@@ -1,0 +1,58 @@
+{
+  "title": "LeonAI SWE-bench Clean AB Case-002",
+  "case_id": "astropy__astropy-12907",
+  "run_a_dir": "/home/ubuntu/specops0/Projects/leonai-main/artifacts/swebench/clean-a-20260224-080055",
+  "run_b_dir": "/home/ubuntu/specops0/Projects/leonai-main/artifacts/swebench/clean-b-20260224-080055",
+  "metrics_a": {
+    "instances": 1,
+    "patch_non_empty": 0,
+    "patch_empty": 1,
+    "errors": 1,
+    "invalid_tool_bash": 1,
+    "recursion_limit_hits": 1,
+    "avg_checkpoints": 26,
+    "avg_tool_calls": 8
+  },
+  "metrics_b": {
+    "instances": 1,
+    "patch_non_empty": 0,
+    "patch_empty": 1,
+    "errors": 1,
+    "invalid_tool_bash": 1,
+    "recursion_limit_hits": 1,
+    "avg_checkpoints": 26,
+    "avg_tool_calls": 8
+  },
+  "ab_diff": {
+    "ab_variables": [
+      "recursion_limit",
+      "timeout_sec",
+      "prompt_profile"
+    ],
+    "changed_variables": [
+      "prompt_profile"
+    ],
+    "is_confounded": false
+  },
+  "case_a": {
+    "instance_id": "astropy__astropy-12907",
+    "patch_len": 0,
+    "checkpoint_count": 26,
+    "tool_calls_total": 8,
+    "invalid_tool_bash": 1,
+    "recursion_limit": 0,
+    "error": "Recursion limit of 24 reached without hitting a stop condition. You can increase the limit by setting the `recursion_limit` config key.\nFor troubleshooting, visit: https://docs.langchain.com/oss/python/langgraph/errors/GRAPH_RECURSION_LIMIT",
+    "last_ai_message": ""
+  },
+  "case_b": {
+    "instance_id": "astropy__astropy-12907",
+    "patch_len": 0,
+    "checkpoint_count": 26,
+    "tool_calls_total": 8,
+    "invalid_tool_bash": 1,
+    "recursion_limit": 0,
+    "error": "Recursion limit of 24 reached without hitting a stop condition. You can increase the limit by setting the `recursion_limit` config key.\nFor troubleshooting, visit: https://docs.langchain.com/oss/python/langgraph/errors/GRAPH_RECURSION_LIMIT",
+    "last_ai_message": "Let me check what specific tests we need to pass according to the issue:"
+  },
+  "generated_at_utc": "2026-02-24T08:06:24.000221+00:00"
+}
