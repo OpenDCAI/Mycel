@@ -235,6 +235,7 @@ async def run_instance(
 
     # @@@git-worktree-lifecycle - worktree gives clean per-instance state without recloning full repo each run.
     run(["git", "-C", str(repo_cache), "worktree", "add", "--detach", str(workspace), base_commit])
+    agent: LeonAgent | None = None
     try:
         prompt = build_prompt(row, prompt_profile=prompt_profile)
         agent = LeonAgent(workspace_root=workspace)
@@ -257,6 +258,10 @@ async def run_instance(
             KEY_PREDICTION: patch,
         }
     finally:
+        # @@@agent-explicit-close - do deterministic cleanup to avoid lingering threads/processes after each instance.
+        if agent is not None:
+            agent.close()
+        set_current_thread_id("")
         if keep_worktree:
             print(f"[slice] keep workspace {workspace}")
         else:

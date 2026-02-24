@@ -700,25 +700,20 @@ class LeonAgent:
     def _cleanup_sqlite_connection(self) -> None:
         """Clean up SQLite connection.
 
-        Properly closes aiosqlite connection using asyncio.run() to avoid
-        hanging on process exit.
+        Properly closes aiosqlite connection in both sync and async contexts.
         """
         if not hasattr(self, "_aiosqlite_conn") or not self._aiosqlite_conn:
             return
 
+        # @@@sqlite-cleanup-cross-loop - run close coroutine via helper so cleanup works even when caller is inside an active event loop.
+        async def _close() -> None:
+            if self._aiosqlite_conn:
+                await self._aiosqlite_conn.close()
+
         try:
-            import asyncio
-
-            # Close the connection asynchronously
-            async def _close():
-                if self._aiosqlite_conn:
-                    await self._aiosqlite_conn.close()
-
-            # Use asyncio.run() to properly close the connection
-            asyncio.run(_close())
-        except Exception:
-            # Ignore errors during cleanup
-            pass
+            self._run_async_cleanup(_close, "SQLite connection")
+        except Exception as e:
+            print(f"[LeonAgent] SQLite cleanup error: {e}")
         finally:
             self._aiosqlite_conn = None
 
