@@ -107,6 +107,22 @@ def build_thread_id(thread_prefix: str, run_stamp: str, instance_id: str) -> str
     return f"{thread_prefix}-{safe_stamp}-{instance_id}"
 
 
+def snapshot_sqlite_db(source_db: Path, snapshot_db: Path) -> None:
+    if not source_db.exists():
+        raise RuntimeError(f"source trace db not found: {source_db}")
+    snapshot_db.parent.mkdir(parents=True, exist_ok=True)
+    if snapshot_db.exists():
+        snapshot_db.unlink()
+    src = sqlite3.connect(f"file:{source_db}?mode=ro", uri=True)
+    dst = sqlite3.connect(str(snapshot_db))
+    try:
+        # @@@trace-db-isolation - copy shared trace DB to run-local snapshot so reporting never holds locks on the live DB.
+        src.backup(dst)
+    finally:
+        dst.close()
+        src.close()
+
+
 def _msg_text(msg: Any) -> str:
     content = getattr(msg, "content", "")
     if isinstance(content, str):
@@ -261,7 +277,8 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--arm", default="A")
     p.add_argument("--prompt-profile", choices=["baseline", "heuristic"], default="baseline")
     p.add_argument("--thread-prefix", default="swebench")
-    p.add_argument("--trace-db", default=str(Path.home() / ".leon" / "leon.db"))
+    p.add_argument("--source-trace-db", default=str(Path.home() / ".leon" / "leon.db"))
+    p.add_argument("--trace-db", default="")
     p.add_argument("--no-eval", action="store_true")
     return p.parse_args()
 
@@ -274,9 +291,17 @@ async def amain() -> None:
     output_dir = Path(args.output_dir).resolve()
     cache_root = output_dir / "repo_cache"
     workspaces_root = output_dir / "workspaces"
-    run_stamp = args.run_id or datetime.utcnow().strftime("slice-%Y%m%d-%H%M%S")
+    run_stamp = args.run_id or datetime.now(timezone.utc).strftime("slice-%Y%m%d-%H%M%S")
     run_dir = output_dir / run_stamp
     run_dir.mkdir(parents=True, exist_ok=True)
+
+    source_trace_db = Path(args.source_trace_db).expanduser().resolve()
+    if not source_trace_db.exists():
+        raise RuntimeError(f"source trace db not found: {source_trace_db}")
+    if args.trace_db:
+        trace_db = Path(args.trace_db).expanduser().resolve()
+    else:
+        trace_db = run_dir / "trace_snapshot.db"
 
     print(
         f"[slice] run_id={run_stamp} arm={args.arm} prompt_profile={args.prompt_profile} "
@@ -285,7 +310,6 @@ async def amain() -> None:
     ds = load_dataset(args.dataset, split=args.split)
     rows = [ds[i] for i in range(args.start, args.start + args.count)]
 
-    trace_db = Path(args.trace_db).expanduser().resolve()
     predictions: list[dict[str, Any]] = []
     trace_summaries: list[dict[str, Any]] = []
     instance_ids: list[str] = []
@@ -316,6 +340,7 @@ async def amain() -> None:
         predictions.append(pred)
         instance_ids.append(str(pred[KEY_INSTANCE_ID]))
 
+        snapshot_sqlite_db(source_db=source_trace_db, snapshot_db=trace_db)
         summary = collect_trace_summary(thread_id=thread_id, instance_id=instance_id, db_path=trace_db)
         trace_summaries.append(summary)
         print(
@@ -386,6 +411,7 @@ async def amain() -> None:
         "timeout_sec": args.timeout_sec,
         "recursion_limit": args.recursion_limit,
         "thread_prefix": args.thread_prefix,
+        "source_trace_db": str(source_trace_db),
         "trace_db": str(trace_db),
         "generated_at_utc": datetime.now(timezone.utc).isoformat(),
         "instances_total": len(instance_ids),

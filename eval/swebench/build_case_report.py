@@ -10,6 +10,9 @@ from statistics import mean
 from typing import Any
 
 
+AB_VARIABLES = ("recursion_limit", "timeout_sec", "prompt_profile")
+
+
 def read_json(path: Path) -> Any:
     return json.loads(path.read_text(encoding="utf-8"))
 
@@ -22,6 +25,20 @@ def read_jsonl(path: Path) -> list[dict[str, Any]]:
             continue
         items.append(json.loads(line))
     return items
+
+
+def is_recursion_limit_error(text: str) -> bool:
+    return "recursion limit of" in text.lower()
+
+
+def compare_ab_variables(cfg_a: dict[str, Any], cfg_b: dict[str, Any]) -> dict[str, Any]:
+    # @@@ab-purity-rule - strict A/B attribution needs exactly one changed variable; otherwise mark as confounded.
+    changed_variables = [k for k in AB_VARIABLES if cfg_a.get(k) != cfg_b.get(k)]
+    return {
+        "ab_variables": list(AB_VARIABLES),
+        "changed_variables": changed_variables,
+        "is_confounded": len(changed_variables) > 1,
+    }
 
 
 def load_run(run_dir: Path) -> dict[str, Any]:
@@ -37,8 +54,8 @@ def load_run(run_dir: Path) -> dict[str, Any]:
 
     patch_non_empty = sum(1 for p in predictions if p.get("model_patch", "").strip())
     invalid_tool_bash = sum(int(t.get("error_markers", {}).get("invalid_tool_bash", 0)) for t in traces)
-    recursion_hits = sum(int(t.get("error_markers", {}).get("recursion_limit", 0)) for t in traces)
-    recursion_hits += sum(1 for e in errors if "Recursion limit of" in str(e.get("error", "")))
+    # @@@recursion-hit-definition - count only terminal errors to keep one clear metric source.
+    recursion_hits = sum(1 for e in errors if is_recursion_limit_error(str(e.get("error", ""))))
     avg_checkpoints = mean([int(t.get("checkpoint_count", 0)) for t in traces]) if traces else 0.0
     avg_tool_calls = mean([int(t.get("tool_calls_total", 0)) for t in traces]) if traces else 0.0
 
@@ -111,6 +128,7 @@ def build_markdown(
     run_b: dict[str, Any],
     case_a: dict[str, Any],
     case_b: dict[str, Any],
+    ab_diff: dict[str, Any],
 ) -> str:
     ma = run_a["metrics"]
     mb = run_b["metrics"]
@@ -134,6 +152,14 @@ def build_markdown(
     lines.append(f"| recursion_limit | {cfg_a['recursion_limit']} | {cfg_b['recursion_limit']} |")
     lines.append(f"| timeout_sec | {cfg_a['timeout_sec']} | {cfg_b['timeout_sec']} |")
     lines.append(f"| prompt_profile | {cfg_a['prompt_profile']} | {cfg_b['prompt_profile']} |")
+    lines.append("")
+    lines.append("## A/B 变量纯度检查")
+    lines.append(f"- 对照变量: `{', '.join(ab_diff['ab_variables'])}`")
+    lines.append(f"- 本轮变化变量: `{', '.join(ab_diff['changed_variables']) or '(none)'}`")
+    if ab_diff["is_confounded"]:
+        lines.append("- 结论: `confounded`（本轮变化变量 > 1，不满足严格因果归因）")
+    else:
+        lines.append("- 结论: `clean`（本轮只改变 1 个变量，可做严格归因）")
     lines.append("")
     lines.append("## 总体指标")
     lines.append("| 指标 | A | B |")
@@ -191,11 +217,12 @@ def main() -> int:
     run_b_dir = Path(args.run_b).expanduser().resolve()
     run_a = load_run(run_a_dir)
     run_b = load_run(run_b_dir)
+    ab_diff = compare_ab_variables(run_a["manifest"], run_b["manifest"])
 
     case_id = pick_case_id(run_a, run_b)
     case_a = summarize_case(case_id, run_a)
     case_b = summarize_case(case_id, run_b)
-    report = build_markdown(args.title, case_id, run_a, run_b, case_a, case_b)
+    report = build_markdown(args.title, case_id, run_a, run_b, case_a, case_b, ab_diff)
 
     output_path = Path(args.output).expanduser().resolve() if args.output else run_b_dir / "case_report_ab.md"
     output_path.write_text(report, encoding="utf-8")
@@ -211,6 +238,7 @@ def main() -> int:
                 "run_b_dir": str(run_b_dir),
                 "metrics_a": run_a["metrics"],
                 "metrics_b": run_b["metrics"],
+                "ab_diff": ab_diff,
                 "case_a": case_a,
                 "case_b": case_b,
                 "generated_at_utc": datetime.now(timezone.utc).isoformat(),

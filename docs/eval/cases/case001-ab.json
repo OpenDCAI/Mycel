@@ -23,6 +23,18 @@
     "avg_checkpoints": 42,
     "avg_tool_calls": 13
   },
+  "ab_diff": {
+    "ab_variables": [
+      "recursion_limit",
+      "timeout_sec",
+      "prompt_profile"
+    ],
+    "changed_variables": [
+      "recursion_limit",
+      "prompt_profile"
+    ],
+    "is_confounded": true
+  },
   "case_a": {
     "instance_id": "astropy__astropy-12907",
     "patch_len": 0,
@@ -43,5 +55,5 @@
     "error": "Recursion limit of 40 reached without hitting a stop condition. You can increase the limit by setting the `recursion_limit` config key.\nFor troubleshooting, visit: https://docs.langchain.com/oss/python/langgraph/errors/GRAPH_RECURSION_LIMIT",
     "last_ai_message": ""
   },
-  "generated_at_utc": "2026-02-24T06:28:38.245087+00:00"
+  "generated_at_utc": "2026-02-24T07:09:52.389576+00:00"
 }

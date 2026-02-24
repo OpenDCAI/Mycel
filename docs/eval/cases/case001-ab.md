@@ -1,6 +1,6 @@
 # LeonAI SWE-bench Case-001 (A/B)
 
-- 生成时间(UTC): 2026-02-24T06:28:38.244938+00:00
+- 生成时间(UTC): 2026-02-24T07:09:52.389369+00:00
 - 数据集: `SWE-bench/SWE-bench_Lite` / split `test`
 - 对照组 A: run_id=`case001-a` arm=`A` profile=`baseline`
 - 实验组 B: run_id=`case001-b` arm=`B` profile=`heuristic`
@@ -14,6 +14,11 @@
 | recursion_limit | 24 | 40 |
 | timeout_sec | 240 | 240 |
 | prompt_profile | baseline | heuristic |
+
+## A/B 变量纯度检查
+- 对照变量: `recursion_limit, timeout_sec, prompt_profile`
+- 本轮变化变量: `recursion_limit, prompt_profile`
+- 结论: `confounded`（本轮变化变量 > 1，不满足严格因果归因）
 
 ## 总体指标
 | 指标 | A | B |
