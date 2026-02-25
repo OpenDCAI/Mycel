@@ -394,13 +394,130 @@ def load_run_candidates(thread_id: str, limit: int = 20) -> list[dict]:
         ]
 
 
+def _msg_text(content: object) -> str:
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        texts: list[str] = []
+        for block in content:
+            if isinstance(block, dict) and block.get("type") == "text":
+                texts.append(str(block.get("text", "")))
+        return "".join(texts)
+    return str(content or "")
+
+
+def _load_checkpoint_events(thread_id: str, limit: int) -> tuple[list[dict], dict[str, int]]:
+    with sqlite3.connect(str(DB_PATH)) as conn:
+        row = conn.execute(
+            "SELECT checkpoint FROM checkpoints WHERE thread_id=? ORDER BY rowid DESC LIMIT 1",
+            (thread_id,),
+        ).fetchone()
+    if not row:
+        return [], {}
+
+    from langgraph.checkpoint.serde.jsonplus import JsonPlusSerializer
+
+    checkpoint_blob = row[0]
+    serde = JsonPlusSerializer()
+    checkpoint = serde.loads_typed(("msgpack", checkpoint_blob))
+    messages = checkpoint.get("channel_values", {}).get("messages", [])
+
+    call_name_by_id: dict[str, str] = {}
+    events: list[dict] = []
+    counts: dict[str, int] = {}
+    seq = 1
+    for msg in messages:
+        cls = msg.__class__.__name__
+        if cls == "AIMessage":
+            text = _msg_text(getattr(msg, "content", ""))
+            if text.strip():
+                payload = {"content": text, "_seq": seq, "_run_id": "checkpoint"}
+                events.append(
+                    {
+                        "seq": seq,
+                        "event_type": "text",
+                        "payload": payload,
+                        "message_id": None,
+                        "created_at": None,
+                        "created_ago": None,
+                    }
+                )
+                counts["text"] = counts.get("text", 0) + 1
+                seq += 1
+            for call in getattr(msg, "tool_calls", None) or []:
+                call_id = str(call.get("id", ""))
+                name = str(call.get("name", "tool"))
+                if call_id:
+                    call_name_by_id[call_id] = name
+                payload = {"id": call_id, "name": name, "args": call.get("args", {}), "_seq": seq, "_run_id": "checkpoint"}
+                events.append(
+                    {
+                        "seq": seq,
+                        "event_type": "tool_call",
+                        "payload": payload,
+                        "message_id": None,
+                        "created_at": None,
+                        "created_ago": None,
+                    }
+                )
+                counts["tool_call"] = counts.get("tool_call", 0) + 1
+                seq += 1
+        elif cls == "ToolMessage":
+            tool_call_id = str(getattr(msg, "tool_call_id", "") or "")
+            name = call_name_by_id.get(tool_call_id, "tool")
+            payload = {
+                "tool_call_id": tool_call_id,
+                "name": name,
+                "content": _msg_text(getattr(msg, "content", "")),
+                "_seq": seq,
+                "_run_id": "checkpoint",
+            }
+            events.append(
+                {
+                    "seq": seq,
+                    "event_type": "tool_result",
+                    "payload": payload,
+                    "message_id": None,
+                    "created_at": None,
+                    "created_ago": None,
+                }
+            )
+            counts["tool_result"] = counts.get("tool_result", 0) + 1
+            seq += 1
+    # @@@checkpoint-trace-fallback - convert latest checkpoint messages into event-like rows so thread trace still renders when run_events are absent.
+    if limit > 0:
+        events = events[-limit:]
+    return events, counts
+
+
 def load_thread_trace_payload(thread_id: str, run_id: str | None = None, limit: int = 2000) -> dict:
     """Load persisted trace bound to thread/run (not session)."""
     run_candidates = load_run_candidates(thread_id, limit=50)
     if not run_id:
         run_id = run_candidates[0]["run_id"] if run_candidates else None
 
+    if run_id == "checkpoint":
+        checkpoint_events, checkpoint_counts = _load_checkpoint_events(thread_id, limit)
+        return {
+            "thread_id": thread_id,
+            "run_id": "checkpoint",
+            "run_candidates": [],
+            "event_count": len(checkpoint_events),
+            "events": checkpoint_events,
+            "event_type_counts": checkpoint_counts,
+        }
+
     if not run_id:
+        checkpoint_events, checkpoint_counts = _load_checkpoint_events(thread_id, limit)
+        if checkpoint_events:
+            return {
+                "thread_id": thread_id,
+                "run_id": "checkpoint",
+                "run_candidates": [],
+                "event_count": len(checkpoint_events),
+                "events": checkpoint_events,
+                "event_type_counts": checkpoint_counts,
+            }
         return {
             "thread_id": thread_id,
             "run_id": None,
