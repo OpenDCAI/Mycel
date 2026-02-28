@@ -1117,8 +1117,12 @@ class LeonAgent:
 Use the Task tool to launch specialized sub-agents for complex tasks:
 - `explore`: Read-only codebase exploration. Use for: finding files, searching code, understanding implementations.
 - `plan`: Design implementation plans. Use for: architecture decisions, multi-step planning.
-- `bash`: Execute shell commands. Use for: git operations, running tests, system commands.
+- `bash`: Task sub-agent type for command-heavy work. It still executes commands via the `run_command` tool.
 - `general`: Full tool access. Use for: independent multi-step tasks requiring file modifications.
+
+Command execution tool naming:
+- Use `run_command` for shell execution.
+- Do not call a tool named `bash`.
 
 When to use Task:
 - Open-ended searches that may require multiple rounds of exploration

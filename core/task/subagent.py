@@ -111,6 +111,9 @@ class SubagentRunner:
                         hooks=mw.hooks,
                         enabled_tools=enabled,
                         operation_recorder=getattr(mw, "operation_recorder", None),
+                        # @@@subagent-inherit-fs-backend - keep parent sandbox backend; otherwise Task subagent falls back to host LocalBackend.
+                        backend=getattr(mw, "backend", None),
+                        verbose=getattr(mw, "verbose", True),
                     )
                     filtered_middleware.append(new_mw)
 
@@ -132,6 +135,10 @@ class SubagentRunner:
                         default_timeout=mw.default_timeout,
                         hooks=mw.hooks,
                         enabled_tools=enabled,
+                        # @@@subagent-inherit-executor - preserve sandbox executor/runtime ownership from parent command middleware.
+                        executor=getattr(mw, "_executor", None),
+                        env=getattr(mw, "env", None),
+                        verbose=getattr(mw, "verbose", True),
                     )
                     filtered_middleware.append(new_mw)
 
@@ -709,6 +716,11 @@ class SubagentRunner:
 
     def _build_system_prompt(self, config: AgentConfig) -> str:
         """Build system prompt for subagent."""
+        command_tool_rule = ""
+        if "*" in config.tools or "run_command" in config.tools:
+            # @@@tool-name-guardrail - trace evidence shows models may call non-existent `bash`; enforce canonical command tool name.
+            command_tool_rule = "\n4. Use `run_command` for shell execution; do not call a tool named `bash`.\n"
+
         # Wildcard agent: don't list tools (inherits all)
         if "*" in config.tools:
             return f"""You are a sub-agent: {config.name}
@@ -722,7 +734,7 @@ class SubagentRunner:
 1. All file paths must be absolute paths.
 2. File operations are restricted to the workspace.
 3. Complete your task efficiently and report your findings.
-"""
+{command_tool_rule}"""
 
         # Regular agent: list available tools
         prompt = f"""You are a specialized sub-agent: {config.name}
@@ -737,7 +749,7 @@ class SubagentRunner:
 1. All file paths must be absolute paths.
 2. File operations are restricted to the workspace.
 3. Complete your task efficiently and report your findings.
-"""
+{command_tool_rule}"""
         return prompt
 
     def get_task_status(self, task_id: str) -> TaskResult:
