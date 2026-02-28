@@ -498,6 +498,17 @@ function shortId(value: string | null, size = 8): string {
   return String(value).slice(0, size);
 }
 
+function evalThreadLabel(threadId: string | null, evaluationId: string | null): string {
+  if (!threadId) return '-';
+  if (!evaluationId) return shortId(threadId, 20);
+  const prefix = `swebench-${evaluationId}-`;
+  if (threadId.startsWith(prefix)) {
+    const instanceId = threadId.slice(prefix.length);
+    return instanceId || shortId(threadId, 20);
+  }
+  return shortId(threadId, 20);
+}
+
 function formatPct(value: any): string {
   const num = Number(value);
   if (!Number.isFinite(num)) return '-';
@@ -508,6 +519,45 @@ function formatResolvedScore(item: any): string {
   const resolved = Number(item?.score?.resolved_instances ?? 0);
   const total = Number(item?.score?.total_instances ?? 0);
   return `${resolved}/${total} (${formatPct(item?.score?.resolved_rate_pct)})`;
+}
+
+function evalProgress(item: any): {
+  done: number;
+  target: number;
+  running: number;
+  pct: number;
+  mode: 'thread_rows' | 'session_rows' | 'checkpoint_estimate';
+} {
+  const doneRaw = Number(item?.threads_done ?? 0);
+  const runningRaw = Number(item?.threads_running ?? 0);
+  const targetRaw = Number(item?.slice_count ?? item?.threads_total ?? 0);
+  const modeRaw = String(item?.progress_source || '');
+  const done = Number.isFinite(doneRaw) ? Math.max(0, doneRaw) : 0;
+  const running = Number.isFinite(runningRaw) ? Math.max(0, runningRaw) : 0;
+  const targetCandidate = Number.isFinite(targetRaw) ? Math.max(0, targetRaw) : 0;
+  const mode =
+    modeRaw === 'checkpoint_estimate' || modeRaw === 'session_rows'
+      ? modeRaw
+      : 'thread_rows';
+  const target = targetCandidate > 0 ? targetCandidate : Math.max(done + running, 0);
+  // @@@progress-active-ratio - evaluation threads can be running long before any thread reaches "done".
+  // Use (done + running) to reflect visible in-flight progress instead of a flat 0% bar.
+  const active = Math.min(target, done + running);
+  const pct = target > 0 ? Math.min(100, (active / target) * 100) : 0;
+  return { done, target, running, pct, mode };
+}
+
+function formatProgressSummary(progress: {
+  done: number;
+  target: number;
+  running: number;
+  pct: number;
+  mode: 'thread_rows' | 'session_rows' | 'checkpoint_estimate';
+}): string {
+  const pending = Math.max(0, progress.target - progress.done - progress.running);
+  const activeLabel = progress.mode === 'checkpoint_estimate' ? 'Started' : 'In Progress';
+  const sourceSuffix = progress.mode === 'thread_rows' ? '' : ` · source=${progress.mode}`;
+  return `Total ${progress.target} · Completed ${progress.done} · ${activeLabel} ${progress.running} · Pending ${pending} · Progress ${formatPct(progress.pct)}${sourceSuffix}`;
 }
 
 function formatStatusSummary(payload: any): string {
@@ -1310,29 +1360,33 @@ function EvaluationPage() {
   const [dataset, setDataset] = React.useState('SWE-bench/SWE-bench_Lite');
   const [split, setSplit] = React.useState('test');
   const [startIdx, setStartIdx] = React.useState('0');
-  const [sliceCount, setSliceCount] = React.useState('5');
+  const [sliceCount, setSliceCount] = React.useState('10');
   const [promptProfile, setPromptProfile] = React.useState('heuristic');
   const [timeoutSec, setTimeoutSec] = React.useState('180');
-  const [recursionLimit, setRecursionLimit] = React.useState('24');
+  const [recursionLimit, setRecursionLimit] = React.useState('256');
   const [sandbox, setSandbox] = React.useState('local');
   const [runStatus, setRunStatus] = React.useState<'idle' | 'starting' | 'submitted' | 'error'>('idle');
   const [evaluationId, setEvaluationId] = React.useState('');
   const [runError, setRunError] = React.useState<string | null>(null);
   const [evaluations, setEvaluations] = React.useState<any[]>([]);
+  const [evalOffset, setEvalOffset] = React.useState(0);
+  const [evalLimit] = React.useState(30);
+  const [evalPagination, setEvalPagination] = React.useState<any>(null);
   const [runsLoading, setRunsLoading] = React.useState(false);
   const [composerOpen, setComposerOpen] = React.useState(false);
 
-  async function loadEvaluations() {
+  const loadEvaluations = React.useCallback(async () => {
     setRunsLoading(true);
     try {
-      const payload = await fetchAPI('/evaluations?limit=30');
+      const payload = await fetchAPI(`/evaluations?limit=${evalLimit}&offset=${evalOffset}`);
       setEvaluations(Array.isArray(payload?.items) ? payload.items : []);
+      setEvalPagination(payload?.pagination || null);
     } catch (e: any) {
       setRunError(e?.message || String(e));
     } finally {
       setRunsLoading(false);
     }
-  }
+  }, [evalLimit, evalOffset]);
 
   React.useEffect(() => {
     void loadEvaluations();
@@ -1340,7 +1394,7 @@ function EvaluationPage() {
       void loadEvaluations();
     }, 2500);
     return () => window.clearInterval(timer);
-  }, []);
+  }, [loadEvaluations]);
 
   async function handleStart() {
     if (runStatus === 'starting') return;
@@ -1395,16 +1449,18 @@ function EvaluationPage() {
     ['Start / Slice', 'Case range', 'Run small slices first, then scale up'],
     ['Prompt Profile', 'Prompt strategy', 'Compare baseline vs heuristic in A/B'],
     ['Timeout(s)', 'Per-case wall clock limit', '180~300 for initial runs'],
-    ['Recursion', 'Agent iteration budget', '24 default, increase only if needed'],
+    ['Recursion', 'Agent iteration budget', '256 default, raise to 512 for hard tasks'],
     ['Sandbox', 'Execution provider', 'Use local for quick checks, daytona for infra parity'],
   ];
   const statusReference = [
     ['queued', 'Job is persisted and waiting for executor slots.'],
     ['running', 'At least one thread is active and writing status updates.'],
+    ['provisional', 'Artifacts are incomplete (missing eval summary or eval error). Score is not final.'],
     ['completed', 'Runner finished and artifacts were written.'],
     ['completed_with_errors', 'Runner finished, but summary reports failed items/errors.'],
     ['error', 'Runner failed; open detail page to inspect stderr and trace.'],
   ];
+  const currentProgress = currentEval ? evalProgress(currentEval) : null;
 
   React.useEffect(() => {
     window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
@@ -1441,6 +1497,17 @@ function EvaluationPage() {
           <p className="description">Latest evaluation submitted from this page.</p>
           <div className="mono">evaluation: {evaluationId || '-'}</div>
           <p className="count">status: {currentEval?.status || runStatus}</p>
+          {currentEval && currentProgress && (
+            <div className="eval-runtime-panel">
+              <div className="mono">phase: {String(currentEval.status || '-').toUpperCase()}</div>
+              <div className="eval-progress-track">
+                <div className="eval-progress-fill" style={{ width: `${currentProgress.pct.toFixed(1)}%` }} />
+              </div>
+              <div className="mono eval-progress-line">
+                {formatProgressSummary(currentProgress)}
+              </div>
+            </div>
+          )}
           {runError && <div className="error">run error: {runError}</div>}
           {evaluationId && (
             <p className="count">
@@ -1460,13 +1527,16 @@ function EvaluationPage() {
 
       <section>
         <div className="section-row">
-          <h2>Evaluations ({evaluations.length})</h2>
+          <h2>Evaluations ({evalPagination?.total ?? evaluations.length})</h2>
           <button className="ghost-btn" onClick={() => setComposerOpen(true)} disabled={runStatus === 'starting'}>
             New Evaluation
           </button>
         </div>
-        <p className="count">Auto refresh: 2.5s {runsLoading ? '| loading...' : ''}</p>
-        <p className="description">Evaluation = one batch run. Threads = running/total. Click Evaluation ID for detail trace and thread links.</p>
+        <p className="count">
+          Auto refresh: 2.5s {runsLoading ? '| loading...' : ''}
+          {' '}| page {evalPagination?.page ?? 1}
+        </p>
+        <p className="description">Evaluation = one batch run. Progress shows total/completed/started-or-running/pending. Click Evaluation ID for detail trace and thread links.</p>
         <table>
           <thead>
             <tr>
@@ -1475,7 +1545,7 @@ function EvaluationPage() {
               <th title="Case index range inside selected split">Range</th>
               <th title="prompt_profile / sandbox">Profile / Sandbox</th>
               <th title="queued / running / completed / completed_with_errors / error">Status</th>
-              <th title="running thread count / total thread count">Threads</th>
+              <th title="total / completed / started|in-progress / pending / progress%">Progress</th>
               <th title="resolved / total from SWE-bench summary">Score</th>
               <th title="Last persisted status update">Updated</th>
             </tr>
@@ -1487,11 +1557,43 @@ function EvaluationPage() {
                 <td className="mono">{item.dataset}</td>
                 <td>{item.start_idx}..{item.start_idx + item.slice_count - 1}</td>
                 <td className="mono">{item.prompt_profile || '-'} / {item.sandbox || '-'}</td>
-                <td>{item.status}</td>
-                <td>{item.threads_running}/{item.threads_total}</td>
+                <td>
+                  {(() => {
+                    // @@@publishable-preferred - publishable is the canonical release gate; score_gate stays as compatibility fallback.
+                    const publishable = item.score?.publishable ?? (item.score?.score_gate === 'final');
+                    return (
+                      <>
+                        <div className="mono">{String(item.status || '-').toUpperCase()}</div>
+                        <div className="mono">publishable: {publishable ? 'TRUE' : 'FALSE'}</div>
+                      </>
+                    );
+                  })()}
+                </td>
+                <td>
+                  {(() => {
+                    const p = evalProgress(item);
+                    return (
+                      <div className="eval-progress-cell">
+                        <div className="eval-progress-track">
+                          <div className="eval-progress-fill" style={{ width: `${p.pct.toFixed(1)}%` }} />
+                        </div>
+                        <div className="mono eval-progress-line">{formatProgressSummary(p)}</div>
+                      </div>
+                    );
+                  })()}
+                </td>
                 <td className="mono">
-                  <div>R {formatResolvedScore(item)}</div>
-                  <div>C {formatPct(item.score?.completed_rate_pct)} | T {formatPct(item.score?.tool_call_thread_rate_pct)}</div>
+                  {(item.score?.publishable ?? (item.score?.score_gate === 'final')) ? (
+                    <>
+                      <div>R {formatResolvedScore(item)}</div>
+                      <div>C {formatPct(item.score?.completed_rate_pct)} | T {formatPct(item.score?.tool_call_thread_rate_pct)}</div>
+                    </>
+                  ) : (
+                    <>
+                      <div>R PROVISIONAL</div>
+                      <div>C - | T -</div>
+                    </>
+                  )}
                 </td>
                 <td>{item.updated_ago || '-'}</td>
               </tr>
@@ -1503,6 +1605,25 @@ function EvaluationPage() {
             )}
           </tbody>
         </table>
+        <div className="section-row" style={{ marginTop: 12 }}>
+          <button
+            className="ghost-btn"
+            onClick={() => setEvalOffset(Math.max((evalPagination?.prev_offset ?? 0), 0))}
+            disabled={!evalPagination?.has_prev || runsLoading}
+          >
+            Prev
+          </button>
+          <p className="count">
+            offset={evalPagination?.offset ?? 0} | limit={evalPagination?.limit ?? evalLimit} | total={evalPagination?.total ?? evaluations.length}
+          </p>
+          <button
+            className="ghost-btn"
+            onClick={() => setEvalOffset(evalPagination?.next_offset ?? (evalOffset + evalLimit))}
+            disabled={!evalPagination?.has_next || runsLoading}
+          >
+            Next
+          </button>
+        </div>
       </section>
 
       <section className="evaluation-notes">
@@ -1682,16 +1803,37 @@ function EvaluationDetailPage() {
   }, [evaluationId]);
 
   if (!data) return <div>Loading...</div>;
+  const detailProgress = evalProgress({
+    threads_done: data.info?.threads_done ?? 0,
+    threads_running: data.info?.threads_running ?? 0,
+    slice_count: data.info?.slice_count ?? data.info?.threads_total ?? 0,
+    progress_source: data.info?.progress_source ?? 'thread_rows',
+  });
+  const threadStateLabel = detailProgress.mode === 'checkpoint_estimate' ? 'started' : 'running';
+  const scoreGate = String(data.info?.score?.score_gate || 'provisional');
+  const publishable = Boolean(data.info?.score?.publishable ?? (scoreGate === 'final'));
+  const scoreFinal = publishable;
+  const summaryReady = !!data.info?.score?.eval_summary_path;
 
   return (
     <div className="page">
       <Breadcrumb items={data.breadcrumb} />
       <h1>Evaluation: {shortId(data.evaluation_id, 14)}</h1>
       <p className="count">
-        {data.info.status} | dataset={data.info.dataset} | threads={data.info.threads_running}/{data.info.threads_total}
-        {' '}| score={data.info.score?.resolved_instances ?? 0}/{data.info.score?.total_instances ?? 0}
-        {' '}({formatPct(data.info.score?.primary_score_pct)})
+        {data.info.status} | dataset={data.info.dataset} | {threadStateLabel}={data.info.threads_running}/{data.info.threads_total}
+        {' '}| gate={scoreGate}
+        {' '}| publishable={String(publishable)}
+        {' '}| score={scoreFinal ? `${data.info.score?.resolved_instances ?? 0}/${data.info.score?.total_instances ?? 0} (${formatPct(data.info.score?.primary_score_pct)})` : 'PROVISIONAL'}
       </p>
+      <section className="eval-runtime-panel">
+        <div className="mono">phase: {String(data.info.status || '-').toUpperCase()}</div>
+        <div className="eval-progress-track">
+          <div className="eval-progress-fill" style={{ width: `${detailProgress.pct.toFixed(1)}%` }} />
+        </div>
+        <div className="mono eval-progress-line">
+          {formatProgressSummary(detailProgress)}
+        </div>
+      </section>
 
       <section className="info-grid">
         <div><strong>Split:</strong> {data.info.split}</div>
@@ -1700,21 +1842,32 @@ function EvaluationDetailPage() {
         <div><strong>Profile:</strong> {data.info.prompt_profile}</div>
         <div><strong>Timeout:</strong> {data.info.timeout_sec}s</div>
         <div><strong>Recursion:</strong> {data.info.recursion_limit}</div>
-        <div><strong>Resolved:</strong> {data.info.score?.resolved_instances ?? 0}/{data.info.score?.total_instances ?? 0}</div>
-        <div><strong>Resolved Rate:</strong> {formatPct(data.info.score?.resolved_rate_pct)}</div>
-        <div><strong>Completed:</strong> {data.info.score?.completed_instances ?? 0}/{data.info.score?.total_instances ?? 0}</div>
-        <div><strong>Completed Rate:</strong> {formatPct(data.info.score?.completed_rate_pct)}</div>
-        <div><strong>Non-empty Patch:</strong> {data.info.score?.non_empty_patch_instances ?? 0}/{data.info.score?.total_instances ?? 0}</div>
-        <div><strong>Non-empty Rate:</strong> {formatPct(data.info.score?.non_empty_patch_rate_pct)}</div>
-        <div><strong>Empty Patch:</strong> {data.info.score?.empty_patch_instances ?? 0}/{data.info.score?.total_instances ?? 0}</div>
-        <div><strong>Errors:</strong> {data.info.score?.error_instances ?? 0}</div>
-        <div><strong>Trace Active:</strong> {data.info.score?.active_trace_threads ?? 0}/{data.info.score?.total_instances ?? 0}</div>
-        <div><strong>Tool-call Threads:</strong> {data.info.score?.tool_call_threads ?? 0}/{data.info.score?.total_instances ?? 0}</div>
-        <div><strong>Tool-call Coverage:</strong> {formatPct(data.info.score?.tool_call_thread_rate_pct)}</div>
-        <div><strong>Tool Calls Total:</strong> {data.info.score?.tool_calls_total ?? 0}</div>
-        <div><strong>Avg Tool Calls(active):</strong> {data.info.score?.avg_tool_calls_per_active_thread ?? '-'}</div>
-        <div><strong>Recursion Cap Hits:</strong> {data.info.score?.recursion_cap_hits ?? 0}{data.info.score?.recursion_limit ? ` / cap ${data.info.score.recursion_limit}` : ''}</div>
-        <div><strong>Summary:</strong> {data.info.score?.eval_summary_path ? 'ready' : 'missing'}</div>
+        <div><strong>Score Gate:</strong> {scoreGate}</div>
+        <div><strong>Publishable:</strong> {String(publishable)}</div>
+        <div><strong>Summary:</strong> {summaryReady ? 'ready' : 'missing'}</div>
+        {scoreFinal ? (
+          <>
+            <div><strong>Resolved:</strong> {data.info.score?.resolved_instances ?? 0}/{data.info.score?.total_instances ?? 0}</div>
+            <div><strong>Resolved Rate:</strong> {formatPct(data.info.score?.resolved_rate_pct)}</div>
+            <div><strong>Completed:</strong> {data.info.score?.completed_instances ?? 0}/{data.info.score?.total_instances ?? 0}</div>
+            <div><strong>Completed Rate:</strong> {formatPct(data.info.score?.completed_rate_pct)}</div>
+            <div><strong>Non-empty Patch:</strong> {data.info.score?.non_empty_patch_instances ?? 0}/{data.info.score?.total_instances ?? 0}</div>
+            <div><strong>Non-empty Rate:</strong> {formatPct(data.info.score?.non_empty_patch_rate_pct)}</div>
+            <div><strong>Empty Patch:</strong> {data.info.score?.empty_patch_instances ?? 0}/{data.info.score?.total_instances ?? 0}</div>
+            <div><strong>Errors:</strong> {data.info.score?.error_instances ?? 0}</div>
+            <div><strong>Trace Active:</strong> {data.info.score?.active_trace_threads ?? 0}/{data.info.score?.total_instances ?? 0}</div>
+            <div><strong>Tool-call Threads:</strong> {data.info.score?.tool_call_threads ?? 0}/{data.info.score?.total_instances ?? 0}</div>
+            <div><strong>Tool-call Coverage:</strong> {formatPct(data.info.score?.tool_call_thread_rate_pct)}</div>
+            <div><strong>Tool Calls Total:</strong> {data.info.score?.tool_calls_total ?? 0}</div>
+            <div><strong>Avg Tool Calls(active):</strong> {data.info.score?.avg_tool_calls_per_active_thread ?? '-'}</div>
+            <div><strong>Recursion Cap Hits:</strong> {data.info.score?.recursion_cap_hits ?? 0}{data.info.score?.recursion_limit ? ` / cap ${data.info.score.recursion_limit}` : ''}</div>
+          </>
+        ) : (
+          <>
+            <div><strong>Final Score:</strong> blocked (provisional)</div>
+            <div><strong>Block Reason:</strong> {data.info.score?.manifest_eval_error ? 'manifest_eval_error' : 'missing_eval_summary'}</div>
+          </>
+        )}
         <div><strong>Run Dir:</strong> <span className="mono">{data.info.score?.run_dir || '-'}</span></div>
       </section>
 
@@ -1736,7 +1889,11 @@ function EvaluationDetailPage() {
             {data.threads.items.map((item: any) => (
               <tr key={item.thread_id}>
                 <td>{item.item_index}</td>
-                <td><Link to={item.thread_url}>{shortId(item.thread_id)}</Link></td>
+                <td>
+                  <Link to={item.thread_url} title={item.thread_id}>
+                    <span className="mono">{evalThreadLabel(item.thread_id, data.evaluation_id)}</span>
+                  </Link>
+                </td>
                 <td>
                   {item.session?.session_url ? (
                     <Link to={item.session.session_url}>{shortId(item.session.session_id)}</Link>

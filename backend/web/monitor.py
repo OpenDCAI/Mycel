@@ -8,7 +8,9 @@ No business logic in frontend.
 import asyncio
 import json
 import os
+import re
 import sqlite3
+import time
 import uuid
 from datetime import datetime
 from pathlib import Path
@@ -39,9 +41,11 @@ class EvaluationCreateRequest(BaseModel):
     start: int = 0
     count: int = Field(default=5, ge=1, le=50)
     prompt_profile: str = "heuristic"
+    model_name: str | None = None
     timeout_sec: int = Field(default=180, ge=30, le=3600)
+    eval_timeout_sec: int = Field(default=10800, ge=300, le=86400)
     git_timeout_sec: int = Field(default=90, ge=15, le=600)
-    recursion_limit: int = Field(default=24, ge=1, le=128)
+    recursion_limit: int = Field(default=256, ge=1, le=512)
     sandbox: str = "local"
     cwd: str = "/home/ubuntu/specops0/Projects/leonai-main"
     arm: str = "monitor"
@@ -136,6 +140,8 @@ def _build_run_slice_command(payload: EvaluationCreateRequest, evaluation_id: st
         payload.prompt_profile,
         "--timeout-sec",
         str(payload.timeout_sec),
+        "--eval-timeout-sec",
+        str(payload.eval_timeout_sec),
         "--git-timeout-sec",
         str(payload.git_timeout_sec),
         "--recursion-limit",
@@ -147,6 +153,8 @@ def _build_run_slice_command(payload: EvaluationCreateRequest, evaluation_id: st
     ]
     if not payload.run_eval:
         cmd.append("--no-eval")
+    if payload.model_name:
+        cmd.extend(["--model-name", payload.model_name])
     return cmd
 
 
@@ -211,24 +219,39 @@ async def _run_evaluation_job(evaluation_id: str, payload: EvaluationCreateReque
     env["LEON_SANDBOX_DB_PATH"] = str(run_dir / "sandbox.db")
     try:
         # @@@monitor-eval-direct-runner - evaluate by invoking SWE runner directly, not by sending a control prompt to another agent.
-        proc = await asyncio.create_subprocess_exec(*command, cwd=cwd, stdout=PIPE, stderr=PIPE, env=env)
-        # @@@monitor-eval-hard-timeout - enforce a hard wall time so evaluation jobs cannot stay in "running" forever.
-        hard_timeout_sec = payload.timeout_sec * payload.count + 120
+        with stdout_path.open("wb") as stdout_fh, stderr_path.open("wb") as stderr_fh:
+            proc = await asyncio.create_subprocess_exec(
+                *command,
+                cwd=cwd,
+                stdout=stdout_fh,
+                stderr=stderr_fh,
+                env=env,
+                start_new_session=True,
+            )
+        _update_evaluation_job_status(
+            evaluation_id,
+            "running",
+            (
+                f"runner=direct pid={proc.pid} sandbox={payload.sandbox} run_dir={run_dir} "
+                f"stdout_log={stdout_path} stderr_log={stderr_path}"
+            ),
+        )
+        # @@@monitor-eval-hard-timeout-budget - wall-time must include both solve budget and harness scoring budget for batch runs.
+        solve_budget_sec = payload.timeout_sec * payload.count
+        eval_budget_sec = payload.eval_timeout_sec if payload.run_eval else 0
+        hard_timeout_sec = solve_budget_sec + eval_budget_sec + 180
         try:
-            stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=hard_timeout_sec)
+            await asyncio.wait_for(proc.wait(), timeout=hard_timeout_sec)
         except asyncio.TimeoutError:
             proc.kill()
-            stdout, stderr = await proc.communicate()
-            stdout_path.write_bytes(stdout or b"")
-            stderr_path.write_bytes(stderr or b"")
+            await proc.wait()
             notes = (
-                f"runner=direct timeout={hard_timeout_sec}s sandbox={payload.sandbox} run_dir={run_dir} "
+                f"runner=direct timeout={hard_timeout_sec}s solve_budget={solve_budget_sec}s "
+                f"eval_budget={eval_budget_sec}s sandbox={payload.sandbox} run_dir={run_dir} "
                 f"stdout_log={stdout_path} stderr_log={stderr_path}"
             )
             _update_evaluation_job_status(evaluation_id, "error", notes)
             return
-        stdout_path.write_bytes(stdout or b"")
-        stderr_path.write_bytes(stderr or b"")
         if proc.returncode != 0:
             notes = (
                 f"runner=direct rc={proc.returncode} sandbox={payload.sandbox} run_dir={run_dir} "
@@ -369,6 +392,134 @@ def _resolve_eval_run_dir(evaluation_id: str, cwd: str | None, notes: str) -> Pa
     return None
 
 
+def _infer_sandbox_from_run_id(run_id: str, fallback: str | None = None) -> str:
+    value = run_id.lower()
+    if "docker" in value:
+        return "docker"
+    if "daytona" in value:
+        return "daytona"
+    if "local" in value:
+        return "local"
+    return fallback or "local"
+
+
+def _iter_artifact_run_dirs(cwd_candidates: list[str], max_dirs: int = 500) -> list[Path]:
+    run_dirs: list[Path] = []
+    seen: set[str] = set()
+    for cwd in cwd_candidates:
+        if not cwd:
+            continue
+        root = (Path(cwd).expanduser().resolve() / "artifacts" / "swebench").resolve()
+        if not root.exists():
+            continue
+        for item in sorted(root.glob("eval-*"), key=lambda p: p.stat().st_mtime if p.exists() else 0, reverse=True):
+            manifest_path = item / "run_manifest.json"
+            if not item.is_dir() or not manifest_path.exists():
+                continue
+            key = str(item)
+            if key in seen:
+                continue
+            seen.add(key)
+            run_dirs.append(item)
+            if len(run_dirs) >= max_dirs:
+                return run_dirs
+    return run_dirs
+
+
+def _backfill_evaluations_from_artifacts(app: object | None, base_cwd: str = "/home/ubuntu/specops0/Projects/leonai-main") -> int:
+    # @@@eval-artifact-backfill-throttle - list endpoint polls every 2.5s; throttle filesystem backfill scan to keep monitor responsive.
+    now = time.time()
+    if app is not None:
+        last_ts = float(getattr(app.state, "eval_artifact_backfill_ts", 0.0) or 0.0)
+        if now - last_ts < 20.0:
+            return 0
+
+    _ensure_evaluation_tables()
+    inserted = 0
+    with sqlite3.connect(str(DB_PATH)) as conn:
+        conn.row_factory = sqlite3.Row
+        existing_ids = {str(row["evaluation_id"]) for row in conn.execute("SELECT evaluation_id FROM evaluation_jobs").fetchall()}
+        cwd_rows = conn.execute("SELECT DISTINCT cwd FROM evaluation_jobs WHERE cwd IS NOT NULL AND cwd != ''").fetchall()
+        cwd_candidates = [base_cwd] + [str(row["cwd"]) for row in cwd_rows if row["cwd"]]
+        run_dirs = _iter_artifact_run_dirs(cwd_candidates)
+        for run_dir in run_dirs:
+            manifest = _read_json_file(run_dir / "run_manifest.json") or {}
+            evaluation_id = str(manifest.get("run_id") or run_dir.name)
+            if not evaluation_id.startswith("eval-"):
+                continue
+            if evaluation_id in existing_ids:
+                continue
+
+            created_at = str(manifest.get("generated_at_utc") or datetime.now().isoformat())
+            dataset = str(manifest.get("dataset") or "SWE-bench/SWE-bench_Lite")
+            split = str(manifest.get("split") or "test")
+            start_idx = int(manifest.get("start") or 0)
+            slice_count = int(manifest.get("count") or 0)
+            prompt_profile = str(manifest.get("prompt_profile") or "heuristic")
+            timeout_sec = int(manifest.get("timeout_sec") or 180)
+            recursion_limit = int(manifest.get("recursion_limit") or 256)
+            sandbox = _infer_sandbox_from_run_id(evaluation_id, fallback=manifest.get("sandbox"))
+            cwd = str(run_dir.parents[2]) if len(run_dir.parents) >= 3 else base_cwd
+            arm = str(manifest.get("arm") or "artifact_backfill")
+            status = "error" if str(manifest.get("eval_error") or "").strip() else "completed"
+            notes = f"runner=artifact_backfill run_dir={run_dir}"
+            conn.execute(
+                """
+                INSERT INTO evaluation_jobs (
+                    evaluation_id, dataset, split, start_idx, slice_count, prompt_profile,
+                    timeout_sec, recursion_limit, sandbox, cwd, arm, status, notes, created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    evaluation_id,
+                    dataset,
+                    split,
+                    start_idx,
+                    slice_count,
+                    prompt_profile,
+                    timeout_sec,
+                    recursion_limit,
+                    sandbox,
+                    cwd,
+                    arm,
+                    status,
+                    notes,
+                    created_at,
+                    created_at,
+                ),
+            )
+
+            trace_path = Path(str(manifest.get("trace_summaries_path") or (run_dir / "trace_summaries.jsonl"))).expanduser()
+            trace_rows = _read_jsonl_rows(trace_path)
+            if trace_rows:
+                for idx, row in enumerate(trace_rows):
+                    instance_id = str(row.get("instance_id") or f"item-{idx}")
+                    thread_id = str(row.get("thread_id") or f"swebench-{evaluation_id}-{instance_id}")
+                    conn.execute(
+                        """
+                        INSERT OR IGNORE INTO evaluation_job_threads (
+                            evaluation_id, thread_id, run_id, start_idx, item_index, created_at
+                        ) VALUES (?, ?, ?, ?, ?, ?)
+                        """,
+                        (
+                            evaluation_id,
+                            thread_id,
+                            evaluation_id,
+                            start_idx + idx,
+                            idx,
+                            created_at,
+                        ),
+                    )
+            inserted += 1
+            existing_ids.add(evaluation_id)
+        conn.commit()
+
+    if app is not None:
+        app.state.eval_artifact_backfill_ts = now
+        app.state.eval_artifact_backfill_inserted = int(getattr(app.state, "eval_artifact_backfill_inserted", 0) or 0) + inserted
+    return inserted
+
+
 def _pct(numerator: int, denominator: int) -> float | None:
     if denominator <= 0:
         return None
@@ -376,10 +527,14 @@ def _pct(numerator: int, denominator: int) -> float | None:
 
 
 def _derive_evaluation_status(status: str, score: dict | None) -> str:
-    if status in {"running", "error"}:
+    if status == "running":
         return status
-    if not score or not bool(score.get("scored")):
+    if not score:
         return status
+    if str(score.get("manifest_eval_error") or "").strip():
+        return "provisional"
+    if not bool(score.get("scored")):
+        return "provisional"
     return "completed_with_errors" if int(score.get("error_instances") or 0) > 0 else "completed"
 
 
@@ -393,6 +548,117 @@ def _count_live_eval_threads(evaluation_id: str) -> int:
             (thread_prefix,),
         ).fetchone()
     return int(row[0] or 0) if row else 0
+
+
+def _load_live_eval_session_progress(evaluation_id: str, cwd: str | None, notes: str) -> dict | None:
+    run_dir = _resolve_eval_run_dir(evaluation_id, cwd, notes)
+    if not run_dir:
+        return None
+    trace_db = run_dir / "sandbox.db"
+    if not trace_db.exists():
+        return None
+    thread_prefix = f"swebench-{evaluation_id}-%"
+    try:
+        with sqlite3.connect(str(trace_db)) as conn:
+            conn.row_factory = sqlite3.Row
+            row = conn.execute(
+                """
+                SELECT
+                    COUNT(*) AS total,
+                    SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END) AS running,
+                    SUM(CASE WHEN status != 'active' THEN 1 ELSE 0 END) AS done,
+                    MAX(idle_ttl_sec) AS idle_ttl_sec,
+                    ROUND((julianday('now') - julianday(MAX(last_active_at))) * 24 * 60, 1) AS idle_minutes
+                FROM chat_sessions
+                WHERE thread_id LIKE ?
+                """,
+                (thread_prefix,),
+            ).fetchone()
+    except sqlite3.OperationalError:
+        # @@@eval-session-table-warmup - sandbox.db may exist before chat_sessions table initialization; treat as no live session data.
+        return None
+    if not row:
+        return None
+    total = int(row["total"] or 0)
+    running = int(row["running"] or 0)
+    done = int(row["done"] or 0)
+    idle_ttl_sec = int(row["idle_ttl_sec"] or 300)
+    idle_minutes = float(row["idle_minutes"]) if row["idle_minutes"] is not None else None
+    if total <= 0:
+        return None
+    # @@@eval-progress-live-session - when thread mapping rows are not persisted yet, use per-run sandbox session states for true running/done counts.
+    # @@@eval-running-freshness - treat stale "active" sessions as non-running to avoid fake-running UI after runner exits unexpectedly.
+    stale_after_minutes = max(2.0, (idle_ttl_sec / 60.0) + 1.0)
+    active_recent = bool(running > 0 and idle_minutes is not None and idle_minutes <= stale_after_minutes)
+    running_effective = running if active_recent else 0
+    done_effective = done if active_recent else min(total, done + running)
+    return {
+        "total": total,
+        "running": max(0, running_effective),
+        "done": max(0, done_effective),
+        "idle_minutes": idle_minutes,
+        "idle_ttl_sec": idle_ttl_sec,
+        "stale_after_minutes": stale_after_minutes,
+        "active_recent": active_recent,
+    }
+
+
+def _load_live_eval_sessions(evaluation_id: str, cwd: str | None, notes: str) -> list[dict]:
+    run_dir = _resolve_eval_run_dir(evaluation_id, cwd, notes)
+    if not run_dir:
+        return []
+    trace_db = run_dir / "sandbox.db"
+    if not trace_db.exists():
+        return []
+    thread_prefix = f"swebench-{evaluation_id}-%"
+    try:
+        with sqlite3.connect(str(trace_db)) as conn:
+            conn.row_factory = sqlite3.Row
+            rows = conn.execute(
+                """
+                SELECT thread_id, chat_session_id, status, started_at, last_active_at, ended_at, close_reason
+                FROM chat_sessions
+                WHERE thread_id LIKE ?
+                ORDER BY started_at ASC
+                """,
+                (thread_prefix,),
+            ).fetchall()
+    except sqlite3.OperationalError:
+        return []
+    sessions: list[dict] = []
+    for row in rows:
+        sessions.append(
+            {
+                "thread_id": str(row["thread_id"]),
+                "chat_session_id": str(row["chat_session_id"]),
+                "status": str(row["status"] or "active"),
+                "started_at": row["started_at"],
+                "last_active_at": row["last_active_at"],
+                "ended_at": row["ended_at"],
+                "close_reason": row["close_reason"],
+            }
+        )
+    return sessions
+
+
+def _is_eval_runner_alive(evaluation_id: str, notes: str) -> bool:
+    # @@@eval-runner-pid-liveness - after backend restart, task map is empty; use persisted runner pid as direct liveness source before session rows appear.
+    m = re.search(r"\bpid=(\d+)\b", notes or "")
+    if not m:
+        return False
+    pid = int(m.group(1))
+    proc_dir = Path(f"/proc/{pid}")
+    if not proc_dir.exists():
+        return False
+    try:
+        cmdline = (proc_dir / "cmdline").read_text(encoding="utf-8", errors="ignore")
+    except Exception:
+        return False
+    if "run_slice.py" not in cmdline:
+        return False
+    if evaluation_id and evaluation_id not in cmdline:
+        return False
+    return True
 
 
 def _load_evaluation_score(evaluation_id: str, cwd: str | None, notes: str) -> dict:
@@ -414,14 +680,25 @@ def _load_evaluation_score(evaluation_id: str, cwd: str | None, notes: str) -> d
         trace_summaries_path = Path(str(manifest["trace_summaries_path"])).expanduser()
     trace_rows = _read_jsonl_rows(trace_summaries_path)
 
-    total_instances = int(summary.get("total_instances") or manifest.get("instances_total") or 0)
+    manifest_total = int(manifest.get("instances_total") or 0)
+    summary_total = int(summary.get("total_instances") or 0)
     submitted_instances = int(summary.get("submitted_instances") or 0)
     completed_instances = int(summary.get("completed_instances") or 0)
     resolved_instances = int(summary.get("resolved_instances") or 0)
     unresolved_instances = int(summary.get("unresolved_instances") or 0)
     empty_patch_instances = int(summary.get("empty_patch_instances") or manifest.get("empty_patch_total") or 0)
     error_instances = int(summary.get("error_instances") or manifest.get("errors_total") or 0)
-    non_empty_patch_instances = max(total_instances - empty_patch_instances, 0)
+
+    total_instances = manifest_total or summary_total
+    if total_instances <= 0:
+        total_instances = max(summary_total, submitted_instances, completed_instances, resolved_instances + unresolved_instances)
+    if submitted_instances > total_instances:
+        total_instances = submitted_instances
+    if completed_instances > total_instances:
+        total_instances = completed_instances
+
+    patch_base = submitted_instances or total_instances
+    non_empty_patch_instances = max(patch_base - empty_patch_instances, 0)
 
     active_trace_threads = 0
     tool_call_threads = 0
@@ -443,8 +720,14 @@ def _load_evaluation_score(evaluation_id: str, cwd: str | None, notes: str) -> d
         recursion_cap_hits = sum(1 for row in trace_rows if int(row.get("last_step") or 0) >= recursion_limit)
 
     # @@@eval-score-source - score must come from persisted run artifacts instead of in-memory thread counters so reload stays consistent.
+    score_gate = "final" if bool(summary_path and summary) and not str(manifest.get("eval_error") or "").strip() else "provisional"
+    publishable = score_gate == "final"
+
     return {
         "scored": bool(summary_path and summary),
+        "score_gate": score_gate,
+        "publishable": publishable,
+        "manifest_eval_error": str(manifest.get("eval_error") or "").strip(),
         "run_dir": str(run_dir) if run_dir else None,
         "manifest_path": str(manifest_path) if manifest_path else None,
         "eval_summary_path": str(summary_path) if summary_path else None,
@@ -472,6 +755,49 @@ def _load_evaluation_score(evaluation_id: str, cwd: str | None, notes: str) -> d
         "recursion_cap_hits": recursion_cap_hits,
         "recursion_cap_hit_rate_pct": _pct(recursion_cap_hits, active_trace_threads),
     }
+
+
+def _backfill_eval_threads_from_score(
+    conn: sqlite3.Connection,
+    *,
+    evaluation_id: str,
+    start_idx: int,
+    created_at: str | None,
+    score: dict | None,
+) -> int:
+    if not score:
+        return 0
+    trace_path_value = score.get("trace_summaries_path")
+    if not trace_path_value:
+        return 0
+    trace_path = Path(str(trace_path_value)).expanduser()
+    trace_rows = _read_jsonl_rows(trace_path)
+    if not trace_rows:
+        return 0
+
+    ts = created_at or datetime.now().isoformat()
+    inserted = 0
+    for idx, row in enumerate(trace_rows):
+        instance_id = str(row.get("instance_id") or f"item-{idx}")
+        thread_id = str(row.get("thread_id") or f"swebench-{evaluation_id}-{instance_id}")
+        cur = conn.execute(
+            """
+            INSERT OR IGNORE INTO evaluation_job_threads (
+                evaluation_id, thread_id, run_id, start_idx, item_index, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (
+                evaluation_id,
+                thread_id,
+                evaluation_id,
+                start_idx + idx,
+                idx,
+                ts,
+            ),
+        )
+        if int(cur.rowcount or 0) > 0:
+            inserted += 1
+    return inserted
 
 
 def format_time_ago(iso_timestamp: str) -> str:
@@ -964,34 +1290,71 @@ async def create_evaluation(payload: EvaluationCreateRequest, request: Request):
 
 
 @router.get("/evaluations")
-def list_evaluations(limit: int = 30, request: Request = None):
+def list_evaluations(
+    limit: int = Query(default=30, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+    request: Request = None,
+):
     _ensure_evaluation_tables()
+    _backfill_evaluations_from_artifacts(request.app if request else None)
     running_jobs = set()
+    pending_status_updates: dict[str, tuple[str, str]] = {}
     if request:
         tasks = _ensure_eval_task_map(request.app)
         running_jobs = {evaluation_id for evaluation_id, task in tasks.items() if not task.done()}
     with sqlite3.connect(str(DB_PATH)) as conn:
         conn.row_factory = sqlite3.Row
+        total_jobs = int(conn.execute("SELECT COUNT(*) AS n FROM evaluation_jobs").fetchone()["n"])
         jobs = conn.execute(
             """
             SELECT evaluation_id, dataset, split, start_idx, slice_count, prompt_profile, timeout_sec,
                    recursion_limit, sandbox, cwd, arm, status, notes, created_at, updated_at
             FROM evaluation_jobs
             ORDER BY created_at DESC
-            LIMIT ?
+            LIMIT ? OFFSET ?
             """,
-            (limit,),
-        ).fetchall()
+            (limit, offset),
+            ).fetchall()
         items = []
         for row in jobs:
             notes = row["notes"] or ""
             status = str(row["status"] or "pending")
             # @@@monitor-eval-orphan-reconcile - if backend restarted and task map no longer tracks a running job, mark it error to avoid permanent fake-running rows.
             if status == "running" and row["evaluation_id"] not in running_jobs:
-                if "runner_lost:" not in notes:
-                    notes = f"{notes} | runner_lost: task not active after restart".strip(" |")
-                _update_evaluation_job_status(row["evaluation_id"], "error", notes)
-                status = "error"
+                if _is_eval_runner_alive(str(row["evaluation_id"]), notes):
+                    if "runner_lost_pid_alive:" not in notes:
+                        notes = f"{notes} | runner_lost_pid_alive: runner process still alive".strip(" |")
+                    pending_status_updates[str(row["evaluation_id"])] = ("running", notes)
+                    status = "running"
+                else:
+                    if "runner_lost:" not in notes:
+                        notes = f"{notes} | runner_lost: task not active after restart".strip(" |")
+                    pending_status_updates[str(row["evaluation_id"])] = ("error", notes)
+                    status = "error"
+
+            score = _load_evaluation_score(
+                evaluation_id=str(row["evaluation_id"]),
+                cwd=row["cwd"],
+                notes=notes,
+            )
+            # @@@eval-status-recover-pid - historical rows may already be marked error after backend restart;
+            # if score is still pending and runner pid is still alive, recover status back to running.
+            if status == "error" and not bool(score.get("scored")):
+                if _is_eval_runner_alive(str(row["evaluation_id"]), notes):
+                    if "runner_recovered_pid_alive:" not in notes:
+                        notes = f"{notes} | runner_recovered_pid_alive: runner process still alive".strip(" |")
+                    pending_status_updates[str(row["evaluation_id"])] = ("running", notes)
+                    status = "running"
+            inserted = _backfill_eval_threads_from_score(
+                conn,
+                evaluation_id=str(row["evaluation_id"]),
+                start_idx=int(row["start_idx"] or 0),
+                created_at=row["created_at"],
+                score=score,
+            )
+            if inserted > 0:
+                conn.commit()
+
             threads = conn.execute(
                 """
                 SELECT thread_id
@@ -1000,22 +1363,38 @@ def list_evaluations(limit: int = 30, request: Request = None):
                 """,
                 (row["evaluation_id"],),
             ).fetchall()
-            total = len(threads)
+            mapped_threads = len(threads)
+            threads_total = mapped_threads
             if row["evaluation_id"] in running_jobs:
                 status = "running"
-            running_count = total if status == "running" else 0
+            running_count = threads_total if status == "running" else 0
+            threads_done = max(threads_total - running_count, 0)
+            threads_started = running_count
+            live_session_progress = _load_live_eval_session_progress(str(row["evaluation_id"]), row["cwd"], notes)
             if status == "running":
                 # @@@eval-live-progress-from-checkpoints - thread rows are ingested after runner exits; use live checkpoint thread ids for in-flight progress.
                 running_count = max(running_count, _count_live_eval_threads(str(row["evaluation_id"])))
-                total = max(total, running_count)
-            score = _load_evaluation_score(
-                evaluation_id=str(row["evaluation_id"]),
-                cwd=row["cwd"],
-                notes=notes,
-            )
+                threads_total = max(threads_total, running_count)
+                if live_session_progress:
+                    threads_total = max(threads_total, int(live_session_progress["total"]))
+                    running_count = max(0, min(threads_total, int(live_session_progress["running"])))
+                    threads_done = max(0, min(threads_total, int(live_session_progress["done"])))
+                    threads_started = max(0, min(threads_total, threads_done + running_count))
+                else:
+                    threads_done = max(threads_total - running_count, 0)
+                    threads_started = running_count
+            elif threads_total == 0 and int(score.get("active_trace_threads") or 0) > 0:
+                threads_total = int(score.get("active_trace_threads") or 0)
+                threads_done = max(threads_total - running_count, 0)
+                threads_started = running_count
+            # @@@eval-progress-source - while running, monitor may only have checkpoint-derived started thread count
+            # (no persisted thread rows yet), so "running" is an estimate and should be labeled accordingly in UI.
+            progress_source = "thread_rows"
+            if status == "running" and mapped_threads == 0:
+                progress_source = "session_rows" if live_session_progress else "checkpoint_estimate"
             status = _derive_evaluation_status(status, score)
             if status != str(row["status"] or "pending"):
-                _update_evaluation_job_status(str(row["evaluation_id"]), status, notes)
+                pending_status_updates[str(row["evaluation_id"])] = (status, notes)
             items.append(
                 {
                     "evaluation_id": row["evaluation_id"],
@@ -1029,9 +1408,11 @@ def list_evaluations(limit: int = 30, request: Request = None):
                     "recursion_limit": int(row["recursion_limit"] or 0),
                     "status": status,
                     "sandbox": row["sandbox"],
-                    "threads_total": total,
+                    "threads_total": threads_total,
                     "threads_running": running_count,
-                    "threads_done": max(total - running_count, 0),
+                    "threads_done": threads_done,
+                    "threads_started": threads_started,
+                    "progress_source": progress_source,
                     "notes": notes,
                     "score": score,
                     "created_at": row["created_at"],
@@ -1040,7 +1421,29 @@ def list_evaluations(limit: int = 30, request: Request = None):
                     "updated_ago": format_time_ago(row["updated_at"]) if row["updated_at"] else None,
                 }
             )
-    return {"title": "Evaluations", "count": len(items), "items": items}
+    for evaluation_id, (status, notes) in pending_status_updates.items():
+        try:
+            _update_evaluation_job_status(evaluation_id, status, notes)
+        except sqlite3.OperationalError as exc:
+            # @@@eval-status-update-lock - avoid surfacing sqlite lock as 500 in list API; keep response serving and retry next poll.
+            print(f"[monitor] status update skipped due to sqlite lock: evaluation_id={evaluation_id} error={exc}", flush=True)
+    page = (offset // limit) + 1
+    return {
+        "title": "Evaluations",
+        "count": len(items),
+        "total": total_jobs,
+        "items": items,
+        "pagination": {
+            "offset": offset,
+            "limit": limit,
+            "total": total_jobs,
+            "page": page,
+            "has_prev": offset > 0,
+            "has_next": (offset + len(items)) < total_jobs,
+            "prev_offset": max(offset - limit, 0) if offset > 0 else None,
+            "next_offset": (offset + limit) if (offset + len(items)) < total_jobs else None,
+        },
+    }
 
 
 @router.get("/evaluation/{evaluation_id}")
@@ -1077,10 +1480,16 @@ def get_evaluation_detail(evaluation_id: str, request: Request, db: sqlite3.Conn
     status = str(job["status"] or "pending")
     notes = job["notes"] or ""
     if status == "running" and evaluation_id not in running_jobs:
-        if "runner_lost:" not in notes:
-            notes = f"{notes} | runner_lost: task not active after restart".strip(" |")
-        _update_evaluation_job_status(evaluation_id, "error", notes)
-        status = "error"
+        if _is_eval_runner_alive(evaluation_id, notes):
+            if "runner_lost_pid_alive:" not in notes:
+                notes = f"{notes} | runner_lost_pid_alive: runner process still alive".strip(" |")
+            _update_evaluation_job_status(evaluation_id, "running", notes)
+            status = "running"
+        else:
+            if "runner_lost:" not in notes:
+                notes = f"{notes} | runner_lost: task not active after restart".strip(" |")
+            _update_evaluation_job_status(evaluation_id, "error", notes)
+            status = "error"
     if evaluation_id in running_jobs:
         status = "running"
     score = _load_evaluation_score(
@@ -1088,37 +1497,101 @@ def get_evaluation_detail(evaluation_id: str, request: Request, db: sqlite3.Conn
         cwd=job["cwd"],
         notes=notes,
     )
+    # @@@eval-status-recover-pid - recover stale error rows to running when runner pid is still alive and score has not closed.
+    if status == "error" and not bool(score.get("scored")):
+        if _is_eval_runner_alive(evaluation_id, notes):
+            if "runner_recovered_pid_alive:" not in notes:
+                notes = f"{notes} | runner_recovered_pid_alive: runner process still alive".strip(" |")
+            _update_evaluation_job_status(evaluation_id, "running", notes)
+            status = "running"
+    if len(rows) == 0:
+        with sqlite3.connect(str(DB_PATH)) as conn:
+            inserted = _backfill_eval_threads_from_score(
+                conn,
+                evaluation_id=evaluation_id,
+                start_idx=int(job["start_idx"] or 0),
+                created_at=job["created_at"],
+                score=score,
+            )
+            if inserted > 0:
+                conn.commit()
+                conn.row_factory = sqlite3.Row
+                rows = conn.execute(
+                    """
+                    SELECT thread_id, run_id, start_idx, item_index, created_at
+                    FROM evaluation_job_threads
+                    WHERE evaluation_id = ?
+                    ORDER BY item_index ASC
+                    """,
+                    (evaluation_id,),
+                ).fetchall()
     status = _derive_evaluation_status(status, score)
     if status != str(job["status"] or "pending"):
         _update_evaluation_job_status(evaluation_id, status, notes)
     thread_items = []
+    mapped_threads = len(rows)
     running_count = 0
-    for row in rows:
-        thread_id = str(row["thread_id"])
+    done_count = 0
+    live_session_progress = _load_live_eval_session_progress(evaluation_id, job["cwd"], notes)
+    live_sessions = _load_live_eval_sessions(evaluation_id, job["cwd"], notes)
+    live_session_by_thread = {str(s["thread_id"]): s for s in live_sessions}
+    row_by_thread = {str(r["thread_id"]): r for r in rows}
+    merged_thread_ids: list[str] = []
+    for s in live_sessions:
+        tid = str(s["thread_id"])
+        if tid not in merged_thread_ids:
+            merged_thread_ids.append(tid)
+    for r in rows:
+        tid = str(r["thread_id"])
+        if tid not in merged_thread_ids:
+            merged_thread_ids.append(tid)
+
+    # @@@eval-detail-thread-source-unify - running phase has live sessions before evaluation_job_threads is persisted;
+    # build detail rows from merged(live sessions, persisted mappings) so "count" and table rows stay consistent.
+    start_idx_base = int(job["start_idx"] or 0)
+    for idx, thread_id in enumerate(merged_thread_ids):
+        row = row_by_thread.get(thread_id)
+        live_session = live_session_by_thread.get(thread_id)
         session = _load_latest_session(db, thread_id)
-        run = _load_run_stats(thread_id, row["run_id"])
-        running = status == "running"
+        session_row = session if session else None
+        if not session_row and live_session:
+            session_row = {
+                "chat_session_id": live_session["chat_session_id"],
+                "status": live_session["status"],
+                "started_at": live_session["started_at"],
+                "last_active_at": live_session["last_active_at"],
+            }
+        run = _load_run_stats(thread_id, row["run_id"] if row else evaluation_id)
+        running = bool(status == "running" and session and session["status"] == "active")
+        if not session and live_session:
+            running = bool(status == "running" and str(live_session["status"]) == "active")
         if running:
             running_count += 1
+        elif session_row and session_row["status"] and session_row["status"] != "active":
+            done_count += 1
         thread_items.append(
             {
                 "thread_id": thread_id,
                 "thread_url": f"/thread/{thread_id}",
-                "start_idx": int(row["start_idx"] or 0),
-                "item_index": int(row["item_index"] or 0),
-                "created_at": row["created_at"],
-                "created_ago": format_time_ago(row["created_at"]) if row["created_at"] else None,
+                "start_idx": int(row["start_idx"] or (start_idx_base + idx)) if row else (start_idx_base + idx),
+                "item_index": int(row["item_index"] or idx) if row else idx,
+                "created_at": (row["created_at"] if row else (live_session["started_at"] if live_session else None)),
+                "created_ago": (
+                    format_time_ago(row["created_at"])
+                    if row and row["created_at"]
+                    else (format_time_ago(live_session["started_at"]) if live_session and live_session["started_at"] else None)
+                ),
                 "run": run,
                 "session": {
-                    "session_id": session["chat_session_id"] if session else None,
-                    "session_url": f"/session/{session['chat_session_id']}" if session else None,
-                    "status": session["status"] if session else None,
-                    "started_ago": format_time_ago(session["started_at"]) if session and session["started_at"] else None,
-                    "last_active_ago": format_time_ago(session["last_active_at"])
-                    if session and session["last_active_at"]
+                    "session_id": session_row["chat_session_id"] if session_row else None,
+                    "session_url": f"/session/{session_row['chat_session_id']}" if session else None,
+                    "status": session_row["status"] if session_row else None,
+                    "started_ago": format_time_ago(session_row["started_at"]) if session_row and session_row["started_at"] else None,
+                    "last_active_ago": format_time_ago(session_row["last_active_at"])
+                    if session_row and session_row["last_active_at"]
                     else None,
                 },
-                "status": "running" if running else (session["status"] if session else "idle"),
+                "status": "running" if running else (session_row["status"] if session_row else ("running" if status == "running" else "idle")),
                 "running": running,
             }
         )
@@ -1126,8 +1599,26 @@ def get_evaluation_detail(evaluation_id: str, request: Request, db: sqlite3.Conn
     total = len(thread_items)
     if status == "running":
         # @@@eval-live-progress-from-checkpoints - evaluation thread mappings are persisted at the end, so derive interim running count from live checkpoint data.
-        running_count = max(running_count, _count_live_eval_threads(evaluation_id))
+        checkpoint_started = _count_live_eval_threads(evaluation_id)
+        running_count = max(running_count, checkpoint_started)
         total = max(total, running_count)
+        if live_session_progress:
+            total = max(total, int(live_session_progress["total"]))
+            if mapped_threads == 0:
+                running_count = max(0, min(total, int(live_session_progress["running"])))
+                done_count = max(0, min(total, int(live_session_progress["done"])))
+            else:
+                running_count = max(running_count, min(total, int(live_session_progress["running"])))
+                done_count = max(done_count, min(total, int(live_session_progress["done"])))
+    threads_done = max(total - running_count, 0)
+    if live_session_progress:
+        threads_done = max(threads_done, min(total, int(live_session_progress["done"])))
+    threads_started = max(0, min(total, threads_done + running_count))
+    # @@@eval-progress-source - when no persisted thread mapping exists yet, running count is checkpoint-derived
+    # "started thread" estimate and must not be presented as exact in-flight count.
+    progress_source = "thread_rows"
+    if status == "running" and mapped_threads == 0:
+        progress_source = "session_rows" if live_session_progress else "checkpoint_estimate"
 
     return {
         "evaluation_id": evaluation_id,
@@ -1154,7 +1645,9 @@ def get_evaluation_detail(evaluation_id: str, request: Request, db: sqlite3.Conn
             "updated_ago": format_time_ago(job["updated_at"]) if job["updated_at"] else None,
             "threads_total": total,
             "threads_running": running_count,
-            "threads_done": max(total - running_count, 0),
+            "threads_done": threads_done,
+            "threads_started": threads_started,
+            "progress_source": progress_source,
             "score": score,
         },
         "threads": {"title": "Evaluation Threads", "count": total, "items": thread_items},
