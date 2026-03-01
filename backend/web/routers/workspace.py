@@ -145,7 +145,12 @@ async def read_workspace_file(
 @router.get("/channels")
 async def get_workspace_channels(thread_id: str) -> dict[str, Any]:
     """Get thread-scoped upload/download channel paths."""
-    payload = await asyncio.to_thread(ensure_thread_file_channel, thread_id)
+    from backend.web.utils.helpers import load_thread_config
+
+    # @@@workspace-lookup - pass stored workspace_id so ensure is idempotent even if called multiple times
+    tc = await asyncio.to_thread(load_thread_config, thread_id)
+    workspace_id = tc.workspace_id if tc else None
+    payload = await asyncio.to_thread(ensure_thread_file_channel, thread_id, workspace_id=workspace_id)
     return payload
 
 
