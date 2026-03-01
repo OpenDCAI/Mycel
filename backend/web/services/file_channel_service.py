@@ -84,7 +84,7 @@ def _channel_root(thread_id: str, workspace_id: str | None = None) -> Path:
     return (THREAD_FILES_ROOT / thread_id).resolve()
 
 
-def ensure_thread_file_channel(thread_id: str, workspace_id: str | None = None) -> dict[str, str]:
+def ensure_thread_file_channel(thread_id: str, workspace_id: str | None = None) -> dict[str, Any]:
     # @@@workspace-root - when workspace_id set, root is shared host_path; otherwise per-thread isolation
     thread_root = _channel_root(thread_id, workspace_id)
     upload_dir = thread_root / "upload"
