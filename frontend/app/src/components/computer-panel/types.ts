@@ -1,4 +1,5 @@
 import type { ChatEntry, LeaseStatus, SessionStatus, TerminalStatus } from "../../api";
+import type { WorkspaceChannelFileEntry, WorkspaceChannelKind } from "../../api";
 
 export type TabType = "terminal" | "files" | "agents";
 
@@ -41,6 +42,17 @@ export interface FileExplorerState {
   selectedFileContent: string;
   loadingWorkspace: boolean;
   workspaceError: string | null;
+  channel: WorkspaceChannelKind;
+  channelRootPath: string;
+  workspaceId: string | null;
+  channelEntries: WorkspaceChannelFileEntry[];
+  loadingChannelFiles: boolean;
+  uploadingChannelFile: boolean;
+  channelError: string | null;
+  setChannel: (channel: WorkspaceChannelKind) => void;
+  refreshChannelFiles: () => Promise<void>;
+  uploadChannelFile: (file: File) => Promise<void>;
+  downloadChannelFile: (relativePath: string) => void;
   handleToggleFolder: (fullPath: string) => Promise<void>;
   handleSelectFile: (fullPath: string) => Promise<void>;
   refreshWorkspace: (pathOverride?: string) => Promise<void>;

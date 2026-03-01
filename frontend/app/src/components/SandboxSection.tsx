@@ -25,8 +25,9 @@ const PROVIDER_FIELDS: Record<string, FieldDef[]> = {
     { key: "image_id", label: "镜像 ID", type: "text", nested: "agentbay" },
   ],
   docker: [
-    { key: "image", label: "镜像", type: "text", placeholder: "python:3.12-slim", nested: "docker" },
-    { key: "mount_path", label: "挂载路径", type: "text", placeholder: "/workspace", nested: "docker" },
+    { key: "image", label: "Image", type: "text", placeholder: "python:3.12-slim", nested: "docker" },
+    { key: "cwd", label: "Working Dir", type: "text", placeholder: "/workspace", nested: "docker" },
+    { key: "mount_path", label: "Context Mount", type: "text", placeholder: "/workspace", nested: "docker" },
   ],
   e2b: [
     { key: "api_key", label: "API 密钥", type: "password", nested: "e2b" },

@@ -14,18 +14,53 @@ from backend.web.utils.helpers import is_virtual_thread_id
 from sandbox.config import SandboxConfig
 from sandbox.config import DEFAULT_DB_PATH as SANDBOX_DB_PATH
 from sandbox.manager import SandboxManager
+from sandbox.provider import ProviderCapability
+
+
+def _capability_to_dict(capability: ProviderCapability) -> dict[str, Any]:
+    return {
+        "can_pause": capability.can_pause,
+        "can_resume": capability.can_resume,
+        "can_destroy": capability.can_destroy,
+        "supports_webhook": capability.supports_webhook,
+        "supports_status_probe": capability.supports_status_probe,
+        "eager_instance_binding": capability.eager_instance_binding,
+        "inspect_visible": capability.inspect_visible,
+        "runtime_kind": capability.runtime_kind,
+        "mount": capability.mount.to_dict(),
+    }
+
+
+_providers_cache: tuple[dict, dict] | None = None
 
 
 def available_sandbox_types() -> list[dict[str, Any]]:
     """Scan ~/.leon/sandboxes/ for configured providers."""
-    types = [{"name": "local", "available": True}]
+    providers, _ = init_providers_and_managers()
+    local_capability = providers["local"].get_capability()
+    types = [
+        {
+            "name": "local",
+            "provider": "local",
+            "available": True,
+            "capability": _capability_to_dict(local_capability),
+        }
+    ]
     if not SANDBOXES_DIR.exists():
         return types
     for f in sorted(SANDBOXES_DIR.glob("*.json")):
         name = f.stem
         try:
-            SandboxConfig.load(name)
-            types.append({"name": name, "available": True})
+            config = SandboxConfig.load(name)
+            provider_obj = providers.get(name)
+            item: dict[str, Any] = {
+                "name": name,
+                "provider": config.provider,
+                "available": True,
+            }
+            if provider_obj:
+                item["capability"] = _capability_to_dict(provider_obj.get_capability())
+            types.append(item)
         except Exception as e:
             types.append({"name": name, "available": False, "reason": str(e)})
     return types
@@ -40,7 +75,8 @@ def init_providers_and_managers() -> tuple[dict, dict]:
     }
     if not SANDBOXES_DIR.exists():
         managers = {name: SandboxManager(provider=p, db_path=SANDBOX_DB_PATH) for name, p in providers.items()}
-        return providers, managers
+        _providers_cache = (providers, managers)
+        return _providers_cache
 
     for config_file in SANDBOXES_DIR.glob("*.json"):
         name = config_file.stem
@@ -66,6 +102,8 @@ def init_providers_and_managers() -> tuple[dict, dict]:
                 providers[name] = DockerProvider(
                     image=config.docker.image,
                     mount_path=config.docker.mount_path,
+                    default_cwd=config.docker.cwd,
+                    bind_mounts=config.docker.bind_mounts,
                     provider_name=name,
                 )
             elif config.provider == "e2b":
@@ -94,13 +132,15 @@ def init_providers_and_managers() -> tuple[dict, dict]:
                     api_url=config.daytona.api_url,
                     target=config.daytona.target,
                     default_cwd=config.daytona.cwd,
+                    bind_mounts=config.daytona.bind_mounts,
                     provider_name=name,
                 )
         except Exception:
             logger.exception("[sandbox] Failed to load %s", name)
 
     managers = {name: SandboxManager(provider=p, db_path=SANDBOX_DB_PATH) for name, p in providers.items()}
-    return providers, managers
+    _providers_cache = (providers, managers)
+    return _providers_cache
 
 
 def load_all_sessions(managers: dict) -> list[dict]:

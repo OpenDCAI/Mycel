@@ -1,5 +1,13 @@
 import { useCallback, useState } from "react";
-import { listWorkspace, readWorkspaceFile } from "../../api";
+import {
+  getWorkspaceChannels,
+  getWorkspaceDownloadUrl,
+  listWorkspace,
+  listWorkspaceChannelFiles,
+  readWorkspaceFile,
+  uploadWorkspaceFile,
+} from "../../api";
+import type { WorkspaceChannelFileEntry, WorkspaceChannelKind } from "../../api";
 import type { TreeNode } from "./types";
 import { buildTreeNodes, updateNodeAtPath } from "./utils";
 
@@ -16,6 +24,17 @@ interface FileExplorerResult {
   selectedFileContent: string;
   loadingWorkspace: boolean;
   workspaceError: string | null;
+  channel: WorkspaceChannelKind;
+  channelRootPath: string;
+  workspaceId: string | null;
+  channelEntries: WorkspaceChannelFileEntry[];
+  loadingChannelFiles: boolean;
+  uploadingChannelFile: boolean;
+  channelError: string | null;
+  setChannel: (channel: WorkspaceChannelKind) => void;
+  refreshChannelFiles: () => Promise<void>;
+  uploadChannelFile: (file: File) => Promise<void>;
+  downloadChannelFile: (relativePath: string) => void;
   handleToggleFolder: (fullPath: string) => Promise<void>;
   handleSelectFile: (fullPath: string) => Promise<void>;
   refreshWorkspace: (pathOverride?: string) => Promise<void>;
@@ -29,6 +48,13 @@ export function useFileExplorer({ threadId }: UseFileExplorerOptions): FileExplo
   const [selectedFileContent, setSelectedFileContent] = useState<string>("");
   const [loadingWorkspace, setLoadingWorkspace] = useState(false);
   const [workspaceError, setWorkspaceError] = useState<string | null>(null);
+  const [channel, setChannelState] = useState<WorkspaceChannelKind>("download");
+  const [channelRootPath, setChannelRootPath] = useState<string>("");
+  const [workspaceId, setWorkspaceId] = useState<string | null>(null);
+  const [channelEntries, setChannelEntries] = useState<WorkspaceChannelFileEntry[]>([]);
+  const [loadingChannelFiles, setLoadingChannelFiles] = useState(false);
+  const [uploadingChannelFile, setUploadingChannelFile] = useState(false);
+  const [channelError, setChannelError] = useState<string | null>(null);
 
   const refreshWorkspace = useCallback(async (pathOverride?: string) => {
     if (!threadId) return;
@@ -98,6 +124,51 @@ export function useFileExplorer({ threadId }: UseFileExplorerOptions): FileExplo
     }
   }, [threadId]);
 
+  const refreshChannelFiles = useCallback(async (channelOverride?: WorkspaceChannelKind) => {
+    if (!threadId) return;
+    const targetChannel = channelOverride ?? channel;
+    setLoadingChannelFiles(true);
+    setChannelError(null);
+    try {
+      const [channels, files] = await Promise.all([
+        getWorkspaceChannels(threadId),
+        listWorkspaceChannelFiles(threadId, targetChannel),
+      ]);
+      setChannelRootPath(targetChannel === "upload" ? channels.upload_path : channels.download_path);
+      setWorkspaceId(channels.workspace_id ?? null);
+      setChannelEntries(files.entries);
+    } catch (e) {
+      setChannelError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setLoadingChannelFiles(false);
+    }
+  }, [threadId, channel]);
+
+  const setChannel = useCallback((nextChannel: WorkspaceChannelKind) => {
+    setChannelState(nextChannel);
+    void refreshChannelFiles(nextChannel);
+  }, [refreshChannelFiles]);
+
+  const uploadChannelFile = useCallback(async (file: File) => {
+    if (!threadId) return;
+    setUploadingChannelFile(true);
+    setChannelError(null);
+    try {
+      await uploadWorkspaceFile(threadId, { file, channel });
+      await refreshChannelFiles(channel);
+    } catch (e) {
+      setChannelError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setUploadingChannelFile(false);
+    }
+  }, [threadId, channel, refreshChannelFiles]);
+
+  const downloadChannelFile = useCallback((relativePath: string) => {
+    if (!threadId) return;
+    const url = getWorkspaceDownloadUrl(threadId, relativePath, channel);
+    window.open(url, "_blank", "noopener,noreferrer");
+  }, [threadId, channel]);
+
   return {
     currentPath,
     setCurrentPath,
@@ -107,6 +178,17 @@ export function useFileExplorer({ threadId }: UseFileExplorerOptions): FileExplo
     selectedFileContent,
     loadingWorkspace,
     workspaceError,
+    channel,
+    channelRootPath,
+    workspaceId,
+    channelEntries,
+    loadingChannelFiles,
+    uploadingChannelFile,
+    channelError,
+    setChannel,
+    refreshChannelFiles: () => refreshChannelFiles(),
+    uploadChannelFile,
+    downloadChannelFile,
     handleToggleFolder,
     handleSelectFile,
     refreshWorkspace,

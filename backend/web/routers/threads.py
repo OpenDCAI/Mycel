@@ -7,6 +7,7 @@ import uuid
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi.responses import JSONResponse
 from sse_starlette.sse import EventSourceResponse
 
 from backend.web.core.dependencies import get_app, get_current_user_id, get_thread_agent, get_thread_lock, verify_thread_owner
@@ -18,7 +19,8 @@ from backend.web.models.requests import (
 )
 from backend.web.services.agent_pool import get_or_create_agent, resolve_thread_sandbox
 from backend.web.services.event_buffer import ThreadEventBuffer
-from backend.web.services.sandbox_service import destroy_thread_resources_sync
+from backend.web.services.file_channel_service import cleanup_thread_file_channel, ensure_thread_file_channel
+from backend.web.services.sandbox_service import destroy_thread_resources_sync, init_providers_and_managers
 from backend.web.services.streaming_service import (
     get_or_create_thread_buffer,
     observe_run_events,
@@ -38,11 +40,73 @@ from storage.contracts import EntityRow
 
 logger = logging.getLogger(__name__)
 from core.runtime.middleware.monitor import AgentState
-
 from backend.web.utils.serializers import avatar_url
+from core.runtime.middleware.queue import format_steer_reminder
+from sandbox.config import MountSpec
 from sandbox.thread_context import set_current_thread_id
 
 router = APIRouter(prefix="/api/threads", tags=["threads"])
+
+
+def _find_mount_capability_mismatch(
+    requested_mounts: list[MountSpec],
+    mount_capability: Any,
+) -> dict[str, Any] | None:
+    capability = mount_capability.to_dict()
+    mode_handlers = capability.get("mode_handlers", {})
+    for mount in requested_mounts:
+        requested = {"mode": mount.mode, "read_only": mount.read_only}
+        # @@@mode-handler-gate - Prefer explicit per-mode capability declaration; fall back to legacy booleans for backward compatibility.
+        mode_supported = None
+        if mode_handlers:
+            mode_supported = bool(mode_handlers.get(mount.mode, False))
+        elif mount.mode == "mount":
+            mode_supported = capability["supports_mount"]
+        elif mount.mode == "copy":
+            mode_supported = capability["supports_copy"]
+        else:
+            mode_supported = False
+
+        if not mode_supported:
+            return {"requested": requested, "capability": capability}
+        if mount.read_only and not capability["supports_read_only"]:
+            return {"requested": requested, "capability": capability}
+    return None
+
+
+async def _validate_mount_capability_gate(
+    sandbox_type: str,
+    requested_mounts: list[MountSpec],
+) -> JSONResponse | None:
+    if not requested_mounts:
+        return None
+
+    providers, _ = await asyncio.to_thread(init_providers_and_managers)
+    provider_obj = providers.get(sandbox_type)
+    if provider_obj is None:
+        return JSONResponse(
+            status_code=400,
+            content={
+                "error": "sandbox_provider_unavailable",
+                "provider": sandbox_type,
+            },
+        )
+
+    capability = provider_obj.get_capability()
+    mismatch = _find_mount_capability_mismatch(requested_mounts, capability.mount)
+    if mismatch is None:
+        return None
+
+    # @@@request-stage-capability-gate - Fail at create-thread request stage so unsupported mount semantics never enter runtime lifecycle.
+    return JSONResponse(
+        status_code=400,
+        content={
+            "error": "sandbox_capability_mismatch",
+            "provider": sandbox_type,
+            "requested": mismatch["requested"],
+            "capability": mismatch["capability"],
+        },
+    )
 
 
 def _get_agent_for_thread(app: Any, thread_id: str) -> Any | None:
@@ -91,15 +155,13 @@ def _create_owned_thread(
         raise HTTPException(403, "Not authorized")
 
     # @@@non-atomic-create - these 3 steps (seq++, thread, entity) are not atomic.
-    # If step 2 or 3 fails, seq has a gap and thread/entity may be orphaned.
-    # Acceptable for dev (SQLite). Wrap in DB transaction when migrating to Supabase.
     seq = app.state.member_repo.increment_entity_seq(agent_member_id)
     thread_entity_id = f"{agent_member_id}-{seq}"
     has_main = app.state.thread_repo.get_main_thread(agent_member_id) is not None
     resolved_is_main = is_main or not has_main
     branch_index = 0 if resolved_is_main else app.state.thread_repo.get_next_branch_index(agent_member_id)
 
-    sandbox_type = payload.sandbox or "local"
+    # Create thread with workspace_id
     app.state.thread_repo.create(
         thread_id=thread_entity_id,
         member_id=agent_member_id,
@@ -109,6 +171,7 @@ def _create_owned_thread(
         model=payload.model,
         is_main=resolved_is_main,
         branch_index=branch_index,
+        workspace_id=payload.workspace_id,
     )
 
     # @@@entity-name-convention - entity display names derive from member + thread role, never sandbox strings.
@@ -121,6 +184,7 @@ def _create_owned_thread(
         created_at=time.time(),
     ))
 
+    # Set thread state
     app.state.thread_sandbox[thread_entity_id] = sandbox_type
     if payload.cwd:
         app.state.thread_cwd[thread_entity_id] = payload.cwd
@@ -135,6 +199,7 @@ def _create_owned_thread(
         "sidebar_label": sidebar_label(is_main=resolved_is_main, branch_index=branch_index),
         "avatar_url": avatar_url(agent_member_id, bool(agent_member.avatar)),
         "is_main": resolved_is_main,
+        "workspace_id": payload.workspace_id,
     }
 
 
@@ -143,9 +208,21 @@ async def create_thread(
     payload: CreateThreadRequest,
     user_id: Annotated[str, Depends(get_current_user_id)],
     app: Annotated[Any, Depends(get_app)] = None,
-) -> dict[str, Any]:
+) -> dict[str, Any] | JSONResponse:
     """Create a new child thread for an agent member."""
-    return _create_owned_thread(app, user_id, payload, is_main=False)
+    # Validate bind_mounts capability before creating thread
+    sandbox_type = payload.sandbox or "local"
+    requested_mounts = payload.bind_mounts if payload.bind_mounts else []
+    capability_error = await _validate_mount_capability_gate(sandbox_type, requested_mounts)
+    if capability_error is not None:
+        return capability_error
+
+    result = _create_owned_thread(app, user_id, payload, is_main=False)
+
+    # File channel workspace setup (async I/O stays in endpoint layer)
+    await asyncio.to_thread(ensure_thread_file_channel, result["thread_id"], workspace_id=payload.workspace_id)
+
+    return result
 
 
 @router.post("/main")
@@ -271,6 +348,7 @@ async def delete_thread(
             await asyncio.to_thread(destroy_thread_resources_sync, thread_id, sandbox_type, app.state.agent_pool)
         except Exception as exc:
             logger.warning("Failed to destroy sandbox resources for thread %s: %s", thread_id, exc)
+        await asyncio.to_thread(cleanup_thread_file_channel, thread_id)
         await asyncio.to_thread(delete_thread_in_db, thread_id)
         # Also delete from threads table (entity-chat addition)
         app.state.thread_repo.delete(thread_id)
