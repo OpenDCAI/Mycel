@@ -69,12 +69,8 @@ def _resolve_relative_path(base: Path, relative_path: str) -> Path:
 
 
 def _channel_root(thread_id: str, workspace_id: str | None = None) -> Path:
-    """Resolve the root directory for a thread's file channel.
-
-    If workspace_id is given, use the workspace's host_path (shared across threads).
-    Otherwise fall back to THREAD_FILES_ROOT/{thread_id} (per-thread isolation).
-    """
     if workspace_id:
+        # @@@lazy-import - avoid circular dep: file_channel_service ↔ workspace_service both import from config
         from backend.web.services.workspace_service import get_workspace
 
         ws = get_workspace(workspace_id)

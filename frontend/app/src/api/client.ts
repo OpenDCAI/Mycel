@@ -251,7 +251,7 @@ export function getWorkspaceDownloadUrl(
 export async function createWorkspace(hostPath: string, name?: string): Promise<Workspace> {
   return request<Workspace>("/api/workspaces", {
     method: "POST",
-    body: JSON.stringify({ host_path: hostPath, ...(name ? { name } : {}) }),
+    body: JSON.stringify({ host_path: hostPath, name }),
   });
 }
 
@@ -260,12 +260,8 @@ export async function listWorkspaces(): Promise<Workspace[]> {
   return payload.workspaces;
 }
 
-export async function getWorkspace(workspaceId: string): Promise<Workspace | null> {
-  try {
-    return await request<Workspace>(`/api/workspaces/${encodeURIComponent(workspaceId)}`);
-  } catch {
-    return null;
-  }
+export async function getWorkspace(workspaceId: string): Promise<Workspace> {
+  return request<Workspace>(`/api/workspaces/${encodeURIComponent(workspaceId)}`);
 }
 
 export async function deleteWorkspace(workspaceId: string): Promise<void> {
