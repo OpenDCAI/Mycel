@@ -1,6 +1,12 @@
-import { FolderOpen, Server, X } from "lucide-react";
+import { FolderOpen, Server } from "lucide-react";
 import { useState } from "react";
 import { pickFolder, type SandboxType } from "../api";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "./ui/dialog";
 
 interface NewThreadModalProps {
   open: boolean;
@@ -32,8 +38,6 @@ export default function NewThreadModal({ open, sandboxTypes, onClose, onCreate }
   const [localExpanded, setLocalExpanded] = useState(false);
   const [cwdInput, setCwdInput] = useState("");
 
-  if (!open) return null;
-
   const handleClose = () => {
     setLocalExpanded(false);
     setCwdInput("");
@@ -58,37 +62,25 @@ export default function NewThreadModal({ open, sandboxTypes, onClose, onCreate }
   };
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm"
-      onClick={handleClose}
-    >
-      <div
-        className="w-[400px] rounded-2xl bg-white border border-[#e5e5e5] shadow-xl animate-scale-in"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-center justify-between px-5 py-4 border-b border-[#e5e5e5]">
-          <h2 className="text-base font-semibold text-[#171717]">新建会话</h2>
-          <button
-            className="w-7 h-7 rounded-lg flex items-center justify-center text-[#a3a3a3] hover:bg-[#f5f5f5] hover:text-[#171717]"
-            onClick={handleClose}
-          >
-            <X className="w-4 h-4" />
-          </button>
-        </div>
+    <Dialog open={open} onOpenChange={(v) => { if (!v) handleClose(); }}>
+      <DialogContent className="sm:max-w-[400px] p-0 gap-0" showCloseButton>
+        <DialogHeader className="px-5 py-4 border-b border-border">
+          <DialogTitle className="text-base">新建会话</DialogTitle>
+        </DialogHeader>
         <div className="px-5 py-4">
-          <p className="text-sm mb-3 text-[#737373]">选择运行环境</p>
+          <p className="text-sm mb-3 text-muted-foreground">选择运行环境</p>
           <div className="space-y-2">
             {sandboxTypes.map((item) => {
               const info = sandboxLabel(item.name);
 
               if (item.name === "local") {
                 return (
-                  <div key="local" className="rounded-xl border border-[#e5e5e5] transition-all overflow-hidden">
+                  <div key="local" className="rounded-lg border border-border transition-all overflow-hidden">
                     <button
                       disabled={!item.available}
                       className={`w-full text-left px-4 py-3 transition-all ${
                         item.available
-                          ? "hover:bg-[#fafafa]"
+                          ? "hover:bg-accent"
                           : "opacity-30 cursor-not-allowed"
                       }`}
                       onClick={() => {
@@ -100,10 +92,10 @@ export default function NewThreadModal({ open, sandboxTypes, onClose, onCreate }
                       }}
                     >
                       <div className="flex items-center gap-3">
-                        <Server className="w-4 h-4 flex-shrink-0 text-[#737373]" />
+                        <Server className="w-4 h-4 flex-shrink-0 text-muted-foreground" />
                         <div className="flex-1">
-                          <div className="text-sm font-medium text-[#171717]">{info.label}</div>
-                          <div className="text-xs text-[#a3a3a3]">{info.desc}</div>
+                          <div className="text-sm font-medium">{info.label}</div>
+                          <div className="text-xs text-muted-foreground">{info.desc}</div>
                         </div>
                       </div>
                     </button>
@@ -111,7 +103,7 @@ export default function NewThreadModal({ open, sandboxTypes, onClose, onCreate }
                     {localExpanded && (
                       <div className="px-4 pb-3 animate-fade-in">
                         <div className="flex items-center gap-2 mt-1">
-                          <FolderOpen className="w-4 h-4 text-[#a3a3a3] flex-shrink-0" />
+                          <FolderOpen className="w-4 h-4 text-muted-foreground flex-shrink-0" />
                           <input
                             type="text"
                             value={cwdInput}
@@ -120,11 +112,11 @@ export default function NewThreadModal({ open, sandboxTypes, onClose, onCreate }
                               if (e.key === "Enter") handleLocalConfirm();
                             }}
                             placeholder="工作目录，如 ~/projects/my-app"
-                            className="flex-1 text-sm px-3 py-1.5 rounded-lg border border-[#e5e5e5] bg-[#fafafa] text-[#171717] placeholder:text-[#d4d4d4] focus:outline-none focus:border-[#a3a3a3] transition-colors"
+                            className="flex-1 text-sm px-3 py-1.5 rounded-lg border border-border bg-accent/50 placeholder:text-muted-foreground/50 focus:outline-none focus:border-ring transition-colors"
                             autoFocus
                           />
                           <button
-                            className="px-3 py-1.5 text-xs rounded-lg border border-[#e5e5e5] bg-white text-[#525252] hover:bg-[#fafafa] hover:border-[#d4d4d4] transition-colors flex items-center gap-1.5"
+                            className="px-3 py-1.5 text-xs rounded-lg border border-border bg-background text-foreground/70 hover:bg-accent hover:border-border/80 transition-colors flex items-center gap-1.5"
                             onClick={handleBrowseFolder}
                             title="选择文件夹"
                           >
@@ -133,9 +125,9 @@ export default function NewThreadModal({ open, sandboxTypes, onClose, onCreate }
                           </button>
                         </div>
                         <div className="flex items-center justify-between mt-2">
-                          <span className="text-[10px] text-[#d4d4d4]">留空则使用默认目录</span>
+                          <span className="text-[10px] text-muted-foreground/50">留空则使用默认目录</span>
                           <button
-                            className="text-xs px-3 py-1 rounded-lg bg-[#171717] text-white hover:bg-[#333] transition-colors"
+                            className="text-xs px-3 py-1 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
                             onClick={handleLocalConfirm}
                           >
                             确认
@@ -151,9 +143,9 @@ export default function NewThreadModal({ open, sandboxTypes, onClose, onCreate }
                 <button
                   key={item.name}
                   disabled={!item.available}
-                  className={`w-full text-left px-4 py-3 rounded-xl border border-[#e5e5e5] transition-all ${
+                  className={`w-full text-left px-4 py-3 rounded-lg border border-border transition-all ${
                     item.available
-                      ? "hover:border-[#d4d4d4] hover:bg-[#fafafa] hover:shadow-sm"
+                      ? "hover:border-border/80 hover:bg-accent hover:shadow-sm"
                       : "opacity-30 cursor-not-allowed"
                   }`}
                   onClick={() => {
@@ -162,10 +154,10 @@ export default function NewThreadModal({ open, sandboxTypes, onClose, onCreate }
                   }}
                 >
                   <div className="flex items-center gap-3">
-                    <Server className="w-4 h-4 flex-shrink-0 text-[#737373]" />
+                    <Server className="w-4 h-4 flex-shrink-0 text-muted-foreground" />
                     <div>
-                      <div className="text-sm font-medium text-[#171717]">{info.label}</div>
-                      <div className="text-xs text-[#a3a3a3]">
+                      <div className="text-sm font-medium">{info.label}</div>
+                      <div className="text-xs text-muted-foreground">
                         {info.desc}{!item.available ? " (不可用)" : ""}
                       </div>
                     </div>
@@ -175,7 +167,7 @@ export default function NewThreadModal({ open, sandboxTypes, onClose, onCreate }
             })}
           </div>
         </div>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }

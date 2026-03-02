@@ -1,4 +1,4 @@
-import { Loader2, Pause, Play, Trash2, X } from "lucide-react";
+import { Loader2, Pause, Play, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import {
   destroySandboxSession,
@@ -7,6 +7,12 @@ import {
   resumeSandboxSession,
   type SandboxSession,
 } from "../api";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "./ui/dialog";
 
 interface SandboxSessionsModalProps {
   isOpen: boolean;
@@ -52,8 +58,6 @@ export default function SandboxSessionsModal({ isOpen, onClose, onSessionMutated
     return () => window.clearInterval(timer);
   }, [isOpen]);
 
-  if (!isOpen) return null;
-
   async function withBusy(row: SandboxSession, fn: () => Promise<void>) {
     setBusy(row.session_id);
     try {
@@ -85,87 +89,71 @@ export default function SandboxSessionsModal({ isOpen, onClose, onSessionMutated
       );
     }
     return (
-      <span className="px-2 py-0.5 rounded text-xs font-medium bg-[#f5f5f5] text-[#737373] border border-[#e5e5e5]">
+      <span className="px-2 py-0.5 rounded text-xs font-medium bg-secondary text-muted-foreground border border-border">
         {status}
       </span>
     );
   }
 
   return (
-    <div
-      className="fixed inset-0 z-[120] flex items-center justify-center bg-black/40 backdrop-blur-sm"
-      onClick={onClose}
-    >
-      <div
-        className="w-[860px] max-w-[95vw] max-h-[85vh] rounded-2xl overflow-hidden bg-white border border-[#e5e5e5] shadow-xl animate-scale-in"
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* Header */}
-        <div className="h-12 px-5 flex items-center justify-between border-b border-[#e5e5e5]">
+    <Dialog open={isOpen} onOpenChange={(v) => { if (!v) onClose(); }}>
+      <DialogContent className="sm:max-w-[860px] p-0 gap-0" showCloseButton>
+        <DialogHeader className="h-12 px-5 flex-row items-center justify-between border-b border-border">
           <div className="flex items-center gap-3">
-            <h3 className="text-sm font-semibold text-[#171717]">运行环境会话</h3>
+            <DialogTitle className="text-sm">运行环境会话</DialogTitle>
             {refreshing && (
-              <Loader2 className="w-3.5 h-3.5 animate-spin text-[#a3a3a3]" />
+              <Loader2 className="w-3.5 h-3.5 animate-spin text-muted-foreground" />
             )}
           </div>
-          <div className="flex items-center gap-2">
-            <button
-              className="px-3 py-1.5 rounded-lg text-xs border border-[#e5e5e5] text-[#525252] hover:bg-[#f5f5f5] hover:text-[#171717]"
-              onClick={() => void refresh()}
-            >
-              刷新
-            </button>
-            <button
-              className="w-7 h-7 rounded-lg flex items-center justify-center text-[#a3a3a3] hover:bg-[#f5f5f5] hover:text-[#171717]"
-              onClick={onClose}
-            >
-              <X className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
+          <button
+            className="px-3 py-1.5 rounded-lg text-xs border border-border text-foreground/70 hover:bg-accent hover:text-foreground"
+            onClick={() => void refresh()}
+          >
+            刷新
+          </button>
+        </DialogHeader>
 
-        {/* Content */}
         <div className="p-5 overflow-auto max-h-[calc(85vh-48px)] custom-scrollbar">
           {loading && sessions.length === 0 && (
             <div className="flex items-center gap-2 py-8 justify-center">
-              <Loader2 className="w-4 h-4 animate-spin text-[#a3a3a3]" />
-              <span className="text-sm text-[#737373]">加载中...</span>
+              <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
+              <span className="text-sm text-muted-foreground">加载中...</span>
             </div>
           )}
-          {error && sessions.length === 0 && <p className="text-sm py-8 text-center text-red-500">{error}</p>}
-          {error && sessions.length > 0 && <p className="text-xs mb-3 text-red-500">刷新失败: {error}</p>}
+          {error && sessions.length === 0 && <p className="text-sm py-8 text-center text-destructive">{error}</p>}
+          {error && sessions.length > 0 && <p className="text-xs mb-3 text-destructive">刷新失败: {error}</p>}
           {!loading && sessions.length === 0 && !error && (
-            <p className="text-sm py-8 text-center text-[#a3a3a3]">暂无活跃会话</p>
+            <p className="text-sm py-8 text-center text-muted-foreground">暂无活跃会话</p>
           )}
           {sessions.length > 0 && (
             <div className="space-y-2">
               {sessions.map((row) => (
                 <div
                   key={row.session_id}
-                  className="flex items-center gap-4 p-3 rounded-xl bg-[#fafafa] border border-[#e5e5e5]"
+                  className="flex items-center gap-4 p-3 rounded-lg bg-accent/50 border border-border"
                 >
                   <div className="flex-1 min-w-0 grid grid-cols-4 gap-3 items-center">
                     <div>
-                      <div className="text-[10px] uppercase tracking-wider mb-0.5 text-[#a3a3a3]">对话</div>
-                      <div className="text-sm font-mono truncate text-[#171717]">{row.thread_id.slice(0, 16)}</div>
+                      <div className="text-[10px] uppercase tracking-wider mb-0.5 text-muted-foreground">对话</div>
+                      <div className="text-sm font-mono truncate">{row.thread_id.slice(0, 16)}</div>
                     </div>
                     <div>
-                      <div className="text-[10px] uppercase tracking-wider mb-0.5 text-[#a3a3a3]">会话</div>
-                      <div className="text-sm font-mono truncate text-[#171717]">{row.session_id.slice(0, 16)}</div>
+                      <div className="text-[10px] uppercase tracking-wider mb-0.5 text-muted-foreground">会话</div>
+                      <div className="text-sm font-mono truncate">{row.session_id.slice(0, 16)}</div>
                     </div>
                     <div>
-                      <div className="text-[10px] uppercase tracking-wider mb-0.5 text-[#a3a3a3]">环境</div>
-                      <div className="text-sm text-[#171717]">{row.provider}</div>
+                      <div className="text-[10px] uppercase tracking-wider mb-0.5 text-muted-foreground">环境</div>
+                      <div className="text-sm">{row.provider}</div>
                     </div>
                     <div>
-                      <div className="text-[10px] uppercase tracking-wider mb-0.5 text-[#a3a3a3]">状态</div>
+                      <div className="text-[10px] uppercase tracking-wider mb-0.5 text-muted-foreground">状态</div>
                       {statusBadge(row.status)}
                     </div>
                   </div>
                   <div className="flex items-center gap-1.5 flex-shrink-0">
                     {row.status === "running" && (
                       <button
-                        className="w-8 h-8 rounded-lg flex items-center justify-center text-[#a3a3a3] hover:bg-[#f0f0f0] hover:text-[#171717] disabled:opacity-30"
+                        className="w-8 h-8 rounded-lg flex items-center justify-center text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-30"
                         disabled={busy === row.session_id}
                         onClick={() => void withBusy(row, () => pauseSandboxSession(row.session_id, row.provider))}
                         title="暂停"
@@ -175,7 +163,7 @@ export default function SandboxSessionsModal({ isOpen, onClose, onSessionMutated
                     )}
                     {row.status === "paused" && (
                       <button
-                        className="w-8 h-8 rounded-lg flex items-center justify-center text-[#a3a3a3] hover:bg-[#f0f0f0] hover:text-green-600 disabled:opacity-30"
+                        className="w-8 h-8 rounded-lg flex items-center justify-center text-muted-foreground hover:bg-accent hover:text-green-600 disabled:opacity-30"
                         disabled={busy === row.session_id}
                         onClick={() => void withBusy(row, () => resumeSandboxSession(row.session_id, row.provider))}
                         title="恢复"
@@ -184,7 +172,7 @@ export default function SandboxSessionsModal({ isOpen, onClose, onSessionMutated
                       </button>
                     )}
                     <button
-                      className="w-8 h-8 rounded-lg flex items-center justify-center text-[#a3a3a3] hover:bg-[#fee2e2] hover:text-[#dc2626] disabled:opacity-30"
+                      className="w-8 h-8 rounded-lg flex items-center justify-center text-muted-foreground hover:bg-destructive/10 hover:text-destructive disabled:opacity-30"
                       disabled={busy === row.session_id}
                       onClick={() => void withBusy(row, () => destroySandboxSession(row.session_id, row.provider))}
                       title="销毁"
@@ -197,7 +185,7 @@ export default function SandboxSessionsModal({ isOpen, onClose, onSessionMutated
             </div>
           )}
         </div>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }

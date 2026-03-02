@@ -1,5 +1,6 @@
 import { Check, ChevronDown, Cpu, Loader2 } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
+import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 
 interface ModelOption {
   id: string;
@@ -33,19 +34,6 @@ export default function ModelSelector({
     () => !VIRTUAL_MODELS.some((m) => m.id === currentModel) && !!currentModel
   );
   const [enabledModels, setEnabledModels] = useState<string[]>([]);
-  const dropdownRef = useRef<HTMLDivElement>(null);
-
-  // Close dropdown on outside click
-  useEffect(() => {
-    if (!isOpen) return;
-    const handler = (e: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
-        setIsOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, [isOpen]);
 
   // Fetch enabled models when dropdown opens
   useEffect(() => {
@@ -85,68 +73,67 @@ export default function ModelSelector({
   const currentModelDisplay = VIRTUAL_MODELS.find((m) => m.id === currentModel)?.name || currentModel;
 
   return (
-    <div className="relative" ref={dropdownRef}>
-      <button
-        onClick={() => setIsOpen((v) => !v)}
-        disabled={loading}
-        className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-[#e5e5e5] text-sm text-[#525252] hover:bg-[#f5f5f5] hover:text-[#171717] disabled:opacity-50 disabled:cursor-not-allowed"
-      >
-        <Cpu className="w-3.5 h-3.5" />
-        <span className="max-w-[120px] truncate">{currentModelDisplay}</span>
-        {loading ? (
-          <Loader2 className="w-3.5 h-3.5 animate-spin" />
-        ) : (
-          <ChevronDown className="w-3.5 h-3.5" />
-        )}
-      </button>
-
-      {isOpen && (
-        <div className="absolute right-0 top-10 w-48 bg-white rounded-xl border border-[#e5e5e5] shadow-lg z-50 py-1">
-          {VIRTUAL_MODELS.map((model) => (
-            <button
-              key={model.id}
-              onClick={() => handleModelSelect(model.id)}
-              disabled={loading}
-              className="w-full flex items-center justify-between py-1.5 px-3 hover:bg-[#f5f5f5] disabled:opacity-50 text-left"
-            >
-              <span className="text-sm text-[#171717]">{model.name}</span>
-              {currentModel === model.id && (
-                <Check className="w-3.5 h-3.5 text-primary flex-shrink-0 ml-2" />
-              )}
-            </button>
-          ))}
-
-          <div className="border-t my-1" />
-          <div className="flex items-center justify-between px-3 py-1.5">
-            <span className="text-xs text-muted-foreground">Custom</span>
-            <button
-              onClick={() => setShowCustomModels(!showCustomModels)}
-              className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${showCustomModels ? "bg-primary" : "bg-muted"}`}
-            >
-              <span className={`inline-block h-3.5 w-3.5 rounded-full bg-white shadow-sm transition-transform ${showCustomModels ? "translate-x-4" : "translate-x-0.5"}`} />
-            </button>
-          </div>
-          {showCustomModels && enabledModels.map((id) => (
-            <button
-              key={id}
-              onClick={() => handleModelSelect(id)}
-              disabled={loading}
-              className="w-full flex items-center justify-between py-1.5 px-3 hover:bg-[#f5f5f5] disabled:opacity-50 text-left"
-            >
-              <span className="text-xs text-[#171717] truncate">{id}</span>
-              {currentModel === id && (
-                <Check className="w-4 h-4 text-primary flex-shrink-0 ml-2" />
-              )}
-            </button>
-          ))}
-
-          {error && (
-            <div className="mx-3 mt-1 px-3 py-2 bg-red-50 border border-red-200 rounded-lg">
-              <p className="text-xs text-red-600">{error}</p>
-            </div>
+    <Popover open={isOpen} onOpenChange={setIsOpen}>
+      <PopoverTrigger asChild>
+        <button
+          disabled={loading}
+          className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-border text-sm text-foreground/70 hover:bg-accent hover:text-foreground disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          <Cpu className="w-3.5 h-3.5" />
+          <span className="max-w-[120px] truncate">{currentModelDisplay}</span>
+          {loading ? (
+            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+          ) : (
+            <ChevronDown className="w-3.5 h-3.5" />
           )}
+        </button>
+      </PopoverTrigger>
+
+      <PopoverContent align="end" className="w-48 p-1">
+        {VIRTUAL_MODELS.map((model) => (
+          <button
+            key={model.id}
+            onClick={() => handleModelSelect(model.id)}
+            disabled={loading}
+            className="w-full flex items-center justify-between py-1.5 px-3 hover:bg-accent rounded-md disabled:opacity-50 text-left"
+          >
+            <span className="text-sm">{model.name}</span>
+            {currentModel === model.id && (
+              <Check className="w-3.5 h-3.5 text-primary flex-shrink-0 ml-2" />
+            )}
+          </button>
+        ))}
+
+        <div className="border-t border-border my-1" />
+        <div className="flex items-center justify-between px-3 py-1.5">
+          <span className="text-xs text-muted-foreground">Custom</span>
+          <button
+            onClick={() => setShowCustomModels(!showCustomModels)}
+            className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${showCustomModels ? "bg-primary" : "bg-muted"}`}
+          >
+            <span className={`inline-block h-3.5 w-3.5 rounded-full bg-white shadow-sm transition-transform ${showCustomModels ? "translate-x-4" : "translate-x-0.5"}`} />
+          </button>
         </div>
-      )}
-    </div>
+        {showCustomModels && enabledModels.map((id) => (
+          <button
+            key={id}
+            onClick={() => handleModelSelect(id)}
+            disabled={loading}
+            className="w-full flex items-center justify-between py-1.5 px-3 hover:bg-accent rounded-md disabled:opacity-50 text-left"
+          >
+            <span className="text-xs truncate">{id}</span>
+            {currentModel === id && (
+              <Check className="w-4 h-4 text-primary flex-shrink-0 ml-2" />
+            )}
+          </button>
+        ))}
+
+        {error && (
+          <div className="mx-2 mt-1 px-3 py-2 bg-destructive/10 border border-destructive/20 rounded-lg">
+            <p className="text-xs text-destructive">{error}</p>
+          </div>
+        )}
+      </PopoverContent>
+    </Popover>
   );
 }

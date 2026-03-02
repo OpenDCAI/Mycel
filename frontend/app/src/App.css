@@ -19,6 +19,11 @@ html, body, #root {
   color: #171717;
 }
 
+/* Remove focus outline from textarea inputs (handled by container border) */
+textarea:focus-visible {
+  outline: none;
+}
+
 /* Smooth transitions — explicit properties to avoid outline/ring flash */
 button, input, textarea {
   transition: color 0.15s ease, background-color 0.15s ease, border-color 0.15s ease, opacity 0.15s ease, box-shadow 0.15s ease;
