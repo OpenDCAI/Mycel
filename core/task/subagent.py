@@ -59,19 +59,30 @@ class SubagentRunner:
         """Set parent runtime for background task event emission."""
         self._parent_runtime = runtime
 
-    def _create_task_checkpointer(self) -> tuple[Any, None]:
-        """Create an in-memory checkpointer for a sub-agent task.
+    async def _create_task_checkpointer(self) -> tuple[Any, Any]:
+        """Create a persistent SQLite checkpointer for a sub-agent task.
 
-        Sub-agents are short-lived (few turns) and don't need persistent state.
-        Using MemorySaver avoids SQLite contention when multiple sub-agents
-        run concurrently against the same leon.db file.
+        Uses the same leon.db as the main agent. WAL mode + 30s busy_timeout
+        (via connection factory constants) prevents 'database is locked' when
+        multiple sub-agents run concurrently.
 
         Returns:
-            (checkpointer, None) — no connection to close.
+            (checkpointer, aiosqlite_connection) — caller must close the connection.
         """
-        from langgraph.checkpoint.memory import MemorySaver
+        import aiosqlite
+        from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 
-        return MemorySaver(), None
+        from storage.providers.sqlite.connection import BUSY_TIMEOUT_MS, SYNCHRONOUS, WAL_MODE
+
+        db_path = self.db_path or (Path.home() / ".leon" / "leon.db")
+        db_path.parent.mkdir(parents=True, exist_ok=True)
+        conn = await aiosqlite.connect(str(db_path))
+        await conn.execute(f"PRAGMA journal_mode={WAL_MODE}")
+        await conn.execute(f"PRAGMA busy_timeout={BUSY_TIMEOUT_MS}")
+        await conn.execute(f"PRAGMA synchronous={SYNCHRONOUS}")
+        checkpointer = AsyncSqliteSaver(conn)
+        await checkpointer.setup()
+        return checkpointer, conn
 
     def _build_subagent_middleware(self, config: AgentConfig, all_middleware: list[Any]) -> list[Any]:
         """Build middleware stack for subagent based on allowed tools."""
@@ -218,8 +229,8 @@ class SubagentRunner:
         middleware_has_tools = any(getattr(m, "tools", None) for m in middleware)
         tools = [] if middleware_has_tools else [_placeholder_tool]
 
-        # In-memory checkpointer — no SQLite contention
-        checkpointer, _ = self._create_task_checkpointer()
+        # Persistent SQLite checkpointer
+        checkpointer, checkpointer_conn = await self._create_task_checkpointer()
 
         try:
             agent = create_agent(
@@ -230,6 +241,8 @@ class SubagentRunner:
                 checkpointer=checkpointer,
             )
         except Exception as e:
+            if checkpointer_conn:
+                await checkpointer_conn.close()
             return TaskResult(
                 task_id=task_id,
                 status="error",
@@ -242,7 +255,7 @@ class SubagentRunner:
 
         if params.get("RunInBackground"):
             task = asyncio.create_task(
-                self._execute_agent(agent, prompt, subagent_thread_id, max_turns, task_id, parent_thread_id, description, parent_tool_call_id)
+                self._execute_agent(agent, prompt, subagent_thread_id, max_turns, task_id, parent_thread_id, description, parent_tool_call_id, checkpointer_conn)
             )
             self._active_tasks[task_id] = task
             return TaskResult(
@@ -253,7 +266,11 @@ class SubagentRunner:
                 result=f"Task started in background. Use TaskOutput with TaskId='{task_id}' to get results.",
             )
         else:
-            return await self._execute_agent(agent, prompt, subagent_thread_id, max_turns, task_id, description=description)
+            try:
+                return await self._execute_agent(agent, prompt, subagent_thread_id, max_turns, task_id, description=description)
+            finally:
+                if checkpointer_conn:
+                    await checkpointer_conn.close()
 
     async def run_streaming(
         self,
@@ -319,8 +336,8 @@ class SubagentRunner:
         middleware_has_tools = any(getattr(m, "tools", None) for m in middleware)
         tools = [] if middleware_has_tools else [_placeholder_tool]
 
-        # In-memory checkpointer — no SQLite contention
-        checkpointer, _ = self._create_task_checkpointer()
+        # Persistent SQLite checkpointer
+        checkpointer, checkpointer_conn = await self._create_task_checkpointer()
 
         try:
             agent = create_agent(
@@ -331,6 +348,8 @@ class SubagentRunner:
                 checkpointer=checkpointer,
             )
         except Exception as e:
+            if checkpointer_conn:
+                await checkpointer_conn.close()
             yield {
                 "event": "task_error",
                 "data": json.dumps({"task_id": task_id, "error": f"Failed to create subagent: {e}"}),
@@ -450,6 +469,10 @@ class SubagentRunner:
                 "data": json.dumps({"task_id": task_id, "error": str(e)}),
             }
 
+        finally:
+            if checkpointer_conn:
+                await checkpointer_conn.close()
+
     def _extract_text_content(self, raw_content: Any) -> str:
         """Extract text content from message content."""
         if isinstance(raw_content, str):
@@ -474,37 +497,42 @@ class SubagentRunner:
         parent_thread_id: str | None = None,
         description: str = "",
         parent_tool_call_id: str | None = None,
+        checkpointer_conn: Any = None,
     ) -> TaskResult:
         """Execute agent and return result.
 
         When a parent runtime is available, uses astream() to emit real-time
         background_task_* events. Otherwise falls back to ainvoke().
         """
-        runtime = self._parent_runtime
-        if runtime:
-            result = await self._execute_agent_streaming(agent, prompt, thread_id, task_id, runtime, description, parent_tool_call_id)
-        else:
-            result = await self._execute_agent_invoke(agent, prompt, thread_id, task_id, description)
+        try:
+            runtime = self._parent_runtime
+            if runtime:
+                result = await self._execute_agent_streaming(agent, prompt, thread_id, task_id, runtime, description, parent_tool_call_id)
+            else:
+                result = await self._execute_agent_invoke(agent, prompt, thread_id, task_id, description)
 
-        # Inject completion notification into parent's unified queue.
-        # This may trigger new_run (via wake handler) when parent is idle.
-        if parent_thread_id and result.status in ("completed", "error"):
-            self._inject_task_notification(task_id, result, parent_thread_id)
+            # Inject completion notification into parent's unified queue.
+            # This may trigger new_run (via wake handler) when parent is idle.
+            if parent_thread_id and result.status in ("completed", "error"):
+                self._inject_task_notification(task_id, result, parent_thread_id)
 
-        # Emit background_task_done/error AFTER notification injection.
-        # This ensures new_run arrives before background_task_done on the
-        # activity SSE, preventing premature frontend disconnect.
-        if runtime and result.status in ("completed", "error"):
-            event_name = "background_task_done" if result.status == "completed" else "background_task_error"
-            event_data: dict[str, Any] = {"task_id": task_id, "status": result.status}
-            if result.status == "error":
-                event_data["error"] = result.error or ""
-            runtime.emit_activity_event({
-                "event": event_name,
-                "data": json.dumps(event_data),
-            })
+            # Emit background_task_done/error AFTER notification injection.
+            # This ensures new_run arrives before background_task_done on the
+            # activity SSE, preventing premature frontend disconnect.
+            if runtime and result.status in ("completed", "error"):
+                event_name = "background_task_done" if result.status == "completed" else "background_task_error"
+                event_data: dict[str, Any] = {"task_id": task_id, "status": result.status}
+                if result.status == "error":
+                    event_data["error"] = result.error or ""
+                runtime.emit_activity_event({
+                    "event": event_name,
+                    "data": json.dumps(event_data),
+                })
 
-        return result
+            return result
+        finally:
+            if checkpointer_conn:
+                await checkpointer_conn.close()
 
     def _inject_task_notification(
         self, task_id: str, result: TaskResult, parent_thread_id: str
