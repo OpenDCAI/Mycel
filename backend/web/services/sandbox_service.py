@@ -56,7 +56,7 @@ def available_sandbox_types() -> list[dict[str, Any]]:
             item: dict[str, Any] = {
                 "name": name,
                 "provider": config.provider,
-                "available": True,
+                "available": provider_obj is not None,
             }
             if provider_obj:
                 item["capability"] = _capability_to_dict(provider_obj.get_capability())
