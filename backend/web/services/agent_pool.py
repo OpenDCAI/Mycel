@@ -112,6 +112,12 @@ async def get_or_create_agent(app_obj: FastAPI, sandbox_type: str, thread_id: st
         sandbox_type=sandbox_type,
     )
     agent_obj.agent_id = agent_id
+
+    # @@@per-thread-bind-mounts - inject bind_mounts from thread_config into sandbox manager
+    if thread_config and thread_config.bind_mounts and hasattr(agent_obj, "_sandbox"):
+        manager = getattr(agent_obj._sandbox, "_manager", None) or getattr(agent_obj._sandbox, "manager", None)
+        if manager and hasattr(manager, "set_thread_bind_mounts"):
+            manager.set_thread_bind_mounts(thread_id, thread_config.bind_mounts)
     pool[pool_key] = agent_obj
     return agent_obj
 

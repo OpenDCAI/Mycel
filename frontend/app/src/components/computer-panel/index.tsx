@@ -49,7 +49,6 @@ export default function ComputerPanel({
   useEffect(() => {
     if (!isOpen || !threadId || activeTab !== "files") return;
     void fileExplorer.refreshWorkspace();
-    void fileExplorer.refreshChannelFiles();
   }, [isOpen, threadId, activeTab]);
 
   if (!isOpen) return null;
@@ -91,21 +90,11 @@ export default function ComputerPanel({
             workspaceError={fileExplorer.workspaceError}
             selectedFilePath={fileExplorer.selectedFilePath}
             selectedFileContent={fileExplorer.selectedFileContent}
-            channel={fileExplorer.channel}
-            channelRootPath={fileExplorer.channelRootPath}
-            workspaceId={fileExplorer.workspaceId}
-            channelEntries={fileExplorer.channelEntries}
-            loadingChannelFiles={fileExplorer.loadingChannelFiles}
-            uploadingChannelFile={fileExplorer.uploadingChannelFile}
-            channelError={fileExplorer.channelError}
             treeWidth={treeWidth}
             onDragStart={onDragStart}
-            onSetChannel={fileExplorer.setChannel}
-            onRefreshChannelFiles={() => void fileExplorer.refreshChannelFiles()}
-            onUploadChannelFile={(file) => void fileExplorer.uploadChannelFile(file)}
-            onDownloadChannelFile={fileExplorer.downloadChannelFile}
             onToggleFolder={fileExplorer.handleToggleFolder}
             onSelectFile={fileExplorer.handleSelectFile}
+            onDownloadFile={fileExplorer.downloadFile}
           />
         )}
       </div>

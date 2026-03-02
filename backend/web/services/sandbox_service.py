@@ -103,7 +103,6 @@ def init_providers_and_managers() -> tuple[dict, dict]:
                     image=config.docker.image,
                     mount_path=config.docker.mount_path,
                     default_cwd=config.docker.cwd,
-                    bind_mounts=config.docker.bind_mounts,
                     provider_name=name,
                 )
             elif config.provider == "e2b":
@@ -132,7 +131,6 @@ def init_providers_and_managers() -> tuple[dict, dict]:
                     api_url=config.daytona.api_url,
                     target=config.daytona.target,
                     default_cwd=config.daytona.cwd,
-                    bind_mounts=config.daytona.bind_mounts,
                     provider_name=name,
                 )
         except Exception:

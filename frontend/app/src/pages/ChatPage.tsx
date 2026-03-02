@@ -159,12 +159,8 @@ function ChatPageInner({ threadId }: { threadId: string }) {
   async function handleDropUploadFiles(files: DroppedUploadFile[]): Promise<string[]> {
     const uploadedPaths: string[] = [];
     for (const item of files) {
-      const payload = await uploadWorkspaceFile(threadId, {
-        file: item.file,
-        channel: "upload",
-        path: item.relativePath,
-      });
-      uploadedPaths.push(payload.relative_path);
+      const payload = await uploadWorkspaceFile(threadId, item.file, item.relativePath);
+      uploadedPaths.push(payload.path);
     }
     return uploadedPaths;
   }

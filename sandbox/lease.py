@@ -115,6 +115,7 @@ class SandboxLease(ABC):
         self.last_error = last_error
         self.needs_refresh = needs_refresh
         self.refresh_hint_at = refresh_hint_at
+        self.bind_mounts: list | None = None
 
     # @@@compat-refresh-error - legacy callers still read refresh_error while storage canonicalized to last_error.
     @property
@@ -129,7 +130,7 @@ class SandboxLease(ABC):
         return self._current_instance
 
     @abstractmethod
-    def ensure_active_instance(self, provider: SandboxProvider) -> SandboxInstance: ...
+    def ensure_active_instance(self, provider: SandboxProvider, bind_mounts: list | None = None) -> SandboxInstance: ...
 
     @abstractmethod
     def destroy_instance(self, provider: SandboxProvider) -> None: ...
@@ -602,7 +603,10 @@ class SQLiteLease(SandboxLease):
 
             return self._snapshot()
 
-    def ensure_active_instance(self, provider: SandboxProvider) -> SandboxInstance:
+    def ensure_active_instance(self, provider: SandboxProvider, bind_mounts: list | None = None) -> SandboxInstance:
+        # @@@lazy-bind-mounts - use stored bind_mounts as fallback for lazy creation paths
+        if bind_mounts is None:
+            bind_mounts = self.bind_mounts
         capability = provider.get_capability()
         if self._current_instance and self.observed_state == "running" and self._is_fresh() and not self.needs_refresh:
             return self._current_instance
@@ -670,7 +674,7 @@ class SQLiteLease(SandboxLease):
 
             self.status = "recovering"
             self._persist_lease_metadata()
-            session_info = provider.create_session(context_id=f"leon-{self.lease_id}")
+            session_info = provider.create_session(context_id=f"leon-{self.lease_id}", bind_mounts=bind_mounts)
             self._current_instance = SandboxInstance(
                 instance_id=session_info.session_id,
                 provider_name=self.provider_name,

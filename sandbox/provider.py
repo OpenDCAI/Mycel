@@ -131,7 +131,7 @@ class SandboxProvider(ABC):
         pass
 
     @abstractmethod
-    def create_session(self, context_id: str | None = None) -> SessionInfo:
+    def create_session(self, context_id: str | None = None, bind_mounts: list | None = None) -> SessionInfo:
         pass
 
     @abstractmethod

@@ -273,7 +273,6 @@ def _create_provider(config):
             image=config.docker.image,
             mount_path=config.docker.mount_path,
             default_cwd=config.docker.cwd,
-            bind_mounts=config.docker.bind_mounts,
         )
 
     elif config.provider == "e2b":
@@ -298,7 +297,6 @@ def _create_provider(config):
                 api_url=config.daytona.api_url,
                 target=config.daytona.target,
                 default_cwd=config.daytona.cwd,
-                bind_mounts=config.daytona.bind_mounts,
             )
 
     return None
