@@ -21,6 +21,7 @@ export default function InputBox({
   const [value, setValue] = useState("");
   const [focused, setFocused] = useState(false);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const sendingRef = useRef(false);
 
   const autoResize = useCallback(() => {
     const el = inputRef.current;
@@ -41,13 +42,18 @@ export default function InputBox({
 
   async function handleSend() {
     const text = value.trim();
-    if (!text) return;
+    if (!text || sendingRef.current) return;
     if (canSendQueue) {
       setValue("");
       await onSendQueueMessage!(text);
     } else if (!disabled) {
+      sendingRef.current = true;
       setValue("");
-      await onSendMessage(text);
+      try {
+        await onSendMessage(text);
+      } finally {
+        sendingRef.current = false;
+      }
     }
     inputRef.current?.focus();
   }
