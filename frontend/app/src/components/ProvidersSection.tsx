@@ -62,7 +62,7 @@ export default function ProvidersSection({ providers, onUpdate }: ProvidersSecti
       <div className="flex items-center gap-3">
         <div className="w-1 h-6 bg-gradient-to-b from-[#0ea5e9] to-[#0284c7] rounded-full" />
         <h2 className="text-lg font-bold text-[#1e293b]" style={{ fontFamily: 'Inter, system-ui, sans-serif' }}>
-          API Providers
+          API 提供商
         </h2>
       </div>
 
@@ -88,21 +88,21 @@ export default function ProvidersSection({ providers, onUpdate }: ProvidersSecti
                   </h3>
                 </div>
                 {isSaving && (
-                  <span className="text-xs text-[#0ea5e9] font-medium animate-pulse">Saving...</span>
+                  <span className="text-xs text-[#0ea5e9] font-medium animate-pulse">保存中...</span>
                 )}
                 {successMessage === providerConfig.id && !isSaving && (
                   <div className="flex items-center gap-2 px-3 py-1.5 bg-[#10b981]/10 rounded-full animate-fadeIn">
                     <svg className="w-4 h-4 text-[#10b981]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                     </svg>
-                    <span className="text-xs text-[#10b981] font-medium">Saved</span>
+                    <span className="text-xs text-[#10b981] font-medium">已保存</span>
                   </div>
                 )}
               </div>
 
               {/* API Key */}
               <div className="space-y-2">
-                <label className="text-xs font-medium text-[#64748b]">API Key</label>
+                <label className="text-xs font-medium text-[#64748b]">API 密钥</label>
                 <div className="relative">
                   <input
                     type={showKey ? "text" : "password"}
@@ -112,7 +112,7 @@ export default function ProvidersSection({ providers, onUpdate }: ProvidersSecti
                       const newConfig = { ...config, api_key: e.target.value || null };
                       void handleSave(providerConfig.id, newConfig);
                     }}
-                    placeholder={`Enter ${providerConfig.name} API Key`}
+                    placeholder={`输入 ${providerConfig.name} API 密钥`}
                     className="w-full px-3 py-2 pr-10 border border-[#e2e8f0] rounded-lg text-sm text-[#1e293b] bg-[#f8fafc] font-mono hover:border-[#0ea5e9] focus:outline-none focus:border-[#0ea5e9] focus:ring-2 focus:ring-[#0ea5e9]/20 transition-all duration-200"
                   />
                   {hasApiKey && (
@@ -143,7 +143,7 @@ export default function ProvidersSection({ providers, onUpdate }: ProvidersSecti
                     className="w-4 h-4 rounded border-[#e2e8f0] text-[#0ea5e9] focus:ring-2 focus:ring-[#0ea5e9]/20"
                   />
                   <label htmlFor={`${providerConfig.id}-override`} className="text-xs font-medium text-[#64748b]">
-                    Custom Base URL
+                    自定义 Base URL
                   </label>
                 </div>
 

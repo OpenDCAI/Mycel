@@ -19,32 +19,32 @@ interface FieldDef {
 // @@@ field-lookup-by-provider-type - one field table per provider type lets multiple named configs reuse the same schema
 const PROVIDER_FIELDS: Record<string, FieldDef[]> = {
   agentbay: [
-    { key: "api_key", label: "API Key", type: "password", nested: "agentbay" },
-    { key: "region_id", label: "Region", type: "text", placeholder: "ap-southeast-1", nested: "agentbay" },
-    { key: "context_path", label: "Context Path", type: "text", placeholder: "/home/wuying", nested: "agentbay" },
-    { key: "image_id", label: "Image ID", type: "text", nested: "agentbay" },
+    { key: "api_key", label: "API 密钥", type: "password", nested: "agentbay" },
+    { key: "region_id", label: "区域", type: "text", placeholder: "ap-southeast-1", nested: "agentbay" },
+    { key: "context_path", label: "上下文路径", type: "text", placeholder: "/home/wuying", nested: "agentbay" },
+    { key: "image_id", label: "镜像 ID", type: "text", nested: "agentbay" },
   ],
   docker: [
-    { key: "image", label: "Image", type: "text", placeholder: "python:3.12-slim", nested: "docker" },
-    { key: "mount_path", label: "Mount Path", type: "text", placeholder: "/workspace", nested: "docker" },
+    { key: "image", label: "镜像", type: "text", placeholder: "python:3.12-slim", nested: "docker" },
+    { key: "mount_path", label: "挂载路径", type: "text", placeholder: "/workspace", nested: "docker" },
   ],
   e2b: [
-    { key: "api_key", label: "API Key", type: "password", nested: "e2b" },
-    { key: "template", label: "Template", type: "text", placeholder: "base", nested: "e2b" },
-    { key: "cwd", label: "Working Dir", type: "text", placeholder: "/home/user", nested: "e2b" },
-    { key: "timeout", label: "Timeout (s)", type: "number", nested: "e2b" },
+    { key: "api_key", label: "API 密钥", type: "password", nested: "e2b" },
+    { key: "template", label: "模板", type: "text", placeholder: "base", nested: "e2b" },
+    { key: "cwd", label: "工作目录", type: "text", placeholder: "/home/user", nested: "e2b" },
+    { key: "timeout", label: "超时 (秒)", type: "number", nested: "e2b" },
   ],
   daytona: [
-    { key: "api_key", label: "API Key", type: "password", nested: "daytona" },
+    { key: "api_key", label: "API 密钥", type: "password", nested: "daytona" },
     { key: "api_url", label: "API URL", type: "text", placeholder: "https://app.daytona.io/api", nested: "daytona" },
-    { key: "target", label: "Target", type: "text", placeholder: "local", nested: "daytona" },
-    { key: "cwd", label: "Working Dir", type: "text", placeholder: "/home/daytona", nested: "daytona" },
+    { key: "target", label: "目标", type: "text", placeholder: "local", nested: "daytona" },
+    { key: "cwd", label: "工作目录", type: "text", placeholder: "/home/daytona", nested: "daytona" },
   ],
 };
 
 const COMMON_FIELDS: FieldDef[] = [
-  { key: "on_exit", label: "On Exit", type: "select", options: ["pause", "destroy"] },
-  { key: "init_commands", label: "Init Cmds", type: "text", placeholder: "comma-separated commands" },
+  { key: "on_exit", label: "退出时", type: "select", options: ["pause", "destroy"] },
+  { key: "init_commands", label: "初始化命令", type: "text", placeholder: "逗号分隔的命令" },
 ];
 
 function getNestedValue(config: Record<string, unknown>, field: FieldDef): string {
@@ -136,7 +136,7 @@ export default function SandboxSection({ sandboxes, onUpdate }: SandboxSectionPr
             void handleSave(configName, setNestedValue(config, field, e.target.value));
           }}
           placeholder={field.placeholder}
-          title={isMaskedSecret ? "Click the eye icon to edit" : undefined}
+          title={isMaskedSecret ? "点击眼睛图标进行编辑" : undefined}
           className="w-full px-2 py-1 pr-7 border border-[#e2e8f0] rounded text-xs text-[#1e293b] bg-[#f8fafc] font-mono focus:outline-none focus:border-[#0ea5e9] transition-colors"
         />
         {isSecret && value && (
@@ -158,9 +158,9 @@ export default function SandboxSection({ sandboxes, onUpdate }: SandboxSectionPr
       <div className="flex items-center gap-3">
         <div className="w-1 h-6 bg-gradient-to-b from-[#0ea5e9] to-[#0284c7] rounded-full" />
         <h2 className="text-lg font-bold text-[#1e293b]" style={{ fontFamily: 'Inter, system-ui, sans-serif' }}>
-          Sandbox Providers
+          沙箱提供商
         </h2>
-        <span className="text-xs text-[#94a3b8]">{entries.length} configs</span>
+        <span className="text-xs text-[#94a3b8]">{entries.length} 个配置</span>
       </div>
 
       <div className="border border-[#e2e8f0] rounded-lg overflow-hidden divide-y divide-[#e2e8f0]">
@@ -183,7 +183,7 @@ export default function SandboxSection({ sandboxes, onUpdate }: SandboxSectionPr
                   <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#f1f5f9] text-[#64748b]">{providerType}</span>
                 )}
                 <span className="text-[10px] text-[#cbd5e1] ml-auto">
-                  {isSaving ? "saving..." : `${fields.length + COMMON_FIELDS.length} fields`}
+                  {isSaving ? "保存中..." : `${fields.length + COMMON_FIELDS.length} 个字段`}
                 </span>
               </button>
 

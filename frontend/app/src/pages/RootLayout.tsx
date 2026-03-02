@@ -115,11 +115,13 @@ export default function RootLayout() {
   const sidebarPx = dragging && dragWidth !== null ? dragWidth : (expanded ? EXPANDED_W : COLLAPSED_W);
   const showLabels = dragging ? (dragWidth !== null && dragWidth >= SNAP_THRESHOLD) : expanded;
 
-  // Auto-collapse sidebar when entering chat route
+  // Auto-collapse sidebar when entering chat, expand when leaving
   const prevIsChatRef = useRef(isChat);
   useEffect(() => {
     if (isChat && !prevIsChatRef.current) {
       setExpanded(false);
+    } else if (!isChat && prevIsChatRef.current) {
+      setExpanded(true);
     }
     prevIsChatRef.current = isChat;
   }, [isChat]);
@@ -154,7 +156,9 @@ export default function RootLayout() {
     return (
       <div className="flex flex-col h-full overflow-hidden bg-background">
         {/* Main content - no top bar, pages have their own headers */}
-        <main className="flex-1 overflow-hidden"><Outlet /></main>
+        <main className="flex-1 overflow-hidden">
+          <div key={location.pathname} className="h-full animate-page-in"><Outlet /></div>
+        </main>
 
         {/* Bottom tab bar */}
         <nav className="shrink-0 border-t border-border bg-card flex items-stretch" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
@@ -256,7 +260,9 @@ export default function RootLayout() {
         </div>
       </div>
 
-      <main className="flex-1 overflow-hidden"><Outlet /></main>
+      <main className="flex-1 overflow-hidden">
+        <div key={location.pathname} className="h-full animate-page-in"><Outlet /></div>
+      </main>
       <CreateMemberDialog open={createMemberOpen} onOpenChange={setCreateMemberOpen} />
       <NewChatDialog open={newChatOpen} onOpenChange={setNewChatOpen} />
     </div>

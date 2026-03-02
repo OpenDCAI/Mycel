@@ -1,9 +1,42 @@
-import { MoreHorizontal, Plus, Search, Trash2 } from "lucide-react";
+import { MessageSquarePlus, MoreHorizontal, Plus, Search, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import type { ThreadSummary } from "../api";
 import { useAppStore } from "../store/app-store";
 import { Skeleton } from "./ui/skeleton";
+
+type DateGroup = "今天" | "昨天" | "更早";
+
+function getDateGroup(dateStr?: string): DateGroup {
+  if (!dateStr) return "更早";
+  const date = new Date(dateStr);
+  if (isNaN(date.getTime())) return "更早";
+  const now = new Date();
+  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const yesterdayStart = new Date(todayStart.getTime() - 86400000);
+  if (date >= todayStart) return "今天";
+  if (date >= yesterdayStart) return "昨天";
+  return "更早";
+}
+
+function formatRelativeTime(dateStr?: string): string {
+  if (!dateStr) return "";
+  const date = new Date(dateStr);
+  if (isNaN(date.getTime())) return "";
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffMinutes = Math.floor(diffMs / 60000);
+  const diffHours = Math.floor(diffMs / 3600000);
+  const diffDays = Math.floor(diffMs / 86400000);
+  if (diffMinutes < 1) return "刚刚";
+  if (diffMinutes < 60) return `${diffMinutes}分钟前`;
+  if (diffHours < 24) return `${diffHours}小时前`;
+  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const yesterdayStart = new Date(todayStart.getTime() - 86400000);
+  if (date >= yesterdayStart && date < todayStart) return "昨天";
+  if (diffDays < 7) return `${diffDays}天前`;
+  return `${date.getMonth() + 1}月${date.getDate()}日`;
+}
 
 interface SidebarProps {
   threads: ThreadSummary[];
@@ -93,10 +126,26 @@ export default function Sidebar({
             <ThreadSkeleton />
           ) : (
             <>
-              {threads.map((thread) => {
+              {(() => {
+                const sorted = [...threads].sort((a, b) => {
+                  const ta = a.updated_at ? new Date(a.updated_at).getTime() : 0;
+                  const tb = b.updated_at ? new Date(b.updated_at).getTime() : 0;
+                  return tb - ta;
+                });
+                let lastGroup: DateGroup | null = null;
+                return sorted.map((thread) => {
                 const isActive = activeThreadId === thread.thread_id;
+                const group = getDateGroup(thread.updated_at);
+                const showGroupLabel = group !== lastGroup;
+                lastGroup = group;
                 return (
-                  <div key={thread.thread_id} className="group/item relative">
+                  <div key={thread.thread_id}>
+                    {showGroupLabel && (
+                      <div className="text-[10px] uppercase tracking-wider text-muted-foreground/60 px-3 pt-3 pb-1">
+                        {group}
+                      </div>
+                    )}
+                  <div className="group/item relative">
                     <Link
                       to={`/chat/${thread.thread_id}`}
                       className={`block w-full text-left px-3 py-2.5 rounded-lg transition-colors ${
@@ -113,8 +162,15 @@ export default function Sidebar({
                           {thread.agent ? (memberNameMap.get(thread.agent) || thread.agent) : "Leon"}
                         </span>
                       </div>
-                      <div className="text-[11px] mt-0.5 text-muted-foreground/60 truncate">
-                        {thread.preview || thread.thread_id.slice(0, 14)}
+                      <div className="flex items-center gap-1 mt-0.5">
+                        <span className="text-[11px] text-muted-foreground/60 truncate flex-1 min-w-0">
+                          {thread.preview || thread.thread_id.slice(0, 14)}
+                        </span>
+                        {thread.updated_at && (
+                          <span className="text-[10px] text-muted-foreground/40 flex-shrink-0">
+                            {formatRelativeTime(thread.updated_at)}
+                          </span>
+                        )}
                       </div>
                     </Link>
                     <div className={`absolute right-2 top-2.5 ${confirmDelete === thread.thread_id ? "flex" : "hidden group-hover/item:flex"} items-center gap-0.5`}>
@@ -156,12 +212,25 @@ export default function Sidebar({
                       )}
                     </div>
                   </div>
+                  </div>
                 );
-              })}
+              });
+              })()}
               {threads.length === 0 && (
-                <p className="text-xs px-3 py-6 text-center text-muted-foreground/60">
-                  暂无对话
-                </p>
+                <div className="flex flex-col items-center justify-center py-10 px-4 text-center">
+                  <div className="w-10 h-10 rounded-xl bg-muted flex items-center justify-center mb-3">
+                    <MessageSquarePlus className="w-5 h-5 text-muted-foreground" />
+                  </div>
+                  <p className="text-xs font-medium text-foreground mb-1">暂无对话</p>
+                  <p className="text-[11px] text-muted-foreground/60 mb-3">发起一个会话，开始与 Agent 协作</p>
+                  <button
+                    onClick={onNewChat}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-xs font-medium hover:opacity-90 transition-opacity"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    发起会话
+                  </button>
+                </div>
               )}
             </>
           )}

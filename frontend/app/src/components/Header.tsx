@@ -1,4 +1,4 @@
-import { ChevronLeft, Monitor, PanelLeft, Pause, Play } from "lucide-react";
+import { ChevronLeft, PanelLeft, Pause, Play } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import type { SandboxInfo } from "../api";
 import { useIsMobile } from "../hooks/use-mobile";
@@ -41,8 +41,6 @@ export default function Header({
   const navigate = useNavigate();
   const hasRemote = sandboxInfo && sandboxInfo.type !== "local";
   const sandboxLabelText = sandboxLabel(sandboxInfo?.type ?? "local");
-  const hasKnownStatus = sandboxInfo?.status === "running" || sandboxInfo?.status === "paused";
-  const statusText = sandboxInfo?.status === "running" ? "运行中" : sandboxInfo?.status === "paused" ? "已暂停" : "";
   const statusDotColor = sandboxInfo?.status === "running"
     ? "#22c55e"
     : sandboxInfo?.status === "paused"
@@ -68,41 +66,22 @@ export default function Header({
           </button>
         )}
 
-        {/* Context indicator — hide sandbox details on mobile */}
-        {isMobile ? (
-          <span className="text-sm font-medium text-[#171717] truncate">
-            {threadPreview || "新对话"}
+        {/* Thread title + optional sandbox badge */}
+        <div className="flex items-center gap-2 min-w-0">
+          <span className="text-sm font-medium text-[#171717] truncate max-w-[200px]">
+            {threadPreview || (activeThreadId ? "新对话" : "无对话")}
           </span>
-        ) : (
-          <div className="flex items-center rounded-lg border border-[#e5e5e5] overflow-hidden">
-            <div className="flex items-center gap-2 px-3 py-1.5 bg-[#fafafa]">
-              <Monitor className="w-3.5 h-3.5 text-[#a3a3a3]" />
-              <span className="text-sm text-[#171717] truncate max-w-[160px]">
-                {threadPreview || (activeThreadId ? "新对话" : "无对话")}
-              </span>
-            </div>
-            {hasKnownStatus && (
-              <>
-                <div className="w-px h-6 bg-[#e5e5e5]" />
-                <div className="flex items-center gap-2 px-3 py-1.5 bg-[#fafafa]">
-                  <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: statusDotColor }} />
-                  <span className="text-sm text-[#525252]">{sandboxLabelText}</span>
-                  {hasRemote && statusText && (
-                    <span
-                      className="text-[10px] px-1.5 py-0.5 rounded font-medium"
-                      style={{
-                        background: sandboxInfo?.status === "running" ? "rgba(34,197,94,0.1)" : "rgba(234,179,8,0.1)",
-                        color: sandboxInfo?.status === "running" ? "#16a34a" : "#ca8a04",
-                      }}
-                    >
-                      {statusText}
-                    </span>
-                  )}
-                </div>
-              </>
-            )}
-          </div>
-        )}
+          {/* Show sandbox as a small badge only for remote sandboxes */}
+          {hasRemote && sandboxInfo?.status && (
+            <span
+              className="hidden sm:inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-md font-medium border border-[#e5e5e5] text-[#737373] bg-[#fafafa] flex-shrink-0"
+              title={`沙箱: ${sandboxLabelText}`}
+            >
+              <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: statusDotColor }} />
+              {sandboxLabelText}
+            </span>
+          )}
+        </div>
       </div>
 
       <div className="flex items-center gap-1.5">

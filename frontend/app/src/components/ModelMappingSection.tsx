@@ -58,23 +58,23 @@ export default function ModelMappingSection({
         <div className="flex items-center gap-3">
           <div className="w-1 h-6 bg-gradient-to-b from-[#0ea5e9] to-[#0284c7] rounded-full" />
           <h2 className="text-lg font-bold text-[#1e293b]" style={{ fontFamily: 'Inter, system-ui, sans-serif' }}>
-            Virtual Models
+            虚拟模型
           </h2>
         </div>
         {saving && (
-          <span className="text-xs text-[#0ea5e9] font-medium animate-pulse">Syncing...</span>
+          <span className="text-xs text-[#0ea5e9] font-medium animate-pulse">同步中...</span>
         )}
         {successMessage && !saving && (
           <div className="flex items-center gap-2 px-3 py-1.5 bg-[#10b981]/10 rounded-full animate-fadeIn">
             <svg className="w-4 h-4 text-[#10b981]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
             </svg>
-            <span className="text-xs text-[#10b981] font-medium">Saved</span>
+            <span className="text-xs text-[#10b981] font-medium">已保存</span>
           </div>
         )}
       </div>
 
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         {virtualModels.map((vm, index) => {
           const currentModel = modelMapping[vm.id] || "";
           return (
@@ -97,7 +97,7 @@ export default function ModelMappingSection({
                   <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
-                  <span>Enable models in Model Pool section below</span>
+                  <span>请在下方模型池中启用模型</span>
                 </div>
               ) : (
                 <select
@@ -105,7 +105,7 @@ export default function ModelMappingSection({
                   onChange={(e) => void handleMappingChange(vm.id, e.target.value)}
                   className="relative w-full px-3 py-2.5 border border-[#e2e8f0] rounded-lg text-sm text-[#1e293b] bg-[#f8fafc] font-mono hover:border-[#0ea5e9] focus:outline-none focus:border-[#0ea5e9] focus:ring-2 focus:ring-[#0ea5e9]/20 transition-all duration-200"
                 >
-                  {!currentModel && <option value="">Select model...</option>}
+                  {!currentModel && <option value="">选择模型...</option>}
                   {enabledModelsList.map((model) => (
                     <option key={model.id} value={model.id}>{model.id}</option>
                   ))}

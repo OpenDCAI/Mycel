@@ -159,6 +159,10 @@ button:focus-visible,
   animation: fadeIn 0.25s ease-out forwards;
 }
 
+.animate-page-in {
+  animation: fadeIn 0.15s ease-out forwards;
+}
+
 .animate-slide-in {
   animation: slideIn 0.25s ease-out forwards;
 }

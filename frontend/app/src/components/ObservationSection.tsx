@@ -47,23 +47,23 @@ const PROVIDERS: ProviderDef[] = [
   {
     id: "langfuse",
     name: "Langfuse",
-    description: "Open-source LLM observability platform",
+    description: "开源 LLM 可观测性平台",
     icon: <LangfuseIcon />,
     fields: [
       { key: "secret_key", label: "Secret Key", type: "password", required: true, nested: "langfuse" },
       { key: "public_key", label: "Public Key", type: "password", required: true, nested: "langfuse" },
-      { key: "host", label: "Host", type: "text", required: false, placeholder: "https://cloud.langfuse.com", helpText: "Self-hosted Langfuse instance URL", nested: "langfuse" },
+      { key: "host", label: "主机地址", type: "text", required: false, placeholder: "https://cloud.langfuse.com", helpText: "自托管 Langfuse 实例 URL", nested: "langfuse" },
     ],
   },
   {
     id: "langsmith",
     name: "LangSmith",
-    description: "LangChain's tracing & evaluation platform",
+    description: "LangChain 追踪与评估平台",
     icon: <LangSmithIcon />,
     fields: [
-      { key: "api_key", label: "API Key", type: "password", required: true, nested: "langsmith" },
-      { key: "project", label: "Project", type: "text", required: false, placeholder: "default", helpText: "LangSmith project name", nested: "langsmith" },
-      { key: "endpoint", label: "Endpoint", type: "text", required: false, placeholder: "https://api.smith.langchain.com", helpText: "Custom API endpoint", nested: "langsmith" },
+      { key: "api_key", label: "API 密钥", type: "password", required: true, nested: "langsmith" },
+      { key: "project", label: "项目名称", type: "text", required: false, placeholder: "default", helpText: "LangSmith 项目名称", nested: "langsmith" },
+      { key: "endpoint", label: "端点", type: "text", required: false, placeholder: "https://api.smith.langchain.com", helpText: "自定义 API 端点", nested: "langsmith" },
     ],
   },
 ];
@@ -130,7 +130,7 @@ export default function ObservationSection({ config, onUpdate }: ObservationSect
       const result = await verifyObservation();
       setVerifyResult(result);
     } catch (err) {
-      setVerifyResult({ success: false, error: err instanceof Error ? err.message : "Verify failed" });
+      setVerifyResult({ success: false, error: err instanceof Error ? err.message : "验证失败" });
     } finally {
       setVerifying(false);
     }
@@ -148,7 +148,7 @@ export default function ObservationSection({ config, onUpdate }: ObservationSect
         <div className="flex items-center gap-2">
           <label className="text-xs font-medium text-[#64748b]">{field.label}</label>
           {!field.required && (
-            <span className="text-[10px] text-[#94a3b8] bg-[#f1f5f9] px-1.5 py-0.5 rounded">optional</span>
+            <span className="text-[10px] text-[#94a3b8] bg-[#f1f5f9] px-1.5 py-0.5 rounded">可选</span>
           )}
           {saved && (
             <span className="text-[#10b981] animate-fadeIn"><Check className="w-3 h-3" /></span>
@@ -179,7 +179,7 @@ export default function ObservationSection({ config, onUpdate }: ObservationSect
 
   return (
     <div className="space-y-3">
-      <p className="text-xs text-[#94a3b8]">Connect an observability provider to trace agent runs. Only one provider can be active at a time.</p>
+      <p className="text-xs text-[#94a3b8]">连接可观测性提供商以追踪 Agent 运行。同时只能激活一个提供商。</p>
       {PROVIDERS.map((provider) => {
         const isActive = active === provider.id;
         const requiredFields = provider.fields.filter((f) => f.required);
@@ -216,7 +216,7 @@ export default function ObservationSection({ config, onUpdate }: ObservationSect
                 style={{ backgroundColor: isActive ? "#0ea5e9" : "#e2e8f0" }}
                 role="switch"
                 aria-checked={isActive}
-                aria-label={`Toggle ${provider.name}`}
+                aria-label={`切换 ${provider.name}`}
               >
                 <span
                   className="absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform duration-200"
@@ -245,7 +245,7 @@ export default function ObservationSection({ config, onUpdate }: ObservationSect
                         className="flex items-center gap-1 text-xs font-medium text-[#64748b] hover:text-[#475569] transition-colors"
                       >
                         <ChevronRight className={`w-3 h-3 transition-transform duration-150 ${advOpen ? "rotate-90" : ""}`} />
-                        Advanced
+                        高级选项
                       </button>
                       <div
                         className="grid transition-[grid-template-rows] duration-150 ease-in-out"
@@ -268,8 +268,8 @@ export default function ObservationSection({ config, onUpdate }: ObservationSect
                         : "bg-red-50 border border-red-100 text-red-600"
                     }`}>
                       {verifyResult.success
-                        ? <><span className="w-1.5 h-1.5 rounded-full bg-[#10b981] shrink-0" /> Connected · {(verifyResult.traces as unknown[])?.length ?? 0} recent traces</>
-                        : <><X className="w-3.5 h-3.5 shrink-0" /> Connection failed: {verifyResult.error}</>
+                        ? <><span className="w-1.5 h-1.5 rounded-full bg-[#10b981] shrink-0" /> 已连接 · {(verifyResult.traces as unknown[])?.length ?? 0} 条近期追踪</>
+                        : <><X className="w-3.5 h-3.5 shrink-0" /> 连接失败：{verifyResult.error}</>
                       }
                     </div>
                   )}
@@ -282,7 +282,7 @@ export default function ObservationSection({ config, onUpdate }: ObservationSect
                       className="text-xs font-medium text-[#0ea5e9] hover:text-[#0284c7] disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-1.5"
                     >
                       {verifying && <Loader2 className="w-3 h-3 animate-spin" />}
-                      {verifying ? "Testing..." : "Test Connection"}
+                      {verifying ? "测试中..." : "测试连接"}
                     </button>
                   </div>
                 </div>

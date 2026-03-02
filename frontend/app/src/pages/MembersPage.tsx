@@ -114,18 +114,33 @@ export default function MembersPage() {
             </button>
           </div>
         ) : filtered.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-20">
-            <SearchX className="w-12 h-12 text-muted-foreground mb-4" />
-            <p className="text-sm font-medium text-foreground mb-1">未找到成员</p>
-            <p className="text-xs text-muted-foreground mb-3">
-              {search || statusFilter !== "all" ? "尝试调整搜索词或筛选条件" : "创建你的第一个 AI 成员"}
-            </p>
-            {!search && statusFilter === "all" && (
-              <button onClick={() => setCreateOpen(true)} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-xs font-medium hover:opacity-90 transition-opacity">
+          memberList.length === 0 ? (
+            /* Truly empty — no members at all */
+            <div className="flex flex-col items-center justify-center py-24">
+              <div className="w-14 h-14 rounded-2xl bg-primary/10 flex items-center justify-center mb-4">
+                <Bot className="w-7 h-7 text-primary" />
+              </div>
+              <p className="text-sm font-semibold text-foreground mb-1">还没有 AI 成员</p>
+              <p className="text-xs text-muted-foreground mb-5 max-w-[220px] text-center leading-relaxed">
+                创建你的第一个 AI 成员，赋予它专属技能与工具
+              </p>
+              <button
+                onClick={() => setCreateOpen(true)}
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-xs font-medium hover:opacity-90 transition-opacity"
+              >
                 <Plus className="w-3.5 h-3.5" />创建成员
               </button>
-            )}
-          </div>
+            </div>
+          ) : (
+            /* Filter / search returned nothing */
+            <div className="flex flex-col items-center justify-center py-24">
+              <div className="w-12 h-12 rounded-xl bg-muted flex items-center justify-center mb-4">
+                <SearchX className="w-6 h-6 text-muted-foreground" />
+              </div>
+              <p className="text-sm font-medium text-foreground mb-1">未找到匹配成员</p>
+              <p className="text-xs text-muted-foreground">尝试调整搜索词或筛选条件</p>
+            </div>
+          )
         ) : (
           <div className={`grid gap-4 ${isMobile ? "grid-cols-1" : "grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"}`}>
             {filtered.map((member, index) => {
@@ -164,7 +179,7 @@ export default function MembersPage() {
                 } catch { toast.error("删除失败"); }
               };
               return (
-                <div key={member.id} onClick={handleCardClick} className="surface-interactive p-4 cursor-pointer group" role="button" aria-label={isBuiltin ? `与 ${member.name} 对话` : `查看成员 ${member.name}`} tabIndex={0} onKeyDown={(e) => e.key === "Enter" && handleCardClick()}>
+                <div key={member.id} onClick={handleCardClick} className="surface-interactive p-4 cursor-pointer group hover:-translate-y-0.5 hover:shadow-md" role="button" aria-label={isBuiltin ? `与 ${member.name} 对话` : `查看成员 ${member.name}`} tabIndex={0} onKeyDown={(e) => e.key === "Enter" && handleCardClick()}>
                   <div className="flex items-start justify-between mb-3">
                     <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-xs font-bold font-mono ${colorClass}`}>{initials}</div>
                     <div className="flex items-center gap-1.5">

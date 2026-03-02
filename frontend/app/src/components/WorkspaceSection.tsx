@@ -30,10 +30,10 @@ export default function WorkspaceSection({ defaultWorkspace, onUpdate }: Workspa
         setSuccess(true);
         setTimeout(() => setSuccess(false), 2000);
       } else {
-        setError(data.detail || "Failed to save");
+        setError(data.detail || "保存失败");
       }
     } catch {
-      setError("Network error");
+      setError("网络错误");
     } finally {
       setSaving(false);
     }
@@ -44,10 +44,10 @@ export default function WorkspaceSection({ defaultWorkspace, onUpdate }: Workspa
       <div className="flex items-center gap-3">
         <div className="w-1 h-6 bg-gradient-to-b from-[#0ea5e9] to-[#0284c7] rounded-full" />
         <h2 className="text-lg font-bold text-[#1e293b]" style={{ fontFamily: 'Inter, system-ui, sans-serif' }}>
-          Local Workspace
+          本地工作区
         </h2>
       </div>
-      <p className="text-xs text-[#94a3b8]">Default working directory for local sandbox</p>
+      <p className="text-xs text-[#94a3b8]">本地沙箱的默认工作目录</p>
       <div className="flex gap-2">
         <div className="relative flex-1">
           <FolderOpen className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#94a3b8]" />
@@ -64,7 +64,7 @@ export default function WorkspaceSection({ defaultWorkspace, onUpdate }: Workspa
           disabled={saving || !path.trim()}
           className="px-4 py-2 text-sm bg-[#0ea5e9] text-white rounded-lg hover:bg-[#0ea5e9]/90 disabled:opacity-50 transition-colors"
         >
-          {saving ? "Saving…" : success ? "Saved" : "Save"}
+          {saving ? "保存中…" : success ? "已保存" : "保存"}
         </button>
       </div>
       {error && <div className="text-xs text-[#ef4444]">{error}</div>}

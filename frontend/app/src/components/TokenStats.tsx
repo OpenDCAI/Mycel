@@ -24,9 +24,9 @@ export default function TokenStats({ runtimeStatus }: TokenStatsProps) {
   }
 
   return (
-    <div className="bg-white pb-3">
+    <div className="bg-background pb-3">
       <div className="max-w-3xl mx-auto px-6">
-        <div className="flex items-center gap-3 text-[10px] text-[#a3a3a3]">
+        <div className="flex items-center gap-3 text-[10px] text-muted-foreground">
           {context && (
             <>
               <span>上下文: {formatTokens(context.estimated_tokens)} ({context.usage_percent}%)</span>
@@ -36,7 +36,7 @@ export default function TokenStats({ runtimeStatus }: TokenStatsProps) {
             </>
           )}
           <span>费用: {formatCost(tokens.cost)}</span>
-          <span className="text-[#c4c4c4]">累计: {formatTokens(tokens.total_tokens)}</span>
+          <span className="text-muted-foreground/60">累计: {formatTokens(tokens.total_tokens)}</span>
         </div>
       </div>
     </div>

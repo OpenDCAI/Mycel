@@ -341,22 +341,6 @@ export default function Tasks() {
   };
 
   const kanbanColumns: TaskStatus[] = ["pending", "running", "completed", "failed"];
-  // Stats bar
-  const statsBar = (
-    <div className="flex items-center gap-3 px-4 md:px-6 py-2 border-b border-border shrink-0">
-      {([
-        { key: "running" as const, label: "执行中", color: "text-primary" },
-        { key: "pending" as const, label: "等待", color: "text-muted-foreground" },
-        { key: "completed" as const, label: "完成", color: "text-success" },
-        { key: "failed" as const, label: "失败", color: "text-destructive" },
-      ]).map((s) => (
-        <div key={s.key} className="flex items-center gap-1.5 text-xs">
-          <span className={`font-mono font-semibold ${s.color}`}>{stats[s.key]}</span>
-          <span className="text-muted-foreground">{s.label}</span>
-        </div>
-      ))}
-    </div>
-  );
 
   // Cron edit panel (Apple-style)
   const cronEditPanel = cronForm && (
