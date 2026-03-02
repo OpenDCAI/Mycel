@@ -128,7 +128,7 @@ async def write_cancellation_markers(
 
 
 def _ensure_thread_handlers(agent: Any, thread_id: str, app: Any) -> None:
-    """Bind per-thread handlers (activity_sink, continue_handler) if not already set.
+    """Bind per-thread handlers (activity_sink, wake_handler) if not already set.
 
     These handlers have per-thread lifetime and must NOT be cleared between runs.
     Idempotent — safe to call at the start of every run.
@@ -137,7 +137,7 @@ def _ensure_thread_handlers(agent: Any, thread_id: str, app: Any) -> None:
     if not runtime:
         return
     # Already bound? Skip.
-    if getattr(runtime, "_activity_sink", None) is not None and getattr(runtime, "_continue_handler", None) is not None:
+    if getattr(runtime, "_activity_sink", None) is not None:
         return
     # Runtime must support bind_thread (AgentRuntime does, test fakes may not)
     if not hasattr(runtime, "bind_thread"):
@@ -163,39 +163,46 @@ def _ensure_thread_handlers(agent: Any, thread_id: str, app: Any) -> None:
             event = {**event, "data": json.dumps(data, ensure_ascii=False)}
         await activity_buf.put(event)
 
-    def continue_handler(message: str) -> None:
-        """Host adapter: core says 'continue with this message'."""
-        if not (hasattr(agent, "runtime") and agent.runtime.transition(AgentState.ACTIVE)):
-            # Could not transition -- enqueue as fallback to avoid silent message loss
-            try:
-                app.state.queue_manager.enqueue(message, thread_id)
-                logger.debug("continue_handler: agent not idle, enqueued message for thread %s", thread_id)
-            except Exception:
-                logger.error("continue_handler: transition failed and enqueue also failed for thread %s — message lost: %.200s", thread_id, message)
-            return
+    qm = app.state.queue_manager
+    loop = getattr(app.state, "_event_loop", None)
 
-        try:
-            new_buf = start_agent_run(
-                agent, thread_id, message, app,
-                message_metadata={"source": "system"},
-            )
-        except Exception:
-            logger.error("continue_handler: failed to start new run for thread %s", thread_id, exc_info=True)
+    def wake_handler() -> None:
+        """Called by enqueue() — may run in any thread."""
+        if not (hasattr(agent, "runtime") and agent.runtime.transition(AgentState.ACTIVE)):
+            return  # ACTIVE: before_model will drain_all
+
+        msg = qm.dequeue(thread_id)
+        if not msg:
+            # Lost race to finally block — undo transition
             if hasattr(agent, "runtime"):
                 agent.runtime.transition(AgentState.IDLE)
             return
 
-        # Notify frontend via activity buffer (persist through sink for reconnection)
-        new_run_event = {
-            "event": "new_run",
-            "data": json.dumps({"thread_id": thread_id, "run_id": new_buf.run_id}),
-        }
-        try:
-            asyncio.get_running_loop().create_task(activity_sink(new_run_event))
-        except RuntimeError:
-            logger.warning("continue_handler: could not notify frontend of new_run (no event loop) for thread %s", thread_id)
+        async def _start_run():
+            try:
+                new_buf = start_agent_run(
+                    agent, thread_id, msg, app,
+                    message_metadata={"source": "system"},
+                )
+                await activity_sink({
+                    "event": "new_run",
+                    "data": json.dumps({"thread_id": thread_id, "run_id": new_buf.run_id}),
+                })
+            except Exception:
+                logger.error("wake_handler failed for thread %s", thread_id, exc_info=True)
+                if hasattr(agent, "runtime"):
+                    agent.runtime.transition(AgentState.IDLE)
+                # Do NOT re-enqueue — avoid enqueue→wake→enqueue infinite recursion
 
-    runtime.bind_thread(activity_sink=activity_sink, continue_handler=continue_handler)
+        if loop and not loop.is_closed():
+            loop.call_soon_threadsafe(loop.create_task, _start_run())
+        else:
+            logger.warning("wake_handler: no event loop for thread %s", thread_id)
+            if hasattr(agent, "runtime"):
+                agent.runtime.transition(AgentState.IDLE)
+
+    runtime.bind_thread(activity_sink=activity_sink)
+    qm.register_wake(thread_id, wake_handler)
 
 
 # ---------------------------------------------------------------------------

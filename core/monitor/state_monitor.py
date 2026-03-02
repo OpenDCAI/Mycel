@@ -1,5 +1,6 @@
 """执行状态监控"""
 
+import threading
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
@@ -63,6 +64,7 @@ class StateMonitor(BaseMonitor):
         self.last_error_message: str | None = None
         self.last_error_at: datetime | None = None
         self._callbacks: list[Callable[[AgentState, AgentState], None]] = []
+        self._transition_lock = threading.Lock()
 
     def on_request(self, request: dict[str, Any]) -> None:
         """请求前：记录活动时间（不做状态转移，由外部控制）"""
@@ -73,13 +75,16 @@ class StateMonitor(BaseMonitor):
         self.last_activity = datetime.now()
 
     def transition(self, new_state: AgentState) -> bool:
-        """状态转移"""
-        if new_state in VALID_TRANSITIONS.get(self.state, []):
-            old_state = self.state
-            self.state = new_state
-            self._emit_state_changed(old_state, new_state)
-            return True
-        return False
+        """状态转移（线程安全）"""
+        with self._transition_lock:
+            if new_state in VALID_TRANSITIONS.get(self.state, []):
+                old_state = self.state
+                self.state = new_state
+            else:
+                return False
+        # Fire callbacks outside lock to avoid deadlock
+        self._emit_state_changed(old_state, new_state)
+        return True
 
     def set_flag(self, name: str, value: bool) -> None:
         """设置标志位"""

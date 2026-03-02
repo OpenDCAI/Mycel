@@ -28,7 +28,6 @@ class AgentRuntime:
         self._subagent_event_buffer: dict[str, list[dict[str, Any]]] = {}  # tool_call_id -> events
         self._event_callback: Callable[[dict], None] | None = None
         self._activity_sink: Callable[[dict], Any] | None = None
-        self._continue_handler: Callable[[str], None] | None = None
 
     # ========== 状态代理 ==========
 
@@ -154,30 +153,13 @@ class AgentRuntime:
         """Set persistent activity event sink. Unlike _event_callback, this survives across runs."""
         self._activity_sink = sink
 
-    def set_continue_handler(self, handler: Callable[[str], None] | None) -> None:
-        """Host registers: when core needs to continue, call this with the message."""
-        self._continue_handler = handler
-
-    def bind_thread(self, activity_sink: Callable[[dict], Any], continue_handler: Callable[[str], None]) -> None:
-        """Set per-thread handlers. Idempotent — safe to call on every run."""
+    def bind_thread(self, activity_sink: Callable[[dict], Any]) -> None:
+        """Set per-thread activity sink. Idempotent — safe to call on every run."""
         self._activity_sink = activity_sink
-        self._continue_handler = continue_handler
 
     def unbind_thread(self) -> None:
         """Clear per-thread handlers on thread deletion."""
         self._activity_sink = None
-        self._continue_handler = None
-
-    def request_continue(self, message: str) -> bool:
-        """Core calls: I need the host to start a new run with this message.
-
-        Returns True if handler was invoked, False if no handler is set.
-        """
-        if self._continue_handler:
-            self._continue_handler(message)
-            return True
-        logger.warning("request_continue called but no continue_handler is set — message may be lost")
-        return False
 
     def _dispatch_to_sink(self, event: dict[str, Any]) -> None:
         """Fire-and-forget dispatch to persistent activity sink."""

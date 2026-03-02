@@ -514,8 +514,8 @@ class SubagentRunner:
         else:
             result = await self._execute_agent_invoke(agent, prompt, thread_id, task_id, description)
 
-        # Inject completion notification into parent's steer channel
-        # This may trigger new_run (via request_continue) when parent is idle.
+        # Inject completion notification into parent's unified queue.
+        # This may trigger new_run (via wake handler) when parent is idle.
         if parent_thread_id and result.status in ("completed", "error"):
             self._inject_task_notification(task_id, result, parent_thread_id)
 
@@ -537,10 +537,11 @@ class SubagentRunner:
     def _inject_task_notification(
         self, task_id: str, result: TaskResult, parent_thread_id: str
     ) -> None:
-        """Route task notification based on parent agent state.
+        """Enqueue task notification into unified SQLite queue.
 
-        - Parent running → inject (steer buffer, drained in before_model)
-        - Parent idle → enqueue (persistent queue, consumed by IDLE callback)
+        The wake handler (registered by the host) will trigger a new run if
+        the agent is IDLE. If the agent is ACTIVE, before_model will drain
+        the message on the next LLM cycle.
         """
         from core.queue import format_task_notification
 
@@ -552,17 +553,13 @@ class SubagentRunner:
             result=result.result,
             description=result.description,
         )
-        qm = self._queue_manager
-        parent_running = getattr(self._parent_runtime, "is_running", lambda: False)()
-        if parent_running:
-            qm.inject(xml, parent_thread_id)
+        if self._queue_manager:
+            self._queue_manager.enqueue(xml, parent_thread_id)
         else:
-            # Agent IDLE → request host to start a new run (bypasses queue)
-            continued = False
-            if self._parent_runtime:
-                continued = self._parent_runtime.request_continue(xml)
-            if not continued:
-                qm.enqueue(xml, parent_thread_id)
+            import logging
+            logging.getLogger(__name__).warning(
+                "_inject_task_notification: no queue_manager for thread %s", parent_thread_id
+            )
 
     async def _execute_agent_invoke(
         self,

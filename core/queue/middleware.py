@@ -1,7 +1,8 @@
 """Steering Middleware - injects queued messages before model calls (non-preemptive)
 
-Tool calls are never skipped. All pending steer messages are drained and
-injected as HumanMessage(metadata={"source": "system"}) before the next LLM call.
+Tool calls are never skipped. All pending messages are drained from the unified
+SQLite queue and injected as HumanMessage(metadata={"source": "system"}) before
+the next LLM call.
 """
 
 import logging
@@ -39,7 +40,7 @@ class SteeringMiddleware(AgentMiddleware):
 
     Flow:
     1. Tool calls execute normally (no skipping)
-    2. Before next model call, drain ALL pending steer messages
+    2. Before next model call, drain ALL pending messages from SQLite queue
     3. Inject as HumanMessage with metadata source="system"
     """
 
@@ -68,13 +69,13 @@ class SteeringMiddleware(AgentMiddleware):
         runtime: Any,
         config: RunnableConfig | None = None,
     ) -> dict[str, Any] | None:
-        """Drain all pending steer messages and inject before model call."""
+        """Drain all pending messages from unified queue and inject before model call."""
         thread_id = (config or {}).get("configurable", {}).get("thread_id")
         if not thread_id:
             logger.debug("SteeringMiddleware: no thread_id in config, skipping steer injection")
             return None
 
-        items = self._queue_manager.drain_steer(thread_id)
+        items = self._queue_manager.drain_all(thread_id)
         if not items:
             return None
 

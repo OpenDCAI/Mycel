@@ -143,6 +143,17 @@ class LeonApp(App):
             # IDLE 时自动处理 followup 队列
             self.call_after_refresh(self._state_driven_followup)
 
+    def _register_wake_handler(self) -> None:
+        """Register wake handler on the unified queue so enqueue() can wake the agent."""
+        if not hasattr(self.agent, "queue_manager"):
+            return
+
+        def wake_handler() -> None:
+            # Schedule followup check on Textual's event loop (thread-safe)
+            self.call_later(self._state_driven_followup)
+
+        self.agent.queue_manager.register_wake(self.thread_id, wake_handler)
+
     def compose(self) -> ComposeResult:
         yield Header()
         with VerticalScroll(id="chat-container"):
@@ -157,6 +168,9 @@ class LeonApp(App):
         """Focus input on mount"""
         chat_input = self.query_one("#chat-input", ChatInput)
         chat_input.focus_input()
+
+        # Register wake handler for unified queue
+        self._register_wake_handler()
 
         # 加载历史 messages
         self.run_worker(self._load_history(), exclusive=False)
@@ -242,8 +256,8 @@ class LeonApp(App):
             self.notify("⚠ 用法: /rollback <数字> 或 /回退 <数字>", severity="warning")
 
     def _handle_active_agent_message(self, content: str) -> None:
-        """Handle message when agent is active — inject as steer."""
-        self.agent.queue_manager.inject(format_steer_reminder(content), thread_id=self.thread_id)
+        """Handle message when agent is active — enqueue into unified queue."""
+        self.agent.queue_manager.enqueue(format_steer_reminder(content), thread_id=self.thread_id)
         self.notify("✓ 消息已注入（转向）")
 
     def _start_agent_run(self, content: str) -> None:

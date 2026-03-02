@@ -1,7 +1,5 @@
-"""Tests for timing-driven message routing: inject (steer) + enqueue/dequeue (followup)."""
+"""Tests for unified message queue: enqueue/dequeue/drain_all + wake handlers."""
 
-import sqlite3
-import tempfile
 import threading
 
 import pytest
@@ -17,81 +15,7 @@ def tmp_db(tmp_path):
 
 
 # ---------------------------------------------------------------------------
-# 1. Inject path (steer) — in-memory buffer
-# ---------------------------------------------------------------------------
-
-
-class TestInjectSteer:
-    def test_inject_and_pop(self, tmp_db):
-        mgr = MessageQueueManager(db_path=tmp_db)
-        mgr.inject("turn left", thread_id="t1")
-        assert mgr.has_steer("t1")
-        assert mgr.pop_steer("t1") == "turn left"
-        assert not mgr.has_steer("t1")
-
-    def test_inject_fifo(self, tmp_db):
-        mgr = MessageQueueManager(db_path=tmp_db)
-        mgr.inject("first", thread_id="t1")
-        mgr.inject("second", thread_id="t1")
-        assert mgr.pop_steer("t1") == "first"
-        assert mgr.pop_steer("t1") == "second"
-        assert mgr.pop_steer("t1") is None
-
-    def test_inject_thread_isolation(self, tmp_db):
-        mgr = MessageQueueManager(db_path=tmp_db)
-        mgr.inject("for-t1", thread_id="t1")
-        mgr.inject("for-t2", thread_id="t2")
-        assert mgr.pop_steer("t1") == "for-t1"
-        assert mgr.pop_steer("t2") == "for-t2"
-        assert mgr.pop_steer("t1") is None
-
-    def test_pop_empty(self, tmp_db):
-        mgr = MessageQueueManager(db_path=tmp_db)
-        assert mgr.pop_steer("nonexistent") is None
-        assert not mgr.has_steer("nonexistent")
-
-    def test_clear_steer(self, tmp_db):
-        mgr = MessageQueueManager(db_path=tmp_db)
-        mgr.inject("a", thread_id="t1")
-        mgr.inject("b", thread_id="t1")
-        mgr.clear_steer("t1")
-        assert not mgr.has_steer("t1")
-        assert mgr.pop_steer("t1") is None
-
-
-class TestDrainSteer:
-    """Tests for batch drain_steer() method."""
-
-    def test_drain_returns_all(self, tmp_db):
-        mgr = MessageQueueManager(db_path=tmp_db)
-        mgr.inject("first", thread_id="t1")
-        mgr.inject("second", thread_id="t1")
-        mgr.inject("third", thread_id="t1")
-        items = mgr.drain_steer("t1")
-        assert items == ["first", "second", "third"]
-
-    def test_drain_empties_queue(self, tmp_db):
-        mgr = MessageQueueManager(db_path=tmp_db)
-        mgr.inject("msg", thread_id="t1")
-        mgr.drain_steer("t1")
-        assert not mgr.has_steer("t1")
-        assert mgr.pop_steer("t1") is None
-        assert mgr.drain_steer("t1") == []
-
-    def test_drain_empty_returns_empty_list(self, tmp_db):
-        mgr = MessageQueueManager(db_path=tmp_db)
-        assert mgr.drain_steer("nonexistent") == []
-
-    def test_drain_thread_isolation(self, tmp_db):
-        mgr = MessageQueueManager(db_path=tmp_db)
-        mgr.inject("for-t1", thread_id="t1")
-        mgr.inject("for-t2", thread_id="t2")
-        assert mgr.drain_steer("t1") == ["for-t1"]
-        assert mgr.drain_steer("t2") == ["for-t2"]
-
-
-# ---------------------------------------------------------------------------
-# 2. Enqueue / dequeue path (followup) — SQLite persistent
+# 1. Enqueue / dequeue path — SQLite persistent
 # ---------------------------------------------------------------------------
 
 
@@ -185,57 +109,183 @@ class TestEnqueueDequeue:
 
 
 # ---------------------------------------------------------------------------
-# 3. clear_all cleans both channels
+# 2. drain_all — atomic batch consumption
+# ---------------------------------------------------------------------------
+
+
+class TestDrainAll:
+    def test_drain_returns_all_fifo(self, tmp_db):
+        mgr = MessageQueueManager(db_path=tmp_db)
+        mgr.enqueue("first", thread_id="t1")
+        mgr.enqueue("second", thread_id="t1")
+        mgr.enqueue("third", thread_id="t1")
+        items = mgr.drain_all("t1")
+        assert items == ["first", "second", "third"]
+
+    def test_drain_empties_queue(self, tmp_db):
+        mgr = MessageQueueManager(db_path=tmp_db)
+        mgr.enqueue("msg", thread_id="t1")
+        mgr.drain_all("t1")
+        assert not mgr.peek("t1")
+        assert mgr.dequeue("t1") is None
+        assert mgr.drain_all("t1") == []
+
+    def test_drain_empty_returns_empty_list(self, tmp_db):
+        mgr = MessageQueueManager(db_path=tmp_db)
+        assert mgr.drain_all("nonexistent") == []
+
+    def test_drain_thread_isolation(self, tmp_db):
+        mgr = MessageQueueManager(db_path=tmp_db)
+        mgr.enqueue("for-t1", thread_id="t1")
+        mgr.enqueue("for-t2", thread_id="t2")
+        assert mgr.drain_all("t1") == ["for-t1"]
+        assert mgr.drain_all("t2") == ["for-t2"]
+
+    def test_drain_concurrent_no_duplicates(self, tmp_db):
+        """Under concurrent access, drain_all delivers each message exactly once."""
+        mgr = MessageQueueManager(db_path=tmp_db)
+        for i in range(20):
+            mgr.enqueue(f"msg-{i}", thread_id="t1")
+
+        all_items = []
+        lock = threading.Lock()
+
+        def drainer():
+            local_mgr = MessageQueueManager(db_path=tmp_db)
+            items = local_mgr.drain_all("t1")
+            with lock:
+                all_items.extend(items)
+
+        threads = [threading.Thread(target=drainer) for _ in range(4)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+
+        assert sorted(all_items) == sorted(f"msg-{i}" for i in range(20))
+
+
+# ---------------------------------------------------------------------------
+# 3. Wake handler
+# ---------------------------------------------------------------------------
+
+
+class TestWakeHandler:
+    def test_enqueue_fires_wake_handler(self, tmp_db):
+        mgr = MessageQueueManager(db_path=tmp_db)
+        calls = []
+        mgr.register_wake("t1", lambda: calls.append("woke"))
+        mgr.enqueue("msg", thread_id="t1")
+        assert calls == ["woke"]
+
+    def test_no_handler_no_error(self, tmp_db):
+        mgr = MessageQueueManager(db_path=tmp_db)
+        # No wake handler registered — should not raise
+        mgr.enqueue("msg", thread_id="t1")
+
+    def test_handler_exception_does_not_prevent_enqueue(self, tmp_db):
+        mgr = MessageQueueManager(db_path=tmp_db)
+
+        def bad_handler():
+            raise RuntimeError("boom")
+
+        mgr.register_wake("t1", bad_handler)
+        mgr.enqueue("msg", thread_id="t1")
+        # Message should still be in queue despite handler failure
+        assert mgr.dequeue("t1") == "msg"
+
+    def test_unregister_stops_firing(self, tmp_db):
+        mgr = MessageQueueManager(db_path=tmp_db)
+        calls = []
+        mgr.register_wake("t1", lambda: calls.append("woke"))
+        mgr.unregister_wake("t1")
+        mgr.enqueue("msg", thread_id="t1")
+        assert calls == []
+
+    def test_thread_isolation(self, tmp_db):
+        mgr = MessageQueueManager(db_path=tmp_db)
+        t1_calls = []
+        t2_calls = []
+        mgr.register_wake("t1", lambda: t1_calls.append(1))
+        mgr.register_wake("t2", lambda: t2_calls.append(1))
+        mgr.enqueue("msg", thread_id="t1")
+        assert t1_calls == [1]
+        assert t2_calls == []
+
+    def test_wake_handler_called_per_enqueue(self, tmp_db):
+        mgr = MessageQueueManager(db_path=tmp_db)
+        calls = []
+        mgr.register_wake("t1", lambda: calls.append(1))
+        mgr.enqueue("a", thread_id="t1")
+        mgr.enqueue("b", thread_id="t1")
+        assert len(calls) == 2
+
+
+# ---------------------------------------------------------------------------
+# 4. clear_all cleans queue and unregisters wake
 # ---------------------------------------------------------------------------
 
 
 class TestClearAll:
     def test_clear_all(self, tmp_db):
         mgr = MessageQueueManager(db_path=tmp_db)
-        mgr.inject("steer-msg", thread_id="t1")
         mgr.enqueue("queue-msg", thread_id="t1")
+        calls = []
+        mgr.register_wake("t1", lambda: calls.append(1))
         mgr.clear_all("t1")
-        assert not mgr.has_steer("t1")
         assert not mgr.peek("t1")
+        # Wake handler should be unregistered
+        mgr.enqueue("new-msg", thread_id="t1")
+        assert calls == []
 
 
 # ---------------------------------------------------------------------------
-# 4. SteeringMiddleware integration — non-preemptive behavior
+# 5. queue_sizes backward compat
+# ---------------------------------------------------------------------------
+
+
+class TestQueueSizes:
+    def test_steer_always_zero(self, tmp_db):
+        mgr = MessageQueueManager(db_path=tmp_db)
+        mgr.enqueue("msg", thread_id="t1")
+        sizes = mgr.queue_sizes("t1")
+        assert sizes["steer"] == 0
+        assert sizes["followup"] == 1
+
+
+# ---------------------------------------------------------------------------
+# 6. SteeringMiddleware integration — non-preemptive behavior
 # ---------------------------------------------------------------------------
 
 
 class TestSteeringMiddlewareIntegration:
-    """Verify SteeringMiddleware reads from inject channel via drain_steer."""
+    """Verify SteeringMiddleware reads from unified queue via drain_all."""
 
-    def test_middleware_consumes_injected_steer(self, tmp_db):
+    def test_middleware_consumes_queued_messages(self, tmp_db):
         from core.queue.middleware import SteeringMiddleware
 
         mgr = MessageQueueManager(db_path=tmp_db)
         middleware = SteeringMiddleware(queue_manager=mgr)
 
         thread_id = "test-middleware"
-        mgr.inject("change direction", thread_id=thread_id)
+        mgr.enqueue("change direction", thread_id=thread_id)
 
-        # Middleware should be able to detect pending steer via the shared manager
-        assert mgr.has_steer(thread_id)
-        # drain_steer is what middleware calls internally
-        items = mgr.drain_steer(thread_id)
+        # Middleware calls drain_all internally
+        items = mgr.drain_all(thread_id)
         assert items == ["change direction"]
-        assert not mgr.has_steer(thread_id)
+        assert not mgr.peek(thread_id)
 
     def test_middleware_drains_multiple(self, tmp_db):
-        """Middleware drains all pending steers at once."""
-        from core.queue.middleware import SteeringMiddleware
-
+        """Middleware drains all pending messages at once."""
         mgr = MessageQueueManager(db_path=tmp_db)
 
         thread_id = "test-multi"
-        mgr.inject("first", thread_id=thread_id)
-        mgr.inject("second", thread_id=thread_id)
+        mgr.enqueue("first", thread_id=thread_id)
+        mgr.enqueue("second", thread_id=thread_id)
 
-        items = mgr.drain_steer(thread_id)
+        items = mgr.drain_all(thread_id)
         assert items == ["first", "second"]
-        assert mgr.drain_steer(thread_id) == []
+        assert mgr.drain_all(thread_id) == []
 
     def test_tool_calls_never_skipped(self, tmp_db):
         """Verify wrap_tool_call is a pure passthrough (non-preemptive)."""
@@ -246,8 +296,8 @@ class TestSteeringMiddlewareIntegration:
         mgr = MessageQueueManager(db_path=tmp_db)
         middleware = SteeringMiddleware(queue_manager=mgr)
 
-        # Inject steer to simulate mid-execution message
-        mgr.inject("urgent message", thread_id="test-no-skip")
+        # Enqueue message to simulate mid-execution message
+        mgr.enqueue("urgent message", thread_id="test-no-skip")
 
         # Create mock tool call request and handler
         mock_request = MagicMock()
@@ -261,7 +311,7 @@ class TestSteeringMiddlewareIntegration:
 
 
 # ---------------------------------------------------------------------------
-# 6. XML formatters
+# 7. XML formatters
 # ---------------------------------------------------------------------------
 
 

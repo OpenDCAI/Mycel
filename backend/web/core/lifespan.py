@@ -42,6 +42,7 @@ async def lifespan(app: FastAPI):
     app.state.activity_buffers: dict[str, RunEventBuffer] = {}
     app.state.idle_reaper_task: asyncio.Task | None = None
     app.state.cron_service = None
+    app.state._event_loop = asyncio.get_running_loop()
 
     try:
         # Start idle reaper background task

@@ -135,6 +135,8 @@ async def delete_thread(
         # Clear per-thread handlers before removing agent
         if agent and hasattr(agent, "runtime") and agent.runtime:
             agent.runtime.unbind_thread()
+        # Unregister wake handler
+        app.state.queue_manager.unregister_wake(thread_id)
         try:
             await asyncio.to_thread(destroy_thread_resources_sync, thread_id, sandbox_type, app.state.agent_pool)
         except Exception as exc:
@@ -162,7 +164,7 @@ async def send_message(
 ) -> dict[str, Any]:
     """Send a message to agent. Server auto-routes based on agent state:
     - Agent IDLE  → start new run
-    - Agent ACTIVE → inject as steer (soft interrupt)
+    - Agent ACTIVE → enqueue into unified queue (drained at next before_model)
     """
     if not payload.message.strip():
         raise HTTPException(status_code=400, detail="message cannot be empty")
@@ -172,7 +174,7 @@ async def send_message(
 
     qm = app.state.queue_manager
     if hasattr(agent, "runtime") and agent.runtime.current_state == AgentState.ACTIVE:
-        qm.inject(format_steer_reminder(payload.message), thread_id)
+        qm.enqueue(format_steer_reminder(payload.message), thread_id)
         return {"status": "injected", "routing": "steer", "thread_id": thread_id}
 
     # Agent is IDLE — start new run (both transition and run start must be atomic)
@@ -181,7 +183,7 @@ async def send_message(
     async with lock:
         if hasattr(agent, "runtime") and not agent.runtime.transition(AgentState.ACTIVE):
             # Race: became active between check and lock
-            qm.inject(format_steer_reminder(payload.message), thread_id)
+            qm.enqueue(format_steer_reminder(payload.message), thread_id)
             return {"status": "injected", "routing": "steer", "thread_id": thread_id}
         buf = start_agent_run(agent, thread_id, payload.message, app)
     return {"status": "started", "routing": "direct", "run_id": buf.run_id, "thread_id": thread_id}

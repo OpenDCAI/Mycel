@@ -246,8 +246,11 @@ class _FakeRuntime:
     def set_activity_sink(self, sink: Any) -> None:
         pass
 
-    def set_continue_handler(self, handler: Any) -> None:
+    def emit_activity_event(self, event: dict[str, Any]) -> None:
         pass
+
+    def transition(self, new_state: Any) -> bool:
+        return True
 
 
 class _FakeRuntimeAgent:
