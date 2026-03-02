@@ -78,7 +78,7 @@ class E2BProvider(SandboxProvider):
         self.timeout = timeout
         self._sandboxes: dict[str, Any] = {}
 
-    def create_session(self, context_id: str | None = None) -> SessionInfo:
+    def create_session(self, context_id: str | None = None, bind_mounts: list | None = None) -> SessionInfo:
         from e2b import Sandbox
 
         sandbox = Sandbox.beta_create(

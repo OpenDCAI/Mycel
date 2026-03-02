@@ -34,7 +34,7 @@ class DummyProvider(SandboxProvider):
             runtime_kind="remote",
         )
 
-    def create_session(self, context_id: str | None = None) -> SessionInfo:
+    def create_session(self, context_id: str | None = None, bind_mounts: list | None = None) -> SessionInfo:
         sid = f"sb-{len(self._created) + 1}"
         self._created.append(sid)
         return SessionInfo(session_id=sid, provider=self.name, status="running")

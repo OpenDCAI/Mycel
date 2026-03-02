@@ -105,12 +105,6 @@ def test_docker_provider_supports_multiple_bind_mount_modes(
         image="python:3.12-slim",
         mount_path="/workspace",
         default_cwd="/home/leon",
-        bind_mounts=[
-            {"source": "/host/tasks", "target": "/home/leon/shared/tasks", "mode": "mount", "read_only": False},
-            {"source": "/host/docs", "target": "/home/leon/shared/docs", "mode": "mount", "read_only": True},
-            {"source": str(copy_source), "target": "/home/leon/bootstrap", "mode": "copy", "read_only": False},
-            {"host_path": "/host/issues", "mount_path": "/home/leon/shared/issues", "mode": "mount", "read_only": False},
-        ],
     )
 
     calls: list[list[str]] = []
@@ -121,7 +115,13 @@ def test_docker_provider_supports_multiple_bind_mount_modes(
 
     monkeypatch.setattr(provider, "_run", fake_run)
 
-    session = provider.create_session(context_id="ctx-volume")
+    # bind_mounts are now passed per-call, not at __init__ time
+    session = provider.create_session(context_id="ctx-volume", bind_mounts=[
+        {"source": "/host/tasks", "target": "/home/leon/shared/tasks", "mode": "mount", "read_only": False},
+        {"source": "/host/docs", "target": "/home/leon/shared/docs", "mode": "mount", "read_only": True},
+        {"source": str(copy_source), "target": "/home/leon/bootstrap", "mode": "copy", "read_only": False},
+        {"host_path": "/host/issues", "mount_path": "/home/leon/shared/issues", "mode": "mount", "read_only": False},
+    ])
     assert session.status == "running"
 
     run_cmd = calls[0]
@@ -176,18 +176,21 @@ def test_daytona_provider_maps_multiple_mounts_to_http_payload(monkeypatch: pyte
 
     monkeypatch.setattr(daytona_module.httpx, "Client", FakeClient)
 
+    from sandbox.config import MountSpec
+
     provider = DaytonaProvider(
         api_key="token-1",
         api_url="http://127.0.0.1:3000/api",
-        bind_mounts=[
-            {"source": "/host/tasks", "target": "/home/daytona/shared/tasks", "mode": "mount", "read_only": False},
-            {"source": "/host/docs", "target": "/home/daytona/shared/docs", "mode": "mount", "read_only": True},
-            {"source": "/host/bootstrap", "target": "/home/daytona/bootstrap", "mode": "copy", "read_only": False},
-            {"host_path": "/host/issues", "mount_path": "/home/daytona/shared/issues", "mode": "mount", "read_only": False},
-        ],
     )
 
-    sandbox_id = provider._create_via_http(provider.bind_mounts)
+    # bind_mounts are now per-call, passed to _create_via_http directly
+    mounts = [
+        MountSpec.model_validate({"source": "/host/tasks", "target": "/home/daytona/shared/tasks", "mode": "mount", "read_only": False}),
+        MountSpec.model_validate({"source": "/host/docs", "target": "/home/daytona/shared/docs", "mode": "mount", "read_only": True}),
+        MountSpec.model_validate({"host_path": "/host/issues", "mount_path": "/home/daytona/shared/issues", "mode": "mount", "read_only": False}),
+    ]
+
+    sandbox_id = provider._create_via_http(mounts)
     assert sandbox_id == "sb-123"
 
     payload = captured["json"]

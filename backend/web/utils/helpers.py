@@ -88,7 +88,14 @@ def save_thread_config(thread_id: str, **fields: Any) -> None:
 
     Usage: save_thread_config(thread_id, model="gpt-4")
     """
-    allowed = {"sandbox_type", "cwd", "model", "queue_mode", "observation_provider", "agent", "workspace_id"}
+    import json as _json
+
+    allowed = {"sandbox_type", "cwd", "model", "queue_mode", "observation_provider", "agent", "bind_mounts_json"}
+    # @@@bind-mounts-json-serialize - convert bind_mounts list to JSON string for storage
+    if "bind_mounts" in fields:
+        raw = fields.pop("bind_mounts")
+        if raw:
+            fields["bind_mounts_json"] = _json.dumps([m.model_dump() if hasattr(m, "model_dump") else m for m in raw])
     updates = {k: v for k, v in fields.items() if k in allowed}
     if not updates:
         return
@@ -101,12 +108,17 @@ def save_thread_config(thread_id: str, **fields: Any) -> None:
 
 def load_thread_config(thread_id: str):
     """Load full thread config from SQLite. Returns ThreadConfig or None."""
+    import json as _json
+
     repo = _build_thread_config_repo()
     try:
         row = repo.lookup_config(thread_id)
         if not row:
             return None
         from backend.web.models.thread_config import ThreadConfig
+
+        bind_mounts_raw = row.get("bind_mounts_json")
+        bind_mounts = _json.loads(bind_mounts_raw) if bind_mounts_raw else []
 
         return ThreadConfig(
             sandbox_type=row["sandbox_type"] or "local",
@@ -115,7 +127,7 @@ def load_thread_config(thread_id: str):
             queue_mode=row["queue_mode"] or "steer",
             observation_provider=row["observation_provider"],
             agent=row.get("agent"),
-            workspace_id=row.get("workspace_id"),
+            bind_mounts=bind_mounts,
         )
     finally:
         repo.close()

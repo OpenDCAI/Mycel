@@ -19,7 +19,6 @@ from backend.web.models.requests import (
 )
 from backend.web.services.agent_pool import get_or_create_agent, resolve_thread_sandbox
 from backend.web.services.event_buffer import ThreadEventBuffer
-from backend.web.services.file_channel_service import cleanup_thread_file_channel, ensure_thread_file_channel
 from backend.web.services.sandbox_service import destroy_thread_resources_sync, init_providers_and_managers
 from backend.web.services.streaming_service import (
     get_or_create_thread_buffer,
@@ -348,7 +347,6 @@ async def delete_thread(
             await asyncio.to_thread(destroy_thread_resources_sync, thread_id, sandbox_type, app.state.agent_pool)
         except Exception as exc:
             logger.warning("Failed to destroy sandbox resources for thread %s: %s", thread_id, exc)
-        await asyncio.to_thread(cleanup_thread_file_channel, thread_id)
         await asyncio.to_thread(delete_thread_in_db, thread_id)
         # Also delete from threads table (entity-chat addition)
         app.state.thread_repo.delete(thread_id)
