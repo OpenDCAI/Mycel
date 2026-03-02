@@ -79,6 +79,7 @@ function ChatPageInner({ threadId }: { threadId: string }) {
     useDisplayDeltas({
       threadId,
       refreshThreads: tm.refreshThreads,
+      refreshThread,
       onUpdate: (updater) => setEntries(updater),
       loading,
       runStarted,
