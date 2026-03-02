@@ -4,21 +4,29 @@ from __future__ import annotations
 
 import json
 import sqlite3
+import threading
 from pathlib import Path
 from typing import Any
 
 
 class SQLiteRunEventRepo:
-    """Minimal run event repository with parameterized SQL operations."""
+    """Minimal run event repository with parameterized SQL operations.
+
+    Thread-safe: all connection access is serialized via a lock, allowing
+    concurrent ``asyncio.to_thread`` callers from the event loop.
+    """
 
     def __init__(self, db_path: str | Path | None = None, conn: sqlite3.Connection | None = None) -> None:
         self._own_conn = conn is None
+        self._lock = threading.Lock()
         if conn is not None:
             self._conn = conn
         else:
             if db_path is None:
                 db_path = Path.home() / ".leon" / "leon.db"
             self._conn = sqlite3.connect(str(db_path), check_same_thread=False)
+            self._conn.execute("PRAGMA journal_mode=WAL")
+            self._conn.execute("PRAGMA busy_timeout=30000")
         self._ensure_table()
 
     def close(self) -> None:
@@ -34,15 +42,16 @@ class SQLiteRunEventRepo:
         message_id: str | None = None,
     ) -> int:
         payload = json.dumps(data, ensure_ascii=False)
-        cursor = self._conn.execute(
-            """
-            INSERT INTO run_events (thread_id, run_id, event_type, data, message_id)
-            VALUES (?, ?, ?, ?, ?)
-            """,
-            (thread_id, run_id, event_type, payload, message_id),
-        )
-        self._conn.commit()
-        return int(cursor.lastrowid)
+        with self._lock:
+            cursor = self._conn.execute(
+                """
+                INSERT INTO run_events (thread_id, run_id, event_type, data, message_id)
+                VALUES (?, ?, ?, ?, ?)
+                """,
+                (thread_id, run_id, event_type, payload, message_id),
+            )
+            self._conn.commit()
+            return int(cursor.lastrowid)
 
     def list_events(
         self,
@@ -52,16 +61,17 @@ class SQLiteRunEventRepo:
         after: int = 0,
         limit: int = 200,
     ) -> list[dict[str, Any]]:
-        rows = self._conn.execute(
-            """
-            SELECT seq, event_type, data, message_id
-            FROM run_events
-            WHERE thread_id = ? AND run_id = ? AND seq > ?
-            ORDER BY seq ASC
-            LIMIT ?
-            """,
-            (thread_id, run_id, after, limit),
-        ).fetchall()
+        with self._lock:
+            rows = self._conn.execute(
+                """
+                SELECT seq, event_type, data, message_id
+                FROM run_events
+                WHERE thread_id = ? AND run_id = ? AND seq > ?
+                ORDER BY seq ASC
+                LIMIT ?
+                """,
+                (thread_id, run_id, after, limit),
+            ).fetchall()
         return [
             {
                 "seq": row[0],
@@ -73,36 +83,39 @@ class SQLiteRunEventRepo:
         ]
 
     def latest_seq(self, thread_id: str) -> int:
-        row = self._conn.execute(
-            "SELECT MAX(seq) FROM run_events WHERE thread_id = ?",
-            (thread_id,),
-        ).fetchone()
+        with self._lock:
+            row = self._conn.execute(
+                "SELECT MAX(seq) FROM run_events WHERE thread_id = ?",
+                (thread_id,),
+            ).fetchone()
         return int(row[0]) if row and row[0] is not None else 0
 
     def latest_run_id(self, thread_id: str) -> str | None:
-        row = self._conn.execute(
-            """
-            SELECT run_id
-            FROM run_events
-            WHERE thread_id = ?
-            ORDER BY seq DESC
-            LIMIT 1
-            """,
-            (thread_id,),
-        ).fetchone()
+        with self._lock:
+            row = self._conn.execute(
+                """
+                SELECT run_id
+                FROM run_events
+                WHERE thread_id = ?
+                ORDER BY seq DESC
+                LIMIT 1
+                """,
+                (thread_id,),
+            ).fetchone()
         return row[0] if row else None
 
     def list_run_ids(self, thread_id: str) -> list[str]:
-        rows = self._conn.execute(
-            """
-            SELECT run_id
-            FROM run_events
-            WHERE thread_id = ?
-            GROUP BY run_id
-            ORDER BY MAX(seq) DESC
-            """,
-            (thread_id,),
-        ).fetchall()
+        with self._lock:
+            rows = self._conn.execute(
+                """
+                SELECT run_id
+                FROM run_events
+                WHERE thread_id = ?
+                GROUP BY run_id
+                ORDER BY MAX(seq) DESC
+                """,
+                (thread_id,),
+            ).fetchall()
         return [row[0] for row in rows if row[0]]
 
     def delete_runs(self, thread_id: str, run_ids: list[str]) -> int:
@@ -111,19 +124,21 @@ class SQLiteRunEventRepo:
 
         placeholders = ",".join("?" for _ in run_ids)
         # @@@param_sql - run ids can be external input; keep IN-clause values fully parameterized.
-        cursor = self._conn.execute(
-            f"DELETE FROM run_events WHERE thread_id = ? AND run_id IN ({placeholders})",
-            [thread_id] + run_ids,
-        )
-        self._conn.commit()
+        with self._lock:
+            cursor = self._conn.execute(
+                f"DELETE FROM run_events WHERE thread_id = ? AND run_id IN ({placeholders})",
+                [thread_id] + run_ids,
+            )
+            self._conn.commit()
         return int(cursor.rowcount)
 
     def delete_thread_events(self, thread_id: str) -> int:
-        cursor = self._conn.execute(
-            "DELETE FROM run_events WHERE thread_id = ?",
-            (thread_id,),
-        )
-        self._conn.commit()
+        with self._lock:
+            cursor = self._conn.execute(
+                "DELETE FROM run_events WHERE thread_id = ?",
+                (thread_id,),
+            )
+            self._conn.commit()
         return int(cursor.rowcount)
 
     def _ensure_table(self) -> None:
