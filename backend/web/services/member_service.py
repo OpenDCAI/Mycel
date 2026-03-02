@@ -27,6 +27,7 @@ logger = logging.getLogger(__name__)
 LEON_HOME = Path.home() / ".leon"
 MEMBERS_DIR = LEON_HOME / "members"
 _TOOLS_CATALOG_PATH = Path(__file__).resolve().parents[3] / "config" / "defaults" / "tools.json"
+_SYSTEM_AGENTS_DIR = (Path(__file__).resolve().parents[3] / "config" / "defaults" / "agents").resolve()
 
 
 def _load_tools_catalog() -> dict[str, dict[str, str]]:
@@ -197,11 +198,26 @@ def _member_to_dict(member_dir: Path) -> dict[str, Any] | None:
     # Convert rules to list of {name, content}
     rules_list = bundle.rules
 
-    # Convert sub-agents
-    sub_agents_list = [
-        {"name": a.name, "desc": a.description}
-        for a in bundle.agents
-    ]
+    # Convert sub-agents — expand tools to full CrudItem list
+    sub_agents_list = []
+    for a in bundle.agents:
+        is_all = a.tools == ["*"]
+        agent_tools = [
+            {
+                "name": t_name,
+                "enabled": is_all or t_name in a.tools,
+                "desc": t_info.get("desc", ""),
+                "group": t_info.get("group", ""),
+            }
+            for t_name, t_info in catalog.items()
+        ]
+        sub_agents_list.append({
+            "name": a.name,
+            "desc": a.description,
+            "tools": agent_tools,
+            "system_prompt": a.system_prompt,
+            "builtin": a.source_dir is not None and a.source_dir.resolve() == _SYSTEM_AGENTS_DIR,
+        })
 
     # Convert MCP servers
     mcps_list = [
@@ -241,13 +257,31 @@ def _leon_builtin() -> dict[str, Any]:
     """Build Leon builtin member dict with full tool catalog."""
     catalog = _load_tools_catalog()
     tools = [{"name": k, "enabled": True, "desc": v.get("desc", ""), "group": v.get("group", "")} for k, v in catalog.items()]
+    # Load built-in sub-agents
+    loader = AgentLoader()
+    builtin_agents = []
+    agents_dir = _SYSTEM_AGENTS_DIR
+    if agents_dir.is_dir():
+        for md in sorted(agents_dir.glob("*.md")):
+            ac = loader.parse_agent_file(md)
+            if ac:
+                is_all = ac.tools == ["*"]
+                agent_tools = [
+                    {"name": k, "enabled": is_all or k in ac.tools, "desc": v.get("desc", ""), "group": v.get("group", "")}
+                    for k, v in catalog.items()
+                ]
+                builtin_agents.append({
+                    "name": ac.name, "desc": ac.description,
+                    "tools": agent_tools, "system_prompt": ac.system_prompt, "builtin": True,
+                })
+
     return {
         "id": "__leon__",
         "name": "Leon",
         "description": "通用数字成员，随时准备为你工作",
         "status": "active",
         "version": "1.0.0",
-        "config": {"prompt": "", "rules": [], "tools": tools, "mcps": [], "skills": [], "subAgents": []},
+        "config": {"prompt": "", "rules": [], "tools": tools, "mcps": [], "skills": [], "subAgents": builtin_agents},
         "created_at": 0,
         "updated_at": 0,
         "builtin": True,
@@ -404,7 +438,7 @@ def _write_rules(member_dir: Path, rules: list[dict[str, str]]) -> None:
 
 
 def _write_sub_agents(member_dir: Path, agents: list[dict[str, Any]]) -> None:
-    """Write sub-agents list to agents/ directory. New assignments copy desc from Library."""
+    """Write sub-agents list to agents/ directory."""
     from backend.web.services.library_service import get_library_agent_desc
 
     agents_dir = member_dir / "agents"
@@ -414,15 +448,26 @@ def _write_sub_agents(member_dir: Path, agents: list[dict[str, Any]]) -> None:
         return
     agents_dir.mkdir(exist_ok=True)
     for item in agents:
-        if isinstance(item, dict) and item.get("name"):
-            desc = item.get("desc", "")
-            if not desc:
-                desc = get_library_agent_desc(item["name"])
-            _write_agent_md(
-                agents_dir / f"{item['name']}.md",
-                name=item["name"],
-                description=desc,
-            )
+        if not (isinstance(item, dict) and item.get("name")):
+            continue
+        desc = item.get("desc", "")
+        if not desc:
+            desc = get_library_agent_desc(item["name"])
+        # Convert CrudItem[] tools back to string list
+        raw_tools = item.get("tools")
+        tools: list[str] | None = None
+        if isinstance(raw_tools, list) and raw_tools and isinstance(raw_tools[0], dict):
+            enabled = [t["name"] for t in raw_tools if t.get("enabled")]
+            tools = ["*"] if len(enabled) == len(raw_tools) else enabled
+        elif isinstance(raw_tools, list):
+            tools = raw_tools  # already string list
+        _write_agent_md(
+            agents_dir / f"{item['name']}.md",
+            name=item["name"],
+            description=desc,
+            tools=tools,
+            system_prompt=item.get("system_prompt", ""),
+        )
 
 
 def _write_runtime_resources(member_dir: Path, config_patch: dict[str, Any]) -> None:

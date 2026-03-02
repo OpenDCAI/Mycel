@@ -9,9 +9,11 @@ export interface CrudItem {
 }
 
 export interface SubAgent {
-  id?: string;
   name: string;
   desc: string;
+  tools: CrudItem[];
+  system_prompt: string;
+  builtin?: boolean;
 }
 
 export interface RuleItem {

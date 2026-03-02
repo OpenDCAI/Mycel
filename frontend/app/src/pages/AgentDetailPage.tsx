@@ -16,7 +16,7 @@ import type { CrudItem, RuleItem, ResourceItem } from "@/store/types";
 
 // ==================== Types ====================
 
-type ModuleId = "prompt" | "tools" | "mcp" | "skills" | "subagents" | "rules";
+type ModuleId = "role" | "mcp" | "skills" | "subagents";
 
 interface ModuleDef {
   id: ModuleId;
@@ -26,12 +26,10 @@ interface ModuleDef {
 }
 
 const modules: ModuleDef[] = [
-  { id: "prompt", label: "System Prompt", icon: FileText },
-  { id: "tools", label: "Tools", icon: Wrench, count: c => c.tools.length },
+  { id: "role", label: "Role", icon: FileText },
   { id: "mcp", label: "MCP", icon: Plug, count: c => c.mcps.length },
   { id: "skills", label: "Skills", icon: Zap, count: c => c.skills.length },
   { id: "subagents", label: "Agents", icon: Users, count: c => c.subAgents.length },
-  { id: "rules", label: "Rules", icon: BookOpen, count: c => c.rules.length },
 ];
 
 // ==================== Main Component ====================
@@ -41,7 +39,7 @@ export default function AgentDetail() {
   const navigate = useNavigate();
   const [showTest, setShowTest] = useState(false);
   const [showPublish, setShowPublish] = useState(false);
-  const [activeModule, setActiveModule] = useState<ModuleId>("prompt");
+  const [activeModule, setActiveModule] = useState<ModuleId>("role");
 
   const member = useAppStore(s => s.getMemberById(id || ""));
   const updateMemberConfig = useAppStore(s => s.updateMemberConfig);
@@ -63,7 +61,7 @@ export default function AgentDetail() {
     );
   }
 
-  const handleToggle = async (mod: ModuleId, itemName: string, enabled: boolean) => {
+  const handleToggle = async (mod: string, itemName: string, enabled: boolean) => {
     if (!member) return;
     try {
       if (mod === "tools") {
@@ -97,7 +95,7 @@ export default function AgentDetail() {
         const existing = new Set(member.config.subAgents.map(a => a.name));
         const newAgents = names.filter(n => !existing.has(n)).map(n => {
           const lib = libraryAgents.find(a => a.name === n);
-          return { name: n, desc: lib?.desc || "" };
+          return { name: n, desc: lib?.desc || "", tools: [] as CrudItem[], system_prompt: "" };
         });
         if (newAgents.length) await updateMemberConfig(member.id, { subAgents: [...member.config.subAgents, ...newAgents] });
       }
@@ -105,7 +103,7 @@ export default function AgentDetail() {
     } catch { toast.error("添加失败"); }
   };
 
-  const handleRemove = async (mod: ModuleId, itemName: string) => {
+  const handleRemove = async (mod: string, itemName: string) => {
     if (!member) return;
     try {
       if (mod === "mcp") await updateMemberConfig(member.id, { mcps: member.config.mcps.filter(i => i.name !== itemName) });
@@ -118,31 +116,26 @@ export default function AgentDetail() {
 
   const renderContent = () => {
     switch (activeModule) {
-      case "prompt":
+      case "role":
         return (
-          <PromptEditor
-            value={member.config.prompt || ""}
-            onSave={async (val) => {
+          <RolePanel
+            prompt={member.config.prompt || ""}
+            tools={member.config.tools}
+            rules={member.config.rules}
+            onSavePrompt={async (val) => {
               await updateMemberConfig(member.id, { prompt: val });
               toast.success("System Prompt 已保存");
             }}
-          />
-        );
-      case "tools":
-        return <ToolsGrid items={member.config.tools} onToggle={(name, en) => handleToggle("tools", name, en)} />;
-      case "rules":
-        return (
-          <RulesPanel
-            rules={member.config.rules}
-            onSave={async (name, content) => {
+            onToggleTool={(name, en) => handleToggle("tools", name, en)}
+            onSaveRule={async (name, content) => {
               await updateMemberConfig(member.id, { rules: member.config.rules.map(r => r.name === name ? { ...r, content } : r) });
               toast.success("规则已保存");
             }}
-            onAdd={async (name) => {
+            onAddRule={async (name) => {
               await updateMemberConfig(member.id, { rules: [...member.config.rules, { name, content: "" }] });
               toast.success(`${name} 已添加`);
             }}
-            onDelete={(name) => handleRemove("rules", name)}
+            onDeleteRule={(name) => handleRemove("rules", name)}
           />
         );
       case "skills":
@@ -167,11 +160,14 @@ export default function AgentDetail() {
         );
       case "subagents":
         return (
-          <ResourceCards
-            type="agent"
-            items={member.config.subAgents.map(a => ({ name: a.name, desc: a.desc }))}
-            onRemove={(name) => handleRemove("subagents", name)}
+          <SubAgentsPanel
+            agents={member.config.subAgents}
+            onSave={async (updated) => {
+              await updateMemberConfig(member.id, { subAgents: updated });
+              toast.success("Agent 配置已保存");
+            }}
             onAdd={() => setPickerType("agent")}
+            onDelete={(name) => handleRemove("subagents", name)}
           />
         );
       default: return null;
@@ -246,41 +242,322 @@ export default function AgentDetail() {
   );
 }
 
-// ==================== PromptEditor ====================
+// ==================== RolePanel (Prompt + Tools + Rules) ====================
 
-function PromptEditor({ value, onSave }: { value: string; onSave: (v: string) => Promise<void> }) {
-  const [text, setText] = useState(value);
-  const [saving, setSaving] = useState(false);
-  const dirty = text !== value;
+function RolePanel({ prompt, tools, rules, onSavePrompt, onToggleTool, onSaveRule, onAddRule, onDeleteRule }: {
+  prompt: string;
+  tools: CrudItem[];
+  rules: RuleItem[];
+  onSavePrompt: (v: string) => Promise<void>;
+  onToggleTool: (name: string, enabled: boolean) => void;
+  onSaveRule: (name: string, content: string) => Promise<void>;
+  onAddRule: (name: string) => Promise<void>;
+  onDeleteRule: (name: string) => void;
+}) {
+  const [promptText, setPromptText] = useState(prompt);
+  const [savingPrompt, setSavingPrompt] = useState(false);
+  const [toolFilter, setToolFilter] = useState("");
+  const [addRuleOpen, setAddRuleOpen] = useState(false);
+  const [addRuleName, setAddRuleName] = useState("");
 
-  useEffect(() => { setText(value); }, [value]);
+  const promptDirty = promptText !== prompt;
+  useEffect(() => { setPromptText(prompt); }, [prompt]);
 
-  const save = async () => {
-    setSaving(true);
-    try { await onSave(text); } finally { setSaving(false); }
+  const savePrompt = async () => {
+    setSavingPrompt(true);
+    try { await onSavePrompt(promptText); } finally { setSavingPrompt(false); }
+  };
+
+  const toolGroups = useMemo(() => {
+    const map: Record<string, CrudItem[]> = {};
+    for (const t of tools) {
+      if (toolFilter && !t.name.toLowerCase().includes(toolFilter.toLowerCase())) continue;
+      const g = t.group || "other";
+      (map[g] ??= []).push(t);
+    }
+    return Object.entries(map).sort(([a], [b]) => a.localeCompare(b));
+  }, [tools, toolFilter]);
+
+  const doAddRule = async () => {
+    const n = addRuleName.trim();
+    if (!n) return;
+    await onAddRule(n.endsWith(".md") ? n : `${n}.md`);
+    setAddRuleName("");
+    setAddRuleOpen(false);
   };
 
   return (
-    <div className="h-full flex flex-col p-4 gap-3">
-      <div className="flex items-center justify-between">
-        <h3 className="text-sm font-medium">System Prompt</h3>
-        <Button size="sm" disabled={!dirty || saving} onClick={save}>
-          <Save className="h-3.5 w-3.5 mr-1" /> {saving ? "保存中..." : "保存"}
-        </Button>
-      </div>
-      <textarea
-        className="flex-1 w-full rounded-md border bg-background px-3 py-2 text-sm font-mono resize-none focus:outline-none focus:ring-2 focus:ring-ring"
-        value={text}
-        onChange={e => setText(e.target.value)}
-        placeholder="输入 System Prompt..."
-      />
+    <div className="p-4 space-y-6 overflow-auto">
+      {/* Section 1: System Prompt */}
+      <section className="space-y-2">
+        <div className="flex items-center gap-2">
+          <FileText className="h-4 w-4 text-muted-foreground" />
+          <h3 className="text-sm font-medium">System Prompt</h3>
+          <div className="flex-1" />
+          <Button size="sm" className="h-7" disabled={!promptDirty || savingPrompt} onClick={savePrompt}>
+            <Save className="h-3.5 w-3.5 mr-1" /> {savingPrompt ? "..." : "保存"}
+          </Button>
+        </div>
+        <textarea
+          className="w-full h-40 rounded-md border bg-background px-3 py-2 text-sm font-mono resize-y focus:outline-none focus:ring-2 focus:ring-ring"
+          value={promptText}
+          onChange={e => setPromptText(e.target.value)}
+          placeholder="输入 System Prompt..."
+        />
+      </section>
+
+      {/* Section 2: Tools */}
+      <section className="space-y-2">
+        <div className="flex items-center gap-2">
+          <Wrench className="h-4 w-4 text-muted-foreground" />
+          <h3 className="text-sm font-medium">Tools</h3>
+          <span className="text-xs text-muted-foreground">{tools.filter(t => t.enabled).length}/{tools.length}</span>
+          <div className="flex-1" />
+          <div className="relative w-40">
+            <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground" />
+            <Input className="pl-7 h-7 text-xs" placeholder="搜索工具..." value={toolFilter} onChange={e => setToolFilter(e.target.value)} />
+          </div>
+        </div>
+        {toolGroups.map(([group, items]) => (
+          <div key={group}>
+            <p className="text-[10px] font-medium text-muted-foreground uppercase mb-1">{group}</p>
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-1.5">
+              {items.map(t => (
+                <div key={t.name} className="flex items-center gap-1.5 rounded border px-2 py-1.5 text-xs">
+                  <Wrench className="h-3 w-3 text-muted-foreground shrink-0" />
+                  <span className="truncate flex-1" title={t.desc}>{t.name}</span>
+                  <Switch checked={t.enabled} onCheckedChange={v => onToggleTool(t.name, v)} />
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+      </section>
+
+      {/* Section 3: Rules */}
+      <section className="space-y-2">
+        <div className="flex items-center gap-2">
+          <BookOpen className="h-4 w-4 text-muted-foreground" />
+          <h3 className="text-sm font-medium">Rules</h3>
+          <span className="text-xs text-muted-foreground">{rules.length} 个文件</span>
+          <div className="flex-1" />
+          <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setAddRuleOpen(true)}>
+            <Plus className="h-3.5 w-3.5" />
+          </Button>
+        </div>
+        {rules.length === 0 ? (
+          <p className="text-xs text-muted-foreground py-2">暂无规则文件，点击 + 添加</p>
+        ) : (
+          <div className="space-y-2">
+            {rules.map(r => (
+              <RuleEditor key={r.name} rule={r} onSave={onSaveRule} onDelete={onDeleteRule} />
+            ))}
+          </div>
+        )}
+      </section>
+
+      {/* Add rule dialog */}
+      <Dialog open={addRuleOpen} onOpenChange={setAddRuleOpen}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader><DialogTitle>添加规则文件</DialogTitle></DialogHeader>
+          <Input placeholder="文件名，如 coding.md" value={addRuleName} onChange={e => setAddRuleName(e.target.value)} onKeyDown={e => e.key === "Enter" && doAddRule()} />
+          <DialogFooter><Button size="sm" onClick={doAddRule} disabled={!addRuleName.trim()}>添加</Button></DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
 
-// ==================== ToolsGrid ====================
+// ==================== RuleEditor (collapsible) ====================
 
-function ToolsGrid({ items, onToggle }: { items: CrudItem[]; onToggle: (name: string, enabled: boolean) => void }) {
+function RuleEditor({ rule, onSave, onDelete }: {
+  rule: RuleItem;
+  onSave: (name: string, content: string) => Promise<void>;
+  onDelete: (name: string) => void;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const [text, setText] = useState(rule.content);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => { setText(rule.content); }, [rule.content]);
+
+  const dirty = text !== rule.content;
+
+  const save = async () => {
+    setSaving(true);
+    try { await onSave(rule.name, text); } finally { setSaving(false); }
+  };
+
+  return (
+    <div className="rounded-md border">
+      <button
+        onClick={() => setExpanded(!expanded)}
+        className="w-full flex items-center gap-2 px-3 py-2 text-xs hover:bg-muted/50 transition-colors"
+      >
+        <BookOpen className="h-3 w-3 text-muted-foreground shrink-0" />
+        <span className="font-medium truncate flex-1 text-left">{rule.name}</span>
+        {dirty && <span className="text-[10px] text-primary">未保存</span>}
+        <span className="text-muted-foreground text-[10px]">{expanded ? "收起" : "展开"}</span>
+      </button>
+      {expanded && (
+        <div className="border-t px-3 py-2 space-y-2">
+          <textarea
+            className="w-full h-32 rounded-md border bg-background px-3 py-2 text-xs font-mono resize-y focus:outline-none focus:ring-2 focus:ring-ring"
+            value={text}
+            onChange={e => setText(e.target.value)}
+          />
+          <div className="flex justify-end gap-2">
+            <Button variant="ghost" size="sm" className="h-6 text-xs text-destructive" onClick={() => onDelete(rule.name)}>
+              <Trash2 className="h-3 w-3 mr-1" /> 删除
+            </Button>
+            <Button size="sm" className="h-6 text-xs" disabled={!dirty || saving} onClick={save}>
+              <Save className="h-3 w-3 mr-1" /> {saving ? "..." : "保存"}
+            </Button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ==================== SubAgentsPanel ====================
+
+function SubAgentsPanel({ agents, onSave, onAdd, onDelete }: {
+  agents: SubAgent[];
+  onSave: (updated: SubAgent[]) => Promise<void>;
+  onAdd: () => void;
+  onDelete: (name: string) => void;
+}) {
+  const [selected, setSelected] = useState<string | null>(agents[0]?.name ?? null);
+  const [draft, setDraft] = useState<SubAgent | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  const current = agents.find(a => a.name === selected);
+
+  useEffect(() => {
+    if (current) {
+      setDraft({ ...current, tools: current.tools.map(t => ({ ...t })) });
+    } else {
+      setDraft(null);
+    }
+  }, [current]);
+
+  const dirty = useMemo(() => {
+    if (!current || !draft) return false;
+    if (draft.desc !== current.desc) return true;
+    if (draft.system_prompt !== current.system_prompt) return true;
+    return draft.tools.some((t, i) => t.enabled !== current.tools[i]?.enabled);
+  }, [current, draft]);
+
+  const save = async () => {
+    if (!draft || !selected) return;
+    setSaving(true);
+    try {
+      const updated = agents.map(a => a.name === selected ? draft : a);
+      await onSave(updated);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleToolToggle = (toolName: string, enabled: boolean) => {
+    if (!draft) return;
+    setDraft({ ...draft, tools: draft.tools.map(t => t.name === toolName ? { ...t, enabled } : t) });
+  };
+
+  return (
+    <div className="h-full flex">
+      {/* Agent list */}
+      <div className="w-48 shrink-0 border-r flex flex-col">
+        <div className="flex items-center justify-between px-3 py-2 border-b">
+          <span className="text-xs font-medium text-muted-foreground">Sub-Agents</span>
+          <Button variant="ghost" size="icon" className="h-6 w-6" onClick={onAdd}>
+            <Plus className="h-3.5 w-3.5" />
+          </Button>
+        </div>
+        <div className="flex-1 overflow-auto py-1">
+          {agents.map(a => (
+            <button
+              key={a.name}
+              onClick={() => setSelected(a.name)}
+              className={`w-full flex items-center gap-2 px-3 py-1.5 text-xs group ${
+                selected === a.name ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-muted"
+              }`}
+            >
+              <Bot className="h-3 w-3 shrink-0" />
+              <span className="truncate flex-1 text-left">{a.name}</span>
+              {a.builtin && (
+                <span className="text-[10px] px-1 rounded bg-muted text-muted-foreground shrink-0">内置</span>
+              )}
+              {!a.builtin && (
+                <span
+                  className="opacity-0 group-hover:opacity-100 shrink-0 text-muted-foreground hover:text-destructive transition-opacity"
+                  onClick={e => { e.stopPropagation(); onDelete(a.name); setSelected(agents.find(x => x.name !== a.name)?.name ?? null); }}
+                >
+                  <X className="h-3 w-3" />
+                </span>
+              )}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Config panel */}
+      <div className="flex-1 flex flex-col min-w-0 overflow-auto">
+        {draft ? (
+          <div className="flex flex-col gap-4 p-4">
+            {/* Header + save */}
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-medium">{draft.name}</span>
+              {draft.builtin && (
+                <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground">内置</span>
+              )}
+              <div className="flex-1" />
+              <Button size="sm" className="h-7" disabled={!dirty || saving} onClick={save}>
+                <Save className="h-3.5 w-3.5 mr-1" /> {saving ? "..." : "保存"}
+              </Button>
+            </div>
+
+            {/* Description */}
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-muted-foreground">Description</label>
+              <Input
+                value={draft.desc}
+                onChange={e => setDraft({ ...draft, desc: e.target.value })}
+                placeholder="Agent 描述..."
+                className="h-8 text-sm"
+              />
+            </div>
+
+            {/* System Prompt */}
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-muted-foreground">System Prompt</label>
+              <textarea
+                className="w-full h-32 rounded-md border bg-background px-3 py-2 text-sm font-mono resize-none focus:outline-none focus:ring-2 focus:ring-ring"
+                value={draft.system_prompt}
+                onChange={e => setDraft({ ...draft, system_prompt: e.target.value })}
+                placeholder="输入 System Prompt..."
+              />
+            </div>
+
+            {/* Tools */}
+            {draft.tools.length > 0 && (
+              <SubAgentToolsGrid items={draft.tools} onToggle={handleToolToggle} />
+            )}
+          </div>
+        ) : (
+          <div className="flex-1 flex items-center justify-center text-sm text-muted-foreground">
+            {agents.length ? "选择一个 Agent" : "暂无 Agent，点击 + 添加"}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ==================== SubAgentToolsGrid (compact) ====================
+
+function SubAgentToolsGrid({ items, onToggle }: { items: CrudItem[]; onToggle: (name: string, enabled: boolean) => void }) {
   const [filter, setFilter] = useState("");
   const groups = useMemo(() => {
     const map: Record<string, CrudItem[]> = {};
@@ -292,131 +569,33 @@ function ToolsGrid({ items, onToggle }: { items: CrudItem[]; onToggle: (name: st
     return Object.entries(map).sort(([a], [b]) => a.localeCompare(b));
   }, [items, filter]);
 
+  const enabledCount = items.filter(t => t.enabled).length;
+
   return (
-    <div className="p-4 space-y-4">
+    <div className="space-y-2">
       <div className="flex items-center gap-2">
-        <h3 className="text-sm font-medium">Tools</h3>
-        <span className="text-xs text-muted-foreground">{items.length} 个工具</span>
+        <label className="text-xs font-medium text-muted-foreground">Tools</label>
+        <span className="text-xs text-muted-foreground">{enabledCount}/{items.length} 启用</span>
         <div className="flex-1" />
-        <div className="relative w-48">
-          <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-          <Input className="pl-8 h-8 text-xs" placeholder="搜索工具..." value={filter} onChange={e => setFilter(e.target.value)} />
+        <div className="relative w-40">
+          <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground" />
+          <Input className="pl-7 h-7 text-xs" placeholder="搜索..." value={filter} onChange={e => setFilter(e.target.value)} />
         </div>
       </div>
       {groups.map(([group, tools]) => (
         <div key={group}>
-          <p className="text-xs font-medium text-muted-foreground uppercase mb-2">{group}</p>
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2">
+          <p className="text-[10px] font-medium text-muted-foreground uppercase mb-1">{group}</p>
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-1.5">
             {tools.map(t => (
-              <div key={t.name} className="flex items-center gap-2 rounded-md border px-3 py-2 text-xs">
-                <Wrench className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                <div className="min-w-0 flex-1">
-                  <p className="font-medium truncate">{t.name}</p>
-                  {t.desc && <p className="text-muted-foreground truncate">{t.desc}</p>}
-                </div>
+              <div key={t.name} className="flex items-center gap-1.5 rounded border px-2 py-1.5 text-xs">
+                <Wrench className="h-3 w-3 text-muted-foreground shrink-0" />
+                <span className="truncate flex-1" title={t.desc}>{t.name}</span>
                 <Switch checked={t.enabled} onCheckedChange={v => onToggle(t.name, v)} />
               </div>
             ))}
           </div>
         </div>
       ))}
-    </div>
-  );
-}
-
-// ==================== RulesPanel ====================
-
-function RulesPanel({ rules, onSave, onAdd, onDelete }: {
-  rules: RuleItem[];
-  onSave: (name: string, content: string) => Promise<void>;
-  onAdd: (name: string) => Promise<void>;
-  onDelete: (name: string) => void;
-}) {
-  const [selected, setSelected] = useState<string | null>(rules[0]?.name ?? null);
-  const [text, setText] = useState("");
-  const [saving, setSaving] = useState(false);
-  const [addOpen, setAddOpen] = useState(false);
-  const [addName, setAddName] = useState("");
-
-  const current = rules.find(r => r.name === selected);
-  useEffect(() => { setText(current?.content ?? ""); }, [current]);
-
-  const dirty = current ? text !== current.content : false;
-
-  const save = async () => {
-    if (!selected) return;
-    setSaving(true);
-    try { await onSave(selected, text); } finally { setSaving(false); }
-  };
-
-  const doAdd = async () => {
-    const n = addName.trim();
-    if (!n) return;
-    await onAdd(n.endsWith(".md") ? n : `${n}.md`);
-    setAddName("");
-    setAddOpen(false);
-    setSelected(n.endsWith(".md") ? n : `${n}.md`);
-  };
-
-  return (
-    <div className="h-full flex">
-      {/* File list */}
-      <div className="w-48 shrink-0 border-r flex flex-col">
-        <div className="flex items-center justify-between px-3 py-2 border-b">
-          <span className="text-xs font-medium text-muted-foreground">规则文件</span>
-          <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setAddOpen(true)}>
-            <Plus className="h-3.5 w-3.5" />
-          </Button>
-        </div>
-        <div className="flex-1 overflow-auto py-1">
-          {rules.map(r => (
-            <button
-              key={r.name}
-              onClick={() => setSelected(r.name)}
-              className={`w-full flex items-center gap-2 px-3 py-1.5 text-xs ${
-                selected === r.name ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-muted"
-              }`}
-            >
-              <BookOpen className="h-3 w-3 shrink-0" />
-              <span className="truncate">{r.name}</span>
-            </button>
-          ))}
-        </div>
-      </div>
-      {/* Editor */}
-      <div className="flex-1 flex flex-col p-4 gap-2 min-w-0">
-        {current ? (
-          <>
-            <div className="flex items-center gap-2">
-              <span className="text-sm font-medium truncate">{current.name}</span>
-              <div className="flex-1" />
-              <Button variant="ghost" size="sm" className="text-destructive h-7" onClick={() => { onDelete(current.name); setSelected(rules.find(r => r.name !== current.name)?.name ?? null); }}>
-                <Trash2 className="h-3.5 w-3.5 mr-1" /> 删除
-              </Button>
-              <Button size="sm" className="h-7" disabled={!dirty || saving} onClick={save}>
-                <Save className="h-3.5 w-3.5 mr-1" /> {saving ? "..." : "保存"}
-              </Button>
-            </div>
-            <textarea
-              className="flex-1 w-full rounded-md border bg-background px-3 py-2 text-sm font-mono resize-none focus:outline-none focus:ring-2 focus:ring-ring"
-              value={text}
-              onChange={e => setText(e.target.value)}
-            />
-          </>
-        ) : (
-          <div className="flex-1 flex items-center justify-center text-sm text-muted-foreground">
-            {rules.length ? "选择一个规则文件" : "暂无规则，点击 + 添加"}
-          </div>
-        )}
-      </div>
-      {/* Add dialog */}
-      <Dialog open={addOpen} onOpenChange={setAddOpen}>
-        <DialogContent className="sm:max-w-sm">
-          <DialogHeader><DialogTitle>添加规则文件</DialogTitle></DialogHeader>
-          <Input placeholder="文件名，如 coding.md" value={addName} onChange={e => setAddName(e.target.value)} onKeyDown={e => e.key === "Enter" && doAdd()} />
-          <DialogFooter><Button size="sm" onClick={doAdd} disabled={!addName.trim()}>添加</Button></DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

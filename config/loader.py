@@ -123,15 +123,6 @@ class AgentLoader:
         if self.workspace_root:
             self._load_agents_from_dir(self.workspace_root / ".leon" / "agents")
 
-        # 4. Members (highest priority)
-        members_dir = Path.home() / ".leon" / "members"
-        if members_dir.exists():
-            for member_dir in members_dir.iterdir():
-                if member_dir.is_dir() and (member_dir / "agent.md").exists():
-                    config = self.parse_agent_file(member_dir / "agent.md")
-                    if config:
-                        self._agents[config.name] = config
-
         return self._agents
 
     def _load_agents_from_dir(self, dir_path: Path) -> None:
@@ -188,6 +179,7 @@ class AgentLoader:
         """Load a complete agent bundle from a directory.
 
         Used for members: system defaults + member bundle (no user/project inheritance).
+        Sub-agents use two-layer merge: system defaults → member-specific (override by name).
         """
         agent_dir = agent_dir.resolve()
         agent = self.parse_agent_file(agent_dir / "agent.md")
@@ -199,7 +191,7 @@ class AgentLoader:
             meta=self._discover_meta(agent_dir),
             runtime=self._discover_runtime(agent_dir),
             rules=self._discover_rules(agent_dir),
-            agents=self._discover_agents(agent_dir),
+            agents=self._merge_agents(agent_dir),
             skills=self._discover_skills(agent_dir),
             mcp=self._discover_mcp(agent_dir),
         )
@@ -245,6 +237,20 @@ class AgentLoader:
                 continue
             rules.append({"name": md.stem, "content": content})
         return rules
+
+    def _merge_agents(self, agent_dir: Path) -> list[AgentConfig]:
+        """Two-layer merge: system defaults → member-specific (override by name)."""
+        merged: dict[str, AgentConfig] = {}
+
+        # Layer 1: system built-in agents
+        for agent in self._discover_agents(self._system_defaults_dir):
+            merged[agent.name] = agent
+
+        # Layer 2: member-specific agents (override by name)
+        for agent in self._discover_agents(agent_dir):
+            merged[agent.name] = agent
+
+        return list(merged.values())
 
     @staticmethod
     def _discover_agents(agent_dir: Path) -> list[AgentConfig]:
