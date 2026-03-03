@@ -566,7 +566,8 @@ async def _run_agent_to_buffer(
             followup = qm.dequeue(thread_id)
             if followup and app:
                 if hasattr(agent, "runtime") and agent.runtime.transition(AgentState.ACTIVE):
-                    start_agent_run(agent, thread_id, followup, app)
+                    start_agent_run(agent, thread_id, followup, app,
+                                    message_metadata={"source": "system"})
         except Exception:
             logger.exception("Failed to consume followup queue for thread %s", thread_id)
             # Re-enqueue the message if it was already dequeued to prevent data loss
