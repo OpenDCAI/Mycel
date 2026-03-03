@@ -617,6 +617,15 @@ async def _run_agent_to_buffer(
             except Exception:
                 logger.debug("Board task idle check failed", exc_info=True)
 
+        # Clean up old run events and close repo BEFORE starting followup run,
+        # so the new run gets a fresh connection and there is no closed-repo race.
+        try:
+            await cleanup_old_runs(thread_id, keep_latest=1, run_event_repo=run_event_repo)
+        except Exception:
+            pass
+        if run_event_repo is not None:
+            run_event_repo.close()
+
         # Consume followup queue: if messages are pending, start a new run
         followup = None
         try:
@@ -624,8 +633,16 @@ async def _run_agent_to_buffer(
             followup = qm.dequeue(thread_id)
             if followup and app:
                 if hasattr(agent, "runtime") and agent.runtime.transition(AgentState.ACTIVE):
-                    start_agent_run(agent, thread_id, followup, app,
-                                    message_metadata={"source": "system"})
+                    new_buf = start_agent_run(agent, thread_id, followup, app,
+                                              message_metadata={"source": "system"})
+                    # Emit new_run so the frontend notification stream reconnects.
+                    # Mirrors wake_handler._start_run() which does the same for idle-triggered runs.
+                    activity_sink = getattr(getattr(agent, "runtime", None), "_activity_sink", None)
+                    if activity_sink:
+                        await activity_sink({
+                            "event": "new_run",
+                            "data": json.dumps({"thread_id": thread_id, "run_id": new_buf.run_id}),
+                        })
         except Exception:
             logger.exception("Failed to consume followup queue for thread %s", thread_id)
             # Re-enqueue the message if it was already dequeued to prevent data loss
@@ -634,13 +651,6 @@ async def _run_agent_to_buffer(
                     app.state.queue_manager.enqueue(followup, thread_id)
                 except Exception:
                     logger.error("Failed to re-enqueue followup for thread %s — message lost: %.200s", thread_id, followup)
-
-        try:
-            await cleanup_old_runs(thread_id, keep_latest=1, run_event_repo=run_event_repo)
-        except Exception:
-            pass
-        if run_event_repo is not None:
-            run_event_repo.close()
 
 
 # ---------------------------------------------------------------------------
