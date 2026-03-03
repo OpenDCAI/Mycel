@@ -33,9 +33,9 @@ export interface UseThreadStreamResult {
  */
 export function useThreadStream(
   threadId: string,
-  deps: { loading: boolean; refreshThreads: () => Promise<void> },
+  deps: { loading: boolean; refreshThreads: () => Promise<void>; runStarted?: boolean },
 ): UseThreadStreamResult {
-  const { loading, refreshThreads } = deps;
+  const { loading, refreshThreads, runStarted } = deps;
 
   const [phase, setPhase] = useState<ConnectionPhase>("idle");
   const [isRunning, setIsRunning] = useState(false);
@@ -106,18 +106,28 @@ export function useThreadStream(
   useEffect(() => {
     if (loading) return;
 
-    // Check if a run is already active and auto-connect
-    void (async () => {
-      try {
-        const runtime = await getThreadRuntime(threadId);
-        if (runtime) setRuntimeStatus(runtime);
-        if (runtime?.state?.state === "active") {
-          connect(runtime.last_seq ?? 0);
+    if (runStarted) {
+      // Navigated from NewChatPage: postRun was already called there.
+      // Connect IMMEDIATELY from seq=0 — do NOT await getThreadRuntime().
+      // A fast run may finish within the ~200ms network round-trip, making
+      // state !== "active" and causing connect() to be skipped entirely.
+      connect(0);
+      // Still fetch runtime for runtimeStatus display (non-blocking)
+      void getThreadRuntime(threadId).then((rt) => { if (rt) setRuntimeStatus(rt); }).catch(() => {});
+    } else {
+      // Page refresh / direct URL: check if a run is already active
+      void (async () => {
+        try {
+          const runtime = await getThreadRuntime(threadId);
+          if (runtime) setRuntimeStatus(runtime);
+          if (runtime?.state?.state === "active") {
+            connect(runtime.last_seq ?? 0);
+          }
+        } catch (err) {
+          console.error("[useThreadStream] init runtime check failed:", err);
         }
-      } catch (err) {
-        console.error("[useThreadStream] init runtime check failed:", err);
-      }
-    })();
+      })();
+    }
 
     // Permanent notification stream — stays open for the entire page lifetime.
     // Handles: new_run (background task → continuation run), run_done, activity events.

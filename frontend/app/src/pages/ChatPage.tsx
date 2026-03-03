@@ -42,12 +42,17 @@ function ChatPageInner({ threadId }: { threadId: string }) {
   const navEntry = performance.getEntriesByType("navigation")[0] as PerformanceNavigationTiming | undefined;
   const runStarted = !!state?.runStarted && navEntry?.type !== "reload";
 
-  // Pre-populate user message so ThinkingIndicator shows immediately (no skeleton)
-  const [initialEntries] = useState(() =>
-    runStarted && state?.message
-      ? [{ id: `user-${Date.now()}`, role: "user" as const, content: state.message, timestamp: Date.now() }]
-      : undefined,
-  );
+  // Pre-populate user + empty assistant turn so ThinkingIndicator shows immediately (no skeleton).
+  // The empty assistant turn (streaming=true, segments=[]) renders the three-dot indicator
+  // until stream events arrive and populate it.
+  const [initialEntries] = useState(() => {
+    if (!runStarted || !state?.message) return undefined;
+    const now = Date.now();
+    return [
+      { id: `user-${now}`, role: "user" as const, content: state.message, timestamp: now },
+      { id: `assistant-${now + 1}`, role: "assistant" as const, segments: [], streaming: true, timestamp: now + 1 } as AssistantTurn,
+    ];
+  });
 
   useEffect(() => {
     if (state?.selectedModel) {
@@ -84,6 +89,7 @@ function ChatPageInner({ threadId }: { threadId: string }) {
       onUpdate: (updater) => setEntries(updater),
       loading,
       onActivityEvent: handleActivityEvent,
+      runStarted,
     });
 
   const isStreaming = isRunning;

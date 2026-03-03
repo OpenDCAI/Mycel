@@ -20,6 +20,12 @@ interface StreamHandlerDeps {
   loading: boolean;
   /** Callback for activity events (command_progress, background_task_*). */
   onActivityEvent?: (event: StreamEvent) => void;
+  /**
+   * True when navigating from a new-chat creation (postRun already called in NewChatPage).
+   * Tells useThreadStream to connect from seq=0 instead of last_seq, so we don't miss
+   * events that were emitted between postRun() and ChatPage mount.
+   */
+  runStarted?: boolean;
 }
 
 export interface StreamHandlerState {
@@ -64,14 +70,14 @@ function applyReconnectTurn(
 export function useStreamHandler(
   deps: StreamHandlerDeps,
 ): StreamHandlerState & StreamHandlerActions {
-  const { threadId, refreshThreads, onUpdate, loading, onActivityEvent } = deps;
+  const { threadId, refreshThreads, onUpdate, loading, onActivityEvent, runStarted } = deps;
 
   // Local state for immediate UI feedback when user sends a message
   // (covers the window between flushSync and useThreadStream.isRunning becoming true)
   const [sendPending, setSendPending] = useState(false);
 
   const { isRunning: streamIsRunning, runtimeStatus, connect, disconnect, subscribe } =
-    useThreadStream(threadId, { loading, refreshThreads });
+    useThreadStream(threadId, { loading, refreshThreads, runStarted });
 
   const isRunning = streamIsRunning || sendPending;
 
