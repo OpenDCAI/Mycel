@@ -445,6 +445,19 @@ wheels = [
 ]
 
 [[package]]
+name = "croniter"
+version = "6.0.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "python-dateutil" },
+    { name = "pytz" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/ad/2f/44d1ae153a0e27be56be43465e5cb39b9650c781e001e7864389deb25090/croniter-6.0.0.tar.gz", hash = "sha256:37c504b313956114a983ece2c2b07790b1f1094fe9d81cc94739214748255577", size = 64481, upload-time = "2024-12-17T17:17:47.32Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/07/4b/290b4c3efd6417a8b0c284896de19b1d5855e6dbdb97d2a35e68fa42de85/croniter-6.0.0-py2.py3-none-any.whl", hash = "sha256:2f878c3856f17896979b2a4379ba1f09c83e374931ea15cc835c5dd2eee9b368", size = 25468, upload-time = "2024-12-17T17:17:45.359Z" },
+]
+
+[[package]]
 name = "cryptography"
 version = "44.0.3"
 source = { registry = "https://pypi.org/simple" }
@@ -1250,6 +1263,7 @@ name = "leonai"
 version = "0.3.0"
 source = { editable = "." }
 dependencies = [
+    { name = "croniter" },
     { name = "duckduckgo-search" },
     { name = "httpx" },
     { name = "langchain" },
@@ -1321,6 +1335,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "croniter", specifier = ">=6.0.0" },
     { name = "daytona-sdk", marker = "extra == 'all'", specifier = ">=0.10.0" },
     { name = "daytona-sdk", marker = "extra == 'daytona'", specifier = ">=0.10.0" },
     { name = "duckduckgo-search", specifier = ">=8.1.1" },
@@ -2404,6 +2419,15 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/6c/07/cfdd6a846ac859e513b4e68bb6c669a90a74d89d8d405516fba7fc9c6f0c/python_socks-2.8.0.tar.gz", hash = "sha256:340f82778b20a290bdd538ee47492978d603dff7826aaf2ce362d21ad9ee6f1b", size = 273130, upload-time = "2025-12-09T12:17:05.433Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/13/10/e2b575faa32d1d32e5e6041fc64794fa9f09526852a06b25353b66f52cae/python_socks-2.8.0-py3-none-any.whl", hash = "sha256:57c24b416569ccea493a101d38b0c82ed54be603aa50b6afbe64c46e4a4e4315", size = 55075, upload-time = "2025-12-09T12:17:03.269Z" },
+]
+
+[[package]]
+name = "pytz"
+version = "2026.1.post1"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/56/db/b8721d71d945e6a8ac63c0fc900b2067181dbb50805958d4d4661cf7d277/pytz-2026.1.post1.tar.gz", hash = "sha256:3378dde6a0c3d26719182142c56e60c7f9af7e968076f31aae569d72a0358ee1", size = 321088, upload-time = "2026-03-03T07:47:50.683Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/10/99/781fe0c827be2742bcc775efefccb3b048a3a9c6ce9aec0cbf4a101677e5/pytz-2026.1.post1-py2.py3-none-any.whl", hash = "sha256:f2fd16142fda348286a75e1a524be810bb05d444e5a081f37f7affc635035f7a", size = 510489, upload-time = "2026-03-03T07:47:49.167Z" },
 ]
 
 [[package]]
