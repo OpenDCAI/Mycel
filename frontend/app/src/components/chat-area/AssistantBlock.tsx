@@ -2,37 +2,10 @@ import { memo } from "react";
 import type { AssistantTurn, NoticeSegment, StreamStatus, ToolSegment, TurnSegment } from "../../api";
 import MarkdownContent from "../MarkdownContent";
 import { CopyButton } from "./CopyButton";
-import { parseNoticeContent, STATUS_ICON, type ParsedNotice } from "./NoticeBubble";
+import { parseNoticeContent, STATUS_ICON } from "./NoticeBubble";
 import { ThinkingIndicator } from "./ThinkingIndicator";
 import { ToolDetailBox } from "./ToolDetailBox";
 import { formatTime } from "./utils";
-
-/** Tools whose results are self-contained content that the AI often echoes verbatim. */
-const CONTENT_HEAVY_TOOLS = new Set([
-  "WebFetch", "web_search", "WebSearch", "Fetch",
-  "load_skill",
-  "Task", "TaskOutput",
-]);
-
-/** Check if text substantially duplicates a content-heavy tool's result. */
-function isToolResultEcho(text: string, toolSegs: ToolSegment[]): boolean {
-  const trimmed = text.trim();
-  if (trimmed.length < 100) return false;
-
-  for (const seg of toolSegs) {
-    if (!CONTENT_HEAVY_TOOLS.has(seg.step.name)) continue;
-    const result = seg.step.result?.trim();
-    if (!result || result.length < 100) continue;
-
-    const resultSample = result.slice(0, 200);
-    if (trimmed.includes(resultSample)) return true;
-
-    const textSample = trimmed.slice(0, 200);
-    if (result.includes(textSample)) return true;
-  }
-
-  return false;
-}
 
 // --- Phase splitting: segments → content phases + notice dividers ---
 
@@ -76,25 +49,17 @@ function NoticeDivider({ content }: { content: string }) {
 // --- Content phase rendering (tools + final text) ---
 
 function ContentPhaseBlock({
-  segments, isStreaming, runtimeStatus, onFocusStep, onFocusAgent, allTurnToolSegs,
+  segments, isStreaming, runtimeStatus, onFocusStep, onFocusAgent,
 }: {
   segments: TurnSegment[];
   isStreaming: boolean;
   runtimeStatus?: StreamStatus | null;
   onFocusStep?: (stepId: string) => void;
   onFocusAgent?: (taskId: string) => void;
-  /** All tool segments from the entire turn, for cross-phase echo detection. */
-  allTurnToolSegs?: ToolSegment[];
 }) {
   const toolSegs = segments.filter((s) => s.type === "tool") as ToolSegment[];
   const textSegs = segments.filter((s) => s.type === "text" && s.content.trim());
-  const finalText = textSegs.length > 0 ? textSegs[textSegs.length - 1] : null;
-
-  // Use all turn tool segs (not just this phase) so echo detection works across notice dividers.
-  const echoCheckSegs = allTurnToolSegs ?? toolSegs;
-  // Run echo detection even during streaming so verbatim tool-result echoes are suppressed immediately.
-  const resultEcho = finalText != null && isToolResultEcho(finalText.content, echoCheckSegs);
-  const visibleText = resultEcho ? null : finalText;
+  const visibleText = textSegs.length > 0 ? textSegs[textSegs.length - 1] : null;
 
   return (
     <>
@@ -168,7 +133,6 @@ export const AssistantBlock = memo(function AssistantBlock({ entry, isStreamingT
                   runtimeStatus={runtimeStatus}
                   onFocusStep={onFocusStep}
                   onFocusAgent={onFocusAgent}
-                  allTurnToolSegs={toolSegs}
                 />
           )
         ) : (
