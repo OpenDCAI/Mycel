@@ -79,6 +79,24 @@ class UpdateProfileRequest(BaseModel):
     email: str | None = None
 
 
+# ── Cron Jobs ──
+
+class CreateCronJobRequest(BaseModel):
+    name: str
+    description: str = ""
+    cron_expression: str
+    task_template: str = "{}"
+    enabled: bool = True
+
+
+class UpdateCronJobRequest(BaseModel):
+    name: str | None = None
+    description: str | None = None
+    cron_expression: str | None = None
+    task_template: str | None = None
+    enabled: bool | None = None
+
+
 # ── Backward compatibility aliases ──
 
 StaffConfigPayload = MemberConfigPayload
