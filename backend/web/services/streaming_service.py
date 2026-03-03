@@ -248,6 +248,8 @@ async def _run_agent_to_buffer(
     task = None
     stream_gen = None
     pending_tool_calls: dict[str, dict] = {}
+    # Per-subagent RunEventBuffer: task_id → (sa_thread_id, buf)
+    subagent_buffers: dict[str, tuple[str, RunEventBuffer]] = {}
     try:
         config = {"configurable": {"thread_id": thread_id}}
         if hasattr(agent, "_current_model_config"):
@@ -475,9 +477,59 @@ async def _run_agent_to_buffer(
             while not activity_queue.empty():
                 try:
                     act_event = activity_queue.get_nowait()
-                    await emit(act_event)
                 except asyncio.QueueEmpty:
                     break
+
+                event_type = act_event.get("event", "")
+
+                if event_type == "subagent_task_start":
+                    # Create dedicated SSE buffer for the subagent thread
+                    try:
+                        sa_data = json.loads(act_event.get("data", "{}"))
+                    except (json.JSONDecodeError, TypeError):
+                        sa_data = {}
+                    task_id = sa_data.get("task_id", "")
+                    sa_thread_id = sa_data.get("thread_id", f"subagent_{task_id}")
+                    if task_id:
+                        sa_buf = RunEventBuffer()
+                        sa_buf.run_id = str(_uuid.uuid4())
+                        subagent_buffers[task_id] = (sa_thread_id, sa_buf)
+                        app.state.thread_event_buffers[sa_thread_id] = sa_buf
+                    # Emit slim lifecycle notification to parent SSE
+                    await emit(act_event)
+
+                elif event_type in ("subagent_task_text", "subagent_task_tool_call", "subagent_task_tool_result"):
+                    # Route to subagent buffer only — skip parent SSE (prevents leakage)
+                    try:
+                        sa_data = json.loads(act_event.get("data", "{}"))
+                    except (json.JSONDecodeError, TypeError):
+                        sa_data = {}
+                    task_id = sa_data.get("task_id", "")
+                    sa_entry = subagent_buffers.get(task_id)
+                    if sa_entry:
+                        _, sa_buf = sa_entry
+                        await sa_buf.put(act_event)
+
+                elif event_type in ("subagent_task_done", "subagent_task_error"):
+                    # Close subagent buffer + emit lifecycle notification to parent
+                    try:
+                        sa_data = json.loads(act_event.get("data", "{}"))
+                    except (json.JSONDecodeError, TypeError):
+                        sa_data = {}
+                    task_id = sa_data.get("task_id", "")
+                    sa_entry = subagent_buffers.pop(task_id, None)
+                    if sa_entry:
+                        sa_thread_id, sa_buf = sa_entry
+                        await sa_buf.put(act_event)
+                        # Emit terminal event so SSE consumer exits cleanly
+                        await sa_buf.put({"event": "done", "data": json.dumps({"thread_id": sa_thread_id})})
+                        await sa_buf.mark_done()
+                        app.state.thread_event_buffers.pop(sa_thread_id, None)
+                    await emit(act_event)
+
+                else:
+                    # All other activity events (command_progress, background_task_*, etc.)
+                    await emit(act_event)
 
         # Final status
         if hasattr(agent, "runtime"):
@@ -523,6 +575,12 @@ async def _run_agent_to_buffer(
         traceback.print_exc()
         await emit({"event": "error", "data": json.dumps({"error": str(e)}, ensure_ascii=False)})
     finally:
+        # Clean up any subagent buffers not already closed (e.g., on cancellation/error)
+        for _task_id, (sa_thread_id, sa_buf) in list(subagent_buffers.items()):
+            await sa_buf.mark_done()
+            app.state.thread_event_buffers.pop(sa_thread_id, None)
+        subagent_buffers.clear()
+
         # Notify activity channel that this run finished (so frontend can refresh)
         if hasattr(agent, "runtime"):
             agent.runtime.emit_activity_event(
