@@ -18,9 +18,29 @@ def _ensure_tasks_table(conn: sqlite3.Connection) -> None:
             priority TEXT DEFAULT 'medium',
             progress INTEGER DEFAULT 0,
             deadline TEXT DEFAULT '',
-            created_at INTEGER NOT NULL
+            created_at INTEGER NOT NULL,
+            thread_id TEXT DEFAULT '',
+            source TEXT DEFAULT 'manual',
+            cron_job_id TEXT DEFAULT '',
+            result TEXT DEFAULT '',
+            started_at INTEGER DEFAULT 0,
+            completed_at INTEGER DEFAULT 0
         )
     """)
+    # Migrate existing databases that lack the new columns.
+    _migrate_new_columns = [
+        ("thread_id", "TEXT DEFAULT ''"),
+        ("source", "TEXT DEFAULT 'manual'"),
+        ("cron_job_id", "TEXT DEFAULT ''"),
+        ("result", "TEXT DEFAULT ''"),
+        ("started_at", "INTEGER DEFAULT 0"),
+        ("completed_at", "INTEGER DEFAULT 0"),
+    ]
+    for col_name, col_def in _migrate_new_columns:
+        try:
+            conn.execute(f"ALTER TABLE panel_tasks ADD COLUMN {col_name} {col_def}")
+        except sqlite3.OperationalError:
+            pass  # column already exists
 
 
 def _tasks_conn() -> sqlite3.Connection:
@@ -41,9 +61,27 @@ def create_task(**fields: Any) -> dict[str, Any]:
     tid = str(now)
     with _tasks_conn() as conn:
         conn.execute(
-            "INSERT INTO panel_tasks (id,title,description,assignee_id,status,priority,progress,deadline,created_at) VALUES (?,?,?,?,?,?,?,?,?)",
-            (tid, fields.get("title", "新任务"), fields.get("description", ""), fields.get("assignee_id", ""),
-             "pending", fields.get("priority", "medium"), 0, fields.get("deadline", ""), now),
+            "INSERT INTO panel_tasks"
+            " (id,title,description,assignee_id,status,priority,progress,deadline,created_at,"
+            "  thread_id,source,cron_job_id,result,started_at,completed_at)"
+            " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            (
+                tid,
+                fields.get("title", "新任务"),
+                fields.get("description", ""),
+                fields.get("assignee_id", ""),
+                "pending",
+                fields.get("priority", "medium"),
+                0,
+                fields.get("deadline", ""),
+                now,
+                fields.get("thread_id", ""),
+                fields.get("source", "manual"),
+                fields.get("cron_job_id", ""),
+                fields.get("result", ""),
+                fields.get("started_at", 0),
+                fields.get("completed_at", 0),
+            ),
         )
         conn.commit()
         row = conn.execute("SELECT * FROM panel_tasks WHERE id = ?", (tid,)).fetchone()
@@ -51,7 +89,10 @@ def create_task(**fields: Any) -> dict[str, Any]:
 
 
 def update_task(task_id: str, **fields: Any) -> dict[str, Any] | None:
-    allowed = {"title", "description", "assignee_id", "status", "priority", "progress", "deadline"}
+    allowed = {
+        "title", "description", "assignee_id", "status", "priority", "progress", "deadline",
+        "thread_id", "source", "cron_job_id", "result", "started_at", "completed_at",
+    }
     updates = {k: v for k, v in fields.items() if k in allowed and v is not None}
     if not updates:
         with _tasks_conn() as conn:
