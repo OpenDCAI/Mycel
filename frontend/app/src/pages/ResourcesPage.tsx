@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useIsMobile } from "@/hooks/use-mobile";
 import type { ProviderInfo } from "./resources/types";
 import { deriveAllocatedResources } from "./resources/allocation";
-import { fetchResourceProviders } from "./resources/api";
+import { fetchResourceProviders, refreshResourceProviders } from "./resources/api";
 import ProviderCard from "./resources/ProviderCard";
 import ProviderDetail from "./resources/ProviderDetail";
 
@@ -17,29 +17,52 @@ export default function ResourcesPage() {
     refresh_status?: "ok" | "error";
   } | null>(null);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const applyPayload = useCallback((payload: Awaited<ReturnType<typeof fetchResourceProviders>>) => {
+    const nextProviders = payload.providers;
+    setSummary({
+      active_providers: payload.summary.active_providers,
+      running_sessions: payload.summary.running_sessions,
+      last_refreshed_at: payload.summary.last_refreshed_at ?? payload.summary.snapshot_at,
+      refresh_status: payload.summary.refresh_status ?? "ok",
+    });
+    setProviders(nextProviders);
+    setSelectedId((prev) => {
+      if (nextProviders.some((p) => p.id === prev)) return prev;
+      return nextProviders[0]?.id ?? "";
+    });
+  }, []);
+
+  const loadSnapshot = useCallback(async () => {
+    const payload = await fetchResourceProviders();
+    applyPayload(payload);
+  }, [applyPayload]);
+
+  const refreshNow = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      const payload = await refreshResourceProviders();
+      applyPayload(payload);
+      setError(null);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to refresh resources");
+    } finally {
+      setRefreshing(false);
+    }
+  }, [applyPayload]);
 
   useEffect(() => {
     let cancelled = false;
 
-    async function load() {
+    async function loadInitial() {
       setLoading(true);
       setError(null);
       try {
         const payload = await fetchResourceProviders();
-        const nextProviders = payload.providers;
         if (cancelled) return;
-        setSummary({
-          active_providers: payload.summary.active_providers,
-          running_sessions: payload.summary.running_sessions,
-          last_refreshed_at: payload.summary.last_refreshed_at ?? payload.summary.snapshot_at,
-          refresh_status: payload.summary.refresh_status ?? "ok",
-        });
-        setProviders(nextProviders);
-        setSelectedId((prev) => {
-          if (nextProviders.some((p) => p.id === prev)) return prev;
-          return nextProviders[0]?.id ?? "";
-        });
+        applyPayload(payload);
       } catch (e) {
         if (cancelled) return;
         setError(e instanceof Error ? e.message : "Failed to load resources");
@@ -48,11 +71,18 @@ export default function ResourcesPage() {
       }
     }
 
-    void load();
+    void loadInitial();
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [applyPayload]);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      void loadSnapshot().catch(() => {});
+    }, 30000);
+    return () => window.clearInterval(timer);
+  }, [loadSnapshot]);
 
   const selected = providers.find((p) => p.id === selectedId) ?? null;
   const activeCount = summary?.active_providers ?? 0;
@@ -110,6 +140,16 @@ export default function ResourcesPage() {
             </span>
           </div>
         </div>
+        <button
+          type="button"
+          onClick={() => {
+            void refreshNow();
+          }}
+          disabled={refreshing}
+          className="h-8 px-3 rounded-md border border-border text-xs text-foreground hover:bg-muted disabled:opacity-60 disabled:cursor-not-allowed"
+        >
+          {refreshing ? "刷新中..." : "刷新"}
+        </button>
       </div>
 
       {/* Content */}

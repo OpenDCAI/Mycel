@@ -1,9 +1,14 @@
 """Sandbox Monitor API - thin router over monitor core."""
 
+import asyncio
+
 from fastapi import APIRouter, HTTPException
 
 from backend.web.monitor_core import MonitorCoreNotFoundError, diagnose, observe
-from backend.web.monitor_core.resource_overview_cache import get_resource_overview_snapshot
+from backend.web.monitor_core.resource_overview_cache import (
+    get_resource_overview_snapshot,
+    refresh_resource_overview_sync,
+)
 
 router = APIRouter(prefix="/api/monitor")
 
@@ -57,3 +62,9 @@ def health_snapshot():
 @router.get("/resources")
 def resources_overview():
     return get_resource_overview_snapshot()
+
+
+@router.post("/resources/refresh")
+async def resources_refresh():
+    # @@@refresh-off-main-loop - provider I/O stays off event loop to avoid request head-of-line blocking.
+    return await asyncio.to_thread(refresh_resource_overview_sync)

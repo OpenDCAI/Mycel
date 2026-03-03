@@ -17,11 +17,7 @@ interface ResourceOverviewResponse {
   providers: ProviderInfo[];
 }
 
-export async function fetchResourceProviders(): Promise<ResourceOverviewResponse> {
-  const response = await fetch("/api/monitor/resources", {
-    headers: { "Content-Type": "application/json" },
-  });
-
+async function ensureResponseShape(response: Response): Promise<ResourceOverviewResponse> {
   if (!response.ok) {
     const body = await response.text();
     throw new Error(`API ${response.status}: ${body || response.statusText}`);
@@ -32,4 +28,19 @@ export async function fetchResourceProviders(): Promise<ResourceOverviewResponse
     throw new Error("Unexpected /api/monitor/resources response shape");
   }
   return payload;
+}
+
+export async function fetchResourceProviders(): Promise<ResourceOverviewResponse> {
+  const response = await fetch("/api/monitor/resources", {
+    headers: { "Content-Type": "application/json" },
+  });
+  return ensureResponseShape(response);
+}
+
+export async function refreshResourceProviders(): Promise<ResourceOverviewResponse> {
+  const response = await fetch("/api/monitor/resources/refresh", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+  });
+  return ensureResponseShape(response);
 }

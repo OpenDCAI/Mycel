@@ -16,6 +16,18 @@ def test_monitor_resources_route_smoke():
     assert isinstance(payload["providers"], list)
 
 
+def test_monitor_resources_refresh_route_smoke():
+    with TestClient(app) as client:
+        response = client.post("/api/monitor/resources/refresh")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert "summary" in payload
+    assert "providers" in payload
+    assert "last_refreshed_at" in payload["summary"]
+    assert "refresh_status" in payload["summary"]
+
+
 def test_monitor_health_route_smoke():
     with TestClient(app) as client:
         response = client.get("/api/monitor/health")
