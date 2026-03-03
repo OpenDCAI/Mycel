@@ -368,6 +368,28 @@ class TaskBoardMiddleware(AgentMiddleware):
             return {"error": f"Task not found: {task_id}"}
         return {"task": updated}
 
+    # ------------------------------------------------------------------
+    # Idle callback
+    # ------------------------------------------------------------------
+
+    async def on_idle(self) -> dict[str, Any] | None:
+        """Called when agent enters IDLE state. Returns highest-priority pending task, or None."""
+        import asyncio
+
+        tasks = await asyncio.to_thread(task_service.list_tasks)
+        pending = [t for t in tasks if t["status"] == "pending"]
+        if not pending:
+            return None
+
+        # Sort: high > medium > low, then oldest first
+        priority_order = {"high": 0, "medium": 1, "low": 2}
+        pending.sort(key=lambda t: (priority_order.get(t.get("priority", "medium"), 9), t["created_at"]))
+        return pending[0]
+
+    # ------------------------------------------------------------------
+    # Handlers
+    # ------------------------------------------------------------------
+
     def _handle_create(self, args: dict) -> dict:
         """Create a board task with source='agent'."""
         task = task_service.create_task(

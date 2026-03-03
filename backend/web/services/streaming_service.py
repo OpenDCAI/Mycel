@@ -539,6 +539,16 @@ async def _run_agent_to_buffer(
         if agent and hasattr(agent, "runtime") and agent.runtime.current_state == AgentState.ACTIVE:
             agent.runtime.transition(AgentState.IDLE)
 
+        # Check for pending board tasks on idle
+        if hasattr(agent, '_taskboard_middleware') and agent._taskboard_middleware.auto_claim:
+            try:
+                next_task = await agent._taskboard_middleware.on_idle()
+                if next_task:
+                    logger.info("Board task available: %s (id=%s)", next_task.get("title"), next_task["id"])
+                    # V1: log only. Auto-execution requires thread management design (V2).
+            except Exception:
+                logger.debug("Board task idle check failed", exc_info=True)
+
         # Consume followup queue: if messages are pending, start a new run
         followup = None
         try:
