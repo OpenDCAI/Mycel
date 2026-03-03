@@ -5,11 +5,12 @@ import {
   type StreamStatus,
   type ToolSegment,
 } from "../api";
+import type { StreamEvent } from "../api/types";
 import { handleSubagentEvent } from "./subagent-event-handler";
 import { makeId } from "./utils";
 
 export type UpdateEntries = (updater: (prev: ChatEntry[]) => ChatEntry[]) => void;
-export type StreamEvent = { type: string; data?: unknown };
+export type { StreamEvent };
 
 type EventPayload = Record<string, unknown>;
 
