@@ -3,22 +3,24 @@
 import asyncio
 from typing import Any
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 
 from backend.web.models.panel import (
     BulkTaskStatusRequest,
+    CreateCronJobRequest,
     CreateMemberRequest,
     CreateResourceRequest,
     CreateTaskRequest,
     MemberConfigPayload,
     PublishMemberRequest,
+    UpdateCronJobRequest,
     UpdateMemberRequest,
     UpdateProfileRequest,
     UpdateResourceContentRequest,
     UpdateResourceRequest,
     UpdateTaskRequest,
 )
-from backend.web.services import member_service, task_service, library_service, profile_service
+from backend.web.services import member_service, task_service, library_service, profile_service, cron_job_service
 
 router = APIRouter(prefix="/api/panel", tags=["panel"])
 
@@ -111,6 +113,58 @@ async def delete_task(task_id: str) -> dict[str, Any]:
 async def bulk_update_status(req: BulkTaskStatusRequest) -> dict[str, Any]:
     count = await asyncio.to_thread(task_service.bulk_update_task_status, req.ids, req.status)
     return {"updated": count}
+
+
+# ── Cron Jobs ──
+
+
+@router.get("/cron-jobs")
+async def list_cron_jobs() -> dict[str, Any]:
+    items = await asyncio.to_thread(cron_job_service.list_cron_jobs)
+    return {"items": items}
+
+
+@router.post("/cron-jobs")
+async def create_cron_job(req: CreateCronJobRequest) -> dict[str, Any]:
+    job = await asyncio.to_thread(
+        cron_job_service.create_cron_job,
+        name=req.name,
+        cron_expression=req.cron_expression,
+        description=req.description,
+        task_template=req.task_template,
+        enabled=int(req.enabled),
+    )
+    return {"item": job}
+
+
+@router.put("/cron-jobs/{job_id}")
+async def update_cron_job(job_id: str, req: UpdateCronJobRequest) -> dict[str, Any]:
+    fields = req.model_dump(exclude_none=True)
+    if "enabled" in fields:
+        fields["enabled"] = int(fields["enabled"])
+    job = await asyncio.to_thread(cron_job_service.update_cron_job, job_id, **fields)
+    if not job:
+        raise HTTPException(404, "Cron job not found")
+    return {"item": job}
+
+
+@router.delete("/cron-jobs/{job_id}")
+async def delete_cron_job(job_id: str) -> dict[str, Any]:
+    ok = await asyncio.to_thread(cron_job_service.delete_cron_job, job_id)
+    if not ok:
+        raise HTTPException(404, "Cron job not found")
+    return {"ok": True}
+
+
+@router.post("/cron-jobs/{job_id}/run")
+async def trigger_cron_job(job_id: str, request: Request) -> dict[str, Any]:
+    cron_service = getattr(request.app.state, "cron_service", None)
+    if not cron_service:
+        raise HTTPException(503, "Cron service not available")
+    task = await cron_service.trigger_job(job_id)
+    if not task:
+        raise HTTPException(404, "Cron job not found or disabled")
+    return {"item": task}
 
 
 # ── Library ──
