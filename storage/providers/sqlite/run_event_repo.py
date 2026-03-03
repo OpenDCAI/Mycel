@@ -25,7 +25,7 @@ class SQLiteRunEventRepo:
             self._conn = conn
         else:
             if db_path is None:
-                db_path = Path.home() / ".leon" / "leon.db"
+                db_path = Path.home() / ".leon" / "events.db"
             self._conn = create_connection(db_path)
         self._ensure_table()
 
