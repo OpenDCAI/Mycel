@@ -41,12 +41,25 @@ async def lifespan(app: FastAPI):
     app.state.thread_event_buffers: dict[str, RunEventBuffer] = {}
     app.state.activity_buffers: dict[str, RunEventBuffer] = {}
     app.state.idle_reaper_task: asyncio.Task | None = None
+    app.state.cron_service = None
 
     try:
         # Start idle reaper background task
         app.state.idle_reaper_task = asyncio.create_task(idle_reaper_loop(app))
+
+        # Start cron scheduler
+        from backend.web.services.cron_service import CronService
+
+        cron_svc = CronService()
+        await cron_svc.start()
+        app.state.cron_service = cron_svc
+
         yield
     finally:
+        # Cleanup: stop cron scheduler
+        if app.state.cron_service:
+            await app.state.cron_service.stop()
+
         # Cleanup: stop idle reaper
         task = app.state.idle_reaper_task
         if task:
