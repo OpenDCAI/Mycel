@@ -14,6 +14,7 @@ import {
 import { useAppStore } from "@/store/app-store";
 import type { Task, TaskStatus, Priority, CronJob } from "@/store/types";
 import CronEditor from "@/components/cron-editor";
+import CreateTaskModal from "@/components/create-task-modal";
 
 const statusConfig: Record<TaskStatus, { label: string; icon: typeof Circle; color: string }> = {
   pending: { label: "等待中", icon: Circle, color: "text-muted-foreground" },
@@ -97,6 +98,10 @@ export default function Tasks() {
   // Editing state for the panel
   const [editForm, setEditForm] = useState<Task | null>(null);
 
+  // Create modal state
+  const [createModalOpen, setCreateModalOpen] = useState(false);
+  const [createModalTab, setCreateModalTab] = useState<"task" | "cron">("task");
+
   // Cron editing state
   const [editingCron, setEditingCron] = useState<CronJob | null>(null);
   const [cronForm, setCronForm] = useState<CronJob | null>(null);
@@ -144,12 +149,28 @@ export default function Tasks() {
     }
   };
 
-  const createTask = async () => {
+  const openCreateModal = (tab: "task" | "cron" = "task") => {
+    setCreateModalTab(tab);
+    setCreateModalOpen(true);
+  };
+
+  const handleCreateTask = async (fields: Partial<Task>) => {
     try {
-      const newTask = await storeAddTask();
-      openEdit(newTask);
+      await storeAddTask(fields);
+      toast.success("任务已创建");
     } catch (e: unknown) {
       toast.error("创建失败: " + (e instanceof Error ? e.message : String(e)));
+      throw e;
+    }
+  };
+
+  const handleCreateCronJob = async (fields: Partial<CronJob>) => {
+    try {
+      await storeAddCronJob(fields);
+      toast.success("定时任务已创建");
+    } catch (e: unknown) {
+      toast.error("创建失败: " + (e instanceof Error ? e.message : String(e)));
+      throw e;
     }
   };
   // Cron helpers
@@ -174,14 +195,6 @@ export default function Tasks() {
     }
   };
 
-  const createCronJob = async () => {
-    try {
-      const newCron = await storeAddCronJob({ name: "新定时任务", cron_expression: "0 9 * * *" });
-      openCronEdit(newCron);
-    } catch (e: unknown) {
-      toast.error("创建失败: " + (e instanceof Error ? e.message : String(e)));
-    }
-  };
 
   const executeCronDelete = async () => {
     if (!deleteCronConfirmId) return;
@@ -493,13 +506,13 @@ export default function Tasks() {
                     <LayoutGrid className="w-3.5 h-3.5" />
                   </button>
                 </div>
-                <button onClick={createTask} className="flex items-center gap-2 px-3 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition-opacity">
+                <button onClick={() => openCreateModal("task")} className="flex items-center gap-2 px-3 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition-opacity">
                   <Plus className="w-4 h-4" />
                   <span className="hidden md:inline">新建任务</span>
                 </button>
               </>
             ) : (
-              <button onClick={createCronJob} className="flex items-center gap-2 px-3 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition-opacity">
+              <button onClick={() => openCreateModal("cron")} className="flex items-center gap-2 px-3 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition-opacity">
                 <Plus className="w-4 h-4" />
                 <span className="hidden md:inline">新建定时任务</span>
               </button>
@@ -664,7 +677,7 @@ export default function Tasks() {
                     <ListTodo className="w-10 h-10 text-muted-foreground mx-auto mb-3" />
                     <p className="text-sm font-medium text-foreground mb-1">暂无任务</p>
                     <p className="text-xs text-muted-foreground mb-3">创建一个新任务开始工作</p>
-                    <button onClick={createTask} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-xs font-medium hover:opacity-90 transition-opacity">
+                    <button onClick={() => openCreateModal("task")} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-xs font-medium hover:opacity-90 transition-opacity">
                       <Plus className="w-3.5 h-3.5" />新建任务
                     </button>
                   </div>
@@ -729,7 +742,7 @@ export default function Tasks() {
                     <ListTodo className="w-10 h-10 text-muted-foreground mx-auto mb-3" />
                     <p className="text-sm font-medium text-foreground mb-1">暂无任务</p>
                     <p className="text-xs text-muted-foreground mb-3">创建一个新任务开始工作</p>
-                    <button onClick={createTask} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-xs font-medium hover:opacity-90 transition-opacity">
+                    <button onClick={() => openCreateModal("task")} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-xs font-medium hover:opacity-90 transition-opacity">
                       <Plus className="w-3.5 h-3.5" />新建任务
                     </button>
                   </div>
@@ -812,7 +825,7 @@ export default function Tasks() {
                   <Timer className="w-10 h-10 text-muted-foreground mx-auto mb-3" />
                   <p className="text-sm font-medium text-foreground mb-1">暂无定时任务</p>
                   <p className="text-xs text-muted-foreground mb-3">创建定时任务自动执行工作</p>
-                  <button onClick={createCronJob} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-xs font-medium hover:opacity-90 transition-opacity">
+                  <button onClick={() => openCreateModal("cron")} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-xs font-medium hover:opacity-90 transition-opacity">
                     <Plus className="w-3.5 h-3.5" />新建定时任务
                   </button>
                 </div>
@@ -919,6 +932,16 @@ export default function Tasks() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Create Task / Cron Modal */}
+      <CreateTaskModal
+        open={createModalOpen}
+        defaultTab={createModalTab}
+        members={memberList}
+        onClose={() => setCreateModalOpen(false)}
+        onCreateTask={handleCreateTask}
+        onCreateCronJob={handleCreateCronJob}
+      />
     </div>
   );
 }
