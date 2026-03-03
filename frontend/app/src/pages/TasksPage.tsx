@@ -869,10 +869,89 @@ export default function Tasks() {
             </>
           )}
         </div>
+        </>)}
+
+        {/* Cron tab content */}
+        {activeTab === "cron" && (
+          <div className="flex-1 overflow-y-auto">
+            {cronJobs.length === 0 ? (
+              <div className="flex items-center justify-center py-20">
+                <div className="text-center">
+                  <Timer className="w-10 h-10 text-muted-foreground mx-auto mb-3" />
+                  <p className="text-sm font-medium text-foreground mb-1">暂无定时任务</p>
+                  <p className="text-xs text-muted-foreground mb-3">创建定时任务自动执行工作</p>
+                  <button onClick={createCronJob} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-xs font-medium hover:opacity-90 transition-opacity">
+                    <Plus className="w-3.5 h-3.5" />新建定时任务
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <>
+                {/* Cron table header */}
+                <div className="grid grid-cols-[1fr_140px_64px_120px_80px] gap-2 px-6 py-2 border-b border-border text-[11px] text-muted-foreground uppercase tracking-wider font-medium sticky top-0 bg-background z-10">
+                  <span>名称</span>
+                  <span>Cron 表达式</span>
+                  <span>状态</span>
+                  <span>上次触发</span>
+                  <span>操作</span>
+                </div>
+                {cronJobs.map((cron) => (
+                  <div
+                    key={cron.id}
+                    onClick={() => openCronEdit(cron)}
+                    className={`grid grid-cols-[1fr_140px_64px_120px_80px] gap-2 px-6 py-3 border-b border-border hover:bg-muted/30 transition-colors cursor-pointer items-center ${
+                      editingCron?.id === cron.id ? "bg-primary/[0.03]" : ""
+                    }`}
+                  >
+                    <div className="flex flex-col gap-0.5">
+                      <span className="text-sm font-medium text-foreground truncate">{cron.name}</span>
+                      {cron.description && (
+                        <span className="text-[11px] text-muted-foreground truncate">{cron.description}</span>
+                      )}
+                    </div>
+                    <div className="flex flex-col gap-0.5">
+                      <span className="text-xs font-mono text-foreground">{cron.cron_expression}</span>
+                      <span className="text-[11px] text-muted-foreground">{cronToHuman(cron.cron_expression)}</span>
+                    </div>
+                    <span>
+                      <span className={`inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded font-medium ${
+                        cron.enabled ? "bg-success/10 text-success" : "bg-muted text-muted-foreground"
+                      }`}>
+                        {cron.enabled ? "启用" : "停用"}
+                      </span>
+                    </span>
+                    <span className="text-[11px] text-muted-foreground font-mono">
+                      {cron.last_run_at ? new Date(cron.last_run_at).toLocaleString("zh-CN", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }) : "--"}
+                    </span>
+                    <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                      <button
+                        onClick={() => handleTriggerCron(cron.id)}
+                        className="p-1.5 rounded-md hover:bg-primary/10 text-muted-foreground hover:text-primary transition-colors"
+                        title="立即触发"
+                      >
+                        <Play className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        onClick={() => setDeleteCronConfirmId(cron.id)}
+                        className="p-1.5 rounded-md hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
+                        title="删除"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </>
+            )}
+          </div>
+        )}
       </div>
 
-      {/* Edit panel */}
-      {editingTask && editPanel}
+      {/* Edit panel (tasks) */}
+      {activeTab === "tasks" && editingTask && editPanel}
+
+      {/* Edit panel (cron) */}
+      {activeTab === "cron" && editingCron && cronEditPanel}
 
       {/* Delete confirmation dialog (Q19) */}
       <AlertDialog open={!!deleteConfirmId} onOpenChange={(open) => !open && setDeleteConfirmId(null)}>
@@ -886,6 +965,24 @@ export default function Tasks() {
           <AlertDialogFooter>
             <AlertDialogCancel>取消</AlertDialogCancel>
             <AlertDialogAction onClick={executeDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              确认删除
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Cron delete confirmation dialog */}
+      <AlertDialog open={!!deleteCronConfirmId} onOpenChange={(open) => !open && setDeleteCronConfirmId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>确认删除定时任务</AlertDialogTitle>
+            <AlertDialogDescription>
+              此操作不可撤销。删除后该定时任务将永久丢失。
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>取消</AlertDialogCancel>
+            <AlertDialogAction onClick={executeCronDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
               确认删除
             </AlertDialogAction>
           </AlertDialogFooter>
