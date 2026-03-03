@@ -59,27 +59,23 @@ class SubagentRunner:
         """Set parent runtime for background task event emission."""
         self._parent_runtime = runtime
 
-    async def _create_task_checkpointer(self) -> tuple[Any, Any]:
-        """Create a persistent SQLite checkpointer for a sub-agent task.
+    async def _create_task_checkpointer(self, task_id: str) -> tuple[Any, Any]:
+        """Create a per-task isolated SQLite checkpointer.
 
-        Uses the same leon.db as the main agent. WAL mode + 30s busy_timeout
-        (via connection factory constants) prevents 'database is locked' when
-        multiple sub-agents run concurrently.
+        Each task gets its own ~/.leon/subagents/{task_id}.db — zero lock
+        contention between concurrent sub-agents.
 
         Returns:
             (checkpointer, aiosqlite_connection) — caller must close the connection.
         """
-        import aiosqlite
         from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 
-        from storage.providers.sqlite.connection import BUSY_TIMEOUT_MS, SYNCHRONOUS, WAL_MODE
+        from storage.providers.sqlite.kernel import connect_sqlite_async
 
-        db_path = self.db_path or (Path.home() / ".leon" / "leon.db")
+        base = self.db_path.parent if self.db_path else (Path.home() / ".leon")
+        db_path = base / "subagents" / f"{task_id}.db"
         db_path.parent.mkdir(parents=True, exist_ok=True)
-        conn = await aiosqlite.connect(str(db_path))
-        await conn.execute(f"PRAGMA journal_mode={WAL_MODE}")
-        await conn.execute(f"PRAGMA busy_timeout={BUSY_TIMEOUT_MS}")
-        await conn.execute(f"PRAGMA synchronous={SYNCHRONOUS}")
+        conn = await connect_sqlite_async(db_path)
         checkpointer = AsyncSqliteSaver(conn)
         await checkpointer.setup()
         return checkpointer, conn
@@ -229,8 +225,8 @@ class SubagentRunner:
         middleware_has_tools = any(getattr(m, "tools", None) for m in middleware)
         tools = [] if middleware_has_tools else [_placeholder_tool]
 
-        # Persistent SQLite checkpointer
-        checkpointer, checkpointer_conn = await self._create_task_checkpointer()
+        # Persistent SQLite checkpointer (per-task isolated db)
+        checkpointer, checkpointer_conn = await self._create_task_checkpointer(task_id)
 
         try:
             agent = create_agent(
@@ -336,8 +332,8 @@ class SubagentRunner:
         middleware_has_tools = any(getattr(m, "tools", None) for m in middleware)
         tools = [] if middleware_has_tools else [_placeholder_tool]
 
-        # Persistent SQLite checkpointer
-        checkpointer, checkpointer_conn = await self._create_task_checkpointer()
+        # Persistent SQLite checkpointer (per-task isolated db)
+        checkpointer, checkpointer_conn = await self._create_task_checkpointer(task_id)
 
         try:
             agent = create_agent(
