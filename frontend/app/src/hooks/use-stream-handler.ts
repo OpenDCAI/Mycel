@@ -3,25 +3,23 @@ import { flushSync } from "react-dom";
 import {
   cancelRun,
   postRun,
-  streamEvents,
   type AssistantTurn,
   type ChatEntry,
   type StreamStatus,
 } from "../api";
+import type { StreamEvent } from "../api/types";
 import { processStreamEvent } from "./stream-event-handlers";
-import { useStreamReconnect } from "./use-stream-reconnect";
+import { useThreadStream } from "./use-thread-stream";
 import { makeId } from "./utils";
 
 interface StreamHandlerDeps {
   threadId: string;
   refreshThreads: () => Promise<void>;
   onUpdate: (updater: (prev: ChatEntry[]) => ChatEntry[]) => void;
-  /** True while useThreadData is loading the snapshot — reconnect waits for this. */
+  /** True while useThreadData is loading the snapshot — connection waits for this. */
   loading: boolean;
-  /** When true, a run was just started — reconnect skips runtime check. */
-  runStarted?: boolean;
   /** Callback for activity events (command_progress, background_task_*). */
-  onActivityEvent?: (event: { type: string; data?: unknown }) => void;
+  onActivityEvent?: (event: StreamEvent) => void;
 }
 
 export interface StreamHandlerState {
@@ -32,39 +30,145 @@ export interface StreamHandlerState {
 export interface StreamHandlerActions {
   handleSendMessage: (message: string) => Promise<void>;
   handleStopStreaming: () => Promise<void>;
-  /** Force reconnect to main SSE (e.g., after activity SSE signals new_run). */
-  triggerReconnect: () => void;
 }
 
-export function useStreamHandler(deps: StreamHandlerDeps): StreamHandlerState & StreamHandlerActions {
-  const { threadId, refreshThreads, onUpdate, loading, runStarted } = deps;
+/**
+ * Reuse the last entry if it's an assistant turn (mark it streaming);
+ * otherwise create a new assistant turn.
+ */
+function applyReconnectTurn(
+  prev: ChatEntry[],
+  fallbackId: string,
+): { entries: ChatEntry[]; turnId: string } {
+  const last = prev[prev.length - 1];
+  if (last?.role === "assistant") {
+    return {
+      entries: prev.map((e) =>
+        e.id === last.id && e.role === "assistant"
+          ? { ...e, streaming: true } as AssistantTurn
+          : e,
+      ),
+      turnId: last.id,
+    };
+  }
+  const newTurn: AssistantTurn = {
+    id: fallbackId,
+    role: "assistant",
+    segments: [],
+    timestamp: Date.now(),
+    streaming: true,
+  };
+  return { entries: [...prev, newTurn], turnId: fallbackId };
+}
 
-  const [runtimeStatus, setRuntimeStatus] = useState<StreamStatus | null>(null);
-  const [isRunning, setIsRunning] = useState(false);
-  const [reconnectKey, setReconnectKey] = useState(0);
-  const triggerReconnect = useCallback(() => setReconnectKey((k) => k + 1), []);
-  const abortRef = useRef<AbortController | null>(null);
+export function useStreamHandler(
+  deps: StreamHandlerDeps,
+): StreamHandlerState & StreamHandlerActions {
+  const { threadId, refreshThreads, onUpdate, loading, onActivityEvent } = deps;
+
+  // Local state for immediate UI feedback when user sends a message
+  // (covers the window between flushSync and useThreadStream.isRunning becoming true)
+  const [sendPending, setSendPending] = useState(false);
+
+  const { isRunning: streamIsRunning, runtimeStatus, connect, disconnect, subscribe } =
+    useThreadStream(threadId, { loading, refreshThreads });
+
+  const isRunning = streamIsRunning || sendPending;
+
+  // Clear sendPending once the stream picks up
+  useEffect(() => {
+    if (streamIsRunning) setSendPending(false);
+  }, [streamIsRunning]);
+
   const onUpdateRef = useRef(onUpdate);
   onUpdateRef.current = onUpdate;
-  const onActivityEventRef = useRef(deps.onActivityEvent);
-  onActivityEventRef.current = deps.onActivityEvent;
+  const onActivityRef = useRef<((event: StreamEvent) => void) | undefined>(onActivityEvent);
+  onActivityRef.current = onActivityEvent;
+  const refreshRef = useRef(refreshThreads);
+  refreshRef.current = refreshThreads;
 
-  // Abort in-flight stream on unmount (key-based remount resets all state)
-  useEffect(() => {
-    return () => { abortRef.current?.abort(); };
-  }, [threadId]);
+  /**
+   * Active turn ID. Set by handleSendMessage (temp then server ID).
+   * For auto-reconnect, set lazily on first non-status event.
+   */
+  const turnIdRef = useRef<string>("");
+  /**
+   * True once the server message_id has been bound to the turn entry.
+   * Reset at the start of each new connection.
+   */
+  const hasBoundRef = useRef(false);
 
-  // Graceful cleanup on page unload
+  // Subscribe to stream events → drive UI state
   useEffect(() => {
-    const cleanup = () => abortRef.current?.abort();
-    window.addEventListener("beforeunload", cleanup);
-    return () => window.removeEventListener("beforeunload", cleanup);
-  }, []);
+    return subscribe((event) => {
+      // For auto-reconnect: no turn has been created by handleSendMessage.
+      // Create or continue the last assistant turn on the first content event.
+      if (!turnIdRef.current && event.type !== "status") {
+        const fallbackId = makeId("reconnect-turn");
+        flushSync(() => {
+          onUpdateRef.current((prev) => {
+            const { entries, turnId } = applyReconnectTurn(prev, fallbackId);
+            turnIdRef.current = turnId;
+            return entries;
+          });
+        });
+      }
+
+      const { messageId } = processStreamEvent(
+        event,
+        turnIdRef.current,
+        onUpdateRef.current,
+        // runtimeStatus is managed by useThreadStream; pass no-op here
+        () => {},
+        onActivityRef.current,
+      );
+
+      // Bind temporary turn ID to the server-assigned message ID (first time only)
+      if (messageId && turnIdRef.current && messageId !== turnIdRef.current && !hasBoundRef.current) {
+        hasBoundRef.current = true;
+        const tempId = turnIdRef.current;
+        turnIdRef.current = messageId;
+        onUpdateRef.current((prev) =>
+          prev.map((e) =>
+            e.id === tempId && e.role === "assistant"
+              ? { ...e, id: messageId, messageIds: [messageId] } as AssistantTurn
+              : e,
+          ),
+        );
+      }
+    });
+  }, [subscribe]);
+
+  // When streaming ends: mark the current turn as done, reset refs, refresh thread list
+  const prevIsRunningRef = useRef(false);
+  useEffect(() => {
+    if (prevIsRunningRef.current && !isRunning) {
+      const doneId = turnIdRef.current;
+      if (doneId) {
+        onUpdateRef.current((prev) =>
+          prev.map((e) =>
+            e.id === doneId && e.role === "assistant"
+              ? { ...e, streaming: false } as AssistantTurn
+              : e,
+          ),
+        );
+      }
+      turnIdRef.current = "";
+      hasBoundRef.current = false;
+      void refreshRef.current();
+    }
+    prevIsRunningRef.current = isRunning;
+  }, [isRunning]);
 
   const handleSendMessage = useCallback(
     async (message: string) => {
-      const userEntry: ChatEntry = { id: makeId("user"), role: "user", content: message, timestamp: Date.now() };
       const tempTurnId = makeId("turn");
+      const userEntry: ChatEntry = {
+        id: makeId("user"),
+        role: "user",
+        content: message,
+        timestamp: Date.now(),
+      };
       const assistantTurn: AssistantTurn = {
         id: tempTurnId,
         role: "assistant",
@@ -73,67 +177,49 @@ export function useStreamHandler(deps: StreamHandlerDeps): StreamHandlerState & 
         streaming: true,
       };
 
+      // Set turn context before connect() so the subscriber knows which turn to update
+      turnIdRef.current = tempTurnId;
+      hasBoundRef.current = false;
+
       flushSync(() => {
         onUpdateRef.current((prev) => [...prev, userEntry, assistantTurn]);
-        setIsRunning(true);
+        setSendPending(true);
       });
 
-      const ac = new AbortController();
-      abortRef.current = ac;
-
-      let boundTurnId = tempTurnId;
-      let hasBound = false;
-
       try {
-        await postRun(threadId, message, ac.signal);
-        await streamEvents(threadId, (event) => {
-          const { messageId } = processStreamEvent(
-            event, boundTurnId, onUpdateRef.current, setRuntimeStatus, onActivityEventRef.current,
-          );
-          if (!hasBound && messageId) {
-            hasBound = true;
-            boundTurnId = messageId;
-            onUpdateRef.current((prev) =>
-              prev.map((e) =>
-                e.id === tempTurnId && e.role === "assistant"
-                  ? { ...e, id: messageId, messageIds: [messageId] } as AssistantTurn
-                  : e,
-              ),
-            );
-          }
-        }, ac.signal);
-      } catch (e) {
-        if (e instanceof Error && e.name !== "AbortError") {
+        await postRun(threadId, message);
+        connect();
+      } catch (err) {
+        setSendPending(false);
+        // Show error in the assistant turn
+        if (err instanceof Error) {
           onUpdateRef.current((prev) =>
-            prev.map((entry) =>
-              entry.id === boundTurnId && entry.role === "assistant"
-                ? { ...entry, segments: [...(entry as AssistantTurn).segments, { type: "text" as const, content: `\n\nError: ${(e as Error).message}` }] } as AssistantTurn
-                : entry,
+            prev.map((e) =>
+              e.id === tempTurnId && e.role === "assistant"
+                ? {
+                    ...e,
+                    streaming: false,
+                    segments: [{ type: "text" as const, content: `\n\nError: ${err.message}` }],
+                  } as AssistantTurn
+                : e,
             ),
           );
         }
-      } finally {
-        abortRef.current = null;
-        setIsRunning(false);
-        onUpdateRef.current((prev) => prev.map((e) =>
-          e.id === boundTurnId && e.role === "assistant" ? { ...e, streaming: false } as AssistantTurn : e,
-        ));
-        await refreshThreads();
+        turnIdRef.current = "";
+        hasBoundRef.current = false;
       }
     },
-    [threadId, refreshThreads],
+    [threadId, connect],
   );
 
   const handleStopStreaming = useCallback(async () => {
     try {
       await cancelRun(threadId);
-    } catch (e) {
-      console.error("Failed to cancel run:", e);
+    } catch (err) {
+      console.error("Failed to cancel run:", err);
     }
-    setTimeout(() => abortRef.current?.abort(), 500);
-  }, [threadId]);
+    setTimeout(() => disconnect(), 500);
+  }, [threadId, disconnect]);
 
-  useStreamReconnect({ threadId, loading, runStarted, reconnectKey, refreshThreads, onUpdateRef, abortRef, setRuntimeStatus, setIsRunning, onActivityEventRef });
-
-  return { runtimeStatus, isRunning, handleSendMessage, handleStopStreaming, triggerReconnect };
+  return { runtimeStatus, isRunning, handleSendMessage, handleStopStreaming };
 }

@@ -9,7 +9,6 @@ import InputBox from "../components/InputBox";
 import TaskProgress from "../components/TaskProgress";
 import TokenStats from "../components/TokenStats";
 import { useActivities } from "../hooks/use-activities";
-import { useActivitySSE } from "../hooks/use-activity-sse";
 import { useAppActions } from "../hooks/use-app-actions";
 import { useResizableX } from "../hooks/use-resizable-x";
 import { useSandboxManager } from "../hooks/use-sandbox-manager";
@@ -78,38 +77,16 @@ function ChatPageInner({ threadId }: { threadId: string }) {
 
   const { activities, handleActivityEvent, cancelCommand, cancelTask } = useActivities();
 
-  const { runtimeStatus, isRunning, handleSendMessage, handleStopStreaming, triggerReconnect } =
+  const { runtimeStatus, isRunning, handleSendMessage, handleStopStreaming } =
     useStreamHandler({
       threadId,
       refreshThreads: tm.refreshThreads,
       onUpdate: (updater) => setEntries(updater),
       loading,
-      runStarted: state?.runStarted,
       onActivityEvent: handleActivityEvent,
     });
 
   const isStreaming = isRunning;
-
-  // Activity SSE: background events after main SSE closes
-  const hasRunningActivities = activities.some((a) => a.status === "running");
-  const needActivitySSE = !isStreaming && hasRunningActivities;
-
-  useActivitySSE(threadId, needActivitySSE, (event) => {
-    if (event.type === "new_run") {
-      // Background task done → agent started continuation run
-      // 1. Refresh thread to load the notification message
-      // 2. Then trigger main SSE reconnect to stream the AI response
-      void refreshThread().then(() => triggerReconnect());
-      return;
-    }
-    if (event.type === "run_done") {
-      // Continuation run finished — refresh to show results
-      // (catches runs that finished before triggerReconnect could connect)
-      void refreshThread();
-      return;
-    }
-    handleActivityEvent(event);
-  });
 
   const { sandboxActionError, handlePauseSandbox, handleResumeSandbox } =
     useSandboxManager({
