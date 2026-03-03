@@ -362,7 +362,7 @@ class SubagentRunner:
         try:
             async for chunk in agent.astream(
                 {"messages": [{"role": "user", "content": prompt}]},
-                config={"configurable": {"thread_id": subagent_thread_id}},
+                config={"configurable": {"thread_id": subagent_thread_id}, "callbacks": []},
                 stream_mode=["messages", "updates"],
             ):
                 if not chunk or not isinstance(chunk, tuple) or len(chunk) != 2:
@@ -641,7 +641,7 @@ class SubagentRunner:
         try:
             async for chunk in agent.astream(
                 {"messages": [{"role": "user", "content": prompt}]},
-                config={"configurable": {"thread_id": thread_id}},
+                config={"configurable": {"thread_id": thread_id}, "callbacks": []},
                 stream_mode=["messages", "updates"],
             ):
                 if not chunk or not isinstance(chunk, tuple) or len(chunk) != 2:

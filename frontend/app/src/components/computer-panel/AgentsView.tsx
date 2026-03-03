@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Loader2 } from "lucide-react";
 import type { AssistantTurn, ToolStep } from "../../api";
 import { useThreadData } from "../../hooks/use-thread-data";
+import { useSubagentStream } from "../../hooks/useSubagentStream";
 import { parseAgentArgs } from "./utils";
 import type { FlowItem } from "./utils";
 import { StepsView } from "./StepsView";
@@ -30,17 +31,13 @@ export function AgentsView({ steps, focusedStepId, onFocusStep }: AgentsViewProp
   const isRunning = stream?.status === "running" || focused?.status === "calling";
 
 
-  // Load sub-agent thread conversation
+  // SSE subscription for real-time subagent output (replaces 1s polling)
+  const liveFlowItems = useSubagentStream(threadId, !!isRunning);
+
+  // Historical data (loads once when threadId changes, or after run completes)
   const { entries, loading, refreshThread } = useThreadData(threadId);
 
-  // Poll while running (1s interval)
-  useEffect(() => {
-    if (!threadId || !isRunning) return;
-    const interval = setInterval(() => void refreshThread(), 1000);
-    return () => clearInterval(interval);
-  }, [threadId, isRunning, refreshThread]);
-
-  // Final refresh when sub-agent completes (running → not running)
+  // One-time refresh when subagent completes (running → not running)
   useEffect(() => {
     if (prevRunningRef.current && !isRunning && threadId) {
       void refreshThread();
@@ -48,48 +45,24 @@ export function AgentsView({ steps, focusedStepId, onFocusStep }: AgentsViewProp
     prevRunningRef.current = !!isRunning;
   }, [isRunning, threadId, refreshThread]);
 
-
-  // Merge polled entries + live stream into FlowItem[]
+  // flowItems: live SSE data while running, historical entries when done
   const flowItems = useMemo<FlowItem[]>(() => {
-    // 1) Build items from polled entries (have full results)
+    if (isRunning) return liveFlowItems;
+
+    // Build from historical thread entries
     const items: FlowItem[] = [];
-    const knownToolIds = new Set<string>();
     for (const entry of entries) {
       if (entry.role !== "assistant") continue;
       for (const seg of (entry as AssistantTurn).segments) {
         if (seg.type === "tool") {
           items.push({ type: "tool", step: seg.step, turnId: entry.id });
-          knownToolIds.add(seg.step.id);
         } else if (seg.type === "text" && seg.content.trim()) {
           items.push({ type: "text", content: seg.content, turnId: entry.id });
         }
       }
     }
-
-    if (!stream) return items;
-
-    // 2) Append live tool calls from SSE that polling hasn't caught up to
-    for (const tc of stream.tool_calls) {
-      if (knownToolIds.has(tc.id)) continue;
-      items.push({
-        type: "tool",
-        step: {
-          id: tc.id, name: tc.name, args: tc.args,
-          status: tc.status === "done" ? "done" : "calling",
-          result: tc.result,
-          timestamp: Date.now(),
-        },
-        turnId: "live",
-      });
-    }
-
-    // 3) If stream has text but entries are empty (first poll pending), show it
-    if (stream.text.trim() && items.every((i) => i.type === "tool")) {
-      items.push({ type: "text", content: stream.text, turnId: "live" });
-    }
-
     return items;
-  }, [entries, stream]);
+  }, [isRunning, liveFlowItems, entries]);
 
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
