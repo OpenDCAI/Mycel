@@ -219,7 +219,7 @@ class LeonAgent:
         self.agent = create_agent(
             model=self.model,
             tools=mcp_tools,
-            system_prompt=self.system_prompt,
+            system_prompt=SystemMessage(content=[{"type": "text", "text": self.system_prompt}]),
             middleware=middleware,
             checkpointer=self.checkpointer if not self._needs_async_init else None,
         )
