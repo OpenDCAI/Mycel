@@ -15,6 +15,19 @@ from backend.web.services.sandbox_service import (
 router = APIRouter(prefix="/api/sandbox", tags=["sandbox"])
 
 
+def _runtime_http_error(exc: RuntimeError) -> HTTPException:
+    message = str(exc)
+    status = 404 if "not found" in message.lower() else 409
+    return HTTPException(status, message)
+
+
+async def _mutate_session_action(session_id: str, action: str, provider: str | None) -> dict[str, Any]:
+    try:
+        return await asyncio.to_thread(control.mutate_session, session_id, action, provider)
+    except RuntimeError as e:
+        raise _runtime_http_error(e) from e
+
+
 @router.get("/types")
 async def list_sandbox_types() -> dict[str, Any]:
     """List available sandbox types."""
@@ -110,54 +123,22 @@ async def get_session_metrics(session_id: str, provider: str | None = Query(defa
     try:
         return await asyncio.to_thread(control.get_session_metrics, session_id, provider)
     except RuntimeError as e:
-        message = str(e)
-        status = 404 if "not found" in message.lower() else 409
-        raise HTTPException(status, message) from e
+        raise _runtime_http_error(e) from e
 
 
 @router.post("/sessions/{session_id}/pause")
 async def pause_sandbox_session(session_id: str, provider: str | None = Query(default=None)) -> dict[str, Any]:
     """Pause a sandbox session."""
-    try:
-        return await asyncio.to_thread(
-            control.mutate_session,
-            session_id,
-            "pause",
-            provider,
-        )
-    except RuntimeError as e:
-        message = str(e)
-        status = 404 if "not found" in message.lower() else 409
-        raise HTTPException(status, message) from e
+    return await _mutate_session_action(session_id, "pause", provider)
 
 
 @router.post("/sessions/{session_id}/resume")
 async def resume_sandbox_session(session_id: str, provider: str | None = Query(default=None)) -> dict[str, Any]:
     """Resume a paused sandbox session."""
-    try:
-        return await asyncio.to_thread(
-            control.mutate_session,
-            session_id,
-            "resume",
-            provider,
-        )
-    except RuntimeError as e:
-        message = str(e)
-        status = 404 if "not found" in message.lower() else 409
-        raise HTTPException(status, message) from e
+    return await _mutate_session_action(session_id, "resume", provider)
 
 
 @router.delete("/sessions/{session_id}")
 async def destroy_sandbox_session(session_id: str, provider: str | None = Query(default=None)) -> dict[str, Any]:
     """Destroy a sandbox session."""
-    try:
-        return await asyncio.to_thread(
-            control.mutate_session,
-            session_id,
-            "destroy",
-            provider,
-        )
-    except RuntimeError as e:
-        message = str(e)
-        status = 404 if "not found" in message.lower() else 409
-        raise HTTPException(status, message) from e
+    return await _mutate_session_action(session_id, "destroy", provider)

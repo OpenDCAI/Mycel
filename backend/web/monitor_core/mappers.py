@@ -46,55 +46,63 @@ def make_badge(desired: str | None, observed: str | None) -> dict[str, Any]:
     }
 
 
+def _thread_ref(thread_id: str | None) -> dict[str, Any]:
+    return {
+        "thread_id": thread_id,
+        "thread_url": f"/thread/{thread_id}" if thread_id else None,
+        "is_orphan": not thread_id,
+    }
+
+
+def _lease_ref(lease_id: str | None, provider: str | None, instance_id: str | None = None) -> dict[str, Any]:
+    return {
+        "lease_id": lease_id,
+        "lease_url": f"/lease/{lease_id}" if lease_id else None,
+        "provider": provider,
+        "instance_id": instance_id,
+    }
+
+
+def _lease_link(lease_id: str | None) -> dict[str, Any]:
+    return {"lease_id": lease_id, "lease_url": f"/lease/{lease_id}" if lease_id else None}
+
+
 def map_threads(rows: list[sqlite3.Row]) -> dict[str, Any]:
-    items: list[dict[str, Any]] = []
-    for row in rows:
-        items.append(
-            {
-                "thread_id": row["thread_id"],
-                "thread_url": f"/thread/{row['thread_id']}",
-                "session_count": row["session_count"],
-                "last_active": row["last_active"],
-                "last_active_ago": format_time_ago(row["last_active"]),
-                "lease": {
-                    "lease_id": row["lease_id"],
-                    "lease_url": f"/lease/{row['lease_id']}" if row["lease_id"] else None,
-                    "provider": row["provider_name"],
-                    "instance_id": row["current_instance_id"],
-                },
-                "state_badge": make_badge(row["desired_state"], row["observed_state"]),
-            }
-        )
+    items = [
+        {
+            "thread_id": row["thread_id"],
+            "thread_url": f"/thread/{row['thread_id']}",
+            "session_count": row["session_count"],
+            "last_active": row["last_active"],
+            "last_active_ago": format_time_ago(row["last_active"]),
+            "lease": _lease_ref(row["lease_id"], row["provider_name"], row["current_instance_id"]),
+            "state_badge": make_badge(row["desired_state"], row["observed_state"]),
+        }
+        for row in rows
+    ]
     return {"title": "All Threads", "count": len(items), "items": items}
 
 
 def map_thread_detail(thread_id: str, sessions: list[sqlite3.Row]) -> dict[str, Any]:
-    items: list[dict[str, Any]] = []
-    lease_ids: set[str] = set()
-
-    for session in sessions:
-        if session["lease_id"]:
-            lease_ids.add(session["lease_id"])
-        items.append(
-            {
-                "session_id": session["chat_session_id"],
-                "session_url": f"/session/{session['chat_session_id']}",
-                "status": session["status"],
-                "started_at": session["started_at"],
-                "started_ago": format_time_ago(session["started_at"]),
-                "ended_at": session["ended_at"],
-                "ended_ago": format_time_ago(session["ended_at"]) if session["ended_at"] else None,
-                "close_reason": session["close_reason"],
-                "lease": {
-                    "lease_id": session["lease_id"],
-                    "lease_url": f"/lease/{session['lease_id']}" if session["lease_id"] else None,
-                    "provider": session["provider_name"],
-                    "instance_id": session["current_instance_id"],
-                },
-                "state_badge": make_badge(session["desired_state"], session["observed_state"]),
-                "error": session["last_error"],
-            }
-        )
+    lease_ids = {
+        str(session["lease_id"]) for session in sessions if session["lease_id"]
+    }
+    items = [
+        {
+            "session_id": session["chat_session_id"],
+            "session_url": f"/session/{session['chat_session_id']}",
+            "status": session["status"],
+            "started_at": session["started_at"],
+            "started_ago": format_time_ago(session["started_at"]),
+            "ended_at": session["ended_at"],
+            "ended_ago": format_time_ago(session["ended_at"]) if session["ended_at"] else None,
+            "close_reason": session["close_reason"],
+            "lease": _lease_ref(session["lease_id"], session["provider_name"], session["current_instance_id"]),
+            "state_badge": make_badge(session["desired_state"], session["observed_state"]),
+            "error": session["last_error"],
+        }
+        for session in sessions
+    ]
 
     return {
         "thread_id": thread_id,
@@ -108,25 +116,20 @@ def map_thread_detail(thread_id: str, sessions: list[sqlite3.Row]) -> dict[str, 
 
 
 def map_leases(rows: list[sqlite3.Row]) -> dict[str, Any]:
-    items: list[dict[str, Any]] = []
-    for row in rows:
-        items.append(
-            {
-                "lease_id": row["lease_id"],
-                "lease_url": f"/lease/{row['lease_id']}",
-                "provider": row["provider_name"],
-                "instance_id": row["current_instance_id"],
-                "thread": {
-                    "thread_id": row["thread_id"],
-                    "thread_url": f"/thread/{row['thread_id']}" if row["thread_id"] else None,
-                    "is_orphan": not row["thread_id"],
-                },
-                "state_badge": make_badge(row["desired_state"], row["observed_state"]),
-                "error": row["last_error"],
-                "updated_at": row["updated_at"],
-                "updated_ago": format_time_ago(row["updated_at"]),
-            }
-        )
+    items = [
+        {
+            "lease_id": row["lease_id"],
+            "lease_url": f"/lease/{row['lease_id']}",
+            "provider": row["provider_name"],
+            "instance_id": row["current_instance_id"],
+            "thread": _thread_ref(row["thread_id"]),
+            "state_badge": make_badge(row["desired_state"], row["observed_state"]),
+            "error": row["last_error"],
+            "updated_at": row["updated_at"],
+            "updated_ago": format_time_ago(row["updated_at"]),
+        }
+        for row in rows
+    ]
     return {"title": "All Leases", "count": len(items), "items": items}
 
 
@@ -169,28 +172,23 @@ def map_lease_detail(lease_id: str, lease: sqlite3.Row, threads: list[sqlite3.Ro
 
 
 def map_diverged(rows: list[sqlite3.Row]) -> dict[str, Any]:
-    items: list[dict[str, Any]] = []
-    for row in rows:
-        items.append(
-            {
-                "lease_id": row["lease_id"],
-                "lease_url": f"/lease/{row['lease_id']}",
-                "provider": row["provider_name"],
-                "instance_id": row["current_instance_id"],
-                "thread": {
-                    "thread_id": row["thread_id"],
-                    "thread_url": f"/thread/{row['thread_id']}" if row["thread_id"] else None,
-                    "is_orphan": not row["thread_id"],
-                },
-                "state_badge": {
-                    "desired": row["desired_state"],
-                    "observed": row["observed_state"],
-                    "hours_diverged": row["hours_diverged"],
-                    "color": "red" if row["hours_diverged"] > 24 else "yellow",
-                },
-                "error": row["last_error"],
-            }
-        )
+    items = [
+        {
+            "lease_id": row["lease_id"],
+            "lease_url": f"/lease/{row['lease_id']}",
+            "provider": row["provider_name"],
+            "instance_id": row["current_instance_id"],
+            "thread": _thread_ref(row["thread_id"]),
+            "state_badge": {
+                "desired": row["desired_state"],
+                "observed": row["observed_state"],
+                "hours_diverged": row["hours_diverged"],
+                "color": "red" if row["hours_diverged"] > 24 else "yellow",
+            },
+            "error": row["last_error"],
+        }
+        for row in rows
+    ]
 
     return {
         "title": "Diverged Leases",
@@ -201,24 +199,20 @@ def map_diverged(rows: list[sqlite3.Row]) -> dict[str, Any]:
 
 
 def map_events(rows: list[sqlite3.Row]) -> dict[str, Any]:
-    items: list[dict[str, Any]] = []
-    for row in rows:
-        items.append(
-            {
-                "event_id": row["event_id"],
-                "event_url": f"/event/{row['event_id']}",
-                "event_type": row["event_type"],
-                "source": row["source"],
-                "provider": row["provider_name"],
-                "lease": {
-                    "lease_id": row["lease_id"],
-                    "lease_url": f"/lease/{row['lease_id']}" if row["lease_id"] else None,
-                },
-                "error": row["error"],
-                "created_at": row["created_at"],
-                "created_ago": format_time_ago(row["created_at"]),
-            }
-        )
+    items = [
+        {
+            "event_id": row["event_id"],
+            "event_url": f"/event/{row['event_id']}",
+            "event_type": row["event_type"],
+            "source": row["source"],
+            "provider": row["provider_name"],
+            "lease": _lease_link(row["lease_id"]),
+            "error": row["error"],
+            "created_at": row["created_at"],
+            "created_ago": format_time_ago(row["created_at"]),
+        }
+        for row in rows
+    ]
 
     return {
         "title": "Lease Events",
