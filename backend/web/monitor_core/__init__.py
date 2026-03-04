@@ -1,5 +1,5 @@
 """Monitor control-plane core package."""
 
-from . import diagnose, observe, overview
+from . import overview
 
-__all__ = ["observe", "diagnose", "overview"]
+__all__ = ["overview"]
