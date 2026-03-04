@@ -10,8 +10,7 @@ import time
 from datetime import datetime, timezone
 from typing import Any
 
-from . import overview
-from .resource_probe import refresh_resource_snapshots
+from backend.web.services import resource_service
 
 _DEFAULT_REFRESH_INTERVAL_SEC = 90.0
 
@@ -55,7 +54,7 @@ def refresh_resource_overview_sync() -> dict[str, Any]:
     global _snapshot_cache
     started = time.perf_counter()
     try:
-        payload = overview.list_resource_providers()
+        payload = resource_service.list_resource_providers()
         duration_ms = (time.perf_counter() - started) * 1000
         payload = _with_refresh_metadata(payload, duration_ms=duration_ms, status="ok", error=None)
         with _snapshot_lock:
@@ -91,7 +90,7 @@ async def resource_overview_refresh_loop() -> None:
         # @@@delayed-first-probe - avoid probe I/O at startup; keeps app boot and testclient teardown deterministic.
         await asyncio.sleep(interval_sec)
         try:
-            await asyncio.wait_for(asyncio.to_thread(refresh_resource_snapshots), timeout=10.0)
+            await asyncio.wait_for(asyncio.to_thread(resource_service.refresh_resource_snapshots), timeout=10.0)
         except asyncio.CancelledError:
             raise
         except asyncio.TimeoutError:

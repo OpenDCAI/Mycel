@@ -154,6 +154,71 @@ class SQLiteSandboxMonitorRepo:
         ).fetchall()
         return [_row_to_dict(r) for r in rows]
 
+    def list_sessions_with_leases(self) -> list[dict]:
+        """Sessions joined with lease info for resource overview."""
+        if not self._table_exists("chat_sessions") or not self._table_exists("sandbox_leases"):
+            return []
+        rows = self._conn.execute(
+            """
+            SELECT
+                cs.chat_session_id AS session_id,
+                cs.thread_id AS thread_id,
+                cs.lease_id AS lease_id,
+                cs.status AS status,
+                cs.started_at AS created_at,
+                sl.provider_name AS provider
+            FROM chat_sessions cs
+            LEFT JOIN sandbox_leases sl ON cs.lease_id = sl.lease_id
+            ORDER BY cs.started_at DESC
+            """
+        ).fetchall()
+        return [
+            {
+                "provider": (r["provider"] or "local"),
+                "session_id": r["session_id"],
+                "thread_id": r["thread_id"],
+                "lease_id": r["lease_id"],
+                "status": r["status"],
+                "created_at": r["created_at"],
+            }
+            for r in rows
+        ]
+
+    def list_probe_targets(self) -> list[dict]:
+        """Active lease instances eligible for resource probing."""
+        if not self._table_exists("sandbox_leases"):
+            return []
+        rows = self._conn.execute(
+            """
+            SELECT lease_id, provider_name, current_instance_id, observed_state
+            FROM sandbox_leases
+            WHERE current_instance_id IS NOT NULL
+              AND observed_state IN ('running', 'paused')
+            ORDER BY updated_at DESC
+            """
+        ).fetchall()
+        targets: list[dict] = []
+        for row in rows:
+            lease_id = str(row["lease_id"] or "").strip()
+            provider_name = str(row["provider_name"] or "").strip()
+            instance_id = str(row["current_instance_id"] or "").strip()
+            observed_state = str(row["observed_state"] or "unknown").strip().lower()
+            if lease_id and provider_name and instance_id:
+                targets.append({
+                    "lease_id": lease_id,
+                    "provider_name": provider_name,
+                    "instance_id": instance_id,
+                    "observed_state": observed_state,
+                })
+        return targets
+
+    def _table_exists(self, table_name: str) -> bool:
+        row = self._conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name = ? LIMIT 1",
+            (table_name,),
+        ).fetchone()
+        return row is not None
+
     def query_event(self, event_id: str) -> dict | None:
         row = self._conn.execute(
             """

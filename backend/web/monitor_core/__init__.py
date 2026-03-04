@@ -1,5 +1,1 @@
-"""Monitor control-plane core package."""
-
-from . import overview
-
-__all__ = ["overview"]
+"""Monitor control-plane core package (being dissolved)."""

@@ -1,8 +1,9 @@
-import sqlite3
 import json
+import sqlite3
 from pathlib import Path
+from unittest.mock import MagicMock
 
-from backend.web.monitor_core import overview
+from backend.web.services import resource_service
 from sandbox.provider import ProviderCapability, build_resource_capabilities
 
 
@@ -17,6 +18,21 @@ def _seed_thread_config(db_path: Path, rows: list[tuple[str, str]]) -> None:
         conn.commit()
 
 
+def _connect_sqlite_test(db_path: Path, row_factory: type | None = None) -> sqlite3.Connection:
+    conn = sqlite3.connect(str(db_path))
+    if row_factory is not None:
+        conn.row_factory = row_factory
+    return conn
+
+
+def _make_fake_repo(sessions: list[dict]):
+    """Create a mock repo that returns pre-canned sessions."""
+    repo = MagicMock()
+    repo.list_sessions_with_leases.return_value = sessions
+    repo.close.return_value = None
+    return repo
+
+
 def _patch_resources_context(
     monkeypatch,
     *,
@@ -25,64 +41,38 @@ def _patch_resources_context(
     sessions: list[dict],
     snapshots: dict | None = None,
 ) -> None:
-    monkeypatch.setattr(overview, "SANDBOXES_DIR", tmp_path)
-    monkeypatch.setattr(overview, "available_sandbox_types", lambda: providers)
-    monkeypatch.setattr(overview, "_list_sessions_fast", lambda: sessions)
+    monkeypatch.setattr(resource_service, "SANDBOXES_DIR", tmp_path)
+    monkeypatch.setattr(resource_service, "available_sandbox_types", lambda: providers)
+    monkeypatch.setattr(
+        resource_service, "SQLiteSandboxMonitorRepo", lambda: _make_fake_repo(sessions),
+    )
     capability_by_provider = {
         "local": build_resource_capabilities(
-            filesystem=True,
-            terminal=True,
-            metrics=False,
-            screenshot=False,
-            web=False,
-            process=False,
-            hooks=False,
-            snapshot=False,
+            filesystem=True, terminal=True, metrics=False, screenshot=False,
+            web=False, process=False, hooks=False, snapshot=False,
         ),
         "docker": build_resource_capabilities(
-            filesystem=True,
-            terminal=True,
-            metrics=True,
-            screenshot=False,
-            web=False,
-            process=False,
-            hooks=False,
-            snapshot=False,
+            filesystem=True, terminal=True, metrics=True, screenshot=False,
+            web=False, process=False, hooks=False, snapshot=False,
         ),
         "e2b": build_resource_capabilities(
-            filesystem=True,
-            terminal=True,
-            metrics=False,
-            screenshot=False,
-            web=False,
-            process=False,
-            hooks=False,
-            snapshot=True,
+            filesystem=True, terminal=True, metrics=False, screenshot=False,
+            web=False, process=False, hooks=False, snapshot=True,
         ),
         "daytona": build_resource_capabilities(
-            filesystem=True,
-            terminal=True,
-            metrics=False,
-            screenshot=False,
-            web=False,
-            process=False,
-            hooks=True,
-            snapshot=False,
+            filesystem=True, terminal=True, metrics=False, screenshot=False,
+            web=False, process=False, hooks=True, snapshot=False,
         ),
         "agentbay": build_resource_capabilities(
-            filesystem=True,
-            terminal=True,
-            metrics=True,
-            screenshot=True,
-            web=True,
-            process=True,
-            hooks=False,
-            snapshot=False,
+            filesystem=True, terminal=True, metrics=True, screenshot=True,
+            web=True, process=True, hooks=False, snapshot=False,
         ),
     }
 
     def _fake_provider_builder(config_name: str, *, sandboxes_dir: Path | None = None):
-        provider_name = overview.resolve_provider_name(config_name, sandboxes_dir=sandboxes_dir or tmp_path)
+        provider_name = resource_service.resolve_provider_name(
+            config_name, sandboxes_dir=sandboxes_dir or tmp_path,
+        )
         resource_capabilities = capability_by_provider.get(provider_name)
         if resource_capabilities is None:
             return None
@@ -90,26 +80,27 @@ def _patch_resources_context(
         class _FakeProvider:
             def get_capability(self) -> ProviderCapability:
                 return ProviderCapability(
-                    can_pause=True,
-                    can_resume=True,
-                    can_destroy=True,
+                    can_pause=True, can_resume=True, can_destroy=True,
                     resource_capabilities=resource_capabilities,
                 )
 
         return _FakeProvider()
 
-    monkeypatch.setattr(overview, "build_provider_from_config_name", _fake_provider_builder)
+    monkeypatch.setattr(resource_service, "build_provider_from_config_name", _fake_provider_builder)
     if snapshots is not None:
-        monkeypatch.setattr(overview, "list_snapshots_by_lease_ids", lambda _: snapshots)
+        monkeypatch.setattr(resource_service, "list_snapshots_by_lease_ids", lambda _: snapshots)
 
 
 def test_list_resource_providers_maps_status_and_metric_metadata(tmp_path, monkeypatch):
     _write_provider_config(tmp_path, "docker_dev", {"provider": "docker"})
 
     db_path = tmp_path / "leon.db"
-    monkeypatch.setattr(overview, "DB_PATH", Path(db_path))
+    monkeypatch.setattr(
+        resource_service, "connect_sqlite_role",
+        lambda *a, **kw: _connect_sqlite_test(db_path, kw.get("row_factory")),
+    )
     _seed_thread_config(db_path, [("thread-local-1", "member-1")])
-    monkeypatch.setattr(overview, "_member_name_map", lambda: {"member-1": "Alice"})
+    monkeypatch.setattr(resource_service, "_member_name_map", lambda: {"member-1": "Alice"})
     _patch_resources_context(
         monkeypatch,
         tmp_path=tmp_path,
@@ -135,7 +126,7 @@ def test_list_resource_providers_maps_status_and_metric_metadata(tmp_path, monke
         ],
     )
 
-    payload = overview.list_resource_providers()
+    payload = resource_service.list_resource_providers()
     assert "summary" in payload
     assert "providers" in payload
     assert payload["summary"]["total_providers"] == 2
@@ -168,7 +159,7 @@ def test_list_resource_providers_marks_ready_when_no_running_sessions(tmp_path, 
         sessions=[],
     )
 
-    payload = overview.list_resource_providers()
+    payload = resource_service.list_resource_providers()
     assert len(payload["providers"]) == 1
     assert payload["summary"]["active_providers"] == 0
     assert payload["summary"]["running_sessions"] == 0
@@ -201,7 +192,7 @@ def test_list_resource_providers_prefers_config_console_url_override(tmp_path, m
         sessions=[],
     )
 
-    payload = overview.list_resource_providers()
+    payload = resource_service.list_resource_providers()
     provider = payload["providers"][0]
     assert provider["id"] == "daytona_selfhost"
     assert provider["consoleUrl"] == "https://ops.example.com/daytona"
@@ -238,7 +229,7 @@ def test_list_resource_providers_uses_snapshot_metrics(tmp_path, monkeypatch):
         },
     )
 
-    payload = overview.list_resource_providers()
+    payload = resource_service.list_resource_providers()
     provider = payload["providers"][0]
     assert provider["telemetry"]["cpu"]["used"] == 21.0
     assert provider["telemetry"]["cpu"]["limit"] == 100.0
@@ -280,7 +271,7 @@ def test_list_resource_providers_surfaces_snapshot_probe_error(tmp_path, monkeyp
         },
     )
 
-    payload = overview.list_resource_providers()
+    payload = resource_service.list_resource_providers()
     provider = payload["providers"][0]
     assert provider["telemetry"]["cpu"]["used"] is None
     assert provider["telemetry"]["cpu"]["source"] == "sandbox_db"
@@ -291,11 +282,14 @@ def test_list_resource_providers_surfaces_snapshot_probe_error(tmp_path, monkeyp
 
 def test_thread_owner_uses_agent_ref_as_name_when_member_lookup_missing(tmp_path, monkeypatch):
     db_path = tmp_path / "leon.db"
-    monkeypatch.setattr(overview, "DB_PATH", Path(db_path))
+    monkeypatch.setattr(
+        resource_service, "connect_sqlite_role",
+        lambda *a, **kw: _connect_sqlite_test(db_path, kw.get("row_factory")),
+    )
     _seed_thread_config(db_path, [("thread-1", "Lex")])
-    monkeypatch.setattr(overview, "_member_name_map", lambda: {})
+    monkeypatch.setattr(resource_service, "_member_name_map", lambda: {})
 
-    owners = overview._thread_owners(["thread-1", "thread-2"])
+    owners = resource_service._thread_owners(["thread-1", "thread-2"])
     assert owners["thread-1"]["agent_id"] == "Lex"
     assert owners["thread-1"]["agent_name"] == "Lex"
     assert owners["thread-2"]["agent_id"] is None
@@ -314,28 +308,20 @@ def test_list_resource_providers_uses_instance_capability_single_source(tmp_path
     class _InstanceOverrideProvider:
         def get_capability(self) -> ProviderCapability:
             return ProviderCapability(
-                can_pause=False,
-                can_resume=False,
-                can_destroy=True,
+                can_pause=False, can_resume=False, can_destroy=True,
                 resource_capabilities=build_resource_capabilities(
-                    filesystem=True,
-                    terminal=True,
-                    metrics=False,
-                    screenshot=False,
-                    web=False,
-                    process=False,
-                    hooks=False,
-                    snapshot=False,
+                    filesystem=True, terminal=True, metrics=False, screenshot=False,
+                    web=False, process=False, hooks=False, snapshot=False,
                 ),
             )
 
     monkeypatch.setattr(
-        overview,
+        resource_service,
         "build_provider_from_config_name",
         lambda _name, **_kwargs: _InstanceOverrideProvider(),
     )
 
-    payload = overview.list_resource_providers()
+    payload = resource_service.list_resource_providers()
     provider = payload["providers"][0]
     assert provider["capabilities"]["metrics"] is False
     assert provider["capabilities"]["web"] is False

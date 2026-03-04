@@ -1,4 +1,6 @@
-from backend.web.monitor_core import resource_probe
+from unittest.mock import MagicMock
+
+from backend.web.services import resource_service
 
 
 class _FakeProvider:
@@ -6,17 +8,24 @@ class _FakeProvider:
         return None
 
 
+def _make_probe_repo(targets: list[dict]):
+    repo = MagicMock()
+    repo.list_probe_targets.return_value = targets
+    repo.close.return_value = None
+    return repo
+
+
 def test_refresh_resource_snapshots_probes_running_leases_only(monkeypatch):
-    monkeypatch.setattr(resource_probe, "ensure_resource_snapshot_table", lambda: None)
+    monkeypatch.setattr(resource_service, "ensure_resource_snapshot_table", lambda: None)
     monkeypatch.setattr(
-        resource_probe,
-        "_probe_targets",
-        lambda: [
+        resource_service,
+        "SQLiteSandboxMonitorRepo",
+        lambda: _make_probe_repo([
             {"provider_name": "p1", "instance_id": "s-1", "lease_id": "l-1", "observed_state": "running"},
             {"provider_name": "p1", "instance_id": "s-2", "lease_id": "l-2", "observed_state": "paused"},
-        ],
+        ]),
     )
-    monkeypatch.setattr(resource_probe, "build_provider_from_config_name", lambda _: _FakeProvider())
+    monkeypatch.setattr(resource_service, "build_provider_from_config_name", lambda _: _FakeProvider())
 
     calls: list[dict] = []
 
@@ -24,9 +33,9 @@ def test_refresh_resource_snapshots_probes_running_leases_only(monkeypatch):
         calls.append(kwargs)
         return {"ok": True, "error": None}
 
-    monkeypatch.setattr(resource_probe, "probe_and_upsert_for_instance", _fake_probe)
+    monkeypatch.setattr(resource_service, "probe_and_upsert_for_instance", _fake_probe)
 
-    result = resource_probe.refresh_resource_snapshots()
+    result = resource_service.refresh_resource_snapshots()
     assert result["probed"] == 2
     assert result["errors"] == 0
     assert result["running_targets"] == 1
@@ -38,19 +47,21 @@ def test_refresh_resource_snapshots_probes_running_leases_only(monkeypatch):
 
 
 def test_refresh_resource_snapshots_counts_provider_build_error(monkeypatch):
-    monkeypatch.setattr(resource_probe, "ensure_resource_snapshot_table", lambda: None)
+    monkeypatch.setattr(resource_service, "ensure_resource_snapshot_table", lambda: None)
     monkeypatch.setattr(
-        resource_probe,
-        "_probe_targets",
-        lambda: [
+        resource_service,
+        "SQLiteSandboxMonitorRepo",
+        lambda: _make_probe_repo([
             {"provider_name": "p-missing", "instance_id": "s-1", "lease_id": "l-1", "observed_state": "running"},
-        ],
+        ]),
     )
-    monkeypatch.setattr(resource_probe, "build_provider_from_config_name", lambda _: None)
+    monkeypatch.setattr(resource_service, "build_provider_from_config_name", lambda _: None)
     upserts: list[dict] = []
-    monkeypatch.setattr(resource_probe, "upsert_lease_resource_snapshot", lambda **kwargs: upserts.append(kwargs))
+    monkeypatch.setattr(
+        resource_service, "upsert_lease_resource_snapshot", lambda **kwargs: upserts.append(kwargs),
+    )
 
-    result = resource_probe.refresh_resource_snapshots()
+    result = resource_service.refresh_resource_snapshots()
     assert result["probed"] == 0
     assert result["errors"] == 1
     assert result["running_targets"] == 1
