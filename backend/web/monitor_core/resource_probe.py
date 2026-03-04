@@ -10,7 +10,7 @@ from sandbox.db import DEFAULT_DB_PATH
 from sandbox.resource_snapshot import ensure_resource_snapshot_table, probe_and_upsert_for_instance
 
 
-def _running_lease_instances() -> list[dict[str, str]]:
+def _probe_targets() -> list[dict[str, str]]:
     if not DEFAULT_DB_PATH.exists():
         return []
 
@@ -26,7 +26,7 @@ def _running_lease_instances() -> list[dict[str, str]]:
             SELECT lease_id, provider_name, current_instance_id, observed_state
             FROM sandbox_leases
             WHERE current_instance_id IS NOT NULL
-              AND observed_state = 'running'
+              AND observed_state IN ('running', 'paused')
             ORDER BY updated_at DESC
             """
         ).fetchall()
@@ -52,16 +52,23 @@ def _running_lease_instances() -> list[dict[str, str]]:
 
 def refresh_resource_snapshots() -> dict[str, Any]:
     ensure_resource_snapshot_table()
-    running_instances = _running_lease_instances()
+    probe_targets = _probe_targets()
 
     provider_cache: dict[str, Any] = {}
     probed = 0
     errors = 0
-    for item in running_instances:
+    running_targets = 0
+    non_running_targets = 0
+    for item in probe_targets:
         lease_id = item["lease_id"]
         provider_key = item["provider_name"]
         instance_id = item["instance_id"]
         status = item["observed_state"]
+        probe_mode = "running_runtime" if status == "running" else "non_running_sdk"
+        if probe_mode == "running_runtime":
+            running_targets += 1
+        else:
+            non_running_targets += 1
 
         provider = provider_cache.get(provider_key)
         if provider is None:
@@ -75,7 +82,7 @@ def refresh_resource_snapshots() -> dict[str, Any]:
             lease_id=lease_id,
             provider_name=provider_key,
             observed_state=status,
-            probe_mode="running_runtime",
+            probe_mode=probe_mode,
             provider=provider,
             instance_id=instance_id,
         )
@@ -83,4 +90,9 @@ def refresh_resource_snapshots() -> dict[str, Any]:
         if not result["ok"]:
             errors += 1
 
-    return {"probed": probed, "errors": errors, "running_leases": len(running_instances)}
+    return {
+        "probed": probed,
+        "errors": errors,
+        "running_targets": running_targets,
+        "non_running_targets": non_running_targets,
+    }

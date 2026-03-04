@@ -10,10 +10,10 @@ def test_refresh_resource_snapshots_probes_running_leases_only(monkeypatch):
     monkeypatch.setattr(resource_probe, "ensure_resource_snapshot_table", lambda: None)
     monkeypatch.setattr(
         resource_probe,
-        "_running_lease_instances",
+        "_probe_targets",
         lambda: [
             {"provider_name": "p1", "instance_id": "s-1", "lease_id": "l-1", "observed_state": "running"},
-            {"provider_name": "p1", "instance_id": "s-2", "lease_id": "l-2", "observed_state": "running"},
+            {"provider_name": "p1", "instance_id": "s-2", "lease_id": "l-2", "observed_state": "paused"},
         ],
     )
     monkeypatch.setattr(resource_probe, "build_provider_from_config_name", lambda _: _FakeProvider())
@@ -29,15 +29,19 @@ def test_refresh_resource_snapshots_probes_running_leases_only(monkeypatch):
     result = resource_probe.refresh_resource_snapshots()
     assert result["probed"] == 2
     assert result["errors"] == 0
+    assert result["running_targets"] == 1
+    assert result["non_running_targets"] == 1
     assert {call["lease_id"] for call in calls} == {"l-1", "l-2"}
-    assert calls[0]["probe_mode"] == "running_runtime"
+    modes = {call["lease_id"]: call["probe_mode"] for call in calls}
+    assert modes["l-1"] == "running_runtime"
+    assert modes["l-2"] == "non_running_sdk"
 
 
 def test_refresh_resource_snapshots_counts_provider_build_error(monkeypatch):
     monkeypatch.setattr(resource_probe, "ensure_resource_snapshot_table", lambda: None)
     monkeypatch.setattr(
         resource_probe,
-        "_running_lease_instances",
+        "_probe_targets",
         lambda: [
             {"provider_name": "p-missing", "instance_id": "s-1", "lease_id": "l-1", "observed_state": "running"},
         ],
@@ -47,4 +51,5 @@ def test_refresh_resource_snapshots_counts_provider_build_error(monkeypatch):
     result = resource_probe.refresh_resource_snapshots()
     assert result["probed"] == 0
     assert result["errors"] == 1
-    assert result["running_leases"] == 1
+    assert result["running_targets"] == 1
+    assert result["non_running_targets"] == 0

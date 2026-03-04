@@ -88,6 +88,8 @@ async def resource_overview_refresh_loop() -> None:
     """Continuously refresh resource overview snapshot."""
     interval_sec = _read_refresh_interval_sec()
     while True:
+        # @@@delayed-first-probe - avoid probe I/O at startup; keeps app boot and testclient teardown deterministic.
+        await asyncio.sleep(interval_sec)
         try:
             await asyncio.wait_for(asyncio.to_thread(refresh_resource_snapshots), timeout=10.0)
         except asyncio.CancelledError:
@@ -106,4 +108,3 @@ async def resource_overview_refresh_loop() -> None:
             print("[monitor] resource refresh loop timeout")
         except Exception as exc:
             print(f"[monitor] resource refresh loop error: {exc}")
-        await asyncio.sleep(interval_sec)
