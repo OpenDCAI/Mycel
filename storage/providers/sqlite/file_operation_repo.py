@@ -25,7 +25,7 @@ class SQLiteFileOperationRepo:
             self._conn = conn
         else:
             if db_path is None:
-                db_path = Path.home() / ".leon" / "leon.db"
+                db_path = Path.home() / ".leon" / "file_ops.db"
             self._conn = create_connection(db_path, row_factory=sqlite3.Row)
         self._ensure_table()
 

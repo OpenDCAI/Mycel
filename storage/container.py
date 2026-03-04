@@ -60,6 +60,8 @@ class StorageContainer:
         root = Path.home() / ".leon"
         self._main_db = Path(main_db_path) if main_db_path else root / "leon.db"
         self._run_event_db = self._main_db.with_name("events.db")
+        self._file_op_db = self._main_db.with_name("file_ops.db")
+        self._summary_db = self._main_db.with_name("summary.db")
         self._eval_db = Path(eval_db_path) if eval_db_path else root / "eval.db"
         self._strategy: StorageStrategy = strategy
         self._supabase_client = supabase_client
@@ -189,11 +191,11 @@ class StorageContainer:
 
     def _sqlite_file_operation_repo(self):
         from storage.providers.sqlite.file_operation_repo import SQLiteFileOperationRepo
-        return SQLiteFileOperationRepo(db_path=self._main_db)
+        return SQLiteFileOperationRepo(db_path=self._file_op_db)
 
     def _sqlite_summary_repo(self):
         from storage.providers.sqlite.summary_repo import SQLiteSummaryRepo
-        return SQLiteSummaryRepo(db_path=self._main_db)
+        return SQLiteSummaryRepo(db_path=self._summary_db)
 
     def _sqlite_eval_repo(self):
         from storage.providers.sqlite.eval_repo import SQLiteEvalRepo
