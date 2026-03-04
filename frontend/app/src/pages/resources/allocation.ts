@@ -6,6 +6,9 @@ export function deriveAllocatedResources(providers: ProviderInfo[]): AllocatedRe
   const resources: AllocatedResource[] = [];
   for (const provider of providers) {
     for (const session of provider.sessions) {
+      if (session.status === "stopped") {
+        continue;
+      }
       for (const key of CAPABILITY_KEYS) {
         if (provider.capabilities[key]) {
           resources.push({

@@ -156,7 +156,7 @@ def test_list_resource_providers_maps_status_and_metric_metadata(tmp_path, monke
     assert docker["status"] == "unavailable"
     assert docker["error"]["code"] == "PROVIDER_UNAVAILABLE"
     assert docker["sessions"][0]["status"] == "paused"
-    assert docker["sessions"][0]["agentName"] == "Unknown"
+    assert docker["sessions"][0]["agentName"] == "未绑定Agent"
 
 
 def test_list_resource_providers_marks_ready_when_no_running_sessions(tmp_path, monkeypatch):
@@ -295,7 +295,7 @@ def test_thread_owner_uses_agent_ref_as_name_when_member_lookup_missing(tmp_path
     assert owners["thread-1"]["agent_id"] == "Lex"
     assert owners["thread-1"]["agent_name"] == "Lex"
     assert owners["thread-2"]["agent_id"] is None
-    assert owners["thread-2"]["agent_name"] == "Unknown"
+    assert owners["thread-2"]["agent_name"] == "未绑定Agent"
 
 
 def test_list_resource_providers_uses_instance_capability_single_source(tmp_path, monkeypatch):

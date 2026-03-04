@@ -186,7 +186,7 @@ def _thread_owners(thread_ids: list[str]) -> dict[str, dict[str, str | None]]:
     for thread_id in thread_ids:
         agent_ref = refs.get(thread_id)
         if not agent_ref:
-            owners[thread_id] = {"agent_id": None, "agent_name": "Unknown"}
+            owners[thread_id] = {"agent_id": None, "agent_name": "未绑定Agent"}
             continue
 
         # @@@agent-name-resolution - thread_config.agent may be member id or direct display name.
@@ -307,14 +307,14 @@ def list_resource_providers() -> dict[str, Any]:
             thread_id = str(session.get("thread_id") or "")
             lease_id = str(session.get("lease_id") or "")
             session_metrics = _to_session_metrics(snapshot_by_lease.get(lease_id))
-            owner = owners.get(thread_id, {"agent_id": None, "agent_name": "Unknown"})
+            owner = owners.get(thread_id, {"agent_id": None, "agent_name": "未绑定Agent"})
             normalized_sessions.append(
                 {
                     "id": str(session.get("session_id") or ""),
                     "leaseId": lease_id,
                     "threadId": thread_id,
                     "agentId": str(owner.get("agent_id") or ""),
-                    "agentName": str(owner.get("agent_name") or "Unknown"),
+                    "agentName": str(owner.get("agent_name") or "未绑定Agent"),
                     "status": normalized,
                     "startedAt": str(session.get("created_at") or ""),
                     "metrics": session_metrics,

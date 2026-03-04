@@ -26,6 +26,7 @@ export default function ProviderCard({ provider, selected, onSelect }: ProviderC
   const isUnavailable = status === "unavailable";
   const isActive = status === "active";
   const TypeIcon = typeIcon[type];
+  const secondary = resolveSecondaryMetric(provider);
 
   const runningSessions = sessions.filter((s) => s.status === "running");
   const pausedSessions = sessions.filter((s) => s.status === "paused");
@@ -83,7 +84,12 @@ export default function ProviderCard({ provider, selected, onSelect }: ProviderC
               limit={telemetry.running.limit}
               unit={telemetry.running.unit}
             />
-            <MetricCircle label="CPU" used={telemetry.cpu.used} limit={telemetry.cpu.limit} unit={telemetry.cpu.unit} />
+            <MetricCircle
+              label={secondary.label}
+              used={secondary.used}
+              limit={secondary.limit}
+              unit={secondary.unit}
+            />
           </div>
         )}
       </div>
@@ -112,6 +118,30 @@ export default function ProviderCard({ provider, selected, onSelect }: ProviderC
       )}
     </button>
   );
+}
+
+function resolveSecondaryMetric(provider: ProviderInfo): {
+  label: string;
+  used: number | null;
+  limit: number | null;
+  unit: string;
+} {
+  const isLocal = provider.type === "local";
+  const isDocker = provider.id === "docker" || provider.id.startsWith("docker_");
+  if (isLocal || isDocker) {
+    return {
+      label: "CPU",
+      used: provider.telemetry.cpu.used,
+      limit: provider.telemetry.cpu.limit,
+      unit: provider.telemetry.cpu.unit,
+    };
+  }
+  return {
+    label: "配额",
+    used: provider.telemetry.quota?.used ?? null,
+    limit: provider.telemetry.quota?.limit ?? null,
+    unit: provider.telemetry.quota?.unit ?? "sandbox",
+  };
 }
 
 function MetricCircle({

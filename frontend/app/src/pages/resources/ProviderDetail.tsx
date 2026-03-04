@@ -143,18 +143,19 @@ export default function ProviderDetail({ provider, allocatedResources }: Provide
 }
 
 function SessionMetricsList({ sessions }: { sessions: ResourceSession[] }) {
-  if (sessions.length === 0) {
-    return <p className="text-xs text-muted-foreground">暂无沙盒会话</p>;
+  const activeSessions = sessions.filter((session) => session.status !== "stopped");
+  if (activeSessions.length === 0) {
+    return <p className="text-xs text-muted-foreground">暂无运行中/暂停会话</p>;
   }
 
   return (
     <div className="space-y-2">
-      {sessions.map((session) => (
+      {activeSessions.map((session) => (
         <div key={session.id} className="rounded-md border border-border/50 bg-card/60 px-3 py-2">
           <div className="flex items-center justify-between gap-2 mb-1">
             <div className="flex items-center gap-2">
               <StatusDot status={session.status} />
-              <span className="text-xs text-foreground font-medium">{session.agentName || "Unknown"}</span>
+              <span className="text-xs text-foreground font-medium">{session.agentName || "未绑定Agent"}</span>
               <span className="text-[10px] text-muted-foreground font-mono">{shortId(session.threadId)}</span>
             </div>
             <span className="text-[10px] text-muted-foreground font-mono">{session.status}</span>
