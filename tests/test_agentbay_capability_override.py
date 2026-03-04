@@ -40,3 +40,23 @@ def test_agentbay_capability_instance_override(monkeypatch):
     assert cap.can_resume is False
     assert cap.can_destroy is True
     assert cap.resource_capabilities == AgentBayProvider.CAPABILITY.resource_capabilities
+
+
+def test_agentbay_screenshot_uses_current_sdk_method(monkeypatch):
+    _install_fake_agentbay_module(monkeypatch)
+    provider = AgentBayProvider(api_key="dummy")
+
+    class _ScreenshotResult:
+        success = True
+        data = "https://example.com/screenshot.png"
+
+    class _FakeComputer:
+        def screenshot(self):
+            return _ScreenshotResult()
+
+    class _FakeSession:
+        computer = _FakeComputer()
+
+    provider._sessions["sess-1"] = _FakeSession()
+    screenshot = provider.screenshot("sess-1")
+    assert screenshot == "https://example.com/screenshot.png"

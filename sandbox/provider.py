@@ -150,7 +150,7 @@ class SandboxProvider(ABC):
     def get_metrics(self, session_id: str) -> Metrics | None:
         pass
 
-    def screenshot(self, session_id: str) -> bytes | None:
+    def screenshot(self, session_id: str) -> bytes | str | None:
         return None
 
     def list_processes(self, session_id: str) -> list[dict]:

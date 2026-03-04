@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import shlex
+import subprocess
 import threading
 import uuid
 from dataclasses import dataclass, field
@@ -116,16 +118,39 @@ class LocalSessionProvider(SandboxProvider):
         timeout_ms: int = 30000,
         cwd: str | None = None,
     ) -> ProviderExecResult:
-        raise RuntimeError("Local provider execute() is unsupported; use runtime shell execution.")
+        workdir = cwd or self.default_cwd or str(Path.cwd())
+        shell_cmd = f"cd {shlex.quote(workdir)} && {command}"
+        result = subprocess.run(
+            ["/bin/bash", "-lc", shell_cmd],
+            capture_output=True,
+            text=True,
+            timeout=max(timeout_ms / 1000, 0.1),
+            check=False,
+        )
+        output = result.stdout or ""
+        if result.stderr:
+            output = f"{output}\n{result.stderr}" if output else result.stderr
+        return ProviderExecResult(output=output, exit_code=result.returncode)
 
     def read_file(self, session_id: str, path: str) -> str:
-        raise RuntimeError("Local provider read_file() is unsupported.")
+        return Path(path).read_text()
 
     def write_file(self, session_id: str, path: str, content: str) -> str:
-        raise RuntimeError("Local provider write_file() is unsupported.")
+        target = Path(path)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(content)
+        return f"Written: {path}"
 
     def list_dir(self, session_id: str, path: str) -> list[dict]:
-        raise RuntimeError("Local provider list_dir() is unsupported.")
+        target = Path(path)
+        if not target.exists() or not target.is_dir():
+            return []
+        items: list[dict] = []
+        for child in target.iterdir():
+            item_type = "directory" if child.is_dir() else "file"
+            size = child.stat().st_size if child.exists() else 0
+            items.append({"name": child.name, "type": item_type, "size": int(size)})
+        return items
 
     def get_metrics(self, session_id: str) -> Metrics | None:
         return None

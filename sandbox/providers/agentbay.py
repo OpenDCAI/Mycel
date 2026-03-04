@@ -210,11 +210,11 @@ class AgentBayProvider(SandboxProvider):
             network_tx_kbps=m.tx_rate_kbyte_per_s,
         )
 
-    def screenshot(self, session_id: str) -> bytes | None:
+    def screenshot(self, session_id: str) -> bytes | str | None:
         session = self._get_session(session_id)
-        result = session.computer.beta_take_screenshot()
+        result = session.computer.screenshot()
         if result.success:
-            return result.data
+            return getattr(result, "data", None)
         return None
 
     def list_processes(self, session_id: str) -> list[dict]:
