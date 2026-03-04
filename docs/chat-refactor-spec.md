@@ -305,3 +305,6 @@ Background Task 完成后，后端通过 Notification（HumanMessage 壳，`meta
 
 - [可执行性分析](./chat-refactor-analysis.md)
 - [P1: SSE 收敛 + 持久连接 + Chat 渲染重构 + DetailBox Modal](./plans/p1-sse-convergence-chat-refactor.md)
+- [P2: Steps Tab 删除 + onFocusStep 链路清理](./plans/p2-steps-tab-cleanup-chat-refactor.md)
+- [P3: Background Task 统一 + Task Output API](./plans/p3-background-task-unification-chat-refactor.md)
+- [P4: ToolCall 富渲染](./plans/p4-toolcall-rich-rendering-chat-refactor.md)
