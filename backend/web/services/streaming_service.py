@@ -737,10 +737,11 @@ async def observe_thread_events(
     """
     yield {"retry": 5000}
 
-    cursor = after if after > 0 else thread_buf.total_count
-    # If after > 0, start from that seq position to replay missed events
-    if after > 0:
-        cursor = 0  # start from ring start, filter by seq below
+    # Always start from the beginning of the ring buffer.
+    # For after=0 (new connection): replay all buffered events so we never miss
+    # events emitted between postRun and SSE connect (race condition fix).
+    # For after>0 (reconnect): start from ring start, filter by _seq below.
+    cursor = 0
 
     while True:
         events, cursor = await thread_buf.read_with_timeout(cursor, timeout=30)
