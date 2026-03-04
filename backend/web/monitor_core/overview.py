@@ -273,6 +273,18 @@ def _aggregate_provider_telemetry(
     }
 
 
+def _resolve_card_cpu_metric(provider_type: str, telemetry: dict[str, Any]) -> dict[str, Any]:
+    cpu = dict(telemetry.get("cpu") or {})
+    if provider_type != "cloud":
+        return cpu
+    # @@@card-cpu-cloud-guardrail - cloud provider lacks reliable account-level quota API; card CPU must stay placeholder until quota contract exists.
+    cpu["used"] = None
+    cpu["limit"] = None
+    cpu["source"] = "unknown"
+    cpu.pop("error", None)
+    return cpu
+
+
 def list_resource_providers() -> dict[str, Any]:
     # @@@overview-fast-path - avoid provider-network calls; overview uses DB session snapshot.
     sessions = _list_sessions_fast()
@@ -321,24 +333,27 @@ def list_resource_providers() -> dict[str, Any]:
                 }
             )
 
+        provider_type = resolve_provider_type(provider_name, config_name, sandboxes_dir=SANDBOXES_DIR)
+        telemetry = _aggregate_provider_telemetry(
+            provider_sessions=provider_sessions,
+            running_count=running_count,
+            snapshot_by_lease=snapshot_by_lease,
+        )
         providers.append(
             {
                 "id": config_name,
                 "name": config_name,
                 "description": catalog.description,
                 "vendor": catalog.vendor,
-                "type": resolve_provider_type(provider_name, config_name, sandboxes_dir=SANDBOXES_DIR),
+                "type": provider_type,
                 "status": _to_resource_status(effective_available, running_count),
                 "unavailableReason": unavailable_reason,
                 "error": (
                     {"code": "PROVIDER_UNAVAILABLE", "message": unavailable_reason} if unavailable_reason else None
                 ),
                 "capabilities": capabilities,
-                "telemetry": _aggregate_provider_telemetry(
-                    provider_sessions=provider_sessions,
-                    running_count=running_count,
-                    snapshot_by_lease=snapshot_by_lease,
-                ),
+                "telemetry": telemetry,
+                "cardCpu": _resolve_card_cpu_metric(provider_type, telemetry),
                 "consoleUrl": resolve_console_url(provider_name, config_name, sandboxes_dir=SANDBOXES_DIR),
                 "sessions": normalized_sessions,
             }

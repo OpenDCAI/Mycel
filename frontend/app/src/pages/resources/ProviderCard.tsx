@@ -26,7 +26,7 @@ export default function ProviderCard({ provider, selected, onSelect }: ProviderC
   const isUnavailable = status === "unavailable";
   const isActive = status === "active";
   const TypeIcon = typeIcon[type];
-  const secondary = resolveSecondaryMetric(provider);
+  const cardCpu = provider.cardCpu ?? telemetry.cpu;
 
   const runningSessions = sessions.filter((s) => s.status === "running");
   const pausedSessions = sessions.filter((s) => s.status === "paused");
@@ -85,10 +85,10 @@ export default function ProviderCard({ provider, selected, onSelect }: ProviderC
               unit={telemetry.running.unit}
             />
             <MetricCircle
-              label={secondary.label}
-              used={secondary.used}
-              limit={secondary.limit}
-              unit={secondary.unit}
+              label="CPU"
+              used={cardCpu.used}
+              limit={cardCpu.limit}
+              unit={cardCpu.unit}
             />
           </div>
         )}
@@ -118,30 +118,6 @@ export default function ProviderCard({ provider, selected, onSelect }: ProviderC
       )}
     </button>
   );
-}
-
-function resolveSecondaryMetric(provider: ProviderInfo): {
-  label: string;
-  used: number | null;
-  limit: number | null;
-  unit: string;
-} {
-  const cpu = provider.telemetry.cpu;
-  // @@@cloud-cpu-guardrail - cloud card must not display locally aggregated CPU as quota-like truth; show placeholder until real provider quota signal is available.
-  if (provider.type === "cloud") {
-    return {
-      label: "CPU",
-      used: null,
-      limit: null,
-      unit: cpu.unit,
-    };
-  }
-  return {
-    label: "CPU",
-    used: cpu.used,
-    limit: cpu.limit,
-    unit: cpu.unit,
-  };
 }
 
 function MetricCircle({

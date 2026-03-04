@@ -72,6 +72,7 @@ export interface ProviderInfo {
   capabilities: ProviderCapabilities;
   quota?: ProviderQuota;
   telemetry: ProviderTelemetry;
+  cardCpu?: UsageMetric;
   consoleUrl?: string;
   latencyMs?: number;
   sessions: ResourceSession[];
