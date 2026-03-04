@@ -56,8 +56,8 @@ class AgentBayProvider(SandboxProvider):
         default_context_path: str = "/home/wuying",
         image_id: str | None = None,
         provider_name: str | None = None,
-        supports_pause: bool = True,
-        supports_resume: bool = True,
+        supports_pause: bool | None = None,
+        supports_resume: bool | None = None,
     ):
         from agentbay import AgentBay
 
@@ -68,7 +68,9 @@ class AgentBayProvider(SandboxProvider):
         self.image_id = image_id
         self._sessions: dict[str, Any] = {}
         # @@@agentbay-runtime-capability-override - account tier may disable pause/resume; keep provider-type defaults, override per configured instance only.
-        self._capability = replace(self.CAPABILITY, can_pause=supports_pause, can_resume=supports_resume)
+        can_pause = self.CAPABILITY.can_pause if supports_pause is None else supports_pause
+        can_resume = self.CAPABILITY.can_resume if supports_resume is None else supports_resume
+        self._capability = replace(self.CAPABILITY, can_pause=can_pause, can_resume=can_resume)
 
     def create_session(self, context_id: str | None = None) -> SessionInfo:
         from agentbay import ContextSync, CreateSessionParams
