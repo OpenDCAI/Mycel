@@ -6,9 +6,9 @@ from typing import Any
 
 from fastapi import FastAPI
 
-from backend.web.monitor_core.resource_overview_cache import resource_overview_refresh_loop
 from backend.web.services.event_buffer import RunEventBuffer
 from backend.web.services.idle_reaper import idle_reaper_loop
+from backend.web.services.resource_cache import resource_overview_refresh_loop
 from core.queue import MessageQueueManager
 from tui.config import ConfigManager
 
@@ -25,8 +25,8 @@ async def lifespan(app: FastAPI):
 
     init_event_store()
 
-    from backend.web.services.member_service import ensure_members_dir
     from backend.web.services.library_service import ensure_library_dir
+    from backend.web.services.member_service import ensure_members_dir
 
     ensure_members_dir()
     ensure_library_dir()

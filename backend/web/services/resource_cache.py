@@ -7,7 +7,7 @@ import copy
 import os
 import threading
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from backend.web.services import resource_service
@@ -25,7 +25,7 @@ def clear_resource_overview_cache() -> None:
 
 
 def _now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+    return datetime.now(UTC).isoformat().replace("+00:00", "Z")
 
 
 def _read_refresh_interval_sec() -> float:
@@ -38,7 +38,9 @@ def _read_refresh_interval_sec() -> float:
     return value
 
 
-def _with_refresh_metadata(payload: dict[str, Any], *, duration_ms: float, status: str, error: str | None) -> dict[str, Any]:
+def _with_refresh_metadata(
+    payload: dict[str, Any], *, duration_ms: float, status: str, error: str | None,
+) -> dict[str, Any]:
     summary = payload.setdefault("summary", {})
     snapshot_at = str(summary.get("snapshot_at") or _now_iso())
     summary["snapshot_at"] = snapshot_at
@@ -87,23 +89,25 @@ async def resource_overview_refresh_loop() -> None:
     """Continuously refresh resource overview snapshot."""
     interval_sec = _read_refresh_interval_sec()
     while True:
-        # @@@delayed-first-probe - avoid probe I/O at startup; keeps app boot and testclient teardown deterministic.
+        # @@@delayed-first-probe - avoid probe I/O at startup; keeps app boot and testclient deterministic.
         await asyncio.sleep(interval_sec)
         try:
-            await asyncio.wait_for(asyncio.to_thread(resource_service.refresh_resource_snapshots), timeout=10.0)
+            await asyncio.wait_for(
+                asyncio.to_thread(resource_service.refresh_resource_snapshots), timeout=10.0,
+            )
         except asyncio.CancelledError:
             raise
-        except asyncio.TimeoutError:
+        except TimeoutError:
             print("[monitor] resource snapshot probe timeout")
         except Exception as exc:
             print(f"[monitor] resource snapshot probe error: {exc}")
 
         try:
-            # @@@refresh-loop-timebox - provider SDK calls may block; timebox loop wait to keep shutdown responsive.
+            # @@@refresh-loop-timebox - provider SDK calls may block; timebox to keep shutdown responsive.
             await asyncio.wait_for(asyncio.to_thread(refresh_resource_overview_sync), timeout=10.0)
         except asyncio.CancelledError:
             raise
-        except asyncio.TimeoutError:
+        except TimeoutError:
             print("[monitor] resource refresh loop timeout")
         except Exception as exc:
             print(f"[monitor] resource refresh loop error: {exc}")

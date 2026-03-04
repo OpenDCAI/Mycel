@@ -1,4 +1,4 @@
-from backend.web.monitor_core import resource_overview_cache as cache
+from backend.web.services import resource_cache as cache
 
 
 def test_resource_overview_cache_refresh_adds_metadata(monkeypatch):

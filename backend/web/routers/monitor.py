@@ -4,11 +4,11 @@ import asyncio
 
 from fastapi import APIRouter, HTTPException
 
-from backend.web.monitor_core.resource_overview_cache import (
+from backend.web.services import monitor_service
+from backend.web.services.resource_cache import (
     get_resource_overview_snapshot,
     refresh_resource_overview_sync,
 )
-from backend.web.services import monitor_service
 
 router = APIRouter(prefix="/api/monitor")
 
