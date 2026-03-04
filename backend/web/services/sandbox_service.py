@@ -1,8 +1,10 @@
 """Sandbox management service."""
 
+import json
 import os
 import uuid
 from datetime import datetime
+from pathlib import Path
 from typing import Any
 
 from backend.web.core.config import LOCAL_WORKSPACE_ROOT, SANDBOXES_DIR
@@ -12,7 +14,21 @@ from sandbox.db import DEFAULT_DB_PATH as SANDBOX_DB_PATH
 from sandbox.manager import SandboxManager
 
 
-def build_provider_from_config_name(name: str) -> Any | None:
+def _load_sandbox_config(name: str, sandboxes_dir: Path | None = None) -> SandboxConfig:
+    if sandboxes_dir is None:
+        return SandboxConfig.load(name)
+    if name == "local":
+        return SandboxConfig()
+    path = sandboxes_dir / f"{name}.json"
+    if not path.exists():
+        raise FileNotFoundError(f"Sandbox config not found: {path}")
+    data = json.loads(path.read_text())
+    config = SandboxConfig(**data)
+    config.name = name
+    return config
+
+
+def build_provider_from_config_name(name: str, *, sandboxes_dir: Path | None = None) -> Any | None:
     """Build one provider instance from sandbox config name."""
     from sandbox.local import LocalSessionProvider
 
@@ -20,7 +36,7 @@ def build_provider_from_config_name(name: str) -> Any | None:
         return LocalSessionProvider(default_cwd=str(LOCAL_WORKSPACE_ROOT))
 
     try:
-        config = SandboxConfig.load(name)
+        config = _load_sandbox_config(name, sandboxes_dir=sandboxes_dir)
     except Exception as e:
         print(f"[sandbox] Failed to load {name}: {e}")
         return None

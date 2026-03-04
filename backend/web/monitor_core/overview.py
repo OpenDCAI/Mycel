@@ -4,40 +4,31 @@ from __future__ import annotations
 
 import sqlite3
 from datetime import datetime, timezone
-from importlib import import_module
 from typing import Any
 
 from backend.web.core.config import DB_PATH
 from backend.web.core.config import SANDBOXES_DIR
-from backend.web.services.sandbox_service import available_sandbox_types
+from backend.web.services.sandbox_service import available_sandbox_types, build_provider_from_config_name
 from sandbox.db import DEFAULT_DB_PATH
 from sandbox.metadata import get_provider_catalog, resolve_console_url, resolve_provider_name, resolve_provider_type
-from sandbox.provider import ProviderCapability, RESOURCE_CAPABILITY_KEYS
+from sandbox.provider import RESOURCE_CAPABILITY_KEYS
 from sandbox.resource_snapshot import list_snapshots_by_lease_ids
 
-_CAPABILITY_CLASS_BY_PROVIDER = {
-    "local": ("sandbox.local", "LocalSessionProvider"),
-    "docker": ("sandbox.providers.docker", "DockerProvider"),
-    "e2b": ("sandbox.providers.e2b", "E2BProvider"),
-    "daytona": ("sandbox.providers.daytona", "DaytonaProvider"),
-    "agentbay": ("sandbox.providers.agentbay", "AgentBayProvider"),
-}
+
+def _empty_capabilities() -> dict[str, bool]:
+    return {key: False for key in RESOURCE_CAPABILITY_KEYS}
 
 
-def _declared_capabilities(provider_name: str) -> dict[str, bool]:
-    declaration = _CAPABILITY_CLASS_BY_PROVIDER.get(provider_name)
-    if declaration is None:
-        raise RuntimeError(f"Unsupported provider type: {provider_name}")
-    module_name, class_name = declaration
-    provider_cls = getattr(import_module(module_name), class_name)
-    declared = getattr(provider_cls, "CAPABILITY", None)
-
-    if not isinstance(declared, ProviderCapability):
-        raise RuntimeError(f"Provider {provider_name} missing class CAPABILITY declaration")
-
-    # @@@capability-contract-surface - monitor consumes only agreed capability keys for stable front-end shape.
-    normalized = declared.declared_resource_capabilities()
-    return {key: normalized[key] for key in RESOURCE_CAPABILITY_KEYS}
+def _resolve_instance_capabilities(config_name: str) -> tuple[dict[str, bool], str | None]:
+    provider = build_provider_from_config_name(config_name, sandboxes_dir=SANDBOXES_DIR)
+    if provider is None:
+        return _empty_capabilities(), f"Failed to initialize provider instance: {config_name}"
+    try:
+        normalized = provider.get_capability().declared_resource_capabilities()
+    except Exception as exc:
+        return _empty_capabilities(), f"Failed to read provider capability: {config_name}: {exc}"
+    # @@@capability-single-source - monitor must read capability from provider instance to stay aligned with runtime overrides.
+    return {key: normalized[key] for key in RESOURCE_CAPABILITY_KEYS}, None
 
 
 def _to_resource_status(available: bool, running_count: int) -> str:
@@ -273,6 +264,11 @@ def list_resource_providers() -> dict[str, Any]:
         available = bool(item.get("available"))
         provider_name = resolve_provider_name(config_name, sandboxes_dir=SANDBOXES_DIR)
         catalog = get_provider_catalog(provider_name)
+        capabilities, capability_error = _resolve_instance_capabilities(config_name)
+        effective_available = available and capability_error is None
+        unavailable_reason: str | None = None
+        if not effective_available:
+            unavailable_reason = str(item.get("reason") or capability_error or "provider unavailable")
 
         provider_sessions = grouped_sessions.get(config_name, [])
         normalized_sessions: list[dict[str, Any]] = []
@@ -301,14 +297,12 @@ def list_resource_providers() -> dict[str, Any]:
                 "description": catalog.description,
                 "vendor": catalog.vendor,
                 "type": resolve_provider_type(provider_name, config_name, sandboxes_dir=SANDBOXES_DIR),
-                "status": _to_resource_status(available, running_count),
-                "unavailableReason": item.get("reason"),
+                "status": _to_resource_status(effective_available, running_count),
+                "unavailableReason": unavailable_reason,
                 "error": (
-                    {"code": "PROVIDER_UNAVAILABLE", "message": str(item.get("reason"))}
-                    if not available and item.get("reason")
-                    else None
+                    {"code": "PROVIDER_UNAVAILABLE", "message": unavailable_reason} if unavailable_reason else None
                 ),
-                "capabilities": _declared_capabilities(provider_name),
+                "capabilities": capabilities,
                 "telemetry": _aggregate_provider_telemetry(
                     provider_sessions=provider_sessions,
                     running_count=running_count,
