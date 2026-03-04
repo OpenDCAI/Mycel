@@ -6,12 +6,7 @@ All new call sites should prefer `storage.providers.sqlite.kernel`.
 import sqlite3
 from pathlib import Path
 
-from storage.providers.sqlite.kernel import (
-    BUSY_TIMEOUT_MS,
-    SYNCHRONOUS,
-    WAL_MODE,
-    connect_sqlite,
-)
+from storage.providers.sqlite.kernel import BUSY_TIMEOUT_MS, connect_sqlite
 
 
 def create_connection(

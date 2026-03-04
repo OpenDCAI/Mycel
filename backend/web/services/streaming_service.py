@@ -3,6 +3,7 @@
 import asyncio
 import json
 import logging
+import traceback
 import uuid as _uuid
 from collections.abc import AsyncGenerator
 from typing import Any
@@ -169,11 +170,14 @@ def _ensure_thread_handlers(agent: Any, thread_id: str, app: Any) -> None:
     def wake_handler() -> None:
         """Called by enqueue() — may run in any thread."""
         if not (hasattr(agent, "runtime") and agent.runtime.transition(AgentState.ACTIVE)):
+            logger.warning("wake_handler: failed to transition to ACTIVE for thread %s (state=%s)",
+                           thread_id, getattr(agent.runtime, "current_state", "unknown") if hasattr(agent, "runtime") else "no-runtime")
             return  # ACTIVE: before_model will drain_all
 
         msg = qm.dequeue(thread_id)
         if not msg:
             # Lost race to finally block — undo transition
+            logger.warning("wake_handler: dequeue returned None for thread %s (race with drain_all), reverting to IDLE", thread_id)
             if hasattr(agent, "runtime"):
                 agent.runtime.transition(AgentState.IDLE)
             return
@@ -203,6 +207,15 @@ def _ensure_thread_handlers(agent: Any, thread_id: str, app: Any) -> None:
 
     runtime.bind_thread(activity_sink=activity_sink)
     qm.register_wake(thread_id, wake_handler)
+
+
+def _parse_event_data(event: dict) -> dict:
+    """Parse the JSON data field of an activity event. Returns empty dict on failure."""
+    raw = event.get("data", "{}")
+    try:
+        return json.loads(raw) if isinstance(raw, str) else (raw if isinstance(raw, dict) else {})
+    except (json.JSONDecodeError, TypeError):
+        return {}
 
 
 # ---------------------------------------------------------------------------
@@ -379,8 +392,6 @@ async def _run_agent_to_buffer(
             except StopAsyncIteration:
                 break
             except Exception as stream_error:
-                import traceback
-
                 traceback.print_exc()
                 await emit({"event": "error", "data": json.dumps({"error": str(stream_error)}, ensure_ascii=False)})
                 break
@@ -482,12 +493,10 @@ async def _run_agent_to_buffer(
 
                 event_type = act_event.get("event", "")
 
+                sa_data = _parse_event_data(act_event)
+
                 if event_type == "subagent_task_start":
                     # Create dedicated SSE buffer for the subagent thread
-                    try:
-                        sa_data = json.loads(act_event.get("data", "{}"))
-                    except (json.JSONDecodeError, TypeError):
-                        sa_data = {}
                     task_id = sa_data.get("task_id", "")
                     sa_thread_id = sa_data.get("thread_id", f"subagent_{task_id}")
                     if task_id:
@@ -500,10 +509,6 @@ async def _run_agent_to_buffer(
 
                 elif event_type in ("subagent_task_text", "subagent_task_tool_call", "subagent_task_tool_result"):
                     # Route to subagent buffer only — skip parent SSE (prevents leakage)
-                    try:
-                        sa_data = json.loads(act_event.get("data", "{}"))
-                    except (json.JSONDecodeError, TypeError):
-                        sa_data = {}
                     task_id = sa_data.get("task_id", "")
                     sa_entry = subagent_buffers.get(task_id)
                     if sa_entry:
@@ -512,10 +517,6 @@ async def _run_agent_to_buffer(
 
                 elif event_type in ("subagent_task_done", "subagent_task_error"):
                     # Close subagent buffer + emit lifecycle notification to parent
-                    try:
-                        sa_data = json.loads(act_event.get("data", "{}"))
-                    except (json.JSONDecodeError, TypeError):
-                        sa_data = {}
                     task_id = sa_data.get("task_id", "")
                     sa_entry = subagent_buffers.pop(task_id, None)
                     if sa_entry:
@@ -551,9 +552,7 @@ async def _run_agent_to_buffer(
                 store = TrajectoryStore()
                 store.save_trajectory(trajectory)
             except Exception:
-                logger.warning(
-                    "[streaming] trajectory save failed for thread %s", thread_id, exc_info=True
-                )
+                logger.error("Failed to persist trajectory for thread %s", thread_id, exc_info=True)
 
         await emit({"event": "done", "data": json.dumps({"thread_id": thread_id})})
     except asyncio.CancelledError:
@@ -570,8 +569,6 @@ async def _run_agent_to_buffer(
             }
         )
     except Exception as e:
-        import traceback
-
         traceback.print_exc()
         await emit({"event": "error", "data": json.dumps({"error": str(e)}, ensure_ascii=False)})
     finally:
@@ -622,35 +619,48 @@ async def _run_agent_to_buffer(
         try:
             await cleanup_old_runs(thread_id, keep_latest=1, run_event_repo=run_event_repo)
         except Exception:
-            pass
+            logger.warning("Failed to cleanup old runs for thread %s", thread_id, exc_info=True)
         if run_event_repo is not None:
             run_event_repo.close()
 
         # Consume followup queue: if messages are pending, start a new run
-        followup = None
-        try:
-            qm = app.state.queue_manager
-            followup = qm.dequeue(thread_id)
-            if followup and app:
-                if hasattr(agent, "runtime") and agent.runtime.transition(AgentState.ACTIVE):
-                    new_buf = start_agent_run(agent, thread_id, followup, app,
-                                              message_metadata={"source": "system"})
-                    # Emit new_run so the frontend notification stream reconnects.
-                    # Mirrors wake_handler._start_run() which does the same for idle-triggered runs.
-                    activity_sink = getattr(getattr(agent, "runtime", None), "_activity_sink", None)
-                    if activity_sink:
-                        await activity_sink({
-                            "event": "new_run",
-                            "data": json.dumps({"thread_id": thread_id, "run_id": new_buf.run_id}),
-                        })
-        except Exception:
-            logger.exception("Failed to consume followup queue for thread %s", thread_id)
-            # Re-enqueue the message if it was already dequeued to prevent data loss
-            if followup:
-                try:
-                    app.state.queue_manager.enqueue(followup, thread_id)
-                except Exception:
-                    logger.error("Failed to re-enqueue followup for thread %s — message lost: %.200s", thread_id, followup)
+        await _consume_followup_queue(agent, thread_id, app)
+
+
+# ---------------------------------------------------------------------------
+# Followup queue consumption (extracted for testability)
+# ---------------------------------------------------------------------------
+
+
+async def _consume_followup_queue(agent: Any, thread_id: str, app: Any) -> None:
+    """Dequeue a pending followup message and start a new run.
+
+    If starting the new run fails, re-enqueue the message so it is not lost.
+    """
+    followup = None
+    try:
+        qm = app.state.queue_manager
+        followup = qm.dequeue(thread_id)
+        if followup and app:
+            if hasattr(agent, "runtime") and agent.runtime.transition(AgentState.ACTIVE):
+                new_buf = start_agent_run(agent, thread_id, followup, app,
+                                          message_metadata={"source": "system"})
+                # Emit new_run so the frontend notification stream reconnects.
+                # Mirrors wake_handler._start_run() which does the same for idle-triggered runs.
+                activity_sink = getattr(getattr(agent, "runtime", None), "_activity_sink", None)
+                if activity_sink:
+                    await activity_sink({
+                        "event": "new_run",
+                        "data": json.dumps({"thread_id": thread_id, "run_id": new_buf.run_id}),
+                    })
+    except Exception:
+        logger.exception("Failed to consume followup queue for thread %s", thread_id)
+        # Re-enqueue the message if it was already dequeued to prevent data loss
+        if followup:
+            try:
+                app.state.queue_manager.enqueue(followup, thread_id)
+            except Exception:
+                logger.error("Failed to re-enqueue followup for thread %s — message lost: %.200s", thread_id, followup)
 
 
 # ---------------------------------------------------------------------------
@@ -801,8 +811,6 @@ async def _run_task_agent_to_buffer(
 
         await buf.put({"event": "done", "data": json.dumps({"thread_id": thread_id})})
     except Exception as e:
-        import traceback
-
         traceback.print_exc()
         await buf.put(
             {

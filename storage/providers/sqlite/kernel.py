@@ -24,32 +24,32 @@ class SQLiteDBRole(StrEnum):
     SUBAGENT = "subagent"
 
 
+def _env_path(env_var: str, fallback: Path) -> Path:
+    """Return Path from environment variable if set, otherwise the fallback."""
+    raw = os.getenv(env_var)
+    return Path(raw) if raw else fallback
+
+
 def resolve_role_db_path(role: SQLiteDBRole, db_path: Path | str | None = None) -> Path:
     """Resolve role-specific DB path, honoring env overrides."""
     if db_path is not None:
         return Path(db_path)
 
     home_root = Path.home() / ".leon"
-    main_raw = os.getenv("LEON_DB_PATH")
-    main_path = Path(main_raw) if main_raw else home_root / "leon.db"
+    main_path = _env_path("LEON_DB_PATH", home_root / "leon.db")
 
     if role == SQLiteDBRole.MAIN:
         return main_path
     if role == SQLiteDBRole.RUN_EVENT:
-        run_event_raw = os.getenv("LEON_RUN_EVENT_DB_PATH")
-        return Path(run_event_raw) if run_event_raw else main_path.with_name("events.db")
+        return _env_path("LEON_RUN_EVENT_DB_PATH", main_path.with_name("events.db"))
     if role == SQLiteDBRole.EVAL:
-        eval_raw = os.getenv("LEON_EVAL_DB_PATH")
-        return Path(eval_raw) if eval_raw else home_root / "eval.db"
+        return _env_path("LEON_EVAL_DB_PATH", home_root / "eval.db")
     if role == SQLiteDBRole.SANDBOX:
-        sandbox_raw = os.getenv("LEON_SANDBOX_DB_PATH")
-        return Path(sandbox_raw) if sandbox_raw else home_root / "sandbox.db"
+        return _env_path("LEON_SANDBOX_DB_PATH", home_root / "sandbox.db")
     if role == SQLiteDBRole.QUEUE:
-        queue_raw = os.getenv("LEON_QUEUE_DB_PATH")
-        return Path(queue_raw) if queue_raw else main_path.with_name("queue.db")
+        return _env_path("LEON_QUEUE_DB_PATH", main_path.with_name("queue.db"))
     if role == SQLiteDBRole.SUBAGENT:
-        subagent_raw = os.getenv("LEON_SUBAGENT_DB_PATH")
-        return Path(subagent_raw) if subagent_raw else main_path.with_name("subagent.db")
+        return _env_path("LEON_SUBAGENT_DB_PATH", main_path.with_name("subagent.db"))
     return main_path
 
 
@@ -110,12 +110,9 @@ async def connect_sqlite_async(
 
     path = Path(db_path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    conn = await aiosqlite.connect(
-        str(path),
-        timeout=timeout_ms / 1000,
-    )
+    conn = await aiosqlite.connect(str(path), timeout=timeout_ms / 1000)
     await conn.execute(f"PRAGMA journal_mode={WAL_MODE}")
-    await conn.execute(f"PRAGMA busy_timeout={BUSY_TIMEOUT_MS}")
+    await conn.execute(f"PRAGMA busy_timeout={timeout_ms}")
     await conn.execute(f"PRAGMA synchronous={SYNCHRONOUS}")
     if row_factory is not None:
         conn.row_factory = row_factory

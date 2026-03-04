@@ -112,11 +112,13 @@ export function useThreadStream(
       // A fast run may finish within the ~200ms network round-trip, making
       // state !== "active" and causing connect() to be skipped entirely.
       connect(0);
-      // Still fetch runtime for runtimeStatus display (non-blocking)
-      void getThreadRuntime(threadId).then((rt) => { if (rt) setRuntimeStatus(rt); }).catch(() => {});
+      // Non-blocking: still fetch runtime for runtimeStatus display
+      void getThreadRuntime(threadId)
+        .then((rt) => { if (rt) setRuntimeStatus(rt); })
+        .catch(() => {});
     } else {
       // Page refresh / direct URL: check if a run is already active
-      void (async () => {
+      async function checkRuntime() {
         try {
           const runtime = await getThreadRuntime(threadId);
           if (runtime) setRuntimeStatus(runtime);
@@ -126,7 +128,8 @@ export function useThreadStream(
         } catch (err) {
           console.error("[useThreadStream] init runtime check failed:", err);
         }
-      })();
+      }
+      void checkRuntime();
     }
 
     // Permanent notification stream — stays open for the entire page lifetime.
