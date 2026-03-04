@@ -24,6 +24,7 @@ workspace/
 node_modules/
 .next/
 .langgraph_api/
+.runtime/
 *.log
  *.bak
 
