@@ -1,4 +1,3 @@
-import { flushSync } from "react-dom";
 import {
   type AssistantTurn,
   type ChatEntry,
@@ -36,17 +35,16 @@ function findTurnToolSeg(prev: ChatEntry[], turnId: string, toolCallId: string):
 function handleText(event: StreamEvent, turnId: string, onUpdate: UpdateEntries) {
   const payload = event.data as { content?: string } | string | undefined;
   const chunk = typeof payload === "string" ? payload : payload?.content ?? "";
-  flushSync(() => {
-    updateTurnSegments(onUpdate, turnId, (turn) => {
-      const segs = [...turn.segments];
-      const last = segs[segs.length - 1];
-      if (last?.type === "text") {
-        segs[segs.length - 1] = { type: "text", content: last.content + chunk };
-      } else {
-        segs.push({ type: "text", content: chunk });
-      }
-      return { ...turn, segments: segs };
-    });
+  // No flushSync — let React batch. Sticky scroll observes childList mutations.
+  updateTurnSegments(onUpdate, turnId, (turn) => {
+    const segs = [...turn.segments];
+    const last = segs[segs.length - 1];
+    if (last?.type === "text") {
+      segs[segs.length - 1] = { type: "text", content: last.content + chunk };
+    } else {
+      segs.push({ type: "text", content: chunk });
+    }
+    return { ...turn, segments: segs };
   });
 }
 
@@ -149,18 +147,38 @@ export function processStreamEvent(
 ): { messageId?: string } {
   const data = (event.data ?? {}) as EventPayload;
   const messageId = typeof data.message_id === "string" ? data.message_id : undefined;
+  const agentId = typeof data.agent_id === "string" ? data.agent_id : undefined;
 
+  // Control events — handled by useThreadStream
   if (event.type === "status") {
     if (event.data) setRuntimeStatus(event.data as StreamStatus);
     return { messageId };
   }
+  if (event.type === "run_start" || event.type === "run_done") {
+    return { messageId };
+  }
 
+  // Sub-agent content events: route by agent_id
+  if (agentId && agentId !== "main" && event.type in EVENT_HANDLERS) {
+    handleSubagentEvent(event, turnId, onUpdate);
+    return { messageId };
+  }
+
+  // Sub-agent lifecycle events
+  if ((event.type === "task_start" || event.type === "task_done" || event.type === "task_error") && agentId && agentId !== "main") {
+    handleSubagentEvent(event, turnId, onUpdate);
+    return { messageId };
+  }
+
+  // Main agent content events
   const handler = EVENT_HANDLERS[event.type];
   if (handler) {
     handler(event, turnId, onUpdate);
-  } else if (event.type.startsWith("subagent_")) {
-    handleSubagentEvent(event, turnId, onUpdate);
-  } else if (
+    return { messageId };
+  }
+
+  // P3 legacy: command_progress, background_task_*
+  if (
     event.type.startsWith("command_") ||
     event.type.startsWith("background_task_")
   ) {

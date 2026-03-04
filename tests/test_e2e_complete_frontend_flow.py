@@ -132,9 +132,9 @@ class TestCompleteFrontendFlow:
                 print(f"⚠ Lease endpoint error: {lease_response}")
 
             # ===== STEP 5: Send Message (SSE Stream) =====
-            # postRun() → POST /runs returns JSON {run_id}, then streamEvents() → GET /runs/events SSE
-            print("\n[STEP 5] User sends message (POST /runs + GET /runs/events)")
-            print("✓ SSE endpoint: POST /runs → JSON, GET /runs/events → SSE (not tested in this flow)")
+            # postRun() → POST /runs returns JSON {run_id}, then streamEvents() → GET /events SSE
+            print("\n[STEP 5] User sends message (POST /runs + GET /events)")
+            print("✓ SSE endpoint: POST /runs → JSON {run_id}, GET /events → persistent SSE (not tested in this flow)")
 
             # ===== STEP 6: Pause/Resume Sandbox =====
             # App.tsx line 119-129: handlePauseSandbox() / handleResumeSandbox()

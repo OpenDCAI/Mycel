@@ -1,10 +1,13 @@
 export const STREAM_EVENT_TYPES = [
-  "text", "tool_call", "tool_result", "status", "done", "error", "cancelled",
-  "task_start", "task_text", "task_tool_call", "task_tool_result", "task_done", "task_error",
-  "subagent_task_start", "subagent_task_text", "subagent_task_tool_call",
-  "subagent_task_tool_result", "subagent_task_done", "subagent_task_error",
-  "background_task_start", "background_task_text", "background_task_done", "background_task_error",
-  "command_progress", "new_run", "run_done",
+  // Content (5) — routed by agent_id
+  "text", "tool_call", "tool_result", "error", "cancelled",
+  // Lifecycle (3) — sub-agent / background task
+  "task_start", "task_done", "task_error",
+  // Control (3) — run boundaries + runtime status
+  "status", "run_start", "run_done",
+  // P3 legacy — kept until Background Task unification
+  "command_progress", "background_task_start", "background_task_text",
+  "background_task_done", "background_task_error",
 ] as const;
 
 export type StreamEventType = (typeof STREAM_EVENT_TYPES)[number];
@@ -14,64 +17,31 @@ export interface StreamEvent {
   data?: unknown;
 }
 
-export interface TaskStartData {
+/** Common fields injected into all content/lifecycle events by the backend. */
+export interface ContentEventData {
+  agent_id: string;
+  parent_tool_call_id?: string;
+  background?: boolean;
+  seq: number;
+  run_id: string;
+  message_id?: string;
+}
+
+export interface TaskStartData extends ContentEventData {
   task_id: string;
   subagent_type: string;
   description: string;
 }
 
-export interface TaskTextData {
-  task_id: string;
-  content: string;
-}
-
-export interface TaskToolCallData {
-  task_id: string;
-  id: string;
-  name: string;
-  args: unknown;
-}
-
-export interface TaskToolResultData {
-  task_id: string;
-  tool_call_id: string;
-  name: string;
-  content: string;
-}
-
-export interface TaskDoneData {
+export interface TaskDoneData extends ContentEventData {
   task_id: string;
   thread_id?: string;
   status: string;
 }
 
-export interface TaskErrorData {
+export interface TaskErrorData extends ContentEventData {
   task_id: string;
   error: string;
-}
-
-export interface SubagentTaskStartData extends TaskStartData {
-  parent_tool_call_id: string;
-}
-
-export interface SubagentTaskTextData extends TaskTextData {
-  parent_tool_call_id: string;
-}
-
-export interface SubagentTaskToolCallData extends TaskToolCallData {
-  parent_tool_call_id: string;
-}
-
-export interface SubagentTaskToolResultData extends TaskToolResultData {
-  parent_tool_call_id: string;
-}
-
-export interface SubagentTaskDoneData extends TaskDoneData {
-  parent_tool_call_id: string;
-}
-
-export interface SubagentTaskErrorData extends TaskErrorData {
-  parent_tool_call_id: string;
 }
 
 export interface ThreadSummary {

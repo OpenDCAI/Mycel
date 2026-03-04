@@ -44,6 +44,7 @@ function appendToTurn(turn: AssistantTurn, msgId: string, segments: TurnSegment[
 interface MapState {
   entries: ChatEntry[];
   currentTurn: AssistantTurn | null;
+  currentRunId: string | null;
   now: number;
 }
 
@@ -51,12 +52,21 @@ function handleHuman(msg: BackendMessage, i: number, state: MapState): void {
   // System-injected messages (steer reminders, task notifications) → notice
   if (msg.metadata?.source === "system") {
     const content = extractTextContent(msg.content);
-    if (state.currentTurn) {
-      // Fold into current assistant turn as a notice segment
+    const msgRunId = (msg.metadata?.run_id as string) || null;
+
+    if (state.currentTurn && msgRunId && msgRunId === state.currentRunId) {
+      // Same run_id → fold into current assistant turn as a notice segment
       state.currentTurn.segments.push({ type: "notice", content });
       return;
     }
-    // No current turn → standalone notice entry (fallback)
+    if (state.currentTurn && !msgRunId) {
+      // No run_id (legacy) → fold into current turn if active
+      state.currentTurn.segments.push({ type: "notice", content });
+      return;
+    }
+    // Different run_id or no current turn → standalone notice entry (Turn boundary)
+    state.currentTurn = null;
+    state.currentRunId = null;
     const notice: NoticeMessage = {
       id: msg.id ?? `hist-notice-${i}`,
       role: "notice",
@@ -69,6 +79,7 @@ function handleHuman(msg: BackendMessage, i: number, state: MapState): void {
 
   // Normal user message → breaks current turn
   state.currentTurn = null;
+  state.currentRunId = null;
   state.entries.push({
     id: msg.id ?? `hist-user-${i}`,
     role: "user",
@@ -81,15 +92,22 @@ function handleAI(msg: BackendMessage, i: number, state: MapState): void {
   const textContent = extractTextContent(msg.content);
   const toolCalls = Array.isArray(msg.tool_calls) ? msg.tool_calls : [];
   const msgId = msg.id ?? `hist-turn-${i}`;
+  const msgRunId = (msg.metadata?.run_id as string) || null;
 
   const segments: TurnSegment[] = [];
   if (textContent) segments.push({ type: "text", content: textContent });
   if (toolCalls.length > 0) segments.push(...buildToolSegments(toolCalls, i, state.now));
 
-  if (state.currentTurn) {
+  // Group by run_id: same run_id = same Turn
+  if (state.currentTurn && msgRunId && msgRunId === state.currentRunId) {
+    appendToTurn(state.currentTurn, msgId, segments);
+  } else if (state.currentTurn && !msgRunId && !state.currentRunId) {
+    // Legacy: no run_id on either → merge consecutive (backward compat)
     appendToTurn(state.currentTurn, msgId, segments);
   } else {
+    // New run_id or first message → new Turn
     state.currentTurn = createTurn(msgId, segments, state.now);
+    state.currentRunId = msgRunId;
     state.entries.push(state.currentTurn);
   }
 }
@@ -128,7 +146,7 @@ const MSG_HANDLERS: Record<string, (msg: BackendMessage, i: number, state: MapSt
 
 export function mapBackendEntries(payload: unknown): ChatEntry[] {
   if (!Array.isArray(payload)) return [];
-  const state: MapState = { entries: [], currentTurn: null, now: Date.now() };
+  const state: MapState = { entries: [], currentTurn: null, currentRunId: null, now: Date.now() };
 
   for (let i = 0; i < payload.length; i += 1) {
     const msg = payload[i] as BackendMessage | undefined;

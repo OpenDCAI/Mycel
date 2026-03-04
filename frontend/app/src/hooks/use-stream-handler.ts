@@ -107,16 +107,42 @@ export function useStreamHandler(
   // Subscribe to stream events → drive UI state
   useEffect(() => {
     return subscribe((event) => {
+      // run_start: ensure we have an assistant turn ready
+      if (event.type === "run_start" && !turnIdRef.current) {
+        const fallbackId = makeId("reconnect-turn");
+        onUpdateRef.current((prev) => {
+          const { entries, turnId } = applyReconnectTurn(prev, fallbackId);
+          turnIdRef.current = turnId;
+          return entries;
+        });
+        return;
+      }
+
+      // run_done: finalize current turn
+      if (event.type === "run_done") {
+        const doneId = turnIdRef.current;
+        if (doneId) {
+          onUpdateRef.current((prev) =>
+            prev.map((e) =>
+              e.id === doneId && e.role === "assistant"
+                ? { ...e, streaming: false } as AssistantTurn
+                : e,
+            ),
+          );
+        }
+        turnIdRef.current = "";
+        hasBoundRef.current = false;
+        return;
+      }
+
       // For auto-reconnect: no turn has been created by handleSendMessage.
       // Create or continue the last assistant turn on the first content event.
       if (!turnIdRef.current && event.type !== "status") {
         const fallbackId = makeId("reconnect-turn");
-        flushSync(() => {
-          onUpdateRef.current((prev) => {
-            const { entries, turnId } = applyReconnectTurn(prev, fallbackId);
-            turnIdRef.current = turnId;
-            return entries;
-          });
+        onUpdateRef.current((prev) => {
+          const { entries, turnId } = applyReconnectTurn(prev, fallbackId);
+          turnIdRef.current = turnId;
+          return entries;
         });
       }
 
@@ -144,27 +170,6 @@ export function useStreamHandler(
       }
     });
   }, [subscribe]);
-
-  // When streaming ends: mark the current turn as done, reset refs, refresh thread list
-  const prevIsRunningRef = useRef(false);
-  useEffect(() => {
-    if (prevIsRunningRef.current && !isRunning) {
-      const doneId = turnIdRef.current;
-      if (doneId) {
-        onUpdateRef.current((prev) =>
-          prev.map((e) =>
-            e.id === doneId && e.role === "assistant"
-              ? { ...e, streaming: false } as AssistantTurn
-              : e,
-          ),
-        );
-      }
-      turnIdRef.current = "";
-      hasBoundRef.current = false;
-      void refreshRef.current();
-    }
-    prevIsRunningRef.current = isRunning;
-  }, [isRunning]);
 
   const handleSendMessage = useCallback(
     async (message: string) => {
@@ -194,7 +199,8 @@ export function useStreamHandler(
 
       try {
         await postRun(threadId, message);
-        connect();
+        // Connection is persistent — no need to reconnect.
+        // run_start event will confirm isRunning.
       } catch (err) {
         setSendPending(false);
         // Show error in the assistant turn
@@ -215,7 +221,7 @@ export function useStreamHandler(
         hasBoundRef.current = false;
       }
     },
-    [threadId, connect],
+    [threadId],
   );
 
   const handleStopStreaming = useCallback(async () => {
@@ -224,8 +230,9 @@ export function useStreamHandler(
     } catch (err) {
       console.error("Failed to cancel run:", err);
     }
-    setTimeout(() => disconnect(), 500);
-  }, [threadId, disconnect]);
+    // Don't disconnect — persistent connection stays open.
+    // cancelled + run_done events will arrive and update state.
+  }, [threadId]);
 
   return { runtimeStatus, isRunning, handleSendMessage, handleStopStreaming };
 }

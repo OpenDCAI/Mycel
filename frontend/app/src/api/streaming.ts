@@ -1,15 +1,16 @@
 import type { StreamEvent, TaskAgentRequest } from "./types";
 import { processChunk } from "./sse-processor";
 
-/** Read an SSE response body, dispatch events, return { lastSeq, finished }. */
+/** Read an SSE response body, dispatch events, return { lastSeq, runEnded }. */
 async function consumeSSEStream(
   reader: ReadableStreamDefaultReader<Uint8Array>,
   onEvent: (event: StreamEvent) => void,
   startSeq: number,
-): Promise<{ lastSeq: number; finished: boolean }> {
+): Promise<{ lastSeq: number; runEnded: boolean }> {
   const decoder = new TextDecoder();
   let buffer = "";
   let seq = startSeq;
+  let runEnded = false;
 
   while (true) {
     const { done, value } = await reader.read();
@@ -21,10 +22,11 @@ async function consumeSSEStream(
     for (const chunk of chunks) {
       const result = processChunk(chunk, onEvent, seq);
       seq = result.seq;
-      if (result.terminal) return { lastSeq: seq, finished: true };
+      if (result.runEnded) runEnded = true;
+      // Persistent stream — never break on runEnded
     }
   }
-  return { lastSeq: seq, finished: false };
+  return { lastSeq: seq, runEnded };
 }
 
 async function postJSON<T>(url: string, body: unknown, signal?: AbortSignal): Promise<T> {
@@ -48,58 +50,50 @@ export async function postRun(
   return postJSON(`/api/threads/${encodeURIComponent(threadId)}/runs`, { message, ...options }, signal);
 }
 
-async function connectOnce(
+/** Persistent SSE connection to a thread's event stream. */
+export async function streamThreadEvents(
   threadId: string,
   onEvent: (event: StreamEvent) => void,
-  after: number,
-  signal?: AbortSignal,
-): Promise<{ after: number; done: boolean }> {
-  const url = `/api/threads/${encodeURIComponent(threadId)}/runs/events?after=${after}`;
-  const res = await fetch(url, { signal });
-  if (!res.ok) {
-    onEvent({ type: "error", data: { error: `SSE connect failed: ${res.status}` } });
-    return { after, done: true };
-  }
-  if (!res.body) return { after, done: true };
-  const { lastSeq, finished } = await consumeSSEStream(res.body.getReader(), onEvent, after);
-  return { after: lastSeq, done: finished };
-}
-
-/** Reconnecting SSE loop with exponential backoff. */
-async function withReconnection(
-  connect: (after: number) => Promise<{ after: number; done: boolean }>,
   signal?: AbortSignal,
   startAfter = 0,
 ): Promise<void> {
   let after = startAfter;
   let attempts = 0;
+  const MAX_ATTEMPTS = 10;
 
   while (!signal?.aborted) {
     try {
-      const result = await connect(after);
-      after = result.after;
+      const url = `/api/threads/${encodeURIComponent(threadId)}/events?after=${after}`;
+      const res = await fetch(url, { signal });
+
+      if (!res.ok) {
+        // 4xx = unrecoverable
+        if (res.status >= 400 && res.status < 500) {
+          onEvent({ type: "error", data: { error: `SSE connect failed: ${res.status}` } });
+          return;
+        }
+        throw new Error(`SSE ${res.status}`);
+      }
+      if (!res.body) return;
+
       attempts = 0;
-      if (result.done) return;
+      const { lastSeq } = await consumeSSEStream(res.body.getReader(), onEvent, after);
+      after = lastSeq;
+
+      // Server closed connection (normal disconnect) — reconnect
+      if (signal?.aborted) return;
     } catch {
       if (signal?.aborted) return;
-      await new Promise((r) => setTimeout(r, Math.min(1000 * 2 ** attempts, 30000)));
-      attempts++;
+      if (++attempts > MAX_ATTEMPTS) {
+        onEvent({ type: "error", data: { error: "Max reconnection attempts reached" } });
+        return;
+      }
+      // Exponential backoff with jitter
+      const base = Math.min(1000 * 2 ** (attempts - 1), 30000);
+      const jitter = base * 0.2 * (Math.random() * 2 - 1);
+      await new Promise((r) => setTimeout(r, base + jitter));
     }
   }
-}
-
-/** Subscribe to SSE event stream with built-in reconnection. */
-export async function streamEvents(
-  threadId: string,
-  onEvent: (event: StreamEvent) => void,
-  signal?: AbortSignal,
-  startAfter = 0,
-): Promise<void> {
-  await withReconnection(
-    (after) => connectOnce(threadId, onEvent, after, signal),
-    signal,
-    startAfter,
-  );
 }
 
 export async function cancelRun(threadId: string): Promise<void> {
@@ -115,25 +109,5 @@ export async function runTaskAgent(
   signal?: AbortSignal,
 ): Promise<void> {
   await postJSON(`/api/threads/${encodeURIComponent(threadId)}/task-agent/runs`, taskRequest, signal);
-  await streamEvents(threadId, onEvent, signal);
-}
-
-/** Subscribe to activity SSE for background events after main SSE closes. */
-export async function streamActivityEvents(
-  threadId: string,
-  onEvent: (event: StreamEvent) => void,
-  signal?: AbortSignal,
-): Promise<void> {
-  await withReconnection(
-    async (after) => {
-      const url = `/api/threads/${encodeURIComponent(threadId)}/activity/events?after=${after}`;
-      const res = await fetch(url, { signal });
-      if (res.status === 204) return { after, done: true }; // No activity buffer yet
-      if (!res.ok) throw new Error(`Activity SSE failed: ${res.status}`);
-      if (!res.body) return { after, done: true };
-      const { lastSeq, finished } = await consumeSSEStream(res.body.getReader(), onEvent, after);
-      return { after: lastSeq, done: finished };
-    },
-    signal,
-  );
+  await streamThreadEvents(threadId, onEvent, signal);
 }

@@ -10,7 +10,7 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
-from backend.web.services.event_buffer import RunEventBuffer
+from backend.web.services.event_buffer import RunEventBuffer, ThreadEventBuffer
 from backend.web.services.event_store import cleanup_old_runs
 from backend.web.utils.serializers import extract_text_content
 from core.monitor import AgentState
@@ -118,9 +118,24 @@ async def write_cancellation_markers(
             new_versions,
         )
     except Exception:
-        logger.exception("[streaming] failed to write cancellation markers for thread %s", thread_id)
+        logger.exception("[streaming] failed to write cancellation markers for thread %s", config.get("configurable", {}).get("thread_id"))
 
     return cancelled_tool_call_ids
+
+
+# ---------------------------------------------------------------------------
+# Thread event buffer management
+# ---------------------------------------------------------------------------
+
+
+def get_or_create_thread_buffer(app: Any, thread_id: str) -> ThreadEventBuffer:
+    """Get existing or create new ThreadEventBuffer for a thread."""
+    buf = app.state.thread_event_buffers.get(thread_id)
+    if isinstance(buf, ThreadEventBuffer):
+        return buf
+    buf = ThreadEventBuffer()
+    app.state.thread_event_buffers[thread_id] = buf
+    return buf
 
 
 # ---------------------------------------------------------------------------
@@ -144,17 +159,12 @@ def _ensure_thread_handlers(agent: Any, thread_id: str, app: Any) -> None:
     if not hasattr(runtime, "bind_thread"):
         return
 
-    # activity_buf is thread-scoped, reused across runs
-    activity_buf = app.state.activity_buffers.get(thread_id)
-    if not activity_buf:
-        activity_buf = RunEventBuffer()
-        activity_buf.run_id = f"activity_{thread_id}"
-        app.state.activity_buffers[thread_id] = activity_buf
+    thread_buf = get_or_create_thread_buffer(app, thread_id)
 
     async def activity_sink(event: dict) -> None:
         from backend.web.services.event_store import append_event as _append
 
-        seq = await _append(thread_id, activity_buf.run_id, event)
+        seq = await _append(thread_id, f"activity_{thread_id}", event)
         try:
             data = json.loads(event.get("data", "{}")) if isinstance(event.get("data"), str) else event.get("data", {})
         except (json.JSONDecodeError, TypeError):
@@ -162,7 +172,7 @@ def _ensure_thread_handlers(agent: Any, thread_id: str, app: Any) -> None:
         if isinstance(data, dict):
             data["_seq"] = seq
             event = {**event, "data": json.dumps(data, ensure_ascii=False)}
-        await activity_buf.put(event)
+        await thread_buf.put(event)
 
     qm = app.state.queue_manager
     loop = getattr(app.state, "_event_loop", None)
@@ -184,14 +194,10 @@ def _ensure_thread_handlers(agent: Any, thread_id: str, app: Any) -> None:
 
         async def _start_run():
             try:
-                new_buf = start_agent_run(
+                start_agent_run(
                     agent, thread_id, msg, app,
                     message_metadata={"source": "system"},
                 )
-                await activity_sink({
-                    "event": "new_run",
-                    "data": json.dumps({"thread_id": thread_id, "run_id": new_buf.run_id}),
-                })
             except Exception:
                 logger.error("wake_handler failed for thread %s", thread_id, exc_info=True)
                 if hasattr(agent, "runtime"):
@@ -219,7 +225,7 @@ def _parse_event_data(event: dict) -> dict:
 
 
 # ---------------------------------------------------------------------------
-# Producer: runs agent, writes events to buffer
+# Producer: runs agent, writes events to ThreadEventBuffer
 # ---------------------------------------------------------------------------
 
 
@@ -229,13 +235,13 @@ async def _run_agent_to_buffer(
     message: str,
     app: Any,
     enable_trajectory: bool,
-    buf: RunEventBuffer,
+    thread_buf: ThreadEventBuffer,
+    run_id: str,
     message_metadata: dict[str, Any] | None = None,
 ) -> None:
-    """Run agent execution and write all SSE events into *buf*."""
+    """Run agent execution and write all SSE events into *thread_buf*."""
     from backend.web.services.event_store import append_event
 
-    run_id = buf.run_id
     run_event_repo = _resolve_run_event_repo(agent)
 
     async def emit(event: dict, message_id: str | None = None) -> None:
@@ -253,10 +259,11 @@ async def _run_agent_to_buffer(
         if isinstance(data, dict):
             data["_seq"] = seq
             data["_run_id"] = run_id
+            data["agent_id"] = "main"
             if message_id:
                 data["message_id"] = message_id
             event = {**event, "data": json.dumps(data, ensure_ascii=False)}
-        await buf.put(event)
+        await thread_buf.put(event)
 
     task = None
     stream_gen = None
@@ -264,7 +271,7 @@ async def _run_agent_to_buffer(
     # Per-subagent RunEventBuffer: task_id → (sa_thread_id, buf)
     subagent_buffers: dict[str, tuple[str, RunEventBuffer]] = {}
     try:
-        config = {"configurable": {"thread_id": thread_id}}
+        config = {"configurable": {"thread_id": thread_id, "run_id": run_id}}
         if hasattr(agent, "_current_model_config"):
             config["configurable"].update(agent._current_model_config)
         set_current_thread_id(thread_id)
@@ -367,6 +374,12 @@ async def _run_agent_to_buffer(
 
         emitted_tool_call_ids: set[str] = set()
 
+        # Emit run_start
+        await emit({
+            "event": "run_start",
+            "data": json.dumps({"thread_id": thread_id, "run_id": run_id}),
+        })
+
         async def run_agent_stream():
             if message_metadata:
                 from langchain_core.messages import HumanMessage
@@ -430,6 +443,9 @@ async def _run_agent_to_buffer(
                         msg_class = msg.__class__.__name__
                         if msg_class == "AIMessage":
                             ai_msg_id = getattr(msg, "id", None)
+                            # A6: inject run_id into message metadata
+                            if hasattr(msg, "metadata") and isinstance(msg.metadata, dict):
+                                msg.metadata["run_id"] = run_id
                             for tc in getattr(msg, "tool_calls", []):
                                 tc_id = tc.get("id")
                                 if tc_id and tc_id in emitted_tool_call_ids:
@@ -459,6 +475,9 @@ async def _run_agent_to_buffer(
                             tool_msg_id = getattr(msg, "id", None)
                             if tc_id:
                                 pending_tool_calls.pop(tc_id, None)
+                            # A6: inject run_id into ToolMessage metadata
+                            if hasattr(msg, "metadata") and isinstance(msg.metadata, dict):
+                                msg.metadata["run_id"] = run_id
                             await emit(
                                 {
                                     "event": "tool_result",
@@ -492,10 +511,16 @@ async def _run_agent_to_buffer(
                     break
 
                 event_type = act_event.get("event", "")
-
                 sa_data = _parse_event_data(act_event)
 
-                if event_type == "subagent_task_start":
+                # A4: Route by agent_id instead of event type prefix
+                agent_id = sa_data.get("agent_id", "")
+                is_subagent_content = (
+                    agent_id and agent_id != "main"
+                    and event_type in ("text", "tool_call", "tool_result")
+                )
+
+                if event_type == "task_start" and agent_id and agent_id != "main":
                     # Create dedicated SSE buffer for the subagent thread
                     task_id = sa_data.get("task_id", "")
                     sa_thread_id = sa_data.get("thread_id", f"subagent_{task_id}")
@@ -503,11 +528,12 @@ async def _run_agent_to_buffer(
                         sa_buf = RunEventBuffer()
                         sa_buf.run_id = str(_uuid.uuid4())
                         subagent_buffers[task_id] = (sa_thread_id, sa_buf)
-                        app.state.thread_event_buffers[sa_thread_id] = sa_buf
-                    # Emit slim lifecycle notification to parent SSE
+                        # Store subagent buffer under sa_thread_id (not thread_id)
+                        app.state.subagent_buffers[sa_thread_id] = sa_buf
+                    # Emit lifecycle notification to parent SSE
                     await emit(act_event)
 
-                elif event_type in ("subagent_task_text", "subagent_task_tool_call", "subagent_task_tool_result"):
+                elif is_subagent_content:
                     # Route to subagent buffer only — skip parent SSE (prevents leakage)
                     task_id = sa_data.get("task_id", "")
                     sa_entry = subagent_buffers.get(task_id)
@@ -515,7 +541,7 @@ async def _run_agent_to_buffer(
                         _, sa_buf = sa_entry
                         await sa_buf.put(act_event)
 
-                elif event_type in ("subagent_task_done", "subagent_task_error"):
+                elif event_type in ("task_done", "task_error") and agent_id and agent_id != "main":
                     # Close subagent buffer + emit lifecycle notification to parent
                     task_id = sa_data.get("task_id", "")
                     sa_entry = subagent_buffers.pop(task_id, None)
@@ -523,9 +549,9 @@ async def _run_agent_to_buffer(
                         sa_thread_id, sa_buf = sa_entry
                         await sa_buf.put(act_event)
                         # Emit terminal event so SSE consumer exits cleanly
-                        await sa_buf.put({"event": "done", "data": json.dumps({"thread_id": sa_thread_id})})
+                        await sa_buf.put({"event": "run_done", "data": json.dumps({"thread_id": sa_thread_id})})
                         await sa_buf.mark_done()
-                        app.state.thread_event_buffers.pop(sa_thread_id, None)
+                        app.state.subagent_buffers.pop(sa_thread_id, None)
                     await emit(act_event)
 
                 else:
@@ -554,7 +580,25 @@ async def _run_agent_to_buffer(
             except Exception:
                 logger.error("Failed to persist trajectory for thread %s", thread_id, exc_info=True)
 
-        await emit({"event": "done", "data": json.dumps({"thread_id": thread_id})})
+        # A6: patch checkpoint — inject run_id into messages that were emitted this run.
+        # In-stream mutation (above) modifies the Python object but checkpoint is already serialized.
+        # update_state with same message IDs → MessagesState add_messages reducer replaces (not appends).
+        try:
+            state = await agent.agent.aget_state(config)
+            to_patch = []
+            for msg in state.values.get("messages", []):
+                if not hasattr(msg, "metadata") or not isinstance(getattr(msg, "metadata", None), dict):
+                    msg.metadata = {}
+                if msg.metadata.get("run_id") is None:
+                    msg.metadata["run_id"] = run_id
+                    to_patch.append(msg)
+            if to_patch:
+                await agent.agent.aupdate_state(config, {"messages": to_patch})
+        except Exception:
+            logger.debug("A6 run_id checkpoint patch failed for thread=%s", thread_id, exc_info=True)
+
+        # A5: emit run_done instead of done (persistent buffer — no mark_done)
+        await emit({"event": "run_done", "data": json.dumps({"thread_id": thread_id, "run_id": run_id})})
     except asyncio.CancelledError:
         cancelled_tool_call_ids = await write_cancellation_markers(agent, config, pending_tool_calls)
         await emit(
@@ -568,21 +612,19 @@ async def _run_agent_to_buffer(
                 ),
             }
         )
+        # Also emit run_done so frontend knows the run ended
+        await emit({"event": "run_done", "data": json.dumps({"thread_id": thread_id, "run_id": run_id})})
     except Exception as e:
         traceback.print_exc()
         await emit({"event": "error", "data": json.dumps({"error": str(e)}, ensure_ascii=False)})
+        await emit({"event": "run_done", "data": json.dumps({"thread_id": thread_id, "run_id": run_id})})
     finally:
         # Clean up any subagent buffers not already closed (e.g., on cancellation/error)
         for _task_id, (sa_thread_id, sa_buf) in list(subagent_buffers.items()):
             await sa_buf.mark_done()
-            app.state.thread_event_buffers.pop(sa_thread_id, None)
+            app.state.subagent_buffers.pop(sa_thread_id, None)
         subagent_buffers.clear()
 
-        # Notify activity channel that this run finished (so frontend can refresh)
-        if hasattr(agent, "runtime"):
-            agent.runtime.emit_activity_event(
-                {"event": "run_done", "data": json.dumps({"thread_id": thread_id, "run_id": run_id})}
-            )
         # Detach per-run event callback (per-thread handlers survive across runs)
         if hasattr(agent, "runtime"):
             agent.runtime.set_event_callback(None)
@@ -596,9 +638,8 @@ async def _run_agent_to_buffer(
                     obs_handler.wait_for_futures()
             except Exception as flush_err:
                 logger.warning("Observation flush error: %s", flush_err)
-        await buf.mark_done()
+        # ThreadEventBuffer is persistent — do NOT mark_done or pop
         app.state.thread_tasks.pop(thread_id, None)
-        app.state.thread_event_buffers.pop(thread_id, None)
         if stream_gen is not None:
             await stream_gen.aclose()
         if agent and hasattr(agent, "runtime") and agent.runtime.current_state == AgentState.ACTIVE:
@@ -643,16 +684,8 @@ async def _consume_followup_queue(agent: Any, thread_id: str, app: Any) -> None:
         followup = qm.dequeue(thread_id)
         if followup and app:
             if hasattr(agent, "runtime") and agent.runtime.transition(AgentState.ACTIVE):
-                new_buf = start_agent_run(agent, thread_id, followup, app,
-                                          message_metadata={"source": "system"})
-                # Emit new_run so the frontend notification stream reconnects.
-                # Mirrors wake_handler._start_run() which does the same for idle-triggered runs.
-                activity_sink = getattr(getattr(agent, "runtime", None), "_activity_sink", None)
-                if activity_sink:
-                    await activity_sink({
-                        "event": "new_run",
-                        "data": json.dumps({"thread_id": thread_id, "run_id": new_buf.run_id}),
-                    })
+                start_agent_run(agent, thread_id, followup, app,
+                                message_metadata={"source": "system"})
     except Exception:
         logger.exception("Failed to consume followup queue for thread %s", thread_id)
         # Re-enqueue the message if it was already dequeued to prevent data loss
@@ -664,7 +697,7 @@ async def _consume_followup_queue(agent: Any, thread_id: str, app: Any) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Orchestrator: creates buffer + launches background task
+# Orchestrator: creates run on persistent ThreadEventBuffer
 # ---------------------------------------------------------------------------
 
 
@@ -675,37 +708,70 @@ def start_agent_run(
     app: Any,
     enable_trajectory: bool = False,
     message_metadata: dict[str, Any] | None = None,
-) -> RunEventBuffer:
-    """Create a RunEventBuffer and launch the agent producer as a background task."""
-
-    buf = RunEventBuffer()
-    buf.run_id = str(_uuid.uuid4())
-    app.state.thread_event_buffers[thread_id] = buf
+) -> str:
+    """Launch agent producer on the persistent ThreadEventBuffer. Returns run_id."""
+    thread_buf = get_or_create_thread_buffer(app, thread_id)
+    run_id = str(_uuid.uuid4())
     bg_task = asyncio.create_task(
-        _run_agent_to_buffer(agent, thread_id, message, app, enable_trajectory, buf, message_metadata)
+        _run_agent_to_buffer(agent, thread_id, message, app, enable_trajectory, thread_buf, run_id, message_metadata)
     )
     # Store the background task so cancel_run can still cancel it
     app.state.thread_tasks[thread_id] = bg_task
-    return buf
+    return run_id
 
 
 # ---------------------------------------------------------------------------
-# Consumer: reads from buffer and yields SSE dicts
+# Consumer: persistent thread event stream
 # ---------------------------------------------------------------------------
+
+
+async def observe_thread_events(
+    thread_buf: ThreadEventBuffer,
+    after: int = 0,
+) -> AsyncGenerator[dict[str, str], None]:
+    """Consume events from a persistent ThreadEventBuffer. Yields SSE event dicts.
+
+    Unlike observe_run_events, this never terminates on its own — the client
+    disconnect (or server shutdown) closes the connection.
+    run_done is a flow event, not a terminal signal.
+    """
+    yield {"retry": 5000}
+
+    cursor = after if after > 0 else thread_buf.total_count
+    # If after > 0, start from that seq position to replay missed events
+    if after > 0:
+        cursor = 0  # start from ring start, filter by seq below
+
+    while True:
+        events, cursor = await thread_buf.read_with_timeout(cursor, timeout=30)
+        if events is None:
+            yield {"comment": "keepalive"}
+            continue
+        if not events:
+            continue
+        for event in events:
+            parsed_data = None
+            try:
+                parsed_data = json.loads(event.get("data", "{}"))
+            except (json.JSONDecodeError, TypeError):
+                pass
+
+            if after > 0 and isinstance(parsed_data, dict):
+                if parsed_data.get("_seq", 0) <= after:
+                    continue
+
+            seq_id = str(parsed_data["_seq"]) if isinstance(parsed_data, dict) and "_seq" in parsed_data else None
+            if seq_id:
+                yield {**event, "id": seq_id}
+            else:
+                yield event
 
 
 async def observe_run_events(
     buf: RunEventBuffer,
     after: int = 0,
 ) -> AsyncGenerator[dict[str, str], None]:
-    """Consume events from a RunEventBuffer. Yields SSE event dicts.
-
-    Safe to abort — does not affect the producer or agent state.
-    When *after* > 0, skip events whose injected ``_seq`` <= after.
-    Sends heartbeat comments every 30s to keep the connection alive.
-    Each event includes an ``id`` field for Last-Event-ID reconnection.
-    """
-    # Tell the browser to reconnect after 5s if the connection drops
+    """Consume events from a RunEventBuffer (subagent streams only). Yields SSE event dicts."""
     yield {"retry": 5000}
 
     cursor = 0
@@ -719,7 +785,6 @@ async def observe_run_events(
         if not events:
             continue
         for event in events:
-            # Parse data once, reuse for both after-filtering and id injection
             parsed_data = None
             try:
                 parsed_data = json.loads(event.get("data", "{}"))
@@ -730,7 +795,6 @@ async def observe_run_events(
                 if parsed_data.get("_seq", 0) <= after:
                     continue
 
-            # Inject SSE id from _seq for Last-Event-ID support
             seq_id = str(parsed_data["_seq"]) if isinstance(parsed_data, dict) and "_seq" in parsed_data else None
             if seq_id:
                 yield {**event, "id": seq_id}
@@ -753,7 +817,7 @@ def start_task_agent_run(
 
     buf = RunEventBuffer()
     buf.run_id = str(_uuid.uuid4())
-    app.state.thread_event_buffers[thread_id] = buf
+    app.state.subagent_buffers[thread_id] = buf
     bg_task = asyncio.create_task(_run_task_agent_to_buffer(thread_id, payload, app, sandbox_type, buf))
     app.state.thread_tasks[thread_id] = bg_task
     return buf
@@ -809,7 +873,7 @@ async def _run_task_agent_to_buffer(
         async for event in task_middleware.run_task_streaming(params):
             await buf.put(event)
 
-        await buf.put({"event": "done", "data": json.dumps({"thread_id": thread_id})})
+        await buf.put({"event": "run_done", "data": json.dumps({"thread_id": thread_id})})
     except Exception as e:
         traceback.print_exc()
         await buf.put(
@@ -821,4 +885,4 @@ async def _run_task_agent_to_buffer(
     finally:
         await buf.mark_done()
         app.state.thread_tasks.pop(thread_id, None)
-        app.state.thread_event_buffers.pop(thread_id, None)
+        app.state.subagent_buffers.pop(thread_id, None)

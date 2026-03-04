@@ -381,8 +381,8 @@ class SubagentRunner:
                                 remaining = max_text_chars - sum(len(p) for p in text_parts)
                                 text_parts.append(content[:remaining])
                             yield {
-                                "event": "task_text",
-                                "data": json.dumps({"task_id": task_id, "content": content}),
+                                "event": "text",
+                                "data": json.dumps({"task_id": task_id, "agent_id": task_id, "content": content}),
                             }
 
                 # Node-level updates from "updates" mode
@@ -405,10 +405,11 @@ class SubagentRunner:
                                     if tc_id:
                                         emitted_tool_call_ids.add(tc_id)
                                     yield {
-                                        "event": "task_tool_call",
+                                        "event": "tool_call",
                                         "data": json.dumps(
                                             {
                                                 "task_id": task_id,
+                                                "agent_id": task_id,
                                                 "id": tc.get("id"),
                                                 "name": tc.get("name", "unknown"),
                                                 "args": tc.get("args", {}),
@@ -417,10 +418,11 @@ class SubagentRunner:
                                     }
                             elif msg_class == "ToolMessage":
                                 yield {
-                                    "event": "task_tool_result",
+                                    "event": "tool_result",
                                     "data": json.dumps(
                                         {
                                             "task_id": task_id,
+                                            "agent_id": task_id,
                                             "tool_call_id": getattr(msg, "tool_call_id", None),
                                             "name": getattr(msg, "name", "unknown"),
                                             "content": str(getattr(msg, "content", "")),
@@ -632,7 +634,7 @@ class SubagentRunner:
             runtime.emit_subagent_event(parent_tool_call_id, {
                 "event": "task_start",
                 "data": json.dumps(start_data),
-            })
+            }, background=True, agent_id=task_id)
 
         text_parts: list[str] = []
         max_text_chars = 200_000
@@ -663,9 +665,9 @@ class SubagentRunner:
                             })
                             if parent_tool_call_id:
                                 runtime.emit_subagent_event(parent_tool_call_id, {
-                                    "event": "task_text",
+                                    "event": "text",
                                     "data": json.dumps({"task_id": task_id, "content": content}),
-                                })
+                                }, background=True, agent_id=task_id)
 
                 elif mode == "updates":
                     if not isinstance(data, dict):
@@ -693,9 +695,9 @@ class SubagentRunner:
                                     }
                                     if parent_tool_call_id:
                                         runtime.emit_subagent_event(parent_tool_call_id, {
-                                            "event": "task_tool_call",
+                                            "event": "tool_call",
                                             "data": json.dumps(tc_data),
-                                        })
+                                        }, background=True, agent_id=task_id)
                             elif msg_class == "ToolMessage":
                                 tr_data = {
                                     "task_id": task_id,
@@ -705,9 +707,9 @@ class SubagentRunner:
                                 }
                                 if parent_tool_call_id:
                                     runtime.emit_subagent_event(parent_tool_call_id, {
-                                        "event": "task_tool_result",
+                                        "event": "tool_result",
                                         "data": json.dumps(tr_data),
-                                    })
+                                    }, background=True, agent_id=task_id)
 
             final_text = "".join(text_parts).strip() or None
             desc = description or None
@@ -725,7 +727,7 @@ class SubagentRunner:
                 runtime.emit_subagent_event(parent_tool_call_id, {
                     "event": "task_done",
                     "data": json.dumps({"task_id": task_id, "status": "completed"}),
-                })
+                }, background=True, agent_id=task_id)
 
         except Exception as e:
             desc = description or None
@@ -741,7 +743,7 @@ class SubagentRunner:
                 runtime.emit_subagent_event(parent_tool_call_id, {
                     "event": "task_error",
                     "data": json.dumps({"task_id": task_id, "error": str(e)}),
-                })
+                }, background=True, agent_id=task_id)
 
         self._task_results[task_id] = task_result
         return task_result

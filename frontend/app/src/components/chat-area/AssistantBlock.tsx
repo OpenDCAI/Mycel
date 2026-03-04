@@ -49,9 +49,11 @@ function NoticeDivider({ content }: { content: string }) {
 // --- Content phase rendering (tools + final text) ---
 
 function ContentPhaseBlock({
-  segments, isStreaming, runtimeStatus, onFocusStep, onFocusAgent,
+  segments, allSegments, isStreaming, runtimeStatus, onFocusStep, onFocusAgent,
 }: {
   segments: TurnSegment[];
+  /** All segments in the full turn (passed to DetailBoxModal). */
+  allSegments?: TurnSegment[];
   isStreaming: boolean;
   runtimeStatus?: StreamStatus | null;
   onFocusStep?: (stepId: string) => void;
@@ -67,6 +69,7 @@ function ContentPhaseBlock({
         <ToolDetailBox
           toolSegments={toolSegs}
           isStreaming={isStreaming}
+          allSegments={allSegments}
           onFocusStep={onFocusStep}
           onFocusAgent={onFocusAgent}
         />
@@ -129,6 +132,7 @@ export const AssistantBlock = memo(function AssistantBlock({ entry, isStreamingT
               : <ContentPhaseBlock
                   key={phase.segments[0]?.type === "tool" ? `tool-${(phase.segments[0] as ToolSegment).step.id}` : `content-${i}`}
                   segments={phase.segments}
+                  allSegments={entry.segments}
                   isStreaming={!!isStreamingThis}
                   runtimeStatus={runtimeStatus}
                   onFocusStep={onFocusStep}
@@ -139,6 +143,7 @@ export const AssistantBlock = memo(function AssistantBlock({ entry, isStreamingT
           /* Original rendering path (no notices) */
           <ContentPhaseBlock
             segments={entry.segments}
+            allSegments={entry.segments}
             isStreaming={!!isStreamingThis}
             runtimeStatus={runtimeStatus}
             onFocusStep={onFocusStep}

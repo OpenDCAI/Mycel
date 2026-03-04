@@ -181,32 +181,54 @@ class AgentRuntime:
             logger.error("Activity sink failed: %s", exc)
 
     def emit_activity_event(self, event: dict[str, Any]) -> None:
-        """Emit activity event (command progress, background task, etc)."""
-        self._dispatch_to_sink(event)
+        """Emit activity event (command progress, background task, etc).
+
+        Mutual exclusion: when _event_callback is set (run active), dispatch
+        only via callback (which feeds activity_queue → drain loop → emit() →
+        ThreadEventBuffer + SQLite). When no callback (run ended), dispatch
+        via _activity_sink directly to ThreadEventBuffer.
+        """
         if self._event_callback:
             self._event_callback(event)
+        else:
+            self._dispatch_to_sink(event)
 
-    # ========== Sub-agent event buffering ==========
+    # ========== Sub-agent event dispatch ==========
 
-    def emit_subagent_event(self, parent_tool_call_id: str, event: dict[str, Any]) -> None:
-        """Push sub-agent event via real-time callback, or buffer for batch retrieval."""
-        event_type = event.get("event", "")
+    def emit_subagent_event(
+        self,
+        parent_tool_call_id: str,
+        event: dict[str, Any],
+        *,
+        background: bool = False,
+        agent_id: str | None = None,
+    ) -> None:
+        """Emit sub-agent event with routing metadata (no prefix).
+
+        The event type is NOT prefixed — routing is done via agent_id /
+        parent_tool_call_id in the data payload.
+        """
         try:
             data = json.loads(event.get("data", "{}"))
         except (json.JSONDecodeError, TypeError):
             data = {}
         data["parent_tool_call_id"] = parent_tool_call_id
-        prefixed_event = {
-            "event": f"subagent_{event_type}",
+        if agent_id:
+            data["agent_id"] = agent_id
+        if background:
+            data["background"] = True
+        enriched_event = {
+            "event": event.get("event", ""),
             "data": json.dumps(data, ensure_ascii=False),
         }
 
-        self._dispatch_to_sink(prefixed_event)
+        # Same mutual exclusion as emit_activity_event
         if self._event_callback:
-            self._event_callback(prefixed_event)
+            self._event_callback(enriched_event)
         else:
+            self._dispatch_to_sink(enriched_event)
             # Batch fallback (backward compat for TUI / non-SSE callers)
-            self._subagent_event_buffer.setdefault(parent_tool_call_id, []).append(prefixed_event)
+            self._subagent_event_buffer.setdefault(parent_tool_call_id, []).append(enriched_event)
 
     def get_pending_subagent_events(self) -> list[tuple[str, list[dict[str, Any]]]]:
         """Get and clear pending sub-agent events."""

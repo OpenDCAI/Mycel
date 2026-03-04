@@ -17,7 +17,7 @@ export function useStickyScroll<T extends HTMLElement>() {
     };
     el.addEventListener("scroll", onScroll, { passive: true });
     const mo = new MutationObserver(onMutate);
-    mo.observe(el, { childList: true, subtree: true, characterData: true });
+    mo.observe(el, { childList: true, subtree: true });
     return () => { el.removeEventListener("scroll", onScroll); mo.disconnect(); };
   }, [el]);
 

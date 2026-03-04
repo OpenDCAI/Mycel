@@ -10,7 +10,7 @@ from typing import Any
 import pytest
 
 from backend.web.services import agent_pool
-from backend.web.services.event_buffer import RunEventBuffer
+from backend.web.services.event_buffer import RunEventBuffer, ThreadEventBuffer
 from backend.web.services.streaming_service import _run_agent_to_buffer
 from storage.providers.sqlite.checkpoint_repo import SQLiteCheckpointRepo
 from storage.providers.sqlite.eval_repo import SQLiteEvalRepo
@@ -264,14 +264,17 @@ def test_run_runtime_consumes_storage_container_run_event_repo(monkeypatch: pyte
     async def _run() -> None:
         repo = _FakeRunEventRepo()
         agent = _FakeRuntimeAgent(storage_container=_FakeStorageContainer(repo))
-        app = SimpleNamespace(state=SimpleNamespace(thread_tasks={}, thread_event_buffers={}, activity_buffers={}))
-        buf = RunEventBuffer()
-        buf.run_id = "run-1"
+        from unittest.mock import MagicMock
+        qm = MagicMock()
+        qm.dequeue.return_value = None
+        app = SimpleNamespace(state=SimpleNamespace(thread_tasks={}, thread_event_buffers={}, subagent_buffers={}, queue_manager=qm))
+        thread_buf = ThreadEventBuffer()
+        run_id = "run-1"
 
-        await _run_agent_to_buffer(agent, "thread-1", "hello", app, False, buf)
+        await _run_agent_to_buffer(agent, "thread-1", "hello", app, False, thread_buf, run_id)
 
         assert repo.append_calls, "run path should persist events through storage_container.run_event_repo()"
-        assert any(c["event_type"] == "done" for c in repo.append_calls)
+        assert any(c["event_type"] == "run_done" for c in repo.append_calls)
         assert repo.closed is True
 
     asyncio.run(_run())
@@ -311,12 +314,15 @@ def test_run_runtime_without_storage_container_keeps_sqlite_event_store_path(mon
         monkeypatch.setattr(event_store, "append_event", _fake_append_event)
         monkeypatch.setattr(event_store, "cleanup_old_runs", _fake_cleanup_old_runs)
 
+        from unittest.mock import MagicMock
+        qm = MagicMock()
+        qm.dequeue.return_value = None
         agent = _FakeRuntimeAgent(storage_container=None)
-        app = SimpleNamespace(state=SimpleNamespace(thread_tasks={}, thread_event_buffers={}, activity_buffers={}))
-        buf = RunEventBuffer()
-        buf.run_id = "run-1"
+        app = SimpleNamespace(state=SimpleNamespace(thread_tasks={}, thread_event_buffers={}, subagent_buffers={}, queue_manager=qm))
+        thread_buf = ThreadEventBuffer()
+        run_id = "run-1"
 
-        await _run_agent_to_buffer(agent, "thread-1", "hello", app, False, buf)
+        await _run_agent_to_buffer(agent, "thread-1", "hello", app, False, thread_buf, run_id)
 
         assert calls, "sqlite event store path should still be used when no storage container is injected"
         assert all(call["run_event_repo"] is None for call in calls)

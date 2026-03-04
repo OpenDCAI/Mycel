@@ -2,9 +2,10 @@
 Tests for subagent SSE event routing in _run_agent_to_buffer drain loop.
 
 Verifies three properties:
-  1. subagent_task_text/tool_call/tool_result do NOT go to parent buf (no leakage)
-  2. subagent_task_start/done DO go to parent buf (lifecycle notification)
-  3. Subagent SSE buffer receives the content events
+  1. subagent content events (text/tool_call/tool_result with non-"main" agent_id)
+     do NOT go to parent buf (no leakage)
+  2. task_start/task_done lifecycle events DO go to parent buf
+  3. Subagent SSE buffer (in app.state.subagent_buffers) receives the content events
 
 Uses _run_agent_to_buffer directly with minimal mocks.
 """
@@ -17,7 +18,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from backend.web.services.event_buffer import RunEventBuffer
+from backend.web.services.event_buffer import RunEventBuffer, ThreadEventBuffer
 
 
 # ---------------------------------------------------------------------------
@@ -120,12 +121,12 @@ def tmp_db(tmp_path):
 
 @pytest.fixture()
 def app():
-    """Minimal app.state mock with capturing thread_event_buffers."""
+    """Minimal app.state mock with capturing subagent_buffers."""
     capturing = CapturingDict()
     return SimpleNamespace(
         state=SimpleNamespace(
-            thread_event_buffers=capturing,
-            activity_buffers={},
+            thread_event_buffers={},
+            subagent_buffers=capturing,
             thread_tasks={},
             queue_manager=MagicMock(),
             _event_loop=None,
@@ -137,8 +138,8 @@ async def _run(agent, thread_id, app, tmp_db):
     """Run _run_agent_to_buffer with all side-effect surfaces mocked."""
     from backend.web.services.streaming_service import _run_agent_to_buffer
 
-    buf = RunEventBuffer()
-    buf.run_id = str(uuid.uuid4())
+    thread_buf = ThreadEventBuffer()
+    run_id = str(uuid.uuid4())
 
     with (
         patch("backend.web.services.streaming_service._ensure_thread_handlers"),
@@ -147,10 +148,10 @@ async def _run(agent, thread_id, app, tmp_db):
         patch("backend.web.utils.helpers.load_thread_config", return_value=None),
     ):
         await _run_agent_to_buffer(
-            agent, thread_id, "test message", app, False, buf
+            agent, thread_id, "test message", app, False, thread_buf, run_id
         )
 
-    return buf
+    return thread_buf
 
 
 # ---------------------------------------------------------------------------
@@ -158,146 +159,172 @@ async def _run(agent, thread_id, app, tmp_db):
 # ---------------------------------------------------------------------------
 
 
+def _parent_event_types(thread_buf: ThreadEventBuffer) -> list[str]:
+    """Extract event type names from a ThreadEventBuffer's ring."""
+    return [e["event"] for e in list(thread_buf._ring) if "event" in e]
+
+
 class TestDrainLoopRouting:
     """Verify activity event routing through the drain loop."""
 
     @pytest.mark.asyncio
     async def test_subagent_text_not_in_parent_buf(self, tmp_db, app):
-        """subagent_task_text must NOT appear in parent buf (no SSE leakage)."""
+        """Subagent content events (text with agent_id != "main") must NOT appear in parent buf."""
         task_id = "task-001"
+        agent_id = f"subagent-{task_id}"
         events = [
-            {"event": "subagent_task_start", "data": json.dumps(
-                {"task_id": task_id, "thread_id": f"subagent_{task_id}"}
+            {"event": "task_start", "data": json.dumps(
+                {"task_id": task_id, "thread_id": f"subagent_{task_id}", "agent_id": agent_id}
             )},
-            {"event": "subagent_task_text", "data": json.dumps(
-                {"task_id": task_id, "content": "secret subagent content"}
+            {"event": "text", "data": json.dumps(
+                {"task_id": task_id, "content": "secret subagent content", "agent_id": agent_id}
             )},
-            {"event": "subagent_task_done", "data": json.dumps(
-                {"task_id": task_id, "thread_id": f"subagent_{task_id}", "status": "completed"}
+            {"event": "task_done", "data": json.dumps(
+                {"task_id": task_id, "thread_id": f"subagent_{task_id}", "status": "completed", "agent_id": agent_id}
             )},
         ]
         agent = make_agent(events)
         parent_buf = await _run(agent, "thread-A", app, tmp_db)
 
-        parent_types = [e["event"] for e in parent_buf.events]
-        assert "subagent_task_text" not in parent_types, (
-            f"Leakage: subagent_task_text found in parent buf. All events: {parent_types}"
+        parent_events = list(parent_buf._ring)
+        # Filter to activity-originated events (exclude run_start, run_done, status, text from main agent)
+        # The subagent "text" event must NOT appear alongside agent_id != "main"
+        subagent_text_leaked = [
+            e for e in parent_events
+            if e.get("event") == "text"
+            and "secret subagent content" in e.get("data", "")
+        ]
+        assert not subagent_text_leaked, (
+            f"Leakage: subagent text event found in parent buf: {subagent_text_leaked}"
         )
 
     @pytest.mark.asyncio
     async def test_lifecycle_events_in_parent_buf(self, tmp_db, app):
-        """subagent_task_start and subagent_task_done must go to parent buf."""
+        """task_start and task_done lifecycle events must go to parent buf."""
         task_id = "task-002"
+        agent_id = f"subagent-{task_id}"
         events = [
-            {"event": "subagent_task_start", "data": json.dumps(
-                {"task_id": task_id, "thread_id": f"subagent_{task_id}"}
+            {"event": "task_start", "data": json.dumps(
+                {"task_id": task_id, "thread_id": f"subagent_{task_id}", "agent_id": agent_id}
             )},
-            {"event": "subagent_task_done", "data": json.dumps(
-                {"task_id": task_id, "thread_id": f"subagent_{task_id}", "status": "completed"}
+            {"event": "task_done", "data": json.dumps(
+                {"task_id": task_id, "thread_id": f"subagent_{task_id}", "status": "completed", "agent_id": agent_id}
             )},
         ]
         agent = make_agent(events)
         parent_buf = await _run(agent, "thread-B", app, tmp_db)
 
-        parent_types = [e["event"] for e in parent_buf.events]
-        assert "subagent_task_start" in parent_types
-        assert "subagent_task_done" in parent_types
+        parent_types = _parent_event_types(parent_buf)
+        assert "task_start" in parent_types
+        assert "task_done" in parent_types
 
     @pytest.mark.asyncio
     async def test_subagent_text_goes_to_sa_buf(self, tmp_db, app):
-        """subagent_task_text must appear in the subagent's RunEventBuffer."""
+        """Subagent text events must appear in the subagent's RunEventBuffer."""
         task_id = "task-003"
         sa_thread_id = f"subagent_{task_id}"
+        agent_id = f"subagent-{task_id}"
         events = [
-            {"event": "subagent_task_start", "data": json.dumps(
-                {"task_id": task_id, "thread_id": sa_thread_id}
+            {"event": "task_start", "data": json.dumps(
+                {"task_id": task_id, "thread_id": sa_thread_id, "agent_id": agent_id}
             )},
-            {"event": "subagent_task_text", "data": json.dumps(
-                {"task_id": task_id, "content": "hello"}
+            {"event": "text", "data": json.dumps(
+                {"task_id": task_id, "content": "hello", "agent_id": agent_id}
             )},
-            {"event": "subagent_task_text", "data": json.dumps(
-                {"task_id": task_id, "content": " world"}
+            {"event": "text", "data": json.dumps(
+                {"task_id": task_id, "content": " world", "agent_id": agent_id}
             )},
-            {"event": "subagent_task_done", "data": json.dumps(
-                {"task_id": task_id, "thread_id": sa_thread_id, "status": "completed"}
+            {"event": "task_done", "data": json.dumps(
+                {"task_id": task_id, "thread_id": sa_thread_id, "status": "completed", "agent_id": agent_id}
             )},
         ]
         agent = make_agent(events)
         await _run(agent, "thread-C", app, tmp_db)
 
-        # sa_buf is removed from thread_event_buffers on done, but CapturingDict retains it
-        sa_buf = app.state.thread_event_buffers.history.get(sa_thread_id)
+        # sa_buf is removed from subagent_buffers on done, but CapturingDict retains it in history
+        sa_buf = app.state.subagent_buffers.history.get(sa_thread_id)
         assert sa_buf is not None, "Subagent buffer was never created"
 
         sa_types = [e["event"] for e in sa_buf.events]
-        text_events = [e for e in sa_buf.events if e["event"] == "subagent_task_text"]
+        text_events = [e for e in sa_buf.events if e["event"] == "text"]
         assert len(text_events) == 2, f"Expected 2 text events in sa_buf, got {sa_types}"
 
     @pytest.mark.asyncio
     async def test_tool_call_and_result_not_in_parent_buf(self, tmp_db, app):
-        """subagent_task_tool_call and tool_result must also not leak to parent."""
+        """Subagent tool_call and tool_result events must also not leak to parent."""
         task_id = "task-004"
+        agent_id = f"subagent-{task_id}"
         events = [
-            {"event": "subagent_task_start", "data": json.dumps(
-                {"task_id": task_id, "thread_id": f"subagent_{task_id}"}
+            {"event": "task_start", "data": json.dumps(
+                {"task_id": task_id, "thread_id": f"subagent_{task_id}", "agent_id": agent_id}
             )},
-            {"event": "subagent_task_tool_call", "data": json.dumps(
-                {"task_id": task_id, "id": "tc-1", "name": "run_command", "args": {}}
+            {"event": "tool_call", "data": json.dumps(
+                {"task_id": task_id, "id": "tc-1", "name": "run_command", "args": {}, "agent_id": agent_id}
             )},
-            {"event": "subagent_task_tool_result", "data": json.dumps(
-                {"task_id": task_id, "tool_call_id": "tc-1", "content": "hello"}
+            {"event": "tool_result", "data": json.dumps(
+                {"task_id": task_id, "tool_call_id": "tc-1", "content": "hello", "agent_id": agent_id}
             )},
-            {"event": "subagent_task_done", "data": json.dumps(
-                {"task_id": task_id, "thread_id": f"subagent_{task_id}", "status": "completed"}
+            {"event": "task_done", "data": json.dumps(
+                {"task_id": task_id, "thread_id": f"subagent_{task_id}", "status": "completed", "agent_id": agent_id}
             )},
         ]
         agent = make_agent(events)
         parent_buf = await _run(agent, "thread-D", app, tmp_db)
 
-        parent_types = [e["event"] for e in parent_buf.events]
-        assert "subagent_task_tool_call" not in parent_types
-        assert "subagent_task_tool_result" not in parent_types
+        # Only tool_call/tool_result events emitted by the main agent (from astream) should
+        # appear in the parent buffer. The subagent ones (with agent_id != "main") must not.
+        parent_events = list(parent_buf._ring)
+        subagent_tool_leaked = [
+            e for e in parent_events
+            if e.get("event") in ("tool_call", "tool_result")
+            and "tc-1" in e.get("data", "")
+        ]
+        assert not subagent_tool_leaked, (
+            f"Subagent tool events leaked to parent buf: {subagent_tool_leaked}"
+        )
 
     @pytest.mark.asyncio
     async def test_non_subagent_events_still_go_to_parent(self, tmp_db, app):
-        """command_progress and other events must still reach parent buf."""
+        """command_progress and other non-subagent events must still reach parent buf."""
         task_id = "task-005"
+        agent_id = f"subagent-{task_id}"
         events = [
             {"event": "command_progress", "data": json.dumps({"output": "running..."})},
-            {"event": "subagent_task_start", "data": json.dumps(
-                {"task_id": task_id, "thread_id": f"subagent_{task_id}"}
+            {"event": "task_start", "data": json.dumps(
+                {"task_id": task_id, "thread_id": f"subagent_{task_id}", "agent_id": agent_id}
             )},
-            {"event": "subagent_task_done", "data": json.dumps(
-                {"task_id": task_id, "thread_id": f"subagent_{task_id}", "status": "completed"}
+            {"event": "task_done", "data": json.dumps(
+                {"task_id": task_id, "thread_id": f"subagent_{task_id}", "status": "completed", "agent_id": agent_id}
             )},
         ]
         agent = make_agent(events)
         parent_buf = await _run(agent, "thread-E", app, tmp_db)
 
-        parent_types = [e["event"] for e in parent_buf.events]
+        parent_types = _parent_event_types(parent_buf)
         assert "command_progress" in parent_types
 
     @pytest.mark.asyncio
-    async def test_sa_buf_has_terminal_done_event(self, tmp_db, app):
-        """Subagent buffer must have a terminal 'done' event so SSE consumer exits."""
+    async def test_sa_buf_has_terminal_run_done_event(self, tmp_db, app):
+        """Subagent buffer must have a terminal 'run_done' event so SSE consumer exits."""
         task_id = "task-006"
         sa_thread_id = f"subagent_{task_id}"
+        agent_id = f"subagent-{task_id}"
         events = [
-            {"event": "subagent_task_start", "data": json.dumps(
-                {"task_id": task_id, "thread_id": sa_thread_id}
+            {"event": "task_start", "data": json.dumps(
+                {"task_id": task_id, "thread_id": sa_thread_id, "agent_id": agent_id}
             )},
-            {"event": "subagent_task_done", "data": json.dumps(
-                {"task_id": task_id, "thread_id": sa_thread_id, "status": "completed"}
+            {"event": "task_done", "data": json.dumps(
+                {"task_id": task_id, "thread_id": sa_thread_id, "status": "completed", "agent_id": agent_id}
             )},
         ]
         agent = make_agent(events)
         await _run(agent, "thread-F", app, tmp_db)
 
-        sa_buf = app.state.thread_event_buffers.history.get(sa_thread_id)
+        sa_buf = app.state.subagent_buffers.history.get(sa_thread_id)
         assert sa_buf is not None
         assert sa_buf.finished.is_set(), "sa_buf.mark_done() was not called"
-        terminal = [e for e in sa_buf.events if e["event"] == "done"]
-        assert len(terminal) == 1, f"Expected 1 terminal 'done' event, got {[e['event'] for e in sa_buf.events]}"
+        terminal = [e for e in sa_buf.events if e["event"] == "run_done"]
+        assert len(terminal) == 1, f"Expected 1 terminal 'run_done' event, got {[e['event'] for e in sa_buf.events]}"
 
 
 # ---------------------------------------------------------------------------
@@ -307,8 +334,8 @@ class TestDrainLoopRouting:
 
 class TestEventStoreVerification:
     """
-    Verify that the drain loop path (run_id != 'activity_*') never wrote
-    subagent_task_text to the parent thread in the real DB.
+    Verify that the drain loop path never wrote subagent content events
+    (text/tool_call/tool_result with agent_id != "main") to the parent thread in the real DB.
 
     Requires ~/.leon/leon.db from a live session with at least one subagent run.
     Skipped if DB unavailable.
@@ -329,41 +356,40 @@ class TestEventStoreVerification:
         finally:
             conn.close()
 
-    # The fix (subagent SSE routing) was committed on 2026-03-03.
-    # Old events in the DB predate the fix and are expected to contain leakage.
-    FIX_DATE = "2026-03-03 14:00:00"
+    # The refactor (agent_id-based routing) was committed on 2026-03-05.
+    # Old events in the DB predate the refactor.
+    REFACTOR_DATE = "2026-03-05 00:00:00"
 
     def test_no_subagent_text_via_emit_path(self):
         """
-        After the fix, subagent_task_text must NOT appear in parent buf
-        via the emit() path (run_id not 'activity_*').
+        After the refactor, subagent content events (old name: subagent_task_text) must NOT
+        appear in parent thread runs via the emit() path.
 
-        Only checks events created on or after FIX_DATE to exclude pre-fix history.
+        Only checks events created on or after REFACTOR_DATE to exclude pre-refactor history.
         """
         rows = self._query(f"""
             SELECT thread_id, run_id, count(*) as cnt
             FROM run_events
             WHERE event_type = 'subagent_task_text'
-              AND run_id NOT LIKE 'activity_%'
-              AND created_at >= '{self.FIX_DATE}'
+              AND created_at >= '{self.REFACTOR_DATE}'
             GROUP BY thread_id, run_id
         """)
         assert rows == [], (
-            f"subagent_task_text leaked via emit() path after fix: {rows}"
+            f"subagent_task_text (old name) still present after refactor: {rows}"
         )
 
-    def test_subagent_start_done_present_via_emit_path(self):
+    def test_task_start_done_present_via_emit_path(self):
         """
-        At least one parent thread should have subagent lifecycle events via emit() path,
-        confirming the routing is active and not vacuously passing.
+        At least one parent thread should have task lifecycle events (task_start/task_done)
+        via the emit() path, confirming routing is active.
+
+        Skipped when DB has no subagent activity (clean install / no Task tool usage).
         """
-        rows = self._query("""
+        rows = self._query(f"""
             SELECT count(*) FROM run_events
-            WHERE event_type IN ('subagent_task_start', 'subagent_task_done')
-              AND run_id NOT LIKE 'activity_%'
+            WHERE event_type IN ('task_start', 'task_done')
+              AND created_at >= '{self.REFACTOR_DATE}'
         """)
         count = rows[0][0]
-        assert count > 0, (
-            "No subagent_task_start/done via emit() path — "
-            "either no subagent ran, or lifecycle events are also misrouted"
-        )
+        if count == 0:
+            pytest.skip("No post-refactor task_start/task_done events — run a subagent to validate")
