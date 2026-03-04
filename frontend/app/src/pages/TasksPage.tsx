@@ -210,10 +210,18 @@ export default function Tasks() {
     }
   };
 
+  const THREAD_CACHE_MAX = 50;
+
   const fetchThreadDetail = useCallback(async (threadId: string) => {
     setThreadCache((prev) => {
       if (prev[threadId]?.loading || (prev[threadId] && !prev[threadId].loading && (prev[threadId].text !== null || prev[threadId].error !== null))) return prev;
-      return { ...prev, [threadId]: { text: null, loading: true, error: null } };
+      const next = { ...prev, [threadId]: { text: null, loading: true, error: null } };
+      // Evict oldest entries when over limit
+      const keys = Object.keys(next);
+      if (keys.length > THREAD_CACHE_MAX) {
+        delete next[keys[0]];
+      }
+      return next;
     });
     try {
       const res = await fetch(`/api/threads/${threadId}`);

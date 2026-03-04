@@ -6,6 +6,21 @@ from croniter import croniter
 from pydantic import BaseModel, field_validator
 
 
+def _check_cron_expr(v: str | None) -> str | None:
+    if v is not None and not croniter.is_valid(v):
+        raise ValueError(f"Invalid cron expression: {v!r}")
+    return v
+
+
+def _check_json_template(v: str | None) -> str | None:
+    if v is not None:
+        try:
+            json.loads(v)
+        except (json.JSONDecodeError, TypeError):
+            raise ValueError("task_template must be valid JSON")
+    return v
+
+
 # ── Members ──
 
 class MemberConfigPayload(BaseModel):
@@ -96,18 +111,12 @@ class CreateCronJobRequest(BaseModel):
     @field_validator("cron_expression")
     @classmethod
     def validate_cron_expression(cls, v: str) -> str:
-        if not croniter.is_valid(v):
-            raise ValueError(f"Invalid cron expression: {v!r}")
-        return v
+        return _check_cron_expr(v)  # type: ignore[return-value]
 
     @field_validator("task_template")
     @classmethod
     def validate_task_template(cls, v: str) -> str:
-        try:
-            json.loads(v)
-        except (json.JSONDecodeError, TypeError):
-            raise ValueError("task_template must be valid JSON")
-        return v
+        return _check_json_template(v)  # type: ignore[return-value]
 
 
 class UpdateCronJobRequest(BaseModel):
@@ -120,19 +129,12 @@ class UpdateCronJobRequest(BaseModel):
     @field_validator("cron_expression")
     @classmethod
     def validate_cron_expression(cls, v: str | None) -> str | None:
-        if v is not None and not croniter.is_valid(v):
-            raise ValueError(f"Invalid cron expression: {v!r}")
-        return v
+        return _check_cron_expr(v)
 
     @field_validator("task_template")
     @classmethod
     def validate_task_template(cls, v: str | None) -> str | None:
-        if v is not None:
-            try:
-                json.loads(v)
-            except (json.JSONDecodeError, TypeError):
-                raise ValueError("task_template must be valid JSON")
-        return v
+        return _check_json_template(v)
 
 
 # ── Backward compatibility aliases ──

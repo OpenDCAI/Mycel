@@ -332,8 +332,7 @@ class TaskBoardMiddleware(AgentMiddleware):
 
         note = args.get("Note")
         if note:
-            # Fetch current description to append
-            current = task_service.update_task(task_id)  # no-op read
+            current = task_service.get_task(task_id)
             if current is None:
                 return {"error": f"Task not found: {task_id}"}
             existing = current.get("description", "")
@@ -382,15 +381,7 @@ class TaskBoardMiddleware(AgentMiddleware):
 
     async def on_idle(self) -> dict[str, Any] | None:
         """Called when agent enters IDLE state. Returns highest-priority pending task, or None."""
-        tasks = await asyncio.to_thread(task_service.list_tasks)
-        pending = [t for t in tasks if t["status"] == "pending"]
-        if not pending:
-            return None
-
-        # Sort: high > medium > low, then oldest first
-        priority_order = {"high": 0, "medium": 1, "low": 2}
-        pending.sort(key=lambda t: (priority_order.get(t.get("priority", "medium"), 9), t["created_at"]))
-        return pending[0]
+        return await asyncio.to_thread(task_service.get_highest_priority_pending_task)
 
     # ------------------------------------------------------------------
     # Handlers

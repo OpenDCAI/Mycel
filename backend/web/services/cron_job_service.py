@@ -1,6 +1,7 @@
 """Cron Jobs CRUD — SQLite based (cron_jobs table)."""
 
 import sqlite3
+import time
 import uuid
 from typing import Any
 
@@ -48,7 +49,6 @@ def create_cron_job(*, name: str, cron_expression: str, **fields: Any) -> dict[s
     if not cron_expression or not cron_expression.strip():
         raise ValueError("cron_expression must not be empty")
 
-    import time
     now = int(time.time() * 1000)
     job_id = uuid.uuid4().hex
     with _conn() as c:

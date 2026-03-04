@@ -2,6 +2,7 @@
 
 import json
 import sqlite3
+import time
 import uuid
 from typing import Any
 
@@ -68,8 +69,24 @@ def list_tasks() -> list[dict[str, Any]]:
         return [_deserialize_row(r) for r in rows]
 
 
+def get_task(task_id: str) -> dict[str, Any] | None:
+    with _tasks_conn() as conn:
+        row = conn.execute("SELECT * FROM panel_tasks WHERE id = ?", (task_id,)).fetchone()
+        return _deserialize_row(row) if row else None
+
+
+def get_highest_priority_pending_task() -> dict[str, Any] | None:
+    """Return the highest-priority pending task (high > medium > low, oldest first)."""
+    with _tasks_conn() as conn:
+        row = conn.execute(
+            "SELECT * FROM panel_tasks WHERE status = 'pending'"
+            " ORDER BY CASE priority WHEN 'high' THEN 0 WHEN 'medium' THEN 1 ELSE 2 END,"
+            " created_at ASC LIMIT 1"
+        ).fetchone()
+        return _deserialize_row(row) if row else None
+
+
 def create_task(**fields: Any) -> dict[str, Any]:
-    import time
     now = int(time.time() * 1000)
     tid = uuid.uuid4().hex
     with _tasks_conn() as conn:

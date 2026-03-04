@@ -20,6 +20,7 @@ from backend.web.services import cron_job_service, task_service
 logger = logging.getLogger(__name__)
 
 _CHECK_INTERVAL_SEC = 60
+_ALLOWED_TEMPLATE_KEYS = {"title", "description", "priority", "assignee_id", "deadline", "tags"}
 
 
 class CronService:
@@ -72,7 +73,6 @@ class CronService:
             return None
 
         # Build task fields from template — only allow known safe keys
-        _ALLOWED_TEMPLATE_KEYS = {"title", "description", "priority", "assignee_id", "deadline", "tags"}
         task_fields: dict[str, Any] = {k: v for k, v in template.items() if k in _ALLOWED_TEMPLATE_KEYS}
         task_fields["source"] = "cron"
         task_fields["cron_job_id"] = job_id
