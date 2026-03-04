@@ -30,7 +30,7 @@ from backend.web.services.thread_state_service import (
     get_session_status,
     get_terminal_status,
 )
-from backend.web.utils.helpers import delete_thread_in_db
+from backend.web.utils.helpers import delete_thread_in_db, lookup_thread_mode
 from backend.web.utils.serializers import serialize_message
 
 logger = logging.getLogger(__name__)
@@ -59,6 +59,10 @@ async def create_thread(
     """Create a new thread with optional sandbox and cwd."""
 
     sandbox_type = payload.sandbox if payload else "local"
+    thread_mode = (payload.mode if payload else "normal").strip().lower()
+    if thread_mode not in {"normal", "evaluation"}:
+        raise HTTPException(status_code=400, detail="mode must be one of: normal, evaluation")
+    keep_full_trace = thread_mode == "evaluation"
     thread_id = str(uuid.uuid4())
     cwd = payload.cwd if payload else None
     agent_name = payload.agent if payload else None
@@ -67,8 +71,14 @@ async def create_thread(
         app.state.thread_cwd[thread_id] = cwd
     from backend.web.utils.helpers import get_active_observation_provider, init_thread_config, save_thread_config
 
-    init_thread_config(thread_id, sandbox_type, cwd)
     model = payload.model if payload else None
+    init_thread_config(
+        thread_id,
+        sandbox_type,
+        cwd,
+        thread_mode=thread_mode,
+        keep_full_trace=keep_full_trace,
+    )
     obs_provider = get_active_observation_provider()
     updates = {}
     if model:
@@ -79,7 +89,12 @@ async def create_thread(
         updates["agent"] = agent_name
     if updates:
         save_thread_config(thread_id, **updates)
-    return {"thread_id": thread_id, "sandbox": sandbox_type, "agent": agent_name}
+    return {
+        "thread_id": thread_id,
+        "sandbox": sandbox_type,
+        "mode": thread_mode,
+        "keep_full_trace": keep_full_trace,
+    }
 
 
 @router.get("")
@@ -338,13 +353,21 @@ async def run_thread(
     # Per-request model override (lightweight, no rebuild)
     if payload.model:
         await asyncio.to_thread(agent.update_config, model=payload.model)
+    thread_mode = lookup_thread_mode(thread_id)
+    enable_trajectory = payload.enable_trajectory or thread_mode == "evaluation"
 
     lock = await get_thread_lock(app, thread_id)
     async with lock:
         if hasattr(agent, "runtime") and not agent.runtime.transition(AgentState.ACTIVE):
             raise HTTPException(status_code=409, detail="Thread is already running")
-        buf = start_agent_run(agent, thread_id, payload.message, app, payload.enable_trajectory)
-    return {"run_id": buf.run_id, "thread_id": thread_id}
+
+    buf = start_agent_run(agent, thread_id, payload.message, app, enable_trajectory)
+    return {
+        "run_id": buf.run_id,
+        "thread_id": thread_id,
+        "mode": thread_mode,
+        "enable_trajectory": enable_trajectory,
+    }
 
 
 @router.get("/{thread_id}/runs/events")

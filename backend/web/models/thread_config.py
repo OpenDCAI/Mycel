@@ -11,4 +11,5 @@ class ThreadConfig(BaseModel):
     model: str | None = None
     queue_mode: str = "steer"  # Deprecated: kept for SQLite schema compat, not read/written
     observation_provider: str | None = None  # "langfuse" | "langsmith" | None
-    agent: str | None = None  # Member name for this thread
+    thread_mode: str = "normal"  # "normal" | "evaluation"
+    keep_full_trace: bool = False

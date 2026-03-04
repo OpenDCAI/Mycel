@@ -13,7 +13,7 @@ import uuid
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from sandbox.interfaces.executor import BaseExecutor
+from sandbox.interfaces.executor import AsyncCommand, BaseExecutor, ExecuteResult
 from sandbox.interfaces.filesystem import FileSystemBackend
 
 if TYPE_CHECKING:
@@ -127,6 +127,64 @@ class _CommandWrapper(BaseExecutor):
             ).fetchone()
         return str(row[0]) if row else None
 
+    def _load_persisted_command(self, command_id: str) -> sqlite3.Row | None:
+        if self._db_path is None:
+            return None
+        with sqlite3.connect(str(self._db_path), timeout=30) as conn:
+            conn.execute("PRAGMA busy_timeout=30000")
+            conn.row_factory = sqlite3.Row
+            row = conn.execute(
+                """
+                SELECT
+                    tc.command_id,
+                    tc.command_line,
+                    tc.cwd,
+                    tc.status,
+                    tc.stdout,
+                    tc.stderr,
+                    tc.exit_code
+                FROM terminal_commands tc
+                LEFT JOIN abstract_terminals at ON at.terminal_id = tc.terminal_id
+                LEFT JOIN chat_sessions cs ON cs.chat_session_id = tc.chat_session_id
+                WHERE tc.command_id = ?
+                  AND (at.thread_id = ? OR cs.thread_id = ?)
+                LIMIT 1
+                """,
+                (command_id, self._session.thread_id, self._session.thread_id),
+            ).fetchone()
+        return row
+
+    # @@@persisted-command-fallback - background command terminal/session can be cleaned before command_status; fallback to DB row keeps trace truthful.
+    def _command_from_row(self, row: sqlite3.Row) -> AsyncCommand:
+        status = str(row["status"] or "")
+        return AsyncCommand(
+            command_id=str(row["command_id"]),
+            command_line=str(row["command_line"] or ""),
+            cwd=str(row["cwd"] or ""),
+            stdout_buffer=[str(row["stdout"] or "")],
+            stderr_buffer=[str(row["stderr"] or "")],
+            exit_code=row["exit_code"],
+            done=status in {"done", "failed", "cancelled"},
+        )
+
+    def _result_from_row(self, row: sqlite3.Row, timeout: float | None = None) -> ExecuteResult:
+        status = str(row["status"] or "")
+        if status in {"running", "pending"} and timeout is not None and timeout > 0:
+            return ExecuteResult(
+                exit_code=-1,
+                stdout=str(row["stdout"] or ""),
+                stderr=str(row["stderr"] or ""),
+                timed_out=True,
+                command_id=str(row["command_id"]),
+            )
+        exit_code = row["exit_code"]
+        return ExecuteResult(
+            exit_code=int(exit_code) if exit_code is not None else 0,
+            stdout=str(row["stdout"] or ""),
+            stderr=str(row["stderr"] or ""),
+            command_id=str(row["command_id"]),
+        )
+
     def _resolve_session_for_terminal(self, terminal_id: str):
         if terminal_id == self._session.terminal.terminal_id:
             return self._session
@@ -162,13 +220,31 @@ class _CommandWrapper(BaseExecutor):
 
     async def get_status(self, command_id: str):
         """Get status for an async command."""
-        session = self._resolve_session_for_command(command_id)
-        return await session.runtime.get_command(command_id)
+        try:
+            session = self._resolve_session_for_command(command_id)
+            cmd = await session.runtime.get_command(command_id)
+            if cmd is not None:
+                return cmd
+        except RuntimeError:
+            pass
+        row = self._load_persisted_command(command_id)
+        if row is None:
+            return None
+        return self._command_from_row(row)
 
     async def wait_for(self, command_id: str, timeout: float | None = None):
         """Wait for async command completion."""
-        session = self._resolve_session_for_command(command_id)
-        return await session.runtime.wait_for_command(command_id, timeout=timeout)
+        try:
+            session = self._resolve_session_for_command(command_id)
+            result = await session.runtime.wait_for_command(command_id, timeout=timeout)
+            if result is not None:
+                return result
+        except RuntimeError:
+            pass
+        row = self._load_persisted_command(command_id)
+        if row is None:
+            return None
+        return self._result_from_row(row, timeout=timeout)
 
     def store_completed_result(self, command_id: str, command_line: str, cwd: str, result):
         """Store completed result for command_status lookup."""

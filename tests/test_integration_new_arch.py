@@ -252,6 +252,36 @@ class TestFullArchitectureFlow:
         assert finished.exit_code == 0
         assert "tick-3" in finished.stdout
 
+    @pytest.mark.asyncio
+    async def test_command_status_fallback_when_terminal_row_missing(self, sandbox_manager, temp_db):
+        thread_id = "test-thread-fallback-status"
+        capability = sandbox_manager.get_sandbox(thread_id)
+
+        async_cmd = await capability.command.execute_async("echo fallback-ok")
+        done = await capability.command.wait_for(async_cmd.command_id, timeout=5.0)
+        assert done is not None
+        assert done.exit_code == 0
+        assert "fallback-ok" in done.stdout
+
+        with sqlite3.connect(str(temp_db), timeout=30) as conn:
+            row = conn.execute(
+                "SELECT terminal_id FROM terminal_commands WHERE command_id = ?",
+                (async_cmd.command_id,),
+            ).fetchone()
+            assert row is not None
+            conn.execute("DELETE FROM abstract_terminals WHERE terminal_id = ?", (row[0],))
+            conn.commit()
+
+        status = await capability.command.get_status(async_cmd.command_id)
+        assert status is not None
+        assert status.done
+        assert "fallback-ok" in "".join(status.stdout_buffer)
+
+        done_again = await capability.command.wait_for(async_cmd.command_id, timeout=1.0)
+        assert done_again is not None
+        assert done_again.exit_code == 0
+        assert "fallback-ok" in done_again.stdout
+
     def test_terminal_state_persists_across_sessions(self, sandbox_manager, temp_db):
         """Test that terminal state persists when session expires."""
         thread_id = "test-thread-4"
