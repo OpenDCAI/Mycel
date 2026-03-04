@@ -83,6 +83,7 @@ export interface AllocatedResource {
   resourceType: ResourceType;
   providerId: string;
   providerName: string;
+  threadId: string;
   agentId: string;
   agentName: string;
   sessionId: string;

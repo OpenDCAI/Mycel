@@ -12,6 +12,7 @@ export function deriveAllocatedResources(providers: ProviderInfo[]): AllocatedRe
             resourceType: key as ResourceType,
             providerId: provider.id,
             providerName: provider.name,
+            threadId: session.threadId,
             agentId: session.agentId,
             agentName: session.agentName,
             sessionId: session.id,

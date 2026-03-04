@@ -107,6 +107,11 @@ function AgentBadge({ allocation }: { allocation: AllocatedResource }) {
       <Bot className="w-3 h-3 shrink-0" />
       <span className="font-medium">{allocation.agentName}</span>
       <span className="text-[9px] text-muted-foreground">{allocation.providerName}</span>
+      {allocation.threadId && (
+        <span className="text-[9px] font-mono text-muted-foreground/80" title={allocation.threadId}>
+          {shortThreadId(allocation.threadId)}
+        </span>
+      )}
       <div
         className={[
           "w-1.5 h-1.5 rounded-full shrink-0",
@@ -115,4 +120,9 @@ function AgentBadge({ allocation }: { allocation: AllocatedResource }) {
       />
     </div>
   );
+}
+
+function shortThreadId(threadId: string): string {
+  if (threadId.length <= 8) return threadId;
+  return `${threadId.slice(0, 8)}...`;
 }
