@@ -17,6 +17,8 @@ class AgentBayConfig(BaseModel):
     region_id: str = "ap-southeast-1"
     context_path: str = "/home/wuying"
     image_id: str | None = None
+    supports_pause: bool = True
+    supports_resume: bool = True
 
 
 class DockerConfig(BaseModel):

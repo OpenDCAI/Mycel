@@ -4,6 +4,7 @@ AgentBay sandbox provider.
 Implements SandboxProvider using Alibaba Cloud's AgentBay SDK.
 """
 
+from dataclasses import replace
 from typing import Any
 
 from sandbox.provider import (
@@ -46,7 +47,7 @@ class AgentBayProvider(SandboxProvider):
     )
 
     def get_capability(self) -> ProviderCapability:
-        return self.CAPABILITY
+        return self._capability
 
     def __init__(
         self,
@@ -55,6 +56,8 @@ class AgentBayProvider(SandboxProvider):
         default_context_path: str = "/home/wuying",
         image_id: str | None = None,
         provider_name: str | None = None,
+        supports_pause: bool = True,
+        supports_resume: bool = True,
     ):
         from agentbay import AgentBay
 
@@ -64,6 +67,8 @@ class AgentBayProvider(SandboxProvider):
         self.default_context_path = default_context_path
         self.image_id = image_id
         self._sessions: dict[str, Any] = {}
+        # @@@agentbay-runtime-capability-override - account tier may disable pause/resume; keep provider-type defaults, override per configured instance only.
+        self._capability = replace(self.CAPABILITY, can_pause=supports_pause, can_resume=supports_resume)
 
     def create_session(self, context_id: str | None = None) -> SessionInfo:
         from agentbay import ContextSync, CreateSessionParams

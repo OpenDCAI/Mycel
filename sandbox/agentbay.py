@@ -23,6 +23,8 @@ class AgentBaySandbox(RemoteSandbox):
             default_context_path=ab.context_path,
             image_id=ab.image_id,
             provider_name=config.name,
+            supports_pause=ab.supports_pause,
+            supports_resume=ab.supports_resume,
         )
         super().__init__(
             provider=provider,

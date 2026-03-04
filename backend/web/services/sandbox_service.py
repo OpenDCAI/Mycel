@@ -38,6 +38,8 @@ def build_provider_from_config_name(name: str) -> Any | None:
                 default_context_path=config.agentbay.context_path,
                 image_id=config.agentbay.image_id,
                 provider_name=name,
+                supports_pause=config.agentbay.supports_pause,
+                supports_resume=config.agentbay.supports_resume,
             )
 
         if config.provider == "docker":
