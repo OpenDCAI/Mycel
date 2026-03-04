@@ -27,6 +27,8 @@ export default function ProviderCard({ provider, selected, onSelect }: ProviderC
   const isActive = status === "active";
   const TypeIcon = typeIcon[type];
   const primaryMetric = telemetry.quota ?? telemetry.cpu;
+  const sourceCandidates = [telemetry.running.source, telemetry.quota?.source, telemetry.cpu.source];
+  const displaySource = sourceCandidates.find((source) => source && source !== "unknown") ?? "unknown";
 
   const runningSessions = sessions.filter((s) => s.status === "running");
   const pausedSessions = sessions.filter((s) => s.status === "paused");
@@ -102,7 +104,7 @@ export default function ProviderCard({ provider, selected, onSelect }: ProviderC
       {!isUnavailable && (
         <div className="mb-2">
           <span className="inline-flex rounded border border-border px-1.5 py-0.5 text-[9px] font-mono uppercase text-muted-foreground">
-            src:{primaryMetric.source}
+            src:{displaySource}
           </span>
         </div>
       )}
