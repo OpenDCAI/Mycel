@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import {
   Search, CheckCircle2, Circle, Clock, AlertCircle,
   ListTodo, ArrowUpDown, ChevronDown, ChevronUp, LayoutGrid, List,
-  Plus, X, Calendar, User, AlertTriangle, RefreshCw, ExternalLink,
+  Plus, AlertTriangle, RefreshCw, ExternalLink,
   Play, Trash2, Timer,
 } from "lucide-react";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -12,9 +12,9 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { useAppStore } from "@/store/app-store";
-import type { Task, TaskStatus, Priority, CronJob } from "@/store/types";
+import type { Task, TaskStatus, CronJob } from "@/store/types";
 import CronEditor from "@/components/cron-editor";
-import CreateTaskModal from "@/components/create-task-modal";
+import TaskModal from "@/components/task-modal";
 
 const statusConfig: Record<TaskStatus, { label: string; icon: typeof Circle; color: string }> = {
   pending: { label: "等待中", icon: Circle, color: "text-muted-foreground" },
@@ -89,18 +89,15 @@ export default function Tasks() {
   const [sortField, setSortField] = useState<SortField>(null);
   const [sortDir, setSortDir] = useState<SortDir>("asc");
   const [selectedRows, setSelectedRows] = useState<Set<string>>(new Set());
-  const [viewMode, setViewMode] = useState<ViewMode>(isMobile ? "table" : "table");
+  const [viewMode, setViewMode] = useState<ViewMode>("table");
   const [dragOverColumn, setDragOverColumn] = useState<TaskStatus | null>(null);
-  const [editingTask, setEditingTask] = useState<Task | null>(null);
-  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<ActiveTab>("tasks");
 
-  // Editing state for the panel
-  const [editForm, setEditForm] = useState<Task | null>(null);
-
-  // Create modal state
-  const [createModalOpen, setCreateModalOpen] = useState(false);
-  const [createModalTab, setCreateModalTab] = useState<"task" | "cron">("task");
+  // Unified task modal state (create + edit)
+  const [taskModalOpen, setTaskModalOpen] = useState(false);
+  const [taskModalTab, setTaskModalTab] = useState<"task" | "cron">("task");
+  const [editingTask, setEditingTask] = useState<Task | undefined>(undefined);
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
 
   // Cron editing state
   const [editingCron, setEditingCron] = useState<CronJob | null>(null);
@@ -115,43 +112,13 @@ export default function Tasks() {
     return { name, avatar };
   };
 
-  const openEdit = (task: Task) => {
-    setEditingTask(task);
-    setEditForm({ ...task });
-  };
-
-  const closeEdit = () => {
-    setEditingTask(null);
-    setEditForm(null);
-  };
-
-  const saveEdit = async () => {
-    if (!editForm) return;
-    try {
-      await storeUpdateTask(editForm.id, editForm);
-      setEditingTask(editForm);
-      toast.success("任务已保存");
-    } catch (e: unknown) {
-      toast.error("保存失败: " + (e instanceof Error ? e.message : String(e)));
-    }
-  };
-
-  const confirmDelete = (id: string) => setDeleteConfirmId(id);
-  const executeDelete = async () => {
-    if (!deleteConfirmId) return;
-    try {
-      await storeDeleteTask(deleteConfirmId);
-      if (editingTask?.id === deleteConfirmId) closeEdit();
-      toast.success("任务已删除");
-      setDeleteConfirmId(null);
-    } catch (e: unknown) {
-      toast.error("删除失败: " + (e instanceof Error ? e.message : String(e)));
-    }
-  };
+  const openEdit = (task: Task) => { setEditingTask(task); setTaskModalOpen(true); };
+  const closeTaskModal = () => { setTaskModalOpen(false); setEditingTask(undefined); };
 
   const openCreateModal = (tab: "task" | "cron" = "task") => {
-    setCreateModalTab(tab);
-    setCreateModalOpen(true);
+    setEditingTask(undefined);
+    setTaskModalTab(tab);
+    setTaskModalOpen(true);
   };
 
   const handleCreateTask = async (fields: Partial<Task>) => {
@@ -161,6 +128,27 @@ export default function Tasks() {
     } catch (e: unknown) {
       toast.error("创建失败: " + (e instanceof Error ? e.message : String(e)));
       throw e;
+    }
+  };
+
+  const handleSaveTask = async (id: string, fields: Partial<Task>) => {
+    try {
+      await storeUpdateTask(id, fields);
+      toast.success("任务已保存");
+    } catch (e: unknown) {
+      toast.error("保存失败: " + (e instanceof Error ? e.message : String(e)));
+      throw e;
+    }
+  };
+
+  const executeDelete = async () => {
+    if (!deleteConfirmId) return;
+    try {
+      await storeDeleteTask(deleteConfirmId);
+      toast.success("任务已删除");
+      setDeleteConfirmId(null);
+    } catch (e: unknown) {
+      toast.error("删除失败: " + (e instanceof Error ? e.message : String(e)));
     }
   };
 
@@ -308,147 +296,6 @@ export default function Tasks() {
           <span className="text-muted-foreground">{s.label}</span>
         </div>
       ))}
-    </div>
-  );
-
-  // Edit panel
-  const editPanel = editForm && (
-    <div className={`${isMobile ? "fixed inset-0 z-50 flex" : "w-[360px] shrink-0 border-l border-border"} bg-background flex flex-col`}>
-      {isMobile && <div className="fixed inset-0 bg-black/50 -z-10" onClick={closeEdit} />}
-      <div className="h-14 flex items-center justify-between px-4 border-b border-border shrink-0">
-        <h3 className="text-sm font-semibold text-foreground">编辑任务</h3>
-        <div className="flex items-center gap-1">
-          <button onClick={saveEdit} className="px-3 py-1.5 rounded-md bg-primary text-primary-foreground text-xs font-medium hover:opacity-90 transition-opacity">
-            保存
-          </button>
-          <button onClick={closeEdit} className="p-1.5 rounded-md hover:bg-muted transition-colors">
-            <X className="w-4 h-4 text-muted-foreground" />
-          </button>
-        </div>
-      </div>
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
-        {/* Title */}
-        <div>
-          <label className="text-[11px] text-muted-foreground uppercase tracking-wider font-medium mb-1.5 block">标题</label>
-          <input
-            value={editForm.title}
-            onChange={(e) => setEditForm({ ...editForm, title: e.target.value })}
-            className="w-full px-3 py-2 rounded-lg bg-card border border-border text-sm text-foreground outline-none focus:border-primary/40 transition-colors"
-          />
-        </div>
-        {/* Description */}
-        <div>
-          <label className="text-[11px] text-muted-foreground uppercase tracking-wider font-medium mb-1.5 block">描述</label>
-          <textarea
-            value={editForm.description}
-            onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
-            rows={3}
-            className="w-full px-3 py-2 rounded-lg bg-card border border-border text-sm text-foreground outline-none focus:border-primary/40 transition-colors resize-none"
-          />
-        </div>
-        {/* Status */}
-        <div>
-          <label className="text-[11px] text-muted-foreground uppercase tracking-wider font-medium mb-1.5 block">状态</label>
-          <div className="flex flex-wrap gap-1.5">
-            {(["pending", "running", "completed", "failed"] as const).map((s) => {
-              const config = statusConfig[s];
-              const StatusIcon = config.icon;
-              return (
-                <button
-                  key={s}
-                  onClick={() => setEditForm({ ...editForm, status: s, progress: s === "completed" ? 100 : s === "pending" ? 0 : editForm.progress })}
-                  className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs transition-colors ${
-                    editForm.status === s ? "bg-primary/10 text-primary font-medium border border-primary/20" : "bg-card border border-border text-muted-foreground hover:text-foreground"
-                  }`}
-                >
-                  <StatusIcon className="w-3 h-3" />
-                  {config.label}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-        {/* Priority */}
-        <div>
-          <label className="text-[11px] text-muted-foreground uppercase tracking-wider font-medium mb-1.5 block">优先级</label>
-          <div className="flex gap-1.5">
-            {(["high", "medium", "low"] as const).map((p) => (
-              <button
-                key={p}
-                onClick={() => setEditForm({ ...editForm, priority: p })}
-                className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
-                  editForm.priority === p ? priorityConfig[p].className + " ring-1 ring-current/20" : "bg-card border border-border text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                {priorityConfig[p].label}
-              </button>
-            ))}
-          </div>
-        </div>
-        {/* Assignee */}
-        <div>
-          <label className="text-[11px] text-muted-foreground uppercase tracking-wider font-medium mb-1.5 block">
-            <User className="w-3 h-3 inline mr-1" />执行者
-          </label>
-          <select
-            value={editForm.assignee_id}
-            onChange={(e) => {
-              setEditForm({ ...editForm, assignee_id: e.target.value });
-            }}
-            className="w-full px-3 py-2 rounded-lg bg-card border border-border text-sm text-foreground outline-none focus:border-primary/40 transition-colors"
-          >
-            <option value="">未分配</option>
-            {memberList.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-          </select>
-        </div>
-        {/* Deadline */}
-        <div>
-          <label className="text-[11px] text-muted-foreground uppercase tracking-wider font-medium mb-1.5 block">
-            <Calendar className="w-3 h-3 inline mr-1" />截止日期
-          </label>
-          <input
-            type="date"
-            value={editForm.deadline}
-            onChange={(e) => setEditForm({ ...editForm, deadline: e.target.value })}
-            className="w-full px-3 py-2 rounded-lg bg-card border border-border text-sm text-foreground outline-none focus:border-primary/40 transition-colors"
-          />
-        </div>
-        {/* Progress (only for running) */}
-        {editForm.status === "running" && (
-          <div>
-            <label className="text-[11px] text-muted-foreground uppercase tracking-wider font-medium mb-1.5 block">进度</label>
-            <div className="flex items-center gap-3">
-              <input
-                type="range"
-                min={0}
-                max={100}
-                value={editForm.progress}
-                onChange={(e) => setEditForm({ ...editForm, progress: Number(e.target.value) })}
-                className="flex-1 accent-primary"
-              />
-              <span className="text-xs font-mono text-primary w-10 text-right">{editForm.progress}%</span>
-            </div>
-          </div>
-        )}
-
-        {/* Result preview */}
-        {editForm.result && (
-          <div>
-            <label className="text-[11px] text-muted-foreground uppercase tracking-wider font-medium mb-1.5 block">执行结果</label>
-            <p className="text-sm p-2 bg-muted rounded whitespace-pre-wrap">{editForm.result}</p>
-          </div>
-        )}
-
-        {/* Danger zone */}
-        <div className="pt-4 border-t border-border">
-          <button
-            onClick={() => confirmDelete(editForm.id)}
-            className="w-full px-3 py-2 rounded-lg border border-destructive/20 text-destructive text-xs font-medium hover:bg-destructive/5 transition-colors"
-          >
-            删除任务
-          </button>
-        </div>
-      </div>
     </div>
   );
 
@@ -891,29 +738,8 @@ export default function Tasks() {
         )}
       </div>
 
-      {/* Edit panel (tasks) */}
-      {activeTab === "tasks" && editingTask && editPanel}
-
       {/* Edit panel (cron) */}
       {activeTab === "cron" && editingCron && cronEditPanel}
-
-      {/* Delete confirmation dialog (Q19) */}
-      <AlertDialog open={!!deleteConfirmId} onOpenChange={(open) => !open && setDeleteConfirmId(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>确认删除任务</AlertDialogTitle>
-            <AlertDialogDescription>
-              此操作不可撤销。删除后该任务的所有数据将永久丢失。
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>取消</AlertDialogCancel>
-            <AlertDialogAction onClick={executeDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-              确认删除
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
 
       {/* Cron delete confirmation dialog */}
       <AlertDialog open={!!deleteCronConfirmId} onOpenChange={(open) => !open && setDeleteCronConfirmId(null)}>
@@ -933,13 +759,34 @@ export default function Tasks() {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Create Task / Cron Modal */}
-      <CreateTaskModal
-        open={createModalOpen}
-        defaultTab={createModalTab}
+      {/* Task delete confirmation dialog */}
+      <AlertDialog open={!!deleteConfirmId} onOpenChange={(open) => !open && setDeleteConfirmId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>确认删除任务</AlertDialogTitle>
+            <AlertDialogDescription>
+              此操作不可撤销。删除后该任务的所有数据将永久丢失。
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>取消</AlertDialogCancel>
+            <AlertDialogAction onClick={executeDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              确认删除
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Unified Task Modal (create + edit) */}
+      <TaskModal
+        open={taskModalOpen}
+        editTask={editingTask}
+        defaultTab={taskModalTab}
         members={memberList}
-        onClose={() => setCreateModalOpen(false)}
+        onClose={closeTaskModal}
         onCreateTask={handleCreateTask}
+        onSaveTask={handleSaveTask}
+        onDeleteTask={(id) => setDeleteConfirmId(id)}
         onCreateCronJob={handleCreateCronJob}
       />
     </div>
