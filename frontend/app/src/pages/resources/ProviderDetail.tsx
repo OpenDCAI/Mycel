@@ -148,15 +148,7 @@ function StatBlock({
     <div className={["rounded-lg bg-muted/30 border border-border/40", compact ? "px-3 py-2" : "py-3 px-2"].join(" ")}>
       <p className="text-lg md:text-2xl font-mono font-bold text-foreground">{formatUsed(metric.used)}</p>
       <p className="text-[10px] text-muted-foreground font-mono">{formatLimit(metric.limit, metric.unit)}</p>
-      <div className="mt-1 flex items-center justify-between gap-2">
-        <p className="text-[9px] text-muted-foreground/60 uppercase tracking-wider">{label}</p>
-        <span className="rounded border border-border px-1.5 py-0.5 text-[9px] font-mono uppercase text-muted-foreground">
-          {metric.source}
-        </span>
-      </div>
-      {metric.freshness && (
-        <p className="text-[9px] text-muted-foreground/60 uppercase tracking-wider mt-1">freshness: {metric.freshness}</p>
-      )}
+      <p className="text-[9px] text-muted-foreground/60 uppercase tracking-wider mt-1">{label}</p>
       {!compact && <p className="text-[10px] text-muted-foreground mt-1">{title}</p>}
     </div>
   );

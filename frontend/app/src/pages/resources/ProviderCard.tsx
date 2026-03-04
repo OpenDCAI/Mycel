@@ -1,4 +1,4 @@
-import { Monitor, Cloud, Container, X, ExternalLink } from "lucide-react";
+import { Monitor, Cloud, Container, X } from "lucide-react";
 import type { ProviderInfo } from "./types";
 import QuotaRing from "./QuotaRing";
 import { CapabilityStrip } from "./CapabilityIcons";
@@ -27,9 +27,6 @@ export default function ProviderCard({ provider, selected, onSelect }: ProviderC
   const isActive = status === "active";
   const TypeIcon = typeIcon[type];
   const primaryMetric = telemetry.quota ?? telemetry.cpu;
-  const sourceCandidates = [telemetry.running.source, telemetry.quota?.source, telemetry.cpu.source];
-  const displaySource = sourceCandidates.find((source) => source && source !== "unknown") ?? "unknown";
-  const showConsoleQuickLink = displaySource === "unknown" && Boolean(provider.consoleUrl);
 
   const runningSessions = sessions.filter((s) => s.status === "running");
   const pausedSessions = sessions.filter((s) => s.status === "paused");
@@ -101,36 +98,6 @@ export default function ProviderCard({ provider, selected, onSelect }: ProviderC
           </div>
         )}
       </div>
-
-      {!isUnavailable && (
-        <div className="mb-2">
-          {showConsoleQuickLink ? (
-            <span
-              role="link"
-              tabIndex={0}
-              onClick={(event) => {
-                event.stopPropagation();
-                window.open(provider.consoleUrl, "_blank", "noopener,noreferrer");
-              }}
-              onKeyDown={(event) => {
-                if (event.key === "Enter" || event.key === " ") {
-                  event.preventDefault();
-                  event.stopPropagation();
-                  window.open(provider.consoleUrl, "_blank", "noopener,noreferrer");
-                }
-              }}
-              className="inline-flex items-center gap-1 rounded border border-border px-1.5 py-0.5 text-[9px] font-mono uppercase text-muted-foreground hover:text-foreground"
-            >
-              控制台
-              <ExternalLink className="h-3 w-3" />
-            </span>
-          ) : (
-            <span className="inline-flex rounded border border-border px-1.5 py-0.5 text-[9px] font-mono uppercase text-muted-foreground">
-              src:{displaySource}
-            </span>
-          )}
-        </div>
-      )}
 
       {/* Capability icons */}
       <CapabilityStrip capabilities={provider.capabilities} />
