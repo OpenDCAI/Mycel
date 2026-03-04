@@ -7,8 +7,13 @@ import type {
   LeaseStatus,
   ThreadDetail,
   ThreadSummary,
+  Workspace,
+  WorkspaceChannelFilesResult,
+  WorkspaceChannelKind,
+  WorkspaceChannelsResult,
   WorkspaceFileResult,
   WorkspaceListResult,
+  WorkspaceTransferEntry,
   WorkspaceUploadResult,
 } from "./types";
 
@@ -176,41 +181,92 @@ export async function getThreadLease(threadId: string): Promise<LeaseStatus> {
 
 // --- Workspace API ---
 
+export async function listWorkspace(threadId: string, path?: string): Promise<WorkspaceListResult> {
+  const q = path ? `?path=${encodeURIComponent(path)}` : "";
+  return request(`/api/threads/${encodeURIComponent(threadId)}/workspace/list${q}`);
+}
+
+export async function readWorkspaceFile(threadId: string, path: string): Promise<WorkspaceFileResult> {
+  return request(`/api/threads/${encodeURIComponent(threadId)}/workspace/read?path=${encodeURIComponent(path)}`);
+}
+
 function workspaceBase(threadId: string): string {
   return `/api/threads/${encodeURIComponent(threadId)}/workspace`;
 }
 
-export async function listWorkspace(threadId: string, path?: string): Promise<WorkspaceListResult> {
-  const q = path ? `?path=${encodeURIComponent(path)}` : "";
-  return request(`${workspaceBase(threadId)}/list${q}`);
+export async function getWorkspaceChannels(threadId: string): Promise<WorkspaceChannelsResult> {
+  return request(`${workspaceBase(threadId)}/channels`);
 }
 
-export async function readWorkspaceFile(threadId: string, path: string): Promise<WorkspaceFileResult> {
-  return request(`${workspaceBase(threadId)}/read?path=${encodeURIComponent(path)}`);
+export async function listWorkspaceChannelFiles(
+  threadId: string,
+  channel: WorkspaceChannelKind = "download",
+): Promise<WorkspaceChannelFilesResult> {
+  const q = `?channel=${encodeURIComponent(channel)}`;
+  return request(`${workspaceBase(threadId)}/channel-files${q}`);
 }
 
-export function getWorkspaceDownloadUrl(threadId: string, path: string): string {
-  return `${workspaceBase(threadId)}/download?path=${encodeURIComponent(path)}`;
+export async function listWorkspaceTransfers(
+  threadId: string,
+  limit = 100,
+): Promise<{ thread_id: string; entries: WorkspaceTransferEntry[] }> {
+  const q = `?limit=${encodeURIComponent(String(limit))}`;
+  return request(`${workspaceBase(threadId)}/transfers${q}`);
 }
 
 export async function uploadWorkspaceFile(
   threadId: string,
-  file: File,
-  path?: string,
+  opts: { file: File; channel?: WorkspaceChannelKind; path?: string },
 ): Promise<WorkspaceUploadResult> {
   const query = new URLSearchParams();
-  if (path) query.set("path", path);
+  query.set("channel", opts.channel ?? "download");
+  if (opts.path) query.set("path", opts.path);
   const form = new FormData();
-  form.set("file", file, file.name);
+  form.set("file", opts.file, opts.file.name);
 
-  const qs = query.toString();
-  const url = `${workspaceBase(threadId)}/upload${qs ? `?${qs}` : ""}`;
-  const response = await fetch(url, { method: "POST", body: form });
+  const response = await fetch(`${workspaceBase(threadId)}/upload?${query.toString()}`, {
+    method: "POST",
+    body: form,
+  });
   if (!response.ok) {
     const body = await response.text();
     throw new Error(`API ${response.status}: ${body || response.statusText}`);
   }
   return (await response.json()) as WorkspaceUploadResult;
+}
+
+export function getWorkspaceDownloadUrl(
+  threadId: string,
+  path: string,
+  channel: WorkspaceChannelKind = "download",
+): string {
+  const query = new URLSearchParams({
+    path,
+    channel,
+  });
+  return `${workspaceBase(threadId)}/download?${query.toString()}`;
+}
+
+// --- Workspace Management API ---
+
+export async function createWorkspace(hostPath: string, name?: string): Promise<Workspace> {
+  return request<Workspace>("/api/workspaces", {
+    method: "POST",
+    body: JSON.stringify({ host_path: hostPath, name }),
+  });
+}
+
+export async function listWorkspaces(): Promise<Workspace[]> {
+  const payload = await request<{ workspaces: Workspace[] }>("/api/workspaces");
+  return payload.workspaces;
+}
+
+export async function getWorkspace(workspaceId: string): Promise<Workspace> {
+  return request<Workspace>(`/api/workspaces/${encodeURIComponent(workspaceId)}`);
+}
+
+export async function deleteWorkspace(workspaceId: string): Promise<void> {
+  await request(`/api/workspaces/${encodeURIComponent(workspaceId)}`, { method: "DELETE" });
 }
 
 // --- Settings API ---

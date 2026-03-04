@@ -1,4 +1,4 @@
-import { Paperclip, Send, Square } from "lucide-react";
+import { Send, Square } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 export interface DroppedUploadFile {
@@ -33,7 +33,6 @@ export default function InputBox({
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const sendingRef = useRef(false);
   const dropRef = useRef<HTMLDivElement>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const autoResize = useCallback(() => {
     const el = inputRef.current;
@@ -183,28 +182,6 @@ export default function InputBox({
     }
   }
 
-  async function handleFileInputChange(event: React.ChangeEvent<HTMLInputElement>) {
-    const files = Array.from(event.target.files ?? []);
-    event.target.value = "";
-    if (files.length === 0) return;
-    if (!onDropUploadFiles) return;
-    setDropError(null);
-    setUploadingDrop(true);
-    try {
-      const droppedFiles: DroppedUploadFile[] = files.map((f) => ({ file: f, relativePath: f.name }));
-      const uploadedPaths = await onDropUploadFiles(droppedFiles);
-      const lines = uploadedPaths.map((path) => `- ${path}`);
-      const hint = `已上传到 upload 通道：\n${lines.join("\n")}`;
-      setValue((prev) => (prev.trim() ? `${prev.trimEnd()}\n\n${hint}` : hint));
-    } catch (error) {
-      const msg = error instanceof Error ? error.message : String(error);
-      setDropError(`上传失败: ${msg}`);
-    } finally {
-      setUploadingDrop(false);
-      inputRef.current?.focus();
-    }
-  }
-
   return (
     <div className="bg-white pb-4">
       <div className="max-w-3xl mx-auto px-4">
@@ -243,27 +220,7 @@ export default function InputBox({
               style={{ boxShadow: "none", overflow: "hidden" }}
             />
           </div>
-          <div className="flex items-center gap-1 pr-3 py-4">
-            {onDropUploadFiles && (
-              <>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  multiple
-                  className="hidden"
-                  onChange={(e) => { void handleFileInputChange(e); }}
-                />
-                <button
-                  type="button"
-                  onClick={(e) => { e.stopPropagation(); fileInputRef.current?.click(); }}
-                  disabled={uploadingDrop}
-                  title="上传文件"
-                  className="w-8 h-8 rounded-full flex items-center justify-center text-[#a3a3a3] hover:text-[#404040] hover:bg-[#f0f0f0] transition-all disabled:opacity-40"
-                >
-                  <Paperclip className="w-4 h-4" />
-                </button>
-              </>
-            )}
+          <div className="flex items-center pr-3 py-4">
             <button
               onClick={(e) => {
                 e.stopPropagation();
@@ -286,12 +243,13 @@ export default function InputBox({
             </button>
           </div>
         </div>
-        {(uploadingDrop || dropError) && (
-          <div className="px-1 pt-1">
-            {uploadingDrop && <p className="text-[11px] text-[#2563eb]">正在上传...</p>}
-            {dropError && <p className="text-[11px] text-red-500">{dropError}</p>}
-          </div>
-        )}
+        <div className="px-1 pt-2 space-y-1">
+          <p className="text-[11px] text-[#737373]">
+            可将文件或文件夹直接拖到输入框，自动上传到当前线程的 <span className="font-mono">upload</span> 通道
+          </p>
+          {uploadingDrop && <p className="text-[11px] text-[#2563eb]">正在上传拖拽文件...</p>}
+          {dropError && <p className="text-[11px] text-red-500">{dropError}</p>}
+        </div>
       </div>
     </div>
   );

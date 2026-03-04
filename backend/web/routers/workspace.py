@@ -1,7 +1,6 @@
-"""Workspace file browsing endpoints — browse, read, download from sandbox filesystem."""
+"""Workspace file browsing endpoints."""
 
 import asyncio
-from pathlib import Path
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
@@ -9,6 +8,13 @@ from fastapi.responses import FileResponse
 
 from backend.web.core.dependencies import get_app
 from backend.web.services.agent_pool import resolve_thread_sandbox
+from backend.web.services.file_channel_service import (
+    ensure_thread_file_channel,
+    list_channel_files,
+    list_thread_file_transfers,
+    resolve_download_file,
+    save_uploaded_file,
+)
 from backend.web.utils.helpers import resolve_local_workspace_path
 from sandbox.thread_context import set_current_thread_id
 
@@ -50,6 +56,7 @@ async def list_workspace_path(
     try:
         set_current_thread_id(thread_id)
         agent = await get_or_create_agent(app, sandbox_type, thread_id=thread_id)
+    # @@@http_passthrough - preserve policy/validation errors from agent creation
     except HTTPException:
         raise
     except Exception as e:
@@ -77,6 +84,7 @@ async def list_workspace_path(
 
     try:
         payload = await asyncio.to_thread(_list_remote)
+    # @@@http_passthrough - preserve explicit status from remote capability path
     except HTTPException:
         raise
     except RuntimeError as e:
@@ -134,25 +142,16 @@ async def read_workspace_file(
     return {"thread_id": thread_id, **payload}
 
 
-@router.get("/download")
-async def download_workspace_file(
-    thread_id: str,
-    path: str = Query(...),
-    app: Annotated[Any, Depends(get_app)] = None,
-) -> FileResponse:
-    """Download a file directly from sandbox filesystem."""
-    sandbox_type = resolve_thread_sandbox(app, thread_id)
-    if sandbox_type == "local":
-        target = resolve_local_workspace_path(
-            path,
-            thread_id=thread_id,
-            thread_cwd_map=app.state.thread_cwd,
-        )
-        if not target.is_file():
-            raise HTTPException(404, f"File not found: {path}")
-        return FileResponse(path=str(target), filename=target.name, media_type="application/octet-stream")
+@router.get("/channels")
+async def get_workspace_channels(thread_id: str) -> dict[str, Any]:
+    """Get thread-scoped upload/download channel paths."""
+    from backend.web.utils.helpers import load_thread_config
 
-    raise HTTPException(501, "Remote sandbox download not yet supported")
+    # @@@workspace-lookup - pass stored workspace_id so ensure is idempotent even if called multiple times
+    tc = await asyncio.to_thread(load_thread_config, thread_id)
+    workspace_id = tc.workspace_id if tc else None
+    payload = await asyncio.to_thread(ensure_thread_file_channel, thread_id, workspace_id=workspace_id)
+    return payload
 
 
 _MAX_UPLOAD_BYTES = 100 * 1024 * 1024  # 100 MB
@@ -162,30 +161,72 @@ _MAX_UPLOAD_BYTES = 100 * 1024 * 1024  # 100 MB
 async def upload_workspace_file(
     thread_id: str,
     file: UploadFile = File(...),
+    channel: str = Query(default="download"),
     path: str | None = Query(default=None),
-    app: Annotated[Any, Depends(get_app)] = None,
 ) -> dict[str, Any]:
-    """Upload a file directly to sandbox filesystem."""
-    sandbox_type = resolve_thread_sandbox(app, thread_id)
-    if sandbox_type != "local":
-        raise HTTPException(501, "Remote sandbox upload not yet supported")
-
-    relative_path = path or file.filename or "uploaded_file"
+    """Upload a file into thread-scoped upload/download channel."""
+    if not file.filename and not path:
+        raise HTTPException(400, "Missing upload path: provide query path or filename")
+    relative_path = path or file.filename or ""
     content = await file.read(_MAX_UPLOAD_BYTES + 1)
     if len(content) > _MAX_UPLOAD_BYTES:
         raise HTTPException(413, f"Upload exceeds {_MAX_UPLOAD_BYTES // (1024 * 1024)} MB limit")
+    try:
+        payload = await asyncio.to_thread(
+            save_uploaded_file,
+            thread_id=thread_id,
+            channel=channel,
+            relative_path=relative_path,
+            content=content,
+        )
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
+    return payload
 
-    target = resolve_local_workspace_path(
-        relative_path,
-        thread_id=thread_id,
-        thread_cwd_map=app.state.thread_cwd,
-    )
-    target.parent.mkdir(parents=True, exist_ok=True)
-    target.write_bytes(content)
 
-    return {
-        "thread_id": thread_id,
-        "path": str(target),
-        "filename": target.name,
-        "size_bytes": len(content),
-    }
+@router.get("/download")
+async def download_workspace_file(
+    thread_id: str,
+    path: str = Query(...),
+    channel: str = Query(default="download"),
+) -> FileResponse:
+    """Download a file from thread-scoped upload/download channel."""
+    try:
+        target = await asyncio.to_thread(
+            resolve_download_file,
+            thread_id=thread_id,
+            channel=channel,
+            relative_path=path,
+        )
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
+    except FileNotFoundError as e:
+        raise HTTPException(404, str(e)) from e
+    return FileResponse(path=str(target), filename=target.name, media_type="application/octet-stream")
+
+
+@router.get("/channel-files")
+async def list_workspace_channel_files(
+    thread_id: str,
+    channel: str = Query(default="download"),
+) -> dict[str, Any]:
+    """List files under thread-scoped upload/download channel."""
+    try:
+        entries = await asyncio.to_thread(
+            list_channel_files,
+            thread_id=thread_id,
+            channel=channel,
+        )
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
+    return {"thread_id": thread_id, "channel": channel, "entries": entries}
+
+
+@router.get("/transfers")
+async def list_workspace_transfers(
+    thread_id: str,
+    limit: int = Query(default=100, ge=1, le=500),
+) -> dict[str, Any]:
+    """List thread file transfer records from SQLite."""
+    entries = await asyncio.to_thread(list_thread_file_transfers, thread_id=thread_id, limit=limit)
+    return {"thread_id": thread_id, "entries": entries}

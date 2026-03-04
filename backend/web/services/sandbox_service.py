@@ -103,6 +103,7 @@ def init_providers_and_managers() -> tuple[dict, dict]:
                     image=config.docker.image,
                     mount_path=config.docker.mount_path,
                     default_cwd=config.docker.cwd,
+                    bind_mounts=config.docker.bind_mounts,
                     provider_name=name,
                 )
             elif config.provider == "e2b":

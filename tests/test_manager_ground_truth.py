@@ -38,7 +38,7 @@ class FakeProvider(SandboxProvider):
             supports_webhook=False,
         )
 
-    def create_session(self, context_id: str | None = None, bind_mounts: list | None = None) -> SessionInfo:
+    def create_session(self, context_id: str | None = None) -> SessionInfo:
         sid = f"s-{uuid.uuid4().hex[:8]}"
         self._statuses[sid] = "running"
         return SessionInfo(session_id=sid, provider=self.name, status="running")

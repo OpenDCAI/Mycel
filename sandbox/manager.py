@@ -53,7 +53,6 @@ class SandboxManager:
         self.provider = provider
         self.provider_capability = provider.get_capability()
         self._on_session_ready = on_session_ready
-        self._thread_bind_mounts: dict[str, list] = {}
 
         self.db_path = db_path or DEFAULT_DB_PATH
         self.terminal_store = TerminalStore(db_path=self.db_path)
@@ -63,10 +62,6 @@ class SandboxManager:
             db_path=self.db_path,
             default_policy=ChatSessionPolicy(),
         )
-
-    def set_thread_bind_mounts(self, thread_id: str, bind_mounts: list) -> None:
-        """Store per-thread bind_mounts for use during session creation."""
-        self._thread_bind_mounts[thread_id] = bind_mounts
 
     def _default_terminal_cwd(self) -> str:
         for attr in ("default_cwd", "default_context_path", "mount_path"):
@@ -80,9 +75,9 @@ class SandboxManager:
         if self._on_session_ready:
             self._on_session_ready(session_id, reason)
 
-    def _ensure_bound_instance(self, lease, bind_mounts: list | None = None) -> None:
+    def _ensure_bound_instance(self, lease) -> None:
         if self.provider_capability.eager_instance_binding and not lease.get_instance():
-            lease.ensure_active_instance(self.provider, bind_mounts=bind_mounts)
+            lease.ensure_active_instance(self.provider)
 
     def _assert_lease_provider(self, lease, thread_id: str) -> None:
         if lease.provider_name != self.provider.name:
@@ -137,9 +132,6 @@ class SandboxManager:
         self.session_manager.close(reason="manager_close")
 
     def get_sandbox(self, thread_id: str) -> SandboxCapability:
-        # @@@per-thread-bind-mounts - retrieve stored bind_mounts for this thread (set via set_thread_bind_mounts)
-        bind_mounts = self._thread_bind_mounts.get(thread_id)
-
         terminal = self._get_active_terminal(thread_id)
         session = self.session_manager.get(thread_id, terminal.terminal_id) if terminal else None
         if session:
@@ -175,6 +167,7 @@ class SandboxManager:
                 lease = self.lease_store.create(terminal.lease_id, self.provider.name)
             self._assert_lease_provider(lease, thread_id)
 
+<<<<<<< HEAD
         # Stamp bind_mounts on lease so lazy creation paths pick them up
         if bind_mounts:
             lease.bind_mounts = bind_mounts
@@ -398,7 +391,7 @@ class SandboxManager:
         if lease.observed_state != "paused":
             # @@@pause-rebind-instance - Pause must operate on a concrete running instance.
             # Re-resolve through lease to avoid pausing stale detached bindings.
-            lease.ensure_active_instance(self.provider, bind_mounts=self._thread_bind_mounts.get(thread_id))
+            lease.ensure_active_instance(self.provider)
             if not lease.pause_instance(self.provider):
                 return False
 

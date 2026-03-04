@@ -87,6 +87,7 @@ class DockerProvider(SandboxProvider):
         image: str,
         mount_path: str = "/workspace",
         default_cwd: str = "/workspace",
+        bind_mounts: list[MountSpec] | None = None,
         command_timeout_sec: float = 20.0,
         provider_name: str | None = None,
         docker_host: str | None = None,
@@ -96,11 +97,14 @@ class DockerProvider(SandboxProvider):
         self.image = image
         self.mount_path = mount_path
         self.default_cwd = default_cwd
+        self.bind_mounts: list[MountSpec] = [
+            MountSpec.model_validate(m) if isinstance(m, dict) else m for m in (bind_mounts or [])
+        ]
         self.command_timeout_sec = command_timeout_sec
         self._docker_host = docker_host
         self._sessions: dict[str, str] = {}  # session_id -> container_id
 
-    def create_session(self, context_id: str | None = None, bind_mounts: list | None = None) -> SessionInfo:
+    def create_session(self, context_id: str | None = None) -> SessionInfo:
         session_id = f"leon-{uuid.uuid4().hex[:12]}"
         container_name = session_id
 
@@ -114,9 +118,8 @@ class DockerProvider(SandboxProvider):
             f"leon.session_id={session_id}",
         ]
 
-        mounts = [MountSpec.model_validate(m) if isinstance(m, dict) else m for m in (bind_mounts or [])]
         copy_mounts: list[tuple[str, str]] = []
-        for mount in mounts:
+        for mount in self.bind_mounts:
             if mount.mode == "copy":
                 copy_mounts.append((mount.source, mount.target))
                 continue

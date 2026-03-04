@@ -49,6 +49,7 @@ class DockerConfig(BaseModel):
     mount_path: str = "/workspace"
     docker_host: str | None = None  # e.g. "unix:///var/run/docker.sock" to bypass stuck Docker Desktop context
     cwd: str = "/workspace"
+    bind_mounts: list[MountSpec] = Field(default_factory=list)
 
 
 class E2BConfig(BaseModel):
@@ -63,6 +64,7 @@ class DaytonaConfig(BaseModel):
     api_url: str = "https://app.daytona.io/api"
     target: str = "local"
     cwd: str = "/home/daytona"
+    bind_mounts: list[MountSpec] = Field(default_factory=list)
 
 
 class SandboxConfig(BaseModel):

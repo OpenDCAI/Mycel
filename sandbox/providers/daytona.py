@@ -84,6 +84,7 @@ class DaytonaProvider(SandboxProvider):
         api_url: str = "https://app.daytona.io/api",
         target: str = "local",
         default_cwd: str = "/home/daytona",
+        bind_mounts: list[MountSpec] | None = None,
         provider_name: str | None = None,
     ):
         from daytona_sdk import Daytona
@@ -94,6 +95,9 @@ class DaytonaProvider(SandboxProvider):
         self.api_url = api_url
         self.target = target
         self.default_cwd = default_cwd
+        self.bind_mounts: list[MountSpec] = [
+            MountSpec.model_validate(m) if isinstance(m, dict) else m for m in (bind_mounts or [])
+        ]
 
         os.environ["DAYTONA_API_KEY"] = api_key
         os.environ["DAYTONA_API_URL"] = api_url
@@ -102,15 +106,12 @@ class DaytonaProvider(SandboxProvider):
 
     # ==================== Session Lifecycle ====================
 
-    def create_session(self, context_id: str | None = None, bind_mounts: list | None = None) -> SessionInfo:
+    def create_session(self, context_id: str | None = None) -> SessionInfo:
         from daytona_sdk import CreateSandboxFromSnapshotParams
-
-        # @@@per-thread-bind-mounts - bind_mounts are now per-thread, passed at session creation time
-        mounts = [MountSpec.model_validate(m) if isinstance(m, dict) else m for m in (bind_mounts or [])]
 
         mount_mounts: list[MountSpec] = []
         copy_mounts: list[tuple[str, str]] = []
-        for mount in mounts:
+        for mount in self.bind_mounts:
             if mount.mode == "copy":
                 copy_mounts.append((mount.source, mount.target))
             else:
