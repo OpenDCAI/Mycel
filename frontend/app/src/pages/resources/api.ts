@@ -17,6 +17,26 @@ interface ResourceOverviewResponse {
   providers: ProviderInfo[];
 }
 
+function ensureProviderCardContract(providers: ProviderInfo[]): void {
+  for (const provider of providers) {
+    if (!provider.cardCpu || !provider.cardCpuMode) {
+      throw new Error(`Provider card CPU contract missing: ${provider.id}`);
+    }
+    if (provider.cardCpuMode === "placeholder_no_quota") {
+      const cpu = provider.cardCpu;
+      if (cpu.used != null || cpu.limit != null) {
+        throw new Error(`Provider ${provider.id} placeholder_no_quota must expose null cardCpu values`);
+      }
+      if (!provider.cardCpuReason || !provider.cardCpuReason.trim()) {
+        throw new Error(`Provider ${provider.id} placeholder_no_quota must expose cardCpuReason`);
+      }
+    }
+    if (provider.cardCpuMode === "direct" && !("used" in provider.cardCpu) && !("limit" in provider.cardCpu)) {
+      throw new Error(`Provider ${provider.id} direct cardCpu shape invalid`);
+    }
+  }
+}
+
 async function ensureResponseShape(response: Response): Promise<ResourceOverviewResponse> {
   if (!response.ok) {
     const body = await response.text();
@@ -27,6 +47,7 @@ async function ensureResponseShape(response: Response): Promise<ResourceOverview
   if (!payload || !payload.summary || !Array.isArray(payload.providers)) {
     throw new Error("Unexpected /api/monitor/resources response shape");
   }
+  ensureProviderCardContract(payload.providers);
   return payload;
 }
 

@@ -26,7 +26,7 @@ export default function ProviderCard({ provider, selected, onSelect }: ProviderC
   const isUnavailable = status === "unavailable";
   const isActive = status === "active";
   const TypeIcon = typeIcon[type];
-  const cardCpu = provider.cardCpu ?? telemetry.cpu;
+  const cardCpu = provider.cardCpu;
 
   const runningSessions = sessions.filter((s) => s.status === "running");
   const pausedSessions = sessions.filter((s) => s.status === "paused");

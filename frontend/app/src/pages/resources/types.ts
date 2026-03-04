@@ -73,9 +73,9 @@ export interface ProviderInfo {
   capabilities: ProviderCapabilities;
   quota?: ProviderQuota;
   telemetry: ProviderTelemetry;
-  cardCpu?: UsageMetric;
-  cardCpuMode?: "direct" | "placeholder_no_quota";
-  cardCpuReason?: string | null;
+  cardCpu: UsageMetric;
+  cardCpuMode: "direct" | "placeholder_no_quota";
+  cardCpuReason: string | null;
   consoleUrl?: string;
   latencyMs?: number;
   sessions: ResourceSession[];
