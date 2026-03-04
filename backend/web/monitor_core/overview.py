@@ -201,7 +201,7 @@ def _thread_owners(thread_ids: list[str]) -> dict[str, dict[str, str | None]]:
     for thread_id in thread_ids:
         agent_ref = refs.get(thread_id)
         if not agent_ref:
-            owners[thread_id] = {"agent_id": None, "agent_name": "Leon"}
+            owners[thread_id] = {"agent_id": None, "agent_name": "Unknown"}
             continue
 
         # @@@agent-name-resolution - thread_config.agent may be member id or direct display name.
@@ -312,13 +312,13 @@ def list_resource_providers() -> dict[str, Any]:
             if normalized == "running":
                 running_count += 1
             thread_id = str(session.get("thread_id") or "")
-            owner = owners.get(thread_id, {"agent_id": None, "agent_name": "Leon"})
+            owner = owners.get(thread_id, {"agent_id": None, "agent_name": "Unknown"})
             normalized_sessions.append(
                 {
                     "id": str(session.get("session_id") or ""),
                     "threadId": thread_id,
                     "agentId": str(owner.get("agent_id") or ""),
-                    "agentName": str(owner.get("agent_name") or "Leon"),
+                    "agentName": str(owner.get("agent_name") or "Unknown"),
                     "status": normalized,
                     "startedAt": str(session.get("created_at") or ""),
                 }
