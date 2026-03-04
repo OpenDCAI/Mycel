@@ -6,25 +6,17 @@ class _FakeProvider:
         return None
 
 
-def test_refresh_resource_snapshots_probes_unique_leases(monkeypatch):
+def test_refresh_resource_snapshots_probes_running_leases_only(monkeypatch):
     monkeypatch.setattr(resource_probe, "ensure_resource_snapshot_table", lambda: None)
     monkeypatch.setattr(
         resource_probe,
-        "init_providers_and_managers",
-        lambda: (
-            {"p1": _FakeProvider()},
-            {"p1": object()},
-        ),
-    )
-    monkeypatch.setattr(
-        resource_probe,
-        "load_all_sessions",
-        lambda _: [
-            {"provider": "p1", "session_id": "s-1", "lease_id": "l-1", "status": "running"},
-            {"provider": "p1", "session_id": "s-2", "lease_id": "l-1", "status": "paused"},
-            {"provider": "p1", "session_id": "s-3", "lease_id": "l-2", "status": "paused"},
+        "_running_lease_instances",
+        lambda: [
+            {"provider_name": "p1", "instance_id": "s-1", "lease_id": "l-1", "observed_state": "running"},
+            {"provider_name": "p1", "instance_id": "s-2", "lease_id": "l-2", "observed_state": "running"},
         ],
     )
+    monkeypatch.setattr(resource_probe, "build_provider_from_config_name", lambda _: _FakeProvider())
 
     calls: list[dict] = []
 
@@ -38,4 +30,21 @@ def test_refresh_resource_snapshots_probes_unique_leases(monkeypatch):
     assert result["probed"] == 2
     assert result["errors"] == 0
     assert {call["lease_id"] for call in calls} == {"l-1", "l-2"}
-    assert calls[0]["probe_mode"] in {"running_runtime", "non_running_sdk"}
+    assert calls[0]["probe_mode"] == "running_runtime"
+
+
+def test_refresh_resource_snapshots_counts_provider_build_error(monkeypatch):
+    monkeypatch.setattr(resource_probe, "ensure_resource_snapshot_table", lambda: None)
+    monkeypatch.setattr(
+        resource_probe,
+        "_running_lease_instances",
+        lambda: [
+            {"provider_name": "p-missing", "instance_id": "s-1", "lease_id": "l-1", "observed_state": "running"},
+        ],
+    )
+    monkeypatch.setattr(resource_probe, "build_provider_from_config_name", lambda _: None)
+
+    result = resource_probe.refresh_resource_snapshots()
+    assert result["probed"] == 0
+    assert result["errors"] == 1
+    assert result["running_leases"] == 1

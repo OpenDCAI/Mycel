@@ -39,11 +39,6 @@ def _read_refresh_interval_sec() -> float:
     return value
 
 
-def _read_probe_enabled() -> bool:
-    raw = (os.getenv("LEON_MONITOR_RESOURCE_PROBE_ENABLED") or "").strip().lower()
-    return raw in {"1", "true", "yes", "on"}
-
-
 def _with_refresh_metadata(payload: dict[str, Any], *, duration_ms: float, status: str, error: str | None) -> dict[str, Any]:
     summary = payload.setdefault("summary", {})
     snapshot_at = str(summary.get("snapshot_at") or _now_iso())
@@ -92,17 +87,15 @@ def get_resource_overview_snapshot() -> dict[str, Any]:
 async def resource_overview_refresh_loop() -> None:
     """Continuously refresh resource overview snapshot."""
     interval_sec = _read_refresh_interval_sec()
-    probe_enabled = _read_probe_enabled()
     while True:
-        if probe_enabled:
-            try:
-                await asyncio.wait_for(asyncio.to_thread(refresh_resource_snapshots), timeout=10.0)
-            except asyncio.CancelledError:
-                raise
-            except asyncio.TimeoutError:
-                print("[monitor] resource snapshot probe timeout")
-            except Exception as exc:
-                print(f"[monitor] resource snapshot probe error: {exc}")
+        try:
+            await asyncio.wait_for(asyncio.to_thread(refresh_resource_snapshots), timeout=10.0)
+        except asyncio.CancelledError:
+            raise
+        except asyncio.TimeoutError:
+            print("[monitor] resource snapshot probe timeout")
+        except Exception as exc:
+            print(f"[monitor] resource snapshot probe error: {exc}")
 
         try:
             # @@@refresh-loop-timebox - provider SDK calls may block; timebox loop wait to keep shutdown responsive.

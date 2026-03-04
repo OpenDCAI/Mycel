@@ -12,6 +12,78 @@ from sandbox.db import DEFAULT_DB_PATH as SANDBOX_DB_PATH
 from sandbox.manager import SandboxManager
 
 
+def build_provider_from_config_name(name: str) -> Any | None:
+    """Build one provider instance from sandbox config name."""
+    from sandbox.local import LocalSessionProvider
+
+    if name == "local":
+        return LocalSessionProvider(default_cwd=str(LOCAL_WORKSPACE_ROOT))
+
+    try:
+        config = SandboxConfig.load(name)
+    except Exception as e:
+        print(f"[sandbox] Failed to load {name}: {e}")
+        return None
+
+    try:
+        if config.provider == "agentbay":
+            from sandbox.providers.agentbay import AgentBayProvider
+
+            key = config.agentbay.api_key or os.getenv("AGENTBAY_API_KEY")
+            if not key:
+                return None
+            return AgentBayProvider(
+                api_key=key,
+                region_id=config.agentbay.region_id,
+                default_context_path=config.agentbay.context_path,
+                image_id=config.agentbay.image_id,
+                provider_name=name,
+            )
+
+        if config.provider == "docker":
+            from sandbox.providers.docker import DockerProvider
+
+            return DockerProvider(
+                image=config.docker.image,
+                mount_path=config.docker.mount_path,
+                provider_name=name,
+            )
+
+        if config.provider == "e2b":
+            from sandbox.providers.e2b import E2BProvider
+
+            key = config.e2b.api_key or os.getenv("E2B_API_KEY")
+            if not key:
+                return None
+            return E2BProvider(
+                api_key=key,
+                template=config.e2b.template,
+                default_cwd=config.e2b.cwd,
+                timeout=config.e2b.timeout,
+                provider_name=name,
+            )
+
+        if config.provider == "daytona":
+            from sandbox.providers.daytona import DaytonaProvider
+
+            key = config.daytona.api_key or os.getenv("DAYTONA_API_KEY")
+            if not key:
+                return None
+            return DaytonaProvider(
+                api_key=key,
+                api_url=config.daytona.api_url,
+                target=config.daytona.target,
+                default_cwd=config.daytona.cwd,
+                provider_name=name,
+            )
+    except Exception as e:
+        print(f"[sandbox] Failed to init provider {name}: {e}")
+        return None
+
+    print(f"[sandbox] Unsupported provider kind in {name}: {config.provider}")
+    return None
+
+
 def available_sandbox_types() -> list[dict[str, Any]]:
     """Scan ~/.leon/sandboxes/ for configured providers."""
     types = [{"name": "local", "available": True}]
@@ -29,65 +101,19 @@ def available_sandbox_types() -> list[dict[str, Any]]:
 
 def init_providers_and_managers() -> tuple[dict, dict]:
     """Load sandbox providers and managers from config files."""
-    from sandbox.local import LocalSessionProvider
-
-    providers: dict[str, Any] = {
-        "local": LocalSessionProvider(default_cwd=str(LOCAL_WORKSPACE_ROOT)),
-    }
+    providers: dict[str, Any] = {}
+    local_provider = build_provider_from_config_name("local")
+    if local_provider is not None:
+        providers["local"] = local_provider
     if not SANDBOXES_DIR.exists():
         managers = {name: SandboxManager(provider=p, db_path=SANDBOX_DB_PATH) for name, p in providers.items()}
         return providers, managers
 
     for config_file in SANDBOXES_DIR.glob("*.json"):
         name = config_file.stem
-        try:
-            config = SandboxConfig.load(name)
-            if config.provider == "agentbay":
-                from sandbox.providers.agentbay import AgentBayProvider
-
-                key = config.agentbay.api_key or os.getenv("AGENTBAY_API_KEY")
-                if key:
-                    providers[name] = AgentBayProvider(
-                        api_key=key,
-                        region_id=config.agentbay.region_id,
-                        default_context_path=config.agentbay.context_path,
-                        image_id=config.agentbay.image_id,
-                        provider_name=name,
-                    )
-            elif config.provider == "docker":
-                from sandbox.providers.docker import DockerProvider
-
-                providers[name] = DockerProvider(
-                    image=config.docker.image,
-                    mount_path=config.docker.mount_path,
-                    provider_name=name,
-                )
-            elif config.provider == "e2b":
-                from sandbox.providers.e2b import E2BProvider
-
-                key = config.e2b.api_key or os.getenv("E2B_API_KEY")
-                if key:
-                    providers[name] = E2BProvider(
-                        api_key=key,
-                        template=config.e2b.template,
-                        default_cwd=config.e2b.cwd,
-                        timeout=config.e2b.timeout,
-                        provider_name=name,
-                    )
-            elif config.provider == "daytona":
-                from sandbox.providers.daytona import DaytonaProvider
-
-                key = config.daytona.api_key or os.getenv("DAYTONA_API_KEY")
-                if key:
-                    providers[name] = DaytonaProvider(
-                        api_key=key,
-                        api_url=config.daytona.api_url,
-                        target=config.daytona.target,
-                        default_cwd=config.daytona.cwd,
-                        provider_name=name,
-                    )
-        except Exception as e:
-            print(f"[sandbox] Failed to load {name}: {e}")
+        provider = build_provider_from_config_name(name)
+        if provider is not None:
+            providers[name] = provider
 
     managers = {name: SandboxManager(provider=p, db_path=SANDBOX_DB_PATH) for name, p in providers.items()}
     return providers, managers
