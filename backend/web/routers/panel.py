@@ -93,6 +93,12 @@ async def create_task(req: CreateTaskRequest) -> dict[str, Any]:
     return await asyncio.to_thread(task_service.create_task, **req.model_dump())
 
 
+@router.put("/tasks/bulk-status")
+async def bulk_update_status(req: BulkTaskStatusRequest) -> dict[str, Any]:
+    count = await asyncio.to_thread(task_service.bulk_update_task_status, req.ids, req.status)
+    return {"updated": count}
+
+
 @router.put("/tasks/{task_id}")
 async def update_task(task_id: str, req: UpdateTaskRequest) -> dict[str, Any]:
     item = await asyncio.to_thread(task_service.update_task, task_id, **req.model_dump())
@@ -107,12 +113,6 @@ async def delete_task(task_id: str) -> dict[str, Any]:
     if not ok:
         raise HTTPException(404, "Task not found")
     return {"success": True}
-
-
-@router.put("/tasks/bulk-status")
-async def bulk_update_status(req: BulkTaskStatusRequest) -> dict[str, Any]:
-    count = await asyncio.to_thread(task_service.bulk_update_task_status, req.ids, req.status)
-    return {"updated": count}
 
 
 # ── Cron Jobs ──
