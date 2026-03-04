@@ -6,7 +6,7 @@ RUNTIME_DIR="$ROOT_DIR/.runtime/lan"
 LOG_DIR="$RUNTIME_DIR/logs"
 PID_DIR="$RUNTIME_DIR/pids"
 
-BACKEND_HOST="127.0.0.1"
+BACKEND_HOST="0.0.0.0"
 BACKEND_PORT="${LEON_BACKEND_PORT:-18001}"
 FRONTEND_HOST="0.0.0.0"
 FRONTEND_PORT="${LEON_FRONTEND_PORT:-15173}"
@@ -61,6 +61,22 @@ wait_http_ok() {
   return 1
 }
 
+check_cors_preflight() {
+  local url="$1"
+  local origin="$2"
+  local headers
+  headers="$(curl -sS -i -X OPTIONS "$url" \
+    -H "Origin: $origin" \
+    -H "Access-Control-Request-Method: GET" \
+    -H "Access-Control-Request-Headers: content-type" || true)"
+  # @@@cors-fail-loud - Treat missing CORS headers as deployment misconfiguration so LAN/manual QA fails fast.
+  if ! printf '%s\n' "$headers" | grep -qi '^access-control-allow-origin:'; then
+    echo "ERROR: CORS preflight check failed for $url" >&2
+    printf '%s\n' "$headers" >&2
+    exit 1
+  fi
+}
+
 ensure_port_free() {
   local port="$1"
   local label="$2"
@@ -94,7 +110,8 @@ if ! kill -0 "$BACKEND_PID" >/dev/null 2>&1; then
   exit 1
 fi
 
-wait_http_ok "http://${BACKEND_HOST}:${BACKEND_PORT}/openapi.json" "backend"
+wait_http_ok "http://127.0.0.1:${BACKEND_PORT}/api/health" "backend"
+check_cors_preflight "http://127.0.0.1:${BACKEND_PORT}/api/health" "http://192.168.31.117:${FRONTEND_PORT}"
 ss -ltn "( sport = :${BACKEND_PORT} )" | grep -q "${BACKEND_HOST}:${BACKEND_PORT}"
 
 cd "$ROOT_DIR/frontend/app"
@@ -110,7 +127,7 @@ if ! kill -0 "$FRONTEND_PID" >/dev/null 2>&1; then
   exit 1
 fi
 
-wait_http_ok "http://127.0.0.1:${FRONTEND_PORT}/resources" "frontend"
+wait_http_ok "http://127.0.0.1:${FRONTEND_PORT}/api/health" "frontend-proxy"
 ss -ltn "( sport = :${FRONTEND_PORT} )" | grep -q "0.0.0.0:${FRONTEND_PORT}"
 
 LAN_IP="$(hostname -I | tr ' ' '\n' | grep -E '^[0-9]+(\.[0-9]+){3}$' | grep -v '^127\.' | head -n1 || true)"

@@ -14,6 +14,11 @@ from backend.web.routers import debug, panel, sandbox, settings, threads, webhoo
 # Create FastAPI app
 app = FastAPI(title="Leon Web Backend", lifespan=lifespan)
 
+
+@app.get("/api/health")
+def api_health() -> dict[str, bool]:
+    return {"ok": True}
+
 # Add CORS middleware
 app.add_middleware(
     CORSMiddleware,

@@ -31,7 +31,7 @@ scripts/lan/start.sh
 
 默认端口：
 
-- backend: `127.0.0.1:18001`
+- backend: `0.0.0.0:18001`
 - frontend: `0.0.0.0:15173`
 
 可用环境变量覆盖：
@@ -53,8 +53,8 @@ LEON_BACKEND_PORT=8001 LEON_FRONTEND_PORT=5173 scripts/lan/start.sh
 
 ```bash
 scripts/lan/status.sh
-curl -fsS http://127.0.0.1:18001/openapi.json >/dev/null
-curl -fsS http://127.0.0.1:15173/resources >/dev/null
+curl -fsS http://127.0.0.1:18001/api/health >/dev/null
+curl -fsS http://127.0.0.1:15173/api/health >/dev/null
 ```
 
 ## 停止
