@@ -2,7 +2,6 @@
 
 from typing import Any
 
-from .errors import MonitorCoreNotFoundError
 from . import mappers, queries
 
 
@@ -28,7 +27,7 @@ def get_lease(lease_id: str) -> dict[str, Any]:
     with queries.connect_db() as db:
         lease = queries.query_lease(db, lease_id)
         if not lease:
-            raise MonitorCoreNotFoundError("Lease not found")
+            raise KeyError("Lease not found")
         threads = queries.query_lease_threads(db, lease_id)
         events = queries.query_lease_events(db, lease_id)
     return mappers.map_lease_detail(lease_id, lease, threads, events)
@@ -50,5 +49,5 @@ def get_event(event_id: str) -> dict[str, Any]:
     with queries.connect_db() as db:
         event = queries.query_event(db, event_id)
     if not event:
-        raise MonitorCoreNotFoundError("Event not found")
+        raise KeyError("Event not found")
     return mappers.map_event_detail(event_id, event)

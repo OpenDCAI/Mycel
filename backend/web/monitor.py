@@ -4,7 +4,7 @@ import asyncio
 
 from fastapi import APIRouter, HTTPException
 
-from backend.web.monitor_core import MonitorCoreNotFoundError, diagnose, observe
+from backend.web.monitor_core import diagnose, observe
 from backend.web.monitor_core.resource_overview_cache import (
     get_resource_overview_snapshot,
     refresh_resource_overview_sync,
@@ -32,7 +32,7 @@ def list_leases():
 def get_lease(lease_id: str):
     try:
         return observe.get_lease(lease_id)
-    except MonitorCoreNotFoundError as e:
+    except KeyError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
 
 
@@ -50,7 +50,7 @@ def list_events(limit: int = 100):
 def get_event(event_id: str):
     try:
         return observe.get_event(event_id)
-    except MonitorCoreNotFoundError as e:
+    except KeyError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
 
 
