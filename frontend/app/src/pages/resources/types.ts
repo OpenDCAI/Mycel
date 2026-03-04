@@ -38,16 +38,17 @@ export interface ProviderTelemetry {
 }
 
 export interface SessionMetrics {
-  cpu: number;
-  memory: number;
-  disk: number;
-  networkIn: number;
-  networkOut: number;
+  cpu: number | null;
+  memory: number | null;
+  disk: number | null;
+  networkIn: number | null;
+  networkOut: number | null;
   webUrl?: string;
 }
 
 export interface ResourceSession {
   id: string;
+  leaseId?: string;
   threadId: string;
   agentId: string;
   agentName: string;

@@ -26,7 +26,6 @@ export default function ProviderCard({ provider, selected, onSelect }: ProviderC
   const isUnavailable = status === "unavailable";
   const isActive = status === "active";
   const TypeIcon = typeIcon[type];
-  const primaryMetric = telemetry.quota ?? telemetry.cpu;
 
   const runningSessions = sessions.filter((s) => s.status === "running");
   const pausedSessions = sessions.filter((s) => s.status === "paused");
@@ -69,32 +68,22 @@ export default function ProviderCard({ provider, selected, onSelect }: ProviderC
         <span className="text-[11px] text-muted-foreground">{typeLabel[type]}</span>
       </div>
 
-      {/* Center: quota ring or special state */}
+      {/* Center: fixed dual metrics (running + CPU) */}
       <div className="flex items-center justify-center min-h-[52px] mb-3 py-2 rounded-lg bg-muted/30">
-        {type === "local" ? (
-          <div className="text-center">
-            <span className="text-2xl font-mono font-bold text-foreground">&infin;</span>
-            <p className="text-[11px] text-muted-foreground">无限制</p>
-          </div>
-        ) : isUnavailable ? (
+        {isUnavailable ? (
           <div className="text-center">
             <p className="text-xs text-muted-foreground">未就绪</p>
             <p className="text-[10px] text-muted-foreground/60 mt-0.5">需要 Docker</p>
           </div>
-        ) : primaryMetric.used != null && primaryMetric.limit != null ? (
-          <div className="text-center">
-            <QuotaRing used={primaryMetric.used} limit={primaryMetric.limit} />
-            <p className="text-[10px] text-muted-foreground mt-1">
-              {telemetry.quota ? "配额使用" : "CPU 使用"}
-            </p>
-          </div>
         ) : (
-          <div className="text-center">
-            <span className="text-sm font-mono text-muted-foreground">
-              {telemetry.running.used}
-              {telemetry.running.limit != null ? `/${telemetry.running.limit}` : ""}
-            </span>
-            <p className="text-[10px] text-muted-foreground">运行数</p>
+          <div className="flex items-center justify-center gap-6">
+            <MetricCircle
+              label="运行数"
+              used={telemetry.running.used}
+              limit={telemetry.running.limit}
+              unit={telemetry.running.unit}
+            />
+            <MetricCircle label="CPU" used={telemetry.cpu.used} limit={telemetry.cpu.limit} unit={telemetry.cpu.unit} />
           </div>
         )}
       </div>
@@ -110,7 +99,7 @@ export default function ProviderCard({ provider, selected, onSelect }: ProviderC
               key={s.id}
               className={[
                 "w-2 h-2 rounded-full",
-                s.status === "running" ? "bg-foreground" : s.status === "paused" ? "bg-warning/80" : "bg-border",
+                s.status === "running" ? "bg-success" : s.status === "paused" ? "bg-warning/80" : "bg-border",
               ].join(" ")}
             />
           ))}
@@ -123,4 +112,49 @@ export default function ProviderCard({ provider, selected, onSelect }: ProviderC
       )}
     </button>
   );
+}
+
+function MetricCircle({
+  label,
+  used,
+  limit,
+  unit,
+}: {
+  label: string;
+  used: number | null;
+  limit: number | null;
+  unit: string;
+}) {
+  const showRing = used != null && limit != null && limit > 0;
+  return (
+    <div className="text-center min-w-[64px]">
+      {showRing ? (
+        <QuotaRing used={used} limit={limit} />
+      ) : (
+        <div className="w-12 h-12 rounded-full border border-border bg-card flex items-center justify-center mx-auto">
+          <span className="text-xs font-mono font-semibold text-foreground">{formatUsed(used)}</span>
+        </div>
+      )}
+      <p className="text-[10px] text-muted-foreground mt-1">{label}</p>
+      <p className="text-[9px] text-muted-foreground/60 font-mono">{formatLimit(limit, unit)}</p>
+    </div>
+  );
+}
+
+function formatUsed(value: number | null): string {
+  if (value == null) {
+    return "--";
+  }
+  if (Number.isInteger(value)) {
+    return String(value);
+  }
+  return value.toFixed(1).replace(/\.0$/, "");
+}
+
+function formatLimit(limit: number | null, unit: string): string {
+  if (limit == null) {
+    return `limit: -- ${unit}`;
+  }
+  const show = Number.isInteger(limit) ? String(limit) : limit.toFixed(1).replace(/\.0$/, "");
+  return `limit: ${show} ${unit}`;
 }

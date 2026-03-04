@@ -1,6 +1,6 @@
 import { Monitor, Cloud, Container, Lock, Settings, ArrowRight, ExternalLink } from "lucide-react";
 import { Link } from "react-router-dom";
-import type { AllocatedResource, ProviderInfo, UsageMetric } from "./types";
+import type { AllocatedResource, ProviderInfo, ResourceSession, UsageMetric } from "./types";
 import ResourceAllocation from "./ResourceAllocation";
 
 const typeIcon = {
@@ -120,6 +120,15 @@ export default function ProviderDetail({ provider, allocatedResources }: Provide
           </div>
         )}
 
+        <div className="mb-5">
+          <div className="mb-2">
+            <span className="text-[11px] text-muted-foreground uppercase tracking-wider font-medium">沙盒列表</span>
+          </div>
+          <div className="rounded-lg bg-muted/15 border border-border/40 p-3">
+            <SessionMetricsList sessions={provider.sessions} />
+          </div>
+        </div>
+
         <div>
           <div className="mb-2">
             <span className="text-[11px] text-muted-foreground uppercase tracking-wider font-medium">资源分配</span>
@@ -131,6 +140,77 @@ export default function ProviderDetail({ provider, allocatedResources }: Provide
       </div>
     </div>
   );
+}
+
+function SessionMetricsList({ sessions }: { sessions: ResourceSession[] }) {
+  if (sessions.length === 0) {
+    return <p className="text-xs text-muted-foreground">暂无沙盒会话</p>;
+  }
+
+  return (
+    <div className="space-y-2">
+      {sessions.map((session) => (
+        <div key={session.id} className="rounded-md border border-border/50 bg-card/60 px-3 py-2">
+          <div className="flex items-center justify-between gap-2 mb-1">
+            <div className="flex items-center gap-2">
+              <StatusDot status={session.status} />
+              <span className="text-xs text-foreground font-medium">{session.agentName || "Unknown"}</span>
+              <span className="text-[10px] text-muted-foreground font-mono">{shortId(session.threadId)}</span>
+            </div>
+            <span className="text-[10px] text-muted-foreground font-mono">{session.status}</span>
+          </div>
+          <div className="grid grid-cols-3 gap-2 text-[10px] font-mono">
+            <MetricCell label="CPU" value={session.metrics?.cpu} unit="%" />
+            <MetricCell label="RAM" value={session.metrics?.memory} unit="GB" />
+            <MetricCell label="磁盘" value={session.metrics?.disk} unit="GB" />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function StatusDot({ status }: { status: ResourceSession["status"] }) {
+  return (
+    <span
+      className={[
+        "h-2 w-2 rounded-full",
+        status === "running" ? "bg-success" : status === "paused" ? "bg-warning/80" : "bg-muted-foreground/40",
+      ].join(" ")}
+    />
+  );
+}
+
+function MetricCell({
+  label,
+  value,
+  unit,
+}: {
+  label: string;
+  value: number | null | undefined;
+  unit: string;
+}) {
+  return (
+    <div className="rounded border border-border/40 bg-muted/20 px-2 py-1">
+      <p className="text-muted-foreground">{label}</p>
+      <p className="text-foreground font-semibold">{formatMetricValue(value, unit)}</p>
+    </div>
+  );
+}
+
+function formatMetricValue(value: number | null | undefined, unit: string): string {
+  if (value == null) {
+    return "--";
+  }
+  const show = Number.isInteger(value) ? String(value) : value.toFixed(1).replace(/\.0$/, "");
+  return `${show}${unit}`;
+}
+
+function shortId(raw: string): string {
+  if (!raw) {
+    return "--";
+  }
+  return raw.length <= 12 ? raw : `${raw.slice(0, 8)}...`;
 }
 
 function StatBlock({

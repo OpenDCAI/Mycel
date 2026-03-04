@@ -203,6 +203,33 @@ def _sum_or_none(values: list[float | int]) -> float | None:
     return float(sum(values))
 
 
+def _as_float(value: Any) -> float | None:
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float)):
+        return float(value)
+    return None
+
+
+def _to_session_metrics(snapshot: dict[str, Any] | None) -> dict[str, float | None] | None:
+    if not snapshot:
+        return None
+    cpu = _as_float(snapshot.get("cpu_used"))
+    memory_mb = _as_float(snapshot.get("memory_used_mb"))
+    disk_gb = _as_float(snapshot.get("disk_used_gb"))
+    network_rx = _as_float(snapshot.get("network_rx_kbps"))
+    network_tx = _as_float(snapshot.get("network_tx_kbps"))
+    if cpu is None and memory_mb is None and disk_gb is None and network_rx is None and network_tx is None:
+        return None
+    return {
+        "cpu": cpu,
+        "memory": (memory_mb / 1024.0) if memory_mb is not None else None,
+        "disk": disk_gb,
+        "networkIn": network_rx,
+        "networkOut": network_tx,
+    }
+
+
 def _aggregate_provider_telemetry(
     *,
     provider_sessions: list[dict[str, Any]],
@@ -240,7 +267,7 @@ def _aggregate_provider_telemetry(
 
     return {
         "running": _metric(running_count, None, "sandbox", "sandbox_db", "cached"),
-        "cpu": _usage_metric(cpu_used, cpu_limit, "cores"),
+        "cpu": _usage_metric(cpu_used, cpu_limit, "%"),
         "memory": _usage_metric(memory_used_gb, memory_limit_gb, "GB"),
         "disk": _usage_metric(disk_used_gb, disk_limit_gb, "GB"),
     }
@@ -278,15 +305,19 @@ def list_resource_providers() -> dict[str, Any]:
             if normalized == "running":
                 running_count += 1
             thread_id = str(session.get("thread_id") or "")
+            lease_id = str(session.get("lease_id") or "")
+            session_metrics = _to_session_metrics(snapshot_by_lease.get(lease_id))
             owner = owners.get(thread_id, {"agent_id": None, "agent_name": "Unknown"})
             normalized_sessions.append(
                 {
                     "id": str(session.get("session_id") or ""),
+                    "leaseId": lease_id,
                     "threadId": thread_id,
                     "agentId": str(owner.get("agent_id") or ""),
                     "agentName": str(owner.get("agent_name") or "Unknown"),
                     "status": normalized,
                     "startedAt": str(session.get("created_at") or ""),
+                    "metrics": session_metrics,
                 }
             )
 
