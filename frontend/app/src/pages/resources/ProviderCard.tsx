@@ -26,7 +26,7 @@ export default function ProviderCard({ provider, selected, onSelect }: ProviderC
   const isUnavailable = status === "unavailable";
   const isActive = status === "active";
   const TypeIcon = typeIcon[type];
-  const secondary = resolveSecondaryMetric(telemetry);
+  const secondary = resolveSecondaryMetric(provider);
 
   const runningSessions = sessions.filter((s) => s.status === "running");
   const pausedSessions = sessions.filter((s) => s.status === "paused");
@@ -120,24 +120,27 @@ export default function ProviderCard({ provider, selected, onSelect }: ProviderC
   );
 }
 
-function resolveSecondaryMetric(telemetry: ProviderInfo["telemetry"]): {
+function resolveSecondaryMetric(provider: ProviderInfo): {
   label: string;
   used: number | null;
   limit: number | null;
   unit: string;
 } {
-  const candidates = [
-    { label: "CPU", metric: telemetry.cpu },
-    { label: "内存", metric: telemetry.memory },
-    { label: "磁盘", metric: telemetry.disk },
-  ];
-  // @@@runtime-metric-priority - card keeps one runtime metric ring to avoid mixing quota semantics into runtime usage.
-  const chosen = candidates.find((item) => item.metric.used != null || item.metric.limit != null) ?? candidates[0];
+  const cpu = provider.telemetry.cpu;
+  // @@@cloud-cpu-guardrail - cloud card must not display locally aggregated CPU as quota-like truth; show placeholder until real provider quota signal is available.
+  if (provider.type === "cloud") {
+    return {
+      label: "CPU",
+      used: null,
+      limit: null,
+      unit: cpu.unit,
+    };
+  }
   return {
-    label: chosen.label,
-    used: chosen.metric.used,
-    limit: chosen.metric.limit,
-    unit: chosen.metric.unit,
+    label: "CPU",
+    used: cpu.used,
+    limit: cpu.limit,
+    unit: cpu.unit,
   };
 }
 
