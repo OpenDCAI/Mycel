@@ -1,9 +1,9 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import {
   Search, CheckCircle2, Circle, Clock, AlertCircle,
-  ListTodo, ArrowUpDown, ChevronDown, ChevronUp, LayoutGrid, List,
+  ListTodo, ArrowUpDown, ChevronDown, ChevronUp, ChevronRight, LayoutGrid, List,
   Plus, AlertTriangle, RefreshCw, ExternalLink,
-  Play, Trash2, Timer,
+  Play, Trash2, Timer, Loader2,
 } from "lucide-react";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { toast } from "sonner";
@@ -12,7 +12,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { useAppStore } from "@/store/app-store";
-import type { Task, TaskStatus, CronJob } from "@/store/types";
+import type { Task, TaskStatus, CronJob, Priority } from "@/store/types";
 import CronEditor from "@/components/cron-editor";
 import TaskModal from "@/components/task-modal";
 
@@ -99,6 +99,10 @@ export default function Tasks() {
   const [taskModalTab, setTaskModalTab] = useState<"task" | "cron">("task");
   const [editingTask, setEditingTask] = useState<Task | undefined>(undefined);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+
+  // Expandable task row state
+  const [expandedTaskId, setExpandedTaskId] = useState<string | null>(null);
+  const [threadCache, setThreadCache] = useState<Record<string, { text: string | null; loading: boolean; error: string | null }>>({});
 
   // Cron editing state
   const [editingCron, setEditingCron] = useState<CronJob | null>(null);
@@ -204,6 +208,45 @@ export default function Tasks() {
     } catch (e: unknown) {
       toast.error("触发失败: " + (e instanceof Error ? e.message : String(e)));
     }
+  };
+
+  const fetchThreadDetail = useCallback(async (threadId: string) => {
+    setThreadCache((prev) => {
+      if (prev[threadId]?.loading || (prev[threadId] && !prev[threadId].loading && (prev[threadId].text !== null || prev[threadId].error !== null))) return prev;
+      return { ...prev, [threadId]: { text: null, loading: true, error: null } };
+    });
+    try {
+      const res = await fetch(`/api/threads/${threadId}`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      const messages: Array<{ role: string; content: string | Array<{ type: string; text?: string }> }> = data.messages || [];
+      let lastText: string | null = null;
+      for (let i = messages.length - 1; i >= 0; i--) {
+        const msg = messages[i];
+        if (msg.role === "assistant") {
+          const content = msg.content;
+          if (typeof content === "string") {
+            lastText = content;
+          } else if (Array.isArray(content)) {
+            const textBlock = content.find((c) => c.type === "text" && c.text);
+            if (textBlock?.text) lastText = textBlock.text;
+          }
+          if (lastText) break;
+        }
+      }
+      if (lastText && lastText.length > 300) lastText = lastText.slice(0, 300) + "…";
+      setThreadCache((prev) => ({ ...prev, [threadId]: { text: lastText, loading: false, error: null } }));
+    } catch (e: unknown) {
+      setThreadCache((prev) => ({ ...prev, [threadId]: { text: null, loading: false, error: e instanceof Error ? e.message : "加载失败" } }));
+    }
+  }, []);
+
+  const toggleExpand = (e: React.MouseEvent, task: Task) => {
+    e.stopPropagation();
+    if (!task.thread_id) return;
+    const isExpanding = expandedTaskId !== task.id;
+    setExpandedTaskId(isExpanding ? task.id : null);
+    if (isExpanding) fetchThreadDetail(task.thread_id);
   };
 
   const allTags = useMemo(() => {
@@ -607,7 +650,7 @@ export default function Tasks() {
             </div>
           ) : (
             <>
-              <div className="grid grid-cols-[32px_32px_1fr_80px_160px_80px_60px] gap-2 px-6 py-2 border-b border-border text-[11px] text-muted-foreground uppercase tracking-wider font-medium sticky top-0 bg-background z-10">
+              <div className="grid grid-cols-[32px_32px_1fr_80px_160px_80px_60px_28px] gap-2 px-6 py-2 border-b border-border text-[11px] text-muted-foreground uppercase tracking-wider font-medium sticky top-0 bg-background z-10">
                 <span className="flex items-center">
                   <input type="checkbox" aria-label="全选任务" checked={selectedRows.size === filtered.length && filtered.length > 0} onChange={toggleSelectAll} className="w-3.5 h-3.5 accent-primary rounded" />
                 </span>
@@ -617,6 +660,7 @@ export default function Tasks() {
                 <span>执行者</span>
                 <span>进度</span>
                 <button onClick={() => handleSort("created_at")} className="flex items-center hover:text-foreground transition-colors">时间 <SortIcon field="created_at" /></button>
+                <span />
               </div>
 
               {filtered.length === 0 ? (
@@ -635,72 +679,117 @@ export default function Tasks() {
                   const status = statusConfig[task.status];
                   const priority = priorityConfig[task.priority];
                   const StatusIcon = status.icon;
+                  const isExpanded = expandedTaskId === task.id;
+                  const cache = task.thread_id ? threadCache[task.thread_id] : null;
                   return (
-                    <div
-                      key={task.id}
-                      onClick={() => openEdit(task)}
-                      className={`grid grid-cols-[32px_32px_1fr_80px_160px_80px_60px] gap-2 px-6 py-3 border-b border-border hover:bg-muted/30 transition-colors cursor-pointer items-center ${
-                        editingTask?.id === task.id ? "bg-primary/[0.03]" : ""
-                      } ${task.status === "failed" ? "bg-destructive/[0.03] border-l-2 border-l-destructive" : ""}`}
-                    >
-                      <span className="flex items-center" onClick={(e) => e.stopPropagation()}>
-                        <input type="checkbox" aria-label={`选择任务: ${task.title}`} checked={selectedRows.has(task.id)} onChange={() => toggleSelectRow(task.id)} className="w-3.5 h-3.5 accent-primary rounded" />
-                      </span>
-                      <StatusIcon className={`w-4 h-4 ${status.color}`} />
-                      <span className="text-sm font-medium text-foreground truncate flex items-center gap-1 flex-wrap">
-                        {task.title}
-                        {task.source && task.source !== "manual" && (
-                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-primary/10 text-primary ml-1 shrink-0">
-                            {sourceLabel[task.source] || task.source}
-                          </span>
-                        )}
-                        {(task.tags || []).map((tag) => (
-                          <button
-                            key={tag}
-                            onClick={(e) => { e.stopPropagation(); setTagFilter(tagFilter === tag ? null : tag); }}
-                            className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium shrink-0 transition-colors ${
-                              tagFilter === tag ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:bg-primary/10 hover:text-primary"
-                            }`}
-                          >
-                            {tag}
-                          </button>
-                        ))}
-                        {task.thread_id && (
-                          <a href={`/chat/${task.thread_id}`}
-                             className="text-muted-foreground hover:text-primary ml-1 shrink-0"
-                             onClick={(e) => e.stopPropagation()}>
-                            <ExternalLink className="w-3.5 h-3.5" />
-                          </a>
-                        )}
-                      </span>
-                      <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium w-fit ${priority.className}`}>{priority.label}</span>
-                      <div className="flex items-center gap-2">
-                        {task.assignee_id ? (() => { const { name, avatar } = getAssigneeInfo(task.assignee_id); return name ? (
-                          <>
-                            <div className="w-5 h-5 rounded bg-primary/10 flex items-center justify-center shrink-0">
-                              <span className="text-[8px] font-mono text-primary font-bold">{avatar}</span>
+                    <div key={task.id}>
+                      <div
+                        onClick={() => openEdit(task)}
+                        className={`grid grid-cols-[32px_32px_1fr_80px_160px_80px_60px_28px] gap-2 px-6 py-3 border-b border-border hover:bg-muted/30 transition-colors cursor-pointer items-center ${
+                          editingTask?.id === task.id ? "bg-primary/[0.03]" : ""
+                        } ${task.status === "failed" ? "bg-destructive/[0.03] border-l-2 border-l-destructive" : ""} ${isExpanded ? "bg-muted/20" : ""}`}
+                      >
+                        <span className="flex items-center" onClick={(e) => e.stopPropagation()}>
+                          <input type="checkbox" aria-label={`选择任务: ${task.title}`} checked={selectedRows.has(task.id)} onChange={() => toggleSelectRow(task.id)} className="w-3.5 h-3.5 accent-primary rounded" />
+                        </span>
+                        <StatusIcon className={`w-4 h-4 ${status.color}`} />
+                        <span className="text-sm font-medium text-foreground truncate flex items-center gap-1 flex-wrap">
+                          {task.title}
+                          {task.source && task.source !== "manual" && (
+                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-primary/10 text-primary ml-1 shrink-0">
+                              {sourceLabel[task.source] || task.source}
+                            </span>
+                          )}
+                          {(task.tags || []).map((tag) => (
+                            <button
+                              key={tag}
+                              onClick={(e) => { e.stopPropagation(); setTagFilter(tagFilter === tag ? null : tag); }}
+                              className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium shrink-0 transition-colors ${
+                                tagFilter === tag ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:bg-primary/10 hover:text-primary"
+                              }`}
+                            >
+                              {tag}
+                            </button>
+                          ))}
+                        </span>
+                        <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium w-fit ${priority.className}`}>{priority.label}</span>
+                        <div className="flex items-center gap-2">
+                          {task.assignee_id ? (() => { const { name, avatar } = getAssigneeInfo(task.assignee_id); return name ? (
+                            <>
+                              <div className="w-5 h-5 rounded bg-primary/10 flex items-center justify-center shrink-0">
+                                <span className="text-[8px] font-mono text-primary font-bold">{avatar}</span>
+                              </div>
+                              <span className="text-xs text-muted-foreground truncate">{name}</span>
+                            </>
+                          ) : <span className="text-xs text-muted-foreground">未分配</span>; })() : (
+                            <span className="text-xs text-muted-foreground">未分配</span>
+                          )}
+                        </div>
+                        <div>
+                          {task.status === "running" ? (
+                            <div className="flex items-center gap-1.5">
+                              <div className="w-12 h-1.5 rounded-full bg-muted overflow-hidden">
+                                <div className="h-full bg-primary rounded-full" style={{ width: `${task.progress}%` }} />
+                              </div>
+                              <span className="text-[10px] font-mono text-primary">{task.progress}%</span>
                             </div>
-                            <span className="text-xs text-muted-foreground truncate">{name}</span>
-                          </>
-                        ) : <span className="text-xs text-muted-foreground">未分配</span>; })() : (
-                          <span className="text-xs text-muted-foreground">未分配</span>
-                        )}
+                          ) : task.status === "completed" ? (
+                            <span className="text-[10px] font-mono text-success">100%</span>
+                          ) : (
+                            <span className="text-[10px] text-muted-foreground">—</span>
+                          )}
+                        </div>
+                        <span className="text-[11px] text-muted-foreground font-mono">{task.created_at ? new Date(task.created_at).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" }) : "--"}</span>
+                        <span className="flex items-center justify-center">
+                          {task.thread_id && (
+                            <button
+                              onClick={(e) => toggleExpand(e, task)}
+                              className="w-5 h-5 flex items-center justify-center rounded text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                              title={isExpanded ? "收起执行详情" : "展开执行详情"}
+                            >
+                              {isExpanded ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
+                            </button>
+                          )}
+                        </span>
                       </div>
-                      <div>
-                        {task.status === "running" ? (
-                          <div className="flex items-center gap-1.5">
-                            <div className="w-12 h-1.5 rounded-full bg-muted overflow-hidden">
-                              <div className="h-full bg-primary rounded-full" style={{ width: `${task.progress}%` }} />
+                      {isExpanded && task.thread_id && (
+                        <div className="border-b border-border bg-muted/10 px-6 py-3">
+                          <div className="flex items-start gap-3">
+                            <div className="shrink-0 mt-0.5">
+                              <div className="w-1.5 h-1.5 rounded-full bg-primary mt-1.5" />
                             </div>
-                            <span className="text-[10px] font-mono text-primary">{task.progress}%</span>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 mb-2">
+                                <span className="text-[11px] text-muted-foreground font-mono">
+                                  Thread: {task.thread_id.slice(0, 8)}…
+                                </span>
+                                <a
+                                  href={`/chat/${task.thread_id}`}
+                                  className="inline-flex items-center gap-1 text-[11px] text-primary hover:underline"
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  <ExternalLink className="w-3 h-3" />
+                                  查看对话
+                                </a>
+                              </div>
+                              {cache?.loading ? (
+                                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                  加载中…
+                                </div>
+                              ) : cache?.error ? (
+                                <p className="text-xs text-destructive">{cache.error}</p>
+                              ) : cache?.text ? (
+                                <p className="text-xs text-foreground/80 leading-relaxed whitespace-pre-wrap border border-border rounded-md px-3 py-2 bg-background">
+                                  {cache.text}
+                                </p>
+                              ) : (
+                                <p className="text-xs text-muted-foreground italic">暂无 AI 回复记录</p>
+                              )}
+                            </div>
                           </div>
-                        ) : task.status === "completed" ? (
-                          <span className="text-[10px] font-mono text-success">100%</span>
-                        ) : (
-                          <span className="text-[10px] text-muted-foreground">—</span>
-                        )}
-                      </div>
-                      <span className="text-[11px] text-muted-foreground font-mono">{task.created_at ? new Date(task.created_at).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" }) : "--"}</span>
+                        </div>
+                      )}
                     </div>
                   );
                 })
