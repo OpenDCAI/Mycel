@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { Search, MessageSquare } from "lucide-react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "./ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "./ui/dialog";
 import { Input } from "./ui/input";
 import { useAppStore } from "@/store/app-store";
 
@@ -43,6 +43,7 @@ export default function NewChatDialog({ open, onOpenChange }: NewChatDialogProps
       <DialogContent className="sm:max-w-md p-0 gap-0">
         <DialogHeader className="px-4 pt-4 pb-3">
           <DialogTitle className="text-base">发起会话</DialogTitle>
+          <DialogDescription className="sr-only">选择成员发起新对话</DialogDescription>
         </DialogHeader>
         <div className="px-4 pb-3">
           <div className="relative">
