@@ -156,6 +156,7 @@ export interface StreamStatus {
   context: { message_count: number; estimated_tokens: number; usage_percent: number; near_limit: boolean };
   current_tool?: string;
   last_seq?: number;
+  run_start_seq?: number;
 }
 
 export interface ChatSettings {

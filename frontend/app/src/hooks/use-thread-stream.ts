@@ -144,7 +144,10 @@ class ThreadConnectionManager {
         if (runtime?.state?.state === "active") {
           this.setRunning(true);
         }
-        this.connect(runtime?.last_seq ?? 0);
+        const startSeq = (runtime?.state?.state === "active" && runtime?.run_start_seq != null)
+          ? Math.max(runtime.run_start_seq - 1, 0)
+          : (runtime?.last_seq ?? 0);
+        this.connect(startSeq);
       } catch (err) {
         if (this.version !== ver) return;
         console.error("[useThreadStream] init failed:", err);

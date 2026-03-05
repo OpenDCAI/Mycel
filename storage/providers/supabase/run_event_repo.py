@@ -130,6 +130,20 @@ class SupabaseRunEventRepo:
             )
         return int(seq)
 
+    def run_start_seq(self, thread_id: str, run_id: str) -> int:
+        query = q.limit(
+            q.order(
+                self._t().select("seq").eq("thread_id", thread_id).eq("run_id", run_id),
+                "seq", desc=False, repo=_REPO, operation="run_start_seq",
+            ),
+            1, _REPO, "run_start_seq",
+        )
+        rows = q.rows(query.execute(), _REPO, "run_start_seq")
+        if not rows:
+            return 0
+        seq = rows[0].get("seq")
+        return int(seq) if seq is not None else 0
+
     def latest_run_id(self, thread_id: str) -> str | None:
         query = q.limit(
             q.order(self._t().select("run_id,seq").eq("thread_id", thread_id), "seq", desc=True, repo=_REPO, operation="latest_run_id"),

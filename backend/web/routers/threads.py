@@ -220,7 +220,7 @@ async def get_thread_runtime(
     app: Annotated[Any, Depends(get_app)] = None,
 ) -> dict[str, Any]:
     """Get runtime status for a thread."""
-    from backend.web.services.event_store import get_last_seq
+    from backend.web.services.event_store import get_last_seq, get_latest_run_id, get_run_start_seq
     from backend.web.utils.helpers import lookup_thread_model
 
     sandbox_type = resolve_thread_sandbox(app, thread_id)
@@ -230,6 +230,10 @@ async def get_thread_runtime(
     status = agent.runtime.get_status_dict()
     status["model"] = lookup_thread_model(thread_id)
     status["last_seq"] = await get_last_seq(thread_id)
+    if status.get("state", {}).get("state") == "active":
+        run_id = await get_latest_run_id(thread_id)
+        if run_id:
+            status["run_start_seq"] = await get_run_start_seq(thread_id, run_id)
     return status
 
 

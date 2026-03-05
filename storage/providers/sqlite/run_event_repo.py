@@ -90,6 +90,14 @@ class SQLiteRunEventRepo:
             ).fetchone()
         return int(row[0]) if row and row[0] is not None else 0
 
+    def run_start_seq(self, thread_id: str, run_id: str) -> int:
+        with self._lock:
+            row = self._conn.execute(
+                "SELECT MIN(seq) FROM run_events WHERE thread_id = ? AND run_id = ?",
+                (thread_id, run_id),
+            ).fetchone()
+        return int(row[0]) if row and row[0] is not None else 0
+
     def latest_run_id(self, thread_id: str) -> str | None:
         with self._lock:
             row = self._conn.execute(
