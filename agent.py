@@ -102,6 +102,7 @@ class LeonAgent:
         sandbox: Any = None,
         storage_container: StorageContainer | None = None,
         queue_manager: MessageQueueManager | None = None,
+        registry: Any = None,
         verbose: bool = False,
     ):
         """
@@ -123,6 +124,7 @@ class LeonAgent:
         """
         self.verbose = verbose
         self.queue_manager = queue_manager or MessageQueueManager()
+        self._registry = registry
 
         # New config system mode
         self.config, self.models_config = self._load_config(
@@ -941,6 +943,8 @@ class LeonAgent:
             hooks=command_hooks,
             enabled_tools=command_tools,
             executor=cmd_executor,
+            registry=getattr(self, "_registry", None),
+            queue_manager=self.queue_manager,
             verbose=self.verbose,
         )
         middleware.append(self._command_middleware)

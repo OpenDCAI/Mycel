@@ -285,11 +285,11 @@ class TestDrainLoopRouting:
 
     @pytest.mark.asyncio
     async def test_non_subagent_events_still_go_to_parent(self, tmp_db, app):
-        """command_progress and other non-subagent events must still reach parent buf."""
+        """Non-subagent activity events must still reach parent buf."""
         task_id = "task-005"
         agent_id = f"subagent-{task_id}"
         events = [
-            {"event": "command_progress", "data": json.dumps({"output": "running..."})},
+            {"event": "notification", "data": json.dumps({"message": "running..."})},
             {"event": "task_start", "data": json.dumps(
                 {"task_id": task_id, "thread_id": f"subagent_{task_id}", "agent_id": agent_id}
             )},
@@ -301,7 +301,7 @@ class TestDrainLoopRouting:
         parent_buf = await _run(agent, "thread-E", app, tmp_db)
 
         parent_types = _parent_event_types(parent_buf)
-        assert "command_progress" in parent_types
+        assert "notification" in parent_types
 
     @pytest.mark.asyncio
     async def test_sa_buf_has_terminal_run_done_event(self, tmp_db, app):
