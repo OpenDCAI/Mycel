@@ -369,35 +369,15 @@ The agent will work independently and return results when complete.""",
         return self.runner.get_task_status(task_id)
 
     async def _handle_task_output(self, args: dict) -> TaskResult:
-        """Handle TaskOutput tool call with optional blocking."""
-        import asyncio
+        """Handle TaskOutput tool call.
 
+        Note: Block parameter is ignored. TaskOutput always returns current status.
+        If task is still running, agent should wait for task-notification to trigger
+        next turn, then call TaskOutput again to get final result.
+        """
         task_id = args.get("TaskId", "")
-        block = args.get("Block", True)
-        timeout_ms = args.get("Timeout", 600000)  # Default 10 minutes
-        timeout_ms = min(timeout_ms, 600000)  # Cap at 10 minutes
-
-        if not block:
-            return self.runner.get_task_status(task_id)
-
-        # Blocking wait for task completion
-        timeout_sec = timeout_ms / 1000
-        start_time = asyncio.get_event_loop().time()
-
-        while True:
-            result = self.runner.get_task_status(task_id)
-            if result.status != "running":
-                return result
-
-            elapsed = asyncio.get_event_loop().time() - start_time
-            if elapsed >= timeout_sec:
-                return TaskResult(
-                    task_id=task_id,
-                    status="timeout",
-                    error=f"Task did not complete within {timeout_ms}ms",
-                )
-
-            await asyncio.sleep(0.5)  # Poll every 500ms
+        # Block parameter is ignored - always return current status
+        return self.runner.get_task_status(task_id)
 
     def _make_tool_message(self, result: TaskResult, tool_id: str) -> ToolMessage:
         """Create tool message from result."""
