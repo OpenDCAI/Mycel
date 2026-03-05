@@ -555,7 +555,7 @@ async def _run_agent_to_buffer(
                     await emit(act_event)
 
                 else:
-                    # All other activity events (command_progress, background_task_*, etc.)
+                    # All other activity events
                     await emit(act_event)
 
         # Final status

@@ -18,8 +18,6 @@ interface StreamHandlerDeps {
   onUpdate: (updater: (prev: ChatEntry[]) => ChatEntry[]) => void;
   /** True while useThreadData is loading the snapshot — connection waits for this. */
   loading: boolean;
-  /** Callback for activity events (command_progress, background_task_*). */
-  onActivityEvent?: (event: StreamEvent) => void;
   /**
    * True when navigating from a new-chat creation (postRun already called in NewChatPage).
    * Tells useThreadStream to connect from seq=0 instead of last_seq, so we don't miss
@@ -70,7 +68,7 @@ function applyReconnectTurn(
 export function useStreamHandler(
   deps: StreamHandlerDeps,
 ): StreamHandlerState & StreamHandlerActions {
-  const { threadId, refreshThreads, onUpdate, loading, onActivityEvent, runStarted } = deps;
+  const { threadId, refreshThreads, onUpdate, loading, runStarted } = deps;
 
   // Local state for immediate UI feedback when user sends a message
   // (covers the window between flushSync and useThreadStream.isRunning becoming true)
@@ -88,8 +86,6 @@ export function useStreamHandler(
 
   const onUpdateRef = useRef(onUpdate);
   onUpdateRef.current = onUpdate;
-  const onActivityRef = useRef<((event: StreamEvent) => void) | undefined>(onActivityEvent);
-  onActivityRef.current = onActivityEvent;
   const refreshRef = useRef(refreshThreads);
   refreshRef.current = refreshThreads;
 
@@ -154,7 +150,6 @@ export function useStreamHandler(
         onUpdateRef.current,
         // runtimeStatus is managed by useThreadStream; pass no-op here
         () => {},
-        onActivityRef.current,
       );
 
       // Bind temporary turn ID to the server-assigned message ID (first time only)

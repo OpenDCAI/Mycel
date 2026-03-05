@@ -9,6 +9,7 @@ import InputBox from "../components/InputBox";
 import TaskProgress from "../components/TaskProgress";
 import TokenStats from "../components/TokenStats";
 import { useAppActions } from "../hooks/use-app-actions";
+import { useBackgroundTasks } from "../hooks/use-background-tasks";
 import { useResizableX } from "../hooks/use-resizable-x";
 import { useSandboxManager } from "../hooks/use-sandbox-manager";
 import { useStreamHandler } from "../hooks/use-stream-handler";
@@ -85,9 +86,10 @@ function ChatPageInner({ threadId }: { threadId: string }) {
       refreshThreads: tm.refreshThreads,
       onUpdate: (updater) => setEntries(updater),
       loading,
-      onActivityEvent: (e) => console.warn("[P3-pending] background event dropped:", e.type),
       runStarted,
     });
+
+  const { tasks } = useBackgroundTasks({ threadId, loading, refreshThreads: tm.refreshThreads });
 
   const isStreaming = isRunning;
 
@@ -152,6 +154,22 @@ function ChatPageInner({ threadId }: { threadId: string }) {
             onFocusAgent={handleFocusAgent}
             onTaskNoticeClick={handleTaskNoticeClick}
           />
+          {tasks.length > 0 && (
+            <div className="px-4 py-2 bg-blue-50 border-t border-blue-200">
+              <div className="text-xs font-medium text-blue-900 mb-1">后台任务 ({tasks.length})</div>
+              <div className="space-y-1">
+                {tasks.map((task) => (
+                  <div key={task.task_id} className="text-xs text-blue-700 flex items-center gap-2">
+                    <span className={task.status === "running" ? "animate-pulse" : ""}>
+                      {task.status === "running" ? "🔄" : task.status === "completed" ? "✅" : "❌"}
+                    </span>
+                    <span className="font-mono">{task.task_type}</span>
+                    <span className="flex-1 truncate">{task.command_line || task.description}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
           <TaskProgress
             isStreaming={isStreaming}
             runtimeStatus={runtimeStatus}

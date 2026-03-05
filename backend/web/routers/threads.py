@@ -456,29 +456,6 @@ async def cancel_command(
     raise HTTPException(404, "Command not found or already completed")
 
 
-@router.post("/{thread_id}/tasks/{task_id}/cancel")
-async def cancel_background_task(
-    thread_id: str,
-    task_id: str,
-    request: Request,
-) -> dict[str, Any]:
-    """Cancel a specific background sub-agent task."""
-    agent = _get_agent_for_thread(request.app, thread_id)
-    if not agent:
-        raise HTTPException(404, "Agent not found")
-
-    runner = getattr(getattr(agent, "_task_middleware", None), "runner", None)
-    if runner is None:
-        raise HTTPException(404, "Task not found or already completed")
-
-    active_tasks = getattr(runner, "_active_tasks", {})
-    if task_id in active_tasks:
-        active_tasks[task_id].cancel()
-        return {"cancelled": True, "task_id": task_id}
-
-    raise HTTPException(404, "Task not found or already completed")
-
-
 @router.post("/{thread_id}/task-agent/runs")
 async def run_task_agent(
     thread_id: str,
@@ -492,3 +469,144 @@ async def run_task_agent(
     sandbox_type = resolve_thread_sandbox(app, thread_id)
     buf = start_task_agent_run(thread_id, payload, app, sandbox_type)
     return {"run_id": buf.run_id, "thread_id": thread_id}
+
+
+# ---------------------------------------------------------------------------
+# Phase 4: Background Task Output API
+# ---------------------------------------------------------------------------
+
+
+@router.get("/{thread_id}/tasks")
+async def list_tasks(
+    thread_id: str,
+    request: Request,
+) -> list[dict]:
+    """列出线程的所有后台任务"""
+    registry = request.app.state.background_task_registry
+    tasks = await registry.list_by_thread(thread_id)
+
+    return [
+        {
+            "task_id": task.task_id,
+            "task_type": task.task_type,
+            "status": task.status,
+            "command_line": task.command_line,  # bash only
+            "description": task.description,  # agent only
+            "exit_code": task.exit_code,  # bash only
+            "error": task.error,
+        }
+        for task in tasks
+    ]
+
+
+@router.get("/{thread_id}/tasks/{task_id}")
+async def get_task(
+    thread_id: str,
+    task_id: str,
+    request: Request,
+) -> dict:
+    """获取任务详情（包含完整输出）"""
+    registry = request.app.state.background_task_registry
+    task = await registry.get(task_id)
+
+    if not task or task.thread_id != thread_id:
+        raise HTTPException(status_code=404, detail="Task not found")
+
+    return {
+        "task_id": task.task_id,
+        "task_type": task.task_type,
+        "status": task.status,
+        "command_line": task.command_line,
+        "description": task.description,
+        "subagent_type": task.subagent_type,
+        "exit_code": task.exit_code,
+        "error": task.error,
+        # 完整输出
+        "stdout": task.stdout_buffer,  # bash only
+        "stderr": task.stderr_buffer,  # bash only
+        "text": task.text_buffer,  # agent only
+        "result": task.result,  # agent only
+    }
+
+
+@router.get("/{thread_id}/tasks/{task_id}/stream")
+async def stream_task_output(
+    thread_id: str,
+    task_id: str,
+    request: Request,
+):
+    """SSE 流式输出任务进度（按需建连）"""
+    registry = request.app.state.background_task_registry
+    task = await registry.get(task_id)
+
+    if not task or task.thread_id != thread_id:
+        raise HTTPException(status_code=404, detail="Task not found")
+
+    async def event_generator():
+        if task.task_type == "bash":
+            # Tail subprocess stdout/stderr
+            process = task._process
+            if process and process.returncode is None:
+                # 实时读取 stdout/stderr
+                try:
+                    while True:
+                        line = await process.stdout.readline()
+                        if not line:
+                            break
+                        yield {
+                            "event": "output",
+                            "data": json.dumps({"type": "stdout", "line": line.decode()}, ensure_ascii=False),
+                        }
+                except Exception:
+                    pass
+
+        elif task.task_type == "agent":
+            # 从 text_buffer 读取
+            sent_count = 0
+            while task.status == "running":
+                if task.text_buffer and len(task.text_buffer) > sent_count:
+                    for text in task.text_buffer[sent_count:]:
+                        yield {
+                            "event": "output",
+                            "data": json.dumps({"type": "text", "content": text}, ensure_ascii=False),
+                        }
+                    sent_count = len(task.text_buffer)
+                await asyncio.sleep(0.1)
+
+        # 任务完成
+        yield {
+            "event": "task_done",
+            "data": json.dumps({"status": task.status}, ensure_ascii=False),
+        }
+
+    return EventSourceResponse(event_generator(), headers=SSE_HEADERS)
+
+
+@router.post("/{thread_id}/tasks/{task_id}/cancel")
+async def cancel_task(
+    thread_id: str,
+    task_id: str,
+    request: Request,
+) -> dict:
+    """取消任务（统一 bash + agent）"""
+    registry = request.app.state.background_task_registry
+    task = await registry.get(task_id)
+
+    if not task or task.thread_id != thread_id:
+        raise HTTPException(status_code=404, detail="Task not found")
+
+    if task.status != "running":
+        raise HTTPException(status_code=400, detail="Task is not running")
+
+    # 取消任务
+    if task.task_type == "bash" and task._process:
+        try:
+            task._process.terminate()
+        except ProcessLookupError:
+            pass
+    elif task.task_type == "agent" and task._async_task:
+        task._async_task.cancel()
+
+    await registry.update(task_id, status="error", error="Cancelled by user")
+
+    return {"success": True}
