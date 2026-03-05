@@ -90,6 +90,10 @@ class FakeProvider(SandboxProvider):
             SessionInfo(session_id=sid, provider=self.name, status=status) for sid, status in self._statuses.items()
         ]
 
+    def create_runtime(self, terminal, lease):
+        from sandbox.runtime import RemoteWrappedRuntime
+        return RemoteWrappedRuntime(terminal, lease, self)
+
 
 class _FakeSupabaseClient:
     def table(self, table_name: str):

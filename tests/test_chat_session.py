@@ -42,8 +42,10 @@ def lease_store(temp_db):
 @pytest.fixture
 def mock_provider():
     """Create mock SandboxProvider."""
+    from sandbox.providers.local import LocalPersistentShellRuntime
     provider = MagicMock()
     provider.name = "local"
+    provider.create_runtime.side_effect = lambda terminal, lease: LocalPersistentShellRuntime(terminal, lease)
     return provider
 
 
