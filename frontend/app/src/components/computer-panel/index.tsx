@@ -21,8 +21,6 @@ export default function ComputerPanel({
   width = 600,
   activeTab: controlledTab,
   onTabChange,
-  focusedAgentStepId = null,
-  onFocusAgent,
 }: ComputerPanelProps) {
   const [internalTab, setInternalTab] = useState<TabType>("terminal");
   const activeTab = controlledTab ?? internalTab;
@@ -81,9 +79,6 @@ export default function ComputerPanel({
         {activeTab === "agents" && (
           <AgentsView
             steps={agentSteps}
-            focusedStepId={focusedAgentStepId}
-            onFocusStep={(id) => onFocusAgent?.(id)}
-
           />
         )}
 

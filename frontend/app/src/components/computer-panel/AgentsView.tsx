@@ -13,19 +13,18 @@ type SubagentStream = NonNullable<ToolStep["subagent_stream"]>;
 
 interface AgentsViewProps {
   steps: ToolStep[];
-  focusedStepId: string | null;
-  onFocusStep: (id: string | null) => void;
 }
 
-export function AgentsView({ steps, focusedStepId, onFocusStep }: AgentsViewProps) {
+export function AgentsView({ steps }: AgentsViewProps) {
   const [leftWidth, setLeftWidth] = useState(280);
   const [isDragging, setIsDragging] = useState(false);
+  const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null);
   const [agentFocusedStepId, setAgentFocusedStepId] = useState<string | null>(null);
   const dragStartX = useRef(0);
   const dragStartWidth = useRef(0);
   const prevRunningRef = useRef(false);
 
-  const focused = steps.find((s) => s.id === focusedStepId) ?? null;
+  const focused = steps.find((s) => s.id === selectedAgentId) ?? null;
   const stream = focused?.subagent_stream;
   const threadId = stream?.thread_id || undefined;
   const isRunning = stream?.status === "running" || focused?.status === "calling";
@@ -107,8 +106,8 @@ export function AgentsView({ steps, focusedStepId, onFocusStep }: AgentsViewProp
             <AgentListItem
               key={step.id}
               step={step}
-              isSelected={step.id === focusedStepId}
-              onClick={() => onFocusStep(step.id)}
+              isSelected={step.id === selectedAgentId}
+              onClick={() => setSelectedAgentId(step.id)}
             />
           ))}
         </div>
