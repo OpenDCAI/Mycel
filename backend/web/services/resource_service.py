@@ -491,6 +491,45 @@ def sandbox_browse(lease_id: str, path: str) -> dict[str, Any]:
     return {"current_path": norm_path, "parent_path": parent_path, "items": items}
 
 
+_READ_MAX_BYTES = 100 * 1024  # 100 KB
+
+
+def sandbox_read(lease_id: str, path: str) -> dict[str, Any]:
+    """Read a file from a sandbox lease via its provider."""
+    repo = SQLiteSandboxMonitorRepo()
+    try:
+        lease = repo.query_lease(lease_id)
+        instance_id = repo.query_lease_instance_id(lease_id)
+    finally:
+        repo.close()
+
+    if not lease:
+        raise KeyError(f"Lease not found: {lease_id}")
+
+    provider_name = str(lease.get("provider_name") or "").strip()
+    if not provider_name:
+        raise RuntimeError("Lease has no provider")
+
+    if not instance_id:
+        raise RuntimeError("No active instance for this lease — sandbox may be destroyed or paused")
+
+    provider = build_provider_from_config_name(provider_name)
+    if provider is None:
+        raise RuntimeError(f"Could not initialize provider: {provider_name}")
+
+    try:
+        content = provider.read_file(instance_id, path)
+    except Exception as exc:
+        raise RuntimeError(f"Failed to read file: {exc}") from exc
+
+    truncated = False
+    if len(content.encode()) > _READ_MAX_BYTES:
+        content = content.encode()[:_READ_MAX_BYTES].decode(errors="replace")
+        truncated = True
+
+    return {"path": path, "content": content, "truncated": truncated}
+
+
 # ---------------------------------------------------------------------------
 # Public API: resource probe
 # ---------------------------------------------------------------------------

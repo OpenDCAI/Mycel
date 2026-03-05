@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ChevronDown, ChevronRight, Folder, Home } from "lucide-react";
+import { ChevronDown, ChevronRight, File, Folder, Home, X } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import type { ResourceSession, SessionMetrics } from "./types";
@@ -188,25 +188,60 @@ function SandboxBrowser({ leaseId, providerType }: { leaseId: string; providerTy
   const isLocal = providerType === "local" || !leaseId;
   const defaultPath = isLocal ? "~" : "/";
 
-  const buildUrl = (path: string) =>
+  const buildBrowseUrl = (path: string) =>
     isLocal
-      ? `/api/settings/browse?path=${encodeURIComponent(path)}`
+      ? `/api/settings/browse?path=${encodeURIComponent(path)}&include_files=true`
       : `/api/monitor/sandbox/${leaseId}/browse?path=${encodeURIComponent(path)}`;
 
+  const buildReadUrl = (path: string) =>
+    isLocal
+      ? `/api/settings/read?path=${encodeURIComponent(path)}`
+      : `/api/monitor/sandbox/${leaseId}/read?path=${encodeURIComponent(path)}`;
+
   const { currentPath, parentPath, items, loading, error, loadPath } =
-    useDirectoryBrowser(buildUrl, defaultPath);
+    useDirectoryBrowser(buildBrowseUrl, defaultPath);
+
+  const [selectedFile, setSelectedFile] = useState<string | null>(null);
+  const [fileContent, setFileContent] = useState<string | null>(null);
+  const [fileLoading, setFileLoading] = useState(false);
+  const [fileError, setFileError] = useState<string | null>(null);
 
   useEffect(() => {
     void loadPath(defaultPath);
+    setSelectedFile(null);
+    setFileContent(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [leaseId]);
+
+  async function openFile(path: string) {
+    if (selectedFile === path) {
+      setSelectedFile(null);
+      setFileContent(null);
+      return;
+    }
+    setSelectedFile(path);
+    setFileContent(null);
+    setFileError(null);
+    setFileLoading(true);
+    try {
+      const resp = await fetch(buildReadUrl(path));
+      if (!resp.ok) throw new Error(`${resp.status}`);
+      const data = await resp.json() as { content: string; truncated: boolean };
+      setFileContent(data.content);
+      if (data.truncated) setFileError("(内容已截断至 100 KB)");
+    } catch (e) {
+      setFileError(e instanceof Error ? e.message : "读取失败");
+    } finally {
+      setFileLoading(false);
+    }
+  }
 
   return (
     <div className="text-xs">
       {/* Path bar */}
       <div className="flex items-center gap-1.5 mb-1.5">
         <button
-          onClick={() => loadPath(defaultPath)}
+          onClick={() => { void loadPath(defaultPath); setSelectedFile(null); setFileContent(null); }}
           className="text-muted-foreground hover:text-foreground transition-colors"
           title="返回根目录"
         >
@@ -249,17 +284,57 @@ function SandboxBrowser({ leaseId, providerType }: { leaseId: string; providerTy
                 <span className="flex-1 text-left truncate">{item.name}</span>
               </button>
             ) : (
-              <div
+              <button
                 key={item.path}
-                className="flex items-center gap-1.5 px-2 py-1 text-muted-foreground/60"
+                onClick={() => { void openFile(item.path); }}
+                className={`w-full flex items-center gap-1.5 px-2 py-1 hover:bg-muted/50 rounded text-left ${
+                  selectedFile === item.path ? "bg-muted/40 text-foreground" : "text-muted-foreground"
+                }`}
               >
-                <span className="w-3 shrink-0 text-center">·</span>
+                <File className="w-3 h-3 shrink-0" />
                 <span className="truncate">{item.name}</span>
-              </div>
+              </button>
             )
           )}
         </div>
       </ScrollArea>
+
+      {/* File content panel */}
+      {selectedFile && (
+        <div className="mt-1.5 border rounded border-border/30 bg-muted/5">
+          <div className="flex items-center justify-between px-2 py-1 border-b border-border/20">
+            <span className="text-[10px] font-mono text-muted-foreground truncate flex-1">
+              {selectedFile.split("/").pop()}
+            </span>
+            <button
+              onClick={() => { setSelectedFile(null); setFileContent(null); setFileError(null); }}
+              className="ml-2 text-muted-foreground hover:text-foreground shrink-0"
+            >
+              <X className="w-3 h-3" />
+            </button>
+          </div>
+          <ScrollArea className="h-[200px]">
+            <div className="p-2">
+              {fileLoading && (
+                <div className="text-center py-6 text-muted-foreground text-[11px]">加载中...</div>
+              )}
+              {!fileLoading && fileError && !fileContent && (
+                <div className="text-center py-6 text-destructive text-[11px]">{fileError}</div>
+              )}
+              {fileContent != null && (
+                <>
+                  <pre className="text-[10px] font-mono text-foreground whitespace-pre-wrap break-all leading-relaxed">
+                    {fileContent}
+                  </pre>
+                  {fileError && (
+                    <p className="text-[10px] text-muted-foreground mt-1 italic">{fileError}</p>
+                  )}
+                </>
+              )}
+            </div>
+          </ScrollArea>
+        </div>
+      )}
     </div>
   );
 }

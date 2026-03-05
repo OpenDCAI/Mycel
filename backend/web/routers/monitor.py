@@ -79,3 +79,14 @@ async def sandbox_browse(lease_id: str, path: str = Query(default="/")):
         raise HTTPException(status_code=404, detail=str(e)) from e
     except RuntimeError as e:
         raise HTTPException(status_code=503, detail=str(e)) from e
+
+
+@router.get("/sandbox/{lease_id}/read")
+async def sandbox_read_file(lease_id: str, path: str = Query(...)):
+    from backend.web.services.resource_service import sandbox_read as _read
+    try:
+        return await asyncio.to_thread(_read, lease_id, path)
+    except KeyError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+    except RuntimeError as e:
+        raise HTTPException(status_code=503, detail=str(e)) from e
