@@ -71,6 +71,8 @@ def mock_provider():
         return result
 
     provider.execute = mock_execute
+    from sandbox.providers.local import LocalPersistentShellRuntime
+    provider.create_runtime.side_effect = lambda terminal, lease: LocalPersistentShellRuntime(terminal, lease)
     return provider
 
 
@@ -97,6 +99,8 @@ def mock_remote_provider():
     provider.write_file.return_value = "ok"
     provider.read_file.return_value = "content"
     provider.list_dir.return_value = []
+    from sandbox.runtime import RemoteWrappedRuntime
+    provider.create_runtime.side_effect = lambda terminal, lease: RemoteWrappedRuntime(terminal, lease, provider)
     return provider
 
 

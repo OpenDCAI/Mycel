@@ -218,3 +218,7 @@ class AgentBayProvider(SandboxProvider):
                 raise RuntimeError(f"Session not found: {session_id}")
             self._sessions[session_id] = result.session
         return self._sessions[session_id]
+
+    def create_runtime(self, terminal, lease):
+        from sandbox.runtime import RemoteWrappedRuntime
+        return RemoteWrappedRuntime(terminal, lease, self)

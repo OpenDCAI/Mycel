@@ -1,8 +1,15 @@
 """Abstract sandbox provider interface."""
 
+from __future__ import annotations
+
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from sandbox.runtime import PhysicalTerminalRuntime
+    from sandbox.lease import SandboxLease
+    from sandbox.terminal import AbstractTerminal
 
 
 @dataclass(frozen=True)
@@ -99,6 +106,11 @@ class SandboxProvider(ABC):
 
     @abstractmethod
     def get_metrics(self, session_id: str) -> Metrics | None:
+        pass
+
+    @abstractmethod
+    def create_runtime(self, terminal: AbstractTerminal, lease: SandboxLease) -> PhysicalTerminalRuntime:
+        """Create the appropriate PhysicalTerminalRuntime for this provider."""
         pass
 
     def screenshot(self, session_id: str) -> bytes | None:

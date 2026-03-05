@@ -28,7 +28,7 @@ from sandbox.lifecycle import (
 if TYPE_CHECKING:
     from sandbox.lease import SandboxLease
     from sandbox.provider import SandboxProvider
-    from sandbox.runtimes.base import PhysicalTerminalRuntime
+    from sandbox.runtime import PhysicalTerminalRuntime
     from sandbox.terminal import AbstractTerminal
 
 REQUIRED_CHAT_SESSION_COLUMNS = {
@@ -291,9 +291,7 @@ class ChatSessionManager:
             )
 
     def _build_runtime(self, terminal: AbstractTerminal, lease: SandboxLease) -> PhysicalTerminalRuntime:
-        from sandbox.runtimes import create_runtime
-
-        return create_runtime(self.provider, terminal, lease)
+        return self.provider.create_runtime(terminal, lease)
 
     def _load_status(self, session_id: str) -> str | None:
         with _connect(self.db_path) as conn:
