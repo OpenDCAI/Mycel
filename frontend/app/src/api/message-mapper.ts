@@ -1,4 +1,4 @@
-import type { AssistantTurn, BackendMessage, ChatEntry, NoticeMessage, ToolSegment, TurnSegment } from "./types";
+import type { AssistantTurn, BackendMessage, ChatEntry, NoticeMessage, NotificationType, ToolSegment, TurnSegment } from "./types";
 
 function extractTextContent(raw: unknown): string {
   if (typeof raw === "string") return raw;
@@ -20,6 +20,7 @@ function extractTextContent(raw: unknown): string {
 function stripSystemReminders(text: string): string {
   return text.replace(/<system-reminder>[\s\S]*?<\/system-reminder>/g, "").trim();
 }
+
 
 function buildToolSegments(toolCalls: unknown[], msgIndex: number, now: number): TurnSegment[] {
   return toolCalls.map((raw, j) => {
@@ -58,15 +59,16 @@ function handleHuman(msg: BackendMessage, i: number, state: MapState): void {
   if (msg.metadata?.source === "system") {
     const content = extractTextContent(msg.content);
     const msgRunId = (msg.metadata?.run_id as string) || null;
+    const ntype = msg.metadata?.notification_type as NotificationType | undefined;
 
     if (state.currentTurn && msgRunId && msgRunId === state.currentRunId) {
       // Same run_id → fold into current assistant turn as a notice segment
-      state.currentTurn.segments.push({ type: "notice", content });
+      state.currentTurn.segments.push({ type: "notice", content, notification_type: ntype });
       return;
     }
     if (state.currentTurn && !msgRunId) {
       // No run_id (legacy) → fold into current turn if active
-      state.currentTurn.segments.push({ type: "notice", content });
+      state.currentTurn.segments.push({ type: "notice", content, notification_type: ntype });
       return;
     }
     // Different run_id or no current turn → standalone notice entry (Turn boundary)
@@ -76,6 +78,7 @@ function handleHuman(msg: BackendMessage, i: number, state: MapState): void {
       id: msg.id ?? `hist-notice-${i}`,
       role: "notice",
       content,
+      notification_type: ntype,
       timestamp: state.now,
     };
     state.entries.push(notice);

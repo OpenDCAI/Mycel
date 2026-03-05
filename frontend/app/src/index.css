@@ -254,6 +254,11 @@ button:focus-visible,
   box-shadow: 0 0 0 1px hsl(var(--primary) / 0.15), 0 2px 8px hsl(var(--primary) / 0.08);
 }
 
+.markdown-content {
+  overflow-wrap: break-word;
+  word-break: break-word;
+}
+
 .markdown-content h1,
 .markdown-content h2,
 .markdown-content h3,

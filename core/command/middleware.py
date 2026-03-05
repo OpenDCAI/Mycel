@@ -355,7 +355,7 @@ class CommandMiddleware(AgentMiddleware[CommandState]):
         # Inject to queue (wake idle agent)
         thread_id = get_current_thread_id()
         if thread_id:
-            self._queue_manager.enqueue(notification, thread_id)
+            self._queue_manager.enqueue(notification, thread_id, notification_type="command")
 
     def _clean_running_output(self, output: str, command_line: str) -> str:
         return normalize_pty_result(output, command_line)

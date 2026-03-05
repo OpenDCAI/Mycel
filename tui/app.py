@@ -257,7 +257,7 @@ class LeonApp(App):
 
     def _handle_active_agent_message(self, content: str) -> None:
         """Handle message when agent is active — enqueue into unified queue."""
-        self.agent.queue_manager.enqueue(format_steer_reminder(content), thread_id=self.thread_id)
+        self.agent.queue_manager.enqueue(format_steer_reminder(content), thread_id=self.thread_id, notification_type="steer")
         self.notify("✓ 消息已注入（转向）")
 
     def _start_agent_run(self, content: str) -> None:

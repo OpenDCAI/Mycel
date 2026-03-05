@@ -2,7 +2,11 @@
 
 from __future__ import annotations
 
-from typing import Any, Protocol
+from typing import Any, Literal, Protocol
+
+from pydantic import BaseModel
+
+NotificationType = Literal["steer", "command", "agent"]
 
 
 class CheckpointRepo(Protocol):
@@ -95,6 +99,23 @@ class SummaryRepo(Protocol):
     def list_summaries(self, thread_id: str) -> list[dict[str, object]]: ...
     def delete_thread_summaries(self, thread_id: str) -> None: ...
     def close(self) -> None: ...
+
+
+class QueueItem(BaseModel):
+    """A dequeued message with its notification type."""
+    content: str
+    notification_type: NotificationType
+
+
+class QueueRepo(Protocol):
+    def close(self) -> None: ...
+    def enqueue(self, thread_id: str, content: str, notification_type: NotificationType = "steer") -> None: ...
+    def dequeue(self, thread_id: str) -> QueueItem | None: ...
+    def drain_all(self, thread_id: str) -> list[QueueItem]: ...
+    def peek(self, thread_id: str) -> bool: ...
+    def list_queue(self, thread_id: str) -> list[dict[str, Any]]: ...
+    def clear_queue(self, thread_id: str) -> None: ...
+    def count(self, thread_id: str) -> int: ...
 
 
 class EvalRepo(Protocol):

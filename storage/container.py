@@ -11,6 +11,7 @@ from .contracts import (
     CheckpointRepo,
     EvalRepo,
     FileOperationRepo,
+    QueueRepo,
     RunEventRepo,
     SummaryRepo,
     ThreadConfigRepo,
@@ -27,6 +28,7 @@ _REPO_REGISTRY: dict[str, tuple[str, str]] = {
     "file_operation_repo": ("storage.providers.supabase.file_operation_repo", "SupabaseFileOperationRepo"),
     "summary_repo":        ("storage.providers.supabase.summary_repo",        "SupabaseSummaryRepo"),
     "eval_repo":           ("storage.providers.supabase.eval_repo",           "SupabaseEvalRepo"),
+    "queue_repo":          ("storage.providers.supabase.queue_repo",          "SupabaseQueueRepo"),
 }
 
 
@@ -41,6 +43,7 @@ class StorageContainer:
         "file_operation_repo",
         "summary_repo",
         "eval_repo",
+        "queue_repo",
     )
 
     def __init__(
@@ -59,6 +62,7 @@ class StorageContainer:
             )
         root = Path.home() / ".leon"
         self._main_db = Path(main_db_path) if main_db_path else root / "leon.db"
+        self._queue_db = self._main_db.with_name("queue.db")
         self._run_event_db = self._main_db.with_name("events.db")
         self._file_op_db = self._main_db.with_name("file_ops.db")
         self._summary_db = self._main_db.with_name("summary.db")
@@ -85,6 +89,9 @@ class StorageContainer:
 
     def summary_repo(self) -> SummaryRepo:
         return self._build_repo("summary_repo", self._sqlite_summary_repo)
+
+    def queue_repo(self) -> QueueRepo:
+        return self._build_repo("queue_repo", self._sqlite_queue_repo)
 
     def eval_repo(self) -> EvalRepo:
         return self._build_repo("eval_repo", self._sqlite_eval_repo)
@@ -196,6 +203,10 @@ class StorageContainer:
     def _sqlite_summary_repo(self):
         from storage.providers.sqlite.summary_repo import SQLiteSummaryRepo
         return SQLiteSummaryRepo(db_path=self._summary_db)
+
+    def _sqlite_queue_repo(self):
+        from storage.providers.sqlite.queue_repo import SQLiteQueueRepo
+        return SQLiteQueueRepo(db_path=self._queue_db)
 
     def _sqlite_eval_repo(self):
         from storage.providers.sqlite.eval_repo import SQLiteEvalRepo

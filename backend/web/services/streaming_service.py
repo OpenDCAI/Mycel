@@ -282,8 +282,8 @@ def _ensure_thread_handlers(agent: Any, thread_id: str, app: Any) -> None:
                            thread_id, getattr(agent.runtime, "current_state", "unknown") if hasattr(agent, "runtime") else "no-runtime")
             return  # ACTIVE: before_model will drain_all
 
-        msg = qm.dequeue(thread_id)
-        if not msg:
+        item = qm.dequeue(thread_id)
+        if not item:
             # Lost race to finally block — undo transition
             logger.warning("wake_handler: dequeue returned None for thread %s (race with drain_all), reverting to IDLE", thread_id)
             if hasattr(agent, "runtime"):
@@ -293,8 +293,8 @@ def _ensure_thread_handlers(agent: Any, thread_id: str, app: Any) -> None:
         async def _start_run():
             try:
                 start_agent_run(
-                    agent, thread_id, msg, app,
-                    message_metadata={"source": "system"},
+                    agent, thread_id, item.content, app,
+                    message_metadata={"source": "system", "notification_type": item.notification_type},
                 )
             except Exception:
                 logger.error("wake_handler failed for thread %s", thread_id, exc_info=True)
@@ -716,22 +716,22 @@ async def _consume_followup_queue(agent: Any, thread_id: str, app: Any) -> None:
 
     If starting the new run fails, re-enqueue the message so it is not lost.
     """
-    followup = None
+    item = None
     try:
         qm = app.state.queue_manager
-        followup = qm.dequeue(thread_id)
-        if followup and app:
+        item = qm.dequeue(thread_id)
+        if item and app:
             if hasattr(agent, "runtime") and agent.runtime.transition(AgentState.ACTIVE):
-                start_agent_run(agent, thread_id, followup, app,
-                                message_metadata={"source": "system"})
+                start_agent_run(agent, thread_id, item.content, app,
+                                message_metadata={"source": "system", "notification_type": item.notification_type})
     except Exception:
         logger.exception("Failed to consume followup queue for thread %s", thread_id)
         # Re-enqueue the message if it was already dequeued to prevent data loss
-        if followup:
+        if item:
             try:
-                app.state.queue_manager.enqueue(followup, thread_id)
+                app.state.queue_manager.enqueue(item.content, thread_id, notification_type=item.notification_type)
             except Exception:
-                logger.error("Failed to re-enqueue followup for thread %s — message lost: %.200s", thread_id, followup)
+                logger.error("Failed to re-enqueue followup for thread %s — message lost: %.200s", thread_id, item.content)
 
 
 # ---------------------------------------------------------------------------
