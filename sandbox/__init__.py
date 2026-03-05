@@ -15,7 +15,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-from sandbox.base import Sandbox
+from sandbox.base import LocalSandbox, RemoteSandbox, Sandbox
 from sandbox.config import SandboxConfig, resolve_sandbox_name
 from sandbox.thread_context import get_current_thread_id, set_current_thread_id
 
@@ -32,12 +32,9 @@ def create_sandbox(
         workspace_root: Fallback working dir for LocalSandbox
         db_path: SQLite path for session tracking
     """
-    from sandbox.base import RemoteSandbox
-
     p = config.provider
 
     if p == "local":
-        from sandbox.base import LocalSandbox
 
         return LocalSandbox(workspace_root=workspace_root or str(Path.cwd()), db_path=db_path)
 
@@ -142,10 +139,3 @@ __all__ = [
 ]
 
 
-def __getattr__(name: str):
-    """Lazy imports for new exports to avoid circular imports."""
-    if name == "RemoteSandbox":
-        from sandbox.base import RemoteSandbox
-
-        return RemoteSandbox
-    raise AttributeError(f"module 'sandbox' has no attribute {name!r}")
