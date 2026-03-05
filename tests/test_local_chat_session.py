@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from sandbox.local import LocalSandbox
+from sandbox.base import LocalSandbox
 from sandbox.providers.local import LocalSessionProvider
 from sandbox.manager import lookup_sandbox_for_thread
 from sandbox.thread_context import set_current_thread_id

@@ -37,7 +37,7 @@ def create_sandbox(
     p = config.provider
 
     if p == "local":
-        from sandbox.local import LocalSandbox
+        from sandbox.base import LocalSandbox
 
         return LocalSandbox(workspace_root=workspace_root or str(Path.cwd()), db_path=db_path)
 
