@@ -16,6 +16,11 @@ function extractTextContent(raw: unknown): string {
   return String(raw ?? "");
 }
 
+/** Strip <system-reminder>...</system-reminder> blocks from text content. */
+function stripSystemReminders(text: string): string {
+  return text.replace(/<system-reminder>[\s\S]*?<\/system-reminder>/g, "").trim();
+}
+
 function buildToolSegments(toolCalls: unknown[], msgIndex: number, now: number): TurnSegment[] {
   return toolCalls.map((raw, j) => {
     const call = raw as { id?: string; name?: string; args?: unknown };
@@ -89,7 +94,7 @@ function handleHuman(msg: BackendMessage, i: number, state: MapState): void {
 }
 
 function handleAI(msg: BackendMessage, i: number, state: MapState): void {
-  const textContent = extractTextContent(msg.content);
+  const textContent = stripSystemReminders(extractTextContent(msg.content));
   const toolCalls = Array.isArray(msg.tool_calls) ? msg.tool_calls : [];
   const msgId = msg.id ?? `hist-turn-${i}`;
   const msgRunId = (msg.metadata?.run_id as string) || null;
