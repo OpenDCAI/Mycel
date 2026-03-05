@@ -7,6 +7,19 @@ function parseArgs(args: unknown): { pattern?: string; path?: string; glob?: str
   return {};
 }
 
+// Parse search result lines to find which display lines are actual matches.
+// Grep output format: "path/to/file:linenum:content" for matches, "path/to/file-linenum-content" for context.
+function parseMatchHighlights(result: string): number[] {
+  const lines = result.split("\n");
+  const highlights: number[] = [];
+  lines.forEach((line, idx) => {
+    if (/^[^:]+:\d+:/.test(line)) {
+      highlights.push(idx + 1); // 1-based display line number
+    }
+  });
+  return highlights;
+}
+
 export default memo(function SearchRenderer({ step, expanded }: ToolRendererProps) {
   const { pattern, path, glob: globPattern } = parseArgs(step.args);
   const query = pattern || globPattern || "";
@@ -23,12 +36,15 @@ export default memo(function SearchRenderer({ step, expanded }: ToolRendererProp
     );
   }
 
+  const highlights = step.result ? parseMatchHighlights(step.result) : [];
+
   return (
     <div className="space-y-1.5">
       {step.result && (
         <CodeBlock
           code={step.result}
           maxLines={20}
+          highlights={highlights}
         />
       )}
     </div>
