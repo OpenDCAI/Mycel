@@ -201,20 +201,16 @@ class AgentRuntime:
         event: dict[str, Any],
         *,
         background: bool = False,
-        agent_id: str | None = None,
     ) -> None:
-        """Emit sub-agent event with routing metadata (no prefix).
+        """Emit sub-agent event with routing metadata.
 
-        The event type is NOT prefixed — routing is done via agent_id /
-        parent_tool_call_id in the data payload.
+        Injects parent_tool_call_id into the data payload for correlation.
         """
         try:
             data = json.loads(event.get("data", "{}"))
         except (json.JSONDecodeError, TypeError):
             data = {}
         data["parent_tool_call_id"] = parent_tool_call_id
-        if agent_id:
-            data["agent_id"] = agent_id
         if background:
             data["background"] = True
         enriched_event = {

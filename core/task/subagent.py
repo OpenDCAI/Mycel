@@ -424,7 +424,7 @@ class SubagentRunner:
                                 text_parts.append(content[:remaining])
                             yield {
                                 "event": "text",
-                                "data": json.dumps({"task_id": task_id, "agent_id": task_id, "content": content}),
+                                "data": json.dumps({"task_id": task_id, "content": content}),
                             }
 
                 # Node-level updates from "updates" mode
@@ -451,7 +451,6 @@ class SubagentRunner:
                                         "data": json.dumps(
                                             {
                                                 "task_id": task_id,
-                                                "agent_id": task_id,
                                                 "id": tc.get("id"),
                                                 "name": tc.get("name", "unknown"),
                                                 "args": tc.get("args", {}),
@@ -464,7 +463,6 @@ class SubagentRunner:
                                     "data": json.dumps(
                                         {
                                             "task_id": task_id,
-                                            "agent_id": task_id,
                                             "tool_call_id": getattr(msg, "tool_call_id", None),
                                             "name": getattr(msg, "name", "unknown"),
                                             "content": str(getattr(msg, "content", "")),
@@ -683,7 +681,7 @@ class SubagentRunner:
                                 runtime.emit_subagent_event(parent_tool_call_id, {
                                     "event": "text",
                                     "data": json.dumps({"task_id": task_id, "content": content}),
-                                }, background=True, agent_id=task_id)
+                                }, background=True)
 
                 elif mode == "updates":
                     if not isinstance(data, dict):
@@ -713,7 +711,7 @@ class SubagentRunner:
                                         runtime.emit_subagent_event(parent_tool_call_id, {
                                             "event": "tool_call",
                                             "data": json.dumps(tc_data),
-                                        }, background=True, agent_id=task_id)
+                                        }, background=True)
                             elif msg_class == "ToolMessage":
                                 tr_data = {
                                     "task_id": task_id,
@@ -725,7 +723,7 @@ class SubagentRunner:
                                     runtime.emit_subagent_event(parent_tool_call_id, {
                                         "event": "tool_result",
                                         "data": json.dumps(tr_data),
-                                    }, background=True, agent_id=task_id)
+                                    }, background=True)
 
             final_text = "".join(text_parts).strip() or None
             desc = description or None
@@ -752,7 +750,7 @@ class SubagentRunner:
                 runtime.emit_subagent_event(parent_tool_call_id, {
                     "event": "task_done",
                     "data": json.dumps({"task_id": task_id, "status": "completed"}),
-                }, background=True, agent_id=task_id)
+                }, background=True)
 
         except Exception as e:
             desc = description or None
@@ -779,7 +777,7 @@ class SubagentRunner:
                 runtime.emit_subagent_event(parent_tool_call_id, {
                     "event": "task_error",
                     "data": json.dumps({"task_id": task_id, "error": str(e)}),
-                }, background=True, agent_id=task_id)
+                }, background=True)
 
         return task_result
 
