@@ -11,6 +11,7 @@ from agent import create_leon_agent
 from storage.runtime import build_storage_container
 from sandbox.manager import lookup_sandbox_for_thread
 from sandbox.thread_context import set_current_thread_id
+from core.identity.agent_registry import get_or_create_agent_id
 
 # Thread lock for config updates
 _config_update_locks: dict[str, asyncio.Lock] = {}
@@ -82,6 +83,13 @@ async def get_or_create_agent(app_obj: FastAPI, sandbox_type: str, thread_id: st
     qm = getattr(app_obj.state, "queue_manager", None)
     registry = getattr(app_obj.state, "background_task_registry", None)
     agent_obj = await asyncio.to_thread(create_agent_sync, sandbox_type, workspace_root, model_name, agent_name, qm, registry)
+    member = agent_name or "leon"
+    agent_id = get_or_create_agent_id(
+        member=member,
+        thread_id=thread_id,
+        sandbox_type=sandbox_type,
+    )
+    agent_obj.agent_id = agent_id
     pool[pool_key] = agent_obj
     return agent_obj
 
