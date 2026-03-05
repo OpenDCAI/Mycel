@@ -16,7 +16,8 @@ class LeaseObservedState(Enum):
 
     These are the actual states reported by sandbox providers.
     """
-    DETACHED = "detached"  # Running (not connected to terminal)
+    RUNNING = "running"    # Running with bound instance
+    DETACHED = "detached"  # Running but detached from terminal
     PAUSED = "paused"      # Paused
     # None means destroyed
 
@@ -69,8 +70,8 @@ def map_lease_to_session_status(
     if desired == LeaseDesiredState.DESTROYED.value:
         return SessionDisplayStatus.DESTROYING.value
 
-    # Running (detached means sandbox is running)
-    if observed == LeaseObservedState.DETACHED.value:
+    # Running — both "running" (bound instance) and "detached" mean the sandbox is up
+    if observed in (LeaseObservedState.RUNNING.value, LeaseObservedState.DETACHED.value):
         if desired == LeaseDesiredState.PAUSED.value:
             # Pausing in progress
             return SessionDisplayStatus.PAUSED.value
