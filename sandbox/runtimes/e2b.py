@@ -15,7 +15,7 @@ from sandbox.runtimes.base import (
     _parse_env_output,
     _sanitize_shell_output,
 )
-from sandbox.runtimes.remote import _RemoteRuntimeBase
+from sandbox.runtimes.wrapped import _RemoteRuntimeBase
 
 if TYPE_CHECKING:
     from sandbox.lease import SandboxLease

@@ -1,4 +1,4 @@
-"""Sandbox ABC — unified interface for execution environments.
+"""Sandbox ABC and RemoteSandbox — unified interface for execution environments.
 
 A Sandbox bundles sub-capabilities by interaction surface:
 - fs()    → FileSystemBackend  (consumed by FileSystemMiddleware)
@@ -7,12 +7,17 @@ A Sandbox bundles sub-capabilities by interaction surface:
 
 from __future__ import annotations
 
+import asyncio
 from abc import ABC, abstractmethod
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from sandbox.interfaces.executor import BaseExecutor
-    from sandbox.interfaces.filesystem import FileSystemBackend
+    from sandbox.capability import SandboxCapability
+    from sandbox.config import SandboxConfig
+    from sandbox.interfaces import BaseExecutor, FileSystemBackend
+    from sandbox.manager import SandboxManager
+    from sandbox.provider import SandboxProvider
 
 
 class Sandbox(ABC):
@@ -39,3 +44,125 @@ class Sandbox(ABC):
 
     def ensure_session(self, thread_id: str) -> None:
         pass
+
+
+class _LazyFSBackend:
+    is_remote = True
+
+    def __init__(self, sandbox: RemoteSandbox):
+        self._remote = sandbox
+
+    def __getattr__(self, name: str):
+        return getattr(self._remote._get_capability().fs, name)
+
+
+class _LazyExecutor:
+    # @@@lazy-remote-flag - CommandMiddleware probes is_remote during init; keep this side-effect free.
+    is_remote = True
+    runtime_owns_cwd = True
+    # @@@lazy-shell-name - CommandMiddleware logs shell_name during init.
+    shell_name = "remote"
+
+    def __init__(self, sandbox: RemoteSandbox):
+        self._remote = sandbox
+
+    def __getattr__(self, name: str):
+        return getattr(self._remote._get_capability().command, name)
+
+
+class RemoteSandbox(Sandbox):
+    """Concrete sandbox for all provider-backed environments (AgentBay, Docker, E2B, Daytona)."""
+
+    def __init__(
+        self,
+        provider: SandboxProvider,
+        config: SandboxConfig,
+        default_cwd: str,
+        db_path: Path | None = None,
+        *,
+        name: str | None = None,
+        working_dir: str | None = None,
+        env_label: str = "Remote sandbox",
+    ) -> None:
+        self._config = config
+        self._default_cwd = default_cwd
+        self._provider = provider
+        from sandbox.manager import SandboxManager
+        self._manager = SandboxManager(provider=provider, db_path=db_path)
+        self._on_exit = config.on_exit
+        self._name = name or config.name
+        self._working_dir = working_dir or default_cwd
+        self._env_label = env_label
+        self._capability_cache: dict[str, SandboxCapability] = {}
+        self._init_commands_run: set[str] = set()
+
+    def _get_capability(self) -> SandboxCapability:
+        from sandbox.thread_context import get_current_thread_id
+        thread_id = get_current_thread_id()
+        if not thread_id:
+            raise RuntimeError("No thread_id set. Call set_current_thread_id first.")
+        if thread_id not in self._capability_cache:
+            capability = self._manager.get_sandbox(thread_id)
+            if self._config.init_commands and thread_id not in self._init_commands_run:
+                self._run_init_commands(capability)
+                self._init_commands_run.add(thread_id)
+            self._capability_cache[thread_id] = capability
+        return self._capability_cache[thread_id]
+
+    def _run_init_commands(self, capability: SandboxCapability) -> None:
+        for i, cmd in enumerate(self._config.init_commands, 1):
+            result = asyncio.run(capability.command.execute(cmd))
+            if result.exit_code != 0:
+                raise RuntimeError(
+                    f"Init command #{i} failed: {cmd}\n"
+                    f"exit={result.exit_code}\nstderr={result.stderr}\nstdout={result.stdout}"
+                )
+
+    def fs(self) -> FileSystemBackend:
+        return _LazyFSBackend(self)  # type: ignore[return-value]
+
+    def shell(self) -> BaseExecutor:
+        return _LazyExecutor(self)  # type: ignore[return-value]
+
+    @property
+    def name(self) -> str:
+        return self._name
+
+    @property
+    def working_dir(self) -> str:
+        return self._working_dir
+
+    @property
+    def env_label(self) -> str:
+        return self._env_label
+
+    @property
+    def manager(self) -> SandboxManager:
+        return self._manager
+
+    def ensure_session(self, thread_id: str) -> None:
+        from sandbox.thread_context import set_current_thread_id
+        set_current_thread_id(thread_id)
+        self._capability_cache.pop(thread_id, None)
+        self._get_capability()
+
+    def pause_thread(self, thread_id: str) -> bool:
+        self._capability_cache.pop(thread_id, None)
+        return self._manager.pause_session(thread_id)
+
+    def resume_thread(self, thread_id: str) -> bool:
+        self._capability_cache.pop(thread_id, None)
+        return self._manager.resume_session(thread_id)
+
+    def close(self) -> None:
+        try:
+            if self._on_exit == "pause":
+                count = self._manager.pause_all_sessions()
+                if count > 0:
+                    print(f"[{self.name}] Paused {count} session(s)")
+            elif self._on_exit == "destroy":
+                for session in self._manager.list_sessions():
+                    self._manager.destroy_session(thread_id=session["thread_id"])
+                print(f"[{self.name}] Destroyed all sessions")
+        except Exception as e:
+            print(f"[{self.name}] Cleanup error: {e}")

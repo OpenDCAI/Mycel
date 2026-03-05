@@ -9,7 +9,7 @@ from sandbox.runtimes.daytona import DaytonaSessionRuntime
 from sandbox.runtimes.docker import DockerPtyRuntime
 from sandbox.runtimes.e2b import E2BPtyRuntime
 from sandbox.runtimes.local import LocalPersistentShellRuntime
-from sandbox.runtimes.remote import RemoteWrappedRuntime
+from sandbox.runtimes.wrapped import RemoteWrappedRuntime
 
 if TYPE_CHECKING:
     from sandbox.lease import SandboxLease

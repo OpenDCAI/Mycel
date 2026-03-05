@@ -32,7 +32,7 @@ def create_sandbox(
         workspace_root: Fallback working dir for LocalSandbox
         db_path: SQLite path for session tracking
     """
-    from sandbox.remote import RemoteSandbox
+    from sandbox.base import RemoteSandbox
 
     p = config.provider
 
@@ -145,7 +145,7 @@ __all__ = [
 def __getattr__(name: str):
     """Lazy imports for new exports to avoid circular imports."""
     if name == "RemoteSandbox":
-        from sandbox.remote import RemoteSandbox
+        from sandbox.base import RemoteSandbox
 
         return RemoteSandbox
     raise AttributeError(f"module 'sandbox' has no attribute {name!r}")
