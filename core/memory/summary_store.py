@@ -59,7 +59,9 @@ class SummaryStore:
     Follows the same pattern as TerminalStore for consistency.
     """
 
-    def __init__(self, db_path: Path = Path.home() / ".leon" / "sandbox.db", summary_repo: SummaryRepo | None = None):
+    def __init__(self, db_path: Path | None = None, summary_repo: SummaryRepo | None = None):
+        if db_path is None and summary_repo is None:
+            raise ValueError("SummaryStore requires either db_path or summary_repo")
         self.db_path = db_path
         self._repo: SummaryRepo
         if summary_repo is not None:
