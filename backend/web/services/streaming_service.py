@@ -313,15 +313,6 @@ def _ensure_thread_handlers(agent: Any, thread_id: str, app: Any) -> None:
     qm.register_wake(thread_id, wake_handler)
 
 
-def _parse_event_data(event: dict) -> dict:
-    """Parse the JSON data field of an activity event. Returns empty dict on failure."""
-    raw = event.get("data", "{}")
-    try:
-        return json.loads(raw) if isinstance(raw, str) else (raw if isinstance(raw, dict) else {})
-    except (json.JSONDecodeError, TypeError):
-        return {}
-
-
 # ---------------------------------------------------------------------------
 # Producer: runs agent, writes events to ThreadEventBuffer
 # ---------------------------------------------------------------------------
@@ -365,8 +356,6 @@ async def _run_agent_to_buffer(
     task = None
     stream_gen = None
     pending_tool_calls: dict[str, dict] = {}
-    # Per-subagent RunEventBuffer: task_id → (sa_thread_id, buf)
-    subagent_buffers: dict[str, tuple[str, RunEventBuffer]] = {}
     try:
         config = {"configurable": {"thread_id": thread_id, "run_id": run_id}}
         if hasattr(agent, "_current_model_config"):
@@ -611,54 +600,7 @@ async def _run_agent_to_buffer(
                     act_event = activity_queue.get_nowait()
                 except asyncio.QueueEmpty:
                     break
-
-                event_type = act_event.get("event", "")
-                sa_data = _parse_event_data(act_event)
-
-                # A4: Route by agent_id instead of event type prefix
-                agent_id = sa_data.get("agent_id", "")
-                is_subagent_content = (
-                    agent_id and agent_id != "main"
-                    and event_type in ("text", "tool_call", "tool_result")
-                )
-
-                if event_type == "task_start" and agent_id and agent_id != "main":
-                    # Create dedicated SSE buffer for the subagent thread
-                    task_id = sa_data.get("task_id", "")
-                    sa_thread_id = sa_data.get("thread_id", f"subagent_{task_id}")
-                    if task_id:
-                        sa_buf = RunEventBuffer()
-                        sa_buf.run_id = str(_uuid.uuid4())
-                        subagent_buffers[task_id] = (sa_thread_id, sa_buf)
-                        # Store subagent buffer under sa_thread_id (not thread_id)
-                        app.state.subagent_buffers[sa_thread_id] = sa_buf
-                    # Emit lifecycle notification to parent SSE
-                    await emit(act_event)
-
-                elif is_subagent_content:
-                    # Route to subagent buffer only — skip parent SSE (prevents leakage)
-                    task_id = sa_data.get("task_id", "")
-                    sa_entry = subagent_buffers.get(task_id)
-                    if sa_entry:
-                        _, sa_buf = sa_entry
-                        await sa_buf.put(act_event)
-
-                elif event_type in ("task_done", "task_error") and agent_id and agent_id != "main":
-                    # Close subagent buffer + emit lifecycle notification to parent
-                    task_id = sa_data.get("task_id", "")
-                    sa_entry = subagent_buffers.pop(task_id, None)
-                    if sa_entry:
-                        sa_thread_id, sa_buf = sa_entry
-                        await sa_buf.put(act_event)
-                        # Emit terminal event so SSE consumer exits cleanly
-                        await sa_buf.put({"event": "run_done", "data": json.dumps({"thread_id": sa_thread_id})})
-                        await sa_buf.mark_done()
-                        app.state.subagent_buffers.pop(sa_thread_id, None)
-                    await emit(act_event)
-
-                else:
-                    # All other activity events
-                    await emit(act_event)
+                await emit(act_event)
 
         # Final status
         if hasattr(agent, "runtime"):
@@ -721,12 +663,6 @@ async def _run_agent_to_buffer(
         await emit({"event": "error", "data": json.dumps({"error": str(e)}, ensure_ascii=False)})
         await emit({"event": "run_done", "data": json.dumps({"thread_id": thread_id, "run_id": run_id})})
     finally:
-        # Clean up any subagent buffers not already closed (e.g., on cancellation/error)
-        for _task_id, (sa_thread_id, sa_buf) in list(subagent_buffers.items()):
-            await sa_buf.mark_done()
-            app.state.subagent_buffers.pop(sa_thread_id, None)
-        subagent_buffers.clear()
-
         # Detach per-run event callback (per-thread handlers survive across runs)
         if hasattr(agent, "runtime"):
             agent.runtime.set_event_callback(None)
