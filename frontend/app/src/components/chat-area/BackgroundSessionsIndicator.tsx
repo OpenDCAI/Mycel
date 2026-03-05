@@ -61,7 +61,7 @@ export function BackgroundSessionsIndicator({ tasks, onCancelTask }: BackgroundS
                           e.stopPropagation();
                           onCancelTask(task.task_id);
                         }}
-                        className="opacity-0 group-hover:opacity-100 p-0.5 hover:bg-red-50 rounded transition-opacity"
+                        className="p-0.5 hover:bg-red-50 rounded transition-colors flex-shrink-0"
                         title="取消任务"
                       >
                         <X className="w-3 h-3 text-red-500" />
@@ -91,7 +91,7 @@ export function BackgroundSessionsIndicator({ tasks, onCancelTask }: BackgroundS
                           e.stopPropagation();
                           onCancelTask(task.task_id);
                         }}
-                        className="opacity-0 group-hover:opacity-100 p-0.5 hover:bg-red-50 rounded transition-opacity"
+                        className="p-0.5 hover:bg-red-50 rounded transition-colors flex-shrink-0"
                         title="取消任务"
                       >
                         <X className="w-3 h-3 text-red-500" />
