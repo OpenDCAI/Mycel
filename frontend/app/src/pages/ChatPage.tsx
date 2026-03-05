@@ -90,7 +90,7 @@ function ChatPageInner({ threadId }: { threadId: string }) {
       runStarted,
     });
 
-  const { tasks } = useBackgroundTasks({ threadId, loading, refreshThreads: tm.refreshThreads });
+  const { tasks, refresh: refreshTasks } = useBackgroundTasks({ threadId, loading, refreshThreads: tm.refreshThreads });
 
   const isStreaming = isRunning;
 
@@ -133,12 +133,15 @@ function ChatPageInner({ threadId }: { threadId: string }) {
         });
         if (!response.ok) {
           console.error("[ChatPage] Failed to cancel task:", response.statusText);
+        } else {
+          // 取消成功后刷新任务列表
+          await refreshTasks();
         }
       } catch (err) {
         console.error("[ChatPage] Error cancelling task:", err);
       }
     },
-    [threadId],
+    [threadId, refreshTasks],
   );
 
   const computerResize = useResizableX(600, 360, 1200, true);
