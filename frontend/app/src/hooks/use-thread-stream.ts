@@ -67,6 +67,8 @@ export function useThreadStream(
         await streamThreadEvents(
           threadId,
           (event) => {
+            // Guard: ignore events from aborted connections
+            if (ac.signal.aborted) return;
             console.log(`[SSE-DIAG] event received: type=${event.type}, subscribers=${subscribers.current.size}`);
             if (event.type === "status" && event.data) {
               setRuntimeStatus(event.data as StreamStatus);

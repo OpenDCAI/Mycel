@@ -6,25 +6,35 @@ async function consumeSSEStream(
   reader: ReadableStreamDefaultReader<Uint8Array>,
   onEvent: (event: StreamEvent) => void,
   startSeq: number,
+  signal?: AbortSignal,
 ): Promise<{ lastSeq: number; runEnded: boolean }> {
   const decoder = new TextDecoder();
   let buffer = "";
   let seq = startSeq;
   let runEnded = false;
 
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    buffer += decoder.decode(value, { stream: true });
-    const chunks = buffer.split(/\r?\n\r?\n/);
-    buffer = chunks.pop() ?? "";
+  // When signal aborts, cancel the reader to unblock reader.read()
+  const onAbort = () => reader.cancel();
+  signal?.addEventListener("abort", onAbort, { once: true });
 
-    for (const chunk of chunks) {
-      const result = processChunk(chunk, onEvent, seq);
-      seq = result.seq;
-      if (result.runEnded) runEnded = true;
-      // Persistent stream — never break on runEnded
+  try {
+    while (true) {
+      if (signal?.aborted) break;
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const chunks = buffer.split(/\r?\n\r?\n/);
+      buffer = chunks.pop() ?? "";
+
+      for (const chunk of chunks) {
+        if (signal?.aborted) break;
+        const result = processChunk(chunk, onEvent, seq);
+        seq = result.seq;
+        if (result.runEnded) runEnded = true;
+      }
     }
+  } finally {
+    signal?.removeEventListener("abort", onAbort);
   }
   return { lastSeq: seq, runEnded };
 }
@@ -80,7 +90,7 @@ export async function streamThreadEvents(
 
       attempts = 0;
       console.log("[SSE-FETCH] consuming SSE stream...");
-      const { lastSeq } = await consumeSSEStream(res.body.getReader(), onEvent, after);
+      const { lastSeq } = await consumeSSEStream(res.body.getReader(), onEvent, after, signal);
       console.log(`[SSE-FETCH] stream ended, lastSeq=${lastSeq}, reconnecting...`);
       after = lastSeq;
 
