@@ -109,28 +109,36 @@ Leon 的层次模型应该是 **member → agent → thread → run**，其中 a
 - 移除事件数据中的 `"agent_id": "main"`
 - 后台任务事件保留 `"background": true`（用于前端 use-background-tasks 过滤）
 
-**后端 drain 循环路由改造**：
+**后端 drain 循环 — 删除 subagent buffer**：
 
 `streaming_service.py:619-662`：
-- 原：`agent_id != "main"` → 子 agent 事件
-- 改：移除 agent_id 判断。事件路由靠 SSE 连接（Thread 级）+ run_id（Turn 级）
-- `task_start/task_done/task_error` 有 `background: true` → Background Task 状态通知
+- 删除 subagent buffer 数据结构和所有基于 `agent_id != "main"` 的分流逻辑
+- 所有事件统一走主 SSE 流，不再分流到 subagent buffer
+- 子 Agent 执行细节通过 Task Output REST API 按需拉取（P3 已实现）
 
-### S3. 前端清理 — 去掉 "main" 和 parent_tool_call_id 路由
+### S3. 前端清理
 
 `hooks/stream-event-handlers.ts:161,167`：
-- 原：`agentId && agentId !== "main"` → handleSubagentEvent
-- 改：移除此路由逻辑。Blocking 子 Agent 是正常 tool_call → tool_result；Async 子 Agent 走 task_start/task_done
+- 删除 `agentId && agentId !== "main"` → handleSubagentEvent 的路由分支
+- 删除 handleSubagentEvent 调用链
+- task_start/task_done/task_error 作为普通事件处理
 
 `hooks/use-background-tasks.ts:46`：
 - 原：`data?.background === true && data?.agent_id === "main"`
 - 改：`data?.background === true`
 
+`hooks/subagent-event-handler.ts`：
+- 不再被 SSE 路由调用，可以删除或保留给 REST API 用
+
+`api/types.ts`：
+- ContentEventData 移除 `agent_id` 字段
+
 ### S4. Runtime 清理
 
 `core/monitor/runtime.py`：
-- `emit_subagent_event` 不再注入 `agent_id` 到事件数据
-- `emit_activity_event` 无变化（本就不注入 agent_id）
+- `emit_subagent_event` 移除 `agent_id` 参数，不再注入到事件数据
+- `parent_tool_call_id` 保留为元数据（记录来源关系，不参与路由）
+- `emit_activity_event` 无变化
 
 ## 涉及文件
 
@@ -139,22 +147,31 @@ Leon 的层次模型应该是 **member → agent → thread → run**，其中 a
 | `~/.leon/agent_instances.json` | 新增 | S1 |
 | `backend/web/services/agent_pool.py` | 读写 JSON，agent_id 赋值 | S1 |
 | `agent.py` | LeonAgent 增加 agent_id 属性 | S1 |
-| `backend/web/services/streaming_service.py` | 移除 `"main"` 注入，改路由逻辑 | S2 |
-| `core/monitor/runtime.py` | emit_subagent_event 不注入 agent_id | S2/S4 |
-| `core/task/subagent.py` | 3 处移除 `"agent_id": "main"` | S2 |
-| `core/command/middleware.py` | 2 处移除 `"agent_id": "main"` | S2 |
-| `frontend/.../stream-event-handlers.ts` | 改路由条件 | S3 |
+| `backend/web/services/streaming_service.py` | 移除 `"main"` 注入，删除 subagent buffer | S2 |
+| `core/monitor/runtime.py` | emit_subagent_event 移除 agent_id 参数 | S2/S4 |
+| `core/task/subagent.py` | 移除 `"agent_id": "main"` | S2 |
+| `core/command/middleware.py` | 移除 `"agent_id": "main"` | S2 |
+| `frontend/.../stream-event-handlers.ts` | 删除 subagent 路由分支 | S3 |
 | `frontend/.../use-background-tasks.ts` | 改过滤条件 | S3 |
-| `frontend/.../subagent-event-handler.ts` | 移除 agent_id 相关逻辑 | S3 |
+| `frontend/.../subagent-event-handler.ts` | 不再被 SSE 调用 | S3 |
 | `frontend/.../api/types.ts` | ContentEventData 移除 agent_id | S3 |
+
+## 关键决策记录
+
+- `parent_tool_call_id` 保留为元数据，仅记录来源关系，不参与任何路由或过滤
+- 事件路由只有两层：Thread（SSE 连接）+ Turn（run_id）
+- 子 Agent 实时流式输出（subagent buffer）删除，执行细节通过 Task Output REST API 按需拉取
+- Blocking 子 Agent = 普通 tool_call → tool_result
+- Async 子 Agent = 启动后属于 Thread，通过 task_start/task_done 通知
 
 ## 验证方案
 
 1. 发送消息 → SSE 事件中无 `agent_id` 字段
-2. Blocking 子 Agent → 正常 tool_call → tool_result 流，无 agent_id 字段
+2. Blocking 子 Agent → 普通 tool_call → tool_result，无 subagent buffer 分流
 3. 后台 bash 命令 → `task_start` 事件有 `background: true`，无 `agent_id`，前端正确更新
 4. 重启后端 → `agent_instances.json` 中的 agent_id 不变
 5. 前端代码中搜索 `"main"` → 0 结果（与 agent_id 路由相关的）
+6. 子 Agent 执行细节可通过 Task Output API 查看
 
 ## 不在本 Plan 范围
 
