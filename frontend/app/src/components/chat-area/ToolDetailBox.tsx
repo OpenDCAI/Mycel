@@ -44,12 +44,14 @@ export const ToolDetailBox = memo(function ToolDetailBox({
   }, [toolSegments.length]);
 
   const hasRunning = isStreaming || toolSegments.some((s) => s.step.status === "calling");
+  const toolCount = toolSegments.length;
 
   return (
     <>
       <div
         role="button"
         tabIndex={0}
+        aria-label={`查看 ${toolCount} 个工具调用详情`}
         className={`rounded-lg border bg-[#fafafa] cursor-pointer transition-colors ${
           hasRunning ? "detail-box-glow" : "border-[#e5e5e5] hover:border-[#d4d4d4]"
         }`}
