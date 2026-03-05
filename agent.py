@@ -122,6 +122,7 @@ class LeonAgent:
             queue_manager: Shared MessageQueueManager instance (created if not provided)
             verbose: Whether to output detailed logs (default False)
         """
+        self.agent_id: str | None = None
         self.verbose = verbose
         self.queue_manager = queue_manager or MessageQueueManager()
         self._registry = registry
