@@ -1,13 +1,11 @@
-import { CheckCircle2, ChevronDown, ChevronRight, Loader2, Square, XCircle } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { Activity, ToolStep } from "../../api";
+import { CheckCircle2, ChevronDown, ChevronRight, Loader2, XCircle } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import type { ToolStep } from "../../api";
 import { DEFAULT_BADGE, TOOL_BADGE_STYLES } from "../chat-area/constants";
 import { getStepSummary } from "../chat-area/utils";
 import MarkdownContent from "../MarkdownContent";
 import { getToolRenderer } from "../tool-renderers";
 import type { FlowItem } from "./utils";
-
-const ACTIVITY_VISIBLE_AFTER_DONE_MS = 30_000;
 
 function getResultPreview(step: ToolStep): string | null {
   if (!step.result || step.status === "calling") return null;
@@ -16,34 +14,23 @@ function getResultPreview(step: ToolStep): string | null {
   return firstLine.length > 100 ? firstLine.slice(0, 97) + "..." : firstLine;
 }
 
-interface StepsViewProps {
+/* -- FlowList: scrolling container for tool/text flow items -- */
+
+interface FlowListProps {
   flowItems: FlowItem[];
-  activities: Activity[];
-  focusedStepId: string | null;
-  onFocusStep: (id: string | null) => void;
-  onCancelCommand?: (commandId: string) => void;
-  onCancelTask?: (taskId: string) => void;
+  focusedStepId?: string | null;
+  onFocusStep?: (id: string | null) => void;
   autoScroll?: boolean;
 }
 
-export function StepsView({
+export function FlowList({
   flowItems,
-  activities,
-  focusedStepId,
+  focusedStepId = null,
   onFocusStep,
-  onCancelCommand,
-  onCancelTask,
   autoScroll = false,
-}: StepsViewProps) {
+}: FlowListProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const isAtBottomRef = useRef(true);
-
-  const visibleActivities = useMemo(() => {
-    const now = Date.now();
-    return activities.filter(
-      (a) => a.status === "running" || now - a.startTime < ACTIVITY_VISIBLE_AFTER_DONE_MS,
-    );
-  }, [activities]);
 
   // Track user scroll position: only auto-scroll if user is near bottom
   const handleScroll = useCallback(() => {
@@ -67,7 +54,7 @@ export function StepsView({
     scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
   }, [autoScroll, flowItems]);
 
-  if (flowItems.length === 0 && visibleActivities.length === 0) {
+  if (flowItems.length === 0) {
     return (
       <div className="h-full flex items-center justify-center text-sm text-[#a3a3a3]">
         暂无活动
@@ -77,16 +64,6 @@ export function StepsView({
 
   return (
     <div ref={scrollRef} onScroll={handleScroll} className="h-full overflow-y-auto bg-white">
-      {/* Running Activities */}
-      {visibleActivities.length > 0 && (
-        <ActivitySection
-          activities={visibleActivities}
-          onCancelCommand={onCancelCommand}
-          onCancelTask={onCancelTask}
-        />
-      )}
-
-      {/* Message flow — chronological, no cards */}
       <div className="px-3 py-2 space-y-1.5">
         {flowItems.map((item, i) =>
           item.type === "tool" ? (
@@ -94,7 +71,7 @@ export function StepsView({
               key={item.step.id}
               step={item.step}
               isFocused={item.step.id === focusedStepId}
-              onFocus={() => onFocusStep(item.step.id)}
+              onFocus={() => onFocusStep?.(item.step.id)}
             />
           ) : (
             <TextFlowLine key={`text-${item.turnId}-${i}`} content={item.content} />
@@ -203,78 +180,6 @@ function TextFlowLine({ content }: { content: string }) {
   );
 }
 
-/* -- Activity section -- */
-
-function ActivitySection({
-  activities,
-  onCancelCommand,
-  onCancelTask,
-}: {
-  activities: Activity[];
-  onCancelCommand?: (commandId: string) => void;
-  onCancelTask?: (taskId: string) => void;
-}) {
-  return (
-    <div className="border-b border-[#e5e5e5] bg-[#fafafa]">
-      <div className="px-3 py-1.5">
-        <div className="text-[10px] text-[#a3a3a3] font-medium uppercase tracking-wide">
-          进行中
-        </div>
-      </div>
-      {activities.map((activity) => (
-        <ActivityItem
-          key={activity.id}
-          activity={activity}
-          onCancel={() => {
-            if (activity.type === "command" && activity.commandId) {
-              onCancelCommand?.(activity.commandId);
-            } else if (activity.type === "background_task" && activity.taskId) {
-              onCancelTask?.(activity.taskId);
-            }
-          }}
-        />
-      ))}
-    </div>
-  );
-}
-
-function ActivityItem({
-  activity,
-  onCancel,
-}: {
-  activity: Activity;
-  onCancel: () => void;
-}) {
-  return (
-    <div className="px-3 py-2 border-b border-[#f5f5f5]">
-      <div className="flex items-center gap-2">
-        <ActivityStatusIcon status={activity.status} />
-        <span className="text-[11px] font-mono text-[#525252] truncate flex-1 min-w-0">
-          {activity.label}
-        </span>
-        {activity.status === "running" ? (
-          <button
-            onClick={onCancel}
-            className="flex-shrink-0 p-0.5 rounded hover:bg-red-50 text-red-400 hover:text-red-600 transition-colors"
-            title="取消"
-          >
-            <Square className="w-3 h-3" />
-          </button>
-        ) : (
-          <span className="text-[10px] text-[#a3a3a3] flex-shrink-0">
-            {formatRelativeTime(activity.startTime)}
-          </span>
-        )}
-      </div>
-      {activity.outputPreview && (
-        <pre className="mt-1 ml-5.5 text-[10px] text-[#737373] font-mono truncate max-w-full overflow-hidden">
-          {activity.outputPreview.slice(-200)}
-        </pre>
-      )}
-    </div>
-  );
-}
-
 /* -- Shared helpers -- */
 
 function StatusIcon({ status }: { status: ToolStep["status"] }) {
@@ -288,26 +193,4 @@ function StatusIcon({ status }: { status: ToolStep["status"] }) {
     case "cancelled":
       return <XCircle className="w-3.5 h-3.5 text-[#a3a3a3] flex-shrink-0" />;
   }
-}
-
-function ActivityStatusIcon({ status }: { status: Activity["status"] }) {
-  switch (status) {
-    case "running":
-      return <Loader2 className="w-3.5 h-3.5 text-blue-500 animate-spin flex-shrink-0" />;
-    case "done":
-      return <CheckCircle2 className="w-3.5 h-3.5 text-green-500 flex-shrink-0" />;
-    case "error":
-      return <XCircle className="w-3.5 h-3.5 text-red-500 flex-shrink-0" />;
-    case "cancelled":
-      return <XCircle className="w-3.5 h-3.5 text-[#a3a3a3] flex-shrink-0" />;
-  }
-}
-
-function formatRelativeTime(startTime: number): string {
-  const elapsed = Math.floor((Date.now() - startTime) / 1000);
-  if (elapsed < 60) return `${elapsed}s`;
-  const mins = Math.floor(elapsed / 60);
-  if (mins < 60) return `${mins}m`;
-  const hours = Math.floor(mins / 60);
-  return `${hours}h`;
 }

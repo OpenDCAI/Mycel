@@ -76,7 +76,7 @@ export function useStreamHandler(
   // (covers the window between flushSync and useThreadStream.isRunning becoming true)
   const [sendPending, setSendPending] = useState(false);
 
-  const { isRunning: streamIsRunning, runtimeStatus, connect, disconnect, subscribe } =
+  const { isRunning: streamIsRunning, runtimeStatus, subscribe } =
     useThreadStream(threadId, { loading, refreshThreads, runStarted });
 
   const isRunning = streamIsRunning || sendPending;

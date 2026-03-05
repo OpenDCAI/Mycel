@@ -1,6 +1,6 @@
-import type { Activity, ChatEntry, LeaseStatus, SessionStatus, TerminalStatus } from "../../api";
+import type { ChatEntry, LeaseStatus, SessionStatus, TerminalStatus } from "../../api";
 
-export type TabType = "terminal" | "files" | "agents" | "steps";
+export type TabType = "terminal" | "files" | "agents";
 
 export interface ComputerPanelProps {
   isOpen: boolean;
@@ -13,11 +13,6 @@ export interface ComputerPanelProps {
   onTabChange?: (tab: TabType) => void;
   focusedAgentStepId?: string | null;
   onFocusAgent?: (stepId: string | null) => void;
-  focusedStepId?: string | null;
-  onFocusStep?: (stepId: string | null) => void;
-  activities?: Activity[];
-  onCancelCommand?: (commandId: string) => void;
-  onCancelTask?: (taskId: string) => void;
   isStreaming?: boolean;
 }
 

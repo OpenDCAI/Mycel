@@ -5,7 +5,7 @@ import { useThreadData } from "../../hooks/use-thread-data";
 import { useSubagentStream } from "../../hooks/useSubagentStream";
 import { parseAgentArgs } from "./utils";
 import type { FlowItem } from "./utils";
-import { StepsView } from "./StepsView";
+import { FlowList } from "./flow-items";
 
 
 type SubagentStream = NonNullable<ToolStep["subagent_stream"]>;
@@ -137,9 +137,8 @@ export function AgentsView({ steps, focusedStepId, onFocusStep }: AgentsViewProp
                 <Loader2 className="w-5 h-5 text-[#a3a3a3] animate-spin" />
               </div>
             ) : (
-              <StepsView
+              <FlowList
                 flowItems={flowItems}
-                activities={[]}
                 focusedStepId={agentFocusedStepId}
                 onFocusStep={setAgentFocusedStepId}
                 autoScroll={!!isRunning}

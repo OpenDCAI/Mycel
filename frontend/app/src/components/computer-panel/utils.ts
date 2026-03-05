@@ -17,7 +17,8 @@ export function extractMessageFlow(entries: ChatEntry[]): FlowItem[] {
     // Find last non-empty text index — exclude it (displayed in chat area)
     let lastTextIdx = -1;
     for (let i = segs.length - 1; i >= 0; i--) {
-      if (segs[i].type === "text" && segs[i].content.trim()) {
+      const seg = segs[i];
+      if (seg.type === "text" && seg.content.trim()) {
         lastTextIdx = i;
         break;
       }

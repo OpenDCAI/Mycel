@@ -18,7 +18,6 @@ export interface AppActionsState {
   computerOpen: boolean;
   computerTab: TabType;
   focusedAgentStepId: string | null;
-  focusedStepId: string | null;
   sidebarCollapsed: boolean;
   searchOpen: boolean;
   sessionsOpen: boolean;
@@ -29,7 +28,6 @@ export interface AppActionsSetters {
   setComputerOpen: React.Dispatch<React.SetStateAction<boolean>>;
   setComputerTab: (tab: TabType) => void;
   setFocusedAgentStepId: (id: string | null) => void;
-  setFocusedStepId: (id: string | null) => void;
   setSidebarCollapsed: React.Dispatch<React.SetStateAction<boolean>>;
   setSearchOpen: (open: boolean) => void;
   setSessionsOpen: (open: boolean) => void;
@@ -38,7 +36,6 @@ export interface AppActionsSetters {
 
 export interface AppActionsHandlers {
   handleFocusAgent: (stepId: string) => void;
-  handleFocusStep: (stepId: string) => void;
   handleSendQueueMessage: (message: string) => Promise<void>;
 }
 
@@ -49,7 +46,6 @@ export function useAppActions(deps: AppActionsDeps): AppActionsState & AppAction
   const [computerOpen, setComputerOpen] = useState(false);
   const [computerTab, setComputerTab] = useState<TabType>("terminal");
   const [focusedAgentStepId, setFocusedAgentStepId] = useState<string | null>(null);
-  const [focusedStepId, setFocusedStepId] = useState<string | null>(null);
   const [searchOpen, setSearchOpen] = useState(false);
   const [sessionsOpen, setSessionsOpen] = useState(false);
   const [newThreadOpen, setNewThreadOpen] = useState(false);
@@ -57,12 +53,6 @@ export function useAppActions(deps: AppActionsDeps): AppActionsState & AppAction
   const handleFocusAgent = useCallback((stepId: string) => {
     setFocusedAgentStepId(stepId);
     setComputerTab("agents");
-    setComputerOpen(true);
-  }, []);
-
-  const handleFocusStep = useCallback((stepId: string) => {
-    setFocusedStepId(stepId);
-    setComputerTab("steps");
     setComputerOpen(true);
   }, []);
 
@@ -78,10 +68,10 @@ export function useAppActions(deps: AppActionsDeps): AppActionsState & AppAction
   );
 
   return {
-    computerOpen, computerTab, focusedAgentStepId, focusedStepId,
+    computerOpen, computerTab, focusedAgentStepId,
     sidebarCollapsed, searchOpen, sessionsOpen, newThreadOpen,
-    setComputerOpen, setComputerTab, setFocusedAgentStepId, setFocusedStepId,
+    setComputerOpen, setComputerTab, setFocusedAgentStepId,
     setSidebarCollapsed, setSearchOpen, setSessionsOpen, setNewThreadOpen,
-    handleFocusAgent, handleFocusStep, handleSendQueueMessage,
+    handleFocusAgent, handleSendQueueMessage,
   };
 }

@@ -49,18 +49,16 @@ function NoticeDivider({ content }: { content: string }) {
 // --- Content phase rendering (tools + final text) ---
 
 function ContentPhaseBlock({
-  segments, allSegments, isStreaming, runtimeStatus, onFocusStep, onFocusAgent,
+  segments, allSegments, isStreaming, onFocusAgent,
 }: {
   segments: TurnSegment[];
   /** All segments in the full turn (passed to DetailBoxModal). */
   allSegments?: TurnSegment[];
   isStreaming: boolean;
-  runtimeStatus?: StreamStatus | null;
-  onFocusStep?: (stepId: string) => void;
   onFocusAgent?: (taskId: string) => void;
 }) {
   const toolSegs = segments.filter((s) => s.type === "tool") as ToolSegment[];
-  const textSegs = segments.filter((s) => s.type === "text" && s.content.trim());
+  const textSegs = segments.filter((s) => s.type === "text");
   const visibleText = textSegs.length > 0 ? textSegs[textSegs.length - 1] : null;
 
   return (
@@ -70,11 +68,10 @@ function ContentPhaseBlock({
           toolSegments={toolSegs}
           isStreaming={isStreaming}
           allSegments={allSegments}
-          onFocusStep={onFocusStep}
           onFocusAgent={onFocusAgent}
         />
       )}
-      {visibleText && (isStreaming
+      {visibleText && visibleText.type === "text" && (isStreaming
         ? <div className="text-[13px] leading-[1.55] text-[#404040] whitespace-pre-wrap">{visibleText.content}</div>
         : <MarkdownContent content={visibleText.content} />
       )}
@@ -88,20 +85,19 @@ interface AssistantBlockProps {
   entry: AssistantTurn;
   isStreamingThis?: boolean;
   runtimeStatus?: StreamStatus | null;
-  onFocusStep?: (stepId: string) => void;
   onFocusAgent?: (taskId: string) => void;
 }
 
-export const AssistantBlock = memo(function AssistantBlock({ entry, isStreamingThis, runtimeStatus, onFocusStep, onFocusAgent }: AssistantBlockProps) {
+export const AssistantBlock = memo(function AssistantBlock({ entry, isStreamingThis, runtimeStatus, onFocusAgent }: AssistantBlockProps) {
   const hasNotice = entry.segments.some((s) => s.type === "notice");
 
   const fullText = entry.segments
     .filter((s) => s.type === "text")
-    .map((s) => s.content)
+    .map((s) => s.type === "text" ? s.content : "")
     .join("\n");
 
   const toolSegs = entry.segments.filter((s) => s.type === "tool") as ToolSegment[];
-  const textSegs = entry.segments.filter((s) => s.type === "text" && s.content.trim());
+  const textSegs = entry.segments.filter((s) => s.type === "text");
 
   const hasVisible = toolSegs.length > 0 || textSegs.length > 0;
 
@@ -134,8 +130,6 @@ export const AssistantBlock = memo(function AssistantBlock({ entry, isStreamingT
                   segments={phase.segments}
                   allSegments={entry.segments}
                   isStreaming={!!isStreamingThis}
-                  runtimeStatus={runtimeStatus}
-                  onFocusStep={onFocusStep}
                   onFocusAgent={onFocusAgent}
                 />
           )
@@ -145,8 +139,6 @@ export const AssistantBlock = memo(function AssistantBlock({ entry, isStreamingT
             segments={entry.segments}
             allSegments={entry.segments}
             isStreaming={!!isStreamingThis}
-            runtimeStatus={runtimeStatus}
-            onFocusStep={onFocusStep}
             onFocusAgent={onFocusAgent}
           />
         )}

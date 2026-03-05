@@ -10,7 +10,6 @@ interface ToolDetailBoxProps {
   isStreaming: boolean;
   /** All segments in the turn (for Modal detail view). */
   allSegments?: TurnSegment[];
-  onFocusStep?: (stepId: string) => void;
   onFocusAgent?: (stepId: string) => void;
 }
 
@@ -33,7 +32,6 @@ export const ToolDetailBox = memo(function ToolDetailBox({
   toolSegments,
   isStreaming,
   allSegments,
-  onFocusStep,
   onFocusAgent,
 }: ToolDetailBoxProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
