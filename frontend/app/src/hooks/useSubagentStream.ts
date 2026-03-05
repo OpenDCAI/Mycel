@@ -60,10 +60,6 @@ export function useSubagentStream(
       threadId,
       (event: StreamEvent) => {
         const data = event.data as Record<string, unknown> | undefined;
-        const agentId = data?.agent_id as string | undefined;
-
-        // Only process events from non-main agents
-        if (!agentId || agentId === "main") return;
 
         if (event.type === "text") {
           if (data?.content) {

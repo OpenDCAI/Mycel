@@ -1,7 +1,7 @@
 export const STREAM_EVENT_TYPES = [
-  // Content (5) — routed by agent_id
+  // Content (5)
   "text", "tool_call", "tool_result", "error", "cancelled",
-  // Lifecycle (3) — sub-agent / background task
+  // Lifecycle (3) — background task
   "task_start", "task_done", "task_error",
   // Control (3) — run boundaries + runtime status
   "status", "run_start", "run_done",
@@ -16,7 +16,6 @@ export interface StreamEvent {
 
 /** Common fields injected into all content/lifecycle events by the backend. */
 export interface ContentEventData {
-  agent_id: string;
   parent_tool_call_id?: string;
   background?: boolean;
   seq: number;

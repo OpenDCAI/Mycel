@@ -5,7 +5,6 @@ import {
   type ToolSegment,
 } from "../api";
 import type { StreamEvent } from "../api/types";
-import { handleSubagentEvent } from "./subagent-event-handler";
 import { makeId } from "./utils";
 
 export type UpdateEntries = (updater: (prev: ChatEntry[]) => ChatEntry[]) => void;
@@ -146,7 +145,6 @@ export function processStreamEvent(
 ): { messageId?: string } {
   const data = (event.data ?? {}) as EventPayload;
   const messageId = typeof data.message_id === "string" ? data.message_id : undefined;
-  const agentId = typeof data.agent_id === "string" ? data.agent_id : undefined;
 
   // Control events — handled by useThreadStream
   if (event.type === "status") {
@@ -157,19 +155,7 @@ export function processStreamEvent(
     return { messageId };
   }
 
-  // Sub-agent content events: route by agent_id
-  if (agentId && agentId !== "main" && event.type in EVENT_HANDLERS) {
-    handleSubagentEvent(event, turnId, onUpdate);
-    return { messageId };
-  }
-
-  // Sub-agent lifecycle events
-  if ((event.type === "task_start" || event.type === "task_done" || event.type === "task_error") && agentId && agentId !== "main") {
-    handleSubagentEvent(event, turnId, onUpdate);
-    return { messageId };
-  }
-
-  // Main agent content events
+  // Content events
   const handler = EVENT_HANDLERS[event.type];
   if (handler) {
     handler(event, turnId, onUpdate);

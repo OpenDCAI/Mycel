@@ -42,8 +42,8 @@ export function useBackgroundTasks({ threadId, loading, refreshThreads }: UseBac
     const unsubscribe = subscribe((event: StreamEvent) => {
       const data = event.data as any;
 
-      // 只处理 background task 事件（agent_id === "main" 且 background === true）
-      const isBackgroundTask = data?.background === true && data?.agent_id === "main";
+      // 只处理 background task 事件
+      const isBackgroundTask = data?.background === true;
       if (!isBackgroundTask) return;
 
       if (event.type === 'task_start') {
