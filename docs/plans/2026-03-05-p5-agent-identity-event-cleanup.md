@@ -228,7 +228,9 @@ git commit -m "refactor(p5): remove agent_id from all SSE event emission"
 
 ---
 
-### Task 5: Change drain loop routing in streaming_service.py
+### Task 5: Remove subagent buffer and drain loop分流逻辑
+
+子 Agent 实时流式输出不再通过 SSE subagent buffer 管道。执行细节通过 Task Output REST API 按需拉取（P3 已实现）。
 
 **Files:**
 - Modify: `backend/web/services/streaming_service.py` (line 619-662)
@@ -237,37 +239,21 @@ git commit -m "refactor(p5): remove agent_id from all SSE event emission"
 
 Read `streaming_service.py` lines 610-670 to understand exact current logic.
 
-**Step 2: Replace agent_id routing with parent_tool_call_id presence**
+**Step 2: Delete subagent buffer routing branches**
 
-Current pattern:
-```python
-agent_id = sa_data.get("agent_id", "")
-is_subagent_content = (
-    agent_id and agent_id != "main"
-    and event_type in ("text", "tool_call", "tool_result")
-)
-```
+删除 drain 循环中所有基于 `agent_id != "main"` 的分流逻辑：
+- 删除 `is_subagent_content` 判断及其 buffer 写入分支
+- 删除 `task_start` 创建 subagent buffer 的分支
+- 删除 `task_done/task_error` 关闭 subagent buffer 的分支
+- 删除 subagent buffer 相关的数据结构定义
 
-New pattern:
-```python
-parent_tcid = sa_data.get("parent_tool_call_id")
-is_subagent_content = (
-    parent_tcid
-    and event_type in ("text", "tool_call", "tool_result")
-)
-```
-
-Update all `agent_id and agent_id != "main"` checks in the drain loop to use `parent_tcid` instead:
-
-- `task_start` with `parent_tcid` → subagent lifecycle
-- `task_done/task_error` with `parent_tcid` → subagent completion
-- `task_start/task_done/task_error` with `background: true` and no `parent_tcid` → background task notification
+所有事件统一发到主 SSE 流。`task_start/task_done/task_error` 事件直接发给前端，前端按需通过 REST API 拉取详情。
 
 **Step 3: Commit**
 
 ```bash
 git add backend/web/services/streaming_service.py
-git commit -m "refactor(p5): drain loop routes by parent_tool_call_id, not agent_id"
+git commit -m "refactor(p5): remove subagent buffer, all events flow through main SSE stream"
 ```
 
 ---
@@ -320,33 +306,25 @@ interface ContentEventData {
 }
 ```
 
-**Step 2: Update stream-event-handlers.ts routing**
+**Step 2: Remove subagent routing from stream-event-handlers.ts**
 
-Replace agent_id routing (~line 161-170):
+删除 agent_id 路由分支（~line 161-170）：
 
 ```typescript
-// Before
+// 删除整个 block：
 if (agentId && agentId !== "main" && event.type in EVENT_HANDLERS) {
     handleSubagentEvent(event, turnId, onUpdate);
     return { messageId };
 }
 
-// After — route by parent_tool_call_id presence
-const parentToolCallId = data?.parent_tool_call_id;
-if (parentToolCallId && event.type in EVENT_HANDLERS) {
+// 也删除 task_start/task_done/task_error 的 subagent 分支：
+if ((event.type === "task_start" || ...) && agentId && agentId !== "main") {
     handleSubagentEvent(event, turnId, onUpdate);
     return { messageId };
 }
 ```
 
-Same for task_start/task_done/task_error routing:
-```typescript
-// Before
-if ((event.type === "task_start" || ...) && agentId && agentId !== "main") {
-
-// After
-if ((event.type === "task_start" || ...) && parentToolCallId) {
-```
+子 Agent 事件不再通过 SSE 路由到 handleSubagentEvent。task_start/task_done/task_error 作为普通事件处理，前端通过 REST API 拉取详情。
 
 Remove all `agentId` variable declarations that read from `data.agent_id`.
 
