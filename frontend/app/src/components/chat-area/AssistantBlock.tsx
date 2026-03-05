@@ -71,9 +71,8 @@ function ContentPhaseBlock({
           onFocusAgent={onFocusAgent}
         />
       )}
-      {visibleText && visibleText.type === "text" && (isStreaming
-        ? <div className="text-[13px] leading-[1.55] text-[#404040] whitespace-pre-wrap">{visibleText.content}</div>
-        : <MarkdownContent content={visibleText.content} />
+      {visibleText && visibleText.type === "text" && (
+        <MarkdownContent content={visibleText.content} />
       )}
     </>
   );
