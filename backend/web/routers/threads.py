@@ -176,7 +176,7 @@ async def send_message(
 
     qm = app.state.queue_manager
     if hasattr(agent, "runtime") and agent.runtime.current_state == AgentState.ACTIVE:
-        qm.enqueue(format_steer_reminder(payload.message), thread_id)
+        qm.enqueue(format_steer_reminder(payload.message), thread_id, notification_type="steer")
         return {"status": "injected", "routing": "steer", "thread_id": thread_id}
 
     # Agent is IDLE — start new run (both transition and run start must be atomic)
@@ -185,7 +185,7 @@ async def send_message(
     async with lock:
         if hasattr(agent, "runtime") and not agent.runtime.transition(AgentState.ACTIVE):
             # Race: became active between check and lock
-            qm.enqueue(format_steer_reminder(payload.message), thread_id)
+            qm.enqueue(format_steer_reminder(payload.message), thread_id, notification_type="steer")
             return {"status": "injected", "routing": "steer", "thread_id": thread_id}
         run_id = start_agent_run(agent, thread_id, payload.message, app)
     return {"status": "started", "routing": "direct", "run_id": run_id, "thread_id": thread_id}
@@ -200,7 +200,7 @@ async def queue_message(
     """Enqueue a followup message. Will be consumed when agent reaches IDLE."""
     if not payload.message.strip():
         raise HTTPException(status_code=400, detail="message cannot be empty")
-    app.state.queue_manager.enqueue(payload.message, thread_id)
+    app.state.queue_manager.enqueue(payload.message, thread_id, notification_type="steer")
     return {"status": "queued", "thread_id": thread_id}
 
 

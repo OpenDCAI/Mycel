@@ -1,74 +1,43 @@
-"""Message Queue Manager — unified SQLite message queue.
+"""Message Queue Manager — facade over QueueRepo with wake-on-enqueue.
 
-Single channel: all messages go through SQLite (enqueue/dequeue/drain_all).
+Delegates all persistence to a QueueRepo (storage layer).
 Wake handlers notify the host when messages arrive for idle agents.
 """
 
+from __future__ import annotations
+
 import logging
-import sqlite3
 import threading
 from collections.abc import Callable
 from pathlib import Path
 
-from storage.providers.sqlite.kernel import (
-    BUSY_TIMEOUT_MS,
-    SQLiteDBRole,
-    connect_sqlite,
-    resolve_role_db_path,
-)
+from storage.contracts import QueueItem, QueueRepo
 
 logger = logging.getLogger(__name__)
 
 
 class MessageQueueManager:
-    """Unified SQLite message queue with wake-on-enqueue support."""
+    """Facade: QueueRepo persistence + wake handler orchestration."""
 
-    def __init__(self, db_path: str | None = None):
-        resolved = Path(db_path) if db_path else resolve_role_db_path(SQLiteDBRole.QUEUE)
-        self._db_path = str(resolved)
+    def __init__(self, repo: QueueRepo | None = None, *, db_path: str | None = None) -> None:
+        if repo is not None:
+            self._repo = repo
+        else:
+            from storage.providers.sqlite.queue_repo import SQLiteQueueRepo
+            resolved = Path(db_path) if db_path else None
+            self._repo = SQLiteQueueRepo(db_path=resolved)
+        # Expose db_path for diagnostics / tests
+        self._db_path: str = getattr(self._repo, "_db_path", "")
         self._wake_handlers: dict[str, Callable[[], None]] = {}
         self._wake_lock = threading.Lock()
-        self._ensure_table()
-
-    # ------------------------------------------------------------------
-    # SQLite setup
-    # ------------------------------------------------------------------
-
-    def _ensure_table(self) -> None:
-        Path(self._db_path).parent.mkdir(parents=True, exist_ok=True)
-        with connect_sqlite(self._db_path, timeout_ms=BUSY_TIMEOUT_MS) as conn:
-            conn.execute(
-                "CREATE TABLE IF NOT EXISTS message_queue ("
-                "  id         INTEGER PRIMARY KEY AUTOINCREMENT,"
-                "  thread_id  TEXT NOT NULL,"
-                "  content    TEXT NOT NULL,"
-                "  created_at TEXT DEFAULT (datetime('now'))"
-                ")"
-            )
-            conn.execute(
-                "CREATE INDEX IF NOT EXISTS idx_mq_thread ON message_queue (thread_id, id)"
-            )
-            conn.commit()
-
-    def _conn(self) -> sqlite3.Connection:
-        return connect_sqlite(
-            self._db_path,
-            row_factory=sqlite3.Row,
-            timeout_ms=BUSY_TIMEOUT_MS,
-        )
 
     # ------------------------------------------------------------------
     # Core operations
     # ------------------------------------------------------------------
 
-    def enqueue(self, content: str, thread_id: str) -> None:
+    def enqueue(self, content: str, thread_id: str, notification_type: str = "steer") -> None:
         """Persist a message. Fires wake handler after INSERT."""
-        with self._conn() as conn:
-            conn.execute(
-                "INSERT INTO message_queue (thread_id, content) VALUES (?, ?)",
-                (thread_id, content),
-            )
-            conn.commit()
+        self._repo.enqueue(thread_id, content, notification_type)
         # Fire wake handler OUTSIDE DB transaction
         with self._wake_lock:
             handler = self._wake_handlers.get(thread_id)
@@ -78,60 +47,21 @@ class MessageQueueManager:
             except Exception:
                 logger.exception("Wake handler raised for thread %s", thread_id)
 
-    def dequeue(self, thread_id: str) -> str | None:
-        """Atomically pop the oldest message (DELETE + RETURNING)."""
-        with self._conn() as conn:
-            # Fast-path: avoid acquiring a write lock when queue is empty.
-            has_row = conn.execute(
-                "SELECT 1 FROM message_queue WHERE thread_id = ? LIMIT 1",
-                (thread_id,),
-            ).fetchone()
-            if has_row is None:
-                return None
-            row = conn.execute(
-                "DELETE FROM message_queue "
-                "WHERE id = (SELECT MIN(id) FROM message_queue WHERE thread_id = ?) "
-                "RETURNING content",
-                (thread_id,),
-            ).fetchone()
-            conn.commit()
-            return row["content"] if row else None
+    def dequeue(self, thread_id: str) -> QueueItem | None:
+        """Atomically pop the oldest message."""
+        return self._repo.dequeue(thread_id)
 
-    def drain_all(self, thread_id: str) -> list[str]:
-        """Atomically DELETE all pending messages, return FIFO-ordered list."""
-        with self._conn() as conn:
-            # Fast-path: avoid DELETE on empty queue to reduce lock contention on main DB.
-            has_row = conn.execute(
-                "SELECT 1 FROM message_queue WHERE thread_id = ? LIMIT 1",
-                (thread_id,),
-            ).fetchone()
-            if has_row is None:
-                return []
-            rows = conn.execute(
-                "DELETE FROM message_queue WHERE thread_id = ? RETURNING content, id",
-                (thread_id,),
-            ).fetchall()
-            conn.commit()
-        return [r["content"] for r in sorted(rows, key=lambda r: r["id"])]
+    def drain_all(self, thread_id: str) -> list[QueueItem]:
+        """Atomically pop all pending messages, return FIFO-ordered list."""
+        return self._repo.drain_all(thread_id)
 
     def peek(self, thread_id: str) -> bool:
         """Check if the queue has messages (without consuming)."""
-        with self._conn() as conn:
-            row = conn.execute(
-                "SELECT 1 FROM message_queue WHERE thread_id = ? LIMIT 1",
-                (thread_id,),
-            ).fetchone()
-            return row is not None
+        return self._repo.peek(thread_id)
 
     def list_queue(self, thread_id: str) -> list[dict]:
         """List all pending messages (for API queries)."""
-        with self._conn() as conn:
-            rows = conn.execute(
-                "SELECT id, content, created_at FROM message_queue "
-                "WHERE thread_id = ? ORDER BY id",
-                (thread_id,),
-            ).fetchall()
-            return [{"id": r["id"], "content": r["content"], "created_at": r["created_at"]} for r in rows]
+        return self._repo.list_queue(thread_id)
 
     # ------------------------------------------------------------------
     # Wake handler registration
@@ -153,9 +83,7 @@ class MessageQueueManager:
 
     def clear_queue(self, thread_id: str) -> None:
         """Clear persisted queue for a thread."""
-        with self._conn() as conn:
-            conn.execute("DELETE FROM message_queue WHERE thread_id = ?", (thread_id,))
-            conn.commit()
+        self._repo.clear_queue(thread_id)
 
     def clear_all(self, thread_id: str) -> None:
         """Clear queue and unregister wake handler for a thread."""
@@ -172,10 +100,4 @@ class MessageQueueManager:
 
     def queue_sizes(self, thread_id: str) -> dict[str, int]:
         """Return queue sizes. steer is always 0 (backward compat)."""
-        with self._conn() as conn:
-            row = conn.execute(
-                "SELECT COUNT(*) as cnt FROM message_queue WHERE thread_id = ?",
-                (thread_id,),
-            ).fetchone()
-            followup_size = row["cnt"] if row else 0
-        return {"steer": 0, "followup": followup_size}
+        return {"steer": 0, "followup": self._repo.count(thread_id)}

@@ -114,9 +114,12 @@ export interface ToolSegment {
   step: ToolStep;
 }
 
+export type NotificationType = "steer" | "command" | "agent";
+
 export interface NoticeSegment {
   type: "notice";
   content: string;
+  notification_type?: NotificationType;
 }
 
 export type TurnSegment = TextSegment | ToolSegment | NoticeSegment;
@@ -141,6 +144,7 @@ export interface NoticeMessage {
   id: string;
   role: "notice";
   content: string;
+  notification_type?: NotificationType;
   timestamp: number;
 }
 

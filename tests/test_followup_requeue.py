@@ -85,7 +85,7 @@ class TestConsumeFollowupQueue:
 
                 mock_start.assert_called_once_with(
                     mock_agent, "thread-1", "do something", mock_app,
-                    message_metadata={"source": "system"},
+                    message_metadata={"source": "system", "notification_type": "steer"},
                 )
             # Message was consumed, queue is empty
             assert queue_manager.dequeue("thread-1") is None
@@ -104,8 +104,9 @@ class TestConsumeFollowupQueue:
                 await _consume_followup_queue(mock_agent, "thread-1", mock_app)
 
             # Message was re-enqueued — it should be available again
-            msg = queue_manager.dequeue("thread-1")
-            assert msg == "important followup"
+            item = queue_manager.dequeue("thread-1")
+            assert item is not None
+            assert item.content == "important followup"
 
         asyncio.run(_run())
 
@@ -132,7 +133,7 @@ class TestConsumeFollowupQueue:
 
                 mock_start.assert_called_once_with(
                     mock_agent, "thread-1", "retry me", mock_app,
-                    message_metadata={"source": "system"},
+                    message_metadata={"source": "system", "notification_type": "steer"},
                 )
 
             # Queue is now empty

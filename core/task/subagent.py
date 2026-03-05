@@ -565,7 +565,7 @@ class SubagentRunner:
             description=result.description,
         )
         if self._queue_manager:
-            self._queue_manager.enqueue(xml, parent_thread_id)
+            self._queue_manager.enqueue(xml, parent_thread_id, notification_type="agent")
         else:
             import logging
             logging.getLogger(__name__).warning(

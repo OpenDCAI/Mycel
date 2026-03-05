@@ -56,6 +56,7 @@ def format_command_notification(
     exit_code: int,
     command_line: str,
     output: str,
+    description: str | None = None,
 ) -> str:
     """Format Bash command completion as system-reminder XML.
 
@@ -65,6 +66,7 @@ def format_command_notification(
         exit_code: Exit code
         command_line: Command line
         output: Output content (truncated to first 1000 characters)
+        description: Human-readable description for frontend rendering
 
     Returns:
         XML formatted notification string
@@ -76,12 +78,15 @@ def format_command_notification(
     escaped_command = escape(command_line)
     escaped_output = escape(truncated_output)
 
+    desc_line = f"  <Description>{escape(description)}</Description>\n" if description else ""
+
     return (
         "<system-reminder>\n"
         "<CommandNotification>\n"
         f"  <CommandId>{command_id}</CommandId>\n"
         f"  <Status>{status}</Status>\n"
         f"  <ExitCode>{exit_code}</ExitCode>\n"
+        f"{desc_line}"
         f"  <CommandLine>{escaped_command}</CommandLine>\n"
         f"  <Output>{escaped_output}</Output>\n"
         "</CommandNotification>\n"

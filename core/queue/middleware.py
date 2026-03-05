@@ -80,7 +80,10 @@ class SteeringMiddleware(AgentMiddleware):
             return None
 
         messages = [
-            HumanMessage(content=item, metadata={"source": "system"})
+            HumanMessage(
+                content=item.content,
+                metadata={"source": "system", "notification_type": item.notification_type},
+            )
             for item in items
         ]
         return {"messages": messages}

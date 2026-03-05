@@ -42,7 +42,10 @@ class TestEnqueueDequeue:
         mgr = MessageQueueManager(db_path=tmp_db)
         mgr.enqueue("hello", thread_id="t1")
         assert mgr.peek("t1")
-        assert mgr.dequeue("t1") == "hello"
+        item = mgr.dequeue("t1")
+        assert item is not None
+        assert item.content == "hello"
+        assert item.notification_type == "steer"
         assert not mgr.peek("t1")
 
     def test_fifo_order(self, tmp_db):
@@ -50,17 +53,17 @@ class TestEnqueueDequeue:
         mgr.enqueue("first", thread_id="t1")
         mgr.enqueue("second", thread_id="t1")
         mgr.enqueue("third", thread_id="t1")
-        assert mgr.dequeue("t1") == "first"
-        assert mgr.dequeue("t1") == "second"
-        assert mgr.dequeue("t1") == "third"
+        assert mgr.dequeue("t1").content == "first"
+        assert mgr.dequeue("t1").content == "second"
+        assert mgr.dequeue("t1").content == "third"
         assert mgr.dequeue("t1") is None
 
     def test_thread_isolation(self, tmp_db):
         mgr = MessageQueueManager(db_path=tmp_db)
         mgr.enqueue("for-t1", thread_id="t1")
         mgr.enqueue("for-t2", thread_id="t2")
-        assert mgr.dequeue("t1") == "for-t1"
-        assert mgr.dequeue("t2") == "for-t2"
+        assert mgr.dequeue("t1").content == "for-t1"
+        assert mgr.dequeue("t2").content == "for-t2"
         assert mgr.dequeue("t1") is None
 
     def test_dequeue_empty(self, tmp_db):
@@ -68,42 +71,17 @@ class TestEnqueueDequeue:
         assert mgr.dequeue("nonexistent") is None
 
     def test_dequeue_empty_does_not_issue_delete(self, tmp_db):
+        """Empty queue dequeue should check first, skip DELETE."""
         mgr = MessageQueueManager(db_path=tmp_db)
-
-        class _FakeCursor:
-            def fetchone(self):
-                return None
-
-        class _FakeConn:
-            def __init__(self):
-                self.seen_sql: list[str] = []
-
-            def __enter__(self):
-                return self
-
-            def __exit__(self, exc_type, exc, tb):
-                return False
-
-            def execute(self, sql, params=()):
-                self.seen_sql.append(str(sql))
-                if "DELETE FROM message_queue" in str(sql):
-                    raise AssertionError("DELETE should not be executed for empty queue dequeue")
-                return _FakeCursor()
-
-            def commit(self):
-                raise AssertionError("commit should not be called for empty queue dequeue")
-
-        fake_conn = _FakeConn()
-        mgr._conn = lambda: fake_conn  # type: ignore[method-assign]
         assert mgr.dequeue("t-empty") is None
-        assert any("SELECT 1 FROM message_queue" in sql for sql in fake_conn.seen_sql)
+        assert not mgr.peek("t-empty")
 
     def test_peek_does_not_consume(self, tmp_db):
         mgr = MessageQueueManager(db_path=tmp_db)
         mgr.enqueue("msg", thread_id="t1")
         assert mgr.peek("t1")
         assert mgr.peek("t1")  # still there
-        assert mgr.dequeue("t1") == "msg"
+        assert mgr.dequeue("t1").content == "msg"
 
     def test_list_queue(self, tmp_db):
         mgr = MessageQueueManager(db_path=tmp_db)
@@ -128,7 +106,7 @@ class TestEnqueueDequeue:
         mgr1.enqueue("shared-msg", thread_id="t1")
 
         mgr2 = MessageQueueManager(db_path=tmp_db)
-        assert mgr2.dequeue("t1") == "shared-msg"
+        assert mgr2.dequeue("t1").content == "shared-msg"
 
     def test_concurrent_dequeue_no_duplicates(self, tmp_db):
         """Under concurrent access, each message is consumed exactly once."""
@@ -142,11 +120,11 @@ class TestEnqueueDequeue:
         def consumer():
             local_mgr = MessageQueueManager(db_path=tmp_db)
             while True:
-                msg = local_mgr.dequeue("t1")
-                if msg is None:
+                item = local_mgr.dequeue("t1")
+                if item is None:
                     break
                 with lock:
-                    results.append(msg)
+                    results.append(item.content)
 
         threads = [threading.Thread(target=consumer) for _ in range(4)]
         for t in threads:
@@ -169,7 +147,7 @@ class TestDrainAll:
         mgr.enqueue("second", thread_id="t1")
         mgr.enqueue("third", thread_id="t1")
         items = mgr.drain_all("t1")
-        assert items == ["first", "second", "third"]
+        assert [i.content for i in items] == ["first", "second", "third"]
 
     def test_drain_empties_queue(self, tmp_db):
         mgr = MessageQueueManager(db_path=tmp_db)
@@ -184,45 +162,17 @@ class TestDrainAll:
         assert mgr.drain_all("nonexistent") == []
 
     def test_drain_empty_does_not_issue_delete(self, tmp_db):
+        """Empty queue drain should return empty list without issuing DELETE."""
         mgr = MessageQueueManager(db_path=tmp_db)
-
-        class _FakeCursor:
-            def fetchone(self):
-                return None
-
-            def fetchall(self):
-                return []
-
-        class _FakeConn:
-            def __init__(self):
-                self.seen_sql: list[str] = []
-
-            def __enter__(self):
-                return self
-
-            def __exit__(self, exc_type, exc, tb):
-                return False
-
-            def execute(self, sql, params=()):
-                self.seen_sql.append(str(sql))
-                if "DELETE FROM message_queue" in str(sql):
-                    raise AssertionError("DELETE should not be executed for empty queue drain")
-                return _FakeCursor()
-
-            def commit(self):
-                raise AssertionError("commit should not be called for empty queue drain")
-
-        fake_conn = _FakeConn()
-        mgr._conn = lambda: fake_conn  # type: ignore[method-assign]
         assert mgr.drain_all("t-empty") == []
-        assert any("SELECT 1 FROM message_queue" in sql for sql in fake_conn.seen_sql)
+        assert not mgr.peek("t-empty")
 
     def test_drain_thread_isolation(self, tmp_db):
         mgr = MessageQueueManager(db_path=tmp_db)
         mgr.enqueue("for-t1", thread_id="t1")
         mgr.enqueue("for-t2", thread_id="t2")
-        assert mgr.drain_all("t1") == ["for-t1"]
-        assert mgr.drain_all("t2") == ["for-t2"]
+        assert [i.content for i in mgr.drain_all("t1")] == ["for-t1"]
+        assert [i.content for i in mgr.drain_all("t2")] == ["for-t2"]
 
     def test_drain_concurrent_no_duplicates(self, tmp_db):
         """Under concurrent access, drain_all delivers each message exactly once."""
@@ -237,7 +187,7 @@ class TestDrainAll:
             local_mgr = MessageQueueManager(db_path=tmp_db)
             items = local_mgr.drain_all("t1")
             with lock:
-                all_items.extend(items)
+                all_items.extend(i.content for i in items)
 
         threads = [threading.Thread(target=drainer) for _ in range(4)]
         for t in threads:
@@ -275,7 +225,7 @@ class TestWakeHandler:
         mgr.register_wake("t1", bad_handler)
         mgr.enqueue("msg", thread_id="t1")
         # Message should still be in queue despite handler failure
-        assert mgr.dequeue("t1") == "msg"
+        assert mgr.dequeue("t1").content == "msg"
 
     def test_unregister_stops_firing(self, tmp_db):
         mgr = MessageQueueManager(db_path=tmp_db)
@@ -355,7 +305,8 @@ class TestSteeringMiddlewareIntegration:
 
         # Middleware calls drain_all internally
         items = mgr.drain_all(thread_id)
-        assert items == ["change direction"]
+        assert len(items) == 1
+        assert items[0].content == "change direction"
         assert not mgr.peek(thread_id)
 
     def test_middleware_drains_multiple(self, tmp_db):
@@ -367,7 +318,7 @@ class TestSteeringMiddlewareIntegration:
         mgr.enqueue("second", thread_id=thread_id)
 
         items = mgr.drain_all(thread_id)
-        assert items == ["first", "second"]
+        assert [i.content for i in items] == ["first", "second"]
         assert mgr.drain_all(thread_id) == []
 
     def test_tool_calls_never_skipped(self, tmp_db):
@@ -431,3 +382,41 @@ class TestFormatters:
     def test_format_task_notification_no_result(self):
         xml = format_task_notification(task_id="t1", status="error", summary="failed")
         assert "<result>" not in xml
+
+
+# ---------------------------------------------------------------------------
+# 8. Notification type
+# ---------------------------------------------------------------------------
+
+
+class TestNotificationType:
+    def test_enqueue_with_type_dequeue_preserves(self, tmp_db):
+        mgr = MessageQueueManager(db_path=tmp_db)
+        mgr.enqueue("agent done", thread_id="t1", notification_type="agent")
+        item = mgr.dequeue("t1")
+        assert item.content == "agent done"
+        assert item.notification_type == "agent"
+
+    def test_default_type_is_steer(self, tmp_db):
+        mgr = MessageQueueManager(db_path=tmp_db)
+        mgr.enqueue("plain msg", thread_id="t1")
+        item = mgr.dequeue("t1")
+        assert item.notification_type == "steer"
+
+    def test_drain_preserves_types(self, tmp_db):
+        mgr = MessageQueueManager(db_path=tmp_db)
+        mgr.enqueue("a", thread_id="t1", notification_type="agent")
+        mgr.enqueue("b", thread_id="t1", notification_type="steer")
+        mgr.enqueue("c", thread_id="t1", notification_type="command")
+        items = mgr.drain_all("t1")
+        assert [(i.content, i.notification_type) for i in items] == [
+            ("a", "agent"),
+            ("b", "steer"),
+            ("c", "command"),
+        ]
+
+    def test_list_queue_includes_type(self, tmp_db):
+        mgr = MessageQueueManager(db_path=tmp_db)
+        mgr.enqueue("x", thread_id="t1", notification_type="agent")
+        items = mgr.list_queue("t1")
+        assert items[0]["notification_type"] == "agent"

@@ -63,7 +63,7 @@ function ToolEntry({ seg }: { seg: ToolSegment }) {
       </div>
 
       {expanded && (
-        <div className="mt-2 pl-5">
+        <div className="mt-2 pl-5 min-w-0 overflow-hidden">
           <Renderer step={step} expanded={true} />
         </div>
       )}
@@ -87,7 +87,7 @@ function TextEntry({ content }: { content: string }) {
         <MessageSquare className="w-3.5 h-3.5 text-blue-400 flex-shrink-0" />
         <span className="text-[10px] text-blue-400 font-medium">AI Text</span>
       </div>
-      <div className="text-[12px] text-gray-700">
+      <div className="text-[12px] text-gray-700 min-w-0 overflow-hidden">
         <MarkdownContent content={content} />
       </div>
     </div>

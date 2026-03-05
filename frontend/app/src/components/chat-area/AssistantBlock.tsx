@@ -107,7 +107,7 @@ export const AssistantBlock = memo(function AssistantBlock({ entry, isStreamingT
       <div className="w-6 h-6 rounded-full bg-[#171717] flex items-center justify-center flex-shrink-0 mt-0.5">
         <span className="text-[11px] font-semibold text-white">L</span>
       </div>
-      <div className="flex-1 max-w-[calc(100%-36px)] space-y-1.5">
+      <div className="flex-1 min-w-0 space-y-1.5 overflow-hidden">
         <div className="flex items-center gap-2">
           <span className="text-[13px] font-medium text-[#171717]">Leon</span>
           {entry.timestamp && (
