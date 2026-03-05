@@ -102,8 +102,8 @@ function ChatPageInner({ threadId }: { threadId: string }) {
 
   const ui = useAppActions({ activeThreadId: threadId, setEntries });
   const {
-    computerOpen, computerTab, focusedAgentStepId,
-    setComputerOpen, setComputerTab, setFocusedAgentStepId,
+    computerOpen, computerTab,
+    setComputerOpen, setComputerTab,
     handleFocusAgent, handleSendQueueMessage,
   } = ui;
 
@@ -183,8 +183,6 @@ function ChatPageInner({ threadId }: { threadId: string }) {
               width={computerResize.width}
               activeTab={computerTab}
               onTabChange={setComputerTab}
-              focusedAgentStepId={focusedAgentStepId}
-              onFocusAgent={setFocusedAgentStepId}
               isStreaming={isStreaming}
             />
           </>

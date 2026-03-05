@@ -11,8 +11,6 @@ export interface ComputerPanelProps {
   width?: number;
   activeTab?: TabType;
   onTabChange?: (tab: TabType) => void;
-  focusedAgentStepId?: string | null;
-  onFocusAgent?: (stepId: string | null) => void;
   isStreaming?: boolean;
 }
 
