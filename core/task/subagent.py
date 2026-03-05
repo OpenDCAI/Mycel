@@ -284,6 +284,8 @@ class SubagentRunner:
                             "task_type": "agent",
                             "description": description,
                             "subagent_type": subagent_type,
+                            "background": True,
+                            "agent_id": "main",
                         }),
                     })
 
@@ -744,7 +746,7 @@ class SubagentRunner:
             if runtime:
                 runtime.emit_activity_event({
                     "event": "task_done",
-                    "data": json.dumps({"task_id": task_id}),
+                    "data": json.dumps({"task_id": task_id, "background": True, "agent_id": "main"}),
                 })
 
             if parent_tool_call_id:
@@ -771,7 +773,7 @@ class SubagentRunner:
             if runtime:
                 runtime.emit_activity_event({
                     "event": "task_error",
-                    "data": json.dumps({"task_id": task_id, "error": str(e)}),
+                    "data": json.dumps({"task_id": task_id, "error": str(e), "background": True, "agent_id": "main"}),
                 })
 
             if parent_tool_call_id:
