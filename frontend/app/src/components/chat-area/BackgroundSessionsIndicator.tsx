@@ -43,8 +43,11 @@ export function BackgroundSessionsIndicator({ tasks, onCancelTask }: BackgroundS
 
       {/* 悬浮面板 */}
       {isHovered && (
-        <div className="absolute top-full left-0 mt-1 bg-white rounded-lg shadow-lg border border-gray-200 p-3 min-w-[260px] max-w-[380px] animate-in fade-in slide-in-from-top-1 duration-150">
-          {agents.length > 0 && (
+        <div className="absolute top-full left-0 pt-1">
+          {/* 透明桥接区域，填充间隙 */}
+          <div className="h-1" />
+          <div className="bg-white rounded-lg shadow-lg border border-gray-200 p-3 min-w-[260px] max-w-[380px] animate-in fade-in slide-in-from-top-1 duration-150">
+            {agents.length > 0 && (
             <div>
               <div className="flex items-center gap-1.5 text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-1.5">
                 <Bot className="w-3 h-3" />
@@ -102,6 +105,7 @@ export function BackgroundSessionsIndicator({ tasks, onCancelTask }: BackgroundS
               </div>
             </div>
           )}
+          </div>
         </div>
       )}
     </div>
