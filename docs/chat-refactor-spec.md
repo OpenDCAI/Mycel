@@ -206,14 +206,14 @@ DetailBox 内每个 ToolCall 采用两行紧凑格式，用内容本身反映状
 { type: "subagent_task_tool_call", data: { task_id, parent_tool_call_id, ... } }
 
 // 改后
-{ type: "tool_call", data: { agent_id: "task_abc", parent_tool_call_id: "tc_xyz", ... } }
+{ type: "tool_call", data: { parent_tool_call_id: "tc_xyz", ... } }
 ```
 
 收敛后事件类型（11 种）：
 
 | 类型 | 事件 | 说明 |
 |------|------|------|
-| 内容 | `text` `tool_call` `tool_result` `error` `cancelled` | 5 种，靠 agent_id 区分来源 |
+| 内容 | `text` `tool_call` `tool_result` `error` `cancelled` | 5 种，靠 `parent_tool_call_id` 有无区分来源 |
 | 生命周期 | `task_start` `task_done` `task_error` | 3 种，覆盖 Turn 内子 Agent 和 Background Task |
 | 控制 | `status` `run_start` `run_done` | 3 种 |
 
@@ -221,10 +221,16 @@ DetailBox 内每个 ToolCall 采用两行紧凑格式，用内容本身反映状
 
 原有的 `command_progress` 事件删除——Background Task 的状态和输出统一走 REST API（见第六章），SSE 只负责轻量的状态变化通知（`task_done`）。
 
-主 Agent 事件：`agent_id = "main"`，无 `parent_tool_call_id`。
-子 Agent / Background Task 事件：`agent_id = task_id`，`parent_tool_call_id`（可选），`background: true/false` 区分是否后台任务。
+### 事件路由
 
-~20 种 → 11 种。前端收到事件后，先看 `type` 决定怎么渲染，再看 `agent_id` / `parent_tool_call_id` 决定往哪个 Turn / ToolStep 里挂。Background Task 的 `task_done` 只是触发前端 re-fetch Task Output API，不携带完整数据。
+事件不携带 `agent_id`。Thread 是聊天主体，Agent 是幕后执行者——`agent_id` 是后端内部的生命周期管理概念，不泄漏到 SSE 协议层。
+
+路由规则靠 `parent_tool_call_id` 这个关系字段：
+- **无 `parent_tool_call_id`** → 主 Thread 事件，挂到当前 Turn
+- **有 `parent_tool_call_id`** → 子 Agent 事件，挂到对应 ToolStep
+- **有 `background: true` 且无 `parent_tool_call_id`** → Background Task 生命周期通知
+
+~20 种 → 11 种。前端收到事件后，先看 `type` 决定怎么渲染，再看 `parent_tool_call_id` 决定往哪个 Turn / ToolStep 里挂。Background Task 的 `task_done` 只是触发前端 re-fetch Task Output API，不携带完整数据。
 
 ## 六、Background Task 与 Task Output
 
@@ -277,7 +283,7 @@ Background Task 完成后，后端通过 Notification（HumanMessage 壳，`meta
 | ComputerPanel steps tab | 存在 | 删除 |
 | Agent Turn 边界 | 不明确，segments 混在一起 | 以 Notification 为分割（仅 Agent idle 时），每个 Turn 独立 |
 | 流式中的 AI text | chunk 追加，所有文字可见 | 最近一条刷新覆盖，中间文字进 DetailBox |
-| SSE 事件类型 | ~20 种，前缀区分来源 | 11 种，靠 agent_id/parent_tool_call_id 路由 |
+| SSE 事件类型 | ~20 种，前缀区分来源 | 11 种，靠 parent_tool_call_id 路由 |
 | Task/SubAgent | 两套平行事件 | 统一为一套，靠 parent_tool_call_id 有无区分 |
 | Background Task | command_progress + background_task_* 两套 SSE 推送 | 统一为 Background Task，状态走 REST API，SSE 只发轻量通知 |
 
@@ -308,3 +314,4 @@ Background Task 完成后，后端通过 Notification（HumanMessage 壳，`meta
 - [P2: Steps Tab 删除 + onFocusStep 链路清理](./plans/p2-steps-tab-cleanup-chat-refactor.md)
 - [P3: Background Task 统一 + Task Output API](./plans/p3-background-task-unification-chat-refactor.md)
 - [P4: ToolCall 富渲染](./plans/p4-toolcall-rich-rendering-chat-refactor.md)
+- [P5: Agent 实例持久化 + SSE 事件清理](./plans/p5-agent-identity-and-event-cleanup.md)
