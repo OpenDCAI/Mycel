@@ -37,6 +37,7 @@ interface AppState {
   updateTask: (id: string, fields: Partial<Task>) => Promise<void>;
   deleteTask: (id: string) => Promise<void>;
   bulkUpdateTaskStatus: (ids: string[], status: TaskStatus) => Promise<void>;
+  bulkDeleteTasks: (ids: string[]) => Promise<void>;
 
   // ── Cron Jobs ──
   fetchCronJobs: () => Promise<void>;
@@ -194,6 +195,16 @@ export const useAppStore = create<AppState>()((set, get) => ({
           ? { ...t, status, progress: status === "completed" ? 100 : status === "pending" ? 0 : t.progress }
           : t
       ),
+    }));
+  },
+
+  bulkDeleteTasks: async (ids) => {
+    await api("/tasks/bulk-delete", {
+      method: "POST",
+      body: JSON.stringify({ ids }),
+    });
+    set((s) => ({
+      taskList: s.taskList.filter((t) => !ids.includes(t.id)),
     }));
   },
 

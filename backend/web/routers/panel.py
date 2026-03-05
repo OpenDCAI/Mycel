@@ -6,6 +6,7 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, Request
 
 from backend.web.models.panel import (
+    BulkDeleteTasksRequest,
     BulkTaskStatusRequest,
     CreateCronJobRequest,
     CreateMemberRequest,
@@ -97,6 +98,12 @@ async def create_task(req: CreateTaskRequest) -> dict[str, Any]:
 async def bulk_update_status(req: BulkTaskStatusRequest) -> dict[str, Any]:
     count = await asyncio.to_thread(task_service.bulk_update_task_status, req.ids, req.status)
     return {"updated": count}
+
+
+@router.post("/tasks/bulk-delete")
+async def bulk_delete_tasks(req: BulkDeleteTasksRequest) -> dict[str, Any]:
+    count = await asyncio.to_thread(task_service.bulk_delete_tasks, req.ids)
+    return {"deleted": count}
 
 
 @router.put("/tasks/{task_id}")

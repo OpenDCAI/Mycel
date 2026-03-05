@@ -75,6 +75,10 @@ class BulkTaskStatusRequest(BaseModel):
     status: str
 
 
+class BulkDeleteTasksRequest(BaseModel):
+    ids: list[str]
+
+
 # ── Library ──
 
 class CreateResourceRequest(BaseModel):
