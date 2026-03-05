@@ -817,8 +817,12 @@ class SubagentRunner:
 
     async def get_task_status(self, task_id: str) -> TaskResult:
         """Get status of a background task from registry."""
+        import logging
+        logger = logging.getLogger(__name__)
+
         registry = self._get_registry()
         if not registry:
+            logger.warning(f"[get_task_status] Registry not available for task {task_id}")
             return TaskResult(
                 task_id=task_id,
                 status="error",
@@ -827,11 +831,14 @@ class SubagentRunner:
 
         entry = await registry.get(task_id)
         if not entry:
+            logger.warning(f"[get_task_status] Task {task_id} not found in registry")
             return TaskResult(
                 task_id=task_id,
                 status="error",
                 error=f"Unknown task_id: {task_id}",
             )
+
+        logger.debug(f"[get_task_status] Task {task_id} status={entry.status}")
 
         # Convert TaskEntry to TaskResult
         return TaskResult(
