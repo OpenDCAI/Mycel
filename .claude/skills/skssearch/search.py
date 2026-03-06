@@ -121,10 +121,27 @@ def main() -> None:
         skills[sid] = {**s, "_from": "kw"}
 
     for item in ai_data:
-        s = item.get("skill", {})
-        sid = s.get("id")
+        # AI search returns different structure: attributes.file contains skill metadata
+        file_meta = item.get("attributes", {}).get("file", {})
+        sid = file_meta.get("skill-id")
+        if not sid:
+            # Fallback to old structure
+            s = item.get("skill", {})
+            sid = s.get("id")
+
         if not sid:
             continue
+
+        # Build skill dict from file metadata
+        s = {
+            "id": sid,
+            "name": file_meta.get("skill-name", ""),
+            "description": "",  # Not in file metadata, would need to parse content
+            "githubUrl": "",    # Not available in this structure
+            "stars": 0,         # Not available
+            "author": sid.split("-")[0] if "-" in sid else "",  # Extract from ID
+        }
+
         if sid not in skills:
             skills[sid] = {**s, "_from": "ai"}
         elif skills[sid]["_from"] == "kw":
@@ -138,8 +155,21 @@ def main() -> None:
     by_name: dict[str, dict] = {}
     for s in skills.values():
         name = s.get("name", "")
-        if name not in by_name or s.get("stars", 0) > by_name[name].get("stars", 0):
+        if name not in by_name:
             by_name[name] = s
+        else:
+            # Keep higher stars, but merge _from tags
+            existing = by_name[name]
+            if s.get("stars", 0) > existing.get("stars", 0):
+                # Replace with higher-starred version, but preserve _from info
+                s_from = s.get("_from", "kw")
+                e_from = existing.get("_from", "kw")
+                if s_from != e_from:
+                    s["_from"] = "both"
+                by_name[name] = s
+            elif s.get("_from") != existing.get("_from"):
+                # Same or lower stars, but different source - mark as both
+                existing["_from"] = "both"
     result = sorted(by_name.values(), key=lambda x: -x.get("stars", 0))[:20]
 
     # Save for sksadd
