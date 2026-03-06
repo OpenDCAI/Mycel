@@ -150,7 +150,7 @@ def _create_owned_thread(
     import time
 
 
-
+    sandbox_type = payload.sandbox or "local"
     agent_member_id = payload.member_id
     agent_member = app.state.member_repo.get_by_id(agent_member_id)
     if not agent_member or agent_member.owner_user_id != owner_user_id:
@@ -205,7 +205,7 @@ def _create_owned_thread(
     }
 
 
-@router.post("")
+@router.post("", response_model=None)
 async def create_thread(
     payload: CreateThreadRequest,
     user_id: Annotated[str, Depends(get_current_user_id)],
