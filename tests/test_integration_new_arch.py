@@ -575,50 +575,34 @@ class TestErrorHandling:
 
 # ── create_sandbox() factory tests ──────────────────────────────────────────
 
+from sandbox import LocalSandbox, create_sandbox  # noqa: E402
+from sandbox.config import SandboxConfig  # noqa: E402
+
 
 def test_create_sandbox_local():
-    from sandbox import LocalSandbox, create_sandbox
-    from sandbox.config import SandboxConfig
-
     sbx = create_sandbox(SandboxConfig(provider="local"), workspace_root="/tmp")
     assert isinstance(sbx, LocalSandbox)
     assert sbx.working_dir == "/tmp"
 
 
 def test_create_sandbox_agentbay_requires_api_key(monkeypatch):
-    import pytest
-    from sandbox import create_sandbox
-    from sandbox.config import SandboxConfig
-
     monkeypatch.delenv("AGENTBAY_API_KEY", raising=False)
     with pytest.raises(ValueError, match="AGENTBAY_API_KEY"):
         create_sandbox(SandboxConfig(provider="agentbay"))
 
 
 def test_create_sandbox_e2b_requires_api_key(monkeypatch):
-    import pytest
-    from sandbox import create_sandbox
-    from sandbox.config import SandboxConfig
-
     monkeypatch.delenv("E2B_API_KEY", raising=False)
     with pytest.raises(ValueError, match="E2B_API_KEY"):
         create_sandbox(SandboxConfig(provider="e2b"))
 
 
 def test_create_sandbox_daytona_requires_api_key(monkeypatch):
-    import pytest
-    from sandbox import create_sandbox
-    from sandbox.config import SandboxConfig
-
     monkeypatch.delenv("DAYTONA_API_KEY", raising=False)
     with pytest.raises(ValueError, match="DAYTONA_API_KEY"):
         create_sandbox(SandboxConfig(provider="daytona"))
 
 
 def test_create_sandbox_unknown_provider():
-    import pytest
-    from sandbox import create_sandbox
-    from sandbox.config import SandboxConfig
-
     with pytest.raises(ValueError, match="Unknown sandbox provider"):
         create_sandbox(SandboxConfig(provider="bogus"))
