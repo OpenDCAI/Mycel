@@ -9,6 +9,7 @@ import { TabBar } from "./TabBar";
 import { TerminalView } from "./TerminalView";
 import { AgentsView } from "./AgentsView";
 import { FilesView } from "./FilesView";
+import { UploadedFilesView } from "./UploadedFilesView";
 
 export type { ComputerPanelProps };
 
@@ -95,6 +96,10 @@ export default function ComputerPanel({
             onToggleFolder={fileExplorer.handleToggleFolder}
             onSelectFile={fileExplorer.handleSelectFile}
           />
+        )}
+
+        {activeTab === "uploads" && threadId && (
+          <UploadedFilesView threadId={threadId} />
         )}
       </div>
     </div>

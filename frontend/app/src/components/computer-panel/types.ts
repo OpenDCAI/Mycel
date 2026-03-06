@@ -1,7 +1,7 @@
 import type { ChatEntry, LeaseStatus, SessionStatus, TerminalStatus } from "../../api";
 import type { WorkspaceChannelFileEntry, WorkspaceChannelKind } from "../../api";
 
-export type TabType = "terminal" | "files" | "agents";
+export type TabType = "terminal" | "files" | "uploads" | "agents";
 
 export interface ComputerPanelProps {
   isOpen: boolean;

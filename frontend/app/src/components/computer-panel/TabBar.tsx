@@ -1,4 +1,4 @@
-import { Bot, FileText, Terminal } from "lucide-react";
+import { Bot, FileText, Terminal, Upload } from "lucide-react";
 import type { TabType } from "./types";
 
 interface TabBarProps {
@@ -11,6 +11,7 @@ interface TabBarProps {
 const TABS: { key: TabType; label: string; icon: typeof Terminal }[] = [
   { key: "terminal", label: "终端", icon: Terminal },
   { key: "files", label: "文件", icon: FileText },
+  { key: "uploads", label: "Uploads", icon: Upload },
   { key: "agents", label: "助手", icon: Bot },
 ];
 
