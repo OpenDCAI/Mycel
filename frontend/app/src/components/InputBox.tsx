@@ -1,5 +1,6 @@
-import { Send, Square } from "lucide-react";
+import { Paperclip, Send, Square } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { FileUploadModal } from "./FileUploadModal";
 
 interface InputBoxProps {
   disabled?: boolean;
@@ -8,6 +9,7 @@ interface InputBoxProps {
   onSendMessage: (message: string) => Promise<void> | void;
   onSendQueueMessage?: (message: string) => Promise<void> | void;
   onStop?: () => void;
+  onUploadFiles?: (files: File[]) => Promise<void>;
 }
 
 export default function InputBox({
@@ -17,9 +19,11 @@ export default function InputBox({
   onSendMessage,
   onSendQueueMessage,
   onStop,
+  onUploadFiles,
 }: InputBoxProps) {
   const [value, setValue] = useState("");
   const [focused, setFocused] = useState(false);
+  const [uploadModalOpen, setUploadModalOpen] = useState(false);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const sendingRef = useRef(false);
 
@@ -96,6 +100,17 @@ export default function InputBox({
             />
           </div>
           <div className="flex items-center pr-3 py-4">
+            {onUploadFiles && (
+              <button
+                type="button"
+                onClick={() => setUploadModalOpen(true)}
+                disabled={inputDisabled}
+                className="w-8 h-8 rounded-full flex items-center justify-center transition-colors text-[#737373] hover:text-[#171717] hover:bg-[#f5f5f5] disabled:opacity-50"
+                title="Attach files"
+              >
+                <Paperclip className="w-4 h-4" />
+              </button>
+            )}
             <button
               onClick={(e) => {
                 e.stopPropagation();
@@ -119,6 +134,13 @@ export default function InputBox({
           </div>
         </div>
       </div>
+      {onUploadFiles && (
+        <FileUploadModal
+          isOpen={uploadModalOpen}
+          onClose={() => setUploadModalOpen(false)}
+          onUpload={onUploadFiles}
+        />
+      )}
     </div>
   );
 }
