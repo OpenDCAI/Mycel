@@ -1,12 +1,12 @@
-import { useEffect, useState } from "react";
-import { ChevronDown, ChevronRight, File, Folder, Home, X } from "lucide-react";
+import { useState } from "react";
+import { ChevronDown, ChevronRight } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import type { ResourceSession, SessionMetrics } from "./types";
 import { getAgentColor, getAgentInitials } from "./utils/avatar";
 import { calculateDuration, formatDuration } from "./utils/duration";
 import { formatMetric } from "./utils/format";
-import { useDirectoryBrowser } from "@/hooks/use-directory-browser";
+import { SandboxFileBrowser } from "@/components/SandboxFileBrowser";
 
 // ---------------------------------------------------------------------------
 // Grouping
@@ -161,9 +161,9 @@ function LeaseItem({ group, providerType }: { group: LeaseGroup; providerType: s
           {/* Metrics bar */}
           {hasMetrics && (
             <div className="grid grid-cols-3 gap-2 px-3 py-2 text-[10px] font-mono bg-muted/10 border-b border-border/20">
-              <MetricCell label="CPU" value={group.metrics?.cpu} unit="%" />
-              <MetricCell label="RAM" value={group.metrics?.memory} unit="GB" />
-              <MetricCell label="磁盘" value={group.metrics?.disk} unit="GB" />
+              <MetricCell label="CPU" used={group.metrics?.cpu} unit="%" />
+              <MetricCell label="RAM" used={group.metrics?.memory} limit={group.metrics?.memoryLimit} unit="GB" note={group.metrics?.memoryNote} />
+              <MetricCell label="磁盘" used={group.metrics?.disk} limit={group.metrics?.diskLimit} unit="GB" note={group.metrics?.diskNote} />
             </div>
           )}
           {/* File browser */}
@@ -181,162 +181,11 @@ function LeaseItem({ group, providerType }: { group: LeaseGroup; providerType: s
 }
 
 // ---------------------------------------------------------------------------
-// Sandbox file browser — uses shared useDirectoryBrowser hook
+// Sandbox file browser — uses shared SandboxFileBrowser component
 // ---------------------------------------------------------------------------
 
 function SandboxBrowser({ leaseId, providerType }: { leaseId: string; providerType: string }) {
-  const isLocal = providerType === "local" || !leaseId;
-  const defaultPath = isLocal ? "~" : "/";
-
-  const buildBrowseUrl = (path: string) =>
-    isLocal
-      ? `/api/settings/browse?path=${encodeURIComponent(path)}&include_files=true`
-      : `/api/monitor/sandbox/${leaseId}/browse?path=${encodeURIComponent(path)}`;
-
-  const buildReadUrl = (path: string) =>
-    isLocal
-      ? `/api/settings/read?path=${encodeURIComponent(path)}`
-      : `/api/monitor/sandbox/${leaseId}/read?path=${encodeURIComponent(path)}`;
-
-  const { currentPath, parentPath, items, loading, error, loadPath } =
-    useDirectoryBrowser(buildBrowseUrl, defaultPath);
-
-  const [selectedFile, setSelectedFile] = useState<string | null>(null);
-  const [fileContent, setFileContent] = useState<string | null>(null);
-  const [fileLoading, setFileLoading] = useState(false);
-  const [fileError, setFileError] = useState<string | null>(null);
-
-  useEffect(() => {
-    void loadPath(defaultPath);
-    setSelectedFile(null);
-    setFileContent(null);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [leaseId]);
-
-  async function openFile(path: string) {
-    if (selectedFile === path) {
-      setSelectedFile(null);
-      setFileContent(null);
-      return;
-    }
-    setSelectedFile(path);
-    setFileContent(null);
-    setFileError(null);
-    setFileLoading(true);
-    try {
-      const resp = await fetch(buildReadUrl(path));
-      if (!resp.ok) throw new Error(`${resp.status}`);
-      const data = await resp.json() as { content: string; truncated: boolean };
-      setFileContent(data.content);
-      if (data.truncated) setFileError("(内容已截断至 100 KB)");
-    } catch (e) {
-      setFileError(e instanceof Error ? e.message : "读取失败");
-    } finally {
-      setFileLoading(false);
-    }
-  }
-
-  return (
-    <div className="text-xs">
-      {/* Path bar */}
-      <div className="flex items-center gap-1.5 mb-1.5">
-        <button
-          onClick={() => { void loadPath(defaultPath); setSelectedFile(null); setFileContent(null); }}
-          className="text-muted-foreground hover:text-foreground transition-colors"
-          title="返回根目录"
-        >
-          <Home className="w-3 h-3" />
-        </button>
-        <span className="font-mono text-muted-foreground truncate flex-1 text-[10px]">{currentPath}</span>
-      </div>
-
-      <ScrollArea className="h-[180px] border rounded border-border/30">
-        <div className="p-1 space-y-0.5">
-          {parentPath && (
-            <button
-              onClick={() => loadPath(parentPath)}
-              className="w-full flex items-center gap-1.5 px-2 py-1 hover:bg-muted/50 rounded text-muted-foreground"
-            >
-              <Folder className="w-3 h-3 shrink-0" />
-              <span>..</span>
-            </button>
-          )}
-
-          {loading && (
-            <div className="text-center py-6 text-muted-foreground">加载中...</div>
-          )}
-          {error && (
-            <div className="text-center py-6 text-destructive text-[11px]">{error}</div>
-          )}
-
-          {!loading && !error && items.length === 0 && (
-            <div className="text-center py-6 text-muted-foreground">此目录为空</div>
-          )}
-
-          {!loading && !error && items.map((item) =>
-            item.is_dir ? (
-              <button
-                key={item.path}
-                onClick={() => loadPath(item.path)}
-                className="w-full flex items-center gap-1.5 px-2 py-1 hover:bg-muted/50 rounded"
-              >
-                <Folder className="w-3 h-3 text-muted-foreground shrink-0" />
-                <span className="flex-1 text-left truncate">{item.name}</span>
-              </button>
-            ) : (
-              <button
-                key={item.path}
-                onClick={() => { void openFile(item.path); }}
-                className={`w-full flex items-center gap-1.5 px-2 py-1 hover:bg-muted/50 rounded text-left ${
-                  selectedFile === item.path ? "bg-muted/40 text-foreground" : "text-muted-foreground"
-                }`}
-              >
-                <File className="w-3 h-3 shrink-0" />
-                <span className="truncate">{item.name}</span>
-              </button>
-            )
-          )}
-        </div>
-      </ScrollArea>
-
-      {/* File content panel */}
-      {selectedFile && (
-        <div className="mt-1.5 border rounded border-border/30 bg-muted/5">
-          <div className="flex items-center justify-between px-2 py-1 border-b border-border/20">
-            <span className="text-[10px] font-mono text-muted-foreground truncate flex-1">
-              {selectedFile.split("/").pop()}
-            </span>
-            <button
-              onClick={() => { setSelectedFile(null); setFileContent(null); setFileError(null); }}
-              className="ml-2 text-muted-foreground hover:text-foreground shrink-0"
-            >
-              <X className="w-3 h-3" />
-            </button>
-          </div>
-          <ScrollArea className="h-[200px]">
-            <div className="p-2">
-              {fileLoading && (
-                <div className="text-center py-6 text-muted-foreground text-[11px]">加载中...</div>
-              )}
-              {!fileLoading && fileError && !fileContent && (
-                <div className="text-center py-6 text-destructive text-[11px]">{fileError}</div>
-              )}
-              {fileContent != null && (
-                <>
-                  <pre className="text-[10px] font-mono text-foreground whitespace-pre-wrap break-all leading-relaxed">
-                    {fileContent}
-                  </pre>
-                  {fileError && (
-                    <p className="text-[10px] text-muted-foreground mt-1 italic">{fileError}</p>
-                  )}
-                </>
-              )}
-            </div>
-          </ScrollArea>
-        </div>
-      )}
-    </div>
-  );
+  return <SandboxFileBrowser leaseId={leaseId} providerType={providerType} />;
 }
 
 // ---------------------------------------------------------------------------
@@ -355,17 +204,31 @@ function StatusDot({ status }: { status: ResourceSession["status"] }) {
 
 function MetricCell({
   label,
-  value,
+  used,
+  limit,
   unit,
+  note,
 }: {
   label: string;
-  value: number | null | undefined;
+  used: number | null | undefined;
+  limit?: number | null | undefined;
   unit: string;
+  note?: string;
 }) {
+  const usedStr = used != null ? formatMetric(used, unit) : "--";
+  const limitStr = limit != null ? formatMetric(limit, unit) : "--";
   return (
     <div className="rounded border border-border/40 bg-muted/20 px-2 py-1">
       <p className="text-muted-foreground">{label}</p>
-      <p className="text-foreground font-semibold">{formatMetric(value, unit)}</p>
+      <p className="text-foreground font-semibold">
+        {usedStr}
+        {limit !== undefined && (
+          <span className="text-muted-foreground font-normal"> / {limitStr}</span>
+        )}
+        {note && (
+          <span title={note} className="ml-1 text-muted-foreground cursor-help text-[9px]">ⓘ</span>
+        )}
+      </p>
     </div>
   );
 }
