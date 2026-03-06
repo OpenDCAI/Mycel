@@ -217,6 +217,10 @@ function MetricCell({
 }) {
   const usedStr = used != null ? formatMetric(used, unit) : "--";
   const limitStr = limit != null ? formatMetric(limit, unit) : "--";
+
+  // Show note icon if there's a note OR if limit is null (to explain why)
+  const showNote = note != null && note.length > 0;
+
   return (
     <div className="rounded border border-border/40 bg-muted/20 px-2 py-1">
       <p className="text-muted-foreground">{label}</p>
@@ -225,8 +229,14 @@ function MetricCell({
         {limit !== undefined && (
           <span className="text-muted-foreground font-normal"> / {limitStr}</span>
         )}
-        {note && (
-          <span title={note} className="ml-1 text-muted-foreground cursor-help text-[9px]">ⓘ</span>
+        {showNote && (
+          <span
+            title={note}
+            className="ml-1 text-muted-foreground cursor-help text-[9px] inline-block"
+            style={{ userSelect: 'none' }}
+          >
+            ⓘ
+          </span>
         )}
       </p>
     </div>
