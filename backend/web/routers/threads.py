@@ -117,7 +117,7 @@ def _get_agent_for_thread(app: Any, thread_id: str) -> Any | None:
     return pool.get(pool_key)
 
 
-@router.post("")
+@router.post("", response_model=None)
 async def create_thread(
     payload: CreateThreadRequest,
     member_id: Annotated[str, Depends(get_current_member_id)],
