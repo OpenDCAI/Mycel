@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
 import { useParams, useOutletContext, useLocation } from "react-router-dom";
+import { toast } from "sonner";
 import ChatArea from "../components/ChatArea";
 import type { AssistantTurn } from "../api";
-import { authFetch, useAuthStore } from "../store/auth-store";
+import { uploadWorkspaceFile } from "../api";
 import ComputerPanel from "../components/ComputerPanel";
 import { DragHandle } from "../components/DragHandle";
 import Header from "../components/Header";
@@ -14,7 +15,7 @@ import { useBackgroundTasks } from "../hooks/use-background-tasks";
 import { BackgroundSessionsIndicator } from "../components/chat-area/BackgroundSessionsIndicator";
 import { useResizableX } from "../hooks/use-resizable-x";
 import { useSandboxManager } from "../hooks/use-sandbox-manager";
-import { useDisplayDeltas } from "../hooks/use-display-deltas";
+import { useStreamHandler } from "../hooks/use-stream-handler";
 import { useThreadData } from "../hooks/use-thread-data";
 import type { ThreadManagerState, ThreadManagerActions } from "../hooks/use-thread-manager";
 
@@ -27,7 +28,7 @@ interface OutletContext {
 
 /** Thin wrapper: key={threadId} forces remount → all hook state resets naturally. */
 export default function ChatPage() {
-  const { threadId } = useParams<{ threadId: string }>();
+  const { threadId } = useParams<{ memberId: string; threadId: string }>();
   if (!threadId) return null;
   return <ChatPageInner key={threadId} threadId={threadId} />;
 }
@@ -44,6 +45,7 @@ function ChatPageInner({ threadId }: { threadId: string }) {
   const agentName = currentThread?.entity_name ?? currentThread?.member_name;
   const agentAvatarUrl = currentThread?.avatar_url;
   const userAvatarUrl = userHasAvatar && userId ? `/api/members/${userId}/avatar` : undefined;
+
   const state = location.state as { selectedModel?: string; runStarted?: boolean; message?: string } | null;
   const [currentModel, setCurrentModel] = useState<string>(state?.selectedModel ?? "");
 
@@ -52,9 +54,17 @@ function ChatPageInner({ threadId }: { threadId: string }) {
   // so state?.runStarted will already be falsy after a real reload — no navEntry check needed.
   const runStarted = !!state?.runStarted;
 
-  // @@@display-builder — no optimistic initialEntries.
-  // Backend sends user_message + run_start via display_delta.
-  const initialEntries = undefined;
+  // Pre-populate user + empty assistant turn so ThinkingIndicator shows immediately (no skeleton).
+  // The empty assistant turn (streaming=true, segments=[]) renders the three-dot indicator
+  // until stream events arrive and populate it.
+  const [initialEntries] = useState(() => {
+    if (!runStarted || !state?.message) return undefined;
+    const now = Date.now();
+    return [
+      { id: `user-${now}`, role: "user" as const, content: state.message, timestamp: now },
+      { id: `assistant-${now + 1}`, role: "assistant" as const, segments: [], streaming: true, timestamp: now + 1 } as AssistantTurn,
+    ];
+  });
 
   useEffect(() => {
     if (state?.selectedModel) return;
@@ -72,16 +82,17 @@ function ChatPageInner({ threadId }: { threadId: string }) {
       .catch(() => setCurrentModel("leon:large"));
   }, [state?.selectedModel, threadId]);
 
-  const { entries, activeSandbox, loading, displaySeq, setEntries, setActiveSandbox, refreshThread } = useThreadData(threadId, runStarted, initialEntries);
+  const { entries, activeSandbox, loading, setEntries, setActiveSandbox, refreshThread } = useThreadData(threadId, runStarted, initialEntries);
 
   const { runtimeStatus, isRunning, handleSendMessage, handleStopStreaming } =
-    useDisplayDeltas({
+    useStreamHandler({
       threadId,
+      // Use tm.refreshThreads (sidebar list only) — NOT refreshThread (which calls
+      // setEntries(history) and would wipe any in-flight streaming entries for the next run).
       refreshThreads: tm.refreshThreads,
       onUpdate: (updater) => setEntries(updater),
       loading,
       runStarted,
-      displaySeq,
     });
 
   // @@@debug-entries — expose current entries for backend comparison
@@ -115,7 +126,7 @@ function ChatPageInner({ threadId }: { threadId: string }) {
       for (const entry of entries) {
         if (entry.role !== "assistant") continue;
         for (const seg of (entry as AssistantTurn).segments) {
-          if (seg.type === "tool" && seg.step.name === "Agent" && seg.step.subagent_stream?.task_id === taskId) {
+          if (seg.type === "tool" && seg.step.name === "Task" && seg.step.subagent_stream?.task_id === taskId) {
             handleFocusAgent(seg.step.id);
             return;
           }
@@ -146,6 +157,24 @@ function ChatPageInner({ threadId }: { threadId: string }) {
 
   const computerResize = useResizableX(600, 360, 1200, true);
 
+  async function handleUploadFiles(files: File[]): Promise<void> {
+    const toastId = toast.loading(`Uploading ${files.length} file(s)...`);
+    try {
+      for (const file of files) {
+        await uploadWorkspaceFile(threadId, {
+          file,
+          channel: "upload",
+          path: file.name,
+        });
+      }
+      toast.success(`Uploaded ${files.length} file(s)`, { id: toastId });
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      toast.error(`Upload failed: ${msg}`, { id: toastId });
+      throw error;
+    }
+  }
+
   return (
     <>
       <Header
@@ -170,14 +199,11 @@ function ChatPageInner({ threadId }: { threadId: string }) {
             <BackgroundSessionsIndicator tasks={tasks} onCancelTask={handleCancelTask} />
             <ChatArea
               entries={entries}
+              isStreaming={isStreaming}
               runtimeStatus={runtimeStatus}
               loading={loading}
               onFocusAgent={handleFocusAgent}
               onTaskNoticeClick={handleTaskNoticeClick}
-              agentName={agentName}
-              agentAvatarUrl={agentAvatarUrl}
-              userName={userName}
-              userAvatarUrl={userAvatarUrl}
             />
           </div>
           <TaskProgress
@@ -191,10 +217,11 @@ function ChatPageInner({ threadId }: { threadId: string }) {
           <InputBox
             disabled={isStreaming}
             isStreaming={isStreaming}
-            placeholder="告诉 Mycel 你需要什么帮助..."
+            placeholder="告诉 Leon 你需要什么帮助..."
             onSendMessage={(msg) => void handleSendMessage(msg)}
             onSendQueueMessage={handleSendQueueMessage}
             onStop={handleStopStreaming}
+            onUploadFiles={handleUploadFiles}
           />
           <TokenStats runtimeStatus={runtimeStatus} />
         </div>
