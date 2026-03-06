@@ -7,13 +7,10 @@ import type {
   LeaseStatus,
   ThreadDetail,
   ThreadSummary,
-  Workspace,
   WorkspaceChannelFilesResult,
   WorkspaceChannelKind,
-  WorkspaceChannelsResult,
   WorkspaceFileResult,
   WorkspaceListResult,
-  WorkspaceTransferEntry,
   WorkspaceUploadResult,
 } from "./types";
 
@@ -194,24 +191,12 @@ function workspaceBase(threadId: string): string {
   return `/api/threads/${encodeURIComponent(threadId)}/workspace`;
 }
 
-export async function getWorkspaceChannels(threadId: string): Promise<WorkspaceChannelsResult> {
-  return request(`${workspaceBase(threadId)}/channels`);
-}
-
 export async function listWorkspaceChannelFiles(
   threadId: string,
   channel: WorkspaceChannelKind = "download",
 ): Promise<WorkspaceChannelFilesResult> {
   const q = `?channel=${encodeURIComponent(channel)}`;
   return request(`${workspaceBase(threadId)}/channel-files${q}`);
-}
-
-export async function listWorkspaceTransfers(
-  threadId: string,
-  limit = 100,
-): Promise<{ thread_id: string; entries: WorkspaceTransferEntry[] }> {
-  const q = `?limit=${encodeURIComponent(String(limit))}`;
-  return request(`${workspaceBase(threadId)}/transfers${q}`);
 }
 
 export async function uploadWorkspaceFile(
@@ -245,28 +230,6 @@ export function getWorkspaceDownloadUrl(
     channel,
   });
   return `${workspaceBase(threadId)}/download?${query.toString()}`;
-}
-
-// --- Workspace Management API ---
-
-export async function createWorkspace(hostPath: string, name?: string): Promise<Workspace> {
-  return request<Workspace>("/api/workspaces", {
-    method: "POST",
-    body: JSON.stringify({ host_path: hostPath, name }),
-  });
-}
-
-export async function listWorkspaces(): Promise<Workspace[]> {
-  const payload = await request<{ workspaces: Workspace[] }>("/api/workspaces");
-  return payload.workspaces;
-}
-
-export async function getWorkspace(workspaceId: string): Promise<Workspace> {
-  return request<Workspace>(`/api/workspaces/${encodeURIComponent(workspaceId)}`);
-}
-
-export async function deleteWorkspace(workspaceId: string): Promise<void> {
-  await request(`/api/workspaces/${encodeURIComponent(workspaceId)}`, { method: "DELETE" });
 }
 
 // --- Settings API ---
