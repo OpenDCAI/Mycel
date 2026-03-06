@@ -159,11 +159,14 @@ class SQLiteSandboxMonitorRepo:
         return [_row_to_dict(r) for r in rows]
 
     def list_sessions_with_leases(self) -> list[dict]:
-        """Leases with active crew (non-closed chat_sessions) for resource overview.
+        """Leases with crew info for resource overview.
 
         @@@lease-source-of-truth - sandbox_leases is the source of truth for sandboxes.
         chat_sessions is LEFT JOIN'd for crew info only, filtered to non-closed to avoid
         returning phantom rows for stale/reopened sessions on the same lease.
+        @@@thread-id-permanent - thread_id is resolved via COALESCE: prefer the active
+        session's thread_id, fall back to the most recent session (including closed).
+        This ensures agent name is never lost when a sandbox is paused between runs.
         """
         if not self._table_exists("sandbox_leases"):
             return []
@@ -176,7 +179,12 @@ class SQLiteSandboxMonitorRepo:
                 sl.desired_state AS desired_state,
                 sl.created_at AS created_at,
                 cs.chat_session_id AS session_id,
-                cs.thread_id AS thread_id
+                COALESCE(
+                    cs.thread_id,
+                    (SELECT thread_id FROM chat_sessions
+                     WHERE lease_id = sl.lease_id
+                     ORDER BY started_at DESC LIMIT 1)
+                ) AS thread_id
             FROM sandbox_leases sl
             LEFT JOIN chat_sessions cs
                 ON sl.lease_id = cs.lease_id

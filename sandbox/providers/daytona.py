@@ -181,10 +181,9 @@ class DaytonaProvider(SandboxProvider):
         if not is_running:
             return Metrics(memory_total_mb=memory_total_mb, disk_total_gb=disk_total_gb)
 
-        # Two-sample cpu.stat (0.2s window) + memory.current + df in one execute() call.
+        # Two-sample cpu.stat (0.2s window) + memory.current + du workspace in one execute() call.
         # Separator lets us split the output cleanly without fragile line-counting.
-        # Two-sample cpu.stat (0.2s window) + memory.current in one execute() call.
-        # @@@daytona-disk - df / shows HOST disk (not container quota), so we skip disk_used.
+        # @@@daytona-disk - df / shows HOST disk (not container quota); use du for workspace usage only.
         cmd = (
             "cat /sys/fs/cgroup/cpu.stat"
             "; sleep 0.2"
@@ -192,23 +191,29 @@ class DaytonaProvider(SandboxProvider):
             "; cat /sys/fs/cgroup/memory.current"
             "; echo '---CPU2---'"
             "; cat /sys/fs/cgroup/cpu.stat"
+            "; echo '---DISK---'"
+            "; du -sm /home/daytona 2>/dev/null || echo 0"
         )
         result = self.execute(session_id, cmd, timeout_ms=5000)
 
         cpu_percent = None
         memory_used_mb = None
+        disk_used_gb = None
 
         if result.exit_code == 0 and result.output:
             try:
                 mem_marker = "---MEM---"
                 cpu2_marker = "---CPU2---"
+                disk_marker = "---DISK---"
                 text = result.output
                 i_mem = text.index(mem_marker)
                 i_cpu2 = text.index(cpu2_marker)
+                i_disk = text.index(disk_marker)
 
                 cpu1_block = text[:i_mem]
                 mem_block = text[i_mem + len(mem_marker):i_cpu2]
-                cpu2_block = text[i_cpu2 + len(cpu2_marker):]
+                cpu2_block = text[i_cpu2 + len(cpu2_marker):i_disk]
+                disk_block = text[i_disk + len(disk_marker):]
 
                 def _usage_usec(block: str) -> int | None:
                     for line in block.splitlines():
@@ -225,6 +230,12 @@ class DaytonaProvider(SandboxProvider):
                 mem_str = mem_block.strip()
                 if mem_str.isdigit():
                     memory_used_mb = int(mem_str) / (1024 ** 2)
+
+                # du -sm outputs "<MB>\t<path>"; parse the first token
+                disk_line = disk_block.strip().splitlines()[0] if disk_block.strip() else ""
+                disk_mb_str = disk_line.split()[0] if disk_line else ""
+                if disk_mb_str.isdigit() and int(disk_mb_str) > 0:
+                    disk_used_gb = int(disk_mb_str) / 1024.0
             except Exception:
                 pass
 
@@ -232,6 +243,7 @@ class DaytonaProvider(SandboxProvider):
             cpu_percent=cpu_percent,
             memory_used_mb=memory_used_mb,
             memory_total_mb=memory_total_mb,
+            disk_used_gb=disk_used_gb,
             disk_total_gb=disk_total_gb,
         )
 

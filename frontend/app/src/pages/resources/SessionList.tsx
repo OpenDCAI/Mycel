@@ -102,7 +102,11 @@ function LeaseItem({ group, providerType }: { group: LeaseGroup; providerType: s
 
   const hasMetrics =
     group.metrics != null &&
-    (group.metrics.cpu != null || group.metrics.memory != null || group.metrics.disk != null);
+    (group.metrics.cpu != null ||
+     group.metrics.memory != null ||
+     group.metrics.memoryLimit != null ||
+     group.metrics.disk != null ||
+     group.metrics.diskLimit != null);
 
   return (
     <div className={`rounded-md border border-border/50 bg-card/60 overflow-hidden ${isStopped ? "opacity-50" : ""}`}>

@@ -253,14 +253,13 @@ class DockerProvider(SandboxProvider):
             timeout=self.command_timeout_sec,
             check=False,
         )
-        disk_used_gb, disk_total_gb = None, None
+        disk_used_gb = None
         if disk_result.returncode == 0:
             lines = disk_result.stdout.strip().splitlines()
             if len(lines) >= 2:
                 df_parts = lines[1].split()
                 if len(df_parts) >= 3:
                     try:
-                        disk_total_gb = float(df_parts[1].rstrip("G"))
                         disk_used_gb = float(df_parts[2].rstrip("G"))
                     except ValueError:
                         pass
@@ -270,7 +269,7 @@ class DockerProvider(SandboxProvider):
             memory_used_mb=mem_used,
             memory_total_mb=None,  # no --memory limit → no meaningful total
             disk_used_gb=disk_used_gb,
-            disk_total_gb=disk_total_gb,
+            disk_total_gb=None,  # @@@docker-disk-no-limit - no --storage-opt, df / total = host disk
         )
 
     def _get_container_id(self, session_id: str, allow_missing: bool = False) -> str | None:

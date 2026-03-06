@@ -41,9 +41,14 @@ export interface ProviderTelemetry {
 export interface SessionMetrics {
   cpu: number | null;
   memory: number | null;
+  memoryLimit: number | null;
+  memoryNote?: string;
   disk: number | null;
+  diskLimit: number | null;
+  diskNote?: string;
   networkIn: number | null;
   networkOut: number | null;
+  probeError?: string;
   webUrl?: string;
 }
 

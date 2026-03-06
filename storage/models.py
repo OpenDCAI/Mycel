@@ -47,14 +47,14 @@ def map_lease_to_session_status(
     """Map sandbox lease state to frontend display status.
 
     Mapping rules:
-    - observed="detached" + desired="running" → "running"
-    - observed="detached" + desired="paused" → "paused" (pausing in progress)
-    - observed="paused" + desired="paused" → "paused"
+    - observed="detached" → "stopped" (instance destroyed/no longer current)
+    - observed="running" → "running"
+    - observed="paused" → "paused"
     - observed=None → "stopped"
     - desired="destroyed" → "destroying"
 
     Args:
-        observed_state: Actual state from provider ("detached", "paused", or None)
+        observed_state: Actual state from provider ("running", "detached", "paused", or None)
         desired_state: Desired state ("running", "paused", "destroyed", or None)
 
     Returns:
@@ -70,11 +70,13 @@ def map_lease_to_session_status(
     if desired == LeaseDesiredState.DESTROYED.value:
         return SessionDisplayStatus.DESTROYING.value
 
-    # Running — both "running" (bound instance) and "detached" mean the sandbox is up
-    if observed in (LeaseObservedState.RUNNING.value, LeaseObservedState.DETACHED.value):
-        if desired == LeaseDesiredState.PAUSED.value:
-            # Pausing in progress
-            return SessionDisplayStatus.PAUSED.value
+    # @@@detached-is-stopped - detached means instance is destroyed/stopped (current_instance_id=NULL)
+    # parse_lease_instance_state() maps {"deleted", "dead", "stopped"} → DETACHED
+    if observed == LeaseObservedState.DETACHED.value:
+        return SessionDisplayStatus.STOPPED.value
+
+    # Running — only "running" means the sandbox is up with bound instance
+    if observed == LeaseObservedState.RUNNING.value:
         return SessionDisplayStatus.RUNNING.value
 
     # Paused
