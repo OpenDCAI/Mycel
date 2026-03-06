@@ -1,5 +1,6 @@
 import { memo } from "react";
 import type { ToolRendererProps } from "./types";
+import { DiffBlock } from "../shared/DiffBlock";
 
 function parseArgs(args: unknown): { file_path?: string; old_string?: string; new_string?: string } {
   if (args && typeof args === "object") return args as { file_path?: string; old_string?: string; new_string?: string };
@@ -22,21 +23,13 @@ export default memo(function EditFileRenderer({ step, expanded }: ToolRendererPr
 
   return (
     <div className="space-y-1.5">
-      {old_string && (
-        <div className="rounded-lg overflow-hidden border border-[#e5e5e5]">
-          <div className="px-3 py-1.5 bg-red-50 text-[10px] font-medium text-red-400 border-b border-[#e5e5e5]">删除</div>
-          <pre className="p-3 text-xs overflow-x-auto max-h-[120px] overflow-y-auto font-mono bg-red-50/30 text-red-700">
-            {old_string}
-          </pre>
-        </div>
-      )}
-      {new_string && (
-        <div className="rounded-lg overflow-hidden border border-[#e5e5e5]">
-          <div className="px-3 py-1.5 bg-green-50 text-[10px] font-medium text-green-500 border-b border-[#e5e5e5]">新增</div>
-          <pre className="p-3 text-xs overflow-x-auto max-h-[120px] overflow-y-auto font-mono bg-green-50/30 text-green-700">
-            {new_string}
-          </pre>
-        </div>
+      {old_string && new_string && (
+        <DiffBlock
+          oldText={old_string}
+          newText={new_string}
+          fileName={file_path}
+          maxLines={20}
+        />
       )}
       {step.result && (
         <pre className="p-3 rounded-lg text-xs overflow-x-auto max-h-[100px] overflow-y-auto font-mono bg-[#fafafa] border border-[#e5e5e5] text-[#525252]">

@@ -13,6 +13,11 @@ CLAUDE.md
 # Virtual environments
 .venv
 
+# Runtime cache
+.claude/.sks-last-search.json
+.claude/skill-groups/
+skills-lock.json
+
 # IDE
 .cursor/
 .windsurf/

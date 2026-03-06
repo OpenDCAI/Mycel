@@ -7,7 +7,7 @@ from fastapi import APIRouter, HTTPException, Query
 
 from backend.web.services.sandbox_service import init_providers_and_managers
 from backend.web.utils.helpers import extract_webhook_instance_id
-from sandbox.db import DEFAULT_DB_PATH as SANDBOX_DB_PATH
+from sandbox.config import DEFAULT_DB_PATH as SANDBOX_DB_PATH
 from sandbox.lease import LeaseStore
 from sandbox.provider_events import ProviderEventStore
 

@@ -5,9 +5,9 @@ import {
   postRun,
   type AssistantTurn,
   type ChatEntry,
-  type StreamEvent,
   type StreamStatus,
 } from "../api";
+import type { StreamEvent } from "../api/types";
 import { processStreamEvent } from "./stream-event-handlers";
 import { useThreadStream } from "./use-thread-stream";
 import { makeId } from "./utils";
@@ -18,8 +18,12 @@ interface StreamHandlerDeps {
   onUpdate: (updater: (prev: ChatEntry[]) => ChatEntry[]) => void;
   /** True while useThreadData is loading the snapshot — connection waits for this. */
   loading: boolean;
-  /** Callback for activity events (command_progress, background_task_*). */
-  onActivityEvent?: (event: StreamEvent) => void;
+  /**
+   * True when navigating from a new-chat creation (postRun already called in NewChatPage).
+   * Tells useThreadStream to connect from seq=0 instead of last_seq, so we don't miss
+   * events that were emitted between postRun() and ChatPage mount.
+   */
+  runStarted?: boolean;
 }
 
 export interface StreamHandlerState {
@@ -64,13 +68,13 @@ function applyReconnectTurn(
 export function useStreamHandler(
   deps: StreamHandlerDeps,
 ): StreamHandlerState & StreamHandlerActions {
-  const { threadId, refreshThreads, onUpdate, loading, onActivityEvent, runStarted } = deps;
+  const { threadId, refreshThreads, onUpdate, loading, runStarted } = deps;
 
   // Local state for immediate UI feedback when user sends a message
   // (covers the window between flushSync and useThreadStream.isRunning becoming true)
   const [sendPending, setSendPending] = useState(false);
 
-  const { isRunning: streamIsRunning, runtimeStatus, connect, disconnect, subscribe } =
+  const { isRunning: streamIsRunning, runtimeStatus, subscribe } =
     useThreadStream(threadId, { loading, refreshThreads, runStarted });
 
   const isRunning = streamIsRunning || sendPending;
@@ -82,14 +86,18 @@ export function useStreamHandler(
 
   const onUpdateRef = useRef(onUpdate);
   onUpdateRef.current = onUpdate;
-  const onActivityRef = useRef<((event: StreamEvent) => void) | undefined>(onActivityEvent);
-  onActivityRef.current = onActivityEvent;
   const refreshRef = useRef(refreshThreads);
   refreshRef.current = refreshThreads;
 
   /**
    * Active turn ID. Set by handleSendMessage (temp then server ID).
    * For auto-reconnect, set lazily on first non-status event.
+   *
+   * CRITICAL: must be set SYNCHRONOUSLY, never inside a deferred React state
+   * updater. When SSE replays buffered events, run_start + text arrive in the
+   * same reader.read() batch. React batches the updater, so turnIdRef would
+   * still be "" when the next event is processed → text lost, streaming stuck.
+   * flushSync forces the updater to execute immediately.
    */
   const turnIdRef = useRef<string>("");
   /**
@@ -100,18 +108,50 @@ export function useStreamHandler(
 
   // Subscribe to stream events → drive UI state
   useEffect(() => {
+    console.log("[STREAM-DIAG] subscriber registered");
+
+    /** Create or reuse an assistant turn for reconnect. Uses flushSync so
+     *  turnIdRef is set BEFORE the next SSE event in the same batch. */
+    function ensureReconnectTurn() {
+      const fallbackId = makeId("reconnect-turn");
+      flushSync(() => {
+        onUpdateRef.current((prev) => {
+          const { entries, turnId } = applyReconnectTurn(prev, fallbackId);
+          turnIdRef.current = turnId;
+          return entries;
+        });
+      });
+    }
+
     return subscribe((event) => {
+      console.log(`[STREAM-DIAG] event=${event.type}, turnId=${turnIdRef.current}, hasBound=${hasBoundRef.current}`);
+      // run_start: ensure we have an assistant turn ready
+      if (event.type === "run_start" && !turnIdRef.current) {
+        ensureReconnectTurn();
+        return;
+      }
+
+      // run_done: finalize current turn
+      if (event.type === "run_done") {
+        const doneId = turnIdRef.current;
+        if (doneId) {
+          onUpdateRef.current((prev) =>
+            prev.map((e) =>
+              e.id === doneId && e.role === "assistant"
+                ? { ...e, streaming: false } as AssistantTurn
+                : e,
+            ),
+          );
+        }
+        turnIdRef.current = "";
+        hasBoundRef.current = false;
+        return;
+      }
+
       // For auto-reconnect: no turn has been created by handleSendMessage.
       // Create or continue the last assistant turn on the first content event.
       if (!turnIdRef.current && event.type !== "status") {
-        const fallbackId = makeId("reconnect-turn");
-        flushSync(() => {
-          onUpdateRef.current((prev) => {
-            const { entries, turnId } = applyReconnectTurn(prev, fallbackId);
-            turnIdRef.current = turnId;
-            return entries;
-          });
-        });
+        ensureReconnectTurn();
       }
 
       const { messageId } = processStreamEvent(
@@ -120,7 +160,6 @@ export function useStreamHandler(
         onUpdateRef.current,
         // runtimeStatus is managed by useThreadStream; pass no-op here
         () => {},
-        onActivityRef.current,
       );
 
       // Bind temporary turn ID to the server-assigned message ID (first time only)
@@ -138,27 +177,6 @@ export function useStreamHandler(
       }
     });
   }, [subscribe]);
-
-  // When streaming ends: mark the current turn as done, reset refs, refresh thread list
-  const prevIsRunningRef = useRef(false);
-  useEffect(() => {
-    if (prevIsRunningRef.current && !isRunning) {
-      const doneId = turnIdRef.current;
-      if (doneId) {
-        onUpdateRef.current((prev) =>
-          prev.map((e) =>
-            e.id === doneId && e.role === "assistant"
-              ? { ...e, streaming: false } as AssistantTurn
-              : e,
-          ),
-        );
-      }
-      turnIdRef.current = "";
-      hasBoundRef.current = false;
-      void refreshRef.current();
-    }
-    prevIsRunningRef.current = isRunning;
-  }, [isRunning]);
 
   const handleSendMessage = useCallback(
     async (message: string) => {
@@ -188,7 +206,8 @@ export function useStreamHandler(
 
       try {
         await postRun(threadId, message);
-        connect();
+        // Connection is persistent — no need to reconnect.
+        // run_start event will confirm isRunning.
       } catch (err) {
         setSendPending(false);
         // Show error in the assistant turn
@@ -209,7 +228,7 @@ export function useStreamHandler(
         hasBoundRef.current = false;
       }
     },
-    [threadId, connect],
+    [threadId],
   );
 
   const handleStopStreaming = useCallback(async () => {
@@ -218,8 +237,9 @@ export function useStreamHandler(
     } catch (err) {
       console.error("Failed to cancel run:", err);
     }
-    setTimeout(() => disconnect(), 500);
-  }, [threadId, disconnect]);
+    // Don't disconnect — persistent connection stays open.
+    // cancelled + run_done events will arrive and update state.
+  }, [threadId]);
 
   return { runtimeStatus, isRunning, handleSendMessage, handleStopStreaming };
 }

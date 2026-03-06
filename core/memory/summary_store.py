@@ -21,7 +21,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from sandbox.db import DEFAULT_DB_PATH
+from sandbox.config import DEFAULT_DB_PATH
 from storage.contracts import SummaryRepo, SummaryRow
 from storage.providers.sqlite.kernel import connect_sqlite
 

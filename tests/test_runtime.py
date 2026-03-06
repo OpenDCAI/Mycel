@@ -6,7 +6,6 @@ import sqlite3
 import tempfile
 import time
 from pathlib import Path
-from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import pytest
@@ -14,14 +13,13 @@ import pytest
 from sandbox.chat_session import ChatSessionManager
 from sandbox.lease import LeaseStore, SandboxInstance
 from sandbox.provider import ProviderExecResult
+from sandbox.interfaces.executor import ExecuteResult
 from sandbox.runtime import (
     DockerPtyRuntime,
-    ExecuteResult,
     LocalPersistentShellRuntime,
     RemoteWrappedRuntime,
     _extract_state_from_output,
     _normalize_pty_result,
-    create_runtime,
 )
 from sandbox.terminal import TerminalState, TerminalStore
 
@@ -149,13 +147,14 @@ class TestLocalPersistentShellRuntime:
 
         # Execute command to start session
         await runtime.execute("echo 'test'")
-        assert runtime._session is not None
+        assert runtime._pty_session is not None
+        proc = runtime._pty_session.process
 
         # Close
         await runtime.close()
 
         # Session should be terminated
-        assert runtime._session.returncode is not None
+        assert proc is not None and proc.returncode is not None
 
     @pytest.mark.asyncio
     async def test_state_version_increments(self, terminal_store, lease_store):
@@ -437,14 +436,23 @@ class TestRuntimeIntegration:
         await runtime2.close()
 
 
-def test_create_runtime_selects_docker_pty(terminal_store, lease_store):
+def test_docker_provider_create_runtime(terminal_store, lease_store):
+    pytest.importorskip("docker")
+    from sandbox.providers.docker import DockerProvider, DockerPtyRuntime as DockerPtyRuntimeDirect
     terminal = terminal_store.create("term-1", "thread-1", "lease-1", "/tmp")
     lease = lease_store.create("lease-1", "docker")
-    provider = MagicMock()
-    provider.get_capability.return_value = SimpleNamespace(runtime_kind="docker_pty")
+    provider = DockerProvider(image="ubuntu:latest", mount_path="/workspace")
+    runtime = provider.create_runtime(terminal, lease)
+    assert isinstance(runtime, DockerPtyRuntimeDirect)
 
-    runtime = create_runtime(provider, terminal, lease)
-    assert isinstance(runtime, DockerPtyRuntime)
+
+def test_local_provider_create_runtime(terminal_store, lease_store):
+    from sandbox.providers.local import LocalPersistentShellRuntime as LocalRuntimeDirect, LocalSessionProvider
+    terminal = terminal_store.create("term-2", "thread-2", "lease-2", "/tmp")
+    lease = lease_store.create("lease-2", "local")
+    provider = LocalSessionProvider()
+    runtime = provider.create_runtime(terminal, lease)
+    assert isinstance(runtime, LocalRuntimeDirect)
 
 
 @pytest.mark.asyncio
@@ -452,10 +460,12 @@ async def test_daytona_runtime_streams_running_output(terminal_store, lease_stor
     terminal = terminal_store.create("term-2", "thread-2", "lease-2", "/tmp")
     lease = lease_store.create("lease-2", "daytona")
     provider = MagicMock()
-    provider.get_capability.return_value = SimpleNamespace(runtime_kind="daytona_pty")
+    from sandbox.providers.daytona import DaytonaSessionRuntime
+    _runtime_instance = DaytonaSessionRuntime(terminal, lease, provider)
+    provider.create_runtime.return_value = _runtime_instance
     ChatSessionManager(provider=provider, db_path=terminal_store.db_path)
 
-    runtime = create_runtime(provider, terminal, lease)
+    runtime = provider.create_runtime(terminal, lease)
 
     def _fake_execute_once(command: str, timeout: float | None = None, on_stdout_chunk=None):
         if on_stdout_chunk is not None:
@@ -492,15 +502,16 @@ async def test_running_command_survives_runtime_reload_without_false_failure(ter
     terminal = terminal_store.create("term-running-db", "thread-running-db", "lease-running-db", "/tmp")
     lease = lease_store.create("lease-running-db", "local")
     provider = MagicMock()
-    provider.get_capability.return_value = SimpleNamespace(runtime_kind="local")
+    from sandbox.providers.local import LocalPersistentShellRuntime
+    provider.create_runtime.side_effect = lambda t, l: LocalPersistentShellRuntime(t, l)
     ChatSessionManager(provider=provider, db_path=terminal_store.db_path)
 
-    runtime1 = create_runtime(provider, terminal, lease)
+    runtime1 = provider.create_runtime(terminal, lease)
     async_cmd = await runtime1.start_command("for i in 1 2 3; do echo tick-$i; sleep 1; done", "/tmp")
     await asyncio.sleep(0.4)
 
     # Simulate command_status query from another runtime/session that has no in-memory task.
-    runtime2 = create_runtime(provider, terminal, lease)
+    runtime2 = provider.create_runtime(terminal, lease)
     status_running = await runtime2.get_command(async_cmd.command_id)
     assert status_running is not None
     assert not status_running.done
@@ -528,10 +539,12 @@ async def test_daytona_runtime_hydrates_once_per_pty_session(terminal_store, lea
     lease.ensure_active_instance = MagicMock(return_value=instance)  # type: ignore[method-assign]
 
     provider = MagicMock()
-    provider.get_capability.return_value = SimpleNamespace(runtime_kind="daytona_pty")
+    from sandbox.providers.daytona import DaytonaSessionRuntime
+    _daytona_runtime = DaytonaSessionRuntime(terminal, lease, provider)
+    provider.create_runtime.return_value = _daytona_runtime
     ChatSessionManager(provider=provider, db_path=terminal_store.db_path)
 
-    runtime = create_runtime(provider, terminal, lease)
+    runtime = provider.create_runtime(terminal, lease)
 
     class _FakeHandle:
         def wait_for_connection(self, timeout=10.0):
@@ -658,9 +671,11 @@ async def test_daytona_runtime_sanitizes_corrupted_terminal_state_before_create(
     lease.ensure_active_instance = MagicMock(return_value=instance)  # type: ignore[method-assign]
 
     provider = MagicMock()
-    provider.get_capability.return_value = SimpleNamespace(runtime_kind="daytona_pty")
+    from sandbox.providers.daytona import DaytonaSessionRuntime
+    _daytona_runtime2 = DaytonaSessionRuntime(terminal, lease, provider)
+    provider.create_runtime.return_value = _daytona_runtime2
     ChatSessionManager(provider=provider, db_path=terminal_store.db_path)
-    runtime = create_runtime(provider, terminal, lease)
+    runtime = provider.create_runtime(terminal, lease)
 
     created_kwargs: dict[str, object] = {}
 

@@ -22,7 +22,7 @@ from typing import TYPE_CHECKING, Any
 
 from storage.providers.sqlite.kernel import connect_sqlite
 
-from sandbox.db import DEFAULT_DB_PATH
+from sandbox.config import DEFAULT_DB_PATH
 from sandbox.lifecycle import (
     LeaseInstanceState,
     assert_lease_instance_transition,

@@ -18,7 +18,7 @@ from typing import TYPE_CHECKING
 
 from storage.providers.sqlite.kernel import connect_sqlite
 
-from sandbox.db import DEFAULT_DB_PATH
+from sandbox.config import DEFAULT_DB_PATH
 from sandbox.lifecycle import (
     ChatSessionState,
     assert_chat_session_transition,
@@ -291,9 +291,7 @@ class ChatSessionManager:
             )
 
     def _build_runtime(self, terminal: AbstractTerminal, lease: SandboxLease) -> PhysicalTerminalRuntime:
-        from sandbox.runtime import create_runtime
-
-        return create_runtime(self.provider, terminal, lease)
+        return self.provider.create_runtime(terminal, lease)
 
     def _load_status(self, session_id: str) -> str | None:
         with _connect(self.db_path) as conn:

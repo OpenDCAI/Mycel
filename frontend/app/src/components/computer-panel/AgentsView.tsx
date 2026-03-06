@@ -5,7 +5,7 @@ import { useThreadData } from "../../hooks/use-thread-data";
 import { useSubagentStream } from "../../hooks/useSubagentStream";
 import { parseAgentArgs } from "./utils";
 import type { FlowItem } from "./utils";
-import { StepsView } from "./StepsView";
+import { FlowList } from "./flow-items";
 
 
 type SubagentStream = NonNullable<ToolStep["subagent_stream"]>;
@@ -13,19 +13,18 @@ type SubagentStream = NonNullable<ToolStep["subagent_stream"]>;
 
 interface AgentsViewProps {
   steps: ToolStep[];
-  focusedStepId: string | null;
-  onFocusStep: (id: string | null) => void;
 }
 
-export function AgentsView({ steps, focusedStepId, onFocusStep }: AgentsViewProps) {
+export function AgentsView({ steps }: AgentsViewProps) {
   const [leftWidth, setLeftWidth] = useState(280);
   const [isDragging, setIsDragging] = useState(false);
+  const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null);
   const [agentFocusedStepId, setAgentFocusedStepId] = useState<string | null>(null);
   const dragStartX = useRef(0);
   const dragStartWidth = useRef(0);
   const prevRunningRef = useRef(false);
 
-  const focused = steps.find((s) => s.id === focusedStepId) ?? null;
+  const focused = steps.find((s) => s.id === selectedAgentId) ?? null;
   const stream = focused?.subagent_stream;
   const threadId = stream?.thread_id || undefined;
   const isRunning = stream?.status === "running" || focused?.status === "calling";
@@ -130,8 +129,8 @@ export function AgentsView({ steps, focusedStepId, onFocusStep }: AgentsViewProp
             <AgentListItem
               key={step.id}
               step={step}
-              isSelected={step.id === focusedStepId}
-              onClick={() => onFocusStep(step.id)}
+              isSelected={step.id === selectedAgentId}
+              onClick={() => setSelectedAgentId(step.id)}
             />
           ))}
         </div>
@@ -160,9 +159,8 @@ export function AgentsView({ steps, focusedStepId, onFocusStep }: AgentsViewProp
                 <Loader2 className="w-5 h-5 text-[#a3a3a3] animate-spin" />
               </div>
             ) : (
-              <StepsView
+              <FlowList
                 flowItems={flowItems}
-                activities={[]}
                 focusedStepId={agentFocusedStepId}
                 onFocusStep={setAgentFocusedStepId}
                 autoScroll={!!isRunning}

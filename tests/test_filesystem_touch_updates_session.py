@@ -61,6 +61,10 @@ class _FakeProvider(SandboxProvider):
     def get_metrics(self, session_id: str) -> Metrics | None:
         return None
 
+    def create_runtime(self, terminal, lease):
+        from sandbox.runtime import RemoteWrappedRuntime
+        return RemoteWrappedRuntime(terminal, lease, self)
+
 
 def _temp_db() -> Path:
     with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:

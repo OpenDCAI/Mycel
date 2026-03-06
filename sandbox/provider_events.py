@@ -10,7 +10,7 @@ from typing import Any
 
 from storage.providers.sqlite.kernel import connect_sqlite
 
-from sandbox.db import DEFAULT_DB_PATH
+from sandbox.config import DEFAULT_DB_PATH
 
 
 def _connect(db_path: Path) -> sqlite3.Connection:

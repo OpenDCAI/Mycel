@@ -8,8 +8,9 @@ import Header from "../components/Header";
 import InputBox from "../components/InputBox";
 import TaskProgress from "../components/TaskProgress";
 import TokenStats from "../components/TokenStats";
-import { useActivities } from "../hooks/use-activities";
 import { useAppActions } from "../hooks/use-app-actions";
+import { useBackgroundTasks } from "../hooks/use-background-tasks";
+import { BackgroundSessionsIndicator } from "../components/chat-area/BackgroundSessionsIndicator";
 import { useResizableX } from "../hooks/use-resizable-x";
 import { useSandboxManager } from "../hooks/use-sandbox-manager";
 import { useStreamHandler } from "../hooks/use-stream-handler";
@@ -80,17 +81,16 @@ function ChatPageInner({ threadId }: { threadId: string }) {
 
   const { entries, activeSandbox, loading, setEntries, setActiveSandbox, refreshThread } = useThreadData(threadId, runStarted, initialEntries);
 
-  const { activities, handleActivityEvent, cancelCommand, cancelTask } = useActivities();
-
   const { runtimeStatus, isRunning, handleSendMessage, handleStopStreaming } =
     useStreamHandler({
       threadId,
       refreshThreads: tm.refreshThreads,
       onUpdate: (updater) => setEntries(updater),
       loading,
-      onActivityEvent: handleActivityEvent,
       runStarted,
     });
+
+  const { tasks, refresh: refreshTasks } = useBackgroundTasks({ threadId, loading, refreshThreads: tm.refreshThreads });
 
   const isStreaming = isRunning;
 
@@ -105,9 +105,9 @@ function ChatPageInner({ threadId }: { threadId: string }) {
 
   const ui = useAppActions({ activeThreadId: threadId, setEntries });
   const {
-    computerOpen, computerTab, focusedAgentStepId, focusedStepId,
-    setComputerOpen, setComputerTab, setFocusedAgentStepId, setFocusedStepId,
-    handleFocusAgent, handleFocusStep, handleSendQueueMessage,
+    computerOpen, computerTab,
+    setComputerOpen, setComputerTab,
+    handleFocusAgent, handleSendQueueMessage,
   } = ui;
 
   const handleTaskNoticeClick = useCallback(
@@ -123,6 +123,25 @@ function ChatPageInner({ threadId }: { threadId: string }) {
       }
     },
     [entries, handleFocusAgent],
+  );
+
+  const handleCancelTask = useCallback(
+    async (taskId: string) => {
+      try {
+        const response = await fetch(`/api/threads/${threadId}/tasks/${taskId}/cancel`, {
+          method: "POST",
+        });
+        if (!response.ok) {
+          console.error("[ChatPage] Failed to cancel task:", response.statusText);
+        } else {
+          // 取消成功后刷新任务列表
+          await refreshTasks();
+        }
+      } catch (err) {
+        console.error("[ChatPage] Error cancelling task:", err);
+      }
+    },
+    [threadId, refreshTasks],
   );
 
   const computerResize = useResizableX(600, 360, 1200, true);
@@ -147,15 +166,17 @@ function ChatPageInner({ threadId }: { threadId: string }) {
               {sandboxActionError}
             </div>
           )}
-          <ChatArea
-            entries={entries}
-            isStreaming={isStreaming}
-            runtimeStatus={runtimeStatus}
-            loading={loading}
-            onFocusStep={handleFocusStep}
-            onFocusAgent={handleFocusAgent}
-            onTaskNoticeClick={handleTaskNoticeClick}
-          />
+          <div className="relative flex-1 flex flex-col min-h-0">
+            <BackgroundSessionsIndicator tasks={tasks} onCancelTask={handleCancelTask} />
+            <ChatArea
+              entries={entries}
+              isStreaming={isStreaming}
+              runtimeStatus={runtimeStatus}
+              loading={loading}
+              onFocusAgent={handleFocusAgent}
+              onTaskNoticeClick={handleTaskNoticeClick}
+            />
+          </div>
           <TaskProgress
             isStreaming={isStreaming}
             runtimeStatus={runtimeStatus}
@@ -187,13 +208,6 @@ function ChatPageInner({ threadId }: { threadId: string }) {
               width={computerResize.width}
               activeTab={computerTab}
               onTabChange={setComputerTab}
-              focusedAgentStepId={focusedAgentStepId}
-              onFocusAgent={setFocusedAgentStepId}
-              focusedStepId={focusedStepId}
-              onFocusStep={setFocusedStepId}
-              activities={activities}
-              onCancelCommand={(id) => cancelCommand(threadId, id)}
-              onCancelTask={(id) => cancelTask(threadId, id)}
               isStreaming={isStreaming}
             />
           </>

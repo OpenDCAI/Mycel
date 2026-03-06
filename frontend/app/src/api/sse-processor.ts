@@ -40,12 +40,13 @@ export function processChunk(
   chunk: string,
   onEvent: (event: StreamEvent) => void,
   seq: number,
-): { seq: number; terminal: boolean } {
+): { seq: number; runEnded: boolean } {
   const parsed = parseSSEChunk(chunk);
-  if (!parsed || (!parsed.dataRaw && parsed.eventType === "text")) return { seq, terminal: false };
+  if (!parsed || (!parsed.dataRaw && parsed.eventType === "text")) return { seq, runEnded: false };
   const type = normalizeStreamType(parsed.eventType);
   const data = tryParse(parsed.dataRaw);
   const newSeq = extractSeq(data) ?? seq;
   onEvent({ type, data });
-  return { seq: newSeq, terminal: type === "done" || type === "cancelled" };
+  // run_done is an in-band signal — the connection stays open
+  return { seq: newSeq, runEnded: type === "run_done" };
 }

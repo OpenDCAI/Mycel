@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { streamEvents } from "../api/streaming";
+import { streamThreadEvents } from "../api/streaming";
 import type { StreamEvent } from "../api/types";
 import type { FlowItem } from "../components/computer-panel/utils";
 
@@ -56,34 +56,34 @@ export function useSubagentStream(
       return items;
     }
 
-    void streamEvents(
+    void streamThreadEvents(
       threadId,
       (event: StreamEvent) => {
-        if (event.type === "subagent_task_text") {
-          const data = event.data as { content?: string } | undefined;
+        const data = event.data as Record<string, unknown> | undefined;
+
+        if (event.type === "text") {
           if (data?.content) {
-            textRef.current += data.content;
+            textRef.current += data.content as string;
             setFlowItems(buildItems());
           }
-        } else if (event.type === "subagent_task_tool_call") {
-          const data = event.data as { id?: string; name?: string; args?: unknown } | undefined;
+        } else if (event.type === "tool_call") {
           if (data?.id) {
-            toolCallsRef.current.set(data.id, {
-              id: data.id,
-              name: data.name ?? "unknown",
+            toolCallsRef.current.set(data.id as string, {
+              id: data.id as string,
+              name: (data.name as string) ?? "unknown",
               args: data.args ?? {},
               status: "calling",
               timestamp: Date.now(),
             });
             setFlowItems(buildItems());
           }
-        } else if (event.type === "subagent_task_tool_result") {
-          const data = event.data as { tool_call_id?: string; content?: string } | undefined;
-          if (data?.tool_call_id) {
-            const tc = toolCallsRef.current.get(data.tool_call_id);
+        } else if (event.type === "tool_result") {
+          const tcId = data?.tool_call_id as string | undefined;
+          if (tcId) {
+            const tc = toolCallsRef.current.get(tcId);
             if (tc) {
               tc.status = "done";
-              tc.result = data.content ?? "";
+              tc.result = (data?.content as string) ?? "";
               setFlowItems(buildItems());
             }
           }

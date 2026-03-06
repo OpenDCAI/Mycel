@@ -6,10 +6,11 @@ from typing import Any
 
 from fastapi import FastAPI
 
-from backend.web.services.event_buffer import RunEventBuffer
+from backend.web.services.event_buffer import RunEventBuffer, ThreadEventBuffer
 from backend.web.services.idle_reaper import idle_reaper_loop
 from backend.web.services.resource_cache import resource_overview_refresh_loop
 from core.queue import MessageQueueManager
+from core.task.registry import BackgroundTaskRegistry
 from tui.config import ConfigManager
 
 
@@ -33,14 +34,15 @@ async def lifespan(app: FastAPI):
 
     # Initialize app state
     app.state.queue_manager = MessageQueueManager()
+    app.state.background_task_registry = BackgroundTaskRegistry()
     app.state.agent_pool: dict[str, Any] = {}
     app.state.thread_sandbox: dict[str, str] = {}
     app.state.thread_cwd: dict[str, str] = {}
     app.state.thread_locks: dict[str, asyncio.Lock] = {}
     app.state.thread_locks_guard = asyncio.Lock()
     app.state.thread_tasks: dict[str, asyncio.Task] = {}
-    app.state.thread_event_buffers: dict[str, RunEventBuffer] = {}
-    app.state.activity_buffers: dict[str, RunEventBuffer] = {}
+    app.state.thread_event_buffers: dict[str, ThreadEventBuffer] = {}
+    app.state.subagent_buffers: dict[str, RunEventBuffer] = {}
     app.state.idle_reaper_task: asyncio.Task | None = None
     app.state.cron_service = None
     app.state._event_loop = asyncio.get_running_loop()

@@ -10,7 +10,7 @@ import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { useAppStore } from "@/store/app-store";
 import type { CrudItem, RuleItem, ResourceItem, SubAgent } from "@/store/types";
 
@@ -359,7 +359,7 @@ function RolePanel({ prompt, tools, rules, onSavePrompt, onToggleTool, onSaveRul
       {/* Add rule dialog */}
       <Dialog open={addRuleOpen} onOpenChange={setAddRuleOpen}>
         <DialogContent className="sm:max-w-sm">
-          <DialogHeader><DialogTitle>添加规则文件</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>添加规则文件</DialogTitle><DialogDescription className="sr-only">输入规则文件名称以添加新规则</DialogDescription></DialogHeader>
           <Input placeholder="文件名，如 coding.md" value={addRuleName} onChange={e => setAddRuleName(e.target.value)} onKeyDown={e => e.key === "Enter" && doAddRule()} />
           <DialogFooter><Button size="sm" onClick={doAddRule} disabled={!addRuleName.trim()}>添加</Button></DialogFooter>
         </DialogContent>
@@ -753,6 +753,7 @@ function ResourcePicker({ type, library, assigned, onConfirm, onClose }: {
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>从 Library 添加 {labels[type]}</DialogTitle>
+          <DialogDescription className="sr-only">从资源库中选择要添加的{labels[type]}</DialogDescription>
         </DialogHeader>
         <div className="relative">
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />

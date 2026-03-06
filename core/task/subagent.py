@@ -43,21 +43,29 @@ class SubagentRunner:
         model_kwargs: dict[str, Any] | None = None,
         queue_manager: Any = None,
         db_path: Path | None = None,
+        registry: Any = None,
     ):
         self.agents = agents
         self.parent_model = parent_model
         self.workspace_root = workspace_root
         self.api_key = api_key
         self.model_kwargs = model_kwargs or {}
-        self._active_tasks: dict[str, asyncio.Task] = {}
-        self._task_results: dict[str, TaskResult] = {}
         self._parent_runtime: Any = None
         self._queue_manager = queue_manager
         self.db_path = db_path
+        self._registry = registry
 
     def set_parent_runtime(self, runtime: Any) -> None:
         """Set parent runtime for background task event emission."""
         self._parent_runtime = runtime
+
+    def _get_registry(self) -> Any:
+        """Get BackgroundTaskRegistry from registry or parent runtime."""
+        if self._registry:
+            return self._registry
+        if self._parent_runtime and hasattr(self._parent_runtime, "_registry"):
+            return self._parent_runtime._registry
+        return None
 
     async def _create_task_checkpointer(self, task_id: str) -> tuple[Any, Any]:
         """Create a per-task isolated SQLite checkpointer.
@@ -155,6 +163,8 @@ class SubagentRunner:
                         default_timeout=mw.default_timeout,
                         hooks=mw.hooks,
                         enabled_tools=enabled,
+                        registry=getattr(mw, "_registry", None),
+                        queue_manager=getattr(mw, "_queue_manager", None),
                     )
                     filtered_middleware.append(new_mw)
 
@@ -250,10 +260,42 @@ class SubagentRunner:
         description = params.get("Description", "")
 
         if params.get("RunInBackground"):
+            # Register task to registry
+            registry = self._get_registry()
+            if registry:
+                from .registry import TaskEntry
+                entry = TaskEntry(
+                    task_id=task_id,
+                    task_type="agent",
+                    thread_id=parent_thread_id or subagent_thread_id,
+                    status="running",
+                    description=description or None,
+                    subagent_type=subagent_type,
+                    text_buffer=[],
+                )
+                await registry.register(entry)
+
+                # Emit task_start event
+                if self._parent_runtime:
+                    self._parent_runtime.emit_activity_event({
+                        "event": "task_start",
+                        "data": json.dumps({
+                            "task_id": task_id,
+                            "task_type": "agent",
+                            "description": description,
+                            "subagent_type": subagent_type,
+                            "background": True,
+                        }),
+                    })
+
             task = asyncio.create_task(
                 self._execute_agent(agent, prompt, subagent_thread_id, max_turns, task_id, parent_thread_id, description, parent_tool_call_id, checkpointer_conn)
             )
-            self._active_tasks[task_id] = task
+
+            # Store async task reference in registry
+            if registry:
+                await registry.update(task_id, _async_task=task)
+
             return TaskResult(
                 task_id=task_id,
                 thread_id=subagent_thread_id,
@@ -381,7 +423,7 @@ class SubagentRunner:
                                 remaining = max_text_chars - sum(len(p) for p in text_parts)
                                 text_parts.append(content[:remaining])
                             yield {
-                                "event": "task_text",
+                                "event": "text",
                                 "data": json.dumps({"task_id": task_id, "content": content}),
                             }
 
@@ -405,7 +447,7 @@ class SubagentRunner:
                                     if tc_id:
                                         emitted_tool_call_ids.add(tc_id)
                                     yield {
-                                        "event": "task_tool_call",
+                                        "event": "tool_call",
                                         "data": json.dumps(
                                             {
                                                 "task_id": task_id,
@@ -417,7 +459,7 @@ class SubagentRunner:
                                     }
                             elif msg_class == "ToolMessage":
                                 yield {
-                                    "event": "task_tool_result",
+                                    "event": "tool_result",
                                     "data": json.dumps(
                                         {
                                             "task_id": task_id,
@@ -431,14 +473,7 @@ class SubagentRunner:
             # Task completed
             final_text = "".join(text_parts).strip() or None
             desc = params.get("Description") or None
-            self._task_results[task_id] = TaskResult(
-                task_id=task_id,
-                thread_id=subagent_thread_id,
-                status="completed",
-                result=final_text,
-                description=desc,
-                turns_used=turns_used,
-            )
+
             yield {
                 "event": "task_done",
                 "data": json.dumps(
@@ -452,14 +487,7 @@ class SubagentRunner:
 
         except Exception as e:
             desc = params.get("Description") or None
-            self._task_results[task_id] = TaskResult(
-                task_id=task_id,
-                thread_id=subagent_thread_id,
-                status="error",
-                error=str(e),
-                description=desc,
-                turns_used=turns_used,
-            )
+
             yield {
                 "event": "task_error",
                 "data": json.dumps({"task_id": task_id, "error": str(e)}),
@@ -497,8 +525,8 @@ class SubagentRunner:
     ) -> TaskResult:
         """Execute agent and return result.
 
-        When a parent runtime is available, uses astream() to emit real-time
-        background_task_* events. Otherwise falls back to ainvoke().
+        When a parent runtime is available, uses astream() for streaming execution.
+        Otherwise falls back to ainvoke().
         """
         try:
             runtime = self._parent_runtime
@@ -511,19 +539,6 @@ class SubagentRunner:
             # This may trigger new_run (via wake handler) when parent is idle.
             if parent_thread_id and result.status in ("completed", "error"):
                 self._inject_task_notification(task_id, result, parent_thread_id)
-
-            # Emit background_task_done/error AFTER notification injection.
-            # This ensures new_run arrives before background_task_done on the
-            # activity SSE, preventing premature frontend disconnect.
-            if runtime and result.status in ("completed", "error"):
-                event_name = "background_task_done" if result.status == "completed" else "background_task_error"
-                event_data: dict[str, Any] = {"task_id": task_id, "status": result.status}
-                if result.status == "error":
-                    event_data["error"] = result.error or ""
-                runtime.emit_activity_event({
-                    "event": event_name,
-                    "data": json.dumps(event_data),
-                })
 
             return result
         finally:
@@ -550,7 +565,7 @@ class SubagentRunner:
             description=result.description,
         )
         if self._queue_manager:
-            self._queue_manager.enqueue(xml, parent_thread_id)
+            self._queue_manager.enqueue(xml, parent_thread_id, notification_type="agent")
         else:
             import logging
             logging.getLogger(__name__).warning(
@@ -568,6 +583,8 @@ class SubagentRunner:
         """Fallback execution via ainvoke (no event emission)."""
         turns_used = 0
         desc = description or None
+        registry = self._get_registry()
+
         try:
             result = await agent.ainvoke(
                 {"messages": [{"role": "user", "content": prompt}]},
@@ -592,6 +609,10 @@ class SubagentRunner:
                 turns_used=turns_used,
             )
 
+            # Update registry if available
+            if registry:
+                await registry.update(task_id, status="completed", result=content)
+
         except Exception as e:
             task_result = TaskResult(
                 task_id=task_id,
@@ -602,7 +623,10 @@ class SubagentRunner:
                 turns_used=turns_used,
             )
 
-        self._task_results[task_id] = task_result
+            # Update registry if available
+            if registry:
+                await registry.update(task_id, status="error", error=str(e))
+
         return task_result
 
     async def _execute_agent_streaming(
@@ -615,25 +639,12 @@ class SubagentRunner:
         description: str = "",
         parent_tool_call_id: str | None = None,
     ) -> TaskResult:
-        """Streaming execution that emits background_task_* events via runtime.
+        """Streaming execution that stores text in registry buffer.
 
         When parent_tool_call_id is provided, also emits subagent_task_* events
         so the frontend AgentsView can track real-time progress.
         """
-        start_data: dict[str, Any] = {"task_id": task_id, "thread_id": thread_id}
-        if description:
-            start_data["description"] = description
-        runtime.emit_activity_event({
-            "event": "background_task_start",
-            "data": json.dumps(start_data),
-        })
-        # Also emit subagent event for AgentsView real-time tracking
-        if parent_tool_call_id:
-            runtime.emit_subagent_event(parent_tool_call_id, {
-                "event": "task_start",
-                "data": json.dumps(start_data),
-            })
-
+        registry = self._get_registry()
         text_parts: list[str] = []
         max_text_chars = 200_000
         emitted_tool_call_ids: set[str] = set()
@@ -657,15 +668,20 @@ class SubagentRunner:
                             if sum(len(p) for p in text_parts) < max_text_chars:
                                 remaining = max_text_chars - sum(len(p) for p in text_parts)
                                 text_parts.append(content[:remaining])
-                            runtime.emit_activity_event({
-                                "event": "background_task_text",
-                                "data": json.dumps({"task_id": task_id, "content": content}),
-                            })
+
+                            # Store in registry buffer instead of emitting event
+                            if registry:
+                                entry = await registry.get(task_id)
+                                if entry and entry.text_buffer is not None:
+                                    entry.text_buffer.append(content)
+                                    await registry.update(task_id, text_buffer=entry.text_buffer)
+
+                            # Still emit subagent event for AgentsView real-time tracking
                             if parent_tool_call_id:
                                 runtime.emit_subagent_event(parent_tool_call_id, {
-                                    "event": "task_text",
+                                    "event": "text",
                                     "data": json.dumps({"task_id": task_id, "content": content}),
-                                })
+                                }, background=True)
 
                 elif mode == "updates":
                     if not isinstance(data, dict):
@@ -693,9 +709,9 @@ class SubagentRunner:
                                     }
                                     if parent_tool_call_id:
                                         runtime.emit_subagent_event(parent_tool_call_id, {
-                                            "event": "task_tool_call",
+                                            "event": "tool_call",
                                             "data": json.dumps(tc_data),
-                                        })
+                                        }, background=True)
                             elif msg_class == "ToolMessage":
                                 tr_data = {
                                     "task_id": task_id,
@@ -705,9 +721,9 @@ class SubagentRunner:
                                 }
                                 if parent_tool_call_id:
                                     runtime.emit_subagent_event(parent_tool_call_id, {
-                                        "event": "task_tool_result",
+                                        "event": "tool_result",
                                         "data": json.dumps(tr_data),
-                                    })
+                                    }, background=True)
 
             final_text = "".join(text_parts).strip() or None
             desc = description or None
@@ -718,14 +734,23 @@ class SubagentRunner:
                 result=final_text,
                 description=desc,
             )
-            # NOTE: background_task_done is emitted by _execute_agent (the caller)
-            # AFTER _inject_task_notification, so that new_run arrives before
-            # background_task_done on the activity SSE — preventing premature disconnect.
+
+            # Update registry with final result
+            if registry:
+                await registry.update(task_id, status="completed", result=final_text)
+
+            # Emit task_done event
+            if runtime:
+                runtime.emit_activity_event({
+                    "event": "task_done",
+                    "data": json.dumps({"task_id": task_id, "background": True}),
+                })
+
             if parent_tool_call_id:
                 runtime.emit_subagent_event(parent_tool_call_id, {
                     "event": "task_done",
                     "data": json.dumps({"task_id": task_id, "status": "completed"}),
-                })
+                }, background=True)
 
         except Exception as e:
             desc = description or None
@@ -736,14 +761,24 @@ class SubagentRunner:
                 error=str(e),
                 description=desc,
             )
-            # NOTE: background_task_error is emitted by _execute_agent (the caller)
+
+            # Update registry with error
+            if registry:
+                await registry.update(task_id, status="error", error=str(e))
+
+            # Emit task_error event
+            if runtime:
+                runtime.emit_activity_event({
+                    "event": "task_error",
+                    "data": json.dumps({"task_id": task_id, "error": str(e), "background": True}),
+                })
+
             if parent_tool_call_id:
                 runtime.emit_subagent_event(parent_tool_call_id, {
                     "event": "task_error",
                     "data": json.dumps({"task_id": task_id, "error": str(e)}),
-                })
+                }, background=True)
 
-        self._task_results[task_id] = task_result
         return task_result
 
     def _build_system_prompt(self, config: AgentConfig) -> str:
@@ -779,33 +814,37 @@ class SubagentRunner:
 """
         return prompt
 
-    def get_task_status(self, task_id: str) -> TaskResult:
-        """Get status of a background task."""
-        # Check if completed
-        if task_id in self._task_results:
-            return self._task_results[task_id]
+    async def get_task_status(self, task_id: str) -> TaskResult:
+        """Get status of a background task from registry."""
+        import logging
+        logger = logging.getLogger(__name__)
 
-        # Check if still running
-        if task_id in self._active_tasks:
-            task = self._active_tasks[task_id]
-            if task.done():
-                try:
-                    return task.result()
-                except Exception as e:
-                    return TaskResult(
-                        task_id=task_id,
-                        status="error",
-                        error=str(e),
-                    )
-            else:
-                return TaskResult(
-                    task_id=task_id,
-                    status="running",
-                    result="Task is still running...",
-                )
+        registry = self._get_registry()
+        if not registry:
+            logger.warning(f"[get_task_status] Registry not available for task {task_id}")
+            return TaskResult(
+                task_id=task_id,
+                status="error",
+                error="Registry not available",
+            )
 
+        entry = await registry.get(task_id)
+        if not entry:
+            logger.warning(f"[get_task_status] Task {task_id} not found in registry")
+            return TaskResult(
+                task_id=task_id,
+                status="error",
+                error=f"Unknown task_id: {task_id}",
+            )
+
+        logger.debug(f"[get_task_status] Task {task_id} status={entry.status}")
+
+        # Convert TaskEntry to TaskResult
         return TaskResult(
-            task_id=task_id,
-            status="error",
-            error=f"Unknown task_id: {task_id}",
+            task_id=entry.task_id,
+            thread_id=entry.thread_id,
+            status=entry.status,
+            result=entry.result,
+            error=entry.error,
+            description=entry.description,
         )

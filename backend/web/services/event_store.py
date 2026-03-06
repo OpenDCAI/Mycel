@@ -105,6 +105,12 @@ async def get_last_seq(thread_id: str, run_event_repo: RunEventRepo | None = Non
     return int(await asyncio.to_thread(repo.latest_seq, thread_id))
 
 
+async def get_run_start_seq(thread_id: str, run_id: str, run_event_repo: RunEventRepo | None = None) -> int:
+    """Return the first seq for a specific run, or 0."""
+    repo = _resolve_run_event_repo(run_event_repo)
+    return int(await asyncio.to_thread(repo.run_start_seq, thread_id, run_id))
+
+
 async def get_latest_run_id(thread_id: str, run_event_repo: RunEventRepo | None = None) -> str | None:
     """Return the run_id of the most recent run for a thread, or None."""
     repo = _resolve_run_event_repo(run_event_repo)

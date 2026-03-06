@@ -56,3 +56,71 @@ export function getStepSummary(step: ToolStep): string {
 
   return step.name;
 }
+
+export function getStepResultSummary(step: ToolStep): string | null {
+  if (!step.result) return null;
+
+  const args = step.args as Record<string, unknown> | null;
+  const result = step.result.trim();
+
+  // Read/read_file: count lines
+  if (step.name === "Read" || step.name === "read_file") {
+    const lines = result.split("\n").length;
+    return `Read ${lines} lines`;
+  }
+
+  // Write/write_file: count lines from result or args.content
+  if (step.name === "Write" || step.name === "write_file") {
+    const lines = result.split("\n").length;
+    if (lines > 1) return `Wrote ${lines} lines`;
+    if (args) {
+      const content = (args.Content ?? args.content) as string;
+      if (content) {
+        const contentLines = content.split("\n").length;
+        return `Wrote ${contentLines} lines`;
+      }
+    }
+    return "Wrote file";
+  }
+
+  // Edit/edit_file: calculate added/removed from args
+  if (step.name === "Edit" || step.name === "edit_file") {
+    if (args) {
+      const oldString = (args.OldString ?? args.old_string) as string;
+      const newString = (args.NewString ?? args.new_string) as string;
+      if (oldString && newString) {
+        const removed = oldString.split("\n").length;
+        const added = newString.split("\n").length;
+        return `Added ${added}, removed ${removed}`;
+      }
+    }
+    return "Edited file";
+  }
+
+  // Grep/Glob/search/find_files: count non-empty lines
+  if (step.name === "Grep" || step.name === "Glob" || step.name === "search" || step.name === "find_files") {
+    const matches = result.split("\n").filter(line => line.trim()).length;
+    return `Found ${matches} matches`;
+  }
+
+  // Bash/run_command: first line (truncate 60 chars) or exit code
+  if (step.name === "Bash" || step.name === "run_command") {
+    const firstLine = result.split("\n")[0];
+    if (firstLine) {
+      return firstLine.length > 60 ? firstLine.slice(0, 57) + "..." : firstLine;
+    }
+    return "Done";
+  }
+
+  // WebFetch/WebSearch/web_search: extract summary or "Done"
+  if (step.name === "WebFetch" || step.name === "WebSearch" || step.name === "web_search") {
+    return "Done";
+  }
+
+  // Task/TaskCreate/...: first 60 chars of result
+  if (step.name === "Task" || step.name === "TaskCreate" || step.name === "TaskOutput") {
+    return result.length > 60 ? result.slice(0, 57) + "..." : result;
+  }
+
+  return null;
+}

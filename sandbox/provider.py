@@ -1,8 +1,15 @@
 """Abstract sandbox provider interface."""
 
+from __future__ import annotations
+
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Any, Mapping
+from typing import TYPE_CHECKING, Any, Mapping
+
+if TYPE_CHECKING:
+    from sandbox.runtime import PhysicalTerminalRuntime
+    from sandbox.lease import SandboxLease
+    from sandbox.terminal import AbstractTerminal
 
 RESOURCE_CAPABILITY_KEYS = (
     "filesystem",
@@ -150,6 +157,11 @@ class SandboxProvider(ABC):
     def get_metrics(self, session_id: str) -> Metrics | None:
         pass
 
+    @abstractmethod
+    def create_runtime(self, terminal: AbstractTerminal, lease: SandboxLease) -> PhysicalTerminalRuntime:
+        """Create the appropriate PhysicalTerminalRuntime for this provider."""
+        pass
+
     def get_metrics_via_commands(self, session_id: str) -> Metrics | None:
         """Get metrics by running Linux shell commands inside the sandbox."""
         try:
@@ -186,7 +198,7 @@ class SandboxProvider(ABC):
         except Exception:
             return None
 
-    def screenshot(self, session_id: str) -> bytes | str | None:
+    def screenshot(self, session_id: str) -> bytes | None:
         return None
 
     def list_processes(self, session_id: str) -> list[dict]:

@@ -79,15 +79,13 @@ class TestConsumeFollowupQueue:
             from backend.web.services.streaming_service import _consume_followup_queue
 
             with patch("backend.web.services.streaming_service.start_agent_run") as mock_start:
-                mock_buf = MagicMock()
-                mock_buf.run_id = "run-123"
-                mock_start.return_value = mock_buf
+                mock_start.return_value = "run-123"  # start_agent_run returns str run_id
 
                 await _consume_followup_queue(mock_agent, "thread-1", mock_app)
 
                 mock_start.assert_called_once_with(
                     mock_agent, "thread-1", "do something", mock_app,
-                    message_metadata={"source": "system"},
+                    message_metadata={"source": "system", "notification_type": "steer"},
                 )
             # Message was consumed, queue is empty
             assert queue_manager.dequeue("thread-1") is None
@@ -106,8 +104,9 @@ class TestConsumeFollowupQueue:
                 await _consume_followup_queue(mock_agent, "thread-1", mock_app)
 
             # Message was re-enqueued — it should be available again
-            msg = queue_manager.dequeue("thread-1")
-            assert msg == "important followup"
+            item = queue_manager.dequeue("thread-1")
+            assert item is not None
+            assert item.content == "important followup"
 
         asyncio.run(_run())
 
@@ -128,15 +127,13 @@ class TestConsumeFollowupQueue:
 
             # Second attempt: succeeds
             with patch("backend.web.services.streaming_service.start_agent_run") as mock_start:
-                mock_buf = MagicMock()
-                mock_buf.run_id = "run-456"
-                mock_start.return_value = mock_buf
+                mock_start.return_value = "run-456"  # start_agent_run returns str run_id
 
                 await _consume_followup_queue(mock_agent, "thread-1", mock_app)
 
                 mock_start.assert_called_once_with(
                     mock_agent, "thread-1", "retry me", mock_app,
-                    message_metadata={"source": "system"},
+                    message_metadata={"source": "system", "notification_type": "steer"},
                 )
 
             # Queue is now empty
@@ -195,55 +192,3 @@ class TestConsumeFollowupQueue:
 
         asyncio.run(_run())
 
-    def test_activity_sink_called_on_success(self, mock_agent, mock_app, queue_manager):
-        """When activity_sink is set, new_run event is emitted."""
-        queue_manager.enqueue("with sink", "thread-1")
-        sink_calls = []
-
-        async def fake_sink(event):
-            sink_calls.append(event)
-
-        mock_agent.runtime._activity_sink = fake_sink
-
-        async def _run():
-            from backend.web.services.streaming_service import _consume_followup_queue
-
-            with patch("backend.web.services.streaming_service.start_agent_run") as mock_start:
-                mock_buf = MagicMock()
-                mock_buf.run_id = "run-789"
-                mock_start.return_value = mock_buf
-
-                await _consume_followup_queue(mock_agent, "thread-1", mock_app)
-
-            assert len(sink_calls) == 1
-            assert sink_calls[0]["event"] == "new_run"
-            data = json.loads(sink_calls[0]["data"])
-            assert data["thread_id"] == "thread-1"
-            assert data["run_id"] == "run-789"
-
-        asyncio.run(_run())
-
-    def test_activity_sink_error_triggers_re_enqueue(self, mock_agent, mock_app, queue_manager):
-        """When activity_sink raises, the message is re-enqueued."""
-        queue_manager.enqueue("sink will fail", "thread-1")
-
-        async def broken_sink(event):
-            raise RuntimeError("sink exploded")
-
-        mock_agent.runtime._activity_sink = broken_sink
-
-        async def _run():
-            from backend.web.services.streaming_service import _consume_followup_queue
-
-            with patch("backend.web.services.streaming_service.start_agent_run") as mock_start:
-                mock_buf = MagicMock()
-                mock_buf.run_id = "run-000"
-                mock_start.return_value = mock_buf
-
-                await _consume_followup_queue(mock_agent, "thread-1", mock_app)
-
-            # Message was re-enqueued because the sink raised
-            msg = queue_manager.dequeue("thread-1")
-            assert msg == "sink will fail"
-
-        asyncio.run(_run())

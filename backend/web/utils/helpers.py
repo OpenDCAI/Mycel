@@ -12,7 +12,7 @@ from storage.container import StorageContainer
 from storage.contracts import ThreadConfigRepo
 from storage.providers.sqlite.kernel import connect_sqlite
 from storage.runtime import build_storage_container
-from sandbox.db import DEFAULT_DB_PATH as SANDBOX_DB_PATH
+from sandbox.config import DEFAULT_DB_PATH as SANDBOX_DB_PATH
 
 # @@@cached-container - reuse a single StorageContainer across helper calls to avoid per-call rebuild.
 _cached_container: StorageContainer | None = None

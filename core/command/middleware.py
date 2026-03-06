@@ -59,6 +59,8 @@ class CommandMiddleware(AgentMiddleware[CommandState]):
         env: dict[str, str] | None = None,
         enabled_tools: dict[str, bool] | None = None,
         executor: BaseExecutor | None = None,
+        registry: Any = None,
+        queue_manager: Any = None,
         verbose: bool = True,
     ) -> None:
         """
@@ -70,10 +72,14 @@ class CommandMiddleware(AgentMiddleware[CommandState]):
             hooks: List of hook instances for command validation
             env: Additional environment variables
             executor: External executor (default: auto-detect OS shell)
+            registry: BackgroundTaskRegistry for task state management
+            queue_manager: MessageQueueManager for notification injection
             verbose: Whether to output detailed logs
         """
         AgentMiddleware.__init__(self)
         self._agent: Any = None
+        self._registry = registry
+        self._queue_manager = queue_manager
 
         # @@@ Don't resolve workspace_root for sandbox — macOS firmlinks break it
         if executor is not None and executor.is_remote:
@@ -216,6 +222,36 @@ class CommandMiddleware(AgentMiddleware[CommandState]):
         except Exception as e:
             return f"Error starting async command: {e}"
 
+        # Register task in registry
+        if self._registry:
+            from core.task.registry import TaskEntry
+            from sandbox.thread_context import get_current_thread_id
+
+            thread_id = get_current_thread_id() or "unknown"
+            entry = TaskEntry(
+                task_id=async_cmd.command_id,
+                task_type="bash",
+                thread_id=thread_id,
+                status="running",
+                command_line=command_line,
+                stdout_buffer=[],
+                stderr_buffer=[],
+            )
+            await self._registry.register(entry)
+
+        # Emit task_start event
+        runtime = getattr(self._agent, "runtime", None) if self._agent else None
+        if runtime:
+            runtime.emit_activity_event({
+                "event": "task_start",
+                "data": json.dumps({
+                    "task_id": async_cmd.command_id,
+                    "task_type": "bash",
+                    "command_line": command_line,
+                    "background": True,
+                }, ensure_ascii=False),
+            })
+
         if timeout and timeout > 0:
             await asyncio.sleep(min(timeout, 1.0))
 
@@ -230,8 +266,7 @@ class CommandMiddleware(AgentMiddleware[CommandState]):
         except Exception:
             logger.warning("Unexpected error checking status for command %s", async_cmd.command_id, exc_info=True)
 
-        # Start background monitoring for progress events
-        runtime = getattr(self._agent, "runtime", None) if self._agent else None
+        # Start background monitoring
         if runtime:
             asyncio.create_task(
                 self._monitor_async_command(async_cmd.command_id, command_line, runtime)
@@ -246,7 +281,7 @@ class CommandMiddleware(AgentMiddleware[CommandState]):
     async def _monitor_async_command(
         self, command_id: str, command_line: str, runtime: Any
     ) -> None:
-        """Poll async command and emit progress events every 2s."""
+        """Monitor async command and emit completion events."""
         while True:
             await asyncio.sleep(2.0)
             try:
@@ -257,21 +292,70 @@ class CommandMiddleware(AgentMiddleware[CommandState]):
             if status is None:
                 break
 
-            output = self._merge_running_output(status)
-
-            runtime.emit_activity_event({
-                "event": "command_progress",
-                "data": json.dumps({
-                    "command_id": command_id,
-                    "command_line": command_line,
-                    "done": status.done,
-                    "exit_code": status.exit_code,
-                    "output_preview": output[-500:] if output else "",
-                }, ensure_ascii=False),
-            })
-
             if status.done:
+                # Get final output
+                output = self._merge_running_output(status)
+                exit_code = status.exit_code or 0
+                task_status = "completed" if exit_code == 0 else "failed"
+
+                # Update registry first
+                if self._registry:
+                    try:
+                        await self._registry.update(
+                            command_id,
+                            status=task_status,
+                            exit_code=exit_code,
+                            stdout_buffer=[output],
+                        )
+                    except Exception as e:
+                        logger.warning("Failed to update registry for command %s: %s", command_id, e)
+
+                # Inject CommandNotification to queue
+                if self._queue_manager:
+                    await self._inject_command_notification(
+                        command_id=command_id,
+                        status=task_status,
+                        exit_code=exit_code,
+                        command_line=command_line,
+                        output=output,
+                    )
+
+                # Emit task completion event
+                event_type = "task_done" if exit_code == 0 else "task_error"
+                runtime.emit_activity_event({
+                    "event": event_type,
+                    "data": json.dumps({
+                        "task_id": command_id,
+                        "exit_code": exit_code,
+                        "background": True,
+                    }, ensure_ascii=False),
+                })
                 break
+
+    async def _inject_command_notification(
+        self,
+        command_id: str,
+        status: str,
+        exit_code: int,
+        command_line: str,
+        output: str,
+    ) -> None:
+        """Inject CommandNotification to unified queue."""
+        from core.queue.formatters import format_command_notification
+        from sandbox.thread_context import get_current_thread_id
+
+        notification = format_command_notification(
+            command_id=command_id,
+            status=status,
+            exit_code=exit_code,
+            command_line=command_line,
+            output=output,
+        )
+
+        # Inject to queue (wake idle agent)
+        thread_id = get_current_thread_id()
+        if thread_id:
+            self._queue_manager.enqueue(notification, thread_id, notification_type="command")
 
     def _clean_running_output(self, output: str, command_line: str) -> str:
         return normalize_pty_result(output, command_line)

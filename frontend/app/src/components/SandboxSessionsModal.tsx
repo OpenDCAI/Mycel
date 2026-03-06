@@ -10,6 +10,7 @@ import {
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
 } from "./ui/dialog";
@@ -101,6 +102,7 @@ export default function SandboxSessionsModal({ isOpen, onClose, onSessionMutated
         <DialogHeader className="h-12 px-5 flex-row items-center justify-between border-b border-border">
           <div className="flex items-center gap-3">
             <DialogTitle className="text-sm">运行环境会话</DialogTitle>
+            <DialogDescription className="sr-only">查看和管理沙箱运行环境会话</DialogDescription>
             {refreshing && (
               <Loader2 className="w-3.5 h-3.5 animate-spin text-muted-foreground" />
             )}

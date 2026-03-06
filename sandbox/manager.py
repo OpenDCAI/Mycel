@@ -14,7 +14,7 @@ from storage.providers.sqlite.kernel import connect_sqlite
 
 from sandbox.capability import SandboxCapability
 from sandbox.chat_session import ChatSessionManager, ChatSessionPolicy
-from sandbox.db import DEFAULT_DB_PATH
+from sandbox.config import DEFAULT_DB_PATH
 from sandbox.lease import LeaseStore
 from sandbox.provider import SandboxProvider
 from sandbox.terminal import TerminalState, TerminalStore
@@ -213,6 +213,71 @@ class SandboxManager:
         )
         return session
 
+    def _db_has_table(self, conn: sqlite3.Connection, name: str) -> bool:
+        return (
+            conn.execute(
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name = ? LIMIT 1",
+                (name,),
+            ).fetchone()
+            is not None
+        )
+
+    def _terminal_is_busy(self, terminal_id: str) -> bool:
+        """Return True if this terminal has a running command."""
+        if not terminal_id:
+            return False
+        if not self.db_path.exists():
+            return False
+        with connect_sqlite(self.db_path) as conn:
+            if not self._db_has_table(conn, "terminal_commands"):
+                return False
+            row = conn.execute(
+                """
+                SELECT 1
+                FROM terminal_commands
+                WHERE terminal_id = ? AND status = 'running'
+                LIMIT 1
+                """,
+                (terminal_id,),
+            ).fetchone()
+            return row is not None
+
+    def _lease_is_busy(self, lease_id: str) -> bool:
+        """Return True if any terminal under this lease has a running command."""
+        if not lease_id:
+            return False
+        if not self.db_path.exists():
+            return False
+        with connect_sqlite(self.db_path) as conn:
+            if not self._db_has_table(conn, "terminal_commands"):
+                return False
+            if not self._db_has_table(conn, "abstract_terminals"):
+                return False
+            row = conn.execute(
+                """
+                SELECT 1
+                FROM terminal_commands tc
+                JOIN abstract_terminals at ON at.terminal_id = tc.terminal_id
+                WHERE at.lease_id = ? AND tc.status = 'running'
+                LIMIT 1
+                """,
+                (lease_id,),
+            ).fetchone()
+            return row is not None
+
+    def _is_expired(self, session_row: dict, now: datetime) -> bool:
+        started_at_raw = session_row.get("started_at")
+        last_active_raw = session_row.get("last_active_at")
+        if not started_at_raw or not last_active_raw:
+            return False
+        started_at = datetime.fromisoformat(str(started_at_raw))
+        last_active_at = datetime.fromisoformat(str(last_active_raw))
+        idle_ttl_sec = int(session_row.get("idle_ttl_sec") or 0)
+        max_duration_sec = int(session_row.get("max_duration_sec") or 0)
+        idle_elapsed = (now - last_active_at).total_seconds()
+        total_elapsed = (now - started_at).total_seconds()
+        return idle_elapsed > idle_ttl_sec or total_elapsed > max_duration_sec
+
     def enforce_idle_timeouts(self) -> int:
         """Pause expired leases and close chat sessions.
 
@@ -230,79 +295,6 @@ class SandboxManager:
         count = 0
 
         active_rows = self.session_manager.list_active()
-
-        def _db_has_table(conn: sqlite3.Connection, name: str) -> bool:
-            return (
-                conn.execute(
-                    "SELECT 1 FROM sqlite_master WHERE type='table' AND name = ? LIMIT 1",
-                    (name,),
-                ).fetchone()
-                is not None
-            )
-
-        def _terminal_is_busy(terminal_id: str) -> bool:
-            """Return True if this terminal has a running command.
-
-            A busy terminal must not have its ChatSession closed.
-            """
-
-            if not terminal_id:
-                return False
-            if not self.db_path.exists():
-                return False
-            with connect_sqlite(self.db_path) as conn:
-                if not _db_has_table(conn, "terminal_commands"):
-                    return False
-                row = conn.execute(
-                    """
-                    SELECT 1
-                    FROM terminal_commands
-                    WHERE terminal_id = ? AND status = 'running'
-                    LIMIT 1
-                    """,
-                    (terminal_id,),
-                ).fetchone()
-                return row is not None
-
-        def _lease_is_busy(lease_id: str) -> bool:
-            """Return True if any terminal under this lease has a running command.
-
-            A busy lease must not be paused.
-            """
-
-            if not lease_id:
-                return False
-            if not self.db_path.exists():
-                return False
-            with connect_sqlite(self.db_path) as conn:
-                if not _db_has_table(conn, "terminal_commands"):
-                    return False
-                if not _db_has_table(conn, "abstract_terminals"):
-                    return False
-                row = conn.execute(
-                    """
-                    SELECT 1
-                    FROM terminal_commands tc
-                    JOIN abstract_terminals at ON at.terminal_id = tc.terminal_id
-                    WHERE at.lease_id = ? AND tc.status = 'running'
-                    LIMIT 1
-                    """,
-                    (lease_id,),
-                ).fetchone()
-                return row is not None
-
-        def _is_expired(session_row: dict) -> bool:
-            started_at_raw = session_row.get("started_at")
-            last_active_raw = session_row.get("last_active_at")
-            if not started_at_raw or not last_active_raw:
-                return False
-            started_at = datetime.fromisoformat(str(started_at_raw))
-            last_active_at = datetime.fromisoformat(str(last_active_raw))
-            idle_ttl_sec = int(session_row.get("idle_ttl_sec") or 0)
-            max_duration_sec = int(session_row.get("max_duration_sec") or 0)
-            idle_elapsed = (now - last_active_at).total_seconds()
-            total_elapsed = (now - started_at).total_seconds()
-            return idle_elapsed > idle_ttl_sec or total_elapsed > max_duration_sec
 
         for row in active_rows:
             session_id = row.get("session_id")
@@ -328,7 +320,7 @@ class SandboxManager:
             if lease and lease.provider_name != self.provider.name:
                 continue
 
-            if terminal and _terminal_is_busy(terminal.terminal_id):
+            if terminal and self._terminal_is_busy(terminal.terminal_id):
                 continue
 
             if lease:
@@ -343,13 +335,13 @@ class SandboxManager:
                         continue
                     if str(other.get("status") or "") not in {"active", "idle"}:
                         continue
-                    if _is_expired(other):
+                    if self._is_expired(other, now):
                         continue
                     has_other_active = True
                     break
 
                 if not has_other_active:
-                    if _lease_is_busy(lease.lease_id):
+                    if self._lease_is_busy(lease.lease_id):
                         continue
                     status = lease.refresh_instance_status(self.provider)
                     # Only pause remote providers (local sandbox doesn't need pause)

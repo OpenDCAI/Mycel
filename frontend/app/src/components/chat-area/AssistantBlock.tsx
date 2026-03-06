@@ -1,8 +1,8 @@
 import { memo } from "react";
-import type { AssistantTurn, NoticeSegment, StreamStatus, TextSegment, ToolSegment, TurnSegment } from "../../api";
+import type { AssistantTurn, NoticeSegment, NotificationType, StreamStatus, ToolSegment, TurnSegment } from "../../api";
 import MarkdownContent from "../MarkdownContent";
 import { CopyButton } from "./CopyButton";
-import { parseNoticeContent, STATUS_ICON } from "./NoticeBubble";
+import { InlineNotice } from "./NoticeBubble";
 import { ThinkingIndicator } from "./ThinkingIndicator";
 import { ToolDetailBox } from "./ToolDetailBox";
 import { formatTime } from "./utils";
@@ -10,7 +10,7 @@ import { formatTime } from "./utils";
 // --- Phase splitting: segments → content phases + notice dividers ---
 
 type ContentPhase = { kind: "content"; segments: TurnSegment[] };
-type NoticePhase = { kind: "notice"; content: string };
+type NoticePhase = { kind: "notice"; content: string; notificationType?: NotificationType };
 type Phase = ContentPhase | NoticePhase;
 
 function splitPhases(segments: TurnSegment[]): Phase[] {
@@ -19,7 +19,8 @@ function splitPhases(segments: TurnSegment[]): Phase[] {
   for (const seg of segments) {
     if (seg.type === "notice") {
       if (buf.length > 0) { phases.push({ kind: "content", segments: buf }); buf = []; }
-      phases.push({ kind: "notice", content: (seg as NoticeSegment).content });
+      const ns = seg as NoticeSegment;
+      phases.push({ kind: "notice", content: ns.content, notificationType: ns.notification_type });
     } else {
       buf.push(seg);
     }
@@ -30,36 +31,23 @@ function splitPhases(segments: TurnSegment[]): Phase[] {
 
 // --- Notice divider (inline within assistant block) ---
 
-function NoticeDivider({ content }: { content: string }) {
-  const parsed = parseNoticeContent(content);
-  if (!parsed.text) return null;
-  const icon = parsed.status ? STATUS_ICON[parsed.status] : null;
-  return (
-    <div className="flex items-center gap-3 my-2 select-none">
-      <div className="flex-1 h-px bg-gray-100" />
-      <span className="inline-flex items-center gap-1.5 px-2.5 text-[11px] text-gray-400">
-        {icon}
-        {parsed.text}
-      </span>
-      <div className="flex-1 h-px bg-gray-100" />
-    </div>
-  );
+function NoticeDivider({ content, notificationType }: { content: string; notificationType?: NotificationType }) {
+  return <InlineNotice content={content} notificationType={notificationType} />;
 }
 
 // --- Content phase rendering (tools + final text) ---
 
 function ContentPhaseBlock({
-  segments, isStreaming, onFocusStep, onFocusAgent,
+  segments, allSegments, isStreaming, onFocusAgent,
 }: {
   segments: TurnSegment[];
+  /** All segments in the full turn (passed to DetailBoxModal). */
+  allSegments?: TurnSegment[];
   isStreaming: boolean;
-  onFocusStep?: (stepId: string) => void;
   onFocusAgent?: (taskId: string) => void;
 }) {
   const toolSegs = segments.filter((s) => s.type === "tool") as ToolSegment[];
-  const textSegs = segments.filter(
-    (s): s is TextSegment => s.type === "text" && s.content.trim().length > 0,
-  );
+  const textSegs = segments.filter((s) => s.type === "text");
   const visibleText = textSegs.length > 0 ? textSegs[textSegs.length - 1] : null;
 
   return (
@@ -68,13 +56,12 @@ function ContentPhaseBlock({
         <ToolDetailBox
           toolSegments={toolSegs}
           isStreaming={isStreaming}
-          onFocusStep={onFocusStep}
+          allSegments={allSegments}
           onFocusAgent={onFocusAgent}
         />
       )}
-      {visibleText && (isStreaming
-        ? <div className="text-[13px] leading-[1.55] text-[#404040] whitespace-pre-wrap">{visibleText.content}</div>
-        : <MarkdownContent content={visibleText.content} />
+      {visibleText && visibleText.type === "text" && (
+        <MarkdownContent content={visibleText.content} />
       )}
     </>
   );
@@ -86,22 +73,19 @@ interface AssistantBlockProps {
   entry: AssistantTurn;
   isStreamingThis?: boolean;
   runtimeStatus?: StreamStatus | null;
-  onFocusStep?: (stepId: string) => void;
   onFocusAgent?: (taskId: string) => void;
 }
 
-export const AssistantBlock = memo(function AssistantBlock({ entry, isStreamingThis, runtimeStatus, onFocusStep, onFocusAgent }: AssistantBlockProps) {
+export const AssistantBlock = memo(function AssistantBlock({ entry, isStreamingThis, runtimeStatus, onFocusAgent }: AssistantBlockProps) {
   const hasNotice = entry.segments.some((s) => s.type === "notice");
 
   const fullText = entry.segments
-    .filter((s): s is TextSegment => s.type === "text")
-    .map((s) => s.content)
+    .filter((s) => s.type === "text")
+    .map((s) => s.type === "text" ? s.content : "")
     .join("\n");
 
   const toolSegs = entry.segments.filter((s) => s.type === "tool") as ToolSegment[];
-  const textSegs = entry.segments.filter(
-    (s): s is TextSegment => s.type === "text" && s.content.trim().length > 0,
-  );
+  const textSegs = entry.segments.filter((s) => s.type === "text");
 
   const hasVisible = toolSegs.length > 0 || textSegs.length > 0;
 
@@ -112,7 +96,7 @@ export const AssistantBlock = memo(function AssistantBlock({ entry, isStreamingT
       <div className="w-6 h-6 rounded-full bg-[#171717] flex items-center justify-center flex-shrink-0 mt-0.5">
         <span className="text-[11px] font-semibold text-white">L</span>
       </div>
-      <div className="flex-1 max-w-[calc(100%-36px)] space-y-1.5">
+      <div className="flex-1 min-w-0 space-y-1.5 overflow-hidden">
         <div className="flex items-center gap-2">
           <span className="text-[13px] font-medium text-[#171717]">Leon</span>
           {entry.timestamp && (
@@ -128,12 +112,12 @@ export const AssistantBlock = memo(function AssistantBlock({ entry, isStreamingT
           /* Phase-based rendering: split at notice boundaries */
           splitPhases(entry.segments).map((phase, i) =>
             phase.kind === "notice"
-              ? <NoticeDivider key={`notice-${i}-${phase.content.slice(0, 32)}`} content={phase.content} />
+              ? <NoticeDivider key={`notice-${i}-${phase.content.slice(0, 32)}`} content={phase.content} notificationType={phase.notificationType} />
               : <ContentPhaseBlock
                   key={phase.segments[0]?.type === "tool" ? `tool-${(phase.segments[0] as ToolSegment).step.id}` : `content-${i}`}
                   segments={phase.segments}
+                  allSegments={entry.segments}
                   isStreaming={!!isStreamingThis}
-                  onFocusStep={onFocusStep}
                   onFocusAgent={onFocusAgent}
                 />
           )
@@ -141,8 +125,8 @@ export const AssistantBlock = memo(function AssistantBlock({ entry, isStreamingT
           /* Original rendering path (no notices) */
           <ContentPhaseBlock
             segments={entry.segments}
+            allSegments={entry.segments}
             isStreaming={!!isStreamingThis}
-            onFocusStep={onFocusStep}
             onFocusAgent={onFocusAgent}
           />
         )}

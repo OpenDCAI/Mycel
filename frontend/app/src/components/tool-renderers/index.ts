@@ -8,6 +8,7 @@ import RunCommandRenderer from "./RunCommandRenderer";
 import SearchRenderer from "./SearchRenderer";
 import TaskRenderer from "./TaskRenderer";
 import WebRenderer from "./WebRenderer";
+import WriteFileRenderer from "./WriteFileRenderer";
 
 type RendererComponent = React.ComponentType<ToolRendererProps>;
 
@@ -17,8 +18,8 @@ const TOOL_RENDERERS: Record<string, RendererComponent> = {
   edit_file: EditFileRenderer,
 
   // File write
-  Write: EditFileRenderer,
-  write_file: EditFileRenderer,
+  Write: WriteFileRenderer,
+  write_file: WriteFileRenderer,
 
   // Commands
   Bash: RunCommandRenderer,

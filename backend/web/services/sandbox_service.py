@@ -1,106 +1,19 @@
 """Sandbox management service."""
 
-import json
+import logging
 import os
 import uuid
 from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+logger = logging.getLogger(__name__)
+
 from backend.web.core.config import LOCAL_WORKSPACE_ROOT, SANDBOXES_DIR
 from backend.web.utils.helpers import is_virtual_thread_id
 from sandbox.config import SandboxConfig
-from sandbox.db import DEFAULT_DB_PATH as SANDBOX_DB_PATH
+from sandbox.config import DEFAULT_DB_PATH as SANDBOX_DB_PATH
 from sandbox.manager import SandboxManager
-
-
-def _load_sandbox_config(name: str, sandboxes_dir: Path | None = None) -> SandboxConfig:
-    if sandboxes_dir is None:
-        return SandboxConfig.load(name)
-    if name == "local":
-        return SandboxConfig()
-    path = sandboxes_dir / f"{name}.json"
-    if not path.exists():
-        raise FileNotFoundError(f"Sandbox config not found: {path}")
-    data = json.loads(path.read_text())
-    config = SandboxConfig(**data)
-    config.name = name
-    return config
-
-
-def build_provider_from_config_name(name: str, *, sandboxes_dir: Path | None = None) -> Any | None:
-    """Build one provider instance from sandbox config name."""
-    from sandbox.local import LocalSessionProvider
-
-    if name == "local":
-        return LocalSessionProvider(default_cwd=str(LOCAL_WORKSPACE_ROOT))
-
-    try:
-        config = _load_sandbox_config(name, sandboxes_dir=sandboxes_dir)
-    except Exception as e:
-        print(f"[sandbox] Failed to load {name}: {e}")
-        return None
-
-    try:
-        if config.provider == "agentbay":
-            from sandbox.providers.agentbay import AgentBayProvider
-
-            key = config.agentbay.api_key or os.getenv("AGENTBAY_API_KEY")
-            if not key:
-                return None
-            return AgentBayProvider(
-                api_key=key,
-                region_id=config.agentbay.region_id,
-                default_context_path=config.agentbay.context_path,
-                image_id=config.agentbay.image_id,
-                provider_name=name,
-                supports_pause=config.agentbay.supports_pause,
-                supports_resume=config.agentbay.supports_resume,
-            )
-
-        if config.provider == "docker":
-            from sandbox.providers.docker import DockerProvider
-
-            return DockerProvider(
-                image=config.docker.image,
-                mount_path=config.docker.mount_path,
-                provider_name=name,
-                docker_host=config.docker.docker_host,
-            )
-
-        if config.provider == "e2b":
-            from sandbox.providers.e2b import E2BProvider
-
-            key = config.e2b.api_key or os.getenv("E2B_API_KEY")
-            if not key:
-                return None
-            return E2BProvider(
-                api_key=key,
-                template=config.e2b.template,
-                default_cwd=config.e2b.cwd,
-                timeout=config.e2b.timeout,
-                provider_name=name,
-            )
-
-        if config.provider == "daytona":
-            from sandbox.providers.daytona import DaytonaProvider
-
-            key = config.daytona.api_key or os.getenv("DAYTONA_API_KEY")
-            if not key:
-                return None
-            return DaytonaProvider(
-                api_key=key,
-                api_url=config.daytona.api_url,
-                target=config.daytona.target,
-                default_cwd=config.daytona.cwd,
-                provider_name=name,
-            )
-    except Exception as e:
-        print(f"[sandbox] Failed to init provider {name}: {e}")
-        return None
-
-    print(f"[sandbox] Unsupported provider kind in {name}: {config.provider}")
-    return None
 
 
 def available_sandbox_types() -> list[dict[str, Any]]:
@@ -120,19 +33,71 @@ def available_sandbox_types() -> list[dict[str, Any]]:
 
 def init_providers_and_managers() -> tuple[dict, dict]:
     """Load sandbox providers and managers from config files."""
-    providers: dict[str, Any] = {}
-    local_provider = build_provider_from_config_name("local")
-    if local_provider is not None:
-        providers["local"] = local_provider
+    from sandbox.providers.local import LocalSessionProvider
+
+    providers: dict[str, Any] = {
+        "local": LocalSessionProvider(default_cwd=str(LOCAL_WORKSPACE_ROOT)),
+    }
     if not SANDBOXES_DIR.exists():
         managers = {name: SandboxManager(provider=p, db_path=SANDBOX_DB_PATH) for name, p in providers.items()}
         return providers, managers
 
     for config_file in SANDBOXES_DIR.glob("*.json"):
         name = config_file.stem
-        provider = build_provider_from_config_name(name)
-        if provider is not None:
-            providers[name] = provider
+        try:
+            config = SandboxConfig.load(name)
+            if config.provider == "agentbay":
+                from sandbox.providers.agentbay import AgentBayProvider
+
+                key = config.agentbay.api_key or os.getenv("AGENTBAY_API_KEY")
+                if not key:
+                    logger.warning("[sandbox] %s configured but no API key; skipping", name)
+                    continue
+                providers[name] = AgentBayProvider(
+                    api_key=key,
+                    region_id=config.agentbay.region_id,
+                    default_context_path=config.agentbay.context_path,
+                    image_id=config.agentbay.image_id,
+                    provider_name=name,
+                )
+            elif config.provider == "docker":
+                from sandbox.providers.docker import DockerProvider
+
+                providers[name] = DockerProvider(
+                    image=config.docker.image,
+                    mount_path=config.docker.mount_path,
+                    provider_name=name,
+                )
+            elif config.provider == "e2b":
+                from sandbox.providers.e2b import E2BProvider
+
+                key = config.e2b.api_key or os.getenv("E2B_API_KEY")
+                if not key:
+                    logger.warning("[sandbox] %s configured but no API key; skipping", name)
+                    continue
+                providers[name] = E2BProvider(
+                    api_key=key,
+                    template=config.e2b.template,
+                    default_cwd=config.e2b.cwd,
+                    timeout=config.e2b.timeout,
+                    provider_name=name,
+                )
+            elif config.provider == "daytona":
+                from sandbox.providers.daytona import DaytonaProvider
+
+                key = config.daytona.api_key or os.getenv("DAYTONA_API_KEY")
+                if not key:
+                    logger.warning("[sandbox] %s configured but no API key; skipping", name)
+                    continue
+                providers[name] = DaytonaProvider(
+                    api_key=key,
+                    api_url=config.daytona.api_url,
+                    target=config.daytona.target,
+                    default_cwd=config.daytona.cwd,
+                    provider_name=name,
+                )
+        except Exception:
+            logger.exception("[sandbox] Failed to load %s", name)
 
     managers = {name: SandboxManager(provider=p, db_path=SANDBOX_DB_PATH) for name, p in providers.items()}
     return providers, managers
@@ -281,33 +246,73 @@ def mutate_sandbox_session(
     }
 
 
-def get_session_metrics(session_id: str, provider_name: str | None = None) -> dict[str, Any]:
-    """Fetch runtime metrics for one session."""
-    providers, managers = init_providers_and_managers()
-    sessions = load_all_sessions(managers)
-    session, _ = find_session_and_manager(sessions, managers, session_id, provider_name=provider_name)
-    if not session:
-        raise RuntimeError(f"Session not found: {session_id}")
+def build_provider_from_config_name(name: str, *, sandboxes_dir: Path | None = None) -> Any | None:
+    """Build one provider instance from sandbox config name. Used by resource_service for per-session ops."""
+    from sandbox.providers.local import LocalSessionProvider
 
-    provider_obj = providers.get(session["provider"])
-    if not provider_obj:
-        return {"session_id": session["session_id"], "metrics": None}
+    if name == "local":
+        return LocalSessionProvider(default_cwd=str(LOCAL_WORKSPACE_ROOT))
 
-    metrics = provider_obj.get_metrics(session["session_id"])
-    web_url = provider_obj.get_web_url(session["session_id"]) if hasattr(provider_obj, "get_web_url") else None
+    _sandboxes_dir = sandboxes_dir or SANDBOXES_DIR
+    try:
+        config = SandboxConfig.load(name)
+    except Exception as e:
+        print(f"[sandbox] Failed to load {name}: {e}")
+        return None
 
-    payload: dict[str, Any] = {"session_id": session["session_id"], "metrics": None, "web_url": web_url}
-    if metrics:
-        payload["metrics"] = {
-            "cpu_percent": metrics.cpu_percent,
-            "memory_used_mb": metrics.memory_used_mb,
-            "memory_total_mb": metrics.memory_total_mb,
-            "disk_used_gb": metrics.disk_used_gb,
-            "disk_total_gb": metrics.disk_total_gb,
-            "network_rx_kbps": metrics.network_rx_kbps,
-            "network_tx_kbps": metrics.network_tx_kbps,
-        }
-    return payload
+    try:
+        if config.provider == "agentbay":
+            from sandbox.providers.agentbay import AgentBayProvider
+            key = config.agentbay.api_key or os.getenv("AGENTBAY_API_KEY")
+            if not key:
+                return None
+            return AgentBayProvider(
+                api_key=key,
+                region_id=config.agentbay.region_id,
+                default_context_path=config.agentbay.context_path,
+                image_id=config.agentbay.image_id,
+                provider_name=name,
+                supports_pause=getattr(config.agentbay, "supports_pause", True),
+                supports_resume=getattr(config.agentbay, "supports_resume", True),
+            )
+        if config.provider == "docker":
+            from sandbox.providers.docker import DockerProvider
+            return DockerProvider(
+                image=config.docker.image,
+                mount_path=config.docker.mount_path,
+                provider_name=name,
+                docker_host=getattr(config.docker, "docker_host", None),
+            )
+        if config.provider == "e2b":
+            from sandbox.providers.e2b import E2BProvider
+            key = config.e2b.api_key or os.getenv("E2B_API_KEY")
+            if not key:
+                return None
+            return E2BProvider(
+                api_key=key,
+                template=config.e2b.template,
+                default_cwd=config.e2b.cwd,
+                timeout=config.e2b.timeout,
+                provider_name=name,
+            )
+        if config.provider == "daytona":
+            from sandbox.providers.daytona import DaytonaProvider
+            key = config.daytona.api_key or os.getenv("DAYTONA_API_KEY")
+            if not key:
+                return None
+            return DaytonaProvider(
+                api_key=key,
+                api_url=config.daytona.api_url,
+                target=config.daytona.target,
+                default_cwd=config.daytona.cwd,
+                provider_name=name,
+            )
+    except Exception as e:
+        print(f"[sandbox] Failed to init provider {name}: {e}")
+        return None
+
+    print(f"[sandbox] Unsupported provider kind in {name}: {config.provider}")
+    return None
 
 
 def destroy_thread_resources_sync(thread_id: str, sandbox_type: str, agent_pool: dict) -> bool:

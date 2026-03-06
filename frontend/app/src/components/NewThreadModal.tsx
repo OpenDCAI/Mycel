@@ -4,6 +4,7 @@ import { pickFolder, type SandboxType } from "../api";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
 } from "./ui/dialog";
@@ -66,6 +67,7 @@ export default function NewThreadModal({ open, sandboxTypes, onClose, onCreate }
       <DialogContent className="sm:max-w-[400px] p-0 gap-0" showCloseButton>
         <DialogHeader className="px-5 py-4 border-b border-border">
           <DialogTitle className="text-base">新建会话</DialogTitle>
+          <DialogDescription className="sr-only">选择运行环境以创建新会话</DialogDescription>
         </DialogHeader>
         <div className="px-5 py-4">
           <p className="text-sm mb-3 text-muted-foreground">选择运行环境</p>

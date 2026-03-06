@@ -71,6 +71,8 @@ def mock_provider():
         return result
 
     provider.execute = mock_execute
+    from sandbox.providers.local import LocalPersistentShellRuntime
+    provider.create_runtime.side_effect = lambda terminal, lease: LocalPersistentShellRuntime(terminal, lease)
     return provider
 
 
@@ -97,6 +99,8 @@ def mock_remote_provider():
     provider.write_file.return_value = "ok"
     provider.read_file.return_value = "content"
     provider.list_dir.return_value = []
+    from sandbox.runtime import RemoteWrappedRuntime
+    provider.create_runtime.side_effect = lambda terminal, lease: RemoteWrappedRuntime(terminal, lease, provider)
     return provider
 
 
@@ -567,3 +571,38 @@ class TestErrorHandling:
         # Lease should exist in DB now
         lease2 = lease_store.get(capability2._session.lease.lease_id)
         assert lease2 is not None
+
+
+# ── create_sandbox() factory tests ──────────────────────────────────────────
+
+from sandbox import LocalSandbox, create_sandbox  # noqa: E402
+from sandbox.config import SandboxConfig  # noqa: E402
+
+
+def test_create_sandbox_local():
+    sbx = create_sandbox(SandboxConfig(provider="local"), workspace_root="/tmp")
+    assert isinstance(sbx, LocalSandbox)
+    assert sbx.working_dir == "/tmp"
+
+
+def test_create_sandbox_agentbay_requires_api_key(monkeypatch):
+    monkeypatch.delenv("AGENTBAY_API_KEY", raising=False)
+    with pytest.raises(ValueError, match="AGENTBAY_API_KEY"):
+        create_sandbox(SandboxConfig(provider="agentbay"))
+
+
+def test_create_sandbox_e2b_requires_api_key(monkeypatch):
+    monkeypatch.delenv("E2B_API_KEY", raising=False)
+    with pytest.raises(ValueError, match="E2B_API_KEY"):
+        create_sandbox(SandboxConfig(provider="e2b"))
+
+
+def test_create_sandbox_daytona_requires_api_key(monkeypatch):
+    monkeypatch.delenv("DAYTONA_API_KEY", raising=False)
+    with pytest.raises(ValueError, match="DAYTONA_API_KEY"):
+        create_sandbox(SandboxConfig(provider="daytona"))
+
+
+def test_create_sandbox_unknown_provider():
+    with pytest.raises(ValueError, match="Unknown sandbox provider"):
+        create_sandbox(SandboxConfig(provider="bogus"))

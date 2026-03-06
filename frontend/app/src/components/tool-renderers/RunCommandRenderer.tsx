@@ -58,6 +58,11 @@ export default memo(function RunCommandRenderer({ step, expanded }: ToolRenderer
     );
   }
 
+  const [outputExpanded, setOutputExpanded] = useState(false);
+  const outputLines = step.result?.split('\n') || [];
+  const needsOutputExpansion = outputLines.length > 15;
+  const displayOutput = outputExpanded ? step.result : outputLines.slice(0, 15).join('\n');
+
   return (
     <div className="space-y-1.5">
       {command && (
@@ -71,9 +76,24 @@ export default memo(function RunCommandRenderer({ step, expanded }: ToolRenderer
         </div>
       )}
       {step.result && (
-        <pre className="p-3 rounded-lg text-xs overflow-x-auto max-h-[200px] overflow-y-auto font-mono bg-[#fafafa] border border-[#e5e5e5] text-[#525252]">
-          {step.result}
-        </pre>
+        <div className="relative">
+          <pre className="p-3 rounded-lg text-xs overflow-x-auto max-h-[200px] overflow-y-auto font-mono bg-[#171717] border border-[#333] text-[#a3a3a3]">
+            {displayOutput}
+          </pre>
+          {needsOutputExpansion && !outputExpanded && (
+            <div className="absolute bottom-0 left-0 right-0 h-12 bg-gradient-to-t from-[#171717] to-transparent pointer-events-none" />
+          )}
+          {needsOutputExpansion && (
+            <div className="mt-1 text-center">
+              <button
+                onClick={() => setOutputExpanded(!outputExpanded)}
+                className="text-xs text-[#737373] hover:text-[#525252] hover:underline"
+              >
+                {outputExpanded ? '收起' : `展开全部 (${outputLines.length} 行)`}
+              </button>
+            </div>
+          )}
+        </div>
       )}
     </div>
   );

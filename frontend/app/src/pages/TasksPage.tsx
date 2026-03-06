@@ -66,6 +66,7 @@ export default function Tasks() {
   const storeUpdateTask = useAppStore((s) => s.updateTask);
   const storeDeleteTask = useAppStore((s) => s.deleteTask);
   const storeBulkUpdate = useAppStore((s) => s.bulkUpdateTaskStatus);
+  const storeBulkDelete = useAppStore((s) => s.bulkDeleteTasks);
   const cronJobs = useAppStore((s) => s.cronJobs);
   const storeAddCronJob = useAppStore((s) => s.addCronJob);
   const storeUpdateCronJob = useAppStore((s) => s.updateCronJob);
@@ -473,7 +474,7 @@ export default function Tasks() {
             <span className="text-primary font-medium">已选择 {selectedRows.size} 项</span>
             <button onClick={async () => { try { await storeBulkUpdate([...selectedRows], "pending"); setSelectedRows(new Set()); } catch (e: unknown) { toast.error("操作失败: " + (e instanceof Error ? e.message : String(e))); } }} className="px-2 py-1 rounded bg-muted hover:bg-muted/80 text-foreground transition-colors">批量取消</button>
             <button onClick={async () => { try { await storeBulkUpdate([...selectedRows], "running"); setSelectedRows(new Set()); } catch (e: unknown) { toast.error("操作失败: " + (e instanceof Error ? e.message : String(e))); } }} className="px-2 py-1 rounded bg-muted hover:bg-muted/80 text-foreground transition-colors">批量重试</button>
-            <button onClick={() => setSelectedRows(new Set())} className="ml-auto text-muted-foreground hover:text-foreground transition-colors">清除选择</button>
+            <button onClick={async () => { try { await storeBulkDelete([...selectedRows]); setSelectedRows(new Set()); toast.success(`已删除 ${selectedRows.size} 个任务`); } catch (e: unknown) { toast.error("删除失败: " + (e instanceof Error ? e.message : String(e))); } }} className="ml-auto text-destructive hover:text-destructive/80 transition-colors">批量删除</button>
           </div>
         )}
         {/* Content area */}

@@ -1,183 +1,242 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import { getThreadRuntime, streamActivityEvents, streamEvents, type StreamStatus } from "../api";
+import { useCallback, useEffect, useReducer, useRef } from "react";
+import { getThreadRuntime, streamThreadEvents, type StreamStatus } from "../api";
 import type { StreamEvent } from "../api/types";
 
 export type ConnectionPhase =
-  | "idle"            // no active run stream
-  | "connecting"      // establishing main SSE
-  | "streaming"       // receiving main SSE events
-  | "reconnecting";   // withReconnection handling network retry internally
+  | "idle"            // not connected
+  | "connecting"      // establishing SSE
+  | "connected"       // receiving events, may or may not be running
+  | "reconnecting"    // network retry
+  | "error";          // unrecoverable error (shows "reconnect" button)
 
 export interface UseThreadStreamResult {
   phase: ConnectionPhase;
   isRunning: boolean;
   runtimeStatus: StreamStatus | null;
-  /** Trigger a new main SSE connection (called by handleSendMessage or auto-reconnect). */
+  /** Establish persistent SSE connection to the thread. */
   connect: (startSeq?: number) => void;
-  /** Abort the current run stream connection and set phase to idle. */
+  /** Abort SSE connection. */
   disconnect: () => void;
   /** Subscribe to all dispatched stream events. Returns an unsubscribe function. */
   subscribe: (handler: (event: StreamEvent) => void) => () => void;
 }
 
+// ---------------------------------------------------------------------------
+// ThreadConnectionManager — imperative SSE lifecycle, framework-agnostic
+// ---------------------------------------------------------------------------
+
+class ThreadConnectionManager {
+  // --- public state (read-only from outside) ---
+  phase: ConnectionPhase = "idle";
+  isRunning = false;
+  runtimeStatus: StreamStatus | null = null;
+
+  // --- internal ---
+  private threadId = "";
+  private ac: AbortController | null = null;
+  private version = 0; // monotonic; async callbacks check against captured ver
+  private subscribers = new Set<(event: StreamEvent) => void>();
+  private listener: (() => void) | null = null; // React re-render trigger
+  private refreshThreads: (() => Promise<void>) | null = null;
+
+  // --- state-change notification ---
+  onChange(fn: () => void) { this.listener = fn; }
+  setRefreshThreads(fn: () => Promise<void>) { this.refreshThreads = fn; }
+
+  private notify() { this.listener?.(); }
+
+  private setPhase(p: ConnectionPhase) {
+    if (this.phase === p) return;
+    this.phase = p;
+    this.notify();
+  }
+
+  private setRunning(v: boolean) {
+    if (this.isRunning === v) return;
+    this.isRunning = v;
+    this.notify();
+  }
+
+  private setStatus(s: StreamStatus | null) {
+    this.runtimeStatus = s;
+    this.notify();
+  }
+
+  // --- core methods ---
+
+  /** Establish persistent SSE connection. Idempotent — aborts any prior connection. */
+  connect(startSeq = 0) {
+    console.log(`[SSE-DIAG] connect(${startSeq}) called, threadId=${this.threadId}`);
+    this.ac?.abort();
+
+    const ac = new AbortController();
+    this.ac = ac;
+    const ver = ++this.version;
+    this.setPhase("connecting");
+
+    void (async () => {
+      try {
+        this.setPhase("connected");
+        console.log(`[SSE-DIAG] streamThreadEvents starting, after=${startSeq}`);
+        await streamThreadEvents(
+          this.threadId,
+          (event) => {
+            if (this.version !== ver) return;
+            console.log(`[SSE-DIAG] event received: type=${event.type}, subscribers=${this.subscribers.size}`);
+            if (event.type === "status" && event.data) {
+              this.setStatus(event.data as StreamStatus);
+            }
+            if (event.type === "run_start") {
+              this.setRunning(true);
+            }
+            if (event.type === "run_done") {
+              this.setRunning(false);
+              void this.refreshThreads?.();
+            }
+            // error events don't change isRunning — followed by run_done
+            for (const h of this.subscribers) h(event);
+          },
+          ac.signal,
+          startSeq,
+        );
+
+        if (this.version !== ver) return;
+        console.log("[SSE-DIAG] streamThreadEvents returned normally → phase=error");
+        this.setPhase("error");
+      } catch (err) {
+        if (this.version !== ver) return;
+        console.error("[SSE-DIAG] connection error:", err);
+        this.setPhase("error");
+      }
+    })();
+  }
+
+  /** Abort connection and reset state. */
+  disconnect() {
+    this.version++; // invalidate all in-flight async callbacks
+    this.ac?.abort();
+    this.ac = null;
+    this.setRunning(false);
+    this.setPhase("idle");
+  }
+
+  /** runStarted=true path: new run was just posted, connect immediately. */
+  initForNewRun(threadId: string) {
+    this.threadId = threadId;
+    const ver = ++this.version;
+    this.setRunning(true);
+    this.connect(0);
+    void getThreadRuntime(threadId)
+      .then((rt) => { if (this.version === ver && rt) this.setStatus(rt); })
+      .catch(() => {});
+  }
+
+  /** Page refresh / direct URL path: fetch runtime first, then connect. */
+  initFromRuntime(threadId: string) {
+    this.threadId = threadId;
+    const ver = ++this.version;
+
+    void (async () => {
+      try {
+        const runtime = await getThreadRuntime(threadId);
+        if (this.version !== ver) return;
+        if (runtime) this.setStatus(runtime);
+        if (runtime?.state?.state === "active") {
+          this.setRunning(true);
+        }
+        const startSeq = (runtime?.state?.state === "active" && runtime?.run_start_seq != null)
+          ? Math.max(runtime.run_start_seq - 1, 0)
+          : (runtime?.last_seq ?? 0);
+        this.connect(startSeq);
+      } catch (err) {
+        if (this.version !== ver) return;
+        console.error("[useThreadStream] init failed:", err);
+        this.connect(0);
+      }
+    })();
+  }
+
+  subscribe(handler: (event: StreamEvent) => void) {
+    this.subscribers.add(handler);
+    return () => { this.subscribers.delete(handler); };
+  }
+
+  dispose() {
+    this.disconnect();
+    this.subscribers.clear();
+    this.listener = null;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// useThreadStream — thin React wrapper over ThreadConnectionManager
+// ---------------------------------------------------------------------------
+
 /**
- * Unified SSE connection manager for a single thread.
+ * Single persistent SSE connection manager for a thread.
  *
- * Two independent channels:
- * - Run stream (`/runs/events`): temporary, per-run, manages isRunning state
- * - Notification stream (`/activity/events`): permanent, page-lifetime, handles
- *   new_run / background_task_done / run_done events without any grace period
- *
- * This eliminates the grace-period race condition where background tasks completing
- * after 5s would miss the notification window.
+ * One channel: `/api/threads/{id}/events` — survives across runs.
+ * `run_start` → isRunning=true, `run_done` → isRunning=false, connection stays open.
  */
 export function useThreadStream(
   threadId: string,
   deps: { loading: boolean; refreshThreads: () => Promise<void>; runStarted?: boolean },
 ): UseThreadStreamResult {
   const { loading, refreshThreads, runStarted } = deps;
+  const [, rerender] = useReducer((x: number) => x + 1, 0);
+  const mgrRef = useRef<ThreadConnectionManager | null>(null);
+  if (!mgrRef.current) mgrRef.current = new ThreadConnectionManager();
+  const mgr = mgrRef.current;
 
-  const [phase, setPhase] = useState<ConnectionPhase>("idle");
-  const [isRunning, setIsRunning] = useState(false);
-  const [runtimeStatus, setRuntimeStatus] = useState<StreamStatus | null>(null);
+  // Keep refreshThreads callback up-to-date without re-creating the manager
+  mgr.setRefreshThreads(refreshThreads);
 
-  /** AbortController for the run stream only (temporary). */
-  const runAcRef = useRef<AbortController | null>(null);
-  /** AbortController for the notification stream (permanent, page-lifetime). */
-  const notifyAcRef = useRef<AbortController | null>(null);
+  // State changes → re-render; dispose on unmount
+  useEffect(() => {
+    mgr.onChange(rerender);
+    return () => mgr.dispose();
+  }, [mgr]);
 
-  const refreshRef = useRef(refreshThreads);
-  refreshRef.current = refreshThreads;
-
-  /** Event subscribers set — never recreated, always current. */
-  const subscribers = useRef<Set<(event: StreamEvent) => void>>(new Set());
-
-  const subscribe = useCallback((handler: (event: StreamEvent) => void) => {
-    subscribers.current.add(handler);
-    return () => subscribers.current.delete(handler);
-  }, []);
-
-  /** Start the main SSE (run stream). Aborts any existing run stream first. */
-  const connect = useCallback((startSeq = 0) => {
-    runAcRef.current?.abort();
-
-    const ac = new AbortController();
-    runAcRef.current = ac;
-    setPhase("connecting");
-    setIsRunning(true);
-
-    void (async () => {
-      try {
-        setPhase("streaming");
-        await streamEvents(
-          threadId,
-          (event) => {
-            if (event.type === "status" && event.data) {
-              setRuntimeStatus(event.data as StreamStatus);
-            }
-            for (const h of subscribers.current) h(event);
-          },
-          ac.signal,
-          startSeq,
-        );
-
-        if (ac.signal.aborted) return;
-
-        // Run stream ended naturally — mark idle, notification stream stays open
-        setIsRunning(false);
-        setPhase("idle");
-      } catch (err) {
-        if (ac.signal.aborted) return;
-        console.error("[useThreadStream] run stream error:", err);
-        setIsRunning(false);
-        setPhase("idle");
-      }
-    })();
-  }, [threadId]);
-
-  const disconnect = useCallback(() => {
-    runAcRef.current?.abort();
-    runAcRef.current = null;
-    setIsRunning(false);
-    setPhase("idle");
-  }, []);
-
-  // On mount (after loading): check runtime + start permanent notification stream
+  // Connection lifecycle — driven by threadId/loading/runStarted
   useEffect(() => {
     if (loading) return;
-
     if (runStarted) {
-      // Navigated from NewChatPage: postRun was already called there.
-      // Connect IMMEDIATELY from seq=0 — do NOT await getThreadRuntime().
-      // A fast run may finish within the ~200ms network round-trip, making
-      // state !== "active" and causing connect() to be skipped entirely.
-      connect(0);
-      // Non-blocking: still fetch runtime for runtimeStatus display
-      void getThreadRuntime(threadId)
-        .then((rt) => { if (rt) setRuntimeStatus(rt); })
-        .catch(() => {});
+      mgr.initForNewRun(threadId);
     } else {
-      // Page refresh / direct URL: check if a run is already active
-      async function checkRuntime() {
-        try {
-          const runtime = await getThreadRuntime(threadId);
-          if (runtime) setRuntimeStatus(runtime);
-          if (runtime?.state?.state === "active") {
-            connect(runtime.last_seq ?? 0);
-          }
-        } catch (err) {
-          console.error("[useThreadStream] init runtime check failed:", err);
-        }
-      }
-      void checkRuntime();
+      mgr.initFromRuntime(threadId);
     }
+    return () => mgr.disconnect();
+  }, [mgr, threadId, loading]);
 
-    // Permanent notification stream — stays open for the entire page lifetime.
-    // Handles: new_run (background task → continuation run), run_done, activity events.
-    const notifyAc = new AbortController();
-    notifyAcRef.current = notifyAc;
-
-    void streamActivityEvents(
-      threadId,
-      (event) => {
-        // Dispatch to all subscribers (activities panel etc.)
-        for (const h of subscribers.current) h(event);
-
-        if (event.type === "new_run") {
-          // A background task triggered a continuation run — connect run stream
-          void refreshRef.current();
-          connect(0);
-        } else if (event.type === "run_done") {
-          // Continuation run finished — refresh thread list
-          void refreshRef.current();
-        }
-      },
-      notifyAc.signal,
-    );
-
-    return () => {
-      notifyAc.abort();
-      notifyAcRef.current = null;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [threadId, loading]);
-
-  // Abort run stream when threadId changes or component unmounts
+  // Tab visibility: reconnect on error when tab becomes visible
   useEffect(() => {
-    return () => {
-      runAcRef.current?.abort();
+    const h = () => {
+      if (document.visibilityState === "visible" && mgr.phase === "error") {
+        mgr.connect(0);
+      }
     };
-  }, [threadId]);
+    document.addEventListener("visibilitychange", h);
+    return () => document.removeEventListener("visibilitychange", h);
+  }, [mgr]);
 
   // Graceful cleanup on page unload
   useEffect(() => {
-    const cleanup = () => {
-      runAcRef.current?.abort();
-      notifyAcRef.current?.abort();
-    };
-    window.addEventListener("beforeunload", cleanup);
-    return () => window.removeEventListener("beforeunload", cleanup);
-  }, []);
+    const h = () => mgr.disconnect();
+    window.addEventListener("beforeunload", h);
+    return () => window.removeEventListener("beforeunload", h);
+  }, [mgr]);
 
-  return { phase, isRunning, runtimeStatus, connect, disconnect, subscribe };
+  // Stable function references — mgr never changes, so these are created once
+  const connectFn = useCallback((seq?: number) => mgr.connect(seq), [mgr]);
+  const disconnectFn = useCallback(() => mgr.disconnect(), [mgr]);
+  const subscribeFn = useCallback((h: (event: StreamEvent) => void) => mgr.subscribe(h), [mgr]);
+
+  return {
+    phase: mgr.phase,
+    isRunning: mgr.isRunning,
+    runtimeStatus: mgr.runtimeStatus,
+    connect: connectFn,
+    disconnect: disconnectFn,
+    subscribe: subscribeFn,
+  };
 }

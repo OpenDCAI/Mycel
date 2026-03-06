@@ -1,5 +1,6 @@
 import { memo } from "react";
 import type { ToolRendererProps } from "./types";
+import { CodeBlock } from "../shared/CodeBlock";
 
 function parseArgs(args: unknown): { url?: string; query?: string; prompt?: string } {
   if (args && typeof args === "object") return args as { url?: string; query?: string; prompt?: string };
@@ -26,9 +27,10 @@ export default memo(function WebRenderer({ step, expanded }: ToolRendererProps) 
   return (
     <div className="space-y-1.5">
       {step.result && (
-        <pre className="p-3 rounded-lg text-xs overflow-x-auto max-h-[200px] overflow-y-auto font-mono bg-[#fafafa] border border-[#e5e5e5] text-[#525252]">
-          {step.result}
-        </pre>
+        <CodeBlock
+          code={step.result}
+          maxLines={20}
+        />
       )}
     </div>
   );

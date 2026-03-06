@@ -1,4 +1,4 @@
-"""LocalSandbox with ChatSession-managed persistent terminal runtime."""
+"""LocalSessionProvider — in-process session provider for local sandbox."""
 
 from __future__ import annotations
 
@@ -11,8 +11,6 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from sandbox.base import Sandbox
-from sandbox.manager import SandboxManager
 from sandbox.provider import (
     Metrics,
     ProviderCapability,
@@ -21,12 +19,11 @@ from sandbox.provider import (
     SessionInfo,
     build_resource_capabilities,
 )
-from sandbox.thread_context import get_current_thread_id, set_current_thread_id
 
 if TYPE_CHECKING:
-    from sandbox.capability import SandboxCapability
-    from sandbox.interfaces.executor import BaseExecutor
-    from sandbox.interfaces.filesystem import FileSystemBackend
+    from sandbox.lease import SandboxLease
+    from sandbox.runtime import PhysicalTerminalRuntime
+    from sandbox.terminal import AbstractTerminal
 
 
 @dataclass
@@ -159,7 +156,6 @@ class LocalSessionProvider(SandboxProvider):
 
         # @@@local-metrics-macos - use fast macOS-native commands; avoid 'top' which requires sampling delay.
         try:
-            # CPU: sum per-process %cpu and normalize by core count
             r = self.execute(
                 session_id,
                 "sysctl -n hw.ncpu; ps -A -o %cpu | awk 'NR>1{s+=$1} END{printf \"%g\", s}'",
@@ -172,7 +168,6 @@ class LocalSessionProvider(SandboxProvider):
                 if len(lines) > 1 and lines[1]:
                     cpu_percent = float(lines[1]) / max(ncpu, 1)
 
-            # Memory: total from hw.memsize, used = (active + wired + compressor) * page_size
             r = self.execute(session_id, "pagesize; sysctl -n hw.memsize; vm_stat", timeout_ms=5000)
             memory_used_mb, memory_total_mb = None, None
             if r.exit_code == 0:
@@ -190,8 +185,6 @@ class LocalSessionProvider(SandboxProvider):
                 if memory_total_mb is not None:
                     memory_used_mb = (active + wired + compressor) * page_size / 1024 / 1024
 
-            # Disk: df -g for 1G-blocks on macOS. APFS volumes share one container, so
-            # "Used" column shows only this volume's data; use total - available for real aggregate.
             r = self.execute(session_id, "df -g / | awk 'NR==2{print $2 - $4, $2}'", timeout_ms=5000)
             disk_used_gb, disk_total_gb = None, None
             if r.exit_code == 0 and r.output.strip():
@@ -209,68 +202,131 @@ class LocalSessionProvider(SandboxProvider):
         except Exception:
             return None
 
+    def create_runtime(self, terminal: AbstractTerminal, lease: SandboxLease) -> PhysicalTerminalRuntime:
+        from sandbox.providers.local import LocalPersistentShellRuntime
+        return LocalPersistentShellRuntime(terminal, lease)
 
-class LocalSandbox(Sandbox):
-    def __init__(self, workspace_root: str, db_path: Path | None = None) -> None:
-        self._workspace_root = workspace_root
-        target_db = db_path or (Path.home() / ".leon" / "sandbox.db")
-        self._provider = LocalSessionProvider(default_cwd=workspace_root)
-        self._manager = SandboxManager(provider=self._provider, db_path=target_db)
-        self._capability_cache: dict[str, SandboxCapability] = {}
 
-    @property
-    def name(self) -> str:
-        return "local"
+# ── Runtime ──────────────────────────────────────────────────────────────────
 
-    @property
-    def working_dir(self) -> str:
-        return self._workspace_root
+import asyncio  # noqa: E402
+from collections.abc import Callable  # noqa: E402
 
-    @property
-    def env_label(self) -> str:
-        return "Local host"
+from sandbox.interfaces.executor import ExecuteResult  # noqa: E402
+from sandbox.runtime import (  # noqa: E402
+    PhysicalTerminalRuntime,
+    _SubprocessPtySession,
+    _build_export_block,
+    _compute_env_delta,
+    _parse_env_output,
+)
 
-    @property
-    def manager(self) -> SandboxManager:
-        return self._manager
 
-    def _get_capability(self) -> SandboxCapability:
-        thread_id = get_current_thread_id()
-        if not thread_id:
-            raise RuntimeError("No thread_id set. Call set_current_thread_id first.")
-        if thread_id not in self._capability_cache:
-            self._capability_cache[thread_id] = self._manager.get_sandbox(thread_id)
-        return self._capability_cache[thread_id]
+class LocalPersistentShellRuntime(PhysicalTerminalRuntime):
+    """Local persistent shell runtime (for local provider).
 
-    def ensure_session(self, thread_id: str) -> None:
-        set_current_thread_id(thread_id)
-        self._capability_cache.pop(thread_id, None)
-        self._get_capability()
+    Uses a persistent PTY-backed shell session.
+    """
 
-    def pause_thread(self, thread_id: str) -> bool:
-        self._capability_cache.pop(thread_id, None)
-        return self._manager.pause_session(thread_id)
+    def __init__(
+        self,
+        terminal,
+        lease,
+        shell_command: tuple[str, ...] = ("/bin/bash",),
+    ):
+        super().__init__(terminal, lease)
+        self.shell_command = shell_command
+        self._pty_session: _SubprocessPtySession | None = None
+        self._session_lock = asyncio.Lock()
+        self._baseline_env: dict[str, str] | None = None
 
-    def resume_thread(self, thread_id: str) -> bool:
-        self._capability_cache.pop(thread_id, None)
-        return self._manager.resume_session(thread_id)
+    def _ensure_session_sync(self, timeout: float | None) -> _SubprocessPtySession:
+        if self._pty_session and self._pty_session.is_alive():
+            return self._pty_session
 
-    def fs(self) -> FileSystemBackend | None:
-        return None
+        state = self.terminal.get_state()
+        self._pty_session = _SubprocessPtySession(list(self.shell_command), cwd=state.cwd)
+        self._pty_session.start()
+        self._pty_session.run("export PS1=''; stty -echo", timeout)
+        if state.env_delta:
+            exports = _build_export_block(state.env_delta)
+            if exports:
+                self._pty_session.run(exports, timeout)
+        baseline_out, _, _ = self._pty_session.run("env", timeout)
+        self._baseline_env = _parse_env_output(baseline_out)
+        return self._pty_session
 
-    def shell(self) -> BaseExecutor:
-        class LazyLocalExecutor:
-            def __init__(self, sandbox: LocalSandbox):
-                self._sandbox = sandbox
-                self.is_remote = False
-                self.runtime_owns_cwd = True
-                self.shell_name = "local-session"
+    def _execute_once_sync(
+        self,
+        command: str,
+        timeout: float | None,
+        on_stdout_chunk: Callable[[str], None] | None = None,
+    ) -> ExecuteResult:
+        if self.lease.observed_state == "paused":
+            raise RuntimeError(f"Sandbox lease {self.lease.lease_id} is paused. Resume before executing commands.")
 
-            def __getattr__(self, name: str):
-                return getattr(self._sandbox._get_capability().command, name)
+        state = self.terminal.get_state()
+        pty_session = self._ensure_session_sync(timeout)
+        stdout, stderr, exit_code = pty_session.run(command, timeout, on_stdout_chunk=on_stdout_chunk)
 
-        return LazyLocalExecutor(self)  # type: ignore[return-value]
+        # Capture state snapshot after each command so new ChatSession can hydrate from DB.
+        pwd_stdout, _, _ = pty_session.run("pwd", timeout)
+        env_stdout, _, _ = pty_session.run("env", timeout)
+        pwd_lines = [line.strip() for line in pwd_stdout.splitlines() if line.strip()]
+        new_cwd = pwd_lines[-1] if pwd_lines else state.cwd
+        env_map = _parse_env_output(env_stdout)
+        env_delta = _compute_env_delta(env_map, self._baseline_env or {}, state.env_delta)
 
-    def close(self) -> None:
-        for session in self._manager.list_sessions():
-            self._manager.destroy_session(session["thread_id"])
+        if new_cwd:
+            from sandbox.terminal import TerminalState
+
+            self.update_terminal_state(TerminalState(cwd=new_cwd, env_delta=env_delta))
+
+        return ExecuteResult(
+            exit_code=exit_code,
+            stdout=stdout,
+            stderr=stderr,
+            timed_out=False,
+        )
+
+    async def _execute_background_command(
+        self,
+        command: str,
+        timeout: float | None,
+        on_stdout_chunk: Callable[[str], None] | None = None,
+    ) -> ExecuteResult:
+        async with self._session_lock:
+            try:
+                return await asyncio.to_thread(self._execute_once_sync, command, timeout, on_stdout_chunk)
+            except TimeoutError:
+                await self._recover_after_timeout()
+                return ExecuteResult(
+                    exit_code=-1,
+                    stdout="",
+                    stderr=f"Command timed out after {timeout}s",
+                    timed_out=True,
+                )
+            except Exception as e:
+                return ExecuteResult(
+                    exit_code=1,
+                    stdout="",
+                    stderr=f"Error: {e}",
+                )
+
+    async def _recover_after_timeout(self) -> None:
+        """Recover PTY session after a command timeout."""
+        if self._pty_session is None:
+            return
+        recovered = await asyncio.to_thread(self._pty_session.interrupt_and_recover)
+        if not recovered:
+            await asyncio.to_thread(self._pty_session.close)
+            self._pty_session = None
+
+    async def execute(self, command: str, timeout: float | None = None) -> ExecuteResult:
+        """Execute command in local shell."""
+        return await self._execute_background_command(command, timeout=timeout)
+
+    async def close(self) -> None:
+        """Close the shell session."""
+        if self._pty_session:
+            await asyncio.to_thread(self._pty_session.close)

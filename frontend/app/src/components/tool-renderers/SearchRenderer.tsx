@@ -1,9 +1,23 @@
 import { memo } from "react";
 import type { ToolRendererProps } from "./types";
+import { CodeBlock } from "../shared/CodeBlock";
 
 function parseArgs(args: unknown): { pattern?: string; path?: string; glob?: string } {
   if (args && typeof args === "object") return args as { pattern?: string; path?: string; glob?: string };
   return {};
+}
+
+// Parse search result lines to find which display lines are actual matches.
+// Grep output format: "path/to/file:linenum:content" for matches, "path/to/file-linenum-content" for context.
+function parseMatchHighlights(result: string): number[] {
+  const lines = result.split("\n");
+  const highlights: number[] = [];
+  lines.forEach((line, idx) => {
+    if (/^[^:]+:\d+:/.test(line)) {
+      highlights.push(idx + 1); // 1-based display line number
+    }
+  });
+  return highlights;
 }
 
 export default memo(function SearchRenderer({ step, expanded }: ToolRendererProps) {
@@ -22,12 +36,16 @@ export default memo(function SearchRenderer({ step, expanded }: ToolRendererProp
     );
   }
 
+  const highlights = step.result ? parseMatchHighlights(step.result) : [];
+
   return (
     <div className="space-y-1.5">
       {step.result && (
-        <pre className="p-3 rounded-lg text-xs overflow-x-auto max-h-[200px] overflow-y-auto font-mono bg-[#fafafa] border border-[#e5e5e5] text-[#525252]">
-          {step.result}
-        </pre>
+        <CodeBlock
+          code={step.result}
+          maxLines={20}
+          highlights={highlights}
+        />
       )}
     </div>
   );

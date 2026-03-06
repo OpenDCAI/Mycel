@@ -20,7 +20,7 @@ from typing import TYPE_CHECKING
 
 from storage.providers.sqlite.kernel import connect_sqlite
 
-from sandbox.db import DEFAULT_DB_PATH
+from sandbox.config import DEFAULT_DB_PATH
 
 if TYPE_CHECKING:
     pass

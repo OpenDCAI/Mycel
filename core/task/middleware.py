@@ -257,15 +257,24 @@ The agent will work independently and return results when complete.""",
         tool_id = tool_call.get("id", "")
         args = tool_call.get("args", {})
 
-        if tool_name == self.TOOL_TASK:
-            result = await self._handle_task(args, tool_id, parent_thread_id)
-        elif tool_name == self.TOOL_TASK_OUTPUT:
-            result = await self._handle_task_output(args)
-        else:
+        try:
+            if tool_name == self.TOOL_TASK:
+                result = await self._handle_task(args, tool_id, parent_thread_id)
+            elif tool_name == self.TOOL_TASK_OUTPUT:
+                result = await self._handle_task_output(args)
+            else:
+                result = TaskResult(
+                    task_id="",
+                    status="error",
+                    error=f"Unknown tool: {tool_name}",
+                )
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).error(f"[TaskMiddleware] tool_call {tool_name} failed: {e}", exc_info=True)
             result = TaskResult(
-                task_id="",
+                task_id=args.get("TaskId", ""),
                 status="error",
-                error=f"Unknown tool: {tool_name}",
+                error=f"Internal error: {e}",
             )
 
         return self._make_tool_message(result, tool_id)
@@ -350,7 +359,7 @@ The agent will work independently and return results when complete.""",
 
         # Get the final result from the runner's task results (streaming path must populate it).
         if task_id:
-            result = self.runner.get_task_status(task_id)
+            result = await self.runner.get_task_status(task_id)
             return result
 
         # Fallback if task_id was not captured
@@ -363,34 +372,45 @@ The agent will work independently and return results when complete.""",
             turns_used=turns_used,
         )
 
-    def _handle_task_status(self, args: dict) -> TaskResult:
+    async def _handle_task_status(self, args: dict) -> TaskResult:
         """Handle task_status tool call."""
         task_id = args.get("TaskId", "")
-        return self.runner.get_task_status(task_id)
+        return await self.runner.get_task_status(task_id)
 
     async def _handle_task_output(self, args: dict) -> TaskResult:
         """Handle TaskOutput tool call with optional blocking."""
         import asyncio
+        import logging
+        logger = logging.getLogger(__name__)
 
         task_id = args.get("TaskId", "")
         block = args.get("Block", True)
-        timeout_ms = args.get("Timeout", 600000)  # Default 10 minutes
-        timeout_ms = min(timeout_ms, 600000)  # Cap at 10 minutes
+        timeout_ms = args.get("Timeout", 30000)  # Default 30 seconds (was 600000)
+        timeout_ms = min(timeout_ms, 120000)  # Cap at 2 minutes (was 10 minutes)
 
         if not block:
-            return self.runner.get_task_status(task_id)
+            return await self.runner.get_task_status(task_id)
 
         # Blocking wait for task completion
         timeout_sec = timeout_ms / 1000
         start_time = asyncio.get_event_loop().time()
+        poll_count = 0
 
         while True:
-            result = self.runner.get_task_status(task_id)
+            result = await self.runner.get_task_status(task_id)
+            poll_count += 1
+
+            # Log every 10 polls to help diagnose stuck tasks
+            if poll_count % 10 == 0:
+                logger.info(f"[TaskOutput] Polling task {task_id}: status={result.status}, poll_count={poll_count}")
+
             if result.status != "running":
+                logger.info(f"[TaskOutput] Task {task_id} completed with status={result.status} after {poll_count} polls")
                 return result
 
             elapsed = asyncio.get_event_loop().time() - start_time
             if elapsed >= timeout_sec:
+                logger.warning(f"[TaskOutput] Task {task_id} timeout after {elapsed:.1f}s ({poll_count} polls)")
                 return TaskResult(
                     task_id=task_id,
                     status="timeout",

@@ -146,6 +146,16 @@ def delete_task(task_id: str) -> bool:
         return cur.rowcount > 0
 
 
+def bulk_delete_tasks(ids: list[str]) -> int:
+    if not ids:
+        return 0
+    placeholders = ",".join("?" for _ in ids)
+    with _tasks_conn() as conn:
+        cur = conn.execute(f"DELETE FROM panel_tasks WHERE id IN ({placeholders})", ids)
+        conn.commit()
+        return cur.rowcount
+
+
 def bulk_update_task_status(ids: list[str], status: str) -> int:
     if not ids:
         return 0

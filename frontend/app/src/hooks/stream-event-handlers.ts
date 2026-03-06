@@ -1,15 +1,14 @@
-import { flushSync } from "react-dom";
 import {
   type AssistantTurn,
   type ChatEntry,
   type StreamStatus,
-  type StreamEvent,
   type ToolSegment,
 } from "../api";
-import { handleSubagentEvent } from "./subagent-event-handler";
+import type { StreamEvent } from "../api/types";
 import { makeId } from "./utils";
 
 export type UpdateEntries = (updater: (prev: ChatEntry[]) => ChatEntry[]) => void;
+export type { StreamEvent };
 
 type EventPayload = Record<string, unknown>;
 
@@ -35,17 +34,16 @@ function findTurnToolSeg(prev: ChatEntry[], turnId: string, toolCallId: string):
 function handleText(event: StreamEvent, turnId: string, onUpdate: UpdateEntries) {
   const payload = event.data as { content?: string } | string | undefined;
   const chunk = typeof payload === "string" ? payload : payload?.content ?? "";
-  flushSync(() => {
-    updateTurnSegments(onUpdate, turnId, (turn) => {
-      const segs = [...turn.segments];
-      const last = segs[segs.length - 1];
-      if (last?.type === "text") {
-        segs[segs.length - 1] = { type: "text", content: last.content + chunk };
-      } else {
-        segs.push({ type: "text", content: chunk });
-      }
-      return { ...turn, segments: segs };
-    });
+  // No flushSync — let React batch. Sticky scroll observes childList mutations.
+  updateTurnSegments(onUpdate, turnId, (turn) => {
+    const segs = [...turn.segments];
+    const last = segs[segs.length - 1];
+    if (last?.type === "text") {
+      segs[segs.length - 1] = { type: "text", content: last.content + chunk };
+    } else {
+      segs.push({ type: "text", content: chunk });
+    }
+    return { ...turn, segments: segs };
   });
 }
 
@@ -144,26 +142,24 @@ export function processStreamEvent(
   turnId: string,
   onUpdate: UpdateEntries,
   setRuntimeStatus: (v: StreamStatus | null) => void,
-  onActivityEvent?: (event: StreamEvent) => void,
 ): { messageId?: string } {
   const data = (event.data ?? {}) as EventPayload;
   const messageId = typeof data.message_id === "string" ? data.message_id : undefined;
 
+  // Control events — handled by useThreadStream
   if (event.type === "status") {
     if (event.data) setRuntimeStatus(event.data as StreamStatus);
     return { messageId };
   }
+  if (event.type === "run_start" || event.type === "run_done") {
+    return { messageId };
+  }
 
+  // Content events
   const handler = EVENT_HANDLERS[event.type];
   if (handler) {
     handler(event, turnId, onUpdate);
-  } else if (event.type.startsWith("subagent_")) {
-    handleSubagentEvent(event, turnId, onUpdate);
-  } else if (
-    event.type.startsWith("command_") ||
-    event.type.startsWith("background_task_")
-  ) {
-    onActivityEvent?.(event);
+    return { messageId };
   }
 
   return { messageId };

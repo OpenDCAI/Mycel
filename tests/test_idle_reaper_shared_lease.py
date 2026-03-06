@@ -75,6 +75,10 @@ class DummyProvider(SandboxProvider):
     def get_metrics(self, session_id: str):
         return None
 
+    def create_runtime(self, terminal, lease):
+        from sandbox.runtime import RemoteWrappedRuntime
+        return RemoteWrappedRuntime(terminal, lease, self)
+
 
 def _connect(db: Path) -> sqlite3.Connection:
     conn = sqlite3.connect(str(db), timeout=30)

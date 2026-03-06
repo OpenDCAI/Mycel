@@ -11,7 +11,7 @@ from typing import Any
 from backend.web.core.config import SANDBOXES_DIR
 from backend.web.services.sandbox_service import available_sandbox_types, build_provider_from_config_name
 from backend.web.utils.helpers import _build_thread_config_repo as _make_thread_config_repo
-from sandbox.local import LocalSessionProvider
+from sandbox.providers.local import LocalSessionProvider
 from sandbox.provider import RESOURCE_CAPABILITY_KEYS
 from sandbox.resource_snapshot import (
     ensure_resource_snapshot_table,
