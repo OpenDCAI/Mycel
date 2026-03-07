@@ -258,7 +258,12 @@ class TerminalStore:
             db_path=self.db_path,
         )
 
-    def _get_pointer_row(self, thread_id: str) -> sqlite3.Row | None:
+    def _get_pointer_row(self, thread_id: str) -> sqlite3.Row | dict | None:
+        # @@@repository-migration - use repository if available
+        if self._repo:
+            return self._repo.get_terminal_pointer(thread_id)
+
+        # Fallback to inline SQL
         with _connect(self.db_path) as conn:
             conn.row_factory = sqlite3.Row
             return conn.execute(
@@ -352,6 +357,24 @@ class TerminalStore:
 
     def set_active(self, thread_id: str, terminal_id: str) -> None:
         now = datetime.now().isoformat()
+
+        # @@@repository-migration - use repository if available
+        if self._repo:
+            terminal = self._repo.get_terminal(terminal_id)
+            if terminal is None:
+                raise RuntimeError(f"Terminal {terminal_id} not found")
+            if terminal["thread_id"] != thread_id:
+                raise RuntimeError(
+                    f"Terminal {terminal_id} belongs to thread {terminal['thread_id']}, not thread {thread_id}"
+                )
+            pointer = self._repo.get_terminal_pointer(thread_id)
+            if pointer is None:
+                self._repo.upsert_terminal_pointer(thread_id, terminal_id, terminal_id, now)
+            else:
+                self._repo.update_terminal_pointer_active(thread_id, terminal_id, now)
+            return
+
+        # Fallback to inline SQL
         with _connect(self.db_path) as conn:
             conn.row_factory = sqlite3.Row
             row = conn.execute(
