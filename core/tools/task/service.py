@@ -24,24 +24,24 @@ TASK_CREATE_SCHEMA = {
     "parameters": {
         "type": "object",
         "properties": {
-            "Subject": {
+            "subject": {
                 "type": "string",
                 "description": "Brief task title in imperative form",
             },
-            "Description": {
+            "description": {
                 "type": "string",
                 "description": "Detailed description of what needs to be done",
             },
-            "ActiveForm": {
+            "active_form": {
                 "type": "string",
                 "description": "Present continuous form for spinner display",
             },
-            "Metadata": {
+            "metadata": {
                 "type": "object",
                 "description": "Optional metadata to attach to the task",
             },
         },
-        "required": ["Subject", "Description"],
+        "required": ["subject", "description"],
     },
 }
 
@@ -51,12 +51,12 @@ TASK_GET_SCHEMA = {
     "parameters": {
         "type": "object",
         "properties": {
-            "TaskId": {
+            "task_id": {
                 "type": "string",
                 "description": "The task ID to retrieve",
             },
         },
-        "required": ["TaskId"],
+        "required": ["task_id"],
     },
 }
 
@@ -81,47 +81,47 @@ TASK_UPDATE_SCHEMA = {
     "parameters": {
         "type": "object",
         "properties": {
-            "TaskId": {
+            "task_id": {
                 "type": "string",
                 "description": "The task ID to update",
             },
-            "Status": {
+            "status": {
                 "type": "string",
                 "enum": ["pending", "in_progress", "completed", "deleted"],
                 "description": "New status for the task",
             },
-            "Subject": {
+            "subject": {
                 "type": "string",
                 "description": "New subject for the task",
             },
-            "Description": {
+            "description": {
                 "type": "string",
                 "description": "New description for the task",
             },
-            "ActiveForm": {
+            "active_form": {
                 "type": "string",
                 "description": "New activeForm for the task",
             },
-            "Owner": {
+            "owner": {
                 "type": "string",
                 "description": "Assign task to an agent",
             },
-            "AddBlocks": {
+            "add_blocks": {
                 "type": "array",
                 "items": {"type": "string"},
                 "description": "Task IDs that this task blocks",
             },
-            "AddBlockedBy": {
+            "add_blocked_by": {
                 "type": "array",
                 "items": {"type": "string"},
                 "description": "Task IDs that block this task",
             },
-            "Metadata": {
+            "metadata": {
                 "type": "object",
                 "description": "Metadata keys to merge (set key to null to delete)",
             },
         },
-        "required": ["TaskId"],
+        "required": ["task_id"],
     },
 }
 
@@ -163,10 +163,10 @@ class TaskService:
         task_id = self._generate_id()
         task = Task(
             id=task_id,
-            subject=args.get("Subject", ""),
-            description=args.get("Description", ""),
-            active_form=args.get("ActiveForm"),
-            metadata=args.get("Metadata", {}),
+            subject=args.get("subject", ""),
+            description=args.get("description", ""),
+            active_form=args.get("active_form"),
+            metadata=args.get("metadata", {}),
         )
         self._tasks[task_id] = task
         return json.dumps(
@@ -176,7 +176,7 @@ class TaskService:
         )
 
     def _get(self, **args: Any) -> str:
-        task_id = args.get("TaskId", "")
+        task_id = args.get("task_id", "")
         if task_id not in self._tasks:
             return json.dumps({"error": f"Task not found: {task_id}"})
         return json.dumps(self._tasks[task_id].to_detail(), ensure_ascii=False, indent=2)
@@ -201,14 +201,14 @@ class TaskService:
         )
 
     def _update(self, **args: Any) -> str:
-        task_id = args.get("TaskId", "")
+        task_id = args.get("task_id", "")
         if task_id not in self._tasks:
             return json.dumps({"error": f"Task not found: {task_id}"})
 
         task = self._tasks[task_id]
 
         # Handle deletion
-        status = args.get("Status")
+        status = args.get("status")
         if status == "deleted":
             for other_task in self._tasks.values():
                 if task_id in other_task.blocks:
@@ -227,33 +227,33 @@ class TaskService:
                 return json.dumps({"error": f"Invalid status '{status}'. Valid: {valid}"})
 
         # Update fields
-        if "Subject" in args:
-            task.subject = args["Subject"]
-        if "Description" in args:
-            task.description = args["Description"]
-        if "ActiveForm" in args:
-            task.active_form = args["ActiveForm"]
-        if "Owner" in args:
-            task.owner = args["Owner"]
+        if "subject" in args:
+            task.subject = args["subject"]
+        if "description" in args:
+            task.description = args["description"]
+        if "active_form" in args:
+            task.active_form = args["active_form"]
+        if "owner" in args:
+            task.owner = args["owner"]
 
         # Add dependencies
-        if "AddBlocks" in args:
-            for blocked_id in args["AddBlocks"]:
+        if "add_blocks" in args:
+            for blocked_id in args["add_blocks"]:
                 if blocked_id not in task.blocks:
                     task.blocks.append(blocked_id)
                 if blocked_id in self._tasks and task_id not in self._tasks[blocked_id].blocked_by:
                     self._tasks[blocked_id].blocked_by.append(task_id)
 
-        if "AddBlockedBy" in args:
-            for blocker_id in args["AddBlockedBy"]:
+        if "add_blocked_by" in args:
+            for blocker_id in args["add_blocked_by"]:
                 if blocker_id not in task.blocked_by:
                     task.blocked_by.append(blocker_id)
                 if blocker_id in self._tasks and task_id not in self._tasks[blocker_id].blocks:
                     self._tasks[blocker_id].blocks.append(task_id)
 
         # Merge metadata
-        if "Metadata" in args:
-            for key, value in args["Metadata"].items():
+        if "metadata" in args:
+            for key, value in args["metadata"].items():
                 if value is None:
                     task.metadata.pop(key, None)
                 else:
