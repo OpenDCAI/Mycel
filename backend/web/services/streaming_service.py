@@ -312,6 +312,14 @@ def _ensure_thread_handlers(agent: Any, thread_id: str, app: Any) -> None:
     runtime.bind_thread(activity_sink=activity_sink)
     qm.register_wake(thread_id, wake_handler)
 
+    # Subscribe to EventBus so sub-agent events (spawned via AgentService)
+    # flow into this thread's SSE stream.
+    try:
+        from backend.web.event_bus import get_event_bus
+        get_event_bus().subscribe(thread_id, activity_sink)
+    except ImportError:
+        pass
+
 
 # ---------------------------------------------------------------------------
 # Producer: runs agent, writes events to ThreadEventBuffer

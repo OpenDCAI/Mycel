@@ -284,7 +284,9 @@ class AgentService:
         """Create and run an independent LeonAgent, collect its text output."""
         # Lazy import avoids circular dependency (agent.py imports AgentService)
         from core.runtime.agent import create_leon_agent
-        from sandbox.thread_context import set_current_thread_id
+        from sandbox.thread_context import get_current_thread_id, set_current_thread_id
+
+        parent_thread_id = get_current_thread_id()
 
         agent = None
         try:
@@ -293,6 +295,21 @@ class AgentService:
                 workspace_root=self._workspace_root,
                 verbose=False,
             )
+
+            # Wire child agent events to the parent's EventBus subscription
+            # so the parent SSE stream shows sub-agent activity.
+            try:
+                from backend.web.event_bus import get_event_bus
+                event_bus = get_event_bus()
+                emit_fn = event_bus.make_emitter(
+                    thread_id=parent_thread_id,
+                    agent_id=task_id,
+                    agent_name=agent_name,
+                )
+                if hasattr(agent, "runtime") and hasattr(agent.runtime, "bind_thread"):
+                    agent.runtime.bind_thread(activity_sink=emit_fn)
+            except ImportError:
+                pass  # backend not available in standalone core usage
 
             set_current_thread_id(thread_id)
             config = {"configurable": {"thread_id": thread_id}}
