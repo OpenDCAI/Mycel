@@ -166,6 +166,9 @@ class LeonAgent:
             from config.schema import DEFAULT_MODEL as _fallback
 
             active_model = _fallback
+        # Member model override: agent.md's model field takes precedence over global config
+        if hasattr(self, "_agent_override") and self._agent_override and self._agent_override.model:
+            active_model = self._agent_override.model
         resolved_model, model_overrides = self.models_config.resolve_model(active_model)
         self.model_name = resolved_model
         self._model_overrides = model_overrides
@@ -219,7 +222,7 @@ class LeonAgent:
             self.checkpointer = None
 
         # Initialize ToolRegistry and Services (new architecture)
-        self._tool_registry = ToolRegistry()
+        self._tool_registry = ToolRegistry(allowed_tools=self._get_member_allowed_tools())
         self._init_services()
 
         # Build middleware stack
@@ -330,6 +333,15 @@ class LeonAgent:
             return ""
 
         return _placeholder
+
+    def _get_member_allowed_tools(self) -> set[str] | None:
+        """Return allowed tool names from member bundle runtime config, or None (= allow all)."""
+        if not hasattr(self, "_agent_bundle") or not self._agent_bundle:
+            return None
+        tool_entries = {k: v for k, v in self._agent_bundle.runtime.items() if k.startswith("tools:")}
+        if not tool_entries:
+            return None  # No per-tool config → allow all
+        return {k.split(":", 1)[1] for k, v in tool_entries.items() if v.enabled}
 
     def _load_config(
         self,
@@ -905,10 +917,20 @@ class LeonAgent:
 
         # Skills tools
         if self.config.skills.enabled and self.config.skills.paths:
+            # Use member bundle's skills enabled/disabled state if available
+            enabled_skills = self.config.skills.skills
+            if hasattr(self, "_agent_bundle") and self._agent_bundle:
+                bundle_skill_entries = {
+                    k.split(":", 1)[1]: v
+                    for k, v in self._agent_bundle.runtime.items()
+                    if k.startswith("skills:")
+                }
+                if bundle_skill_entries:
+                    enabled_skills = {name: rc.enabled for name, rc in bundle_skill_entries.items()}
             self._skills_service = SkillsService(
                 registry=self._tool_registry,
                 skill_paths=self.config.skills.paths,
-                enabled_skills=self.config.skills.skills,
+                enabled_skills=enabled_skills,
             )
 
         # Task tools (DEFERRED - discoverable via tool_search)
@@ -952,7 +974,14 @@ class LeonAgent:
 
     async def _init_mcp_tools(self) -> list:
         mcp_enabled = self.config.mcp.enabled
-        mcp_servers = self.config.mcp.servers
+
+        # Use member bundle MCP config if available, else fall back to global config
+        if hasattr(self, "_agent_bundle") and self._agent_bundle and self._agent_bundle.mcp:
+            mcp_servers = {
+                name: srv for name, srv in self._agent_bundle.mcp.items() if not srv.disabled
+            }
+        else:
+            mcp_servers = self.config.mcp.servers
 
         if not mcp_enabled or not mcp_servers:
             return []
@@ -1024,9 +1053,19 @@ class LeonAgent:
 
     def _build_system_prompt(self) -> str:
         """Build system prompt based on sandbox mode."""
-        # If agent override is set, use Task Agent's system_prompt
+        # If agent override is set, use member's system_prompt + rules
         if hasattr(self, "_agent_override") and self._agent_override:
-            return self._agent_override.system_prompt
+            prompt = self._agent_override.system_prompt
+            # Append bundle rules (from rules/*.md) to system prompt
+            if hasattr(self, "_agent_bundle") and self._agent_bundle and self._agent_bundle.rules:
+                rule_parts = [
+                    f"## {r['name']}\n{r['content']}"
+                    for r in self._agent_bundle.rules
+                    if r.get("content", "").strip()
+                ]
+                if rule_parts:
+                    prompt += "\n\n---\n\n" + "\n\n".join(rule_parts)
+            return prompt
 
         prompt = self._build_base_prompt()
         prompt += self._build_common_prompt_sections()
