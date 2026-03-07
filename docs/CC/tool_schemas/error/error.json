@@ -1,0 +1,256 @@
+{
+  "meta": {
+    "description": "Claude Code tool 调用错误返回值大全",
+    "collected_at": "2026-03-07",
+    "error_categories": [
+      "schema_validation",
+      "execution"
+    ]
+  },
+  "schema_validation_errors": {
+    "description": "InputValidationError - JSON Schema 校验失败，工具根本不会执行",
+    "format": "<tool_use_error>InputValidationError: ...</tool_use_error>",
+    "cases": {
+      "missing_single_required_param": {
+        "description": "缺少单个必需参数",
+        "example_tool": "Read",
+        "input": { "file_path": "(missing)" },
+        "raw_error": "InputValidationError: Read failed due to the following issue:\nThe required parameter `file_path` is missing",
+        "pattern": "The required parameter `{param_name}` is missing"
+      },
+      "missing_multiple_required_params": {
+        "description": "缺少多个必需参数，全部列出",
+        "examples": [
+          {
+            "tool": "Write",
+            "input": {},
+            "raw_error": "InputValidationError: Write failed due to the following issues:\nThe required parameter `file_path` is missing\nThe required parameter `content` is missing"
+          },
+          {
+            "tool": "Edit",
+            "input": {},
+            "raw_error": "InputValidationError: Edit failed due to the following issues:\nThe required parameter `file_path` is missing\nThe required parameter `old_string` is missing\nThe required parameter `new_string` is missing"
+          },
+          {
+            "tool": "Agent",
+            "input": {},
+            "raw_error": "InputValidationError: Agent failed due to the following issues:\nThe required parameter `description` is missing\nThe required parameter `prompt` is missing"
+          },
+          {
+            "tool": "WebFetch",
+            "input": {},
+            "raw_error": "InputValidationError: WebFetch failed due to the following issues:\nThe required parameter `url` is missing\nThe required parameter `prompt` is missing"
+          },
+          {
+            "tool": "NotebookEdit",
+            "input": {},
+            "raw_error": "InputValidationError: NotebookEdit failed due to the following issues:\nThe required parameter `notebook_path` is missing\nThe required parameter `new_source` is missing"
+          },
+          {
+            "tool": "TaskCreate",
+            "input": {},
+            "raw_error": "InputValidationError: TaskCreate failed due to the following issues:\nThe required parameter `subject` is missing\nThe required parameter `description` is missing"
+          }
+        ],
+        "pattern": "{ToolName} failed due to the following issues:\nThe required parameter `{param1}` is missing\nThe required parameter `{param2}` is missing\n..."
+      },
+      "wrong_type_string_for_number": {
+        "description": "传入 string，期望 number",
+        "examples": [
+          {
+            "tool": "Read",
+            "param": "limit",
+            "input": { "file_path": "/etc/hosts", "limit": "not_a_number" },
+            "raw_error": "InputValidationError: Read failed due to the following issue:\nThe parameter `limit` type is expected as `number` but provided as `string`"
+          },
+          {
+            "tool": "Bash",
+            "param": "timeout",
+            "input": { "command": "echo test", "timeout": "not_a_number" },
+            "raw_error": "InputValidationError: Bash failed due to the following issue:\nThe parameter `timeout` type is expected as `number` but provided as `string`"
+          },
+          {
+            "tool": "Grep",
+            "param": "head_limit",
+            "input": { "pattern": "test", "head_limit": "not_a_number" },
+            "raw_error": "InputValidationError: Grep failed due to the following issue:\nThe parameter `head_limit` type is expected as `number` but provided as `string`"
+          }
+        ],
+        "pattern": "The parameter `{param_name}` type is expected as `number` but provided as `string`"
+      },
+      "wrong_type_string_for_boolean": {
+        "description": "传入 string，期望 boolean",
+        "examples": [
+          {
+            "tool": "Bash",
+            "param": "run_in_background",
+            "input": { "command": "echo test", "run_in_background": "not_a_bool" },
+            "raw_error": "InputValidationError: Bash failed due to the following issue:\nThe parameter `run_in_background` type is expected as `boolean` but provided as `string`"
+          }
+        ],
+        "pattern": "The parameter `{param_name}` type is expected as `boolean` but provided as `string`"
+      },
+      "invalid_enum_value_simple": {
+        "description": "枚举值无效（简单枚举）- 返回 JSON 结构",
+        "examples": [
+          {
+            "tool": "Grep",
+            "param": "output_mode",
+            "input": { "pattern": "test", "output_mode": "invalid_mode" },
+            "raw_error": "InputValidationError: [\n  {\n    \"code\": \"invalid_value\",\n    \"values\": [\"content\", \"files_with_matches\", \"count\"],\n    \"path\": [\"output_mode\"],\n    \"message\": \"Invalid option: expected one of \\\"content\\\"|\\\"files_with_matches\\\"|\\\"count\\\"\"\n  }\n]"
+          },
+          {
+            "tool": "NotebookEdit",
+            "param": "edit_mode",
+            "input": { "notebook_path": "/test.ipynb", "new_source": "code", "edit_mode": "invalid_mode" },
+            "raw_error": "InputValidationError: [\n  {\n    \"code\": \"invalid_value\",\n    \"values\": [\"replace\", \"insert\", \"delete\"],\n    \"path\": [\"edit_mode\"],\n    \"message\": \"Invalid option: expected one of \\\"replace\\\"|\\\"insert\\\"|\\\"delete\\\"\"\n  }\n]"
+          },
+          {
+            "tool": "Agent",
+            "param": "mode",
+            "input": { "description": "test", "prompt": "test", "mode": "invalid_mode" },
+            "raw_error": "InputValidationError: [\n  {\n    \"code\": \"invalid_value\",\n    \"values\": [\"acceptEdits\", \"bypassPermissions\", \"default\", \"dontAsk\", \"plan\"],\n    \"path\": [\"mode\"],\n    \"message\": \"Invalid option: expected one of \\\"acceptEdits\\\"|\\\"bypassPermissions\\\"|\\\"default\\\"|\\\"dontAsk\\\"|\\\"plan\\\"\"\n  }\n]"
+          },
+          {
+            "tool": "Agent",
+            "param": "isolation",
+            "input": { "description": "test", "prompt": "test", "isolation": "invalid" },
+            "raw_error": "InputValidationError: [\n  {\n    \"code\": \"invalid_value\",\n    \"values\": [\"worktree\"],\n    \"path\": [\"isolation\"],\n    \"message\": \"Invalid input: expected \\\"worktree\\\"\"\n  }\n]"
+          }
+        ],
+        "json_structure": {
+          "code": "invalid_value",
+          "values": ["...allowed enum values..."],
+          "path": ["param_name"],
+          "message": "Invalid option: expected one of ..."
+        }
+      },
+      "invalid_enum_value_union": {
+        "description": "枚举值无效（union 类型）- 展示所有 union 分支的校验错误",
+        "examples": [
+          {
+            "tool": "TaskUpdate",
+            "param": "status",
+            "input": { "taskId": "abc", "status": "invalid_status" },
+            "raw_error": "InputValidationError: [\n  {\n    \"code\": \"invalid_union\",\n    \"errors\": [\n      [\n        {\n          \"code\": \"invalid_value\",\n          \"values\": [\"pending\", \"in_progress\", \"completed\"],\n          \"path\": [],\n          \"message\": \"Invalid option: expected one of \\\"pending\\\"|\\\"in_progress\\\"|\\\"completed\\\"\"\n        }\n      ],\n      [\n        {\n          \"code\": \"invalid_value\",\n          \"values\": [\"deleted\"],\n          \"path\": [],\n          \"message\": \"Invalid input: expected \\\"deleted\\\"\"\n        }\n      ]\n    ],\n    \"path\": [\"status\"],\n    \"message\": \"Invalid input\"\n  }\n]"
+          }
+        ],
+        "json_structure": {
+          "code": "invalid_union",
+          "errors": [["...branch 1 errors..."], ["...branch 2 errors..."]],
+          "path": ["param_name"],
+          "message": "Invalid input"
+        }
+      }
+    }
+  },
+  "execution_errors": {
+    "description": "工具通过了 schema 校验但执行失败 - 包装在 <tool_use_error> 或直接返回文本",
+    "cases": {
+      "file_not_found_read": {
+        "description": "Read - 文件不存在（绝对路径 / 相对路径均触发）",
+        "tool": "Read",
+        "input": { "file_path": "/nonexistent/file.txt" },
+        "raw_error": "File does not exist. Note: your current working directory is /Users/apple/worktrees/leon--feat-agent-tool-refactor.",
+        "note": "相对路径会被解析为 cwd 相对路径，依然可能触发此错误"
+      },
+      "file_not_found_edit": {
+        "description": "Edit - 文件不存在",
+        "tool": "Edit",
+        "input": { "file_path": "/nonexistent/file.txt", "old_string": "foo", "new_string": "bar" },
+        "raw_error": "File does not exist. Note: your current working directory is /Users/apple/worktrees/leon--feat-agent-tool-refactor.",
+        "format": "<tool_use_error>File does not exist. ...</tool_use_error>"
+      },
+      "directory_not_found_glob": {
+        "description": "Glob - 搜索目录不存在",
+        "tool": "Glob",
+        "input": { "pattern": "**/*.py", "path": "nonexistent/path" },
+        "raw_error": "Directory does not exist: nonexistent/path. Note: your current working directory is /Users/apple/worktrees/leon--feat-agent-tool-refactor.",
+        "format": "<tool_use_error>Directory does not exist: ...</tool_use_error>"
+      },
+      "edit_string_not_found": {
+        "description": "Edit - old_string 在文件中不存在",
+        "tool": "Edit",
+        "input": { "file_path": "/etc/hosts", "old_string": "some_string_not_present_xyz_987", "new_string": "bar" },
+        "raw_error": "String to replace not found in file.\nString: some_string_not_present_xyz_987",
+        "format": "<tool_use_error>String to replace not found in file.\nString: ...</tool_use_error>"
+      },
+      "edit_multiple_matches": {
+        "description": "Edit - old_string 匹配多处，但 replace_all=false",
+        "tool": "Edit",
+        "input": { "file_path": "/etc/hosts", "old_string": "localhost", "new_string": "bar", "replace_all": false },
+        "raw_error": "Found 4 matches of the string to replace, but replace_all is false. To replace all occurrences, set replace_all to true. To replace only one occurrence, please provide more context to uniquely identify the instance.\nString: localhost",
+        "format": "<tool_use_error>Found {N} matches of the string to replace, but replace_all is false. ...</tool_use_error>"
+      },
+      "notebook_edit_missing_cell_type": {
+        "description": "NotebookEdit - edit_mode=insert 时缺少 cell_type（逻辑校验，非 schema 校验）",
+        "tool": "NotebookEdit",
+        "input": { "notebook_path": "/test.ipynb", "new_source": "code", "edit_mode": "insert" },
+        "raw_error": "Cell type is required when using edit_mode=insert.",
+        "format": "<tool_use_error>Cell type is required when using edit_mode=insert.</tool_use_error>",
+        "note": "这是工具内部的业务逻辑校验，不是 JSON Schema 校验，所以不以 InputValidationError 开头"
+      },
+      "task_not_found": {
+        "description": "TaskUpdate / TaskGet - 任务 ID 不存在",
+        "examples": [
+          {
+            "tool": "TaskUpdate",
+            "input": { "taskId": "nonexistent-abc-123", "status": "completed" },
+            "raw_output": "Task not found",
+            "note": "返回普通文本，不是 error 标签"
+          },
+          {
+            "tool": "TaskGet",
+            "input": { "taskId": "nonexistent-abc-123" },
+            "raw_output": "Task not found",
+            "note": "返回普通文本，不是 error 标签"
+          }
+        ]
+      },
+      "timeout_out_of_range_ignored": {
+        "description": "Bash timeout 超过最大值 600000 - 不报错，直接执行（schema 未校验范围上限）",
+        "tool": "Bash",
+        "input": { "command": "echo test", "timeout": 999999999 },
+        "raw_output": "test",
+        "note": "JSON Schema 中标注 maximum:600000，但实际未校验，工具照常执行"
+      },
+      "grep_invalid_type_silently_ignored": {
+        "description": "Grep type 参数传入无效文件类型 - 不报错，返回空结果",
+        "tool": "Grep",
+        "input": { "pattern": "test", "type": "invalid_type" },
+        "raw_output": "No files found",
+        "note": "非枚举约束的字符串参数，非法值被静默忽略"
+      },
+      "read_negative_offset": {
+        "description": "Read offset=-1 - 不报错，从第 -1 行开始（等效于从头）",
+        "tool": "Read",
+        "input": { "file_path": "/etc/hosts", "offset": -1 },
+        "raw_output": "正常返回文件内容，行号从 -1 开始",
+        "note": "负数 offset 被接受，行号从负数开始显示"
+      }
+    }
+  },
+  "summary": {
+    "error_wrapper_tags": {
+      "<tool_use_error>": "schema 校验失败 OR 工具执行失败（抛出异常）",
+      "plain_text": "工具执行完成但结果表示失败（如 'Task not found'、'No files found'）"
+    },
+    "validation_error_formats": {
+      "simple_text": "缺少参数、类型错误 → 人类可读的文本描述",
+      "json_array": "枚举错误、union 错误 → JSON 数组，每项含 code/values/path/message"
+    },
+    "error_codes_observed": {
+      "invalid_value": "枚举值不在允许列表中",
+      "invalid_union": "union 类型所有分支均校验失败"
+    },
+    "key_observations": [
+      "所有 schema 校验错误都以 InputValidationError 开头",
+      "缺少参数 / 类型错误 → 简单文本格式",
+      "枚举/union 错误 → JSON 数组格式（可能是不同的校验库）",
+      "工具内部逻辑错误（Edit 找不到字符串等）→ <tool_use_error> 但不以 InputValidationError 开头",
+      "某些软性失败（Task not found）→ 普通文本，没有 error 标签",
+      "JSON Schema 的 minimum/maximum 数值约束未被强制校验（timeout=999999999 照常执行）",
+      "非枚举字符串参数的非法值会被静默忽略（Grep type=invalid_type）"
+    ]
+  }
+}

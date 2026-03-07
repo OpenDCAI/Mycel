@@ -1,0 +1,20 @@
+{
+  "name": "Write",
+  "description": "Writes a file to the local filesystem. This tool will overwrite the existing file if there is one at the provided path. Prefer the Edit tool for modifying existing files — only use this to create new files or for complete rewrites.",
+  "parameters": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "content": {
+        "description": "The content to write to the file",
+        "type": "string"
+      },
+      "file_path": {
+        "description": "The absolute path to the file to write (must be absolute, not relative)",
+        "type": "string"
+      }
+    },
+    "required": ["file_path", "content"],
+    "type": "object"
+  }
+}

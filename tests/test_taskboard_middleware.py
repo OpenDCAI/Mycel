@@ -16,7 +16,7 @@ def _use_tmp_db(tmp_path, monkeypatch):
 
 @pytest.fixture()
 def middleware():
-    from core.taskboard.middleware import TaskBoardMiddleware
+    from backend.taskboard.middleware import TaskBoardMiddleware
 
     mw = TaskBoardMiddleware(thread_id="test-thread-001")
     return mw

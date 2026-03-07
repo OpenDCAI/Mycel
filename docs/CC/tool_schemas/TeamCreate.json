@@ -1,0 +1,24 @@
+{
+  "name": "TeamCreate",
+  "description": "Create a new team to coordinate multiple agents working on a project. Teams have a 1:1 correspondence with task lists (Team = TaskList). Creates a team file at ~/.claude/teams/{team-name}.json and a corresponding task list directory at ~/.claude/tasks/{team-name}/.",
+  "parameters": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "agent_type": {
+        "description": "Type/role of the team lead (e.g., \"researcher\", \"test-runner\").",
+        "type": "string"
+      },
+      "description": {
+        "description": "Team description/purpose.",
+        "type": "string"
+      },
+      "team_name": {
+        "description": "Name for the new team to create.",
+        "type": "string"
+      }
+    },
+    "required": ["team_name"],
+    "type": "object"
+  }
+}

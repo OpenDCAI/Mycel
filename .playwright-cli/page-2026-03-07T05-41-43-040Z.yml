@@ -1,0 +1,904 @@
+- generic:
+  - generic:
+    - generic:
+      - generic:
+        - complementary:
+          - generic:
+            - generic:
+              - generic: L
+          - generic:
+            - button:
+              - img
+          - navigation:
+            - link:
+              - /url: /chat
+              - generic:
+                - img
+              - generic: 消息
+            - link:
+              - /url: /members
+              - generic:
+                - img
+              - generic: 成员
+            - link:
+              - /url: /tasks
+              - generic:
+                - img
+              - generic: 任务
+            - link:
+              - /url: /library
+              - generic:
+                - img
+              - generic: 能力库
+          - generic:
+            - generic:
+              - generic:
+                - generic: YZ
+            - link:
+              - /url: /settings
+              - generic:
+                - img
+              - generic: 设置
+        - generic:
+          - generic:
+            - img
+      - main:
+        - generic:
+          - generic:
+            - generic:
+              - generic:
+                - generic: 消息
+              - generic:
+                - button:
+                  - img
+                  - generic: 搜索对话...
+              - generic:
+                - generic:
+                  - generic: 对话
+                  - generic: "87"
+                - generic:
+                  - generic:
+                    - generic: 今天
+                    - generic:
+                      - link:
+                        - /url: /chat/run-cd415faa
+                        - generic:
+                          - generic: Leon
+                        - generic:
+                          - generic: 调用 Read 工具，file_path 参数传一个不存在的文件 /tmp/no
+                          - generic: 2小时前
+                  - generic:
+                    - generic:
+                      - link:
+                        - /url: /chat/run-2ebaee4a
+                        - generic:
+                          - generic: Leon
+                        - generic:
+                          - generic: 用 Read 工具读取 /Users/apple/worktrees/leon-
+                          - generic: 2小时前
+                  - generic:
+                    - generic:
+                      - link:
+                        - /url: /chat/run-710b3bef
+                        - generic:
+                          - generic: Leon
+                        - generic:
+                          - generic: 请调用 tool_search 工具搜索 "task"，看看有哪些任务相关工具可
+                          - generic: 2小时前
+                  - generic:
+                    - generic:
+                      - link:
+                        - /url: /chat/run-7ceacc0a
+                        - generic:
+                          - generic: Leon
+                        - generic:
+                          - generic: 直接调用名为 Bash 的工具，参数 command="echo hello"
+                          - generic: 2小时前
+                  - generic:
+                    - generic:
+                      - link:
+                        - /url: /chat/run-b512e2d0
+                        - generic:
+                          - generic: Leon
+                        - generic:
+                          - generic: 直接调用名为 Bash 的工具，参数 command="echo hello"
+                          - generic: 2小时前
+                  - generic:
+                    - generic:
+                      - link:
+                        - /url: /chat/run-04e71ff8
+                        - generic:
+                          - generic: Leon
+                        - generic:
+                          - generic: "用 Bash 工具执行: echo \"hello\""
+                          - generic: 2小时前
+                  - generic:
+                    - generic:
+                      - link:
+                        - /url: /chat/run-1fc3edc5
+                        - generic:
+                          - generic: Leon
+                        - generic:
+                          - generic: 列出当前目录的文件
+                          - generic: 2小时前
+                  - generic:
+                    - generic:
+                      - link:
+                        - /url: /chat/run-3aed4f1a
+                        - generic:
+                          - generic: Leon
+                        - generic:
+                          - generic: 你好，用一句话介绍你自己
+                          - generic: 2小时前
+                  - generic:
+                    - generic:
+                      - link:
+                        - /url: /chat/run-ece9f75a
+                        - generic:
+                          - generic: Leon
+                        - generic:
+                          - generic: gpt-4o
+                          - generic: 2小时前
+                  - generic:
+                    - generic:
+                      - link:
+                        - /url: /chat/run-6af630f7
+                        - generic:
+                          - generic: Leon
+                        - generic:
+                          - generic: 你好，用一句话介绍你自己
+                          - generic: 2小时前
+                  - generic:
+                    - generic:
+                      - link:
+                        - /url: /chat/92a6b503-d3a7-461a-b4f0-2acb0664c18b
+                        - generic:
+                          - generic: Leon
+                        - generic:
+                          - generic: 用 Read 工具读取 /tmp/leon-backend-8003.log 的
+                          - generic: 2小时前
+                  - generic:
+                    - generic:
+                      - link:
+                        - /url: /chat/6b573510-40f6-48dc-b192-4583f8975aec
+                        - generic:
+                          - generic: Leon
+                        - generic:
+                          - generic: hi
+                          - generic: 3小时前
+                  - generic:
+                    - generic: 昨天
+                    - generic:
+                      - link:
+                        - /url: /chat/8df5dafe-585f-4896-8665-ad66dea1b6cd
+                        - generic:
+                          - generic: Leon
+                        - generic:
+                          - generic: hello
+                          - generic: 23小时前
+                  - generic:
+                    - generic:
+                      - link:
+                        - /url: /chat/d7938401-e0aa-4eea-b823-9b1fb381f945
+                        - generic:
+                          - generic: Leon
+                        - generic:
+                          - generic: hello
+                          - generic: 昨天
+                  - generic:
+                    - generic:
+                      - link:
+                        - /url: /chat/db0d830b-130d-448c-b6d4-ec0bce0e7aa1
+                        - generic:
+                          - generic: Leon
+                        - generic:
+                          - generic: 写个 1000 字小说
+                          - generic: 昨天
+                  - generic:
+                    - generic:
+                      - link:
+                        - /url: /chat/e6d31914-20bc-4676-a4b9-f493d0b09588
+                        - generic:
+                          - generic: Leon
+                        - generic:
+                          - generic: hello
+                          - generic: 昨天
+                  - generic:
+                    - generic:
+                      - link:
+                        - /url: /chat/e22a1b33-bb40-4007-8dc1-79939b3c627e
+                        - generic:
+                          - generic: Leon
+                        - generic:
+                          - generic: 测试你的所有 tool 是否可用
+                          - generic: 昨天
+                  - generic:
+                    - generic:
+                      - link:
+                        - /url: /chat/00339c19-8c3d-4188-9acf-a6728b00caf1
+                        - generic:
+                          - generic: Leon
+                        - generic:
+                          - generic: 写个 1000 字小说
+                          - generic: 昨天
+                  - generic:
+                    - generic:
+                      - link:
+                        - /url: /chat/3cb6bea0-994d-4791-a825-f719d24a4570
+                        - generic:
+                          - generic: Leon
+                        - generic:
+                          - generic: 写个 1000 字小说
+                          - generic: 昨天
+                  - generic:
+                    - generic:
+                      - link:
+                        - /url: /chat/2cd4a700-458e-4d0c-b707-cf51ca1ab22c
+                        - generic:
+                          - generic: Leon
+                        - generic:
+                          - generic: 测试你的所有 tool 是否可用
+                          - generic: 昨天
+                  - generic:
+                    - generic:
+                      - link:
+                        - /url: /chat/2ac23a83-0084-40f5-922b-7895a87ed76b
+                        - generic:
+                          - generic: Leon
+                        - generic:
+                          - generic: 写个 400 字小说
+                          - generic: 昨天
+                  - generic:
+                    - generic:
+                      - link:
+                        - /url: /chat/8b1f2671-aa58-4470-852d-4de859f2f233
+                        - generic:
+                          - generic: Leon
+                        - generic:
+                          - generic: 写一篇400字的科幻小说
+                          - generic: 昨天
+                  - generic:
+                    - generic: 更早
+                    - generic:
+                      - link:
+                        - /url: /chat/88f5f78d-9d96-4083-aa66-7321cad8e302
+                        - generic:
+                          - generic: Leon
+                        - generic:
+                          - generic: 写一篇400字的科幻小说
+                          - generic: 1天前
+                  - generic:
+                    - generic:
+                      - link:
+                        - /url: /chat/783a758e-8453-4f46-8797-099302aeaa14
+                        - generic:
+                          - generic: Leon
+                        - generic:
+                          - generic: 写一篇400字的科幻小说
+                          - generic: 1天前
+                  - generic:
+                    - generic:
+                      - link:
+                        - /url: /chat/90169500-34f7-4ebe-9e5c-970d39f0e384
+                        - generic:
+                          - generic: Leon
+                        - generic:
+                          - generic: 写一篇400字的科幻小说
+                          - generic: 1天前
+                  - generic:
+                    - generic:
+                      - link:
+                        - /url: /chat/c69828a4-80ce-4ddf-9f7e-483280af9116
+                        - generic:
+                          - generic: Leon
+                        - generic:
+                          - generic: say hi
+                          - generic: 1天前
+                  - generic:
+                    - generic:
+                      - link:
+                        - /url: /chat/1c78363f-544f-4a22-ae1b-bfb5f9c181b8
+                        - generic:
+                          - generic: Leon
+                        - generic:
+                          - generic: hello,写个 400 字小说
+                          - generic: 1天前
+                  - generic:
+                    - generic:
+                      - link:
+                        - /url: /chat/52a2703a-8441-4ac2-9599-15bd182dbf5b
+                        - generic:
+                          - generic: Leon
+                        - generic:
+                          - generic: hello,写个 400 字小说
+                          - generic: 1天前
+                  - generic:
+                    - generic:
+                      - link:
+                        - /url: /chat/837f46b7-5f9a-4326-8e3e-c13f23af3478
+                        - generic:
+                          - generic: Leon
+                        - generic:
+                          - generic: say hi
+                          - generic: 1天前
+                  - generic:
+                    - generic:
+                      - link:
+                        - /url: /chat/3f4f106d-be32-4ad3-8f6f-ae22d1035c24
+                        - generic:
+                          - generic: Leon
+                        - generic:
+                          - generic: hello
+                          - generic: 1天前
+                  - generic:
+                    - generic:
+                      - link:
+                        - /url: /chat/a8b4b0ed-1f1e-474b-a626-1e945f449eed
+                        - generic:
+                          - generic: Leon
+                        - generic:
+                          - generic: hello
+                          - generic: 1天前
+                  - generic:
+                    - generic:
+                      - link:
+                        - /url: /chat/1dcf75d6-aae1-4fa8-aac9-2cdb7d81b589
+                        - generic:
+                          - generic: Leon
+                        - generic:
+                          - generic: say hi
+                          - generic: 1天前
+                  - generic:
+                    - generic:
+                      - link:
+                        - /url: /chat/eaa9972d-a4f3-4de3-8589-a5c430c2e265
+                        - generic:
+                          - generic: Leon
+                        - generic:
+                          - generic: hello
+                          - generic: 1天前
+                  - generic:
+                    - generic:
+                      - link:
+                        - /url: /chat/db97aeb7-a493-422d-9a54-bb128a60ff9e
+                        - generic:
+                          - generic: Leon
+                        - generic:
+                          - generic: 请用 markdown 格式回复：1个标题、1段文字、1个代码块、1个列表
+                          - generic: 1天前
+                  - generic:
+                    - generic:
+                      - link:
+                        - /url: /chat/68d29b6f-4a30-46aa-b545-52c2ae07fc3f
+                        - generic:
+                          - generic: Leon
+                        - generic:
+                          - generic: say hi
+                          - generic: 1天前
+                  - generic:
+                    - generic:
+                      - link:
+                        - /url: /chat/9558c3e7-9aff-4041-b81f-486ac98e8980
+                        - generic:
+                          - generic: Leon
+                        - generic:
+                          - generic: say hello in one word
+                          - generic: 1天前
+                  - generic:
+                    - generic:
+                      - link:
+                        - /url: /chat/69494d9f-7b05-4dab-8f58-9c8c66ab1fea
+                        - generic:
+                          - generic: Leon
+                        - generic:
+                          - generic: hello
+                          - generic: 1天前
+                  - generic:
+                    - generic:
+                      - link:
+                        - /url: /chat/862418d9-fb65-46d6-a2ac-c32de5bfd86e
+                        - generic:
+                          - generic: Leon
+                        - generic:
+                          - generic: say hello in one word
+                          - generic: 1天前
+                  - generic:
+                    - generic:
+                      - link:
+                        - /url: /chat/133c2d29-ae55-401e-93e1-d4df6c570355
+                        - generic:
+                          - generic: Leon
+                        - generic:
+                          - generic: 测试下你的异步 bash 和异步 task
+                          - generic: 1天前
+                  - generic:
+                    - generic:
+                      - link:
+                        - /url: /chat/0b690bce-3afc-434a-8296-2bbfd9af7d8e
+                        - generic:
+                          - generic: Leon
+                        - generic:
+                          - generic: 测试下你的异步 bash 和异步 task
+                          - generic: 1天前
+                  - generic:
+                    - generic:
+                      - link:
+                        - /url: /chat/507f84c9-2e1c-4d0a-945e-eece7ccf612e
+                        - generic:
+                          - generic: Leon
+                        - generic:
+                          - generic: 测试你的所有 tool 是否可用
+                          - generic: 1天前
+                  - generic:
+                    - generic:
+                      - link:
+                        - /url: /chat/16b04f6d-c4ce-4761-8acc-890e415df2ea
+                        - generic:
+                          - generic: Leon
+                        - generic:
+                          - generic: 请用 read_file 读取 /tmp/test.txt，然后用 write_
+                          - generic: 1天前
+                  - generic:
+                    - generic:
+                      - link:
+                        - /url: /chat/50c372ce-f492-45d9-b774-bf55a31da69d
+                        - generic:
+                          - generic: Leon
+                        - generic:
+                          - generic: hello
+                          - generic: 1天前
+                  - generic:
+                    - generic:
+                      - link:
+                        - /url: /chat/e9e5fec3-8b70-4a16-b5a7-21fe2166b688
+                        - generic:
+                          - generic: Leon
+                        - generic:
+                          - generic: 请依次执行以下操作：1) 用 read_file 读取 /tmp/test_p4
+                          - generic: 1天前
+                  - generic:
+                    - generic:
+                      - link:
+                        - /url: /chat/c12c8c9f-4abb-4ae2-8fe3-80b8c3eab984
+                        - generic:
+                          - generic: Leon
+                        - generic:
+                          - generic: 请测试你的所有 tool 是否可用，每个 tool 都调用一次验证功能正常
+                          - generic: 1天前
+                  - generic:
+                    - generic:
+                      - link:
+                        - /url: /chat/4213ec4e-689c-4706-919c-f5702cc665d7
+                        - generic:
+                          - generic: Leon
+                        - generic:
+                          - generic: Run 'echo hello && sleep 2 && echo world
+                          - generic: 2天前
+                  - generic:
+                    - generic:
+                      - link:
+                        - /url: /chat/dc4f4036-b034-4d0d-8355-a862fc42dbd1
+                        - generic:
+                          - generic: Leon
+                        - generic:
+                          - generic: 请用 Agent 工具帮我分析一下当前项目的结构
+                          - generic: 2天前
+                  - generic:
+                    - generic:
+                      - link:
+                        - /url: /chat/ce02a329-a04e-4138-912b-0b3f77a2f7d6
+                        - generic:
+                          - generic: Leon
+                        - generic:
+                          - generic: 测试你的所有 tool 是否可用
+                          - generic: 2天前
+                  - generic:
+                    - generic:
+                      - link:
+                        - /url: /chat/32e0b68d-657a-4285-ba62-469c6387e1ea
+                        - generic:
+                          - generic: Leon
+                        - generic:
+                          - generic: 测试下你的所有 tool 是否可用
+                          - generic: 2天前
+                  - generic:
+                    - generic:
+                      - link:
+                        - /url: /chat/546798a1-9ebf-495d-a5fe-334aa328cd98
+                        - generic:
+                          - generic: Leon
+                        - generic:
+                          - generic: 测试下你的所有 tool 是否可用
+                          - generic: 2天前
+                  - generic:
+                    - generic:
+                      - link:
+                        - /url: /chat/f019f05e-baaa-46c7-beb9-dc5e54bf53d2
+                        - generic:
+                          - generic: Leon
+                        - generic:
+                          - generic: 测试下你的所有 tool 是否可用
+                          - generic: 2天前
+                  - generic:
+                    - generic:
+                      - link:
+                        - /url: /chat/7ae9e61c-9a9c-4b9d-b7ae-374375abdfa5
+                        - generic:
+                          - generic: Leon
+                        - generic:
+                          - generic: 测试下你的所有 tool 是否可用
+                          - generic: 2天前
+                  - generic:
+                    - generic:
+                      - link:
+                        - /url: /chat/7ef509af-d5b9-4212-9956-ad1f199c75f1
+                        - generic:
+                          - generic: Leon
+                        - generic:
+                          - generic: hi
+                          - generic: 2天前
+                  - generic:
+                    - generic:
+                      - link:
+                        - /url: /chat/295cef7c-aa0e-4b63-9d80-aa80ede148a6
+                        - generic:
+                          - generic: Leon
+                        - generic:
+                          - generic: test realtime
+                          - generic: 2天前
+                  - generic:
+                    - generic:
+                      - link:
+                        - /url: /chat/40d1906e-c061-4e2f-bbb0-e8efaffcac05
+                        - generic:
+                          - generic: Leon
+                        - generic:
+                          - generic: 测试你的所有 tool 是否可用
+                          - generic: 2天前
+                  - generic:
+                    - generic:
+                      - link:
+                        - /url: /chat/71a21e4c-8f5f-433f-92f1-064ebf35b613
+                        - generic:
+                          - generic: Leon
+                        - generic:
+                          - generic: 测试你的所有 tool 是否可用
+                          - generic: 2天前
+                  - generic:
+                    - generic:
+                      - link:
+                        - /url: /chat/d1745d3b-f3c5-4889-ae3f-6dfb802df170
+                        - generic:
+                          - generic: Leon
+                        - generic:
+                          - generic: say hello
+                          - generic: 2天前
+                  - generic:
+                    - generic:
+                      - link:
+                        - /url: /chat/ff8e3328-12f3-4ee7-8d57-40698d98715f
+                        - generic:
+                          - generic: Leon
+                        - generic:
+                          - generic: say hi
+                          - generic: 2天前
+                  - generic:
+                    - generic:
+                      - link:
+                        - /url: /chat/4ff7d0ba-7331-4245-83ee-a871068298c8
+                        - generic:
+                          - generic: Leon
+                        - generic:
+                          - generic: say hello
+                          - generic: 2天前
+                  - generic:
+                    - generic:
+                      - link:
+                        - /url: /chat/423ec6fc-0fbf-495a-8378-b73eb5f52e55
+                        - generic:
+                          - generic: Leon
+                        - generic:
+                          - generic: 测试你的所有 tool 是否可用
+                          - generic: 2天前
+                  - generic:
+                    - generic:
+                      - link:
+                        - /url: /chat/aa0a2fbc-5c84-4b11-bf0c-28a57ba43e1c
+                        - generic:
+                          - generic: Leon
+                        - generic:
+                          - generic: 测试你的所有 tool 是否可用
+                          - generic: 2天前
+                  - generic:
+                    - generic:
+                      - link:
+                        - /url: /chat/43a9fdc2-0c09-41d8-a657-4de4d1533d80
+                        - generic:
+                          - generic: Leon
+                        - generic:
+                          - generic: 测试你的所有 tool 是否可用
+                          - generic: 2天前
+                  - generic:
+                    - generic:
+                      - link:
+                        - /url: /chat/1f2d11d9-f342-49ce-ac74-ee0085cfdf4c
+                        - generic:
+                          - generic: Leon
+                        - generic:
+                          - generic: 测试你的所有 tool 是否可用
+                          - generic: 2天前
+                  - generic:
+                    - generic:
+                      - link:
+                        - /url: /chat/18660e52-1e6b-429d-826f-9e6beed9c23a
+                        - generic:
+                          - generic: Leon
+                        - generic:
+                          - generic: 测试你的所有 tool 是否可用
+                          - generic: 2天前
+                  - generic:
+                    - generic:
+                      - link:
+                        - /url: /chat/49346f45-f0b2-4e2e-9f76-7c0b234b9712
+                        - generic:
+                          - generic: Leon
+                        - generic:
+                          - generic: say hello
+                          - generic: 2天前
+                  - generic:
+                    - generic:
+                      - link:
+                        - /url: /chat/6d6b7b28-089d-4b28-82ce-2d583229a917
+                        - generic:
+                          - generic: Leon
+                        - generic:
+                          - generic: 请用异步方式同时执行以下4个独立任务，每完成一个就立即报告结果，不需要等其他任务
+                          - generic: 2天前
+                  - generic:
+                    - generic:
+                      - link:
+                        - /url: /chat/d6e6115e-c3aa-4670-b518-1d696fd73ffa
+                        - generic:
+                          - generic: Leon
+                        - generic:
+                          - generic: 请同时执行以下4个任务并等待全部完成后汇总：1) 用 list_dir 列出工作
+                          - generic: 2天前
+                  - generic:
+                    - generic:
+                      - link:
+                        - /url: /chat/50a4f7d6-fb9e-49ce-853e-75ee1fe171c5
+                        - generic:
+                          - generic: Leon
+                        - generic:
+                          - generic: 请逐一测试你的所有工具能力：1) 用 list_dir 列出 /tmp 目录 2
+                          - generic: 2天前
+                  - generic:
+                    - generic:
+                      - link:
+                        - /url: /chat/9bee61fb-0bd8-4aef-9a46-4fbe589a8ec8
+                        - generic:
+                          - generic: Leon
+                        - generic:
+                          - generic: hi
+                          - generic: 2天前
+                  - generic:
+                    - generic:
+                      - link:
+                        - /url: /chat/e396b69f-f026-4e5b-8037-207629bc8016
+                        - generic:
+                          - generic: Leon
+                        - generic:
+                          - generic: say hello
+                          - generic: 2天前
+                  - generic:
+                    - generic:
+                      - link:
+                        - /url: /chat/3ad3e3b8-c137-4695-9e1a-e71b3a689951
+                        - generic:
+                          - generic: Leon
+                        - generic:
+                          - generic: say hello in one word
+                          - generic: 2天前
+                  - generic:
+                    - generic:
+                      - link:
+                        - /url: /chat/51cb79a9-804c-4a9f-a8c4-2453eb4383a1
+                        - generic:
+                          - generic: Leon
+                        - generic:
+                          - generic: say hi
+                          - generic: 2天前
+                  - generic:
+                    - generic:
+                      - link:
+                        - /url: /chat/3a3afcba-4d4d-41bd-b1eb-262c7c05f538
+                        - generic:
+                          - generic: Leon
+                        - generic:
+                          - generic: say hi
+                          - generic: 2天前
+                  - generic:
+                    - generic:
+                      - link:
+                        - /url: /chat/35c9d8dd-1e49-42a4-b341-7d1183bfc4f3
+                        - generic:
+                          - generic: Leon
+                        - generic:
+                          - generic: say hi
+                          - generic: 2天前
+                  - generic:
+                    - generic:
+                      - link:
+                        - /url: /chat/6fb2bbfe-6338-4e59-bbf2-fe1227e68d19
+                        - generic:
+                          - generic: Leon
+                        - generic:
+                          - generic: say hello in one word
+                          - generic: 2天前
+                  - generic:
+                    - generic:
+                      - link:
+                        - /url: /chat/d6c5c037-731d-427e-a255-db1f28194760
+                        - generic:
+                          - generic: Leon
+                        - generic:
+                          - generic: 你好，请用一句话回复我
+                          - generic: 2天前
+                  - generic:
+                    - generic:
+                      - link:
+                        - /url: /chat/test-docker-54c48c73
+                        - generic:
+                          - generic: Leon
+                        - generic:
+                          - generic: Write the text 'hello from test' to /wor
+                          - generic: 2天前
+                  - generic:
+                    - generic:
+                      - link:
+                        - /url: /chat/test-docker-b88b006b
+                        - generic:
+                          - generic: Leon
+                        - generic:
+                          - generic: "Use the run_command tool to execute: ech"
+                          - generic: 2天前
+                  - generic:
+                    - generic:
+                      - link:
+                        - /url: /chat/c2cf2aa1-27bf-42d0-a167-4c8cf7367c9a
+                        - generic:
+                          - generic: Leon
+                        - generic:
+                          - generic: 请用 list_dir 工具列出 /tmp 目录内容，完成后汇报结果
+                          - generic: 2天前
+                  - generic:
+                    - generic:
+                      - link:
+                        - /url: /chat/c688601f-eff4-411c-a873-fcd85a8b22b9
+                        - generic:
+                          - generic: Leon
+                        - generic:
+                          - generic: 测试三个场景：
+                          - generic: 2天前
+                  - generic:
+                    - generic:
+                      - link:
+                        - /url: /chat/8fae4fd6-5cd6-4037-8893-7f7dd6c1516b
+                        - generic:
+                          - generic: Leon
+                        - generic:
+                          - generic: 请用 write_file 在 /tmp 目录写一个 test_lock.txt
+                          - generic: 2天前
+                  - generic:
+                    - generic:
+                      - link:
+                        - /url: /chat/1097a968-3ea3-49e8-9f41-bc5178bb31e0
+                        - generic:
+                          - generic: Leon
+                        - generic:
+                          - generic: hello
+                          - generic: 2天前
+                  - generic:
+                    - generic:
+                      - link:
+                        - /url: /chat/997ff1d3-ad05-49df-acf0-e399d361b3e4
+                        - generic:
+                          - generic: Leon
+                        - generic:
+                          - generic: hello
+                          - generic: 2天前
+                  - generic:
+                    - generic:
+                      - link:
+                        - /url: /chat/33eb8c23-0a18-42ad-acb1-00ade3870baf
+                        - generic:
+                          - generic: Leon
+                        - generic:
+                          - generic: 你好，请说一句话测试一下
+                          - generic: 2天前
+                  - generic:
+                    - generic:
+                      - link:
+                        - /url: /chat/c0aacc34-8320-478b-94ce-024eb9ee38d2
+                        - generic:
+                          - generic: Leon
+                        - generic:
+                          - generic: cctool max1400 https://perfectapi.arche-
+                          - generic: 2天前
+                  - generic:
+                    - generic:
+                      - link:
+                        - /url: /chat/78d1880a-2f70-4d72-a8f9-710857a65ffe
+                        - generic:
+                          - generic: Leon
+                        - generic:
+                          - generic: hi
+                          - generic: 2天前
+                  - generic:
+                    - generic:
+                      - link:
+                        - /url: /chat/3133bbdb-38f4-4f4a-b8d6-967e65b6a33a
+                        - generic:
+                          - generic: Leon
+                        - generic:
+                          - generic: helllo
+                          - generic: 5天前
+            - generic:
+              - generic:
+                - generic:
+                  - generic:
+                    - heading [level=1]: 你好，我是 Leon
+                    - paragraph: 你的通用数字成员，随时准备为你工作
+                    - generic:
+                      - generic: 文件操作
+                      - generic: 代码探索
+                      - generic: 命令执行
+                      - generic: 信息检索
+                  - generic:
+                    - generic:
+                      - textbox:
+                        - /placeholder: 告诉 Leon 你需要什么帮助...
+                      - paragraph: Enter 发送，Shift + Enter 换行
+                      - generic:
+                        - combobox:
+                          - generic: 本地
+                          - img
+                        - button:
+                          - img
+                        - button:
+                          - generic: Medium
+                          - img
+                        - button [disabled]:
+                          - img
+                          - text: 发送
+            - generic:
+              - heading [level=2]: 搜索对话
+              - paragraph: 搜索对话或运行环境
+    - region "Notifications alt+T"
+  - dialog "发起会话" [ref=e823]:
+    - generic [ref=e824]:
+      - heading "发起会话" [level=2] [ref=e825]
+      - paragraph [ref=e826]: 选择成员发起新对话
+    - generic [ref=e828]:
+      - img [ref=e829]
+      - textbox "搜索成员..." [active] [ref=e832]
+    - generic [ref=e833]:
+      - button "LE Leon 在线 通用数字成员，随时准备为你工作" [ref=e834] [cursor=pointer]:
+        - generic [ref=e835]: LE
+        - generic [ref=e836]:
+          - generic [ref=e837]:
+            - generic [ref=e838]: Leon
+            - generic [ref=e839]: 在线
+          - paragraph [ref=e840]: 通用数字成员，随时准备为你工作
+        - img [ref=e841]
+      - button "TE Test Researcher 在线 A test research agent" [ref=e843] [cursor=pointer]:
+        - generic [ref=e844]: TE
+        - generic [ref=e845]:
+          - generic [ref=e846]:
+            - generic [ref=e847]: Test Researcher
+            - generic [ref=e848]: 在线
+          - paragraph [ref=e849]: A test research agent
+        - img [ref=e850]
+    - button "Close" [ref=e852] [cursor=pointer]:
+      - img
+      - generic [ref=e853]: Close

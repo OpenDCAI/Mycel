@@ -1,0 +1,20 @@
+{
+  "name": "Skill",
+  "description": "Execute a skill within the main conversation. When users ask you to perform tasks, check if any of the available skills match. Skills provide specialized capabilities and domain knowledge. When users reference a slash command or \"/<something>\", they are referring to a skill.",
+  "parameters": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "args": {
+        "description": "Optional arguments for the skill",
+        "type": "string"
+      },
+      "skill": {
+        "description": "The skill name. E.g., \"commit\", \"review-pr\", or \"pdf\"",
+        "type": "string"
+      }
+    },
+    "required": ["skill"],
+    "type": "object"
+  }
+}

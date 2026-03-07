@@ -7,8 +7,8 @@ from unittest.mock import MagicMock
 import pytest
 from langchain_core.messages import ToolMessage
 
-from core.spill_buffer.spill import PREVIEW_BYTES, spill_if_needed
-from core.spill_buffer.middleware import SKIP_TOOLS, SpillBufferMiddleware
+from core.runtime.middleware.spill_buffer.spill import PREVIEW_BYTES, spill_if_needed
+from core.runtime.middleware.spill_buffer.middleware import SKIP_TOOLS, SpillBufferMiddleware
 
 
 # ---------------------------------------------------------------------------

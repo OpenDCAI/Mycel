@@ -4,7 +4,7 @@ import xml.etree.ElementTree as ET
 
 import pytest
 
-from core.queue.formatters import format_command_notification
+from core.runtime.middleware.queue.formatters import format_command_notification
 
 
 class TestFormatCommandNotification:

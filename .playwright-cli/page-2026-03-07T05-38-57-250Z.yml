@@ -1,0 +1,70 @@
+- generic [ref=e2]:
+  - generic [ref=e3]:
+    - generic [ref=e4]:
+      - complementary [ref=e5]:
+        - generic [ref=e8]: L
+        - button [ref=e10] [cursor=pointer]:
+          - img [ref=e11]
+        - navigation [ref=e13]:
+          - link "消息" [ref=e14] [cursor=pointer]:
+            - /url: /chat
+            - img [ref=e16]
+            - generic: 消息
+          - link "成员" [ref=e19] [cursor=pointer]:
+            - /url: /members
+            - img [ref=e21]
+            - generic: 成员
+          - link "任务" [ref=e26] [cursor=pointer]:
+            - /url: /tasks
+            - img [ref=e28]
+            - generic: 任务
+          - link "能力库" [ref=e31] [cursor=pointer]:
+            - /url: /library
+            - img [ref=e33]
+            - generic: 能力库
+        - generic [ref=e35]:
+          - generic [ref=e38]: YZ
+          - link "设置" [ref=e39] [cursor=pointer]:
+            - /url: /settings
+            - img [ref=e41]
+            - generic: 设置
+      - generic "拖拽调整侧栏宽度，双击切换" [ref=e44]:
+        - img [ref=e46]
+    - main [ref=e48]:
+      - generic [ref=e50]:
+        - generic [ref=e51]:
+          - generic [ref=e53]: 消息
+          - button "搜索对话..." [ref=e55] [cursor=pointer]:
+            - img [ref=e56]
+            - generic [ref=e59]: 搜索对话...
+          - generic [ref=e62]:
+            - generic [ref=e63]: 对话
+            - generic [ref=e64]: "0"
+        - generic [ref=e85]:
+          - generic [ref=e86]:
+            - heading "你好，我是 Leon" [level=1] [ref=e87]
+            - paragraph [ref=e88]: 你的通用数字成员，随时准备为你工作
+            - generic [ref=e89]:
+              - generic [ref=e90]: 文件操作
+              - generic [ref=e91]: 代码探索
+              - generic [ref=e92]: 命令执行
+              - generic [ref=e93]: 信息检索
+          - generic [ref=e95]:
+            - textbox "告诉 Leon 你需要什么帮助..." [ref=e96]
+            - paragraph [ref=e97]: Enter 发送，Shift + Enter 换行
+            - generic [ref=e98]:
+              - combobox [ref=e99] [cursor=pointer]:
+                - generic: 本地
+                - img
+              - button "/Users/apple/Desktop/leon_test" [ref=e100] [cursor=pointer]:
+                - img
+              - button "Medium" [ref=e101] [cursor=pointer]:
+                - generic [ref=e102]: Medium
+                - img [ref=e103]
+              - button "发送" [disabled]:
+                - img
+                - text: 发送
+        - generic [ref=e105]:
+          - heading "搜索对话" [level=2] [ref=e106]
+          - paragraph [ref=e107]: 搜索对话或运行环境
+  - region "Notifications alt+T"

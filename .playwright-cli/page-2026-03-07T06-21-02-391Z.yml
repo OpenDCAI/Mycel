@@ -1,0 +1,734 @@
+- generic [ref=e2]:
+  - generic [ref=e3]:
+    - generic [ref=e4]:
+      - complementary [ref=e5]:
+        - generic [ref=e8]: L
+        - button [ref=e10] [cursor=pointer]:
+          - img [ref=e11]
+        - navigation [ref=e13]:
+          - link "消息" [ref=e14] [cursor=pointer]:
+            - /url: /chat
+            - img [ref=e16]
+            - generic: 消息
+          - link "成员" [ref=e19] [cursor=pointer]:
+            - /url: /members
+            - img [ref=e21]
+            - generic: 成员
+          - link "任务" [ref=e26] [cursor=pointer]:
+            - /url: /tasks
+            - img [ref=e28]
+            - generic: 任务
+          - link "能力库" [ref=e31] [cursor=pointer]:
+            - /url: /library
+            - img [ref=e33]
+            - generic: 能力库
+        - generic [ref=e35]:
+          - generic [ref=e38]: YZ
+          - link "设置" [ref=e39] [cursor=pointer]:
+            - /url: /settings
+            - img [ref=e41]
+            - generic: 设置
+      - generic "拖拽调整侧栏宽度，双击切换" [ref=e44]:
+        - img [ref=e46]
+    - main [ref=e48]:
+      - generic [ref=e833]:
+        - generic [ref=e834]:
+          - generic [ref=e836]: 消息
+          - button "搜索对话..." [ref=e838] [cursor=pointer]:
+            - img [ref=e839]
+            - generic [ref=e842]: 搜索对话...
+          - generic [ref=e844]:
+            - generic [ref=e845]:
+              - generic [ref=e846]: 对话
+              - generic [ref=e847]: "91"
+            - generic [ref=e848]:
+              - generic [ref=e849]:
+                - generic [ref=e850]: 今天
+                - link "Leon 请测试你的所有工具是否可用：1) 用 Read 工具读取 /tmp/test.t 刚刚" [ref=e852] [cursor=pointer]:
+                  - /url: /chat/a21f102b-0e1c-4190-998f-4752cb5e78a1
+                  - generic [ref=e855]: Leon
+                  - generic [ref=e856]:
+                    - generic [ref=e857]: 请测试你的所有工具是否可用：1) 用 Read 工具读取 /tmp/test.t
+                    - generic [ref=e858]: 刚刚
+              - link "Leon 请调用 Agent 工具，启动一个子 Agent，让它用一句话介绍自己，然后返回 17分钟前" [ref=e861] [cursor=pointer]:
+                - /url: /chat/1a285abe-d7d9-439e-9b1f-82f338d4cdf6
+                - generic [ref=e863]: Leon
+                - generic [ref=e864]:
+                  - generic [ref=e865]: 请调用 Agent 工具，启动一个子 Agent，让它用一句话介绍自己，然后返回
+                  - generic [ref=e866]: 17分钟前
+              - link "Leon 你好，用一句话介绍你自己 22分钟前" [ref=e1725] [cursor=pointer]:
+                - /url: /chat/run-201cfc14
+                - generic [ref=e871]: Leon
+                - generic [ref=e872]:
+                  - generic [ref=e873]: 你好，用一句话介绍你自己
+                  - generic [ref=e874]: 22分钟前
+              - link "Leon 请测试你的所有工具是否可用：1) 用 Read 工具读取 /tmp/test.t 36分钟前" [ref=e877] [cursor=pointer]:
+                - /url: /chat/103ae567-aa53-44e4-8d6c-1122409b1b6d
+                - generic [ref=e879]: Leon
+                - generic [ref=e880]:
+                  - generic [ref=e881]: 请测试你的所有工具是否可用：1) 用 Read 工具读取 /tmp/test.t
+                  - generic [ref=e882]: 36分钟前
+              - link "Leon 调用 Read 工具，file_path 参数传一个不存在的文件 /tmp/no 3小时前" [ref=e885] [cursor=pointer]:
+                - /url: /chat/run-cd415faa
+                - generic [ref=e887]: Leon
+                - generic [ref=e888]:
+                  - generic [ref=e889]: 调用 Read 工具，file_path 参数传一个不存在的文件 /tmp/no
+                  - generic [ref=e890]: 3小时前
+              - link "Leon 用 Read 工具读取 /Users/apple/worktrees/leon- 3小时前" [ref=e893] [cursor=pointer]:
+                - /url: /chat/run-2ebaee4a
+                - generic [ref=e895]: Leon
+                - generic [ref=e896]:
+                  - generic [ref=e897]: 用 Read 工具读取 /Users/apple/worktrees/leon-
+                  - generic [ref=e898]: 3小时前
+              - link "Leon 请调用 tool_search 工具搜索 \"task\"，看看有哪些任务相关工具可 3小时前" [ref=e901] [cursor=pointer]:
+                - /url: /chat/run-710b3bef
+                - generic [ref=e903]: Leon
+                - generic [ref=e904]:
+                  - generic [ref=e905]: 请调用 tool_search 工具搜索 "task"，看看有哪些任务相关工具可
+                  - generic [ref=e906]: 3小时前
+              - link "Leon 直接调用名为 Bash 的工具，参数 command=\"echo hello\" 3小时前" [ref=e909] [cursor=pointer]:
+                - /url: /chat/run-7ceacc0a
+                - generic [ref=e911]: Leon
+                - generic [ref=e912]:
+                  - generic [ref=e913]: 直接调用名为 Bash 的工具，参数 command="echo hello"
+                  - generic [ref=e914]: 3小时前
+              - link "Leon 直接调用名为 Bash 的工具，参数 command=\"echo hello\" 3小时前" [ref=e917] [cursor=pointer]:
+                - /url: /chat/run-b512e2d0
+                - generic [ref=e919]: Leon
+                - generic [ref=e920]:
+                  - generic [ref=e921]: 直接调用名为 Bash 的工具，参数 command="echo hello"
+                  - generic [ref=e922]: 3小时前
+              - 'link "Leon 用 Bash 工具执行: echo \"hello\" 3小时前" [ref=e925] [cursor=pointer]':
+                - /url: /chat/run-04e71ff8
+                - generic [ref=e927]: Leon
+                - generic [ref=e928]:
+                  - generic [ref=e929]: "用 Bash 工具执行: echo \"hello\""
+                  - generic [ref=e930]: 3小时前
+              - link "Leon 列出当前目录的文件 3小时前" [ref=e933] [cursor=pointer]:
+                - /url: /chat/run-1fc3edc5
+                - generic [ref=e935]: Leon
+                - generic [ref=e936]:
+                  - generic [ref=e937]: 列出当前目录的文件
+                  - generic [ref=e938]: 3小时前
+              - link "Leon 你好，用一句话介绍你自己 3小时前" [ref=e941] [cursor=pointer]:
+                - /url: /chat/run-3aed4f1a
+                - generic [ref=e943]: Leon
+                - generic [ref=e944]:
+                  - generic [ref=e945]: 你好，用一句话介绍你自己
+                  - generic [ref=e946]: 3小时前
+              - link "Leon gpt-4o 3小时前" [ref=e949] [cursor=pointer]:
+                - /url: /chat/run-ece9f75a
+                - generic [ref=e951]: Leon
+                - generic [ref=e952]:
+                  - generic [ref=e953]: gpt-4o
+                  - generic [ref=e954]: 3小时前
+              - link "Leon 你好，用一句话介绍你自己 3小时前" [ref=e957] [cursor=pointer]:
+                - /url: /chat/run-6af630f7
+                - generic [ref=e959]: Leon
+                - generic [ref=e960]:
+                  - generic [ref=e961]: 你好，用一句话介绍你自己
+                  - generic [ref=e962]: 3小时前
+              - link "Leon 用 Read 工具读取 /tmp/leon-backend-8003.log 的 3小时前" [ref=e965] [cursor=pointer]:
+                - /url: /chat/92a6b503-d3a7-461a-b4f0-2acb0664c18b
+                - generic [ref=e967]: Leon
+                - generic [ref=e968]:
+                  - generic [ref=e969]: 用 Read 工具读取 /tmp/leon-backend-8003.log 的
+                  - generic [ref=e970]: 3小时前
+              - link "Leon hi 3小时前" [ref=e973] [cursor=pointer]:
+                - /url: /chat/6b573510-40f6-48dc-b192-4583f8975aec
+                - generic [ref=e975]: Leon
+                - generic [ref=e976]:
+                  - generic [ref=e977]: hi
+                  - generic [ref=e978]: 3小时前
+              - generic [ref=e979]:
+                - generic [ref=e980]: 昨天
+                - link "Leon hello 昨天" [ref=e982] [cursor=pointer]:
+                  - /url: /chat/8df5dafe-585f-4896-8665-ad66dea1b6cd
+                  - generic [ref=e984]: Leon
+                  - generic [ref=e985]:
+                    - generic [ref=e986]: hello
+                    - generic [ref=e987]: 昨天
+              - link "Leon hello 昨天" [ref=e990] [cursor=pointer]:
+                - /url: /chat/d7938401-e0aa-4eea-b823-9b1fb381f945
+                - generic [ref=e992]: Leon
+                - generic [ref=e993]:
+                  - generic [ref=e994]: hello
+                  - generic [ref=e995]: 昨天
+              - link "Leon 写个 1000 字小说 昨天" [ref=e998] [cursor=pointer]:
+                - /url: /chat/db0d830b-130d-448c-b6d4-ec0bce0e7aa1
+                - generic [ref=e1000]: Leon
+                - generic [ref=e1001]:
+                  - generic [ref=e1002]: 写个 1000 字小说
+                  - generic [ref=e1003]: 昨天
+              - link "Leon hello 昨天" [ref=e1006] [cursor=pointer]:
+                - /url: /chat/e6d31914-20bc-4676-a4b9-f493d0b09588
+                - generic [ref=e1008]: Leon
+                - generic [ref=e1009]:
+                  - generic [ref=e1010]: hello
+                  - generic [ref=e1011]: 昨天
+              - link "Leon 测试你的所有 tool 是否可用 昨天" [ref=e1014] [cursor=pointer]:
+                - /url: /chat/e22a1b33-bb40-4007-8dc1-79939b3c627e
+                - generic [ref=e1016]: Leon
+                - generic [ref=e1017]:
+                  - generic [ref=e1018]: 测试你的所有 tool 是否可用
+                  - generic [ref=e1019]: 昨天
+              - link "Leon 写个 1000 字小说 昨天" [ref=e1022] [cursor=pointer]:
+                - /url: /chat/00339c19-8c3d-4188-9acf-a6728b00caf1
+                - generic [ref=e1024]: Leon
+                - generic [ref=e1025]:
+                  - generic [ref=e1026]: 写个 1000 字小说
+                  - generic [ref=e1027]: 昨天
+              - link "Leon 写个 1000 字小说 昨天" [ref=e1030] [cursor=pointer]:
+                - /url: /chat/3cb6bea0-994d-4791-a825-f719d24a4570
+                - generic [ref=e1032]: Leon
+                - generic [ref=e1033]:
+                  - generic [ref=e1034]: 写个 1000 字小说
+                  - generic [ref=e1035]: 昨天
+              - link "Leon 测试你的所有 tool 是否可用 昨天" [ref=e1038] [cursor=pointer]:
+                - /url: /chat/2cd4a700-458e-4d0c-b707-cf51ca1ab22c
+                - generic [ref=e1040]: Leon
+                - generic [ref=e1041]:
+                  - generic [ref=e1042]: 测试你的所有 tool 是否可用
+                  - generic [ref=e1043]: 昨天
+              - link "Leon 写个 400 字小说 昨天" [ref=e1046] [cursor=pointer]:
+                - /url: /chat/2ac23a83-0084-40f5-922b-7895a87ed76b
+                - generic [ref=e1048]: Leon
+                - generic [ref=e1049]:
+                  - generic [ref=e1050]: 写个 400 字小说
+                  - generic [ref=e1051]: 昨天
+              - link "Leon 写一篇400字的科幻小说 昨天" [ref=e1054] [cursor=pointer]:
+                - /url: /chat/8b1f2671-aa58-4470-852d-4de859f2f233
+                - generic [ref=e1056]: Leon
+                - generic [ref=e1057]:
+                  - generic [ref=e1058]: 写一篇400字的科幻小说
+                  - generic [ref=e1059]: 昨天
+              - generic [ref=e1060]:
+                - generic [ref=e1061]: 更早
+                - link "Leon 写一篇400字的科幻小说 1天前" [ref=e1063] [cursor=pointer]:
+                  - /url: /chat/88f5f78d-9d96-4083-aa66-7321cad8e302
+                  - generic [ref=e1065]: Leon
+                  - generic [ref=e1066]:
+                    - generic [ref=e1067]: 写一篇400字的科幻小说
+                    - generic [ref=e1068]: 1天前
+              - link "Leon 写一篇400字的科幻小说 1天前" [ref=e1071] [cursor=pointer]:
+                - /url: /chat/783a758e-8453-4f46-8797-099302aeaa14
+                - generic [ref=e1073]: Leon
+                - generic [ref=e1074]:
+                  - generic [ref=e1075]: 写一篇400字的科幻小说
+                  - generic [ref=e1076]: 1天前
+              - link "Leon 写一篇400字的科幻小说 1天前" [ref=e1079] [cursor=pointer]:
+                - /url: /chat/90169500-34f7-4ebe-9e5c-970d39f0e384
+                - generic [ref=e1081]: Leon
+                - generic [ref=e1082]:
+                  - generic [ref=e1083]: 写一篇400字的科幻小说
+                  - generic [ref=e1084]: 1天前
+              - link "Leon say hi 1天前" [ref=e1087] [cursor=pointer]:
+                - /url: /chat/c69828a4-80ce-4ddf-9f7e-483280af9116
+                - generic [ref=e1089]: Leon
+                - generic [ref=e1090]:
+                  - generic [ref=e1091]: say hi
+                  - generic [ref=e1092]: 1天前
+              - link "Leon hello,写个 400 字小说 1天前" [ref=e1095] [cursor=pointer]:
+                - /url: /chat/1c78363f-544f-4a22-ae1b-bfb5f9c181b8
+                - generic [ref=e1097]: Leon
+                - generic [ref=e1098]:
+                  - generic [ref=e1099]: hello,写个 400 字小说
+                  - generic [ref=e1100]: 1天前
+              - link "Leon hello,写个 400 字小说 1天前" [ref=e1103] [cursor=pointer]:
+                - /url: /chat/52a2703a-8441-4ac2-9599-15bd182dbf5b
+                - generic [ref=e1105]: Leon
+                - generic [ref=e1106]:
+                  - generic [ref=e1107]: hello,写个 400 字小说
+                  - generic [ref=e1108]: 1天前
+              - link "Leon say hi 1天前" [ref=e1111] [cursor=pointer]:
+                - /url: /chat/837f46b7-5f9a-4326-8e3e-c13f23af3478
+                - generic [ref=e1113]: Leon
+                - generic [ref=e1114]:
+                  - generic [ref=e1115]: say hi
+                  - generic [ref=e1116]: 1天前
+              - link "Leon hello 1天前" [ref=e1119] [cursor=pointer]:
+                - /url: /chat/3f4f106d-be32-4ad3-8f6f-ae22d1035c24
+                - generic [ref=e1121]: Leon
+                - generic [ref=e1122]:
+                  - generic [ref=e1123]: hello
+                  - generic [ref=e1124]: 1天前
+              - link "Leon hello 1天前" [ref=e1127] [cursor=pointer]:
+                - /url: /chat/a8b4b0ed-1f1e-474b-a626-1e945f449eed
+                - generic [ref=e1129]: Leon
+                - generic [ref=e1130]:
+                  - generic [ref=e1131]: hello
+                  - generic [ref=e1132]: 1天前
+              - link "Leon say hi 1天前" [ref=e1135] [cursor=pointer]:
+                - /url: /chat/1dcf75d6-aae1-4fa8-aac9-2cdb7d81b589
+                - generic [ref=e1137]: Leon
+                - generic [ref=e1138]:
+                  - generic [ref=e1139]: say hi
+                  - generic [ref=e1140]: 1天前
+              - link "Leon hello 1天前" [ref=e1143] [cursor=pointer]:
+                - /url: /chat/eaa9972d-a4f3-4de3-8589-a5c430c2e265
+                - generic [ref=e1145]: Leon
+                - generic [ref=e1146]:
+                  - generic [ref=e1147]: hello
+                  - generic [ref=e1148]: 1天前
+              - link "Leon 请用 markdown 格式回复：1个标题、1段文字、1个代码块、1个列表 1天前" [ref=e1151] [cursor=pointer]:
+                - /url: /chat/db97aeb7-a493-422d-9a54-bb128a60ff9e
+                - generic [ref=e1153]: Leon
+                - generic [ref=e1154]:
+                  - generic [ref=e1155]: 请用 markdown 格式回复：1个标题、1段文字、1个代码块、1个列表
+                  - generic [ref=e1156]: 1天前
+              - link "Leon say hi 1天前" [ref=e1159] [cursor=pointer]:
+                - /url: /chat/68d29b6f-4a30-46aa-b545-52c2ae07fc3f
+                - generic [ref=e1161]: Leon
+                - generic [ref=e1162]:
+                  - generic [ref=e1163]: say hi
+                  - generic [ref=e1164]: 1天前
+              - link "Leon say hello in one word 1天前" [ref=e1167] [cursor=pointer]:
+                - /url: /chat/9558c3e7-9aff-4041-b81f-486ac98e8980
+                - generic [ref=e1169]: Leon
+                - generic [ref=e1170]:
+                  - generic [ref=e1171]: say hello in one word
+                  - generic [ref=e1172]: 1天前
+              - link "Leon hello 1天前" [ref=e1175] [cursor=pointer]:
+                - /url: /chat/69494d9f-7b05-4dab-8f58-9c8c66ab1fea
+                - generic [ref=e1177]: Leon
+                - generic [ref=e1178]:
+                  - generic [ref=e1179]: hello
+                  - generic [ref=e1180]: 1天前
+              - link "Leon say hello in one word 1天前" [ref=e1183] [cursor=pointer]:
+                - /url: /chat/862418d9-fb65-46d6-a2ac-c32de5bfd86e
+                - generic [ref=e1185]: Leon
+                - generic [ref=e1186]:
+                  - generic [ref=e1187]: say hello in one word
+                  - generic [ref=e1188]: 1天前
+              - link "Leon 测试下你的异步 bash 和异步 task 1天前" [ref=e1191] [cursor=pointer]:
+                - /url: /chat/133c2d29-ae55-401e-93e1-d4df6c570355
+                - generic [ref=e1193]: Leon
+                - generic [ref=e1194]:
+                  - generic [ref=e1195]: 测试下你的异步 bash 和异步 task
+                  - generic [ref=e1196]: 1天前
+              - link "Leon 测试下你的异步 bash 和异步 task 1天前" [ref=e1199] [cursor=pointer]:
+                - /url: /chat/0b690bce-3afc-434a-8296-2bbfd9af7d8e
+                - generic [ref=e1201]: Leon
+                - generic [ref=e1202]:
+                  - generic [ref=e1203]: 测试下你的异步 bash 和异步 task
+                  - generic [ref=e1204]: 1天前
+              - link "Leon 测试你的所有 tool 是否可用 1天前" [ref=e1207] [cursor=pointer]:
+                - /url: /chat/507f84c9-2e1c-4d0a-945e-eece7ccf612e
+                - generic [ref=e1209]: Leon
+                - generic [ref=e1210]:
+                  - generic [ref=e1211]: 测试你的所有 tool 是否可用
+                  - generic [ref=e1212]: 1天前
+              - link "Leon 请用 read_file 读取 /tmp/test.txt，然后用 write_ 1天前" [ref=e1215] [cursor=pointer]:
+                - /url: /chat/16b04f6d-c4ce-4761-8acc-890e415df2ea
+                - generic [ref=e1217]: Leon
+                - generic [ref=e1218]:
+                  - generic [ref=e1219]: 请用 read_file 读取 /tmp/test.txt，然后用 write_
+                  - generic [ref=e1220]: 1天前
+              - link "Leon hello 1天前" [ref=e1223] [cursor=pointer]:
+                - /url: /chat/50c372ce-f492-45d9-b774-bf55a31da69d
+                - generic [ref=e1225]: Leon
+                - generic [ref=e1226]:
+                  - generic [ref=e1227]: hello
+                  - generic [ref=e1228]: 1天前
+              - link "Leon 请依次执行以下操作：1) 用 read_file 读取 /tmp/test_p4 1天前" [ref=e1231] [cursor=pointer]:
+                - /url: /chat/e9e5fec3-8b70-4a16-b5a7-21fe2166b688
+                - generic [ref=e1233]: Leon
+                - generic [ref=e1234]:
+                  - generic [ref=e1235]: 请依次执行以下操作：1) 用 read_file 读取 /tmp/test_p4
+                  - generic [ref=e1236]: 1天前
+              - link "Leon 请测试你的所有 tool 是否可用，每个 tool 都调用一次验证功能正常 2天前" [ref=e1239] [cursor=pointer]:
+                - /url: /chat/c12c8c9f-4abb-4ae2-8fe3-80b8c3eab984
+                - generic [ref=e1241]: Leon
+                - generic [ref=e1242]:
+                  - generic [ref=e1243]: 请测试你的所有 tool 是否可用，每个 tool 都调用一次验证功能正常
+                  - generic [ref=e1244]: 2天前
+              - link "Leon Run 'echo hello && sleep 2 && echo world 2天前" [ref=e1247] [cursor=pointer]:
+                - /url: /chat/4213ec4e-689c-4706-919c-f5702cc665d7
+                - generic [ref=e1249]: Leon
+                - generic [ref=e1250]:
+                  - generic [ref=e1251]: Run 'echo hello && sleep 2 && echo world
+                  - generic [ref=e1252]: 2天前
+              - link "Leon 请用 Agent 工具帮我分析一下当前项目的结构 2天前" [ref=e1255] [cursor=pointer]:
+                - /url: /chat/dc4f4036-b034-4d0d-8355-a862fc42dbd1
+                - generic [ref=e1257]: Leon
+                - generic [ref=e1258]:
+                  - generic [ref=e1259]: 请用 Agent 工具帮我分析一下当前项目的结构
+                  - generic [ref=e1260]: 2天前
+              - link "Leon 测试你的所有 tool 是否可用 2天前" [ref=e1263] [cursor=pointer]:
+                - /url: /chat/ce02a329-a04e-4138-912b-0b3f77a2f7d6
+                - generic [ref=e1265]: Leon
+                - generic [ref=e1266]:
+                  - generic [ref=e1267]: 测试你的所有 tool 是否可用
+                  - generic [ref=e1268]: 2天前
+              - link "Leon 测试下你的所有 tool 是否可用 2天前" [ref=e1271] [cursor=pointer]:
+                - /url: /chat/32e0b68d-657a-4285-ba62-469c6387e1ea
+                - generic [ref=e1273]: Leon
+                - generic [ref=e1274]:
+                  - generic [ref=e1275]: 测试下你的所有 tool 是否可用
+                  - generic [ref=e1276]: 2天前
+              - link "Leon 测试下你的所有 tool 是否可用 2天前" [ref=e1279] [cursor=pointer]:
+                - /url: /chat/546798a1-9ebf-495d-a5fe-334aa328cd98
+                - generic [ref=e1281]: Leon
+                - generic [ref=e1282]:
+                  - generic [ref=e1283]: 测试下你的所有 tool 是否可用
+                  - generic [ref=e1284]: 2天前
+              - link "Leon 测试下你的所有 tool 是否可用 2天前" [ref=e1287] [cursor=pointer]:
+                - /url: /chat/f019f05e-baaa-46c7-beb9-dc5e54bf53d2
+                - generic [ref=e1289]: Leon
+                - generic [ref=e1290]:
+                  - generic [ref=e1291]: 测试下你的所有 tool 是否可用
+                  - generic [ref=e1292]: 2天前
+              - link "Leon 测试下你的所有 tool 是否可用 2天前" [ref=e1295] [cursor=pointer]:
+                - /url: /chat/7ae9e61c-9a9c-4b9d-b7ae-374375abdfa5
+                - generic [ref=e1297]: Leon
+                - generic [ref=e1298]:
+                  - generic [ref=e1299]: 测试下你的所有 tool 是否可用
+                  - generic [ref=e1300]: 2天前
+              - link "Leon hi 2天前" [ref=e1303] [cursor=pointer]:
+                - /url: /chat/7ef509af-d5b9-4212-9956-ad1f199c75f1
+                - generic [ref=e1305]: Leon
+                - generic [ref=e1306]:
+                  - generic [ref=e1307]: hi
+                  - generic [ref=e1308]: 2天前
+              - link "Leon test realtime 2天前" [ref=e1311] [cursor=pointer]:
+                - /url: /chat/295cef7c-aa0e-4b63-9d80-aa80ede148a6
+                - generic [ref=e1313]: Leon
+                - generic [ref=e1314]:
+                  - generic [ref=e1315]: test realtime
+                  - generic [ref=e1316]: 2天前
+              - link "Leon 测试你的所有 tool 是否可用 2天前" [ref=e1319] [cursor=pointer]:
+                - /url: /chat/40d1906e-c061-4e2f-bbb0-e8efaffcac05
+                - generic [ref=e1321]: Leon
+                - generic [ref=e1322]:
+                  - generic [ref=e1323]: 测试你的所有 tool 是否可用
+                  - generic [ref=e1324]: 2天前
+              - link "Leon 测试你的所有 tool 是否可用 2天前" [ref=e1327] [cursor=pointer]:
+                - /url: /chat/71a21e4c-8f5f-433f-92f1-064ebf35b613
+                - generic [ref=e1329]: Leon
+                - generic [ref=e1330]:
+                  - generic [ref=e1331]: 测试你的所有 tool 是否可用
+                  - generic [ref=e1332]: 2天前
+              - link "Leon say hello 2天前" [ref=e1335] [cursor=pointer]:
+                - /url: /chat/d1745d3b-f3c5-4889-ae3f-6dfb802df170
+                - generic [ref=e1337]: Leon
+                - generic [ref=e1338]:
+                  - generic [ref=e1339]: say hello
+                  - generic [ref=e1340]: 2天前
+              - link "Leon say hi 2天前" [ref=e1343] [cursor=pointer]:
+                - /url: /chat/ff8e3328-12f3-4ee7-8d57-40698d98715f
+                - generic [ref=e1345]: Leon
+                - generic [ref=e1346]:
+                  - generic [ref=e1347]: say hi
+                  - generic [ref=e1348]: 2天前
+              - link "Leon say hello 2天前" [ref=e1351] [cursor=pointer]:
+                - /url: /chat/4ff7d0ba-7331-4245-83ee-a871068298c8
+                - generic [ref=e1353]: Leon
+                - generic [ref=e1354]:
+                  - generic [ref=e1355]: say hello
+                  - generic [ref=e1356]: 2天前
+              - link "Leon 测试你的所有 tool 是否可用 2天前" [ref=e1359] [cursor=pointer]:
+                - /url: /chat/423ec6fc-0fbf-495a-8378-b73eb5f52e55
+                - generic [ref=e1361]: Leon
+                - generic [ref=e1362]:
+                  - generic [ref=e1363]: 测试你的所有 tool 是否可用
+                  - generic [ref=e1364]: 2天前
+              - link "Leon 测试你的所有 tool 是否可用 2天前" [ref=e1367] [cursor=pointer]:
+                - /url: /chat/aa0a2fbc-5c84-4b11-bf0c-28a57ba43e1c
+                - generic [ref=e1369]: Leon
+                - generic [ref=e1370]:
+                  - generic [ref=e1371]: 测试你的所有 tool 是否可用
+                  - generic [ref=e1372]: 2天前
+              - link "Leon 测试你的所有 tool 是否可用 2天前" [ref=e1375] [cursor=pointer]:
+                - /url: /chat/43a9fdc2-0c09-41d8-a657-4de4d1533d80
+                - generic [ref=e1377]: Leon
+                - generic [ref=e1378]:
+                  - generic [ref=e1379]: 测试你的所有 tool 是否可用
+                  - generic [ref=e1380]: 2天前
+              - link "Leon 测试你的所有 tool 是否可用 2天前" [ref=e1383] [cursor=pointer]:
+                - /url: /chat/1f2d11d9-f342-49ce-ac74-ee0085cfdf4c
+                - generic [ref=e1385]: Leon
+                - generic [ref=e1386]:
+                  - generic [ref=e1387]: 测试你的所有 tool 是否可用
+                  - generic [ref=e1388]: 2天前
+              - link "Leon 测试你的所有 tool 是否可用 2天前" [ref=e1391] [cursor=pointer]:
+                - /url: /chat/18660e52-1e6b-429d-826f-9e6beed9c23a
+                - generic [ref=e1393]: Leon
+                - generic [ref=e1394]:
+                  - generic [ref=e1395]: 测试你的所有 tool 是否可用
+                  - generic [ref=e1396]: 2天前
+              - link "Leon say hello 2天前" [ref=e1399] [cursor=pointer]:
+                - /url: /chat/49346f45-f0b2-4e2e-9f76-7c0b234b9712
+                - generic [ref=e1401]: Leon
+                - generic [ref=e1402]:
+                  - generic [ref=e1403]: say hello
+                  - generic [ref=e1404]: 2天前
+              - link "Leon 请用异步方式同时执行以下4个独立任务，每完成一个就立即报告结果，不需要等其他任务 2天前" [ref=e1407] [cursor=pointer]:
+                - /url: /chat/6d6b7b28-089d-4b28-82ce-2d583229a917
+                - generic [ref=e1409]: Leon
+                - generic [ref=e1410]:
+                  - generic [ref=e1411]: 请用异步方式同时执行以下4个独立任务，每完成一个就立即报告结果，不需要等其他任务
+                  - generic [ref=e1412]: 2天前
+              - link "Leon 请同时执行以下4个任务并等待全部完成后汇总：1) 用 list_dir 列出工作 2天前" [ref=e1415] [cursor=pointer]:
+                - /url: /chat/d6e6115e-c3aa-4670-b518-1d696fd73ffa
+                - generic [ref=e1417]: Leon
+                - generic [ref=e1418]:
+                  - generic [ref=e1419]: 请同时执行以下4个任务并等待全部完成后汇总：1) 用 list_dir 列出工作
+                  - generic [ref=e1420]: 2天前
+              - link "Leon 请逐一测试你的所有工具能力：1) 用 list_dir 列出 /tmp 目录 2 2天前" [ref=e1423] [cursor=pointer]:
+                - /url: /chat/50a4f7d6-fb9e-49ce-853e-75ee1fe171c5
+                - generic [ref=e1425]: Leon
+                - generic [ref=e1426]:
+                  - generic [ref=e1427]: 请逐一测试你的所有工具能力：1) 用 list_dir 列出 /tmp 目录 2
+                  - generic [ref=e1428]: 2天前
+              - link "Leon hi 2天前" [ref=e1431] [cursor=pointer]:
+                - /url: /chat/9bee61fb-0bd8-4aef-9a46-4fbe589a8ec8
+                - generic [ref=e1433]: Leon
+                - generic [ref=e1434]:
+                  - generic [ref=e1435]: hi
+                  - generic [ref=e1436]: 2天前
+              - link "Leon say hello 2天前" [ref=e1439] [cursor=pointer]:
+                - /url: /chat/e396b69f-f026-4e5b-8037-207629bc8016
+                - generic [ref=e1441]: Leon
+                - generic [ref=e1442]:
+                  - generic [ref=e1443]: say hello
+                  - generic [ref=e1444]: 2天前
+              - link "Leon say hello in one word 2天前" [ref=e1447] [cursor=pointer]:
+                - /url: /chat/3ad3e3b8-c137-4695-9e1a-e71b3a689951
+                - generic [ref=e1449]: Leon
+                - generic [ref=e1450]:
+                  - generic [ref=e1451]: say hello in one word
+                  - generic [ref=e1452]: 2天前
+              - link "Leon say hi 2天前" [ref=e1455] [cursor=pointer]:
+                - /url: /chat/51cb79a9-804c-4a9f-a8c4-2453eb4383a1
+                - generic [ref=e1457]: Leon
+                - generic [ref=e1458]:
+                  - generic [ref=e1459]: say hi
+                  - generic [ref=e1460]: 2天前
+              - link "Leon say hi 2天前" [ref=e1463] [cursor=pointer]:
+                - /url: /chat/3a3afcba-4d4d-41bd-b1eb-262c7c05f538
+                - generic [ref=e1465]: Leon
+                - generic [ref=e1466]:
+                  - generic [ref=e1467]: say hi
+                  - generic [ref=e1468]: 2天前
+              - link "Leon say hi 2天前" [ref=e1471] [cursor=pointer]:
+                - /url: /chat/35c9d8dd-1e49-42a4-b341-7d1183bfc4f3
+                - generic [ref=e1473]: Leon
+                - generic [ref=e1474]:
+                  - generic [ref=e1475]: say hi
+                  - generic [ref=e1476]: 2天前
+              - link "Leon say hello in one word 2天前" [ref=e1479] [cursor=pointer]:
+                - /url: /chat/6fb2bbfe-6338-4e59-bbf2-fe1227e68d19
+                - generic [ref=e1481]: Leon
+                - generic [ref=e1482]:
+                  - generic [ref=e1483]: say hello in one word
+                  - generic [ref=e1484]: 2天前
+              - link "Leon 你好，请用一句话回复我 2天前" [ref=e1487] [cursor=pointer]:
+                - /url: /chat/d6c5c037-731d-427e-a255-db1f28194760
+                - generic [ref=e1489]: Leon
+                - generic [ref=e1490]:
+                  - generic [ref=e1491]: 你好，请用一句话回复我
+                  - generic [ref=e1492]: 2天前
+              - link "Leon Write the text 'hello from test' to /wor 2天前" [ref=e1495] [cursor=pointer]:
+                - /url: /chat/test-docker-54c48c73
+                - generic [ref=e1497]: Leon
+                - generic [ref=e1498]:
+                  - generic [ref=e1499]: Write the text 'hello from test' to /wor
+                  - generic [ref=e1500]: 2天前
+              - 'link "Leon Use the run_command tool to execute: ech 2天前" [ref=e1503] [cursor=pointer]':
+                - /url: /chat/test-docker-b88b006b
+                - generic [ref=e1505]: Leon
+                - generic [ref=e1506]:
+                  - generic [ref=e1507]: "Use the run_command tool to execute: ech"
+                  - generic [ref=e1508]: 2天前
+              - link "Leon 请用 list_dir 工具列出 /tmp 目录内容，完成后汇报结果 2天前" [ref=e1511] [cursor=pointer]:
+                - /url: /chat/c2cf2aa1-27bf-42d0-a167-4c8cf7367c9a
+                - generic [ref=e1513]: Leon
+                - generic [ref=e1514]:
+                  - generic [ref=e1515]: 请用 list_dir 工具列出 /tmp 目录内容，完成后汇报结果
+                  - generic [ref=e1516]: 2天前
+              - link "Leon 测试三个场景： 2天前" [ref=e1519] [cursor=pointer]:
+                - /url: /chat/c688601f-eff4-411c-a873-fcd85a8b22b9
+                - generic [ref=e1521]: Leon
+                - generic [ref=e1522]:
+                  - generic [ref=e1523]: 测试三个场景：
+                  - generic [ref=e1524]: 2天前
+              - link "Leon 请用 write_file 在 /tmp 目录写一个 test_lock.txt 2天前" [ref=e1527] [cursor=pointer]:
+                - /url: /chat/8fae4fd6-5cd6-4037-8893-7f7dd6c1516b
+                - generic [ref=e1529]: Leon
+                - generic [ref=e1530]:
+                  - generic [ref=e1531]: 请用 write_file 在 /tmp 目录写一个 test_lock.txt
+                  - generic [ref=e1532]: 2天前
+              - link "Leon hello 2天前" [ref=e1535] [cursor=pointer]:
+                - /url: /chat/1097a968-3ea3-49e8-9f41-bc5178bb31e0
+                - generic [ref=e1537]: Leon
+                - generic [ref=e1538]:
+                  - generic [ref=e1539]: hello
+                  - generic [ref=e1540]: 2天前
+              - link "Leon hello 2天前" [ref=e1543] [cursor=pointer]:
+                - /url: /chat/997ff1d3-ad05-49df-acf0-e399d361b3e4
+                - generic [ref=e1545]: Leon
+                - generic [ref=e1546]:
+                  - generic [ref=e1547]: hello
+                  - generic [ref=e1548]: 2天前
+              - link "Leon 你好，请说一句话测试一下 2天前" [ref=e1551] [cursor=pointer]:
+                - /url: /chat/33eb8c23-0a18-42ad-acb1-00ade3870baf
+                - generic [ref=e1553]: Leon
+                - generic [ref=e1554]:
+                  - generic [ref=e1555]: 你好，请说一句话测试一下
+                  - generic [ref=e1556]: 2天前
+              - link "Leon cctool max1400 https://perfectapi.arche- 2天前" [ref=e1559] [cursor=pointer]:
+                - /url: /chat/c0aacc34-8320-478b-94ce-024eb9ee38d2
+                - generic [ref=e1561]: Leon
+                - generic [ref=e1562]:
+                  - generic [ref=e1563]: cctool max1400 https://perfectapi.arche-
+                  - generic [ref=e1564]: 2天前
+              - link "Leon hi 2天前" [ref=e1567] [cursor=pointer]:
+                - /url: /chat/78d1880a-2f70-4d72-a8f9-710857a65ffe
+                - generic [ref=e1569]: Leon
+                - generic [ref=e1570]:
+                  - generic [ref=e1571]: hi
+                  - generic [ref=e1572]: 2天前
+              - link "Leon helllo 5天前" [ref=e1575] [cursor=pointer]:
+                - /url: /chat/3133bbdb-38f4-4f4a-b8d6-967e65b6a33a
+                - generic [ref=e1577]: Leon
+                - generic [ref=e1578]:
+                  - generic [ref=e1579]: helllo
+                  - generic [ref=e1580]: 5天前
+        - generic [ref=e1582]:
+          - generic [ref=e1583]:
+            - generic [ref=e1584]:
+              - button [ref=e1585] [cursor=pointer]:
+                - img [ref=e1586]
+              - generic [ref=e1589]: 请测试你的所有工具是否可用：1) 用 Read 工具读取 /tmp/test.t
+            - button "Medium" [ref=e1591] [cursor=pointer]:
+              - img [ref=e1592]
+              - generic [ref=e1595]: Medium
+              - img [ref=e1596]
+          - generic [ref=e1599]:
+            - generic [ref=e1602]:
+              - generic [ref=e1604]:
+                - paragraph [ref=e1606]: 请测试你的所有工具是否可用：1) 用 Read 工具读取 /tmp/test.txt 2) 用 Bash 工具执行 echo hello 3) 用 Glob 工具找 *.py 文件 4) 用 WebSearch 搜索 python 5) 用 tool_search 搜索 read
+                - generic [ref=e1607]: 14:19
+              - generic [ref=e1608]:
+                - generic [ref=e1610]: L
+                - generic [ref=e1611]:
+                  - generic [ref=e1612]:
+                    - generic [ref=e1613]: Leon
+                    - generic [ref=e1614]: 14:19
+                  - button "查看 5 个工具调用详情" [ref=e1615] [cursor=pointer]:
+                    - generic [ref=e1617]:
+                      - generic [ref=e1618]:
+                        - img [ref=e1619]
+                        - generic [ref=e1622]: Read
+                        - generic [ref=e1623]: test.txt
+                      - generic [ref=e1624]:
+                        - img [ref=e1625]
+                        - generic [ref=e1628]: Bash
+                        - generic [ref=e1629]: echo hello
+                      - generic [ref=e1630]:
+                        - img [ref=e1631]
+                        - generic [ref=e1634]: Glob
+                        - generic [ref=e1635]: leon_test
+                      - generic [ref=e1636]:
+                        - img [ref=e1637]
+                        - generic [ref=e1640]: Web
+                        - generic [ref=e1641]: python
+                      - generic [ref=e1642]:
+                        - img [ref=e1643]
+                        - generic [ref=e1646]: tool_search
+                        - generic [ref=e1647]: read
+                  - generic [ref=e1649]:
+                    - list [ref=e1650]:
+                      - listitem [ref=e1651]:
+                        - text: Read
+                        - code [ref=e1652]: /tmp/test.txt
+                    - list [ref=e1653]:
+                      - listitem [ref=e1654]:
+                        - text: 失败：路径不在允许的工作区内
+                        - list [ref=e1655]:
+                          - listitem [ref=e1656]:
+                            - text: "Workspace:"
+                            - code [ref=e1657]: /Users/apple/Desktop/leon_test
+                          - listitem [ref=e1658]:
+                            - text: "Attempted:"
+                            - code [ref=e1659]: /private/tmp/test.txt
+                    - list [ref=e1660]:
+                      - listitem [ref=e1661]:
+                        - text: Bash
+                        - code [ref=e1662]: echo hello
+                    - list [ref=e1663]:
+                      - listitem [ref=e1664]:
+                        - text: 成功：输出
+                        - code [ref=e1665]: hello
+                    - list [ref=e1666]:
+                      - listitem [ref=e1667]:
+                        - text: Glob 查找
+                        - code [ref=e1668]: "*.py"
+                        - text: （在
+                        - code [ref=e1669]: /Users/apple/Desktop/leon_test
+                        - text: ）
+                    - list [ref=e1670]:
+                      - listitem [ref=e1671]:
+                        - text: 成功：找到
+                        - list [ref=e1672]:
+                          - listitem [ref=e1673]:
+                            - code [ref=e1674]: /Users/apple/Desktop/leon_test/tests/__init__.py
+                          - listitem [ref=e1675]:
+                            - code [ref=e1676]: /Users/apple/Desktop/leon_test/tests/test_users_api.py
+                          - listitem [ref=e1677]:
+                            - code [ref=e1678]: /Users/apple/Desktop/leon_test/app/__init__.py
+                          - listitem [ref=e1679]:
+                            - code [ref=e1680]: /Users/apple/Desktop/leon_test/app/main.py
+                          - listitem [ref=e1681]:
+                            - code [ref=e1682]: /Users/apple/Desktop/leon_test/app/storage.py
+                          - listitem [ref=e1683]:
+                            - code [ref=e1684]: /Users/apple/Desktop/leon_test/app/models.py
+                          - listitem [ref=e1685]:
+                            - code [ref=e1686]: /Users/apple/Desktop/leon_test/thinking_dots_test.py
+                          - listitem [ref=e1726]:
+                            - code [ref=e1727]: /Users/apple/Desktop/leon_test/test3.py
+                          - listitem [ref=e1728]:
+                            - code [ref=e1729]: /Users/apple/Desktop/leon_test/sum_script.py
+                    - list [ref=e1730]:
+                      - listitem [ref=e1731]:
+                        - text: WebSearch 搜索
+                        - code [ref=e1732]: python
+                    - list [ref=e1733]:
+                      - listitem [ref=e1734]:
+                        - text: 失败：
+                        - code [ref=e1735]: No search providers configured
+                        - text: （未配置搜索提供方）
+                    - list [ref=e1736]:
+                      - listitem [ref=e1737]:
+                        - text: tool_search 搜索
+                        - code [ref=e1738]: read
+                    - list [ref=e1739]:
+                      - listitem [ref=e1740]:
+                        - text: 成功：返回了
+                        - code [ref=e1741]: Read
+                        - text: （以及相关工具
+                        - code [ref=e1742]: Edit
+                        - text: ）的工具定义信息。*
+                  - button "复制" [ref=e1744] [cursor=pointer]:
+                    - img [ref=e1745]
+                    - generic [ref=e1748]: 复制
+            - generic [ref=e1690]:
+              - img [ref=e1692]
+              - generic [ref=e1697]:
+                - generic [ref=e1699]: 本地
+                - generic [ref=e1700]: ·
+                - generic [ref=e1701]: Leon 待命中
+              - button [ref=e1703] [cursor=pointer]:
+                - img [ref=e1704]
+            - generic [ref=e1709]:
+              - textbox "告诉 Leon 你需要什么帮助..." [ref=e1749]
+              - button [disabled] [ref=e1713]:
+                - img [ref=e1750]
+            - generic [ref=e1718]:
+              - generic [ref=e1719]: "上下文: 3.3k (0.8%)"
+              - generic [ref=e1720]: "费用: $0.02"
+              - generic [ref=e1721]: "累计: 6.5k"
+        - generic [ref=e1722]:
+          - heading "搜索对话" [level=2] [ref=e1723]
+          - paragraph [ref=e1724]: 搜索对话或运行环境
+  - region "Notifications alt+T"

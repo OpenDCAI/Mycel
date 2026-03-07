@@ -1,0 +1,28 @@
+{
+  "name": "Read",
+  "description": "Reads a file from the local filesystem. You can access any file directly by using this tool. Supports reading text files, images (PNG, JPG, etc.), PDF files (.pdf), and Jupyter notebooks (.ipynb).",
+  "parameters": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "file_path": {
+        "description": "The absolute path to the file to read",
+        "type": "string"
+      },
+      "limit": {
+        "description": "The number of lines to read. Only provide if the file is too large to read at once.",
+        "type": "number"
+      },
+      "offset": {
+        "description": "The line number to start reading from. Only provide if the file is too large to read at once",
+        "type": "number"
+      },
+      "pages": {
+        "description": "Page range for PDF files (e.g., \"1-5\", \"3\", \"10-20\"). Only applicable to PDF files. Maximum 20 pages per request.",
+        "type": "string"
+      }
+    },
+    "required": ["file_path"],
+    "type": "object"
+  }
+}

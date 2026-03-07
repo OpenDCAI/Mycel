@@ -1,0 +1,69 @@
+{
+  "name": "Grep",
+  "description": "A powerful search tool built on ripgrep. Supports full regex syntax. Filter files with glob parameter or type parameter. Output modes: \"content\" shows matching lines, \"files_with_matches\" shows only file paths (default), \"count\" shows match counts.",
+  "parameters": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "-A": {
+        "description": "Number of lines to show after each match (rg -A). Requires output_mode: \"content\".",
+        "type": "number"
+      },
+      "-B": {
+        "description": "Number of lines to show before each match (rg -B). Requires output_mode: \"content\".",
+        "type": "number"
+      },
+      "-C": {
+        "description": "Alias for context.",
+        "type": "number"
+      },
+      "-i": {
+        "description": "Case insensitive search (rg -i)",
+        "type": "boolean"
+      },
+      "-n": {
+        "description": "Show line numbers in output (rg -n). Requires output_mode: \"content\". Defaults to true.",
+        "type": "boolean"
+      },
+      "context": {
+        "description": "Number of lines to show before and after each match (rg -C). Requires output_mode: \"content\".",
+        "type": "number"
+      },
+      "glob": {
+        "description": "Glob pattern to filter files (e.g. \"*.js\", \"*.{ts,tsx}\") - maps to rg --glob",
+        "type": "string"
+      },
+      "head_limit": {
+        "description": "Limit output to first N lines/entries. Defaults to 0 (unlimited).",
+        "type": "number"
+      },
+      "multiline": {
+        "description": "Enable multiline mode where . matches newlines (rg -U --multiline-dotall). Default: false.",
+        "type": "boolean"
+      },
+      "offset": {
+        "description": "Skip first N lines/entries before applying head_limit. Defaults to 0.",
+        "type": "number"
+      },
+      "output_mode": {
+        "description": "Output mode: \"content\", \"files_with_matches\", or \"count\". Defaults to \"files_with_matches\".",
+        "enum": ["content", "files_with_matches", "count"],
+        "type": "string"
+      },
+      "path": {
+        "description": "File or directory to search in (rg PATH). Defaults to current working directory.",
+        "type": "string"
+      },
+      "pattern": {
+        "description": "The regular expression pattern to search for in file contents",
+        "type": "string"
+      },
+      "type": {
+        "description": "File type to search (rg --type). Common types: js, py, rust, go, java, etc.",
+        "type": "string"
+      }
+    },
+    "required": ["pattern"],
+    "type": "object"
+  }
+}

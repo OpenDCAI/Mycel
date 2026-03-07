@@ -11,12 +11,12 @@ import asyncio
 from typing import Any
 
 from core.runtime.registry import ToolEntry, ToolMode, ToolRegistry
-from core.web.fetchers.jina import JinaFetcher
-from core.web.fetchers.markdownify import MarkdownifyFetcher
-from core.web.searchers.exa import ExaSearcher
-from core.web.searchers.firecrawl import FirecrawlSearcher
-from core.web.searchers.tavily import TavilySearcher
-from core.web.types import FetchLimits, FetchResult, SearchResult
+from core.tools.web.fetchers.jina import JinaFetcher
+from core.tools.web.fetchers.markdownify import MarkdownifyFetcher
+from core.tools.web.searchers.exa import ExaSearcher
+from core.tools.web.searchers.firecrawl import FirecrawlSearcher
+from core.tools.web.searchers.tavily import TavilySearcher
+from core.tools.web.types import FetchLimits, FetchResult, SearchResult
 
 
 class WebService:

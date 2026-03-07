@@ -1,0 +1,28 @@
+{
+  "name": "TaskOutput",
+  "description": "Retrieves output from a running or completed task (background shell, agent, or remote session). Takes a task_id parameter identifying the task. Returns the task output along with status information. Use block=true (default) to wait for task completion. Use block=false for non-blocking check of current status.",
+  "parameters": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "block": {
+        "default": true,
+        "description": "Whether to wait for completion",
+        "type": "boolean"
+      },
+      "task_id": {
+        "description": "The task ID to get output from",
+        "type": "string"
+      },
+      "timeout": {
+        "default": 30000,
+        "description": "Max wait time in ms",
+        "maximum": 600000,
+        "minimum": 0,
+        "type": "number"
+      }
+    },
+    "required": ["task_id", "block", "timeout"],
+    "type": "object"
+  }
+}

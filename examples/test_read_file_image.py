@@ -7,7 +7,7 @@ from typing import Any
 from langchain.chat_models import init_chat_model
 from langchain_core.messages import HumanMessage, ToolMessage
 
-from core.filesystem.read import read_file
+from core.tools.filesystem.read import read_file
 
 
 def _load_dotenv_if_present() -> None:

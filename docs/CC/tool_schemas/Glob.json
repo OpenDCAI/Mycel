@@ -1,0 +1,20 @@
+{
+  "name": "Glob",
+  "description": "Fast file pattern matching tool that works with any codebase size. Supports glob patterns like \"**/*.js\" or \"src/**/*.ts\". Returns matching file paths sorted by modification time.",
+  "parameters": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "path": {
+        "description": "The directory to search in. If not specified, the current working directory will be used.",
+        "type": "string"
+      },
+      "pattern": {
+        "description": "The glob pattern to match files against",
+        "type": "string"
+      }
+    },
+    "required": ["pattern"],
+    "type": "object"
+  }
+}

@@ -13,9 +13,9 @@ import logging
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from core.filesystem.backend import FileSystemBackend
-from core.filesystem.read import ReadLimits, ReadResult
-from core.filesystem.read import read_file as read_file_dispatch
+from core.tools.filesystem.backend import FileSystemBackend
+from core.tools.filesystem.read import ReadLimits, ReadResult
+from core.tools.filesystem.read import read_file as read_file_dispatch
 from core.runtime.registry import ToolEntry, ToolMode, ToolRegistry
 
 if TYPE_CHECKING:
@@ -39,7 +39,7 @@ class FileSystemService:
         backend: FileSystemBackend | None = None,
     ):
         if backend is None:
-            from core.filesystem.local_backend import LocalBackend
+            from core.tools.filesystem.local_backend import LocalBackend
 
             backend = LocalBackend()
 
@@ -301,7 +301,7 @@ class FileSystemService:
                     f"Total lines: {total_lines}"
                 )
 
-        from core.filesystem.local_backend import LocalBackend
+        from core.tools.filesystem.local_backend import LocalBackend
 
         if isinstance(self.backend, LocalBackend):
             limits = ReadLimits()

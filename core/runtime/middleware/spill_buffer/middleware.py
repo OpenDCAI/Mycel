@@ -24,7 +24,7 @@ except ImportError:
     ModelResponse = Any
     ToolCallRequest = Any
 
-from core.filesystem.backend import FileSystemBackend
+from core.tools.filesystem.backend import FileSystemBackend
 from .spill import spill_if_needed
 
 # Tools whose output must never be silently replaced.
@@ -48,7 +48,7 @@ class SpillBufferMiddleware(AgentMiddleware):
         default_threshold: int = 50_000,
     ) -> None:
         if fs_backend is None:
-            from core.filesystem.local_backend import LocalBackend
+            from core.tools.filesystem.local_backend import LocalBackend
 
             fs_backend = LocalBackend()
         self.fs_backend = fs_backend

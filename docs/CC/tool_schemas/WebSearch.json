@@ -1,0 +1,31 @@
+{
+  "name": "WebSearch",
+  "description": "Allows Claude to search the web and use the results to inform responses. Provides up-to-date information for current events and recent data. Returns search result information formatted as search result blocks, including links as markdown hyperlinks.",
+  "parameters": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "allowed_domains": {
+        "description": "Only include search results from these domains",
+        "items": {
+          "type": "string"
+        },
+        "type": "array"
+      },
+      "blocked_domains": {
+        "description": "Never include search results from these domains",
+        "items": {
+          "type": "string"
+        },
+        "type": "array"
+      },
+      "query": {
+        "description": "The search query to use",
+        "minLength": 2,
+        "type": "string"
+      }
+    },
+    "required": ["query"],
+    "type": "object"
+  }
+}

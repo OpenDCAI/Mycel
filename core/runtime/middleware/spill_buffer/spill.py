@@ -5,7 +5,7 @@ from __future__ import annotations
 import os
 from typing import Any
 
-from core.filesystem.backend import FileSystemBackend
+from core.tools.filesystem.backend import FileSystemBackend
 
 PREVIEW_BYTES = 2048
 

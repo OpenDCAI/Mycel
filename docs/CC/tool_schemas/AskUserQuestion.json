@@ -1,0 +1,105 @@
+{
+  "name": "AskUserQuestion",
+  "description": "Use this tool when you need to ask the user questions during execution. Allows gathering user preferences or requirements, clarifying ambiguous instructions, getting decisions on implementation choices, and offering choices about direction.",
+  "parameters": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "annotations": {
+        "additionalProperties": {
+          "additionalProperties": false,
+          "properties": {
+            "notes": {
+              "description": "Free-text notes the user added to their selection.",
+              "type": "string"
+            },
+            "preview": {
+              "description": "The preview content of the selected option, if the question used previews.",
+              "type": "string"
+            }
+          },
+          "type": "object"
+        },
+        "description": "Optional per-question annotations from the user. Keyed by question text.",
+        "propertyNames": {
+          "type": "string"
+        },
+        "type": "object"
+      },
+      "answers": {
+        "additionalProperties": {
+          "type": "string"
+        },
+        "description": "User answers collected by the permission component",
+        "propertyNames": {
+          "type": "string"
+        },
+        "type": "object"
+      },
+      "metadata": {
+        "additionalProperties": false,
+        "description": "Optional metadata for tracking and analytics purposes. Not displayed to user.",
+        "properties": {
+          "source": {
+            "description": "Optional identifier for the source of this question.",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "questions": {
+        "description": "Questions to ask the user (1-4 questions)",
+        "items": {
+          "additionalProperties": false,
+          "properties": {
+            "header": {
+              "description": "Very short label displayed as a chip/tag (max 12 chars).",
+              "type": "string"
+            },
+            "multiSelect": {
+              "default": false,
+              "description": "Set to true to allow the user to select multiple options.",
+              "type": "boolean"
+            },
+            "options": {
+              "description": "The available choices for this question. Must have 2-4 options.",
+              "items": {
+                "additionalProperties": false,
+                "properties": {
+                  "description": {
+                    "description": "Explanation of what this option means or what will happen if chosen.",
+                    "type": "string"
+                  },
+                  "label": {
+                    "description": "The display text for this option.",
+                    "type": "string"
+                  },
+                  "preview": {
+                    "description": "Optional preview content rendered when this option is focused.",
+                    "type": "string"
+                  }
+                },
+                "required": ["label", "description"],
+                "type": "object"
+              },
+              "maxItems": 4,
+              "minItems": 2,
+              "type": "array"
+            },
+            "question": {
+              "description": "The complete question to ask the user.",
+              "type": "string"
+            }
+          },
+          "required": ["question", "header", "options", "multiSelect"],
+          "type": "object"
+        },
+        "maxItems": 4,
+        "minItems": 1,
+        "type": "array"
+      }
+    },
+    "required": ["questions"],
+    "type": "object"
+  }
+}

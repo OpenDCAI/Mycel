@@ -4,8 +4,8 @@ import pytest
 from pydantic import ValidationError
 
 from config.models_schema import ActiveModel, CustomModelConfig, ModelSpec, ModelsConfig, PoolConfig
-from core.monitor.cost import fetch_openrouter_pricing, get_model_context_limit
-from core.monitor.middleware import MonitorMiddleware
+from core.runtime.middleware.monitor.cost import fetch_openrouter_pricing, get_model_context_limit
+from core.runtime.middleware.monitor.middleware import MonitorMiddleware
 
 # Ensure OpenRouter cache is populated (same as MonitorMiddleware.__init__)
 fetch_openrouter_pricing()

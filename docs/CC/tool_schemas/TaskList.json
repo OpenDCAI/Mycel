@@ -1,0 +1,10 @@
+{
+  "name": "TaskList",
+  "description": "Use this tool to list all tasks in the task list. Returns a summary of each task including id, subject, status, owner, and blockedBy. Useful for seeing what tasks are available to work on and checking overall progress.",
+  "parameters": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {},
+    "type": "object"
+  }
+}

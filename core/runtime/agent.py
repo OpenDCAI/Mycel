@@ -54,10 +54,10 @@ from core.runtime.middleware.prompt_caching import PromptCachingMiddleware
 from core.runtime.middleware.queue import MessageQueueManager, SteeringMiddleware
 
 # Hooks (used by Services)
-from core.command.hooks.dangerous_commands import DangerousCommandsHook
-from core.command.hooks.file_access_logger import FileAccessLoggerHook
-from core.command.hooks.file_permission import FilePermissionHook
-from core.command.hooks.path_security import PathSecurityHook
+from core.tools.command.hooks.dangerous_commands import DangerousCommandsHook
+from core.tools.command.hooks.file_access_logger import FileAccessLoggerHook
+from core.tools.command.hooks.file_permission import FilePermissionHook
+from core.tools.command.hooks.path_security import PathSecurityHook
 
 from core.model_params import normalize_model_kwargs
 from storage.container import StorageContainer
@@ -764,7 +764,7 @@ class LeonAgent:
         middleware.append(SteeringMiddleware(queue_manager=self.queue_manager))
 
         # 5. TaskBoard (board management — not yet converted to Service)
-        from core.taskboard.middleware import TaskBoardMiddleware
+        from backend.taskboard.middleware import TaskBoardMiddleware
         self._taskboard_middleware = TaskBoardMiddleware()
         middleware.append(self._taskboard_middleware)
 

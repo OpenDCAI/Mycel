@@ -1,0 +1,36 @@
+{
+  "name": "SendMessage",
+  "description": "Send messages to agent teammates and handle protocol requests/responses in a team. Supports message types: \"message\" (DM to single teammate), \"broadcast\" (all teammates), \"shutdown_request\", \"shutdown_response\", and \"plan_approval_response\".",
+  "parameters": {
+    "additionalProperties": false,
+    "properties": {
+      "approve": {
+        "description": "Whether to approve the request (required for shutdown_response, plan_approval_response)",
+        "type": "boolean"
+      },
+      "content": {
+        "description": "Message text, reason, or feedback",
+        "type": "string"
+      },
+      "recipient": {
+        "description": "Agent name of the recipient (required for message, shutdown_request, plan_approval_response)",
+        "type": "string"
+      },
+      "request_id": {
+        "description": "Request ID to respond to (required for shutdown_response, plan_approval_response)",
+        "type": "string"
+      },
+      "summary": {
+        "description": "A 5-10 word summary of the message, shown as a preview in the UI (required for message, broadcast)",
+        "type": "string"
+      },
+      "type": {
+        "description": "Message type: \"message\" for DMs, \"broadcast\" to all teammates, \"shutdown_request\", \"shutdown_response\", \"plan_approval_response\"",
+        "enum": ["message", "broadcast", "shutdown_request", "shutdown_response", "plan_approval_response"],
+        "type": "string"
+      }
+    },
+    "required": ["type"],
+    "type": "object"
+  }
+}

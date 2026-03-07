@@ -10,7 +10,7 @@ from unittest.mock import patch
 
 import pytest
 
-from core.memory.summary_store import SummaryStore
+from core.runtime.middleware.memory.summary_store import SummaryStore
 
 
 @pytest.fixture
@@ -433,7 +433,7 @@ def test_transaction_rollback_on_error(temp_db):
     assert len(initial_summaries) == 1
 
     # Import the module to patch its _connect function
-    from core.memory import summary_store
+    from core.runtime.middleware.memory import summary_store
 
     original_connect = summary_store._connect
     call_count = {"count": 0}

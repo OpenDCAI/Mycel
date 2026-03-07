@@ -1,0 +1,19 @@
+{
+  "name": "TaskStop",
+  "description": "Stops a running background task by its ID. Takes a task_id parameter identifying the task to stop. Returns a success or failure status.",
+  "parameters": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "shell_id": {
+        "description": "Deprecated: use task_id instead",
+        "type": "string"
+      },
+      "task_id": {
+        "description": "The ID of the background task to stop",
+        "type": "string"
+      }
+    },
+    "type": "object"
+  }
+}

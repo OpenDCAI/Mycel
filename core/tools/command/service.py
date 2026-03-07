@@ -21,8 +21,8 @@ from typing import Any
 from core.runtime.registry import ToolEntry, ToolMode, ToolRegistry
 from sandbox.shell_output import normalize_pty_result
 
-from core.command.base import AsyncCommand, BaseExecutor
-from core.command.dispatcher import get_executor
+from core.tools.command.base import AsyncCommand, BaseExecutor
+from core.tools.command.dispatcher import get_executor
 
 logger = logging.getLogger(__name__)
 

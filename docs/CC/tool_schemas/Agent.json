@@ -1,0 +1,50 @@
+{
+  "name": "Agent",
+  "description": "Launch a new agent to handle complex, multi-step tasks autonomously.\n\nThe Agent tool launches specialized agents (subprocesses) that autonomously handle complex tasks. Each agent type has specific capabilities and tools available to it.",
+  "parameters": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "description": {
+        "description": "A short (3-5 word) description of the task",
+        "type": "string"
+      },
+      "isolation": {
+        "description": "Isolation mode. \"worktree\" creates a temporary git worktree so the agent works on an isolated copy of the repo.",
+        "enum": ["worktree"],
+        "type": "string"
+      },
+      "mode": {
+        "description": "Permission mode for spawned teammate (e.g., \"plan\" to require plan approval).",
+        "enum": ["acceptEdits", "bypassPermissions", "default", "dontAsk", "plan"],
+        "type": "string"
+      },
+      "name": {
+        "description": "Name for the spawned agent",
+        "type": "string"
+      },
+      "prompt": {
+        "description": "The task for the agent to perform",
+        "type": "string"
+      },
+      "resume": {
+        "description": "Optional agent ID to resume from. If provided, the agent will continue from the previous execution transcript.",
+        "type": "string"
+      },
+      "run_in_background": {
+        "description": "Set to true to run this agent in the background. You will be notified when it completes.",
+        "type": "boolean"
+      },
+      "subagent_type": {
+        "description": "The type of specialized agent to use for this task",
+        "type": "string"
+      },
+      "team_name": {
+        "description": "Team name for spawning. Uses current team context if omitted.",
+        "type": "string"
+      }
+    },
+    "required": ["description", "prompt"],
+    "type": "object"
+  }
+}

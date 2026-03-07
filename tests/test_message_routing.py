@@ -5,8 +5,8 @@ from pathlib import Path
 
 import pytest
 
-from core.queue import MessageQueueManager
-from core.queue.formatters import format_steer_reminder, format_task_notification
+from core.runtime.middleware.queue import MessageQueueManager
+from core.runtime.middleware.queue.formatters import format_steer_reminder, format_task_notification
 
 
 @pytest.fixture()
@@ -295,7 +295,7 @@ class TestSteeringMiddlewareIntegration:
     """Verify SteeringMiddleware reads from unified queue via drain_all."""
 
     def test_middleware_consumes_queued_messages(self, tmp_db):
-        from core.queue.middleware import SteeringMiddleware
+        from core.runtime.middleware.queue.middleware import SteeringMiddleware
 
         mgr = MessageQueueManager(db_path=tmp_db)
         middleware = SteeringMiddleware(queue_manager=mgr)
@@ -325,7 +325,7 @@ class TestSteeringMiddlewareIntegration:
         """Verify wrap_tool_call is a pure passthrough (non-preemptive)."""
         from unittest.mock import MagicMock
 
-        from core.queue.middleware import SteeringMiddleware
+        from core.runtime.middleware.queue.middleware import SteeringMiddleware
 
         mgr = MessageQueueManager(db_path=tmp_db)
         middleware = SteeringMiddleware(queue_manager=mgr)

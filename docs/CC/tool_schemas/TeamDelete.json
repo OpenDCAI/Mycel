@@ -1,0 +1,10 @@
+{
+  "name": "TeamDelete",
+  "description": "Remove team and task directories when the swarm work is complete. Removes the team directory (~/.claude/teams/{team-name}/) and the task directory (~/.claude/tasks/{team-name}/). Will fail if the team still has active members.",
+  "parameters": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {},
+    "type": "object"
+  }
+}

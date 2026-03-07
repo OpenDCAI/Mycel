@@ -1,0 +1,32 @@
+{
+  "name": "Bash",
+  "description": "Executes a given bash command and returns its output. The working directory persists between commands, but shell state does not. The shell environment is initialized from the user's profile (bash or zsh).",
+  "parameters": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "command": {
+        "description": "The command to execute",
+        "type": "string"
+      },
+      "dangerouslyDisableSandbox": {
+        "description": "Set this to true to dangerously override sandbox mode and run commands without sandboxing.",
+        "type": "boolean"
+      },
+      "description": {
+        "description": "Clear, concise description of what this command does in active voice.",
+        "type": "string"
+      },
+      "run_in_background": {
+        "description": "Set to true to run this command in the background. Use TaskOutput to read the output later.",
+        "type": "boolean"
+      },
+      "timeout": {
+        "description": "Optional timeout in milliseconds (max 600000)",
+        "type": "number"
+      }
+    },
+    "required": ["command"],
+    "type": "object"
+  }
+}

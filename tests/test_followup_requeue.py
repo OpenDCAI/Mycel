@@ -15,7 +15,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from core.queue.manager import MessageQueueManager
+from core.runtime.middleware.queue.manager import MessageQueueManager
 
 
 # ---------------------------------------------------------------------------
