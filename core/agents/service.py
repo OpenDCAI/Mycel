@@ -69,16 +69,16 @@ AGENT_SCHEMA = {
 
 TASK_OUTPUT_SCHEMA = {
     "name": "TaskOutput",
-    "description": "Get the output of a background agent task by its TaskId.",
+    "description": "Get the output of a background agent task by its task_id.",
     "parameters": {
         "type": "object",
         "properties": {
-            "TaskId": {
+            "task_id": {
                 "type": "string",
                 "description": "The task ID returned when starting a background agent",
             },
         },
-        "required": ["TaskId"],
+        "required": ["task_id"],
     },
 }
 
@@ -88,12 +88,12 @@ TASK_STOP_SCHEMA = {
     "parameters": {
         "type": "object",
         "properties": {
-            "TaskId": {
+            "task_id": {
                 "type": "string",
                 "description": "The task ID to stop",
             },
         },
-        "required": ["TaskId"],
+        "required": ["task_id"],
     },
 }
 
@@ -299,15 +299,15 @@ class AgentService:
                 except Exception:
                     pass
 
-    async def _handle_task_output(self, TaskId: str) -> str:
+    async def _handle_task_output(self, task_id: str) -> str:
         """Get output of a background agent task."""
-        running = self._tasks.get(TaskId)
+        running = self._tasks.get(task_id)
         if not running:
-            return f"Error: task '{TaskId}' not found"
+            return f"Error: task '{task_id}' not found"
 
         if not running.is_done:
             return json.dumps({
-                "task_id": TaskId,
+                "task_id": task_id,
                 "status": "running",
                 "message": "Agent is still running.",
             }, ensure_ascii=False)
@@ -315,20 +315,20 @@ class AgentService:
         result = running.get_result()
         status = "error" if (result and result.startswith("<tool_use_error>")) else "completed"
         return json.dumps({
-            "task_id": TaskId,
+            "task_id": task_id,
             "status": status,
             "result": result,
         }, ensure_ascii=False)
 
-    async def _handle_task_stop(self, TaskId: str) -> str:
+    async def _handle_task_stop(self, task_id: str) -> str:
         """Stop a running background agent task."""
-        running = self._tasks.get(TaskId)
+        running = self._tasks.get(task_id)
         if not running:
-            return f"Error: task '{TaskId}' not found"
+            return f"Error: task '{task_id}' not found"
 
         if running.is_done:
-            return f"Task {TaskId} already completed"
+            return f"Task {task_id} already completed"
 
         running.task.cancel()
         await self._agent_registry.update_status(running.agent_id, "error")
-        return f"Task {TaskId} cancelled"
+        return f"Task {task_id} cancelled"

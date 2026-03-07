@@ -162,5 +162,5 @@ class CommandService:
         return (
             f"Command started in background.\n"
             f"CommandId: {async_cmd.command_id}\n"
-            f"Use command_status tool to check progress."
+            f"Use TaskOutput to get result."
         )
