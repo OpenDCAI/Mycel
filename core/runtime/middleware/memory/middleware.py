@@ -170,8 +170,7 @@ class MemoryMiddleware(AgentMiddleware):
                 f"sent to LLM (original: {original_count} msgs)"
             )
 
-        request.messages = messages
-        return await handler(request)
+        return await handler(request.override(messages=messages))
 
     async def _do_compact(self, messages: list[Any], thread_id: str | None = None) -> list[Any]:
         """Execute compaction: summarize old messages, return compacted list."""

@@ -23,7 +23,7 @@ def serialize_message(msg: Any) -> dict[str, Any]:
     result = {
         "id": getattr(msg, "id", None),
         "type": msg.__class__.__name__,
-        "content": extract_text_content(getattr(msg, "content", "")),
+        "content": getattr(msg, "content", ""),
         "tool_calls": getattr(msg, "tool_calls", []),
         "tool_call_id": getattr(msg, "tool_call_id", None),
     }

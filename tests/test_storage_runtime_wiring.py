@@ -146,7 +146,7 @@ def test_create_agent_sync_all_sqlite_override_with_supabase_default_does_not_re
         "LEON_STORAGE_REPO_PROVIDERS",
         (
             '{"checkpoint_repo":"sqlite","thread_config_repo":"sqlite","run_event_repo":"sqlite",'
-            '"file_operation_repo":"sqlite","summary_repo":"sqlite","eval_repo":"sqlite"}'
+            '"file_operation_repo":"sqlite","summary_repo":"sqlite","eval_repo":"sqlite","queue_repo":"sqlite"}'
         ),
     )
     monkeypatch.delenv("LEON_SUPABASE_CLIENT_FACTORY", raising=False)
