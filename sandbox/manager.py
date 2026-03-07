@@ -18,6 +18,7 @@ from sandbox.config import DEFAULT_DB_PATH
 from sandbox.lease import LeaseStore
 from sandbox.provider import SandboxProvider
 from sandbox.terminal import TerminalState, TerminalStore
+from sandbox.workspace_sync import WorkspaceSync
 
 
 def lookup_sandbox_for_thread(thread_id: str, db_path: Path | None = None) -> str | None:
@@ -61,6 +62,12 @@ class SandboxManager:
             provider=provider,
             db_path=self.db_path,
             default_policy=ChatSessionPolicy(),
+        )
+
+        from backend.web.core.config import THREAD_FILES_ROOT
+        self.workspace_sync = WorkspaceSync(
+            provider_capability=self.provider_capability,
+            workspace_root=THREAD_FILES_ROOT
         )
 
     def _default_terminal_cwd(self) -> str:
@@ -132,6 +139,9 @@ class SandboxManager:
         self.session_manager.close(reason="manager_close")
 
     def get_sandbox(self, thread_id: str) -> SandboxCapability:
+        from sandbox.thread_context import set_current_thread_id
+        set_current_thread_id(thread_id)
+
         terminal = self._get_active_terminal(thread_id)
         session = self.session_manager.get(thread_id, terminal.terminal_id) if terminal else None
         if session:
@@ -183,6 +193,12 @@ class SandboxManager:
 
         instance = lease.get_instance()
         if instance:
+            # @@@workspace-upload - sync files to sandbox after creation
+            try:
+                self.workspace_sync.upload_workspace(thread_id, instance.instance_id, self.provider)
+            except Exception as e:
+                import logging
+                logging.getLogger(__name__).warning(f"Failed to upload workspace: {e}")
             self._fire_session_ready(instance.instance_id, "create")
 
         return SandboxCapability(session, manager=self)
@@ -392,6 +408,14 @@ class SandboxManager:
             # @@@pause-rebind-instance - Pause must operate on a concrete running instance.
             # Re-resolve through lease to avoid pausing stale detached bindings.
             lease.ensure_active_instance(self.provider)
+            instance = lease.get_instance()
+            if instance:
+                # @@@workspace-download - sync files from sandbox before pause
+                try:
+                    self.workspace_sync.download_workspace(thread_id, instance.instance_id, self.provider)
+                except Exception as e:
+                    import logging
+                    logging.getLogger(__name__).warning(f"Failed to download workspace: {e}")
             if not lease.pause_instance(self.provider):
                 return False
 
@@ -467,6 +491,17 @@ class SandboxManager:
         terminals = self.terminal_store.list_by_thread(thread_id)
         if not terminals:
             return False
+
+        # @@@workspace-download - sync files before destroy
+        lease = self._get_thread_lease(thread_id)
+        if lease:
+            instance = lease.get_instance()
+            if instance:
+                try:
+                    self.workspace_sync.download_workspace(thread_id, instance.instance_id, self.provider)
+                except Exception as e:
+                    import logging
+                    logging.getLogger(__name__).warning(f"Failed to download workspace: {e}")
 
         lease_ids = {terminal.lease_id for terminal in terminals}
 
