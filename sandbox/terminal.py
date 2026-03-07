@@ -23,7 +23,7 @@ from storage.providers.sqlite.kernel import connect_sqlite
 from sandbox.config import DEFAULT_DB_PATH
 
 if TYPE_CHECKING:
-    pass
+    from storage.providers.sqlite.sandbox_repository_protocol import SandboxRepositoryProtocol
 
 REQUIRED_ABSTRACT_TERMINAL_COLUMNS = {
     "terminal_id",
@@ -172,8 +172,9 @@ class TerminalStore:
     Handles CRUD operations for terminals in the database.
     """
 
-    def __init__(self, db_path: Path = DEFAULT_DB_PATH):
+    def __init__(self, db_path: Path = DEFAULT_DB_PATH, repository: SandboxRepositoryProtocol | None = None):
         self.db_path = db_path
+        self._repo = repository  # @@@repository-migration - optional injection
         self._ensure_tables()
 
     def _ensure_tables(self) -> None:
@@ -319,6 +320,14 @@ class TerminalStore:
 
     def get_by_id(self, terminal_id: str) -> AbstractTerminal | None:
         """Get terminal by terminal_id."""
+        # @@@repository-migration - use repository if available
+        if self._repo:
+            row = self._repo.get_terminal(terminal_id)
+            if not row:
+                return None
+            return self._row_to_terminal(row)  # type: ignore - dict works like Row
+
+        # Fallback to inline SQL
         with _connect(self.db_path) as conn:
             conn.row_factory = sqlite3.Row
             row = conn.execute(
