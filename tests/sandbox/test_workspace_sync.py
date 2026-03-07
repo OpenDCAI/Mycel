@@ -90,3 +90,25 @@ def test_upload_workspace_to_sandbox():
 
         sync.upload_workspace("thread-123", "session-456", mock_provider)
         assert mock_provider.write_file.call_count == 2
+
+
+def test_download_workspace_from_sandbox():
+    """Should download all files from sandbox to workspace."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        mock_provider = Mock()
+        mock_provider.list_dir.return_value = [
+            {"name": "file1.txt", "type": "file"},
+        ]
+        mock_provider.read_file.return_value = "content1"
+
+        sync = WorkspaceSync(
+            provider_capability=ProviderCapability(
+                can_pause=True, can_resume=True, can_destroy=True,
+                mount=MountCapability(supports_mount=False)
+            ),
+            workspace_root=Path(tmpdir)
+        )
+
+        sync.download_workspace("thread-123", "session-456", mock_provider)
+        workspace = Path(tmpdir) / "thread-123" / "files"
+        assert (workspace / "file1.txt").read_text() == "content1"
