@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -8,6 +8,21 @@ import { getAgentColor, getAgentInitials } from "./utils/avatar";
 import { calculateDuration, formatDuration } from "./utils/duration";
 import { formatMetric } from "./utils/format";
 import { SandboxFileBrowser } from "@/components/SandboxFileBrowser";
+
+// ---------------------------------------------------------------------------
+// Session Counting
+// ---------------------------------------------------------------------------
+
+export function useSessionCounts(sessions: ResourceSession[]) {
+  return useMemo(
+    () => ({
+      running: sessions.filter((s) => s.status === "running").length,
+      paused: sessions.filter((s) => s.status === "paused").length,
+      stopped: sessions.filter((s) => s.status === "stopped").length,
+    }),
+    [sessions]
+  );
+}
 
 // ---------------------------------------------------------------------------
 // Grouping

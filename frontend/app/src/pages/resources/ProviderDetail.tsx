@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Monitor, Cloud, Container, Lock, Settings, ArrowRight, ExternalLink } from "lucide-react";
 import { Link } from "react-router-dom";
 import type { ProviderInfo, UsageMetric } from "./types";
-import { groupByLease, type LeaseGroup } from "./SessionList";
+import { groupByLease, useSessionCounts, type LeaseGroup } from "./SessionList";
 import SandboxCard from "./SandboxCard";
 import SandboxDetailSheet from "./SandboxDetailSheet";
 import { formatNumber, formatLimit } from "./utils/format";
@@ -74,9 +74,7 @@ export default function ProviderDetail({ provider }: ProviderDetailProps) {
   // @@@overview-semantic - local = host machine metrics (CPU/mem/disk are provider-level).
   // Non-local = session counts only; per-instance probe data is not a global provider quota.
   const isLocal = type === "local";
-  const runningCount = provider.sessions.filter((s) => s.status === "running").length;
-  const pausedCount = provider.sessions.filter((s) => s.status === "paused").length;
-  const stoppedCount = provider.sessions.filter((s) => s.status === "stopped").length;
+  const { running: runningCount, paused: pausedCount, stopped: stoppedCount } = useSessionCounts(provider.sessions);
 
   const groups = groupByLease(provider.sessions);
 
