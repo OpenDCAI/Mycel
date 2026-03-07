@@ -162,6 +162,7 @@ async def upload_workspace_file(
     thread_id: str,
     file: UploadFile = File(...),
     path: str | None = Query(default=None),
+    app: Annotated[Any, Depends(get_app)] = None,
 ) -> dict[str, Any]:
     """Upload a file into thread-scoped files directory."""
     if not file.filename and not path:
@@ -177,6 +178,26 @@ async def upload_workspace_file(
             relative_path=relative_path,
             content=content,
         )
+
+        # @@@upload-sync - sync uploaded file to remote sandbox immediately
+        from backend.web.services.agent_pool import resolve_thread_sandbox
+        from backend.web.core.dependencies import get_app
+        sandbox_type = resolve_thread_sandbox(app, thread_id)
+        if sandbox_type not in ("local", "docker"):
+            from backend.web.services.sandbox_service import get_sandbox_manager
+            manager = get_sandbox_manager(sandbox_type)
+            if manager and manager.workspace_sync.needs_upload_sync():
+                try:
+                    session = manager.session_manager.get_by_thread(thread_id)
+                    if session:
+                        await asyncio.to_thread(
+                            manager.workspace_sync.upload_workspace,
+                            thread_id, session.session_id, manager.provider
+                        )
+                except Exception as e:
+                    import logging
+                    logging.getLogger(__name__).warning(f"Failed to sync uploaded file: {e}")
+
     except ValueError as e:
         raise HTTPException(400, str(e)) from e
     return payload

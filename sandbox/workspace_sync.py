@@ -29,7 +29,8 @@ class WorkspaceSync:
 
     def needs_upload_sync(self) -> bool:
         """Check if provider needs explicit upload sync (vs bind mount)."""
-        return not self.provider_capability.mount.supports_mount
+        # Only Docker uses host bind mounts; remote providers need SDK upload
+        return self.provider_capability.runtime_kind not in ("local", "docker")
 
     def upload_workspace(self, thread_id: str, session_id: str, provider: SandboxProvider) -> None:
         """Upload workspace files to sandbox."""
