@@ -49,10 +49,13 @@ class LocalBackend(FileSystemBackend):
         return Path(path).is_dir()
 
     def list_dir(self, path: str) -> DirListResult:
+        import os
         try:
             p = Path(path)
             entries = []
             for item in sorted(p.iterdir()):
+                if not os.access(item, os.R_OK):
+                    continue
                 if item.is_file():
                     entries.append(DirEntry(name=item.name, is_dir=False, size=item.stat().st_size))
                 elif item.is_dir():
