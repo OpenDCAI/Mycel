@@ -23,3 +23,7 @@ class WorkspaceSync:
     def get_thread_workspace_path(self, thread_id: str) -> Path:
         """Get the local workspace directory for a thread."""
         return self.workspace_root / thread_id / "files"
+
+    def needs_upload_sync(self) -> bool:
+        """Check if provider needs explicit upload sync (vs bind mount)."""
+        return not self.provider_capability.mount.supports_mount

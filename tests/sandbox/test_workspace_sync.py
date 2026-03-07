@@ -35,3 +35,33 @@ def test_get_thread_workspace_path():
 
     path = sync.get_thread_workspace_path("thread-123")
     assert path == Path("/tmp/workspaces/thread-123/files")
+
+
+def test_needs_upload_sync_for_bind_mount():
+    """Bind mount providers don't need upload sync."""
+    sync = WorkspaceSync(
+        provider_capability=ProviderCapability(
+            can_pause=True,
+            can_resume=True,
+            can_destroy=True,
+            mount=MountCapability(supports_mount=True)
+        ),
+        workspace_root=Path("/tmp/workspaces")
+    )
+
+    assert sync.needs_upload_sync() is False
+
+
+def test_needs_upload_sync_for_remote():
+    """Remote providers need upload sync."""
+    sync = WorkspaceSync(
+        provider_capability=ProviderCapability(
+            can_pause=True,
+            can_resume=True,
+            can_destroy=True,
+            mount=MountCapability(supports_mount=False, supports_copy=True)
+        ),
+        workspace_root=Path("/tmp/workspaces")
+    )
+
+    assert sync.needs_upload_sync() is True
