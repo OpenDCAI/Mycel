@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 from pathlib import Path
 import time
+from sandbox.sync.retry import retry_with_backoff
 
 class SyncStrategy(ABC):
     @abstractmethod
@@ -57,6 +58,7 @@ class IncrementalSyncStrategy(SyncStrategy):
         self.workspace_root = workspace_root
         self.state = state
 
+    @retry_with_backoff(max_retries=3, backoff_factor=1)
     def upload(self, thread_id: str, session_id: str, provider, files: list[str] | None = None):
         workspace = self.workspace_root / thread_id / "files"
         if not workspace.exists():
