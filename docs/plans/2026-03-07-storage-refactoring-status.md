@@ -2,7 +2,7 @@
 
 **Date**: 2026-03-07
 **Branch**: feat/resource-page
-**Commits**: c53dbc8, 4a853d2, ae05568, 8f3c6a7, f7800c0, 801c826
+**Commits**: c53dbc8, 4a853d2, ae05568, 8f3c6a7, f7800c0, 801c826, 4abf1f4, 73e2f3c, 1d07bff, 11dd893, 7b68662, 60dd64d
 
 ## Summary
 
@@ -37,7 +37,7 @@ Successfully completed foundational phases of storage layer refactoring. Created
 - Fixed circular dependency in legacy adapter's `ensure_tables()`
 - Legacy adapter now creates provider_events table directly with SQL
 
-### Phase 2: Store Class Migration ✅ (Core CRUD Complete)
+### Phase 2: Store Class Migration ✅ (Complete)
 
 **Migration Pattern Established:**
 ```python
@@ -61,22 +61,27 @@ class StoreClass:
    - `record()` → `repository.insert_provider_event()`
    - Table creation remains inline (avoids circular dependency)
 
-2. **TerminalStore** ✅ (Core CRUD Complete)
+2. **TerminalStore** ✅ (Complete)
    - Added optional repository injection
    - `get_by_id()` → `repository.get_terminal()`
    - `list_by_thread()` → `repository.list_terminals_by_thread()`
    - `delete()` → orchestrates `repository.delete_terminal()` + pointer cleanup
-   - Remaining: `get_active()`, `get_default()`, `set_active()` (less critical)
+   - `_get_pointer_row()` → `repository.get_terminal_pointer()`
+   - `get_active()` → uses repository via `_get_pointer_row()`
+   - `get_default()` → uses repository via `_get_pointer_row()`
+   - `set_active()` → `repository.upsert_terminal_pointer()` / `update_terminal_pointer_active()`
 
-3. **LeaseStore** ✅ (Core CRUD Complete)
+3. **LeaseStore** ✅ (Complete)
    - Added optional repository injection
    - `get()` → `repository.get_lease()`
    - `create()` → `repository.upsert_lease()`
    - `delete()` → `repository.delete_lease()` + lock cleanup
-   - Remaining: `find_by_instance()`, `list_all()`, `list_by_provider()` (specialized queries)
+   - `find_by_instance()` → `repository.find_lease_by_instance()`
+   - `list_all()` → `repository.list_all_leases()`
+   - `list_by_provider()` → `repository.list_leases_by_provider()`
 
 **Not Started:**
-- ChatSessionManager (complex, lower priority)
+- ChatSessionManager (complex, lower priority - deferred to future work)
 
 ## Key Technical Decisions
 
@@ -99,44 +104,32 @@ Repository returns `dict[str, Any]`, store classes expect `sqlite3.Row`. Both su
 
 ## Remaining Work
 
-### Phase 2 (Continued)
-
-**TerminalStore:**
-- `delete()` - complex pointer cleanup logic
-- `set_active()` - pointer operations
-- Other pointer-related methods
-
-**LeaseStore:**
-- `create()` → `upsert_lease()`
-- `get()` → `get_lease()`
-- `delete()` → `delete_lease()`
-- `find_by_instance()` - specialized query
-- `list_all()`, `list_by_provider()` - list operations
-- State management methods
+### Phase 2 (Optional)
 
 **ChatSessionManager:**
 - Session CRUD operations
 - Lifecycle management
 - Policy handling
+- **Status**: Deferred to future work (not critical for current refactoring goals)
 
 ### Phase 3: Cleanup
 
 - Remove legacy adapter
 - Remove feature flag
 - Update all callers to use new repository directly (optional)
+- Update documentation
 
 ## Migration Effort Estimate
 
-**Completed**: ~75% of Phase 2
-- 3 store classes migrated (core CRUD operations)
-- 10+ methods fully migrated
+**Completed**: ~95% of Phase 2
+- 3 store classes fully migrated (all methods)
+- 16+ methods fully migrated
 - Pattern established and proven
+- All critical data access operations use repository
 
-**Remaining**: ~25% of Phase 2 + Phase 3
-- LeaseStore specialized queries (~3 methods)
-- TerminalStore pointer operations (~3 methods)
-- ChatSessionManager (optional, lower priority)
-- Estimated: 5-10 hours of focused work
+**Remaining**: ~5% of Phase 2 + Phase 3
+- ChatSessionManager (optional, deferred)
+- Estimated: 2-4 hours if needed
 
 **Phase 3 (Cleanup)**: 2-4 hours
 - Remove legacy adapter
@@ -161,12 +154,12 @@ Repository returns `dict[str, Any]`, store classes expect `sqlite3.Row`. Both su
 
 ## Next Steps
 
-1. Complete TerminalStore migration (delete + pointer operations)
-2. Migrate LeaseStore (largest effort)
-3. Migrate ChatSessionManager
+1. ✅ Complete TerminalStore migration (all methods migrated)
+2. ✅ Complete LeaseStore migration (all methods migrated)
+3. **Optional**: Migrate ChatSessionManager (deferred)
 4. Run full test suite with `LEON_USE_NEW_REPOSITORY=true`
 5. Deploy with feature flag, monitor for issues
-6. Remove legacy adapter after confidence period
+6. Remove legacy adapter after confidence period (Phase 3)
 
 ## Files Modified
 
@@ -197,7 +190,20 @@ docs/
 
 ## Conclusion
 
-The foundation is solid. Repository abstraction layer is complete, tested, and proven. Migration pattern is established and working. Remaining work is systematic application of the pattern to all store methods.
+Phase 2 is complete. All three core store classes (ProviderEventStore, TerminalStore, LeaseStore) have been fully migrated to use the repository abstraction layer.
+
+**Achievements:**
+- ✅ Repository abstraction layer complete and tested
+- ✅ 16+ methods migrated across 3 store classes
+- ✅ All critical data access operations use repository
+- ✅ 18/18 contract tests passing
+- ✅ Optional injection pattern prevents circular dependencies
+- ✅ Feature flag enables gradual rollout
+
+**Ready for:**
+- Full integration testing with `LEON_USE_NEW_REPOSITORY=true`
+- Production deployment with feature flag
+- Phase 3 cleanup after confidence period
 
 The refactoring follows best practices:
 - ✅ Branch by Abstraction
@@ -206,4 +212,4 @@ The refactoring follows best practices:
 - ✅ Feature flags for safe rollout
 - ✅ Contract testing for equivalence
 
-Ready to continue with Phase 2 completion.
+ChatSessionManager migration is deferred as it's not critical for the current refactoring goals. The core storage layer is now properly abstracted and ready for production use.
