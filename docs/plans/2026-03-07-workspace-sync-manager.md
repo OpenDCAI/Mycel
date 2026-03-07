@@ -6,7 +6,7 @@
 
 **Architecture:** Strategy pattern with SyncManager orchestrating different sync strategies (Full, Incremental, SingleFile). State tracking via SyncState to detect changes. Provider-specific configuration for paths and capabilities. Error handling with retry logic and partial failure recovery.
 
-**Tech Stack:** Python 3.12, Pydantic for models, SQLite for state tracking, hashlib for checksums
+**Tech Stack:** Python 3.12, Pydantic for models, Leon's SQLite kernel (SANDBOX role) for state tracking, hashlib for checksums
 
 ---
 
@@ -123,9 +123,8 @@ git commit -m "feat: add SyncManager architecture skeleton"
 # tests/sandbox/sync/test_state.py
 def test_sync_state_track_file():
     from sandbox.sync.state import SyncState
-    from pathlib import Path
 
-    state = SyncState(Path("/tmp/test.db"))
+    state = SyncState()
 
     state.track_file("thread1", "file.txt", "abc123", 1234567890)
 
@@ -143,16 +142,14 @@ Expected: FAIL with "No module named 'sandbox.sync.state'"
 
 ```python
 # sandbox/sync/state.py
-import sqlite3
-from pathlib import Path
+from storage.providers.sqlite.kernel import connect_sqlite_role, SQLiteDBRole
 
 class SyncState:
-    def __init__(self, db_path: Path):
-        self.db_path = db_path
+    def __init__(self):
         self._ensure_tables()
 
     def _ensure_tables(self):
-        with sqlite3.connect(str(self.db_path)) as conn:
+        with connect_sqlite_role(SQLiteDBRole.SANDBOX) as conn:
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS sync_files (
                     thread_id TEXT,
@@ -164,14 +161,14 @@ class SyncState:
             """)
 
     def track_file(self, thread_id: str, relative_path: str, checksum: str, timestamp: int):
-        with sqlite3.connect(str(self.db_path)) as conn:
+        with connect_sqlite_role(SQLiteDBRole.SANDBOX) as conn:
             conn.execute(
                 "INSERT OR REPLACE INTO sync_files VALUES (?, ?, ?, ?)",
                 (thread_id, relative_path, checksum, timestamp)
             )
 
     def get_file_info(self, thread_id: str, relative_path: str) -> dict | None:
-        with sqlite3.connect(str(self.db_path)) as conn:
+        with connect_sqlite_role(SQLiteDBRole.SANDBOX) as conn:
             row = conn.execute(
                 "SELECT checksum, last_synced FROM sync_files WHERE thread_id = ? AND relative_path = ?",
                 (thread_id, relative_path)
@@ -211,11 +208,10 @@ def test_detect_changed_files():
     import tempfile
 
     with tempfile.TemporaryDirectory() as tmpdir:
-        db = Path(tmpdir) / "test.db"
         workspace = Path(tmpdir) / "workspace"
         workspace.mkdir()
 
-        state = SyncState(db)
+        state = SyncState()
 
         # Create file and track it
         file1 = workspace / "file1.txt"
@@ -387,9 +383,8 @@ def test_incremental_sync_only_changed():
     with tempfile.TemporaryDirectory() as tmpdir:
         workspace = Path(tmpdir) / "workspace"
         workspace.mkdir()
-        db = Path(tmpdir) / "test.db"
 
-        state = SyncState(db)
+        state = SyncState()
         provider = MockProvider()
         strategy = IncrementalSyncStrategy(Path(tmpdir), state)
 
@@ -523,7 +518,6 @@ Expected: FAIL with assertion errors
 def _select_strategy(self) -> SyncStrategy:
     from sandbox.sync.strategy import NoOpStrategy, IncrementalSyncStrategy
     from sandbox.sync.state import SyncState
-    from pathlib import Path
 
     runtime_kind = self.provider_capability.runtime_kind
 
@@ -532,8 +526,7 @@ def _select_strategy(self) -> SyncStrategy:
         return NoOpStrategy()
 
     # Remote providers use incremental sync
-    db_path = Path.home() / ".leon" / "sync_state.db"
-    state = SyncState(db_path)
+    state = SyncState()
     return IncrementalSyncStrategy(self.workspace_root, state)
 ```
 
@@ -767,7 +760,7 @@ git commit -m "test: add end-to-end sync tests"
 This plan implements a robust workspace sync manager with:
 
 1. **Strategy Pattern**: NoOpStrategy for Docker/local, IncrementalSyncStrategy for remote providers
-2. **State Tracking**: SQLite-based tracking with checksums for change detection
+2. **State Tracking**: Leon's SQLite kernel (SANDBOX role) for tracking with checksums for change detection
 3. **Optimization**: Only sync changed files, not full workspace on every upload
 4. **Error Handling**: Retry logic with exponential backoff for transient failures
 5. **Provider-Specific**: Automatic strategy selection based on runtime_kind
@@ -777,6 +770,10 @@ This plan implements a robust workspace sync manager with:
 - Tracks file state to detect changes efficiently
 - Handles network failures gracefully with retries
 - Clean abstraction separating sync logic from provider logic
+- Uses Leon's database abstraction layer (no raw SQLite)
+
+**Refactoring Note**:
+- If any abstraction leak is found during implementation (e.g., direct database access, provider-specific logic in generic code), refactor immediately to maintain clean separation of concerns
 
 **Next Steps After Implementation**:
 - Remove old `sandbox/workspace_sync.py` file
