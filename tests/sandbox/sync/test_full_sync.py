@@ -4,6 +4,8 @@ def test_full_sync_upload():
     import tempfile
 
     class MockProvider:
+        WORKSPACE_ROOT = "/workspace"
+
         def __init__(self):
             self.uploaded = {}
 
