@@ -432,6 +432,32 @@ class TerminalStore:
 
     def delete(self, terminal_id: str) -> None:
         """Delete terminal."""
+        # @@@repository-migration - use repository if available
+        if self._repo:
+            terminal = self._repo.get_terminal(terminal_id)
+            if terminal is None:
+                return
+            thread_id = str(terminal["thread_id"])
+
+            self._repo.delete_terminal(terminal_id)
+
+            pointer = self._repo.get_terminal_pointer(thread_id)
+            if pointer:
+                remaining = self._repo.list_terminals_by_thread(thread_id)
+                if not remaining:
+                    self._repo.delete_terminal_pointer(thread_id)
+                else:
+                    next_terminal_id = remaining[0]["terminal_id"]
+                    active_id = pointer["active_terminal_id"]
+                    default_id = pointer["default_terminal_id"]
+                    new_active = next_terminal_id if active_id == terminal_id else active_id
+                    new_default = next_terminal_id if default_id == terminal_id else default_id
+                    self._repo.upsert_terminal_pointer(
+                        thread_id, new_active, new_default, datetime.now().isoformat()
+                    )
+            return
+
+        # Fallback to inline SQL
         with _connect(self.db_path) as conn:
             conn.row_factory = sqlite3.Row
             terminal = conn.execute(
