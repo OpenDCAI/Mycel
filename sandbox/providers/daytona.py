@@ -74,6 +74,7 @@ class DaytonaProvider(SandboxProvider):
             mode_handlers={"mount": True, "copy": True},
         ),
     )
+    WORKSPACE_ROOT = "/home/daytona"
 
     def get_capability(self) -> ProviderCapability:
         return self.CAPABILITY

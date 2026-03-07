@@ -42,11 +42,17 @@ class WorkspaceSync:
                 logger.debug(f"No workspace to upload for thread {thread_id}")
                 return
 
+            # @@@workspace-root - E2B uses /home/user/workspace, others use /workspace
+            workspace_root = getattr(provider, 'WORKSPACE_ROOT', '/workspace') + '/files'
+            # Ensure remote directory exists (some providers don't auto-create parents)
+            if hasattr(provider, 'execute'):
+                provider.execute(session_id, f"mkdir -p {workspace_root}")
+
             file_count = 0
             for file_path in workspace.rglob("*"):
                 if file_path.is_file():
                     relative = file_path.relative_to(workspace)
-                    remote_path = f"/workspace/files/{relative}"
+                    remote_path = f"{workspace_root}/{relative}"
                     content = file_path.read_text()
                     provider.write_file(session_id, remote_path, content)
                     file_count += 1
@@ -80,7 +86,9 @@ class WorkspaceSync:
                         local_item.write_text(content)
                         file_count += 1
 
-            download_recursive("/workspace/files", workspace)
+            # @@@workspace-root - E2B uses /home/user/workspace, others use /workspace
+            workspace_root = getattr(provider, 'WORKSPACE_ROOT', '/workspace') + '/files'
+            download_recursive(workspace_root, workspace)
             logger.info(f"Downloaded {file_count} files from sandbox {session_id}")
         except Exception as e:
             logger.error(f"Failed to download workspace for thread {thread_id}: {e}")

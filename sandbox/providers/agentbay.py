@@ -54,6 +54,7 @@ class AgentBayProvider(SandboxProvider):
             snapshot=False,
         ),
     )
+    WORKSPACE_ROOT = "/home/wuying"
 
     def get_capability(self) -> ProviderCapability:
         return self._capability

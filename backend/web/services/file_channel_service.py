@@ -222,7 +222,7 @@ def list_thread_file_transfers(
         _ensure_tables(conn)
         rows = conn.execute(
             """
-            SELECT id, thread_id, direction, channel, relative_path, size_bytes, status, created_at
+            SELECT id, thread_id, direction, relative_path, size_bytes, status, created_at
             FROM thread_file_transfers
             WHERE thread_id = ?
             ORDER BY id DESC

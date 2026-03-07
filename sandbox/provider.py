@@ -124,6 +124,7 @@ class SandboxProvider(ABC):
     """Abstract interface for sandbox providers."""
 
     name: str  # Provider identifier: 'agentbay', 'e2b', 'docker', 'local'
+    WORKSPACE_ROOT: str = "/workspace"  # Override in subclasses with non-standard workspace paths
 
     @abstractmethod
     def get_capability(self) -> ProviderCapability:

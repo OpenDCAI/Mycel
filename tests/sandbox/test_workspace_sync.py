@@ -40,13 +40,13 @@ def test_get_thread_workspace_path():
 
 
 def test_needs_upload_sync_for_bind_mount():
-    """Bind mount providers don't need upload sync."""
+    """Docker (local runtime) doesn't need upload sync."""
     sync = WorkspaceSync(
         provider_capability=ProviderCapability(
             can_pause=True,
             can_resume=True,
             can_destroy=True,
-            mount=MountCapability(supports_mount=True)
+            runtime_kind="docker",
         ),
         workspace_root=Path("/tmp/workspaces")
     )
@@ -78,12 +78,13 @@ def test_upload_workspace_to_sandbox():
         (workspace / "file2.txt").write_text("content2")
 
         mock_provider = Mock()
+        mock_provider.WORKSPACE_ROOT = "/workspace"
         sync = WorkspaceSync(
             provider_capability=ProviderCapability(
                 can_pause=True,
                 can_resume=True,
                 can_destroy=True,
-                mount=MountCapability(supports_mount=False)
+                runtime_kind="e2b_pty",
             ),
             workspace_root=Path(tmpdir)
         )
@@ -96,6 +97,7 @@ def test_download_workspace_from_sandbox():
     """Should download all files from sandbox to workspace."""
     with tempfile.TemporaryDirectory() as tmpdir:
         mock_provider = Mock()
+        mock_provider.WORKSPACE_ROOT = "/workspace"
         mock_provider.list_dir.return_value = [
             {"name": "file1.txt", "type": "file"},
         ]
@@ -104,7 +106,7 @@ def test_download_workspace_from_sandbox():
         sync = WorkspaceSync(
             provider_capability=ProviderCapability(
                 can_pause=True, can_resume=True, can_destroy=True,
-                mount=MountCapability(supports_mount=False)
+                runtime_kind="e2b_pty",
             ),
             workspace_root=Path(tmpdir)
         )
