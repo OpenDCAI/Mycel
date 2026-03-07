@@ -1,5 +1,7 @@
 import pytest
 from pathlib import Path
+from unittest.mock import Mock
+import tempfile
 from sandbox.workspace_sync import WorkspaceSync
 from sandbox.provider import ProviderCapability, MountCapability
 
@@ -65,3 +67,26 @@ def test_needs_upload_sync_for_remote():
     )
 
     assert sync.needs_upload_sync() is True
+
+
+def test_upload_workspace_to_sandbox():
+    """Should upload all files from workspace to sandbox."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        workspace = Path(tmpdir) / "thread-123" / "files"
+        workspace.mkdir(parents=True)
+        (workspace / "file1.txt").write_text("content1")
+        (workspace / "file2.txt").write_text("content2")
+
+        mock_provider = Mock()
+        sync = WorkspaceSync(
+            provider_capability=ProviderCapability(
+                can_pause=True,
+                can_resume=True,
+                can_destroy=True,
+                mount=MountCapability(supports_mount=False)
+            ),
+            workspace_root=Path(tmpdir)
+        )
+
+        sync.upload_workspace("thread-123", "session-456", mock_provider)
+        assert mock_provider.write_file.call_count == 2
