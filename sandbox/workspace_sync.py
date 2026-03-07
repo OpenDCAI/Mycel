@@ -19,3 +19,7 @@ class WorkspaceSync:
     ):
         self.provider_capability = provider_capability
         self.workspace_root = workspace_root
+
+    def get_thread_workspace_path(self, thread_id: str) -> Path:
+        """Get the local workspace directory for a thread."""
+        return self.workspace_root / thread_id / "files"
