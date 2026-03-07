@@ -109,11 +109,27 @@ class AgentRuntime:
     # ========== 聚合输出 ==========
 
     def get_status_dict(self) -> dict[str, Any]:
-        """返回完整状态字典"""
+        """返回完整状态字典（verbose）"""
         return {
             "state": self.state.get_metrics(),
             "tokens": self.token.get_metrics(),
             "context": self.context.get_metrics(),
+        }
+
+    def get_compact_dict(self) -> dict[str, Any]:
+        """返回精简状态字典，适合轻量观察（不含 streaming 细节）"""
+        token = self.token
+        ctx = self.context
+        usage_percent = (
+            round(ctx.estimated_tokens / ctx.context_limit * 100, 1)
+            if ctx.context_limit > 0 else 0.0
+        )
+        return {
+            "state": self.state.state.value,
+            "tokens": token.total_tokens,
+            "cost": float(token.get_cost().get("total", 0)),
+            "calls": token.call_count,
+            "ctx_percent": usage_percent,
         }
 
     def get_status_line(self) -> str:

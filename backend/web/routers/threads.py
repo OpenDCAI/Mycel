@@ -217,9 +217,14 @@ async def get_queue(
 @router.get("/{thread_id}/runtime")
 async def get_thread_runtime(
     thread_id: str,
+    stream: bool = False,
     app: Annotated[Any, Depends(get_app)] = None,
 ) -> dict[str, Any]:
-    """Get runtime status for a thread."""
+    """Get runtime status for a thread.
+
+    - stream=false (default): compact {state, model, tokens, cost, calls, ctx_percent, last_seq}
+    - stream=true: full verbose data including flags, error details, cache tokens, context breakdown
+    """
     from backend.web.services.event_store import get_last_seq, get_latest_run_id, get_run_start_seq
     from backend.web.utils.helpers import lookup_thread_model
 
@@ -227,9 +232,18 @@ async def get_thread_runtime(
     agent = await get_or_create_agent(app, sandbox_type, thread_id=thread_id)
     if not hasattr(agent, "runtime"):
         raise HTTPException(status_code=404, detail="Agent has no runtime monitor")
+
+    last_seq = await get_last_seq(thread_id)
+
+    if not stream:
+        status = agent.runtime.get_compact_dict()
+        status["model"] = lookup_thread_model(thread_id)
+        status["last_seq"] = last_seq
+        return status
+
     status = agent.runtime.get_status_dict()
     status["model"] = lookup_thread_model(thread_id)
-    status["last_seq"] = await get_last_seq(thread_id)
+    status["last_seq"] = last_seq
     if status.get("state", {}).get("state") == "active":
         run_id = await get_latest_run_id(thread_id)
         if run_id:
