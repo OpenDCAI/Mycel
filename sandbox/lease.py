@@ -1012,6 +1012,14 @@ class LeaseStore:
         )
 
     def find_by_instance(self, *, provider_name: str, instance_id: str) -> SandboxLease | None:
+        # @@@repository-migration - use repository if available
+        if self._repo:
+            row = self._repo.find_lease_by_instance(provider_name, instance_id)
+            if not row:
+                return None
+            return self.get(row["lease_id"])
+
+        # Fallback to inline SQL
         with _connect(self.db_path) as conn:
             conn.row_factory = sqlite3.Row
             row = conn.execute(
@@ -1150,6 +1158,11 @@ class LeaseStore:
             SQLiteLease._lease_locks.pop(lease_id, None)
 
     def list_all(self) -> list[dict]:
+        # @@@repository-migration - use repository if available
+        if self._repo:
+            return self._repo.list_all_leases()
+
+        # Fallback to inline SQL
         with _connect(self.db_path) as conn:
             conn.row_factory = sqlite3.Row
             rows = conn.execute(
@@ -1169,6 +1182,11 @@ class LeaseStore:
             return [dict(row) for row in rows]
 
     def list_by_provider(self, provider_name: str) -> list[dict]:
+        # @@@repository-migration - use repository if available
+        if self._repo:
+            return self._repo.list_leases_by_provider(provider_name)
+
+        # Fallback to inline SQL
         with _connect(self.db_path) as conn:
             conn.row_factory = sqlite3.Row
             rows = conn.execute(

@@ -182,6 +182,46 @@ class LegacySandboxRepository:
             conn.execute("DELETE FROM sandbox_leases WHERE lease_id = ?", (lease_id,))
             conn.commit()
 
+    def find_lease_by_instance(self, provider_name: str, instance_id: str) -> dict[str, Any] | None:
+        """Find lease by provider and instance ID."""
+        with self._connect() as conn:
+            conn.row_factory = sqlite3.Row
+            row = conn.execute(
+                "SELECT * FROM sandbox_leases WHERE provider_name = ? AND current_instance_id = ? LIMIT 1",
+                (provider_name, instance_id),
+            ).fetchone()
+            return dict(row) if row else None
+
+    def list_all_leases(self) -> list[dict[str, Any]]:
+        """List all leases with summary info."""
+        with self._connect() as conn:
+            conn.row_factory = sqlite3.Row
+            rows = conn.execute(
+                """
+                SELECT lease_id, provider_name, current_instance_id, desired_state,
+                       observed_state, version, created_at, updated_at
+                FROM sandbox_leases
+                ORDER BY created_at DESC
+                """
+            ).fetchall()
+            return [dict(row) for row in rows]
+
+    def list_leases_by_provider(self, provider_name: str) -> list[dict[str, Any]]:
+        """List leases for a specific provider."""
+        with self._connect() as conn:
+            conn.row_factory = sqlite3.Row
+            rows = conn.execute(
+                """
+                SELECT lease_id, provider_name, current_instance_id, desired_state,
+                       observed_state, version, created_at, updated_at
+                FROM sandbox_leases
+                WHERE provider_name = ?
+                ORDER BY created_at DESC
+                """,
+                (provider_name,),
+            ).fetchall()
+            return [dict(row) for row in rows]
+
     # === INSTANCE OPERATIONS ===
 
     def upsert_instance(

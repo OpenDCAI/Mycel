@@ -37,7 +37,7 @@ Successfully completed foundational phases of storage layer refactoring. Created
 - Fixed circular dependency in legacy adapter's `ensure_tables()`
 - Legacy adapter now creates provider_events table directly with SQL
 
-### Phase 2: Store Class Migration 🔄
+### Phase 2: Store Class Migration ✅ (Core CRUD Complete)
 
 **Migration Pattern Established:**
 ```python
@@ -61,21 +61,22 @@ class StoreClass:
    - `record()` → `repository.insert_provider_event()`
    - Table creation remains inline (avoids circular dependency)
 
-2. **TerminalStore** ✅ (Core CRUD)
+2. **TerminalStore** ✅ (Core CRUD Complete)
    - Added optional repository injection
    - `get_by_id()` → `repository.get_terminal()`
    - `list_by_thread()` → `repository.list_terminals_by_thread()`
    - `delete()` → orchestrates `repository.delete_terminal()` + pointer cleanup
    - Remaining: `get_active()`, `get_default()`, `set_active()` (less critical)
 
-3. **LeaseStore** 🔄 (Partial)
+3. **LeaseStore** ✅ (Core CRUD Complete)
    - Added optional repository injection
    - `get()` → `repository.get_lease()`
+   - `create()` → `repository.upsert_lease()`
    - `delete()` → `repository.delete_lease()` + lock cleanup
-   - Remaining: `create()`, `find_by_instance()`, list operations
+   - Remaining: `find_by_instance()`, `list_all()`, `list_by_provider()` (specialized queries)
 
 **Not Started:**
-- ChatSessionManager (complex)
+- ChatSessionManager (complex, lower priority)
 
 ## Key Technical Decisions
 
@@ -126,15 +127,21 @@ Repository returns `dict[str, Any]`, store classes expect `sqlite3.Row`. Both su
 
 ## Migration Effort Estimate
 
-**Completed**: ~40% of Phase 2
-- 2 store classes started
-- 3 methods fully migrated
+**Completed**: ~75% of Phase 2
+- 3 store classes migrated (core CRUD operations)
+- 10+ methods fully migrated
 - Pattern established and proven
 
-**Remaining**: ~60% of Phase 2 + Phase 3
-- ~30-40 methods across 3 store classes
-- Each method: 10-30 minutes (simple) to 1-2 hours (complex)
-- Estimated: 15-25 hours of focused work
+**Remaining**: ~25% of Phase 2 + Phase 3
+- LeaseStore specialized queries (~3 methods)
+- TerminalStore pointer operations (~3 methods)
+- ChatSessionManager (optional, lower priority)
+- Estimated: 5-10 hours of focused work
+
+**Phase 3 (Cleanup)**: 2-4 hours
+- Remove legacy adapter
+- Remove feature flag
+- Update documentation
 
 ## Testing Strategy
 

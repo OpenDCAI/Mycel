@@ -63,6 +63,18 @@ class SandboxRepositoryProtocol(Protocol):
         """Delete lease."""
         ...
 
+    def find_lease_by_instance(self, provider_name: str, instance_id: str) -> dict[str, Any] | None:
+        """Find lease by provider and instance ID."""
+        ...
+
+    def list_all_leases(self) -> list[dict[str, Any]]:
+        """List all leases with summary info."""
+        ...
+
+    def list_leases_by_provider(self, provider_name: str) -> list[dict[str, Any]]:
+        """List leases for a specific provider."""
+        ...
+
     # === INSTANCE OPERATIONS ===
 
     def upsert_instance(
