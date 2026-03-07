@@ -283,7 +283,7 @@ class AgentService:
     ) -> str:
         """Create and run an independent LeonAgent, collect its text output."""
         # Lazy import avoids circular dependency (agent.py imports AgentService)
-        from agent import create_leon_agent
+        from core.runtime.agent import create_leon_agent
         from sandbox.thread_context import set_current_thread_id
 
         agent = None

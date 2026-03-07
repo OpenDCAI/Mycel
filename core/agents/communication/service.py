@@ -11,7 +11,7 @@ import logging
 from html import escape
 
 from core.agents.registry import AgentRegistry
-from core.queue.manager import MessageQueueManager
+from core.runtime.middleware.queue.manager import MessageQueueManager
 from core.runtime.registry import ToolEntry, ToolMode, ToolRegistry
 
 logger = logging.getLogger(__name__)

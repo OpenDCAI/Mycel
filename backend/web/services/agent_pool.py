@@ -7,7 +7,7 @@ from typing import Any
 
 from fastapi import FastAPI
 
-from agent import create_leon_agent
+from core.runtime.agent import create_leon_agent
 from storage.runtime import build_storage_container
 from sandbox.manager import lookup_sandbox_for_thread
 from sandbox.thread_context import set_current_thread_id
@@ -24,7 +24,7 @@ def create_agent_sync(sandbox_name: str, workspace_root: Path | None = None, mod
         eval_db_path=os.getenv("LEON_EVAL_DB_PATH"),
     )
     # @@@web-file-ops-repo - inject storage-backed repo so file_operations route to correct provider.
-    from tui.operations import FileOperationRecorder, set_recorder
+    from core.operations import FileOperationRecorder, set_recorder
     set_recorder(FileOperationRecorder(repo=storage_container.file_operation_repo()))
     return create_leon_agent(
         model_name=model_name,
