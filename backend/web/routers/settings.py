@@ -253,18 +253,30 @@ async def update_model_config(request: ModelConfigRequest, req: Request) -> dict
 @router.get("/available-models")
 async def get_available_models() -> dict[str, Any]:
     """Get all available models and virtual models from models.json."""
-    pricing_file = Path(__file__).parent.parent.parent.parent / "core" / "monitor" / "pricing_bundled.json"
+    models_file = Path(__file__).parent.parent.parent.parent / "core" / "runtime" / "middleware" / "monitor" / "models.json"
 
-    if not pricing_file.exists():
-        raise HTTPException(status_code=500, detail="Pricing data not found")
+    if not models_file.exists():
+        raise HTTPException(status_code=500, detail="Models data not found")
 
     try:
-        with open(pricing_file, encoding="utf-8") as f:
-            pricing_data = json.load(f)
+        with open(models_file, encoding="utf-8") as f:
+            raw_data = json.load(f)
 
-        pricing_ids = set(pricing_data["models"].keys())
-        bundled_providers = pricing_data.get("providers", {})
-        models_list = [{"id": mid, "name": mid, "provider": bundled_providers.get(mid)} for mid in pricing_ids]
+        # 解析 OpenRouter 原始格式 {"data": [{id, pricing, context_length, ...}]}
+        bundled_providers: dict[str, str] = {}
+        models_list = []
+        seen: set[str] = set()
+        for m in raw_data.get("data", []):
+            model_id = m.get("id", "")
+            if "/" not in model_id:
+                continue
+            provider, short_name = model_id.split("/", 1)
+            if short_name in seen:
+                continue
+            seen.add(short_name)
+            bundled_providers[short_name] = provider
+            models_list.append({"id": short_name, "name": m.get("name", short_name), "provider": provider, "context_length": m.get("context_length")})
+        pricing_ids = seen
 
         # Merge custom + orphaned enabled models
         mc = load_merged_models()

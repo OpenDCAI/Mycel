@@ -12,6 +12,8 @@ interface AvailableModelsData {
   models: Array<{
     id: string;
     name: string;
+    provider?: string;
+    context_length?: number;
     custom?: boolean;
   }>;
   virtual_models: Array<{

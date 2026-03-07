@@ -115,6 +115,7 @@ py-modules = ["agent"]
 [tool.setuptools.package-data]
 "config.defaults.agents" = ["*.md"]
 "eval.scenarios" = ["*.yaml"]
+"core.runtime.middleware.monitor" = ["models.json"]
 
 [tool.ruff]
 line-length = 120

@@ -2,7 +2,7 @@
 
 定价来源优先级：
 1. OpenRouter API（启动时拉取，缓存到 ~/.leon/pricing_cache.json，24h TTL）
-2. 本地 bundled 文件（pricing_bundled.json，随代码发布，离线兜底）
+2. 本地 models.json（OpenRouter /models 原始快照，随代码发布，离线兜底）
 """
 
 from __future__ import annotations
@@ -20,7 +20,7 @@ _model_providers: dict[str, str] = {}  # model_name → provider (e.g. "anthropi
 _initialized = False
 
 # 路径
-_BUNDLED_PATH = Path(__file__).parent / "pricing_bundled.json"
+_BUNDLED_PATH = Path(__file__).parent / "models.json"
 _CACHE_PATH = Path.home() / ".leon" / "pricing_cache.json"
 _CACHE_TTL = 86400  # 24 小时
 
@@ -28,47 +28,51 @@ M = Decimal("1000000")
 _PER_TOKEN_TO_PER_M = Decimal("1000000")
 
 
-def _parse_openrouter_model(model: dict[str, Any]) -> tuple[str, dict[str, Decimal], int, str] | None:
+def _parse_openrouter_model(model: dict[str, Any]) -> tuple[str, dict[str, Decimal] | None, int, str] | None:
     """从 OpenRouter 模型数据中提取定价、上下文窗口和 provider
 
     OpenRouter pricing 字段是 per-token（字符串），转换为 per-1M-tokens（Decimal）。
     模型 ID 格式为 "provider/model-name"，提取两部分。
+    costs 为 None 表示免费模型（pricing 为 0），但 context_length 和 provider 仍会返回。
     """
     model_id = model.get("id", "")
-    pricing = model.get("pricing")
-    if not pricing or not model_id:
+    if not model_id or "/" not in model_id:
         return None
     context_length = model.get("context_length", 0) or 0
 
-    provider = model_id.split("/", 1)[0] if "/" in model_id else ""
-    short_name = model_id.split("/", 1)[-1] if "/" in model_id else model_id
+    provider = model_id.split("/", 1)[0]
+    short_name = model_id.split("/", 1)[1]
 
+    pricing = model.get("pricing") or {}
     prompt_price = pricing.get("prompt", "0")
     completion_price = pricing.get("completion", "0")
 
     if prompt_price == "0" and completion_price == "0":
-        return None
+        return short_name, None, context_length, provider
 
     try:
         input_per_m = Decimal(prompt_price) * _PER_TOKEN_TO_PER_M
         output_per_m = Decimal(completion_price) * _PER_TOKEN_TO_PER_M
     except Exception:
-        return None
+        return short_name, None, context_length, provider
 
     cache_read_per_m = _parse_cache_price(pricing.get("input_cache_read"))
     cache_write_per_m = _parse_cache_price(pricing.get("input_cache_write"))
 
+    # 仅在 OpenRouter 未明确提供时推断（不覆盖明确值）
     if not cache_read_per_m or not cache_write_per_m:
         cache_read_per_m, cache_write_per_m = _infer_cache_prices(
             provider, input_per_m, cache_read_per_m, cache_write_per_m
         )
 
-    costs = {
+    costs: dict[str, Decimal] = {
         "input": input_per_m,
         "output": output_per_m,
-        "cache_read": cache_read_per_m,
-        "cache_write": cache_write_per_m,
     }
+    if cache_read_per_m:
+        costs["cache_read"] = cache_read_per_m
+    if cache_write_per_m:
+        costs["cache_write"] = cache_write_per_m
 
     return short_name, costs, context_length, provider
 
@@ -192,7 +196,8 @@ def _fetch_from_openrouter() -> dict[str, dict[str, Decimal]] | None:
             if parsed:
                 name, costs, ctx_len, provider = parsed
                 if name not in result:
-                    result[name] = costs
+                    if costs is not None:
+                        result[name] = costs
                     if ctx_len > 0:
                         ctx_result[name] = ctx_len
                     if provider:
@@ -210,14 +215,30 @@ def _fetch_from_openrouter() -> dict[str, dict[str, Decimal]] | None:
 
 
 def _load_bundled() -> dict[str, dict[str, Decimal]]:
-    """从随代码发布的 pricing_bundled.json 加载"""
-    global _model_providers
+    """从随代码发布的 models.json（OpenRouter 原始快照）加载"""
+    global _context_limits, _model_providers
     if not _BUNDLED_PATH.exists():
         return {}
     try:
         data = json.loads(_BUNDLED_PATH.read_text())
-        _model_providers = data.get("providers", {})
-        return _deserialize_costs(data.get("models", data))
+        result: dict[str, dict[str, Decimal]] = {}
+        ctx_result: dict[str, int] = {}
+        prov_result: dict[str, str] = {}
+        for model in data.get("data", []):
+            parsed = _parse_openrouter_model(model)
+            if parsed:
+                name, costs, ctx_len, provider = parsed
+                if name not in result:
+                    if costs is not None:
+                        result[name] = costs
+                    if ctx_len > 0:
+                        ctx_result[name] = ctx_len
+                    if provider:
+                        prov_result[name] = provider
+        _context_limits = ctx_result
+        _model_providers = prov_result
+        _save_cache(_serialize_costs(result), ctx_result, prov_result)
+        return result
     except Exception:
         return {}
 
@@ -227,55 +248,20 @@ def get_model_providers() -> dict[str, str]:
     return _model_providers
 
 
-# 常见模型的上下文窗口大小（兜底，OpenRouter 数据优先）
-_BUNDLED_CONTEXT_LIMITS: dict[str, int] = {
-    "claude-3-haiku": 200000,
-    "claude-3.5-haiku": 200000,
-    "claude-haiku-4.5": 200000,
-    "claude-3.5-sonnet": 200000,
-    "claude-sonnet-4-5": 200000,
-    "claude-sonnet-4.5": 200000,
-    "claude-3.7-sonnet": 200000,
-    "claude-opus-4": 200000,
-    "claude-opus-4.1": 200000,
-    "claude-sonnet-4.6": 1000000,
-    "claude-opus-4.6": 1000000,
-    "gpt-4o": 128000,
-    "gpt-4o-mini": 128000,
-    "gpt-4.1": 1047576,
-    "gpt-4.1-mini": 1047576,
-    "gpt-4.1-nano": 1047576,
-    "gpt-5": 128000,
-    "gpt-5-turbo": 128000,
-    "gpt-5.2": 128000,
-    "o1": 200000,
-    "o3": 200000,
-    "o3-mini": 200000,
-    "o4-mini": 200000,
-    "deepseek-chat": 65536,
-    "deepseek-reasoner": 65536,
-}
-
 _DEFAULT_CONTEXT_LIMIT = 128000
 
 
 def get_model_context_limit(model_name: str) -> int:
-    """查询模型的上下文窗口大小
+    """查询模型的上下文窗口大小，来源为 OpenRouter 数据（models.json 或实时 API）。
 
-    查找优先级：OpenRouter 精确/规范化 → bundled 精确/规范化 → 默认值
+    查找优先级：精确匹配 → 规范化名称匹配 → 默认值 128000。
     不使用前缀匹配，因为不同变体的上下文窗口可能完全不同（如 gpt-5 vs gpt-5-turbo）。
     """
     normalized = CostCalculator._normalize_model_name(model_name)
 
-    # 1. OpenRouter 数据（精确 → 规范化）
     for name in (model_name, normalized):
         if name in _context_limits:
             return _context_limits[name]
-
-    # 2. Bundled 兜底（精确 → 规范化）
-    for name in (model_name, normalized):
-        if name in _BUNDLED_CONTEXT_LIMITS:
-            return _BUNDLED_CONTEXT_LIMITS[name]
 
     return _DEFAULT_CONTEXT_LIMIT
 
