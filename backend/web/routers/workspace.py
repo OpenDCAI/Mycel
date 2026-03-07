@@ -179,24 +179,6 @@ async def upload_workspace_file(
             content=content,
         )
 
-        # @@@upload-sync - sync uploaded file to remote sandbox immediately
-        sandbox_type = resolve_thread_sandbox(app, thread_id)
-        if sandbox_type not in ("local", "docker"):
-            from backend.web.services.sandbox_service import get_sandbox_manager
-            manager = get_sandbox_manager(sandbox_type)
-            if manager and manager.workspace_sync.needs_upload_sync():
-                try:
-                    session = manager.session_manager.get_by_thread(thread_id)
-                    if session:
-                        remote_path = f"/workspace/files/{relative_path}"
-                        await asyncio.to_thread(
-                            manager.provider.write_file,
-                            session.session_id, remote_path, content.decode('utf-8')
-                        )
-                except Exception as e:
-                    import logging
-                    logging.getLogger(__name__).warning(f"Failed to sync uploaded file: {e}")
-
     except ValueError as e:
         raise HTTPException(400, str(e)) from e
     return payload
