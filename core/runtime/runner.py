@@ -76,18 +76,20 @@ class ToolRunner(AgentMiddleware):
             return ToolMessage(
                 content=f"InputValidationError: {name} failed due to the following issue:\n{e}",
                 tool_call_id=call_id,
+                name=name,
             )
 
         try:
             result = entry.handler(**args)
             if asyncio.iscoroutine(result):
                 result = asyncio.get_event_loop().run_until_complete(result)
-            return ToolMessage(content=str(result), tool_call_id=call_id)
+            return ToolMessage(content=str(result), tool_call_id=call_id, name=name)
         except Exception as e:
             logger.exception("Tool %s execution failed", name)
             return ToolMessage(
                 content=f"<tool_use_error>{e}</tool_use_error>",
                 tool_call_id=call_id,
+                name=name,
             )
 
     async def _validate_and_run_async(
@@ -104,18 +106,20 @@ class ToolRunner(AgentMiddleware):
             return ToolMessage(
                 content=f"InputValidationError: {name} failed due to the following issue:\n{e}",
                 tool_call_id=call_id,
+                name=name,
             )
 
         try:
             result = entry.handler(**args)
             if asyncio.iscoroutine(result):
                 result = await result
-            return ToolMessage(content=str(result), tool_call_id=call_id)
+            return ToolMessage(content=str(result), tool_call_id=call_id, name=name)
         except Exception as e:
             logger.exception("Tool %s execution failed", name)
             return ToolMessage(
                 content=f"<tool_use_error>{e}</tool_use_error>",
                 tool_call_id=call_id,
+                name=name,
             )
 
     # -- Model call wrappers --

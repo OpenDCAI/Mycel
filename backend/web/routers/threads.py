@@ -214,6 +214,66 @@ async def get_queue(
     return {"messages": messages, "thread_id": thread_id}
 
 
+@router.get("/{thread_id}/history")
+async def get_thread_history(
+    thread_id: str,
+    limit: int = 20,
+    truncate: int = 300,
+    app: Annotated[Any, Depends(get_app)] = None,
+) -> dict[str, Any]:
+    """Compact conversation history for debugging — no raw LangChain noise.
+
+    Args:
+        limit: Max messages to return, from the end (default 20)
+        truncate: Truncate content to this many chars (default 300, 0 = no limit)
+    """
+    from backend.web.utils.serializers import extract_text_content
+
+    sandbox_type = resolve_thread_sandbox(app, thread_id)
+    agent = await get_or_create_agent(app, sandbox_type, thread_id=thread_id)
+    set_current_thread_id(thread_id)
+    config = {"configurable": {"thread_id": thread_id}}
+    state = await agent.agent.aget_state(config)
+
+    values = getattr(state, "values", {}) if state else {}
+    all_messages = values.get("messages", []) if isinstance(values, dict) else []
+    total = len(all_messages)
+    messages = all_messages[-limit:] if limit > 0 else all_messages
+
+    def _trunc(text: str) -> str:
+        if truncate > 0 and len(text) > truncate:
+            return text[:truncate] + f"…[+{len(text) - truncate}]"
+        return text
+
+    def _compact(msg: Any) -> dict[str, Any]:
+        cls = msg.__class__.__name__
+        if cls == "HumanMessage":
+            return {"role": "human", "text": _trunc(extract_text_content(msg.content))}
+        if cls == "AIMessage":
+            calls = getattr(msg, "tool_calls", [])
+            if calls:
+                return {
+                    "role": "ai",
+                    "calls": [
+                        {"tool": c["name"], "args": str(c.get("args", {}))[:120]}
+                        for c in calls
+                    ],
+                }
+            return {"role": "ai", "text": _trunc(extract_text_content(msg.content))}
+        if cls == "ToolMessage":
+            tool_name = getattr(msg, "name", None) or getattr(msg, "tool_call_id", "?")
+            return {"role": "tool", "tool": tool_name, "text": _trunc(extract_text_content(msg.content))}
+        # SystemMessage or other
+        return {"role": cls.lower().replace("message", ""), "text": _trunc(extract_text_content(msg.content))}
+
+    return {
+        "thread_id": thread_id,
+        "total": total,
+        "showing": len(messages),
+        "messages": [_compact(m) for m in messages],
+    }
+
+
 @router.get("/{thread_id}/runtime")
 async def get_thread_runtime(
     thread_id: str,
