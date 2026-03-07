@@ -193,18 +193,15 @@ function workspaceBase(threadId: string): string {
 
 export async function listWorkspaceChannelFiles(
   threadId: string,
-  channel: WorkspaceChannelKind = "download",
 ): Promise<WorkspaceChannelFilesResult> {
-  const q = `?channel=${encodeURIComponent(channel)}`;
-  return request(`${workspaceBase(threadId)}/channel-files${q}`);
+  return request(`${workspaceBase(threadId)}/channel-files`);
 }
 
 export async function uploadWorkspaceFile(
   threadId: string,
-  opts: { file: File; channel?: WorkspaceChannelKind; path?: string },
+  opts: { file: File; path?: string },
 ): Promise<WorkspaceUploadResult> {
   const query = new URLSearchParams();
-  query.set("channel", opts.channel ?? "download");
   if (opts.path) query.set("path", opts.path);
   const form = new FormData();
   form.set("file", opts.file, opts.file.name);
@@ -223,12 +220,8 @@ export async function uploadWorkspaceFile(
 export function getWorkspaceDownloadUrl(
   threadId: string,
   path: string,
-  channel: WorkspaceChannelKind = "download",
 ): string {
-  const query = new URLSearchParams({
-    path,
-    channel,
-  });
+  const query = new URLSearchParams({ path });
   return `${workspaceBase(threadId)}/download?${query.toString()}`;
 }
 

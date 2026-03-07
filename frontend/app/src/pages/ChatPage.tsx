@@ -45,6 +45,7 @@ function ChatPageInner({ threadId }: { threadId: string }) {
   const agentName = currentThread?.entity_name ?? currentThread?.member_name;
   const agentAvatarUrl = currentThread?.avatar_url;
   const userAvatarUrl = userHasAvatar && userId ? `/api/members/${userId}/avatar` : undefined;
+  const [attachedFiles, setAttachedFiles] = useState<File[]>([]);
 
   const state = location.state as { selectedModel?: string; runStarted?: boolean; message?: string } | null;
   const [currentModel, setCurrentModel] = useState<string>(state?.selectedModel ?? "");
@@ -163,7 +164,6 @@ function ChatPageInner({ threadId }: { threadId: string }) {
       for (const file of files) {
         await uploadWorkspaceFile(threadId, {
           file,
-          channel: "upload",
           path: file.name,
         });
       }
@@ -173,6 +173,14 @@ function ChatPageInner({ threadId }: { threadId: string }) {
       toast.error(`Upload failed: ${msg}`, { id: toastId });
       throw error;
     }
+  }
+
+  async function handleSendWithAttachments(message: string): Promise<void> {
+    if (attachedFiles.length > 0) {
+      await handleUploadFiles(attachedFiles);
+      setAttachedFiles([]);
+    }
+    await handleSendMessage(message);
   }
 
   return (
@@ -218,10 +226,12 @@ function ChatPageInner({ threadId }: { threadId: string }) {
             disabled={isStreaming}
             isStreaming={isStreaming}
             placeholder="告诉 Leon 你需要什么帮助..."
-            onSendMessage={(msg) => void handleSendMessage(msg)}
+            onSendMessage={(msg) => void handleSendWithAttachments(msg)}
             onSendQueueMessage={handleSendQueueMessage}
             onStop={handleStopStreaming}
-            onUploadFiles={handleUploadFiles}
+            attachedFiles={attachedFiles}
+            onAttachFiles={(files) => setAttachedFiles((prev) => [...prev, ...files])}
+            onRemoveFile={(index) => setAttachedFiles((prev) => prev.filter((_, i) => i !== index))}
           />
           <TokenStats runtimeStatus={runtimeStatus} />
         </div>

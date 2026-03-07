@@ -103,8 +103,15 @@ class DockerProvider(SandboxProvider):
         self.command_timeout_sec = command_timeout_sec
         self._docker_host = docker_host
         self._sessions: dict[str, str] = {}  # session_id -> container_id
+        self._thread_bind_mounts: dict[str, list[MountSpec]] = {}  # thread_id -> bind_mounts
 
-    def create_session(self, context_id: str | None = None) -> SessionInfo:
+    def set_thread_bind_mounts(self, thread_id: str, mounts: list[MountSpec | dict]) -> None:
+        """Set thread-specific bind mounts that will be applied when creating sessions."""
+        self._thread_bind_mounts[thread_id] = [
+            MountSpec.model_validate(m) if isinstance(m, dict) else m for m in mounts
+        ]
+
+    def create_session(self, context_id: str | None = None, thread_id: str | None = None) -> SessionInfo:
         session_id = f"leon-{uuid.uuid4().hex[:12]}"
         container_name = session_id
 
@@ -118,8 +125,13 @@ class DockerProvider(SandboxProvider):
             f"leon.session_id={session_id}",
         ]
 
+        # Merge global bind_mounts with thread-specific mounts
+        all_mounts = list(self.bind_mounts)
+        if thread_id and thread_id in self._thread_bind_mounts:
+            all_mounts.extend(self._thread_bind_mounts[thread_id])
+
         copy_mounts: list[tuple[str, str]] = []
-        for mount in self.bind_mounts:
+        for mount in all_mounts:
             if mount.mode == "copy":
                 copy_mounts.append((mount.source, mount.target))
                 continue

@@ -9,7 +9,6 @@ import { TabBar } from "./TabBar";
 import { TerminalView } from "./TerminalView";
 import { AgentsView } from "./AgentsView";
 import { FilesView } from "./FilesView";
-import { UploadedFilesView } from "./UploadedFilesView";
 
 export type { ComputerPanelProps };
 
@@ -98,9 +97,6 @@ export default function ComputerPanel({
           />
         )}
 
-        {activeTab === "uploads" && threadId && (
-          <UploadedFilesView threadId={threadId} />
-        )}
       </div>
     </div>
   );

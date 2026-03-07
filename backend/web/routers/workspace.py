@@ -161,10 +161,9 @@ _MAX_UPLOAD_BYTES = 100 * 1024 * 1024  # 100 MB
 async def upload_workspace_file(
     thread_id: str,
     file: UploadFile = File(...),
-    channel: str = Query(default="download"),
     path: str | None = Query(default=None),
 ) -> dict[str, Any]:
-    """Upload a file into thread-scoped upload/download channel."""
+    """Upload a file into thread-scoped files directory."""
     if not file.filename and not path:
         raise HTTPException(400, "Missing upload path: provide query path or filename")
     relative_path = path or file.filename or ""
@@ -175,7 +174,6 @@ async def upload_workspace_file(
         payload = await asyncio.to_thread(
             save_uploaded_file,
             thread_id=thread_id,
-            channel=channel,
             relative_path=relative_path,
             content=content,
         )
@@ -188,14 +186,12 @@ async def upload_workspace_file(
 async def download_workspace_file(
     thread_id: str,
     path: str = Query(...),
-    channel: str = Query(default="download"),
 ) -> FileResponse:
-    """Download a file from thread-scoped upload/download channel."""
+    """Download a file from thread-scoped files directory."""
     try:
         target = await asyncio.to_thread(
             resolve_download_file,
             thread_id=thread_id,
-            channel=channel,
             relative_path=path,
         )
     except ValueError as e:
@@ -208,18 +204,16 @@ async def download_workspace_file(
 @router.get("/channel-files")
 async def list_workspace_channel_files(
     thread_id: str,
-    channel: str = Query(default="download"),
 ) -> dict[str, Any]:
-    """List files under thread-scoped upload/download channel."""
+    """List files under thread-scoped files directory."""
     try:
         entries = await asyncio.to_thread(
             list_channel_files,
             thread_id=thread_id,
-            channel=channel,
         )
     except ValueError as e:
         raise HTTPException(400, str(e)) from e
-    return {"thread_id": thread_id, "channel": channel, "entries": entries}
+    return {"thread_id": thread_id, "entries": entries}
 
 
 @router.get("/transfers")

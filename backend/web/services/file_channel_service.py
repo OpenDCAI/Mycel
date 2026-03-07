@@ -1,4 +1,4 @@
-"""Thread-scoped upload/download channel service."""
+"""Thread-scoped file service."""
 
 from __future__ import annotations
 
@@ -11,8 +11,6 @@ from typing import Any
 
 from backend.web.core.config import DB_PATH, THREAD_FILES_ROOT
 
-_ALLOWED_CHANNELS = {"upload", "download"}
-
 
 def _now_utc() -> str:
     return datetime.now(UTC).isoformat()
@@ -23,9 +21,7 @@ def _ensure_tables(conn: sqlite3.Connection) -> None:
         """
         CREATE TABLE IF NOT EXISTS thread_file_channels (
             thread_id TEXT PRIMARY KEY,
-            root_path TEXT NOT NULL,
-            upload_path TEXT NOT NULL,
-            download_path TEXT NOT NULL,
+            files_path TEXT NOT NULL,
             created_at TEXT NOT NULL,
             updated_at TEXT NOT NULL
         )
@@ -37,7 +33,6 @@ def _ensure_tables(conn: sqlite3.Connection) -> None:
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             thread_id TEXT NOT NULL,
             direction TEXT NOT NULL,
-            channel TEXT NOT NULL,
             relative_path TEXT NOT NULL,
             size_bytes INTEGER NOT NULL,
             status TEXT NOT NULL,
@@ -51,24 +46,17 @@ def _ensure_tables(conn: sqlite3.Connection) -> None:
     )
 
 
-def _validate_channel(channel: str) -> str:
-    normalized = channel.strip().lower()
-    if normalized not in _ALLOWED_CHANNELS:
-        raise ValueError(f"Unsupported channel: {channel}")
-    return normalized
-
-
 def _resolve_relative_path(base: Path, relative_path: str) -> Path:
     requested = Path(relative_path)
     if requested.is_absolute():
         raise ValueError(f"Path must be relative: {relative_path}")
     candidate = (base / requested).resolve()
-    # @@@channel-path-boundary - Reject traversal so API callers cannot escape per-thread upload/download roots.
+    # @@@path-boundary - Reject traversal so API callers cannot escape per-thread files root.
     candidate.relative_to(base.resolve())
     return candidate
 
 
-def _channel_root(thread_id: str, workspace_id: str | None = None) -> Path:
+def _thread_files_dir(thread_id: str, workspace_id: str | None = None) -> Path:
     if workspace_id:
         # @@@lazy-import - avoid circular dep: file_channel_service ↔ workspace_service both import from config
         from backend.web.services.workspace_service import get_workspace
@@ -77,17 +65,13 @@ def _channel_root(thread_id: str, workspace_id: str | None = None) -> Path:
         if ws is None:
             raise ValueError(f"Workspace not found: {workspace_id}")
         return Path(ws["host_path"]).resolve()
-    return (THREAD_FILES_ROOT / thread_id).resolve()
+    return (THREAD_FILES_ROOT / thread_id / "files").resolve()
 
 
 def ensure_thread_file_channel(thread_id: str, workspace_id: str | None = None) -> dict[str, Any]:
     # @@@workspace-root - when workspace_id set, root is shared host_path; otherwise per-thread isolation
-    thread_root = _channel_root(thread_id, workspace_id)
-    upload_dir = thread_root / "upload"
-    download_dir = thread_root / "download"
-
-    upload_dir.mkdir(parents=True, exist_ok=True)
-    download_dir.mkdir(parents=True, exist_ok=True)
+    files_dir = _thread_files_dir(thread_id, workspace_id)
+    files_dir.mkdir(parents=True, exist_ok=True)
 
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
     now = _now_utc()
@@ -95,40 +79,35 @@ def ensure_thread_file_channel(thread_id: str, workspace_id: str | None = None) 
         _ensure_tables(conn)
         conn.execute(
             """
-            INSERT INTO thread_file_channels(thread_id, root_path, upload_path, download_path, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?)
+            INSERT INTO thread_file_channels(thread_id, files_path, created_at, updated_at)
+            VALUES (?, ?, ?, ?)
             ON CONFLICT(thread_id) DO UPDATE SET
-                root_path = excluded.root_path,
-                upload_path = excluded.upload_path,
-                download_path = excluded.download_path,
+                files_path = excluded.files_path,
                 updated_at = excluded.updated_at
             """,
-            (thread_id, str(thread_root), str(upload_dir), str(download_dir), now, now),
+            (thread_id, str(files_dir), now, now),
         )
         conn.commit()
     return {
         "thread_id": thread_id,
         "workspace_id": workspace_id,
-        "root_path": str(thread_root),
-        "upload_path": str(upload_dir),
-        "download_path": str(download_dir),
+        "files_path": str(files_dir),
     }
 
 
-def _channel_dir(thread_id: str, channel: str) -> Path:
-    channel = _validate_channel(channel)
-    # @@@channel-must-be-initialized - look up saved root_path from DB instead of reconstructing from env
+def _get_files_dir(thread_id: str) -> Path:
+    # @@@files-must-be-initialized - look up saved files_path from DB instead of reconstructing from env
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
     with sqlite3.connect(str(DB_PATH)) as conn:
         _ensure_tables(conn)
         row = conn.execute(
-            "SELECT root_path FROM thread_file_channels WHERE thread_id = ?", (thread_id,)
+            "SELECT files_path FROM thread_file_channels WHERE thread_id = ?", (thread_id,)
         ).fetchone()
     if row is None:
         raise ValueError(f"File channel not initialized for thread {thread_id}; call ensure_thread_file_channel first")
-    d = (Path(row[0]) / channel).resolve()
+    d = Path(row[0]).resolve()
     if not d.is_dir():
-        raise ValueError(f"File channel directory missing for thread {thread_id} channel {channel}")
+        raise ValueError(f"File directory missing for thread {thread_id}")
     return d
 
 
@@ -149,7 +128,6 @@ def _record_transfer(
     *,
     thread_id: str,
     direction: str,
-    channel: str,
     relative_path: str,
     size_bytes: int,
     status: str,
@@ -159,10 +137,10 @@ def _record_transfer(
         _ensure_tables(conn)
         conn.execute(
             """
-            INSERT INTO thread_file_transfers(thread_id, direction, channel, relative_path, size_bytes, status, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO thread_file_transfers(thread_id, direction, relative_path, size_bytes, status, created_at)
+            VALUES (?, ?, ?, ?, ?, ?)
             """,
-            (thread_id, direction, channel, relative_path, int(size_bytes), status, now),
+            (thread_id, direction, relative_path, int(size_bytes), status, now),
         )
         conn.commit()
 
@@ -170,12 +148,10 @@ def _record_transfer(
 def save_uploaded_file(
     *,
     thread_id: str,
-    channel: str,
     relative_path: str,
     content: bytes,
 ) -> dict[str, Any]:
-    channel = _validate_channel(channel)
-    base = _channel_dir(thread_id, channel)
+    base = _get_files_dir(thread_id)
     target = _resolve_relative_path(base, relative_path)
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_bytes(content)
@@ -183,14 +159,12 @@ def save_uploaded_file(
     _record_transfer(
         thread_id=thread_id,
         direction="upload",
-        channel=channel,
         relative_path=str(Path(relative_path)),
         size_bytes=len(content),
         status="ok",
     )
     return {
         "thread_id": thread_id,
-        "channel": channel,
         "relative_path": str(Path(relative_path)),
         "absolute_path": str(target),
         "size_bytes": len(content),
@@ -201,11 +175,9 @@ def save_uploaded_file(
 def resolve_download_file(
     *,
     thread_id: str,
-    channel: str,
     relative_path: str,
 ) -> Path:
-    channel = _validate_channel(channel)
-    base = _channel_dir(thread_id, channel)
+    base = _get_files_dir(thread_id)
     target = _resolve_relative_path(base, relative_path)
     if not target.exists() or not target.is_file():
         raise FileNotFoundError(f"File not found: {relative_path}")
@@ -213,7 +185,6 @@ def resolve_download_file(
     _record_transfer(
         thread_id=thread_id,
         direction="download",
-        channel=channel,
         relative_path=str(Path(relative_path)),
         size_bytes=target.stat().st_size,
         status="ok",
@@ -224,9 +195,8 @@ def resolve_download_file(
 def list_channel_files(
     *,
     thread_id: str,
-    channel: str,
 ) -> list[dict[str, Any]]:
-    base = _channel_dir(thread_id, channel)
+    base = _get_files_dir(thread_id)
     entries: list[dict[str, Any]] = []
     for item in sorted(base.rglob("*")):
         if not item.is_file():

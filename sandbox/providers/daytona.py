@@ -103,15 +103,27 @@ class DaytonaProvider(SandboxProvider):
         os.environ["DAYTONA_API_URL"] = api_url
         self.client = Daytona()
         self._sandboxes: dict[str, Any] = {}
+        self._thread_bind_mounts: dict[str, list[MountSpec]] = {}  # thread_id -> bind_mounts
+
+    def set_thread_bind_mounts(self, thread_id: str, mounts: list[MountSpec | dict]) -> None:
+        """Set thread-specific bind mounts that will be applied when creating sessions."""
+        self._thread_bind_mounts[thread_id] = [
+            MountSpec.model_validate(m) if isinstance(m, dict) else m for m in mounts
+        ]
 
     # ==================== Session Lifecycle ====================
 
-    def create_session(self, context_id: str | None = None) -> SessionInfo:
+    def create_session(self, context_id: str | None = None, thread_id: str | None = None) -> SessionInfo:
         from daytona_sdk import CreateSandboxFromSnapshotParams
+
+        # Merge global bind_mounts with thread-specific mounts
+        all_mounts = list(self.bind_mounts)
+        if thread_id and thread_id in self._thread_bind_mounts:
+            all_mounts.extend(self._thread_bind_mounts[thread_id])
 
         mount_mounts: list[MountSpec] = []
         copy_mounts: list[tuple[str, str]] = []
-        for mount in self.bind_mounts:
+        for mount in all_mounts:
             if mount.mode == "copy":
                 copy_mounts.append((mount.source, mount.target))
             else:

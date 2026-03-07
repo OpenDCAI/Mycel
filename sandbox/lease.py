@@ -670,7 +670,9 @@ class SQLiteLease(SandboxLease):
 
             self.status = "recovering"
             self._persist_lease_metadata()
-            session_info = provider.create_session(context_id=f"leon-{self.lease_id}")
+            from sandbox.thread_context import get_current_thread_id
+            thread_id = get_current_thread_id()
+            session_info = provider.create_session(context_id=f"leon-{self.lease_id}", thread_id=thread_id)
             self._current_instance = SandboxInstance(
                 instance_id=session_info.session_id,
                 provider_name=self.provider_name,
