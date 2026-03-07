@@ -245,32 +245,42 @@ async def get_thread_history(
             return text[:truncate] + f"…[+{len(text) - truncate}]"
         return text
 
-    def _compact(msg: Any) -> dict[str, Any]:
+    def _expand(msg: Any) -> list[dict[str, Any]]:
+        """Expand one LangChain message into 1-N flat entries.
+
+        AIMessage with tool_calls → N tool_call entries (one per call),
+        then the text content (if any) as an assistant entry.
+        ToolMessage → one tool_result entry.
+        HumanMessage → one human entry.
+        """
         cls = msg.__class__.__name__
         if cls == "HumanMessage":
-            return {"role": "human", "text": _trunc(extract_text_content(msg.content))}
+            return [{"role": "human", "text": _trunc(extract_text_content(msg.content))}]
         if cls == "AIMessage":
-            calls = getattr(msg, "tool_calls", [])
-            if calls:
-                return {
-                    "role": "ai",
-                    "calls": [
-                        {"tool": c["name"], "args": str(c.get("args", {}))[:120]}
-                        for c in calls
-                    ],
-                }
-            return {"role": "ai", "text": _trunc(extract_text_content(msg.content))}
+            entries: list[dict] = []
+            for c in getattr(msg, "tool_calls", []):
+                entries.append({
+                    "role": "tool_call",
+                    "tool": c["name"],
+                    "args": str(c.get("args", {}))[:200],
+                })
+            text = extract_text_content(msg.content)
+            if text:
+                entries.append({"role": "assistant", "text": _trunc(text)})
+            return entries or [{"role": "assistant", "text": ""}]
         if cls == "ToolMessage":
-            tool_name = getattr(msg, "name", None) or getattr(msg, "tool_call_id", "?")
-            return {"role": "tool", "tool": tool_name, "text": _trunc(extract_text_content(msg.content))}
-        # SystemMessage or other
-        return {"role": cls.lower().replace("message", ""), "text": _trunc(extract_text_content(msg.content))}
+            return [{"role": "tool_result", "tool": getattr(msg, "name", "?"), "text": _trunc(extract_text_content(msg.content))}]
+        return [{"role": "system", "text": _trunc(extract_text_content(msg.content))}]
+
+    flat: list[dict] = []
+    for m in messages:
+        flat.extend(_expand(m))
 
     return {
         "thread_id": thread_id,
         "total": total,
         "showing": len(messages),
-        "messages": [_compact(m) for m in messages],
+        "messages": flat,
     }
 
 
