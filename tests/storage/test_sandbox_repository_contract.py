@@ -1,7 +1,6 @@
-"""Contract tests for SandboxRepository implementations.
+"""Contract tests for SandboxRepository implementation.
 
-These tests run against BOTH legacy and new implementations to prove behavioral equivalence.
-They define the repository contract that all implementations must satisfy.
+These tests define the repository contract that the implementation must satisfy.
 """
 
 from __future__ import annotations
@@ -10,23 +9,14 @@ import pytest
 from pathlib import Path
 from datetime import datetime, timezone
 
-from storage.providers.sqlite.legacy_sandbox_repository import LegacySandboxRepository
 from storage.providers.sqlite.sandbox_repo import SandboxRepository
 
 
-@pytest.fixture(params=["legacy", "new"])
-def repository(request, tmp_path):
-    """Parametrized fixture providing both implementations.
-
-    Tests run twice: once with legacy, once with new implementation.
-    Both must pass for equivalence to be proven.
-    """
+@pytest.fixture
+def repository(tmp_path):
+    """Fixture providing repository instance."""
     db_path = tmp_path / "test.db"
-
-    if request.param == "legacy":
-        return LegacySandboxRepository(db_path)
-    else:
-        return SandboxRepository(db_path)
+    return SandboxRepository(db_path)
 
 
 def _now_iso() -> str:
