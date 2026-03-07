@@ -1,6 +1,7 @@
 import {
   type AssistantTurn,
   type ChatEntry,
+  type RetrySegment,
   type StreamStatus,
   type ToolSegment,
 } from "../api";
@@ -105,7 +106,14 @@ function handleToolResult(event: StreamEvent, turnId: string, onUpdate: UpdateEn
 }
 
 function handleError(event: StreamEvent, turnId: string, onUpdate: UpdateEntries) {
-  const text = typeof event.data === "string" ? event.data : JSON.stringify(event.data ?? "Unknown error");
+  let text: string;
+  if (typeof event.data === "string") {
+    text = event.data;
+  } else if (event.data && typeof event.data === "object" && "error" in event.data) {
+    text = String((event.data as Record<string, unknown>).error);
+  } else {
+    text = JSON.stringify(event.data ?? "Unknown error");
+  }
   updateTurnSegments(onUpdate, turnId, (turn) => ({
     ...turn,
     segments: [...turn.segments, { type: "text", content: `\n\nError: ${text}` }],
@@ -125,6 +133,20 @@ function handleCancelled(event: StreamEvent, turnId: string, onUpdate: UpdateEnt
   }));
 }
 
+function handleRetry(event: StreamEvent, turnId: string, onUpdate: UpdateEntries) {
+  const d = (event.data ?? {}) as Record<string, unknown>;
+  const seg: RetrySegment = {
+    type: "retry",
+    attempt: Number(d.attempt ?? 1),
+    maxAttempts: Number(d.max_attempts ?? 10),
+    waitSeconds: Number(d.wait_seconds ?? 0),
+  };
+  updateTurnSegments(onUpdate, turnId, (turn) => ({
+    ...turn,
+    segments: [...turn.segments.filter((s) => s.type !== "retry"), seg],
+  }));
+}
+
 // --- Main dispatcher via handler map ---
 
 type EventHandler = (event: StreamEvent, turnId: string, onUpdate: UpdateEntries) => void;
@@ -135,6 +157,7 @@ const EVENT_HANDLERS: Record<string, EventHandler> = {
   tool_result: handleToolResult,
   error: handleError,
   cancelled: handleCancelled,
+  retry: handleRetry,
 };
 
 export function processStreamEvent(
@@ -151,7 +174,14 @@ export function processStreamEvent(
     if (event.data) setRuntimeStatus(event.data as StreamStatus);
     return { messageId };
   }
-  if (event.type === "run_start" || event.type === "run_done") {
+  if (event.type === "run_start") {
+    return { messageId };
+  }
+  if (event.type === "run_done") {
+    updateTurnSegments(onUpdate, turnId, (turn) => ({
+      ...turn,
+      segments: turn.segments.filter((s) => s.type !== "retry"),
+    }));
     return { messageId };
   }
 

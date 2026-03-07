@@ -124,7 +124,7 @@ export const DetailBoxModal = memo(function DetailBoxModal({
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-2 mt-2">
-          {segments.map((seg, i) => {
+          {segments.filter((s) => s.type !== "retry").map((seg, i) => {
             if (seg.type === "tool") {
               return <ToolEntry key={seg.step.id} seg={seg as ToolSegment} />;
             }

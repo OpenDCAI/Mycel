@@ -1,5 +1,6 @@
 import { memo } from "react";
-import type { AssistantTurn, NoticeSegment, NotificationType, StreamStatus, ToolSegment, TurnSegment } from "../../api";
+import { Loader2 } from "lucide-react";
+import type { AssistantTurn, NoticeSegment, NotificationType, RetrySegment, StreamStatus, ToolSegment, TurnSegment } from "../../api";
 import MarkdownContent from "../MarkdownContent";
 import { CopyButton } from "./CopyButton";
 import { InlineNotice } from "./NoticeBubble";
@@ -49,6 +50,7 @@ function ContentPhaseBlock({
   const toolSegs = segments.filter((s) => s.type === "tool") as ToolSegment[];
   const textSegs = segments.filter((s) => s.type === "text");
   const visibleText = textSegs.length > 0 ? textSegs[textSegs.length - 1] : null;
+  const retrySeg = segments.find((s) => s.type === "retry") as RetrySegment | undefined;
 
   return (
     <>
@@ -62,6 +64,12 @@ function ContentPhaseBlock({
       )}
       {visibleText && visibleText.type === "text" && (
         <MarkdownContent content={visibleText.content} />
+      )}
+      {retrySeg && (
+        <div className="text-xs text-amber-500 mt-1.5 flex items-center gap-1.5">
+          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+          <span>正在重试 {retrySeg.attempt}/{retrySeg.maxAttempts}...</span>
+        </div>
       )}
     </>
   );

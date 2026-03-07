@@ -5,6 +5,8 @@ export const STREAM_EVENT_TYPES = [
   "task_start", "task_done", "task_error",
   // Control (3) — run boundaries + runtime status
   "status", "run_start", "run_done",
+  // Retry notification
+  "retry",
 ] as const;
 
 export type StreamEventType = (typeof STREAM_EVENT_TYPES)[number];
@@ -122,7 +124,14 @@ export interface NoticeSegment {
   notification_type?: NotificationType;
 }
 
-export type TurnSegment = TextSegment | ToolSegment | NoticeSegment;
+export interface RetrySegment {
+  type: "retry";
+  attempt: number;
+  maxAttempts: number;
+  waitSeconds: number;
+}
+
+export type TurnSegment = TextSegment | ToolSegment | NoticeSegment | RetrySegment;
 
 export interface AssistantTurn {
   id: string;

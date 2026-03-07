@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Search, Plus, Zap, Users, Wrench, Plug, SearchX, ArrowUpDown, AlertTriangle, RefreshCw, MessageSquare, Copy, Trash2 } from "lucide-react";
+import { Search, Plus, Zap, Users, Wrench, Plug, SearchX, ArrowUpDown, AlertTriangle, RefreshCw, MessageSquare, Copy, Trash2, Bot } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import CreateMemberDialog from "@/components/CreateMemberDialog";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -147,7 +147,7 @@ export default function MembersPage() {
               const status = statusConfig[member.status];
               const colorClass = avatarColors[index % avatarColors.length];
               const initials = member.name.split(" ").map((w) => w[0]).join("").slice(0, 2);
-              const isBuiltin = (member as any).builtin === true;
+              const isBuiltin = member.builtin === true;
               const handleCardClick = () => {
                 navigate(`/members/${member.id}`);
               };

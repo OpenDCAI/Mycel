@@ -35,8 +35,8 @@ export default function TokenStats({ runtimeStatus }: TokenStatsProps) {
               )}
             </>
           )}
-          <span>费用: {formatCost(tokens.cost)}</span>
-          <span className="text-muted-foreground/60">累计: {formatTokens(tokens.total_tokens)}</span>
+          {tokens.cost != null && <span>费用: {formatCost(tokens.cost)}</span>}
+          {tokens.total_tokens != null && <span className="text-muted-foreground/60">累计: {formatTokens(tokens.total_tokens)}</span>}
         </div>
       </div>
     </div>
