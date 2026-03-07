@@ -75,6 +75,11 @@ from core.tools.task.service import TaskService
 from core.tools.tool_search.service import ToolSearchService
 from core.tools.web.service import WebService
 
+# Multi-agent services
+from core.agents.registry import AgentRegistry
+from core.agents.service import AgentService
+from core.agents.communication.service import SendMessageService
+
 # Import file operation recorder for time travel
 from tui.operations import get_recorder
 
@@ -747,54 +752,73 @@ class LeonAgent:
         self.close()
 
     def _build_middleware_stack(self) -> list:
-        """Build middleware stack."""
+        """Build middleware stack.
+
+        Order (outer → inner, i.e. index 0 = outermost):
+          SpillBuffer → Monitor → PromptCaching → Memory → Steering
+            → [legacy middlewares, transitional] → ToolRunner
+        """
         middleware = []
 
         # Get backends from sandbox
         fs_backend = self._sandbox.fs()
         cmd_executor = self._sandbox.shell()
 
-        # 0. Steering (highest priority)
-        middleware.append(SteeringMiddleware(queue_manager=self.queue_manager))
+        # 1. Monitor — second from outside; observes all model calls/responses.
+        #    Must come before PromptCaching/Memory/Steering so token counts
+        #    are captured before any request transformations.
+        context_limit = self.config.runtime.context_limit
+        self._monitor_middleware = MonitorMiddleware(
+            context_limit=context_limit,
+            model_name=self.model_name,
+            verbose=self.verbose,
+        )
+        middleware.append(self._monitor_middleware)
 
-        # 1. Memory (context pruning + compaction)
+        # 2. Prompt Caching — adds cache_control markers to model requests
+        middleware.append(PromptCachingMiddleware(ttl="5m", min_messages_to_cache=0))
+
+        # 3. Memory — prunes/compacts context before model call
         memory_enabled = self.config.memory.pruning.enabled or self.config.memory.compaction.enabled
         if memory_enabled:
             self._add_memory_middleware(middleware)
 
-        # 2. Prompt Caching
-        middleware.append(PromptCachingMiddleware(ttl="5m", min_messages_to_cache=0))
+        # 4. Steering — injects queued messages before model call
+        middleware.append(SteeringMiddleware(queue_manager=self.queue_manager))
 
-        # 3. FileSystem
+        # Legacy middlewares (transitional — their tools are also registered via
+        # Services into ToolRegistry, but old tool names still route here):
+
+        # 5. FileSystem (read_file / write_file / edit_file / list_dir via old names)
         if self.config.tools.filesystem.enabled:
             self._add_filesystem_middleware(middleware, fs_backend)
 
-        # 4. Search
+        # 6. Search (Grep / Glob via old BaseTool path)
         if self.config.tools.search.enabled:
             self._add_search_middleware(middleware)
 
-        # 5. Web
+        # 7. Web (web_search / Fetch via old names)
         if self.config.tools.web.enabled:
             self._add_web_middleware(middleware)
 
-        # 6. Command
+        # 8. Command (run_command via old name)
         if self.config.tools.command.enabled:
             self._add_command_middleware(middleware, cmd_executor)
 
-        # 7. Skills
+        # 9. Skills
         if self.config.skills.enabled and self.config.skills.paths:
             self._add_skills_middleware(middleware)
 
-        # 8. Todo
+        # 10. Todo (TaskCreate/Update/List/Get via old TodoMiddleware)
         self._todo_middleware = TodoMiddleware(verbose=self.verbose)
         middleware.append(self._todo_middleware)
 
-        # 9. TaskBoard (agent ↔ panel_tasks)
+        # 11. TaskBoard (board management — not yet converted to Service)
         from core.taskboard.middleware import TaskBoardMiddleware
         self._taskboard_middleware = TaskBoardMiddleware()
         middleware.append(self._taskboard_middleware)
 
-        # 10. Task (sub-agent orchestration)
+        # 12. Task (old sub-agent middleware — kept for backward compat)
         self._task_middleware = TaskMiddleware(
             workspace_root=self.workspace_root,
             parent_model=self.model_name,
@@ -805,27 +829,16 @@ class LeonAgent:
         )
         middleware.append(self._task_middleware)
 
-        # 11. Monitor (last to capture all requests/responses)
-        context_limit = self.config.runtime.context_limit
-        self._monitor_middleware = MonitorMiddleware(
-            context_limit=context_limit,
-            model_name=self.model_name,
-            verbose=self.verbose,
-        )
-        middleware.append(self._monitor_middleware)
-
-        # 12. ToolRunner (innermost — routes registered tool calls via ToolRegistry)
+        # 13. ToolRunner (innermost — routes all ToolRegistry-registered tool calls)
         self._tool_runner = ToolRunner(
             registry=self._tool_registry,
             validator=ToolValidator(),
         )
         middleware.append(self._tool_runner)
 
-        # 13. SpillBuffer (outermost — catches all oversized tool outputs)
-        # Must be first in list: LangChain chains tool-call wrappers with
-        # "first = outermost", so index-0 wraps every other middleware's
-        # result.  Middlewares like Search short-circuit (return without
-        # calling handler), so only the outermost wrapper sees their output.
+        # 0. SpillBuffer (outermost — catches oversized tool outputs)
+        # Must be inserted at index 0 AFTER building the list:
+        # LangChain wraps middlewares as "first = outermost".
         if self.config.tools.spill_buffer.enabled:
             spill_cfg = self.config.tools.spill_buffer
             middleware.insert(
@@ -1087,6 +1100,22 @@ class LeonAgent:
         # ToolSearch (INLINE - always available for discovering DEFERRED tools)
         self._tool_search_service = ToolSearchService(
             registry=self._tool_registry,
+        )
+
+        # Multi-agent tools (Agent/TaskOutput/TaskStop/SendMessage)
+        self._agent_registry = AgentRegistry()
+        self._agent_service = AgentService(
+            tool_registry=self._tool_registry,
+            agent_registry=self._agent_registry,
+            workspace_root=self.workspace_root,
+            model_name=self.model_name,
+            queue_manager=self.queue_manager,
+        )
+        self._send_message_service = SendMessageService(
+            registry=self._tool_registry,
+            agent_registry=self._agent_registry,
+            queue_manager=self.queue_manager,
+            current_thread_id="",  # Updated dynamically per invocation via thread_context
         )
 
         if self.verbose:

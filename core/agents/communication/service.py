@@ -21,14 +21,21 @@ SEND_MESSAGE_SCHEMA = {
     "description": (
         "Send a message to another agent. "
         "type='message' for DMs, 'broadcast' for all agents, "
-        "'shutdown_request' to request shutdown, 'shutdown_response' to respond."
+        "'shutdown_request' to request shutdown, 'shutdown_response' to respond, "
+        "'plan_approval_response' to approve/reject a plan."
     ),
     "parameters": {
         "type": "object",
         "properties": {
             "type": {
                 "type": "string",
-                "enum": ["message", "broadcast", "shutdown_request", "shutdown_response"],
+                "enum": [
+                    "message",
+                    "broadcast",
+                    "shutdown_request",
+                    "shutdown_response",
+                    "plan_approval_response",
+                ],
                 "description": "Message type",
             },
             "recipient": {
@@ -127,6 +134,8 @@ class SendMessageService:
             return await self._send_shutdown_request(content, recipient)
         elif type == "shutdown_response":
             return await self._send_shutdown_response(content, recipient, approve, request_id)
+        elif type == "plan_approval_response":
+            return await self._send_plan_approval_response(content, recipient, approve, request_id)
         return f"Unknown message type: {type}"
 
     async def _send_direct(self, content: str, recipient: str | None, summary: str | None) -> str:
@@ -193,3 +202,23 @@ class SendMessageService:
         )
         self._queue_manager.enqueue(msg, target_thread, "agent_message")
         return f"Shutdown response sent to {recipient}"
+
+    async def _send_plan_approval_response(
+        self, content: str, recipient: str | None, approve: bool | None, request_id: str | None
+    ) -> str:
+        if not recipient:
+            return "Error: recipient required for plan_approval_response"
+
+        entry = await self._agent_registry.get_by_name(recipient)
+        if not entry:
+            return f"Error: agent '{recipient}' not found"
+
+        msg = _format_agent_message(
+            "plan_approval_response", content,
+            sender_thread=self._current_thread_id,
+            approve=approve,
+            request_id=request_id,
+        )
+        self._queue_manager.enqueue(msg, entry.thread_id, "agent_message")
+        action = "approved" if approve else "rejected"
+        return f"Plan {action} — response sent to {recipient}"

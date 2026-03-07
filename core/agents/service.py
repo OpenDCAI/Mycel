@@ -1,7 +1,7 @@
 """AgentService - Registers Agent/TaskOutput/TaskStop tools into ToolRegistry.
 
-Wraps SubagentRunner to provide CC-compatible Agent tool interface,
-with AgentRegistry integration for name-based routing.
+Creates independent LeonAgent instances per spawn, uses asyncio.shield() +
+wait_for() for implicit background switching. Backed by AgentRegistry (SQLite).
 """
 
 from __future__ import annotations
@@ -15,9 +15,6 @@ from typing import Any
 
 from core.agents.registry import AgentEntry, AgentRegistry
 from core.runtime.registry import ToolEntry, ToolMode, ToolRegistry
-from core.task.registry import BackgroundTaskRegistry
-from core.task.subagent import SubagentRunner
-from core.task.types import TaskParams, TaskResult
 
 logger = logging.getLogger(__name__)
 
@@ -25,14 +22,15 @@ AGENT_SCHEMA = {
     "name": "Agent",
     "description": (
         "Launch a new agent to handle complex tasks autonomously. "
-        "Use subagent_type to select a specialized agent, or omit for default."
+        "Use subagent_type to select a specialized agent, or omit for default. "
+        "Agents run independently with their own tool stack."
     ),
     "parameters": {
         "type": "object",
         "properties": {
             "subagent_type": {
                 "type": "string",
-                "description": "Type of agent to spawn (e.g. 'Explore', 'Coder')",
+                "description": "Type of agent to spawn (e.g. 'Explore', 'Coder'). Omit for general-purpose.",
             },
             "prompt": {
                 "type": "string",
@@ -49,19 +47,19 @@ AGENT_SCHEMA = {
             "run_in_background": {
                 "type": "boolean",
                 "default": False,
-                "description": "Run agent as a background task",
+                "description": "Return immediately with task_id instead of waiting",
             },
             "resume": {
                 "type": "string",
-                "description": "Agent ID to resume",
+                "description": "Task ID of a previously backgrounded agent to resume",
             },
             "max_turns": {
                 "type": "integer",
-                "description": "Maximum turns",
+                "description": "Maximum turns the agent can take",
             },
             "timeout": {
                 "type": "integer",
-                "description": "Timeout in milliseconds",
+                "description": "Timeout in milliseconds before auto-backgrounding (default: 300000)",
                 "default": 300000,
             },
         },
@@ -71,13 +69,13 @@ AGENT_SCHEMA = {
 
 TASK_OUTPUT_SCHEMA = {
     "name": "TaskOutput",
-    "description": "Get the output of a background task by its TaskId.",
+    "description": "Get the output of a background agent task by its TaskId.",
     "parameters": {
         "type": "object",
         "properties": {
             "TaskId": {
                 "type": "string",
-                "description": "The task ID returned when starting a background task",
+                "description": "The task ID returned when starting a background agent",
             },
         },
         "required": ["TaskId"],
@@ -86,7 +84,7 @@ TASK_OUTPUT_SCHEMA = {
 
 TASK_STOP_SCHEMA = {
     "name": "TaskStop",
-    "description": "Stop a running background task.",
+    "description": "Stop a running background agent task.",
     "parameters": {
         "type": "object",
         "properties": {
@@ -100,27 +98,47 @@ TASK_STOP_SCHEMA = {
 }
 
 
+class _RunningTask:
+    """Tracks a background asyncio.Task with its metadata."""
+
+    def __init__(self, task: asyncio.Task, agent_id: str, thread_id: str):
+        self.task = task
+        self.agent_id = agent_id
+        self.thread_id = thread_id
+
+    @property
+    def is_done(self) -> bool:
+        return self.task.done()
+
+    def get_result(self) -> str | None:
+        if not self.task.done():
+            return None
+        exc = self.task.exception()
+        if exc:
+            return f"<tool_use_error>{exc}</tool_use_error>"
+        return self.task.result()
+
+
 class AgentService:
     """Registers Agent, TaskOutput, TaskStop tools into ToolRegistry.
 
-    Wraps SubagentRunner for actual agent execution, and uses AgentRegistry
-    for name -> thread_id mapping (enabling SendMessage routing).
+    Creates independent LeonAgent instances for each spawn. Uses asyncio.shield()
+    + wait_for() so long-running agents auto-switch to background without losing work.
     """
 
     def __init__(
         self,
         tool_registry: ToolRegistry,
-        subagent_runner: SubagentRunner,
         agent_registry: AgentRegistry,
-        task_registry: BackgroundTaskRegistry,
-        all_middleware: list[Any],
-        current_thread_id: str | None = None,
+        workspace_root: Path,
+        model_name: str,
+        queue_manager: Any | None = None,
     ):
-        self._subagent_runner = subagent_runner
         self._agent_registry = agent_registry
-        self._task_registry = task_registry
-        self._all_middleware = all_middleware
-        self._current_thread_id = current_thread_id
+        self._workspace_root = workspace_root
+        self._model_name = model_name
+        self._queue_manager = queue_manager
+        self._tasks: dict[str, _RunningTask] = {}  # task_id -> _RunningTask
 
         tool_registry.register(ToolEntry(
             name="Agent",
@@ -155,96 +173,162 @@ class AgentService:
         max_turns: int | None = None,
         timeout: int = 300000,
     ) -> str:
-        """Handle Agent tool call - spawn a sub-agent via SubagentRunner."""
-        agent_id = str(uuid.uuid4())[:8]
-        agent_name = name or f"agent-{agent_id}"
+        """Spawn an independent LeonAgent and run it with the given prompt."""
+        from sandbox.thread_context import get_current_thread_id
 
-        params: TaskParams = {
-            "SubagentType": subagent_type,
-            "Prompt": prompt,
-        }
-        if description:
-            params["Description"] = description
-        if run_in_background:
-            params["RunInBackground"] = True
-        if resume:
-            params["Resume"] = resume
-        if max_turns is not None:
-            params["MaxTurns"] = max_turns
+        task_id = uuid.uuid4().hex[:8]
+        agent_name = name or f"agent-{task_id}"
 
-        result: TaskResult = await self._subagent_runner.run(
-            params=params,
-            all_middleware=self._all_middleware,
-            parent_thread_id=self._current_thread_id,
-        )
+        # Reuse thread_id when resuming a previous backgrounded task
+        if resume and resume in self._tasks:
+            thread_id = self._tasks[resume].thread_id
+        else:
+            thread_id = f"subagent-{task_id}"
 
-        # Register agent in AgentRegistry for name-based routing
-        thread_id = result.thread_id or f"subagent_{result.task_id}"
-        await self._agent_registry.register(AgentEntry(
-            agent_id=agent_id,
+        parent_thread_id = get_current_thread_id()
+
+        # Register in AgentRegistry immediately
+        entry = AgentEntry(
+            agent_id=task_id,
             name=agent_name,
             thread_id=thread_id,
-            status="running" if result.status == "running" else result.status,
-            parent_agent_id=self._current_thread_id,
+            status="running",
+            parent_agent_id=parent_thread_id,
             subagent_type=subagent_type,
-        ))
+        )
+        await self._agent_registry.register(entry)
 
-        if result.status == "completed":
-            await self._agent_registry.update_status(agent_id, "completed")
+        # Create async task (independent LeonAgent runs inside)
+        task = asyncio.create_task(
+            self._run_agent(task_id, agent_name, thread_id, prompt, subagent_type, max_turns)
+        )
+        running = _RunningTask(task=task, agent_id=task_id, thread_id=thread_id)
+        self._tasks[task_id] = running
 
-        return self._format_result(result, agent_name)
+        if run_in_background:
+            return json.dumps({
+                "task_id": task_id,
+                "agent_name": agent_name,
+                "thread_id": thread_id,
+                "status": "running",
+                "message": "Agent started in background. Use TaskOutput to get result.",
+            }, ensure_ascii=False)
+
+        # Wait with timeout; asyncio.shield keeps agent running if we time out
+        timeout_s = timeout / 1000
+        try:
+            result = await asyncio.wait_for(asyncio.shield(task), timeout=timeout_s)
+            await self._agent_registry.update_status(task_id, "completed")
+            return result
+        except asyncio.TimeoutError:
+            # Auto-switch to background — agent keeps running via shield
+            return json.dumps({
+                "task_id": task_id,
+                "agent_name": agent_name,
+                "thread_id": thread_id,
+                "status": "backgrounded",
+                "message": (
+                    f"Agent still running after {timeout}ms. "
+                    "Use TaskOutput to poll for result."
+                ),
+            }, ensure_ascii=False)
+        except Exception as e:
+            await self._agent_registry.update_status(task_id, "error")
+            return f"<tool_use_error>Agent failed: {e}</tool_use_error>"
+
+    async def _run_agent(
+        self,
+        task_id: str,
+        agent_name: str,
+        thread_id: str,
+        prompt: str,
+        subagent_type: str,
+        max_turns: int | None,
+    ) -> str:
+        """Create and run an independent LeonAgent, collect its text output."""
+        # Lazy import avoids circular dependency (agent.py imports AgentService)
+        from agent import create_leon_agent
+        from sandbox.thread_context import set_current_thread_id
+
+        agent = None
+        try:
+            agent = create_leon_agent(
+                model_name=self._model_name,
+                workspace_root=self._workspace_root,
+                verbose=False,
+            )
+
+            set_current_thread_id(thread_id)
+            config = {"configurable": {"thread_id": thread_id}}
+            output_parts: list[str] = []
+
+            async for chunk in agent.agent.astream(
+                {"messages": [{"role": "user", "content": prompt}]},
+                config=config,
+                stream_mode="updates",
+            ):
+                for _, node_update in chunk.items():
+                    if not isinstance(node_update, dict):
+                        continue
+                    msgs = node_update.get("messages", [])
+                    if not isinstance(msgs, list):
+                        msgs = [msgs]
+                    for msg in msgs:
+                        if msg.__class__.__name__ == "AIMessage":
+                            content = getattr(msg, "content", "")
+                            if isinstance(content, str) and content:
+                                output_parts.append(content)
+                            elif isinstance(content, list):
+                                for block in content:
+                                    if isinstance(block, dict) and block.get("type") == "text":
+                                        text = block.get("text", "")
+                                        if text:
+                                            output_parts.append(text)
+
+            await self._agent_registry.update_status(task_id, "completed")
+            return "\n".join(output_parts) or "(Agent completed with no text output)"
+
+        except Exception as e:
+            logger.exception("[AgentService] Agent %s failed", agent_name)
+            await self._agent_registry.update_status(task_id, "error")
+            raise
+        finally:
+            if agent is not None:
+                try:
+                    agent.close()
+                except Exception:
+                    pass
 
     async def _handle_task_output(self, TaskId: str) -> str:
-        """Get output of a background task."""
-        result = await self._subagent_runner.get_task_status(TaskId)
+        """Get output of a background agent task."""
+        running = self._tasks.get(TaskId)
+        if not running:
+            return f"Error: task '{TaskId}' not found"
 
-        if result.status == "running":
-            # Include buffered text if available
-            entry = await self._task_registry.get(TaskId)
-            if entry and entry.text_buffer:
-                partial = "".join(entry.text_buffer[-50:])
-                return json.dumps({
-                    "task_id": TaskId,
-                    "status": "running",
-                    "partial_output": partial,
-                }, ensure_ascii=False)
-            return json.dumps({"task_id": TaskId, "status": "running"})
+        if not running.is_done:
+            return json.dumps({
+                "task_id": TaskId,
+                "status": "running",
+                "message": "Agent is still running.",
+            }, ensure_ascii=False)
 
+        result = running.get_result()
+        status = "error" if (result and result.startswith("<tool_use_error>")) else "completed"
         return json.dumps({
             "task_id": TaskId,
-            "status": result.status,
-            "result": result.result,
-            "error": result.error,
+            "status": status,
+            "result": result,
         }, ensure_ascii=False)
 
     async def _handle_task_stop(self, TaskId: str) -> str:
-        """Stop a running background task."""
-        entry = await self._task_registry.get(TaskId)
-        if not entry:
+        """Stop a running background agent task."""
+        running = self._tasks.get(TaskId)
+        if not running:
             return f"Error: task '{TaskId}' not found"
 
-        if entry.status != "running":
-            return f"Task {TaskId} is already {entry.status}"
+        if running.is_done:
+            return f"Task {TaskId} already completed"
 
-        # Cancel the async task
-        if entry._async_task and not entry._async_task.done():
-            entry._async_task.cancel()
-            await self._task_registry.update(TaskId, status="error", error="Stopped by user")
-            return f"Task {TaskId} stopped"
-
-        return f"Task {TaskId} has no cancellable process"
-
-    def _format_result(self, result: TaskResult, agent_name: str) -> str:
-        """Format TaskResult for LLM consumption."""
-        data: dict[str, Any] = {
-            "task_id": result.task_id,
-            "agent_name": agent_name,
-            "status": result.status,
-        }
-        if result.result:
-            data["result"] = result.result
-        if result.error:
-            data["error"] = result.error
-        if result.thread_id:
-            data["thread_id"] = result.thread_id
-        return json.dumps(data, ensure_ascii=False)
+        running.task.cancel()
+        await self._agent_registry.update_status(running.agent_id, "error")
+        return f"Task {TaskId} cancelled"
