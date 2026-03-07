@@ -13,6 +13,9 @@ CLAUDE.md
 # Virtual environments
 .venv
 
+# Playwright CLI snapshots
+.playwright-cli/
+
 # Runtime cache
 .claude/.sks-last-search.json
 .claude/skill-groups/
