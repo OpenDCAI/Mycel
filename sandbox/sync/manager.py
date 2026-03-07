@@ -8,5 +8,15 @@ class SyncManager:
         self.strategy = self._select_strategy()
 
     def _select_strategy(self) -> SyncStrategy:
-        from sandbox.sync.strategy import NoOpStrategy
-        return NoOpStrategy()
+        from sandbox.sync.strategy import NoOpStrategy, IncrementalSyncStrategy
+        from sandbox.sync.state import SyncState
+
+        runtime_kind = self.provider_capability.runtime_kind
+
+        # Docker and local use bind mounts - no sync needed
+        if runtime_kind in ("local", "docker"):
+            return NoOpStrategy()
+
+        # Remote providers use incremental sync
+        state = SyncState()
+        return IncrementalSyncStrategy(self.workspace_root, state)
