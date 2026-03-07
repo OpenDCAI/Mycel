@@ -90,3 +90,25 @@ def resolve_sandbox_name(cli_arg: str | None) -> str:
     if cli_arg:
         return cli_arg
     return os.getenv("LEON_SANDBOX", "local")
+
+
+# === REPOSITORY DEPENDENCY INJECTION ===
+
+def get_sandbox_repository():
+    """Factory for sandbox repository implementation.
+
+    Allows switching between legacy (inline SQL) and new (repository pattern)
+    implementations via environment variable for gradual migration.
+
+    Usage:
+        export LEON_USE_NEW_REPOSITORY=true  # Use new implementation
+        export LEON_USE_NEW_REPOSITORY=false # Use legacy (default)
+    """
+    use_new = os.getenv("LEON_USE_NEW_REPOSITORY", "false").lower() == "true"
+
+    if use_new:
+        from storage.providers.sqlite.sandbox_repo import SandboxRepository
+        return SandboxRepository(DEFAULT_DB_PATH)
+    else:
+        from storage.providers.sqlite.legacy_sandbox_repository import LegacySandboxRepository
+        return LegacySandboxRepository(DEFAULT_DB_PATH)
