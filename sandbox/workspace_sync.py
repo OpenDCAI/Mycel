@@ -41,3 +41,24 @@ class WorkspaceSync:
                 remote_path = f"/workspace/files/{relative}"
                 content = file_path.read_text()
                 provider.write_file(session_id, remote_path, content)
+
+    def download_workspace(self, thread_id: str, session_id: str, provider: SandboxProvider) -> None:
+        """Download workspace files from sandbox."""
+        if not self.needs_upload_sync():
+            return
+        workspace = self.get_thread_workspace_path(thread_id)
+        workspace.mkdir(parents=True, exist_ok=True)
+
+        def download_recursive(remote_path: str, local_path: Path) -> None:
+            items = provider.list_dir(session_id, remote_path)
+            for item in items:
+                remote_item = f"{remote_path}/{item['name']}".replace("//", "/")
+                local_item = local_path / item["name"]
+                if item["type"] == "directory":
+                    local_item.mkdir(parents=True, exist_ok=True)
+                    download_recursive(remote_item, local_item)
+                else:
+                    content = provider.read_file(session_id, remote_item)
+                    local_item.write_text(content)
+
+        download_recursive("/workspace/files", workspace)
