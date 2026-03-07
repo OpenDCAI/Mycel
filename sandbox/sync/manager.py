@@ -20,3 +20,15 @@ class SyncManager:
         # Remote providers use incremental sync
         state = SyncState()
         return IncrementalSyncStrategy(self.workspace_root, state)
+
+    def get_thread_workspace_path(self, thread_id: str) -> Path:
+        """Get the local workspace path for a thread."""
+        return self.workspace_root / thread_id / "files"
+
+    def upload_workspace(self, thread_id: str, session_id: str, provider):
+        """Upload workspace files to sandbox."""
+        self.strategy.upload(thread_id, session_id, provider)
+
+    def download_workspace(self, thread_id: str, session_id: str, provider):
+        """Download workspace files from sandbox."""
+        self.strategy.download(thread_id, session_id, provider)

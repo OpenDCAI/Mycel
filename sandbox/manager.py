@@ -18,7 +18,7 @@ from sandbox.config import DEFAULT_DB_PATH
 from sandbox.lease import LeaseStore
 from sandbox.provider import SandboxProvider
 from sandbox.terminal import TerminalState, TerminalStore
-from sandbox.workspace_sync import WorkspaceSync
+from sandbox.sync.manager import SyncManager
 
 
 def lookup_sandbox_for_thread(thread_id: str, db_path: Path | None = None) -> str | None:
@@ -65,7 +65,7 @@ class SandboxManager:
         )
 
         from backend.web.core.config import THREAD_FILES_ROOT
-        self.workspace_sync = WorkspaceSync(
+        self.workspace_sync = SyncManager(
             provider_capability=self.provider_capability,
             workspace_root=THREAD_FILES_ROOT
         )
