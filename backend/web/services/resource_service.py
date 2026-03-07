@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-import json
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 from backend.web.core.config import SANDBOXES_DIR
+from backend.web.services.config_loader import SandboxConfigLoader
 from backend.web.services.sandbox_service import available_sandbox_types, build_provider_from_config_name
 from backend.web.utils.helpers import _build_thread_config_repo as _make_thread_config_repo
 from sandbox.providers.local import LocalSessionProvider
@@ -21,6 +21,9 @@ from sandbox.resource_snapshot import (
 )
 from storage.models import map_lease_to_session_status
 from storage.providers.sqlite.sandbox_monitor_repo import SQLiteSandboxMonitorRepo
+
+_CONFIG_LOADER = SandboxConfigLoader(SANDBOXES_DIR)
+
 
 # ---------------------------------------------------------------------------
 # Provider catalog (display metadata: vendor, description, console URL)
@@ -43,22 +46,8 @@ _CATALOG: dict[str, _CatalogEntry] = {
 }
 
 
-def _load_config_payload(config_name: str, *, sandboxes_dir: Path) -> dict[str, Any]:
-    if config_name == "local":
-        return {"provider": "local"}
-    config_path = sandboxes_dir / f"{config_name}.json"
-    payload = json.loads(config_path.read_text())
-    if not isinstance(payload, dict):
-        raise RuntimeError(f"Sandbox config is not a JSON object: {config_path}")
-    return payload
-
-
 def resolve_provider_name(config_name: str, *, sandboxes_dir: Path) -> str:
-    payload = _load_config_payload(config_name, sandboxes_dir=sandboxes_dir)
-    provider = str(payload.get("provider") or "").strip()
-    if not provider:
-        raise RuntimeError(f"Sandbox config missing provider: {config_name}")
-    return provider
+    return _CONFIG_LOADER.get_provider_name(config_name)
 
 
 def _resolve_provider_type(provider_name: str, config_name: str, *, sandboxes_dir: Path) -> str:
@@ -71,7 +60,7 @@ def _resolve_provider_type(provider_name: str, config_name: str, *, sandboxes_di
 
 
 def _resolve_console_url(provider_name: str, config_name: str, *, sandboxes_dir: Path) -> str | None:
-    payload = _load_config_payload(config_name, sandboxes_dir=sandboxes_dir)
+    payload = _CONFIG_LOADER.load(config_name)
     override = str(payload.get("console_url") or "").strip()
     if override:
         return override
