@@ -539,7 +539,7 @@ async def list_tasks(
             "task_type": run_type,
             "status": "completed" if run.is_done else "running",
             "command_line": getattr(run, "command", None) if run_type == "bash" else None,
-            "description": None,
+            "description": getattr(run, "description", None),
             "exit_code": getattr(getattr(run, "_cmd", None), "exit_code", None) if run_type == "bash" else None,
             "error": None,
         })

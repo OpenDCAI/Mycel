@@ -89,7 +89,7 @@ export function BackgroundSessionsIndicator({ tasks, onCancelTask }: BackgroundS
                 {terminals.map((task) => (
                   <div key={task.task_id} className="flex items-center gap-1.5 text-[11px] text-gray-700 group">
                     <StatusIcon status={task.status} />
-                    <span className="font-mono truncate flex-1">{task.command_line || task.task_id}</span>
+                    <span className="font-mono truncate flex-1">{task.description || task.command_line || task.task_id}</span>
                     {task.status === "running" && onCancelTask && (
                       <button
                         onClick={(e) => {

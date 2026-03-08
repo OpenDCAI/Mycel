@@ -122,9 +122,10 @@ class _RunningTask:
 class _BashBackgroundRun:
     """Wraps AsyncCommand to provide the same is_done/get_result interface as _RunningTask."""
 
-    def __init__(self, async_cmd: Any, command: str):
+    def __init__(self, async_cmd: Any, command: str, description: str = ""):
         self._cmd = async_cmd
         self.command = command
+        self.description = description
 
     @property
     def is_done(self) -> bool:

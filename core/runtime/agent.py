@@ -1162,6 +1162,12 @@ class LeonAgent:
    - File editing → use `Edit` (NOT `sed` or `awk` via Bash)
    - Reserve `Bash` for: git, package managers, build tools, tests, and other system operations.""")
 
+        # Rule 6: Background task description
+        rules.append("""6. **Background Task Description**: When using `Bash` with `run_in_background: true`, always include a clear `description` parameter.
+   - The description is shown to the user in the background task indicator.
+   - Keep it concise (5–10 words), action-oriented, e.g. "Run test suite", "Build frontend assets".
+   - Without a description, the raw command string is shown, which is hard to read.""")
+
         return "\n\n".join(rules)
 
     def _build_base_prompt(self) -> str:

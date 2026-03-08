@@ -75,6 +75,10 @@ class CommandService:
                             "type": "string",
                             "description": "Command to execute",
                         },
+                        "description": {
+                            "type": "string",
+                            "description": "Human-readable description of what this command does. Required when run_in_background is true; shown in the background task indicator.",
+                        },
                         "run_in_background": {
                             "type": "boolean",
                             "description": "Run in background (default: false). Returns task ID for status queries.",
@@ -106,6 +110,7 @@ class CommandService:
     async def _bash(
         self,
         command: str,
+        description: str = "",
         run_in_background: bool = False,
         timeout: int = DEFAULT_TIMEOUT_MS,
     ) -> str:
@@ -119,7 +124,7 @@ class CommandService:
         if not run_in_background:
             return await self._execute_blocking(command, work_dir, timeout_secs)
         else:
-            return await self._execute_async(command, work_dir, timeout_secs)
+            return await self._execute_async(command, work_dir, timeout_secs, description=description)
 
     async def _execute_blocking(self, command: str, work_dir: str | None, timeout_secs: float) -> str:
         try:
@@ -133,7 +138,7 @@ class CommandService:
             return f"Error executing command: {e}"
         return result.to_tool_result()
 
-    async def _execute_async(self, command: str, work_dir: str | None, timeout_secs: float) -> str:
+    async def _execute_async(self, command: str, work_dir: str | None, timeout_secs: float, description: str = "") -> str:
         try:
             async_cmd = await self._executor.execute_async(
                 command=command,
@@ -147,7 +152,7 @@ class CommandService:
 
         if self._background_runs is not None:
             from core.agents.service import _BashBackgroundRun
-            self._background_runs[task_id] = _BashBackgroundRun(async_cmd, command)
+            self._background_runs[task_id] = _BashBackgroundRun(async_cmd, command, description=description)
 
         # Build emit_fn for SSE task lifecycle events
         emit_fn = None
@@ -175,7 +180,8 @@ class CommandService:
                 "task_id": task_id,
                 "background": True,
                 "task_type": "bash",
-                "description": command[:80],
+                "description": description or command[:80],
+                "command_line": command,
             }, ensure_ascii=False)})
 
         if parent_thread_id:
