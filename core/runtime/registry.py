@@ -32,13 +32,24 @@ class ToolRegistry:
     Tools with DEFERRED mode are only discoverable via tool_search.
     """
 
-    def __init__(self, allowed_tools: set[str] | None = None):
+    def __init__(
+        self,
+        allowed_tools: set[str] | None = None,
+        blocked_tools: set[str] | None = None,
+    ):
         self._tools: dict[str, ToolEntry] = {}
         self._allowed_tools = allowed_tools
+        self._blocked_tools = blocked_tools or set()
+
+    @property
+    def blocked_tools(self) -> set[str]:
+        return self._blocked_tools
 
     def register(self, entry: ToolEntry) -> None:
         if self._allowed_tools is not None and entry.name not in self._allowed_tools:
             return  # silently skip
+        if entry.name in self._blocked_tools:
+            return  # silently skip disabled tools
         self._tools[entry.name] = entry
 
     def get(self, name: str) -> ToolEntry | None:

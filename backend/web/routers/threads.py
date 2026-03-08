@@ -630,9 +630,15 @@ async def _notify_task_cancelled(app: Any, thread_id: str, task_id: str, run: An
         agent = _get_agent_for_thread(app, thread_id)
         qm = getattr(agent, "queue_manager", None) if agent else None
         if qm:
+            description = getattr(run, "description", "") or ""
+            command = getattr(run, "command", "") or ""
+            label = description or command[:80] or f"Task {task_id}"
             notification = (
                 f'<CommandNotification task_id="{task_id}" status="cancelled">'
-                f"Task was cancelled by user.</CommandNotification>"
+                f"<Status>cancelled</Status>"
+                f"<Description>{label}</Description>"
+                + (f"<CommandLine>{command[:200]}</CommandLine>" if command else "")
+                + f"</CommandNotification>"
             )
             qm.enqueue(notification, thread_id, notification_type="command")
     except Exception:

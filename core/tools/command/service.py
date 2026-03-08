@@ -187,7 +187,7 @@ class CommandService:
         if parent_thread_id:
             asyncio.create_task(
                 self._notify_bash_completion(
-                    task_id, async_cmd, command, parent_thread_id, emit_fn
+                    task_id, async_cmd, command, parent_thread_id, emit_fn, description=description
                 )
             )
 
@@ -204,6 +204,7 @@ class CommandService:
         command: str,
         parent_thread_id: str,
         emit_fn: Any = None,
+        description: str = "",
     ) -> None:
         """Poll until async command finishes, then enqueue CommandNotification."""
         while not async_cmd.done:
@@ -222,8 +223,12 @@ class CommandService:
                 pass
 
         if self._queue_manager:
+            label = description or command[:80]
             notification = (
                 f'<CommandNotification task_id="{task_id}" status="completed">'
-                f"{result[:500]}</CommandNotification>"
+                f"<Status>completed</Status>"
+                f"<Description>{label}</Description>"
+                f"<CommandLine>{command[:200]}</CommandLine>"
+                f"</CommandNotification>"
             )
             self._queue_manager.enqueue(notification, parent_thread_id, notification_type="command")

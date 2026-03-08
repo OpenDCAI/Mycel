@@ -60,17 +60,23 @@ class TaskBoardMiddleware(AgentMiddleware):
         TOOL_CREATE,
     })
 
-    def __init__(self, thread_id: str = "", auto_claim: bool = True):
+    def __init__(
+        self,
+        thread_id: str = "",
+        auto_claim: bool = True,
+        blocked_tools: frozenset[str] | set[str] | None = None,
+    ):
         self.thread_id = thread_id
         self.auto_claim = auto_claim
+        self._blocked_tools: frozenset[str] = frozenset(blocked_tools or ())
 
     # ------------------------------------------------------------------
     # Tool schemas
     # ------------------------------------------------------------------
 
     def _get_tool_schemas(self) -> list[dict]:
-        """Return OpenAI-format function schemas for the 6 board tools."""
-        return [
+        """Return OpenAI-format function schemas, filtered by blocked_tools."""
+        schemas = [
             {
                 "type": "function",
                 "function": {
@@ -216,6 +222,7 @@ class TaskBoardMiddleware(AgentMiddleware):
                 },
             },
         ]
+        return [s for s in schemas if s["function"]["name"] not in self._blocked_tools]
 
     # ------------------------------------------------------------------
     # Model call wrapping — inject tool schemas

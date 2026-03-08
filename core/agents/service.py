@@ -364,11 +364,15 @@ class AgentService:
                     "background": True,
                 }, ensure_ascii=False)})
             if self._queue_manager and parent_thread_id:
+                label = description or agent_name
                 notification = (
-                    f'<TaskNotification task_id="{task_id}" name="{agent_name}" status="completed">'
-                    f"{result[:500]}</TaskNotification>"
+                    f'<TaskNotification>'
+                    f"<task-id>{task_id}</task-id>"
+                    f"<status>completed</status>"
+                    f"<description>{label}</description>"
+                    f"</TaskNotification>"
                 )
-                self._queue_manager.enqueue(notification, parent_thread_id, notification_type="task")
+                self._queue_manager.enqueue(notification, parent_thread_id, notification_type="agent")
             return result
 
         except Exception as e:
@@ -384,11 +388,15 @@ class AgentService:
                 except Exception:
                     pass
             if self._queue_manager and parent_thread_id:
+                label = description or agent_name
                 notification = (
-                    f'<TaskNotification task_id="{task_id}" name="{agent_name}" status="error">'
-                    f"{str(e)[:200]}</TaskNotification>"
+                    f'<TaskNotification>'
+                    f"<task-id>{task_id}</task-id>"
+                    f"<status>error</status>"
+                    f"<description>{label}</description>"
+                    f"</TaskNotification>"
                 )
-                self._queue_manager.enqueue(notification, parent_thread_id, notification_type="task")
+                self._queue_manager.enqueue(notification, parent_thread_id, notification_type="agent")
             raise
         finally:
             if agent is not None:

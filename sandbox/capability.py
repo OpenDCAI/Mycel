@@ -107,10 +107,14 @@ class _CommandWrapper(BaseExecutor):
         wrapped, work_dir = self._wrap_command(command, cwd, env)
         if self._manager is None:
             return await self._session.runtime.start_command(wrapped, work_dir)
-        bg_session = self._manager.create_background_command_session(
-            thread_id=self._session.thread_id,
-            initial_cwd=work_dir,
-        )
+        try:
+            bg_session = self._manager.create_background_command_session(
+                thread_id=self._session.thread_id,
+                initial_cwd=work_dir,
+            )
+        except RuntimeError:
+            # No default terminal yet (sandbox not primed); fall back to current session
+            return await self._session.runtime.start_command(wrapped, work_dir)
         return await bg_session.runtime.start_command(wrapped, work_dir)
 
     def _lookup_command_terminal_id(self, command_id: str) -> str | None:

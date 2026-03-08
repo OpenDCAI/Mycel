@@ -470,11 +470,12 @@ class CustomModelConfigRequest(BaseModel):
     model_id: str
     based_on: str | None = None
     context_limit: int | None = None
+    provider: str | None = None
 
 
 @router.post("/models/custom/config")
 async def update_custom_model_config(request: CustomModelConfigRequest) -> dict[str, Any]:
-    """Update based_on/context_limit for a custom model."""
+    """Update based_on/context_limit/provider for a custom model."""
     data = load_models()
     pool = data.setdefault("pool", {})
     custom_config = pool.setdefault("custom_config", {})
@@ -484,6 +485,9 @@ async def update_custom_model_config(request: CustomModelConfigRequest) -> dict[
     if request.context_limit is not None:
         cfg["context_limit"] = request.context_limit or None
     custom_config[request.model_id] = cfg
+    if request.provider:
+        custom_providers = pool.setdefault("custom_providers", {})
+        custom_providers[request.model_id] = request.provider
     save_models(data)
     return {"success": True, "custom_config": custom_config}
 

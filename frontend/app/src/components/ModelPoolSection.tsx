@@ -32,6 +32,7 @@ export default function ModelPoolSection({ models, enabledModels, customConfig, 
   const [editingModel, setEditingModel] = useState<string | null>(null);
   const [editAlias, setEditAlias] = useState("");
   const [editContextLimit, setEditContextLimit] = useState("");
+  const [editProvider, setEditProvider] = useState("");
 
   const handleToggle = async (modelId: string, enabled: boolean) => {
     setToggling(modelId);
@@ -75,6 +76,7 @@ export default function ModelPoolSection({ models, enabledModels, customConfig, 
         model_id: modelId,
         based_on: editAlias || null,
         context_limit: editContextLimit ? parseInt(editContextLimit) : null,
+        provider: editProvider || null,
       }),
     });
     setEditingModel(null);
@@ -215,6 +217,7 @@ export default function ModelPoolSection({ models, enabledModels, customConfig, 
                             setEditingModel(model.id);
                             setEditAlias(cfg?.based_on || "");
                             setEditContextLimit(cfg?.context_limit?.toString() || "");
+                            setEditProvider(model.provider || "");
                           }
                         }}
                         className="text-[11px] px-2 py-0.5 rounded border border-[#e2e8f0] text-[#64748b] hover:border-[#94a3b8] transition-colors"
@@ -261,6 +264,14 @@ export default function ModelPoolSection({ models, enabledModels, customConfig, 
               )}
               {isEditing && (
                 <div className="mx-3 mt-2 mb-1 p-3 border border-[#e2e8f0] rounded-lg bg-[#f8f9fa] space-y-2">
+                  <div>
+                    <label className="text-[11px] text-[#94a3b8] block mb-1">提供商</label>
+                    <select value={editProvider} onChange={(e) => setEditProvider(e.target.value)}
+                      className="w-full px-2 py-1 text-sm border border-[#e2e8f0] rounded bg-white focus:outline-none focus:border-[#0ea5e9]">
+                      <option value="">不更改</option>
+                      {providerNames.map((p) => <option key={p} value={p}>{p}</option>)}
+                    </select>
+                  </div>
                   <div className="grid grid-cols-2 gap-2">
                     <div>
                       <label className="text-[11px] text-[#94a3b8] block mb-1">基于模型</label>
