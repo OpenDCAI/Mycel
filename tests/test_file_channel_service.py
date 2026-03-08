@@ -107,7 +107,7 @@ def test_workspace_shared_across_threads(_patch_services) -> None:
     host_path = root_path.parent / "shared_workspace"
     host_path.mkdir()
 
-    ws = svc.create_workspace(str(host_path), name="shared")
+    ws = svc._create_workspace(str(host_path), name="shared")
     wid = ws["workspace_id"]
 
     _save_thread_config("thread-a", workspace_id=wid)

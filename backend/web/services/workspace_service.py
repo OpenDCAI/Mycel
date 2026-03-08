@@ -36,7 +36,8 @@ def _repo() -> WorkspaceRepo:
 # ---------------------------------------------------------------------------
 
 
-def create_workspace(host_path: str, name: str | None = None) -> dict[str, Any]:
+def _create_workspace(host_path: str, name: str | None = None) -> dict[str, Any]:
+    """Internal: Create workspace entity. Used by thread operations only."""
     host = Path(host_path).expanduser().resolve()
     if not host.exists():
         raise ValueError(f"Workspace host_path does not exist: {host}")
@@ -50,7 +51,8 @@ def create_workspace(host_path: str, name: str | None = None) -> dict[str, Any]:
     return {"workspace_id": workspace_id, "host_path": str(host), "name": name, "created_at": now}
 
 
-def get_workspace(workspace_id: str) -> dict[str, Any] | None:
+def _get_workspace(workspace_id: str) -> dict[str, Any] | None:
+    """Internal: Lookup workspace entity."""
     repo = _repo()
     try:
         return repo.get(workspace_id)
@@ -58,7 +60,8 @@ def get_workspace(workspace_id: str) -> dict[str, Any] | None:
         repo.close()
 
 
-def list_workspaces() -> list[dict[str, Any]]:
+def _list_workspaces() -> list[dict[str, Any]]:
+    """Internal: List all workspace entities."""
     repo = _repo()
     try:
         return repo.list_all()
@@ -66,7 +69,8 @@ def list_workspaces() -> list[dict[str, Any]]:
         repo.close()
 
 
-def delete_workspace(workspace_id: str) -> bool:
+def _delete_workspace(workspace_id: str) -> bool:
+    """Internal: Delete workspace entity (does not remove host directory)."""
     repo = _repo()
     try:
         return repo.delete(workspace_id)
@@ -91,7 +95,7 @@ def _resolve_relative_path(base: Path, relative_path: str) -> Path:
 
 def _thread_files_dir(thread_id: str, workspace_id: str | None = None) -> Path:
     if workspace_id:
-        ws = get_workspace(workspace_id)
+        ws = _get_workspace(workspace_id)
         if ws is None:
             raise ValueError(f"Workspace not found: {workspace_id}")
         return Path(ws["host_path"]).resolve()
