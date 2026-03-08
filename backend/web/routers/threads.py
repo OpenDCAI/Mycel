@@ -594,4 +594,46 @@ async def cancel_task(
             except ProcessLookupError:
                 pass
 
+    # Emit task_done SSE and notify main agent once cancellation completes
+    asyncio.create_task(_notify_task_cancelled(request.app, thread_id, task_id, run))
+
     return {"success": True}
+
+
+async def _notify_task_cancelled(app: Any, thread_id: str, task_id: str, run: Any) -> None:
+    """Wait for run to finish, then emit task_done SSE and enqueue cancellation notice."""
+    # Wait up to 5s for the task to actually stop
+    for _ in range(50):
+        if run.is_done:
+            break
+        await asyncio.sleep(0.1)
+
+    # Emit task_done so the frontend indicator updates
+    try:
+        from backend.web.event_bus import get_event_bus
+        event_bus = get_event_bus()
+        emit_fn = event_bus.make_emitter(
+            thread_id=thread_id,
+            agent_id=task_id,
+            agent_name=f"cancel-{task_id[:8]}",
+        )
+        await emit_fn({"event": "task_done", "data": json.dumps({
+            "task_id": task_id,
+            "background": True,
+            "cancelled": True,
+        }, ensure_ascii=False)})
+    except Exception:
+        logger.debug("Failed to emit task_done for cancelled task %s", task_id, exc_info=True)
+
+    # Notify the main agent so it knows the user cancelled this task
+    try:
+        agent = _get_agent_for_thread(app, thread_id)
+        qm = getattr(agent, "queue_manager", None) if agent else None
+        if qm:
+            notification = (
+                f'<CommandNotification task_id="{task_id}" status="cancelled">'
+                f"Task was cancelled by user.</CommandNotification>"
+            )
+            qm.enqueue(notification, thread_id, notification_type="command")
+    except Exception:
+        logger.debug("Failed to enqueue cancellation notice for task %s", task_id, exc_info=True)
