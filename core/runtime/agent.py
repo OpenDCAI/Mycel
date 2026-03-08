@@ -58,7 +58,6 @@ from core.runtime.middleware.queue import MessageQueueManager, SteeringMiddlewar
 from core.tools.command.hooks.dangerous_commands import DangerousCommandsHook
 from core.tools.command.hooks.file_access_logger import FileAccessLoggerHook
 from core.tools.command.hooks.file_permission import FilePermissionHook
-from core.tools.command.hooks.path_security import PathSecurityHook
 
 from core.model_params import normalize_model_kwargs
 from storage.container import StorageContainer
@@ -925,7 +924,6 @@ class LeonAgent:
                             verbose=self.verbose,
                         )
                     )
-                command_hooks.append(PathSecurityHook(workspace_root=self.workspace_root))
             self._command_service = CommandService(
                 registry=self._tool_registry,
                 workspace_root=self.workspace_root,

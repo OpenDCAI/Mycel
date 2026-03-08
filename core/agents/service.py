@@ -14,9 +14,87 @@ from pathlib import Path
 from typing import Any
 
 from core.agents.registry import AgentEntry, AgentRegistry
+from core.runtime.middleware.queue.formatters import format_task_notification
 from core.runtime.registry import ToolEntry, ToolMode, ToolRegistry
 
 logger = logging.getLogger(__name__)
+
+
+async def _repair_subagent_checkpoint(agent: Any, config: dict) -> None:
+    """Repair incomplete tool_call history in a sub-agent's checkpoint.
+
+    If the checkpoint has an AIMessage with tool_calls lacking matching
+    ToolMessages, inserts synthetic error ToolMessages so the LLM won't
+    reject the history. Safe to call on fresh checkpoints (no-op).
+    """
+    try:
+        from langchain_core.messages import RemoveMessage, ToolMessage
+
+        graph = getattr(agent, "agent", None)
+        if not graph:
+            return
+
+        state = await graph.aget_state(config)
+        if not state or not state.values:
+            return
+
+        messages = state.values.get("messages", [])
+        if not messages:
+            return
+
+        pending: dict[str, str] = {}  # tc_id -> tool_name
+        answered: set[str] = set()
+        for msg in messages:
+            cls = msg.__class__.__name__
+            if cls == "AIMessage":
+                for tc in getattr(msg, "tool_calls", []):
+                    tc_id = tc.get("id")
+                    if tc_id:
+                        pending[tc_id] = tc.get("name", "unknown")
+            elif cls == "ToolMessage":
+                tc_id = getattr(msg, "tool_call_id", None)
+                if tc_id:
+                    answered.add(tc_id)
+
+        unmatched = {tid: name for tid, name in pending.items() if tid not in answered}
+        if not unmatched:
+            return
+
+        thread_id = config.get("configurable", {}).get("thread_id")
+        logger.warning("[AgentService] Repairing %d incomplete tool_call(s) in %s", len(unmatched), thread_id)
+
+        broken_ai_idx = None
+        for i, msg in enumerate(messages):
+            if msg.__class__.__name__ == "AIMessage":
+                for tc in getattr(msg, "tool_calls", []):
+                    if tc.get("id") in unmatched:
+                        broken_ai_idx = i
+                        break
+            if broken_ai_idx is not None:
+                break
+
+        if broken_ai_idx is None:
+            return
+
+        after_msgs = messages[broken_ai_idx + 1:]
+        updates: list[Any] = []
+        for msg in after_msgs:
+            msg_id = getattr(msg, "id", None)
+            if msg_id:
+                updates.append(RemoveMessage(id=msg_id))
+        for tc_id, tool_name in unmatched.items():
+            updates.append(ToolMessage(
+                content="Error: task was interrupted. Results unavailable.",
+                tool_call_id=tc_id,
+                name=tool_name,
+            ))
+        for msg in after_msgs:
+            if msg.__class__.__name__ != "ToolMessage" or getattr(msg, "tool_call_id", None) not in unmatched:
+                updates.append(msg)
+        await graph.aupdate_state(config, {"messages": updates})
+    except Exception:
+        logger.exception("[AgentService] Failed to repair sub-agent checkpoint")
+
 
 AGENT_SCHEMA = {
     "name": "Agent",
@@ -342,6 +420,11 @@ class AgentService:
             config = {"configurable": {"thread_id": thread_id}}
             output_parts: list[str] = []
 
+            # Repair broken checkpoint: if last AIMessage has tool_calls without
+            # matching ToolMessages, inject synthetic error ToolMessages so the LLM
+            # won't reject the history (happens when resuming a backgrounded/timed-out task).
+            await _repair_subagent_checkpoint(agent, config)
+
             async for chunk in agent.agent.astream(
                 {"messages": [{"role": "user", "content": prompt}]},
                 config=config,
@@ -375,12 +458,11 @@ class AgentService:
                 }, ensure_ascii=False)})
             if self._queue_manager and parent_thread_id:
                 label = description or agent_name
-                notification = (
-                    f'<TaskNotification>'
-                    f"<task-id>{task_id}</task-id>"
-                    f"<status>completed</status>"
-                    f"<description>{label}</description>"
-                    f"</TaskNotification>"
+                notification = format_task_notification(
+                    task_id=task_id,
+                    status="completed",
+                    summary=label,
+                    description=label,
                 )
                 self._queue_manager.enqueue(notification, parent_thread_id, notification_type="agent")
             return result
@@ -399,12 +481,11 @@ class AgentService:
                     pass
             if self._queue_manager and parent_thread_id:
                 label = description or agent_name
-                notification = (
-                    f'<TaskNotification>'
-                    f"<task-id>{task_id}</task-id>"
-                    f"<status>error</status>"
-                    f"<description>{label}</description>"
-                    f"</TaskNotification>"
+                notification = format_task_notification(
+                    task_id=task_id,
+                    status="error",
+                    summary=label,
+                    description=label,
                 )
                 self._queue_manager.enqueue(notification, parent_thread_id, notification_type="agent")
             raise

@@ -151,7 +151,7 @@ class SendMessageService:
             sender_thread=self._current_thread_id,
             summary=summary,
         )
-        self._queue_manager.enqueue(msg, entry.thread_id, "agent_message")
+        self._queue_manager.enqueue(msg, entry.thread_id, "agent")
         return f"Message sent to {recipient}"
 
     async def _send_broadcast(self, content: str, summary: str | None) -> str:
@@ -164,7 +164,7 @@ class SendMessageService:
                 sender_thread=self._current_thread_id,
                 summary=summary,
             )
-            self._queue_manager.enqueue(msg, agent.thread_id, "agent_message")
+            self._queue_manager.enqueue(msg, agent.thread_id, "agent")
 
         return f"Broadcast sent to {len(targets)} agents"
 
@@ -180,7 +180,7 @@ class SendMessageService:
             "shutdown_request", content,
             sender_thread=self._current_thread_id,
         )
-        self._queue_manager.enqueue(msg, entry.thread_id, "agent_message")
+        self._queue_manager.enqueue(msg, entry.thread_id, "agent")
         return f"Shutdown request sent to {recipient}"
 
     async def _send_shutdown_response(
@@ -200,7 +200,7 @@ class SendMessageService:
             approve=approve,
             request_id=request_id,
         )
-        self._queue_manager.enqueue(msg, target_thread, "agent_message")
+        self._queue_manager.enqueue(msg, target_thread, "agent")
         return f"Shutdown response sent to {recipient}"
 
     async def _send_plan_approval_response(
@@ -219,6 +219,6 @@ class SendMessageService:
             approve=approve,
             request_id=request_id,
         )
-        self._queue_manager.enqueue(msg, entry.thread_id, "agent_message")
+        self._queue_manager.enqueue(msg, entry.thread_id, "agent")
         action = "approved" if approve else "rejected"
         return f"Plan {action} — response sent to {recipient}"
