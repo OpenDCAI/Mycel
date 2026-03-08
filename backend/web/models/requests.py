@@ -23,7 +23,10 @@ class RunRequest(BaseModel):
     message: str
     enable_trajectory: bool = False
     model: str | None = None
+    attachments: list[str] = Field(default_factory=list)
 
 
 class SendMessageRequest(BaseModel):
     message: str
+    attachments: list[str] = Field(default_factory=list)
+

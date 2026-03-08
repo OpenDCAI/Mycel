@@ -55,7 +55,7 @@ export async function postRun(
   threadId: string,
   message: string,
   signal?: AbortSignal,
-  options?: { model?: string; enable_trajectory?: boolean },
+  options?: { model?: string; enable_trajectory?: boolean; attachments?: string[] },
 ): Promise<{ run_id: string; thread_id: string }> {
   return postJSON(`/api/threads/${encodeURIComponent(threadId)}/messages`, { message, ...options }, signal);
 }

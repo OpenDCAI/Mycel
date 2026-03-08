@@ -78,7 +78,7 @@ class SyncState:
                 # New file — must upload
                 changed.append(relative)
                 continue
-            # @@@mtime-fast-path - check mtime before expensive checksum
+            # @@@checksum-change-detection - compare SHA256 against tracked checksum
             current_checksum = _calculate_checksum(file_path)
             if current_checksum != known[relative]:
                 changed.append(relative)

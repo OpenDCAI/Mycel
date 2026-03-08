@@ -50,6 +50,7 @@ class SandboxManager:
         provider: SandboxProvider,
         db_path: Path | None = None,
         on_session_ready: Callable[[str, str], None] | None = None,
+        workspace_root: Path | None = None,
     ):
         self.provider = provider
         self.provider_capability = provider.get_capability()
@@ -64,10 +65,10 @@ class SandboxManager:
             default_policy=ChatSessionPolicy(),
         )
 
-        from backend.web.core.config import THREAD_FILES_ROOT
+        _ws_root = workspace_root or Path.home() / ".leon" / "thread_files"
         self.workspace_sync = SyncManager(
             provider_capability=self.provider_capability,
-            workspace_root=THREAD_FILES_ROOT
+            workspace_root=_ws_root,
         )
 
     def _default_terminal_cwd(self) -> str:

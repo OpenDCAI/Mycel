@@ -140,47 +140,6 @@ class NoOpStrategy(SyncStrategy):
         pass
 
 
-class FullSyncStrategy(SyncStrategy):
-    def __init__(self, workspace_root: Path):
-        self.workspace_root = workspace_root
-
-    def upload(self, thread_id: str, session_id: str, provider, files: list[str] | None = None):
-        workspace = self.workspace_root / thread_id / "files"
-        if not workspace.exists():
-            return
-
-        remote_root = getattr(provider, 'WORKSPACE_ROOT', '/workspace') + '/files'
-
-        all_files = files or [
-            str(fp.relative_to(workspace))
-            for fp in workspace.rglob("*") if fp.is_file()
-        ]
-        if not all_files:
-            return
-
-        if hasattr(provider, 'execute'):
-            try:
-                _batch_upload_tar(session_id, provider, workspace, remote_root, all_files)
-                return
-            except Exception:
-                logger.warning("Batch tar upload failed, falling back to sequential", exc_info=True)
-
-        _fallback_upload_sequential(session_id, provider, workspace, remote_root, all_files)
-
-    def download(self, thread_id: str, session_id: str, provider):
-        workspace = self.workspace_root / thread_id / "files"
-        remote_root = getattr(provider, 'WORKSPACE_ROOT', '/workspace') + '/files'
-
-        if hasattr(provider, 'execute'):
-            try:
-                _batch_download_tar(session_id, provider, workspace, remote_root)
-                return
-            except Exception:
-                logger.warning("Batch tar download failed, falling back to sequential", exc_info=True)
-
-        _fallback_download_sequential(session_id, provider, workspace, remote_root)
-
-
 class IncrementalSyncStrategy(SyncStrategy):
     def __init__(self, workspace_root: Path, state):
         self.workspace_root = workspace_root

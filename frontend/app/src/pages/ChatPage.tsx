@@ -176,11 +176,12 @@ function ChatPageInner({ threadId }: { threadId: string }) {
   }
 
   async function handleSendWithAttachments(message: string): Promise<void> {
+    const filenames = attachedFiles.map((f) => f.name);
     if (attachedFiles.length > 0) {
       await handleUploadFiles(attachedFiles);
       setAttachedFiles([]);
     }
-    await handleSendMessage(message);
+    await handleSendMessage(message, filenames.length > 0 ? filenames : undefined);
   }
 
   return (

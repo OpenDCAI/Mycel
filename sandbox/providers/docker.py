@@ -428,6 +428,9 @@ class DockerProvider(SandboxProvider):
             return None
         raise RuntimeError(f"Docker session not found: {session_id}")
 
+    # @@@proxy-isolation - docker CLI hangs when it inherits http_proxy/all_proxy from parent
+    _PROXY_VARS = ("http_proxy", "https_proxy", "all_proxy", "HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY")
+
     def _run(
         self,
         cmd: list[str],
@@ -437,10 +440,9 @@ class DockerProvider(SandboxProvider):
         check: bool = True,
     ) -> subprocess.CompletedProcess[str]:
         effective_timeout = timeout if timeout is not None else self.command_timeout_sec
-        # @@@proxy-isolation - strip proxy vars to prevent docker CLI hangs
-        env = os.environ.copy()
-        for key in ['http_proxy', 'https_proxy', 'all_proxy', 'HTTP_PROXY', 'HTTPS_PROXY', 'ALL_PROXY']:
-            env.pop(key, None)
+        # @@@proxy-isolation - strip proxy vars so Docker CLI uses unix socket directly
+        env = {k: v for k, v in os.environ.items() if k not in self._PROXY_VARS}
+        # @@@docker-host - pass DOCKER_HOST when configured to bypass stuck Docker Desktop context
         if self._docker_host:
             env["DOCKER_HOST"] = self._docker_host
         try:
