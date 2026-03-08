@@ -141,6 +141,7 @@ export interface AssistantTurn {
   role: "assistant";
   segments: TurnSegment[];
   timestamp: number;
+  endTimestamp?: number;
   streaming?: boolean;
 }
 

@@ -157,7 +157,7 @@ export function useStreamHandler(
           onUpdateRef.current((prev) =>
             prev.map((e) =>
               e.id === doneId && e.role === "assistant"
-                ? { ...e, streaming: false } as AssistantTurn
+                ? { ...e, streaming: false, endTimestamp: Date.now() } as AssistantTurn
                 : e,
             ),
           );

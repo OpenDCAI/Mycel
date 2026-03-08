@@ -1,4 +1,4 @@
-import { memo } from "react";
+import { memo, useEffect, useState } from "react";
 import { Loader2 } from "lucide-react";
 import type { AssistantTurn, NoticeSegment, NotificationType, RetrySegment, StreamStatus, ToolSegment, TurnSegment } from "../../api";
 import MarkdownContent from "../MarkdownContent";
@@ -84,8 +84,23 @@ interface AssistantBlockProps {
   onFocusAgent?: (taskId: string) => void;
 }
 
+function formatDuration(ms: number): string {
+  if (ms < 60000) return `${Math.round(ms / 1000)}s`;
+  return `${Math.floor(ms / 60000)}m ${Math.round((ms % 60000) / 1000)}s`;
+}
+
 export const AssistantBlock = memo(function AssistantBlock({ entry, isStreamingThis, runtimeStatus, onFocusAgent }: AssistantBlockProps) {
   const hasNotice = entry.segments.some((s) => s.type === "notice");
+
+  const [elapsed, setElapsed] = useState<number | null>(() =>
+    entry.endTimestamp ? entry.endTimestamp - entry.timestamp : null
+  );
+
+  useEffect(() => {
+    if (entry.endTimestamp) {
+      setElapsed(entry.endTimestamp - entry.timestamp);
+    }
+  }, [entry.timestamp, entry.endTimestamp]);
 
   const fullText = entry.segments
     .filter((s) => s.type === "text")
@@ -142,8 +157,11 @@ export const AssistantBlock = memo(function AssistantBlock({ entry, isStreamingT
         )}
 
         {!isStreamingThis && fullText.trim() && (
-          <div className="flex justify-start mt-0.5">
+          <div className="flex items-center gap-2 mt-0.5">
             <CopyButton text={fullText} />
+            {elapsed !== null && elapsed >= 1000 && (
+              <span className="text-[10px] text-[#d4d4d4] tabular-nums">{formatDuration(elapsed)}</span>
+            )}
           </div>
         )}
       </div>

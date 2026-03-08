@@ -180,6 +180,7 @@ export function processStreamEvent(
   if (event.type === "run_done") {
     updateTurnSegments(onUpdate, turnId, (turn) => ({
       ...turn,
+      endTimestamp: Date.now(),
       segments: turn.segments.filter((s) => s.type !== "retry"),
     }));
     return { messageId };

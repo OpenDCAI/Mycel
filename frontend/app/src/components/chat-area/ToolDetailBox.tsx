@@ -28,6 +28,65 @@ function MiniStatusIcon({ status }: { status: string }) {
   }
 }
 
+/** Slot-machine style rolling number — digits slide up on increment. */
+function RollingNumber({ value }: { value: number }) {
+  const prevRef = useRef(value);
+  const [display, setDisplay] = useState({ curr: value, prev: null as number | null, tick: 0 });
+
+  useEffect(() => {
+    if (value === prevRef.current) return;
+    const prev = prevRef.current;
+    prevRef.current = value;
+    setDisplay(d => ({ curr: value, prev, tick: d.tick + 1 }));
+  }, [value]);
+
+  const { curr, prev, tick } = display;
+  const digits = String(curr).length;
+
+  return (
+    <span
+      style={{
+        position: "relative",
+        display: "inline-block",
+        overflow: "hidden",
+        verticalAlign: "middle",
+        height: "1.1em",
+        minWidth: `${digits * 0.62}em`,
+        lineHeight: 1,
+      }}
+    >
+      {/* Exiting number — slides out upward */}
+      {prev !== null && tick > 0 && (
+        <span
+          key={`out-${tick}`}
+          style={{
+            position: "absolute",
+            inset: 0,
+            display: "flex",
+            alignItems: "center",
+            animation: "numRollOut 0.18s cubic-bezier(0.55, 0, 1, 0.45) forwards",
+          }}
+        >
+          {prev}
+        </span>
+      )}
+      {/* Entering number — rolls in from below */}
+      <span
+        key={`in-${tick}`}
+        style={{
+          position: "absolute",
+          inset: 0,
+          display: "flex",
+          alignItems: "center",
+          animation: tick > 0 ? "numRollIn 0.24s cubic-bezier(0.22, 1, 0.36, 1) forwards" : "none",
+        }}
+      >
+        {curr}
+      </span>
+    </span>
+  );
+}
+
 export const ToolDetailBox = memo(function ToolDetailBox({
   toolSegments,
   isStreaming,
@@ -51,17 +110,25 @@ export const ToolDetailBox = memo(function ToolDetailBox({
       <div
         role="button"
         tabIndex={0}
-        aria-label={`查看 ${toolCount} 个工具调用详情`}
-        className={`rounded-lg border bg-[#fafafa] cursor-pointer transition-colors ${
+        aria-label={`查看 ${toolCount} 次工具调用详情`}
+        className={`relative rounded-lg border bg-[#fafafa] cursor-pointer transition-colors ${
           hasRunning ? "detail-box-glow" : "border-[#e5e5e5] hover:border-[#d4d4d4]"
         }`}
         onClick={() => setModalOpen(true)}
         onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setModalOpen(true); } }}
         title="点击查看详情"
       >
+        {/* Rolling count badge — top-right corner */}
+        <div className="absolute top-1.5 right-2 z-10 flex items-center gap-0.5 pointer-events-none select-none">
+          <span className="text-[10px] text-[#b8b8b8] tabular-nums leading-none font-medium">
+            <RollingNumber value={toolCount} />
+          </span>
+          <span className="text-[10px] text-[#c8c8c8] leading-none"> 次工具</span>
+        </div>
+
         <div
           ref={scrollRef}
-          className="relative z-[1] overflow-y-auto detail-box-scroll detail-box-mask px-2.5 py-1.5"
+          className="relative z-[1] overflow-y-auto detail-box-scroll detail-box-mask px-2.5 py-1.5 pr-16"
           style={{
             maxHeight: hasRunning ? 130 : 80,
             transition: "max-height 0.3s ease",
