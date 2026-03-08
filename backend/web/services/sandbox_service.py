@@ -9,7 +9,7 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
-from backend.web.core.config import LOCAL_WORKSPACE_ROOT, SANDBOXES_DIR
+from backend.web.core.config import LOCAL_WORKSPACE_ROOT, SANDBOXES_DIR, THREAD_FILES_ROOT
 from backend.web.utils.helpers import is_virtual_thread_id
 from sandbox.config import SandboxConfig
 from sandbox.config import DEFAULT_DB_PATH as SANDBOX_DB_PATH
@@ -74,7 +74,7 @@ def init_providers_and_managers() -> tuple[dict, dict]:
         "local": LocalSessionProvider(default_cwd=str(LOCAL_WORKSPACE_ROOT)),
     }
     if not SANDBOXES_DIR.exists():
-        managers = {name: SandboxManager(provider=p, db_path=SANDBOX_DB_PATH) for name, p in providers.items()}
+        managers = {name: SandboxManager(provider=p, db_path=SANDBOX_DB_PATH, workspace_root=THREAD_FILES_ROOT) for name, p in providers.items()}
         _providers_cache = (providers, managers)
         return _providers_cache
 
@@ -137,7 +137,7 @@ def init_providers_and_managers() -> tuple[dict, dict]:
         except Exception:
             logger.exception("[sandbox] Failed to load %s", name)
 
-    managers = {name: SandboxManager(provider=p, db_path=SANDBOX_DB_PATH) for name, p in providers.items()}
+    managers = {name: SandboxManager(provider=p, db_path=SANDBOX_DB_PATH, workspace_root=THREAD_FILES_ROOT) for name, p in providers.items()}
     _providers_cache = (providers, managers)
     return _providers_cache
 
