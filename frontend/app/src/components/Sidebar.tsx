@@ -1,4 +1,4 @@
-import { ChevronRight, MessageSquarePlus, MoreHorizontal, Plus, Search, Trash2 } from "lucide-react";
+import { Check, ChevronRight, MessageSquarePlus, MoreHorizontal, Plus, Search, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import type { ThreadSummary } from "../api";
@@ -66,6 +66,9 @@ function ThreadItem({
   isActive,
   label,
   to,
+  isSelectMode,
+  isSelected,
+  onToggleSelect,
   confirmDelete,
   setConfirmDelete,
   onDeleteThread,
@@ -74,22 +77,42 @@ function ThreadItem({
   isActive: boolean;
   label: string;
   to: string;
+  isSelectMode: boolean;
+  isSelected: boolean;
+  onToggleSelect: (id: string) => void;
   confirmDelete: string | null;
   setConfirmDelete: (id: string | null) => void;
   onDeleteThread: (id: string) => void;
 }) {
   return (
     <div className="group/item relative">
+      {/* Checkbox — overlays left border area, no layout shift */}
+      <button
+        className={`absolute left-0 top-0 bottom-0 w-9 flex items-center justify-center z-10 transition-opacity ${
+          isSelectMode ? "opacity-100" : "opacity-0 group-hover/item:opacity-60"
+        }`}
+        onClick={(e) => { e.preventDefault(); e.stopPropagation(); onToggleSelect(thread.thread_id); }}
+      >
+        <div className={`w-4 h-4 rounded border-2 flex items-center justify-center transition-colors ${
+          isSelected ? "bg-primary border-primary" : "border-muted-foreground/50 bg-card"
+        }`}>
+          {isSelected && <Check className="w-2.5 h-2.5 text-primary-foreground" />}
+        </div>
+      </button>
+
       <Link
-        to={to}
+        to={isSelectMode ? "#" : to}
+        onClick={(e) => { if (isSelectMode) { e.preventDefault(); e.stopPropagation(); onToggleSelect(thread.thread_id); } }}
         className={`block w-full text-left px-3 py-2.5 rounded-lg transition-colors ${
-          isActive
+          isSelected
+            ? "bg-primary/8 border-l-2 border-l-primary"
+            : isActive
             ? "bg-background border-l-2 border-l-foreground shadow-sm"
             : "border-l-2 border-l-transparent hover:bg-muted"
         }`}
       >
         <div className={`flex items-center gap-1.5 ${isActive ? "text-foreground font-medium" : "text-foreground"}`}>
-          {thread.running && (
+          {thread.running && !isSelectMode && (
             <span className="w-3 h-3 rounded-full border-2 border-muted-foreground border-t-foreground animate-spin flex-shrink-0" />
           )}
           <span className="text-sm font-medium truncate">{label}</span>
@@ -105,31 +128,35 @@ function ThreadItem({
           )}
         </div>
       </Link>
-      <div className={`absolute right-2 top-2.5 ${confirmDelete === thread.thread_id ? "flex" : "hidden group-hover/item:flex"} items-center gap-0.5`}>
-        {confirmDelete === thread.thread_id ? (
-          <>
+
+      {/* Single-item delete — hidden in select mode */}
+      {!isSelectMode && (
+        <div className={`absolute right-2 top-2.5 ${confirmDelete === thread.thread_id ? "flex" : "hidden group-hover/item:flex"} items-center gap-0.5`}>
+          {confirmDelete === thread.thread_id ? (
+            <>
+              <button
+                className="w-6 h-6 rounded flex items-center justify-center text-destructive bg-destructive/10 hover:bg-destructive/20"
+                onClick={(e) => { e.preventDefault(); e.stopPropagation(); setConfirmDelete(null); onDeleteThread(thread.thread_id); }}
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+              </button>
+              <button
+                className="w-6 h-6 rounded flex items-center justify-center text-muted-foreground/60 hover:bg-muted hover:text-foreground text-xs"
+                onClick={(e) => { e.preventDefault(); e.stopPropagation(); setConfirmDelete(null); }}
+              >
+                ✕
+              </button>
+            </>
+          ) : (
             <button
-              className="w-6 h-6 rounded flex items-center justify-center text-destructive bg-destructive/10 hover:bg-destructive/20"
-              onClick={(e) => { e.preventDefault(); e.stopPropagation(); setConfirmDelete(null); onDeleteThread(thread.thread_id); }}
+              className="w-6 h-6 rounded flex items-center justify-center text-muted-foreground/60 hover:bg-muted hover:text-foreground"
+              onClick={(e) => { e.preventDefault(); e.stopPropagation(); setConfirmDelete(thread.thread_id); }}
             >
-              <Trash2 className="w-3.5 h-3.5" />
+              <MoreHorizontal className="w-3.5 h-3.5" />
             </button>
-            <button
-              className="w-6 h-6 rounded flex items-center justify-center text-muted-foreground/60 hover:bg-muted hover:text-foreground text-xs"
-              onClick={(e) => { e.preventDefault(); e.stopPropagation(); setConfirmDelete(null); }}
-            >
-              ✕
-            </button>
-          </>
-        ) : (
-          <button
-            className="w-6 h-6 rounded flex items-center justify-center text-muted-foreground/60 hover:bg-muted hover:text-foreground"
-            onClick={(e) => { e.preventDefault(); e.stopPropagation(); setConfirmDelete(thread.thread_id); }}
-          >
-            <MoreHorizontal className="w-3.5 h-3.5" />
-          </button>
-        )}
-      </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -150,6 +177,32 @@ export default function Sidebar({
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   const [expandedMembers, setExpandedMembers] = useState<Set<string>>(new Set());
   const hasInitialized = useRef(false);
+  const [isSelectMode, setIsSelectMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
+  const onToggleSelect = (threadId: string) => {
+    if (!isSelectMode) setIsSelectMode(true);
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(threadId)) next.delete(threadId);
+      else next.add(threadId);
+      return next;
+    });
+  };
+
+  const exitSelectMode = () => { setIsSelectMode(false); setSelectedIds(new Set()); };
+
+  const handleBulkDelete = () => {
+    selectedIds.forEach(id => onDeleteThread(id));
+    exitSelectMode();
+  };
+
+  useEffect(() => {
+    if (!isSelectMode) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") exitSelectMode(); };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [isSelectMode]);
 
   // Group threads by member, sorted by most recent activity
   const groups = useMemo(() => {
@@ -265,6 +318,9 @@ export default function Sidebar({
             isActive={isActive}
             label={memberName}
             to={`/chat/${memberId}/${thread.thread_id}`}
+            isSelectMode={isSelectMode}
+            isSelected={selectedIds.has(thread.thread_id)}
+            onToggleSelect={onToggleSelect}
             confirmDelete={confirmDelete}
             setConfirmDelete={setConfirmDelete}
             onDeleteThread={onDeleteThread}
@@ -357,6 +413,9 @@ export default function Sidebar({
                           isActive={activeThreadId === thread.thread_id}
                           label={thread.preview || thread.thread_id.slice(0, 14)}
                           to={`/chat/${group.memberId}/${thread.thread_id}`}
+                          isSelectMode={isSelectMode}
+                          isSelected={selectedIds.has(thread.thread_id)}
+                          onToggleSelect={onToggleSelect}
                           confirmDelete={confirmDelete}
                           setConfirmDelete={setConfirmDelete}
                           onDeleteThread={onDeleteThread}
@@ -370,6 +429,27 @@ export default function Sidebar({
           )}
         </div>
       </div>
+
+      {/* Bulk action bar */}
+      {isSelectMode && (
+        <div className="px-3 py-2.5 border-t border-border flex items-center gap-2 flex-shrink-0">
+          <span className="text-xs text-muted-foreground flex-1">已选 {selectedIds.size} 条</span>
+          <button
+            onClick={handleBulkDelete}
+            disabled={selectedIds.size === 0}
+            className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-destructive/10 text-destructive hover:bg-destructive/20 disabled:opacity-40 text-xs font-medium transition-colors"
+          >
+            <Trash2 className="w-3 h-3" />
+            删除
+          </button>
+          <button
+            onClick={exitSelectMode}
+            className="px-2.5 py-1.5 rounded-lg text-xs text-muted-foreground hover:bg-muted transition-colors"
+          >
+            取消
+          </button>
+        </div>
+      )}
     </div>
   );
 }
