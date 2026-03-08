@@ -285,6 +285,16 @@ class AgentService:
         description: str = "",
     ) -> str:
         """Create and run an independent LeonAgent, collect its text output."""
+        # Isolate this sub-agent from the parent's LangChain callback chain.
+        # asyncio.create_task() copies the current context, so this task inherits
+        # var_child_runnable_config which carries the parent graph's inheritable
+        # callbacks (including StreamMessagesHandler for stream_mode="messages").
+        # Without isolation, the sub-agent's LLM calls would write tokens directly
+        # into the parent's "messages" stream. We clear it here so the sub-agent
+        # starts a fresh, independent callback context.
+        from langchain_core.runnables.config import var_child_runnable_config
+        var_child_runnable_config.set(None)
+
         # Lazy import avoids circular dependency (agent.py imports AgentService)
         from core.runtime.agent import create_leon_agent
         from sandbox.thread_context import get_current_thread_id, set_current_thread_id

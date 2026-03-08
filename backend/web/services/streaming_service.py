@@ -554,6 +554,38 @@ async def _run_agent_to_buffer(
                                 message_id=chunk_msg_id,
                             )
 
+                        # Early tool_call emission: LangGraph streams tool_call_chunks in real-time
+                        # but the "updates" mode only fires after the full LLM response is generated.
+                        # By emitting tool_call as soon as we see the first chunk with name+id,
+                        # the UI can show the tool name immediately (typically within 1 second of
+                        # LLM start) rather than waiting for the full generation (3-8 seconds).
+                        for tc_chunk in getattr(msg_chunk, "tool_call_chunks", []):
+                            tc_id = tc_chunk.get("id")
+                            tc_name = tc_chunk.get("name", "")
+                            if tc_id and tc_name and tc_id not in emitted_tool_call_ids:
+                                emitted_tool_call_ids.add(tc_id)
+                                pending_tool_calls[tc_id] = {"name": tc_name, "args": {}}
+                                await emit(
+                                    {
+                                        "event": "tool_call",
+                                        "data": json.dumps(
+                                            {"id": tc_id, "name": tc_name, "args": {}},
+                                            ensure_ascii=False,
+                                        ),
+                                    },
+                                    message_id=chunk_msg_id,
+                                )
+                                # Also update status so ThinkingIndicator shows current tool
+                                if hasattr(agent, "runtime"):
+                                    status = agent.runtime.get_status_dict()
+                                    status["current_tool"] = tc_name
+                                    await emit(
+                                        {
+                                            "event": "status",
+                                            "data": json.dumps(status, ensure_ascii=False),
+                                        }
+                                    )
+
                 elif mode == "updates":
                     if not isinstance(data, dict):
                         continue
