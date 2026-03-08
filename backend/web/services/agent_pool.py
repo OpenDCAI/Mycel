@@ -17,7 +17,7 @@ from core.identity.agent_registry import get_or_create_agent_id
 _config_update_locks: dict[str, asyncio.Lock] = {}
 
 
-def create_agent_sync(sandbox_name: str, workspace_root: Path | None = None, model_name: str | None = None, agent: str | None = None, queue_manager: Any = None, chat_repos: dict | None = None) -> Any:
+def create_agent_sync(sandbox_name: str, workspace_root: Path | None = None, model_name: str | None = None, agent: str | None = None, queue_manager: Any = None, chat_repos: dict | None = None, extra_allowed_paths: list[str] | None = None) -> Any:
     """Create a LeonAgent with the given sandbox. Runs in a thread."""
     storage_container = build_storage_container(
         main_db_path=os.getenv("LEON_DB_PATH"),
@@ -35,6 +35,7 @@ def create_agent_sync(sandbox_name: str, workspace_root: Path | None = None, mod
         chat_repos=chat_repos,
         verbose=True,
         agent=agent,
+        extra_allowed_paths=extra_allowed_paths,
     )
 
 
@@ -102,9 +103,16 @@ async def get_or_create_agent(app_obj: FastAPI, sandbox_type: str, thread_id: st
                 "chat_event_bus": getattr(app_obj.state, "chat_event_bus", None),
             }
 
+    # @@@per-thread-file-access - ensure thread files are accessible from agent
+    from backend.web.services.workspace_service import ensure_thread_files
+
+    workspace_id = thread_data.get("workspace_id") if thread_data else None
+    channel = ensure_thread_files(thread_id, workspace_id=workspace_id)
+    extra_allowed_paths = [channel["files_path"]] if sandbox_type == "local" else None
+
     # @@@ agent-init-thread - LeonAgent.__init__ uses run_until_complete, must run in thread
     qm = getattr(app_obj.state, "queue_manager", None)
-    agent_obj = await asyncio.to_thread(create_agent_sync, sandbox_type, workspace_root, model_name, agent_name, qm, chat_repos)
+    agent_obj = await asyncio.to_thread(create_agent_sync, sandbox_type, workspace_root, model_name, agent_name, qm, chat_repos, extra_allowed_paths)
     member = agent_name or "leon"
     agent_id = get_or_create_agent_id(
         member=member,
@@ -115,10 +123,8 @@ async def get_or_create_agent(app_obj: FastAPI, sandbox_type: str, thread_id: st
 
     # @@@per-thread-bind-mounts - mount or copy thread files directory into sandbox
     if hasattr(agent_obj, "_sandbox") and sandbox_type != "local":
-        from backend.web.services.file_channel_service import ensure_thread_file_channel
         from sandbox.config import MountSpec
 
-        channel = ensure_thread_file_channel(thread_id)
         capability = agent_obj._sandbox.manager.provider_capability
         # @@@cloud-provider-copy - cloud providers can't mount local files, use copy mode instead
         mode = "mount" if capability.mount.supports_mount else "copy"
