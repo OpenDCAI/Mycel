@@ -19,10 +19,23 @@ class SyncManager:
 
         # Remote providers use incremental sync
         state = SyncState()
-        return IncrementalSyncStrategy(self.workspace_root, state)
+        return IncrementalSyncStrategy(self.workspace_root, state, self)
 
     def get_thread_workspace_path(self, thread_id: str) -> Path:
-        """Get the local workspace path for a thread."""
+        """Get the local workspace path for a thread, respecting workspace sharing."""
+        from backend.web.utils.helpers import load_thread_config, _get_container
+
+        tc = load_thread_config(thread_id)
+        if tc and tc.workspace_id:
+            # Thread uses shared workspace
+            repo = _get_container().workspace_repo()
+            try:
+                ws = repo.get(tc.workspace_id)
+                if ws:
+                    return Path(ws["host_path"]).resolve()
+            finally:
+                repo.close()
+        # Default per-thread path
         return self.workspace_root / thread_id / "files"
 
     def upload_workspace(self, thread_id: str, session_id: str, provider, files: list[str] | None = None):
