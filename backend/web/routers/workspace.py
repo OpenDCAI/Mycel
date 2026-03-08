@@ -8,12 +8,11 @@ from fastapi.responses import FileResponse
 
 from backend.web.core.dependencies import get_app
 from backend.web.services.agent_pool import resolve_thread_sandbox
-from backend.web.services.file_channel_service import (
-    ensure_thread_file_channel,
-    list_channel_files,
-    list_thread_file_transfers,
-    resolve_download_file,
-    save_uploaded_file,
+from backend.web.services.workspace_service import (
+    ensure_thread_files,
+    list_files,
+    resolve_file,
+    save_file,
 )
 from backend.web.utils.helpers import resolve_local_workspace_path
 from sandbox.thread_context import set_current_thread_id
@@ -150,7 +149,7 @@ async def get_workspace_channels(thread_id: str) -> dict[str, Any]:
     # @@@workspace-lookup - pass stored workspace_id so ensure is idempotent even if called multiple times
     tc = await asyncio.to_thread(load_thread_config, thread_id)
     workspace_id = tc.workspace_id if tc else None
-    payload = await asyncio.to_thread(ensure_thread_file_channel, thread_id, workspace_id=workspace_id)
+    payload = await asyncio.to_thread(ensure_thread_files, thread_id, workspace_id=workspace_id)
     return payload
 
 
@@ -173,7 +172,7 @@ async def upload_workspace_file(
         raise HTTPException(413, f"Upload exceeds {_MAX_UPLOAD_BYTES // (1024 * 1024)} MB limit")
     try:
         payload = await asyncio.to_thread(
-            save_uploaded_file,
+            save_file,
             thread_id=thread_id,
             relative_path=relative_path,
             content=content,
@@ -192,7 +191,7 @@ async def download_workspace_file(
     """Download a file from thread-scoped files directory."""
     try:
         target = await asyncio.to_thread(
-            resolve_download_file,
+            resolve_file,
             thread_id=thread_id,
             relative_path=path,
         )
@@ -210,7 +209,7 @@ async def list_workspace_channel_files(
     """List files under thread-scoped files directory."""
     try:
         entries = await asyncio.to_thread(
-            list_channel_files,
+            list_files,
             thread_id=thread_id,
         )
     except ValueError as e:
@@ -218,11 +217,3 @@ async def list_workspace_channel_files(
     return {"thread_id": thread_id, "entries": entries}
 
 
-@router.get("/transfers")
-async def list_workspace_transfers(
-    thread_id: str,
-    limit: int = Query(default=100, ge=1, le=500),
-) -> dict[str, Any]:
-    """List thread file transfer records from SQLite."""
-    entries = await asyncio.to_thread(list_thread_file_transfers, thread_id=thread_id, limit=limit)
-    return {"thread_id": thread_id, "entries": entries}

@@ -10,7 +10,6 @@ from typing import Any, Literal
 from .contracts import (
     CheckpointRepo,
     EvalRepo,
-    FileChannelRepo,
     FileOperationRepo,
     QueueRepo,
     RunEventRepo,
@@ -33,7 +32,6 @@ _REPO_REGISTRY: dict[str, tuple[str, str]] = {
     "summary_repo":        ("storage.providers.supabase.summary_repo",        "SupabaseSummaryRepo"),
     "eval_repo":           ("storage.providers.supabase.eval_repo",           "SupabaseEvalRepo"),
     "queue_repo":          ("storage.providers.supabase.queue_repo",          "SupabaseQueueRepo"),
-    "file_channel_repo":   ("storage.providers.supabase.file_channel_repo",  "SupabaseFileChannelRepo"),
     "workspace_repo":      ("storage.providers.supabase.workspace_repo",     "SupabaseWorkspaceRepo"),
 }
 
@@ -49,7 +47,6 @@ class StorageContainer:
         "summary_repo",
         "eval_repo",
         "queue_repo",
-        "file_channel_repo",
         "workspace_repo",
     )
 
@@ -99,9 +96,6 @@ class StorageContainer:
 
     def eval_repo(self) -> EvalRepo:
         return self._build_repo("eval_repo", self._sqlite_eval_repo)
-
-    def file_channel_repo(self) -> FileChannelRepo:
-        return self._build_repo("file_channel_repo", self._sqlite_file_channel_repo)
 
     def workspace_repo(self) -> WorkspaceRepo:
         return self._build_repo("workspace_repo", self._sqlite_workspace_repo)
@@ -213,10 +207,6 @@ class StorageContainer:
     def _sqlite_eval_repo(self):
         from storage.providers.sqlite.eval_repo import SQLiteEvalRepo
         return SQLiteEvalRepo(db_path=self._eval_db)
-
-    def _sqlite_file_channel_repo(self):
-        from storage.providers.sqlite.file_channel_repo import SQLiteFileChannelRepo
-        return SQLiteFileChannelRepo(db_path=self._main_db)
 
     def _sqlite_workspace_repo(self):
         from storage.providers.sqlite.workspace_repo import SQLiteWorkspaceRepo

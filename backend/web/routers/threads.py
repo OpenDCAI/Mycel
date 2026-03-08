@@ -18,7 +18,7 @@ from backend.web.models.requests import (
 )
 from backend.web.services.agent_pool import get_or_create_agent, resolve_thread_sandbox
 from backend.web.services.event_buffer import ThreadEventBuffer
-from backend.web.services.file_channel_service import cleanup_thread_file_channel, ensure_thread_file_channel
+from backend.web.services.workspace_service import cleanup_thread_files, ensure_thread_files
 from backend.web.services.sandbox_service import destroy_thread_resources_sync, init_providers_and_managers
 from backend.web.services.streaming_service import (
     get_or_create_thread_buffer,
@@ -44,6 +44,54 @@ from sandbox.config import MountSpec
 from sandbox.thread_context import set_current_thread_id
 
 router = APIRouter(prefix="/api/threads", tags=["threads"])
+
+
+async def _prepare_attachment_message(
+    thread_id: str,
+    sandbox_type: str,
+    message: str,
+    attachments: list[str],
+) -> tuple[str, dict[str, Any] | None]:
+    """Build LLM notification prefix and sync uploads to running sandbox.
+
+    Returns (modified_message, message_metadata).
+    """
+    message_metadata: dict[str, Any] = {"attachments": attachments}
+    workspace_root = "/workspace"
+    _, managers = init_providers_and_managers()
+    mgr = managers.get(sandbox_type)
+    if mgr:
+        workspace_root = getattr(mgr.provider, "WORKSPACE_ROOT", "/workspace")
+    files_dir = f"{workspace_root}/files"
+
+    original_message = message
+    sync_ok = True
+
+    # @@@sync-new-uploads - push newly uploaded files to already-running sandbox
+    if mgr and hasattr(mgr, 'workspace_sync'):
+        try:
+            terminal = mgr._get_active_terminal(thread_id)
+            if terminal:
+                session = mgr.session_manager.get(thread_id, terminal.terminal_id)
+                if session:
+                    instance = session.lease.get_instance()
+                    if instance:
+                        await asyncio.to_thread(
+                            mgr.workspace_sync.upload_workspace,
+                            thread_id, instance.instance_id, mgr.provider,
+                            attachments,
+                        )
+        except Exception:
+            logger.error("Failed to sync uploads to sandbox", exc_info=True)
+            sync_ok = False
+
+    # @@@sync-fail-honest - don't tell agent files are in sandbox if sync failed
+    if sync_ok:
+        message = f"[User uploaded {len(attachments)} file(s) to {files_dir}/: {', '.join(attachments)}]\n\n{original_message}"
+    else:
+        message = f"[User uploaded {len(attachments)} file(s) but sync to sandbox failed. Files may not be available in {files_dir}/.]\n\n{original_message}"
+
+    return message, message_metadata
 
 
 def _find_mount_capability_mismatch(
@@ -185,6 +233,7 @@ async def create_thread(
     }
 
 
+
 @router.get("")
 async def list_threads(
     member_id: Annotated[str, Depends(get_current_member_id)],
@@ -285,7 +334,7 @@ async def delete_thread(
             await asyncio.to_thread(destroy_thread_resources_sync, thread_id, sandbox_type, app.state.agent_pool)
         except Exception as exc:
             logger.warning("Failed to destroy sandbox resources for thread %s: %s", thread_id, exc)
-        await asyncio.to_thread(cleanup_thread_file_channel, thread_id)
+        await asyncio.to_thread(cleanup_thread_files, thread_id)
         await asyncio.to_thread(delete_thread_in_db, thread_id)
         # Also delete from threads table (entity-chat addition)
         app.state.thread_repo.delete(thread_id)

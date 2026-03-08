@@ -25,9 +25,9 @@ class SyncManager:
         """Get the local workspace path for a thread."""
         return self.workspace_root / thread_id / "files"
 
-    def upload_workspace(self, thread_id: str, session_id: str, provider):
+    def upload_workspace(self, thread_id: str, session_id: str, provider, files: list[str] | None = None):
         """Upload workspace files to sandbox."""
-        self.strategy.upload(thread_id, session_id, provider)
+        self.strategy.upload(thread_id, session_id, provider, files=files)
 
     def download_workspace(self, thread_id: str, session_id: str, provider):
         """Download workspace files from sandbox."""

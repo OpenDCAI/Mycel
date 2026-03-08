@@ -61,6 +61,7 @@ class FileSystemMiddleware(AgentMiddleware):
         operation_recorder: FileOperationRecorder | None = None,
         backend: FileSystemBackend | None = None,
         verbose: bool = True,
+        extra_allowed_paths: list[Path | str] | None = None,
     ):
         """Initialize filesystem middleware.
 
@@ -93,6 +94,10 @@ class FileSystemMiddleware(AgentMiddleware):
         self._read_files: dict[Path, float | None] = {}
         self.operation_recorder = operation_recorder
         self.verbose = verbose
+        self.extra_allowed_paths: list[Path] = [
+            Path(p) if backend.is_remote else Path(p).resolve()
+            for p in (extra_allowed_paths or [])
+        ]
 
         if not backend.is_remote:
             self.workspace_root.mkdir(parents=True, exist_ok=True)
@@ -120,7 +125,8 @@ class FileSystemMiddleware(AgentMiddleware):
         try:
             resolved.relative_to(self.workspace_root)
         except ValueError:
-            return False, f"Path outside workspace\n   Workspace: {self.workspace_root}\n   Attempted: {resolved}", None
+            if not any(resolved.is_relative_to(p) for p in self.extra_allowed_paths):
+                return False, f"Path outside workspace\n   Workspace: {self.workspace_root}\n   Attempted: {resolved}", None
 
         if self.allowed_extensions and resolved.suffix:
             ext = resolved.suffix.lstrip(".")

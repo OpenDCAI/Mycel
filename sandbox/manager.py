@@ -3,12 +3,15 @@
 Orchestrates: Thread → ChatSession → Runtime → Terminal → Lease → Instance
 """
 
+import logging
 import sqlite3
 import uuid
 from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 from storage.providers.sqlite.kernel import connect_sqlite
 
@@ -178,7 +181,6 @@ class SandboxManager:
                 lease = self.lease_store.create(terminal.lease_id, self.provider.name)
             self._assert_lease_provider(lease, thread_id)
 
-<<<<<<< HEAD
         # Stamp bind_mounts on lease so lazy creation paths pick them up
         if bind_mounts:
             lease.bind_mounts = bind_mounts
@@ -197,12 +199,12 @@ class SandboxManager:
             # @@@workspace-upload - sync files to sandbox after creation
             try:
                 self.workspace_sync.upload_workspace(thread_id, instance.instance_id, self.provider)
-            except Exception as e:
-                import logging
-                logging.getLogger(__name__).warning(f"Failed to upload workspace: {e}")
+            except Exception:
+                logger.warning("Failed to upload workspace on create", exc_info=True)
             self._fire_session_ready(instance.instance_id, "create")
 
         return SandboxCapability(session, manager=self)
+
 
     def create_background_command_session(self, thread_id: str, initial_cwd: str) -> Any:
         default_terminal = self.terminal_store.get_default(thread_id)
@@ -414,9 +416,8 @@ class SandboxManager:
                 # @@@workspace-download - sync files from sandbox before pause
                 try:
                     self.workspace_sync.download_workspace(thread_id, instance.instance_id, self.provider)
-                except Exception as e:
-                    import logging
-                    logging.getLogger(__name__).warning(f"Failed to download workspace: {e}")
+                except Exception:
+                    logger.error("Failed to download workspace before pause — agent changes may be lost", exc_info=True)
             if not lease.pause_instance(self.provider):
                 return False
 
@@ -443,6 +444,14 @@ class SandboxManager:
 
         if not lease.resume_instance(self.provider):
             return False
+
+        # @@@workspace-upload-on-resume - re-sync files that may have been uploaded while paused
+        instance = lease.get_instance()
+        if instance:
+            try:
+                self.workspace_sync.upload_workspace(thread_id, instance.instance_id, self.provider)
+            except Exception:
+                logger.warning("Failed to upload workspace on resume", exc_info=True)
 
         resumed_any = False
         for terminal in terminals:
@@ -500,9 +509,8 @@ class SandboxManager:
             if instance:
                 try:
                     self.workspace_sync.download_workspace(thread_id, instance.instance_id, self.provider)
-                except Exception as e:
-                    import logging
-                    logging.getLogger(__name__).warning(f"Failed to download workspace: {e}")
+                except Exception:
+                    logger.error("Failed to download workspace before destroy — agent changes are lost", exc_info=True)
 
         lease_ids = {terminal.lease_id for terminal in terminals}
 
