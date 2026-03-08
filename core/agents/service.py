@@ -288,6 +288,19 @@ class AgentService:
 
         parent_thread_id = get_current_thread_id()
 
+        # emit_fn is set if EventBus is available; used for task lifecycle SSE events
+        emit_fn = None
+        try:
+            from backend.web.event_bus import get_event_bus
+            event_bus = get_event_bus()
+            emit_fn = event_bus.make_emitter(
+                thread_id=parent_thread_id,
+                agent_id=task_id,
+                agent_name=agent_name,
+            )
+        except ImportError:
+            pass  # backend not available in standalone core usage
+
         agent = None
         try:
             agent = create_leon_agent(
@@ -298,20 +311,21 @@ class AgentService:
 
             # Wire child agent events to the parent's EventBus subscription
             # so the parent SSE stream shows sub-agent activity.
-            try:
-                from backend.web.event_bus import get_event_bus
-                event_bus = get_event_bus()
-                emit_fn = event_bus.make_emitter(
-                    thread_id=parent_thread_id,
-                    agent_id=task_id,
-                    agent_name=agent_name,
-                )
+            if emit_fn is not None:
                 if hasattr(agent, "runtime") and hasattr(agent.runtime, "bind_thread"):
                     agent.runtime.bind_thread(activity_sink=emit_fn)
-            except ImportError:
-                pass  # backend not available in standalone core usage
 
             set_current_thread_id(thread_id)
+
+            # Notify frontend: background task started
+            if emit_fn is not None:
+                await emit_fn({"event": "task_start", "data": json.dumps({
+                    "task_id": task_id,
+                    "background": True,
+                    "task_type": "agent",
+                    "description": agent_name,
+                }, ensure_ascii=False)})
+
             config = {"configurable": {"thread_id": thread_id}}
             output_parts: list[str] = []
 
@@ -339,11 +353,39 @@ class AgentService:
                                             output_parts.append(text)
 
             await self._agent_registry.update_status(task_id, "completed")
-            return "\n".join(output_parts) or "(Agent completed with no text output)"
+            result = "\n".join(output_parts) or "(Agent completed with no text output)"
+            # Notify frontend: task done
+            if emit_fn is not None:
+                await emit_fn({"event": "task_done", "data": json.dumps({
+                    "task_id": task_id,
+                    "background": True,
+                }, ensure_ascii=False)})
+            if self._queue_manager and parent_thread_id:
+                notification = (
+                    f'<TaskNotification task_id="{task_id}" name="{agent_name}" status="completed">'
+                    f"{result[:500]}</TaskNotification>"
+                )
+                self._queue_manager.enqueue(notification, parent_thread_id, notification_type="task")
+            return result
 
         except Exception as e:
             logger.exception("[AgentService] Agent %s failed", agent_name)
             await self._agent_registry.update_status(task_id, "error")
+            # Notify frontend: task error
+            if emit_fn is not None:
+                try:
+                    await emit_fn({"event": "task_error", "data": json.dumps({
+                        "task_id": task_id,
+                        "background": True,
+                    }, ensure_ascii=False)})
+                except Exception:
+                    pass
+            if self._queue_manager and parent_thread_id:
+                notification = (
+                    f'<TaskNotification task_id="{task_id}" name="{agent_name}" status="error">'
+                    f"{str(e)[:200]}</TaskNotification>"
+                )
+                self._queue_manager.enqueue(notification, parent_thread_id, notification_type="task")
             raise
         finally:
             if agent is not None:

@@ -271,7 +271,9 @@ def _ensure_thread_handlers(agent: Any, thread_id: str, app: Any) -> None:
         if isinstance(data, dict):
             data["_seq"] = seq
             event = {**event, "data": json.dumps(data, ensure_ascii=False)}
-        await thread_buf.put(event)
+        # Only SSE-valid fields: extra metadata (agent_id, agent_name) stays in event_store
+        _SSE_FIELDS = frozenset({"event", "data", "id", "retry", "comment"})
+        await thread_buf.put({k: v for k, v in event.items() if k in _SSE_FIELDS})
 
     qm = app.state.queue_manager
     loop = getattr(app.state, "_event_loop", None)

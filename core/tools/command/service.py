@@ -149,8 +149,75 @@ class CommandService:
             from core.agents.service import _BashBackgroundRun
             self._background_runs[task_id] = _BashBackgroundRun(async_cmd, command)
 
+        # Build emit_fn for SSE task lifecycle events
+        emit_fn = None
+        parent_thread_id = None
+        try:
+            from sandbox.thread_context import get_current_thread_id
+            from backend.web.event_bus import get_event_bus
+            parent_thread_id = get_current_thread_id()
+            logger.debug("[CommandService] _execute_async: parent_thread_id=%s task_id=%s", parent_thread_id, task_id)
+            if parent_thread_id:
+                event_bus = get_event_bus()
+                emit_fn = event_bus.make_emitter(
+                    thread_id=parent_thread_id,
+                    agent_id=task_id,
+                    agent_name=f"bash-{task_id[:8]}",
+                )
+        except ImportError:
+            logger.debug("[CommandService] backend.web.event_bus not available")
+        except Exception as e:
+            logger.warning("[CommandService] emit_fn setup failed: %s", e)
+
+        # Emit task_start so the frontend dot lights up immediately
+        if emit_fn is not None:
+            await emit_fn({"event": "task_start", "data": json.dumps({
+                "task_id": task_id,
+                "background": True,
+                "task_type": "bash",
+                "description": command[:80],
+            }, ensure_ascii=False)})
+
+        if parent_thread_id:
+            asyncio.create_task(
+                self._notify_bash_completion(
+                    task_id, async_cmd, command, parent_thread_id, emit_fn
+                )
+            )
+
         return (
             f"Command started in background.\n"
             f"task_id: {task_id}\n"
             f"Use TaskOutput to get result."
         )
+
+    async def _notify_bash_completion(
+        self,
+        task_id: str,
+        async_cmd: Any,
+        command: str,
+        parent_thread_id: str,
+        emit_fn: Any = None,
+    ) -> None:
+        """Poll until async command finishes, then enqueue CommandNotification."""
+        while not async_cmd.done:
+            await asyncio.sleep(1)
+        from core.agents.service import _BashBackgroundRun
+        result = _BashBackgroundRun(async_cmd, command).get_result() or ""
+
+        # Emit task_done so the frontend dot updates in real time
+        if emit_fn is not None:
+            try:
+                await emit_fn({"event": "task_done", "data": json.dumps({
+                    "task_id": task_id,
+                    "background": True,
+                }, ensure_ascii=False)})
+            except Exception:
+                pass
+
+        if self._queue_manager:
+            notification = (
+                f'<CommandNotification task_id="{task_id}" status="completed">'
+                f"{result[:500]}</CommandNotification>"
+            )
+            self._queue_manager.enqueue(notification, parent_thread_id, notification_type="command")
