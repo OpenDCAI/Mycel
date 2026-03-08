@@ -1,4 +1,4 @@
-import { Check, ChevronRight, MessageSquarePlus, MoreHorizontal, Plus, Search, Trash2 } from "lucide-react";
+import { Check, ChevronRight, MoreHorizontal, Plus, Search, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import type { ThreadSummary } from "../api";
@@ -85,31 +85,36 @@ function ThreadItem({
   onDeleteThread: (id: string) => void;
 }) {
   return (
-    <div className="group/item relative">
-      {/* Checkbox — overlays left border area, no layout shift */}
-      <button
-        className={`absolute left-0 top-0 bottom-0 w-9 flex items-center justify-center z-10 transition-opacity ${
-          isSelectMode ? "opacity-100" : "opacity-0 group-hover/item:opacity-60"
-        }`}
-        onClick={(e) => { e.preventDefault(); e.stopPropagation(); onToggleSelect(thread.thread_id); }}
-      >
-        <div className={`w-4 h-4 rounded border-2 flex items-center justify-center transition-colors ${
-          isSelected ? "bg-primary border-primary" : "border-muted-foreground/50 bg-card"
-        }`}>
-          {isSelected && <Check className="w-2.5 h-2.5 text-primary-foreground" />}
-        </div>
-      </button>
+    <div className={`group/item flex items-center rounded-lg transition-colors ${
+      isSelected ? "bg-primary/10" : isActive ? "bg-background shadow-sm" : "hover:bg-muted"
+    }`}>
+      {/* Left gutter: fixed w-7, holds active indicator OR checkbox — text never moves */}
+      <div className="relative w-7 flex-shrink-0 self-stretch flex items-center justify-center">
+        {/* Active indicator line */}
+        {isActive && !isSelected && (
+          <div className="absolute left-0 top-2 bottom-2 w-0.5 rounded-r-full bg-foreground" />
+        )}
+        {isSelected && (
+          <div className="absolute left-0 top-2 bottom-2 w-0.5 rounded-r-full bg-primary" />
+        )}
+        {/* Checkbox — only visible in select mode */}
+        {isSelectMode && (
+          <button
+            className={`w-4 h-4 rounded border-[1.5px] flex items-center justify-center transition-colors ${
+              isSelected ? "bg-primary border-primary" : "border-muted-foreground/40 bg-card"
+            }`}
+            onClick={(e) => { e.stopPropagation(); onToggleSelect(thread.thread_id); }}
+          >
+            {isSelected && <Check className="w-2.5 h-2.5 text-primary-foreground" />}
+          </button>
+        )}
+      </div>
 
+      {/* Text content */}
       <Link
         to={isSelectMode ? "#" : to}
-        onClick={(e) => { if (isSelectMode) { e.preventDefault(); e.stopPropagation(); onToggleSelect(thread.thread_id); } }}
-        className={`block w-full text-left px-3 py-2.5 rounded-lg transition-colors ${
-          isSelected
-            ? "bg-primary/8 border-l-2 border-l-primary"
-            : isActive
-            ? "bg-background border-l-2 border-l-foreground shadow-sm"
-            : "border-l-2 border-l-transparent hover:bg-muted"
-        }`}
+        onClick={(e) => { if (isSelectMode) { e.preventDefault(); onToggleSelect(thread.thread_id); } }}
+        className="flex-1 min-w-0 py-2.5 pr-2"
       >
         <div className={`flex items-center gap-1.5 ${isActive ? "text-foreground font-medium" : "text-foreground"}`}>
           {thread.running && !isSelectMode && (
@@ -131,18 +136,18 @@ function ThreadItem({
 
       {/* Single-item delete — hidden in select mode */}
       {!isSelectMode && (
-        <div className={`absolute right-2 top-2.5 ${confirmDelete === thread.thread_id ? "flex" : "hidden group-hover/item:flex"} items-center gap-0.5`}>
+        <div className={`${confirmDelete === thread.thread_id ? "flex" : "hidden group-hover/item:flex"} items-center gap-0.5 pr-1.5`}>
           {confirmDelete === thread.thread_id ? (
             <>
               <button
                 className="w-6 h-6 rounded flex items-center justify-center text-destructive bg-destructive/10 hover:bg-destructive/20"
-                onClick={(e) => { e.preventDefault(); e.stopPropagation(); setConfirmDelete(null); onDeleteThread(thread.thread_id); }}
+                onClick={(e) => { e.stopPropagation(); setConfirmDelete(null); onDeleteThread(thread.thread_id); }}
               >
                 <Trash2 className="w-3.5 h-3.5" />
               </button>
               <button
                 className="w-6 h-6 rounded flex items-center justify-center text-muted-foreground/60 hover:bg-muted hover:text-foreground text-xs"
-                onClick={(e) => { e.preventDefault(); e.stopPropagation(); setConfirmDelete(null); }}
+                onClick={(e) => { e.stopPropagation(); setConfirmDelete(null); }}
               >
                 ✕
               </button>
@@ -150,7 +155,7 @@ function ThreadItem({
           ) : (
             <button
               className="w-6 h-6 rounded flex items-center justify-center text-muted-foreground/60 hover:bg-muted hover:text-foreground"
-              onClick={(e) => { e.preventDefault(); e.stopPropagation(); setConfirmDelete(thread.thread_id); }}
+              onClick={(e) => { e.stopPropagation(); setConfirmDelete(thread.thread_id); }}
             >
               <MoreHorizontal className="w-3.5 h-3.5" />
             </button>
@@ -173,7 +178,6 @@ export default function Sidebar({
   const { threadId } = useParams<{ threadId?: string }>();
   const activeThreadId = threadId || null;
   const memberList = useAppStore(s => s.memberList);
-  const memberNameMap = useMemo(() => new Map(memberList.map(m => [m.id, m.name])), [memberList]);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   const [expandedMembers, setExpandedMembers] = useState<Set<string>>(new Set());
   const hasInitialized = useRef(false);
@@ -192,6 +196,12 @@ export default function Sidebar({
 
   const exitSelectMode = () => { setIsSelectMode(false); setSelectedIds(new Set()); };
 
+  const isAllSelected = threads.length > 0 && threads.every(t => selectedIds.has(t.thread_id));
+
+  const handleSelectAll = () => {
+    setSelectedIds(isAllSelected ? new Set() : new Set(threads.map(t => t.thread_id)));
+  };
+
   const handleBulkDelete = () => {
     selectedIds.forEach(id => onDeleteThread(id));
     exitSelectMode();
@@ -204,18 +214,29 @@ export default function Sidebar({
     return () => document.removeEventListener("keydown", onKey);
   }, [isSelectMode]);
 
-  // Group threads by member, sorted by most recent activity
+  // Group threads by member. Use memberList as base so members persist even with no threads.
   const groups = useMemo(() => {
     const map = new Map<string, { memberName: string; threads: ThreadSummary[]; latestAt: number }>();
+
+    // Seed from memberList so members with no threads remain visible
+    for (const member of memberList) {
+      map.set(member.name, { memberName: member.name, threads: [], latestAt: 0 });
+    }
+    // Always ensure the default "Leon" entry exists
+    if (!map.has("Leon")) {
+      map.set("Leon", { memberName: "Leon", threads: [], latestAt: 0 });
+    }
+
+    // Attach threads to their member group
     for (const thread of threads) {
-      const key = thread.agent || "leon";
-      const name = thread.agent ? (memberNameMap.get(thread.agent) || thread.agent) : "Leon";
-      const at = thread.updated_at ? new Date(thread.updated_at).getTime() : 0;
-      if (!map.has(key)) map.set(key, { memberName: name, threads: [], latestAt: 0 });
+      const key = thread.agent || "Leon";
+      if (!map.has(key)) map.set(key, { memberName: key, threads: [], latestAt: 0 });
       const g = map.get(key)!;
+      const at = thread.updated_at ? new Date(thread.updated_at).getTime() : 0;
       g.threads.push(thread);
       g.latestAt = Math.max(g.latestAt, at);
     }
+
     return [...map.entries()]
       .map(([memberId, g]) => ({ memberId, ...g }))
       .sort((a, b) => b.latestAt - a.latestAt)
@@ -227,7 +248,7 @@ export default function Sidebar({
           return tb - ta;
         }),
       }));
-  }, [threads, memberNameMap]);
+  }, [threads, memberList]);
 
   // Auto-expand the most recently active member on first load
   useEffect(() => {
@@ -294,42 +315,6 @@ export default function Sidebar({
 
   // ── Expanded mode ────────────────────────────────────────────────────────
 
-  // Flat list with date groups (used when only one member)
-  const renderFlatList = (memberId: string) => {
-    const sorted = [...threads].sort((a, b) => {
-      const ta = a.updated_at ? new Date(a.updated_at).getTime() : 0;
-      const tb = b.updated_at ? new Date(b.updated_at).getTime() : 0;
-      return tb - ta;
-    });
-    let lastGroup: DateGroup | null = null;
-    return sorted.map((thread) => {
-      const isActive = activeThreadId === thread.thread_id;
-      const memberName = thread.agent ? (memberNameMap.get(thread.agent) || thread.agent) : "Leon";
-      const group = getDateGroup(thread.updated_at);
-      const showGroupLabel = group !== lastGroup;
-      lastGroup = group;
-      return (
-        <div key={thread.thread_id}>
-          {showGroupLabel && (
-            <div className="text-[10px] uppercase tracking-wider text-muted-foreground/60 px-3 pt-3 pb-1">{group}</div>
-          )}
-          <ThreadItem
-            thread={thread}
-            isActive={isActive}
-            label={memberName}
-            to={`/chat/${memberId}/${thread.thread_id}`}
-            isSelectMode={isSelectMode}
-            isSelected={selectedIds.has(thread.thread_id)}
-            onToggleSelect={onToggleSelect}
-            confirmDelete={confirmDelete}
-            setConfirmDelete={setConfirmDelete}
-            onDeleteThread={onDeleteThread}
-          />
-        </div>
-      );
-    });
-  };
-
   return (
     <div className="h-full flex flex-col bg-card border-r border-border animate-slide-in flex-shrink-0" style={{ width }}>
       {/* Header */}
@@ -354,35 +339,27 @@ export default function Sidebar({
       <div className="flex-1 min-h-0 px-3 pt-3 flex flex-col">
         <div className="flex items-center justify-between px-2 mb-2 flex-shrink-0">
           <span className="text-[11px] font-medium tracking-wider uppercase text-muted-foreground/60">对话</span>
-          <span className="text-[11px] text-muted-foreground/40">{threads.length}</span>
+          <div className="flex items-center gap-1.5">
+            <span className="text-[11px] text-muted-foreground/40">{threads.length}</span>
+            {!isSelectMode && (
+              <button
+                onClick={() => setIsSelectMode(true)}
+                className="text-[11px] text-muted-foreground/50 hover:text-foreground transition-colors px-1"
+              >
+                管理
+              </button>
+            )}
+          </div>
         </div>
 
         <div className="flex-1 min-h-0 overflow-y-auto space-y-0.5 custom-scrollbar">
           {loading ? (
             <ThreadSkeleton />
-          ) : groups.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-10 px-4 text-center">
-              <div className="w-10 h-10 rounded-xl bg-muted flex items-center justify-center mb-3">
-                <MessageSquarePlus className="w-5 h-5 text-muted-foreground" />
-              </div>
-              <p className="text-xs font-medium text-foreground mb-1">暂无对话</p>
-              <p className="text-[11px] text-muted-foreground/60 mb-3">发起一个会话，开始与 Agent 协作</p>
-              <button
-                onClick={onNewChat}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-xs font-medium hover:opacity-90 transition-opacity"
-              >
-                <Plus className="w-3.5 h-3.5" />
-                发起会话
-              </button>
-            </div>
-          ) : groups.length === 1 ? (
-            // Single member: flat list with date groups
-            renderFlatList(groups[0].memberId)
           ) : (
-            // Multiple members: grouped by member
             groups.map((group) => {
               const isExpanded = expandedMembers.has(group.memberId);
               const initial = group.memberName.slice(0, 1).toUpperCase();
+              const urlId = group.memberId === "Leon" ? "leon" : group.memberId;
               return (
                 <div key={group.memberId} className="mb-1">
                   {/* Group header: chevron toggles expand, avatar+name navigates to new chat */}
@@ -394,7 +371,7 @@ export default function Sidebar({
                       <ChevronRight className={`w-3.5 h-3.5 transition-transform ${isExpanded ? "rotate-90" : ""}`} />
                     </button>
                     <Link
-                      to={`/chat/${group.memberId}`}
+                      to={`/chat/${urlId}`}
                       className="flex items-center gap-2 flex-1 min-w-0"
                     >
                       <div className="w-6 h-6 rounded-lg bg-primary/10 flex items-center justify-center text-[11px] font-semibold text-primary flex-shrink-0">
@@ -402,25 +379,34 @@ export default function Sidebar({
                       </div>
                       <span className="text-xs font-medium text-foreground flex-1 truncate">{group.memberName}</span>
                     </Link>
-                    <span className="text-[10px] text-muted-foreground/40 flex-shrink-0">{group.threads.length}</span>
+                    <span className="text-[10px] text-muted-foreground/40 flex-shrink-0">{group.threads.length || ""}</span>
                   </div>
                   {isExpanded && (
                     <div className="mt-0.5 ml-3 space-y-0.5">
-                      {group.threads.map((thread) => (
-                        <ThreadItem
-                          key={thread.thread_id}
-                          thread={thread}
-                          isActive={activeThreadId === thread.thread_id}
-                          label={thread.preview || thread.thread_id.slice(0, 14)}
-                          to={`/chat/${group.memberId}/${thread.thread_id}`}
-                          isSelectMode={isSelectMode}
-                          isSelected={selectedIds.has(thread.thread_id)}
-                          onToggleSelect={onToggleSelect}
-                          confirmDelete={confirmDelete}
-                          setConfirmDelete={setConfirmDelete}
-                          onDeleteThread={onDeleteThread}
-                        />
-                      ))}
+                      {group.threads.length === 0 ? (
+                        <Link
+                          to={`/chat/${urlId}`}
+                          className="block px-3 py-2 text-[11px] text-muted-foreground/50 hover:text-muted-foreground transition-colors"
+                        >
+                          + 发起新对话
+                        </Link>
+                      ) : (
+                        group.threads.map((thread) => (
+                          <ThreadItem
+                            key={thread.thread_id}
+                            thread={thread}
+                            isActive={activeThreadId === thread.thread_id}
+                            label={thread.preview || thread.thread_id.slice(0, 14)}
+                            to={`/chat/${urlId}/${thread.thread_id}`}
+                            isSelectMode={isSelectMode}
+                            isSelected={selectedIds.has(thread.thread_id)}
+                            onToggleSelect={onToggleSelect}
+                            confirmDelete={confirmDelete}
+                            setConfirmDelete={setConfirmDelete}
+                            onDeleteThread={onDeleteThread}
+                          />
+                        ))
+                      )}
                     </div>
                   )}
                 </div>
@@ -433,6 +419,13 @@ export default function Sidebar({
       {/* Bulk action bar */}
       {isSelectMode && (
         <div className="px-3 py-2.5 border-t border-border flex items-center gap-2 flex-shrink-0">
+          <button
+            onClick={handleSelectAll}
+            className="text-xs text-muted-foreground/70 hover:text-foreground transition-colors"
+          >
+            {isAllSelected ? "取消全选" : "全选"}
+          </button>
+          <span className="text-xs text-muted-foreground/40">·</span>
           <span className="text-xs text-muted-foreground flex-1">已选 {selectedIds.size} 条</span>
           <button
             onClick={handleBulkDelete}

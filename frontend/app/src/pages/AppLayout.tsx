@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, Outlet, useParams } from "react-router-dom";
 import { DragHandle } from "../components/DragHandle";
 import NewChatDialog from "../components/NewChatDialog";
@@ -18,6 +18,8 @@ export default function AppLayout() {
     threads, sandboxTypes, loading,
     refreshThreads, handleCreateThread, handleDeleteThread,
   } = tm;
+  const fetchMembers = useAppStore(s => s.fetchMembers);
+  useEffect(() => { void fetchMembers(); }, [fetchMembers]);
 
   const isMobile = useIsMobile();
   const { threadId } = useParams<{ memberId?: string; threadId?: string }>();
