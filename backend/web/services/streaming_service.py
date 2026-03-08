@@ -473,6 +473,17 @@ async def _run_agent_to_buffer(
         # won't reject the message history.
         await _repair_incomplete_tool_calls(agent, config)
 
+        # Emit notice BEFORE run_start when this run was triggered by a queue notification.
+        # This makes the notice appear in real-time between turns, not just after history reload.
+        if message_metadata and message_metadata.get("source") == "system":
+            await emit({
+                "event": "notice",
+                "data": json.dumps({
+                    "content": message,
+                    "notification_type": message_metadata.get("notification_type"),
+                }, ensure_ascii=False),
+            })
+
         # Emit run_start
         await emit({
             "event": "run_start",

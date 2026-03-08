@@ -84,7 +84,9 @@ function ChatPageInner({ threadId }: { threadId: string }) {
   const { runtimeStatus, isRunning, handleSendMessage, handleStopStreaming } =
     useStreamHandler({
       threadId,
-      refreshThreads: refreshThread,
+      // Use tm.refreshThreads (sidebar list only) — NOT refreshThread (which calls
+      // setEntries(history) and would wipe any in-flight streaming entries for the next run).
+      refreshThreads: tm.refreshThreads,
       onUpdate: (updater) => setEntries(updater),
       loading,
       runStarted,

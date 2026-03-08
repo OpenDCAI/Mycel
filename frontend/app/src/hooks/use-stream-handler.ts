@@ -5,6 +5,8 @@ import {
   postRun,
   type AssistantTurn,
   type ChatEntry,
+  type NoticeMessage,
+  type NotificationType,
   type StreamStatus,
 } from "../api";
 import type { StreamEvent } from "../api/types";
@@ -45,7 +47,10 @@ function applyReconnectTurn(
   fallbackId: string,
 ): { entries: ChatEntry[]; turnId: string } {
   const last = prev[prev.length - 1];
-  if (last?.role === "assistant") {
+  // Only reuse if the last turn is currently streaming (true reconnect mid-run).
+  // A completed turn (streaming: false) must NOT be reused — that would merge a new
+  // notification-triggered run into the previous turn.
+  if (last?.role === "assistant" && (last as AssistantTurn).streaming) {
     return {
       entries: prev.map((e) =>
         e.id === last.id && e.role === "assistant"
@@ -125,6 +130,21 @@ export function useStreamHandler(
 
     return subscribe((event) => {
       console.log(`[STREAM-DIAG] event=${event.type}, turnId=${turnIdRef.current}, hasBound=${hasBoundRef.current}`);
+
+      // notice: standalone entry inserted between turns (e.g. task completion notification)
+      if (event.type === "notice") {
+        const d = (event.data ?? {}) as { content?: string; notification_type?: string };
+        const noticeEntry: NoticeMessage = {
+          id: makeId("stream-notice"),
+          role: "notice",
+          content: d.content ?? "",
+          notification_type: d.notification_type as NotificationType | undefined,
+          timestamp: Date.now(),
+        };
+        onUpdateRef.current((prev) => [...prev, noticeEntry]);
+        return;
+      }
+
       // run_start: ensure we have an assistant turn ready
       if (event.type === "run_start" && !turnIdRef.current) {
         ensureReconnectTurn();
@@ -149,8 +169,12 @@ export function useStreamHandler(
       }
 
       // For auto-reconnect: no turn has been created by handleSendMessage.
-      // Create or continue the last assistant turn on the first content event.
-      if (!turnIdRef.current && event.type !== "status") {
+      // Only create a turn for content events that actually render into turns.
+      // task_start/task_done/task_error are background task lifecycle events —
+      // they must NOT trigger turn creation (otherwise they create a spurious empty
+      // turn before the notice event arrives, pushing notice below T2's content).
+      const TURN_CONTENT_EVENTS = new Set(["text", "tool_call", "tool_result", "error", "cancelled", "retry"]);
+      if (!turnIdRef.current && TURN_CONTENT_EVENTS.has(event.type)) {
         ensureReconnectTurn();
       }
 

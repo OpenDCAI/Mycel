@@ -1,4 +1,4 @@
-import { CheckCircle2, XCircle, Clock, Terminal, Bot } from "lucide-react";
+import { CheckCircle2, XCircle, Clock, Terminal } from "lucide-react";
 import type { NoticeMessage, NotificationType } from "../../api";
 
 interface NoticeBubbleProps {
@@ -66,7 +66,6 @@ function AgentDivider({ parsed, inline, onClick }: { parsed: ParsedNotice; inlin
     <span className={`inline-flex items-center gap-1.5 px-2.5 text-[11px] text-gray-400 ${
       isClickable ? "hover:text-gray-600 transition-colors cursor-pointer" : ""
     }`}>
-      <Bot className="w-3 h-3 shrink-0" />
       {statusIcon}
       {parsed.text}
     </span>
@@ -153,7 +152,7 @@ function renderNotice(
 function normalizeStatus(raw: string): ParsedNotice["status"] {
   const lower = raw.toLowerCase().trim();
   if (lower === "completed" || lower === "done" || lower === "success") return "completed";
-  if (lower === "error" || lower === "failed") return "error";
+  if (lower === "error" || lower === "failed" || lower === "cancelled") return "error";
   return "pending";
 }
 
@@ -180,14 +179,20 @@ function unescapeXml(s: string): string {
   return s.replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#x27;/g, "'");
 }
 
+function statusLabel(statusRaw: string, status: ParsedNotice["status"]): string {
+  if (statusRaw === "cancelled") return "cancelled";
+  if (status === "completed") return "done";
+  if (status === "error") return "failed";
+  return statusRaw;
+}
+
 function parseCommand(raw: string): ParsedNotice {
   const statusRaw = raw.match(/<Status>([\s\S]*?)<\/Status>/)?.[1]?.trim() ?? "";
   const commandLine = unescapeXml(raw.match(/<CommandLine>([\s\S]*?)<\/CommandLine>/)?.[1]?.trim() ?? "");
   const description = raw.match(/<Description>([\s\S]*?)<\/Description>/)?.[1]?.trim();
   const status = normalizeStatus(statusRaw);
   const label = description ? unescapeXml(description) : commandLine || "Command";
-  const statusText = status === "completed" ? "done" : status === "error" ? "failed" : statusRaw;
-  return { text: `${label} ${statusText}`, status, commandLine: commandLine || undefined };
+  return { text: `${label} ${statusLabel(statusRaw, status)}`, status, commandLine: commandLine || undefined };
 }
 
 function parseAgent(raw: string): ParsedNotice {
@@ -196,6 +201,5 @@ function parseAgent(raw: string): ParsedNotice {
   const description = raw.match(/<description>([\s\S]*?)<\/description>/)?.[1]?.trim() ?? "";
   const status = normalizeStatus(statusRaw);
   const label = description || `Task ${taskId}`;
-  const statusText = status === "completed" ? "done" : status === "error" ? "failed" : statusRaw;
-  return { text: `${label} ${statusText}`, status, taskId: taskId || undefined };
+  return { text: `${label} ${statusLabel(statusRaw, status)}`, status, taskId: taskId || undefined };
 }
