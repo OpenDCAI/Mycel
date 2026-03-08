@@ -78,6 +78,7 @@ class SandboxConfig(BaseModel):
     daytona: DaytonaConfig = Field(default_factory=DaytonaConfig)
     on_exit: str = "pause"
     init_commands: list[str] = Field(default_factory=list)
+    allowed_paths: list[str] = Field(default_factory=list)
 
     @classmethod
     def load(cls, name: str) -> SandboxConfig:
@@ -102,6 +103,8 @@ class SandboxConfig(BaseModel):
             data["console_url"] = self.console_url
         if self.init_commands:
             data["init_commands"] = self.init_commands
+        if self.allowed_paths:
+            data["allowed_paths"] = self.allowed_paths
         if self.provider in ("agentbay", "docker", "e2b", "daytona"):
             data[self.provider] = getattr(self, self.provider).model_dump()
 

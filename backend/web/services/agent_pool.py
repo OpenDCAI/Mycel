@@ -116,7 +116,17 @@ async def get_or_create_agent(app_obj: FastAPI, sandbox_type: str, thread_id: st
 
         workspace_id = thread_data.get("workspace_id") if thread_data else None
         channel = ensure_thread_files(thread_id, workspace_id=workspace_id)
-        extra_allowed_paths = [channel["files_path"]] if sandbox_type == "local" else None
+        extra_allowed_paths: list[str] = [channel["files_path"]] if sandbox_type == "local" else []
+
+        # Merge user-configured allowed_paths from sandbox config
+        from sandbox.config import SandboxConfig
+        try:
+            sandbox_config = SandboxConfig.load(sandbox_type)
+            extra_allowed_paths.extend(sandbox_config.allowed_paths)
+        except FileNotFoundError:
+            pass
+
+        extra_allowed_paths = extra_allowed_paths or None
 
         # @@@ agent-init-thread - LeonAgent.__init__ uses run_until_complete, must run in thread
         qm = getattr(app_obj.state, "queue_manager", None)
