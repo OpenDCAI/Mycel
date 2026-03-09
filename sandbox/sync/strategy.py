@@ -88,14 +88,13 @@ class NoOpStrategy(SyncStrategy):
 
 
 class IncrementalSyncStrategy(SyncStrategy):
-    def __init__(self, workspace_root: Path, state, manager=None):
+    def __init__(self, workspace_root: Path, state):
         self.workspace_root = workspace_root
         self.state = state
-        self.manager = manager
 
     @retry_with_backoff(max_retries=3, backoff_factor=1)
     def upload(self, thread_id: str, session_id: str, provider, files: list[str] | None = None):
-        workspace = self.manager.get_thread_workspace_path(thread_id) if self.manager else self.workspace_root / thread_id / "files"
+        workspace = self.workspace_root / thread_id / "files"
         if not workspace.exists():
             return
 
@@ -122,14 +121,14 @@ class IncrementalSyncStrategy(SyncStrategy):
         self.state.track_files_batch(thread_id, records)
 
     def download(self, thread_id: str, session_id: str, provider):
-        workspace = self.manager.get_thread_workspace_path(thread_id) if self.manager else self.workspace_root / thread_id / "files"
+        workspace = self.workspace_root / thread_id / "files"
         remote_root = getattr(provider, 'WORKSPACE_ROOT', '/workspace') + '/files'
         _batch_download_tar(session_id, provider, workspace, remote_root)
         self._update_checksums_after_download(thread_id)
 
     def _update_checksums_after_download(self, thread_id: str):
         """Update checksum DB to match downloaded files, preventing redundant re-uploads on resume."""
-        workspace = self.manager.get_thread_workspace_path(thread_id) if self.manager else self.workspace_root / thread_id / "files"
+        workspace = self.workspace_root / thread_id / "files"
         if not workspace.exists():
             return
         from sandbox.sync.state import _calculate_checksum
