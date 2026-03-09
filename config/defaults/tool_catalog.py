@@ -64,8 +64,6 @@ TOOLS: list[ToolDef] = [
     ToolDef(name="TaskStop",    desc="停止后台任务",            group=ToolGroup.AGENT),
     ToolDef(name="Agent",       desc="启动子 Agent 执行任务",   group=ToolGroup.AGENT),
     ToolDef(name="SendMessage", desc="向其他 Agent 发送消息",   group=ToolGroup.AGENT),
-    ToolDef(name="TeamCreate",  desc="创建 Agent 团队",         group=ToolGroup.AGENT, mode=ToolMode.DEFERRED),
-    ToolDef(name="TeamDelete",  desc="解散 Agent 团队",         group=ToolGroup.AGENT, mode=ToolMode.DEFERRED),
     # todo
     ToolDef(name="TaskCreate", desc="创建待办任务",   group=ToolGroup.TODO, mode=ToolMode.DEFERRED),
     ToolDef(name="TaskGet",    desc="获取任务详情",   group=ToolGroup.TODO, mode=ToolMode.DEFERRED),
