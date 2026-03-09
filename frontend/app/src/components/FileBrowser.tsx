@@ -15,6 +15,11 @@ interface FileBrowserProps {
 export function FileBrowser({ threadId }: FileBrowserProps) {
   const { files, loading, error } = useFileList(threadId);
 
+  const handleDownload = (path: string) => {
+    const url = `/api/threads/${threadId}/workspace/download?path=${encodeURIComponent(path)}`;
+    window.open(url, '_blank');
+  };
+
   if (loading) return <div>Loading files...</div>;
   if (error) return <div>Error: {error}</div>;
   if (files.length === 0) return <div>No files uploaded</div>;
@@ -33,7 +38,7 @@ export function FileBrowser({ threadId }: FileBrowserProps) {
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                <DropdownMenuItem>Download</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => handleDownload(file.relative_path)}>Download</DropdownMenuItem>
                 <DropdownMenuItem className="text-red-600">Delete</DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
