@@ -101,15 +101,6 @@ def _resolve_relative_path(base: Path, relative_path: str) -> Path:
     return candidate
 
 
-def _thread_files_dir(thread_id: str, workspace_id: str | None = None) -> Path:
-    if workspace_id:
-        ws = _get_workspace(workspace_id)
-        if ws is None:
-            raise ValueError(f"Workspace not found: {workspace_id}")
-        return Path(ws["host_path"]).resolve()
-    return (THREAD_FILES_ROOT / thread_id / "files").resolve()
-
-
 def _get_workspace_id(thread_id: str) -> str | None:
     """Look up workspace_id from thread config."""
     from backend.web.utils.helpers import load_thread_config
