@@ -9,8 +9,6 @@ from fastapi.responses import FileResponse
 from backend.web.core.dependencies import get_app
 from backend.web.services.agent_pool import resolve_thread_sandbox
 from backend.web.services.workspace_service import (
-    _create_workspace,
-    _get_workspace,
     ensure_thread_files,
     list_files,
     resolve_file,
