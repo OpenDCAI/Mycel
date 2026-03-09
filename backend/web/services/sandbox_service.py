@@ -128,6 +128,7 @@ def init_providers_and_managers() -> tuple[dict, dict]:
                     api_url=config.daytona.api_url,
                     target=config.daytona.target,
                     default_cwd=config.daytona.cwd,
+                    bind_mounts=config.daytona.bind_mounts,
                     provider_name=name,
                 )
         except Exception:
