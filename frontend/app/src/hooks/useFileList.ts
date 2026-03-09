@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 
 interface FileEntry {
   relative_path: string;
@@ -6,13 +6,12 @@ interface FileEntry {
   updated_at: string;
 }
 
-export function useFileList(threadId: string | undefined) {
+export function useFileList(threadId: string) {
   const [files, setFiles] = useState<FileEntry[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchFiles = async () => {
-    if (!threadId) return;
+  const fetchFiles = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
@@ -25,11 +24,11 @@ export function useFileList(threadId: string | undefined) {
     } finally {
       setLoading(false);
     }
-  };
+  }, [threadId]);
 
   useEffect(() => {
     fetchFiles();
-  }, [threadId]);
+  }, [fetchFiles]);
 
   return { files, loading, error, refetch: fetchFiles };
 }
