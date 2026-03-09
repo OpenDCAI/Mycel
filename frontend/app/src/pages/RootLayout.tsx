@@ -1,5 +1,5 @@
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
-import { MessageSquare, Users, ListTodo, Library, Settings, Plus, ChevronLeft, ChevronRight } from "lucide-react";
+import { MessageSquare, Users, ListTodo, Library, Layers, Settings, Plus, ChevronLeft, ChevronRight } from "lucide-react";
 import { useState, useEffect, useCallback, useRef } from "react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import CreateMemberDialog from "@/components/CreateMemberDialog";
@@ -12,6 +12,7 @@ const navItems = [
   { to: "/chat", icon: MessageSquare, label: "消息" },
   { to: "/members", icon: Users, label: "成员" },
   { to: "/tasks", icon: ListTodo, label: "任务" },
+  { to: "/resources", icon: Layers, label: "资源" },
   { to: "/library", icon: Library, label: "能力库" },
 ];
 

@@ -2,12 +2,23 @@
 
 from __future__ import annotations
 
+import platform
+import shlex
+import subprocess
 import threading
 import uuid
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import TYPE_CHECKING
 
-from sandbox.provider import Metrics, ProviderCapability, ProviderExecResult, SandboxProvider, SessionInfo
+from sandbox.provider import (
+    Metrics,
+    ProviderCapability,
+    ProviderExecResult,
+    SandboxProvider,
+    SessionInfo,
+    build_resource_capabilities,
+)
 
 if TYPE_CHECKING:
     from sandbox.lease import SandboxLease
@@ -17,22 +28,36 @@ if TYPE_CHECKING:
 
 @dataclass
 class LocalSessionProvider(SandboxProvider):
+    """Local session provider with direct host access."""
+
+    CATALOG_ENTRY = {"vendor": None, "description": "Direct host access", "provider_type": "local"}
     name: str = "local"
+    CAPABILITY = ProviderCapability(
+        can_pause=True,
+        can_resume=True,
+        can_destroy=True,
+        supports_webhook=False,
+        supports_status_probe=False,
+        eager_instance_binding=True,
+        inspect_visible=False,
+        runtime_kind="local",
+        resource_capabilities=build_resource_capabilities(
+            filesystem=True,
+            terminal=True,
+            metrics=True,
+            screenshot=False,
+            web=False,
+            process=False,
+            hooks=False,
+            snapshot=False,
+        ),
+    )
     default_cwd: str | None = None
     _session_states: dict[str, str] = field(default_factory=dict, init=False, repr=False)
     _state_lock: threading.Lock = field(default_factory=threading.Lock, init=False, repr=False)
 
     def get_capability(self) -> ProviderCapability:
-        return ProviderCapability(
-            can_pause=True,
-            can_resume=True,
-            can_destroy=True,
-            supports_webhook=False,
-            supports_status_probe=False,
-            eager_instance_binding=True,
-            inspect_visible=False,
-            runtime_kind="local",
-        )
+        return self.CAPABILITY
 
     def create_session(self, context_id: str | None = None) -> SessionInfo:
         session_id = context_id or f"local-{uuid.uuid4().hex[:12]}"
@@ -94,19 +119,91 @@ class LocalSessionProvider(SandboxProvider):
         timeout_ms: int = 30000,
         cwd: str | None = None,
     ) -> ProviderExecResult:
-        raise RuntimeError("Local provider execute() is unsupported; use runtime shell execution.")
+        workdir = cwd or self.default_cwd or str(Path.cwd())
+        shell_cmd = f"cd {shlex.quote(workdir)} && {command}"
+        result = subprocess.run(
+            ["/bin/bash", "-lc", shell_cmd],
+            capture_output=True,
+            text=True,
+            timeout=max(timeout_ms / 1000, 0.1),
+            check=False,
+        )
+        output = result.stdout or ""
+        if result.stderr:
+            output = f"{output}\n{result.stderr}" if output else result.stderr
+        return ProviderExecResult(output=output, exit_code=result.returncode)
 
     def read_file(self, session_id: str, path: str) -> str:
-        raise RuntimeError("Local provider read_file() is unsupported.")
+        return Path(path).read_text()
 
     def write_file(self, session_id: str, path: str, content: str) -> str:
-        raise RuntimeError("Local provider write_file() is unsupported.")
+        target = Path(path)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(content)
+        return f"Written: {path}"
 
     def list_dir(self, session_id: str, path: str) -> list[dict]:
-        raise RuntimeError("Local provider list_dir() is unsupported.")
+        target = Path(path)
+        if not target.exists() or not target.is_dir():
+            return []
+        items: list[dict] = []
+        for child in target.iterdir():
+            item_type = "directory" if child.is_dir() else "file"
+            size = child.stat().st_size if child.exists() else 0
+            items.append({"name": child.name, "type": item_type, "size": int(size)})
+        return items
 
     def get_metrics(self, session_id: str) -> Metrics | None:
-        return None
+        if platform.system() != "Darwin":
+            return self.get_metrics_via_commands(session_id)
+
+        # @@@local-metrics-macos - use fast macOS-native commands; avoid 'top' which requires sampling delay.
+        try:
+            r = self.execute(
+                session_id,
+                "sysctl -n hw.ncpu; ps -A -o %cpu | awk 'NR>1{s+=$1} END{printf \"%g\", s}'",
+                timeout_ms=5000,
+            )
+            cpu_percent = None
+            if r.exit_code == 0:
+                lines = r.output.strip().splitlines()
+                ncpu = int(lines[0]) if lines else 1
+                if len(lines) > 1 and lines[1]:
+                    cpu_percent = float(lines[1]) / max(ncpu, 1)
+
+            r = self.execute(session_id, "pagesize; sysctl -n hw.memsize; vm_stat", timeout_ms=5000)
+            memory_used_mb, memory_total_mb = None, None
+            if r.exit_code == 0:
+                lines = r.output.strip().splitlines()
+                page_size = int(lines[0]) if lines else 4096
+                memory_total_mb = int(lines[1]) / 1024 / 1024 if len(lines) > 1 else None
+                active = wired = compressor = 0
+                for line in lines[2:]:
+                    if "Pages active:" in line:
+                        active = int(line.split()[-1].rstrip("."))
+                    elif "Pages wired down:" in line:
+                        wired = int(line.split()[-1].rstrip("."))
+                    elif "Pages occupied by compressor:" in line:
+                        compressor = int(line.split()[-1].rstrip("."))
+                if memory_total_mb is not None:
+                    memory_used_mb = (active + wired + compressor) * page_size / 1024 / 1024
+
+            r = self.execute(session_id, "df -g / | awk 'NR==2{print $2 - $4, $2}'", timeout_ms=5000)
+            disk_used_gb, disk_total_gb = None, None
+            if r.exit_code == 0 and r.output.strip():
+                parts = r.output.strip().split()
+                disk_used_gb = float(parts[0]) if parts else None
+                disk_total_gb = float(parts[1]) if len(parts) > 1 else None
+
+            return Metrics(
+                cpu_percent=cpu_percent,
+                memory_used_mb=memory_used_mb,
+                memory_total_mb=memory_total_mb,
+                disk_used_gb=disk_used_gb,
+                disk_total_gb=disk_total_gb,
+            )
+        except Exception:
+            return None
 
     def create_runtime(self, terminal: AbstractTerminal, lease: SandboxLease) -> PhysicalTerminalRuntime:
         from sandbox.providers.local import LocalPersistentShellRuntime

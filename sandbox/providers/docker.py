@@ -7,6 +7,7 @@ Implements SandboxProvider using local Docker containers.
 from __future__ import annotations
 
 import asyncio
+import os
 import shlex
 import subprocess
 import uuid
@@ -14,7 +15,14 @@ from collections.abc import Callable
 from typing import TYPE_CHECKING
 
 from sandbox.interfaces.executor import ExecuteResult
-from sandbox.provider import Metrics, ProviderCapability, ProviderExecResult, SandboxProvider, SessionInfo
+from sandbox.provider import (
+    Metrics,
+    ProviderCapability,
+    ProviderExecResult,
+    SandboxProvider,
+    SessionInfo,
+    build_resource_capabilities,
+)
 from sandbox.runtime import (
     _RemoteRuntimeBase,
     _SubprocessPtySession,
@@ -41,16 +49,29 @@ class DockerProvider(SandboxProvider):
     - If context_id is provided, uses a named Docker volume for persistence.
     """
 
+    CATALOG_ENTRY = {"vendor": None, "description": "Isolated container sandbox", "provider_type": "container"}
+
     name = "docker"
+    CAPABILITY = ProviderCapability(
+        can_pause=True,
+        can_resume=True,
+        can_destroy=True,
+        supports_webhook=False,
+        runtime_kind="docker_pty",
+        resource_capabilities=build_resource_capabilities(
+            filesystem=True,
+            terminal=True,
+            metrics=True,
+            screenshot=False,
+            web=False,
+            process=False,
+            hooks=False,
+            snapshot=False,
+        ),
+    )
 
     def get_capability(self) -> ProviderCapability:
-        return ProviderCapability(
-            can_pause=True,
-            can_resume=True,
-            can_destroy=True,
-            supports_webhook=False,
-            runtime_kind="docker_pty",
-        )
+        return self.CAPABILITY
 
     def __init__(
         self,
@@ -58,12 +79,14 @@ class DockerProvider(SandboxProvider):
         mount_path: str = "/workspace",
         command_timeout_sec: float = 20.0,
         provider_name: str | None = None,
+        docker_host: str | None = None,
     ):
         if provider_name:
             self.name = provider_name
         self.image = image
         self.mount_path = mount_path
         self.command_timeout_sec = command_timeout_sec
+        self._docker_host = docker_host
         self._sessions: dict[str, str] = {}  # session_id -> container_id
 
     def create_session(self, context_id: str | None = None) -> SessionInfo:
@@ -81,6 +104,8 @@ class DockerProvider(SandboxProvider):
         ]
 
         if context_id:
+            # @@@context-label - also label with context_id so probe can find container via lease_id
+            cmd.extend(["--label", f"leon.context_id={context_id}"])
             volume = context_id
             cmd.extend(["-v", f"{volume}:{self.mount_path}"])
 
@@ -225,36 +250,96 @@ class DockerProvider(SandboxProvider):
         container_id = self._get_container_id(session_id, allow_missing=True)
         if not container_id:
             return None
+
+        # Check state — docker stats only works on running containers.
+        state_result = self._run(
+            ["docker", "inspect", "--format", "{{.State.Status}}", container_id],
+            timeout=self.command_timeout_sec,
+            check=False,
+        )
+        if state_result.returncode != 0:
+            return None
+        container_state = state_result.stdout.strip()
+
+        # @@@docker-paused-disk - paused/stopped containers still hold filesystem space.
+        # docker stats won't work for them, but docker ps --size reads the writable layer without
+        # touching the container process.
+        if container_state != "running":
+            return Metrics(
+                cpu_percent=None,
+                memory_used_mb=None,
+                memory_total_mb=None,
+                disk_used_gb=self._disk_usage_from_ps(container_id),
+                disk_total_gb=None,
+            )
+
+        # CPU and memory RSS from docker stats.
+        # @@@docker-memory-limit - no --memory flag set → MemUsage denominator is host RAM, not a container limit.
+        stats_result = self._run(
+            ["docker", "stats", "--no-stream", "--format", "{{.CPUPerc}}\t{{.MemUsage}}", container_id],
+            timeout=self.command_timeout_sec,
+            check=False,
+        )
+        if stats_result.returncode != 0:
+            return None
+        parts = stats_result.stdout.strip().split("\t")
+        if len(parts) != 2:
+            return None
+        cpu_percent = self._parse_percent(parts[0])
+        mem_used, _ = self._parse_mem_usage(parts[1])  # ignore denominator (host RAM)
+
+        # @@@docker-disk - BlockIO from docker stats is cumulative r/w bytes, not filesystem capacity.
+        # Use df inside container for real disk usage.
+        disk_result = self._run(
+            ["docker", "exec", container_id, "df", "-BG", "/"],
+            timeout=self.command_timeout_sec,
+            check=False,
+        )
+        disk_used_gb = None
+        if disk_result.returncode == 0:
+            lines = disk_result.stdout.strip().splitlines()
+            if len(lines) >= 2:
+                df_parts = lines[1].split()
+                if len(df_parts) >= 3:
+                    try:
+                        disk_used_gb = float(df_parts[2].rstrip("G"))
+                    except ValueError:
+                        pass
+
+        return Metrics(
+            cpu_percent=cpu_percent,
+            memory_used_mb=mem_used,
+            memory_total_mb=None,  # no --memory limit → no meaningful total
+            disk_used_gb=disk_used_gb,
+            disk_total_gb=None,  # @@@docker-disk-no-limit - no --storage-opt, df / total = host disk
+        )
+
+    def _disk_usage_from_ps(self, container_id: str) -> float | None:
+        """Read writable-layer size for any container state via docker ps --size."""
         result = self._run(
-            [
-                "docker",
-                "stats",
-                "--no-stream",
-                "--format",
-                "{{.CPUPerc}}\t{{.MemUsage}}\t{{.NetIO}}\t{{.BlockIO}}",
-                container_id,
-            ],
+            ["docker", "ps", "-a", "--filter", f"id={container_id}", "--format", "{{.Size}}"],
             timeout=self.command_timeout_sec,
             check=False,
         )
         if result.returncode != 0:
             return None
-        parts = result.stdout.strip().split("\t")
-        if len(parts) != 4:
+        size_str = result.stdout.strip()
+        if not size_str:
             return None
-        cpu_percent = self._parse_percent(parts[0])
-        mem_used, mem_total = self._parse_mem_usage(parts[1])
-        net_rx, net_tx = self._parse_io(parts[2])
-        disk_used, disk_total = self._parse_io(parts[3])
-        return Metrics(
-            cpu_percent=cpu_percent,
-            memory_used_mb=mem_used,
-            memory_total_mb=mem_total,
-            disk_used_gb=disk_used / 1024,
-            disk_total_gb=disk_total / 1024,
-            network_rx_kbps=net_rx,
-            network_tx_kbps=net_tx,
-        )
+        # Output: "8.19kB (virtual 159MB)" — first token is writable layer
+        writable = size_str.split(" (")[0]
+        try:
+            if writable.endswith("GB"):
+                return float(writable[:-2])
+            if writable.endswith("MB"):
+                return float(writable[:-2]) / 1024.0
+            if writable.lower().endswith("kb"):
+                return float(writable[:-2]) / (1024.0 * 1024.0)
+            if writable.endswith("B"):
+                return float(writable[:-1]) / (1024.0 ** 3)
+        except ValueError:
+            pass
+        return None
 
     def create_runtime(self, terminal: AbstractTerminal, lease: SandboxLease) -> PhysicalTerminalRuntime:
         return DockerPtyRuntime(terminal, lease, self)
@@ -285,6 +370,11 @@ class DockerProvider(SandboxProvider):
         check: bool = True,
     ) -> subprocess.CompletedProcess[str]:
         effective_timeout = timeout if timeout is not None else self.command_timeout_sec
+        # @@@docker-host - pass DOCKER_HOST when configured to bypass stuck Docker Desktop context
+        env = None
+        if self._docker_host:
+            env = os.environ.copy()
+            env["DOCKER_HOST"] = self._docker_host
         try:
             result = subprocess.run(
                 cmd,
@@ -292,6 +382,7 @@ class DockerProvider(SandboxProvider):
                 text=True,
                 capture_output=True,
                 timeout=effective_timeout,
+                env=env,
             )
         except subprocess.TimeoutExpired as exc:
             raise RuntimeError(f"Docker command timed out after {effective_timeout}s: {' '.join(cmd)}") from exc

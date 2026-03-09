@@ -23,7 +23,7 @@ export default function NewChatPage() {
 
   const startWith = (location.state as any)?.startWith as string | undefined;
   const memberName = (location.state as any)?.memberName as string | undefined;
-  const agentForThread = startWith === "__leon__" ? undefined : memberName;
+  const agentForThread = startWith || undefined;
 
   async function handleSend(message: string, sandbox: string, model: string, workspace?: string) {
     // For local sandbox, check if workspace is set

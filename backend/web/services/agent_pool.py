@@ -74,10 +74,9 @@ async def get_or_create_agent(app_obj: FastAPI, sandbox_type: str, thread_id: st
         prefs = load_preferences()
         model_name = prefs.default_model
 
-    # Resolve agent name: explicit param → thread config
-    agent_name = agent
-    if not agent_name and thread_config and thread_config.agent:
-        agent_name = thread_config.agent
+    # @@@agent-vs-member - thread_config.agent stores a member ID (e.g. "__leon__") for display,
+    # NOT an agent type name ("bash", "general", etc.). Never pass it to create_leon_agent.
+    agent_name = agent  # explicit caller-provided type only; None → default Leon agent
 
     # @@@ agent-init-thread - LeonAgent.__init__ uses run_until_complete, must run in thread
     qm = getattr(app_obj.state, "queue_manager", None)

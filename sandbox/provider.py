@@ -4,12 +4,57 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Mapping
 
 if TYPE_CHECKING:
     from sandbox.runtime import PhysicalTerminalRuntime
     from sandbox.lease import SandboxLease
     from sandbox.terminal import AbstractTerminal
+
+RESOURCE_CAPABILITY_KEYS = (
+    "filesystem",
+    "terminal",
+    "metrics",
+    "screenshot",
+    "web",
+    "process",
+    "hooks",
+    "snapshot",
+)
+
+
+def normalize_resource_capabilities(raw: Mapping[str, object]) -> dict[str, bool]:
+    missing = [key for key in RESOURCE_CAPABILITY_KEYS if key not in raw]
+    extras = [key for key in raw if key not in RESOURCE_CAPABILITY_KEYS]
+    if missing or extras:
+        raise RuntimeError(f"Invalid resource capabilities; missing={missing}, extras={extras}")
+    # @@@capability-shape-contract - monitor/UI rely on fixed capability keys for stable rendering.
+    return {key: bool(raw[key]) for key in RESOURCE_CAPABILITY_KEYS}
+
+
+def build_resource_capabilities(
+    *,
+    filesystem: bool,
+    terminal: bool,
+    metrics: bool,
+    screenshot: bool,
+    web: bool,
+    process: bool,
+    hooks: bool,
+    snapshot: bool,
+) -> dict[str, bool]:
+    return normalize_resource_capabilities(
+        {
+            "filesystem": filesystem,
+            "terminal": terminal,
+            "metrics": metrics,
+            "screenshot": screenshot,
+            "web": web,
+            "process": process,
+            "hooks": hooks,
+            "snapshot": snapshot,
+        }
+    )
 
 
 @dataclass(frozen=True)
@@ -24,6 +69,10 @@ class ProviderCapability:
     eager_instance_binding: bool = False
     inspect_visible: bool = True
     runtime_kind: str = "remote"
+    resource_capabilities: dict[str, bool] = field(default_factory=dict)
+
+    def declared_resource_capabilities(self) -> dict[str, bool]:
+        return normalize_resource_capabilities(self.resource_capabilities)
 
 
 @dataclass
@@ -43,13 +92,13 @@ class ProviderExecResult:
 
 @dataclass
 class Metrics:
-    cpu_percent: float
-    memory_used_mb: float
-    memory_total_mb: float
-    disk_used_gb: float
-    disk_total_gb: float
-    network_rx_kbps: float
-    network_tx_kbps: float
+    cpu_percent: float | None = None
+    memory_used_mb: float | None = None
+    memory_total_mb: float | None = None
+    disk_used_gb: float | None = None
+    disk_total_gb: float | None = None
+    network_rx_kbps: float | None = None
+    network_tx_kbps: float | None = None
 
 
 class SandboxProvider(ABC):
@@ -112,6 +161,42 @@ class SandboxProvider(ABC):
     def create_runtime(self, terminal: AbstractTerminal, lease: SandboxLease) -> PhysicalTerminalRuntime:
         """Create the appropriate PhysicalTerminalRuntime for this provider."""
         pass
+
+    def get_metrics_via_commands(self, session_id: str) -> Metrics | None:
+        """Get metrics by running Linux shell commands inside the sandbox."""
+        try:
+            cpu_result = self.execute(
+                session_id,
+                "top -bn1 | grep 'Cpu(s)' | sed 's/.*, *\\([0-9.]*\\)%* id.*/\\1/' | awk '{print 100 - $1}'",
+                timeout_ms=5000,
+            )
+            cpu_percent = float(cpu_result.output.strip()) if cpu_result.exit_code == 0 and cpu_result.output.strip() else None
+
+            mem_result = self.execute(session_id, "free -m | awk 'NR==2{print $3,$2}'", timeout_ms=5000)
+            memory_used_mb, memory_total_mb = None, None
+            if mem_result.exit_code == 0 and mem_result.output.strip():
+                parts = mem_result.output.strip().split()
+                memory_used_mb = float(parts[0]) if len(parts) > 0 else None
+                memory_total_mb = float(parts[1]) if len(parts) > 1 else None
+
+            disk_result = self.execute(session_id, "df -BG / | awk 'NR==2{gsub(/G/,\"\"); print $3,$2}'", timeout_ms=5000)
+            disk_used_gb, disk_total_gb = None, None
+            if disk_result.exit_code == 0 and disk_result.output.strip():
+                parts = disk_result.output.strip().split()
+                disk_used_gb = float(parts[0]) if len(parts) > 0 else None
+                disk_total_gb = float(parts[1]) if len(parts) > 1 else None
+
+            if any(v is not None for v in [cpu_percent, memory_used_mb, disk_used_gb]):
+                return Metrics(
+                    cpu_percent=cpu_percent,
+                    memory_used_mb=memory_used_mb,
+                    memory_total_mb=memory_total_mb,
+                    disk_used_gb=disk_used_gb,
+                    disk_total_gb=disk_total_gb,
+                )
+            return None
+        except Exception:
+            return None
 
     def screenshot(self, session_id: str) -> bytes | None:
         return None

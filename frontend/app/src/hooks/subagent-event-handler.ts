@@ -1,5 +1,5 @@
-import type { AssistantTurn, ToolStep } from "../api";
-import type { UpdateEntries, StreamEvent } from "./stream-event-handlers";
+import type { AssistantTurn, StreamEvent, ToolStep } from "../api";
+import type { UpdateEntries } from "./stream-event-handlers";
 
 type EventPayload = Record<string, unknown>;
 type SubagentStream = NonNullable<ToolStep["subagent_stream"]>;

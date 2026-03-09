@@ -23,6 +23,7 @@ from sandbox.provider import (
     ProviderExecResult,
     SandboxProvider,
     SessionInfo,
+    build_resource_capabilities,
 )
 
 if TYPE_CHECKING:
@@ -34,17 +35,30 @@ if TYPE_CHECKING:
 class E2BProvider(SandboxProvider):
     """E2B cloud sandbox provider."""
 
+    CATALOG_ENTRY = {"vendor": "E2B", "description": "Cloud sandbox with runtime metrics", "provider_type": "cloud"}
+
     name = "e2b"
+    CAPABILITY = ProviderCapability(
+        can_pause=True,
+        can_resume=True,
+        can_destroy=True,
+        supports_webhook=False,
+        runtime_kind="e2b_pty",
+        resource_capabilities=build_resource_capabilities(
+            filesystem=True,
+            terminal=True,
+            metrics=True,
+            screenshot=False,
+            web=False,
+            process=False,
+            hooks=False,
+            snapshot=True,
+        ),
+    )
     WORKSPACE_ROOT = "/home/user/workspace"
 
     def get_capability(self) -> ProviderCapability:
-        return ProviderCapability(
-            can_pause=True,
-            can_resume=True,
-            can_destroy=True,
-            supports_webhook=False,
-            runtime_kind="e2b_pty",
-        )
+        return self.CAPABILITY
 
     def __init__(
         self,
@@ -202,7 +216,8 @@ class E2BProvider(SandboxProvider):
             return []
 
     def get_metrics(self, session_id: str) -> Metrics | None:
-        return None
+        # E2B is Ubuntu-based; free/top/df are available → delegate to shell command probing.
+        return self.get_metrics_via_commands(session_id)
 
     def snapshot_workspace(self, session_id: str) -> list[dict]:
         """Download all files from /home/user/workspace."""

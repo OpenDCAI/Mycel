@@ -20,11 +20,14 @@ class AgentBayConfig(BaseModel):
     region_id: str = "ap-southeast-1"
     context_path: str = "/home/wuying"
     image_id: str | None = None
+    supports_pause: bool | None = None
+    supports_resume: bool | None = None
 
 
 class DockerConfig(BaseModel):
     image: str = "python:3.12-slim"
     mount_path: str = "/workspace"
+    docker_host: str | None = None  # e.g. "unix:///var/run/docker.sock" to bypass stuck Docker Desktop context
 
 
 class E2BConfig(BaseModel):
@@ -45,6 +48,7 @@ class SandboxConfig(BaseModel):
     provider: str = "local"
     # @@@ config-name-propagation - carries the config file stem (e.g. "daytona_selfhost") through the pipeline
     name: str = "local"
+    console_url: str | None = None
     agentbay: AgentBayConfig = Field(default_factory=AgentBayConfig)
     docker: DockerConfig = Field(default_factory=DockerConfig)
     e2b: E2BConfig = Field(default_factory=E2BConfig)
@@ -71,6 +75,8 @@ class SandboxConfig(BaseModel):
         path.parent.mkdir(parents=True, exist_ok=True)
 
         data = {"provider": self.provider, "on_exit": self.on_exit}
+        if self.console_url:
+            data["console_url"] = self.console_url
         if self.init_commands:
             data["init_commands"] = self.init_commands
         if self.provider in ("agentbay", "docker", "e2b", "daytona"):
@@ -84,3 +90,11 @@ def resolve_sandbox_name(cli_arg: str | None) -> str:
     if cli_arg:
         return cli_arg
     return os.getenv("LEON_SANDBOX", "local")
+
+
+# === REPOSITORY DEPENDENCY INJECTION ===
+
+def get_sandbox_repository():
+    """Factory for sandbox repository implementation."""
+    from storage.providers.sqlite.sandbox_repo import SandboxRepository
+    return SandboxRepository(DEFAULT_DB_PATH)
