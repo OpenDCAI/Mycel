@@ -219,7 +219,12 @@ def delete_file(
 
 
 def cleanup_thread_files(thread_id: str) -> None:
-    """Delete disk files for a thread (per-thread dir only)."""
+    """Delete disk files and workspace entity for a thread."""
+    # Delete file-channel workspace entity from DB
+    workspace_id = _get_workspace_id(thread_id)
+    if workspace_id:
+        _delete_workspace(workspace_id)
+    # Delete disk files
     thread_root = (THREAD_FILES_ROOT / thread_id).resolve()
     if thread_root.exists():
         shutil.rmtree(thread_root)

@@ -78,6 +78,10 @@ class SyncStrategy(ABC):
     def download(self, thread_id: str, session_id: str, provider):
         pass
 
+    def clear_thread(self, thread_id: str):
+        """Remove all sync state for a thread. Default no-op."""
+        pass
+
 
 class NoOpStrategy(SyncStrategy):
     def upload(self, thread_id: str, session_id: str, provider, files: list[str] | None = None):
@@ -125,6 +129,9 @@ class IncrementalSyncStrategy(SyncStrategy):
         remote_root = getattr(provider, 'WORKSPACE_ROOT', '/workspace') + '/files'
         _batch_download_tar(session_id, provider, workspace, remote_root)
         self._update_checksums_after_download(thread_id)
+
+    def clear_thread(self, thread_id: str):
+        self.state.clear_thread(thread_id)
 
     def _update_checksums_after_download(self, thread_id: str):
         """Update checksum DB to match downloaded files, preventing redundant re-uploads on resume."""

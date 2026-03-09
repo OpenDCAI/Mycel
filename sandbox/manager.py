@@ -74,6 +74,17 @@ class SandboxManager:
             workspace_root=_ws_root,
         )
 
+    def resolve_agent_files_dir(self, thread_id: str) -> str:
+        """Path where the agent sees uploaded files for this thread.
+
+        Remote providers: files mounted at {WORKSPACE_ROOT}/files inside the container.
+        Local: agent accesses files directly on the host filesystem.
+        """
+        # @@@agent-files-dir - local has no container isolation, so thread_id is in the path
+        if self.provider_capability.runtime_kind == "local":
+            return str(self.workspace_sync.get_thread_workspace_path(thread_id))
+        return f"{self.provider.WORKSPACE_ROOT}/files"
+
     def _default_terminal_cwd(self) -> str:
         for attr in ("default_cwd", "default_context_path", "mount_path"):
             if hasattr(self.provider, attr):
@@ -139,6 +150,20 @@ class SandboxManager:
         lease = self.lease_store.get(terminals[0].lease_id)
         return bool(lease and lease.provider_name == self.provider.name)
 
+    def sync_uploads(self, thread_id: str, files: list[str] | None = None) -> bool:
+        """Upload files to the active sandbox. Returns False if no active session."""
+        terminal = self._get_active_terminal(thread_id)
+        if not terminal:
+            return False
+        session = self.session_manager.get(thread_id, terminal.terminal_id)
+        if not session:
+            return False
+        instance = session.lease.get_instance()
+        if not instance:
+            return False
+        self.workspace_sync.upload_workspace(thread_id, instance.instance_id, self.provider, files=files)
+        return True
+
     def close(self):
         self.session_manager.close(reason="manager_close")
 
@@ -184,7 +209,23 @@ class SandboxManager:
         # Stamp bind_mounts on lease so lazy creation paths pick them up
         if bind_mounts:
             lease.bind_mounts = bind_mounts
+
+        # @@@workspace-bindmount - configure bind mount before container creation
+        if hasattr(self.provider, 'set_thread_bind_mounts'):
+            workspace_path = self.workspace_sync.get_thread_workspace_path(thread_id)
+            workspace_path.mkdir(parents=True, exist_ok=True)
+            from sandbox.config import MountSpec
+            target = self.resolve_agent_files_dir(thread_id)
+            self.provider.set_thread_bind_mounts(thread_id, [
+                MountSpec(source=str(workspace_path), target=target, read_only=False)
+            ])
+
         self._ensure_bound_instance(lease, bind_mounts=bind_mounts)
+
+        # @@@force-instance-for-sync - Non-eager providers (E2B, Daytona, etc.) create instances lazily.
+        # Force instance creation here so workspace sync can upload files before tools run.
+        if not lease.get_instance():
+            lease.ensure_active_instance(self.provider)
 
         session_id = f"sess-{uuid.uuid4().hex[:12]}"
         session = self.session_manager.create(
@@ -511,6 +552,8 @@ class SandboxManager:
                     self.workspace_sync.download_workspace(thread_id, instance.instance_id, self.provider)
                 except Exception:
                     logger.error("Failed to download workspace before destroy — agent changes are lost", exc_info=True)
+
+        self.workspace_sync.clear_thread(thread_id)
 
         lease_ids = {terminal.lease_id for terminal in terminals}
 

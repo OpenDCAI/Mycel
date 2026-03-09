@@ -59,30 +59,17 @@ async def _prepare_attachment_message(
     Returns (modified_message, message_metadata).
     """
     message_metadata: dict[str, Any] = {"attachments": attachments}
-    workspace_root = "/workspace"
     _, managers = init_providers_and_managers()
     mgr = managers.get(sandbox_type)
-    if mgr:
-        workspace_root = getattr(mgr.provider, "WORKSPACE_ROOT", "/workspace")
-    files_dir = f"{workspace_root}/files"
+    files_dir = mgr.resolve_agent_files_dir(thread_id) if mgr else "/workspace/files"
 
     original_message = message
     sync_ok = True
 
     # @@@sync-new-uploads - push newly uploaded files to already-running sandbox
-    if mgr and hasattr(mgr, 'workspace_sync'):
+    if mgr:
         try:
-            terminal = mgr._get_active_terminal(thread_id)
-            if terminal:
-                session = mgr.session_manager.get(thread_id, terminal.terminal_id)
-                if session:
-                    instance = session.lease.get_instance()
-                    if instance:
-                        await asyncio.to_thread(
-                            mgr.workspace_sync.upload_workspace,
-                            thread_id, instance.instance_id, mgr.provider,
-                            attachments,
-                        )
+            sync_ok = await asyncio.to_thread(mgr.sync_uploads, thread_id, attachments)
         except Exception:
             logger.error("Failed to sync uploads to sandbox", exc_info=True)
             sync_ok = False

@@ -66,6 +66,12 @@ class SyncState:
             ).fetchall()
             return {row[0]: row[1] for row in rows}
 
+    def clear_thread(self, thread_id: str) -> int:
+        """Delete all sync records for a thread."""
+        with connect_sqlite_role(SQLiteDBRole.SANDBOX) as conn:
+            cur = conn.execute("DELETE FROM sync_files WHERE thread_id = ?", (thread_id,))
+            return cur.rowcount
+
     def detect_changes(self, thread_id: str, workspace_path: Path) -> list[str]:
         """Detect files that changed since last sync. Uses batch DB query + mtime heuristic."""
         known = self.get_all_files(thread_id)
