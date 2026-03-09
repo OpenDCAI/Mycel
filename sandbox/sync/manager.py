@@ -32,3 +32,7 @@ class SyncManager:
     def download_workspace(self, thread_id: str, session_id: str, provider):
         """Download workspace files from sandbox."""
         self.strategy.download(thread_id, session_id, provider)
+
+    def clear_thread(self, thread_id: str):
+        """Remove all sync state for a thread."""
+        self.strategy.clear_thread(thread_id)
