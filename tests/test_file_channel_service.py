@@ -99,6 +99,19 @@ def test_upload_rejects_path_escape(_patch_services) -> None:
         )
 
 
+def test_file_channel_workspace_created(_patch_services) -> None:
+    """File channel workspace is created automatically."""
+    _, root_path = _patch_services
+    import backend.web.services.workspace_service as svc
+
+    workspace_id = svc.create_file_channel_workspace("thread-fc")
+    ws = svc._get_workspace(workspace_id)
+
+    assert ws is not None
+    assert "file-channel" in ws["name"]
+    assert str(root_path / "thread-fc" / "files") in ws["host_path"]
+
+
 def test_workspace_shared_across_threads(_patch_services) -> None:
     """Two threads sharing a workspace see each other's files."""
     _, root_path = _patch_services
