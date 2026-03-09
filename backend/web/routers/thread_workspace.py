@@ -208,6 +208,29 @@ async def download_workspace_file(
     return FileResponse(path=str(target), filename=target.name, media_type="application/octet-stream")
 
 
+@router.delete("/files")
+async def delete_workspace_file(
+    thread_id: str,
+    path: str = Query(...),
+    workspace_id: str | None = Query(default=None),
+) -> dict[str, Any]:
+    """Delete a file from workspace."""
+    from backend.web.services.workspace_service import delete_file
+
+    try:
+        await asyncio.to_thread(
+            delete_file,
+            thread_id=thread_id,
+            relative_path=path,
+            workspace_id=workspace_id,
+        )
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
+    except FileNotFoundError as e:
+        raise HTTPException(404, str(e)) from e
+    return {"ok": True, "path": path}
+
+
 @router.get("/channel-files")
 async def list_workspace_channel_files(
     thread_id: str,
