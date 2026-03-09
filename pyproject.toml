@@ -96,7 +96,6 @@ packages = [
     "core.tools.web.searchers",
     "core.agents",
     "core.agents.communication",
-    "core.agents.teams",
     "sandbox",
     "sandbox.interfaces",
     "sandbox.providers",
