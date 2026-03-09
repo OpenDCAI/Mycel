@@ -31,9 +31,6 @@ def _capability_to_dict(capability: ProviderCapability) -> dict[str, Any]:
     }
 
 
-_providers_cache: tuple[dict, dict] | None = None
-
-
 def available_sandbox_types() -> list[dict[str, Any]]:
     """Scan ~/.leon/sandboxes/ for configured providers."""
     providers, _ = init_providers_and_managers()
@@ -75,8 +72,7 @@ def init_providers_and_managers() -> tuple[dict, dict]:
     }
     if not SANDBOXES_DIR.exists():
         managers = {name: SandboxManager(provider=p, db_path=SANDBOX_DB_PATH, workspace_root=THREAD_FILES_ROOT) for name, p in providers.items()}
-        _providers_cache = (providers, managers)
-        return _providers_cache
+        return providers, managers
 
     for config_file in SANDBOXES_DIR.glob("*.json"):
         name = config_file.stem
@@ -138,8 +134,7 @@ def init_providers_and_managers() -> tuple[dict, dict]:
             logger.exception("[sandbox] Failed to load %s", name)
 
     managers = {name: SandboxManager(provider=p, db_path=SANDBOX_DB_PATH, workspace_root=THREAD_FILES_ROOT) for name, p in providers.items()}
-    _providers_cache = (providers, managers)
-    return _providers_cache
+    return providers, managers
 
 
 def load_all_sessions(managers: dict) -> list[dict]:
