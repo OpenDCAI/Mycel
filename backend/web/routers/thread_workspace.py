@@ -163,9 +163,10 @@ async def upload_workspace_file(
     thread_id: str,
     file: UploadFile = File(...),
     path: str | None = Query(default=None),
+    workspace_id: str | None = Query(default=None),
     app: Annotated[Any, Depends(get_app)] = None,
 ) -> dict[str, Any]:
-    """Upload a file into thread-scoped files directory."""
+    """Upload a file into thread file channel."""
     if not file.filename and not path:
         raise HTTPException(400, "Missing upload path: provide query path or filename")
     relative_path = path or file.filename or ""
@@ -178,6 +179,7 @@ async def upload_workspace_file(
             thread_id=thread_id,
             relative_path=relative_path,
             content=content,
+            workspace_id=workspace_id,
         )
 
     except ValueError as e:
@@ -189,6 +191,7 @@ async def upload_workspace_file(
 async def download_workspace_file(
     thread_id: str,
     path: str = Query(...),
+    workspace_id: str | None = Query(default=None),
 ) -> FileResponse:
     """Download a file from thread-scoped files directory."""
     try:
@@ -196,6 +199,7 @@ async def download_workspace_file(
             resolve_file,
             thread_id=thread_id,
             relative_path=path,
+            workspace_id=workspace_id,
         )
     except ValueError as e:
         raise HTTPException(400, str(e)) from e
@@ -207,12 +211,14 @@ async def download_workspace_file(
 @router.get("/channel-files")
 async def list_workspace_channel_files(
     thread_id: str,
+    workspace_id: str | None = Query(default=None),
 ) -> dict[str, Any]:
     """List files under thread-scoped files directory."""
     try:
         entries = await asyncio.to_thread(
             list_files,
             thread_id=thread_id,
+            workspace_id=workspace_id,
         )
     except ValueError as e:
         raise HTTPException(400, str(e)) from e
