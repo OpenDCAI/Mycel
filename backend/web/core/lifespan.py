@@ -10,8 +10,6 @@ from backend.web.services.event_buffer import RunEventBuffer, ThreadEventBuffer
 from backend.web.services.idle_reaper import idle_reaper_loop
 from core.runtime.middleware.queue import MessageQueueManager
 from backend.web.services.resource_cache import resource_overview_refresh_loop
-from core.queue import MessageQueueManager
-from core.task.registry import BackgroundTaskRegistry
 from tui.config import ConfigManager
 
 

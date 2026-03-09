@@ -74,7 +74,7 @@ from core.tools.task.service import TaskService
 from core.tools.tool_search.service import ToolSearchService
 
 # Multi-agent team coordination
-from core.agents.teams.service import TeamService
+# from core.agents.teams.service import TeamService  # @@@teams-removed - module doesn't exist
 from core.tools.web.service import WebService
 
 # Multi-agent services
@@ -980,9 +980,10 @@ class LeonAgent:
         )
 
         # Team coordination (TeamCreate/TeamDelete — deferred mode)
-        self._team_service = TeamService(
-            tool_registry=self._tool_registry,
-        )
+        # @@@teams-removed - TeamService module doesn't exist, feature not implemented
+        # self._team_service = TeamService(
+        #     tool_registry=self._tool_registry,
+        # )
 
         # TaskBoard tools (board management — INLINE, blocked by default via catalog)
         try:
