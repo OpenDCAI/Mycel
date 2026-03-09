@@ -4,18 +4,24 @@ from functools import wraps
 
 logger = logging.getLogger(__name__)
 
-def retry_with_backoff(max_retries=3, backoff_factor=2):
-    def decorator(func):
+
+class retry_with_backoff:
+    """Decorator: retry on exception with exponential backoff."""
+
+    def __init__(self, max_retries: int = 3, backoff_factor: int = 2):
+        self.max_retries = max_retries
+        self.backoff_factor = backoff_factor
+
+    def __call__(self, func):
         @wraps(func)
         def wrapper(*args, **kwargs):
-            for attempt in range(max_retries):
+            for attempt in range(self.max_retries):
                 try:
                     return func(*args, **kwargs)
                 except Exception as e:
-                    if attempt == max_retries - 1:
+                    if attempt == self.max_retries - 1:
                         raise
-                    wait_time = backoff_factor ** attempt
+                    wait_time = self.backoff_factor ** attempt
                     logger.warning(f"Attempt {attempt + 1} failed: {e}. Retrying in {wait_time}s...")
                     time.sleep(wait_time)
         return wrapper
-    return decorator
