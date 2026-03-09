@@ -6,6 +6,7 @@ Implements SandboxProvider using Alibaba Cloud's AgentBay SDK.
 
 from __future__ import annotations
 
+from dataclasses import replace
 from typing import TYPE_CHECKING, Any
 
 from sandbox.provider import (
@@ -14,6 +15,7 @@ from sandbox.provider import (
     ProviderExecResult,
     SandboxProvider,
     SessionInfo,
+    build_resource_capabilities,
 )
 
 if TYPE_CHECKING:
@@ -33,15 +35,28 @@ class AgentBayProvider(SandboxProvider):
     - Rich inspection APIs (metrics, screenshot, processes)
     """
 
+    CATALOG_ENTRY = {"vendor": "Alibaba Cloud", "description": "Remote Linux sandbox", "provider_type": "cloud"}
+
     name = "agentbay"
+    CAPABILITY = ProviderCapability(
+        can_pause=True,
+        can_resume=True,
+        can_destroy=True,
+        supports_webhook=False,
+        resource_capabilities=build_resource_capabilities(
+            filesystem=True,
+            terminal=True,
+            metrics=True,
+            screenshot=True,
+            web=True,
+            process=True,
+            hooks=False,
+            snapshot=False,
+        ),
+    )
 
     def get_capability(self) -> ProviderCapability:
-        return ProviderCapability(
-            can_pause=True,
-            can_resume=True,
-            can_destroy=True,
-            supports_webhook=False,
-        )
+        return self._capability
 
     def __init__(
         self,
@@ -50,6 +65,8 @@ class AgentBayProvider(SandboxProvider):
         default_context_path: str = "/home/wuying",
         image_id: str | None = None,
         provider_name: str | None = None,
+        supports_pause: bool | None = None,
+        supports_resume: bool | None = None,
     ):
         from agentbay import AgentBay
 
@@ -59,6 +76,10 @@ class AgentBayProvider(SandboxProvider):
         self.default_context_path = default_context_path
         self.image_id = image_id
         self._sessions: dict[str, Any] = {}
+        # @@@agentbay-runtime-capability-override - account tier may disable pause/resume; keep provider-type defaults, override per configured instance only.
+        can_pause = self.CAPABILITY.can_pause if supports_pause is None else supports_pause
+        can_resume = self.CAPABILITY.can_resume if supports_resume is None else supports_resume
+        self._capability = replace(self.CAPABILITY, can_pause=can_pause, can_resume=can_resume)
 
     def create_session(self, context_id: str | None = None) -> SessionInfo:
         from agentbay import ContextSync, CreateSessionParams
@@ -198,11 +219,11 @@ class AgentBayProvider(SandboxProvider):
             network_tx_kbps=m.tx_rate_kbyte_per_s,
         )
 
-    def screenshot(self, session_id: str) -> bytes | None:
+    def screenshot(self, session_id: str) -> bytes | str | None:
         session = self._get_session(session_id)
-        result = session.computer.beta_take_screenshot()
+        result = session.computer.screenshot()
         if result.success:
-            return result.data
+            return getattr(result, "data", None)
         return None
 
     def list_processes(self, session_id: str) -> list[dict]:

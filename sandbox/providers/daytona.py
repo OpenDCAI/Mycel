@@ -12,7 +12,14 @@ import logging
 import os
 from typing import TYPE_CHECKING, Any
 
-from sandbox.provider import Metrics, ProviderCapability, ProviderExecResult, SandboxProvider, SessionInfo
+from sandbox.provider import (
+    Metrics,
+    ProviderCapability,
+    ProviderExecResult,
+    SandboxProvider,
+    SessionInfo,
+    build_resource_capabilities,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -25,16 +32,29 @@ if TYPE_CHECKING:
 class DaytonaProvider(SandboxProvider):
     """Daytona cloud sandbox provider."""
 
+    CATALOG_ENTRY = {"vendor": "Daytona", "description": "Managed cloud or self-host Daytona sandboxes", "provider_type": "cloud"}
+
     name = "daytona"
+    CAPABILITY = ProviderCapability(
+        can_pause=True,
+        can_resume=True,
+        can_destroy=True,
+        supports_webhook=True,
+        runtime_kind="daytona_pty",
+        resource_capabilities=build_resource_capabilities(
+            filesystem=True,
+            terminal=True,
+            metrics=True,
+            screenshot=False,
+            web=False,
+            process=False,
+            hooks=True,
+            snapshot=False,
+        ),
+    )
 
     def get_capability(self) -> ProviderCapability:
-        return ProviderCapability(
-            can_pause=True,
-            can_resume=True,
-            can_destroy=True,
-            supports_webhook=True,
-            runtime_kind="daytona_pty",
-        )
+        return self.CAPABILITY
 
     def __init__(
         self,
@@ -168,7 +188,90 @@ class DaytonaProvider(SandboxProvider):
     # ==================== Inspection ====================
 
     def get_metrics(self, session_id: str) -> Metrics | None:
-        return None
+        # @@@daytona-metrics - SDK gives static limits (memory/disk quota).
+        # For running sandboxes: one composite cgroup v2 command collects live CPU + memory (~237ms).
+        # free/top are NOT installed in Daytona containers; df / shows host disk (useless per-container).
+        # memory.max='max' (no cgroup limit) → memory_total from SDK quota only.
+        try:
+            sb = self.client.find_one(session_id)
+            self._sandboxes[session_id] = sb
+        except Exception:
+            return None
+
+        memory_gib = getattr(sb, "memory", None)
+        disk_gib = getattr(sb, "disk", None)
+        memory_total_mb = float(memory_gib) * 1024.0 if memory_gib else None
+        disk_total_gb = float(disk_gib) if disk_gib else None
+
+        is_running = getattr(sb, "state", None) and sb.state.value == "started"
+        if not is_running:
+            return Metrics(memory_total_mb=memory_total_mb, disk_total_gb=disk_total_gb)
+
+        # Two-sample cpu.stat (0.2s window) + memory.current + du workspace in one execute() call.
+        # Separator lets us split the output cleanly without fragile line-counting.
+        # @@@daytona-disk - df / shows HOST disk (not container quota); use du for workspace usage only.
+        cmd = (
+            "cat /sys/fs/cgroup/cpu.stat"
+            "; sleep 0.2"
+            "; echo '---MEM---'"
+            "; cat /sys/fs/cgroup/memory.current"
+            "; echo '---CPU2---'"
+            "; cat /sys/fs/cgroup/cpu.stat"
+            "; echo '---DISK---'"
+            "; du -sm /home/daytona 2>/dev/null || echo 0"
+        )
+        result = self.execute(session_id, cmd, timeout_ms=5000)
+
+        cpu_percent = None
+        memory_used_mb = None
+        disk_used_gb = None
+
+        if result.exit_code == 0 and result.output:
+            try:
+                mem_marker = "---MEM---"
+                cpu2_marker = "---CPU2---"
+                disk_marker = "---DISK---"
+                text = result.output
+                i_mem = text.index(mem_marker)
+                i_cpu2 = text.index(cpu2_marker)
+                i_disk = text.index(disk_marker)
+
+                cpu1_block = text[:i_mem]
+                mem_block = text[i_mem + len(mem_marker):i_cpu2]
+                cpu2_block = text[i_cpu2 + len(cpu2_marker):i_disk]
+                disk_block = text[i_disk + len(disk_marker):]
+
+                def _usage_usec(block: str) -> int | None:
+                    for line in block.splitlines():
+                        if line.startswith("usage_usec"):
+                            return int(line.split()[1])
+                    return None
+
+                u1 = _usage_usec(cpu1_block)
+                u2 = _usage_usec(cpu2_block)
+                if u1 is not None and u2 is not None:
+                    # delta_usec / 200_000us (0.2s window) * 100 → CPU%
+                    cpu_percent = (u2 - u1) / 2_000.0
+
+                mem_str = mem_block.strip()
+                if mem_str.isdigit():
+                    memory_used_mb = int(mem_str) / (1024 ** 2)
+
+                # du -sm outputs "<MB>\t<path>"; parse the first token
+                disk_line = disk_block.strip().splitlines()[0] if disk_block.strip() else ""
+                disk_mb_str = disk_line.split()[0] if disk_line else ""
+                if disk_mb_str.isdigit() and int(disk_mb_str) > 0:
+                    disk_used_gb = int(disk_mb_str) / 1024.0
+            except Exception:
+                pass
+
+        return Metrics(
+            cpu_percent=cpu_percent,
+            memory_used_mb=memory_used_mb,
+            memory_total_mb=memory_total_mb,
+            disk_used_gb=disk_used_gb,
+            disk_total_gb=disk_total_gb,
+        )
 
     # ==================== Internal ====================
 

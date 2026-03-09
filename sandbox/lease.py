@@ -31,6 +31,7 @@ from sandbox.lifecycle import (
 
 if TYPE_CHECKING:
     from sandbox.provider import SandboxProvider
+    from storage.providers.sqlite.sandbox_repository_protocol import SandboxRepositoryProtocol
 
 LEASE_FRESHNESS_TTL_SEC = 3.0
 
@@ -682,6 +683,20 @@ class SQLiteLease(SandboxLease):
                 source="run.create",
                 payload={"created": True, "instance_id": session_info.session_id},
             )
+            from sandbox.resource_snapshot import probe_and_upsert_for_instance
+
+            probe_result = probe_and_upsert_for_instance(
+                lease_id=self.lease_id,
+                provider_name=self.provider_name,
+                observed_state=self.observed_state,
+                probe_mode="create_running",
+                provider=provider,
+                instance_id=session_info.session_id,
+                db_path=self.db_path,
+            )
+            if not probe_result["ok"]:
+                # @@@create-probe-fail-loud - lease creation succeeds, but resource probe failure stays explicit.
+                print(f"[lease:{self.lease_id}] create probe error: {probe_result['error']}")
             if not self._current_instance:
                 raise RuntimeError(f"Lease {self.lease_id}: failed to bind created instance")
             return self._current_instance
@@ -744,8 +759,9 @@ class SQLiteLease(SandboxLease):
 class LeaseStore:
     """Store for managing SandboxLease persistence."""
 
-    def __init__(self, db_path: Path = DEFAULT_DB_PATH):
+    def __init__(self, db_path: Path = DEFAULT_DB_PATH, repository: SandboxRepositoryProtocol | None = None):
         self.db_path = db_path
+        self._repo = repository  # @@@repository-migration - optional injection
         self._ensure_tables()
 
     def _ensure_tables(self) -> None:
@@ -834,6 +850,39 @@ class LeaseStore:
             )
 
     def get(self, lease_id: str) -> SandboxLease | None:
+        # @@@repository-migration - use repository if available
+        if self._repo:
+            row = self._repo.get_lease(lease_id)
+            if not row:
+                return None
+
+            instance = None
+            if row["current_instance_id"]:
+                created_raw = row["instance_created_at"] or datetime.now().isoformat()
+                instance = SandboxInstance(
+                    instance_id=row["current_instance_id"],
+                    provider_name=row["provider_name"],
+                    status=row["observed_state"] or "unknown",
+                    created_at=datetime.fromisoformat(created_raw),
+                )
+
+            return SQLiteLease(
+                lease_id=row["lease_id"],
+                provider_name=row["provider_name"],
+                current_instance=instance,
+                db_path=self.db_path,
+                status=row["status"] or "active",
+                workspace_key=row["workspace_key"],
+                desired_state=row["desired_state"] or "running",
+                observed_state=row["observed_state"] or "detached",
+                version=int(row["version"] or 0),
+                observed_at=datetime.fromisoformat(row["observed_at"]) if row["observed_at"] else None,
+                last_error=row["last_error"],
+                needs_refresh=bool(row["needs_refresh"]),
+                refresh_hint_at=datetime.fromisoformat(row["refresh_hint_at"]) if row["refresh_hint_at"] else None,
+            )
+
+        # Fallback to inline SQL
         with _connect(self.db_path) as conn:
             conn.row_factory = sqlite3.Row
             row = conn.execute(
@@ -889,43 +938,63 @@ class LeaseStore:
     def create(self, lease_id: str, provider_name: str) -> SandboxLease:
         now = datetime.now().isoformat()
 
-        with _connect(self.db_path) as conn:
-            conn.execute(
-                """
-                INSERT INTO sandbox_leases (
-                    lease_id,
-                    provider_name,
-                    desired_state,
-                    observed_state,
-                    instance_status,
-                    version,
-                    observed_at,
-                    last_error,
-                    needs_refresh,
-                    refresh_hint_at,
-                    status,
-                    created_at,
-                    updated_at
-                )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    lease_id,
-                    provider_name,
-                    "running",
-                    "detached",
-                    "detached",
-                    0,
-                    now,
-                    None,
-                    0,
-                    None,
-                    "active",
-                    now,
-                    now,
-                ),
+        # @@@repository-migration - use repository if available
+        if self._repo:
+            self._repo.upsert_lease(
+                lease_id=lease_id,
+                provider_name=provider_name,
+                workspace_key=None,
+                current_instance_id=None,
+                instance_created_at=None,
+                desired_state="running",
+                observed_state="detached",
+                version=0,
+                observed_at=now,
+                last_error=None,
+                needs_refresh=0,
+                refresh_hint_at=None,
+                status="active",
+                created_at=now,
+                updated_at=now,
             )
-            conn.commit()
+        else:
+            with _connect(self.db_path) as conn:
+                conn.execute(
+                    """
+                    INSERT INTO sandbox_leases (
+                        lease_id,
+                        provider_name,
+                        desired_state,
+                        observed_state,
+                        instance_status,
+                        version,
+                        observed_at,
+                        last_error,
+                        needs_refresh,
+                        refresh_hint_at,
+                        status,
+                        created_at,
+                        updated_at
+                    )
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        lease_id,
+                        provider_name,
+                        "running",
+                        "detached",
+                        "detached",
+                        0,
+                        now,
+                        None,
+                        0,
+                        None,
+                        "active",
+                        now,
+                        now,
+                    ),
+                )
+                conn.commit()
 
         return SQLiteLease(
             lease_id=lease_id,
@@ -943,6 +1012,14 @@ class LeaseStore:
         )
 
     def find_by_instance(self, *, provider_name: str, instance_id: str) -> SandboxLease | None:
+        # @@@repository-migration - use repository if available
+        if self._repo:
+            row = self._repo.find_lease_by_instance(provider_name, instance_id)
+            if not row:
+                return None
+            return self.get(row["lease_id"])
+
+        # Fallback to inline SQL
         with _connect(self.db_path) as conn:
             conn.row_factory = sqlite3.Row
             row = conn.execute(
@@ -1070,13 +1147,22 @@ class LeaseStore:
             return cursor.rowcount > 0
 
     def delete(self, lease_id: str) -> None:
-        with _connect(self.db_path) as conn:
-            conn.execute("DELETE FROM sandbox_leases WHERE lease_id = ?", (lease_id,))
-            conn.commit()
+        # @@@repository-migration - use repository if available
+        if self._repo:
+            self._repo.delete_lease(lease_id)
+        else:
+            with _connect(self.db_path) as conn:
+                conn.execute("DELETE FROM sandbox_leases WHERE lease_id = ?", (lease_id,))
+                conn.commit()
         with SQLiteLease._lock_guard:
             SQLiteLease._lease_locks.pop(lease_id, None)
 
     def list_all(self) -> list[dict]:
+        # @@@repository-migration - use repository if available
+        if self._repo:
+            return self._repo.list_all_leases()
+
+        # Fallback to inline SQL
         with _connect(self.db_path) as conn:
             conn.row_factory = sqlite3.Row
             rows = conn.execute(
@@ -1096,6 +1182,11 @@ class LeaseStore:
             return [dict(row) for row in rows]
 
     def list_by_provider(self, provider_name: str) -> list[dict]:
+        # @@@repository-migration - use repository if available
+        if self._repo:
+            return self._repo.list_leases_by_provider(provider_name)
+
+        # Fallback to inline SQL
         with _connect(self.db_path) as conn:
             conn.row_factory = sqlite3.Row
             rows = conn.execute(

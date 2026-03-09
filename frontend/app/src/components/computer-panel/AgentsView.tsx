@@ -60,6 +60,29 @@ export function AgentsView({ steps }: AgentsViewProps) {
         }
       }
     }
+
+    if (!stream) return items;
+
+    // 2) Append live tool calls from SSE that polling hasn't caught up to
+    for (const tc of stream.tool_calls) {
+      if (knownToolIds.has(tc.id)) continue;
+      items.push({
+        type: "tool",
+        step: {
+          id: tc.id, name: tc.name, args: tc.args,
+          status: tc.status === "done" ? "done" : "calling",
+          result: tc.result,
+          timestamp: Date.now(),
+        },
+        turnId: "live",
+      });
+    }
+
+    // 3) If stream has text but entries are empty (first poll pending), show it
+    if (stream.text.trim() && !items.some((i) => i.type === "text")) {
+      items.push({ type: "text", content: stream.text, turnId: "live" });
+    }
+
     return items;
   }, [isRunning, liveFlowItems, entries]);
 
@@ -227,5 +250,4 @@ function AgentPromptSection({ args }: { args: unknown }) {
     </div>
   );
 }
-
 

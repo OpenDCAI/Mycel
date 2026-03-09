@@ -1,13 +1,8 @@
 import { ChevronRight, Folder, Home } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { Button } from "./ui/button";
 import { ScrollArea } from "./ui/scroll-area";
-
-interface DirectoryItem {
-  name: string;
-  path: string;
-  is_dir: boolean;
-}
+import { useDirectoryBrowser } from "../hooks/use-directory-browser";
 
 interface FilesystemBrowserProps {
   onSelect: (path: string) => void;
@@ -18,48 +13,16 @@ export default function FilesystemBrowser({
   onSelect,
   initialPath = "~",
 }: FilesystemBrowserProps) {
-  const [currentPath, setCurrentPath] = useState(initialPath);
-  const [parentPath, setParentPath] = useState<string | null>(null);
-  const [items, setItems] = useState<DirectoryItem[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
+  const buildUrl = (path: string) =>
+    `/api/settings/browse?path=${encodeURIComponent(path)}`;
 
-  async function loadDirectory(path: string) {
-    setLoading(true);
-    setError("");
-
-    try {
-      const response = await fetch(
-        `/api/settings/browse?path=${encodeURIComponent(path)}`
-      );
-
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.detail || "加载失败");
-      }
-
-      const data = await response.json();
-      setCurrentPath(data.current_path);
-      setParentPath(data.parent_path);
-      setItems(data.items);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "加载失败");
-    } finally {
-      setLoading(false);
-    }
-  }
+  const { currentPath, parentPath, items, loading, error, loadPath } =
+    useDirectoryBrowser(buildUrl, initialPath);
 
   useEffect(() => {
-    void loadDirectory(initialPath);
+    void loadPath(initialPath);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialPath]);
-
-  function handleNavigate(path: string) {
-    void loadDirectory(path);
-  }
-
-  function handleSelect() {
-    onSelect(currentPath);
-  }
 
   return (
     <div className="space-y-3">
@@ -68,7 +31,7 @@ export default function FilesystemBrowser({
         <Button
           variant="outline"
           size="sm"
-          onClick={() => handleNavigate("~")}
+          onClick={() => loadPath("~")}
           title="返回主目录"
         >
           <Home className="h-3.5 w-3.5" />
@@ -81,7 +44,7 @@ export default function FilesystemBrowser({
       {/* Parent Directory */}
       {parentPath && (
         <button
-          onClick={() => handleNavigate(parentPath)}
+          onClick={() => loadPath(parentPath)}
           className="w-full flex items-center gap-2 px-2 py-1.5 text-sm hover:bg-accent rounded-md"
         >
           <Folder className="h-4 w-4 text-muted-foreground" />
@@ -113,7 +76,7 @@ export default function FilesystemBrowser({
             items.map((item) => (
               <button
                 key={item.path}
-                onClick={() => handleNavigate(item.path)}
+                onClick={() => loadPath(item.path)}
                 className="w-full flex items-center gap-2 px-2 py-1.5 text-sm hover:bg-accent rounded-md"
               >
                 <Folder className="h-4 w-4 text-muted-foreground" />
@@ -125,7 +88,7 @@ export default function FilesystemBrowser({
       </ScrollArea>
 
       {/* Select Button */}
-      <Button onClick={handleSelect} className="w-full" disabled={loading}>
+      <Button onClick={() => onSelect(currentPath)} className="w-full" disabled={loading}>
         选择此目录
       </Button>
     </div>

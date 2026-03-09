@@ -8,6 +8,7 @@ import MembersPage from './pages/MembersPage';
 import AgentDetailPage from './pages/AgentDetailPage';
 import TasksPage from './pages/TasksPage';
 import LibraryPage from './pages/LibraryPage';
+import ResourcesPage from './pages/ResourcesPage';
 
 export const router = createBrowserRouter([
   {
@@ -47,6 +48,10 @@ export const router = createBrowserRouter([
       {
         path: 'tasks',
         element: <TasksPage />,
+      },
+      {
+        path: 'resources',
+        element: <ResourcesPage />,
       },
       {
         path: 'library',

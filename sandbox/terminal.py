@@ -23,7 +23,7 @@ from storage.providers.sqlite.kernel import connect_sqlite
 from sandbox.config import DEFAULT_DB_PATH
 
 if TYPE_CHECKING:
-    pass
+    from storage.providers.sqlite.sandbox_repository_protocol import SandboxRepositoryProtocol
 
 REQUIRED_ABSTRACT_TERMINAL_COLUMNS = {
     "terminal_id",
@@ -172,8 +172,9 @@ class TerminalStore:
     Handles CRUD operations for terminals in the database.
     """
 
-    def __init__(self, db_path: Path = DEFAULT_DB_PATH):
+    def __init__(self, db_path: Path = DEFAULT_DB_PATH, repository: SandboxRepositoryProtocol | None = None):
         self.db_path = db_path
+        self._repo = repository  # @@@repository-migration - optional injection
         self._ensure_tables()
 
     def _ensure_tables(self) -> None:
@@ -257,7 +258,12 @@ class TerminalStore:
             db_path=self.db_path,
         )
 
-    def _get_pointer_row(self, thread_id: str) -> sqlite3.Row | None:
+    def _get_pointer_row(self, thread_id: str) -> sqlite3.Row | dict | None:
+        # @@@repository-migration - use repository if available
+        if self._repo:
+            return self._repo.get_terminal_pointer(thread_id)
+
+        # Fallback to inline SQL
         with _connect(self.db_path) as conn:
             conn.row_factory = sqlite3.Row
             return conn.execute(
@@ -304,6 +310,12 @@ class TerminalStore:
         return self.get_by_id(str(pointer["default_terminal_id"]))
 
     def list_by_thread(self, thread_id: str) -> list[AbstractTerminal]:
+        # @@@repository-migration - use repository if available
+        if self._repo:
+            rows = self._repo.list_terminals_by_thread(thread_id)
+            return [self._row_to_terminal(row) for row in rows]  # type: ignore
+
+        # Fallback to inline SQL
         with _connect(self.db_path) as conn:
             conn.row_factory = sqlite3.Row
             rows = conn.execute(
@@ -319,6 +331,14 @@ class TerminalStore:
 
     def get_by_id(self, terminal_id: str) -> AbstractTerminal | None:
         """Get terminal by terminal_id."""
+        # @@@repository-migration - use repository if available
+        if self._repo:
+            row = self._repo.get_terminal(terminal_id)
+            if not row:
+                return None
+            return self._row_to_terminal(row)  # type: ignore - dict works like Row
+
+        # Fallback to inline SQL
         with _connect(self.db_path) as conn:
             conn.row_factory = sqlite3.Row
             row = conn.execute(
@@ -337,6 +357,24 @@ class TerminalStore:
 
     def set_active(self, thread_id: str, terminal_id: str) -> None:
         now = datetime.now().isoformat()
+
+        # @@@repository-migration - use repository if available
+        if self._repo:
+            terminal = self._repo.get_terminal(terminal_id)
+            if terminal is None:
+                raise RuntimeError(f"Terminal {terminal_id} not found")
+            if terminal["thread_id"] != thread_id:
+                raise RuntimeError(
+                    f"Terminal {terminal_id} belongs to thread {terminal['thread_id']}, not thread {thread_id}"
+                )
+            pointer = self._repo.get_terminal_pointer(thread_id)
+            if pointer is None:
+                self._repo.upsert_terminal_pointer(thread_id, terminal_id, terminal_id, now)
+            else:
+                self._repo.update_terminal_pointer_active(thread_id, terminal_id, now)
+            return
+
+        # Fallback to inline SQL
         with _connect(self.db_path) as conn:
             conn.row_factory = sqlite3.Row
             row = conn.execute(
@@ -417,6 +455,32 @@ class TerminalStore:
 
     def delete(self, terminal_id: str) -> None:
         """Delete terminal."""
+        # @@@repository-migration - use repository if available
+        if self._repo:
+            terminal = self._repo.get_terminal(terminal_id)
+            if terminal is None:
+                return
+            thread_id = str(terminal["thread_id"])
+
+            self._repo.delete_terminal(terminal_id)
+
+            pointer = self._repo.get_terminal_pointer(thread_id)
+            if pointer:
+                remaining = self._repo.list_terminals_by_thread(thread_id)
+                if not remaining:
+                    self._repo.delete_terminal_pointer(thread_id)
+                else:
+                    next_terminal_id = remaining[0]["terminal_id"]
+                    active_id = pointer["active_terminal_id"]
+                    default_id = pointer["default_terminal_id"]
+                    new_active = next_terminal_id if active_id == terminal_id else active_id
+                    new_default = next_terminal_id if default_id == terminal_id else default_id
+                    self._repo.upsert_terminal_pointer(
+                        thread_id, new_active, new_default, datetime.now().isoformat()
+                    )
+            return
+
+        # Fallback to inline SQL
         with _connect(self.db_path) as conn:
             conn.row_factory = sqlite3.Row
             terminal = conn.execute(

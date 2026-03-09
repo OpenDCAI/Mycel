@@ -134,8 +134,8 @@ async def get_settings() -> UserSettings:
 
 
 @router.get("/browse")
-async def browse_filesystem(path: str = Query(default="~")) -> dict[str, Any]:
-    """Browse filesystem directories."""
+async def browse_filesystem(path: str = Query(default="~"), include_files: bool = Query(default=False)) -> dict[str, Any]:
+    """Browse filesystem directories (and optionally files)."""
     try:
         target_path = Path(path).expanduser().resolve()
         if not target_path.exists():
@@ -146,14 +146,36 @@ async def browse_filesystem(path: str = Query(default="~")) -> dict[str, Any]:
         parent = str(target_path.parent) if target_path.parent != target_path else None
         items: list[DirectoryItem] = []
         try:
-            for item in sorted(target_path.iterdir(), key=lambda x: x.name.lower()):
-                if item.is_dir() and not item.name.startswith("."):
-                    items.append(DirectoryItem(name=item.name, path=str(item), is_dir=True))
+            for item in sorted(target_path.iterdir(), key=lambda x: (not x.is_dir(), x.name.lower())):
+                if item.name.startswith("."):
+                    continue
+                if item.is_dir() or include_files:
+                    items.append(DirectoryItem(name=item.name, path=str(item), is_dir=item.is_dir()))
         except PermissionError:
             pass
 
         return {"current_path": str(target_path), "parent_path": parent, "items": [item.model_dump() for item in items]}
     # @@@http_passthrough - preserve explicit user-facing status codes from validation branches
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+@router.get("/read")
+async def read_local_file(path: str = Query(...)) -> dict[str, Any]:
+    """Read a local file's content (for SandboxBrowser in resources page)."""
+    _READ_MAX_BYTES = 100 * 1024
+    try:
+        target = Path(path).expanduser().resolve()
+        if not target.exists():
+            raise HTTPException(status_code=404, detail="File not found")
+        if target.is_dir():
+            raise HTTPException(status_code=400, detail="Path is a directory")
+        raw = target.read_bytes()
+        truncated = len(raw) > _READ_MAX_BYTES
+        content = raw[:_READ_MAX_BYTES].decode(errors="replace")
+        return {"path": str(target), "content": content, "truncated": truncated}
     except HTTPException:
         raise
     except Exception as e:

@@ -9,6 +9,9 @@ from fastapi import FastAPI
 from backend.web.services.event_buffer import RunEventBuffer, ThreadEventBuffer
 from backend.web.services.idle_reaper import idle_reaper_loop
 from core.runtime.middleware.queue import MessageQueueManager
+from backend.web.services.resource_cache import resource_overview_refresh_loop
+from core.queue import MessageQueueManager
+from core.task.registry import BackgroundTaskRegistry
 from tui.config import ConfigManager
 
 
@@ -24,8 +27,8 @@ async def lifespan(app: FastAPI):
 
     init_event_store()
 
-    from backend.web.services.member_service import ensure_members_dir
     from backend.web.services.library_service import ensure_library_dir
+    from backend.web.services.member_service import ensure_members_dir
 
     ensure_members_dir()
     ensure_library_dir()
@@ -43,10 +46,14 @@ async def lifespan(app: FastAPI):
     app.state.idle_reaper_task: asyncio.Task | None = None
     app.state.cron_service = None
     app.state._event_loop = asyncio.get_running_loop()
+    app.state.monitor_resources_task: asyncio.Task | None = None
 
     try:
         # Start idle reaper background task
         app.state.idle_reaper_task = asyncio.create_task(idle_reaper_loop(app))
+
+        # Start resource overview refresh loop
+        app.state.monitor_resources_task = asyncio.create_task(resource_overview_refresh_loop())
 
         # Start cron scheduler
         from backend.web.services.cron_service import CronService
@@ -57,18 +64,19 @@ async def lifespan(app: FastAPI):
 
         yield
     finally:
+        # @@@background-task-shutdown-order - cancel monitor/reaper before provider cleanup.
+        for task_name in ("monitor_resources_task", "idle_reaper_task"):
+            task = getattr(app.state, task_name, None)
+            if task:
+                task.cancel()
+                try:
+                    await task
+                except asyncio.CancelledError:
+                    pass
+
         # Cleanup: stop cron scheduler
         if app.state.cron_service:
             await app.state.cron_service.stop()
-
-        # Cleanup: stop idle reaper
-        task = app.state.idle_reaper_task
-        if task:
-            task.cancel()
-            try:
-                await task
-            except asyncio.CancelledError:
-                pass
 
         # Cleanup: close all agents
         for agent in app.state.agent_pool.values():
