@@ -78,6 +78,14 @@ def _delete_workspace(workspace_id: str) -> bool:
         repo.close()
 
 
+def create_file_channel_workspace(thread_id: str) -> str:
+    """Create file channel workspace for thread. Returns workspace_id."""
+    host_path = THREAD_FILES_ROOT / thread_id / "files"
+    host_path.mkdir(parents=True, exist_ok=True)
+    ws = _create_workspace(str(host_path), name=f"file-channel-{thread_id}")
+    return ws["workspace_id"]
+
+
 # ---------------------------------------------------------------------------
 # Thread-scoped file operations (merged from file_channel_service)
 # ---------------------------------------------------------------------------
