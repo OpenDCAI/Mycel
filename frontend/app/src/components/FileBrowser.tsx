@@ -28,7 +28,7 @@ export function FileBrowser({ threadId }: FileBrowserProps) {
             <span className="text-sm text-gray-500">{(file.size_bytes / 1024).toFixed(1)} KB</span>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="sm">
+                <Button variant="ghost" size="sm" aria-label="File actions">
                   <MoreVertical className="h-4 w-4" />
                 </Button>
               </DropdownMenuTrigger>
