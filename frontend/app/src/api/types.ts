@@ -294,7 +294,6 @@ export interface WorkspaceChannelFilesResult {
 
 export interface WorkspaceUploadResult {
   thread_id: string;
-  channel: string;
   relative_path: string;
   absolute_path: string;
   size_bytes: number;
