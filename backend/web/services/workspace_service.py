@@ -118,18 +118,39 @@ def _get_workspace_id(thread_id: str) -> str | None:
     return tc.workspace_id if tc else None
 
 
-def _get_files_dir(thread_id: str) -> Path:
-    """Derive files directory from thread config."""
-    workspace_id = _get_workspace_id(thread_id)
-    d = _thread_files_dir(thread_id, workspace_id)
+def _get_files_dir(thread_id: str, workspace_id: str | None = None) -> Path:
+    """Derive files directory. If workspace_id not provided, use thread's file channel workspace."""
+    if not workspace_id:
+        workspace_id = _get_workspace_id(thread_id)
+    if not workspace_id:
+        raise ValueError(f"No workspace found for thread {thread_id}")
+
+    ws = _get_workspace(workspace_id)
+    if not ws:
+        raise ValueError(f"Workspace not found: {workspace_id}")
+
+    d = Path(ws["host_path"]).resolve()
     if not d.is_dir():
-        raise ValueError(f"File directory missing for thread {thread_id}")
+        raise ValueError(f"Workspace directory missing: {d}")
     return d
 
 
 def ensure_thread_files(thread_id: str, workspace_id: str | None = None) -> dict[str, Any]:
     """Ensure files directory exists. Returns channel info."""
-    files_dir = _thread_files_dir(thread_id, workspace_id)
+    # If no workspace_id provided, check thread config or create file channel workspace
+    if not workspace_id:
+        workspace_id = _get_workspace_id(thread_id)
+        if not workspace_id:
+            workspace_id = create_file_channel_workspace(thread_id)
+            # Save to thread config
+            from backend.web.utils.helpers import save_thread_config
+            save_thread_config(thread_id, workspace_id=workspace_id)
+
+    ws = _get_workspace(workspace_id)
+    if not ws:
+        raise ValueError(f"Workspace not found: {workspace_id}")
+
+    files_dir = Path(ws["host_path"]).resolve()
     files_dir.mkdir(parents=True, exist_ok=True)
     return {
         "thread_id": thread_id,
@@ -143,8 +164,9 @@ def save_file(
     thread_id: str,
     relative_path: str,
     content: bytes,
+    workspace_id: str | None = None,
 ) -> dict[str, Any]:
-    base = _get_files_dir(thread_id)
+    base = _get_files_dir(thread_id, workspace_id)
     target = _resolve_relative_path(base, relative_path)
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_bytes(content)
@@ -162,8 +184,9 @@ def resolve_file(
     *,
     thread_id: str,
     relative_path: str,
+    workspace_id: str | None = None,
 ) -> Path:
-    base = _get_files_dir(thread_id)
+    base = _get_files_dir(thread_id, workspace_id)
     target = _resolve_relative_path(base, relative_path)
     if not target.exists() or not target.is_file():
         raise FileNotFoundError(f"File not found: {relative_path}")
@@ -173,8 +196,9 @@ def resolve_file(
 def list_files(
     *,
     thread_id: str,
+    workspace_id: str | None = None,
 ) -> list[dict[str, Any]]:
-    base = _get_files_dir(thread_id)
+    base = _get_files_dir(thread_id, workspace_id)
     entries: list[dict[str, Any]] = []
     for item in sorted(base.rglob("*")):
         if not item.is_file():
