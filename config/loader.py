@@ -123,6 +123,9 @@ class AgentLoader:
         if self.workspace_root:
             self._load_agents_from_dir(self.workspace_root / ".leon" / "agents")
 
+        # 4. Members (~/.leon/members/<id>/agent.md) — highest priority
+        self._load_agents_from_members(Path.home() / ".leon" / "members")
+
         return self._agents
 
     def _load_agents_from_dir(self, dir_path: Path) -> None:
@@ -132,6 +135,21 @@ class AgentLoader:
         for md_file in dir_path.glob("*.md"):
             config = self.parse_agent_file(md_file)
             if config:
+                self._agents[config.name] = config
+
+    def _load_agents_from_members(self, members_dir: Path) -> None:
+        """Load members as agents — each member lives in members/<id>/agent.md."""
+        if not members_dir.exists():
+            return
+        for member_dir in sorted(members_dir.iterdir()):
+            if not member_dir.is_dir():
+                continue
+            agent_md = member_dir / "agent.md"
+            if not agent_md.exists():
+                continue
+            config = self.parse_agent_file(agent_md)
+            if config:
+                # source_dir is already set to member_dir by parse_agent_file
                 self._agents[config.name] = config
 
     @staticmethod

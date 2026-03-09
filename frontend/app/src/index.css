@@ -242,6 +242,16 @@ button:focus-visible,
   pointer-events: none;
 }
 
+/* Rolling number animation (slot-machine style) */
+@keyframes numRollIn {
+  from { transform: translateY(110%); opacity: 0; }
+  to   { transform: translateY(0);    opacity: 1; }
+}
+@keyframes numRollOut {
+  from { transform: translateY(0);     opacity: 1; }
+  to   { transform: translateY(-110%); opacity: 0; }
+}
+
 /* Markdown content */
 /* Utility classes */
 @layer components {

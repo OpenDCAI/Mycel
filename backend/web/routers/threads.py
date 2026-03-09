@@ -14,7 +14,6 @@ from backend.web.models.requests import (
     CreateThreadRequest,
     RunRequest,
     SendMessageRequest,
-    TaskAgentRequest,
 )
 from backend.web.services.agent_pool import get_or_create_agent, resolve_thread_sandbox
 from backend.web.services.event_buffer import ThreadEventBuffer
@@ -24,7 +23,6 @@ from backend.web.services.streaming_service import (
     observe_run_events,
     observe_thread_events,
     start_agent_run,
-    start_task_agent_run,
 )
 from backend.web.services.thread_service import list_threads_from_db
 from backend.web.services.thread_state_service import (
@@ -37,8 +35,8 @@ from backend.web.utils.helpers import delete_thread_in_db
 from backend.web.utils.serializers import serialize_message
 
 logger = logging.getLogger(__name__)
-from core.monitor import AgentState
-from core.queue import format_steer_reminder
+from core.runtime.middleware.monitor import AgentState
+from core.runtime.middleware.queue import format_steer_reminder
 from sandbox.thread_context import set_current_thread_id
 
 router = APIRouter(prefix="/api/threads", tags=["threads"])
@@ -214,12 +212,90 @@ async def get_queue(
     return {"messages": messages, "thread_id": thread_id}
 
 
+@router.get("/{thread_id}/history")
+async def get_thread_history(
+    thread_id: str,
+    limit: int = 20,
+    truncate: int = 300,
+    app: Annotated[Any, Depends(get_app)] = None,
+) -> dict[str, Any]:
+    """Compact conversation history for debugging — no raw LangChain noise.
+
+    Args:
+        limit: Max messages to return, from the end (default 20)
+        truncate: Truncate content to this many chars (default 300, 0 = no limit)
+    """
+    from backend.web.utils.serializers import extract_text_content
+
+    sandbox_type = resolve_thread_sandbox(app, thread_id)
+    agent = await get_or_create_agent(app, sandbox_type, thread_id=thread_id)
+    set_current_thread_id(thread_id)
+    config = {"configurable": {"thread_id": thread_id}}
+    state = await agent.agent.aget_state(config)
+
+    values = getattr(state, "values", {}) if state else {}
+    all_messages = values.get("messages", []) if isinstance(values, dict) else []
+    total = len(all_messages)
+    messages = all_messages[-limit:] if limit > 0 else all_messages
+
+    def _trunc(text: str) -> str:
+        if truncate > 0 and len(text) > truncate:
+            return text[:truncate] + f"…[+{len(text) - truncate}]"
+        return text
+
+    def _expand(msg: Any) -> list[dict[str, Any]]:
+        """Expand one LangChain message into 1-N flat entries.
+
+        AIMessage with tool_calls → N tool_call entries (one per call),
+        then the text content (if any) as an assistant entry.
+        ToolMessage → one tool_result entry.
+        HumanMessage → one human entry.
+        """
+        cls = msg.__class__.__name__
+        if cls == "HumanMessage":
+            metadata = getattr(msg, "metadata", {}) or {}
+            if metadata.get("source") == "system":
+                return [{"role": "notification", "text": _trunc(extract_text_content(msg.content))}]
+            return [{"role": "human", "text": _trunc(extract_text_content(msg.content))}]
+        if cls == "AIMessage":
+            entries: list[dict] = []
+            for c in getattr(msg, "tool_calls", []):
+                entries.append({
+                    "role": "tool_call",
+                    "tool": c["name"],
+                    "args": str(c.get("args", {}))[:200],
+                })
+            text = extract_text_content(msg.content)
+            if text:
+                entries.append({"role": "assistant", "text": _trunc(text)})
+            return entries or [{"role": "assistant", "text": ""}]
+        if cls == "ToolMessage":
+            return [{"role": "tool_result", "tool": getattr(msg, "name", "?"), "text": _trunc(extract_text_content(msg.content))}]
+        return [{"role": "system", "text": _trunc(extract_text_content(msg.content))}]
+
+    flat: list[dict] = []
+    for m in messages:
+        flat.extend(_expand(m))
+
+    return {
+        "thread_id": thread_id,
+        "total": total,
+        "showing": len(messages),
+        "messages": flat,
+    }
+
+
 @router.get("/{thread_id}/runtime")
 async def get_thread_runtime(
     thread_id: str,
+    stream: bool = False,
     app: Annotated[Any, Depends(get_app)] = None,
 ) -> dict[str, Any]:
-    """Get runtime status for a thread."""
+    """Get runtime status for a thread.
+
+    - stream=false (default): compact {state, model, tokens, cost, calls, ctx_percent, last_seq}
+    - stream=true: full verbose data including flags, error details, cache tokens, context breakdown
+    """
     from backend.web.services.event_store import get_last_seq, get_latest_run_id, get_run_start_seq
     from backend.web.utils.helpers import lookup_thread_model
 
@@ -227,9 +303,18 @@ async def get_thread_runtime(
     agent = await get_or_create_agent(app, sandbox_type, thread_id=thread_id)
     if not hasattr(agent, "runtime"):
         raise HTTPException(status_code=404, detail="Agent has no runtime monitor")
+
+    last_seq = await get_last_seq(thread_id)
+
+    if not stream:
+        status = agent.runtime.get_compact_dict()
+        status["model"] = lookup_thread_model(thread_id)
+        status["last_seq"] = last_seq
+        return status
+
     status = agent.runtime.get_status_dict()
     status["model"] = lookup_thread_model(thread_id)
-    status["last_seq"] = await get_last_seq(thread_id)
+    status["last_seq"] = last_seq
     if status.get("state", {}).get("state") == "active":
         run_id = await get_latest_run_id(thread_id)
         if run_id:
@@ -429,55 +514,14 @@ async def cancel_run(
     return {"ok": True, "message": "Run cancellation requested"}
 
 
-@router.post("/{thread_id}/commands/{command_id}/cancel")
-async def cancel_command(
-    thread_id: str,
-    command_id: str,
-    request: Request,
-) -> dict[str, Any]:
-    """Cancel a specific async command by terminating its process."""
-    agent = _get_agent_for_thread(request.app, thread_id)
-    if not agent:
-        raise HTTPException(404, "Agent not found")
-
-    # Find CommandMiddleware via TaskMiddleware's parent_middleware list
-    parent_mw = getattr(getattr(agent, "_task_middleware", None), "parent_middleware", [])
-    from core.command import CommandMiddleware
-
-    for mw in parent_mw:
-        if not isinstance(mw, CommandMiddleware):
-            continue
-        executor = getattr(mw, "_executor", None)
-        if not executor:
-            continue
-        status = await executor.get_status(command_id)
-        if status and not status.done:
-            process = getattr(status, "process", None)
-            if process:
-                process.terminate()
-                return {"cancelled": True, "command_id": command_id}
-
-    raise HTTPException(404, "Command not found or already completed")
-
-
-@router.post("/{thread_id}/task-agent/runs")
-async def run_task_agent(
-    thread_id: str,
-    payload: TaskAgentRequest,
-    app: Annotated[Any, Depends(get_app)] = None,
-) -> dict[str, Any]:
-    """Start a task agent run. Observe events via GET /events."""
-    if not payload.prompt.strip():
-        raise HTTPException(status_code=400, detail="prompt cannot be empty")
-
-    sandbox_type = resolve_thread_sandbox(app, thread_id)
-    buf = start_task_agent_run(thread_id, payload, app, sandbox_type)
-    return {"run_id": buf.run_id, "thread_id": thread_id}
-
-
 # ---------------------------------------------------------------------------
-# Phase 4: Background Task Output API
+# Background Run API — bridges frontend to agent._background_runs
 # ---------------------------------------------------------------------------
+
+
+def _get_background_runs(app: Any, thread_id: str) -> dict:
+    agent = _get_agent_for_thread(app, thread_id)
+    return getattr(agent, "_background_runs", {}) if agent else {}
 
 
 @router.get("/{thread_id}/tasks")
@@ -485,22 +529,21 @@ async def list_tasks(
     thread_id: str,
     request: Request,
 ) -> list[dict]:
-    """列出线程的所有后台任务"""
-    registry = request.app.state.background_task_registry
-    tasks = await registry.list_by_thread(thread_id)
-
-    return [
-        {
-            "task_id": task.task_id,
-            "task_type": task.task_type,
-            "status": task.status,
-            "command_line": task.command_line,  # bash only
-            "description": task.description,  # agent only
-            "exit_code": task.exit_code,  # bash only
-            "error": task.error,
-        }
-        for task in tasks
-    ]
+    """列出线程的所有后台 run（bash + agent）"""
+    runs = _get_background_runs(request.app, thread_id)
+    result = []
+    for task_id, run in runs.items():
+        run_type = "bash" if run.__class__.__name__ == "_BashBackgroundRun" else "agent"
+        result.append({
+            "task_id": task_id,
+            "task_type": run_type,
+            "status": "completed" if run.is_done else "running",
+            "command_line": getattr(run, "command", None) if run_type == "bash" else None,
+            "description": getattr(run, "description", None),
+            "exit_code": getattr(getattr(run, "_cmd", None), "exit_code", None) if run_type == "bash" else None,
+            "error": None,
+        })
+    return result
 
 
 @router.get("/{thread_id}/tasks/{task_id}")
@@ -509,81 +552,22 @@ async def get_task(
     task_id: str,
     request: Request,
 ) -> dict:
-    """获取任务详情（包含完整输出）"""
-    registry = request.app.state.background_task_registry
-    task = await registry.get(task_id)
-
-    if not task or task.thread_id != thread_id:
+    """获取 background run 详情（含完整输出）"""
+    runs = _get_background_runs(request.app, thread_id)
+    run = runs.get(task_id)
+    if not run:
         raise HTTPException(status_code=404, detail="Task not found")
 
+    run_type = "bash" if run.__class__.__name__ == "_BashBackgroundRun" else "agent"
+    result_text = run.get_result() if run.is_done else None
     return {
-        "task_id": task.task_id,
-        "task_type": task.task_type,
-        "status": task.status,
-        "command_line": task.command_line,
-        "description": task.description,
-        "subagent_type": task.subagent_type,
-        "exit_code": task.exit_code,
-        "error": task.error,
-        # 完整输出
-        "stdout": task.stdout_buffer,  # bash only
-        "stderr": task.stderr_buffer,  # bash only
-        "text": task.text_buffer,  # agent only
-        "result": task.result,  # agent only
+        "task_id": task_id,
+        "task_type": run_type,
+        "status": "completed" if run.is_done else "running",
+        "command_line": getattr(run, "command", None) if run_type == "bash" else None,
+        "result": result_text,
+        "text": result_text,
     }
-
-
-@router.get("/{thread_id}/tasks/{task_id}/stream")
-async def stream_task_output(
-    thread_id: str,
-    task_id: str,
-    request: Request,
-):
-    """SSE 流式输出任务进度（按需建连）"""
-    registry = request.app.state.background_task_registry
-    task = await registry.get(task_id)
-
-    if not task or task.thread_id != thread_id:
-        raise HTTPException(status_code=404, detail="Task not found")
-
-    async def event_generator():
-        if task.task_type == "bash":
-            # Tail subprocess stdout/stderr
-            process = task._process
-            if process and process.returncode is None:
-                # 实时读取 stdout/stderr
-                try:
-                    while True:
-                        line = await process.stdout.readline()
-                        if not line:
-                            break
-                        yield {
-                            "event": "output",
-                            "data": json.dumps({"type": "stdout", "line": line.decode()}, ensure_ascii=False),
-                        }
-                except Exception:
-                    pass
-
-        elif task.task_type == "agent":
-            # 从 text_buffer 读取
-            sent_count = 0
-            while task.status == "running":
-                if task.text_buffer and len(task.text_buffer) > sent_count:
-                    for text in task.text_buffer[sent_count:]:
-                        yield {
-                            "event": "output",
-                            "data": json.dumps({"type": "text", "content": text}, ensure_ascii=False),
-                        }
-                    sent_count = len(task.text_buffer)
-                await asyncio.sleep(0.1)
-
-        # 任务完成
-        yield {
-            "event": "task_done",
-            "data": json.dumps({"status": task.status}, ensure_ascii=False),
-        }
-
-    return EventSourceResponse(event_generator(), headers=SSE_HEADERS)
 
 
 @router.post("/{thread_id}/tasks/{task_id}/cancel")
@@ -592,25 +576,70 @@ async def cancel_task(
     task_id: str,
     request: Request,
 ) -> dict:
-    """取消任务（统一 bash + agent）"""
-    registry = request.app.state.background_task_registry
-    task = await registry.get(task_id)
-
-    if not task or task.thread_id != thread_id:
+    """取消 background run（bash + agent 统一）"""
+    runs = _get_background_runs(request.app, thread_id)
+    run = runs.get(task_id)
+    if not run:
         raise HTTPException(status_code=404, detail="Task not found")
-
-    if task.status != "running":
+    if run.is_done:
         raise HTTPException(status_code=400, detail="Task is not running")
 
-    # 取消任务
-    if task.task_type == "bash" and task._process:
-        try:
-            task._process.terminate()
-        except ProcessLookupError:
-            pass
-    elif task.task_type == "agent" and task._async_task:
-        task._async_task.cancel()
+    if run.__class__.__name__ == "_RunningTask":
+        run.task.cancel()
+    elif run.__class__.__name__ == "_BashBackgroundRun":
+        process = getattr(run._cmd, "process", None)
+        if process:
+            try:
+                process.terminate()
+            except ProcessLookupError:
+                pass
 
-    await registry.update(task_id, status="error", error="Cancelled by user")
+    # Emit task_done SSE and notify main agent once cancellation completes
+    asyncio.create_task(_notify_task_cancelled(request.app, thread_id, task_id, run))
 
     return {"success": True}
+
+
+async def _notify_task_cancelled(app: Any, thread_id: str, task_id: str, run: Any) -> None:
+    """Wait for run to finish, then emit task_done SSE and enqueue cancellation notice."""
+    # Wait up to 5s for the task to actually stop
+    for _ in range(50):
+        if run.is_done:
+            break
+        await asyncio.sleep(0.1)
+
+    # Emit task_done so the frontend indicator updates
+    try:
+        from backend.web.event_bus import get_event_bus
+        event_bus = get_event_bus()
+        emit_fn = event_bus.make_emitter(
+            thread_id=thread_id,
+            agent_id=task_id,
+            agent_name=f"cancel-{task_id[:8]}",
+        )
+        await emit_fn({"event": "task_done", "data": json.dumps({
+            "task_id": task_id,
+            "background": True,
+            "cancelled": True,
+        }, ensure_ascii=False)})
+    except Exception:
+        logger.debug("Failed to emit task_done for cancelled task %s", task_id, exc_info=True)
+
+    # Notify the main agent so it knows the user cancelled this task
+    try:
+        agent = _get_agent_for_thread(app, thread_id)
+        qm = getattr(agent, "queue_manager", None) if agent else None
+        if qm:
+            description = getattr(run, "description", "") or ""
+            command = getattr(run, "command", "") or ""
+            label = description or command[:80] or f"Task {task_id}"
+            notification = (
+                f'<CommandNotification task_id="{task_id}" status="cancelled">'
+                f"<Status>cancelled</Status>"
+                f"<Description>{label}</Description>"
+                + (f"<CommandLine>{command[:200]}</CommandLine>" if command else "")
+                + f"</CommandNotification>"
+            )
+            qm.enqueue(notification, thread_id, notification_type="command")
+    except Exception:
+        logger.debug("Failed to enqueue cancellation notice for task %s", task_id, exc_info=True)

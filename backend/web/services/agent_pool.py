@@ -7,7 +7,7 @@ from typing import Any
 
 from fastapi import FastAPI
 
-from agent import create_leon_agent
+from core.runtime.agent import create_leon_agent
 from storage.runtime import build_storage_container
 from sandbox.manager import lookup_sandbox_for_thread
 from sandbox.thread_context import set_current_thread_id
@@ -17,14 +17,14 @@ from core.identity.agent_registry import get_or_create_agent_id
 _config_update_locks: dict[str, asyncio.Lock] = {}
 
 
-def create_agent_sync(sandbox_name: str, workspace_root: Path | None = None, model_name: str | None = None, agent: str | None = None, queue_manager: Any = None, registry: Any = None) -> Any:
+def create_agent_sync(sandbox_name: str, workspace_root: Path | None = None, model_name: str | None = None, agent: str | None = None, queue_manager: Any = None) -> Any:
     """Create a LeonAgent with the given sandbox. Runs in a thread."""
     storage_container = build_storage_container(
         main_db_path=os.getenv("LEON_DB_PATH"),
         eval_db_path=os.getenv("LEON_EVAL_DB_PATH"),
     )
     # @@@web-file-ops-repo - inject storage-backed repo so file_operations route to correct provider.
-    from tui.operations import FileOperationRecorder, set_recorder
+    from core.operations import FileOperationRecorder, set_recorder
     set_recorder(FileOperationRecorder(repo=storage_container.file_operation_repo()))
     return create_leon_agent(
         model_name=model_name,
@@ -32,7 +32,6 @@ def create_agent_sync(sandbox_name: str, workspace_root: Path | None = None, mod
         sandbox=sandbox_name if sandbox_name != "local" else None,
         storage_container=storage_container,
         queue_manager=queue_manager,
-        registry=registry,
         verbose=True,
         agent=agent,
     )
@@ -80,8 +79,7 @@ async def get_or_create_agent(app_obj: FastAPI, sandbox_type: str, thread_id: st
 
     # @@@ agent-init-thread - LeonAgent.__init__ uses run_until_complete, must run in thread
     qm = getattr(app_obj.state, "queue_manager", None)
-    registry = getattr(app_obj.state, "background_task_registry", None)
-    agent_obj = await asyncio.to_thread(create_agent_sync, sandbox_type, workspace_root, model_name, agent_name, qm, registry)
+    agent_obj = await asyncio.to_thread(create_agent_sync, sandbox_type, workspace_root, model_name, agent_name, qm)
     member = agent_name or "leon"
     agent_id = get_or_create_agent_id(
         member=member,

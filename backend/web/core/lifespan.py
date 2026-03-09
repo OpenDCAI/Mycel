@@ -8,6 +8,7 @@ from fastapi import FastAPI
 
 from backend.web.services.event_buffer import RunEventBuffer, ThreadEventBuffer
 from backend.web.services.idle_reaper import idle_reaper_loop
+from core.runtime.middleware.queue import MessageQueueManager
 from backend.web.services.resource_cache import resource_overview_refresh_loop
 from core.queue import MessageQueueManager
 from core.task.registry import BackgroundTaskRegistry
@@ -34,7 +35,6 @@ async def lifespan(app: FastAPI):
 
     # Initialize app state
     app.state.queue_manager = MessageQueueManager()
-    app.state.background_task_registry = BackgroundTaskRegistry()
     app.state.agent_pool: dict[str, Any] = {}
     app.state.thread_sandbox: dict[str, str] = {}
     app.state.thread_cwd: dict[str, str] = {}

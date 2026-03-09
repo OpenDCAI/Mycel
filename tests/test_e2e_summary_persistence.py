@@ -64,7 +64,7 @@ class TestFullAgentSummaryPersistence:
 
         # Override db_path and lower threshold for testing
         if hasattr(agent, "_memory_middleware") and agent._memory_middleware:
-            from core.memory.summary_store import SummaryStore
+            from core.runtime.middleware.memory.summary_store import SummaryStore
 
             agent._memory_middleware.summary_store = SummaryStore(Path(test_db_path))
             # Lower threshold to 1000 tokens to trigger compaction easily
@@ -122,7 +122,7 @@ class TestFullAgentSummaryPersistence:
 
         # Override db_path for testing
         if hasattr(agent2, "_memory_middleware") and agent2._memory_middleware:
-            from core.memory.summary_store import SummaryStore
+            from core.runtime.middleware.memory.summary_store import SummaryStore
 
             agent2._memory_middleware.summary_store = SummaryStore(Path(test_db_path))
 
@@ -170,7 +170,7 @@ class TestAgentSplitTurnE2E:
 
         # Override db_path and lower threshold for testing
         if hasattr(agent, "_memory_middleware") and agent._memory_middleware:
-            from core.memory.summary_store import SummaryStore
+            from core.runtime.middleware.memory.summary_store import SummaryStore
 
             agent._memory_middleware.summary_store = SummaryStore(Path(test_db_path))
             # Lower threshold to trigger compaction
@@ -235,7 +235,7 @@ class TestAgentConcurrentThreads:
 
             # Override db_path and lower threshold for testing
             if hasattr(agent, "_memory_middleware") and agent._memory_middleware:
-                from core.memory.summary_store import SummaryStore
+                from core.runtime.middleware.memory.summary_store import SummaryStore
 
                 agent._memory_middleware.summary_store = SummaryStore(Path(test_db_path))
                 agent._memory_middleware._compaction_threshold = 0.01
@@ -260,7 +260,7 @@ class TestAgentConcurrentThreads:
                 agent.close()
 
         # Verify summaries are isolated
-        from core.memory.summary_store import SummaryStore
+        from core.runtime.middleware.memory.summary_store import SummaryStore
 
         store = SummaryStore(Path(test_db_path))
 
@@ -294,7 +294,7 @@ class TestAgentConcurrentThreads:
 
             # Override db_path for testing
             if hasattr(agent, "_memory_middleware") and agent._memory_middleware:
-                from core.memory.summary_store import SummaryStore
+                from core.runtime.middleware.memory.summary_store import SummaryStore
 
                 agent._memory_middleware.summary_store = SummaryStore(Path(test_db_path))
 

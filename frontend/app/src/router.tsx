@@ -25,10 +25,14 @@ export const router = createBrowserRouter([
         children: [
           {
             index: true,
+            element: <Navigate to="/chat/leon" replace />,
+          },
+          {
+            path: ':memberId',
             element: <NewChatPage />,
           },
           {
-            path: ':threadId',
+            path: ':memberId/:threadId',
             element: <ChatPage />,
           },
         ],

@@ -5,8 +5,8 @@ from pathlib import Path
 
 import pytest
 
-from core.queue import MessageQueueManager
-from core.queue.formatters import format_steer_reminder, format_task_notification
+from core.runtime.middleware.queue import MessageQueueManager
+from core.runtime.middleware.queue.formatters import format_steer_reminder, format_background_notification
 
 
 @pytest.fixture()
@@ -207,7 +207,7 @@ class TestWakeHandler:
     def test_enqueue_fires_wake_handler(self, tmp_db):
         mgr = MessageQueueManager(db_path=tmp_db)
         calls = []
-        mgr.register_wake("t1", lambda: calls.append("woke"))
+        mgr.register_wake("t1", lambda item: calls.append("woke"))
         mgr.enqueue("msg", thread_id="t1")
         assert calls == ["woke"]
 
@@ -219,7 +219,7 @@ class TestWakeHandler:
     def test_handler_exception_does_not_prevent_enqueue(self, tmp_db):
         mgr = MessageQueueManager(db_path=tmp_db)
 
-        def bad_handler():
+        def bad_handler(item: object):
             raise RuntimeError("boom")
 
         mgr.register_wake("t1", bad_handler)
@@ -230,7 +230,7 @@ class TestWakeHandler:
     def test_unregister_stops_firing(self, tmp_db):
         mgr = MessageQueueManager(db_path=tmp_db)
         calls = []
-        mgr.register_wake("t1", lambda: calls.append("woke"))
+        mgr.register_wake("t1", lambda item: calls.append("woke"))
         mgr.unregister_wake("t1")
         mgr.enqueue("msg", thread_id="t1")
         assert calls == []
@@ -239,8 +239,8 @@ class TestWakeHandler:
         mgr = MessageQueueManager(db_path=tmp_db)
         t1_calls = []
         t2_calls = []
-        mgr.register_wake("t1", lambda: t1_calls.append(1))
-        mgr.register_wake("t2", lambda: t2_calls.append(1))
+        mgr.register_wake("t1", lambda item: t1_calls.append(1))
+        mgr.register_wake("t2", lambda item: t2_calls.append(1))
         mgr.enqueue("msg", thread_id="t1")
         assert t1_calls == [1]
         assert t2_calls == []
@@ -248,7 +248,7 @@ class TestWakeHandler:
     def test_wake_handler_called_per_enqueue(self, tmp_db):
         mgr = MessageQueueManager(db_path=tmp_db)
         calls = []
-        mgr.register_wake("t1", lambda: calls.append(1))
+        mgr.register_wake("t1", lambda item: calls.append(1))
         mgr.enqueue("a", thread_id="t1")
         mgr.enqueue("b", thread_id="t1")
         assert len(calls) == 2
@@ -264,7 +264,7 @@ class TestClearAll:
         mgr = MessageQueueManager(db_path=tmp_db)
         mgr.enqueue("queue-msg", thread_id="t1")
         calls = []
-        mgr.register_wake("t1", lambda: calls.append(1))
+        mgr.register_wake("t1", lambda item: calls.append(1))
         mgr.clear_all("t1")
         assert not mgr.peek("t1")
         # Wake handler should be unregistered
@@ -295,7 +295,7 @@ class TestSteeringMiddlewareIntegration:
     """Verify SteeringMiddleware reads from unified queue via drain_all."""
 
     def test_middleware_consumes_queued_messages(self, tmp_db):
-        from core.queue.middleware import SteeringMiddleware
+        from core.runtime.middleware.queue.middleware import SteeringMiddleware
 
         mgr = MessageQueueManager(db_path=tmp_db)
         middleware = SteeringMiddleware(queue_manager=mgr)
@@ -325,7 +325,7 @@ class TestSteeringMiddlewareIntegration:
         """Verify wrap_tool_call is a pure passthrough (non-preemptive)."""
         from unittest.mock import MagicMock
 
-        from core.queue.middleware import SteeringMiddleware
+        from core.runtime.middleware.queue.middleware import SteeringMiddleware
 
         mgr = MessageQueueManager(db_path=tmp_db)
         middleware = SteeringMiddleware(queue_manager=mgr)
@@ -357,30 +357,30 @@ class TestFormatters:
         assert "IMPORTANT" in xml
         assert "</system-reminder>" in xml
 
-    def test_format_task_notification(self):
-        xml = format_task_notification(
+    def test_format_background_notification(self):
+        xml = format_background_notification(
             task_id="abc123",
             status="completed",
             summary="Analysis done",
             result="Found 5 issues",
         )
-        assert "<task-notification>" in xml
-        assert "<task-id>abc123</task-id>" in xml
+        assert "<background-notification>" in xml
+        assert "<run-id>abc123</run-id>" in xml
         assert "<status>completed</status>" in xml
         assert "<summary>Analysis done</summary>" in xml
         assert "<result>Found 5 issues</result>" in xml
 
-    def test_format_task_notification_truncates_long_result(self):
+    def test_format_background_notification_truncates_long_result(self):
         long_result = "x" * 3000
-        xml = format_task_notification(
+        xml = format_background_notification(
             task_id="t1", status="completed", summary="done", result=long_result
         )
         assert "..." in xml
         # Result field should be truncated
         assert len(xml) < 3000
 
-    def test_format_task_notification_no_result(self):
-        xml = format_task_notification(task_id="t1", status="error", summary="failed")
+    def test_format_background_notification_no_result(self):
+        xml = format_background_notification(task_id="t1", status="error", summary="failed")
         assert "<result>" not in xml
 
 

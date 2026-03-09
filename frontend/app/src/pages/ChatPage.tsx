@@ -26,7 +26,7 @@ interface OutletContext {
 
 /** Thin wrapper: key={threadId} forces remount → all hook state resets naturally. */
 export default function ChatPage() {
-  const { threadId } = useParams<{ threadId: string }>();
+  const { threadId } = useParams<{ memberId: string; threadId: string }>();
   if (!threadId) return null;
   return <ChatPageInner key={threadId} threadId={threadId} />;
 }
@@ -38,10 +38,10 @@ function ChatPageInner({ threadId }: { threadId: string }) {
 
   const state = location.state as { selectedModel?: string; runStarted?: boolean; message?: string } | null;
 
-  // On page refresh, browser preserves location.state but the run context is lost.
-  // Detect reload and force runStarted=false so useThreadData loads from backend.
-  const navEntry = performance.getEntriesByType("navigation")[0] as PerformanceNavigationTiming | undefined;
-  const runStarted = !!state?.runStarted && navEntry?.type !== "reload";
+  // location.state.runStarted is set by NewChatPage on SPA navigation only.
+  // On page refresh the browser preserves state but React Router resets it to null,
+  // so state?.runStarted will already be falsy after a real reload — no navEntry check needed.
+  const runStarted = !!state?.runStarted;
 
   // Pre-populate user + empty assistant turn so ThinkingIndicator shows immediately (no skeleton).
   // The empty assistant turn (streaming=true, segments=[]) renders the three-dot indicator
@@ -84,7 +84,9 @@ function ChatPageInner({ threadId }: { threadId: string }) {
   const { runtimeStatus, isRunning, handleSendMessage, handleStopStreaming } =
     useStreamHandler({
       threadId,
-      refreshThreads: refreshThread,
+      // Use tm.refreshThreads (sidebar list only) — NOT refreshThread (which calls
+      // setEntries(history) and would wipe any in-flight streaming entries for the next run).
+      refreshThreads: tm.refreshThreads,
       onUpdate: (updater) => setEntries(updater),
       loading,
       runStarted,
@@ -160,7 +162,7 @@ function ChatPageInner({ threadId }: { threadId: string }) {
       />
 
       <div className="flex-1 flex min-h-0">
-        <div className="flex-1 flex flex-col min-w-0">
+        <div className="flex-1 flex flex-col min-w-[320px]">
           {sandboxActionError && (
             <div className="px-3 py-2 text-xs bg-red-50 text-red-600 border-b border-red-200">
               {sandboxActionError}

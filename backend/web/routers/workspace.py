@@ -22,7 +22,7 @@ async def list_workspace_path(
     """List files and directories in workspace path."""
     sandbox_type = resolve_thread_sandbox(app, thread_id)
     if sandbox_type == "local":
-        from core.filesystem.local_backend import LocalBackend
+        from core.tools.filesystem.local_backend import LocalBackend
 
         backend = LocalBackend()
         target = resolve_local_workspace_path(
@@ -93,7 +93,7 @@ async def read_workspace_file(
     """Read file content from workspace."""
     sandbox_type = resolve_thread_sandbox(app, thread_id)
     if sandbox_type == "local":
-        from core.filesystem.local_backend import LocalBackend
+        from core.tools.filesystem.local_backend import LocalBackend
 
         backend = LocalBackend()
         target = resolve_local_workspace_path(

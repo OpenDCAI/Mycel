@@ -32,7 +32,9 @@ class TestEventStore:
     """EventStore CRUD operations."""
 
     def test_init_creates_table(self, tmp_db):
-        conn = sqlite3.connect(str(tmp_db))
+        # run_events live in events.db (sibling of the main DB)
+        events_db = tmp_db.with_name("events.db")
+        conn = sqlite3.connect(str(events_db))
         tables = conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='run_events'").fetchall()
         assert len(tables) == 1
 

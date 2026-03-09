@@ -529,6 +529,8 @@ class TestEventStoreEdgeCases:
 
         import sqlite3
 
-        conn = sqlite3.connect(str(tmp_db))
+        # run_events live in events.db (sibling of the main DB)
+        events_db = tmp_db.with_name("events.db")
+        conn = sqlite3.connect(str(events_db))
         mode = conn.execute("PRAGMA journal_mode").fetchone()[0]
         assert mode == "wal"

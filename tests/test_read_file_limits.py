@@ -18,8 +18,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from core.filesystem.read.types import ReadLimits
-from core.filesystem.middleware import FileSystemMiddleware
+from core.tools.filesystem.read.types import ReadLimits
+from core.tools.filesystem.middleware import FileSystemMiddleware
 from sandbox.interfaces.filesystem import FileReadResult, FileSystemBackend
 
 

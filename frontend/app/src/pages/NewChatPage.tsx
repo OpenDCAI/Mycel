@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate, useOutletContext, useLocation } from "react-router-dom";
+import { useNavigate, useOutletContext, useParams } from "react-router-dom";
 import { postRun } from "../api";
 import CenteredInputBox from "../components/CenteredInputBox";
 import WorkspaceSetupModal from "../components/WorkspaceSetupModal";
@@ -15,15 +15,15 @@ interface OutletContext {
 
 export default function NewChatPage() {
   const navigate = useNavigate();
-  const location = useLocation();
+  const { memberId } = useParams<{ memberId: string }>();
   const { tm } = useOutletContext<OutletContext>();
   const { sandboxTypes, selectedSandbox, handleCreateThread } = tm;
   const { settings, loading, hasWorkspace } = useWorkspaceSettings();
   const [showWorkspaceSetup, setShowWorkspaceSetup] = useState(false);
 
-  const startWith = (location.state as any)?.startWith as string | undefined;
-  const memberName = (location.state as any)?.memberName as string | undefined;
-  const agentForThread = startWith || undefined;
+  // memberId in URL is the member name (e.g. "Test Researcher") or "leon" for the default agent
+  const memberName = memberId === "leon" ? undefined : memberId;
+  const agentForThread = memberName;
 
   async function handleSend(message: string, sandbox: string, model: string, workspace?: string) {
     // For local sandbox, check if workspace is set
@@ -34,13 +34,13 @@ export default function NewChatPage() {
 
     const cwd = workspace || settings?.default_workspace || undefined;
     const threadId = await handleCreateThread(sandbox, cwd, agentForThread);
-    console.log('[NewChatPage] Created thread:', threadId, 'agent:', agentForThread, 'posting run:', message);
-    try {
-      await postRun(threadId, message, undefined, model ? { model } : undefined);
-    } catch (err) {
+    // Fire-and-forget: don't await postRun — agent creation can take 3-5s on first call.
+    // ChatPage mounts immediately with optimistic spinner; SSE (seq=0) picks up run_start
+    // when the agent is ready.
+    postRun(threadId, message, undefined, model ? { model } : undefined).catch(err => {
       console.error('[NewChatPage] postRun failed:', err);
-    }
-    navigate(`/chat/${threadId}`, {
+    });
+    navigate(`/chat/${memberId}/${threadId}`, {
       state: { selectedModel: model, runStarted: true, message },
     });
   }

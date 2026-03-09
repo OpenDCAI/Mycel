@@ -5,10 +5,10 @@ from dataclasses import dataclass
 
 import pytest
 
-from core.command import CommandMiddleware
-from core.command.base import AsyncCommand, BaseExecutor, ExecuteResult
-from core.command.dispatcher import get_executor, get_shell_info
-from core.command.hooks.dangerous_commands import DangerousCommandsHook
+from core.tools.command.middleware import CommandMiddleware
+from core.tools.command.base import AsyncCommand, BaseExecutor, ExecuteResult
+from core.tools.command.dispatcher import get_executor, get_shell_info
+from core.tools.command.hooks.dangerous_commands import DangerousCommandsHook
 
 
 class TestExecuteResult:

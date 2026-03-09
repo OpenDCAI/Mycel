@@ -20,22 +20,19 @@ from typing import Any
 
 import yaml
 
+from config.defaults.tool_catalog import TOOLS_BY_NAME, ToolDef
 from config.loader import AgentLoader
 
 logger = logging.getLogger(__name__)
 
 LEON_HOME = Path.home() / ".leon"
 MEMBERS_DIR = LEON_HOME / "members"
-_TOOLS_CATALOG_PATH = Path(__file__).resolve().parents[3] / "config" / "defaults" / "tools.json"
 _SYSTEM_AGENTS_DIR = (Path(__file__).resolve().parents[3] / "config" / "defaults" / "agents").resolve()
 
 
-def _load_tools_catalog() -> dict[str, dict[str, str]]:
-    """Load the system tool catalog (name → {desc, group})."""
-    try:
-        return json.loads(_TOOLS_CATALOG_PATH.read_text(encoding="utf-8"))
-    except (json.JSONDecodeError, OSError):
-        return {}
+def _load_tools_catalog() -> dict[str, ToolDef]:
+    """Return the typed tool catalog (name → ToolDef)."""
+    return TOOLS_BY_NAME
 
 
 def ensure_members_dir() -> None:
@@ -180,9 +177,9 @@ def _member_to_dict(member_dir: Path) -> dict[str, Any] | None:
         runtime_key = f"tools:{tool_name}"
         if runtime_key in bundle.runtime:
             rc = bundle.runtime[runtime_key]
-            tools_list.append({"name": tool_name, "enabled": rc.enabled, "desc": rc.desc or tool_info.get("desc", ""), "group": tool_info.get("group", "")})
+            tools_list.append({"name": tool_name, "enabled": rc.enabled, "desc": rc.desc or tool_info.desc, "group": tool_info.group})
         else:
-            tools_list.append({"name": tool_name, "enabled": True, "desc": tool_info.get("desc", ""), "group": tool_info.get("group", "")})
+            tools_list.append({"name": tool_name, "enabled": tool_info.default, "desc": tool_info.desc, "group": tool_info.group})
 
     # Skills from runtime — enrich desc from Library if empty
     skills_list = []
@@ -207,8 +204,8 @@ def _member_to_dict(member_dir: Path) -> dict[str, Any] | None:
             {
                 "name": t_name,
                 "enabled": is_all or t_name in a.tools,
-                "desc": t_info.get("desc", ""),
-                "group": t_info.get("group", ""),
+                "desc": t_info.desc,
+                "group": t_info.group,
             }
             for t_name, t_info in catalog.items()
         ]
@@ -257,7 +254,7 @@ def _member_to_dict(member_dir: Path) -> dict[str, Any] | None:
 def _leon_builtin() -> dict[str, Any]:
     """Build Leon builtin member dict with full tool catalog."""
     catalog = _load_tools_catalog()
-    tools = [{"name": k, "enabled": True, "desc": v.get("desc", ""), "group": v.get("group", "")} for k, v in catalog.items()]
+    tools = [{"name": k, "enabled": v.default, "desc": v.desc, "group": v.group} for k, v in catalog.items()]
     # Load built-in sub-agents (read-only display)
     builtin_agents = _load_builtin_agents(catalog)
 
@@ -274,7 +271,7 @@ def _leon_builtin() -> dict[str, Any]:
     }
 
 
-def _load_builtin_agents(catalog: dict[str, dict[str, str]]) -> list[dict[str, Any]]:
+def _load_builtin_agents(catalog: dict[str, ToolDef]) -> list[dict[str, Any]]:
     """Load system built-in agents for display (read-only)."""
     loader = AgentLoader()
     agents = []
@@ -284,7 +281,7 @@ def _load_builtin_agents(catalog: dict[str, dict[str, str]]) -> list[dict[str, A
             if ac:
                 is_all = ac.tools == ["*"]
                 agent_tools = [
-                    {"name": k, "enabled": is_all or k in ac.tools, "desc": v.get("desc", ""), "group": v.get("group", "")}
+                    {"name": k, "enabled": is_all or k in ac.tools, "desc": v.desc, "group": v.group}
                     for k, v in catalog.items()
                 ]
                 agents.append({

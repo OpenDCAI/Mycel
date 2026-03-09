@@ -34,7 +34,6 @@
         },
         "write_file": true,
         "edit_file": true,
-        "multi_edit": true,
         "list_dir": true
       }
     },

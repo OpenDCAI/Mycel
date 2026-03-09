@@ -72,8 +72,8 @@ def list_threads_from_db() -> list[dict[str, Any]]:
 
     results = []
     for tid in sorted(thread_ids):
-        # Filter out sub-agent threads (they start with "subagent_")
-        if tid.startswith("subagent_"):
+        # Filter out sub-agent threads (thread_id format: "subagent-{task_id}")
+        if tid.startswith("subagent-"):
             continue
         meta = thread_meta.get(tid, {})
         results.append(

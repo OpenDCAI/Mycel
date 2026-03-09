@@ -3,6 +3,7 @@
 import asyncio
 import json
 import logging
+import random
 import traceback
 import uuid as _uuid
 from collections.abc import AsyncGenerator
@@ -13,7 +14,7 @@ logger = logging.getLogger(__name__)
 from backend.web.services.event_buffer import RunEventBuffer, ThreadEventBuffer
 from backend.web.services.event_store import cleanup_old_runs
 from backend.web.utils.serializers import extract_text_content
-from core.monitor import AgentState
+from core.runtime.middleware.monitor import AgentState
 from storage.contracts import RunEventRepo
 from sandbox.thread_context import set_current_run_id, set_current_thread_id
 
@@ -270,17 +271,31 @@ def _ensure_thread_handlers(agent: Any, thread_id: str, app: Any) -> None:
         if isinstance(data, dict):
             data["_seq"] = seq
             event = {**event, "data": json.dumps(data, ensure_ascii=False)}
-        await thread_buf.put(event)
+        # Only SSE-valid fields: extra metadata (agent_id, agent_name) stays in event_store
+        _SSE_FIELDS = frozenset({"event", "data", "id", "retry", "comment"})
+        await thread_buf.put({k: v for k, v in event.items() if k in _SSE_FIELDS})
 
     qm = app.state.queue_manager
     loop = getattr(app.state, "_event_loop", None)
 
-    def wake_handler() -> None:
-        """Called by enqueue() — may run in any thread."""
+    def wake_handler(item: Any) -> None:
+        """Called by enqueue() with the newly-enqueued QueueItem — may run in any thread."""
         if not (hasattr(agent, "runtime") and agent.runtime.transition(AgentState.ACTIVE)):
-            logger.warning("wake_handler: failed to transition to ACTIVE for thread %s (state=%s)",
-                           thread_id, getattr(agent.runtime, "current_state", "unknown") if hasattr(agent, "runtime") else "no-runtime")
-            return  # ACTIVE: before_model will drain_all
+            # Agent already ACTIVE — before_model will drain_all on the next LLM call.
+            # Emit only this one notice immediately so the frontend sees it in real-time
+            # instead of requiring a page refresh. The item is the exact QueueItem just
+            # enqueued — no list_queue() needed, so no duplicate emissions.
+            if loop and not loop.is_closed():
+                async def _emit_one_notice() -> None:
+                    await activity_sink({
+                        "event": "notice",
+                        "data": json.dumps({
+                            "content": item.content,
+                            "notification_type": item.notification_type,
+                        }, ensure_ascii=False),
+                    })
+                loop.call_soon_threadsafe(loop.create_task, _emit_one_notice())
+            return
 
         item = qm.dequeue(thread_id)
         if not item:
@@ -311,6 +326,14 @@ def _ensure_thread_handlers(agent: Any, thread_id: str, app: Any) -> None:
 
     runtime.bind_thread(activity_sink=activity_sink)
     qm.register_wake(thread_id, wake_handler)
+
+    # Subscribe to EventBus so sub-agent events (spawned via AgentService)
+    # flow into this thread's SSE stream.
+    try:
+        from backend.web.event_bus import get_event_bus
+        get_event_bus().subscribe(thread_id, activity_sink)
+    except ImportError:
+        pass
 
 
 # ---------------------------------------------------------------------------
@@ -361,9 +384,6 @@ async def _run_agent_to_buffer(
         if hasattr(agent, "_current_model_config"):
             config["configurable"].update(agent._current_model_config)
         set_current_thread_id(thread_id)
-        # Bind thread_id to TaskBoardMiddleware so ClaimTask records the executor
-        if hasattr(agent, '_taskboard_middleware'):
-            agent._taskboard_middleware.thread_id = thread_id
         # @@@web-run-context - web runs have no TUI checkpoint; use run_id to group file ops per run.
         set_current_run_id(run_id)
 
@@ -465,142 +485,223 @@ async def _run_agent_to_buffer(
         # won't reject the message history.
         await _repair_incomplete_tool_calls(agent, config)
 
+        # Emit notice BEFORE run_start when this run was triggered by a queue notification.
+        # This makes the notice appear in real-time between turns, not just after history reload.
+        if message_metadata and message_metadata.get("source") == "system":
+            await emit({
+                "event": "notice",
+                "data": json.dumps({
+                    "content": message,
+                    "notification_type": message_metadata.get("notification_type"),
+                }, ensure_ascii=False),
+            })
+
         # Emit run_start
         await emit({
             "event": "run_start",
             "data": json.dumps({"thread_id": thread_id, "run_id": run_id}),
         })
 
-        async def run_agent_stream():
-            if message_metadata:
-                from langchain_core.messages import HumanMessage
-                input_msg = HumanMessage(content=message, metadata=message_metadata)
-            else:
-                input_msg = {"role": "user", "content": message}
+        if message_metadata:
+            from langchain_core.messages import HumanMessage
+            _initial_input: dict | None = {"messages": [HumanMessage(content=message, metadata=message_metadata)]}
+        else:
+            _initial_input = {"messages": [{"role": "user", "content": message}]}
+
+        async def run_agent_stream(input_data: dict | None = _initial_input):
             async for chunk in agent.agent.astream(
-                {"messages": [input_msg]},
+                input_data,
                 config=config,
                 stream_mode=["messages", "updates"],
             ):
                 yield chunk
 
-        stream_gen = run_agent_stream()
-        task = asyncio.create_task(stream_gen.__anext__())
-        app.state.thread_tasks[thread_id] = task
+        MAX_STREAM_RETRIES = 10
 
-        while True:
+        def _is_retryable_stream_error(err: Exception) -> bool:
             try:
-                chunk = await task
-                task = asyncio.create_task(stream_gen.__anext__())
-                app.state.thread_tasks[thread_id] = task
-            except StopAsyncIteration:
-                break
-            except Exception as stream_error:
-                traceback.print_exc()
-                await emit({"event": "error", "data": json.dumps({"error": str(stream_error)}, ensure_ascii=False)})
-                break
-            if not chunk:
-                continue
+                import httpx
+                return isinstance(err, (
+                    httpx.RemoteProtocolError,
+                    httpx.ReadError,
+                ))
+            except ImportError:
+                return False
 
-            if not isinstance(chunk, tuple) or len(chunk) != 2:
-                continue
-            mode, data = chunk
+        stream_attempt = 0
+        while True:  # 外层重试循环
+            # First attempt sends the user message; retries pass None so LangGraph
+            # resumes from the last checkpoint without re-appending the user message.
+            stream_gen = run_agent_stream(_initial_input if stream_attempt == 0 else None)
+            task = asyncio.create_task(stream_gen.__anext__())
+            app.state.thread_tasks[thread_id] = task
+            stream_err: Exception | None = None
 
-            if mode == "messages":
-                msg_chunk, metadata = data
-                msg_class = msg_chunk.__class__.__name__
-                if msg_class == "AIMessageChunk":
-                    content = extract_text_content(getattr(msg_chunk, "content", ""))
-                    chunk_msg_id = getattr(msg_chunk, "id", None)
-                    if content:
-                        await emit(
-                            {
-                                "event": "text",
-                                "data": json.dumps({"content": content}, ensure_ascii=False),
-                            },
-                            message_id=chunk_msg_id,
-                        )
-
-            elif mode == "updates":
-                if not isinstance(data, dict):
+            while True:  # 内层 chunk 循环
+                try:
+                    chunk = await task
+                    task = asyncio.create_task(stream_gen.__anext__())
+                    app.state.thread_tasks[thread_id] = task
+                except StopAsyncIteration:
+                    break
+                except Exception as err:
+                    stream_err = err
+                    break
+                if not chunk:
                     continue
-                for _node_name, node_update in data.items():
-                    if not isinstance(node_update, dict):
-                        continue
-                    messages = node_update.get("messages", [])
-                    if not isinstance(messages, list):
-                        messages = [messages]
-                    for msg in messages:
-                        msg_class = msg.__class__.__name__
-                        if msg_class == "AIMessage":
-                            ai_msg_id = getattr(msg, "id", None)
-                            # A6: inject run_id into message metadata
-                            if hasattr(msg, "metadata") and isinstance(msg.metadata, dict):
-                                msg.metadata["run_id"] = run_id
-                            for tc in getattr(msg, "tool_calls", []):
-                                tc_id = tc.get("id")
-                                if tc_id and tc_id in emitted_tool_call_ids:
-                                    continue
-                                if tc_id:
-                                    emitted_tool_call_ids.add(tc_id)
-                                    pending_tool_calls[tc_id] = {
-                                        "name": tc.get("name", "unknown"),
-                                        "args": tc.get("args", {}),
-                                    }
+
+                if not isinstance(chunk, tuple) or len(chunk) != 2:
+                    continue
+                mode, data = chunk
+
+                if mode == "messages":
+                    msg_chunk, metadata = data
+                    msg_class = msg_chunk.__class__.__name__
+                    if msg_class == "AIMessageChunk":
+                        content = extract_text_content(getattr(msg_chunk, "content", ""))
+                        chunk_msg_id = getattr(msg_chunk, "id", None)
+                        if content:
+                            await emit(
+                                {
+                                    "event": "text",
+                                    "data": json.dumps({"content": content}, ensure_ascii=False),
+                                },
+                                message_id=chunk_msg_id,
+                            )
+
+                        # Early tool_call emission: LangGraph streams tool_call_chunks in real-time
+                        # but the "updates" mode only fires after the full LLM response is generated.
+                        # By emitting tool_call as soon as we see the first chunk with name+id,
+                        # the UI can show the tool name immediately (typically within 1 second of
+                        # LLM start) rather than waiting for the full generation (3-8 seconds).
+                        for tc_chunk in getattr(msg_chunk, "tool_call_chunks", []):
+                            tc_id = tc_chunk.get("id")
+                            tc_name = tc_chunk.get("name", "")
+                            if tc_id and tc_name and tc_id not in emitted_tool_call_ids:
+                                emitted_tool_call_ids.add(tc_id)
+                                pending_tool_calls[tc_id] = {"name": tc_name, "args": {}}
                                 await emit(
                                     {
                                         "event": "tool_call",
                                         "data": json.dumps(
+                                            {"id": tc_id, "name": tc_name, "args": {}},
+                                            ensure_ascii=False,
+                                        ),
+                                    },
+                                    message_id=chunk_msg_id,
+                                )
+                                # Also update status so ThinkingIndicator shows current tool
+                                if hasattr(agent, "runtime"):
+                                    status = agent.runtime.get_status_dict()
+                                    status["current_tool"] = tc_name
+                                    await emit(
+                                        {
+                                            "event": "status",
+                                            "data": json.dumps(status, ensure_ascii=False),
+                                        }
+                                    )
+
+                elif mode == "updates":
+                    if not isinstance(data, dict):
+                        continue
+                    for _node_name, node_update in data.items():
+                        if not isinstance(node_update, dict):
+                            continue
+                        messages = node_update.get("messages", [])
+                        if not isinstance(messages, list):
+                            messages = [messages]
+                        for msg in messages:
+                            msg_class = msg.__class__.__name__
+                            if msg_class == "AIMessage":
+                                ai_msg_id = getattr(msg, "id", None)
+                                # A6: inject run_id into message metadata
+                                if hasattr(msg, "metadata") and isinstance(msg.metadata, dict):
+                                    msg.metadata["run_id"] = run_id
+                                for tc in getattr(msg, "tool_calls", []):
+                                    tc_id = tc.get("id")
+                                    full_args = tc.get("args", {})
+                                    if tc_id and tc_id not in emitted_tool_call_ids:
+                                        emitted_tool_call_ids.add(tc_id)
+                                        pending_tool_calls[tc_id] = {
+                                            "name": tc.get("name", "unknown"),
+                                            "args": full_args,
+                                        }
+                                    # Always emit from updates mode — carries complete args.
+                                    # Early emission (messages mode) sends args:{} for real-time
+                                    # tool name display; this emission delivers the full args.
+                                    await emit(
+                                        {
+                                            "event": "tool_call",
+                                            "data": json.dumps(
+                                                {
+                                                    "id": tc_id,
+                                                    "name": tc.get("name", "unknown"),
+                                                    "args": full_args,
+                                                },
+                                                ensure_ascii=False,
+                                            ),
+                                        },
+                                        message_id=ai_msg_id,
+                                    )
+                            elif msg_class == "ToolMessage":
+                                tc_id = getattr(msg, "tool_call_id", None)
+                                tool_msg_id = getattr(msg, "id", None)
+                                if tc_id:
+                                    pending_tool_calls.pop(tc_id, None)
+                                # A6: inject run_id into ToolMessage metadata
+                                if hasattr(msg, "metadata") and isinstance(msg.metadata, dict):
+                                    msg.metadata["run_id"] = run_id
+                                await emit(
+                                    {
+                                        "event": "tool_result",
+                                        "data": json.dumps(
                                             {
-                                                "id": tc.get("id"),
-                                                "name": tc.get("name", "unknown"),
-                                                "args": tc.get("args", {}),
+                                                "tool_call_id": tc_id,
+                                                "name": getattr(msg, "name", "unknown"),
+                                                "content": str(getattr(msg, "content", "")),
+                                                "metadata": getattr(msg, "metadata", None) or {},
                                             },
                                             ensure_ascii=False,
                                         ),
                                     },
-                                    message_id=ai_msg_id,
+                                    message_id=tool_msg_id,
                                 )
-                        elif msg_class == "ToolMessage":
-                            tc_id = getattr(msg, "tool_call_id", None)
-                            tool_msg_id = getattr(msg, "id", None)
-                            if tc_id:
-                                pending_tool_calls.pop(tc_id, None)
-                            # A6: inject run_id into ToolMessage metadata
-                            if hasattr(msg, "metadata") and isinstance(msg.metadata, dict):
-                                msg.metadata["run_id"] = run_id
-                            await emit(
-                                {
-                                    "event": "tool_result",
-                                    "data": json.dumps(
+                                if hasattr(agent, "runtime"):
+                                    status = agent.runtime.get_status_dict()
+                                    status["current_tool"] = getattr(msg, "name", None)
+                                    await emit(
                                         {
-                                            "tool_call_id": tc_id,
-                                            "name": getattr(msg, "name", "unknown"),
-                                            "content": str(getattr(msg, "content", "")),
-                                            "metadata": getattr(msg, "metadata", None) or {},
-                                        },
-                                        ensure_ascii=False,
-                                    ),
-                                },
-                                message_id=tool_msg_id,
-                            )
-                            if hasattr(agent, "runtime"):
-                                status = agent.runtime.get_status_dict()
-                                status["current_tool"] = getattr(msg, "name", None)
-                                await emit(
-                                    {
-                                        "event": "status",
-                                        "data": json.dumps(status, ensure_ascii=False),
-                                    }
-                                )
+                                            "event": "status",
+                                            "data": json.dumps(status, ensure_ascii=False),
+                                        }
+                                    )
 
-            # Drain real-time activity events (sub-agent, command progress, etc.)
-            while not activity_queue.empty():
-                try:
-                    act_event = activity_queue.get_nowait()
-                except asyncio.QueueEmpty:
-                    break
-                await emit(act_event)
+                # Drain real-time activity events (sub-agent, command progress, etc.)
+                while not activity_queue.empty():
+                    try:
+                        act_event = activity_queue.get_nowait()
+                    except asyncio.QueueEmpty:
+                        break
+                    await emit(act_event)
+
+            if stream_err is None:
+                break  # 正常完成，退出外层重试循环
+
+            if _is_retryable_stream_error(stream_err) and stream_attempt < MAX_STREAM_RETRIES:
+                stream_attempt += 1
+                wait = max(min(2 ** stream_attempt, 30) + random.uniform(-1.0, 1.0), 1.0)
+                await emit({"event": "retry", "data": json.dumps({
+                    "attempt": stream_attempt,
+                    "max_attempts": MAX_STREAM_RETRIES,
+                    "wait_seconds": round(wait, 1),
+                }, ensure_ascii=False)})
+                await stream_gen.aclose()
+                await asyncio.sleep(wait)
+            else:
+                traceback.print_exc()
+                await emit({"event": "error", "data": json.dumps(
+                    {"error": str(stream_err)}, ensure_ascii=False)})
+                break
 
         # Final status
         if hasattr(agent, "runtime"):
@@ -684,9 +785,10 @@ async def _run_agent_to_buffer(
             agent.runtime.transition(AgentState.IDLE)
 
         # Check for pending board tasks on idle
-        if hasattr(agent, '_taskboard_middleware') and agent._taskboard_middleware.auto_claim:
+        taskboard_svc = getattr(agent, '_taskboard_service', None)
+        if taskboard_svc is not None and taskboard_svc.auto_claim:
             try:
-                next_task = await agent._taskboard_middleware.on_idle()
+                next_task = await taskboard_svc.on_idle()
                 if next_task:
                     logger.info("Board task available: %s (id=%s)", next_task.get("title"), next_task["id"])
                     # V1: log only. Auto-execution requires thread management design (V2).
@@ -840,88 +942,3 @@ async def observe_run_events(
             else:
                 yield event
 
-
-# ---------------------------------------------------------------------------
-# Task agent: buffer-based producer (same pattern as main agent)
-# ---------------------------------------------------------------------------
-
-
-def start_task_agent_run(
-    thread_id: str,
-    payload: Any,
-    app: Any,
-    sandbox_type: str,
-) -> RunEventBuffer:
-    """Create a RunEventBuffer and launch task agent as background task."""
-
-    buf = RunEventBuffer()
-    buf.run_id = str(_uuid.uuid4())
-    app.state.subagent_buffers[thread_id] = buf
-    bg_task = asyncio.create_task(_run_task_agent_to_buffer(thread_id, payload, app, sandbox_type, buf))
-    app.state.thread_tasks[thread_id] = bg_task
-    return buf
-
-
-async def _run_task_agent_to_buffer(
-    thread_id: str,
-    payload: Any,
-    app: Any,
-    sandbox_type: str,
-    buf: RunEventBuffer,
-) -> None:
-    """Task agent producer — writes events to buffer."""
-    try:
-        set_current_thread_id(thread_id)
-        from backend.web.services.agent_pool import get_or_create_agent
-
-        agent = await get_or_create_agent(app, sandbox_type, thread_id=thread_id)
-        # Bind thread_id to TaskBoardMiddleware
-        if hasattr(agent, '_taskboard_middleware'):
-            agent._taskboard_middleware.thread_id = thread_id
-
-        # Get TaskMiddleware from agent
-        task_middleware = None
-        if hasattr(agent, "middleware"):
-            for mw in agent.middleware:
-                if mw.__class__.__name__ == "TaskMiddleware":
-                    task_middleware = mw
-                    break
-
-        if not task_middleware:
-            await buf.put(
-                {
-                    "event": "task_error",
-                    "data": json.dumps({"error": "TaskMiddleware not available"}, ensure_ascii=False),
-                }
-            )
-            return
-
-        # Build task params
-        params: dict[str, Any] = {
-            "SubagentType": payload.subagent_type,
-            "Prompt": payload.prompt,
-        }
-        if payload.description:
-            params["Description"] = payload.description
-        if payload.model:
-            params["Model"] = payload.model
-        if payload.max_turns:
-            params["MaxTurns"] = payload.max_turns
-
-        # Stream task execution into buffer
-        async for event in task_middleware.run_task_streaming(params):
-            await buf.put(event)
-
-        await buf.put({"event": "run_done", "data": json.dumps({"thread_id": thread_id})})
-    except Exception as e:
-        traceback.print_exc()
-        await buf.put(
-            {
-                "event": "task_error",
-                "data": json.dumps({"error": str(e)}, ensure_ascii=False),
-            }
-        )
-    finally:
-        await buf.mark_done()
-        app.state.thread_tasks.pop(thread_id, None)
-        app.state.subagent_buffers.pop(thread_id, None)

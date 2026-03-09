@@ -33,9 +33,7 @@ export default function NewChatDialog({ open, onOpenChange }: NewChatDialogProps
 
   const handleSelect = (member: typeof memberList[0]) => {
     onOpenChange(false);
-    navigate("/chat", {
-      state: { startWith: member.id, memberName: member.name },
-    });
+    navigate(`/chat/${member.name}`);
   };
 
   return (

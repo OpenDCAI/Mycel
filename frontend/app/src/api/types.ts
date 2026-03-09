@@ -5,6 +5,10 @@ export const STREAM_EVENT_TYPES = [
   "task_start", "task_done", "task_error",
   // Control (3) — run boundaries + runtime status
   "status", "run_start", "run_done",
+  // Retry notification
+  "retry",
+  // Notice — system notification emitted before run_start (e.g. task completion)
+  "notice",
 ] as const;
 
 export type StreamEventType = (typeof STREAM_EVENT_TYPES)[number];
@@ -122,7 +126,14 @@ export interface NoticeSegment {
   notification_type?: NotificationType;
 }
 
-export type TurnSegment = TextSegment | ToolSegment | NoticeSegment;
+export interface RetrySegment {
+  type: "retry";
+  attempt: number;
+  maxAttempts: number;
+  waitSeconds: number;
+}
+
+export type TurnSegment = TextSegment | ToolSegment | NoticeSegment | RetrySegment;
 
 export interface AssistantTurn {
   id: string;
@@ -130,6 +141,7 @@ export interface AssistantTurn {
   role: "assistant";
   segments: TurnSegment[];
   timestamp: number;
+  endTimestamp?: number;
   streaming?: boolean;
 }
 
@@ -219,10 +231,3 @@ export interface WorkspaceFileResult {
   size: number;
 }
 
-export interface TaskAgentRequest {
-  subagent_type: string;
-  prompt: string;
-  description?: string;
-  model?: string;
-  max_turns?: number;
-}

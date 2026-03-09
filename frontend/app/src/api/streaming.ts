@@ -1,4 +1,4 @@
-import type { StreamEvent, TaskAgentRequest } from "./types";
+import type { StreamEvent } from "./types";
 import { processChunk } from "./sse-processor";
 
 /** Read an SSE response body, dispatch events, return { lastSeq, runEnded }. */
@@ -117,13 +117,3 @@ export async function cancelRun(threadId: string): Promise<void> {
   if (!res.ok) throw new Error(`Cancel failed: ${res.statusText}`);
 }
 
-/** Start a task agent and subscribe to its event stream. */
-export async function runTaskAgent(
-  threadId: string,
-  taskRequest: TaskAgentRequest,
-  onEvent: (event: StreamEvent) => void,
-  signal?: AbortSignal,
-): Promise<void> {
-  await postJSON(`/api/threads/${encodeURIComponent(threadId)}/task-agent/runs`, taskRequest, signal);
-  await streamThreadEvents(threadId, onEvent, signal);
-}

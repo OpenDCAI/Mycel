@@ -25,8 +25,8 @@ try:
 except ImportError:
     set_sandbox_run_id = None
     set_sandbox_thread_id = None
-from core.monitor import AgentState
-from core.queue import format_steer_reminder
+from core.runtime.middleware.monitor import AgentState
+from core.runtime.middleware.queue import format_steer_reminder
 
 
 class WelcomeBanner(Static):
@@ -148,7 +148,7 @@ class LeonApp(App):
         if not hasattr(self.agent, "queue_manager"):
             return
 
-        def wake_handler() -> None:
+        def wake_handler(item: object) -> None:
             # Schedule followup check on Textual's event loop (thread-safe)
             self.call_later(self._state_driven_followup)
 

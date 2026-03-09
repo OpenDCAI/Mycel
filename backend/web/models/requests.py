@@ -19,10 +19,3 @@ class RunRequest(BaseModel):
 class SendMessageRequest(BaseModel):
     message: str
 
-
-class TaskAgentRequest(BaseModel):
-    subagent_type: str
-    prompt: str
-    description: str | None = None
-    model: str | None = None
-    max_turns: int | None = None

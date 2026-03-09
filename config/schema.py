@@ -92,7 +92,6 @@ class FileSystemToolsConfig(BaseModel):
     read_file: ReadFileConfig = Field(default_factory=ReadFileConfig)
     write_file: bool = True
     edit_file: bool = True
-    multi_edit: bool = True
     list_dir: bool = True
 
 
@@ -202,6 +201,10 @@ class ToolsConfig(BaseModel):
     web: WebConfig = Field(default_factory=WebConfig)
     command: CommandConfig = Field(default_factory=CommandConfig)
     spill_buffer: SpillBufferConfig = Field(default_factory=SpillBufferConfig)
+    tool_modes: dict[str, str] = Field(
+        default_factory=dict,
+        description="Per-tool mode overrides: tool_name -> 'inline' | 'deferred'",
+    )
 
 
 # ============================================================================

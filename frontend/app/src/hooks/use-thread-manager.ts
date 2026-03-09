@@ -61,10 +61,9 @@ export function useThreadManager(): ThreadManagerState & ThreadManagerActions {
   const handleDeleteThread = useCallback(
     async (threadId: string) => {
       await deleteThread(threadId);
-      const remaining = threads.filter((t) => t.thread_id !== threadId);
-      setThreads(remaining);
+      setThreads(prev => prev.filter((t) => t.thread_id !== threadId));
     },
-    [threads],
+    [],
   );
 
   return {

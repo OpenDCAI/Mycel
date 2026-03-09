@@ -37,9 +37,14 @@ export default function SearchModal({ isOpen, threads, onClose, onSelectThread }
                 onClose();
               }}
             >
-              <div className="flex flex-col gap-0.5">
-                <span className="text-sm">{thread.preview || thread.thread_id}</span>
-                <span className="text-xs text-muted-foreground">{thread.sandbox ?? "local"}</span>
+              <div className="flex flex-col gap-0.5 min-w-0">
+                <span className="text-sm truncate">{thread.preview || thread.thread_id}</span>
+                <span className="text-xs text-muted-foreground flex gap-2">
+                  <span>{thread.sandbox ?? "local"}</span>
+                  {thread.updated_at && (
+                    <span>{new Date(thread.updated_at).toLocaleString("zh-CN", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })}</span>
+                  )}
+                </span>
               </div>
             </CommandItem>
           ))}

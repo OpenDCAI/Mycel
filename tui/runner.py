@@ -61,15 +61,16 @@ class NonInteractiveRunner:
         t0 = time.perf_counter()
 
         # @@@ Set sandbox thread context and ensure session before invoke
-        if hasattr(self.agent, "_sandbox") and self.agent._sandbox.name != "local":
+        if hasattr(self.agent, "_sandbox"):
             from sandbox.thread_context import set_current_thread_id
 
             set_current_thread_id(self.thread_id)
-            self.agent._sandbox.ensure_session(self.thread_id)
+            if self.agent._sandbox.name != "local":
+                self.agent._sandbox.ensure_session(self.thread_id)
 
         # 状态转移：→ ACTIVE
         if hasattr(self.agent, "runtime"):
-            from core.monitor import AgentState
+            from core.runtime.middleware.monitor import AgentState
 
             self.agent.runtime.transition(AgentState.ACTIVE)
 
@@ -92,7 +93,7 @@ class NonInteractiveRunner:
         finally:
             # 状态转移：→ IDLE
             if hasattr(self.agent, "runtime"):
-                from core.monitor import AgentState
+                from core.runtime.middleware.monitor import AgentState
 
                 if self.agent.runtime.current_state == AgentState.ACTIVE:
                     self.agent.runtime.transition(AgentState.IDLE)
