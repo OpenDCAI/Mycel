@@ -135,3 +135,26 @@ def test_workspace_shared_across_threads(_patch_services) -> None:
     svc.cleanup_thread_files("thread-a")
     assert host_path.exists(), "workspace host_path wrongly deleted by cleanup"
     assert (host_path / "shared.txt").exists(), "shared file wrongly deleted"
+
+
+def test_delete_file(_patch_services) -> None:
+    import backend.web.services.workspace_service as svc
+
+    _save_thread_config("thread-delete")
+    svc.ensure_thread_files("thread-delete")
+    svc.save_file(thread_id="thread-delete", relative_path="to_delete.txt", content=b"data")
+
+    svc.delete_file(thread_id="thread-delete", relative_path="to_delete.txt")
+
+    with pytest.raises(FileNotFoundError):
+        svc.resolve_file(thread_id="thread-delete", relative_path="to_delete.txt")
+
+
+def test_delete_file_not_found(_patch_services) -> None:
+    import backend.web.services.workspace_service as svc
+
+    _save_thread_config("thread-delete-2")
+    svc.ensure_thread_files("thread-delete-2")
+
+    with pytest.raises(FileNotFoundError):
+        svc.delete_file(thread_id="thread-delete-2", relative_path="nonexistent.txt")

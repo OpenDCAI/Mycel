@@ -204,6 +204,20 @@ def list_files(
     return entries
 
 
+def delete_file(
+    *,
+    thread_id: str,
+    relative_path: str,
+    workspace_id: str | None = None,
+) -> None:
+    """Delete a file from workspace."""
+    base = _get_files_dir(thread_id, workspace_id)
+    target = _resolve_relative_path(base, relative_path)
+    if not target.exists() or not target.is_file():
+        raise FileNotFoundError(f"File not found: {relative_path}")
+    target.unlink()
+
+
 def cleanup_thread_files(thread_id: str) -> None:
     """Delete disk files for a thread (per-thread dir only)."""
     thread_root = (THREAD_FILES_ROOT / thread_id).resolve()
