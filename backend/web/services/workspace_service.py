@@ -167,14 +167,8 @@ def save_file(
     digest = hashlib.sha256(content).hexdigest()
 
     # @@@upload-touch-activity - File upload is user activity, update session timestamp to prevent idle reaper race
-    try:
-        from backend.web.utils.helpers import _get_container
-        mgr = _get_container().sandbox_manager()
-        session = mgr.session_manager.get_by_thread(thread_id)
-        if session:
-            session.touch()
-    except Exception:
-        pass  # Non-blocking: upload succeeds even if session touch fails
+    from backend.web.services.activity_tracker import track_thread_activity
+    track_thread_activity(thread_id, "file_upload")
 
     return {
         "thread_id": thread_id,
