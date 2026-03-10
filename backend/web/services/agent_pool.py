@@ -132,17 +132,18 @@ async def get_or_create_agent(app_obj: FastAPI, sandbox_type: str, thread_id: st
     agent_obj.agent_id = agent_id
 
     # @@@per-thread-bind-mounts - mount or copy thread files directory into sandbox
+    # Workplace-capable providers are handled by manager's strategy gate in get_sandbox()
     if hasattr(agent_obj, "_sandbox") and sandbox_type != "local":
-        from sandbox.config import MountSpec
-
         capability = agent_obj._sandbox.manager.provider_capability
-        # @@@cloud-provider-copy - cloud providers can't mount local files, use copy mode instead
-        mode = "mount" if capability.mount.supports_mount else "copy"
-        target = agent_obj._sandbox.manager.resolve_agent_files_dir(thread_id)
-        mount = MountSpec(source=channel["files_path"], target=target, mode=mode, read_only=False)
-        manager = getattr(agent_obj._sandbox, "_manager", None) or getattr(agent_obj._sandbox, "manager", None)
-        if manager and hasattr(manager, "set_thread_bind_mounts"):
-            manager.set_thread_bind_mounts(thread_id, [mount])
+        if not capability.mount.supports_workplace:
+            from sandbox.config import MountSpec
+            # @@@cloud-provider-copy - cloud providers can't mount local files, use copy mode instead
+            mode = "mount" if capability.mount.supports_mount else "copy"
+            target = agent_obj._sandbox.manager.resolve_agent_files_dir(thread_id)
+            mount = MountSpec(source=channel["files_path"], target=target, mode=mode, read_only=False)
+            manager = getattr(agent_obj._sandbox, "_manager", None) or getattr(agent_obj._sandbox, "manager", None)
+            if manager and hasattr(manager, "set_thread_bind_mounts"):
+                manager.set_thread_bind_mounts(thread_id, [mount])
     pool[pool_key] = agent_obj
     return agent_obj
 
