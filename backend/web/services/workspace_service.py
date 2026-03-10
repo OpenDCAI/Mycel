@@ -12,11 +12,14 @@ Files path is derived, not cached in DB:
 from __future__ import annotations
 
 import hashlib
+import logging
 import shutil
 import uuid
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 from backend.web.core.config import THREAD_FILES_ROOT
 from backend.web.utils.helpers import _get_container
@@ -244,6 +247,7 @@ def create_agent_workplace(
         repo.upsert(member_name, provider_type, backend_ref, mount_path, now)
     finally:
         repo.close()
+    logger.info("Created workplace: member=%s provider=%s ref=%s", member_name, provider_type, backend_ref)
     return {
         "member_name": member_name, "provider_type": provider_type,
         "backend_ref": backend_ref, "mount_path": mount_path, "created_at": now,
@@ -261,9 +265,12 @@ def list_agent_workplaces(member_name: str) -> list[dict[str, Any]]:
 def delete_all_agent_workplaces(member_name: str) -> int:
     repo = _workplace_repo()
     try:
-        return repo.delete_all_for_member(member_name)
+        count = repo.delete_all_for_member(member_name)
     finally:
         repo.close()
+    if count:
+        logger.info("Deleted %d workplace(s) for member=%s", count, member_name)
+    return count
 
 
 def cleanup_thread_files(thread_id: str) -> None:
