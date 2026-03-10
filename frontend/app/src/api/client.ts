@@ -7,7 +7,6 @@ import type {
   LeaseStatus,
   ThreadSummary,
   WorkspaceChannelFilesResult,
-  WorkspaceChannelKind,
   WorkspaceFileResult,
   WorkspaceListResult,
   WorkspaceUploadResult,
@@ -168,17 +167,17 @@ export async function getThreadLease(threadId: string): Promise<LeaseStatus> {
 
 // --- Workspace API ---
 
+function workspaceBase(threadId: string): string {
+  return `/api/threads/${encodeURIComponent(threadId)}/workspace`;
+}
+
 export async function listWorkspace(threadId: string, path?: string): Promise<WorkspaceListResult> {
   const q = path ? `?path=${encodeURIComponent(path)}` : "";
-  return request(`/api/threads/${encodeURIComponent(threadId)}/workspace/list${q}`);
+  return request(`${workspaceBase(threadId)}/list${q}`);
 }
 
 export async function readWorkspaceFile(threadId: string, path: string): Promise<WorkspaceFileResult> {
-  return request(`/api/threads/${encodeURIComponent(threadId)}/workspace/read?path=${encodeURIComponent(path)}`);
-}
-
-function workspaceBase(threadId: string): string {
-  return `/api/threads/${encodeURIComponent(threadId)}/workspace`;
+  return request(`${workspaceBase(threadId)}/read?path=${encodeURIComponent(path)}`);
 }
 
 export async function listWorkspaceChannelFiles(
