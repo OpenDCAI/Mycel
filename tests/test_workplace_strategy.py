@@ -39,7 +39,7 @@ class FakeWorkplaceProvider(SandboxProvider):
         self._created_workplaces.append((member_name, mount_path))
         return ref
 
-    def create_session(self, context_id=None):
+    def create_session(self, context_id=None, thread_id=None):
         return SessionInfo(session_id=f"s-{uuid.uuid4().hex[:8]}", provider=self.name, status="running")
 
     def destroy_session(self, session_id, sync=True):
