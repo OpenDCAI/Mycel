@@ -647,6 +647,10 @@ def delete_member(member_id: str) -> bool:
     member_dir = MEMBERS_DIR / member_id
     if not member_dir.is_dir():
         return False
+
+    # @@@workplace-cleanup - delete provider-side storage before removing member directory
+    _cleanup_member_workplaces(member_id)
+
     shutil.rmtree(member_dir)
 
     # Also remove from SQLite
@@ -658,3 +662,25 @@ def delete_member(member_id: str) -> bool:
         repo.close()
 
     return True
+
+
+def _cleanup_member_workplaces(member_name: str) -> None:
+    """Delete workplace storage (volumes, host dirs) for a member being deleted."""
+    from backend.web.services.workspace_service import list_agent_workplaces, delete_all_agent_workplaces
+
+    workplaces = list_agent_workplaces(member_name)
+    if not workplaces:
+        return
+
+    from backend.web.services.sandbox_service import init_providers_and_managers
+    providers, _ = init_providers_and_managers()
+
+    for wp in workplaces:
+        try:
+            provider = providers.get(wp["provider_type"])
+            if provider:
+                provider.delete_workplace(wp["backend_ref"])
+        except Exception:
+            logger.warning("Failed to delete workplace backend: %s", wp, exc_info=True)
+
+    delete_all_agent_workplaces(member_name)
