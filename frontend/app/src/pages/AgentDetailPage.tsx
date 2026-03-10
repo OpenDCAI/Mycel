@@ -16,6 +16,14 @@ import type { CrudItem, RuleItem, ResourceItem, SubAgent } from "@/store/types";
 
 // ==================== Types ====================
 
+interface WorkplaceItem {
+  member_name: string;
+  provider_type: string;
+  backend_ref: string;
+  mount_path: string;
+  created_at?: string;
+}
+
 type ModuleId = "role" | "mcp" | "skills" | "subagents" | "workplace";
 
 interface ModuleDef {
@@ -71,7 +79,7 @@ export default function AgentDetail() {
     } catch { toast.error("重命名失败"); }
   };
 
-  const [workplaces, setWorkplaces] = useState<any[]>([]);
+  const [workplaces, setWorkplaces] = useState<WorkplaceItem[]>([]);
   useEffect(() => {
     if (member && activeModule === "workplace") {
       fetch(`/api/panel/members/${member.id}/workplaces`)
@@ -272,15 +280,23 @@ export default function AgentDetail() {
 
       {showTest && <TestPanel memberName={member.name} onClose={() => setShowTest(false)} />}
       {showPublish && <PublishDialog open={showPublish} onOpenChange={setShowPublish} memberId={member.id} />}
-      {pickerType && (
-        <ResourcePicker
-          type={pickerType}
-          library={pickerType === "skill" ? librarySkills : pickerType === "mcp" ? libraryMcps : libraryAgents}
-          assigned={pickerType === "skill" ? member.config.skills.map(s => s.name) : pickerType === "mcp" ? member.config.mcps.map(m => m.name) : member.config.subAgents.map(a => a.name)}
-          onConfirm={(names) => { handleAssign(pickerType, names); setPickerType(null); }}
-          onClose={() => setPickerType(null)}
-        />
-      )}
+      {pickerType && (() => {
+        const libraryMap = { skill: librarySkills, mcp: libraryMcps, agent: libraryAgents };
+        const assignedMap = {
+          skill: member.config.skills.map(s => s.name),
+          mcp: member.config.mcps.map(m => m.name),
+          agent: member.config.subAgents.map(a => a.name),
+        };
+        return (
+          <ResourcePicker
+            type={pickerType}
+            library={libraryMap[pickerType]}
+            assigned={assignedMap[pickerType]}
+            onConfirm={(names) => { handleAssign(pickerType, names); setPickerType(null); }}
+            onClose={() => setPickerType(null)}
+          />
+        );
+      })()}
     </div>
   );
 }
@@ -840,7 +856,7 @@ function ResourcePicker({ type, library, assigned, onConfirm, onClose }: {
 
 // ==================== WorkplacePanel ====================
 
-function WorkplacePanel({ items }: { items: any[] }) {
+function WorkplacePanel({ items }: { items: WorkplaceItem[] }) {
   if (!items.length) {
     return (
       <div className="flex items-center justify-center h-40 text-sm text-muted-foreground">
