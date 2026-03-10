@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import {
   ArrowLeft, Bot, FileText, Wrench, Plug, Zap, Users, BookOpen,
-  Play, Tag, Save, Plus, Trash2, Search, X, Check, Lock,
+  Play, Tag, Save, Plus, Trash2, Search, X, Check, Lock, HardDrive,
 } from "lucide-react";
 import TestPanel from "@/components/TestPanel";
 import PublishDialog from "@/components/PublishDialog";
@@ -16,7 +16,7 @@ import type { CrudItem, RuleItem, ResourceItem, SubAgent } from "@/store/types";
 
 // ==================== Types ====================
 
-type ModuleId = "role" | "mcp" | "skills" | "subagents";
+type ModuleId = "role" | "mcp" | "skills" | "subagents" | "workplace";
 
 interface ModuleDef {
   id: ModuleId;
@@ -30,6 +30,7 @@ const modules: ModuleDef[] = [
   { id: "mcp", label: "MCP", icon: Plug, count: c => c.mcps.length },
   { id: "skills", label: "Skills", icon: Zap, count: c => c.skills.length },
   { id: "subagents", label: "Agents", icon: Users, count: c => c.subAgents.length },
+  { id: "workplace", label: "Workplace", icon: HardDrive },
 ];
 
 // ==================== Main Component ====================
@@ -69,6 +70,16 @@ export default function AgentDetail() {
       await updateMember(member.id, { name: trimmed });
     } catch { toast.error("重命名失败"); }
   };
+
+  const [workplaces, setWorkplaces] = useState<any[]>([]);
+  useEffect(() => {
+    if (member && activeModule === "workplace") {
+      fetch(`/api/panel/members/${member.id}/workplaces`)
+        .then(r => r.json())
+        .then(d => setWorkplaces(d.items || []))
+        .catch(() => setWorkplaces([]));
+    }
+  }, [member?.id, activeModule]);
 
   const statusLabels: Record<string, string> = { active: "在岗", draft: "草稿", inactive: "离线" };
 
@@ -189,6 +200,8 @@ export default function AgentDetail() {
             onDelete={(name) => handleRemove("subagents", name)}
           />
         );
+      case "workplace":
+        return <WorkplacePanel items={workplaces} />;
       default: return null;
     }
   };
@@ -822,5 +835,41 @@ function ResourcePicker({ type, library, assigned, onConfirm, onClose }: {
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+// ==================== WorkplacePanel ====================
+
+function WorkplacePanel({ items }: { items: any[] }) {
+  if (!items.length) {
+    return (
+      <div className="flex items-center justify-center h-40 text-sm text-muted-foreground">
+        No workplaces created yet. Start a thread with a remote sandbox to create one.
+      </div>
+    );
+  }
+  return (
+    <div className="space-y-3 p-4">
+      {items.map((wp) => (
+        <div key={wp.provider_type} className="rounded-lg border p-4 space-y-2">
+          <div className="flex items-center justify-between">
+            <span className="font-medium text-sm">{wp.provider_type}</span>
+            <span className="text-xs text-muted-foreground">
+              {wp.created_at ? new Date(wp.created_at).toLocaleString() : ""}
+            </span>
+          </div>
+          <div className="grid grid-cols-2 gap-2 text-xs">
+            <div>
+              <span className="text-muted-foreground">Backend Ref: </span>
+              <code className="bg-muted px-1 rounded">{wp.backend_ref}</code>
+            </div>
+            <div>
+              <span className="text-muted-foreground">Mount Path: </span>
+              <code className="bg-muted px-1 rounded">{wp.mount_path}</code>
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
   );
 }
