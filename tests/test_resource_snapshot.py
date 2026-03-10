@@ -26,7 +26,7 @@ class _FakeProvider(SandboxProvider):
                 "web": False,
                 "process": False,
                 "hooks": False,
-                "snapshot": False,
+                "mount": False,
             },
         )
 

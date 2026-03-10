@@ -6,7 +6,7 @@ export const CAPABILITY_LABELS: Record<string, string> = {
   web: "Web",
   process: "进程",
   hooks: "Hook",
-  snapshot: "快照",
+  mount: "挂载",
 };
 
 export const CAPABILITY_KEYS = [
@@ -17,5 +17,5 @@ export const CAPABILITY_KEYS = [
   "web",
   "process",
   "hooks",
-  "snapshot",
+  "mount",
 ] as const;

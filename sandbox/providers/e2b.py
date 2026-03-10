@@ -52,7 +52,7 @@ class E2BProvider(SandboxProvider):
             web=False,
             process=False,
             hooks=False,
-            snapshot=True,
+            mount=False,
         ),
     )
     WORKSPACE_ROOT = "/home/user/workspace"

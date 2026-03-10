@@ -65,7 +65,7 @@ class DaytonaProvider(SandboxProvider):
             web=False,
             process=False,
             hooks=True,
-            snapshot=False,
+            mount=True,
         ),
         mount=MountCapability(
             supports_mount=True,

@@ -19,7 +19,7 @@ RESOURCE_CAPABILITY_KEYS = (
     "web",
     "process",
     "hooks",
-    "snapshot",
+    "mount",
 )
 
 
@@ -41,7 +41,7 @@ def build_resource_capabilities(
     web: bool,
     process: bool,
     hooks: bool,
-    snapshot: bool,
+    mount: bool,
 ) -> dict[str, bool]:
     return normalize_resource_capabilities(
         {
@@ -52,7 +52,7 @@ def build_resource_capabilities(
             "web": web,
             "process": process,
             "hooks": hooks,
-            "snapshot": snapshot,
+            "mount": mount,
         }
     )
 
