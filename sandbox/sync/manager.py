@@ -13,8 +13,8 @@ class SyncManager:
 
         runtime_kind = self.provider_capability.runtime_kind
 
-        # Docker and local use bind mounts - no sync needed
-        if runtime_kind in ("local", "docker"):
+        # Bind-mount-based providers don't need sync
+        if runtime_kind in ("local", "docker_pty"):
             return NoOpStrategy()
 
         # Remote providers use incremental sync
