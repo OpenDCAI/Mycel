@@ -120,6 +120,8 @@ async def read_workspace_file(
     try:
         set_current_thread_id(thread_id)
         agent = await get_or_create_agent(app, sandbox_type, thread_id=thread_id)
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(503, f"Sandbox agent init failed for {sandbox_type}: {e}") from e
 
@@ -136,6 +138,8 @@ async def read_workspace_file(
 
     try:
         payload = await asyncio.to_thread(_read_remote)
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(400, str(e)) from e
     return {"thread_id": thread_id, **payload}
