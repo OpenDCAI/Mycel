@@ -7,6 +7,7 @@ Implements SandboxProvider using local Docker containers.
 from __future__ import annotations
 
 import asyncio
+import logging
 import os
 import shlex
 import subprocess
@@ -14,6 +15,8 @@ import uuid
 from collections.abc import Callable
 from pathlib import Path
 from typing import TYPE_CHECKING
+
+logger = logging.getLogger(__name__)
 
 from sandbox.config import MountSpec
 from sandbox.interfaces.executor import ExecuteResult
@@ -76,6 +79,7 @@ class DockerProvider(SandboxProvider):
             supports_copy=True,
             supports_read_only=True,
             mode_handlers={"mount": True, "copy": True},
+            supports_workplace=True,
         ),
     )
 
@@ -104,12 +108,39 @@ class DockerProvider(SandboxProvider):
         self._docker_host = docker_host
         self._sessions: dict[str, str] = {}  # session_id -> container_id
         self._thread_bind_mounts: dict[str, list[MountSpec]] = {}  # thread_id -> bind_mounts
+        self._workplace_mounts: dict[str, MountSpec] = {}  # thread_id -> workplace bind mount
 
     def set_thread_bind_mounts(self, thread_id: str, mounts: list[MountSpec | dict]) -> None:
         """Set thread-specific bind mounts that will be applied when creating sessions."""
         self._thread_bind_mounts[thread_id] = [
             MountSpec.model_validate(m) if isinstance(m, dict) else m for m in mounts
         ]
+
+    # ==================== Workplace ====================
+
+    def create_workplace(self, member_name: str, mount_path: str) -> str:
+        """Create a host directory for the agent. Returns host path as backend_ref."""
+        workplace_dir = Path.home() / ".leon" / "workplaces" / member_name
+        workplace_dir.mkdir(parents=True, exist_ok=True)
+        logger.info("Created Docker workplace: %s", workplace_dir)
+        return str(workplace_dir)
+
+    def set_workplace_mount(self, thread_id: str, backend_ref: str, mount_path: str) -> None:
+        self._workplace_mounts[thread_id] = MountSpec(
+            source=backend_ref, target=mount_path, mode="mount", read_only=False,
+        )
+
+    def delete_workplace(self, backend_ref: str) -> None:
+        """Delete workplace host directory. backend_ref is the host path."""
+        import shutil
+        workplace_dir = Path(backend_ref).resolve()
+        # @@@safe-workplace-delete - refuse to delete outside expected directory
+        expected_parent = (Path.home() / ".leon" / "workplaces").resolve()
+        if not str(workplace_dir).startswith(str(expected_parent)):
+            raise ValueError(f"Refusing to delete workplace outside {expected_parent}: {workplace_dir}")
+        if workplace_dir.exists():
+            logger.info("Deleting Docker workplace: %s", workplace_dir)
+            shutil.rmtree(workplace_dir)
 
     def create_session(self, context_id: str | None = None, thread_id: str | None = None) -> SessionInfo:
         session_id = f"leon-{uuid.uuid4().hex[:12]}"
@@ -125,8 +156,10 @@ class DockerProvider(SandboxProvider):
             f"leon.session_id={session_id}",
         ]
 
-        # Merge global bind_mounts with thread-specific mounts
+        # Merge global bind_mounts with thread-specific mounts + workplace mount
         all_mounts = list(self.bind_mounts)
+        if thread_id and thread_id in self._workplace_mounts:
+            all_mounts.append(self._workplace_mounts.pop(thread_id))
         if thread_id and thread_id in self._thread_bind_mounts:
             all_mounts.extend(self._thread_bind_mounts[thread_id])
 
