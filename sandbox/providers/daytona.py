@@ -235,11 +235,8 @@ class DaytonaProvider(SandboxProvider):
         cwd: str | None = None,
     ) -> ProviderExecResult:
         sb = self._get_sandbox(session_id)
-        try:
-            result = sb.process.exec(command, cwd=cwd or self.default_cwd, timeout=timeout_ms // 1000)
-            return ProviderExecResult(output=result.result or "", exit_code=int(result.exit_code or 0))
-        except Exception as e:
-            return ProviderExecResult(output="", exit_code=1, error=str(e))
+        result = sb.process.exec(command, cwd=cwd or self.default_cwd, timeout=timeout_ms // 1000)
+        return ProviderExecResult(output=result.result or "", exit_code=int(result.exit_code or 0))
 
     # ==================== Filesystem ====================
 
