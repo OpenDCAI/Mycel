@@ -315,6 +315,8 @@ def build_provider_from_config_name(name: str, *, sandboxes_dir: Path | None = N
             return DockerProvider(
                 image=config.docker.image,
                 mount_path=config.docker.mount_path,
+                default_cwd=config.docker.cwd,
+                bind_mounts=config.docker.bind_mounts,
                 provider_name=name,
                 docker_host=getattr(config.docker, "docker_host", None),
             )
@@ -340,6 +342,7 @@ def build_provider_from_config_name(name: str, *, sandboxes_dir: Path | None = N
                 api_url=config.daytona.api_url,
                 target=config.daytona.target,
                 default_cwd=config.daytona.cwd,
+                bind_mounts=config.daytona.bind_mounts,
                 provider_name=name,
             )
     except Exception as e:
