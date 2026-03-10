@@ -92,6 +92,7 @@ worktrees/
 
 # Playwright CLI artifacts
 frontend/app/.playwright-cli/
+frontend/app/test-results/
 frontend/app/*.png
 frontend/app/*.yml
 
