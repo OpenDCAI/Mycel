@@ -218,6 +218,54 @@ def delete_file(
     target.unlink()
 
 
+# ---------------------------------------------------------------------------
+# Agent Workplace operations
+# ---------------------------------------------------------------------------
+
+
+def _workplace_repo():
+    return _get_container().workplace_repo()
+
+
+def get_agent_workplace(member_name: str, provider_type: str) -> dict[str, Any] | None:
+    repo = _workplace_repo()
+    try:
+        return repo.get(member_name, provider_type)
+    finally:
+        repo.close()
+
+
+def create_agent_workplace(
+    member_name: str, provider_type: str, backend_ref: str, mount_path: str,
+) -> dict[str, Any]:
+    now = _now_utc()
+    repo = _workplace_repo()
+    try:
+        repo.upsert(member_name, provider_type, backend_ref, mount_path, now)
+    finally:
+        repo.close()
+    return {
+        "member_name": member_name, "provider_type": provider_type,
+        "backend_ref": backend_ref, "mount_path": mount_path, "created_at": now,
+    }
+
+
+def list_agent_workplaces(member_name: str) -> list[dict[str, Any]]:
+    repo = _workplace_repo()
+    try:
+        return repo.list_by_member(member_name)
+    finally:
+        repo.close()
+
+
+def delete_all_agent_workplaces(member_name: str) -> int:
+    repo = _workplace_repo()
+    try:
+        return repo.delete_all_for_member(member_name)
+    finally:
+        repo.close()
+
+
 def cleanup_thread_files(thread_id: str) -> None:
     """Delete disk files and workspace entity for a thread."""
     workspace_id = _get_workspace_id(thread_id)

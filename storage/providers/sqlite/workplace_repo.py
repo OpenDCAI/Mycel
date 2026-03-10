@@ -1,0 +1,85 @@
+"""SQLite repository for agent workplaces."""
+
+from __future__ import annotations
+
+import sqlite3
+from pathlib import Path
+from typing import Any
+
+from storage.providers.sqlite.connection import create_connection
+
+
+class SQLiteWorkplaceRepo:
+
+    def __init__(self, db_path: str | Path, conn: sqlite3.Connection | None = None) -> None:
+        self._own_conn = conn is None
+        if conn is not None:
+            self._conn = conn
+        else:
+            self._conn = create_connection(db_path)
+        self._ensure_tables()
+
+    def close(self) -> None:
+        if self._own_conn:
+            self._conn.close()
+
+    def upsert(self, member_name: str, provider_type: str,
+               backend_ref: str, mount_path: str, created_at: str) -> None:
+        self._conn.execute(
+            "INSERT OR REPLACE INTO agent_workplaces"
+            "(member_name, provider_type, backend_ref, mount_path, created_at)"
+            " VALUES (?, ?, ?, ?, ?)",
+            (member_name, provider_type, backend_ref, mount_path, created_at),
+        )
+        self._conn.commit()
+
+    def get(self, member_name: str, provider_type: str) -> dict[str, Any] | None:
+        self._conn.row_factory = sqlite3.Row
+        row = self._conn.execute(
+            "SELECT member_name, provider_type, backend_ref, mount_path, created_at"
+            " FROM agent_workplaces WHERE member_name = ? AND provider_type = ?",
+            (member_name, provider_type),
+        ).fetchone()
+        self._conn.row_factory = None
+        return dict(row) if row else None
+
+    def list_by_member(self, member_name: str) -> list[dict[str, Any]]:
+        self._conn.row_factory = sqlite3.Row
+        rows = self._conn.execute(
+            "SELECT member_name, provider_type, backend_ref, mount_path, created_at"
+            " FROM agent_workplaces WHERE member_name = ?",
+            (member_name,),
+        ).fetchall()
+        self._conn.row_factory = None
+        return [dict(r) for r in rows]
+
+    def delete(self, member_name: str, provider_type: str) -> bool:
+        cur = self._conn.execute(
+            "DELETE FROM agent_workplaces WHERE member_name = ? AND provider_type = ?",
+            (member_name, provider_type),
+        )
+        self._conn.commit()
+        return cur.rowcount > 0
+
+    def delete_all_for_member(self, member_name: str) -> int:
+        cur = self._conn.execute(
+            "DELETE FROM agent_workplaces WHERE member_name = ?",
+            (member_name,),
+        )
+        self._conn.commit()
+        return cur.rowcount
+
+    def _ensure_tables(self) -> None:
+        self._conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS agent_workplaces (
+                member_name    TEXT NOT NULL,
+                provider_type  TEXT NOT NULL,
+                backend_ref    TEXT NOT NULL,
+                mount_path     TEXT NOT NULL,
+                created_at     TEXT NOT NULL,
+                PRIMARY KEY (member_name, provider_type)
+            )
+            """
+        )
+        self._conn.commit()
