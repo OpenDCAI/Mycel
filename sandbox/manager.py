@@ -103,6 +103,21 @@ class SandboxManager:
         backend_ref = self.provider.create_workplace(member_name, mount_path)
         return create_agent_workplace(member_name, provider_type, backend_ref, mount_path)
 
+    def _lookup_workplace(self, thread_id: str) -> dict[str, Any] | None:
+        """Read-only workplace lookup. No side effects — never creates resources."""
+        from backend.web.utils.helpers import load_thread_config
+        tc = load_thread_config(thread_id)
+        member_name = tc.agent if tc else None
+        if not member_name:
+            return None
+
+        capability = self.provider.get_capability()
+        if not capability.mount.supports_workplace:
+            return None
+
+        from backend.web.services.workspace_service import get_agent_workplace
+        return get_agent_workplace(member_name, self.provider.name)
+
     def resolve_agent_files_dir(self, thread_id: str) -> str:
         """Path where the agent sees uploaded files for this thread.
 
@@ -487,7 +502,7 @@ class SandboxManager:
             instance = lease.get_instance()
             if instance:
                 # @@@workplace-skip-download - Workplace storage persists independently
-                workplace = self._resolve_workplace(thread_id)
+                workplace = self._lookup_workplace(thread_id)
                 if not workplace:
                     # @@@workspace-download - sync files from sandbox before pause
                     try:
@@ -580,7 +595,7 @@ class SandboxManager:
 
         # @@@workspace-download - sync files before destroy (skip for workplace-backed threads)
         lease = self._get_thread_lease(thread_id)
-        workplace = self._resolve_workplace(thread_id)
+        workplace = self._lookup_workplace(thread_id)
         if lease and not workplace:
             instance = lease.get_instance()
             if instance:
