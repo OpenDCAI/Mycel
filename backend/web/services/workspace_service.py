@@ -165,6 +165,17 @@ def save_file(
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_bytes(content)
     digest = hashlib.sha256(content).hexdigest()
+
+    # @@@upload-touch-activity - File upload is user activity, update session timestamp to prevent idle reaper race
+    try:
+        from backend.web.utils.helpers import _get_container
+        mgr = _get_container().sandbox_manager()
+        session = mgr.session_manager.get_by_thread(thread_id)
+        if session:
+            session.touch()
+    except Exception:
+        pass  # Non-blocking: upload succeeds even if session touch fails
+
     return {
         "thread_id": thread_id,
         "relative_path": str(Path(relative_path)),
