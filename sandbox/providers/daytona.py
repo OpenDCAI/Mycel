@@ -72,6 +72,7 @@ class DaytonaProvider(SandboxProvider):
             supports_copy=True,
             supports_read_only=True,
             mode_handlers={"mount": True, "copy": True},
+            supports_workplace=True,
         ),
     )
     WORKSPACE_ROOT = "/home/daytona"
@@ -105,6 +106,7 @@ class DaytonaProvider(SandboxProvider):
         self.client = Daytona()
         self._sandboxes: dict[str, Any] = {}
         self._thread_bind_mounts: dict[str, list[MountSpec]] = {}  # thread_id -> bind_mounts
+        self._workplace_mounts: dict[str, tuple[str, str]] = {}  # thread_id -> (volume_id, mount_path)
 
     def set_thread_bind_mounts(self, thread_id: str, mounts: list[MountSpec | dict]) -> None:
         """Set thread-specific bind mounts that will be applied when creating sessions."""
@@ -112,10 +114,53 @@ class DaytonaProvider(SandboxProvider):
             MountSpec.model_validate(m) if isinstance(m, dict) else m for m in mounts
         ]
 
+    # ==================== Workplace ====================
+
+    def create_workplace(self, member_name: str, mount_path: str) -> str:
+        """Create a Daytona volume for the agent. Returns volume name as backend_ref."""
+        volume_name = f"leon-workplace-{member_name}"
+        logger.info("Creating workplace volume: %s", volume_name)
+        # @@@workplace-volume-ready - volume transitions pending_create → ready (~6s)
+        self.client.volume.create(volume_name)
+        for _ in range(30):
+            vol = self.client.volume.get(volume_name)
+            if vol.state == "ready":
+                logger.info("Workplace volume ready: %s (id=%s)", volume_name, vol.id)
+                return volume_name
+            time.sleep(1)
+        raise RuntimeError(f"Volume {volume_name} did not become ready within 30s")
+
+    def set_workplace_mount(self, thread_id: str, backend_ref: str, mount_path: str) -> None:
+        self._workplace_mounts[thread_id] = (backend_ref, mount_path)
+
+    def delete_workplace(self, backend_ref: str) -> None:
+        """Delete workplace volume. backend_ref is the volume name."""
+        logger.info("Deleting workplace volume: %s", backend_ref)
+        try:
+            vol = self.client.volume.get(backend_ref)
+            self.client.volume.delete(vol)
+        except Exception:
+            logger.warning("Failed to delete workplace volume %s", backend_ref, exc_info=True)
+
     # ==================== Session Lifecycle ====================
 
     def create_session(self, context_id: str | None = None, thread_id: str | None = None) -> SessionInfo:
-        from daytona_sdk import CreateSandboxFromSnapshotParams
+        from daytona_sdk import CreateSandboxFromSnapshotParams, VolumeMount
+
+        # @@@workplace-volume-mount - use SDK VolumeMount instead of bind mount HTTP workaround
+        if thread_id and thread_id in self._workplace_mounts:
+            volume_name, wp_mount_path = self._workplace_mounts.pop(thread_id)
+            vol = self.client.volume.get(volume_name)
+            params = CreateSandboxFromSnapshotParams(
+                target=self.target,
+                auto_stop_interval=0,
+                volumes=[VolumeMount(volume_id=vol.id, mount_path=wp_mount_path)],
+            )
+            sb = self.client.create(params)
+            # @@@workplace-chown - Docker-in-Docker bind mount loses FUSE uid/gid
+            sb.process.exec(f"sudo chown daytona:daytona {wp_mount_path}", timeout=10)
+            self._sandboxes[sb.id] = sb
+            return SessionInfo(session_id=sb.id, provider=self.name, status="running")
 
         # Merge global bind_mounts with thread-specific mounts
         all_mounts = list(self.bind_mounts)
