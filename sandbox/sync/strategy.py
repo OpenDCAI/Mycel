@@ -19,6 +19,8 @@ def _pack_tar(workspace: Path, files: list[str]) -> bytes:
             full = workspace / rel_path
             if full.exists() and full.is_file():
                 tar.add(str(full), arcname=rel_path)
+            else:
+                logger.warning("_pack_tar: skipping missing file %s", full)
     return buf.getvalue()
 
 
@@ -44,17 +46,24 @@ def _batch_upload_tar(session_id: str, provider, workspace: Path, workspace_root
         cmd = f"mkdir -p {workspace_root} && base64 -d <<'__TAR_EOF__' | tar xzf - -C {workspace_root}\n{b64}\n__TAR_EOF__"
 
     result = provider.execute(session_id, cmd, timeout_ms=60000)
-    if hasattr(result, 'exit_code') and result.exit_code and result.exit_code != 0:
+    exit_code = getattr(result, 'exit_code', None)
+    if exit_code is not None and exit_code != 0:
         error_msg = getattr(result, 'error', '') or getattr(result, 'output', '')
-        raise RuntimeError(f"Batch upload failed (exit {result.exit_code}): {error_msg}")
+        raise RuntimeError(f"Batch upload failed (exit {exit_code}): {error_msg}")
     logger.info(f"[SYNC-PERF] batch_upload_tar: {len(files)} files, {len(tar_bytes)} bytes tar, {time.time()-t0:.3f}s")
 
 
 def _batch_download_tar(session_id: str, provider, workspace: Path, workspace_root: str):
     """Download all files from sandbox in a single network call via tar."""
     t0 = time.time()
-    cmd = f"cd {workspace_root} 2>/dev/null && tar czf - . 2>/dev/null | base64 || echo ''"
+    # @@@download-check-dir - fail explicitly if workspace dir doesn't exist
+    cmd = f"cd {workspace_root} && tar czf - . | base64"
     result = provider.execute(session_id, cmd, timeout_ms=60000)
+
+    exit_code = getattr(result, 'exit_code', None)
+    if exit_code is not None and exit_code != 0:
+        error_msg = getattr(result, 'error', '') or getattr(result, 'output', '')
+        raise RuntimeError(f"Batch download failed (exit {exit_code}): {error_msg}")
 
     output = getattr(result, 'output', '') or ''
     output = output.strip()
