@@ -3,7 +3,7 @@
 import tempfile
 from pathlib import Path
 
-from core.filesystem.middleware import FileSystemMiddleware
+from core.tools.filesystem.middleware import FileSystemMiddleware
 
 
 def test_extra_allowed_path_validates() -> None:
