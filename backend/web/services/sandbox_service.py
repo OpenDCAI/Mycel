@@ -258,11 +258,11 @@ def mutate_sandbox_session(
 
         mode = "manager_lease"
         if action == "pause":
-            ok = lease.pause_instance(manager.provider)
+            ok = lease.pause_instance(manager.provider, source="api")
         elif action == "resume":
-            ok = lease.resume_instance(manager.provider)
+            ok = lease.resume_instance(manager.provider, source="api")
         elif action == "destroy":
-            lease.destroy_instance(manager.provider)
+            lease.destroy_instance(manager.provider, source="api")
             ok = True
         else:
             raise RuntimeError(f"Unknown action: {action}")
