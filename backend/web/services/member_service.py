@@ -666,7 +666,7 @@ def delete_member(member_id: str) -> bool:
 
 def _cleanup_member_workplaces(member_name: str) -> None:
     """Delete workplace storage (volumes, host dirs) for a member being deleted."""
-    from backend.web.services.workspace_service import list_agent_workplaces, delete_all_agent_workplaces
+    from backend.web.services.workspace_service import list_agent_workplaces, delete_agent_workplace
 
     workplaces = list_agent_workplaces(member_name)
     if not workplaces:
@@ -680,7 +680,7 @@ def _cleanup_member_workplaces(member_name: str) -> None:
             provider = providers.get(wp["provider_type"])
             if provider:
                 provider.delete_workplace(wp["backend_ref"])
+            # Only delete DB record if backend cleanup succeeded (or no provider)
+            delete_agent_workplace(member_name, wp["provider_type"])
         except Exception:
-            logger.warning("Failed to delete workplace backend: %s", wp, exc_info=True)
-
-    delete_all_agent_workplaces(member_name)
+            logger.warning("Failed to delete workplace backend — keeping DB record: %s", wp, exc_info=True)

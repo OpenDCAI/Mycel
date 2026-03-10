@@ -262,6 +262,17 @@ def list_agent_workplaces(member_name: str) -> list[dict[str, Any]]:
         repo.close()
 
 
+def delete_agent_workplace(member_name: str, provider_type: str) -> bool:
+    repo = _workplace_repo()
+    try:
+        deleted = repo.delete(member_name, provider_type)
+    finally:
+        repo.close()
+    if deleted:
+        logger.info("Deleted workplace: member=%s provider=%s", member_name, provider_type)
+    return deleted
+
+
 def delete_all_agent_workplaces(member_name: str) -> int:
     repo = _workplace_repo()
     try:
