@@ -81,13 +81,13 @@ export default function AgentDetail() {
 
   const [workplaces, setWorkplaces] = useState<WorkplaceItem[]>([]);
   useEffect(() => {
-    if (member && activeModule === "workplace") {
+    if (member) {
       fetch(`/api/panel/members/${member.id}/workplaces`)
         .then(r => r.json())
         .then(d => setWorkplaces(d.items || []))
         .catch(() => setWorkplaces([]));
     }
-  }, [member?.id, activeModule]);
+  }, [member?.id]);
 
   const statusLabels: Record<string, string> = { active: "在岗", draft: "草稿", inactive: "离线" };
 
@@ -252,7 +252,7 @@ export default function AgentDetail() {
         <nav className="w-48 shrink-0 border-r bg-muted/30 py-2">
           {modules.map(m => {
             const Icon = m.icon;
-            const count = m.count ? m.count(member.config) : undefined;
+            const count = m.id === "workplace" ? workplaces.length : (m.count ? m.count(member.config) : undefined);
             const active = activeModule === m.id;
             return (
               <button
