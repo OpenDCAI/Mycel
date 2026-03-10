@@ -285,10 +285,7 @@ class SandboxManager:
         instance = lease.get_instance()
         if instance:
             # @@@workspace-upload - sync files to sandbox after creation
-            try:
-                self.workspace_sync.upload_workspace(thread_id, instance.instance_id, self.provider)
-            except Exception:
-                logger.warning("Failed to upload workspace on create", exc_info=True)
+            self.workspace_sync.upload_workspace(thread_id, instance.instance_id, self.provider)
             self._fire_session_ready(instance.instance_id, "create")
 
         return SandboxCapability(session, manager=self)
@@ -509,6 +506,7 @@ class SandboxManager:
                         self.workspace_sync.download_workspace(thread_id, instance.instance_id, self.provider)
                     except Exception:
                         logger.error("Failed to download workspace before pause — agent changes may be lost", exc_info=True)
+                        raise
             if not lease.pause_instance(self.provider):
                 return False
 
@@ -539,10 +537,7 @@ class SandboxManager:
         # @@@workspace-upload-on-resume - re-sync files that may have been uploaded while paused
         instance = lease.get_instance()
         if instance:
-            try:
-                self.workspace_sync.upload_workspace(thread_id, instance.instance_id, self.provider)
-            except Exception:
-                logger.warning("Failed to upload workspace on resume", exc_info=True)
+            self.workspace_sync.upload_workspace(thread_id, instance.instance_id, self.provider)
 
         resumed_any = False
         for terminal in terminals:
@@ -603,6 +598,7 @@ class SandboxManager:
                     self.workspace_sync.download_workspace(thread_id, instance.instance_id, self.provider)
                 except Exception:
                     logger.error("Failed to download workspace before destroy — agent changes are lost", exc_info=True)
+                    raise
 
         self.workspace_sync.clear_thread(thread_id)
 
