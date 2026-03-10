@@ -132,13 +132,13 @@ class SandboxLease(ABC):
     def ensure_active_instance(self, provider: SandboxProvider) -> SandboxInstance: ...
 
     @abstractmethod
-    def destroy_instance(self, provider: SandboxProvider) -> None: ...
+    def destroy_instance(self, provider: SandboxProvider, *, source: str = "api") -> None: ...
 
     @abstractmethod
-    def pause_instance(self, provider: SandboxProvider) -> bool: ...
+    def pause_instance(self, provider: SandboxProvider, *, source: str = "api") -> bool: ...
 
     @abstractmethod
-    def resume_instance(self, provider: SandboxProvider) -> bool: ...
+    def resume_instance(self, provider: SandboxProvider, *, source: str = "api") -> bool: ...
 
     @abstractmethod
     def refresh_instance_status(
@@ -703,15 +703,15 @@ class SQLiteLease(SandboxLease):
                 raise RuntimeError(f"Lease {self.lease_id}: failed to bind created instance")
             return self._current_instance
 
-    def destroy_instance(self, provider: SandboxProvider) -> None:
-        self.apply(provider, event_type="intent.destroy", source="api")
+    def destroy_instance(self, provider: SandboxProvider, *, source: str = "api") -> None:
+        self.apply(provider, event_type="intent.destroy", source=source)
 
-    def pause_instance(self, provider: SandboxProvider) -> bool:
-        self.apply(provider, event_type="intent.pause", source="api")
+    def pause_instance(self, provider: SandboxProvider, *, source: str = "api") -> bool:
+        self.apply(provider, event_type="intent.pause", source=source)
         return True
 
-    def resume_instance(self, provider: SandboxProvider) -> bool:
-        self.apply(provider, event_type="intent.resume", source="api")
+    def resume_instance(self, provider: SandboxProvider, *, source: str = "api") -> bool:
+        self.apply(provider, event_type="intent.resume", source=source)
         return True
 
     def refresh_instance_status(

@@ -461,7 +461,7 @@ class SandboxManager:
                     # Only pause remote providers (local sandbox doesn't need pause)
                     if status == "running" and self.provider.name != "local":
                         try:
-                            paused = lease.pause_instance(self.provider)
+                            paused = lease.pause_instance(self.provider, source="idle_reaper")
                         except Exception as exc:
                             print(
                                 f"[idle-reaper] failed to pause expired lease {lease.lease_id} for thread {thread_id}: {exc}"
@@ -507,7 +507,7 @@ class SandboxManager:
                     except Exception:
                         logger.error("Failed to download workspace before pause — agent changes may be lost", exc_info=True)
                         raise
-            if not lease.pause_instance(self.provider):
+            if not lease.pause_instance(self.provider, source="user_pause"):
                 return False
 
         for terminal in terminals:
