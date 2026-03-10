@@ -74,6 +74,35 @@ class SandboxManager:
             workspace_root=_ws_root,
         )
 
+    def _resolve_workplace(self, thread_id: str, member_name: str | None = None) -> dict[str, Any] | None:
+        """Strategy gate: decide Workplace vs File Channel.
+        Returns workplace record if Workplace should be used, None for File Channel fallback.
+        """
+        if not member_name:
+            # Look up member from ThreadConfig
+            from backend.web.utils.helpers import load_thread_config
+            tc = load_thread_config(thread_id)
+            member_name = tc.agent if tc else None
+        if not member_name:
+            return None
+
+        capability = self.provider.get_capability()
+        if not capability.mount.supports_workplace:
+            return None
+
+        from backend.web.services.workspace_service import get_agent_workplace, create_agent_workplace
+
+        provider_type = self.provider.name
+        workplace = get_agent_workplace(member_name, provider_type)
+        if workplace:
+            return workplace
+
+        # @@@strategy-gate-lazy-create - first sandbox start for this member + provider
+        mount_path = self.resolve_agent_files_dir(thread_id)
+        logger.info("Creating workplace for member=%s provider=%s", member_name, provider_type)
+        backend_ref = self.provider.create_workplace(member_name, mount_path)
+        return create_agent_workplace(member_name, provider_type, backend_ref, mount_path)
+
     def resolve_agent_files_dir(self, thread_id: str) -> str:
         """Path where the agent sees uploaded files for this thread.
 
@@ -210,8 +239,11 @@ class SandboxManager:
         if bind_mounts:
             lease.bind_mounts = bind_mounts
 
-        # @@@workspace-bindmount - configure bind mount before container creation
-        if hasattr(self.provider, 'set_thread_bind_mounts'):
+        # @@@workspace-strategy-gate - Workplace vs File Channel
+        workplace = self._resolve_workplace(thread_id)
+        if workplace:
+            self.provider.set_workplace_mount(thread_id, workplace["backend_ref"], workplace["mount_path"])
+        elif hasattr(self.provider, 'set_thread_bind_mounts'):
             workspace_path = self.workspace_sync.get_thread_workspace_path(thread_id)
             workspace_path.mkdir(parents=True, exist_ok=True)
             from sandbox.config import MountSpec
@@ -454,11 +486,14 @@ class SandboxManager:
             lease.ensure_active_instance(self.provider)
             instance = lease.get_instance()
             if instance:
-                # @@@workspace-download - sync files from sandbox before pause
-                try:
-                    self.workspace_sync.download_workspace(thread_id, instance.instance_id, self.provider)
-                except Exception:
-                    logger.error("Failed to download workspace before pause — agent changes may be lost", exc_info=True)
+                # @@@workplace-skip-download - Workplace storage persists independently
+                workplace = self._resolve_workplace(thread_id)
+                if not workplace:
+                    # @@@workspace-download - sync files from sandbox before pause
+                    try:
+                        self.workspace_sync.download_workspace(thread_id, instance.instance_id, self.provider)
+                    except Exception:
+                        logger.error("Failed to download workspace before pause — agent changes may be lost", exc_info=True)
             if not lease.pause_instance(self.provider):
                 return False
 
@@ -543,9 +578,10 @@ class SandboxManager:
         if not terminals:
             return False
 
-        # @@@workspace-download - sync files before destroy
+        # @@@workspace-download - sync files before destroy (skip for workplace-backed threads)
         lease = self._get_thread_lease(thread_id)
-        if lease:
+        workplace = self._resolve_workplace(thread_id)
+        if lease and not workplace:
             instance = lease.get_instance()
             if instance:
                 try:
