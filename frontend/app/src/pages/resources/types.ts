@@ -10,7 +10,7 @@ export interface ProviderCapabilities {
   web: boolean;
   process: boolean;
   hooks: boolean;
-  snapshot: boolean;
+  mount: boolean;
 }
 
 export interface ProviderQuota {

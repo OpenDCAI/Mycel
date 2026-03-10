@@ -51,7 +51,7 @@ class AgentBayProvider(SandboxProvider):
             web=True,
             process=True,
             hooks=False,
-            snapshot=False,
+            mount=False,
         ),
     )
     WORKSPACE_ROOT = "/home/wuying"

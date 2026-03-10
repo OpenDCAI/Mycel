@@ -49,7 +49,7 @@ class LocalSessionProvider(SandboxProvider):
             web=False,
             process=False,
             hooks=False,
-            snapshot=False,
+            mount=False,
         ),
     )
     default_cwd: str | None = None

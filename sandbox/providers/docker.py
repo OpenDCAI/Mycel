@@ -72,7 +72,7 @@ class DockerProvider(SandboxProvider):
             web=False,
             process=False,
             hooks=False,
-            snapshot=False,
+            mount=True,
         ),
         mount=MountCapability(
             supports_mount=True,
