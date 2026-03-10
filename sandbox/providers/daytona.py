@@ -136,11 +136,8 @@ class DaytonaProvider(SandboxProvider):
     def delete_workplace(self, backend_ref: str) -> None:
         """Delete workplace volume. backend_ref is the volume name."""
         logger.info("Deleting workplace volume: %s", backend_ref)
-        try:
-            vol = self.client.volume.get(backend_ref)
-            self.client.volume.delete(vol)
-        except Exception:
-            logger.warning("Failed to delete workplace volume %s", backend_ref, exc_info=True)
+        vol = self.client.volume.get(backend_ref)
+        self.client.volume.delete(vol)
 
     # ==================== Session Lifecycle ====================
 
