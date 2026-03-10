@@ -85,7 +85,7 @@ class DaytonaProvider(SandboxProvider):
     def create_session(self, context_id: str | None = None) -> SessionInfo:
         from daytona_sdk import CreateSandboxFromSnapshotParams
 
-        params = CreateSandboxFromSnapshotParams(auto_stop_interval=0)
+        params = CreateSandboxFromSnapshotParams(target=self.target, auto_stop_interval=0)
         sb = self.client.create(params)
         self._sandboxes[sb.id] = sb
         return SessionInfo(session_id=sb.id, provider=self.name, status="running")
