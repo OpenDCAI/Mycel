@@ -65,6 +65,7 @@ class MountCapability:
     supports_copy: bool = False
     supports_read_only: bool = False
     mode_handlers: dict[str, bool] = field(default_factory=dict)
+    supports_workplace: bool = False
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -72,6 +73,7 @@ class MountCapability:
             "supports_copy": self.supports_copy,
             "supports_read_only": self.supports_read_only,
             "mode_handlers": dict(self.mode_handlers or {}),
+            "supports_workplace": self.supports_workplace,
         }
 
 
@@ -226,3 +228,19 @@ class SandboxProvider(ABC):
 
     def get_web_url(self, session_id: str) -> str | None:
         return None
+
+    def create_workplace(self, member_name: str, mount_path: str) -> str:
+        """Create persistent storage for an agent. Returns backend_ref.
+        Override in providers where supports_workplace=True.
+        """
+        raise NotImplementedError(f"{self.name} does not support Workplaces")
+
+    def set_workplace_mount(self, thread_id: str, backend_ref: str, mount_path: str) -> None:
+        """Configure workplace mount for next create_session().
+        Called before create_session(). Provider stores this internally.
+        """
+        raise NotImplementedError(f"{self.name} does not support Workplaces")
+
+    def delete_workplace(self, backend_ref: str) -> None:
+        """Delete persistent storage. Called on agent deletion."""
+        raise NotImplementedError(f"{self.name} does not support Workplaces")
