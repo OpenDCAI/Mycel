@@ -706,6 +706,7 @@ class SandboxManager:
             try:
                 provider_sessions = self.provider.list_provider_sessions() or []
             except Exception:
+                logger.warning("Failed to list provider sessions for %s", self.provider.name, exc_info=True)
                 provider_sessions = []
 
             for ps in provider_sessions:
