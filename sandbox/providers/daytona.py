@@ -62,6 +62,7 @@ class DaytonaProvider(SandboxProvider):
         api_url: str = "https://app.daytona.io/api",
         target: str = "local",
         default_cwd: str = "/home/daytona",
+        shell: str = "/bin/bash",
         provider_name: str | None = None,
     ):
         from daytona_sdk import Daytona
@@ -72,6 +73,7 @@ class DaytonaProvider(SandboxProvider):
         self.api_url = api_url
         self.target = target
         self.default_cwd = default_cwd
+        self.shell = shell
 
         os.environ["DAYTONA_API_KEY"] = api_key
         os.environ["DAYTONA_API_URL"] = api_url
@@ -459,12 +461,14 @@ class DaytonaSessionRuntime(_RemoteRuntimeBase):
                     )
                 except Exception as create_exc:
                     message = str(create_exc)
-                    if "/usr/bin/zsh" in message:
+                    if "/usr/bin/zsh" in message or "/usr/bin/bash" in message:
                         # @@@daytona-shell-fail-loud - Do not silently override provider shell selection.
                         # Surface explicit infra error so snapshot/image shell mismatch is fixed at source.
+                        shell = "/usr/bin/zsh" if "/usr/bin/zsh" in message else "/usr/bin/bash"
                         raise RuntimeError(
-                            "Daytona PTY bootstrap failed: provider requested /usr/bin/zsh but it is missing "
-                            "in the sandbox image. Fix provider snapshot/image shell config."
+                            f"Daytona PTY bootstrap failed: provider requested {shell} but it is missing "
+                            "in the sandbox image. Fix provider snapshot/image shell config or ensure the shell "
+                            "is installed at the expected path in the Daytona workspace image."
                         ) from create_exc
                     raise
             self._pty_handle = handle

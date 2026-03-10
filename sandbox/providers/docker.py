@@ -370,10 +370,11 @@ class DockerProvider(SandboxProvider):
         check: bool = True,
     ) -> subprocess.CompletedProcess[str]:
         effective_timeout = timeout if timeout is not None else self.command_timeout_sec
-        # @@@docker-host - pass DOCKER_HOST when configured to bypass stuck Docker Desktop context
-        env = None
+        # @@@proxy-isolation - strip proxy vars to prevent docker CLI hangs
+        env = os.environ.copy()
+        for key in ['http_proxy', 'https_proxy', 'all_proxy', 'HTTP_PROXY', 'HTTPS_PROXY', 'ALL_PROXY']:
+            env.pop(key, None)
         if self._docker_host:
-            env = os.environ.copy()
             env["DOCKER_HOST"] = self._docker_host
         try:
             result = subprocess.run(
