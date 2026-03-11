@@ -221,7 +221,7 @@ class SandboxManager:
             self._assert_lease_provider(session.lease, thread_id)
             # @@@activity-resume - Any new activity against a paused thread must resume before command execution.
             if session.status == "paused":
-                if not self.resume_session(thread_id):
+                if not self.resume_session(thread_id, source="auto_resume"):
                     raise RuntimeError(f"Failed to resume paused session for thread {thread_id}")
                 session = self.session_manager.get(thread_id, session.terminal.terminal_id)
                 if not session:
@@ -522,7 +522,7 @@ class SandboxManager:
             return
         self.get_sandbox(thread_id)
 
-    def resume_session(self, thread_id: str) -> bool:
+    def resume_session(self, thread_id: str, source: str = "user_resume") -> bool:
         terminals = self._get_thread_terminals(thread_id)
         if not terminals:
             return False
@@ -531,7 +531,7 @@ class SandboxManager:
         if not lease:
             return False
 
-        if not lease.resume_instance(self.provider):
+        if not lease.resume_instance(self.provider, source=source):
             return False
 
         # @@@workspace-upload-on-resume - re-sync files that may have been uploaded while paused
