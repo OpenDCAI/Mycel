@@ -40,10 +40,10 @@ def _batch_upload_tar(session_id: str, provider, workspace: Path, workspace_root
 
     # @@@single-call-upload - one execute() replaces N write_file() calls
     if len(b64) < 100_000:
-        cmd = f"mkdir -p {workspace_root} && printf '%s' '{b64}' | base64 -d | tar xzf - -C {workspace_root}"
+        cmd = f"mkdir -p {workspace_root} && printf '%s' '{b64}' | base64 -d | tar xzmf - -C {workspace_root}"
     else:
         # Large payload — heredoc to avoid shell arg limits
-        cmd = f"mkdir -p {workspace_root} && base64 -d <<'__TAR_EOF__' | tar xzf - -C {workspace_root}\n{b64}\n__TAR_EOF__"
+        cmd = f"mkdir -p {workspace_root} && base64 -d <<'__TAR_EOF__' | tar xzmf - -C {workspace_root}\n{b64}\n__TAR_EOF__"
 
     result = provider.execute(session_id, cmd, timeout_ms=60000)
     exit_code = getattr(result, 'exit_code', None)
