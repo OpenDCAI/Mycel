@@ -122,6 +122,7 @@ class LeonAgent:
         storage_container: StorageContainer | None = None,
         queue_manager: MessageQueueManager | None = None,
         chat_repos: dict | None = None,
+        extra_allowed_paths: list[str] | None = None,
         verbose: bool = False,
     ):
         """
@@ -143,6 +144,7 @@ class LeonAgent:
         """
         self.agent_id: str | None = None
         self.verbose = verbose
+        self.extra_allowed_paths = extra_allowed_paths
         self.queue_manager = queue_manager or MessageQueueManager()
         self._chat_repos: dict | None = chat_repos
 
@@ -912,6 +914,7 @@ class LeonAgent:
                 hooks=file_hooks,
                 operation_recorder=get_recorder(),
                 backend=fs_backend,
+                extra_allowed_paths=self.extra_allowed_paths,
             )
 
         # Search tools

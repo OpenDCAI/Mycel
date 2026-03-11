@@ -37,6 +37,7 @@ class FileSystemService:
         hooks: list[Any] | None = None,
         operation_recorder: FileOperationRecorder | None = None,
         backend: FileSystemBackend | None = None,
+        extra_allowed_paths: list[str | Path] | None = None,
     ):
         if backend is None:
             from core.tools.filesystem.local_backend import LocalBackend
@@ -52,6 +53,10 @@ class FileSystemService:
         self.hooks = hooks or []
         self._read_files: dict[Path, float | None] = {}
         self.operation_recorder = operation_recorder
+        self.extra_allowed_paths: list[Path] = [
+            Path(p) if backend.is_remote else Path(p).resolve()
+            for p in (extra_allowed_paths or [])
+        ]
 
         if not backend.is_remote:
             self.workspace_root.mkdir(parents=True, exist_ok=True)
@@ -195,11 +200,12 @@ class FileSystemService:
         try:
             resolved.relative_to(self.workspace_root)
         except ValueError:
-            return (
-                False,
-                f"Path outside workspace\n   Workspace: {self.workspace_root}\n   Attempted: {resolved}",
-                None,
-            )
+            if not any(resolved.is_relative_to(p) for p in self.extra_allowed_paths):
+                return (
+                    False,
+                    f"Path outside workspace\n   Workspace: {self.workspace_root}\n   Attempted: {resolved}",
+                    None,
+                )
 
         if self.allowed_extensions and resolved.suffix:
             ext = resolved.suffix.lstrip(".")
