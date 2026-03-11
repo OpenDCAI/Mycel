@@ -6,7 +6,7 @@
 
 **企业级 Agent 运行时，构建、运行和治理协作 AI 团队**
 
-[🇬🇧 English](README_EN.md) | [← 返回 README](../README.md)
+[🇬🇧 English](../README.md) | 🇨🇳 中文
 
 [![PyPI version](https://badge.fury.io/py/leonai.svg)](https://badge.fury.io/py/leonai)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
