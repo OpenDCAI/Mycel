@@ -56,7 +56,13 @@ def _batch_upload_tar(session_id: str, provider, workspace: Path, workspace_root
 def _batch_download_tar(session_id: str, provider, workspace: Path, workspace_root: str):
     """Download all files from sandbox in a single network call via tar."""
     t0 = time.time()
-    # @@@download-check-dir - fail explicitly if workspace dir doesn't exist
+    # @@@download-check-dir - skip if remote dir doesn't exist (nothing to download)
+    check = provider.execute(session_id, f"test -d {workspace_root} && echo EXISTS", timeout_ms=10000)
+    check_out = (getattr(check, 'output', '') or '').strip()
+    if check_out != "EXISTS":
+        logger.info(f"[SYNC] download skipped: {workspace_root} does not exist in sandbox")
+        return
+
     cmd = f"cd {workspace_root} && tar czf - . | base64"
     result = provider.execute(session_id, cmd, timeout_ms=60000)
 
