@@ -4,14 +4,33 @@ import asyncio
 from typing import Annotated, Any
 
 from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from backend.web.services.agent_pool import get_or_create_agent, resolve_thread_sandbox
 from sandbox.thread_context import set_current_thread_id
+
+_bearer_scheme = HTTPBearer(auto_error=False)
 
 
 async def get_app(request: Request) -> FastAPI:
     """Get FastAPI app instance from request."""
     return request.app
+
+
+async def get_current_member_id(
+    app: Annotated[FastAPI, Depends(get_app)],
+    credentials: HTTPAuthorizationCredentials | None = Depends(_bearer_scheme),
+) -> str:
+    """Extract and verify JWT, return member_id. 401 on failure."""
+    if credentials is None:
+        raise HTTPException(401, "Missing authorization header")
+    auth_service = getattr(app.state, "auth_service", None)
+    if auth_service is None:
+        raise HTTPException(500, "Auth service not initialized")
+    try:
+        return auth_service.verify_token(credentials.credentials)
+    except ValueError as e:
+        raise HTTPException(401, str(e))
 
 
 async def get_thread_lock(app: Annotated[FastAPI, Depends(get_app)], thread_id: str) -> asyncio.Lock:

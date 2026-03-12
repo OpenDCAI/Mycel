@@ -31,6 +31,30 @@ async def lifespan(app: FastAPI):
     ensure_members_dir()
     ensure_library_dir()
 
+    # Initialize contact system repos + auth service
+    from storage.providers.sqlite.contact_repo import SQLiteContactRepo
+    from storage.providers.sqlite.conversation_repo import (
+        SQLiteConversationMemberRepo,
+        SQLiteConversationMessageRepo,
+        SQLiteConversationRepo,
+    )
+    from storage.providers.sqlite.member_repo import SQLiteAccountRepo, SQLiteMemberRepo
+    from backend.web.services.auth_service import AuthService
+
+    app.state.member_repo = SQLiteMemberRepo()
+    app.state.account_repo = SQLiteAccountRepo()
+    app.state.contact_repo = SQLiteContactRepo()
+    app.state.conversation_repo = SQLiteConversationRepo()
+    app.state.conv_member_repo = SQLiteConversationMemberRepo()
+    app.state.conv_message_repo = SQLiteConversationMessageRepo()
+    app.state.auth_service = AuthService(
+        members=app.state.member_repo,
+        accounts=app.state.account_repo,
+        contacts=app.state.contact_repo,
+        conversations=app.state.conversation_repo,
+        conv_members=app.state.conv_member_repo,
+    )
+
     # Initialize app state
     app.state.queue_manager = MessageQueueManager()
     app.state.agent_pool: dict[str, Any] = {}
