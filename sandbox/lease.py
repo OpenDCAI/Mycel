@@ -1154,6 +1154,9 @@ class LeaseStore:
             self._repo.delete_lease(lease_id)
         else:
             with _connect(self.db_path) as conn:
+                conn.execute("DELETE FROM sandbox_instances WHERE lease_id = ?", (lease_id,))
+                conn.execute("DELETE FROM lease_events WHERE lease_id = ?", (lease_id,))
+                conn.execute("DELETE FROM lease_resource_snapshots WHERE lease_id = ?", (lease_id,))
                 conn.execute("DELETE FROM sandbox_leases WHERE lease_id = ?", (lease_id,))
                 conn.commit()
         with SQLiteLease._lock_guard:
