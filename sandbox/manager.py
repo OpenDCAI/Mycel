@@ -588,17 +588,19 @@ class SandboxManager:
         if not terminals:
             return False
 
-        # @@@workspace-download - sync files before destroy (skip for workplace-backed threads)
+        # @@@workspace-download-before-destroy - sync files before destroy
+        # Skip if workplace-backed or if sandbox is already paused (files synced during pause)
         lease = self._get_thread_lease(thread_id)
         workplace = self._lookup_workplace(thread_id)
         if lease and not workplace:
-            instance = lease.get_instance()
-            if instance:
-                try:
-                    self.workspace_sync.download_workspace(thread_id, instance.instance_id, self.provider)
-                except Exception:
-                    logger.error("Failed to download workspace before destroy — agent changes are lost", exc_info=True)
-                    raise
+            if lease.observed_state == "running":
+                instance = lease.get_instance()
+                if instance:
+                    try:
+                        self.workspace_sync.download_workspace(thread_id, instance.instance_id, self.provider)
+                    except Exception:
+                        logger.error("Failed to download workspace before destroy — agent changes are lost", exc_info=True)
+                        raise
 
         self.workspace_sync.clear_thread(thread_id)
 
