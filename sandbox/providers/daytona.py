@@ -194,7 +194,15 @@ class DaytonaProvider(SandboxProvider):
             self._sandboxes.pop(session_id, None)
             return True
         except Exception:
-            logger.exception("[DaytonaProvider] destroy_session failed for %s", session_id)
+            # @@@destroy-verify-actual - verify sandbox is truly gone before reporting failure
+            logger.warning("[DaytonaProvider] destroy_session error for %s, verifying actual state", session_id)
+            actual = self.get_session_status(session_id)
+            if actual == "unknown":
+                # Sandbox no longer findable — delete succeeded
+                logger.info("[DaytonaProvider] sandbox %s no longer exists — destroy succeeded", session_id)
+                self._sandboxes.pop(session_id, None)
+                return True
+            logger.error("[DaytonaProvider] destroy_session truly failed for %s (state=%s)", session_id, actual)
             return False
 
     def pause_session(self, session_id: str) -> bool:
@@ -203,7 +211,14 @@ class DaytonaProvider(SandboxProvider):
             sb.stop()
             return True
         except Exception:
-            logger.exception("[DaytonaProvider] pause_session failed for %s", session_id)
+            # @@@pause-verify-actual - sb.stop() can throw (e.g. Daytona 502 during wait)
+            # even though the sandbox actually stopped. Verify real state before giving up.
+            logger.warning("[DaytonaProvider] pause_session error for %s, verifying actual state", session_id)
+            actual = self.get_session_status(session_id)
+            if actual == "paused":
+                logger.info("[DaytonaProvider] sandbox %s is actually stopped despite error — pause succeeded", session_id)
+                return True
+            logger.error("[DaytonaProvider] pause_session truly failed for %s (state=%s)", session_id, actual)
             return False
 
     def resume_session(self, session_id: str) -> bool:
@@ -212,7 +227,13 @@ class DaytonaProvider(SandboxProvider):
             sb.start()
             return True
         except Exception:
-            logger.exception("[DaytonaProvider] resume_session failed for %s", session_id)
+            # @@@resume-verify-actual - same pattern as pause: verify real state on error
+            logger.warning("[DaytonaProvider] resume_session error for %s, verifying actual state", session_id)
+            actual = self.get_session_status(session_id)
+            if actual == "running":
+                logger.info("[DaytonaProvider] sandbox %s is actually running despite error — resume succeeded", session_id)
+                return True
+            logger.error("[DaytonaProvider] resume_session truly failed for %s (state=%s)", session_id, actual)
             return False
 
     def get_session_status(self, session_id: str) -> str:
