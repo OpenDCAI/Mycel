@@ -5,10 +5,10 @@ Registered into ToolRegistry so the agent can communicate via conversations.
 
 from __future__ import annotations
 
-import json
 import logging
 import time
 import uuid
+from typing import Any
 
 from core.runtime.registry import ToolEntry, ToolMode, ToolRegistry
 from storage.contracts import ConversationMessageRow
@@ -34,6 +34,7 @@ class LogbookService:
         conv_members: SQLiteConversationMemberRepo | None = None,
         conv_messages: SQLiteConversationMessageRepo | None = None,
         members: SQLiteMemberRepo | None = None,
+        event_bus: Any | None = None,
     ) -> None:
         self._member_id = member_id
         # @@@shared-repos - reuse existing repos to avoid "database is locked" from competing connections
@@ -41,6 +42,8 @@ class LogbookService:
         self._conv_members = conv_members or SQLiteConversationMemberRepo()
         self._conv_messages = conv_messages or SQLiteConversationMessageRepo()
         self._members = members or SQLiteMemberRepo()
+        # @@@logbook-sse-push - duck-typed event bus with .publish(conv_id, event_dict) for real-time SSE
+        self._event_bus = event_bus
         self._register(registry)
 
     def _register(self, registry: ToolRegistry) -> None:
@@ -161,6 +164,16 @@ class LogbookService:
         self._conv_members.update_last_read(conversation_id, self._member_id, now)
 
         logger.info("Logbook reply: member=%s conv=%s msg=%s", self._member_id[:8], conversation_id[:8], msg_id[:8])
+
+        if self._event_bus:
+            self._event_bus.publish(conversation_id, {
+                "event": "message",
+                "id": msg_id,
+                "sender_id": self._member_id,
+                "content": content,
+                "created_at": now,
+            })
+
         return f"Reply sent (id: {msg_id})"
 
     def _mark_read(self, conversation_id: str) -> str:

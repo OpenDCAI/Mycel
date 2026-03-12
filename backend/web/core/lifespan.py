@@ -55,8 +55,10 @@ async def lifespan(app: FastAPI):
         conv_members=app.state.conv_member_repo,
     )
 
+    from backend.web.services.conversation_events import ConversationEventBus
     from backend.web.services.conversation_service import ConversationService
 
+    app.state.conversation_event_bus = ConversationEventBus()
     app.state.conversation_service = ConversationService(
         conversations=app.state.conversation_repo,
         conv_members=app.state.conv_member_repo,

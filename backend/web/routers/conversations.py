@@ -1,11 +1,13 @@
 """Conversations API router — list, get, send messages, SSE events."""
 
 import asyncio
+import json
 import logging
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel
+from sse_starlette.sse import EventSourceResponse
 
 from backend.web.core.dependencies import get_app, get_current_member_id
 from backend.web.services.agent_pool import get_or_create_agent
@@ -64,6 +66,41 @@ async def list_messages(
     return svc.list_messages(conversation_id, limit=limit, before=before)
 
 
+@router.get("/{conversation_id}/events")
+async def stream_conversation_events(
+    conversation_id: str,
+    request: Request,
+    member_id: Annotated[str, Depends(get_current_member_id)],
+    app: Annotated[Any, Depends(get_app)],
+):
+    """SSE stream of new messages in a conversation.
+
+    Fires when user sends a message (via POST) or agent replies (via logbook_reply).
+    """
+    svc = app.state.conversation_service
+    if not svc.is_member(conversation_id, member_id):
+        raise HTTPException(403, "Not a member of this conversation")
+
+    event_bus = app.state.conversation_event_bus
+    queue = event_bus.subscribe(conversation_id)
+
+    async def event_generator():
+        try:
+            while True:
+                if await request.is_disconnected():
+                    break
+                try:
+                    event = await asyncio.wait_for(queue.get(), timeout=30)
+                    yield {"event": event.get("event", "message"), "data": json.dumps(event)}
+                except TimeoutError:
+                    # Send keepalive comment to prevent connection timeout
+                    yield {"comment": "keepalive"}
+        finally:
+            event_bus.unsubscribe(conversation_id, queue)
+
+    return EventSourceResponse(event_generator())
+
+
 @router.post("/{conversation_id}/messages")
 async def send_message(
     conversation_id: str,
@@ -87,6 +124,18 @@ async def send_message(
     except PermissionError as e:
         raise HTTPException(403, str(e))
 
+    msg = result["message"]
+
+    # @@@conversation-sse-push - notify SSE subscribers about the user's message
+    event_bus = app.state.conversation_event_bus
+    event_bus.publish(conversation_id, {
+        "event": "message",
+        "id": msg["id"],
+        "sender_id": msg["sender_id"],
+        "content": msg["content"],
+        "created_at": msg["created_at"],
+    })
+
     routing = result["routing"]
     brain_thread_id = routing["brain_thread_id"]
     sender_name = routing["sender_name"]
@@ -106,7 +155,7 @@ async def send_message(
     # @@@conversation-routing - same IDLE/ACTIVE pattern as threads.py:send_message
     if hasattr(agent, "runtime") and agent.runtime.current_state == AgentState.ACTIVE:
         qm.enqueue(formatted, brain_thread_id, notification_type="steer")
-        return {**result["message"], "routing": "steer"}
+        return {**msg, "routing": "steer"}
 
     # Agent IDLE → start new run
     from backend.web.services.streaming_service import get_or_create_thread_buffer
@@ -121,7 +170,7 @@ async def send_message(
         if hasattr(agent, "runtime") and not agent.runtime.transition(AgentState.ACTIVE):
             # Race: became active between check and lock
             qm.enqueue(formatted, brain_thread_id, notification_type="steer")
-            return {**result["message"], "routing": "steer"}
+            return {**msg, "routing": "steer"}
         run_id = start_agent_run(agent, brain_thread_id, formatted, app)
 
-    return {**result["message"], "routing": "direct", "run_id": run_id}
+    return {**msg, "routing": "direct", "run_id": run_id}

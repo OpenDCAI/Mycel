@@ -85,7 +85,7 @@ async def get_or_create_agent(app_obj: FastAPI, sandbox_type: str, thread_id: st
 
     # @@@ agent-init-thread - LeonAgent.__init__ uses run_until_complete, must run in thread
     qm = getattr(app_obj.state, "queue_manager", None)
-    # @@@shared-logbook-repos - pass app.state repos to avoid "database is locked" from competing connections
+    # @@@shared-logbook-repos - pass app.state repos + event bus to avoid lock contention and enable SSE push
     logbook_repos = None
     if member_id:
         logbook_repos = {
@@ -93,6 +93,7 @@ async def get_or_create_agent(app_obj: FastAPI, sandbox_type: str, thread_id: st
             "conv_members": getattr(app_obj.state, "conv_member_repo", None),
             "conv_messages": getattr(app_obj.state, "conv_message_repo", None),
             "members": getattr(app_obj.state, "member_repo", None),
+            "event_bus": getattr(app_obj.state, "conversation_event_bus", None),
         }
     agent_obj = await asyncio.to_thread(create_agent_sync, sandbox_type, workspace_root, model_name, agent_name, qm, member_id, logbook_repos)
     member = agent_name or "leon"
