@@ -1,0 +1,171 @@
+- generic [ref=e2]:
+  - generic [ref=e3]:
+    - generic [ref=e4]:
+      - complementary [ref=e5]:
+        - generic [ref=e8]: L
+        - button [ref=e10] [cursor=pointer]:
+          - img [ref=e11]
+        - navigation [ref=e13]:
+          - link "消息" [ref=e14] [cursor=pointer]:
+            - /url: /chat
+            - img [ref=e16]
+            - generic: 消息
+          - link "成员" [ref=e19] [cursor=pointer]:
+            - /url: /members
+            - img [ref=e21]
+            - generic: 成员
+          - link "任务" [ref=e26] [cursor=pointer]:
+            - /url: /tasks
+            - img [ref=e28]
+            - generic: 任务
+          - link "资源" [ref=e31] [cursor=pointer]:
+            - /url: /resources
+            - img [ref=e33]
+            - generic: 资源
+          - link "能力库" [ref=e37] [cursor=pointer]:
+            - /url: /library
+            - img [ref=e39]
+            - generic: 能力库
+        - generic [ref=e41]:
+          - generic [ref=e44]: YZ
+          - link "设置" [ref=e45] [cursor=pointer]:
+            - /url: /settings
+            - img [ref=e47]
+            - generic: 设置
+      - generic "拖拽调整侧栏宽度，双击切换" [ref=e50]:
+        - img [ref=e52]
+    - main [ref=e54]:
+      - generic [ref=e56]:
+        - generic [ref=e57]:
+          - generic [ref=e59]: 消息
+          - button "搜索对话..." [ref=e61] [cursor=pointer]:
+            - img [ref=e62]
+            - generic [ref=e65]: 搜索对话...
+          - generic [ref=e67]:
+            - generic [ref=e68]:
+              - generic [ref=e69]: 对话
+              - generic [ref=e70]:
+                - generic [ref=e71]: "14"
+                - button "管理" [ref=e72] [cursor=pointer]
+            - generic [ref=e116]:
+              - generic [ref=e117]:
+                - button [ref=e118] [cursor=pointer]:
+                  - img [ref=e119]
+                - link "L Leon" [ref=e121] [cursor=pointer]:
+                  - /url: /chat/leon
+                  - generic [ref=e122]: L
+                  - generic [ref=e123]: Leon
+                - generic [ref=e124]: "14"
+              - generic [ref=e125]:
+                - link "echo test echo test 1分钟前" [ref=e128] [cursor=pointer]:
+                  - /url: /chat/leon/21440d95-d25b-4b7c-9ef1-99a62a5a9a82
+                  - generic [ref=e130]: echo test
+                  - generic [ref=e131]:
+                    - generic [ref=e132]: echo test
+                    - generic [ref=e133]: 1分钟前
+                - link "Write hello to /home/daytona/files/lifec Write hello to /home/daytona/files/lifec 2分钟前" [ref=e136] [cursor=pointer]:
+                  - /url: /chat/leon/a1456b26-ee05-442b-9afd-4090cb152ac6
+                  - generic [ref=e138]: Write hello to /home/daytona/files/lifec
+                  - generic [ref=e139]:
+                    - generic [ref=e140]: Write hello to /home/daytona/files/lifec
+                    - generic [ref=e141]: 2分钟前
+                - link "Read a1-test.txt and tell me the number Read a1-test.txt and tell me the number 4分钟前" [ref=e144] [cursor=pointer]:
+                  - /url: /chat/leon/37c6def1-3cce-47bd-b03b-369139295eb5
+                  - generic [ref=e146]: Read a1-test.txt and tell me the number
+                  - generic [ref=e147]:
+                    - generic [ref=e148]: Read a1-test.txt and tell me the number
+                    - generic [ref=e149]: 4分钟前
+                - link "echo hello echo hello 4分钟前" [ref=e152] [cursor=pointer]:
+                  - /url: /chat/leon/a04ec9ec-7c27-4267-afd4-313d99541aa9
+                  - generic [ref=e154]: echo hello
+                  - generic [ref=e155]:
+                    - generic [ref=e156]: echo hello
+                    - generic [ref=e157]: 4分钟前
+                - link "What is in the uploaded file? What is in the uploaded file? 10分钟前" [ref=e160] [cursor=pointer]:
+                  - /url: /chat/leon/0457c313-0e99-4177-9446-c1058173536c
+                  - generic [ref=e162]: What is in the uploaded file?
+                  - generic [ref=e163]:
+                    - generic [ref=e164]: What is in the uploaded file?
+                    - generic [ref=e165]: 10分钟前
+                - link "Read lifecycle.txt Read lifecycle.txt 21分钟前" [ref=e168] [cursor=pointer]:
+                  - /url: /chat/leon/39fddc3b-277a-40e0-9df9-504fb53ad3d8
+                  - generic [ref=e170]: Read lifecycle.txt
+                  - generic [ref=e171]:
+                    - generic [ref=e172]: Read lifecycle.txt
+                    - generic [ref=e173]: 21分钟前
+                - link "Write a file called /home/daytona/files/ Write a file called /home/daytona/files/ 24分钟前" [ref=e176] [cursor=pointer]:
+                  - /url: /chat/leon/61bed22d-fb25-4ab6-870d-17a8a1ddf4c3
+                  - generic [ref=e178]: Write a file called /home/daytona/files/
+                  - generic [ref=e179]:
+                    - generic [ref=e180]: Write a file called /home/daytona/files/
+                    - generic [ref=e181]: 24分钟前
+                - link "Read the file test-secret.txt and tell m Read the file test-secret.txt and tell m 28分钟前" [ref=e184] [cursor=pointer]:
+                  - /url: /chat/leon/15c28be6-8115-42dc-8fb1-cfd9bd267ede
+                  - generic [ref=e186]: Read the file test-secret.txt and tell m
+                  - generic [ref=e187]:
+                    - generic [ref=e188]: Read the file test-secret.txt and tell m
+                    - generic [ref=e189]: 28分钟前
+                - link "say hello say hello 46分钟前" [ref=e192] [cursor=pointer]:
+                  - /url: /chat/leon/fb53fbfd-9fd0-4482-bc6b-90eedeead576
+                  - generic [ref=e194]: say hello
+                  - generic [ref=e195]:
+                    - generic [ref=e196]: say hello
+                    - generic [ref=e197]: 46分钟前
+                - link "echo hello world echo hello world 58分钟前" [ref=e200] [cursor=pointer]:
+                  - /url: /chat/leon/fac17584-c4d9-4546-8047-f4998592ea4b
+                  - generic [ref=e202]: echo hello world
+                  - generic [ref=e203]:
+                    - generic [ref=e204]: echo hello world
+                    - generic [ref=e205]: 58分钟前
+                - link "Read first99.txt and tell me what it say Read first99.txt and tell me what it say 59分钟前" [ref=e208] [cursor=pointer]:
+                  - /url: /chat/leon/c5162f5d-6531-4287-953c-7828b2bf38f5
+                  - generic [ref=e210]: Read first99.txt and tell me what it say
+                  - generic [ref=e211]:
+                    - generic [ref=e212]: Read first99.txt and tell me what it say
+                    - generic [ref=e213]: 59分钟前
+                - link "echo hello echo hello 1小时前" [ref=e216] [cursor=pointer]:
+                  - /url: /chat/leon/fb7918cb-a926-4b87-945a-6d4d4e4b2e0b
+                  - generic [ref=e218]: echo hello
+                  - generic [ref=e219]:
+                    - generic [ref=e220]: echo hello
+                    - generic [ref=e221]: 1小时前
+                - link "list dir list dir 1小时前" [ref=e224] [cursor=pointer]:
+                  - /url: /chat/leon/20c5d7e5-3710-4d2d-8af5-1a6d0745544d
+                  - generic [ref=e226]: list dir
+                  - generic [ref=e227]:
+                    - generic [ref=e228]: list dir
+                    - generic [ref=e229]: 1小时前
+                - link "list dir list dir 19小时前" [ref=e232] [cursor=pointer]:
+                  - /url: /chat/leon/5a7d1bee-a425-4033-af23-0926d9756c2c
+                  - generic [ref=e234]: list dir
+                  - generic [ref=e235]:
+                    - generic [ref=e236]: list dir
+                    - generic [ref=e237]: 19小时前
+        - generic [ref=e93]:
+          - generic [ref=e94]:
+            - heading "你好，我是 37c6def1-3cce-47bd-b03b-369139295eb5" [level=1] [ref=e95]
+            - paragraph [ref=e96]: 37c6def1-3cce-47bd-b03b-369139295eb5 准备为你工作
+            - generic [ref=e97]:
+              - generic [ref=e98]: 文件操作
+              - generic [ref=e99]: 代码探索
+              - generic [ref=e100]: 命令执行
+              - generic [ref=e101]: 信息检索
+          - generic [ref=e103]:
+            - textbox "告诉 Leon 你需要什么帮助..." [ref=e104]
+            - paragraph [ref=e105]: Enter 发送，Shift + Enter 换行
+            - generic [ref=e106]:
+              - combobox [ref=e107] [cursor=pointer]:
+                - generic: 本地
+                - img
+              - button "选择工作区" [ref=e108] [cursor=pointer]:
+                - img
+              - button "Large" [ref=e109] [cursor=pointer]:
+                - generic [ref=e110]: Large
+                - img [ref=e111]
+              - button "发送" [disabled]:
+                - img
+                - text: 发送
+        - generic [ref=e113]:
+          - heading "搜索对话" [level=2] [ref=e114]
+          - paragraph [ref=e115]: 搜索对话或运行环境
+  - region "Notifications alt+T"
