@@ -347,8 +347,11 @@ class SandboxRepository:
             return dict(row) if row else None
 
     def delete_lease(self, lease_id: str) -> None:
-        """Delete lease."""
+        """Delete lease and all associated child records."""
         with self._transaction() as conn:
+            conn.execute("DELETE FROM sandbox_instances WHERE lease_id = ?", (lease_id,))
+            conn.execute("DELETE FROM lease_events WHERE lease_id = ?", (lease_id,))
+            conn.execute("DELETE FROM lease_resource_snapshots WHERE lease_id = ?", (lease_id,))
             conn.execute("DELETE FROM sandbox_leases WHERE lease_id = ?", (lease_id,))
 
     def find_lease_by_instance(self, provider_name: str, instance_id: str) -> dict[str, Any] | None:
