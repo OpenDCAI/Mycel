@@ -53,20 +53,33 @@ async def _prepare_attachment_message(
     sandbox_type: str,
     message: str,
     attachments: list[str],
+    agent: Any | None = None,
 ) -> tuple[str, dict[str, Any] | None]:
     """Build LLM notification prefix and sync uploads to running sandbox.
 
     Returns (modified_message, message_metadata).
+    When *agent* is supplied, uses its live manager and primes the sandbox
+    (resume if paused) before syncing.
     """
-    message_metadata: dict[str, Any] = {"attachments": attachments}
-    _, managers = init_providers_and_managers()
-    mgr = managers.get(sandbox_type)
+    from backend.web.services.streaming_service import prime_sandbox
+
+    message_metadata: dict[str, Any] = {"attachments": attachments, "original_message": message}
+    if agent is not None and getattr(agent, '_sandbox', None):
+        mgr = agent._sandbox.manager
+    else:
+        _, managers = init_providers_and_managers()
+        mgr = managers.get(sandbox_type)
     files_dir = mgr.resolve_agent_files_dir(thread_id) if mgr else "/workspace/files"
 
     original_message = message
     sync_ok = True
 
-    # @@@sync-new-uploads - push newly uploaded files to already-running sandbox
+    # @@@sync-prime-then-upload - resume sandbox if paused, then push files
+    if mgr and agent is not None:
+        try:
+            await prime_sandbox(agent, thread_id)
+        except Exception:
+            logger.warning("prime_sandbox before sync_uploads failed", exc_info=True)
     if mgr:
         try:
             sync_ok = await asyncio.to_thread(mgr.sync_uploads, thread_id, attachments)
@@ -421,6 +434,34 @@ async def send_message(
     from backend.web.services.message_routing import route_message_to_brain
 
     return await route_message_to_brain(app, thread_id, payload.message, source="owner")
+
+            return {"status": "injected", "routing": "steer", "thread_id": thread_id}
+        run_id = start_agent_run(agent, thread_id, message, app, message_metadata=message_metadata)
+    return {"status": "started", "routing": "direct", "run_id": run_id, "thread_id": thread_id}
+
+
+@router.post("/{thread_id}/queue")
+async def queue_message(
+    thread_id: str,
+    payload: SendMessageRequest,
+    app: Annotated[Any, Depends(get_app)] = None,
+) -> dict[str, Any]:
+    """Enqueue a followup message. Will be consumed when agent reaches IDLE."""
+    if not payload.message.strip():
+        raise HTTPException(status_code=400, detail="message cannot be empty")
+    app.state.queue_manager.enqueue(payload.message, thread_id, notification_type="steer")
+    return {"status": "queued", "thread_id": thread_id}
+
+
+@router.get("/{thread_id}/queue")
+async def get_queue(
+    thread_id: str,
+    app: Annotated[Any, Depends(get_app)] = None,
+) -> dict[str, Any]:
+    """List pending followup messages in the queue."""
+    messages = app.state.queue_manager.list_queue(thread_id)
+    return {"messages": messages, "thread_id": thread_id}
+>>>>>>> 14241d17 (fix: reorder sync after agent creation, prime sandbox before upload)
 
 
 @router.get("/{thread_id}/history")
