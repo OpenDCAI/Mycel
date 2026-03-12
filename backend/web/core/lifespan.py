@@ -55,6 +55,16 @@ async def lifespan(app: FastAPI):
         conv_members=app.state.conv_member_repo,
     )
 
+    from backend.web.services.conversation_service import ConversationService
+
+    app.state.conversation_service = ConversationService(
+        conversations=app.state.conversation_repo,
+        conv_members=app.state.conv_member_repo,
+        conv_messages=app.state.conv_message_repo,
+        contacts=app.state.contact_repo,
+        members=app.state.member_repo,
+    )
+
     # Initialize app state
     app.state.queue_manager = MessageQueueManager()
     app.state.agent_pool: dict[str, Any] = {}
