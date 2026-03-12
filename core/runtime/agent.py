@@ -110,6 +110,7 @@ class LeonAgent:
         api_key: str | None = None,
         workspace_root: str | Path | None = None,
         *,
+        member_id: str | None = None,
         agent: str | None = None,
         allowed_file_extensions: list[str] | None = None,
         block_dangerous_commands: bool | None = None,
@@ -143,6 +144,7 @@ class LeonAgent:
             verbose: Whether to output detailed logs (default False)
         """
         self.agent_id: str | None = None
+        self.member_id: str | None = member_id
         self.verbose = verbose
         self.queue_manager = queue_manager or MessageQueueManager()
 

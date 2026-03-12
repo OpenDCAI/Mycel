@@ -17,7 +17,7 @@ from core.identity.agent_registry import get_or_create_agent_id
 _config_update_locks: dict[str, asyncio.Lock] = {}
 
 
-def create_agent_sync(sandbox_name: str, workspace_root: Path | None = None, model_name: str | None = None, agent: str | None = None, queue_manager: Any = None) -> Any:
+def create_agent_sync(sandbox_name: str, workspace_root: Path | None = None, model_name: str | None = None, agent: str | None = None, queue_manager: Any = None, member_id: str | None = None) -> Any:
     """Create a LeonAgent with the given sandbox. Runs in a thread."""
     storage_container = build_storage_container(
         main_db_path=os.getenv("LEON_DB_PATH"),
@@ -34,10 +34,11 @@ def create_agent_sync(sandbox_name: str, workspace_root: Path | None = None, mod
         queue_manager=queue_manager,
         verbose=True,
         agent=agent,
+        member_id=member_id,
     )
 
 
-async def get_or_create_agent(app_obj: FastAPI, sandbox_type: str, thread_id: str | None = None, agent: str | None = None) -> Any:
+async def get_or_create_agent(app_obj: FastAPI, sandbox_type: str, thread_id: str | None = None, agent: str | None = None, member_id: str | None = None) -> Any:
     """Lazy agent pool — one agent per thread, created on demand."""
     if thread_id:
         set_current_thread_id(thread_id)
@@ -46,6 +47,10 @@ async def get_or_create_agent(app_obj: FastAPI, sandbox_type: str, thread_id: st
     # This ensures complete isolation of middleware state (memory, todo, runtime, filesystem, etc.)
     if not thread_id:
         raise ValueError("thread_id is required for agent creation")
+
+    # @@@brain-thread-member-id - auto-extract member_id from brain-{uuid} thread_ids
+    if not member_id and thread_id.startswith("brain-"):
+        member_id = thread_id[len("brain-"):]
 
     pool_key = f"{thread_id}:{sandbox_type}"
     pool = app_obj.state.agent_pool
@@ -79,7 +84,7 @@ async def get_or_create_agent(app_obj: FastAPI, sandbox_type: str, thread_id: st
 
     # @@@ agent-init-thread - LeonAgent.__init__ uses run_until_complete, must run in thread
     qm = getattr(app_obj.state, "queue_manager", None)
-    agent_obj = await asyncio.to_thread(create_agent_sync, sandbox_type, workspace_root, model_name, agent_name, qm)
+    agent_obj = await asyncio.to_thread(create_agent_sync, sandbox_type, workspace_root, model_name, agent_name, qm, member_id)
     member = agent_name or "leon"
     agent_id = get_or_create_agent_id(
         member=member,
@@ -89,6 +94,12 @@ async def get_or_create_agent(app_obj: FastAPI, sandbox_type: str, thread_id: st
     agent_obj.agent_id = agent_id
     pool[pool_key] = agent_obj
     return agent_obj
+
+
+async def get_or_create_agent_for_member(app_obj: FastAPI, member_id: str, sandbox_type: str = "local") -> Any:
+    """Create or retrieve agent for a member using brain-{member_id} as thread_id."""
+    brain_thread_id = f"brain-{member_id}"
+    return await get_or_create_agent(app_obj, sandbox_type, thread_id=brain_thread_id, member_id=member_id)
 
 
 def resolve_thread_sandbox(app_obj: FastAPI, thread_id: str) -> str:
