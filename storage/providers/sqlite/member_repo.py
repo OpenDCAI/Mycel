@@ -33,9 +33,9 @@ class SQLiteMemberRepo:
     def create(self, row: MemberRow) -> None:
         with self._lock:
             self._conn.execute(
-                "INSERT INTO members (id, name, type, avatar, description, config_dir, created_at, updated_at)"
-                " VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-                (row.id, row.name, row.type.value, row.avatar, row.description, row.config_dir, row.created_at, row.updated_at),
+                "INSERT INTO members (id, name, type, avatar, description, config_dir, owner_id, created_at, updated_at)"
+                " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (row.id, row.name, row.type.value, row.avatar, row.description, row.config_dir, row.owner_id, row.created_at, row.updated_at),
             )
             self._conn.commit()
 
@@ -54,8 +54,16 @@ class SQLiteMemberRepo:
             rows = self._conn.execute("SELECT * FROM members ORDER BY created_at").fetchall()
             return [self._to_row(r) for r in rows]
 
+    def list_by_owner(self, owner_id: str) -> list[MemberRow]:
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT * FROM members WHERE owner_id = ? ORDER BY created_at",
+                (owner_id,),
+            ).fetchall()
+            return [self._to_row(r) for r in rows]
+
     def update(self, member_id: str, **fields: Any) -> None:
-        allowed = {"name", "avatar", "description", "config_dir", "updated_at"}
+        allowed = {"name", "avatar", "description", "config_dir", "owner_id", "updated_at"}
         updates = {k: v for k, v in fields.items() if k in allowed}
         if not updates:
             return
@@ -76,7 +84,7 @@ class SQLiteMemberRepo:
         return MemberRow(
             id=r[0], name=r[1], type=MemberType(r[2]),
             avatar=r[3], description=r[4], config_dir=r[5],
-            created_at=r[6], updated_at=r[7],
+            owner_id=r[6], created_at=r[7], updated_at=r[8],
         )
 
     def _ensure_table(self) -> None:
@@ -89,11 +97,17 @@ class SQLiteMemberRepo:
                 avatar TEXT,
                 description TEXT,
                 config_dir TEXT,
+                owner_id TEXT,
                 created_at REAL NOT NULL,
                 updated_at REAL
             )
             """
         )
+        # Add owner_id to existing tables that don't have it
+        try:
+            self._conn.execute("ALTER TABLE members ADD COLUMN owner_id TEXT")
+        except Exception:
+            pass  # column already exists
         self._conn.commit()
 
 

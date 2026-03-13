@@ -104,9 +104,10 @@ class DirectoryService:
         return result
 
     def _find_owner(self, agent_member: Any) -> dict[str, str] | None:
-        """Derive the human owner of an agent from their contact list."""
-        for contact in self._contacts.list_by_owner(agent_member.id):
-            owner = self._members.get_by_id(contact.contact_id)
-            if owner and owner.type == MemberType.HUMAN:
-                return {"id": owner.id, "name": owner.name}
+        """Read owner directly from member row's owner_id."""
+        if not agent_member.owner_id:
+            return None
+        owner = self._members.get_by_id(agent_member.owner_id)
+        if owner:
+            return {"id": owner.id, "name": owner.name}
         return None

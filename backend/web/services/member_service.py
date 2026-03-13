@@ -335,18 +335,19 @@ def _get_db_member_repo():
 
 # ── CRUD operations ──
 
-def list_members() -> list[dict[str, Any]]:
-    """List agent members. Identity from DB, config from filesystem."""
-    from storage.contracts import MemberType
-
+def list_members(owner_id: str | None = None) -> list[dict[str, Any]]:
+    """List agent members. Scoped to owner when owner_id provided."""
     repo = _get_db_member_repo()
     try:
-        db_agents = [m for m in repo.list_all() if m.type != MemberType.HUMAN]
+        if owner_id:
+            db_agents = repo.list_by_owner(owner_id)
+        else:
+            from storage.contracts import MemberType
+            db_agents = [m for m in repo.list_all() if m.type != MemberType.HUMAN]
     finally:
         repo.close()
 
     if not db_agents:
-        # No DB members yet (pre-registration state) → fallback to builtin
         return [_leon_builtin()]
 
     return [_db_member_to_dict(agent) for agent in db_agents]

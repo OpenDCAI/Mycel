@@ -81,6 +81,7 @@ class AuthService:
             id=agent_id, name=f"{username}'s Leon", type=MemberType.MYCEL_AGENT,
             description="Your AI assistant",
             config_dir=LEON_TEMPLATE_DIR,
+            owner_id=human_id,
             created_at=now,
         ))
 
@@ -125,14 +126,12 @@ class AuthService:
         conv_ids = self._conv_members.list_conversations_for_member(member.id)
         conversation_id = conv_ids[0] if conv_ids else None
 
-        # Find agent member (contact who is mycel_agent)
-        contacts = self._contacts.list_by_owner(member.id)
+        # @@@owner-id-login - direct query instead of scanning contacts
+        owned_agents = self._members.list_by_owner(member.id)
         agent_info = None
-        for c in contacts:
-            agent_member = self._members.get_by_id(c.contact_id)
-            if agent_member and agent_member.type == MemberType.MYCEL_AGENT:
-                agent_info = {"id": agent_member.id, "name": agent_member.name, "type": "mycel_agent"}
-                break
+        if owned_agents:
+            a = owned_agents[0]
+            agent_info = {"id": a.id, "name": a.name, "type": a.type.value}
 
         token = self._make_token(member.id)
 

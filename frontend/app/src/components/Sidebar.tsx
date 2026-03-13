@@ -1,5 +1,5 @@
 import { Check, ChevronRight, MoreHorizontal, Plus, Search, Trash2 } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import type { ThreadSummary } from "../api";
 import { Skeleton } from "./ui/skeleton";
@@ -177,8 +177,14 @@ export default function Sidebar({
   const { threadId } = useParams<{ threadId?: string }>();
   const activeThreadId = threadId || null;
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
-  const [expandedMembers, setExpandedMembers] = useState<Set<string>>(new Set());
-  const hasInitialized = useRef(false);
+  // @@@persistent-collapse - default collapsed, persist expanded state in localStorage
+  const STORAGE_KEY = "sidebar-expanded-members";
+  const [expandedMembers, setExpandedMembers] = useState<Set<string>>(() => {
+    try {
+      const stored = localStorage.getItem(STORAGE_KEY);
+      return stored ? new Set(JSON.parse(stored)) : new Set();
+    } catch { return new Set(); }
+  });
   const [isSelectMode, setIsSelectMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
@@ -239,19 +245,12 @@ export default function Sidebar({
       }));
   }, [threads]);
 
-  // Auto-expand the most recently active member on first load
-  useEffect(() => {
-    if (groups.length > 0 && !hasInitialized.current) {
-      hasInitialized.current = true;
-      setExpandedMembers(new Set([groups[0].memberId]));
-    }
-  }, [groups]);
-
   const toggleMember = (memberId: string) => {
     setExpandedMembers(prev => {
       const next = new Set(prev);
       if (next.has(memberId)) next.delete(memberId);
       else next.add(memberId);
+      localStorage.setItem(STORAGE_KEY, JSON.stringify([...next]));
       return next;
     });
   };

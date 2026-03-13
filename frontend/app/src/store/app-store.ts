@@ -3,6 +3,7 @@ import type {
   Member, Task, ResourceItem, UserProfile,
   MemberConfig, TaskStatus, CronJob,
 } from "./types";
+import { useAuthStore } from "./auth-store";
 
 const API = "/api/panel";
 
@@ -65,10 +66,13 @@ interface AppState {
 }
 
 async function api<T = unknown>(path: string, opts?: RequestInit): Promise<T> {
-  const res = await fetch(`${API}${path}`, {
-    headers: { "Content-Type": "application/json" },
-    ...opts,
-  });
+  const token = useAuthStore.getState().token;
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    ...(opts?.headers as Record<string, string> ?? {}),
+  };
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+  const res = await fetch(`${API}${path}`, { ...opts, headers });
   if (!res.ok) throw new Error(`API error: ${res.status}`);
   return res.json();
 }

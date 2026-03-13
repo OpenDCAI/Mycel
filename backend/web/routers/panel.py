@@ -1,10 +1,11 @@
 """Panel API router — Members, Tasks, Library, Profile."""
 
 import asyncio
-from typing import Any
+from typing import Annotated, Any
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 
+from backend.web.core.dependencies import get_current_member_id
 from backend.web.models.panel import (
     BulkDeleteTasksRequest,
     BulkTaskStatusRequest,
@@ -29,8 +30,10 @@ router = APIRouter(prefix="/api/panel", tags=["panel"])
 # ── Members ──
 
 @router.get("/members")
-async def list_members() -> dict[str, Any]:
-    items = await asyncio.to_thread(member_service.list_members)
+async def list_members(
+    member_id: Annotated[str, Depends(get_current_member_id)],
+) -> dict[str, Any]:
+    items = await asyncio.to_thread(member_service.list_members, member_id)
     return {"items": items}
 
 
