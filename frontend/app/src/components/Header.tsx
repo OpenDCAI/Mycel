@@ -1,4 +1,4 @@
-import { ChevronLeft, PanelLeft, Pause, Play } from "lucide-react";
+import { ChevronLeft, Eye, MessageSquareText, PanelLeft, Pause, Play } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import type { SandboxInfo } from "../api";
 import { useIsMobile } from "../hooks/use-mobile";
@@ -16,11 +16,15 @@ function sandboxLabel(name: string): string {
       .join(" ");
 }
 
+type ViewMode = "owner" | "contact";
+
 interface HeaderProps {
   activeThreadId: string | null;
   threadPreview: string | null;
   sandboxInfo: SandboxInfo | null;
   currentModel?: string;
+  viewMode?: ViewMode;
+  onToggleViewMode?: () => void;
   onToggleSidebar: () => void;
   onPauseSandbox: () => void;
   onResumeSandbox: () => void;
@@ -32,6 +36,8 @@ export default function Header({
   threadPreview,
   sandboxInfo,
   currentModel = "leon:medium",
+  viewMode,
+  onToggleViewMode,
   onToggleSidebar,
   onPauseSandbox,
   onResumeSandbox,
@@ -85,6 +91,16 @@ export default function Header({
       </div>
 
       <div className="flex items-center gap-1.5">
+        {viewMode && onToggleViewMode && (
+          <button
+            onClick={onToggleViewMode}
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-border text-xs text-foreground/70 hover:bg-accent hover:text-foreground transition-colors"
+            title={viewMode === "owner" ? "切换到消息视图" : "切换到完整视图"}
+          >
+            {viewMode === "owner" ? <Eye className="w-3.5 h-3.5" /> : <MessageSquareText className="w-3.5 h-3.5" />}
+            {viewMode === "owner" ? "完整" : "消息"}
+          </button>
+        )}
         <ModelSelector
           currentModel={currentModel}
           threadId={activeThreadId}

@@ -3,7 +3,6 @@ import { useParams, useOutletContext, useLocation } from "react-router-dom";
 import ChatArea, { type ViewMode } from "../components/ChatArea";
 import ConversationView from "../components/chat-area/ConversationView";
 import type { AssistantTurn } from "../api";
-import { Eye, MessageSquareText } from "lucide-react";
 import ComputerPanel from "../components/ComputerPanel";
 import { DragHandle } from "../components/DragHandle";
 import Header from "../components/Header";
@@ -168,6 +167,8 @@ function ChatPageInner({ threadId }: { threadId: string }) {
         threadPreview={conversation?.title ?? tm.threads.find((t) => t.thread_id === threadId)?.preview ?? null}
         sandboxInfo={activeSandbox}
         currentModel={currentModel}
+        viewMode={conversation && isOwnAgent ? viewMode : undefined}
+        onToggleViewMode={conversation && isOwnAgent ? () => setViewMode(v => v === "owner" ? "contact" : "owner") : undefined}
         onToggleSidebar={() => setSidebarCollapsed(v => !v)}
         onPauseSandbox={() => void handlePauseSandbox()}
         onResumeSandbox={() => void handleResumeSandbox()}
@@ -183,19 +184,6 @@ function ChatPageInner({ threadId }: { threadId: string }) {
           )}
           <div className="relative flex-1 flex flex-col min-h-0">
             <BackgroundSessionsIndicator tasks={tasks} onCancelTask={handleCancelTask} />
-            {/* @@@view-mode-toggle - only owner of the agent can toggle full view */}
-            {conversation && isOwnAgent && (
-              <div className="flex items-center justify-end px-4 py-1 border-b border-border/50 bg-muted/20">
-                <button
-                  onClick={() => setViewMode(v => v === "owner" ? "contact" : "owner")}
-                  className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-                  title={viewMode === "owner" ? "切换到联系人视图" : "切换到完整视图"}
-                >
-                  {viewMode === "owner" ? <Eye className="w-3.5 h-3.5" /> : <MessageSquareText className="w-3.5 h-3.5" />}
-                  {viewMode === "owner" ? "完整视图" : "消息视图"}
-                </button>
-              </div>
-            )}
             {/* @@@two-views - owner reads brain thread, contact reads conversation_messages */}
             {viewMode === "contact" && conversation ? (
               <ConversationView conversationId={conversation.id} isStreaming={isStreaming} />
