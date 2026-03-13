@@ -97,6 +97,7 @@ async def get_or_create_agent(app_obj: FastAPI, sandbox_type: str, thread_id: st
             "conv_members": getattr(app_obj.state, "conv_member_repo", None),
             "conv_messages": getattr(app_obj.state, "conv_message_repo", None),
             "members": getattr(app_obj.state, "member_repo", None),
+            "contacts": getattr(app_obj.state, "contact_repo", None),
             "event_bus": getattr(app_obj.state, "conversation_event_bus", None),
             "message_router": _create_message_router(app_obj),
         }

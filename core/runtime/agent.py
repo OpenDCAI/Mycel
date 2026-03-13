@@ -1000,6 +1000,7 @@ class LeonAgent:
                 conv_members=repos.get("conv_members"),
                 conv_messages=repos.get("conv_messages"),
                 members=repos.get("members"),
+                contacts=repos.get("contacts"),
                 event_bus=repos.get("event_bus"),
                 message_router=repos.get("message_router"),
             )

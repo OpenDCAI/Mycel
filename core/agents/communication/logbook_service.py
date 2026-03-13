@@ -13,8 +13,10 @@ from collections import defaultdict
 from datetime import datetime, timezone
 from typing import Any
 
+from core.agents.communication.directory_service import DirectoryService
 from core.runtime.registry import ToolEntry, ToolMode, ToolRegistry
 from storage.contracts import ConversationMessageRow, MemberRow
+from storage.providers.sqlite.contact_repo import SQLiteContactRepo
 from storage.providers.sqlite.conversation_repo import (
     SQLiteConversationMemberRepo,
     SQLiteConversationMessageRepo,
@@ -37,6 +39,7 @@ class LogbookService:
         conv_members: SQLiteConversationMemberRepo | None = None,
         conv_messages: SQLiteConversationMessageRepo | None = None,
         members: SQLiteMemberRepo | None = None,
+        contacts: SQLiteContactRepo | None = None,
         event_bus: Any | None = None,
         message_router: Any | None = None,
     ) -> None:
@@ -46,10 +49,13 @@ class LogbookService:
         self._conv_members = conv_members or SQLiteConversationMemberRepo()
         self._conv_messages = conv_messages or SQLiteConversationMessageRepo()
         self._members = members or SQLiteMemberRepo()
+        self._contacts = contacts or SQLiteContactRepo()
         # @@@logbook-sse-push - duck-typed event bus with .publish(conv_id, event_dict) for real-time SSE
         self._event_bus = event_bus
         # @@@logbook-delivery - callback(conv_id, sender_id, content) routes to agent recipients' brains
         self._message_router = message_router
+        # @@@logbook-directory - shared discovery service for browse/search
+        self._directory = DirectoryService(self._members, self._contacts)
         self._register(registry)
 
     # ------------------------------------------------------------------
@@ -65,11 +71,24 @@ class LogbookService:
                 "description": (
                     "Read your logbook. No args = contact overview with unread counts. "
                     "Pass conversation_id to read messages. Pass query to search within a conversation. "
-                    "Pass member to filter contacts by name."
+                    "Pass member to filter contacts by name. "
+                    "Pass directory=true to browse the member directory and discover contacts and strangers."
                 ),
                 "parameters": {
                     "type": "object",
                     "properties": {
+                        "directory": {
+                            "type": "boolean",
+                            "description": "Browse the member directory to discover contacts and strangers",
+                        },
+                        "search": {
+                            "type": "string",
+                            "description": "Search members by name (used with directory=true)",
+                        },
+                        "type_filter": {
+                            "type": "string",
+                            "description": "Filter by member type: human, mycel_agent, openclaw_agent (used with directory=true)",
+                        },
                         "member": {
                             "type": "string",
                             "description": "Contact name or UUID — fuzzy match",
@@ -102,20 +121,28 @@ class LogbookService:
             mode=ToolMode.INLINE,
             schema={
                 "name": "logbook_reply",
-                "description": "Send a reply to a conversation. Also marks the conversation as read.",
+                "description": (
+                    "Send a message. Use conversation_id for existing conversations. "
+                    "Use 'to' (member name or id) to message someone new — "
+                    "a conversation will be created automatically if needed."
+                ),
                 "parameters": {
                     "type": "object",
                     "properties": {
                         "conversation_id": {
                             "type": "string",
-                            "description": "The conversation to reply to",
+                            "description": "The conversation to reply to (use this OR 'to', not both)",
+                        },
+                        "to": {
+                            "type": "string",
+                            "description": "Member name or id to message — auto-creates conversation if needed",
                         },
                         "content": {
                             "type": "string",
-                            "description": "Your reply message",
+                            "description": "Your message",
                         },
                     },
-                    "required": ["conversation_id", "content"],
+                    "required": ["content"],
                 },
             },
             handler=self._reply,
@@ -128,13 +155,18 @@ class LogbookService:
 
     def _logbook(
         self,
+        directory: bool | None = None,
+        search: str | None = None,
+        type_filter: str | None = None,
         member: str | None = None,
         conversation_id: str | None = None,
         query: str | None = None,
         limit: int | None = None,
         before: float | None = None,
     ) -> str:
-        # @@@logbook-dispatch - three modes: search, message list, contact tree
+        # @@@logbook-dispatch - four modes: directory, search, message list, contact tree
+        if directory:
+            return self._handle_directory(search, type_filter)
         if conversation_id:
             if query:
                 return self._handle_search(conversation_id, query, limit or 50)
@@ -236,10 +268,27 @@ class LogbookService:
         return self._format_contact_tree(sorted_contacts[:limit], cursor)
 
     # ------------------------------------------------------------------
+    # Mode 4: Directory — member discovery
+    # ------------------------------------------------------------------
+
+    def _handle_directory(self, search: str | None, type_filter: str | None) -> str:
+        result = self._directory.browse(self._member_id, type_filter=type_filter, search=search)
+        return self._format_directory(result, search)
+
+    # ------------------------------------------------------------------
     # logbook_reply — send + mark read
     # ------------------------------------------------------------------
 
-    def _reply(self, conversation_id: str, content: str) -> str:
+    def _reply(self, content: str, conversation_id: str | None = None, to: str | None = None) -> str:
+        # @@@logbook-initiate - resolve 'to' param into a conversation, creating if needed
+        if to and not conversation_id:
+            conversation_id = self._resolve_or_create_conversation(to)
+            if conversation_id is None:
+                return f"Error: could not find member '{to}'"
+
+        if not conversation_id:
+            return "Error: provide either conversation_id or 'to' parameter"
+
         if not self._conv_members.is_member(conversation_id, self._member_id):
             return f"Error: you are not a member of conversation {conversation_id}"
 
@@ -295,6 +344,52 @@ class LogbookService:
             if needle in m.name.lower():
                 return m
         return None
+
+    # ------------------------------------------------------------------
+    # Conversation creation (for 'to' parameter in logbook_reply)
+    # ------------------------------------------------------------------
+
+    def _resolve_or_create_conversation(self, to: str) -> str | None:
+        """Find or create a conversation with the target member.
+
+        Returns conversation_id or None if member not found.
+        """
+        target = self._resolve_member(to)
+        if not target:
+            return None
+
+        # Check if we already share a conversation
+        my_convs = set(self._conv_members.list_conversations_for_member(self._member_id))
+        their_convs = set(self._conv_members.list_conversations_for_member(target.id))
+        shared = my_convs & their_convs
+        for cid in shared:
+            conv = self._conversations.get_by_id(cid)
+            if conv and conv.status == "active":
+                return cid
+
+        # Create new conversation
+        now = time.time()
+        conv_id = str(uuid.uuid4())
+        from storage.contracts import ConversationRow, MemberType
+        # Determine agent_member_id: prefer the agent in the pair
+        if target.type == MemberType.MYCEL_AGENT:
+            agent_id = target.id
+        else:
+            agent_id = self._member_id  # self is the agent
+        my_member = self._members.get_by_id(self._member_id)
+        my_name = my_member.name if my_member else "Agent"
+        title = f"{my_name} ↔ {target.name}"
+
+        self._conversations.create(ConversationRow(
+            id=conv_id, agent_member_id=agent_id,
+            title=title, created_at=now,
+        ))
+        self._conv_members.add_member(conv_id, self._member_id, now)
+        self._conv_members.add_member(conv_id, target.id, now)
+        self._contacts.create_pair(self._member_id, target.id, now)
+
+        logger.info("Logbook created conversation: %s ↔ %s (conv=%s)", self._member_id[:8], target.id[:8], conv_id[:8])
+        return conv_id
 
     # ------------------------------------------------------------------
     # Helpers
@@ -422,5 +517,37 @@ class LogbookService:
 
         lines.append("")
         lines.append(f"  conversation_id: {conv_id}")
+
+        return "\n".join(lines)
+
+    def _format_directory(self, result: Any, search: str | None) -> str:
+        from core.agents.communication.directory_service import DirectoryResult
+
+        r: DirectoryResult = result
+        header = f"🔍 Directory search: \"{search}\"" if search else "📖 Directory"
+        lines = [header, ""]
+
+        def _entry_line(e: Any) -> str:
+            label = e.name
+            if e.owner:
+                label += f" (owner: {e.owner['name']})"
+            type_tag = f" [{e.type}]"
+            desc = f" — {e.description}" if e.description else ""
+            return f"    {label}{type_tag}{desc}  id:{e.id}"
+
+        if r.contacts:
+            lines.append(f"  Contacts ({len(r.contacts)}):")
+            for e in r.contacts:
+                lines.append(_entry_line(e))
+            lines.append("")
+
+        if r.others:
+            lines.append(f"  Others ({len(r.others)}):")
+            for e in r.others:
+                lines.append(_entry_line(e))
+            lines.append("")
+
+        if not r.contacts and not r.others:
+            lines.append("  No members found.")
 
         return "\n".join(lines)

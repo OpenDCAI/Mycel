@@ -1,8 +1,32 @@
 import { authRequest } from "../store/auth-store";
 
+// @@@member-directory - types + fetch for member discovery (shared with agent logbook)
+export interface DirectoryEntry {
+  id: string;
+  name: string;
+  type: string;
+  description: string | null;
+  owner: { id: string; name: string } | null;
+  is_contact: boolean;
+}
+
+export interface DirectoryResult {
+  contacts: DirectoryEntry[];
+  others: DirectoryEntry[];
+}
+
+export async function listDirectory(type?: string, search?: string): Promise<DirectoryResult> {
+  const params = new URLSearchParams();
+  if (type) params.set("type", type);
+  if (search) params.set("search", search);
+  const qs = params.toString();
+  return authRequest<DirectoryResult>(`/api/members/directory${qs ? `?${qs}` : ""}`);
+}
+
 export interface ConversationSummary {
   id: string;
   agent_member_id: string;
+  agent_name: string;
   title: string;
   status: string;
   created_at: number;
