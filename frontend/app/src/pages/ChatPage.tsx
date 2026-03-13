@@ -19,6 +19,7 @@ import { useStreamHandler } from "../hooks/use-stream-handler";
 import { useThreadData } from "../hooks/use-thread-data";
 import type { ThreadManagerState, ThreadManagerActions } from "../hooks/use-thread-manager";
 import type { ConversationSummary } from "../api/conversations";
+import { useAuthStore } from "../store/auth-store";
 
 interface OutletContext {
   tm: ThreadManagerState & ThreadManagerActions;
@@ -45,8 +46,18 @@ function ChatPageInner({ threadId }: { threadId: string }) {
   const conversation = conversations?.find(c => c.id === threadId);
   const brainThreadId = conversation ? `brain-${conversation.agent_member_id}` : threadId;
 
+  // @@@own-agent-check - only the agent's owner sees the brain thread (full view).
+  // For other people's agents, always show contact view.
+  const authAgent = useAuthStore(s => s.agent);
+  const isOwnAgent = conversation ? conversation.agent_member_id === authAgent?.id : false;
+
   const [currentModel, setCurrentModel] = useState<string>("");
+  // @@@view-default — default to owner for own agent, contact for others.
+  // conversations may load after first render, so sync via useEffect.
   const [viewMode, setViewMode] = useState<ViewMode>("owner");
+  useEffect(() => {
+    if (conversation) setViewMode(isOwnAgent ? "owner" : "contact");
+  }, [conversation, isOwnAgent]);
 
   const state = location.state as { selectedModel?: string; runStarted?: boolean; message?: string } | null;
 
@@ -174,8 +185,8 @@ function ChatPageInner({ threadId }: { threadId: string }) {
           )}
           <div className="relative flex-1 flex flex-col min-h-0">
             <BackgroundSessionsIndicator tasks={tasks} onCancelTask={handleCancelTask} />
-            {/* @@@view-mode-toggle - switch between owner (full) and contact (text-only) view */}
-            {conversation && (
+            {/* @@@view-mode-toggle - only owner of the agent can toggle full view */}
+            {conversation && isOwnAgent && (
               <div className="flex items-center justify-end px-4 py-1 border-b border-border/50 bg-muted/20">
                 <button
                   onClick={() => setViewMode(v => v === "owner" ? "contact" : "owner")}
