@@ -179,7 +179,7 @@ class ThreadConnectionManager {
  * `run_start` → isRunning=true, `run_done` → isRunning=false, connection stays open.
  */
 export function useThreadStream(
-  threadId: string,
+  threadId: string | null,
   deps: { loading: boolean; refreshThreads: () => Promise<void>; runStarted?: boolean },
 ): UseThreadStreamResult {
   const { loading, refreshThreads, runStarted } = deps;
@@ -199,7 +199,7 @@ export function useThreadStream(
 
   // Connection lifecycle — driven by threadId/loading/runStarted
   useEffect(() => {
-    if (loading) return;
+    if (loading || !threadId) return;
     if (runStarted) {
       mgr.initForNewRun(threadId);
     } else {

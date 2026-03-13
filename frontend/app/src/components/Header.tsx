@@ -23,6 +23,8 @@ interface HeaderProps {
   threadPreview: string | null;
   sandboxInfo: SandboxInfo | null;
   currentModel?: string;
+  /** False for human↔human conversations — hides agent-centric UI. */
+  hasAgent?: boolean;
   viewMode?: ViewMode;
   onToggleViewMode?: () => void;
   onToggleSidebar: () => void;
@@ -36,6 +38,7 @@ export default function Header({
   threadPreview,
   sandboxInfo,
   currentModel = "leon:medium",
+  hasAgent = true,
   viewMode,
   onToggleViewMode,
   onToggleSidebar,
@@ -101,13 +104,15 @@ export default function Header({
             {viewMode === "owner" ? "完整" : "消息"}
           </button>
         )}
-        <ModelSelector
-          currentModel={currentModel}
-          threadId={activeThreadId}
-          onModelChange={onModelChange}
-        />
+        {hasAgent && (
+          <ModelSelector
+            currentModel={currentModel}
+            threadId={activeThreadId}
+            onModelChange={onModelChange}
+          />
+        )}
 
-        {hasRemote && sandboxInfo?.status === "running" && (
+        {hasAgent && hasRemote && sandboxInfo?.status === "running" && (
           <button
             className="px-3 py-1.5 rounded-lg text-xs flex items-center gap-2 border border-[#e5e5e5] text-[#525252] hover:bg-[#f5f5f5] hover:text-[#171717]"
             onClick={onPauseSandbox}
@@ -116,7 +121,7 @@ export default function Header({
             暂停
           </button>
         )}
-        {hasRemote && sandboxInfo?.status === "paused" && (
+        {hasAgent && hasRemote && sandboxInfo?.status === "paused" && (
           <button
             className="px-3 py-1.5 rounded-lg text-xs flex items-center gap-2 border border-[#e5e5e5] text-[#525252] hover:bg-[#f5f5f5] hover:text-[#171717]"
             onClick={onResumeSandbox}

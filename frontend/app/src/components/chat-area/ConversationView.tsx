@@ -2,8 +2,8 @@
  * @@@contact-view - renders conversation_messages (clean "player" view).
  * Fetches from GET /api/conversations/{id}/messages, subscribes to conversation SSE.
  */
-import { memo, useEffect, useMemo, useRef, useState } from "react";
-import { listMessages, type ConversationMessage, type ConversationMemberDetail } from "../../api/conversations";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { listMessages, sendConversationMessage, type ConversationMessage, type ConversationMemberDetail } from "../../api/conversations";
 import { authFetch, useAuthStore } from "../../store/auth-store";
 import { useStickyScroll } from "../../hooks/use-sticky-scroll";
 import { ChatSkeleton } from "./ChatSkeleton";
@@ -15,14 +15,18 @@ interface ConversationViewProps {
   isStreaming?: boolean;
   /** Participant info for resolving sender names. */
   memberDetails?: ConversationMemberDetail[];
+  /** Ref for ChatPage to call our send handler (optimistic insert + API). */
+  sendRef?: React.MutableRefObject<((content: string) => Promise<void>) | undefined>;
 }
 
-export default function ConversationView({ conversationId, isStreaming, memberDetails }: ConversationViewProps) {
+export default function ConversationView({ conversationId, isStreaming, memberDetails, sendRef }: ConversationViewProps) {
   const [messages, setMessages] = useState<ConversationMessage[]>([]);
   const [loading, setLoading] = useState(true);
   const memberId = useAuthStore(s => s.member?.id);
   const containerRef = useStickyScroll<HTMLDivElement>();
   const seenIds = useRef(new Set<string>());
+  // @@@pending-dedup - tracks optimistic messages so SSE echo replaces instead of duplicating
+  const pendingRef = useRef(new Map<string, string>()); // key: `${senderId}\n${content}`, value: optimisticId
 
   // @@@member-name-map - resolve sender_id → display name from member_details
   const memberNameMap = useMemo(() => {
@@ -78,8 +82,18 @@ export default function ConversationView({ conversationId, isStreaming, memberDe
 
             try {
               const evt = JSON.parse(dataLines.join(""));
-              if (evt.id && evt.content && !seenIds.current.has(evt.id)) {
-                seenIds.current.add(evt.id);
+              if (!evt.id || !evt.content || seenIds.current.has(evt.id)) continue;
+              seenIds.current.add(evt.id);
+
+              // @@@pending-dedup - if this echoes an optimistic message, replace it
+              const pendingKey = `${evt.sender_id}\n${evt.content}`;
+              const optimisticId = pendingRef.current.get(pendingKey);
+              if (optimisticId) {
+                pendingRef.current.delete(pendingKey);
+                setMessages(prev => prev.map(m =>
+                  m.id === optimisticId ? { ...m, id: evt.id, created_at: evt.created_at } : m
+                ));
+              } else {
                 const msg: ConversationMessage = {
                   id: evt.id,
                   conversation_id: conversationId,
@@ -101,6 +115,35 @@ export default function ConversationView({ conversationId, isStreaming, memberDe
 
     return () => controller.abort();
   }, [conversationId]);
+
+  // @@@optimistic-send - insert message locally, then confirm via API. SSE echo deduped by pendingRef.
+  const handleSend = useCallback(async (content: string) => {
+    if (!memberId) return;
+    const optimisticId = `optimistic-${Date.now()}`;
+    const pendingKey = `${memberId}\n${content}`;
+    const msg: ConversationMessage = {
+      id: optimisticId,
+      conversation_id: conversationId,
+      sender_id: memberId,
+      content,
+      created_at: Date.now() / 1000,
+    };
+    pendingRef.current.set(pendingKey, optimisticId);
+    setMessages(prev => [...prev, msg]);
+    try {
+      const result = await sendConversationMessage(conversationId, content);
+      if (result?.id) seenIds.current.add(result.id as string);
+    } catch (err) {
+      console.error("[ConversationView] send failed:", err);
+      pendingRef.current.delete(pendingKey);
+      setMessages(prev => prev.filter(m => m.id !== optimisticId));
+    }
+  }, [conversationId, memberId]);
+
+  // Expose send handler to parent via ref
+  useEffect(() => {
+    if (sendRef) sendRef.current = handleSend;
+  }, [handleSend, sendRef]);
 
   const resolveSenderName = (senderId: string): string => {
     return memberNameMap.get(senderId) || fallbackName;

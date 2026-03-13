@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams, useOutletContext, useLocation } from "react-router-dom";
 import ChatArea, { type ViewMode } from "../components/ChatArea";
 import ConversationView from "../components/chat-area/ConversationView";
@@ -46,7 +46,8 @@ function ChatPageInner({ threadId }: { threadId: string }) {
   const agentMember = conversation?.member_details?.find(
     m => m.type === "mycel_agent" || m.type === "openclaw_agent"
   );
-  const brainThreadId = agentMember ? `brain-${agentMember.id}` : threadId;
+  // @@@no-brain-for-humans - human↔human conversations have no brain thread
+  const brainThreadId = agentMember ? `brain-${agentMember.id}` : null;
   const hasAgent = !!agentMember;
 
   // @@@own-agent-check - only the agent's owner sees the brain thread (full view).
@@ -73,6 +74,7 @@ function ChatPageInner({ threadId }: { threadId: string }) {
   });
 
   useEffect(() => {
+    if (!brainThreadId) return;
     if (state?.selectedModel) {
       setCurrentModel(state.selectedModel);
       void fetch("/api/settings/config", {
@@ -96,7 +98,7 @@ function ChatPageInner({ threadId }: { threadId: string }) {
     }
   }, [state?.selectedModel, brainThreadId]);
 
-  const { entries, activeSandbox, loading, setEntries, setActiveSandbox, refreshThread } = useThreadData(brainThreadId, runStarted, initialEntries);
+  const { entries, activeSandbox, loading, setEntries, setActiveSandbox, refreshThread } = useThreadData(brainThreadId ?? undefined, runStarted, initialEntries);
 
   const { runtimeStatus, isRunning, handleSendMessage, handleStopStreaming } =
     useStreamHandler({
@@ -145,6 +147,7 @@ function ChatPageInner({ threadId }: { threadId: string }) {
 
   const handleCancelTask = useCallback(
     async (taskId: string) => {
+      if (!brainThreadId) return;
       try {
         const response = await fetch(`/api/threads/${brainThreadId}/tasks/${taskId}/cancel`, {
           method: "POST",
@@ -161,6 +164,10 @@ function ChatPageInner({ threadId }: { threadId: string }) {
     [brainThreadId, refreshTasks],
   );
 
+  // @@@conv-send-ref - ConversationView exposes its optimistic send handler here
+  const convSendRef = useRef<(content: string) => Promise<void>>();
+  const inContactView = viewMode === "contact" && !!conversation;
+
   const computerResize = useResizableX(600, 360, 1200, true);
 
   return (
@@ -170,6 +177,7 @@ function ChatPageInner({ threadId }: { threadId: string }) {
         threadPreview={conversation?.title ?? tm.threads.find((t) => t.thread_id === threadId)?.preview ?? null}
         sandboxInfo={activeSandbox}
         currentModel={currentModel}
+        hasAgent={hasAgent}
         viewMode={conversation && isOwnAgent && hasAgent ? viewMode : undefined}
         onToggleViewMode={conversation && isOwnAgent && hasAgent ? () => setViewMode(v => v === "owner" ? "contact" : "owner") : undefined}
         onToggleSidebar={() => setSidebarCollapsed(v => !v)}
@@ -189,7 +197,7 @@ function ChatPageInner({ threadId }: { threadId: string }) {
             <BackgroundSessionsIndicator tasks={tasks} onCancelTask={handleCancelTask} />
             {/* @@@two-views - owner reads brain thread, contact reads conversation_messages */}
             {viewMode === "contact" && conversation ? (
-              <ConversationView conversationId={conversation.id} isStreaming={isStreaming} memberDetails={conversation.member_details} />
+              <ConversationView conversationId={conversation.id} isStreaming={isStreaming} memberDetails={conversation.member_details} sendRef={convSendRef} />
             ) : (
               <ChatArea
                 entries={entries}
@@ -201,23 +209,25 @@ function ChatPageInner({ threadId }: { threadId: string }) {
               />
             )}
           </div>
-          <TaskProgress
-            isStreaming={isStreaming}
-            runtimeStatus={runtimeStatus}
-            sandboxType={activeSandbox?.type ?? "local"}
-            sandboxStatus={activeSandbox?.status ?? (activeSandbox?.type === "local" ? "running" : null)}
-            computerOpen={computerOpen}
-            onToggleComputer={() => setComputerOpen((v) => !v)}
-          />
+          {hasAgent && (
+            <TaskProgress
+              isStreaming={isStreaming}
+              runtimeStatus={runtimeStatus}
+              sandboxType={activeSandbox?.type ?? "local"}
+              sandboxStatus={activeSandbox?.status ?? (activeSandbox?.type === "local" ? "running" : null)}
+              computerOpen={computerOpen}
+              onToggleComputer={() => setComputerOpen((v) => !v)}
+            />
+          )}
           <InputBox
-            disabled={isStreaming}
-            isStreaming={isStreaming}
+            disabled={inContactView ? false : isStreaming}
+            isStreaming={inContactView ? false : isStreaming}
             placeholder="告诉 Leon 你需要什么帮助..."
-            onSendMessage={(msg) => void handleSendMessage(msg)}
-            onSendQueueMessage={handleSendQueueMessage}
-            onStop={handleStopStreaming}
+            onSendMessage={inContactView ? (msg) => void convSendRef.current?.(msg) : (msg) => void handleSendMessage(msg)}
+            onSendQueueMessage={inContactView ? undefined : handleSendQueueMessage}
+            onStop={inContactView ? undefined : handleStopStreaming}
           />
-          <TokenStats runtimeStatus={runtimeStatus} />
+          {hasAgent && <TokenStats runtimeStatus={runtimeStatus} />}
         </div>
 
         {computerOpen && (

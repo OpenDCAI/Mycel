@@ -15,7 +15,7 @@ import { useThreadStream } from "./use-thread-stream";
 import { makeId } from "./utils";
 
 interface StreamHandlerDeps {
-  threadId: string;
+  threadId: string | null;
   /** If set, send messages through conversation API instead of thread API. */
   conversationId?: string;
   refreshThreads: () => Promise<void>;
@@ -234,7 +234,10 @@ export function useStreamHandler(
         // @@@conversation-routing - route through conversation API when conversationId is set
         if (conversationId) {
           await sendConversationMessage(conversationId, message);
-        } else {
+          // No brain thread → no run_start event to clear sendPending.
+          // Reset immediately — conversation SSE handles message arrival.
+          if (!threadId) setSendPending(false);
+        } else if (threadId) {
           await postRun(threadId, message);
         }
         // Connection is persistent — no need to reconnect.
@@ -263,6 +266,7 @@ export function useStreamHandler(
   );
 
   const handleStopStreaming = useCallback(async () => {
+    if (!threadId) return;
     try {
       await cancelRun(threadId);
     } catch (err) {
