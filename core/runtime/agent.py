@@ -1121,15 +1121,15 @@ class LeonAgent:
         if self.member_id:
             prompt += (
                 "\n\n## Communication (Logbook)\n"
-                "You have a logbook for inter-agent and human communication.\n"
-                "- Use `logbook_reply(conversation_id, content)` to reply to messages\n"
-                "- Use `logbook_check_messages` to check for messages you might have missed\n"
-                "- Use `logbook_mark_read(conversation_id)` to mark messages as read\n"
-                "- Your direct text output is inner monologue — it is NOT sent to anyone.\n"
-                "  Only `logbook_reply` sends messages to conversations.\n"
-                "- When you receive an <incoming-message>, reply directly using `logbook_reply`\n"
-                "  with the conversation_id from the message. The message content is already\n"
-                "  in your context — no need to call `logbook_check_messages` first.\n"
+                "You have a logbook — your communication channel with humans and other agents.\n"
+                "- `logbook()` — see all contacts, conversations, and unread counts\n"
+                "- `logbook(member=\"tom\")` — filter to one contact's conversations\n"
+                "- `logbook(conversation_id=\"...\")` — read messages (most recent 100)\n"
+                "- `logbook(conversation_id=\"...\", query=\"keyword\")` — search in conversation\n"
+                "- `logbook_reply(conversation_id=\"...\", content=\"...\")` — send a reply (marks as read)\n"
+                "- Your direct text output is inner monologue — only `logbook_reply` sends messages.\n"
+                "- When you receive an <incoming-message>, reply directly with `logbook_reply`.\n"
+                "  The message content and conversation_id are already in your context.\n"
             )
 
         return prompt

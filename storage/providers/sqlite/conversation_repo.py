@@ -158,6 +158,14 @@ class SQLiteConversationMemberRepo:
             )
             self._conn.commit()
 
+    def get_last_read_at(self, conversation_id: str, member_id: str) -> float | None:
+        with self._lock:
+            row = self._conn.execute(
+                "SELECT last_read_at FROM conversation_members WHERE conversation_id = ? AND member_id = ?",
+                (conversation_id, member_id),
+            ).fetchone()
+            return row[0] if row else None
+
     def _ensure_table(self) -> None:
         self._conn.execute(
             """
@@ -221,6 +229,22 @@ class SQLiteConversationMessageRepo:
                 ).fetchall()
         # Return in chronological order (query was DESC for LIMIT, reverse back)
         rows.reverse()
+        return [
+            ConversationMessageRow(id=r[0], conversation_id=r[1], sender_id=r[2], content=r[3], created_at=r[4])
+            for r in rows
+        ]
+
+    def search_in_conversation(
+        self, conversation_id: str, query: str, *, limit: int = 50,
+    ) -> list[ConversationMessageRow]:
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT id, conversation_id, sender_id, content, created_at"
+                " FROM conversation_messages"
+                " WHERE conversation_id = ? AND content LIKE ?"
+                " ORDER BY created_at ASC LIMIT ?",
+                (conversation_id, f"%{query}%", limit),
+            ).fetchall()
         return [
             ConversationMessageRow(id=r[0], conversation_id=r[1], sender_id=r[2], content=r[3], created_at=r[4])
             for r in rows
