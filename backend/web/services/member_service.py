@@ -380,16 +380,62 @@ def get_member(member_id: str) -> dict[str, Any] | None:
     return _member_to_dict(member_dir)
 
 
-def create_member(name: str, description: str = "") -> dict[str, Any]:
-    now = int(time.time() * 1000)
-    member_id = str(now)
+def create_member(name: str, description: str = "", owner_id: str | None = None) -> dict[str, Any]:
+    import uuid as _uuid
+    member_id = str(_uuid.uuid4())
     member_dir = MEMBERS_DIR / member_id
     member_dir.mkdir(parents=True, exist_ok=True)
+    now_ms = int(time.time() * 1000)
+    now_s = time.time()
+
+    # 1. Filesystem config
     _write_agent_md(member_dir / "agent.md", name=name, description=description)
     _write_json(member_dir / "meta.json", {
         "status": "draft", "version": "0.1.0",
-        "created_at": now, "updated_at": now,
+        "created_at": now_ms, "updated_at": now_ms,
     })
+
+    # 2. DB identity index
+    if owner_id:
+        from storage.contracts import MemberRow, MemberType
+        repo = _get_db_member_repo()
+        try:
+            repo.create(MemberRow(
+                id=member_id, name=name, type=MemberType.MYCEL_AGENT,
+                description=description,
+                config_dir=str(member_dir),
+                owner_id=owner_id,
+                created_at=now_s,
+            ))
+        finally:
+            repo.close()
+
+        # 3. Contact pair (owner ↔ new agent)
+        from storage.providers.sqlite.contact_repo import SQLiteContactRepo
+        contact_repo = SQLiteContactRepo()
+        try:
+            contact_repo.create_pair(owner_id, member_id, now_s)
+        finally:
+            contact_repo.close()
+
+        # 4. Auto-create conversation (owner ↔ new agent)
+        from storage.providers.sqlite.conversation_repo import (
+            SQLiteConversationRepo, SQLiteConversationMemberRepo,
+        )
+        from storage.contracts import ConversationRow
+        conv_repo = SQLiteConversationRepo()
+        conv_member_repo = SQLiteConversationMemberRepo()
+        try:
+            conv_id = str(_uuid.uuid4())
+            conv_repo.create(ConversationRow(
+                id=conv_id, title=f"Chat with {name}", created_at=now_s,
+            ))
+            conv_member_repo.add_member(conv_id, owner_id, now_s)
+            conv_member_repo.add_member(conv_id, member_id, now_s)
+        finally:
+            conv_repo.close()
+            conv_member_repo.close()
+
     return get_member(member_id)  # type: ignore
 
 
@@ -438,6 +484,16 @@ def update_member(member_id: str, **fields: Any) -> dict[str, Any] | None:
         meta = _read_json(member_dir / "meta.json", {})
         meta["updated_at"] = int(time.time() * 1000)
         _write_json(member_dir / "meta.json", meta)
+    # Sync identity fields to DB
+    if member_id != "__leon__":
+        db_updates = {k: v for k, v in updates.items() if k in {"name", "description"}}
+        if db_updates:
+            repo = _get_db_member_repo()
+            try:
+                if repo.get_by_id(member_id):
+                    repo.update(member_id, **db_updates, updated_at=time.time())
+            finally:
+                repo.close()
     return get_member(member_id)
 
 
@@ -630,8 +686,50 @@ def publish_member(member_id: str, bump_type: str = "patch") -> dict[str, Any] |
 def delete_member(member_id: str) -> bool:
     if member_id == "__leon__":
         return False
+
+    found = False
+
+    # 1. Remove filesystem config
     member_dir = MEMBERS_DIR / member_id
-    if not member_dir.is_dir():
-        return False
-    shutil.rmtree(member_dir)
-    return True
+    if member_dir.is_dir():
+        shutil.rmtree(member_dir)
+        found = True
+
+    # 2. Remove DB MemberRow
+    repo = _get_db_member_repo()
+    try:
+        row = repo.get_by_id(member_id)
+        if row:
+            repo.delete(member_id)
+            found = True
+    finally:
+        repo.close()
+
+    # 3. Remove contacts involving this member
+    from storage.providers.sqlite.contact_repo import SQLiteContactRepo
+    contact_repo = SQLiteContactRepo()
+    try:
+        contacts = contact_repo.list_by_owner(member_id)
+        for c in contacts:
+            contact_repo.delete_pair(member_id, c.contact_id)
+    finally:
+        contact_repo.close()
+
+    # 4. Remove conversations where this member is a participant
+    from storage.providers.sqlite.conversation_repo import (
+        SQLiteConversationMemberRepo, SQLiteConversationRepo,
+    )
+    conv_member_repo = SQLiteConversationMemberRepo()
+    conv_repo = SQLiteConversationRepo()
+    try:
+        conv_ids = conv_member_repo.list_conversations_for_member(member_id)
+        for conv_id in conv_ids:
+            conv_member_repo.remove_member(conv_id, member_id)
+            remaining = conv_member_repo.list_members(conv_id)
+            if not remaining:
+                conv_repo.update_status(conv_id, "deleted")
+    finally:
+        conv_member_repo.close()
+        conv_repo.close()
+
+    return found

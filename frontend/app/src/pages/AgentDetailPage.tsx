@@ -42,12 +42,18 @@ export default function AgentDetail() {
   const [activeModule, setActiveModule] = useState<ModuleId>("role");
 
   const member = useAppStore(s => s.getMemberById(id || ""));
+  const updateMember = useAppStore(s => s.updateMember);
   const updateMemberConfig = useAppStore(s => s.updateMemberConfig);
   const loadAll = useAppStore(s => s.loadAll);
   const librarySkills = useAppStore(s => s.librarySkills);
   const libraryMcps = useAppStore(s => s.libraryMcps);
   const libraryAgents = useAppStore(s => s.libraryAgents);
   useEffect(() => { loadAll(); }, [loadAll]);
+
+  const [editingName, setEditingName] = useState(false);
+  const [editName, setEditName] = useState("");
+  const [editingDesc, setEditingDesc] = useState(false);
+  const [editDesc, setEditDesc] = useState("");
 
   const [pickerType, setPickerType] = useState<"skill" | "mcp" | "agent" | null>(null);
 
@@ -181,11 +187,62 @@ export default function AgentDetail() {
           <ArrowLeft className="h-4 w-4" />
         </Button>
         <Bot className="h-5 w-5 text-primary" />
-        <span className="font-medium">{member.name}</span>
+        {editingName ? (
+          <Input
+            className="h-7 w-48 text-sm font-medium"
+            value={editName}
+            onChange={(e) => setEditName(e.target.value)}
+            autoFocus
+            onBlur={async () => {
+              const trimmed = editName.trim();
+              if (trimmed && trimmed !== member.name) {
+                await updateMember(member.id, { name: trimmed });
+                toast.success("名称已更新");
+              }
+              setEditingName(false);
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+              if (e.key === "Escape") setEditingName(false);
+            }}
+          />
+        ) : (
+          <span
+            className="font-medium cursor-pointer hover:text-primary transition-colors"
+            onClick={() => { if (!member.builtin) { setEditName(member.name); setEditingName(true); } }}
+            title={member.builtin ? undefined : "点击编辑名称"}
+          >{member.name}</span>
+        )}
         <span className="text-xs px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
           {statusLabels[member.status] || member.status}
         </span>
         <span className="text-xs text-muted-foreground">v{member.version}</span>
+        {editingDesc ? (
+          <Input
+            className="h-7 flex-1 text-xs"
+            value={editDesc}
+            onChange={(e) => setEditDesc(e.target.value)}
+            autoFocus
+            placeholder="描述..."
+            onBlur={async () => {
+              if (editDesc.trim() !== (member.description || "")) {
+                await updateMember(member.id, { description: editDesc.trim() });
+                toast.success("描述已更新");
+              }
+              setEditingDesc(false);
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+              if (e.key === "Escape") setEditingDesc(false);
+            }}
+          />
+        ) : (
+          <span
+            className="text-xs text-muted-foreground truncate max-w-[200px] cursor-pointer hover:text-foreground transition-colors"
+            onClick={() => { if (!member.builtin) { setEditDesc(member.description || ""); setEditingDesc(true); } }}
+            title={member.builtin ? member.description : "点击编辑描述"}
+          >{member.description || (member.builtin ? "" : "添加描述...")}</span>
+        )}
         <div className="flex-1" />
         <Button size="sm" variant="outline" onClick={() => setShowTest(true)}>
           <Play className="h-3.5 w-3.5 mr-1" /> 测试
