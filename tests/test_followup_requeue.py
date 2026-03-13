@@ -85,7 +85,7 @@ class TestConsumeFollowupQueue:
 
                 mock_start.assert_called_once_with(
                     mock_agent, "thread-1", "do something", mock_app,
-                    message_metadata={"source": "system", "notification_type": "steer"},
+                    emit_notice=True,
                 )
             # Message was consumed, queue is empty
             assert queue_manager.dequeue("thread-1") is None
@@ -133,7 +133,7 @@ class TestConsumeFollowupQueue:
 
                 mock_start.assert_called_once_with(
                     mock_agent, "thread-1", "retry me", mock_app,
-                    message_metadata={"source": "system", "notification_type": "steer"},
+                    emit_notice=True,
                 )
 
             # Queue is now empty

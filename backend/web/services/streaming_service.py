@@ -289,10 +289,7 @@ def _ensure_thread_handlers(agent: Any, thread_id: str, app: Any) -> None:
                 async def _emit_one_notice() -> None:
                     await activity_sink({
                         "event": "notice",
-                        "data": json.dumps({
-                            "content": item.content,
-                            "notification_type": item.notification_type,
-                        }, ensure_ascii=False),
+                        "data": json.dumps({"content": item.content}, ensure_ascii=False),
                     })
                 loop.call_soon_threadsafe(loop.create_task, _emit_one_notice())
             return
@@ -307,10 +304,7 @@ def _ensure_thread_handlers(agent: Any, thread_id: str, app: Any) -> None:
 
         async def _start_run():
             try:
-                start_agent_run(
-                    agent, thread_id, item.content, app,
-                    message_metadata={"source": "system", "notification_type": item.notification_type},
-                )
+                start_agent_run(agent, thread_id, item.content, app, emit_notice=True)
             except Exception:
                 logger.error("wake_handler failed for thread %s", thread_id, exc_info=True)
                 if hasattr(agent, "runtime"):
@@ -349,7 +343,7 @@ async def _run_agent_to_buffer(
     enable_trajectory: bool,
     thread_buf: ThreadEventBuffer,
     run_id: str,
-    message_metadata: dict[str, Any] | None = None,
+    emit_notice: bool = False,
 ) -> None:
     """Run agent execution and write all SSE events into *thread_buf*."""
     from backend.web.services.event_store import append_event
@@ -485,15 +479,12 @@ async def _run_agent_to_buffer(
         # won't reject the message history.
         await _repair_incomplete_tool_calls(agent, config)
 
-        # Emit notice BEFORE run_start when this run was triggered by a queue notification.
-        # This makes the notice appear in real-time between turns, not just after history reload.
-        if message_metadata and message_metadata.get("source") == "system":
+        # Emit notice BEFORE run_start when this run was triggered by routing
+        # (agent-to-agent, followup queue). Visible in brain thread full view.
+        if emit_notice:
             await emit({
                 "event": "notice",
-                "data": json.dumps({
-                    "content": message,
-                    "notification_type": message_metadata.get("notification_type"),
-                }, ensure_ascii=False),
+                "data": json.dumps({"content": message}, ensure_ascii=False),
             })
 
         # Emit run_start
@@ -502,11 +493,8 @@ async def _run_agent_to_buffer(
             "data": json.dumps({"thread_id": thread_id, "run_id": run_id}),
         })
 
-        if message_metadata:
-            from langchain_core.messages import HumanMessage
-            _initial_input: dict | None = {"messages": [HumanMessage(content=message, metadata=message_metadata)]}
-        else:
-            _initial_input = {"messages": [{"role": "user", "content": message}]}
+        # @@@unified-input - ALL messages use the same format regardless of sender type.
+        _initial_input: dict | None = {"messages": [{"role": "user", "content": message}]}
 
         async def run_agent_stream(input_data: dict | None = _initial_input):
             async for chunk in agent.agent.astream(
@@ -532,7 +520,8 @@ async def _run_agent_to_buffer(
         while True:  # 外层重试循环
             # First attempt sends the user message; retries pass None so LangGraph
             # resumes from the last checkpoint without re-appending the user message.
-            stream_gen = run_agent_stream(_initial_input if stream_attempt == 0 else None)
+            stream_input = _initial_input if stream_attempt == 0 else None
+            stream_gen = run_agent_stream(stream_input)
             task = asyncio.create_task(stream_gen.__anext__())
             app.state.thread_tasks[thread_id] = task
             stream_err: Exception | None = None
@@ -725,23 +714,6 @@ async def _run_agent_to_buffer(
             except Exception:
                 logger.error("Failed to persist trajectory for thread %s", thread_id, exc_info=True)
 
-        # A6: patch checkpoint — inject run_id into messages that were emitted this run.
-        # In-stream mutation (above) modifies the Python object but checkpoint is already serialized.
-        # update_state with same message IDs → MessagesState add_messages reducer replaces (not appends).
-        try:
-            state = await agent.agent.aget_state(config)
-            to_patch = []
-            for msg in state.values.get("messages", []):
-                if not hasattr(msg, "metadata") or not isinstance(getattr(msg, "metadata", None), dict):
-                    msg.metadata = {}
-                if msg.metadata.get("run_id") is None:
-                    msg.metadata["run_id"] = run_id
-                    to_patch.append(msg)
-            if to_patch:
-                await agent.agent.aupdate_state(config, {"messages": to_patch})
-        except Exception:
-            logger.debug("A6 run_id checkpoint patch failed for thread=%s", thread_id, exc_info=True)
-
         # A5: emit run_done instead of done (persistent buffer — no mark_done)
         await emit({"event": "run_done", "data": json.dumps({"thread_id": thread_id, "run_id": run_id})})
     except asyncio.CancelledError:
@@ -824,8 +796,7 @@ async def _consume_followup_queue(agent: Any, thread_id: str, app: Any) -> None:
         item = qm.dequeue(thread_id)
         if item and app:
             if hasattr(agent, "runtime") and agent.runtime.transition(AgentState.ACTIVE):
-                start_agent_run(agent, thread_id, item.content, app,
-                                message_metadata={"source": "system", "notification_type": item.notification_type})
+                start_agent_run(agent, thread_id, item.content, app, emit_notice=True)
     except Exception:
         logger.exception("Failed to consume followup queue for thread %s", thread_id)
         # Re-enqueue the message if it was already dequeued to prevent data loss
@@ -847,13 +818,30 @@ def start_agent_run(
     message: str,
     app: Any,
     enable_trajectory: bool = False,
-    message_metadata: dict[str, Any] | None = None,
+    emit_notice: bool = False,
 ) -> str:
-    """Launch agent producer on the persistent ThreadEventBuffer. Returns run_id."""
+    """Launch agent producer on the persistent ThreadEventBuffer. Returns run_id.
+
+    @@@clean-context - Each agent run executes in an isolated context to prevent
+    LangGraph's var_child_runnable_config from leaking between agents. Without
+    this, cross-agent runs (agent A triggers agent B via tool call) inherit
+    agent A's run_id in metadata, causing LangGraph to treat the next call as
+    a resume-from-interrupt instead of a new turn → zero output.
+    """
+    import contextvars
+    from langchain_core.runnables.config import var_child_runnable_config
+
     thread_buf = get_or_create_thread_buffer(app, thread_id)
     run_id = str(_uuid.uuid4())
-    bg_task = asyncio.create_task(
-        _run_agent_to_buffer(agent, thread_id, message, app, enable_trajectory, thread_buf, run_id, message_metadata)
+
+    # Create a clean context so this run doesn't inherit the caller's
+    # LangGraph context vars (e.g. parent agent's run_id).
+    ctx = contextvars.copy_context()
+    ctx.run(var_child_runnable_config.set, None)
+
+    bg_task = asyncio.get_running_loop().create_task(
+        _run_agent_to_buffer(agent, thread_id, message, app, enable_trajectory, thread_buf, run_id, emit_notice),
+        context=ctx,
     )
     # Store the background task so cancel_run can still cancel it
     app.state.thread_tasks[thread_id] = bg_task

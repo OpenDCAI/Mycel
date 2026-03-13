@@ -144,12 +144,13 @@ def resolve_thread_sandbox(app_obj: FastAPI, thread_id: str) -> str:
 # ---------------------------------------------------------------------------
 
 
-async def route_message_to_brain(app_obj: FastAPI, brain_thread_id: str, formatted_message: str) -> str:
+async def route_message_to_brain(app_obj: FastAPI, brain_thread_id: str, formatted_message: str) -> dict:
     """Route a formatted message to an agent's brain thread.
 
     Handles IDLE (start new run) and ACTIVE (steer via queue).
-    Same IDLE/ACTIVE pattern as the POST /conversations/{id}/messages handler.
-    Returns 'direct' or 'steer'.
+    Single entry point for ALL message delivery — human and agent senders
+    use the same path.
+    Returns {"routing": "direct", "run_id": ...} or {"routing": "steer"}.
     """
     sandbox_type = resolve_thread_sandbox(app_obj, brain_thread_id)
     agent = await get_or_create_agent(app_obj, sandbox_type, thread_id=brain_thread_id)
@@ -159,7 +160,7 @@ async def route_message_to_brain(app_obj: FastAPI, brain_thread_id: str, formatt
     # Fast path: agent already running → steer
     if hasattr(agent, "runtime") and agent.runtime.current_state == AgentState.ACTIVE:
         qm.enqueue(formatted_message, brain_thread_id, notification_type="steer")
-        return "steer"
+        return {"routing": "steer"}
 
     # Slow path: agent IDLE → acquire lock, transition, start run
     from backend.web.services.streaming_service import start_agent_run
@@ -175,12 +176,12 @@ async def route_message_to_brain(app_obj: FastAPI, brain_thread_id: str, formatt
         if hasattr(agent, "runtime") and not agent.runtime.transition(AgentState.ACTIVE):
             # Race: became active between check and lock
             qm.enqueue(formatted_message, brain_thread_id, notification_type="steer")
-            return "steer"
-        start_agent_run(
+            return {"routing": "steer"}
+        run_id = start_agent_run(
             agent, brain_thread_id, formatted_message, app_obj,
-            message_metadata={"source": "system", "notification_type": "steer"},
+            emit_notice=True,
         )
-        return "direct"
+        return {"routing": "direct", "run_id": run_id}
 
 
 def _create_message_router(app_obj: FastAPI) -> Any:
@@ -216,7 +217,7 @@ def _create_message_router(app_obj: FastAPI) -> Any:
             async def _route(brain_tid=brain_thread_id, msg=formatted):
                 try:
                     result = await route_message_to_brain(app_obj, brain_tid, msg)
-                    logger.info("Routed message to %s: %s", brain_tid[:14], result)
+                    logger.info("Routed message to %s: %s", brain_tid[:14], result.get("routing"))
                 except Exception:
                     logger.exception("Failed to route message to %s", brain_tid[:14])
 

@@ -2,7 +2,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Loader2, MessageSquare, Search } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "./ui/dialog";
-import { useAuthStore } from "@/store/auth-store";
 import { createConversation, listDirectory, type DirectoryEntry, type DirectoryResult } from "@/api/conversations";
 
 interface NewChatDialogProps {
@@ -14,7 +13,6 @@ interface NewChatDialogProps {
 // @@@member-directory-dialog - search bar + contacts/others split, backed by DirectoryService
 export default function NewChatDialog({ open, onOpenChange, onConversationCreated }: NewChatDialogProps) {
   const navigate = useNavigate();
-  const myAgent = useAuthStore(s => s.agent);
   const [result, setResult] = useState<DirectoryResult>({ contacts: [], others: [] });
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(false);
@@ -24,18 +22,10 @@ export default function NewChatDialog({ open, onOpenChange, onConversationCreate
   const fetchDirectory = useCallback((query: string) => {
     setLoading(true);
     listDirectory("mycel_agent", query || undefined)
-      .then((r) => {
-        // Exclude user's own agent from both lists
-        const excludeId = myAgent?.id;
-        if (excludeId) {
-          r.contacts = r.contacts.filter(e => e.id !== excludeId);
-          r.others = r.others.filter(e => e.id !== excludeId);
-        }
-        setResult(r);
-      })
+      .then((r) => setResult(r))
       .catch((err) => console.error("[NewChatDialog] Failed to fetch directory:", err))
       .finally(() => setLoading(false));
-  }, [myAgent]);
+  }, []);
 
   // Fetch on open
   useEffect(() => {
@@ -61,7 +51,7 @@ export default function NewChatDialog({ open, onOpenChange, onConversationCreate
       const conv = await createConversation(agentId);
       onOpenChange(false);
       await onConversationCreated?.();
-      navigate(`/chat/leon/${conv.id}`);
+      navigate(`/chat/${conv.agent_name}/${conv.id}`);
     } catch (err) {
       console.error("[NewChatDialog] Failed to create conversation:", err);
     } finally {

@@ -52,12 +52,10 @@ function ChatPageInner({ threadId }: { threadId: string }) {
   const isOwnAgent = conversation ? conversation.agent_member_id === authAgent?.id : false;
 
   const [currentModel, setCurrentModel] = useState<string>("");
-  // @@@view-default — default to owner for own agent, contact for others.
-  // conversations may load after first render, so sync via useEffect.
-  const [viewMode, setViewMode] = useState<ViewMode>("owner");
-  useEffect(() => {
-    if (conversation) setViewMode(isOwnAgent ? "owner" : "contact");
-  }, [conversation, isOwnAgent]);
+  // @@@view-default — conversation view is primary for everyone.
+  // Toggle to "owner" (brain thread) available only for own agent.
+  // key={threadId} on parent forces remount, so default applies fresh each time.
+  const [viewMode, setViewMode] = useState<ViewMode>("contact");
 
   const state = location.state as { selectedModel?: string; runStarted?: boolean; message?: string } | null;
 

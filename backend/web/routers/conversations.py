@@ -10,11 +10,8 @@ from pydantic import BaseModel
 from sse_starlette.sse import EventSourceResponse
 
 from backend.web.core.dependencies import get_app, get_current_member_id
-from backend.web.services.agent_pool import get_or_create_agent
-from backend.web.services.streaming_service import start_agent_run
-from core.runtime.middleware.monitor import AgentState
+from backend.web.services.agent_pool import route_message_to_brain
 from core.runtime.middleware.queue import format_conversation_message
-from sandbox.thread_context import set_current_thread_id
 
 logger = logging.getLogger(__name__)
 
@@ -179,41 +176,13 @@ async def send_message(
         "created_at": msg["created_at"],
     })
 
+    # @@@unified-message-delivery - single path for ALL message delivery
     routing = result["routing"]
     brain_thread_id = routing["brain_thread_id"]
     sender_name = routing["sender_name"]
     conv_id = routing["conversation_id"]
 
-    # Format message for brain injection
     formatted = format_conversation_message(body.content, sender_name, conv_id)
+    delivery = await route_message_to_brain(app, brain_thread_id, formatted)
 
-    # Get/create agent for the brain thread
-    from backend.web.services.agent_pool import resolve_thread_sandbox
-    sandbox_type = resolve_thread_sandbox(app, brain_thread_id)
-    agent = await get_or_create_agent(app, sandbox_type, thread_id=brain_thread_id)
-    set_current_thread_id(brain_thread_id)
-
-    qm = app.state.queue_manager
-
-    # @@@conversation-routing - same IDLE/ACTIVE pattern as threads.py:send_message
-    if hasattr(agent, "runtime") and agent.runtime.current_state == AgentState.ACTIVE:
-        qm.enqueue(formatted, brain_thread_id, notification_type="steer")
-        return {**msg, "routing": "steer"}
-
-    # Agent IDLE → start new run
-    from backend.web.services.streaming_service import get_or_create_thread_buffer
-    lock_key = brain_thread_id
-    locks_guard = app.state.thread_locks_guard
-    async with locks_guard:
-        if lock_key not in app.state.thread_locks:
-            app.state.thread_locks[lock_key] = asyncio.Lock()
-        lock = app.state.thread_locks[lock_key]
-
-    async with lock:
-        if hasattr(agent, "runtime") and not agent.runtime.transition(AgentState.ACTIVE):
-            # Race: became active between check and lock
-            qm.enqueue(formatted, brain_thread_id, notification_type="steer")
-            return {**msg, "routing": "steer"}
-        run_id = start_agent_run(agent, brain_thread_id, formatted, app)
-
-    return {**msg, "routing": "direct", "run_id": run_id}
+    return {**msg, **delivery}

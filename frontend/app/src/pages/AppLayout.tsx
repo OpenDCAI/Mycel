@@ -152,7 +152,6 @@ function MobileThreadList({ threads, loading, onNewChat, onDeleteThread, newChat
   setNewChatOpen: (v: boolean) => void;
   onConversationCreated: () => Promise<void>;
 }) {
-  const memberList = useAppStore(s => s.memberList);
   return (
     <div className="h-full w-full bg-background flex flex-col overflow-hidden">
       <div className="h-14 flex items-center justify-between px-4 border-b border-border shrink-0">
@@ -171,17 +170,16 @@ function MobileThreadList({ threads, loading, onNewChat, onDeleteThread, newChat
           </div>
         ) : (
           threads.map(t => {
-            const member = memberList.find((m: any) => m.id === t.agent);
-            const memberName = member?.name || t.agent || "Leon";
+            const agentName = t.agent || "Leon";
             const preview = t.preview || "新会话";
             return (
               <div key={t.thread_id} className="flex items-center border-b border-border">
-                <Link to={`/chat/${t.thread_id}`} className="flex items-center gap-3 px-4 py-3 flex-1 min-w-0 hover:bg-muted/50 transition-colors">
+                <Link to={`/chat/${agentName}/${t.thread_id}`} className="flex items-center gap-3 px-4 py-3 flex-1 min-w-0 hover:bg-muted/50 transition-colors">
                   <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
-                    <span className="text-xs font-bold text-primary">{memberName.slice(0, 1)}</span>
+                    <span className="text-xs font-bold text-primary">{agentName.slice(0, 1)}</span>
                   </div>
                   <div className="min-w-0 flex-1">
-                    <p className="text-sm font-medium text-foreground truncate">{memberName}</p>
+                    <p className="text-sm font-medium text-foreground truncate">{agentName}</p>
                     <p className="text-xs text-muted-foreground truncate">{preview}</p>
                   </div>
                 </Link>

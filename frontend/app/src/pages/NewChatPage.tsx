@@ -20,7 +20,7 @@ interface OutletContext {
 export default function NewChatPage() {
   const navigate = useNavigate();
   const { memberId } = useParams<{ memberId: string }>();
-  const { tm, refreshConversations } = useOutletContext<OutletContext>();
+  const { tm, conversations, refreshConversations } = useOutletContext<OutletContext>();
   const { sandboxTypes, selectedSandbox } = tm;
   const { settings, loading, hasWorkspace } = useWorkspaceSettings();
   const [showWorkspaceSetup, setShowWorkspaceSetup] = useState(false);
@@ -34,13 +34,20 @@ export default function NewChatPage() {
       return;
     }
 
-    if (!agent) {
-      console.error("[NewChatPage] No agent in auth store");
+    // @@@conversation-flow - resolve target agent from URL memberId, fall back to own agent.
+    // Clicking "alice's Leon" group header → memberId="alice's Leon" → create conv with alice's Leon.
+    // Clicking "leon" (default) → create conv with own agent.
+    let targetAgentId = agent?.id;
+    if (memberId && memberId !== "leon" && conversations) {
+      const match = conversations.find(c => c.agent_name === memberId);
+      if (match) targetAgentId = match.agent_member_id;
+    }
+    if (!targetAgentId) {
+      console.error("[NewChatPage] No agent to create conversation with");
       return;
     }
 
-    // @@@conversation-flow - create conversation → send first message → navigate to brain thread
-    const conv = await createConversation(agent.id);
+    const conv = await createConversation(targetAgentId);
     sendConversationMessage(conv.id, message).catch(err => {
       console.error("[NewChatPage] sendConversationMessage failed:", err);
     });
