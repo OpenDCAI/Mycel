@@ -306,18 +306,50 @@ def _ensure_leon_dir() -> Path:
     return leon_dir
 
 
+# ── DB identity helpers ──
+
+def _resolve_config_dir(config_dir_str: str | None) -> Path:
+    """Resolve a member's config directory, defaulting to __leon__ template."""
+    if config_dir_str:
+        p = Path(config_dir_str)
+        if p.is_dir():
+            return p
+    return MEMBERS_DIR / "__leon__"
+
+
+def _db_member_to_dict(row: Any) -> dict[str, Any]:
+    """Build frontend member dict: identity from DB row, config from filesystem."""
+    config_dir = _resolve_config_dir(row.config_dir)
+    item = _member_to_dict(config_dir) or _leon_builtin()
+    # DB is the identity source of truth — override filesystem names
+    item["id"] = row.id
+    item["name"] = row.name
+    item["description"] = row.description or item.get("description", "")
+    return item
+
+
+def _get_db_member_repo():
+    from storage.providers.sqlite.member_repo import SQLiteMemberRepo
+    return SQLiteMemberRepo()
+
+
 # ── CRUD operations ──
 
 def list_members() -> list[dict[str, Any]]:
-    leon = get_member("__leon__")
-    results: list[dict[str, Any]] = [leon] if leon else [_leon_builtin()]
-    if MEMBERS_DIR.exists():
-        for d in sorted(MEMBERS_DIR.iterdir(), reverse=True):
-            if d.is_dir() and d.name != "__leon__" and (d / "agent.md").exists():
-                item = _member_to_dict(d)
-                if item:
-                    results.append(item)
-    return results
+    """List agent members. Identity from DB, config from filesystem."""
+    from storage.contracts import MemberType
+
+    repo = _get_db_member_repo()
+    try:
+        db_agents = [m for m in repo.list_all() if m.type != MemberType.HUMAN]
+    finally:
+        repo.close()
+
+    if not db_agents:
+        # No DB members yet (pre-registration state) → fallback to builtin
+        return [_leon_builtin()]
+
+    return [_db_member_to_dict(agent) for agent in db_agents]
 
 
 def get_member(member_id: str) -> dict[str, Any] | None:
@@ -329,6 +361,18 @@ def get_member(member_id: str) -> dict[str, Any] | None:
                 item["builtin"] = True
                 return item
         return _leon_builtin()
+
+    # Try DB first (contact system members)
+    repo = _get_db_member_repo()
+    try:
+        row = repo.get_by_id(member_id)
+    finally:
+        repo.close()
+
+    if row:
+        return _db_member_to_dict(row)
+
+    # Fallback: filesystem-only member (legacy path)
     member_dir = MEMBERS_DIR / member_id
     if not member_dir.is_dir():
         return None
@@ -348,12 +392,28 @@ def create_member(name: str, description: str = "") -> dict[str, Any]:
     return get_member(member_id)  # type: ignore
 
 
+def _resolve_member_dir(member_id: str) -> Path | None:
+    """Resolve writable config directory for a member. Checks filesystem then DB."""
+    member_dir = MEMBERS_DIR / member_id
+    if member_dir.is_dir():
+        return member_dir
+    # Not a filesystem member — check DB for config_dir
+    repo = _get_db_member_repo()
+    try:
+        row = repo.get_by_id(member_id)
+    finally:
+        repo.close()
+    if row:
+        return _resolve_config_dir(row.config_dir)
+    return None
+
+
 def update_member(member_id: str, **fields: Any) -> dict[str, Any] | None:
     if member_id == "__leon__":
         member_dir = _ensure_leon_dir()
     else:
-        member_dir = MEMBERS_DIR / member_id
-        if not member_dir.is_dir():
+        member_dir = _resolve_member_dir(member_id)
+        if not member_dir:
             return None
     allowed = {"name", "description", "status"}
     updates = {k: v for k, v in fields.items() if k in allowed and v is not None}
@@ -384,8 +444,8 @@ def update_member_config(member_id: str, config_patch: dict[str, Any]) -> dict[s
     if member_id == "__leon__":
         member_dir = _ensure_leon_dir()
     else:
-        member_dir = MEMBERS_DIR / member_id
-        if not member_dir.is_dir():
+        member_dir = _resolve_member_dir(member_id)
+        if not member_dir:
             return None
 
     # prompt → agent.md body

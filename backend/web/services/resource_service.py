@@ -10,7 +10,6 @@ from typing import Any
 from backend.web.core.config import SANDBOXES_DIR
 from backend.web.services.config_loader import SandboxConfigLoader
 from backend.web.services.sandbox_service import available_sandbox_types, build_provider_from_config_name
-from backend.web.utils.helpers import _build_thread_config_repo as _make_thread_config_repo
 from sandbox.providers.local import LocalSessionProvider
 from sandbox.providers.docker import DockerProvider
 from sandbox.providers.daytona import DaytonaProvider
@@ -217,38 +216,25 @@ def _to_session_metrics(snapshot: dict[str, Any] | None) -> dict[str, Any] | Non
 
 
 def _member_name_map() -> dict[str, str]:
+    """Map member_id → display name from DB (single source of truth)."""
     try:
-        from backend.web.services.member_service import list_members
-        members = list_members()
+        from storage.providers.sqlite.member_repo import SQLiteMemberRepo
+        repo = SQLiteMemberRepo()
+        try:
+            return {m.id: m.name for m in repo.list_all()}
+        finally:
+            repo.close()
     except Exception:
         return {}
-    mapping: dict[str, str] = {}
-    for member in members:
-        member_id = str(member.get("id") or "").strip()
-        member_name = str(member.get("name") or "").strip()
-        if member_id and member_name:
-            mapping[member_id] = member_name
-    return mapping
 
 
 def _thread_agent_refs(thread_ids: list[str]) -> dict[str, str]:
-    """Batch lookup agent refs from thread_config via the storage abstraction (SQLite or Supabase)."""
-    unique = sorted({tid for tid in thread_ids if tid})
-    if not unique:
-        return {}
-    repo = _make_thread_config_repo()
-    try:
-        refs: dict[str, str] = {}
-        for tid in unique:
-            config = repo.lookup_config(tid) or {}
-            agent_ref = str(config.get("agent") or "").strip()
-            if agent_ref:
-                refs[tid] = agent_ref
-        return refs
-    except Exception:
-        return {}
-    finally:
-        repo.close()
+    """Extract agent member_id from brain-{member_id} thread convention."""
+    refs: dict[str, str] = {}
+    for tid in thread_ids:
+        if tid.startswith("brain-"):
+            refs[tid] = tid[len("brain-"):]
+    return refs
 
 
 def _thread_owners(thread_ids: list[str]) -> dict[str, dict[str, str | None]]:
