@@ -2,7 +2,6 @@ import { Check, ChevronRight, MoreHorizontal, Plus, Search, Trash2 } from "lucid
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import type { ThreadSummary } from "../api";
-import { useAppStore } from "../store/app-store";
 import { Skeleton } from "./ui/skeleton";
 
 type DateGroup = "今天" | "昨天" | "更早";
@@ -177,7 +176,6 @@ export default function Sidebar({
 }: SidebarProps) {
   const { threadId } = useParams<{ threadId?: string }>();
   const activeThreadId = threadId || null;
-  const memberList = useAppStore(s => s.memberList);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   const [expandedMembers, setExpandedMembers] = useState<Set<string>>(new Set());
   const hasInitialized = useRef(false);
@@ -214,20 +212,11 @@ export default function Sidebar({
     return () => document.removeEventListener("keydown", onKey);
   }, [isSelectMode]);
 
-  // Group threads by member. Use memberList as base so members persist even with no threads.
+  // Group threads by member (agent_name from conversations)
   const groups = useMemo(() => {
     const map = new Map<string, { memberName: string; threads: ThreadSummary[]; latestAt: number }>();
 
-    // Seed from memberList so members with no threads remain visible
-    for (const member of memberList) {
-      map.set(member.name, { memberName: member.name, threads: [], latestAt: 0 });
-    }
-    // Always ensure the default "Leon" entry exists
-    if (!map.has("Leon")) {
-      map.set("Leon", { memberName: "Leon", threads: [], latestAt: 0 });
-    }
-
-    // Attach threads to their member group
+    // Build groups from actual threads only — no seeding from memberList
     for (const thread of threads) {
       const key = thread.agent || "Leon";
       if (!map.has(key)) map.set(key, { memberName: key, threads: [], latestAt: 0 });
@@ -248,7 +237,7 @@ export default function Sidebar({
           return tb - ta;
         }),
       }));
-  }, [threads, memberList]);
+  }, [threads]);
 
   // Auto-expand the most recently active member on first load
   useEffect(() => {

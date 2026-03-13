@@ -29,10 +29,18 @@ class ConversationService:
         self._members = members
 
     def create_conversation(self, creator_id: str, agent_member_id: str, title: str | None = None) -> dict:
-        """Create a new conversation between creator and agent."""
+        """Create a new conversation between creator and agent.
+
+        Returns existing active conversation if one already exists between these members.
+        """
         agent = self._members.get_by_id(agent_member_id)
         if not agent:
             raise ValueError(f"Agent member {agent_member_id} not found")
+
+        # @@@dedup-conversation - return existing if already exists
+        existing = self._find_existing_conversation(creator_id, agent_member_id)
+        if existing:
+            return existing
 
         now = time.time()
         conv_id = str(uuid.uuid4())
@@ -51,11 +59,33 @@ class ConversationService:
         return {
             "id": conv_id,
             "agent_member_id": agent_member_id,
+            "agent_name": agent.name,
             "title": conv_title,
             "status": "active",
             "created_at": now,
             "members": [creator_id, agent_member_id],
         }
+
+    def _find_existing_conversation(self, member_a: str, member_b: str) -> dict | None:
+        """Find an existing active conversation between two members."""
+        a_convs = set(self._conv_members.list_conversations_for_member(member_a))
+        b_convs = set(self._conv_members.list_conversations_for_member(member_b))
+        shared = a_convs & b_convs
+        for cid in shared:
+            conv = self._conversations.get_by_id(cid)
+            if conv and conv.status == "active":
+                members = self._conv_members.list_members(cid)
+                agent = self._members.get_by_id(conv.agent_member_id)
+                return {
+                    "id": conv.id,
+                    "agent_member_id": conv.agent_member_id,
+                    "agent_name": agent.name if agent else "Leon",
+                    "title": conv.title,
+                    "status": conv.status,
+                    "created_at": conv.created_at,
+                    "members": [m.member_id for m in members],
+                }
+        return None
 
     # @@@member-conversation - create conversation between any two members (not just human+agent)
     def create_member_conversation(self, member_ids: list[str], title: str | None = None) -> dict:
@@ -108,9 +138,11 @@ class ConversationService:
             conv = self._conversations.get_by_id(cid)
             if conv and conv.status != "archived":
                 members = self._conv_members.list_members(cid)
+                agent = self._members.get_by_id(conv.agent_member_id)
                 results.append({
                     "id": conv.id,
                     "agent_member_id": conv.agent_member_id,
+                    "agent_name": agent.name if agent else "Leon",
                     "title": conv.title,
                     "status": conv.status,
                     "created_at": conv.created_at,
@@ -124,9 +156,11 @@ class ConversationService:
         if not conv:
             return None
         members = self._conv_members.list_members(conversation_id)
+        agent = self._members.get_by_id(conv.agent_member_id)
         return {
             "id": conv.id,
             "agent_member_id": conv.agent_member_id,
+            "agent_name": agent.name if agent else "Leon",
             "title": conv.title,
             "status": conv.status,
             "created_at": conv.created_at,

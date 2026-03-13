@@ -78,7 +78,7 @@ class AuthService:
         # 3. Agent member (Leon from template)
         agent_id = str(uuid.uuid4())
         self._members.create(MemberRow(
-            id=agent_id, name="Leon", type=MemberType.MYCEL_AGENT,
+            id=agent_id, name=f"{username}'s Leon", type=MemberType.MYCEL_AGENT,
             description="Your AI assistant",
             config_dir=LEON_TEMPLATE_DIR,
             created_at=now,
@@ -91,7 +91,7 @@ class AuthService:
         conv_id = str(uuid.uuid4())
         self._conversations.create(ConversationRow(
             id=conv_id, agent_member_id=agent_id,
-            title="Chat with Leon", created_at=now,
+            title=f"Chat with {username}'s Leon", created_at=now,
         ))
         self._conv_members.add_member(conv_id, human_id, now)
         self._conv_members.add_member(conv_id, agent_id, now)
@@ -104,7 +104,7 @@ class AuthService:
         return {
             "token": token,
             "member": {"id": human_id, "name": username, "type": "human"},
-            "agent": {"id": agent_id, "name": "Leon", "type": "mycel_agent"},
+            "agent": {"id": agent_id, "name": f"{username}'s Leon", "type": "mycel_agent"},
             "conversation_id": conv_id,
         }
 

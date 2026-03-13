@@ -21,16 +21,25 @@ async def get_current_member_id(
     app: Annotated[FastAPI, Depends(get_app)],
     credentials: HTTPAuthorizationCredentials | None = Depends(_bearer_scheme),
 ) -> str:
-    """Extract and verify JWT, return member_id. 401 on failure."""
+    """Extract and verify JWT, return member_id. 401 on failure.
+
+    Also verifies the member still exists in DB — rejects ghost tokens
+    from stale sessions after DB cleanup.
+    """
     if credentials is None:
         raise HTTPException(401, "Missing authorization header")
     auth_service = getattr(app.state, "auth_service", None)
     if auth_service is None:
         raise HTTPException(500, "Auth service not initialized")
     try:
-        return auth_service.verify_token(credentials.credentials)
+        member_id = auth_service.verify_token(credentials.credentials)
     except ValueError as e:
         raise HTTPException(401, str(e))
+    # @@@ghost-token - verify member still exists (DB may have been wiped)
+    member_repo = getattr(app.state, "member_repo", None)
+    if member_repo and member_repo.get_by_id(member_id) is None:
+        raise HTTPException(401, "Member no longer exists")
+    return member_id
 
 
 async def get_thread_lock(app: Annotated[FastAPI, Depends(get_app)], thread_id: str) -> asyncio.Lock:

@@ -51,17 +51,16 @@ export default function AppLayout() {
     }
   }, [refreshConversations]);
 
-  // @@@conv-as-route-key - each conversation has its own sidebar entry + URL.
-  // Brain thread ID is derived internally by ChatPage, not exposed in the URL.
+  // @@@conv-as-route-key - each conversation maps to its ACTUAL agent, not the user's own agent.
   const sidebarThreads: ThreadSummary[] = useMemo(() =>
     conversations.map(conv => ({
       thread_id: conv.id,
       preview: conv.title,
       updated_at: new Date(conv.created_at * 1000).toISOString(),
-      agent: authAgent?.name || "Leon",
+      agent: conv.agent_name || "Leon",
       running: false,
     })),
-    [conversations, authAgent],
+    [conversations],
   );
 
   const isMobile = useIsMobile();
