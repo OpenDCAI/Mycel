@@ -1,4 +1,5 @@
 import { authRequest } from "../store/auth-store";
+import { useAuthStore } from "../store/auth-store";
 
 // @@@member-directory - types + fetch for member discovery (shared with agent logbook)
 export interface DirectoryEntry {
@@ -23,23 +24,30 @@ export async function listDirectory(type?: string, search?: string): Promise<Dir
   return authRequest<DirectoryResult>(`/api/members/directory${qs ? `?${qs}` : ""}`);
 }
 
+export interface ConversationMemberDetail {
+  id: string;
+  name: string;
+  type: string;
+}
+
 export interface ConversationSummary {
   id: string;
-  agent_member_id: string;
-  agent_name: string;
   title: string;
   status: string;
   created_at: number;
   members: string[];
+  member_details?: ConversationMemberDetail[];
 }
 
-export async function createConversation(
-  agentMemberId: string,
+export async function createMemberConversation(
+  memberId: string,
   title?: string,
 ): Promise<ConversationSummary> {
+  const currentMemberId = useAuthStore.getState().member?.id;
+  if (!currentMemberId) throw new Error("Not authenticated");
   return authRequest<ConversationSummary>("/api/conversations", {
     method: "POST",
-    body: JSON.stringify({ agent_member_id: agentMemberId, title }),
+    body: JSON.stringify({ members: [currentMemberId, memberId], title }),
   });
 }
 

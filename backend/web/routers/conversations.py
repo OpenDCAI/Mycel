@@ -10,8 +10,7 @@ from pydantic import BaseModel
 from sse_starlette.sse import EventSourceResponse
 
 from backend.web.core.dependencies import get_app, get_current_member_id
-from backend.web.services.agent_pool import route_message_to_brain
-from core.runtime.middleware.queue import format_conversation_message
+from core.agents.communication.delivery import DeliveryRouter
 
 logger = logging.getLogger(__name__)
 
@@ -19,8 +18,7 @@ router = APIRouter(prefix="/api/conversations", tags=["conversations"])
 
 
 class CreateConversationBody(BaseModel):
-    agent_member_id: str | None = None
-    members: list[str] | None = None  # @@@member-conversation - any two members, not just human+agent
+    members: list[str]
     title: str | None = None
 
 
@@ -34,19 +32,10 @@ async def create_conversation(
     member_id: Annotated[str, Depends(get_current_member_id)],
     app: Annotated[Any, Depends(get_app)],
 ) -> dict:
-    """Create a new conversation between members.
-
-    Two modes:
-    - agent_member_id: legacy — conversation between JWT holder and an agent
-    - members: list of 2 member IDs — conversation between any two members
-    """
+    """Create a new conversation between two members."""
     svc = app.state.conversation_service
     try:
-        if body.members and len(body.members) == 2:
-            return svc.create_member_conversation(body.members, body.title)
-        if body.agent_member_id:
-            return svc.create_conversation(member_id, body.agent_member_id, body.title)
-        raise HTTPException(400, "Provide agent_member_id or members (list of 2)")
+        return svc.create_member_conversation(body.members, body.title)
     except ValueError as e:
         raise HTTPException(404, str(e))
 
@@ -176,13 +165,11 @@ async def send_message(
         "created_at": msg["created_at"],
     })
 
-    # @@@unified-message-delivery - single path for ALL message delivery
-    routing = result["routing"]
-    brain_thread_id = routing["brain_thread_id"]
-    sender_name = routing["sender_name"]
-    conv_id = routing["conversation_id"]
+    # @@@delivery-bottleneck - route through DeliveryRouter (narrow bottleneck)
+    delivery_router: DeliveryRouter = app.state.delivery_router
+    deliveries = await delivery_router.deliver_to_conversation(
+        conversation_id, member_id, body.content,
+        app.state.conv_member_repo, app.state.member_repo,
+    )
 
-    formatted = format_conversation_message(body.content, sender_name, conv_id)
-    delivery = await route_message_to_brain(app, brain_thread_id, formatted)
-
-    return {**msg, **delivery}
+    return {**msg, "deliveries": deliveries}

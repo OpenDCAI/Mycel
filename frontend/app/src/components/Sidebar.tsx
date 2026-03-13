@@ -218,7 +218,7 @@ export default function Sidebar({
     return () => document.removeEventListener("keydown", onKey);
   }, [isSelectMode]);
 
-  // Group threads by member (agent_name from conversations)
+  // Group threads by member name
   const groups = useMemo(() => {
     const map = new Map<string, { memberName: string; threads: ThreadSummary[]; latestAt: number }>();
 

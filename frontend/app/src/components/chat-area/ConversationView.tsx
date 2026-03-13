@@ -2,8 +2,8 @@
  * @@@contact-view - renders conversation_messages (clean "player" view).
  * Fetches from GET /api/conversations/{id}/messages, subscribes to conversation SSE.
  */
-import { memo, useEffect, useRef, useState } from "react";
-import { listMessages, type ConversationMessage } from "../../api/conversations";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
+import { listMessages, type ConversationMessage, type ConversationMemberDetail } from "../../api/conversations";
 import { authFetch, useAuthStore } from "../../store/auth-store";
 import { useStickyScroll } from "../../hooks/use-sticky-scroll";
 import { ChatSkeleton } from "./ChatSkeleton";
@@ -13,15 +13,26 @@ interface ConversationViewProps {
   conversationId: string;
   /** True when the brain thread SSE indicates agent is active. */
   isStreaming?: boolean;
+  /** Participant info for resolving sender names. */
+  memberDetails?: ConversationMemberDetail[];
 }
 
-export default function ConversationView({ conversationId, isStreaming }: ConversationViewProps) {
+export default function ConversationView({ conversationId, isStreaming, memberDetails }: ConversationViewProps) {
   const [messages, setMessages] = useState<ConversationMessage[]>([]);
   const [loading, setLoading] = useState(true);
   const memberId = useAuthStore(s => s.member?.id);
-  const agentName = useAuthStore(s => s.agent?.name) || "Leon";
   const containerRef = useStickyScroll<HTMLDivElement>();
   const seenIds = useRef(new Set<string>());
+
+  // @@@member-name-map - resolve sender_id → display name from member_details
+  const memberNameMap = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const m of memberDetails || []) map.set(m.id, m.name);
+    return map;
+  }, [memberDetails]);
+
+  // Fallback name for non-self senders
+  const fallbackName = useAuthStore(s => s.agent?.name) || "Leon";
 
   // Fetch initial messages
   useEffect(() => {
@@ -37,8 +48,6 @@ export default function ConversationView({ conversationId, isStreaming }: Conver
   }, [conversationId]);
 
   // @@@conv-sse - subscribe to conversation SSE for real-time messages.
-  // Uses /\r?\n\r?\n/ chunk splitting (same as api/streaming.ts) to handle
-  // sse_starlette's \r\n line endings correctly.
   useEffect(() => {
     const url = `/api/conversations/${encodeURIComponent(conversationId)}/events`;
     const controller = new AbortController();
@@ -61,7 +70,6 @@ export default function ConversationView({ conversationId, isStreaming }: Conver
           buffer = chunks.pop() ?? "";
 
           for (const chunk of chunks) {
-            // Extract data lines from chunk, same pattern as sse-processor.ts
             const dataLines: string[] = [];
             for (const line of chunk.split(/\r?\n/)) {
               if (line.startsWith("data:")) dataLines.push(line.slice(5).trim());
@@ -94,6 +102,10 @@ export default function ConversationView({ conversationId, isStreaming }: Conver
     return () => controller.abort();
   }, [conversationId]);
 
+  const resolveSenderName = (senderId: string): string => {
+    return memberNameMap.get(senderId) || fallbackName;
+  };
+
   return (
     <div ref={containerRef} className="flex-1 overflow-y-auto py-5 bg-white">
       {loading ? (
@@ -109,26 +121,26 @@ export default function ConversationView({ conversationId, isStreaming }: Conver
               key={msg.id}
               message={msg}
               isSelf={msg.sender_id === memberId}
-              senderName={msg.sender_id === memberId ? undefined : agentName}
+              senderName={msg.sender_id === memberId ? undefined : resolveSenderName(msg.sender_id)}
             />
           ))}
           {/* @@@typing-indicator - shows while brain thread SSE reports agent is active */}
-          {isStreaming && <TypingIndicator agentName={agentName} />}
+          {isStreaming && <TypingIndicator name={resolveSenderName("")} />}
         </div>
       )}
     </div>
   );
 }
 
-function TypingIndicator({ agentName }: { agentName: string }) {
+function TypingIndicator({ name }: { name: string }) {
   return (
     <div className="flex justify-start animate-fade-in">
       <div className="flex gap-2.5">
         <div className="w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center text-[11px] font-semibold text-primary shrink-0 mt-0.5">
-          {agentName.slice(0, 1).toUpperCase()}
+          {name.slice(0, 1).toUpperCase()}
         </div>
         <div>
-          <span className="text-[11px] text-muted-foreground ml-0.5 mb-0.5 block">{agentName}</span>
+          <span className="text-[11px] text-muted-foreground ml-0.5 mb-0.5 block">{name}</span>
           <div className="rounded-xl rounded-bl-sm bg-white border border-border px-4 py-2.5">
             <div className="flex items-center gap-1">
               <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground/40 animate-bounce [animation-delay:0ms]" />

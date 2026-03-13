@@ -2,7 +2,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Loader2, MessageSquare, Search } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "./ui/dialog";
-import { createConversation, listDirectory, type DirectoryEntry, type DirectoryResult } from "@/api/conversations";
+import { createMemberConversation, listDirectory, type DirectoryEntry, type DirectoryResult } from "@/api/conversations";
+import { useAuthStore } from "@/store/auth-store";
 
 interface NewChatDialogProps {
   open: boolean;
@@ -10,9 +11,10 @@ interface NewChatDialogProps {
   onConversationCreated?: () => Promise<void>;
 }
 
-// @@@member-directory-dialog - search bar + contacts/others split, backed by DirectoryService
+// @@@member-directory-dialog - search bar + contacts/others split, shows ALL member types
 export default function NewChatDialog({ open, onOpenChange, onConversationCreated }: NewChatDialogProps) {
   const navigate = useNavigate();
+  const currentMemberId = useAuthStore(s => s.member?.id);
   const [result, setResult] = useState<DirectoryResult>({ contacts: [], others: [] });
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(false);
@@ -21,7 +23,8 @@ export default function NewChatDialog({ open, onOpenChange, onConversationCreate
 
   const fetchDirectory = useCallback((query: string) => {
     setLoading(true);
-    listDirectory("mycel_agent", query || undefined)
+    // @@@no-type-filter - show all member types, not just agents
+    listDirectory(undefined, query || undefined)
       .then((r) => setResult(r))
       .catch((err) => console.error("[NewChatDialog] Failed to fetch directory:", err))
       .finally(() => setLoading(false));
@@ -44,14 +47,17 @@ export default function NewChatDialog({ open, onOpenChange, onConversationCreate
     return () => clearTimeout(debounceRef.current);
   }, [search, open, fetchDirectory]);
 
-  const handleSelect = async (agentId: string) => {
+  const handleSelect = async (memberId: string) => {
     if (creating) return;
-    setCreating(agentId);
+    setCreating(memberId);
     try {
-      const conv = await createConversation(agentId);
+      const conv = await createMemberConversation(memberId);
       onOpenChange(false);
       await onConversationCreated?.();
-      navigate(`/chat/${conv.agent_name}/${conv.id}`);
+      // Navigate using the other member's name for URL
+      const otherMember = conv.member_details?.find(m => m.id !== currentMemberId);
+      const displayName = otherMember?.name || "Chat";
+      navigate(`/chat/${displayName}/${conv.id}`);
     } catch (err) {
       console.error("[NewChatDialog] Failed to create conversation:", err);
     } finally {
@@ -60,8 +66,10 @@ export default function NewChatDialog({ open, onOpenChange, onConversationCreate
   };
 
   const renderEntry = (entry: DirectoryEntry) => {
+    const isAgent = entry.type !== "human";
     const ownerName = entry.owner?.name ?? "unknown";
-    const initial = ownerName.slice(0, 1).toUpperCase();
+    const initial = entry.name.slice(0, 1).toUpperCase();
+    const subtitle = isAgent ? `${ownerName}'s agent` : "Human";
     const isCreating = creating === entry.id;
     return (
       <button
@@ -75,7 +83,7 @@ export default function NewChatDialog({ open, onOpenChange, onConversationCreate
         </div>
         <div className="min-w-0 flex-1">
           <span className="text-sm font-medium truncate">{entry.name}</span>
-          <p className="text-xs text-muted-foreground truncate mt-0.5">{ownerName}'s agent</p>
+          <p className="text-xs text-muted-foreground truncate mt-0.5">{subtitle}</p>
         </div>
         <MessageSquare className="h-4 w-4 text-muted-foreground shrink-0" />
       </button>

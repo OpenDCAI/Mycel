@@ -31,9 +31,9 @@ class SQLiteConversationRepo:
     def create(self, row: ConversationRow) -> None:
         with self._lock:
             self._conn.execute(
-                "INSERT INTO conversations (id, agent_member_id, title, status, created_at, updated_at)"
-                " VALUES (?, ?, ?, ?, ?, ?)",
-                (row.id, row.agent_member_id, row.title, row.status, row.created_at, row.updated_at),
+                "INSERT INTO conversations (id, title, status, created_at, updated_at)"
+                " VALUES (?, ?, ?, ?, ?)",
+                (row.id, row.title, row.status, row.created_at, row.updated_at),
             )
             self._conn.commit()
 
@@ -41,14 +41,6 @@ class SQLiteConversationRepo:
         with self._lock:
             row = self._conn.execute("SELECT * FROM conversations WHERE id = ?", (conversation_id,)).fetchone()
             return self._to_row(row) if row else None
-
-    def list_by_agent(self, agent_member_id: str) -> list[ConversationRow]:
-        with self._lock:
-            rows = self._conn.execute(
-                "SELECT * FROM conversations WHERE agent_member_id = ? ORDER BY created_at DESC",
-                (agent_member_id,),
-            ).fetchall()
-            return [self._to_row(r) for r in rows]
 
     def list_by_member(self, member_id: str) -> list[ConversationRow]:
         """List conversations where this member is a participant."""
@@ -71,8 +63,8 @@ class SQLiteConversationRepo:
 
     def _to_row(self, r: tuple) -> ConversationRow:
         return ConversationRow(
-            id=r[0], agent_member_id=r[1], title=r[2],
-            status=r[3], created_at=r[4], updated_at=r[5],
+            id=r[0], title=r[1],
+            status=r[2], created_at=r[3], updated_at=r[4],
         )
 
     def _ensure_table(self) -> None:
@@ -80,7 +72,6 @@ class SQLiteConversationRepo:
             """
             CREATE TABLE IF NOT EXISTS conversations (
                 id TEXT PRIMARY KEY,
-                agent_member_id TEXT NOT NULL,
                 title TEXT,
                 status TEXT NOT NULL DEFAULT 'active',
                 created_at REAL NOT NULL,

@@ -51,16 +51,21 @@ export default function AppLayout() {
     }
   }, [refreshConversations]);
 
-  // @@@conv-as-route-key - each conversation maps to its ACTUAL agent, not the user's own agent.
+  // @@@conv-as-route-key - group by the OTHER participant's name (works for human↔human too)
+  const currentMemberId = useAuthStore(s => s.member?.id);
   const sidebarThreads: ThreadSummary[] = useMemo(() =>
-    conversations.map(conv => ({
-      thread_id: conv.id,
-      preview: conv.title,
-      updated_at: new Date(conv.created_at * 1000).toISOString(),
-      agent: conv.agent_name || "Leon",
-      running: false,
-    })),
-    [conversations],
+    conversations.map(conv => {
+      const otherMember = conv.member_details?.find(m => m.id !== currentMemberId);
+      const displayName = otherMember?.name || "Chat";
+      return {
+        thread_id: conv.id,
+        preview: conv.title,
+        updated_at: new Date(conv.created_at * 1000).toISOString(),
+        agent: displayName,
+        running: false,
+      };
+    }),
+    [conversations, currentMemberId],
   );
 
   const isMobile = useIsMobile();

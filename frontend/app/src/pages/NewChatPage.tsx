@@ -5,7 +5,7 @@ import WorkspaceSetupModal from "../components/WorkspaceSetupModal";
 import type { ThreadManagerState, ThreadManagerActions } from "../hooks/use-thread-manager";
 import { useWorkspaceSettings } from "../hooks/use-workspace-settings";
 import { useAuthStore } from "../store/auth-store";
-import { createConversation, sendConversationMessage } from "../api/conversations";
+import { createMemberConversation, sendConversationMessage } from "../api/conversations";
 import type { ConversationSummary } from "../api/conversations";
 
 interface OutletContext {
@@ -34,20 +34,22 @@ export default function NewChatPage() {
       return;
     }
 
-    // @@@conversation-flow - resolve target agent from URL memberId, fall back to own agent.
-    // Clicking "alice's Leon" group header → memberId="alice's Leon" → create conv with alice's Leon.
-    // Clicking "leon" (default) → create conv with own agent.
-    let targetAgentId = agent?.id;
+    // @@@conversation-flow - resolve target member from URL memberId via member_details.
+    const currentMemberId = useAuthStore.getState().member?.id;
+    let targetMemberId: string | undefined;
     if (memberId && memberId !== "leon" && conversations) {
-      const match = conversations.find(c => c.agent_name === memberId);
-      if (match) targetAgentId = match.agent_member_id;
+      for (const c of conversations) {
+        const other = c.member_details?.find(m => m.id !== currentMemberId && m.name === memberId);
+        if (other) { targetMemberId = other.id; break; }
+      }
     }
-    if (!targetAgentId) {
-      console.error("[NewChatPage] No agent to create conversation with");
+    if (!targetMemberId) targetMemberId = agent?.id;
+    if (!targetMemberId) {
+      console.error("[NewChatPage] No member to create conversation with");
       return;
     }
 
-    const conv = await createConversation(targetAgentId);
+    const conv = await createMemberConversation(targetMemberId);
     sendConversationMessage(conv.id, message).catch(err => {
       console.error("[NewChatPage] sendConversationMessage failed:", err);
     });

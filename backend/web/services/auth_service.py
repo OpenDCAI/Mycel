@@ -91,8 +91,7 @@ class AuthService:
         # 5. Conversation
         conv_id = str(uuid.uuid4())
         self._conversations.create(ConversationRow(
-            id=conv_id, agent_member_id=agent_id,
-            title=f"Chat with {username}'s Leon", created_at=now,
+            id=conv_id, title=f"Chat with {username}'s Leon", created_at=now,
         ))
         self._conv_members.add_member(conv_id, human_id, now)
         self._conv_members.add_member(conv_id, agent_id, now)

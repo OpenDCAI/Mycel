@@ -57,8 +57,18 @@ async def lifespan(app: FastAPI):
 
     from backend.web.services.conversation_events import ConversationEventBus
     from backend.web.services.conversation_service import ConversationService
+    from core.agents.communication.delivery import (
+        DeliveryRouter, HumanDelivery, MycelAgentDelivery, OpenClawDelivery,
+    )
+    from storage.contracts import MemberType
 
     app.state.conversation_event_bus = ConversationEventBus()
+    # @@@delivery-bottleneck-init - narrow bottleneck for message delivery
+    app.state.delivery_router = DeliveryRouter({
+        MemberType.HUMAN: HumanDelivery(),
+        MemberType.MYCEL_AGENT: MycelAgentDelivery(app),
+        MemberType.OPENCLAW_AGENT: OpenClawDelivery(),
+    })
     app.state.conversation_service = ConversationService(
         conversations=app.state.conversation_repo,
         conv_members=app.state.conv_member_repo,

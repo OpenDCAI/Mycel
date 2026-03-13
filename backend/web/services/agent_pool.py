@@ -185,44 +185,33 @@ async def route_message_to_brain(app_obj: FastAPI, brain_thread_id: str, formatt
 
 
 def _create_message_router(app_obj: FastAPI) -> Any:
-    """Create a sync callback that routes messages to agent recipients.
+    """Create a sync callback that routes messages via DeliveryRouter.
 
     Called from logbook_reply (sync context, agent tool handler thread).
     Schedules async routing on the event loop via call_soon_threadsafe.
+    Both HTTP and logbook paths now converge through the same bottleneck.
     """
     loop = getattr(app_obj.state, "_event_loop", None)
     conv_member_repo = getattr(app_obj.state, "conv_member_repo", None)
     member_repo = getattr(app_obj.state, "member_repo", None)
+    delivery_router = getattr(app_obj.state, "delivery_router", None)
 
-    if not loop or not conv_member_repo or not member_repo:
+    if not loop or not conv_member_repo or not member_repo or not delivery_router:
         return None
 
     def router(conversation_id: str, sender_id: str, content: str) -> None:
-        from storage.contracts import MemberType
-        from core.runtime.middleware.queue import format_conversation_message
+        async def _route():
+            try:
+                results = await delivery_router.deliver_to_conversation(
+                    conversation_id, sender_id, content,
+                    conv_member_repo, member_repo,
+                )
+                logger.info("DeliveryRouter routed message in conv %s: %d deliveries", conversation_id[:8], len(results))
+            except Exception:
+                logger.exception("DeliveryRouter failed for conv %s", conversation_id[:8])
 
-        members = conv_member_repo.list_members(conversation_id)
-        for cm in members:
-            if cm.member_id == sender_id:
-                continue
-            member = member_repo.get_by_id(cm.member_id)
-            if not member or member.type != MemberType.MYCEL_AGENT:
-                continue  # human recipients get via SSE, no brain routing needed
-
-            brain_thread_id = f"brain-{cm.member_id}"
-            sender = member_repo.get_by_id(sender_id)
-            sender_name = sender.name if sender else "unknown"
-            formatted = format_conversation_message(content, sender_name, conversation_id)
-
-            async def _route(brain_tid=brain_thread_id, msg=formatted):
-                try:
-                    result = await route_message_to_brain(app_obj, brain_tid, msg)
-                    logger.info("Routed message to %s: %s", brain_tid[:14], result.get("routing"))
-                except Exception:
-                    logger.exception("Failed to route message to %s", brain_tid[:14])
-
-            if loop and not loop.is_closed():
-                loop.call_soon_threadsafe(loop.create_task, _route())
+        if loop and not loop.is_closed():
+            loop.call_soon_threadsafe(loop.create_task, _route())
 
     return router
 

@@ -41,14 +41,17 @@ function ChatPageInner({ threadId }: { threadId: string }) {
   const { tm, conversations, setSidebarCollapsed } = useOutletContext<OutletContext>();
 
   // @@@conv-routing - threadId from URL is now a conversation ID.
-  // Look up conversation → derive brain thread ID for internal use.
+  // Look up conversation → derive brain thread ID from member_details (first agent found).
   const conversation = conversations?.find(c => c.id === threadId);
-  const brainThreadId = conversation ? `brain-${conversation.agent_member_id}` : threadId;
+  const agentMember = conversation?.member_details?.find(
+    m => m.type === "mycel_agent" || m.type === "openclaw_agent"
+  );
+  const brainThreadId = agentMember ? `brain-${agentMember.id}` : threadId;
+  const hasAgent = !!agentMember;
 
   // @@@own-agent-check - only the agent's owner sees the brain thread (full view).
-  // For other people's agents, always show contact view.
   const authAgent = useAuthStore(s => s.agent);
-  const isOwnAgent = conversation ? conversation.agent_member_id === authAgent?.id : false;
+  const isOwnAgent = agentMember ? agentMember.id === authAgent?.id : false;
 
   const [currentModel, setCurrentModel] = useState<string>("");
   // @@@view-default — conversation view is primary for everyone.
@@ -167,8 +170,8 @@ function ChatPageInner({ threadId }: { threadId: string }) {
         threadPreview={conversation?.title ?? tm.threads.find((t) => t.thread_id === threadId)?.preview ?? null}
         sandboxInfo={activeSandbox}
         currentModel={currentModel}
-        viewMode={conversation && isOwnAgent ? viewMode : undefined}
-        onToggleViewMode={conversation && isOwnAgent ? () => setViewMode(v => v === "owner" ? "contact" : "owner") : undefined}
+        viewMode={conversation && isOwnAgent && hasAgent ? viewMode : undefined}
+        onToggleViewMode={conversation && isOwnAgent && hasAgent ? () => setViewMode(v => v === "owner" ? "contact" : "owner") : undefined}
         onToggleSidebar={() => setSidebarCollapsed(v => !v)}
         onPauseSandbox={() => void handlePauseSandbox()}
         onResumeSandbox={() => void handleResumeSandbox()}
@@ -186,7 +189,7 @@ function ChatPageInner({ threadId }: { threadId: string }) {
             <BackgroundSessionsIndicator tasks={tasks} onCancelTask={handleCancelTask} />
             {/* @@@two-views - owner reads brain thread, contact reads conversation_messages */}
             {viewMode === "contact" && conversation ? (
-              <ConversationView conversationId={conversation.id} isStreaming={isStreaming} />
+              <ConversationView conversationId={conversation.id} isStreaming={isStreaming} memberDetails={conversation.member_details} />
             ) : (
               <ChatArea
                 entries={entries}

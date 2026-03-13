@@ -370,19 +370,13 @@ class LogbookService:
         # Create new conversation
         now = time.time()
         conv_id = str(uuid.uuid4())
-        from storage.contracts import ConversationRow, MemberType
-        # Determine agent_member_id: prefer the agent in the pair
-        if target.type == MemberType.MYCEL_AGENT:
-            agent_id = target.id
-        else:
-            agent_id = self._member_id  # self is the agent
+        from storage.contracts import ConversationRow
         my_member = self._members.get_by_id(self._member_id)
         my_name = my_member.name if my_member else "Agent"
         title = f"{my_name} ↔ {target.name}"
 
         self._conversations.create(ConversationRow(
-            id=conv_id, agent_member_id=agent_id,
-            title=title, created_at=now,
+            id=conv_id, title=title, created_at=now,
         ))
         self._conv_members.add_member(conv_id, self._member_id, now)
         self._conv_members.add_member(conv_id, target.id, now)
