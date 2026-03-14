@@ -325,6 +325,9 @@ def _db_member_to_dict(row: Any) -> dict[str, Any]:
     item["id"] = row.id
     item["name"] = row.name
     item["description"] = row.description or item.get("description", "")
+    # @@@db-agent-never-builtin — DB-backed agents with real UUIDs are user-owned, never builtin.
+    # The builtin flag may leak from _leon_builtin() fallback when config_dir fails to load.
+    item["builtin"] = False
     return item
 
 
