@@ -271,7 +271,11 @@ export default function NetworkPage() {
     const charge = fg.d3Force("charge");
     if (charge && typeof charge.strength === "function") charge.strength(-120);
     const link = fg.d3Force("link");
-    if (link && typeof link.distance === "function") link.distance(60);
+    // @@@weight-distance — heavier edges (more messages) pull nodes closer
+    if (link && typeof link.distance === "function") {
+      const mw = Math.max(1, ...allEdges.map((e) => e.weight));
+      link.distance((l: FGLink) => 80 - 50 * (l.weight / mw)); // range: 30 (heavy) to 80 (light)
+    }
   }, [graphData]);
 
   // --- resize ---
