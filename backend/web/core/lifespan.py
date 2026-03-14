@@ -68,6 +68,10 @@ async def lifespan(app: FastAPI):
     from storage.contracts import MemberType
 
     app.state.conversation_event_bus = ConversationEventBus()
+
+    from backend.web.services.typing_tracker import TypingTracker
+    app.state.typing_tracker = TypingTracker(app.state.conversation_event_bus)
+
     # @@@delivery-bottleneck-init - narrow bottleneck for message delivery
     app.state.delivery_router = DeliveryRouter({
         MemberType.HUMAN: HumanDelivery(),

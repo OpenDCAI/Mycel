@@ -736,6 +736,11 @@ async def _run_agent_to_buffer(
         await emit({"event": "error", "data": json.dumps({"error": str(e)}, ensure_ascii=False)})
         await emit({"event": "run_done", "data": json.dumps({"thread_id": thread_id, "run_id": run_id})})
     finally:
+        # @@@typing-lifecycle - stop typing indicator for this conversation
+        typing_tracker = getattr(app.state, "typing_tracker", None)
+        if typing_tracker:
+            typing_tracker.stop(thread_id)
+
         # Detach per-run event callback (per-thread handlers survive across runs)
         if hasattr(agent, "runtime"):
             agent.runtime.set_event_callback(None)

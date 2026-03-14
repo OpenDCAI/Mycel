@@ -59,6 +59,12 @@ class MycelAgentDelivery:
         from core.runtime.middleware.queue import format_conversation_message
 
         brain_thread_id = f"brain-{member.id}"
+
+        # @@@typing-lifecycle - start typing indicator for this conversation
+        typing_tracker = getattr(self._app.state, "typing_tracker", None)
+        if typing_tracker is not None:
+            typing_tracker.start(brain_thread_id, conversation_id, member.id)
+
         formatted = format_conversation_message(content, sender_name, conversation_id)
         result = await route_message_to_brain(self._app, brain_thread_id, formatted)
         return {**result, "member_id": member.id, "brain_thread_id": brain_thread_id}

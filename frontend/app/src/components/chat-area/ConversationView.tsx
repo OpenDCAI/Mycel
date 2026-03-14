@@ -12,17 +12,17 @@ import { formatTime } from "./utils";
 
 interface ConversationViewProps {
   conversationId: string;
-  /** True when the brain thread SSE indicates agent is active (owner only). */
-  isStreaming?: boolean;
   /** Participant info for resolving sender names. */
   memberDetails?: MemberInfo[];
   /** Ref for ChatPage to call our send handler (optimistic insert + API). */
   sendRef?: React.MutableRefObject<((content: string) => Promise<void>) | undefined>;
 }
 
-export default function ConversationView({ conversationId, isStreaming, memberDetails, sendRef }: ConversationViewProps) {
+export default function ConversationView({ conversationId, memberDetails, sendRef }: ConversationViewProps) {
   const [messages, setMessages] = useState<ConversationMessage[]>([]);
   const [loading, setLoading] = useState(true);
+  // @@@typing-lifecycle - driven by conversation SSE typing_start/typing_stop events
+  const [typingMembers, setTypingMembers] = useState<Set<string>>(new Set());
   const memberId = useAuthStore(s => s.member?.id);
   const containerRef = useStickyScroll<HTMLDivElement>();
   const seenIds = useRef(new Set<string>());
@@ -83,6 +83,20 @@ export default function ConversationView({ conversationId, isStreaming, memberDe
 
             try {
               const evt = JSON.parse(dataLines.join(""));
+
+              // @@@typing-lifecycle - handle typing events from conversation SSE
+              if (evt.event === "typing_start" && evt.member_id) {
+                setTypingMembers(prev => new Set(prev).add(evt.member_id));
+                continue;
+              }
+              if (evt.event === "typing_stop" && evt.member_id) {
+                setTypingMembers(prev => {
+                  const next = new Set(prev);
+                  next.delete(evt.member_id);
+                  return next;
+                });
+                continue;
+              }
 
               if (!evt.id || !evt.content || seenIds.current.has(evt.id)) continue;
               seenIds.current.add(evt.id);
@@ -170,11 +184,10 @@ export default function ConversationView({ conversationId, isStreaming, memberDe
               senderName={msg.sender_id === memberId ? undefined : resolveSenderName(msg.sender_id)}
             />
           ))}
-          {/* @@@typing-indicator — driven by brain thread SSE (owner only for now) */}
-          {isStreaming && (() => {
-            const other = (memberDetails || []).find(m => m.id !== memberId);
-            return other ? <TypingIndicator name={other.name} memberId={other.id} /> : null;
-          })()}
+          {/* @@@typing-lifecycle — driven by conversation SSE typing_start/typing_stop */}
+          {typingMembers.size > 0 && (memberDetails || [])
+            .filter(m => typingMembers.has(m.id))
+            .map(m => <TypingIndicator key={m.id} name={m.name} memberId={m.id} />)}
         </div>
       )}
     </div>

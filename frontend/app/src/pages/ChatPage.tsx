@@ -187,7 +187,7 @@ function ChatPageInner({ threadId }: { threadId: string }) {
             {brainThreadId && <BackgroundSessionsIndicator tasks={tasks} onCancelTask={handleCancelTask} />}
             {/* @@@two-views - owner reads brain thread, contact reads conversation_messages */}
             {viewMode === "contact" && conversation ? (
-              <ConversationView conversationId={conversation.id} isStreaming={isStreaming} memberDetails={conversation.member_details} sendRef={convSendRef} />
+              <ConversationView conversationId={conversation.id} memberDetails={conversation.member_details} sendRef={convSendRef} />
             ) : (
               <ChatArea
                 entries={entries}
