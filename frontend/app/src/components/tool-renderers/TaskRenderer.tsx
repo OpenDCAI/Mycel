@@ -1,6 +1,7 @@
 import { memo, useState } from "react";
 import { useParams } from "react-router-dom";
 import type { ToolRendererProps } from "./types";
+import { authFetch } from "../../store/auth-store";
 
 function parseArgs(args: unknown): {
   description?: string;
@@ -53,7 +54,7 @@ export default memo(function TaskRenderer({ step, expanded }: ToolRendererProps)
     if (!threadId || !stream?.task_id) return;
     setLoadingOutput(true);
     try {
-      const res = await fetch(`/api/threads/${threadId}/tasks/${stream.task_id}`);
+      const res = await authFetch(`/api/threads/${threadId}/tasks/${stream.task_id}`);
       const data = await res.json();
       setTaskOutput(data.result ?? data.text ?? JSON.stringify(data, null, 2));
     } catch {

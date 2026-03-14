@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { authFetch } from "../store/auth-store";
 
 export interface BrowseItem {
   name: string;
@@ -21,7 +22,7 @@ export function useDirectoryBrowser(buildUrl: (path: string) => string, initialP
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(buildUrl(path));
+      const res = await authFetch(buildUrl(path));
       if (!res.ok) {
         const d = await res.json().catch(() => ({}));
         throw new Error((d as { detail?: string }).detail || "加载失败");

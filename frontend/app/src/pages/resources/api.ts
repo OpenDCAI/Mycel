@@ -1,4 +1,5 @@
 import type { ProviderInfo } from "./types";
+import { authFetch } from "../../store/auth-store";
 
 interface ResourceSummary {
   snapshot_at: string;
@@ -40,16 +41,11 @@ async function ensureResponseShape(response: Response): Promise<ResourceOverview
 }
 
 export async function fetchResourceProviders(): Promise<ResourceOverviewResponse> {
-  const response = await fetch("/api/monitor/resources", {
-    headers: { "Content-Type": "application/json" },
-  });
+  const response = await authFetch("/api/monitor/resources");
   return ensureResponseShape(response);
 }
 
 export async function refreshResourceProviders(): Promise<ResourceOverviewResponse> {
-  const response = await fetch("/api/monitor/resources/refresh", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-  });
+  const response = await authFetch("/api/monitor/resources/refresh", { method: "POST" });
   return ensureResponseShape(response);
 }

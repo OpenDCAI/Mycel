@@ -12,6 +12,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { useAppStore } from "@/store/app-store";
+import { authFetch } from "@/store/auth-store";
 import type { Task, TaskStatus, CronJob, Priority } from "@/store/types";
 import CronEditor from "@/components/cron-editor";
 import TaskModal from "@/components/task-modal";
@@ -225,7 +226,7 @@ export default function Tasks() {
       return next;
     });
     try {
-      const res = await fetch(`/api/threads/${threadId}`);
+      const res = await authFetch(`/api/threads/${threadId}`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       const messages: Array<{ role: string; content: string | Array<{ type: string; text?: string }> }> = data.messages || [];

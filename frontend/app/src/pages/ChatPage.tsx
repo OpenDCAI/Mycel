@@ -18,7 +18,7 @@ import { useStreamHandler } from "../hooks/use-stream-handler";
 import { useThreadData } from "../hooks/use-thread-data";
 import type { ThreadManagerState, ThreadManagerActions } from "../hooks/use-thread-manager";
 import type { ConversationSummary } from "../api/conversations";
-import { useAuthStore } from "../store/auth-store";
+import { authFetch } from "../store/auth-store";
 
 interface OutletContext {
   tm: ThreadManagerState & ThreadManagerActions;
@@ -41,22 +41,9 @@ function ChatPageInner({ threadId }: { threadId: string }) {
   const { tm, conversations, setSidebarCollapsed } = useOutletContext<OutletContext>();
 
   // @@@conv-routing - threadId from URL is now a conversation ID.
-  // Look up conversation → derive brain thread ID from member_details (first agent found).
   const conversation = conversations?.find(c => c.id === threadId);
-  const agentMember = conversation?.member_details?.find(
-    m => m.type === "mycel_agent" || m.type === "openclaw_agent"
-  );
-  // @@@no-brain-for-humans - human↔human conversations have no brain thread
-  const brainThreadId = agentMember ? `brain-${agentMember.id}` : null;
-  const hasAgent = !!agentMember;
-
-  // @@@own-agent-check - owner sees the brain thread toggle when they're a
-  // participant in the conversation.  All conversations in the user's list
-  // belong to them, so the real gate is just "has an agent member".
-  const authMember = useAuthStore(s => s.member);
-  const isOwnAgent = hasAgent && !!conversation?.member_details?.some(
-    m => m.id === authMember?.id
-  );
+  // @@@brain-thread-gate - backend decides ownership; null = contact, string = owner
+  const brainThreadId = conversation?.brain_thread_id ?? null;
 
   const [currentModel, setCurrentModel] = useState<string>("");
   // @@@view-default — conversation view is primary for everyone.
@@ -81,19 +68,18 @@ function ChatPageInner({ threadId }: { threadId: string }) {
     if (!brainThreadId) return;
     if (state?.selectedModel) {
       setCurrentModel(state.selectedModel);
-      void fetch("/api/settings/config", {
+      void authFetch("/api/settings/config", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ model: state.selectedModel, thread_id: brainThreadId }),
       });
     } else {
-      fetch(`/api/threads/${brainThreadId}/runtime`)
+      authFetch(`/api/threads/${brainThreadId}/runtime`)
         .then((r) => r.json())
         .then((d) => {
           if (d.model) {
             setCurrentModel(d.model);
           } else {
-            return fetch("/api/settings")
+            return authFetch("/api/settings")
               .then((r) => r.json())
               .then((d) => setCurrentModel(d.default_model || "leon:large"));
           }
@@ -153,7 +139,7 @@ function ChatPageInner({ threadId }: { threadId: string }) {
     async (taskId: string) => {
       if (!brainThreadId) return;
       try {
-        const response = await fetch(`/api/threads/${brainThreadId}/tasks/${taskId}/cancel`, {
+        const response = await authFetch(`/api/threads/${brainThreadId}/tasks/${taskId}/cancel`, {
           method: "POST",
         });
         if (!response.ok) {
@@ -181,9 +167,9 @@ function ChatPageInner({ threadId }: { threadId: string }) {
         threadPreview={conversation?.title ?? tm.threads.find((t) => t.thread_id === threadId)?.preview ?? null}
         sandboxInfo={activeSandbox}
         currentModel={currentModel}
-        hasAgent={hasAgent}
-        viewMode={conversation && isOwnAgent && hasAgent ? viewMode : undefined}
-        onToggleViewMode={conversation && isOwnAgent && hasAgent ? () => setViewMode(v => v === "owner" ? "contact" : "owner") : undefined}
+        hasAgent={!!brainThreadId}
+        viewMode={brainThreadId ? viewMode : undefined}
+        onToggleViewMode={brainThreadId ? () => setViewMode(v => v === "owner" ? "contact" : "owner") : undefined}
         onToggleSidebar={() => setSidebarCollapsed(v => !v)}
         onPauseSandbox={() => void handlePauseSandbox()}
         onResumeSandbox={() => void handleResumeSandbox()}
@@ -198,7 +184,7 @@ function ChatPageInner({ threadId }: { threadId: string }) {
             </div>
           )}
           <div className="relative flex-1 flex flex-col min-h-0">
-            <BackgroundSessionsIndicator tasks={tasks} onCancelTask={handleCancelTask} />
+            {brainThreadId && <BackgroundSessionsIndicator tasks={tasks} onCancelTask={handleCancelTask} />}
             {/* @@@two-views - owner reads brain thread, contact reads conversation_messages */}
             {viewMode === "contact" && conversation ? (
               <ConversationView conversationId={conversation.id} isStreaming={isStreaming} memberDetails={conversation.member_details} sendRef={convSendRef} />
@@ -213,7 +199,7 @@ function ChatPageInner({ threadId }: { threadId: string }) {
               />
             )}
           </div>
-          {hasAgent && (
+          {brainThreadId && (
             <TaskProgress
               isStreaming={isStreaming}
               runtimeStatus={runtimeStatus}
@@ -231,10 +217,10 @@ function ChatPageInner({ threadId }: { threadId: string }) {
             onSendQueueMessage={inContactView ? undefined : handleSendQueueMessage}
             onStop={inContactView ? undefined : handleStopStreaming}
           />
-          {hasAgent && <TokenStats runtimeStatus={runtimeStatus} />}
+          {brainThreadId && <TokenStats runtimeStatus={runtimeStatus} />}
         </div>
 
-        {computerOpen && (
+        {brainThreadId && computerOpen && (
           <>
             <DragHandle onMouseDown={computerResize.onMouseDown} />
             <ComputerPanel

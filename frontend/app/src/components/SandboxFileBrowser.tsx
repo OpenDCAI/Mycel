@@ -1,5 +1,6 @@
 import { File, Folder, Home, X } from "lucide-react";
 import { useEffect, useState } from "react";
+import { authFetch } from "../store/auth-store";
 import { useDirectoryBrowser } from "../hooks/use-directory-browser";
 import { ScrollArea } from "./ui/scroll-area";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "./ui/resizable";
@@ -50,7 +51,7 @@ export function SandboxFileBrowser({ leaseId, providerType, className = "h-[300p
     setFileError(null);
     setFileLoading(true);
     try {
-      const resp = await fetch(buildReadUrl(path));
+      const resp = await authFetch(buildReadUrl(path));
       if (!resp.ok) throw new Error(`${resp.status}`);
       const data = await resp.json() as { content: string; truncated: boolean };
       setFileContent(data.content);

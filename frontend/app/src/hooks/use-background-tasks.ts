@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useThreadStream } from './use-thread-stream';
 import type { StreamEvent } from '../api/types';
+import { authFetch } from '../store/auth-store';
 
 export interface BackgroundTask {
   task_id: string;
@@ -26,7 +27,7 @@ export function useBackgroundTasks({ threadId, loading, refreshThreads }: UseBac
   const fetchTasks = useCallback(async () => {
     if (!threadId) return;
     try {
-      const response = await fetch(`/api/threads/${threadId}/tasks`);
+      const response = await authFetch(`/api/threads/${threadId}/tasks`);
       if (!response.ok) {
         console.error('[BackgroundTasks] Failed to fetch tasks:', response.statusText);
         return;

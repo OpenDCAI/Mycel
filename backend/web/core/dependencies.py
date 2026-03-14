@@ -42,6 +42,35 @@ async def get_current_member_id(
     return member_id
 
 
+# @@@thread-auth - verify requesting user owns the brain thread
+async def verify_thread_owner(
+    thread_id: str,
+    member_id: Annotated[str, Depends(get_current_member_id)],
+    app: Annotated[FastAPI, Depends(get_app)],
+) -> str:
+    """Verify requesting user owns the brain thread. Returns member_id.
+
+    - brain-{agent_id} threads: checks agent's owner_id == member_id → 403 if not
+    - Non-brain threads: just require valid JWT (legacy compat)
+    """
+    if not thread_id.startswith("brain-"):
+        return member_id
+
+    agent_member_id = thread_id.removeprefix("brain-")
+    member_repo = getattr(app.state, "member_repo", None)
+    if not member_repo:
+        raise HTTPException(500, "Member repo not initialized")
+
+    agent = member_repo.get_by_id(agent_member_id)
+    if not agent:
+        raise HTTPException(404, "Agent not found")
+
+    if agent.owner_id != member_id:
+        raise HTTPException(403, "Not authorized to access this thread")
+
+    return member_id
+
+
 async def get_thread_lock(app: Annotated[FastAPI, Depends(get_app)], thread_id: str) -> asyncio.Lock:
     """Get or create a lock for a specific thread."""
     async with app.state.thread_locks_guard:

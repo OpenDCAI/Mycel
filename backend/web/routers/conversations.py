@@ -72,7 +72,7 @@ async def get_conversation(
 ) -> dict:
     """Get conversation detail."""
     svc = app.state.conversation_service
-    conv = svc.get(conversation_id)
+    conv = svc.get(conversation_id, requesting_member_id=member_id)
     if not conv:
         raise HTTPException(404, "Conversation not found")
     if member_id not in conv["members"]:

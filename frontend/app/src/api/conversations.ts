@@ -37,6 +37,8 @@ export interface ConversationSummary {
   created_at: number;
   members: string[];
   member_details?: ConversationMemberDetail[];
+  /** Non-null only when the requesting user owns the agent. */
+  brain_thread_id?: string | null;
 }
 
 export async function createMemberConversation(

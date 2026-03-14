@@ -21,6 +21,24 @@ def _member_details(members_repo: any, member_ids: list[str]) -> list[dict]:
     return details
 
 
+# @@@brain-thread-gate - compute brain_thread_id only for the owner
+_AGENT_TYPES = {"mycel_agent", "openclaw_agent"}
+
+
+def _compute_brain_thread_id(
+    members_repo: any,
+    member_details: list[dict],
+    requesting_member_id: str,
+) -> str | None:
+    """Return brain_thread_id if requesting user owns the agent, else None."""
+    for detail in member_details:
+        if detail["type"] in _AGENT_TYPES:
+            agent = members_repo.get_by_id(detail["id"])
+            if agent and agent.owner_id == requesting_member_id:
+                return f"brain-{detail['id']}"
+    return None
+
+
 class ConversationService:
     """Thin layer over conversation repos + message storage."""
 
@@ -84,31 +102,43 @@ class ConversationService:
             if conv and conv.status != "archived":
                 members = self._conv_members.list_members(cid)
                 member_ids = [m.member_id for m in members]
+                details = _member_details(self._members, member_ids)
                 results.append({
                     "id": conv.id,
                     "title": conv.title,
                     "status": conv.status,
                     "created_at": conv.created_at,
                     "members": member_ids,
-                    "member_details": _member_details(self._members, member_ids),
+                    "member_details": details,
+                    "brain_thread_id": _compute_brain_thread_id(self._members, details, member_id),
                 })
         return results
 
-    def get(self, conversation_id: str) -> dict | None:
-        """Get a single conversation with member list."""
+    def get(self, conversation_id: str, requesting_member_id: str | None = None) -> dict | None:
+        """Get a single conversation with member list.
+
+        If requesting_member_id is provided, brain_thread_id is computed
+        conditionally (non-null only for the agent's owner).
+        """
         conv = self._conversations.get_by_id(conversation_id)
         if not conv:
             return None
         members = self._conv_members.list_members(conversation_id)
         member_ids = [m.member_id for m in members]
-        return {
+        details = _member_details(self._members, member_ids)
+        result: dict = {
             "id": conv.id,
             "title": conv.title,
             "status": conv.status,
             "created_at": conv.created_at,
             "members": member_ids,
-            "member_details": _member_details(self._members, member_ids),
+            "member_details": details,
         }
+        if requesting_member_id is not None:
+            result["brain_thread_id"] = _compute_brain_thread_id(
+                self._members, details, requesting_member_id,
+            )
+        return result
 
     def is_member(self, conversation_id: str, member_id: str) -> bool:
         """Check if member participates in conversation."""
