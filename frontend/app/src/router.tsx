@@ -9,6 +9,7 @@ import AgentDetailPage from './pages/AgentDetailPage';
 import TasksPage from './pages/TasksPage';
 import LibraryPage from './pages/LibraryPage';
 import ResourcesPage from './pages/ResourcesPage';
+import NetworkPage from './pages/NetworkPage';
 
 export const router = createBrowserRouter([
   {
@@ -56,6 +57,10 @@ export const router = createBrowserRouter([
       {
         path: 'library',
         element: <LibraryPage />,
+      },
+      {
+        path: 'network',
+        element: <NetworkPage />,
       },
       {
         path: 'settings',

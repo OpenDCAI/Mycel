@@ -8,7 +8,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from backend.web.core.lifespan import lifespan
-from backend.web.routers import auth, conversations, debug, members, monitor, panel, sandbox, settings, threads, webhooks, workspace
+from backend.web.routers import auth, conversations, debug, members, monitor, network, panel, sandbox, settings, threads, webhooks, workspace
 
 # Create FastAPI app
 app = FastAPI(title="Leon Web Backend", lifespan=lifespan)
@@ -34,6 +34,7 @@ app.include_router(settings.router)
 app.include_router(debug.router)
 app.include_router(panel.router)
 app.include_router(monitor.router)
+app.include_router(network.router)
 
 
 def _resolve_port() -> int:

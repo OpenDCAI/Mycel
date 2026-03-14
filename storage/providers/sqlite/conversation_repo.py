@@ -157,6 +157,29 @@ class SQLiteConversationMemberRepo:
             ).fetchone()
             return row[0] if row else None
 
+    def list_all_edges(self) -> list[tuple[str, str, int]]:
+        """Self-join to get (source, target, weight) edges between co-members.
+
+        Weight = total messages across all shared conversations.
+        Falls back to conversation count if no messages exist.
+        """
+        with self._lock:
+            rows = self._conn.execute(
+                # @@@edge-weight-messages — count messages in shared conversations
+                "SELECT cm1.member_id, cm2.member_id,"
+                "  COALESCE(SUM(msg_counts.cnt), COUNT(DISTINCT cm1.conversation_id))"
+                " FROM conversation_members cm1"
+                " JOIN conversation_members cm2"
+                "   ON cm1.conversation_id = cm2.conversation_id"
+                "   AND cm1.member_id < cm2.member_id"
+                " LEFT JOIN ("
+                "   SELECT conversation_id, COUNT(*) AS cnt"
+                "   FROM conversation_messages GROUP BY conversation_id"
+                " ) msg_counts ON msg_counts.conversation_id = cm1.conversation_id"
+                " GROUP BY cm1.member_id, cm2.member_id",
+            ).fetchall()
+            return [(r[0], r[1], r[2]) for r in rows]
+
     def _ensure_table(self) -> None:
         self._conn.execute(
             """
