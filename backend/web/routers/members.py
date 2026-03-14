@@ -157,7 +157,7 @@ async def get_avatar(member_id: str) -> FileResponse:
     return FileResponse(
         path,
         media_type="image/png",
-        headers={"Cache-Control": "public, max-age=3600"},
+        headers={"Cache-Control": "no-cache"},
     )
 
 
