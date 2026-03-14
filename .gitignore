@@ -108,3 +108,7 @@ frontend/app/test-results/
 /.playwright-mcp/
 /current-chat.yaml
 /.claude/skills/
+
+# Dev artifacts
+.vite/
+temp/
