@@ -58,9 +58,19 @@ class MycelAgentDelivery:
         from backend.web.services.agent_pool import route_message_to_brain
         from core.runtime.middleware.queue import format_conversation_message
 
+        # @@@typing-signal — broadcast typing_start before processing, typing_stop after
+        event_bus = getattr(self._app.state, "conversation_event_bus", None)
+        if event_bus:
+            event_bus.publish(conversation_id, {"event": "typing_start", "member_id": member.id})
+
         brain_thread_id = f"brain-{member.id}"
         formatted = format_conversation_message(content, sender_name, conversation_id)
-        result = await route_message_to_brain(self._app, brain_thread_id, formatted)
+        try:
+            result = await route_message_to_brain(self._app, brain_thread_id, formatted)
+        finally:
+            if event_bus:
+                event_bus.publish(conversation_id, {"event": "typing_stop", "member_id": member.id})
+
         return {**result, "member_id": member.id, "brain_thread_id": brain_thread_id}
 
 

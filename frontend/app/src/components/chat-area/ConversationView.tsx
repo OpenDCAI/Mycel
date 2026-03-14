@@ -12,20 +12,20 @@ import { formatTime } from "./utils";
 
 interface ConversationViewProps {
   conversationId: string;
-  /** True when the brain thread SSE indicates agent is active. */
-  isStreaming?: boolean;
   /** Participant info for resolving sender names. */
   memberDetails?: MemberInfo[];
   /** Ref for ChatPage to call our send handler (optimistic insert + API). */
   sendRef?: React.MutableRefObject<((content: string) => Promise<void>) | undefined>;
 }
 
-export default function ConversationView({ conversationId, isStreaming, memberDetails, sendRef }: ConversationViewProps) {
+export default function ConversationView({ conversationId, memberDetails, sendRef }: ConversationViewProps) {
   const [messages, setMessages] = useState<ConversationMessage[]>([]);
   const [loading, setLoading] = useState(true);
   const memberId = useAuthStore(s => s.member?.id);
   const containerRef = useStickyScroll<HTMLDivElement>();
   const seenIds = useRef(new Set<string>());
+  // @@@typing-members — tracks who's currently typing via conversation SSE
+  const [typingMembers, setTypingMembers] = useState<Set<string>>(new Set());
   // @@@pending-dedup - tracks optimistic messages so SSE echo replaces instead of duplicating
   const pendingRef = useRef(new Map<string, string>()); // key: `${senderId}\n${content}`, value: optimisticId
 
@@ -83,6 +83,17 @@ export default function ConversationView({ conversationId, isStreaming, memberDe
 
             try {
               const evt = JSON.parse(dataLines.join(""));
+
+              // @@@typing-signal — handle typing_start/typing_stop from conversation SSE
+              if (evt.event === "typing_start") {
+                setTypingMembers(prev => new Set(prev).add(evt.member_id));
+                continue;
+              }
+              if (evt.event === "typing_stop") {
+                setTypingMembers(prev => { const next = new Set(prev); next.delete(evt.member_id); return next; });
+                continue;
+              }
+
               if (!evt.id || !evt.content || seenIds.current.has(evt.id)) continue;
               seenIds.current.add(evt.id);
 
@@ -169,12 +180,11 @@ export default function ConversationView({ conversationId, isStreaming, memberDe
               senderName={msg.sender_id === memberId ? undefined : resolveSenderName(msg.sender_id)}
             />
           ))}
-          {/* @@@typing-indicator - shows while brain thread SSE reports agent is active */}
-          {isStreaming && (() => {
-            // The other participant — whoever is typing. No human/agent assumption.
-            const other = (memberDetails || []).find(m => m.id !== memberId);
-            return other ? <TypingIndicator name={other.name} memberId={other.id} /> : null;
-          })()}
+          {/* @@@typing-indicator — driven by conversation SSE typing_start/typing_stop */}
+          {Array.from(typingMembers).map(tid => {
+            const m = (memberDetails || []).find(d => d.id === tid);
+            return m ? <TypingIndicator key={tid} name={m.name} memberId={m.id} /> : null;
+          })}
         </div>
       )}
     </div>
