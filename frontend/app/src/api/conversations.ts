@@ -1,4 +1,4 @@
-import { authRequest } from "../store/auth-store";
+import { authFetch, authRequest } from "../store/auth-store";
 import { useAuthStore } from "../store/auth-store";
 
 // @@@member-directory - types + fetch for member discovery (shared with agent logbook)
@@ -93,4 +93,15 @@ export async function sendConversationMessage(
     method: "POST",
     body: JSON.stringify({ content }),
   });
+}
+
+/** Upload avatar for a member. Returns true on success. */
+export async function uploadMemberAvatar(memberId: string, file: File): Promise<boolean> {
+  const form = new FormData();
+  form.append("file", file);
+  const res = await authFetch(`/api/members/${memberId}/avatar`, {
+    method: "PUT",
+    body: form,
+  });
+  return res.ok;
 }

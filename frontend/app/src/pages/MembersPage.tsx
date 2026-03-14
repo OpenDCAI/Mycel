@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { Search, Plus, Zap, Users, Wrench, Plug, SearchX, ArrowUpDown, AlertTriangle, RefreshCw, MessageSquare, Copy, Trash2, Bot, Camera } from "lucide-react";
 import MemberAvatar from "@/components/MemberAvatar";
-import { useAuthStore } from "@/store/auth-store";
+import { uploadMemberAvatar } from "@/api/conversations";
 import { useNavigate } from "react-router-dom";
 import CreateMemberDialog from "@/components/CreateMemberDialog";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -15,51 +15,25 @@ const statusConfig = {
   inactive: { label: "离线", dot: "bg-muted-foreground", shape: "rounded-full opacity-50" },
 };
 
-const avatarColors = [
-  "bg-primary/15 text-primary",
-  "bg-success/15 text-success",
-  "bg-warning/15 text-warning",
-  "bg-destructive/15 text-destructive",
-  "bg-chart-1/15 text-chart-1",
-  "bg-accent text-accent-foreground",
-];
-
 type SortKey = "name" | "skills" | "status" | null;
 
 // @@@avatar-upload — click-to-upload avatar overlay on member cards
 function AvatarUploadTrigger({ memberId, name }: { memberId: string; name: string }) {
   const inputRef = useRef<HTMLInputElement>(null);
-  const token = useAuthStore((s) => s.token);
   const [uploading, setUploading] = useState(false);
-  // Cache-bust key to force image reload after upload
   const [rev, setRev] = useState(0);
 
   const handleUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file || !token) return;
+    if (!file) return;
     setUploading(true);
     try {
-      const form = new FormData();
-      form.append("file", file);
-      const res = await fetch(`/api/members/${memberId}/avatar`, {
-        method: "PUT",
-        headers: { Authorization: `Bearer ${token}` },
-        body: form,
-      });
-      if (!res.ok) {
-        const body = await res.text();
-        toast.error(`上传失败: ${body}`);
-      } else {
-        setRev((r) => r + 1);
-        toast.success("头像已更新");
-      }
-    } catch (err) {
-      toast.error("上传失败");
-    } finally {
-      setUploading(false);
-      if (inputRef.current) inputRef.current.value = "";
-    }
-  }, [memberId, token]);
+      const ok = await uploadMemberAvatar(memberId, file);
+      if (ok) { setRev((r) => r + 1); toast.success("头像已更新"); }
+      else toast.error("上传失败");
+    } catch { toast.error("上传失败"); }
+    finally { setUploading(false); if (inputRef.current) inputRef.current.value = ""; }
+  }, [memberId]);
 
   return (
     <div className="relative group/avatar" onClick={(e) => { e.stopPropagation(); inputRef.current?.click(); }}>
@@ -197,8 +171,6 @@ export default function MembersPage() {
           <div className={`grid gap-4 ${isMobile ? "grid-cols-1" : "grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"}`}>
             {filtered.map((member, index) => {
               const status = statusConfig[member.status];
-              const colorClass = avatarColors[index % avatarColors.length];
-              const initials = member.name.split(" ").map((w) => w[0]).join("").slice(0, 2);
               const isBuiltin = member.builtin === true;
               const handleCardClick = () => {
                 navigate(`/members/${member.id}`);

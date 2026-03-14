@@ -3,6 +3,7 @@ import { MessageSquare, Users, ListTodo, Library, Layers, Share2, Settings, Plus
 import { useState, useEffect, useCallback, useRef } from "react";
 import MemberAvatar from "@/components/MemberAvatar";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
+import { uploadMemberAvatar } from "@/api/conversations";
 import CreateMemberDialog from "@/components/CreateMemberDialog";
 import NewChatDialog from "@/components/NewChatDialog";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -45,28 +46,14 @@ export default function RootLayout() {
   const avatarInputRef = useRef<HTMLInputElement>(null);
   const handleAvatarUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file || !token || !authMember?.id) return;
-    const form = new FormData();
-    form.append("file", file);
+    if (!file || !authMember?.id) return;
     try {
-      const res = await fetch(`/api/members/${authMember.id}/avatar`, {
-        method: "PUT",
-        headers: { Authorization: `Bearer ${token}` },
-        body: form,
-      });
-      if (res.ok) {
-        setAvatarRev((r) => r + 1);
-        toast.success("头像已更新");
-      } else {
-        const body = await res.text();
-        toast.error(`上传失败: ${body}`);
-      }
-    } catch {
-      toast.error("上传失败");
-    } finally {
-      if (avatarInputRef.current) avatarInputRef.current.value = "";
-    }
-  }, [token, authMember?.id]);
+      const ok = await uploadMemberAvatar(authMember.id, file);
+      if (ok) { setAvatarRev((r) => r + 1); toast.success("头像已更新"); }
+      else toast.error("上传失败");
+    } catch { toast.error("上传失败"); }
+    finally { if (avatarInputRef.current) avatarInputRef.current.value = ""; }
+  }, [authMember?.id]);
 
   useEffect(() => { loadAll(); }, [loadAll]);
 

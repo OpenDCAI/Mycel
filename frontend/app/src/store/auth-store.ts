@@ -78,8 +78,10 @@ export const useAuthStore = create<AuthState>()(
  */
 export async function authFetch(url: string, init?: RequestInit): Promise<Response> {
   const token = useAuthStore.getState().token;
+  const isFormData = init?.body instanceof FormData;
   const headers: Record<string, string> = {
-    "Content-Type": "application/json",
+    // Don't set Content-Type for FormData — browser sets it with boundary
+    ...(isFormData ? {} : { "Content-Type": "application/json" }),
     ...(init?.headers as Record<string, string> ?? {}),
   };
   if (token) headers["Authorization"] = `Bearer ${token}`;

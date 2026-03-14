@@ -69,7 +69,6 @@ export default function NewChatDialog({ open, onOpenChange, onConversationCreate
   const renderEntry = (entry: DirectoryEntry) => {
     const isAgent = entry.type !== "human";
     const ownerName = entry.owner?.name ?? "unknown";
-    const initial = entry.name.slice(0, 1).toUpperCase();
     const subtitle = isAgent ? `${ownerName}'s agent` : "Human";
     const isCreating = creating === entry.id;
     return (

@@ -93,14 +93,13 @@ function Minimap({ nodes, links }: { nodes: FGNode[]; links: FGLink[] }) {
     const ctx = cvs.getContext("2d");
     if (!ctx) return;
 
-    let raf: number;
+    let timer: ReturnType<typeof setTimeout>;
     const draw = () => {
       ctx.clearRect(0, 0, MINIMAP_W, MINIMAP_H);
 
-      // Compute bounds
       const xs = nodes.map((n) => n.x ?? 0);
       const ys = nodes.map((n) => n.y ?? 0);
-      if (xs.length === 0) return;
+      if (xs.length === 0) { timer = setTimeout(draw, 200); return; }
       const minX = Math.min(...xs);
       const maxX = Math.max(...xs);
       const minY = Math.min(...ys);
@@ -116,7 +115,6 @@ function Minimap({ nodes, links }: { nodes: FGNode[]; links: FGLink[] }) {
       const tx = (n: FGNode) => offX + ((n.x ?? 0) - minX) * scale;
       const ty = (n: FGNode) => offY + ((n.y ?? 0) - minY) * scale;
 
-      // Links
       ctx.strokeStyle = "rgba(148,163,184,0.25)";
       ctx.lineWidth = 0.5;
       for (const link of links) {
@@ -129,7 +127,6 @@ function Minimap({ nodes, links }: { nodes: FGNode[]; links: FGLink[] }) {
         ctx.stroke();
       }
 
-      // Nodes
       for (const n of nodes) {
         ctx.fillStyle = COLORS[n.type] || "#a78bfa";
         ctx.beginPath();
@@ -137,10 +134,10 @@ function Minimap({ nodes, links }: { nodes: FGNode[]; links: FGLink[] }) {
         ctx.fill();
       }
 
-      raf = requestAnimationFrame(draw);
+      timer = setTimeout(draw, 200); // ~5fps, not 60
     };
     draw();
-    return () => cancelAnimationFrame(raf);
+    return () => clearTimeout(timer);
   }, [nodes, links]);
 
   return (
@@ -277,10 +274,9 @@ export default function NetworkPage() {
     const link = fg.d3Force("link");
     // @@@weight-distance — heavier edges (more messages) pull nodes closer
     if (link && typeof link.distance === "function") {
-      const mw = Math.max(1, ...allEdges.map((e) => e.weight));
-      link.distance((l: FGLink) => 80 - 50 * (l.weight / mw)); // range: 30 (heavy) to 80 (light)
+      link.distance((l: FGLink) => 80 - 50 * (l.weight / maxWeight)); // range: 30 (heavy) to 80 (light)
     }
-  }, [graphData]);
+  }, [graphData, maxWeight]);
 
   // --- resize ---
   useEffect(() => {
@@ -367,8 +363,9 @@ export default function NetworkPage() {
       ctx.fillStyle = labelColor;
       ctx.fillText(node.name, x, y + r + 2);
     },
+    // avatarCache is a ref — read live on each paint call, no dep needed
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [myAgentId, myMemberId, labelColor, mode, centerId, avatarLoadCount],
+    [myAgentId, myMemberId, labelColor, mode, centerId],
   );
 
   const paintNodeArea = useCallback(

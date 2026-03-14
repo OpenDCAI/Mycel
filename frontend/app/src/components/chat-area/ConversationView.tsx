@@ -3,7 +3,7 @@
  * Fetches from GET /api/conversations/{id}/messages, subscribes to conversation SSE.
  */
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { listMessages, sendConversationMessage, type ConversationMessage, type ConversationMemberDetail } from "../../api/conversations";
+import { listMessages, sendConversationMessage, type ConversationMessage, type MemberInfo } from "../../api/conversations";
 import { authFetch, useAuthStore } from "../../store/auth-store";
 import MemberAvatar from "@/components/MemberAvatar";
 import { useStickyScroll } from "../../hooks/use-sticky-scroll";
@@ -15,7 +15,7 @@ interface ConversationViewProps {
   /** True when the brain thread SSE indicates agent is active. */
   isStreaming?: boolean;
   /** Participant info for resolving sender names. */
-  memberDetails?: ConversationMemberDetail[];
+  memberDetails?: MemberInfo[];
   /** Ref for ChatPage to call our send handler (optimistic insert + API). */
   sendRef?: React.MutableRefObject<((content: string) => Promise<void>) | undefined>;
 }
@@ -181,13 +181,7 @@ function TypingIndicator({ name, agentId }: { name: string; agentId?: string }) 
   return (
     <div className="flex justify-start animate-fade-in">
       <div className="flex gap-2.5">
-        {agentId ? (
-          <MemberAvatar memberId={agentId} name={name} size="sm" className="mt-0.5" />
-        ) : (
-          <div className="w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center text-[11px] font-semibold text-primary shrink-0 mt-0.5">
-            {name.slice(0, 1).toUpperCase()}
-          </div>
-        )}
+        <MemberAvatar memberId={agentId || ""} name={name} size="sm" className="mt-0.5" />
         <div>
           <span className="text-[11px] text-muted-foreground ml-0.5 mb-0.5 block">{name}</span>
           <div className="rounded-xl rounded-bl-sm bg-white border border-border px-4 py-2.5">
