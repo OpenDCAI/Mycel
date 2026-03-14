@@ -170,20 +170,24 @@ export default function ConversationView({ conversationId, isStreaming, memberDe
             />
           ))}
           {/* @@@typing-indicator - shows while brain thread SSE reports agent is active */}
-          {isStreaming && <TypingIndicator name={resolveSenderName("")} />}
+          {isStreaming && <TypingIndicator name={resolveSenderName("")} agentId={useAuthStore.getState().agent?.id} />}
         </div>
       )}
     </div>
   );
 }
 
-function TypingIndicator({ name }: { name: string }) {
+function TypingIndicator({ name, agentId }: { name: string; agentId?: string }) {
   return (
     <div className="flex justify-start animate-fade-in">
       <div className="flex gap-2.5">
-        <div className="w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center text-[11px] font-semibold text-primary shrink-0 mt-0.5">
-          {name.slice(0, 1).toUpperCase()}
-        </div>
+        {agentId ? (
+          <MemberAvatar memberId={agentId} name={name} size="sm" className="mt-0.5" />
+        ) : (
+          <div className="w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center text-[11px] font-semibold text-primary shrink-0 mt-0.5">
+            {name.slice(0, 1).toUpperCase()}
+          </div>
+        )}
         <div>
           <span className="text-[11px] text-muted-foreground ml-0.5 mb-0.5 block">{name}</span>
           <div className="rounded-xl rounded-bl-sm bg-white border border-border px-4 py-2.5">

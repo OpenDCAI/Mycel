@@ -269,9 +269,9 @@ export default function NetworkPage() {
     if (!fgRef.current) return;
     const fg = fgRef.current;
     const charge = fg.d3Force("charge");
-    if (charge && typeof charge.strength === "function") charge.strength(-200);
+    if (charge && typeof charge.strength === "function") charge.strength(-120);
     const link = fg.d3Force("link");
-    if (link && typeof link.distance === "function") link.distance(100);
+    if (link && typeof link.distance === "function") link.distance(60);
   }, [graphData]);
 
   // --- resize ---
