@@ -351,8 +351,9 @@ export default function NetworkPage() {
       ctx.stroke();
 
       // Label
-      const fontSize = Math.max(10 / globalScale, 3);
-      ctx.font = `${fontSize}px sans-serif`;
+      const fontSize = Math.max(11 / globalScale, 3);
+      ctx.font = `${fontSize}px -apple-system, "Segoe UI", Roboto, sans-serif`;
+      ctx.letterSpacing = `${0.5 / globalScale}px`;
       ctx.textAlign = "center";
       ctx.textBaseline = "top";
       ctx.fillStyle = labelColor;
