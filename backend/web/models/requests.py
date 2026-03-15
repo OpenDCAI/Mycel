@@ -10,11 +10,6 @@ class CreateThreadRequest(BaseModel):
     agent: str | None = None
 
 
-class RunRequest(BaseModel):
-    message: str
-    enable_trajectory: bool = False
-    model: str | None = None
-
 
 class SendMessageRequest(BaseModel):
     message: str

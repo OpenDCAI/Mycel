@@ -59,16 +59,6 @@ async function postJSON<T>(url: string, body: unknown, signal?: AbortSignal): Pr
   return res.json();
 }
 
-/** Start an agent run (fire-and-forget). */
-export async function postRun(
-  threadId: string,
-  message: string,
-  signal?: AbortSignal,
-  options?: { model?: string; enable_trajectory?: boolean },
-): Promise<{ run_id: string; thread_id: string }> {
-  return postJSON(`/api/threads/${encodeURIComponent(threadId)}/runs`, { message, ...options }, signal);
-}
-
 /** Persistent SSE connection to a thread's event stream. */
 export async function streamThreadEvents(
   threadId: string,

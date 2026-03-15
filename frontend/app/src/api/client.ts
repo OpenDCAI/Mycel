@@ -74,16 +74,6 @@ export async function sendMessage(threadId: string, message: string): Promise<{ 
   });
 }
 
-export async function queueMessage(threadId: string, message: string): Promise<void> {
-  await request(`/api/threads/${encodeURIComponent(threadId)}/queue`, {
-    method: "POST",
-    body: JSON.stringify({ message }),
-  });
-}
-
-export async function getQueue(threadId: string): Promise<{ messages: Array<{ id: number; content: string; created_at: string }> }> {
-  return request(`/api/threads/${encodeURIComponent(threadId)}/queue`);
-}
 
 // --- Sandbox API ---
 

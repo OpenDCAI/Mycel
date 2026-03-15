@@ -12,7 +12,6 @@ from sse_starlette.sse import EventSourceResponse
 from backend.web.core.dependencies import get_app, get_current_member_id, get_thread_agent, get_thread_lock, verify_thread_owner
 from backend.web.models.requests import (
     CreateThreadRequest,
-    RunRequest,
     SendMessageRequest,
 )
 from backend.web.services.agent_pool import get_or_create_agent, resolve_thread_sandbox
@@ -195,30 +194,6 @@ async def send_message(
         run_id = start_agent_run(agent, thread_id, payload.message, app)
     return {"status": "started", "routing": "direct", "run_id": run_id, "thread_id": thread_id}
 
-
-@router.post("/{thread_id}/queue")
-async def queue_message(
-    thread_id: str,
-    payload: SendMessageRequest,
-    _owner: Annotated[str, Depends(verify_thread_owner)] = "",
-    app: Annotated[Any, Depends(get_app)] = None,
-) -> dict[str, Any]:
-    """Enqueue a followup message. Will be consumed when agent reaches IDLE."""
-    if not payload.message.strip():
-        raise HTTPException(status_code=400, detail="message cannot be empty")
-    app.state.queue_manager.enqueue(payload.message, thread_id, notification_type="steer")
-    return {"status": "queued", "thread_id": thread_id}
-
-
-@router.get("/{thread_id}/queue")
-async def get_queue(
-    thread_id: str,
-    _owner: Annotated[str, Depends(verify_thread_owner)] = "",
-    app: Annotated[Any, Depends(get_app)] = None,
-) -> dict[str, Any]:
-    """List pending followup messages in the queue."""
-    messages = app.state.queue_manager.list_queue(thread_id)
-    return {"messages": messages, "thread_id": thread_id}
 
 
 @router.get("/{thread_id}/history")
@@ -499,36 +474,6 @@ async def stream_thread_events(
         headers=SSE_HEADERS,
     )
 
-
-# Run endpoint — returns JSON, agent runs in background
-@router.post("/{thread_id}/runs")
-async def run_thread(
-    thread_id: str,
-    payload: RunRequest,
-    _owner: Annotated[str, Depends(verify_thread_owner)] = "",
-    app: Annotated[Any, Depends(get_app)] = None,
-) -> dict[str, Any]:
-    """Start an agent run. Returns {run_id, thread_id}; observe via GET /events."""
-    if not payload.message.strip():
-        raise HTTPException(status_code=400, detail="message cannot be empty")
-
-    sandbox_type = resolve_thread_sandbox(app, thread_id)
-    set_current_thread_id(thread_id)
-    agent = await get_or_create_agent(app, sandbox_type, thread_id=thread_id)
-
-    # Per-request model override, or sync from settings if changed
-    if payload.model:
-        await asyncio.to_thread(agent.update_config, model=payload.model)
-    else:
-        from backend.web.services.agent_pool import _sync_agent_model
-        await _sync_agent_model(agent, thread_id)
-
-    lock = await get_thread_lock(app, thread_id)
-    async with lock:
-        if hasattr(agent, "runtime") and not agent.runtime.transition(AgentState.ACTIVE):
-            raise HTTPException(status_code=409, detail="Thread is already running")
-        run_id = start_agent_run(agent, thread_id, payload.message, app, payload.enable_trajectory)
-    return {"run_id": run_id, "thread_id": thread_id}
 
 
 @router.post("/{thread_id}/runs/cancel")

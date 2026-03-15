@@ -2,7 +2,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import {
   cancelRun,
-  postRun,
   type AssistantTurn,
   type ChatEntry,
   type NoticeMessage,
@@ -231,15 +230,12 @@ export function useStreamHandler(
       });
 
       try {
-        // @@@conversation-routing - route through conversation API when conversationId is set
-        if (conversationId) {
-          await sendConversationMessage(conversationId, message);
-          // No brain thread → no run_start event to clear sendPending.
-          // Reset immediately — conversation SSE handles message arrival.
-          if (!threadId) setSendPending(false);
-        } else if (threadId) {
-          await postRun(threadId, message);
-        }
+        // @@@conversation-routing - all messages go through conversation API
+        if (!conversationId) throw new Error("No conversation context");
+        await sendConversationMessage(conversationId, message);
+        // No brain thread → no run_start event to clear sendPending.
+        // Reset immediately — conversation SSE handles message arrival.
+        if (!threadId) setSendPending(false);
         // Connection is persistent — no need to reconnect.
         // run_start event will confirm isRunning.
       } catch (err) {
