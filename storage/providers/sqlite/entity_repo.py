@@ -84,7 +84,7 @@ class SQLiteEntityRepo:
                 member_id TEXT NOT NULL,
                 name TEXT NOT NULL,
                 avatar TEXT,
-                thread_id TEXT,
+                thread_id TEXT UNIQUE,
                 created_at REAL NOT NULL
             )
             """

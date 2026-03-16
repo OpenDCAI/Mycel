@@ -29,6 +29,7 @@ class MemberRow(BaseModel):
     description: str | None = None
     config_dir: str | None = None
     owner_id: str | None = None
+    next_entity_seq: int = 0
     created_at: float
     updated_at: float | None = None
 

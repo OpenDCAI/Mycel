@@ -109,6 +109,7 @@ class SQLiteMemberRepo:
             id=r[0], name=r[1], type=MemberType(r[2]),
             avatar=r[3], description=r[4], config_dir=r[5],
             owner_id=r[6], created_at=r[7], updated_at=r[8],
+            next_entity_seq=r[9] if len(r) > 9 else 0,
         )
 
     def _ensure_table(self) -> None:
