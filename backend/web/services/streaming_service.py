@@ -291,6 +291,7 @@ def _ensure_thread_handlers(agent: Any, thread_id: str, app: Any) -> None:
                         "event": "notice",
                         "data": json.dumps({
                             "content": item.content,
+                            "source": getattr(item, "source", None),
                             "notification_type": item.notification_type,
                         }, ensure_ascii=False),
                     })
@@ -309,7 +310,11 @@ def _ensure_thread_handlers(agent: Any, thread_id: str, app: Any) -> None:
             try:
                 start_agent_run(
                     agent, thread_id, item.content, app,
-                    message_metadata={"source": "system", "notification_type": item.notification_type},
+                    message_metadata={
+                        "source": getattr(item, "source", None) or "system",
+                        "notification_type": item.notification_type,
+                        "sender_name": getattr(item, "sender_name", None),
+                    },
                 )
             except Exception:
                 logger.error("wake_handler failed for thread %s", thread_id, exc_info=True)
@@ -484,20 +489,26 @@ async def _run_agent_to_buffer(
         await _repair_incomplete_tool_calls(agent, config)
 
         # Emit notice BEFORE run_start when this run was triggered by a queue notification.
-        # This makes the notice appear in real-time between turns, not just after history reload.
-        if message_metadata and message_metadata.get("source") == "system":
+        src = (message_metadata or {}).get("source")
+        if src and src != "owner":
             await emit({
                 "event": "notice",
                 "data": json.dumps({
                     "content": message,
-                    "notification_type": message_metadata.get("notification_type"),
+                    "source": src,
+                    "notification_type": (message_metadata or {}).get("notification_type"),
                 }, ensure_ascii=False),
             })
 
-        # Emit run_start
+        # Emit run_start with source propagation
         await emit({
             "event": "run_start",
-            "data": json.dumps({"thread_id": thread_id, "run_id": run_id}),
+            "data": json.dumps({
+                "thread_id": thread_id,
+                "run_id": run_id,
+                "source": src,
+                "sender_name": (message_metadata or {}).get("sender_name"),
+            }),
         })
 
         if message_metadata:
@@ -823,7 +834,11 @@ async def _consume_followup_queue(agent: Any, thread_id: str, app: Any) -> None:
         if item and app:
             if hasattr(agent, "runtime") and agent.runtime.transition(AgentState.ACTIVE):
                 start_agent_run(agent, thread_id, item.content, app,
-                                message_metadata={"source": "system", "notification_type": item.notification_type})
+                                message_metadata={
+                                    "source": item.source or "system",
+                                    "notification_type": item.notification_type,
+                                    "sender_name": item.sender_name,
+                                })
     except Exception:
         logger.exception("Failed to consume followup queue for thread %s", thread_id)
         # Re-enqueue the message if it was already dequeued to prevent data loss
