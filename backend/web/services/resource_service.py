@@ -10,7 +10,7 @@ from typing import Any
 from backend.web.core.config import SANDBOXES_DIR
 from backend.web.services.config_loader import SandboxConfigLoader
 from backend.web.services.sandbox_service import available_sandbox_types, build_provider_from_config_name
-from backend.web.utils.helpers import _build_thread_config_repo as _make_thread_config_repo
+from storage.providers.sqlite.thread_repo import SQLiteThreadRepo
 from sandbox.providers.local import LocalSessionProvider
 from sandbox.providers.docker import DockerProvider
 from sandbox.providers.daytona import DaytonaProvider
@@ -232,16 +232,16 @@ def _member_name_map() -> dict[str, str]:
 
 
 def _thread_agent_refs(thread_ids: list[str]) -> dict[str, str]:
-    """Batch lookup agent refs from thread_config via the storage abstraction (SQLite or Supabase)."""
+    """Batch lookup agent refs from threads table."""
     unique = sorted({tid for tid in thread_ids if tid})
     if not unique:
         return {}
-    repo = _make_thread_config_repo()
+    repo = SQLiteThreadRepo()
     try:
         refs: dict[str, str] = {}
         for tid in unique:
-            config = repo.lookup_config(tid) or {}
-            agent_ref = str(config.get("agent") or "").strip()
+            data = repo.get_by_id(tid)
+            agent_ref = str(data.get("agent") or "").strip() if data else ""
             if agent_ref:
                 refs[tid] = agent_ref
         return refs

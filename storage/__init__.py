@@ -5,13 +5,11 @@ from .contracts import (
     FileOperationRepo,
     RunEventRepo,
     SummaryRepo,
-    ThreadConfigRepo,
 )
 
 __all__ = [
     "StorageContainer",
     "CheckpointRepo",
-    "ThreadConfigRepo",
     "RunEventRepo",
     "FileOperationRepo",
     "SummaryRepo",

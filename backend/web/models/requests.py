@@ -4,6 +4,7 @@ from pydantic import BaseModel
 
 
 class CreateThreadRequest(BaseModel):
+    member_id: str  # which agent template to create thread from
     sandbox: str = "local"
     cwd: str | None = None
     model: str | None = None

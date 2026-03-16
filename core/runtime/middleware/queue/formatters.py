@@ -9,6 +9,17 @@ from html import escape
 from typing import Literal
 
 
+def format_chat_message(content: str, sender_name: str, chat_id: str) -> str:
+    """Wrap chat message in XML for agent brain thread."""
+    return (
+        "<system-reminder>\n"
+        f'<chat-message sender="{escape(sender_name)}" chat="{escape(chat_id)}">\n'
+        f"{content}\n"
+        "</chat-message>\n"
+        "</system-reminder>"
+    )
+
+
 def format_steer_reminder(content: str) -> str:
     """Format user steer message as system-reminder XML."""
     return (

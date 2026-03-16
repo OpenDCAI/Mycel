@@ -14,7 +14,6 @@ from .contracts import (
     QueueRepo,
     RunEventRepo,
     SummaryRepo,
-    ThreadConfigRepo,
 )
 
 StorageStrategy = Literal["sqlite", "supabase"]
@@ -23,7 +22,6 @@ RepoProviderMap = Mapping[str, str]
 # @@@repo-registry - maps repo name → (supabase module path, class name) for generic dispatch.
 _REPO_REGISTRY: dict[str, tuple[str, str]] = {
     "checkpoint_repo":     ("storage.providers.supabase.checkpoint_repo",     "SupabaseCheckpointRepo"),
-    "thread_config_repo":  ("storage.providers.supabase.thread_config_repo",  "SupabaseThreadConfigRepo"),
     "run_event_repo":      ("storage.providers.supabase.run_event_repo",       "SupabaseRunEventRepo"),
     "file_operation_repo": ("storage.providers.supabase.file_operation_repo", "SupabaseFileOperationRepo"),
     "summary_repo":        ("storage.providers.supabase.summary_repo",        "SupabaseSummaryRepo"),
@@ -38,7 +36,6 @@ class StorageContainer:
     _SUPPORTED_STRATEGIES = {"sqlite", "supabase"}
     _REPO_NAMES = (
         "checkpoint_repo",
-        "thread_config_repo",
         "run_event_repo",
         "file_operation_repo",
         "summary_repo",
@@ -78,9 +75,6 @@ class StorageContainer:
     def checkpoint_repo(self) -> CheckpointRepo:
         return self._build_repo("checkpoint_repo", self._sqlite_checkpoint_repo)
 
-    def thread_config_repo(self) -> ThreadConfigRepo:
-        return self._build_repo("thread_config_repo", self._sqlite_thread_config_repo)
-
     def run_event_repo(self) -> RunEventRepo:
         return self._build_repo("run_event_repo", self._sqlite_run_event_repo)
 
@@ -104,11 +98,7 @@ class StorageContainer:
         finally:
             checkpoint.close()
 
-        thread_config = self.thread_config_repo()
-        try:
-            thread_config.delete_thread_config(thread_id)
-        finally:
-            thread_config.close()
+        # threads table is managed via app.state.thread_repo, not StorageContainer
 
         run_event = self.run_event_repo()
         try:
@@ -187,10 +177,6 @@ class StorageContainer:
     def _sqlite_checkpoint_repo(self):
         from storage.providers.sqlite.checkpoint_repo import SQLiteCheckpointRepo
         return SQLiteCheckpointRepo(db_path=self._main_db)
-
-    def _sqlite_thread_config_repo(self):
-        from storage.providers.sqlite.thread_config_repo import SQLiteThreadConfigRepo
-        return SQLiteThreadConfigRepo(db_path=self._main_db)
 
     def _sqlite_run_event_repo(self):
         from storage.providers.sqlite.run_event_repo import SQLiteRunEventRepo

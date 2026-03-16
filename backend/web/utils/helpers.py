@@ -9,7 +9,6 @@ from fastapi import HTTPException
 
 from backend.web.core.config import DB_PATH
 from storage.container import StorageContainer
-from storage.contracts import ThreadConfigRepo
 from storage.providers.sqlite.kernel import connect_sqlite
 from storage.runtime import build_storage_container
 from sandbox.config import DEFAULT_DB_PATH as SANDBOX_DB_PATH
@@ -79,80 +78,12 @@ def _get_container() -> StorageContainer:
     return _cached_container
 
 
-def _build_thread_config_repo() -> ThreadConfigRepo:
-    return _get_container().thread_config_repo()
-
-
-def save_thread_config(thread_id: str, **fields: Any) -> None:
-    """Update specific fields of thread config in SQLite.
-
-    Usage: save_thread_config(thread_id, model="gpt-4")
-    """
-    allowed = {"sandbox_type", "cwd", "model", "observation_provider", "agent"}
-    updates = {k: v for k, v in fields.items() if k in allowed}
-    if not updates:
-        return
-    repo = _build_thread_config_repo()
-    try:
-        repo.update_fields(thread_id, **updates)
-    finally:
-        repo.close()
-
-
-def load_thread_config(thread_id: str):
-    """Load full thread config from SQLite. Returns ThreadConfig or None."""
-    repo = _build_thread_config_repo()
-    try:
-        row = repo.lookup_config(thread_id)
-        if not row:
-            return None
-        from backend.web.models.thread_config import ThreadConfig
-
-        return ThreadConfig(
-            sandbox_type=row["sandbox_type"] or "local",
-            cwd=row["cwd"],
-            model=row["model"],
-            queue_mode=row["queue_mode"] or "steer",
-            observation_provider=row["observation_provider"],
-            agent=row.get("agent"),
-        )
-    finally:
-        repo.close()
-
-
-def init_thread_config(thread_id: str, sandbox_type: str, cwd: str | None) -> None:
-    """Create initial thread config row in storage repo."""
-    repo = _build_thread_config_repo()
-    try:
-        repo.save_metadata(thread_id, sandbox_type, cwd)
-    finally:
-        repo.close()
-
-
 def get_active_observation_provider() -> str | None:
     """Read global observation config and return the active provider name."""
     from config.observation_loader import ObservationLoader
 
     config = ObservationLoader().load()
     return config.active if config.active else None
-
-
-def save_thread_model(thread_id: str, model: str) -> None:
-    """Persist the selected model for a thread."""
-    repo = _build_thread_config_repo()
-    try:
-        repo.save_model(thread_id, model)
-    finally:
-        repo.close()
-
-
-def lookup_thread_model(thread_id: str) -> str | None:
-    """Look up persisted model for a thread."""
-    repo = _build_thread_config_repo()
-    try:
-        return repo.lookup_model(thread_id)
-    finally:
-        repo.close()
 
 
 def resolve_local_workspace_path(
@@ -167,15 +98,11 @@ def resolve_local_workspace_path(
     if local_workspace_root is None:
         local_workspace_root = LOCAL_WORKSPACE_ROOT
 
-    # Use thread-specific workspace root if available (memory → SQLite fallback)
+    # Use thread-specific workspace root if available from memory cache
     thread_cwd = None
     if thread_id:
         if thread_cwd_map:
             thread_cwd = thread_cwd_map.get(thread_id)
-        if not thread_cwd:
-            tc = load_thread_config(thread_id)
-            if tc:
-                thread_cwd = tc.cwd
     # @@@workspace-base-normalize - relative LOCAL_WORKSPACE_ROOT must be normalized, or target.relative_to(base) always fails.
     base = Path(thread_cwd).resolve() if thread_cwd else local_workspace_root.resolve()
 

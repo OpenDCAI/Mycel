@@ -250,11 +250,12 @@ class ModelConfigRequest(BaseModel):
 async def update_model_config(request: ModelConfigRequest, req: Request) -> dict[str, Any]:
     """Update model configuration for agent (hot-reload) and persist per-thread."""
     from backend.web.services.agent_pool import update_agent_config
-    from backend.web.utils.helpers import save_thread_model
 
     # Persist model per-thread if thread_id provided
     if request.thread_id:
-        save_thread_model(request.thread_id, request.model)
+        thread_repo = getattr(req.app.state, "thread_repo", None)
+        if thread_repo:
+            thread_repo.update(request.thread_id, model=request.model)
 
     try:
         result = await update_agent_config(app_obj=req.app, model=request.model, thread_id=request.thread_id)

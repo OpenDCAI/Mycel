@@ -7,11 +7,9 @@ from .kernel import SQLiteDBRole, connect_sqlite, connect_sqlite_async, connect_
 from .queue_repo import SQLiteQueueRepo
 from .run_event_repo import SQLiteRunEventRepo
 from .summary_repo import SQLiteSummaryRepo
-from .thread_config_repo import SQLiteThreadConfigRepo
 
 __all__ = [
     "SQLiteCheckpointRepo",
-    "SQLiteThreadConfigRepo",
     "SQLiteRunEventRepo",
     "SQLiteFileOperationRepo",
     "SQLiteQueueRepo",

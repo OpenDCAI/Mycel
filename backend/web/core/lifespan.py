@@ -31,7 +31,53 @@ async def lifespan(app: FastAPI):
     ensure_members_dir()
     ensure_library_dir()
 
-    # Initialize app state
+    # ---- Entity-Chat repos + services ----
+    from pathlib import Path
+    from storage.providers.sqlite.member_repo import SQLiteMemberRepo, SQLiteAccountRepo
+    from storage.providers.sqlite.entity_repo import SQLiteEntityRepo
+    from storage.providers.sqlite.thread_repo import SQLiteThreadRepo
+    from storage.providers.sqlite.contact_repo import SQLiteContactRepo
+    from storage.providers.sqlite.chat_repo import SQLiteChatRepo, SQLiteChatEntityRepo, SQLiteChatMessageRepo
+
+    db = Path("~/.leon/leon.db").expanduser()
+
+    app.state.member_repo = SQLiteMemberRepo(db)
+    app.state.account_repo = SQLiteAccountRepo(db)
+    app.state.entity_repo = SQLiteEntityRepo(db)
+    app.state.thread_repo = SQLiteThreadRepo(db)
+    app.state.contact_repo = SQLiteContactRepo(db)
+    app.state.chat_repo = SQLiteChatRepo(db)
+    app.state.chat_entity_repo = SQLiteChatEntityRepo(db)
+    app.state.chat_message_repo = SQLiteChatMessageRepo(db)
+
+    from backend.web.services.auth_service import AuthService
+    app.state.auth_service = AuthService(
+        members=app.state.member_repo,
+        accounts=app.state.account_repo,
+        entities=app.state.entity_repo,
+        threads=app.state.thread_repo,
+    )
+
+    from backend.web.services.chat_events import ChatEventBus
+    from backend.web.services.typing_tracker import TypingTracker
+    app.state.chat_event_bus = ChatEventBus()
+    app.state.typing_tracker = TypingTracker(app.state.chat_event_bus)
+
+    from backend.web.services.chat_service import ChatService
+    app.state.chat_service = ChatService(
+        chat_repo=app.state.chat_repo,
+        chat_entity_repo=app.state.chat_entity_repo,
+        chat_message_repo=app.state.chat_message_repo,
+        entity_repo=app.state.entity_repo,
+        member_repo=app.state.member_repo,
+        event_bus=app.state.chat_event_bus,
+    )
+
+    # Wire chat delivery after event loop is available
+    from core.agents.communication.delivery import make_chat_delivery_fn
+    app.state.chat_service.set_delivery_fn(make_chat_delivery_fn(app))
+
+    # ---- Existing state ----
     app.state.queue_manager = MessageQueueManager()
     app.state.agent_pool: dict[str, Any] = {}
     app.state.thread_sandbox: dict[str, str] = {}
