@@ -35,16 +35,17 @@ class MessageQueueManager:
     # Core operations
     # ------------------------------------------------------------------
 
-    def enqueue(self, content: str, thread_id: str, notification_type: str = "steer") -> None:
+    def enqueue(self, content: str, thread_id: str, notification_type: str = "steer",
+                source: str | None = None, sender_entity_id: str | None = None, sender_name: str | None = None) -> None:
         """Persist a message. Fires wake handler after INSERT."""
-        self._repo.enqueue(thread_id, content, notification_type)
-        # Fire wake handler OUTSIDE DB transaction, passing the newly-enqueued item
-        # so the handler doesn't need to peek the queue (which causes duplicates).
+        self._repo.enqueue(thread_id, content, notification_type,
+                           source=source, sender_entity_id=sender_entity_id, sender_name=sender_name)
         with self._wake_lock:
             handler = self._wake_handlers.get(thread_id)
         if handler:
             try:
-                handler(QueueItem(content=content, notification_type=notification_type))
+                handler(QueueItem(content=content, notification_type=notification_type,
+                                  source=source, sender_entity_id=sender_entity_id, sender_name=sender_name))
             except Exception:
                 logger.exception("Wake handler raised for thread %s", thread_id)
 

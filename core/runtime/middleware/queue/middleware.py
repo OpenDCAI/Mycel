@@ -82,7 +82,12 @@ class SteeringMiddleware(AgentMiddleware):
         messages = [
             HumanMessage(
                 content=item.content,
-                metadata={"source": "system", "notification_type": item.notification_type},
+                metadata={
+                    "source": item.source or "system",
+                    "notification_type": item.notification_type,
+                    "sender_name": item.sender_name,
+                    "sender_entity_id": item.sender_entity_id,
+                },
             )
             for item in items
         ]
