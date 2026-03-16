@@ -65,6 +65,9 @@ async def create_thread(
     if not agent_member or agent_member.owner_id != member_id:
         raise HTTPException(403, "Not authorized")
 
+    # @@@non-atomic-create - these 3 steps (seq++, thread, entity) are not atomic.
+    # If step 2 or 3 fails, seq has a gap and thread/entity may be orphaned.
+    # Acceptable for dev (SQLite). Wrap in DB transaction when migrating to Supabase.
     seq = app.state.member_repo.increment_entity_seq(agent_member_id)
     thread_entity_id = f"{agent_member_id}-{seq}"
 

@@ -62,7 +62,6 @@ class ChatService:
     def _deliver_to_agents(self, chat_id: str, sender_entity_id: str, content: str) -> None:
         """For each non-sender agent entity in the chat, deliver to their brain thread."""
         participants = self._chat_entities.list_entities(chat_id)
-        print(f"[ChatService] _deliver_to_agents: chat={chat_id[:8]}, sender={sender_entity_id[:12]}, participants={len(participants)}, delivery_fn={self._delivery_fn is not None}")
         sender_entity = self._entities.get_by_id(sender_entity_id)
         sender_name = sender_entity.name if sender_entity else "unknown"
 
@@ -71,13 +70,10 @@ class ChatService:
                 continue
             entity = self._entities.get_by_id(ce.entity_id)
             if not entity or entity.type != "agent" or not entity.thread_id:
-                print(f"[ChatService] skip entity {ce.entity_id} (type={entity.type if entity else None}, thread={entity.thread_id if entity else None})")
                 continue
             if self._delivery_fn:
-                print(f"[ChatService] delivering to entity {entity.id} (thread={entity.thread_id})")
                 try:
                     self._delivery_fn(entity, content, sender_name, chat_id, sender_entity_id)
-                    print(f"[ChatService] delivery_fn called successfully for {entity.id}")
                 except Exception:
                     logger.exception("Failed to deliver chat message to entity %s", entity.id)
 

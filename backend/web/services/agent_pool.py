@@ -98,7 +98,6 @@ async def get_or_create_agent(app_obj: FastAPI, sandbox_type: str, thread_id: st
                 "chat_entity_repo": getattr(app_obj.state, "chat_entity_repo", None),
                 "chat_message_repo": getattr(app_obj.state, "chat_message_repo", None),
                 "member_repo": getattr(app_obj.state, "member_repo", None),
-                "contact_repo": getattr(app_obj.state, "contact_repo", None),
                 "chat_event_bus": getattr(app_obj.state, "chat_event_bus", None),
             }
 
