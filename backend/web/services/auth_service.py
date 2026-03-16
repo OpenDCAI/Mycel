@@ -52,6 +52,8 @@ class AuthService:
 
         now = time.time()
 
+        # @@@non-atomic-register - steps 1-7 are not atomic. Acceptable for dev.
+        # Wrap in DB transaction when migrating to Supabase.
         # 1. Human member
         human_member_id = generate_member_id()
         self._members.create(MemberRow(

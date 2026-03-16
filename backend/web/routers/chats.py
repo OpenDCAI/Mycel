@@ -101,6 +101,15 @@ async def send_message(
     """Send a message in a chat."""
     if not body.content.strip():
         raise HTTPException(400, "Content cannot be empty")
+    # Verify sender_entity_id belongs to the authenticated member
+    sender = app.state.entity_repo.get_by_id(body.sender_entity_id)
+    if not sender:
+        raise HTTPException(404, "Sender entity not found")
+    # Entity belongs to member directly, or to an agent owned by member
+    if sender.member_id != member_id:
+        agent_member = app.state.member_repo.get_by_id(sender.member_id)
+        if not agent_member or agent_member.owner_id != member_id:
+            raise HTTPException(403, "Sender entity does not belong to you")
     chat_service = app.state.chat_service
     msg = chat_service.send_message(chat_id, body.sender_entity_id, body.content)
     return {"id": msg.id, "chat_id": msg.chat_id, "sender_entity_id": msg.sender_entity_id, "content": msg.content, "created_at": msg.created_at}

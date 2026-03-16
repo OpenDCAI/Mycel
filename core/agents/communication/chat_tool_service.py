@@ -33,7 +33,6 @@ class ChatToolService:
         chat_entity_repo: Any = None,
         chat_message_repo: Any = None,
         member_repo: Any = None,
-        contact_repo: Any = None,
         chat_event_bus: Any = None,
     ) -> None:
         self._entity_id = entity_id
@@ -43,7 +42,6 @@ class ChatToolService:
         self._chat_entities = chat_entity_repo
         self._messages = chat_message_repo
         self._members = member_repo
-        self._contacts = contact_repo
         self._event_bus = chat_event_bus
         self._register(registry)
 
