@@ -54,19 +54,17 @@ async def get_or_create_agent(app_obj: FastAPI, sandbox_type: str, thread_id: st
 
     # For local sandbox, check if thread has custom cwd (memory → SQLite fallback)
     workspace_root = None
-    from backend.web.utils.helpers import load_thread_config
-
-    thread_config = load_thread_config(thread_id)
+    thread_data = app_obj.state.thread_repo.get_by_id(thread_id) if hasattr(app_obj.state, "thread_repo") else None
     if sandbox_type == "local":
         cwd = app_obj.state.thread_cwd.get(thread_id)
-        if not cwd and thread_config and thread_config.cwd:
-            cwd = thread_config.cwd
+        if not cwd and thread_data and thread_data.get("cwd"):
+            cwd = thread_data["cwd"]
             app_obj.state.thread_cwd[thread_id] = cwd
         if cwd:
             workspace_root = Path(cwd).resolve()
 
-    # Look up model for this thread (thread config → preferences default)
-    model_name = thread_config.model if thread_config and thread_config.model else None
+    # Look up model for this thread (threads table → preferences default)
+    model_name = thread_data.get("model") if thread_data else None
     if not model_name:
         from backend.web.routers.settings import load_settings as load_preferences
 
@@ -96,14 +94,12 @@ def resolve_thread_sandbox(app_obj: FastAPI, thread_id: str) -> str:
     mapping = app_obj.state.thread_sandbox
     if thread_id in mapping:
         return mapping[thread_id]
-    from backend.web.utils.helpers import load_thread_config
-
-    tc = load_thread_config(thread_id)
-    if tc:
-        mapping[thread_id] = tc.sandbox_type
-        if tc.cwd:
-            app_obj.state.thread_cwd.setdefault(thread_id, tc.cwd)
-        return tc.sandbox_type
+    thread_data = app_obj.state.thread_repo.get_by_id(thread_id) if hasattr(app_obj.state, "thread_repo") else None
+    if thread_data:
+        mapping[thread_id] = thread_data.get("sandbox_type", "local")
+        if thread_data.get("cwd"):
+            app_obj.state.thread_cwd.setdefault(thread_id, thread_data["cwd"])
+        return thread_data.get("sandbox_type", "local")
     detected = lookup_sandbox_for_thread(thread_id)
     if detected:
         mapping[thread_id] = detected

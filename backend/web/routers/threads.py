@@ -9,7 +9,7 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sse_starlette.sse import EventSourceResponse
 
-from backend.web.core.dependencies import get_app, get_thread_agent, get_thread_lock
+from backend.web.core.dependencies import get_app, get_current_member_id, get_thread_agent, get_thread_lock, verify_thread_owner
 from backend.web.models.requests import (
     CreateThreadRequest,
     RunRequest,
@@ -24,7 +24,6 @@ from backend.web.services.streaming_service import (
     observe_thread_events,
     start_agent_run,
 )
-from backend.web.services.thread_service import list_threads_from_db
 from backend.web.services.thread_state_service import (
     get_lease_status,
     get_sandbox_info,
@@ -33,6 +32,7 @@ from backend.web.services.thread_state_service import (
 )
 from backend.web.utils.helpers import delete_thread_in_db
 from backend.web.utils.serializers import serialize_message
+from storage.contracts import EntityRow
 
 logger = logging.getLogger(__name__)
 from core.runtime.middleware.monitor import AgentState
@@ -54,49 +54,60 @@ def _get_agent_for_thread(app: Any, thread_id: str) -> Any | None:
 
 @router.post("")
 async def create_thread(
-    payload: CreateThreadRequest | None = None,
+    payload: CreateThreadRequest,
+    member_id: Annotated[str, Depends(get_current_member_id)],
     app: Annotated[Any, Depends(get_app)] = None,
 ) -> dict[str, Any]:
-    """Create a new thread with optional sandbox and cwd."""
+    """Create a new thread for an agent member."""
+    import time
+    agent_member_id = payload.member_id
+    agent_member = app.state.member_repo.get_by_id(agent_member_id)
+    if not agent_member or agent_member.owner_id != member_id:
+        raise HTTPException(403, "Not authorized")
 
-    sandbox_type = payload.sandbox if payload else "local"
-    thread_id = str(uuid.uuid4())
-    cwd = payload.cwd if payload else None
-    agent_name = payload.agent if payload else None
-    app.state.thread_sandbox[thread_id] = sandbox_type
-    if cwd:
-        app.state.thread_cwd[thread_id] = cwd
-    from backend.web.utils.helpers import get_active_observation_provider, init_thread_config, save_thread_config
+    seq = app.state.member_repo.increment_entity_seq(agent_member_id)
+    thread_entity_id = f"{agent_member_id}-{seq}"
 
-    init_thread_config(thread_id, sandbox_type, cwd)
-    model = payload.model if payload else None
-    obs_provider = get_active_observation_provider()
-    updates = {}
-    if model:
-        updates["model"] = model
-    if obs_provider:
-        updates["observation_provider"] = obs_provider
-    if agent_name:
-        updates["agent"] = agent_name
-    if updates:
-        save_thread_config(thread_id, **updates)
-    return {"thread_id": thread_id, "sandbox": sandbox_type, "agent": agent_name}
+    sandbox_type = payload.sandbox or "local"
+    app.state.thread_repo.create(
+        thread_id=thread_entity_id,
+        member_id=agent_member_id,
+        sandbox_type=sandbox_type,
+        cwd=payload.cwd,
+        created_at=time.time(),
+        model=payload.model,
+        agent=payload.agent,
+    )
+
+    app.state.entity_repo.create(EntityRow(
+        id=thread_entity_id, type="agent",
+        member_id=agent_member_id,
+        name=agent_member.name,
+        thread_id=thread_entity_id,
+        created_at=time.time(),
+    ))
+
+    app.state.thread_sandbox[thread_entity_id] = sandbox_type
+    if payload.cwd:
+        app.state.thread_cwd[thread_entity_id] = payload.cwd
+
+    return {"thread_id": thread_entity_id, "sandbox": sandbox_type}
 
 
 @router.get("")
-async def list_threads(app: Annotated[Any, Depends(get_app)] = None) -> dict[str, Any]:
-    """List all threads with metadata."""
-    threads = await asyncio.to_thread(list_threads_from_db)
-    tasks = app.state.thread_tasks
-    for t in threads:
-        t["sandbox"] = resolve_thread_sandbox(app, t["thread_id"])
-        t["running"] = t["thread_id"] in tasks
+async def list_threads(
+    member_id: Annotated[str, Depends(get_current_member_id)],
+    app: Annotated[Any, Depends(get_app)] = None,
+) -> dict[str, Any]:
+    """List threads owned by the current user."""
+    threads = app.state.thread_repo.list_by_owner(member_id)
     return {"threads": threads}
 
 
 @router.get("/{thread_id}")
 async def get_thread_messages(
     thread_id: str,
+    member_id: Annotated[str, Depends(verify_thread_owner)],
     app: Annotated[Any, Depends(get_app)] = None,
 ) -> dict[str, Any]:
     """Get messages and sandbox info for a thread."""
@@ -122,6 +133,7 @@ async def get_thread_messages(
 @router.delete("/{thread_id}")
 async def delete_thread(
     thread_id: str,
+    member_id: Annotated[str, Depends(verify_thread_owner)],
     app: Annotated[Any, Depends(get_app)] = None,
 ) -> dict[str, Any]:
     """Delete a thread and its resources."""
@@ -160,56 +172,18 @@ async def delete_thread(
 async def send_message(
     thread_id: str,
     payload: SendMessageRequest,
+    member_id: Annotated[str, Depends(verify_thread_owner)],
     app: Annotated[Any, Depends(get_app)] = None,
 ) -> dict[str, Any]:
-    """Send a message to agent. Server auto-routes based on agent state:
-    - Agent IDLE  → start new run
-    - Agent ACTIVE → enqueue into unified queue (drained at next before_model)
-    """
+    """Send a message to agent — thin wrapper around route_message_to_brain."""
     if not payload.message.strip():
         raise HTTPException(status_code=400, detail="message cannot be empty")
 
-    sandbox_type = resolve_thread_sandbox(app, thread_id)
-    agent = await get_or_create_agent(app, sandbox_type, thread_id=thread_id)
+    from backend.web.services.message_routing import route_message_to_brain
+    from backend.web.services.prompt_injection import build_message_with_hint
 
-    qm = app.state.queue_manager
-    if hasattr(agent, "runtime") and agent.runtime.current_state == AgentState.ACTIVE:
-        qm.enqueue(format_steer_reminder(payload.message), thread_id, notification_type="steer")
-        return {"status": "injected", "routing": "steer", "thread_id": thread_id}
-
-    # Agent is IDLE — start new run (both transition and run start must be atomic)
-    set_current_thread_id(thread_id)
-    lock = await get_thread_lock(app, thread_id)
-    async with lock:
-        if hasattr(agent, "runtime") and not agent.runtime.transition(AgentState.ACTIVE):
-            # Race: became active between check and lock
-            qm.enqueue(format_steer_reminder(payload.message), thread_id, notification_type="steer")
-            return {"status": "injected", "routing": "steer", "thread_id": thread_id}
-        run_id = start_agent_run(agent, thread_id, payload.message, app)
-    return {"status": "started", "routing": "direct", "run_id": run_id, "thread_id": thread_id}
-
-
-@router.post("/{thread_id}/queue")
-async def queue_message(
-    thread_id: str,
-    payload: SendMessageRequest,
-    app: Annotated[Any, Depends(get_app)] = None,
-) -> dict[str, Any]:
-    """Enqueue a followup message. Will be consumed when agent reaches IDLE."""
-    if not payload.message.strip():
-        raise HTTPException(status_code=400, detail="message cannot be empty")
-    app.state.queue_manager.enqueue(payload.message, thread_id, notification_type="steer")
-    return {"status": "queued", "thread_id": thread_id}
-
-
-@router.get("/{thread_id}/queue")
-async def get_queue(
-    thread_id: str,
-    app: Annotated[Any, Depends(get_app)] = None,
-) -> dict[str, Any]:
-    """List pending followup messages in the queue."""
-    messages = app.state.queue_manager.list_queue(thread_id)
-    return {"messages": messages, "thread_id": thread_id}
+    content = build_message_with_hint(payload.message, source="owner")
+    return await route_message_to_brain(app, thread_id, content, source="owner")
 
 
 @router.get("/{thread_id}/history")
@@ -217,6 +191,7 @@ async def get_thread_history(
     thread_id: str,
     limit: int = 20,
     truncate: int = 300,
+    member_id: Annotated[str, Depends(verify_thread_owner)] = None,
     app: Annotated[Any, Depends(get_app)] = None,
 ) -> dict[str, Any]:
     """Compact conversation history for debugging — no raw LangChain noise.
@@ -289,15 +264,11 @@ async def get_thread_history(
 async def get_thread_runtime(
     thread_id: str,
     stream: bool = False,
+    member_id: Annotated[str, Depends(verify_thread_owner)] = None,
     app: Annotated[Any, Depends(get_app)] = None,
 ) -> dict[str, Any]:
-    """Get runtime status for a thread.
-
-    - stream=false (default): compact {state, model, tokens, cost, calls, ctx_percent, last_seq}
-    - stream=true: full verbose data including flags, error details, cache tokens, context breakdown
-    """
+    """Get runtime status for a thread."""
     from backend.web.services.event_store import get_last_seq, get_latest_run_id, get_run_start_seq
-    from backend.web.utils.helpers import lookup_thread_model
 
     sandbox_type = resolve_thread_sandbox(app, thread_id)
     agent = await get_or_create_agent(app, sandbox_type, thread_id=thread_id)
@@ -305,14 +276,14 @@ async def get_thread_runtime(
         raise HTTPException(status_code=404, detail="Agent has no runtime monitor")
 
     last_seq = await get_last_seq(thread_id)
+    thread_data = app.state.thread_repo.get_by_id(thread_id)
+    model = thread_data["model"] if thread_data and thread_data.get("model") else None
 
     if not stream:
         status = agent.runtime.get_compact_dict()
-        # Normalize state to match verbose format: string → {state, flags} object.
-        # This keeps the TypeScript StreamStatus contract consistent across both endpoints.
         state_str = status.pop("state", "idle")
         status["state"] = {"state": state_str, "flags": {}}
-        status["model"] = lookup_thread_model(thread_id)
+        status["model"] = model
         status["last_seq"] = last_seq
         if state_str == "active":
             run_id = await get_latest_run_id(thread_id)
@@ -321,7 +292,7 @@ async def get_thread_runtime(
         return status
 
     status = agent.runtime.get_status_dict()
-    status["model"] = lookup_thread_model(thread_id)
+    status["model"] = model
     status["last_seq"] = last_seq
     if status.get("state", {}).get("state") == "active":
         run_id = await get_latest_run_id(thread_id)
@@ -431,14 +402,23 @@ async def stream_thread_events(
     thread_id: str,
     request: Request,
     after: int = 0,
+    token: str | None = None,
     app: Annotated[Any, Depends(get_app)] = None,
 ) -> EventSourceResponse:
-    """Persistent SSE event stream for a thread — survives across runs.
+    """Persistent SSE event stream — uses ?token= for auth (EventSource can't set headers)."""
+    if not token:
+        raise HTTPException(401, "Missing token")
+    try:
+        sse_member_id = app.state.auth_service.verify_token(token)
+    except ValueError as e:
+        raise HTTPException(401, str(e))
+    thread = app.state.thread_repo.get_by_id(thread_id)
+    if not thread:
+        raise HTTPException(404, "Thread not found")
+    agent_member = app.state.member_repo.get_by_id(thread["member_id"])
+    if not agent_member or agent_member.owner_id != sse_member_id:
+        raise HTTPException(403, "Not authorized")
 
-    Supports reconnection via ``?after=N`` or ``Last-Event-ID`` header.
-    The connection stays open until the client disconnects.
-    ``run_start`` / ``run_done`` are in-band events, not connection lifecycle signals.
-    """
     last_id = request.headers.get("Last-Event-ID")
     if last_id:
         try:
@@ -482,36 +462,10 @@ async def stream_thread_events(
     )
 
 
-# Run endpoint — returns JSON, agent runs in background
-@router.post("/{thread_id}/runs")
-async def run_thread(
-    thread_id: str,
-    payload: RunRequest,
-    app: Annotated[Any, Depends(get_app)] = None,
-) -> dict[str, Any]:
-    """Start an agent run. Returns {run_id, thread_id}; observe via GET /events."""
-    if not payload.message.strip():
-        raise HTTPException(status_code=400, detail="message cannot be empty")
-
-    sandbox_type = resolve_thread_sandbox(app, thread_id)
-    set_current_thread_id(thread_id)
-    agent = await get_or_create_agent(app, sandbox_type, thread_id=thread_id)
-
-    # Per-request model override (lightweight, no rebuild)
-    if payload.model:
-        await asyncio.to_thread(agent.update_config, model=payload.model)
-
-    lock = await get_thread_lock(app, thread_id)
-    async with lock:
-        if hasattr(agent, "runtime") and not agent.runtime.transition(AgentState.ACTIVE):
-            raise HTTPException(status_code=409, detail="Thread is already running")
-        run_id = start_agent_run(agent, thread_id, payload.message, app, payload.enable_trajectory)
-    return {"run_id": run_id, "thread_id": thread_id}
-
-
 @router.post("/{thread_id}/runs/cancel")
 async def cancel_run(
     thread_id: str,
+    member_id: Annotated[str, Depends(verify_thread_owner)] = None,
     app: Annotated[Any, Depends(get_app)] = None,
 ):
     """Cancel an active run for the given thread."""

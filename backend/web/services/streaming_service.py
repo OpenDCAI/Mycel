@@ -412,10 +412,8 @@ async def _run_agent_to_buffer(
         obs_active = None
         obs_provider = None
         try:
-            from backend.web.utils.helpers import load_thread_config
-
-            thread_cfg = load_thread_config(thread_id)
-            obs_provider = thread_cfg.observation_provider if thread_cfg else None
+            thread_data = app.state.thread_repo.get_by_id(thread_id) if hasattr(app.state, "thread_repo") else None
+            obs_provider = thread_data.get("observation_provider") if thread_data else None
 
             if obs_provider:
                 from config.observation_loader import ObservationLoader

@@ -60,15 +60,15 @@ def list_threads_from_db() -> list[dict[str, Any]]:
                 ).fetchall()
                 thread_ids.update(row["thread_id"] for row in rows if row["thread_id"])
 
-    # Batch-load agent names from thread_config
+    # Batch-load agent names from threads table
     thread_agents: dict[str, str | None] = {}
     if DB_PATH.exists():
         with connect_sqlite(DB_PATH, row_factory=sqlite3.Row) as conn:
             tables = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()}
-            if "thread_config" in tables:
-                rows = conn.execute("SELECT thread_id, agent FROM thread_config").fetchall()
+            if "threads" in tables:
+                rows = conn.execute("SELECT id, agent FROM threads").fetchall()
                 for row in rows:
-                    thread_agents[row["thread_id"]] = row["agent"]
+                    thread_agents[row["id"]] = row["agent"]
 
     results = []
     for tid in sorted(thread_ids):
