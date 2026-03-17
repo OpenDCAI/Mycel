@@ -28,6 +28,8 @@ class AgentRuntime:
         self._subagent_event_buffer: dict[str, list[dict[str, Any]]] = {}  # tool_call_id -> events
         self._event_callback: Callable[[dict], None] | None = None
         self._activity_sink: Callable[[dict], Any] | None = None
+        # @@@run-source-tracking — set per-run by streaming_service, read by tell_owner
+        self.current_run_source: str | None = None  # "owner" | "external" | "system"
 
     # ========== 状态代理 ==========
 

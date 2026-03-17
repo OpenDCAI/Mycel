@@ -51,8 +51,8 @@ async def _async_deliver(
     sender_entity_id: str,
 ) -> None:
     """Deliver chat message to an agent's brain thread."""
+    logger.info("[delivery] _async_deliver: entity=%s thread=%s from=%s", entity.id, entity.thread_id, sender_name)
     from backend.web.services.message_routing import route_message_to_brain
-    from backend.web.services.prompt_injection import build_message_with_hint
     from core.runtime.middleware.queue.formatters import format_chat_message
 
     if not entity.thread_id:
@@ -66,11 +66,12 @@ async def _async_deliver(
     if typing_tracker is not None:
         typing_tracker.start_chat(thread_id, chat_id, entity.id)
 
+    # @@@external-routing-instruction - routing instruction is now inside
+    # format_chat_message, no separate hint needed
     formatted = format_chat_message(content, sender_name, chat_id)
-    formatted_with_hint = build_message_with_hint(formatted, source="external", sender_name=sender_name)
 
     await route_message_to_brain(
-        app, thread_id, formatted_with_hint,
+        app, thread_id, formatted,
         source="external",
         sender_name=sender_name,
     )

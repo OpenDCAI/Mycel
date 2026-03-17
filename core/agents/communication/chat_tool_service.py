@@ -34,6 +34,7 @@ class ChatToolService:
         chat_message_repo: Any = None,
         member_repo: Any = None,
         chat_event_bus: Any = None,
+        runtime_fn: Any = None,
     ) -> None:
         self._entity_id = entity_id
         self._owner_entity_id = owner_entity_id
@@ -43,6 +44,7 @@ class ChatToolService:
         self._messages = chat_message_repo
         self._members = member_repo
         self._event_bus = chat_event_bus
+        self._runtime_fn = runtime_fn  # callable → AgentRuntime (lazy, resolves at call time)
         self._register(registry)
 
     def _register(self, registry: ToolRegistry) -> None:
@@ -72,9 +74,13 @@ class ChatToolService:
                 last = c.get("last_message")
                 last_preview = f' — last: "{last["content"][:50]}"' if last else ""
                 unread_str = f" ({unread} unread)" if unread > 0 else ""
-                other_id = others[0]["id"] if others else ""
-                eid_str = f" [entity_id: {other_id}]" if other_id else ""
-                lines.append(f"- {name}{eid_str}{unread_str}{last_preview}")
+                is_group = len(others) >= 2
+                if is_group:
+                    id_str = f" [chat_id: {c['id']}]"
+                else:
+                    other_id = others[0]["id"] if others else ""
+                    id_str = f" [entity_id: {other_id}]" if other_id else ""
+                lines.append(f"- {name}{id_str}{unread_str}{last_preview}")
             return "\n".join(lines)
 
         registry.register(ToolEntry(
@@ -98,12 +104,17 @@ class ChatToolService:
     def _register_chat_read(self, registry: ToolRegistry) -> None:
         eid = self._entity_id
 
-        def handle(entity_id: str, limit: int = 20, mark_read: bool = True) -> str:
-            chat_id = self._chat_entities.find_chat_between(eid, entity_id)
-            if not chat_id:
-                target = self._entities.get_by_id(entity_id)
-                name = target.name if target else entity_id
-                return f"No chat history with {name}."
+        def handle(entity_id: str | None = None, chat_id: str | None = None, limit: int = 20, mark_read: bool = True) -> str:
+            if chat_id:
+                pass  # use chat_id directly
+            elif entity_id:
+                chat_id = self._chat_entities.find_chat_between(eid, entity_id)
+                if not chat_id:
+                    target = self._entities.get_by_id(entity_id)
+                    name = target.name if target else entity_id
+                    return f"No chat history with {name}."
+            else:
+                return "Provide entity_id or chat_id."
             msgs = self._messages.list_by_chat(chat_id, limit=limit)
             if not msgs:
                 return "No messages yet."
@@ -122,15 +133,15 @@ class ChatToolService:
             mode=ToolMode.INLINE,
             schema={
                 "name": "chat_read",
-                "description": "Read chat history with a specific entity. Use entity_id from chats() or directory().",
+                "description": "Read chat history. Use entity_id for 1:1, chat_id for group chats.",
                 "parameters": {
                     "type": "object",
                     "properties": {
-                        "entity_id": {"type": "string", "description": "The entity_id to read chat history with"},
+                        "entity_id": {"type": "string", "description": "Entity_id for 1:1 chat history"},
+                        "chat_id": {"type": "string", "description": "Chat_id for group chat history"},
                         "limit": {"type": "integer", "description": "Max messages to return", "default": 20},
                         "mark_read": {"type": "boolean", "description": "Mark messages as read", "default": True},
                     },
-                    "required": ["entity_id"],
                 },
             },
             handler=handle,
@@ -141,13 +152,33 @@ class ChatToolService:
         eid = self._entity_id
         owner_eid = self._owner_entity_id
 
-        def handle(content: str, entity_id: str) -> str:
+        def handle(content: str, entity_id: str | None = None, chat_id: str | None = None) -> str:
+            # @@@group-chat-support - chat_id for groups, entity_id for 1:1
+            if chat_id:
+                # Direct send to a chat (group or 1:1 by chat_id)
+                if not self._chat_entities.is_entity_in_chat(chat_id, eid):
+                    raise RuntimeError(f"You are not a member of chat {chat_id}")
+                self._chat_service.send_message(chat_id, eid, content)
+                return f"Message sent to chat."
+            if not entity_id:
+                raise RuntimeError("Provide entity_id (for 1:1) or chat_id (for group)")
             # @@@owner-gate - block direct chat to owner; use tell_owner instead
             if entity_id == owner_eid:
                 raise RuntimeError("Use tell_owner() to contact your owner, not chat_send.")
             target = self._entities.get_by_id(entity_id)
             if not target:
                 raise RuntimeError(f"Entity not found: {entity_id}")
+            # @@@reachability-gate - only agent entities with brain threads can receive chat messages
+            if target.type != "agent" or not target.thread_id:
+                agent_hint = ""
+                all_entities = self._entities.list_all()
+                for e in all_entities:
+                    if e.member_id == target.member_id and e.type == "agent" and e.thread_id:
+                        agent_hint = f" Try their agent entity instead: entity_id={e.id} ({e.name})"
+                        break
+                raise RuntimeError(
+                    f"{target.name} is a {target.type} entity and cannot receive chat messages.{agent_hint}"
+                )
             chat = self._chat_service.find_or_create_chat([eid, entity_id])
             self._chat_service.send_message(chat.id, eid, content)
             return f"Message sent to {target.name}."
@@ -158,20 +189,21 @@ class ChatToolService:
             schema={
                 "name": "chat_send",
                 "description": (
-                    "Send a message to an entity. Use entity_id from directory() or chats(). "
-                    "Cannot send to your owner — use tell_owner() instead.\n\n"
+                    "Send a message. Use entity_id for 1:1 chats, chat_id for group chats.\n\n"
                     "Signal protocol — append to content:\n"
-                    "  (no tag) = expecting a reply\n"
-                    "  ::yield = I have nothing more to add; up to you whether to continue\n"
-                    "  ::close = conversation over, do NOT reply"
+                    "  (no tag) = I expect a reply from you\n"
+                    "  ::yield = I'm done with my turn; reply only if you want to\n"
+                    "  ::close = conversation over, do NOT reply\n\n"
+                    "For games/turns: do NOT append ::yield — just send the move and expect a reply."
                 ),
                 "parameters": {
                     "type": "object",
                     "properties": {
-                        "content": {"type": "string", "description": "Message content. Append ::yield or ::close to signal intent."},
-                        "entity_id": {"type": "string", "description": "Target entity_id"},
+                        "content": {"type": "string", "description": "Message content"},
+                        "entity_id": {"type": "string", "description": "Target entity_id (for 1:1 chat)"},
+                        "chat_id": {"type": "string", "description": "Target chat_id (for group chat)"},
                     },
-                    "required": ["content", "entity_id"],
+                    "required": ["content"],
                 },
             },
             handler=handle,
@@ -235,15 +267,18 @@ class ChatToolService:
                     owner_member = self._members.get_by_id(member.owner_id)
                     if owner_member:
                         owner_info = f" (owner: {owner_member.name})"
-                lines.append(f"- {e.name} [{e.type}] entity_id={e.id}{owner_info}")
-            return "\n".join(lines)
+                # @@@reachability-tag - show which entities can receive chat messages
+                reachable = " ✉" if e.type == "agent" and e.thread_id else ""
+                lines.append(f"- {e.name} [{e.type}]{reachable} entity_id={e.id}{owner_info}")
+            header = "✉ = can receive chat messages (use their entity_id with chat_send)\n"
+            return header + "\n".join(lines)
 
         registry.register(ToolEntry(
             name="directory",
             mode=ToolMode.INLINE,
             schema={
                 "name": "directory",
-                "description": "Browse the entity directory. Returns entity_ids for use with chat_send, chat_read.",
+                "description": "Browse the entity directory. Returns entity_ids for use with chat_send, chat_read. Only entities marked ✉ (agents) can receive chat messages.",
                 "parameters": {
                     "type": "object",
                     "properties": {
@@ -257,15 +292,29 @@ class ChatToolService:
         ))
 
     def _register_tell_owner(self, registry: ToolRegistry) -> None:
+        runtime_fn = self._runtime_fn
+
         def handle(message: str) -> str:
-            return f"Notified owner: {message}"
+            # @@@tell-owner-context-gate — only valid in external runs
+            runtime = runtime_fn() if runtime_fn else None
+            if runtime and getattr(runtime, "current_run_source", None) == "owner":
+                raise RuntimeError(
+                    "Your owner is right here in this conversation — just say it directly. "
+                    "tell_owner is for external conversations when your owner isn't present."
+                )
+            logger.info("[tell_owner] %s", message[:100])
+            return f"Owner notified: {message}"
 
         registry.register(ToolEntry(
             name="tell_owner",
             mode=ToolMode.INLINE,
             schema={
                 "name": "tell_owner",
-                "description": "Send a notification to your owner. Use during external runs when you need to inform your owner about something.",
+                "description": (
+                    "Notify your owner about something important. "
+                    "ONLY use this during external conversations (when someone else messaged you). "
+                    "Do NOT use this when your owner is already talking to you — just respond directly."
+                ),
                 "parameters": {
                     "type": "object",
                     "properties": {
@@ -279,15 +328,29 @@ class ChatToolService:
         ))
 
     def _register_ask_owner(self, registry: ToolRegistry) -> None:
+        runtime_fn = self._runtime_fn
+
         def handle(question: str) -> str:
-            return f"Question sent to owner: {question}"
+            # @@@ask-owner-context-gate — only valid in external runs
+            runtime = runtime_fn() if runtime_fn else None
+            if runtime and getattr(runtime, "current_run_source", None) == "owner":
+                raise RuntimeError(
+                    "Your owner is right here — just ask them directly. "
+                    "ask_owner is for external conversations when your owner isn't present."
+                )
+            logger.info("[ask_owner] %s", question[:100])
+            return f"Question sent to owner: {question}. They will respond when ready."
 
         registry.register(ToolEntry(
             name="ask_owner",
             mode=ToolMode.INLINE,
             schema={
                 "name": "ask_owner",
-                "description": "Ask your owner a question that requires their decision. Use during external runs when you need authorization or guidance.",
+                "description": (
+                    "Ask your owner a question that needs their decision. "
+                    "ONLY use this during external conversations (when someone else messaged you). "
+                    "Do NOT use this when your owner is already talking to you."
+                ),
                 "parameters": {
                     "type": "object",
                     "properties": {

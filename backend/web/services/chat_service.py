@@ -1,16 +1,38 @@
 """Chat service — entity-to-entity communication."""
 
+from __future__ import annotations
+
 import logging
 import time
 import uuid
+from typing import Any, Callable
 
-from storage.contracts import ChatMessageRow, ChatRow
+from storage.contracts import (
+    ChatEntityRepo,
+    ChatMessageRepo,
+    ChatMessageRow,
+    ChatRepo,
+    ChatRow,
+    DeliveryResolver,
+    EntityRepo,
+    MemberRepo,
+)
 
 logger = logging.getLogger(__name__)
 
 
 class ChatService:
-    def __init__(self, chat_repo, chat_entity_repo, chat_message_repo, entity_repo, member_repo, event_bus=None, delivery_fn=None) -> None:
+    def __init__(
+        self,
+        chat_repo: ChatRepo,
+        chat_entity_repo: ChatEntityRepo,
+        chat_message_repo: ChatMessageRepo,
+        entity_repo: EntityRepo,
+        member_repo: MemberRepo,
+        event_bus: Any = None,
+        delivery_fn: Callable | None = None,
+        delivery_resolver: DeliveryResolver | None = None,
+    ) -> None:
         self._chats = chat_repo
         self._chat_entities = chat_entity_repo
         self._messages = chat_message_repo
@@ -18,11 +40,12 @@ class ChatService:
         self._members = member_repo
         self._event_bus = event_bus
         self._delivery_fn = delivery_fn
+        self._delivery_resolver = delivery_resolver
 
     def find_or_create_chat(self, entity_ids: list[str], title: str | None = None) -> ChatRow:
-        """Find existing chat between entities, or create one."""
+        """Find existing 1:1 chat between two entities, or create one."""
         if len(entity_ids) != 2:
-            raise ValueError("V1: only 2-entity chats supported")
+            raise ValueError("Use create_group_chat() for 3+ entities")
 
         self._check_owner_agent_rule(entity_ids)
 
@@ -37,8 +60,20 @@ class ChatService:
             self._chat_entities.add_entity(chat_id, eid, now)
         return self._chats.get_by_id(chat_id)
 
+    def create_group_chat(self, entity_ids: list[str], title: str | None = None) -> ChatRow:
+        """Create a group chat with 3+ entities."""
+        if len(entity_ids) < 3:
+            raise ValueError("Group chat requires 3+ entities")
+        now = time.time()
+        chat_id = str(uuid.uuid4())
+        self._chats.create(ChatRow(id=chat_id, title=title, created_at=now))
+        for eid in entity_ids:
+            self._chat_entities.add_entity(chat_id, eid, now)
+        return self._chats.get_by_id(chat_id)
+
     def send_message(self, chat_id: str, sender_entity_id: str, content: str) -> ChatMessageRow:
         """Send a message in a chat."""
+        logger.debug("[send_message] chat=%s sender=%s content=%.50s", chat_id[:8], sender_entity_id[:15], content[:50])
         now = time.time()
         msg_id = str(uuid.uuid4())
         msg = ChatMessageRow(id=msg_id, chat_id=chat_id, sender_entity_id=sender_entity_id, content=content, created_at=now)
@@ -70,12 +105,23 @@ class ChatService:
                 continue
             entity = self._entities.get_by_id(ce.entity_id)
             if not entity or entity.type != "agent" or not entity.thread_id:
+                logger.debug("[deliver] SKIP %s type=%s thread=%s", ce.entity_id, getattr(entity, "type", None), getattr(entity, "thread_id", None))
                 continue
+            # @@@delivery-strategy-gate — check contact block/mute + chat mute
+            if self._delivery_resolver:
+                from storage.contracts import DeliveryAction
+                action = self._delivery_resolver.resolve(ce.entity_id, chat_id, sender_entity_id)
+                if action != DeliveryAction.DELIVER:
+                    logger.info("[deliver] POLICY %s for %s (sender=%s chat=%s)", action.value, ce.entity_id, sender_entity_id, chat_id[:8])
+                    continue
             if self._delivery_fn:
+                logger.debug("[deliver] → %s (thread=%s) from=%s", entity.id, entity.thread_id, sender_name)
                 try:
                     self._delivery_fn(entity, content, sender_name, chat_id, sender_entity_id)
                 except Exception:
                     logger.exception("Failed to deliver chat message to entity %s", entity.id)
+            else:
+                logger.warning("[deliver] NO delivery_fn for %s", entity.id)
 
     # @@@owner-agent-rule - owner and own agent use workspace thread, not chat
     def _check_owner_agent_rule(self, entity_ids: list[str]) -> None:

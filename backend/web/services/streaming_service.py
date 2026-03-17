@@ -500,7 +500,12 @@ async def _run_agent_to_buffer(
                 }, ensure_ascii=False),
             })
 
-        # Emit run_start with source propagation
+        # @@@run-source-tracking — set on runtime so tell_owner can check context
+        if hasattr(agent, "runtime"):
+            agent.runtime.current_run_source = src or "owner"
+
+        # @@@display-projection-sse — run_start carries display_mode for frontend
+        display_mode = "collapsed" if src and src != "owner" else "expanded"
         await emit({
             "event": "run_start",
             "data": json.dumps({
@@ -508,6 +513,7 @@ async def _run_agent_to_buffer(
                 "run_id": run_id,
                 "source": src,
                 "sender_name": (message_metadata or {}).get("sender_name"),
+                "display_mode": display_mode,
             }),
         })
 
@@ -518,12 +524,32 @@ async def _run_agent_to_buffer(
             _initial_input = {"messages": [{"role": "user", "content": message}]}
 
         async def run_agent_stream(input_data: dict | None = _initial_input):
+            chunk_count = 0
+            # @@@astream-reentry — LangGraph's astream(input) silently returns
+            # 0 chunks when the graph is at __end__ (completed previous run).
+            # The fix: always use aupdate_state to inject input, then astream(None).
+            # This works for both fresh threads (no checkpoint) and existing ones.
+            if input_data is not None:
+                pre_state = await agent.agent.aget_state(config)
+                has_checkpoint = pre_state.values is not None and len(pre_state.values.get("messages", [])) > 0
+                if has_checkpoint:
+                    # Existing thread: inject message via aupdate_state, then resume
+                    await agent.agent.aupdate_state(config, input_data, as_node="__start__")
+                    effective_input = None
+                else:
+                    # Fresh thread: direct astream works fine
+                    effective_input = input_data
+            else:
+                effective_input = input_data
+
             async for chunk in agent.agent.astream(
-                input_data,
+                effective_input,
                 config=config,
                 stream_mode=["messages", "updates"],
             ):
+                chunk_count += 1
                 yield chunk
+            logger.debug("[stream] thread=%s STREAM DONE chunks=%d", thread_id[:15], chunk_count)
 
         MAX_STREAM_RETRIES = 10
 
@@ -589,13 +615,15 @@ async def _run_agent_to_buffer(
                             if tc_id and tc_name and tc_id not in emitted_tool_call_ids:
                                 emitted_tool_call_ids.add(tc_id)
                                 pending_tool_calls[tc_id] = {"name": tc_name, "args": {}}
+                                # @@@display-projection-sse — tell_owner/ask_owner punch through
+                                tc_display = "punch_through" if tc_name in ("tell_owner", "ask_owner") else None
+                                tc_data = {"id": tc_id, "name": tc_name, "args": {}}
+                                if tc_display:
+                                    tc_data["display_mode"] = tc_display
                                 await emit(
                                     {
                                         "event": "tool_call",
-                                        "data": json.dumps(
-                                            {"id": tc_id, "name": tc_name, "args": {}},
-                                            ensure_ascii=False,
-                                        ),
+                                        "data": json.dumps(tc_data, ensure_ascii=False),
                                     },
                                     message_id=chunk_msg_id,
                                 )
@@ -734,22 +762,11 @@ async def _run_agent_to_buffer(
             except Exception:
                 logger.error("Failed to persist trajectory for thread %s", thread_id, exc_info=True)
 
-        # A6: patch checkpoint — inject run_id into messages that were emitted this run.
-        # In-stream mutation (above) modifies the Python object but checkpoint is already serialized.
-        # update_state with same message IDs → MessagesState add_messages reducer replaces (not appends).
-        try:
-            state = await agent.agent.aget_state(config)
-            to_patch = []
-            for msg in state.values.get("messages", []):
-                if not hasattr(msg, "metadata") or not isinstance(getattr(msg, "metadata", None), dict):
-                    msg.metadata = {}
-                if msg.metadata.get("run_id") is None:
-                    msg.metadata["run_id"] = run_id
-                    to_patch.append(msg)
-            if to_patch:
-                await agent.agent.aupdate_state(config, {"messages": to_patch})
-        except Exception:
-            logger.debug("A6 run_id checkpoint patch failed for thread=%s", thread_id, exc_info=True)
+        # @@@A6-disabled — aupdate_state after a completed run leaves the graph
+        # at __end__, causing the NEXT astream(new_input) to produce 0 chunks.
+        # This broke multi-run threads (e.g. external message delivery).
+        # run_id is available from run_start SSE event; no need to patch checkpoint.
+        # See: https://github.com/langchain-ai/langgraph/issues/XXX
 
         # A5: emit run_done instead of done (persistent buffer — no mark_done)
         await emit({"event": "run_done", "data": json.dumps({"thread_id": thread_id, "run_id": run_id})})

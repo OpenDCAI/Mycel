@@ -109,11 +109,17 @@ class SQLiteChatEntityRepo:
     def list_entities(self, chat_id: str) -> list[ChatEntityRow]:
         with self._lock:
             rows = self._conn.execute(
-                "SELECT chat_id, entity_id, joined_at, last_read_at"
+                "SELECT chat_id, entity_id, joined_at, last_read_at, muted, mute_until"
                 " FROM chat_entities WHERE chat_id = ?",
                 (chat_id,),
             ).fetchall()
-            return [ChatEntityRow(chat_id=r[0], entity_id=r[1], joined_at=r[2], last_read_at=r[3]) for r in rows]
+            return [
+                ChatEntityRow(
+                    chat_id=r[0], entity_id=r[1], joined_at=r[2], last_read_at=r[3],
+                    muted=bool(r[4]), mute_until=r[5],
+                )
+                for r in rows
+            ]
 
     def list_chats_for_entity(self, entity_id: str) -> list[str]:
         with self._lock:
@@ -139,6 +145,16 @@ class SQLiteChatEntityRepo:
             )
             self._conn.commit()
 
+    def update_mute(self, chat_id: str, entity_id: str, muted: bool, mute_until: float | None = None) -> None:
+        def _do():
+            with self._lock:
+                self._conn.execute(
+                    "UPDATE chat_entities SET muted = ?, mute_until = ? WHERE chat_id = ? AND entity_id = ?",
+                    (int(muted), mute_until, chat_id, entity_id),
+                )
+                self._conn.commit()
+        _retry_on_locked(_do)
+
     # @@@find-chat-between - core uniqueness query: two entities share at most one chat
     def find_chat_between(self, entity_a: str, entity_b: str) -> str | None:
         with self._lock:
@@ -158,10 +174,21 @@ class SQLiteChatEntityRepo:
                 entity_id TEXT NOT NULL REFERENCES entities(id),
                 joined_at REAL NOT NULL,
                 last_read_at REAL,
+                muted INTEGER NOT NULL DEFAULT 0,
+                mute_until REAL,
                 UNIQUE(chat_id, entity_id)
             )
             """
         )
+        # @@@chat-entity-migration - add muted/mute_until if table already exists
+        try:
+            self._conn.execute("ALTER TABLE chat_entities ADD COLUMN muted INTEGER NOT NULL DEFAULT 0")
+        except sqlite3.OperationalError:
+            pass  # column already exists
+        try:
+            self._conn.execute("ALTER TABLE chat_entities ADD COLUMN mute_until REAL")
+        except sqlite3.OperationalError:
+            pass
         self._conn.commit()
 
 
