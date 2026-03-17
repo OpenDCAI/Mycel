@@ -75,6 +75,7 @@ class ChatMessageRow(BaseModel):
     chat_id: str
     sender_entity_id: str
     content: str
+    mentioned_entity_ids: list[str] = []
     created_at: float
 
 

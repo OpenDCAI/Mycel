@@ -71,13 +71,23 @@ class ChatService:
             self._chat_entities.add_entity(chat_id, eid, now)
         return self._chats.get_by_id(chat_id)
 
-    def send_message(self, chat_id: str, sender_entity_id: str, content: str) -> ChatMessageRow:
+    def send_message(
+        self, chat_id: str, sender_entity_id: str, content: str,
+        mentioned_entity_ids: list[str] | None = None,
+    ) -> ChatMessageRow:
         """Send a message in a chat."""
         logger.debug("[send_message] chat=%s sender=%s content=%.50s", chat_id[:8], sender_entity_id[:15], content[:50])
+        mentions = mentioned_entity_ids or []
         now = time.time()
         msg_id = str(uuid.uuid4())
-        msg = ChatMessageRow(id=msg_id, chat_id=chat_id, sender_entity_id=sender_entity_id, content=content, created_at=now)
+        msg = ChatMessageRow(
+            id=msg_id, chat_id=chat_id, sender_entity_id=sender_entity_id,
+            content=content, mentioned_entity_ids=mentions, created_at=now,
+        )
         self._messages.create(msg)
+
+        sender = self._entities.get_by_id(sender_entity_id)
+        sender_name = sender.name if sender else "unknown"
 
         if self._event_bus:
             self._event_bus.publish(chat_id, {
@@ -86,16 +96,22 @@ class ChatService:
                     "id": msg_id,
                     "chat_id": chat_id,
                     "sender_entity_id": sender_entity_id,
+                    "sender_name": sender_name,
                     "content": content,
+                    "mentioned_entity_ids": mentions,
                     "created_at": now,
                 },
             })
 
-        self._deliver_to_agents(chat_id, sender_entity_id, content)
+        self._deliver_to_agents(chat_id, sender_entity_id, content, mentions)
         return msg
 
-    def _deliver_to_agents(self, chat_id: str, sender_entity_id: str, content: str) -> None:
+    def _deliver_to_agents(
+        self, chat_id: str, sender_entity_id: str, content: str,
+        mentioned_entity_ids: list[str] | None = None,
+    ) -> None:
         """For each non-sender agent entity in the chat, deliver to their brain thread."""
+        mentions = set(mentioned_entity_ids or [])
         participants = self._chat_entities.list_entities(chat_id)
         sender_entity = self._entities.get_by_id(sender_entity_id)
         sender_name = sender_entity.name if sender_entity else "unknown"
@@ -108,11 +124,15 @@ class ChatService:
                 logger.debug("[deliver] SKIP %s type=%s thread=%s", ce.entity_id, getattr(entity, "type", None), getattr(entity, "thread_id", None))
                 continue
             # @@@delivery-strategy-gate — check contact block/mute + chat mute
+            # @@@mention-override — mentioned entities skip mute (but not block)
             if self._delivery_resolver:
                 from storage.contracts import DeliveryAction
-                action = self._delivery_resolver.resolve(ce.entity_id, chat_id, sender_entity_id)
+                is_mentioned = ce.entity_id in mentions
+                action = self._delivery_resolver.resolve(
+                    ce.entity_id, chat_id, sender_entity_id, is_mentioned=is_mentioned,
+                )
                 if action != DeliveryAction.DELIVER:
-                    logger.info("[deliver] POLICY %s for %s (sender=%s chat=%s)", action.value, ce.entity_id, sender_entity_id, chat_id[:8])
+                    logger.info("[deliver] POLICY %s for %s (sender=%s chat=%s mentioned=%s)", action.value, ce.entity_id, sender_entity_id, chat_id[:8], is_mentioned)
                     continue
             if self._delivery_fn:
                 logger.debug("[deliver] → %s (thread=%s) from=%s", entity.id, entity.thread_id, sender_name)
@@ -164,6 +184,7 @@ class ChatService:
                 sender = self._entities.get_by_id(m.sender_entity_id)
                 last_msg = {"content": m.content, "sender_name": sender.name if sender else "unknown", "created_at": m.created_at}
             unread = self._messages.count_unread(cid, entity_id)
+            has_mention = self._messages.has_unread_mention(cid, entity_id)
             result.append({
                 "id": cid,
                 "title": chat.title,
@@ -172,5 +193,6 @@ class ChatService:
                 "entities": entities_info,
                 "last_message": last_msg,
                 "unread_count": unread,
+                "has_mention": has_mention,
             })
         return result

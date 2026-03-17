@@ -28,23 +28,31 @@ class DefaultDeliveryResolver:
         self._contacts = contact_repo
         self._chat_entities = chat_entity_repo
 
-    def resolve(self, recipient_entity_id: str, chat_id: str, sender_entity_id: str) -> DeliveryAction:
-        # 1. Contact-level block/mute
+    def resolve(
+        self, recipient_entity_id: str, chat_id: str, sender_entity_id: str,
+        *, is_mentioned: bool = False,
+    ) -> DeliveryAction:
+        # 1. Contact-level block — always DROP, even if mentioned
         contact = self._contacts.get(recipient_entity_id, sender_entity_id)
-        if contact:
-            if contact.relation == "blocked":
-                logger.debug("[resolver] DROP: %s blocked %s", recipient_entity_id[:15], sender_entity_id[:15])
-                return DeliveryAction.DROP
-            if contact.relation == "muted":
-                logger.debug("[resolver] NOTIFY: %s muted %s", recipient_entity_id[:15], sender_entity_id[:15])
-                return DeliveryAction.NOTIFY
+        if contact and contact.relation == "blocked":
+            logger.debug("[resolver] DROP: %s blocked %s", recipient_entity_id[:15], sender_entity_id[:15])
+            return DeliveryAction.DROP
 
-        # 2. Chat-level mute
+        # @@@mention-override — mentioned entities skip mute checks
+        if is_mentioned:
+            return DeliveryAction.DELIVER
+
+        # 2. Contact-level mute
+        if contact and contact.relation == "muted":
+            logger.debug("[resolver] NOTIFY: %s muted %s", recipient_entity_id[:15], sender_entity_id[:15])
+            return DeliveryAction.NOTIFY
+
+        # 3. Chat-level mute
         if self._is_chat_muted(recipient_entity_id, chat_id):
             logger.debug("[resolver] NOTIFY: %s muted chat %s", recipient_entity_id[:15], chat_id[:8])
             return DeliveryAction.NOTIFY
 
-        # 3. Default
+        # 4. Default
         return DeliveryAction.DELIVER
 
     def _is_chat_muted(self, entity_id: str, chat_id: str) -> bool:

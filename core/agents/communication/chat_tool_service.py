@@ -151,13 +151,12 @@ class ChatToolService:
         eid = self._entity_id
         owner_eid = self._owner_entity_id
 
-        def handle(content: str, entity_id: str | None = None, chat_id: str | None = None) -> str:
+        def handle(content: str, entity_id: str | None = None, chat_id: str | None = None, mentions: list[str] | None = None) -> str:
             # @@@group-chat-support - chat_id for groups, entity_id for 1:1
             if chat_id:
-                # Direct send to a chat (group or 1:1 by chat_id)
                 if not self._chat_entities.is_entity_in_chat(chat_id, eid):
                     raise RuntimeError(f"You are not a member of chat {chat_id}")
-                self._chat_service.send_message(chat_id, eid, content)
+                self._chat_service.send_message(chat_id, eid, content, mentions)
                 return f"Message sent to chat."
             if not entity_id:
                 raise RuntimeError("Provide entity_id (for 1:1) or chat_id (for group)")
@@ -179,7 +178,7 @@ class ChatToolService:
                     f"{target.name} is a {target.type} entity and cannot receive chat messages.{agent_hint}"
                 )
             chat = self._chat_service.find_or_create_chat([eid, entity_id])
-            self._chat_service.send_message(chat.id, eid, content)
+            self._chat_service.send_message(chat.id, eid, content, mentions)
             return f"Message sent to {target.name}."
 
         registry.register(ToolEntry(
@@ -201,6 +200,7 @@ class ChatToolService:
                         "content": {"type": "string", "description": "Message content"},
                         "entity_id": {"type": "string", "description": "Target entity_id (for 1:1 chat)"},
                         "chat_id": {"type": "string", "description": "Target chat_id (for group chat)"},
+                        "mentions": {"type": "array", "items": {"type": "string"}, "description": "Entity IDs to @mention (overrides mute for these recipients)"},
                     },
                     "required": ["content"],
                 },

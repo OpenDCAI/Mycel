@@ -24,6 +24,7 @@ class CreateChatBody(BaseModel):
 class SendMessageBody(BaseModel):
     content: str
     sender_entity_id: str
+    mentioned_entity_ids: list[str] | None = None
 
 
 @router.get("")
@@ -71,11 +72,18 @@ async def get_chat(
     member_id: Annotated[str, Depends(get_current_member_id)],
     app: Annotated[Any, Depends(get_app)],
 ):
-    """Get chat details."""
+    """Get chat details with member list."""
     chat = app.state.chat_repo.get_by_id(chat_id)
     if not chat:
         raise HTTPException(404, "Chat not found")
-    return {"id": chat.id, "title": chat.title, "status": chat.status, "created_at": chat.created_at}
+    participants = app.state.chat_entity_repo.list_entities(chat_id)
+    entity_repo = app.state.entity_repo
+    entities_info = []
+    for p in participants:
+        e = entity_repo.get_by_id(p.entity_id)
+        if e:
+            entities_info.append({"id": e.id, "name": e.name, "type": e.type, "avatar": getattr(e, "avatar", None)})
+    return {"id": chat.id, "title": chat.title, "status": chat.status, "created_at": chat.created_at, "entities": entities_info}
 
 
 @router.get("/{chat_id}/messages")
@@ -88,10 +96,38 @@ async def list_messages(
 ):
     """List messages in a chat."""
     msgs = app.state.chat_message_repo.list_by_chat(chat_id, limit=limit, before=before)
+    # Batch entity lookup to avoid N+1
+    entity_repo = app.state.entity_repo
+    sender_ids = {m.sender_entity_id for m in msgs}
+    sender_map = {}
+    for sid in sender_ids:
+        e = entity_repo.get_by_id(sid)
+        if e:
+            sender_map[sid] = e
     return [
-        {"id": m.id, "chat_id": m.chat_id, "sender_entity_id": m.sender_entity_id, "content": m.content, "created_at": m.created_at}
+        {
+            "id": m.id, "chat_id": m.chat_id, "sender_entity_id": m.sender_entity_id,
+            "sender_name": sender_map[m.sender_entity_id].name if m.sender_entity_id in sender_map else "unknown",
+            "content": m.content,
+            "mentioned_entity_ids": m.mentioned_entity_ids,
+            "created_at": m.created_at,
+        }
         for m in msgs
     ]
+
+
+@router.post("/{chat_id}/read")
+async def mark_read(
+    chat_id: str,
+    member_id: Annotated[str, Depends(get_current_member_id)],
+    app: Annotated[Any, Depends(get_app)],
+):
+    """Mark all messages in this chat as read for the current user."""
+    import time
+    entities = app.state.entity_repo.get_by_member_id(member_id)
+    for e in entities:
+        app.state.chat_entity_repo.update_last_read(chat_id, e.id, time.time())
+    return {"status": "ok"}
 
 
 @router.post("/{chat_id}/messages")
@@ -114,8 +150,11 @@ async def send_message(
         if not agent_member or agent_member.owner_id != member_id:
             raise HTTPException(403, "Sender entity does not belong to you")
     chat_service = app.state.chat_service
-    msg = chat_service.send_message(chat_id, body.sender_entity_id, body.content)
-    return {"id": msg.id, "chat_id": msg.chat_id, "sender_entity_id": msg.sender_entity_id, "content": msg.content, "created_at": msg.created_at}
+    msg = chat_service.send_message(chat_id, body.sender_entity_id, body.content, body.mentioned_entity_ids)
+    return {
+        "id": msg.id, "chat_id": msg.chat_id, "sender_entity_id": msg.sender_entity_id,
+        "content": msg.content, "mentioned_entity_ids": msg.mentioned_entity_ids, "created_at": msg.created_at,
+    }
 
 
 @router.get("/{chat_id}/events")
