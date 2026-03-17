@@ -11,7 +11,6 @@ interface AgentMember {
   description: string | null;
   owner_name: string | null;
   is_mine: boolean;
-  entities: Array<{ id: string; name: string; type: string }>;
   created_at: number;
 }
 
