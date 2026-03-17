@@ -615,8 +615,8 @@ async def _run_agent_to_buffer(
                             if tc_id and tc_name and tc_id not in emitted_tool_call_ids:
                                 emitted_tool_call_ids.add(tc_id)
                                 pending_tool_calls[tc_id] = {"name": tc_name, "args": {}}
-                                # @@@display-projection-sse — tell_owner/ask_owner punch through
-                                tc_display = "punch_through" if tc_name in ("tell_owner", "ask_owner") else None
+                                # @@@display-projection-sse — tell_owner punch through
+                                tc_display = "punch_through" if tc_name == "tell_owner" else None
                                 tc_data = {"id": tc_id, "name": tc_name, "args": {}}
                                 if tc_display:
                                     tc_data["display_mode"] = tc_display
@@ -790,6 +790,10 @@ async def _run_agent_to_buffer(
         await emit({"event": "error", "data": json.dumps({"error": str(e)}, ensure_ascii=False)})
         await emit({"event": "run_done", "data": json.dumps({"thread_id": thread_id, "run_id": run_id})})
     finally:
+        # @@@typing-lifecycle-stop — guaranteed cleanup even on crash/cancel
+        typing_tracker = getattr(app.state, "typing_tracker", None)
+        if typing_tracker is not None:
+            typing_tracker.stop(thread_id)
         # Detach per-run event callback (per-thread handlers survive across runs)
         if hasattr(agent, "runtime"):
             agent.runtime.set_event_callback(None)

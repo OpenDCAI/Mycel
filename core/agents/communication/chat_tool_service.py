@@ -16,10 +16,10 @@ logger = logging.getLogger(__name__)
 
 
 class ChatToolService:
-    """Registers 7 chat tools into ToolRegistry.
+    """Registers 6 chat tools into ToolRegistry.
 
     Each tool closure captures entity_id (the calling agent's identity)
-    and owner_entity_id (for tell_owner/ask_owner gating).
+    and owner_entity_id (for tell_owner gating).
     """
 
     def __init__(
@@ -54,7 +54,6 @@ class ChatToolService:
         self._register_chat_search(registry)
         self._register_directory(registry)
         self._register_tell_owner(registry)
-        self._register_ask_owner(registry)
 
     def _register_chats(self, registry: ToolRegistry) -> None:
         eid = self._entity_id
@@ -327,38 +326,3 @@ class ChatToolService:
             source="chat",
         ))
 
-    def _register_ask_owner(self, registry: ToolRegistry) -> None:
-        runtime_fn = self._runtime_fn
-
-        def handle(question: str) -> str:
-            # @@@ask-owner-context-gate — only valid in external runs
-            runtime = runtime_fn() if runtime_fn else None
-            if runtime and getattr(runtime, "current_run_source", None) == "owner":
-                raise RuntimeError(
-                    "Your owner is right here — just ask them directly. "
-                    "ask_owner is for external conversations when your owner isn't present."
-                )
-            logger.info("[ask_owner] %s", question[:100])
-            return f"Question sent to owner: {question}. They will respond when ready."
-
-        registry.register(ToolEntry(
-            name="ask_owner",
-            mode=ToolMode.INLINE,
-            schema={
-                "name": "ask_owner",
-                "description": (
-                    "Ask your owner a question that needs their decision. "
-                    "ONLY use this during external conversations (when someone else messaged you). "
-                    "Do NOT use this when your owner is already talking to you."
-                ),
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "question": {"type": "string", "description": "The question for your owner"},
-                    },
-                    "required": ["question"],
-                },
-            },
-            handler=handle,
-            source="chat",
-        ))

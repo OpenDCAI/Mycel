@@ -1,7 +1,7 @@
 """Thread display projection — pure function from messages to annotated messages.
 
 @@@display-projection — computes display_mode for each message based on
-run source, tell_owner/ask_owner tool calls, and owner steer (waterline).
+run source, tell_owner tool calls, and owner steer (waterline).
 
 4 situations (Thread owner view):
 1. Owner run → expanded
@@ -19,7 +19,7 @@ from __future__ import annotations
 
 from typing import Any
 
-_PUNCH_TOOLS = frozenset({"tell_owner", "ask_owner"})
+_PUNCH_TOOLS = frozenset({"tell_owner"})
 
 
 def project_thread_display(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -66,7 +66,7 @@ def project_thread_display(messages: list[dict[str, Any]]) -> list[dict[str, Any
 
         elif msg_type == "AIMessage":
             if segment_source == "external":
-                # Check for tell_owner/ask_owner punch-through
+                # Check for tell_owner punch-through
                 if _has_punch_tool(msg):
                     msg["display"] = _display("punch_through", segment_source, segment_sender)
                 else:
@@ -76,7 +76,7 @@ def project_thread_display(messages: list[dict[str, Any]]) -> list[dict[str, Any
 
         elif msg_type == "ToolMessage":
             if segment_source == "external":
-                # Check if this is a tell_owner/ask_owner result
+                # Check if this is a tell_owner result
                 tool_name = (meta.get("name") or msg.get("name") or "")
                 if tool_name in _PUNCH_TOOLS:
                     msg["display"] = _display("punch_through", segment_source, segment_sender)
@@ -101,7 +101,7 @@ def _display(mode: str, run_source: str | None, sender_name: str | None) -> dict
 
 
 def _has_punch_tool(msg: dict[str, Any]) -> bool:
-    """Check if an AIMessage has tell_owner or ask_owner tool calls."""
+    """Check if an AIMessage has tell_owner tool calls."""
     for tc in msg.get("tool_calls", []):
         if tc.get("name") in _PUNCH_TOOLS:
             return True

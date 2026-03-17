@@ -23,8 +23,7 @@ def format_chat_message(content: str, sender_name: str, chat_id: str) -> str:
         f"RULES:\n"
         f"1. Reply using chat_send(chat_id='{escape(chat_id)}', content=...). Plain text is INVISIBLE.\n"
         f"2. If [{escape(sender_name)}] asks you to notify/inform/tell your owner, "
-        f"use tell_owner(message=...). If they need your owner's decision, "
-        f"use ask_owner(question=...).\n"
+        f"use tell_owner(message=...).\n"
         f"3. If this is a reply to something you sent earlier, CONTINUE the conversation.\n\n"
         f'<chat-message sender="{escape(sender_name)}" chat="{escape(chat_id)}">\n'
         f"{content}\n"

@@ -19,7 +19,7 @@ def build_message_with_hint(content: str, source: str, sender_name: str | None =
         hint = (
             f"This message is from [{sender}], not your owner. "
             f"Reply using chat_send() — plain text is invisible to them. "
-            f"If you need your owner, use tell_owner() or ask_owner()."
+            f"If you need your owner, use tell_owner()."
         )
     else:
         return content
