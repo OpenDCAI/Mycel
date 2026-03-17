@@ -1,9 +1,11 @@
 """Panel API router — Members, Tasks, Library, Profile."""
 
 import asyncio
-from typing import Any
+from typing import Annotated, Any
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
+
+from backend.web.core.dependencies import get_current_member_id
 
 from backend.web.models.panel import (
     BulkDeleteTasksRequest,
@@ -29,24 +31,10 @@ router = APIRouter(prefix="/api/panel", tags=["panel"])
 # ── Members ──
 
 @router.get("/members")
-async def list_members(request: Request) -> dict[str, Any]:
-    items = await asyncio.to_thread(member_service.list_members)
-    # @@@auth-scope — if authenticated, only show builtin + user's own agents
-    auth_header = request.headers.get("Authorization", "")
-    if auth_header.startswith("Bearer "):
-        try:
-            from backend.web.core.dependencies import _get_auth_service
-            payload = _get_auth_service(request.app).verify_token(auth_header[7:])
-            member_id = payload["member_id"]
-            member_repo = getattr(request.app.state, "member_repo", None)
-            if member_repo:
-                own_agent_ids = {m.id for m in member_repo.list_by_owner(member_id)}
-                items = [
-                    m for m in items
-                    if m.get("builtin") or m.get("id") == "__leon__" or m.get("id") in own_agent_ids
-                ]
-        except Exception:
-            pass  # If auth fails, return all (backward compat)
+async def list_members(
+    member_id: Annotated[str, Depends(get_current_member_id)],
+) -> dict[str, Any]:
+    items = await asyncio.to_thread(member_service.list_members, member_id)
     return {"items": items}
 
 
