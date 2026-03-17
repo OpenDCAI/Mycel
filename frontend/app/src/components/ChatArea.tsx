@@ -99,12 +99,21 @@ export default function ChatArea({ entries, isStreaming: _isStreaming, runtimeSt
         <div className="max-w-3xl mx-auto px-5 space-y-3.5">
           {processed.map((item) => {
             if (item.type === "tell_owner") {
+              // Render as a standard AssistantBlock — same as owner's agent response
+              const fakeTurn: AssistantTurn = {
+                id: item.id,
+                role: "assistant",
+                segments: item.messages.map(msg => ({ type: "text" as const, content: msg })),
+                timestamp: Date.now(),
+              };
               return (
-                <div key={item.id} className="px-3 py-2 rounded-lg bg-amber-50 border border-amber-200/60 text-sm text-amber-900">
-                  {item.messages.map((msg, i) => (
-                    <p key={i}>{msg}</p>
-                  ))}
-                </div>
+                <AssistantBlock
+                  key={item.id}
+                  entry={fakeTurn}
+                  isStreamingThis={false}
+                  runtimeStatus={null}
+                  onFocusAgent={onFocusAgent}
+                />
               );
             }
 
