@@ -90,11 +90,14 @@ class DeliveryAction(str, Enum):
     DROP = "drop"        # silent: message stored but invisible to this entity
 
 
+ContactRelation = Literal["normal", "blocked", "muted"]
+
+
 class ContactRow(BaseModel):
     """Directional relationship between two entities. A→B independent of B→A."""
-    owner_entity_id: str    # the entity setting this relationship
-    target_entity_id: str   # the entity being related to
-    relation: str           # 'normal' | 'blocked' | 'muted'
+    owner_entity_id: str
+    target_entity_id: str
+    relation: ContactRelation
     created_at: float
     updated_at: float | None = None
 

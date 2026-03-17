@@ -56,6 +56,19 @@ def resolve_role_db_path(role: SQLiteDBRole, db_path: Path | str | None = None) 
     return main_path
 
 
+def retry_on_locked(fn, max_retries=5, delay=0.2):
+    """Retry a DB write on 'database is locked' errors with exponential backoff."""
+    import time
+    for attempt in range(max_retries):
+        try:
+            return fn()
+        except sqlite3.OperationalError as e:
+            if "database is locked" in str(e) and attempt < max_retries - 1:
+                time.sleep(delay * (attempt + 1))
+                continue
+            raise
+
+
 def apply_pragmas(conn: sqlite3.Connection) -> None:
     """Apply canonical PRAGMA settings for Leon SQLite connections."""
     conn.execute(f"PRAGMA journal_mode={WAL_MODE}")

@@ -14,17 +14,22 @@ async def get_app(request: Request) -> FastAPI:
     return request.app
 
 
+def _get_auth_service(app: FastAPI):
+    """Get auth service from app state, or raise 500."""
+    auth_service = getattr(app.state, "auth_service", None)
+    if auth_service is None:
+        raise HTTPException(500, "Auth service not initialized")
+    return auth_service
+
+
 async def get_current_member_id(request: Request) -> str:
     """Extract member_id from JWT Bearer token."""
     auth_header = request.headers.get("Authorization", "")
     if not auth_header.startswith("Bearer "):
         raise HTTPException(401, "Missing or invalid Authorization header")
     token = auth_header[7:]
-    auth_service = getattr(request.app.state, "auth_service", None)
-    if auth_service is None:
-        raise HTTPException(500, "Auth service not initialized")
     try:
-        return auth_service.verify_token(token)
+        return _get_auth_service(request.app).verify_token(token)
     except ValueError as e:
         raise HTTPException(401, str(e))
 

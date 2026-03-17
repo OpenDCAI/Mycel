@@ -4,24 +4,11 @@ from __future__ import annotations
 
 import sqlite3
 import threading
-import time
 from pathlib import Path
 
 from storage.contracts import ChatEntityRow, ChatMessageRow, ChatRow
 from storage.providers.sqlite.connection import create_connection
-from storage.providers.sqlite.kernel import SQLiteDBRole, resolve_role_db_path
-
-
-def _retry_on_locked(fn, max_retries=5, delay=0.2):
-    """Retry a DB write operation on 'database is locked' errors."""
-    for attempt in range(max_retries):
-        try:
-            return fn()
-        except sqlite3.OperationalError as e:
-            if "database is locked" in str(e) and attempt < max_retries - 1:
-                time.sleep(delay * (attempt + 1))
-                continue
-            raise
+from storage.providers.sqlite.kernel import SQLiteDBRole, resolve_role_db_path, retry_on_locked as _retry_on_locked
 
 
 class SQLiteChatRepo:
@@ -189,6 +176,8 @@ class SQLiteChatEntityRepo:
             self._conn.execute("ALTER TABLE chat_entities ADD COLUMN mute_until REAL")
         except sqlite3.OperationalError:
             pass
+        # @@@chat-entity-index — speeds up find_chat_between and list_chats_for_entity
+        self._conn.execute("CREATE INDEX IF NOT EXISTS idx_chat_entities_entity ON chat_entities(entity_id, chat_id)")
         self._conn.commit()
 
 

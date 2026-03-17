@@ -43,26 +43,26 @@ class SQLiteThreadRepo:
             )
             self._conn.commit()
 
+    _COLS = ("id", "member_id", "sandbox_type", "model", "cwd", "observation_provider", "agent", "created_at")
+
+    def _to_dict(self, r: tuple) -> dict[str, Any]:
+        return dict(zip(self._COLS, r))
+
     def get_by_id(self, thread_id: str) -> dict[str, Any] | None:
         with self._lock:
-            self._conn.row_factory = sqlite3.Row
             row = self._conn.execute("SELECT * FROM threads WHERE id = ?", (thread_id,)).fetchone()
-            self._conn.row_factory = None
-            return dict(row) if row else None
+            return self._to_dict(row) if row else None
 
     def list_by_member(self, member_id: str) -> list[dict[str, Any]]:
         with self._lock:
-            self._conn.row_factory = sqlite3.Row
             rows = self._conn.execute(
                 "SELECT * FROM threads WHERE member_id = ? ORDER BY created_at", (member_id,),
             ).fetchall()
-            self._conn.row_factory = None
-            return [dict(r) for r in rows]
+            return [self._to_dict(r) for r in rows]
 
     def list_by_owner(self, owner_member_id: str) -> list[dict[str, Any]]:
         """Return all threads owned by this member (via members.owner_id JOIN)."""
         with self._lock:
-            self._conn.row_factory = sqlite3.Row
             rows = self._conn.execute(
                 "SELECT t.*, m.name as member_name FROM threads t"
                 " JOIN members m ON t.member_id = m.id"
@@ -70,8 +70,8 @@ class SQLiteThreadRepo:
                 " ORDER BY t.created_at",
                 (owner_member_id,),
             ).fetchall()
-            self._conn.row_factory = None
-            return [dict(r) for r in rows]
+            # JOIN adds member_name as extra column
+            return [{**self._to_dict(r[:len(self._COLS)]), "member_name": r[len(self._COLS)]} for r in rows]
 
     def update(self, thread_id: str, **fields: Any) -> None:
         allowed = {"sandbox_type", "model", "cwd", "observation_provider", "agent"}
