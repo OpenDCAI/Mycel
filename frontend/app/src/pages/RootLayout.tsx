@@ -1,5 +1,5 @@
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
-import { MessageSquare, Users, ListTodo, Library, Layers, Settings, Plus, ChevronLeft, ChevronRight, LogOut } from "lucide-react";
+import { MessageSquare, MessagesSquare, Users, ListTodo, Library, Layers, Settings, Plus, ChevronLeft, ChevronRight, LogOut } from "lucide-react";
 import { useState, useEffect, useCallback, useRef } from "react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import CreateMemberDialog from "@/components/CreateMemberDialog";
@@ -11,6 +11,7 @@ import { toast } from "sonner";
 
 const navItems = [
   { to: "/threads", icon: MessageSquare, label: "Workspace" },
+  { to: "/chats", icon: MessagesSquare, label: "Chats" },
   { to: "/members", icon: Users, label: "Members" },
   { to: "/tasks", icon: ListTodo, label: "Tasks" },
   { to: "/resources", icon: Layers, label: "Resources" },
@@ -123,7 +124,7 @@ function AuthenticatedLayout() {
     return () => { window.removeEventListener("mousemove", onMove); window.removeEventListener("mouseup", onUp); };
   }, [dragging, dragWidth]);
 
-  const isChat = location.pathname.startsWith("/threads");
+  const isChat = location.pathname.startsWith("/threads") || location.pathname.startsWith("/chats");
   const sidebarPx = dragging && dragWidth !== null ? dragWidth : (expanded ? EXPANDED_W : COLLAPSED_W);
   const showLabels = dragging ? (dragWidth !== null && dragWidth >= SNAP_THRESHOLD) : expanded;
 

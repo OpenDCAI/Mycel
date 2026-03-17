@@ -2,6 +2,8 @@ import { createBrowserRouter, Navigate } from 'react-router-dom';
 import RootLayout from './pages/RootLayout';
 import AppLayout from './pages/AppLayout';
 import ChatPage from './pages/ChatPage';
+import ChatsListPage from './pages/ChatsListPage';
+import ChatConversationPage from './pages/ChatConversationPage';
 import WorkspaceLanding from './pages/WorkspaceLanding';
 import SettingsPage from './pages/SettingsPage';
 import MembersPage from './pages/MembersPage';
@@ -37,6 +39,14 @@ export const router = createBrowserRouter([
             element: <ChatPage />,
           },
         ],
+      },
+      {
+        path: 'chats',
+        element: <ChatsListPage />,
+      },
+      {
+        path: 'chats/:chatId',
+        element: <ChatConversationPage />,
       },
       {
         path: 'members',
