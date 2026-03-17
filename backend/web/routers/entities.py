@@ -47,13 +47,21 @@ async def list_entities(
     member_id: Annotated[str, Depends(get_current_member_id)],
     app: Annotated[Any, Depends(get_app)],
 ):
-    """List all entities (social identities) for discovery. Used by New Chat entity picker.
-    Entity = Thread's social identity. This lists all entities so users can find who to chat with."""
+    """List chattable entities for discovery (New Chat picker).
+    Excludes: current user's own human entity + own agent entities (those use workspace)."""
     entity_repo = app.state.entity_repo
+    member_repo = app.state.member_repo
+
+    # Find member IDs to exclude: self + own agents
+    exclude_member_ids = {member_id}
+    for m in member_repo.list_by_owner(member_id):
+        exclude_member_ids.add(m.id)
+
     all_entities = entity_repo.list_all()
     return [
         {"id": e.id, "name": e.name, "type": e.type, "avatar": getattr(e, "avatar", None)}
         for e in all_entities
+        if e.member_id not in exclude_member_ids
     ]
 
 

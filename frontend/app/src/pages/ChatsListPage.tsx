@@ -79,12 +79,9 @@ function NewChatDialog({ onClose, onCreated }: { onClose: () => void; onCreated:
   useEffect(() => {
     authFetch("/api/entities")
       .then(r => r.json())
-      .then((data: ChatEntity[]) => {
-        // Filter out self
-        setEntities(data.filter(e => e.id !== myEntityId));
-      })
+      .then((data: ChatEntity[]) => setEntities(data))
       .catch(console.error);
-  }, [myEntityId]);
+  }, []);
 
   const filtered = search
     ? entities.filter(e => e.name.toLowerCase().includes(search.toLowerCase()))
