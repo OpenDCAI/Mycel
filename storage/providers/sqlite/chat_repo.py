@@ -199,15 +199,24 @@ class SQLiteChatMessageRepo:
             self._conn.close()
 
     def create(self, row: ChatMessageRow) -> None:
+        import json as _json
+        mentions_json = _json.dumps(row.mentioned_entity_ids) if row.mentioned_entity_ids else None
         def _do():
             with self._lock:
                 self._conn.execute(
-                    "INSERT INTO chat_messages (id, chat_id, sender_entity_id, content, created_at)"
-                    " VALUES (?, ?, ?, ?, ?)",
-                    (row.id, row.chat_id, row.sender_entity_id, row.content, row.created_at),
+                    "INSERT INTO chat_messages (id, chat_id, sender_entity_id, content, mentions, created_at)"
+                    " VALUES (?, ?, ?, ?, ?, ?)",
+                    (row.id, row.chat_id, row.sender_entity_id, row.content, mentions_json, row.created_at),
                 )
                 self._conn.commit()
         _retry_on_locked(_do)
+
+    _MSG_COLS = "id, chat_id, sender_entity_id, content, mentions, created_at"
+
+    def _to_msg(self, r: tuple) -> ChatMessageRow:
+        import json as _json
+        mentions = _json.loads(r[4]) if r[4] else []
+        return ChatMessageRow(id=r[0], chat_id=r[1], sender_entity_id=r[2], content=r[3], mentioned_entity_ids=mentions, created_at=r[5])
 
     def list_by_chat(
         self, chat_id: str, *, limit: int = 50, before: float | None = None,
@@ -215,25 +224,20 @@ class SQLiteChatMessageRepo:
         with self._lock:
             if before is not None:
                 rows = self._conn.execute(
-                    "SELECT id, chat_id, sender_entity_id, content, created_at"
-                    " FROM chat_messages"
+                    f"SELECT {self._MSG_COLS} FROM chat_messages"
                     " WHERE chat_id = ? AND created_at < ?"
                     " ORDER BY created_at DESC LIMIT ?",
                     (chat_id, before, limit),
                 ).fetchall()
             else:
                 rows = self._conn.execute(
-                    "SELECT id, chat_id, sender_entity_id, content, created_at"
-                    " FROM chat_messages"
+                    f"SELECT {self._MSG_COLS} FROM chat_messages"
                     " WHERE chat_id = ?"
                     " ORDER BY created_at DESC LIMIT ?",
                     (chat_id, limit),
                 ).fetchall()
         rows.reverse()
-        return [
-            ChatMessageRow(id=r[0], chat_id=r[1], sender_entity_id=r[2], content=r[3], created_at=r[4])
-            for r in rows
-        ]
+        return [self._to_msg(r) for r in rows]
 
     def count_unread(self, chat_id: str, entity_id: str) -> int:
         with self._lock:
@@ -256,28 +260,45 @@ class SQLiteChatMessageRepo:
                 ).fetchone()
             return int(row[0]) if row else 0
 
+    def has_unread_mention(self, chat_id: str, entity_id: str) -> bool:
+        """Check if there are unread messages that @mention this entity."""
+        with self._lock:
+            cursor_row = self._conn.execute(
+                "SELECT last_read_at FROM chat_entities WHERE chat_id = ? AND entity_id = ?",
+                (chat_id, entity_id),
+            ).fetchone()
+            last_read = cursor_row[0] if cursor_row else None
+            # @@@mention-query — JSON LIKE is crude but sufficient for SQLite without JSON1 extension
+            mention_pattern = f'%"{entity_id}"%'
+            if last_read is None:
+                row = self._conn.execute(
+                    "SELECT COUNT(*) FROM chat_messages WHERE chat_id = ? AND mentions LIKE ? AND sender_entity_id != ?",
+                    (chat_id, mention_pattern, entity_id),
+                ).fetchone()
+            else:
+                row = self._conn.execute(
+                    "SELECT COUNT(*) FROM chat_messages WHERE chat_id = ? AND mentions LIKE ? AND sender_entity_id != ? AND created_at > ?",
+                    (chat_id, mention_pattern, entity_id, last_read),
+                ).fetchone()
+            return int(row[0]) > 0 if row else False
+
     def search(self, query: str, *, chat_id: str | None = None, limit: int = 50) -> list[ChatMessageRow]:
         with self._lock:
             if chat_id:
                 rows = self._conn.execute(
-                    "SELECT id, chat_id, sender_entity_id, content, created_at"
-                    " FROM chat_messages"
+                    f"SELECT {self._MSG_COLS} FROM chat_messages"
                     " WHERE chat_id = ? AND content LIKE ?"
                     " ORDER BY created_at ASC LIMIT ?",
                     (chat_id, f"%{query}%", limit),
                 ).fetchall()
             else:
                 rows = self._conn.execute(
-                    "SELECT id, chat_id, sender_entity_id, content, created_at"
-                    " FROM chat_messages"
+                    f"SELECT {self._MSG_COLS} FROM chat_messages"
                     " WHERE content LIKE ?"
                     " ORDER BY created_at ASC LIMIT ?",
                     (f"%{query}%", limit),
                 ).fetchall()
-        return [
-            ChatMessageRow(id=r[0], chat_id=r[1], sender_entity_id=r[2], content=r[3], created_at=r[4])
-            for r in rows
-        ]
+        return [self._to_msg(r) for r in rows]
 
     def _ensure_table(self) -> None:
         self._conn.execute(
@@ -287,6 +308,7 @@ class SQLiteChatMessageRepo:
                 chat_id TEXT NOT NULL REFERENCES chats(id),
                 sender_entity_id TEXT NOT NULL,
                 content TEXT NOT NULL,
+                mentions TEXT,
                 created_at REAL NOT NULL
             )
             """
@@ -294,4 +316,9 @@ class SQLiteChatMessageRepo:
         self._conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_chat_messages_chat_time ON chat_messages(chat_id, created_at)"
         )
+        # @@@mentions-migration — add mentions column if table already exists
+        try:
+            self._conn.execute("ALTER TABLE chat_messages ADD COLUMN mentions TEXT")
+        except sqlite3.OperationalError:
+            pass
         self._conn.commit()
