@@ -10,6 +10,7 @@ import { useIsMobile } from "../hooks/use-mobile";
 import { useResizableX } from "../hooks/use-resizable-x";
 import { useThreadManager } from "../hooks/use-thread-manager";
 import { useAppStore } from "../store/app-store";
+import MemberAvatar from "../components/MemberAvatar";
 import { Plus, Trash2 } from "lucide-react";
 
 export default function AppLayout() {
@@ -133,9 +134,7 @@ function MobileThreadList({ threads, loading, onNewChat, onDeleteThread, newChat
             return (
               <div key={t.thread_id} className="flex items-center border-b border-border">
                 <Link to={`/chat/${t.thread_id}`} className="flex items-center gap-3 px-4 py-3 flex-1 min-w-0 hover:bg-muted/50 transition-colors">
-                  <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
-                    <span className="text-xs font-bold text-primary">{memberName.slice(0, 1)}</span>
-                  </div>
+                  <MemberAvatar name={memberName} size="md" />
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-medium text-foreground truncate">{memberName}</p>
                     <p className="text-xs text-muted-foreground truncate">{preview}</p>

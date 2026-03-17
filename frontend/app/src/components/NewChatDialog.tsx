@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { Search, MessageSquare } from "lucide-react";
+import MemberAvatar from "./MemberAvatar";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "./ui/dialog";
 import { Input } from "./ui/input";
 import { useAppStore } from "@/store/app-store";
@@ -67,9 +68,7 @@ export default function NewChatDialog({ open, onOpenChange }: NewChatDialogProps
                 onClick={() => handleSelect(member)}
                 className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-muted transition-colors"
               >
-                <div className="w-9 h-9 rounded-full bg-primary/10 text-primary flex items-center justify-center text-sm font-medium shrink-0">
-                  {member.name.slice(0, 2).toUpperCase()}
-                </div>
+                <MemberAvatar name={member.name} id={member.id} size="sm" />
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
                     <span className="text-sm font-medium truncate">{member.name}</span>

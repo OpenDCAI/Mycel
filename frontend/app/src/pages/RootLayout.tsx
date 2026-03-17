@@ -1,7 +1,7 @@
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { MessageSquare, MessagesSquare, Users, ListTodo, Library, Layers, Settings, Plus, ChevronLeft, ChevronRight, LogOut } from "lucide-react";
 import { useState, useEffect, useCallback, useRef } from "react";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import MemberAvatar from "@/components/MemberAvatar";
 import CreateMemberDialog from "@/components/CreateMemberDialog";
 import NewChatDialog from "@/components/NewChatDialog";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -233,11 +233,7 @@ function AuthenticatedLayout() {
 
           <div className={`flex flex-col ${showLabels ? "px-2" : "items-center"} gap-0.5`}>
             <div className={`flex items-center ${showLabels ? "px-3 gap-3" : "justify-center"} h-10 mb-1`}>
-              <Avatar className="w-7 h-7 shrink-0">
-                <AvatarFallback className="text-[10px] font-semibold bg-primary/10 text-primary">
-                  {(authMember?.name || "U").charAt(0).toUpperCase()}
-                </AvatarFallback>
-              </Avatar>
+              <MemberAvatar name={authMember?.name || "User"} id={authMember?.id} size="sm" type="human" />
               {showLabels && (
                 <div className="min-w-0 flex-1">
                   <p className="text-xs font-medium text-foreground truncate">{authMember?.name || "User"}</p>

@@ -5,6 +5,7 @@ import {
   Plus, AlertTriangle, RefreshCw, ExternalLink,
   Play, Trash2, Timer, Loader2,
 } from "lucide-react";
+import MemberAvatar from "@/components/MemberAvatar";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { toast } from "sonner";
 import {
@@ -559,11 +560,9 @@ export default function Tasks() {
                                 {priority.label}
                               </span>
                               <div className="flex items-center gap-1.5">
-                                {task.assignee_id && (() => { const { name, avatar } = getAssigneeInfo(task.assignee_id); return name ? (
+                                {task.assignee_id && (() => { const { name } = getAssigneeInfo(task.assignee_id); return name ? (
                                   <>
-                                    <div className="w-5 h-5 rounded bg-primary/10 flex items-center justify-center">
-                                      <span className="text-[8px] font-mono text-primary font-bold">{avatar}</span>
-                                    </div>
+                                    <MemberAvatar name={name} size="xs" />
                                     <span className="text-[10px] text-muted-foreground">{name}</span>
                                   </>
                                 ) : null; })()}
@@ -620,11 +619,9 @@ export default function Tasks() {
                       </div>
                       <div className="flex items-center justify-between text-xs text-muted-foreground">
                         <div className="flex items-center gap-1.5">
-                          {task.assignee_id && (() => { const { name, avatar } = getAssigneeInfo(task.assignee_id); return name ? (
+                          {task.assignee_id && (() => { const { name } = getAssigneeInfo(task.assignee_id); return name ? (
                             <>
-                              <div className="w-4 h-4 rounded bg-primary/10 flex items-center justify-center">
-                                <span className="text-[7px] font-mono text-primary font-bold">{avatar}</span>
-                              </div>
+                              <MemberAvatar name={name} size="xs" />
                               <span>{name}</span>
                             </>
                           ) : null; })()}
@@ -704,11 +701,9 @@ export default function Tasks() {
                         </span>
                         <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium w-fit ${priority.className}`}>{priority.label}</span>
                         <div className="flex items-center gap-2">
-                          {task.assignee_id ? (() => { const { name, avatar } = getAssigneeInfo(task.assignee_id); return name ? (
+                          {task.assignee_id ? (() => { const { name } = getAssigneeInfo(task.assignee_id); return name ? (
                             <>
-                              <div className="w-5 h-5 rounded bg-primary/10 flex items-center justify-center shrink-0">
-                                <span className="text-[8px] font-mono text-primary font-bold">{avatar}</span>
-                              </div>
+                              <MemberAvatar name={name} size="xs" />
                               <span className="text-xs text-muted-foreground truncate">{name}</span>
                             </>
                           ) : <span className="text-xs text-muted-foreground">未分配</span>; })() : (

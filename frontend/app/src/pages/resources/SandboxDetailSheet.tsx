@@ -4,13 +4,12 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import MemberAvatar from "@/components/MemberAvatar";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { SandboxFileBrowser } from "@/components/SandboxFileBrowser";
 import type { LeaseGroup } from "./SessionList";
 import type { ResourceSession, SessionMetrics } from "./types";
-import { getAgentColor, getAgentInitials } from "./utils/avatar";
 import { calculateDuration, formatDuration } from "./utils/duration";
 import { formatMetric } from "./utils/format";
 
@@ -130,11 +129,7 @@ export default function SandboxDetailSheet({
 function AgentRow({ session }: { session: ResourceSession }) {
   return (
     <div className="flex items-center gap-3 rounded-lg border border-border/40 bg-muted/10 px-3 py-2.5">
-      <Avatar className="w-8 h-8 shrink-0">
-        <AvatarFallback className={`${getAgentColor(session.agentId)} text-[10px] font-bold`}>
-          {getAgentInitials(session.agentName)}
-        </AvatarFallback>
-      </Avatar>
+      <MemberAvatar name={session.agentName || "?"} size="sm" type="mycel_agent" />
       <div className="flex-1 min-w-0">
         <p className="text-sm font-medium text-foreground truncate">
           {session.agentName || "未绑定"}

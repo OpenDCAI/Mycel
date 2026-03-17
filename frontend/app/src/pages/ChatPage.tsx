@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useParams, useOutletContext, useLocation } from "react-router-dom";
 import ChatArea from "../components/ChatArea";
 import type { AssistantTurn } from "../api";
-import { authFetch } from "../store/auth-store";
+import { authFetch, useAuthStore } from "../store/auth-store";
 import ComputerPanel from "../components/ComputerPanel";
 import { DragHandle } from "../components/DragHandle";
 import Header from "../components/Header";
@@ -35,6 +35,8 @@ export default function ChatPage() {
 function ChatPageInner({ threadId }: { threadId: string }) {
   const location = useLocation();
   const { tm, setSidebarCollapsed } = useOutletContext<OutletContext>();
+  const userName = useAuthStore(s => s.member?.name);
+  const agentName = useAuthStore(s => s.agent?.name);
   const [currentModel, setCurrentModel] = useState<string>("");
 
   const state = location.state as { selectedModel?: string; runStarted?: boolean; message?: string } | null;
@@ -182,6 +184,8 @@ function ChatPageInner({ threadId }: { threadId: string }) {
               showExternalRuns={showExternalRuns}
               onFocusAgent={handleFocusAgent}
               onTaskNoticeClick={handleTaskNoticeClick}
+              agentName={agentName}
+              userName={userName}
             />
           </div>
           <TaskProgress

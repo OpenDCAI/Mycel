@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Plus, X, Search } from "lucide-react";
+import MemberAvatar from "../components/MemberAvatar";
 import { authFetch } from "../store/auth-store";
 import { useAuthStore } from "../store/auth-store";
 
@@ -31,36 +32,6 @@ function formatTime(ts: number): string {
   if (diffMs < 86400_000) return `${Math.floor(diffMs / 3600_000)}h`;
   if (diffMs < 604800_000) return `${Math.floor(diffMs / 86400_000)}d`;
   return `${d.getMonth() + 1}/${d.getDate()}`;
-}
-
-function ChatAvatar({ entities, myEntityId }: { entities: ChatEntity[]; myEntityId: string | null }) {
-  const others = entities.filter(e => e.id !== myEntityId);
-  const isGroup = entities.length >= 3;
-
-  if (isGroup) {
-    const show = others.slice(0, 2);
-    return (
-      <div className="relative w-10 h-10 shrink-0">
-        {show.map((e, i) => (
-          <div
-            key={e.id}
-            className="absolute w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center text-[10px] font-semibold text-primary border-2 border-card"
-            style={{ top: i * 6, left: i * 6, zIndex: show.length - i }}
-          >
-            {e.name.charAt(0).toUpperCase()}
-          </div>
-        ))}
-      </div>
-    );
-  }
-
-  const other = others[0];
-  if (!other) return <div className="w-10 h-10 rounded-full bg-muted shrink-0" />;
-  return (
-    <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-sm font-semibold text-primary shrink-0">
-      {other.name.charAt(0).toUpperCase()}
-    </div>
-  );
 }
 
 function chatDisplayName(chat: ChatSummary, myEntityId: string | null): string {
@@ -137,9 +108,7 @@ function NewChatDialog({ onClose, onCreated }: { onClose: () => void; onCreated:
                 disabled={creating}
                 className="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-muted transition-colors text-left disabled:opacity-50"
               >
-                <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-xs font-semibold text-primary shrink-0">
-                  {e.name.charAt(0).toUpperCase()}
-                </div>
+                <MemberAvatar name={e.name} size="sm" />
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-medium truncate">{e.name}</p>
                   <p className="text-[10px] text-muted-foreground">{e.type}</p>
@@ -221,7 +190,7 @@ export default function ChatsListPage() {
             to={`/chats/${chat.id}`}
             className="flex items-center gap-3 px-6 py-3 hover:bg-muted/50 transition-colors border-b border-border/50"
           >
-            <ChatAvatar entities={chat.entities} myEntityId={myEntityId} />
+            <MemberAvatar name={chatDisplayName(chat, myEntityId)} size="md" />
             <div className="flex-1 min-w-0">
               <div className="flex items-center justify-between">
                 <span className={`text-sm truncate ${chat.unread_count > 0 ? "font-semibold text-foreground" : "font-medium text-foreground"}`}>
