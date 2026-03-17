@@ -4,23 +4,11 @@ from __future__ import annotations
 
 import sqlite3
 import threading
-import time
 from pathlib import Path
 
 from storage.contracts import ContactRow
 from storage.providers.sqlite.connection import create_connection
-from storage.providers.sqlite.kernel import SQLiteDBRole, resolve_role_db_path
-
-
-def _retry_on_locked(fn, max_retries=5, delay=0.2):
-    for attempt in range(max_retries):
-        try:
-            return fn()
-        except sqlite3.OperationalError as e:
-            if "database is locked" in str(e) and attempt < max_retries - 1:
-                time.sleep(delay * (attempt + 1))
-                continue
-            raise
+from storage.providers.sqlite.kernel import SQLiteDBRole, resolve_role_db_path, retry_on_locked as _retry_on_locked
 
 
 class SQLiteContactRepo:

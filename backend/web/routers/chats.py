@@ -3,7 +3,7 @@
 import asyncio
 import json
 import logging
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
@@ -160,7 +160,7 @@ async def stream_chat_events(
 class SetContactBody(BaseModel):
     owner_entity_id: str
     target_entity_id: str
-    relation: str  # 'normal' | 'blocked' | 'muted'
+    relation: Literal["normal", "blocked", "muted"]
 
 
 @router.post("/contacts")
