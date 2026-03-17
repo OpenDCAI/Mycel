@@ -1,6 +1,7 @@
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
-import { MessageSquare, MessagesSquare, Users, ListTodo, Library, Layers, Settings, Plus, ChevronLeft, ChevronRight, LogOut } from "lucide-react";
+import { MessageSquare, MessagesSquare, Users, ListTodo, Library, Layers, Settings, Plus, ChevronLeft, ChevronRight, LogOut, Camera } from "lucide-react";
 import { useState, useEffect, useCallback, useRef } from "react";
+import { uploadMemberAvatar } from "@/api/conversations";
 import MemberAvatar from "@/components/MemberAvatar";
 import CreateMemberDialog from "@/components/CreateMemberDialog";
 import NewChatDialog from "@/components/NewChatDialog";
@@ -40,6 +41,23 @@ function AuthenticatedLayout() {
   const [showCreate, setShowCreate] = useState(false);
   const [createMemberOpen, setCreateMemberOpen] = useState(false);
   const [newChatOpen, setNewChatOpen] = useState(false);
+  const [showProfile, setShowProfile] = useState(false);
+  const [avatarRev, setAvatarRev] = useState(0);
+  const avatarInputRef = useRef<HTMLInputElement>(null);
+
+  // @@@profile-avatar-upload — click avatar → file picker → upload → cache bust
+  const handleAvatarUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !authMember) return;
+    try {
+      await uploadMemberAvatar(authMember.id, file);
+      setAvatarRev(r => r + 1);
+      toast.success("Avatar updated");
+    } catch (err) {
+      toast.error(`Upload failed: ${err instanceof Error ? err.message : "unknown"}`);
+    }
+    if (avatarInputRef.current) avatarInputRef.current.value = "";
+  }, [authMember]);
 
   const userProfile = useAppStore((s) => s.userProfile);
   const loadAll = useAppStore((s) => s.loadAll);
@@ -232,17 +250,47 @@ function AuthenticatedLayout() {
           </nav>
 
           <div className={`flex flex-col ${showLabels ? "px-2" : "items-center"} gap-0.5`}>
-            <div className={`flex items-center ${showLabels ? "px-3 gap-3" : "justify-center"} h-10 mb-1`}>
-              <MemberAvatar name={authMember?.name || "User"} id={authMember?.id} size="sm" type="human" />
-              {showLabels && (
-                <div className="min-w-0 flex-1">
-                  <p className="text-xs font-medium text-foreground truncate">{authMember?.name || "User"}</p>
-                </div>
-              )}
-              {showLabels && (
-                <button onClick={authLogout} className="text-muted-foreground hover:text-foreground" title="Logout">
-                  <LogOut className="w-3.5 h-3.5" />
-                </button>
+            {/* @@@avatar-popover — click avatar → popover with upload + logout */}
+            <div className="relative">
+              <button
+                onClick={() => setShowProfile(!showProfile)}
+                className={`flex items-center ${showLabels ? "px-3 gap-3" : "justify-center"} h-10 mb-1 rounded-xl hover:bg-muted transition-colors w-full`}
+              >
+                <MemberAvatar name={authMember?.name || "User"} id={authMember?.id} size="sm" type="human" rev={avatarRev} />
+                {showLabels && (
+                  <div className="min-w-0 flex-1 text-left">
+                    <p className="text-xs font-medium text-foreground truncate">{authMember?.name || "User"}</p>
+                  </div>
+                )}
+                {showLabels && (
+                  <LogOut className="w-3.5 h-3.5 text-muted-foreground" />
+                )}
+              </button>
+              {showProfile && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setShowProfile(false)} />
+                  <div className={`absolute z-50 w-56 bg-card border border-border rounded-xl shadow-xl py-3 px-3 ${
+                    showLabels ? "bottom-12 left-0" : "bottom-0 left-14"
+                  }`}>
+                    <div className="flex flex-col items-center mb-3">
+                      <div className="relative group/avatar mb-2 cursor-pointer" onClick={() => avatarInputRef.current?.click()}>
+                        <MemberAvatar name={authMember?.name || "User"} id={authMember?.id} size="lg" type="human" rev={avatarRev} />
+                        <div className="absolute inset-0 rounded-full bg-black/40 opacity-0 group-hover/avatar:opacity-100 transition-opacity flex items-center justify-center">
+                          <Camera className="w-5 h-5 text-white" />
+                        </div>
+                      </div>
+                      <p className="text-sm font-semibold text-foreground">{authMember?.name || "User"}</p>
+                      <p className="text-[10px] text-muted-foreground">{authMember?.id || ""}</p>
+                    </div>
+                    <button
+                      onClick={() => { setShowProfile(false); authLogout(); }}
+                      className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-destructive hover:bg-destructive/10 transition-colors"
+                    >
+                      <LogOut className="w-3.5 h-3.5" /> Logout
+                    </button>
+                    <input ref={avatarInputRef} type="file" accept="image/png,image/jpeg,image/webp,image/gif" className="hidden" onChange={handleAvatarUpload} />
+                  </div>
+                </>
               )}
             </div>
             <NavLink to="/settings" className="group relative block overflow-visible">

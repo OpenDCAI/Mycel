@@ -116,6 +116,7 @@ export default function ChatsLayout() {
   const [chats, setChats] = useState<ChatSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [showNewChat, setShowNewChat] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
 
   const refresh = useCallback(() => {
     authFetch("/api/chats")
@@ -133,8 +134,11 @@ export default function ChatsLayout() {
     navigate(`/chats/${newChatId}`);
   }, [navigate, refresh]);
 
-  // Sort: unread first, then by time
-  const sorted = [...chats].sort((a, b) => {
+  // Filter by search + sort: unread first, then by time
+  const filtered = searchQuery
+    ? chats.filter(c => chatDisplayName(c, myEntityId).toLowerCase().includes(searchQuery.toLowerCase()))
+    : chats;
+  const sorted = [...filtered].sort((a, b) => {
     if (a.unread_count > 0 && b.unread_count === 0) return -1;
     if (b.unread_count > 0 && a.unread_count === 0) return 1;
     const ta = a.last_message?.created_at ?? 0;
@@ -152,6 +156,20 @@ export default function ChatsLayout() {
             className="w-7 h-7 rounded-lg flex items-center justify-center text-muted-foreground hover:bg-muted hover:text-foreground">
             <Plus className="w-4 h-4" />
           </button>
+        </div>
+
+        {/* Search — matches Threads sidebar style */}
+        <div className="px-3 pb-3">
+          <div className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-muted-foreground/60 bg-muted/30 border border-transparent focus-within:border-primary/40">
+            <Search className="w-4 h-4 shrink-0" />
+            <input
+              type="text"
+              placeholder="Search chats..."
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              className="flex-1 bg-transparent outline-none text-foreground placeholder:text-muted-foreground/60 text-sm"
+            />
+          </div>
         </div>
 
         <div className="flex-1 overflow-y-auto">
