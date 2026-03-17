@@ -57,7 +57,7 @@ export async function postRun(
   signal?: AbortSignal,
   options?: { model?: string; enable_trajectory?: boolean },
 ): Promise<{ run_id: string; thread_id: string }> {
-  return postJSON(`/api/threads/${encodeURIComponent(threadId)}/runs`, { message, ...options }, signal);
+  return postJSON(`/api/threads/${encodeURIComponent(threadId)}/messages`, { message, ...options }, signal);
 }
 
 /** Persistent SSE connection to a thread's event stream. */
