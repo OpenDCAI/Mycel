@@ -124,7 +124,7 @@ function ThreadItem({
         </div>
         <div className="flex items-center gap-1 mt-0.5">
           <span className="text-[11px] text-muted-foreground/60 truncate flex-1 min-w-0">
-            {thread.preview || thread.thread_id.slice(0, 14)}
+            {thread.preview || thread.sandbox || "local"}
           </span>
           {thread.updated_at && (
             <span className="text-[10px] text-muted-foreground/40 flex-shrink-0">
@@ -214,27 +214,22 @@ export default function Sidebar({
     return () => document.removeEventListener("keydown", onKey);
   }, [isSelectMode]);
 
-  // Group threads by member. Use memberList as base so members persist even with no threads.
+  // Group threads by member — uses thread.member_name (auth-scoped from API)
   const groups = useMemo(() => {
     const map = new Map<string, { memberName: string; threads: ThreadSummary[]; latestAt: number }>();
 
-    // Seed from memberList so members with no threads remain visible
-    for (const member of memberList) {
-      map.set(member.name, { memberName: member.name, threads: [], latestAt: 0 });
-    }
-    // Always ensure the default "Leon" entry exists
-    if (!map.has("Leon")) {
-      map.set("Leon", { memberName: "Leon", threads: [], latestAt: 0 });
-    }
-
-    // Attach threads to their member group
     for (const thread of threads) {
-      const key = thread.agent || "Leon";
+      const key = (thread as any).member_name || thread.agent || "Leon";
       if (!map.has(key)) map.set(key, { memberName: key, threads: [], latestAt: 0 });
       const g = map.get(key)!;
       const at = thread.updated_at ? new Date(thread.updated_at).getTime() : 0;
       g.threads.push(thread);
       g.latestAt = Math.max(g.latestAt, at);
+    }
+
+    // Ensure at least one entry
+    if (map.size === 0) {
+      map.set("Leon", { memberName: "Leon", threads: [], latestAt: 0 });
     }
 
     return [...map.entries()]
@@ -248,7 +243,7 @@ export default function Sidebar({
           return tb - ta;
         }),
       }));
-  }, [threads, memberList]);
+  }, [threads]);
 
   // Auto-expand the most recently active member on first load
   useEffect(() => {
@@ -292,7 +287,7 @@ export default function Sidebar({
                   <div className="absolute -left-[4px] top-1/2 -translate-y-1/2 w-[3px] h-5 rounded-r-full bg-primary" />
                 )}
                 <Link
-                  to={`/chat/${group.memberId}`}
+                  to={`/threads`}
                   title={group.memberName}
                   className={`w-9 h-9 rounded-xl flex items-center justify-center text-xs font-semibold transition-colors ${
                     isActive ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:bg-primary/15 hover:text-primary"
@@ -371,7 +366,7 @@ export default function Sidebar({
                       <ChevronRight className={`w-3.5 h-3.5 transition-transform ${isExpanded ? "rotate-90" : ""}`} />
                     </button>
                     <Link
-                      to={`/chat/${urlId}`}
+                      to={`/threads`}
                       className="flex items-center gap-2 flex-1 min-w-0"
                     >
                       <div className="w-6 h-6 rounded-lg bg-primary/10 flex items-center justify-center text-[11px] font-semibold text-primary flex-shrink-0">
@@ -385,7 +380,7 @@ export default function Sidebar({
                     <div className="mt-0.5 ml-3 space-y-0.5">
                       {group.threads.length === 0 ? (
                         <Link
-                          to={`/chat/${urlId}`}
+                          to={`/threads`}
                           className="block px-3 py-2 text-[11px] text-muted-foreground/50 hover:text-muted-foreground transition-colors"
                         >
                           + 发起新对话
@@ -396,8 +391,8 @@ export default function Sidebar({
                             key={thread.thread_id}
                             thread={thread}
                             isActive={activeThreadId === thread.thread_id}
-                            label={thread.preview || thread.thread_id.slice(0, 14)}
-                            to={`/chat/${urlId}/${thread.thread_id}`}
+                            label={thread.preview || thread.sandbox || "local"}
+                            to={`/threads/${thread.thread_id}`}
                             isSelectMode={isSelectMode}
                             isSelected={selectedIds.has(thread.thread_id)}
                             onToggleSelect={onToggleSelect}
