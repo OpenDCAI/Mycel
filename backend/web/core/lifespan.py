@@ -62,6 +62,11 @@ async def lifespan(app: FastAPI):
     app.state.chat_event_bus = ChatEventBus()
     app.state.typing_tracker = TypingTracker(app.state.chat_event_bus)
 
+    from storage.providers.sqlite.contact_repo import SQLiteContactRepo
+    from backend.web.services.delivery_resolver import DefaultDeliveryResolver
+    app.state.contact_repo = SQLiteContactRepo(chat_db)
+    delivery_resolver = DefaultDeliveryResolver(app.state.contact_repo, app.state.chat_entity_repo)
+
     from backend.web.services.chat_service import ChatService
     app.state.chat_service = ChatService(
         chat_repo=app.state.chat_repo,
@@ -70,6 +75,7 @@ async def lifespan(app: FastAPI):
         entity_repo=app.state.entity_repo,
         member_repo=app.state.member_repo,
         event_bus=app.state.chat_event_bus,
+        delivery_resolver=delivery_resolver,
     )
 
     # Wire chat delivery after event loop is available

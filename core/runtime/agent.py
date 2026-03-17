@@ -1001,6 +1001,8 @@ class LeonAgent:
             owner_entity_id = repos.get("owner_entity_id", "")
             if entity_id:
                 from core.agents.communication.chat_tool_service import ChatToolService
+                # @@@lazy-runtime — runtime isn't set yet at _init_services() time.
+                # Pass a callable that resolves runtime lazily at tool call time.
                 self._chat_tool_service = ChatToolService(
                     registry=self._tool_registry,
                     entity_id=entity_id,
@@ -1011,6 +1013,7 @@ class LeonAgent:
                     chat_message_repo=repos.get("chat_message_repo"),
                     member_repo=repos.get("member_repo"),
                     chat_event_bus=repos.get("chat_event_bus"),
+                    runtime_fn=lambda: getattr(self, "runtime", None),
                 )
 
         if self.verbose:

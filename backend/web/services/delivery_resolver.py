@@ -1,0 +1,62 @@
+"""Delivery strategy resolver — evaluates per-recipient delivery action.
+
+@@@delivery-strategy-gate — single evaluation point between message storage
+and agent delivery. Checks contact-level block/mute → chat-level mute → default.
+"""
+
+from __future__ import annotations
+
+import logging
+import time
+
+from storage.contracts import ChatEntityRepo, ContactRepo, DeliveryAction
+
+logger = logging.getLogger(__name__)
+
+
+class DefaultDeliveryResolver:
+    """Evaluates delivery action for a chat message recipient.
+
+    Priority (highest wins):
+    1. Contact block (sender blocked by recipient) → DROP
+    2. Contact mute (sender muted by recipient)   → NOTIFY
+    3. Chat mute (recipient muted this chat)       → NOTIFY
+    4. Default                                     → DELIVER
+    """
+
+    def __init__(self, contact_repo: ContactRepo, chat_entity_repo: ChatEntityRepo) -> None:
+        self._contacts = contact_repo
+        self._chat_entities = chat_entity_repo
+
+    def resolve(self, recipient_entity_id: str, chat_id: str, sender_entity_id: str) -> DeliveryAction:
+        # 1. Contact-level block/mute
+        contact = self._contacts.get(recipient_entity_id, sender_entity_id)
+        if contact:
+            if contact.relation == "blocked":
+                logger.debug("[resolver] DROP: %s blocked %s", recipient_entity_id[:15], sender_entity_id[:15])
+                return DeliveryAction.DROP
+            if contact.relation == "muted":
+                logger.debug("[resolver] NOTIFY: %s muted %s", recipient_entity_id[:15], sender_entity_id[:15])
+                return DeliveryAction.NOTIFY
+
+        # 2. Chat-level mute
+        if self._is_chat_muted(recipient_entity_id, chat_id):
+            logger.debug("[resolver] NOTIFY: %s muted chat %s", recipient_entity_id[:15], chat_id[:8])
+            return DeliveryAction.NOTIFY
+
+        # 3. Default
+        return DeliveryAction.DELIVER
+
+    def _is_chat_muted(self, entity_id: str, chat_id: str) -> bool:
+        """Check if entity has muted this specific chat."""
+        entities = self._chat_entities.list_entities(chat_id)
+        for ce in entities:
+            if ce.entity_id == entity_id:
+                muted = getattr(ce, "muted", False)
+                if not muted:
+                    return False
+                mute_until = getattr(ce, "mute_until", None)
+                if mute_until is not None and mute_until < time.time():
+                    return False  # mute expired
+                return True
+        return False

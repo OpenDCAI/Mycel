@@ -26,6 +26,7 @@ def serialize_message(msg: Any) -> dict[str, Any]:
         "content": getattr(msg, "content", ""),
         "tool_calls": getattr(msg, "tool_calls", []),
         "tool_call_id": getattr(msg, "tool_call_id", None),
+        "name": getattr(msg, "name", None),
     }
     metadata = getattr(msg, "metadata", None)
     if metadata:

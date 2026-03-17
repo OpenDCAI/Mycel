@@ -31,9 +31,13 @@ async def route_message_to_brain(
     agent = await get_or_create_agent(app, sandbox_type, thread_id=thread_id)
     qm = app.state.queue_manager
 
+    state = agent.runtime.current_state if hasattr(agent, "runtime") else "no-runtime"
+    logger.debug("[route] thread=%s state=%s source=%s", thread_id[:15], state, source)
+
     if hasattr(agent, "runtime") and agent.runtime.current_state == AgentState.ACTIVE:
         qm.enqueue(format_steer_reminder(content), thread_id, "steer",
                     source=source, sender_name=sender_name)
+        logger.debug("[route] → ENQUEUED (agent active)")
         return {"status": "injected", "routing": "steer", "thread_id": thread_id}
 
     # IDLE path — acquire lock for atomic transition
@@ -44,7 +48,9 @@ async def route_message_to_brain(
         if hasattr(agent, "runtime") and not agent.runtime.transition(AgentState.ACTIVE):
             qm.enqueue(format_steer_reminder(content), thread_id, "steer",
                         source=source, sender_name=sender_name)
+            logger.debug("[route] → ENQUEUED (transition failed)")
             return {"status": "injected", "routing": "steer", "thread_id": thread_id}
+        logger.debug("[route] → START RUN (idle→active)")
         run_id = start_agent_run(agent, thread_id, content, app,
                                   message_metadata={"source": source, "sender_name": sender_name})
     return {"status": "started", "routing": "direct", "run_id": run_id, "thread_id": thread_id}

@@ -126,9 +126,15 @@ async def get_thread_messages(
     # Get sandbox session info (new architecture)
     sandbox_info = get_sandbox_info(agent, thread_id, sandbox_type)
 
+    serialized = [serialize_message(msg) for msg in messages]
+
+    # @@@display-projection — annotate messages with display_mode for frontend rendering
+    from backend.web.services.display_projection import project_thread_display
+    annotated = project_thread_display(serialized)
+
     return {
         "thread_id": thread_id,
-        "messages": [serialize_message(msg) for msg in messages],
+        "messages": annotated,
         "sandbox": sandbox_info,
     }
 

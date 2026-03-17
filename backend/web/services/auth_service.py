@@ -10,14 +10,16 @@ import bcrypt
 import jwt
 
 from storage.contracts import (
+    AccountRepo,
     AccountRow,
+    EntityRepo,
     EntityRow,
+    MemberRepo,
     MemberRow,
     MemberType,
+    ThreadRepo,
 )
-from storage.providers.sqlite.entity_repo import SQLiteEntityRepo
-from storage.providers.sqlite.member_repo import SQLiteAccountRepo, SQLiteMemberRepo, generate_member_id
-from storage.providers.sqlite.thread_repo import SQLiteThreadRepo
+from storage.providers.sqlite.member_repo import generate_member_id
 
 logger = logging.getLogger(__name__)
 
@@ -30,10 +32,10 @@ JWT_EXPIRE_SECONDS = 86400 * 7  # 7 days
 class AuthService:
     def __init__(
         self,
-        members: SQLiteMemberRepo,
-        accounts: SQLiteAccountRepo,
-        entities: SQLiteEntityRepo,
-        threads: SQLiteThreadRepo,
+        members: MemberRepo,
+        accounts: AccountRepo,
+        entities: EntityRepo,
+        threads: ThreadRepo,
     ) -> None:
         self._members = members
         self._accounts = accounts

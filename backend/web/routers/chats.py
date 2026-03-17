@@ -53,10 +53,13 @@ async def create_chat(
     member_id: Annotated[str, Depends(get_current_member_id)],
     app: Annotated[Any, Depends(get_app)],
 ):
-    """Create a chat between entities."""
+    """Create a chat between entities. 2 entities = 1:1 chat, 3+ = group chat."""
     chat_service = app.state.chat_service
     try:
-        chat = chat_service.find_or_create_chat(body.entity_ids, body.title)
+        if len(body.entity_ids) >= 3:
+            chat = chat_service.create_group_chat(body.entity_ids, body.title)
+        else:
+            chat = chat_service.find_or_create_chat(body.entity_ids, body.title)
         return {"id": chat.id, "title": chat.title, "status": chat.status, "created_at": chat.created_at}
     except ValueError as e:
         raise HTTPException(400, str(e))
@@ -147,6 +150,74 @@ async def stream_chat_events(
             event_bus.unsubscribe(chat_id, queue)
 
     return StreamingResponse(event_generator(), media_type="text/event-stream")
+
+
+# ---------------------------------------------------------------------------
+# Contact management (block/mute)
+# ---------------------------------------------------------------------------
+
+
+class SetContactBody(BaseModel):
+    owner_entity_id: str
+    target_entity_id: str
+    relation: str  # 'normal' | 'blocked' | 'muted'
+
+
+@router.post("/contacts")
+async def set_contact(
+    body: SetContactBody,
+    member_id: Annotated[str, Depends(get_current_member_id)],
+    app: Annotated[Any, Depends(get_app)],
+):
+    """Set a directional contact relationship (block/mute/normal)."""
+    import time
+    from storage.contracts import ContactRow
+    contact_repo = app.state.contact_repo
+    contact_repo.upsert(ContactRow(
+        owner_entity_id=body.owner_entity_id,
+        target_entity_id=body.target_entity_id,
+        relation=body.relation,
+        created_at=time.time(),
+        updated_at=time.time(),
+    ))
+    return {"status": "ok", "relation": body.relation}
+
+
+@router.delete("/contacts/{owner_entity_id}/{target_entity_id}")
+async def delete_contact(
+    owner_entity_id: str,
+    target_entity_id: str,
+    member_id: Annotated[str, Depends(get_current_member_id)],
+    app: Annotated[Any, Depends(get_app)],
+):
+    """Delete a contact relationship."""
+    contact_repo = app.state.contact_repo
+    contact_repo.delete(owner_entity_id, target_entity_id)
+    return {"status": "deleted"}
+
+
+# ---------------------------------------------------------------------------
+# Chat mute
+# ---------------------------------------------------------------------------
+
+
+class MuteChatBody(BaseModel):
+    entity_id: str
+    muted: bool
+    mute_until: float | None = None
+
+
+@router.post("/{chat_id}/mute")
+async def mute_chat(
+    chat_id: str,
+    body: MuteChatBody,
+    member_id: Annotated[str, Depends(get_current_member_id)],
+    app: Annotated[Any, Depends(get_app)],
+):
+    """Mute/unmute a chat for a specific entity."""
+    chat_entity_repo = app.state.chat_entity_repo
+    chat_entity_repo.update_mute(chat_id, body.entity_id, body.muted, body.mute_until)
+    return {"status": "ok", "muted": body.muted}
 
 
 @router.delete("/{chat_id}")

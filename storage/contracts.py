@@ -66,6 +66,8 @@ class ChatEntityRow(BaseModel):
     entity_id: str
     joined_at: float
     last_read_at: float | None = None
+    muted: bool = False
+    mute_until: float | None = None  # None = permanent mute when muted=True
 
 
 class ChatMessageRow(BaseModel):
@@ -75,6 +77,26 @@ class ChatMessageRow(BaseModel):
     content: str
     created_at: float
 
+
+# ---------------------------------------------------------------------------
+# Delivery strategy — contact relationships + delivery actions
+# ---------------------------------------------------------------------------
+
+
+class DeliveryAction(str, Enum):
+    """What to do when a chat message reaches a recipient."""
+    DELIVER = "deliver"  # full delivery: inject into agent context, wake agent
+    NOTIFY = "notify"    # red dot only: message stored, unread counted, no delivery
+    DROP = "drop"        # silent: message stored but invisible to this entity
+
+
+class ContactRow(BaseModel):
+    """Directional relationship between two entities. A→B independent of B→A."""
+    owner_entity_id: str    # the entity setting this relationship
+    target_entity_id: str   # the entity being related to
+    relation: str           # 'normal' | 'blocked' | 'muted'
+    created_at: float
+    updated_at: float | None = None
 
 
 class CheckpointRepo(Protocol):
@@ -239,6 +261,7 @@ class ChatEntityRepo(Protocol):
     def list_chats_for_entity(self, entity_id: str) -> list[str]: ...
     def is_entity_in_chat(self, chat_id: str, entity_id: str) -> bool: ...
     def update_last_read(self, chat_id: str, entity_id: str, last_read_at: float) -> None: ...
+    def update_mute(self, chat_id: str, entity_id: str, muted: bool, mute_until: float | None = None) -> None: ...
     def find_chat_between(self, entity_a: str, entity_b: str) -> str | None: ...
 
 
@@ -259,3 +282,19 @@ class ThreadRepo(Protocol):
     def list_by_owner(self, owner_member_id: str) -> list[dict[str, Any]]: ...
     def update(self, thread_id: str, **fields: Any) -> None: ...
     def delete(self, thread_id: str) -> None: ...
+
+
+class ContactRepo(Protocol):
+    def close(self) -> None: ...
+    def upsert(self, row: ContactRow) -> None: ...
+    def get(self, owner_entity_id: str, target_entity_id: str) -> ContactRow | None: ...
+    def list_for_entity(self, owner_entity_id: str) -> list[ContactRow]: ...
+    def delete(self, owner_entity_id: str, target_entity_id: str) -> None: ...
+
+
+class DeliveryResolver(Protocol):
+    """Evaluates delivery strategy for a chat message recipient.
+
+    Checks contact-level block/mute, then chat-level mute, then defaults to DELIVER.
+    """
+    def resolve(self, recipient_entity_id: str, chat_id: str, sender_entity_id: str) -> DeliveryAction: ...
