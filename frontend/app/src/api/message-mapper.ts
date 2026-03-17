@@ -1,4 +1,4 @@
-import type { AssistantTurn, BackendMessage, ChatEntry, NoticeMessage, NotificationType, ToolSegment, TurnSegment } from "./types";
+import type { AssistantTurn, BackendMessage, ChatEntry, DisplayMode, NoticeMessage, NotificationType, ToolSegment, TurnSegment, WaterlineEntry } from "./types";
 
 function extractTextContent(raw: unknown): string {
   if (typeof raw === "string") return raw;
@@ -52,9 +52,40 @@ interface MapState {
   currentTurn: AssistantTurn | null;
   currentRunId: string | null;
   now: number;
+  // @@@display-carry — carried from HumanMessage to subsequent AI/Tool messages
+  _displayMode: DisplayMode | undefined;
+  _senderName: string | undefined;
 }
 
 function handleHuman(msg: BackendMessage, i: number, state: MapState): void {
+  const display = (msg as any).display as { mode?: string; run_source?: string; sender_name?: string } | undefined;
+  const mode = display?.mode;
+
+  // @@@waterline — owner steers into external run
+  if (mode === "waterline") {
+    state.currentTurn = null;
+    state.currentRunId = null;
+    state._displayMode = "expanded";
+    state._senderName = undefined;
+    const entry: WaterlineEntry = {
+      id: msg.id ?? `waterline-${i}`,
+      role: "waterline",
+      content: extractTextContent(msg.content),
+      timestamp: state.now,
+    };
+    state.entries.push(entry);
+    return;
+  }
+
+  // @@@collapsed-human — external message, don't show as UserBubble
+  if (mode === "collapsed") {
+    state.currentTurn = null;
+    state.currentRunId = null;
+    state._displayMode = "collapsed";
+    state._senderName = display?.sender_name;
+    return;
+  }
+
   // System-injected messages (steer reminders, task notifications) → notice
   if (msg.metadata?.source === "system") {
     const content = extractTextContent(msg.content);
@@ -62,16 +93,13 @@ function handleHuman(msg: BackendMessage, i: number, state: MapState): void {
     const ntype = msg.metadata?.notification_type as NotificationType | undefined;
 
     if (state.currentTurn && msgRunId && msgRunId === state.currentRunId) {
-      // Same run_id → fold into current assistant turn as a notice segment
       state.currentTurn.segments.push({ type: "notice", content, notification_type: ntype });
       return;
     }
     if (state.currentTurn && !msgRunId) {
-      // No run_id (legacy) → fold into current turn if active
       state.currentTurn.segments.push({ type: "notice", content, notification_type: ntype });
       return;
     }
-    // Different run_id or no current turn → standalone notice entry (Turn boundary)
     state.currentTurn = null;
     state.currentRunId = null;
     const notice: NoticeMessage = {
@@ -85,9 +113,11 @@ function handleHuman(msg: BackendMessage, i: number, state: MapState): void {
     return;
   }
 
-  // Normal user message → breaks current turn
+  // Normal user message (expanded) → breaks current turn
   state.currentTurn = null;
   state.currentRunId = null;
+  state._displayMode = "expanded";
+  state._senderName = undefined;
   state.entries.push({
     id: msg.id ?? `hist-user-${i}`,
     role: "user",
@@ -97,6 +127,7 @@ function handleHuman(msg: BackendMessage, i: number, state: MapState): void {
 }
 
 function handleAI(msg: BackendMessage, i: number, state: MapState): void {
+  const display = (msg as any).display as { mode?: string; sender_name?: string } | undefined;
   const textContent = stripSystemReminders(extractTextContent(msg.content));
   const toolCalls = Array.isArray(msg.tool_calls) ? msg.tool_calls : [];
   const msgId = msg.id ?? `hist-turn-${i}`;
@@ -109,13 +140,19 @@ function handleAI(msg: BackendMessage, i: number, state: MapState): void {
   // Group by run_id: same run_id = same Turn
   if (state.currentTurn && msgRunId && msgRunId === state.currentRunId) {
     appendToTurn(state.currentTurn, msgId, segments);
+    // punch_through AIMessage upgrades the turn's displayMode if it was collapsed
+    if (display?.mode === "punch_through" && state.currentTurn.displayMode === "collapsed") {
+      state.currentTurn.displayMode = "collapsed"; // keep collapsed, punch_through segments handled in rendering
+    }
   } else if (state.currentTurn && !msgRunId && !state.currentRunId) {
-    // Legacy: no run_id on either → merge consecutive (backward compat)
     appendToTurn(state.currentTurn, msgId, segments);
   } else {
     // New run_id or first message → new Turn
     state.currentTurn = createTurn(msgId, segments, state.now);
     state.currentRunId = msgRunId;
+    // @@@display-mode-carry — set displayMode from display annotation or carried state
+    state.currentTurn.displayMode = (display?.mode ?? state._displayMode) as DisplayMode | undefined;
+    state.currentTurn.senderName = display?.sender_name ?? state._senderName;
     state.entries.push(state.currentTurn);
   }
 }
@@ -168,7 +205,7 @@ const MSG_HANDLERS: Record<string, (msg: BackendMessage, i: number, state: MapSt
 
 export function mapBackendEntries(payload: unknown): ChatEntry[] {
   if (!Array.isArray(payload)) return [];
-  const state: MapState = { entries: [], currentTurn: null, currentRunId: null, now: Date.now() };
+  const state: MapState = { entries: [], currentTurn: null, currentRunId: null, now: Date.now(), _displayMode: undefined, _senderName: undefined };
 
   for (let i = 0; i < payload.length; i += 1) {
     const msg = payload[i] as BackendMessage | undefined;

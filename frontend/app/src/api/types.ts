@@ -135,6 +135,8 @@ export interface RetrySegment {
 
 export type TurnSegment = TextSegment | ToolSegment | NoticeSegment | RetrySegment;
 
+export type DisplayMode = "expanded" | "collapsed" | "punch_through" | "waterline";
+
 export interface AssistantTurn {
   id: string;
   messageIds?: string[];
@@ -143,6 +145,8 @@ export interface AssistantTurn {
   timestamp: number;
   endTimestamp?: number;
   streaming?: boolean;
+  displayMode?: DisplayMode;
+  senderName?: string;
 }
 
 export interface UserMessage {
@@ -160,7 +164,14 @@ export interface NoticeMessage {
   timestamp: number;
 }
 
-export type ChatEntry = UserMessage | AssistantTurn | NoticeMessage;
+export interface WaterlineEntry {
+  id: string;
+  role: "waterline";
+  content: string;
+  timestamp: number;
+}
+
+export type ChatEntry = UserMessage | AssistantTurn | NoticeMessage | WaterlineEntry;
 
 export interface StreamStatus {
   state: { state: string; flags: Record<string, boolean> };

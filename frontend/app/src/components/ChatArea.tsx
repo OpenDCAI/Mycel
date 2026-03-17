@@ -2,8 +2,10 @@ import type { AssistantTurn, ChatEntry, NoticeMessage, StreamStatus } from "../a
 import { useStickyScroll } from "../hooks/use-sticky-scroll";
 import { AssistantBlock } from "./chat-area/AssistantBlock";
 import { ChatSkeleton } from "./chat-area/ChatSkeleton";
+import { CollapsedRunBlock } from "./chat-area/CollapsedRunBlock";
 import { NoticeBubble } from "./chat-area/NoticeBubble";
 import { UserBubble } from "./chat-area/UserBubble";
+import { WaterlineDivider } from "./chat-area/WaterlineDivider";
 
 interface ChatAreaProps {
   entries: ChatEntry[];
@@ -30,8 +32,22 @@ export default function ChatArea({ entries, isStreaming: _isStreaming, runtimeSt
             if (entry.role === "user") {
               return <UserBubble key={entry.id} entry={entry} />;
             }
+            if (entry.role === "waterline") {
+              return <WaterlineDivider key={entry.id} />;
+            }
             const assistantEntry = entry as AssistantTurn;
             const isStreamingThis = assistantEntry.streaming === true;
+            // @@@display-mode-routing — collapsed external runs get CollapsedRunBlock
+            if (assistantEntry.displayMode === "collapsed") {
+              return (
+                <CollapsedRunBlock
+                  key={entry.id}
+                  entry={assistantEntry}
+                  isStreamingThis={isStreamingThis}
+                  onFocusAgent={onFocusAgent}
+                />
+              );
+            }
             return (
               <AssistantBlock
                 key={entry.id}

@@ -132,7 +132,9 @@ export function useStreamHandler(
 
       // notice: standalone entry inserted between turns (e.g. task completion notification)
       if (event.type === "notice") {
-        const d = (event.data ?? {}) as { content?: string; notification_type?: string };
+        const d = (event.data ?? {}) as { content?: string; notification_type?: string; source?: string };
+        // @@@external-notice-filter — external notices contain raw XML, skip them
+        if (d.source === "external") return;
         const noticeEntry: NoticeMessage = {
           id: makeId("stream-notice"),
           role: "notice",
@@ -144,9 +146,20 @@ export function useStreamHandler(
         return;
       }
 
-      // run_start: ensure we have an assistant turn ready
-      if (event.type === "run_start" && !turnIdRef.current) {
-        ensureReconnectTurn();
+      // run_start: ensure we have an assistant turn ready + set display mode
+      if (event.type === "run_start") {
+        if (!turnIdRef.current) ensureReconnectTurn();
+        // @@@display-mode-sse — carry display_mode from run_start to the assistant turn
+        const d = (event.data ?? {}) as { display_mode?: string; sender_name?: string };
+        if (d.display_mode && turnIdRef.current) {
+          onUpdateRef.current((prev) =>
+            prev.map((e) =>
+              e.id === turnIdRef.current && e.role === "assistant"
+                ? { ...e, displayMode: d.display_mode, senderName: d.sender_name } as AssistantTurn
+                : e,
+            ),
+          );
+        }
         return;
       }
 
@@ -218,6 +231,17 @@ export function useStreamHandler(
         streaming: true,
       };
 
+      // @@@close-prev-turn — close previous turn if it was streaming (owner steer into external run)
+      const prevTurnId = turnIdRef.current;
+      if (prevTurnId) {
+        onUpdateRef.current((prev) =>
+          prev.map((e) =>
+            e.id === prevTurnId && e.role === "assistant"
+              ? { ...e, streaming: false, endTimestamp: Date.now() } as AssistantTurn
+              : e,
+          ),
+        );
+      }
       // Set turn context before connect() so the subscriber knows which turn to update
       turnIdRef.current = tempTurnId;
       hasBoundRef.current = false;
