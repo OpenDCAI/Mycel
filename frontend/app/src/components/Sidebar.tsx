@@ -3,7 +3,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import type { ThreadSummary } from "../api";
 import MemberAvatar from "./MemberAvatar";
-import SidebarPanel from "./SidebarPanel";
 import { useAppStore } from "../store/app-store";
 import { Skeleton } from "./ui/skeleton";
 
@@ -309,24 +308,41 @@ export default function Sidebar({
   // ── Expanded mode ────────────────────────────────────────────────────────
 
   return (
-    <SidebarPanel
-      title="Threads"
-      searchPlaceholder="Search threads..."
-      count={threads.length}
-      width={width}
-      loading={loading}
-    >
-      <div className="px-3 pt-2 flex flex-col flex-1 min-h-0">
-        {!isSelectMode && (
-          <div className="flex items-center justify-end px-2 mb-2 flex-shrink-0">
-            <button
-              onClick={() => setIsSelectMode(true)}
-              className="text-[11px] text-muted-foreground/50 hover:text-foreground transition-colors px-1"
-            >
-              管理
-            </button>
+    <div className="h-full flex flex-col bg-card border-r border-border animate-slide-in flex-shrink-0" style={{ width }}>
+      {/* Header */}
+      <div className="px-4 pt-3 pb-1 flex items-center justify-between">
+        <span className="text-sm font-semibold text-foreground">消息</span>
+      </div>
+
+      {/* Search */}
+      <div className="px-3 pb-3">
+        <button
+          className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-muted-foreground/60 hover:bg-muted hover:text-foreground"
+          onClick={onSearchClick}
+        >
+          <Search className="w-4 h-4" />
+          <span>搜索对话...</span>
+        </button>
+      </div>
+
+      <div className="h-px mx-3 bg-border" />
+
+      {/* Thread list */}
+      <div className="flex-1 min-h-0 px-3 pt-3 flex flex-col">
+        <div className="flex items-center justify-between px-2 mb-2 flex-shrink-0">
+          <span className="text-[11px] font-medium tracking-wider uppercase text-muted-foreground/60">对话</span>
+          <div className="flex items-center gap-1.5">
+            <span className="text-[11px] text-muted-foreground/40">{threads.length}</span>
+            {!isSelectMode && (
+              <button
+                onClick={() => setIsSelectMode(true)}
+                className="text-[11px] text-muted-foreground/50 hover:text-foreground transition-colors px-1"
+              >
+                管理
+              </button>
+            )}
           </div>
-        )}
+        </div>
 
         <div className="flex-1 min-h-0 overflow-y-auto space-y-0.5 custom-scrollbar">
           {loading ? (
@@ -386,25 +402,35 @@ export default function Sidebar({
             })
           )}
         </div>
-
-        {/* Bulk action bar */}
-        {isSelectMode && (
-          <div className="px-3 py-2.5 border-t border-border flex items-center gap-2 flex-shrink-0">
-            <button onClick={handleSelectAll} className="text-xs text-muted-foreground/70 hover:text-foreground transition-colors">
-              {isAllSelected ? "取消全选" : "全选"}
-            </button>
-            <span className="text-xs text-muted-foreground/40">·</span>
-            <span className="text-xs text-muted-foreground flex-1">已选 {selectedIds.size} 条</span>
-            <button onClick={handleBulkDelete} disabled={selectedIds.size === 0}
-              className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-destructive/10 text-destructive hover:bg-destructive/20 disabled:opacity-40 text-xs font-medium transition-colors">
-              <Trash2 className="w-3 h-3" /> 删除
-            </button>
-            <button onClick={exitSelectMode} className="px-2.5 py-1.5 rounded-lg text-xs text-muted-foreground hover:bg-muted transition-colors">
-              取消
-            </button>
-          </div>
-        )}
       </div>
-    </SidebarPanel>
+
+      {/* Bulk action bar */}
+      {isSelectMode && (
+        <div className="px-3 py-2.5 border-t border-border flex items-center gap-2 flex-shrink-0">
+          <button
+            onClick={handleSelectAll}
+            className="text-xs text-muted-foreground/70 hover:text-foreground transition-colors"
+          >
+            {isAllSelected ? "取消全选" : "全选"}
+          </button>
+          <span className="text-xs text-muted-foreground/40">·</span>
+          <span className="text-xs text-muted-foreground flex-1">已选 {selectedIds.size} 条</span>
+          <button
+            onClick={handleBulkDelete}
+            disabled={selectedIds.size === 0}
+            className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-destructive/10 text-destructive hover:bg-destructive/20 disabled:opacity-40 text-xs font-medium transition-colors"
+          >
+            <Trash2 className="w-3 h-3" />
+            删除
+          </button>
+          <button
+            onClick={exitSelectMode}
+            className="px-2.5 py-1.5 rounded-lg text-xs text-muted-foreground hover:bg-muted transition-colors"
+          >
+            取消
+          </button>
+        </div>
+      )}
+    </div>
   );
 }
