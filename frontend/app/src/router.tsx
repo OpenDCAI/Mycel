@@ -2,7 +2,7 @@ import { createBrowserRouter, Navigate } from 'react-router-dom';
 import RootLayout from './pages/RootLayout';
 import AppLayout from './pages/AppLayout';
 import ChatPage from './pages/ChatPage';
-import NewChatPage from './pages/NewChatPage';
+import WorkspaceLanding from './pages/WorkspaceLanding';
 import SettingsPage from './pages/SettingsPage';
 import MembersPage from './pages/MembersPage';
 import AgentDetailPage from './pages/AgentDetailPage';
@@ -13,26 +13,27 @@ import ResourcesPage from './pages/ResourcesPage';
 export const router = createBrowserRouter([
   {
     path: '/',
-    element: <Navigate to="/chat" replace />,
+    element: <Navigate to="/threads" replace />,
+  },
+  // Old /chat/* URLs → redirect to /threads
+  {
+    path: '/chat/*',
+    element: <Navigate to="/threads" replace />,
   },
   {
     path: '/',
     element: <RootLayout />,
     children: [
       {
-        path: 'chat',
+        path: 'threads',
         element: <AppLayout />,
         children: [
           {
             index: true,
-            element: <Navigate to="/chat/leon" replace />,
+            element: <WorkspaceLanding />,
           },
           {
-            path: ':memberId',
-            element: <NewChatPage />,
-          },
-          {
-            path: ':memberId/:threadId',
+            path: ':threadId',
             element: <ChatPage />,
           },
         ],

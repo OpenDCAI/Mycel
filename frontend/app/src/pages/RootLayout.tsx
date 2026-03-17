@@ -1,18 +1,19 @@
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
-import { MessageSquare, Users, ListTodo, Library, Layers, Settings, Plus, ChevronLeft, ChevronRight } from "lucide-react";
+import { MessageSquare, Users, ListTodo, Library, Layers, Settings, Plus, ChevronLeft, ChevronRight, LogOut } from "lucide-react";
 import { useState, useEffect, useCallback, useRef } from "react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import CreateMemberDialog from "@/components/CreateMemberDialog";
 import NewChatDialog from "@/components/NewChatDialog";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useAppStore } from "@/store/app-store";
+import { useAuthStore } from "@/store/auth-store";
 import { toast } from "sonner";
 
 const navItems = [
-  { to: "/chat", icon: MessageSquare, label: "消息" },
-  { to: "/members", icon: Users, label: "成员" },
-  { to: "/tasks", icon: ListTodo, label: "任务" },
-  { to: "/resources", icon: Layers, label: "资源" },
+  { to: "/threads", icon: MessageSquare, label: "Workspace" },
+  { to: "/members", icon: Users, label: "Members" },
+  { to: "/tasks", icon: ListTodo, label: "Tasks" },
+  { to: "/resources", icon: Layers, label: "Resources" },
   { to: "/library", icon: Library, label: "能力库" },
 ];
 
@@ -21,7 +22,17 @@ const mobileNavItems = [
   { to: "/settings", icon: Settings, label: "设置" },
 ];
 
+// @@@auth-guard — wrapper that shows LoginForm when not authenticated
 export default function RootLayout() {
+  const token = useAuthStore(s => s.token);
+  if (!token) return <LoginForm />;
+  return <AuthenticatedLayout />;
+}
+
+function AuthenticatedLayout() {
+  const authMember = useAuthStore(s => s.member);
+  const authLogout = useAuthStore(s => s.logout);
+
   const location = useLocation();
   const navigate = useNavigate();
   const isMobile = useIsMobile();
@@ -112,7 +123,7 @@ export default function RootLayout() {
     return () => { window.removeEventListener("mousemove", onMove); window.removeEventListener("mouseup", onUp); };
   }, [dragging, dragWidth]);
 
-  const isChat = location.pathname.startsWith("/chat");
+  const isChat = location.pathname.startsWith("/threads");
   const sidebarPx = dragging && dragWidth !== null ? dragWidth : (expanded ? EXPANDED_W : COLLAPSED_W);
   const showLabels = dragging ? (dragWidth !== null && dragWidth >= SNAP_THRESHOLD) : expanded;
 
@@ -222,13 +233,19 @@ export default function RootLayout() {
           <div className={`flex flex-col ${showLabels ? "px-2" : "items-center"} gap-0.5`}>
             <div className={`flex items-center ${showLabels ? "px-3 gap-3" : "justify-center"} h-10 mb-1`}>
               <Avatar className="w-7 h-7 shrink-0">
-                <AvatarFallback className="text-[10px] font-semibold bg-primary/10 text-primary">{userProfile.initials}</AvatarFallback>
+                <AvatarFallback className="text-[10px] font-semibold bg-primary/10 text-primary">
+                  {(authMember?.name || "U").charAt(0).toUpperCase()}
+                </AvatarFallback>
               </Avatar>
               {showLabels && (
-                <div className="min-w-0">
-                  <p className="text-xs font-medium text-foreground truncate">{userProfile.name}</p>
-                  <p className="text-[10px] text-muted-foreground truncate">{userProfile.email}</p>
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs font-medium text-foreground truncate">{authMember?.name || "User"}</p>
                 </div>
+              )}
+              {showLabels && (
+                <button onClick={authLogout} className="text-muted-foreground hover:text-foreground" title="Logout">
+                  <LogOut className="w-3.5 h-3.5" />
+                </button>
               )}
             </div>
             <NavLink to="/settings" className="group relative block overflow-visible">
@@ -312,5 +329,78 @@ function CreateDropdown({
         </button>
       </div>
     </>
+  );
+}
+
+function LoginForm() {
+  const [mode, setMode] = useState<"login" | "register">("login");
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const login = useAuthStore(s => s.login);
+  const register = useAuthStore(s => s.register);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+    setLoading(true);
+    try {
+      if (mode === "login") await login(username, password);
+      else await register(username, password);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Authentication failed");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="h-screen flex items-center justify-center bg-background">
+      <div className="w-full max-w-sm px-6">
+        <div className="text-center mb-8">
+          <div className="w-12 h-12 rounded-xl bg-primary mx-auto mb-4 flex items-center justify-center">
+            <span className="text-primary-foreground font-mono font-bold text-lg">L</span>
+          </div>
+          <h1 className="text-xl font-semibold text-foreground">Leon</h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            {mode === "login" ? "Sign in to your account" : "Create a new account"}
+          </p>
+        </div>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <input
+            type="text"
+            placeholder="Username"
+            value={username}
+            onChange={e => setUsername(e.target.value)}
+            className="w-full px-4 py-2.5 rounded-lg border border-border bg-card text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
+            required
+          />
+          <input
+            type="password"
+            placeholder="Password"
+            value={password}
+            onChange={e => setPassword(e.target.value)}
+            className="w-full px-4 py-2.5 rounded-lg border border-border bg-card text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
+            required
+          />
+          {error && <p className="text-xs text-destructive">{error}</p>}
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full py-2.5 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 disabled:opacity-50"
+          >
+            {loading ? "..." : mode === "login" ? "Sign in" : "Create account"}
+          </button>
+        </form>
+        <p className="text-center text-xs text-muted-foreground mt-4">
+          {mode === "login" ? (
+            <>No account? <button onClick={() => { setMode("register"); setError(null); }} className="text-primary hover:underline">Register</button></>
+          ) : (
+            <>Already have an account? <button onClick={() => { setMode("login"); setError(null); }} className="text-primary hover:underline">Sign in</button></>
+          )}
+        </p>
+      </div>
+    </div>
   );
 }

@@ -26,7 +26,7 @@ interface OutletContext {
 
 /** Thin wrapper: key={threadId} forces remount → all hook state resets naturally. */
 export default function ChatPage() {
-  const { threadId } = useParams<{ memberId: string; threadId: string }>();
+  const { threadId } = useParams<{ threadId: string }>();
   if (!threadId) return null;
   return <ChatPageInner key={threadId} threadId={threadId} />;
 }
