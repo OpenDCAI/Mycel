@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useParams, useOutletContext, useLocation } from "react-router-dom";
 import ChatArea from "../components/ChatArea";
 import type { AssistantTurn } from "../api";
+import { authFetch } from "../store/auth-store";
 import ComputerPanel from "../components/ComputerPanel";
 import { DragHandle } from "../components/DragHandle";
 import Header from "../components/Header";
@@ -64,7 +65,7 @@ function ChatPageInner({ threadId }: { threadId: string }) {
         body: JSON.stringify({ model: state.selectedModel, thread_id: threadId }),
       });
     } else {
-      fetch(`/api/threads/${threadId}/runtime`)
+      authFetch(`/api/threads/${threadId}/runtime`)
         .then((r) => r.json())
         .then((d) => {
           if (d.model) {
