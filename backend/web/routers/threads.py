@@ -423,7 +423,7 @@ async def stream_thread_events(
     if not token:
         raise HTTPException(401, "Missing token")
     try:
-        sse_member_id = app.state.auth_service.verify_token(token)
+        sse_member_id = app.state.auth_service.verify_token(token)["member_id"]
     except ValueError as e:
         raise HTTPException(401, str(e))
     thread = app.state.thread_repo.get_by_id(thread_id)

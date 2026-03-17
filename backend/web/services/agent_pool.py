@@ -82,7 +82,8 @@ async def get_or_create_agent(app_obj: FastAPI, sandbox_type: str, thread_id: st
         entity_repo = app_obj.state.entity_repo
         agent_entity = entity_repo.get_by_thread_id(thread_id)
         if agent_entity:
-            # Find owner's human entity via member chain
+            # @@@admin-chain — find owner's human entity via Member domain (template ownership).
+            # This is NOT Entity→Member ownership; it's Thread→Entity→Member(template)→Owner→Entity(human).
             agent_member = app_obj.state.member_repo.get_by_id(agent_entity.member_id) if hasattr(app_obj.state, "member_repo") else None
             owner_entity_id = ""
             if agent_member and agent_member.owner_id:

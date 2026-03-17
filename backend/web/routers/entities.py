@@ -47,7 +47,8 @@ async def list_entities(
     member_id: Annotated[str, Depends(get_current_member_id)],
     app: Annotated[Any, Depends(get_app)],
 ):
-    """List all entities in the system (for directory / new-chat picker)."""
+    """List all entities (social identities) for discovery. Used by New Chat entity picker.
+    Entity = Thread's social identity. This lists all entities so users can find who to chat with."""
     entity_repo = app.state.entity_repo
     all_entities = entity_repo.list_all()
     return [

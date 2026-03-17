@@ -22,8 +22,8 @@ def _get_auth_service(app: FastAPI):
     return auth_service
 
 
-async def get_current_member_id(request: Request) -> str:
-    """Extract member_id from JWT Bearer token."""
+def _extract_jwt_payload(request: Request) -> dict:
+    """Extract and verify JWT payload from Bearer token. Returns {member_id, entity_id}."""
     auth_header = request.headers.get("Authorization", "")
     if not auth_header.startswith("Bearer "):
         raise HTTPException(401, "Missing or invalid Authorization header")
@@ -32,6 +32,20 @@ async def get_current_member_id(request: Request) -> str:
         return _get_auth_service(request.app).verify_token(token)
     except ValueError as e:
         raise HTTPException(401, str(e))
+
+
+async def get_current_member_id(request: Request) -> str:
+    """Extract member_id from JWT. Used for thread/workspace scoping."""
+    return _extract_jwt_payload(request)["member_id"]
+
+
+async def get_current_entity_id(request: Request) -> str:
+    """Extract entity_id from JWT. Used for chat/social scoping (Entity = Thread's identity)."""
+    payload = _extract_jwt_payload(request)
+    entity_id = payload.get("entity_id")
+    if not entity_id:
+        raise HTTPException(401, "Token missing entity_id — please re-login")
+    return entity_id
 
 
 async def verify_thread_owner(

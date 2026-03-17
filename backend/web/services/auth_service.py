@@ -119,8 +119,8 @@ class AuthService:
         # 8. No contact (owner↔own agent = bare chat)
         # 9. No chat
 
-        # 10. JWT
-        token = self._make_token(human_member_id)
+        # 10. JWT — carries both member_id and entity_id
+        token = self._make_token(human_member_id, human_entity_id)
 
         logger.info("Registered user '%s' (member=%s, agent=%s)", username, human_member_id[:8], agent_member_id[:8])
 
@@ -155,7 +155,7 @@ class AuthService:
         entities = self._entities.get_by_member_id(member.id)
         human_entity = next((e for e in entities if e.type == "human"), None)
 
-        token = self._make_token(member.id)
+        token = self._make_token(member.id, human_entity.id if human_entity else None)
 
         return {
             "token": token,
@@ -164,19 +164,18 @@ class AuthService:
             "entity_id": human_entity.id if human_entity else None,
         }
 
-    def verify_token(self, token: str) -> str:
-        """Verify JWT and return member_id. Raises ValueError on failure."""
+    def verify_token(self, token: str) -> dict:
+        """Verify JWT and return payload dict with member_id + entity_id. Raises ValueError on failure."""
         try:
             payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
-            return payload["member_id"]
+            return {"member_id": payload["member_id"], "entity_id": payload.get("entity_id")}
         except jwt.ExpiredSignatureError:
             raise ValueError("Token expired")
         except jwt.InvalidTokenError:
             raise ValueError("Invalid token")
 
-    def _make_token(self, member_id: str) -> str:
-        return jwt.encode(
-            {"member_id": member_id, "exp": time.time() + JWT_EXPIRE_SECONDS},
-            JWT_SECRET,
-            algorithm=JWT_ALGORITHM,
-        )
+    def _make_token(self, member_id: str, entity_id: str | None = None) -> str:
+        payload = {"member_id": member_id, "exp": time.time() + JWT_EXPIRE_SECONDS}
+        if entity_id:
+            payload["entity_id"] = entity_id
+        return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)

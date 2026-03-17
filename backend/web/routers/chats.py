@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
-from backend.web.core.dependencies import get_app, get_current_member_id
+from backend.web.core.dependencies import get_app, get_current_entity_id, get_current_member_id
 
 logger = logging.getLogger(__name__)
 
@@ -29,23 +29,11 @@ class SendMessageBody(BaseModel):
 
 @router.get("")
 async def list_chats(
-    member_id: Annotated[str, Depends(get_current_member_id)],
+    entity_id: Annotated[str, Depends(get_current_entity_id)],
     app: Annotated[Any, Depends(get_app)],
 ):
-    """List all chats for the current user's entities."""
-    entity_repo = app.state.entity_repo
-    chat_service = app.state.chat_service
-
-    entities = entity_repo.get_by_member_id(member_id)
-    all_chats = []
-    seen_ids: set[str] = set()
-    for e in entities:
-        chats = chat_service.list_chats_for_entity(e.id)
-        for c in chats:
-            if c["id"] not in seen_ids:
-                seen_ids.add(c["id"])
-                all_chats.append(c)
-    return all_chats
+    """List all chats for the current user's entity (social identity from JWT)."""
+    return app.state.chat_service.list_chats_for_entity(entity_id)
 
 
 @router.post("")
@@ -119,14 +107,12 @@ async def list_messages(
 @router.post("/{chat_id}/read")
 async def mark_read(
     chat_id: str,
-    member_id: Annotated[str, Depends(get_current_member_id)],
+    entity_id: Annotated[str, Depends(get_current_entity_id)],
     app: Annotated[Any, Depends(get_app)],
 ):
-    """Mark all messages in this chat as read for the current user."""
+    """Mark all messages in this chat as read for the current user's entity."""
     import time
-    entities = app.state.entity_repo.get_by_member_id(member_id)
-    for e in entities:
-        app.state.chat_entity_repo.update_last_read(chat_id, e.id, time.time())
+    app.state.chat_entity_repo.update_last_read(chat_id, entity_id, time.time())
     return {"status": "ok"}
 
 
