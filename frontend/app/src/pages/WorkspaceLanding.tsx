@@ -10,7 +10,14 @@ export default function WorkspaceLanding() {
   useEffect(() => {
     if (!entityId) return;
     authFetch(`/api/entities/${entityId}/agent-thread`)
-      .then(r => r.ok ? r.json() : null)
+      .then(r => {
+        if (r.status === 404) {
+          // @@@stale-token — entity doesn't exist in DB, force re-login
+          useAuthStore.getState().logout();
+          return null;
+        }
+        return r.ok ? r.json() : null;
+      })
       .then(data => {
         if (data?.thread_id) {
           navigate(`/threads/${data.thread_id}`, { replace: true });
