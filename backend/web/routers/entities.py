@@ -1,4 +1,4 @@
-"""Entity endpoints."""
+"""Entity & Member endpoints — new entity-chat system."""
 
 from typing import Annotated, Any
 
@@ -7,6 +7,44 @@ from fastapi import APIRouter, Depends, HTTPException
 from backend.web.core.dependencies import get_app, get_current_member_id
 
 router = APIRouter(prefix="/api/entities", tags=["entities"])
+
+# ---------------------------------------------------------------------------
+# Members (agent directory)
+# ---------------------------------------------------------------------------
+
+members_router = APIRouter(prefix="/api/members", tags=["members"])
+
+
+@members_router.get("")
+async def list_members(
+    member_id: Annotated[str, Depends(get_current_member_id)],
+    app: Annotated[Any, Depends(get_app)],
+):
+    """List all agent members with owner info and entities. For member directory page."""
+    member_repo = app.state.member_repo
+    entity_repo = app.state.entity_repo
+
+    all_members = member_repo.list_all()
+    result = []
+    for m in all_members:
+        if m.type != "mycel_agent":
+            continue
+        # Get owner name
+        owner = member_repo.get_by_id(m.owner_id) if m.owner_id else None
+        # Get entities for this member
+        entities = entity_repo.get_by_member_id(m.id)
+        result.append({
+            "id": m.id,
+            "name": m.name,
+            "type": m.type,
+            "avatar": m.avatar,
+            "description": m.description,
+            "owner_name": owner.name if owner else None,
+            "is_mine": m.owner_id == member_id,
+            "entities": [{"id": e.id, "name": e.name, "type": e.type} for e in entities],
+            "created_at": m.created_at,
+        })
+    return result
 
 
 @router.get("")
