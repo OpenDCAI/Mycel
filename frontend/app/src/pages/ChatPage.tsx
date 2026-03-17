@@ -148,6 +148,7 @@ function ChatPageInner({ threadId }: { threadId: string }) {
   );
 
   const computerResize = useResizableX(600, 360, 1200, true);
+  const [showExternalRuns, setShowExternalRuns] = useState(false);
 
   return (
     <>
@@ -156,6 +157,8 @@ function ChatPageInner({ threadId }: { threadId: string }) {
         threadPreview={tm.threads.find((t) => t.thread_id === threadId)?.preview ?? null}
         sandboxInfo={activeSandbox}
         currentModel={currentModel}
+        showExternalRuns={showExternalRuns}
+        onToggleExternalRuns={() => setShowExternalRuns(v => !v)}
         onToggleSidebar={() => setSidebarCollapsed(v => !v)}
         onPauseSandbox={() => void handlePauseSandbox()}
         onResumeSandbox={() => void handleResumeSandbox()}
@@ -176,6 +179,7 @@ function ChatPageInner({ threadId }: { threadId: string }) {
               isStreaming={isStreaming}
               runtimeStatus={runtimeStatus}
               loading={loading}
+              showExternalRuns={showExternalRuns}
               onFocusAgent={handleFocusAgent}
               onTaskNoticeClick={handleTaskNoticeClick}
             />

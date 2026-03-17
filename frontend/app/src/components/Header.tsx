@@ -1,4 +1,4 @@
-import { ChevronLeft, PanelLeft, Pause, Play } from "lucide-react";
+import { ChevronLeft, Eye, EyeOff, PanelLeft, Pause, Play } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import type { SandboxInfo } from "../api";
 import { useIsMobile } from "../hooks/use-mobile";
@@ -21,6 +21,8 @@ interface HeaderProps {
   threadPreview: string | null;
   sandboxInfo: SandboxInfo | null;
   currentModel?: string;
+  showExternalRuns?: boolean;
+  onToggleExternalRuns?: () => void;
   onToggleSidebar: () => void;
   onPauseSandbox: () => void;
   onResumeSandbox: () => void;
@@ -32,6 +34,8 @@ export default function Header({
   threadPreview,
   sandboxInfo,
   currentModel = "leon:medium",
+  showExternalRuns,
+  onToggleExternalRuns,
   onToggleSidebar,
   onPauseSandbox,
   onResumeSandbox,
@@ -85,6 +89,19 @@ export default function Header({
       </div>
 
       <div className="flex items-center gap-1.5">
+        {onToggleExternalRuns && (
+          <button
+            onClick={onToggleExternalRuns}
+            className={`px-2.5 py-1.5 rounded-lg text-xs flex items-center gap-1.5 border transition-colors ${
+              showExternalRuns
+                ? "border-primary/30 text-primary bg-primary/5"
+                : "border-border text-muted-foreground hover:text-foreground hover:bg-muted"
+            }`}
+            title={showExternalRuns ? "Hide external runs" : "Show external runs"}
+          >
+            {showExternalRuns ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
+          </button>
+        )}
         <ModelSelector
           currentModel={currentModel}
           threadId={activeThreadId}
