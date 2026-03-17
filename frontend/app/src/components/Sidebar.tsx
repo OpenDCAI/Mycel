@@ -2,6 +2,7 @@ import { Check, ChevronRight, MoreHorizontal, Plus, Search, Trash2 } from "lucid
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import type { ThreadSummary } from "../api";
+import MemberAvatar from "./MemberAvatar";
 import { useAppStore } from "../store/app-store";
 import { Skeleton } from "./ui/skeleton";
 
@@ -279,8 +280,6 @@ export default function Sidebar({
           {groups.map((group) => {
             const isActive = group.threads.some(t => t.thread_id === activeThreadId);
             const isRunning = group.threads.some(t => t.running);
-            const initial = group.memberName.slice(0, 1).toUpperCase();
-            const latestThread = group.threads[0];
             return (
               <div key={group.memberId} className="relative group/item w-full flex justify-center">
                 {isActive && (
@@ -289,13 +288,11 @@ export default function Sidebar({
                 <Link
                   to={`/threads`}
                   title={group.memberName}
-                  className={`w-9 h-9 rounded-xl flex items-center justify-center text-xs font-semibold transition-colors ${
-                    isActive ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:bg-primary/15 hover:text-primary"
-                  }`}
+                  className="flex items-center justify-center"
                 >
                   {isRunning
-                    ? <span className="w-3 h-3 rounded-full border-2 border-current border-t-transparent animate-spin" />
-                    : initial}
+                    ? <span className="w-9 h-9 rounded-xl flex items-center justify-center bg-muted"><span className="w-3 h-3 rounded-full border-2 border-muted-foreground border-t-transparent animate-spin" /></span>
+                    : <MemberAvatar name={group.memberName} size="sm" />}
                 </Link>
                 <div className="absolute left-[52px] top-1/2 -translate-y-1/2 px-2 py-1 bg-foreground text-background text-xs rounded opacity-0 group-hover/item:opacity-100 pointer-events-none transition-opacity whitespace-nowrap z-50 max-w-[200px] truncate">
                   {group.memberName}
@@ -353,8 +350,6 @@ export default function Sidebar({
           ) : (
             groups.map((group) => {
               const isExpanded = expandedMembers.has(group.memberId);
-              const initial = group.memberName.slice(0, 1).toUpperCase();
-              const urlId = group.memberId === "Leon" ? "leon" : group.memberId;
               return (
                 <div key={group.memberId} className="mb-1">
                   {/* Group header: chevron toggles expand, avatar+name navigates to new chat */}
@@ -369,9 +364,7 @@ export default function Sidebar({
                       to={`/threads`}
                       className="flex items-center gap-2 flex-1 min-w-0"
                     >
-                      <div className="w-6 h-6 rounded-lg bg-primary/10 flex items-center justify-center text-[11px] font-semibold text-primary flex-shrink-0">
-                        {initial}
-                      </div>
+                      <MemberAvatar name={group.memberName} size="xs" />
                       <span className="text-xs font-medium text-foreground flex-1 truncate">{group.memberName}</span>
                     </Link>
                     <span className="text-[10px] text-muted-foreground/40 flex-shrink-0">{group.threads.length || ""}</span>

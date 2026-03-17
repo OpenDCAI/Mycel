@@ -1,10 +1,11 @@
 import { memo } from "react";
 import type { UserMessage } from "../../api";
+import MemberAvatar from "../MemberAvatar";
 import { formatTime } from "./utils";
 
-export const UserBubble = memo(function UserBubble({ entry }: { entry: UserMessage }) {
+export const UserBubble = memo(function UserBubble({ entry, userName }: { entry: UserMessage; userName?: string }) {
   return (
-    <div className="flex justify-end animate-fade-in">
+    <div className="flex justify-end gap-2 mb-1 animate-fade-in">
       <div className="max-w-[78%]">
         <div className="rounded-xl rounded-br-sm px-3.5 py-2 bg-[#f5f5f5] border border-[#e5e5e5]">
           <p className="text-[13px] whitespace-pre-wrap leading-[1.55] text-[#171717]">
@@ -17,6 +18,7 @@ export const UserBubble = memo(function UserBubble({ entry }: { entry: UserMessa
           </div>
         )}
       </div>
+      <MemberAvatar name={userName || "You"} size="xs" type="human" />
     </div>
   );
 });

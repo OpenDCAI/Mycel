@@ -16,6 +16,8 @@ interface ChatAreaProps {
   showExternalRuns?: boolean;
   onFocusAgent?: (taskId: string) => void;
   onTaskNoticeClick?: (taskId: string) => void;
+  agentName?: string;
+  userName?: string;
 }
 
 // @@@tell-owner-extract — pull tell_owner message from segments
@@ -83,7 +85,7 @@ function preprocessEntries(entries: ChatEntry[], showExternalRuns: boolean): Pro
   return result;
 }
 
-export default function ChatArea({ entries, isStreaming: _isStreaming, runtimeStatus, loading, showExternalRuns = false, onFocusAgent, onTaskNoticeClick }: ChatAreaProps) {
+export default function ChatArea({ entries, isStreaming: _isStreaming, runtimeStatus, loading, showExternalRuns = false, onFocusAgent, onTaskNoticeClick, agentName, userName }: ChatAreaProps) {
   const containerRef = useStickyScroll<HTMLDivElement>();
 
   const processed = useMemo(
@@ -113,6 +115,7 @@ export default function ChatArea({ entries, isStreaming: _isStreaming, runtimeSt
                   isStreamingThis={false}
                   runtimeStatus={null}
                   onFocusAgent={onFocusAgent}
+                  agentName={agentName}
                 />
               );
             }
@@ -132,7 +135,7 @@ export default function ChatArea({ entries, isStreaming: _isStreaming, runtimeSt
               return <NoticeBubble key={entry.id} entry={entry as NoticeMessage} onTaskNoticeClick={onTaskNoticeClick} />;
             }
             if (entry.role === "user") {
-              return <UserBubble key={entry.id} entry={entry} />;
+              return <UserBubble key={entry.id} entry={entry} userName={userName} />;
             }
             if (entry.role === "waterline") {
               return <WaterlineDivider key={entry.id} />;
@@ -146,6 +149,7 @@ export default function ChatArea({ entries, isStreaming: _isStreaming, runtimeSt
                 isStreamingThis={isStreamingThis}
                 runtimeStatus={isStreamingThis ? runtimeStatus : null}
                 onFocusAgent={onFocusAgent}
+                agentName={agentName}
               />
             );
           })}

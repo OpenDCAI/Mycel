@@ -1,10 +1,9 @@
 import { useState, useMemo } from "react";
 import { ChevronDown, ChevronRight } from "lucide-react";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import MemberAvatar from "@/components/MemberAvatar";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import type { ResourceSession, SessionMetrics } from "./types";
-import { getAgentColor, getAgentInitials } from "./utils/avatar";
 import { calculateDuration, formatDuration } from "./utils/duration";
 import { formatMetric } from "./utils/format";
 import { SandboxFileBrowser } from "@/components/SandboxFileBrowser";
@@ -141,11 +140,7 @@ function LeaseItem({ group, providerType }: { group: LeaseGroup; providerType: s
         {/* Crew avatars */}
         <div className="flex -space-x-1 shrink-0">
           {group.sessions.slice(0, 4).map((s) => (
-            <Avatar key={s.id || s.leaseId} className="w-5 h-5 border border-background">
-              <AvatarFallback className={`${getAgentColor(s.agentId)} text-[8px]`}>
-                {getAgentInitials(s.agentName)}
-              </AvatarFallback>
-            </Avatar>
+            <MemberAvatar key={s.id || s.leaseId} name={s.agentName || "?"} size="xs" type="mycel_agent" className="border border-background" />
           ))}
           {group.sessions.length > 4 && (
             <div className="w-5 h-5 rounded-full bg-muted border border-background flex items-center justify-center text-[8px] text-muted-foreground">

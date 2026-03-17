@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import MemberAvatar from "@/components/MemberAvatar";
 import type { LeaseGroup } from "./SessionList";
-import { getAgentColor, getAgentInitials } from "./utils/avatar";
 import { calculateDuration, formatDuration } from "./utils/duration";
 import { formatMetric } from "./utils/format";
 
@@ -90,11 +89,7 @@ export default function SandboxCard({ group, onClick }: SandboxCardProps) {
       <div className="flex items-center gap-2">
         <div className="flex -space-x-1.5 shrink-0">
           {group.sessions.slice(0, 3).map((s) => (
-            <Avatar key={s.id || s.leaseId} className="w-6 h-6 border-2 border-card">
-              <AvatarFallback className={`${getAgentColor(s.agentId)} text-[8px] font-bold`}>
-                {getAgentInitials(s.agentName)}
-              </AvatarFallback>
-            </Avatar>
+            <MemberAvatar key={s.id || s.leaseId} name={s.agentName || "?"} size="xs" type="mycel_agent" className="border-2 border-card" />
           ))}
           {group.sessions.length > 3 && (
             <div className="w-6 h-6 rounded-full bg-muted border-2 border-card flex items-center justify-center text-[8px] font-mono text-muted-foreground">

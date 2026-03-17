@@ -1,5 +1,5 @@
 /**
- * MemberAvatar — unified avatar component for all DOM surfaces.
+ * @@@universal-avatar — THE single avatar component. Used everywhere.
  * Shows avatar image from /api/members/{id}/avatar with initials fallback.
  * Radix Avatar handles the fallback automatically on 404 or load error.
  */
@@ -16,9 +16,10 @@ const SIZE_MAP = {
 } as const;
 
 interface MemberAvatarProps {
-  memberId: string;
   name: string;
-  /** Member type — uses type-based color (consistent with network view). Falls back to ID hash. */
+  /** Member/entity ID — used for image URL + deterministic color hash. */
+  id?: string;
+  /** Member type — human | mycel_agent | openclaw_agent → type-based color. */
   type?: string;
   size?: keyof typeof SIZE_MAP;
   className?: string;
@@ -27,20 +28,20 @@ interface MemberAvatarProps {
 }
 
 export default function MemberAvatar({
-  memberId,
   name,
+  id,
   type,
   size = "md",
   className,
   rev,
 }: MemberAvatarProps) {
   const sizeClass = SIZE_MAP[size];
-  const fallbackColor = type ? colorForType(type).tw : colorForId(memberId);
-  const src = `/api/members/${memberId}/avatar${rev ? `?v=${rev}` : ""}`;
+  const fallbackColor = type ? colorForType(type).tw : id ? colorForId(id) : colorForId(name);
+  const src = id ? `/api/members/${id}/avatar${rev ? `?v=${rev}` : ""}` : undefined;
 
   return (
     <Avatar className={cn(sizeClass, "shrink-0", className)}>
-      <AvatarImage src={src} alt={name} />
+      {src && <AvatarImage src={src} alt={name} />}
       <AvatarFallback className={cn("font-semibold", fallbackColor)}>
         {getInitials(name)}
       </AvatarFallback>
