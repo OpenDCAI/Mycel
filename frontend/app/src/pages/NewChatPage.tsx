@@ -7,6 +7,7 @@ import type { ThreadManagerState, ThreadManagerActions } from "../hooks/use-thre
 import { useWorkspaceSettings } from "../hooks/use-workspace-settings";
 import { useAuthStore } from "../store/auth-store";
 import { useAppStore } from "../store/app-store";
+import MemberAvatar from "../components/MemberAvatar";
 
 interface OutletContext {
   tm: ThreadManagerState & ThreadManagerActions;
@@ -32,9 +33,11 @@ export default function NewChatPage() {
   const memberName = isOwnedAgent ? (authAgent?.name || "Agent") : decodedName;
 
   // Get the actual member ID for thread creation
-  const resolvedMemberId = isOwnedAgent
-    ? authAgent?.id
-    : memberList.find(m => m.name === decodedName)?.id;
+  const resolvedMember = isOwnedAgent
+    ? memberList.find(m => m.id === authAgent?.id)
+    : memberList.find(m => m.name === decodedName);
+  const resolvedMemberId = isOwnedAgent ? authAgent?.id : resolvedMember?.id;
+  const memberAvatarUrl = resolvedMember?.avatar_url;
 
   async function handleSend(message: string, sandbox: string, model: string, workspace?: string) {
     if (sandbox === "local" && !workspace && !hasWorkspace) {
@@ -68,6 +71,9 @@ export default function NewChatPage() {
     <div className="flex-1 flex items-center justify-center relative">
       <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-[600px] px-4">
         <div className="text-center mb-8">
+          <div className="flex justify-center mb-4">
+            <MemberAvatar name={memberName} avatarUrl={memberAvatarUrl} type="mycel_agent" size="lg" />
+          </div>
           <h1 className="text-2xl font-medium text-foreground mb-2">
             你好，我是 {memberName}
           </h1>
