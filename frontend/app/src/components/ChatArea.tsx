@@ -13,10 +13,12 @@ interface ChatAreaProps {
   onFocusAgent?: (taskId: string) => void;
   onTaskNoticeClick?: (taskId: string) => void;
   agentName?: string;
+  agentAvatarUrl?: string;
   userName?: string;
+  userAvatarUrl?: string;
 }
 
-export default function ChatArea({ entries, isStreaming: _isStreaming, runtimeStatus, loading, onFocusAgent, onTaskNoticeClick, agentName, userName }: ChatAreaProps) {
+export default function ChatArea({ entries, isStreaming: _isStreaming, runtimeStatus, loading, onFocusAgent, onTaskNoticeClick, agentName, agentAvatarUrl, userName, userAvatarUrl }: ChatAreaProps) {
   const containerRef = useStickyScroll<HTMLDivElement>();
 
   return (
@@ -36,7 +38,7 @@ export default function ChatArea({ entries, isStreaming: _isStreaming, runtimeSt
                   {isHidden && entry.senderName && (
                     <div className="text-[10px] text-[#a3a3a3] mb-0.5 text-right mr-2">{entry.senderName}</div>
                   )}
-                  <UserBubble entry={entry} userName={isHidden ? (entry.senderName || "external") : userName} />
+                  <UserBubble entry={entry} userName={isHidden ? (entry.senderName || "external") : userName} avatarUrl={isHidden ? undefined : userAvatarUrl} />
                 </div>
               );
             }
@@ -50,6 +52,7 @@ export default function ChatArea({ entries, isStreaming: _isStreaming, runtimeSt
                   runtimeStatus={isStreamingThis ? runtimeStatus : null}
                   onFocusAgent={onFocusAgent}
                   agentName={agentName}
+                  agentAvatarUrl={agentAvatarUrl}
                 />
               </div>
             );

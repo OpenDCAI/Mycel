@@ -8,6 +8,7 @@ interface UserBubbleProps {
   content?: string;      // direct content (chat path)
   timestamp?: number;    // direct timestamp (chat path)
   userName?: string;
+  avatarUrl?: string;
 }
 
 export const UserBubble = memo(function UserBubble(props: UserBubbleProps) {
@@ -27,7 +28,7 @@ export const UserBubble = memo(function UserBubble(props: UserBubbleProps) {
           </div>
         )}
       </div>
-      <MemberAvatar name={props.userName || "You"} size="xs" type="human" />
+      <MemberAvatar name={props.userName || "You"} avatarUrl={props.avatarUrl} size="xs" type="human" />
     </div>
   );
 });
