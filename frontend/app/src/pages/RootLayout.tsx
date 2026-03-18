@@ -52,6 +52,8 @@ function AuthenticatedLayout() {
     try {
       await uploadMemberAvatar(authMember.id, file);
       setAvatarRev(r => r + 1);
+      // Persist avatar flag so it survives page refresh
+      useAuthStore.setState(s => ({ member: s.member ? { ...s.member, avatar: `avatars/${authMember.id}.png` } : s.member }));
       toast.success("Avatar updated");
     } catch (err) {
       toast.error(`Upload failed: ${err instanceof Error ? err.message : "unknown"}`);
