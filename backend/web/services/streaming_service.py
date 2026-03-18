@@ -524,9 +524,9 @@ async def _run_agent_to_buffer(
         if hasattr(agent, "runtime"):
             agent.runtime.current_run_source = src or "owner"
 
-        # @@@owner-visibility-sse — same functions as refresh path in display_projection.py.
+        # @@@owner-visibility-sse — same functions as refresh path in visibility.py.
         # run_ctx is local to this run; written back to agent.runtime.visibility_context at run end.
-        from backend.web.services.display_projection import compute_visibility, message_visibility, tool_event_visibility
+        from backend.web.services.visibility import compute_visibility, message_visibility, tool_event_visibility
         is_steer = bool(meta.get("is_steer"))
         showing, run_ctx = compute_visibility(src or "owner", is_steer, agent.runtime.visibility_context)
 
