@@ -27,7 +27,6 @@ function extractChatMessage(text: string): string | null {
   return m ? m[1].trim() : null;
 }
 
-
 function buildToolSegments(toolCalls: unknown[], msgIndex: number, now: number): TurnSegment[] {
   return toolCalls.map((raw, j) => {
     const call = raw as { id?: string; name?: string; args?: unknown };
@@ -102,11 +101,8 @@ function handleHuman(msg: BackendMessage, i: number, state: MapState): void {
     const msgRunId = (meta.run_id as string) || null;
     const ntype = meta.notification_type as NotificationType | undefined;
 
-    if (state.currentTurn && msgRunId && msgRunId === state.currentRunId) {
-      state.currentTurn.segments.push({ type: "notice", content, notification_type: ntype });
-      return;
-    }
-    if (state.currentTurn && !msgRunId) {
+    // Fold into current turn if same run or no run tracking
+    if (state.currentTurn && (!msgRunId || msgRunId === state.currentRunId)) {
       state.currentTurn.segments.push({ type: "notice", content, notification_type: ntype });
       return;
     }

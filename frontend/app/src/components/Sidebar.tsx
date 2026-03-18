@@ -3,23 +3,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import type { ThreadSummary } from "../api";
 import MemberAvatar from "./MemberAvatar";
-import { useAppStore } from "../store/app-store";
 import { useAuthStore } from "../store/auth-store";
 import { Skeleton } from "./ui/skeleton";
-
-type DateGroup = "今天" | "昨天" | "更早";
-
-function getDateGroup(dateStr?: string): DateGroup {
-  if (!dateStr) return "更早";
-  const date = new Date(dateStr);
-  if (isNaN(date.getTime())) return "更早";
-  const now = new Date();
-  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const yesterdayStart = new Date(todayStart.getTime() - 86400000);
-  if (date >= todayStart) return "今天";
-  if (date >= yesterdayStart) return "昨天";
-  return "更早";
-}
 
 function formatRelativeTime(dateStr?: string): string {
   if (!dateStr) return "";
@@ -179,7 +164,6 @@ export default function Sidebar({
 }: SidebarProps) {
   const { threadId } = useParams<{ threadId?: string }>();
   const activeThreadId = threadId || null;
-  const memberList = useAppStore(s => s.memberList);
   const authAgent = useAuthStore(s => s.agent);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   const [expandedMembers, setExpandedMembers] = useState<Set<string>>(() => {

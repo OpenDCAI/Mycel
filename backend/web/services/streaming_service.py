@@ -497,7 +497,7 @@ async def _run_agent_to_buffer(
                             if tc_id:
                                 checkpoint_tc_ids.add(tc_id)
         except Exception:
-            pass
+            logger.debug("[stream:checkpoint] failed to pre-populate tc_ids for thread=%s", thread_id[:15], exc_info=True)
         emitted_tool_call_ids.update(checkpoint_tc_ids)
         logger.debug("[stream:checkpoint] thread=%s pre-populated %d tc_ids", thread_id[:15], len(checkpoint_tc_ids))
 
@@ -507,14 +507,15 @@ async def _run_agent_to_buffer(
         await _repair_incomplete_tool_calls(agent, config)
 
         # Emit notice BEFORE run_start when this run was triggered by a queue notification.
-        src = (message_metadata or {}).get("source")
+        meta = message_metadata or {}
+        src = meta.get("source")
         if src and src != "owner":
             await emit({
                 "event": "notice",
                 "data": json.dumps({
                     "content": message,
                     "source": src,
-                    "notification_type": (message_metadata or {}).get("notification_type"),
+                    "notification_type": meta.get("notification_type"),
                 }, ensure_ascii=False),
             })
 
@@ -525,7 +526,7 @@ async def _run_agent_to_buffer(
         # @@@display-showing-sse — same functions as refresh path in display_projection.py.
         # run_latent is local to this run; written back to agent.runtime.display_latent at run end.
         from backend.web.services.display_projection import compute_showing, ai_display, tool_display, tool_call_display
-        is_steer = bool((message_metadata or {}).get("is_steer"))
+        is_steer = bool(meta.get("is_steer"))
         showing, run_latent = compute_showing(src or "owner", is_steer, agent.runtime.display_latent)
 
         await emit({
@@ -534,7 +535,7 @@ async def _run_agent_to_buffer(
                 "thread_id": thread_id,
                 "run_id": run_id,
                 "source": src,
-                "sender_name": (message_metadata or {}).get("sender_name"),
+                "sender_name": meta.get("sender_name"),
                 "showing": showing,
             }),
         })
@@ -551,6 +552,7 @@ async def _run_agent_to_buffer(
             # 0 chunks when the graph is at __end__ (completed previous run).
             # The fix: always use aupdate_state to inject input, then astream(None).
             # This works for both fresh threads (no checkpoint) and existing ones.
+            effective_input = input_data
             if input_data is not None:
                 pre_state = await agent.agent.aget_state(config)
                 has_checkpoint = pre_state.values is not None and len(pre_state.values.get("messages", [])) > 0
@@ -558,11 +560,6 @@ async def _run_agent_to_buffer(
                     # Existing thread: inject message via aupdate_state, then resume
                     await agent.agent.aupdate_state(config, input_data, as_node="__start__")
                     effective_input = None
-                else:
-                    # Fresh thread: direct astream works fine
-                    effective_input = input_data
-            else:
-                effective_input = input_data
 
             async for chunk in agent.agent.astream(
                 effective_input,

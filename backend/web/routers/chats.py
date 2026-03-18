@@ -189,6 +189,13 @@ class SetContactBody(BaseModel):
     relation: Literal["normal", "blocked", "muted"]
 
 
+def _verify_entity_ownership(app: Any, entity_id: str, member_id: str) -> None:
+    """Raise 403 if entity does not belong to the authenticated member."""
+    entity = app.state.entity_repo.get_by_id(entity_id)
+    if not entity or entity.member_id != member_id:
+        raise HTTPException(403, "Entity does not belong to you")
+
+
 @router.post("/contacts")
 async def set_contact(
     body: SetContactBody,
@@ -196,6 +203,7 @@ async def set_contact(
     app: Annotated[Any, Depends(get_app)],
 ):
     """Set a directional contact relationship (block/mute/normal)."""
+    _verify_entity_ownership(app, body.owner_entity_id, member_id)
     import time
     from storage.contracts import ContactRow
     contact_repo = app.state.contact_repo
@@ -217,6 +225,7 @@ async def delete_contact(
     app: Annotated[Any, Depends(get_app)],
 ):
     """Delete a contact relationship."""
+    _verify_entity_ownership(app, owner_entity_id, member_id)
     contact_repo = app.state.contact_repo
     contact_repo.delete(owner_entity_id, target_entity_id)
     return {"status": "deleted"}
@@ -241,6 +250,7 @@ async def mute_chat(
     app: Annotated[Any, Depends(get_app)],
 ):
     """Mute/unmute a chat for a specific entity."""
+    _verify_entity_ownership(app, body.entity_id, member_id)
     chat_entity_repo = app.state.chat_entity_repo
     chat_entity_repo.update_mute(chat_id, body.entity_id, body.muted, body.mute_until)
     return {"status": "ok", "muted": body.muted}
@@ -249,12 +259,14 @@ async def mute_chat(
 @router.delete("/{chat_id}")
 async def delete_chat(
     chat_id: str,
-    member_id: Annotated[str, Depends(get_current_member_id)],
+    entity_id: Annotated[str, Depends(get_current_entity_id)],
     app: Annotated[Any, Depends(get_app)],
 ):
-    """Delete a chat."""
+    """Delete a chat. Caller must be a participant."""
     chat = app.state.chat_repo.get_by_id(chat_id)
     if not chat:
         raise HTTPException(404, "Chat not found")
+    if not app.state.chat_entity_repo.is_entity_in_chat(chat_id, entity_id):
+        raise HTTPException(403, "Not a participant of this chat")
     app.state.chat_repo.delete(chat_id)
     return {"status": "deleted"}

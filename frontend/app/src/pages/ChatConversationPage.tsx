@@ -46,6 +46,7 @@ function ChatConversationInner({ chatId }: { chatId: string }) {
   const [error, setError] = useState<string | null>(null);
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
+  const [typingEntities, setTypingEntities] = useState<Set<string>>(new Set());
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const isAtBottomRef = useRef(true);
@@ -101,7 +102,7 @@ function ChatConversationInner({ chatId }: { chatId: string }) {
       });
 
     return () => { cancelled = true; };
-  }, [chatId]);
+  }, [chatId, refreshChatList]);
 
   // Scroll to bottom on initial load
   useEffect(() => {
@@ -173,10 +174,6 @@ function ChatConversationInner({ chatId }: { chatId: string }) {
       refreshChatList(); // refresh sidebar on leave
     };
   }, [chatId, scrollToBottom, refreshChatList]);
-
-  // Typing indicator state
-  const [typingEntities, setTypingEntities] = useState<Set<string>>(new Set());
-
 
   // Send message
   const handleSend = useCallback(async () => {
