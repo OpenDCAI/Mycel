@@ -322,7 +322,7 @@ function ChatConversationInner({ chatId }: { chatId: string }) {
                     </div>
                   )}
                   {isMine ? (
-                    <UserBubble content={msg.content} timestamp={ts} userName={myName} />
+                    <UserBubble content={msg.content} timestamp={ts} userName={myName} avatarUrl={entityMap.get(myEntityId!)?.avatar_url} />
                   ) : (
                     <ChatBubble
                       content={msg.content}
