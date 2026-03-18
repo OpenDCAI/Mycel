@@ -37,7 +37,7 @@ async def route_message_to_brain(
 
     # @@@context-shift — only inject visibility hint when shifting from private → owner.
     # External messages arrive pre-formatted by format_chat_message (always has hint).
-    needs_shift_hint = source == "owner" and agent.runtime.display_latent != "owner"
+    needs_shift_hint = source == "owner" and agent.runtime.visibility_context != "owner"
 
     if source == "owner" and needs_shift_hint:
         steer_content = format_owner_steer(content)

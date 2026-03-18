@@ -524,11 +524,11 @@ async def _run_agent_to_buffer(
         if hasattr(agent, "runtime"):
             agent.runtime.current_run_source = src or "owner"
 
-        # @@@display-showing-sse — same functions as refresh path in display_projection.py.
-        # run_latent is local to this run; written back to agent.runtime.display_latent at run end.
-        from backend.web.services.display_projection import compute_showing, ai_display, tool_display, tool_call_display
+        # @@@owner-visibility-sse — same functions as refresh path in display_projection.py.
+        # run_ctx is local to this run; written back to agent.runtime.visibility_context at run end.
+        from backend.web.services.display_projection import compute_visibility, message_visibility, tool_event_visibility
         is_steer = bool(meta.get("is_steer"))
-        showing, run_latent = compute_showing(src or "owner", is_steer, agent.runtime.display_latent)
+        showing, run_ctx = compute_visibility(src or "owner", is_steer, agent.runtime.visibility_context)
 
         await emit({
             "event": "run_start",
@@ -621,20 +621,20 @@ async def _run_agent_to_buffer(
                                     "event": "text",
                                     "data": json.dumps({
                                         "content": content,
-                                        "showing": run_latent == "owner",
+                                        "showing": run_ctx == "owner",
                                     }, ensure_ascii=False),
                                 },
                                 message_id=chunk_msg_id,
                             )
 
-                        # Early tool_call emission — tagged via tool_call_display()
+                        # Early tool_call emission — tagged via message_visibility()
                         for tc_chunk in getattr(msg_chunk, "tool_call_chunks", []):
                             tc_id = tc_chunk.get("id")
                             tc_name = tc_chunk.get("name", "")
                             if tc_id and tc_name and tc_id not in emitted_tool_call_ids:
                                 emitted_tool_call_ids.add(tc_id)
                                 pending_tool_calls[tc_id] = {"name": tc_name, "args": {}}
-                                disp = tool_call_display(run_latent, tc_name)
+                                disp = tool_event_visibility(run_ctx, tc_name)
                                 tc_data: dict[str, Any] = {
                                     "id": tc_id, "name": tc_name, "args": {},
                                     **disp,
@@ -674,8 +674,8 @@ async def _run_agent_to_buffer(
                                 hmeta = getattr(msg, "metadata", {}) or {}
                                 hsrc = hmeta.get("source", "owner")
                                 his_steer = bool(hmeta.get("is_steer"))
-                                _showing, new_lat = compute_showing(hsrc, his_steer, run_latent)
-                                run_latent = new_lat
+                                _showing, new_lat = compute_visibility(hsrc, his_steer, run_ctx)
+                                run_ctx = new_lat
                                 continue
 
                             if msg_class == "AIMessage":
@@ -684,7 +684,7 @@ async def _run_agent_to_buffer(
                                     msg.metadata["run_id"] = run_id
 
                                 tc_names = [tc.get("name", "") for tc in getattr(msg, "tool_calls", [])]
-                                disp = ai_display(run_latent, tc_names)
+                                disp = message_visibility(run_ctx, tc_names)
 
                                 for tc in getattr(msg, "tool_calls", []):
                                     tc_id = tc.get("id")
@@ -702,7 +702,7 @@ async def _run_agent_to_buffer(
                                             "name": tc_name,
                                             "args": full_args,
                                         }
-                                    tc_disp = tool_call_display(run_latent, tc_name)
+                                    tc_disp = tool_event_visibility(run_ctx, tc_name)
                                     await emit(
                                         {
                                             "event": "tool_call",
@@ -724,7 +724,7 @@ async def _run_agent_to_buffer(
                                 if hasattr(msg, "metadata") and isinstance(msg.metadata, dict):
                                     msg.metadata["run_id"] = run_id
                                 tool_name = getattr(msg, "name", "") or ""
-                                disp = tool_display(run_latent, tool_name)
+                                disp = message_visibility(run_ctx, [tool_name])
                                 await emit(
                                     {
                                         "event": "tool_result",
@@ -779,7 +779,7 @@ async def _run_agent_to_buffer(
                 break
 
         # Write local latent back to runtime at run end
-        agent.runtime.display_latent = run_latent
+        agent.runtime.visibility_context = run_ctx
 
         # Final status
         if hasattr(agent, "runtime"):

@@ -30,9 +30,9 @@ class AgentRuntime:
         self._activity_sink: Callable[[dict], Any] | None = None
         # @@@run-source-tracking — set per-run by streaming_service, read by tell_owner
         self.current_run_source: str | None = None  # "owner" | "external" | "system"
-        # @@@display-latent — single source of truth for display context.
-        # Updated by middleware (before_model), streaming_service, and project_thread_display.
-        self.display_latent: str = "owner"
+        # @@@owner-visibility — single source of truth for visibility context.
+        # Updated by middleware (before_model), streaming_service, and annotate_owner_visibility.
+        self.visibility_context: str = "owner"
 
     # ========== 状态代理 ==========
 

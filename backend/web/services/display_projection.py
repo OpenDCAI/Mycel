@@ -1,9 +1,8 @@
-"""Re-export display projection from core.display — single source of truth."""
+"""Re-export owner visibility from core.runtime.visibility — single source of truth."""
 
-from core.display import (  # noqa: F401
-    ai_display,
-    compute_showing,
-    project_thread_display,
-    tool_call_display,
-    tool_display,
+from core.runtime.visibility import (  # noqa: F401
+    annotate_owner_visibility,
+    compute_visibility,
+    message_visibility,
+    tool_event_visibility,
 )
