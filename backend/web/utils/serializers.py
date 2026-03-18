@@ -19,6 +19,11 @@ def strip_system_tags(content: str) -> str:
 strip_system_hints = strip_system_tags
 
 
+def avatar_url(member_id: str | None, has_avatar: bool) -> str | None:
+    """Build avatar URL. Returns None if no avatar uploaded."""
+    return f"/api/members/{member_id}/avatar" if member_id and has_avatar else None
+
+
 def extract_text_content(raw_content: Any) -> str:
     """Extract text content from various message content formats."""
     if isinstance(raw_content, str):

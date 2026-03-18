@@ -37,6 +37,7 @@ from storage.contracts import EntityRow
 logger = logging.getLogger(__name__)
 from core.runtime.middleware.monitor import AgentState
 
+from backend.web.utils.serializers import avatar_url
 from sandbox.thread_context import set_current_thread_id
 
 router = APIRouter(prefix="/api/threads", tags=["threads"])
@@ -99,7 +100,7 @@ async def create_thread(
         "sandbox": sandbox_type,
         "member_id": agent_member_id,
         "member_name": agent_member.name,
-        "avatar_url": f"/api/members/{agent_member_id}/avatar" if agent_member.avatar else None,
+        "avatar_url": avatar_url(agent_member_id, bool(agent_member.avatar)),
         "agent": payload.agent,
     }
 
@@ -114,7 +115,7 @@ async def list_threads(
     threads = [
         {"thread_id": t["id"], "sandbox": t.get("sandbox_type", "local"), "agent": t.get("agent"),
          "member_name": t.get("member_name"), "member_id": t.get("member_id"),
-         "avatar_url": f"/api/members/{t['member_id']}/avatar" if t.get("member_avatar") else None}
+         "avatar_url": avatar_url(t.get("member_id"), bool(t.get("member_avatar")))}
         for t in raw
     ]
     return {"threads": threads}

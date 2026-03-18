@@ -99,7 +99,6 @@ class SteeringMiddleware(AgentMiddleware):
             ))
             # @@@display-latent-sync — advance latent so streaming tags
             # subsequent events with correct showing metadata.
-            rt = self._agent_runtime
             if rt and hasattr(rt, "display_latent"):
                 _, new_latent = compute_showing(source, bool(is_steer), rt.display_latent)
                 rt.display_latent = new_latent

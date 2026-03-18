@@ -10,6 +10,7 @@ from fastapi import APIRouter, Depends, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 
 from backend.web.core.dependencies import get_app, get_current_member_id
+from backend.web.utils.serializers import avatar_url
 
 logger = logging.getLogger(__name__)
 
@@ -45,7 +46,7 @@ async def list_members(
             "id": m.id,
             "name": m.name,
             "type": m.type,
-            "avatar_url": f"/api/members/{m.id}/avatar" if m.avatar else None,
+            "avatar_url": avatar_url(m.id, bool(m.avatar)),
             "description": m.description,
             "owner_name": owner.name if owner else None,
             "is_mine": m.owner_id == member_id,
@@ -150,7 +151,7 @@ async def list_entities(
     all_entities = entity_repo.list_all()
     return [
         {"id": e.id, "name": e.name, "type": e.type, "member_id": e.member_id,
-         "avatar_url": f"/api/members/{e.member_id}/avatar" if e.avatar else None}
+         "avatar_url": avatar_url(e.member_id, bool(e.avatar))}
         for e in all_entities
         if e.member_id not in exclude_member_ids
     ]
