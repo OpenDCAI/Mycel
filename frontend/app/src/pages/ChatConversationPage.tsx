@@ -4,31 +4,7 @@ import { PanelLeft, Send } from "lucide-react";
 import { authFetch, useAuthStore } from "../store/auth-store";
 import { UserBubble } from "../components/chat-area/UserBubble";
 import { ChatBubble } from "../components/chat-area/ChatBubble";
-
-interface ChatEntity {
-  id: string;
-  name: string;
-  type: string;
-  avatar_url?: string;
-}
-
-interface ChatMessage {
-  id: string;
-  chat_id: string;
-  sender_entity_id: string;
-  sender_name: string;
-  content: string;
-  mentioned_entity_ids: string[];
-  created_at: number;
-}
-
-interface ChatDetail {
-  id: string;
-  title: string | null;
-  status: string;
-  created_at: number;
-  entities: ChatEntity[];
-}
+import type { ChatEntity, ChatMessage, ChatDetail } from "../api/types";
 
 // @@@time-gap — only show timestamp when gap >= 5 minutes
 function shouldShowTime(prev: ChatMessage | null, curr: ChatMessage): boolean {

@@ -20,7 +20,8 @@ function ThreadsIndexRedirect() {
   const agent = useAuthStore(s => s.agent);
   const navigate = useNavigate();
   useEffect(() => {
-    const name = agent?.name || "leon";
+    if (!agent?.name) return; // wait for auth to load
+    const name = agent.name;
     navigate(`/threads/${encodeURIComponent(name)}`, { replace: true });
   }, [agent, navigate]);
   return null;

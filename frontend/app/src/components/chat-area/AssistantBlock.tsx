@@ -92,7 +92,7 @@ function formatDuration(ms: number): string {
 }
 
 export const AssistantBlock = memo(function AssistantBlock({ entry, isStreamingThis, runtimeStatus, onFocusAgent, agentName }: AssistantBlockProps) {
-  const displayName = agentName || "Leon";
+  const displayName = agentName || "Agent";
   const hasNotice = entry.segments.some((s) => s.type === "notice");
 
   const [elapsed, setElapsed] = useState<number | null>(() =>

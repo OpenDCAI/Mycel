@@ -29,7 +29,7 @@ export default function NewChatPage() {
   // Resolve URL member name → member ID
   const decodedName = memberUrlId ? decodeURIComponent(memberUrlId) : undefined;
   const isOwnedAgent = !decodedName || decodedName === authAgent?.name;
-  const memberName = isOwnedAgent ? (authAgent?.name || "Leon") : decodedName;
+  const memberName = isOwnedAgent ? (authAgent?.name || "Agent") : decodedName;
 
   // Get the actual member ID for thread creation
   const resolvedMemberId = isOwnedAgent

@@ -227,7 +227,7 @@ export default function Sidebar({
     const map = new Map<string, { memberName: string; avatarUrl?: string; threads: ThreadSummary[]; latestAt: number }>();
 
     for (const thread of threads) {
-      const key = thread.member_name || thread.agent || "Leon";
+      const key = thread.member_name || thread.agent || "Agent";
       if (!map.has(key)) map.set(key, { memberName: key, avatarUrl: thread.avatar_url, threads: [], latestAt: 0 });
       const g = map.get(key)!;
       if (!g.avatarUrl && thread.avatar_url) g.avatarUrl = thread.avatar_url;

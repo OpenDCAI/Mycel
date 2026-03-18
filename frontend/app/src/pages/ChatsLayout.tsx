@@ -3,22 +3,7 @@ import { Link, Outlet, useParams, useNavigate } from "react-router-dom";
 import { Plus, Search, X } from "lucide-react";
 import MemberAvatar from "../components/MemberAvatar";
 import { authFetch, useAuthStore } from "../store/auth-store";
-
-interface ChatEntity {
-  id: string;
-  name: string;
-  type: string;
-  avatar_url?: string;
-}
-
-interface ChatSummary {
-  id: string;
-  title: string | null;
-  entities: ChatEntity[];
-  last_message?: { content: string; sender_name: string; created_at: number };
-  unread_count: number;
-  has_mention: boolean;
-}
+import type { ChatEntity, ChatSummary } from "../api/types";
 
 function formatTime(ts: number): string {
   const d = new Date(ts * 1000);

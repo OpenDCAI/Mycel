@@ -242,3 +242,39 @@ export interface WorkspaceFileResult {
   size: number;
 }
 
+// --- Entity Chat types ---
+
+export interface ChatEntity {
+  id: string;
+  name: string;
+  type: string;
+  avatar_url?: string;
+}
+
+export interface ChatSummary {
+  id: string;
+  title: string | null;
+  entities: ChatEntity[];
+  last_message?: { content: string; sender_name: string; created_at: number };
+  unread_count: number;
+  has_mention: boolean;
+}
+
+export interface ChatDetail {
+  id: string;
+  title: string | null;
+  status: string;
+  created_at: number;
+  entities: ChatEntity[];
+}
+
+export interface ChatMessage {
+  id: string;
+  chat_id: string;
+  sender_entity_id: string;
+  sender_name: string;
+  content: string;
+  mentioned_entity_ids: string[];
+  created_at: number;
+}
+
