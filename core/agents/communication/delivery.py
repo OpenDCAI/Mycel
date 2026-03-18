@@ -51,6 +51,12 @@ async def _async_deliver(
     sender_entity_id: str,
 ) -> None:
     """Deliver chat message to an agent's brain thread."""
+    # @@@context-isolation — clear inherited LangChain ContextVar so the recipient
+    # agent's astream doesn't inherit the sender's StreamMessagesHandler callbacks.
+    # Without this, LangGraph's messages stream mode leaks chunks across agents.
+    from langchain_core.runnables.config import var_child_runnable_config
+    var_child_runnable_config.set(None)
+
     logger.info("[delivery] _async_deliver: entity=%s thread=%s from=%s", entity.id, entity.thread_id, sender_name)
     from backend.web.services.message_routing import route_message_to_brain
     from core.runtime.middleware.queue.formatters import format_chat_message

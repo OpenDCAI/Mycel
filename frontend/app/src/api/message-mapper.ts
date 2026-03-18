@@ -1,4 +1,4 @@
-import type { AssistantTurn, BackendMessage, ChatEntry, DisplayMode, NoticeMessage, NotificationType, ToolSegment, TurnSegment, WaterlineEntry } from "./types";
+import type { AssistantTurn, BackendMessage, ChatEntry, NoticeMessage, NotificationType, ToolSegment, TurnSegment } from "./types";
 
 function extractTextContent(raw: unknown): string {
   if (typeof raw === "string") return raw;
@@ -19,6 +19,12 @@ function extractTextContent(raw: unknown): string {
 /** Strip <system-reminder>...</system-reminder> blocks from text content. */
 function stripSystemReminders(text: string): string {
   return text.replace(/<system-reminder>[\s\S]*?<\/system-reminder>/g, "").trim();
+}
+
+/** Extract the actual chat message content from <chat-message> tags inside system-reminder. */
+function extractChatMessage(text: string): string | null {
+  const m = text.match(/<chat-message[^>]*>([\s\S]*?)<\/chat-message>/);
+  return m ? m[1].trim() : null;
 }
 
 
@@ -47,50 +53,54 @@ function appendToTurn(turn: AssistantTurn, msgId: string, segments: TurnSegment[
   turn.messageIds?.push(msgId);
 }
 
+// @@@display — read backend-computed display metadata
+interface DisplayAnnotation {
+  showing?: boolean;
+  is_tell_owner?: boolean;
+  sender_name?: string;
+}
+
+function getDisplay(msg: BackendMessage): DisplayAnnotation {
+  return (msg as any).display ?? {};
+}
+
 interface MapState {
   entries: ChatEntry[];
   currentTurn: AssistantTurn | null;
   currentRunId: string | null;
+  showHidden: boolean;
   now: number;
-  // @@@display-carry — carried from HumanMessage to subsequent AI/Tool messages
-  _displayMode: DisplayMode | undefined;
-  _senderName: string | undefined;
 }
 
 function handleHuman(msg: BackendMessage, i: number, state: MapState): void {
-  const display = (msg as any).display as { mode?: string; run_source?: string; sender_name?: string } | undefined;
-  const mode = display?.mode;
+  const display = getDisplay(msg);
+  const meta = msg.metadata || {};
 
-  // @@@waterline — owner steers into external run
-  if (mode === "waterline") {
+  // Hidden HumanMessage: each run = independent turn, just break the current turn.
+  // When showHidden, also emit a dimmed user entry.
+  if (display.showing === false) {
     state.currentTurn = null;
     state.currentRunId = null;
-    state._displayMode = "expanded";
-    state._senderName = undefined;
-    const entry: WaterlineEntry = {
-      id: msg.id ?? `waterline-${i}`,
-      role: "waterline",
-      content: extractTextContent(msg.content),
-      timestamp: state.now,
-    };
-    state.entries.push(entry);
+    if (state.showHidden) {
+      const rawContent = extractTextContent(msg.content);
+      const chatMsg = extractChatMessage(rawContent);
+      state.entries.push({
+        id: msg.id ?? `hist-user-${i}`,
+        role: "user",
+        content: chatMsg || stripSystemReminders(rawContent) || "(external message)",
+        timestamp: state.now,
+        showing: false,
+        senderName: (meta.sender_name as string) || undefined,
+      });
+    }
     return;
   }
 
-  // @@@collapsed-human — external message, don't show as UserBubble
-  if (mode === "collapsed") {
-    state.currentTurn = null;
-    state.currentRunId = null;
-    state._displayMode = "collapsed";
-    state._senderName = display?.sender_name;
-    return;
-  }
-
-  // System-injected messages (steer reminders, task notifications) → notice
-  if (msg.metadata?.source === "system") {
+  // System-injected messages → notice
+  if (meta.source === "system") {
     const content = extractTextContent(msg.content);
-    const msgRunId = (msg.metadata?.run_id as string) || null;
-    const ntype = msg.metadata?.notification_type as NotificationType | undefined;
+    const msgRunId = (meta.run_id as string) || null;
+    const ntype = meta.notification_type as NotificationType | undefined;
 
     if (state.currentTurn && msgRunId && msgRunId === state.currentRunId) {
       state.currentTurn.segments.push({ type: "notice", content, notification_type: ntype });
@@ -113,11 +123,9 @@ function handleHuman(msg: BackendMessage, i: number, state: MapState): void {
     return;
   }
 
-  // Normal user message (expanded) → breaks current turn
+  // Normal visible user message
   state.currentTurn = null;
   state.currentRunId = null;
-  state._displayMode = "expanded";
-  state._senderName = undefined;
   state.entries.push({
     id: msg.id ?? `hist-user-${i}`,
     role: "user",
@@ -127,37 +135,76 @@ function handleHuman(msg: BackendMessage, i: number, state: MapState): void {
 }
 
 function handleAI(msg: BackendMessage, i: number, state: MapState): void {
-  const display = (msg as any).display as { mode?: string; sender_name?: string } | undefined;
+  const display = getDisplay(msg);
   const textContent = stripSystemReminders(extractTextContent(msg.content));
   const toolCalls = Array.isArray(msg.tool_calls) ? msg.tool_calls : [];
   const msgId = msg.id ?? `hist-turn-${i}`;
   const msgRunId = (msg.metadata?.run_id as string) || null;
 
+  // Hidden: skip (unless tell_owner or showHidden)
+  if (display.showing === false && !display.is_tell_owner && !state.showHidden) {
+    return;
+  }
+
+  // tell_owner from hidden run: extract tell_owner content only
+  if (display.showing === false && display.is_tell_owner) {
+    const tellMsgs: string[] = [];
+    for (const tc of toolCalls) {
+      const call = tc as { name?: string; args?: unknown };
+      if (call.name === "tell_owner") {
+        const args = call.args as { message?: string } | undefined;
+        if (args?.message) tellMsgs.push(args.message);
+      }
+    }
+    if (tellMsgs.length > 0) {
+      const turn = createTurn(msgId, tellMsgs.map(t => ({ type: "text" as const, content: t })), state.now);
+      turn.isTellOwner = true;
+      turn.showing = true; // tell_owner content IS shown
+      state.entries.push(turn);
+    }
+    return;
+  }
+
+  // showHidden dimmed turn — hidden AI rendered separately, not merged
+  if (display.showing === false && state.showHidden) {
+    const segments: TurnSegment[] = [];
+    if (textContent) segments.push({ type: "text", content: textContent });
+    if (toolCalls.length > 0) segments.push(...buildToolSegments(toolCalls, i, state.now));
+    const turn = createTurn(msgId, segments, state.now);
+    turn.showing = false;
+    turn.senderName = display.sender_name;
+    state.currentTurn = turn;
+    state.currentRunId = msgRunId;
+    state.entries.push(turn);
+    return;
+  }
+
+  // Visible: normal turn building
   const segments: TurnSegment[] = [];
   if (textContent) segments.push({ type: "text", content: textContent });
   if (toolCalls.length > 0) segments.push(...buildToolSegments(toolCalls, i, state.now));
 
-  // Group by run_id: same run_id = same Turn
+  // @@@turn-merge — merge within same run_id, or when both have no run tracking.
   if (state.currentTurn && msgRunId && msgRunId === state.currentRunId) {
     appendToTurn(state.currentTurn, msgId, segments);
-    // punch_through AIMessage upgrades the turn's displayMode if it was collapsed
-    if (display?.mode === "punch_through" && state.currentTurn.displayMode === "collapsed") {
-      state.currentTurn.displayMode = "collapsed"; // keep collapsed, punch_through segments handled in rendering
-    }
   } else if (state.currentTurn && !msgRunId && !state.currentRunId) {
     appendToTurn(state.currentTurn, msgId, segments);
   } else {
-    // New run_id or first message → new Turn
     state.currentTurn = createTurn(msgId, segments, state.now);
     state.currentRunId = msgRunId;
-    // @@@display-mode-carry — set displayMode from display annotation or carried state
-    state.currentTurn.displayMode = (display?.mode ?? state._displayMode) as DisplayMode | undefined;
-    state.currentTurn.senderName = display?.sender_name ?? state._senderName;
+    state.currentTurn.showing = true;
     state.entries.push(state.currentTurn);
   }
 }
 
 function handleTool(msg: BackendMessage, _i: number, state: MapState): void {
+  const display = getDisplay(msg);
+
+  // Hidden: skip (unless tell_owner result or showHidden)
+  if (display.showing === false && !display.is_tell_owner && !state.showHidden) {
+    return;
+  }
+
   if (!state.currentTurn) return;
   const seg = state.currentTurn.segments.find(
     (s): s is ToolSegment => s.type === "tool" && s.step.id === msg.tool_call_id,
@@ -172,8 +219,6 @@ function handleTool(msg: BackendMessage, _i: number, state: MapState): void {
     let threadId = (msg.metadata?.subagent_thread_id as string | undefined)
       || (taskId ? `subagent-${taskId}` : undefined);
 
-    // For Agent tool calls: also try parsing JSON content for task_id/thread_id
-    // (background agents return JSON with task_id; metadata may be empty)
     if (!taskId && seg.step.name === "Agent") {
       try {
         const parsed = JSON.parse(contentStr) as Record<string, unknown>;
@@ -203,9 +248,9 @@ const MSG_HANDLERS: Record<string, (msg: BackendMessage, i: number, state: MapSt
   ToolMessage: handleTool,
 };
 
-export function mapBackendEntries(payload: unknown): ChatEntry[] {
+export function mapBackendEntries(payload: unknown, showHidden = false): ChatEntry[] {
   if (!Array.isArray(payload)) return [];
-  const state: MapState = { entries: [], currentTurn: null, currentRunId: null, now: Date.now(), _displayMode: undefined, _senderName: undefined };
+  const state: MapState = { entries: [], currentTurn: null, currentRunId: null, showHidden, now: Date.now() };
 
   for (let i = 0; i < payload.length; i += 1) {
     const msg = payload[i] as BackendMessage | undefined;

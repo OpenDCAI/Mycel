@@ -36,7 +36,7 @@ from storage.contracts import EntityRow
 
 logger = logging.getLogger(__name__)
 from core.runtime.middleware.monitor import AgentState
-from core.runtime.middleware.queue import format_steer_reminder
+
 from sandbox.thread_context import set_current_thread_id
 
 router = APIRouter(prefix="/api/threads", tags=["threads"])
@@ -94,7 +94,14 @@ async def create_thread(
     if payload.cwd:
         app.state.thread_cwd[thread_entity_id] = payload.cwd
 
-    return {"thread_id": thread_entity_id, "sandbox": sandbox_type}
+    return {
+        "thread_id": thread_entity_id,
+        "sandbox": sandbox_type,
+        "member_id": agent_member_id,
+        "member_name": agent_member.name,
+        "avatar_url": f"/api/members/{agent_member_id}/avatar" if agent_member.avatar else None,
+        "agent": payload.agent,
+    }
 
 
 @router.get("")
@@ -106,7 +113,8 @@ async def list_threads(
     raw = app.state.thread_repo.list_by_owner(member_id)
     threads = [
         {"thread_id": t["id"], "sandbox": t.get("sandbox_type", "local"), "agent": t.get("agent"),
-         "member_name": t.get("member_name"), "member_id": t.get("member_id")}
+         "member_name": t.get("member_name"), "member_id": t.get("member_id"),
+         "avatar_url": f"/api/members/{t['member_id']}/avatar" if t.get("member_avatar") else None}
         for t in raw
     ]
     return {"threads": threads}
@@ -133,9 +141,11 @@ async def get_thread_messages(
 
     serialized = [serialize_message(msg) for msg in messages]
 
-    # @@@display-projection — annotate messages with display_mode for frontend rendering
+    # @@@display-projection — annotate messages with display metadata.
+    # Do NOT update agent.runtime.display_latent here — streaming owns the live state.
+    # Updating it would race with active runs.
     from backend.web.services.display_projection import project_thread_display
-    annotated = project_thread_display(serialized)
+    annotated, _final_latent = project_thread_display(serialized)
 
     return {
         "thread_id": thread_id,
@@ -169,6 +179,13 @@ async def delete_thread(
         except Exception as exc:
             logger.warning("Failed to destroy sandbox resources for thread %s: %s", thread_id, exc)
         await asyncio.to_thread(delete_thread_in_db, thread_id)
+        # Also delete from threads table (entity-chat addition)
+        app.state.thread_repo.delete(thread_id)
+        # Delete associated entity
+        try:
+            app.state.entity_repo.delete(thread_id)
+        except Exception:
+            pass
 
     # Clean up thread-specific state
     app.state.thread_sandbox.pop(thread_id, None)
@@ -194,10 +211,8 @@ async def send_message(
         raise HTTPException(status_code=400, detail="message cannot be empty")
 
     from backend.web.services.message_routing import route_message_to_brain
-    from backend.web.services.prompt_injection import build_message_with_hint
 
-    content = build_message_with_hint(payload.message, source="owner")
-    return await route_message_to_brain(app, thread_id, content, source="owner")
+    return await route_message_to_brain(app, thread_id, payload.message, source="owner")
 
 
 @router.get("/{thread_id}/history")

@@ -4,6 +4,7 @@ import { Link, useParams } from "react-router-dom";
 import type { ThreadSummary } from "../api";
 import MemberAvatar from "./MemberAvatar";
 import { useAppStore } from "../store/app-store";
+import { useAuthStore } from "../store/auth-store";
 import { Skeleton } from "./ui/skeleton";
 
 type DateGroup = "今天" | "昨天" | "更早";
@@ -179,8 +180,14 @@ export default function Sidebar({
   const { threadId } = useParams<{ threadId?: string }>();
   const activeThreadId = threadId || null;
   const memberList = useAppStore(s => s.memberList);
+  const authAgent = useAuthStore(s => s.agent);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
-  const [expandedMembers, setExpandedMembers] = useState<Set<string>>(new Set());
+  const [expandedMembers, setExpandedMembers] = useState<Set<string>>(() => {
+    try {
+      const saved = localStorage.getItem("sidebar-expanded-members");
+      return saved ? new Set(JSON.parse(saved)) : new Set();
+    } catch { return new Set(); }
+  });
   const hasInitialized = useRef(false);
   const [isSelectMode, setIsSelectMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -217,20 +224,21 @@ export default function Sidebar({
 
   // Group threads by member — uses thread.member_name (auth-scoped from API)
   const groups = useMemo(() => {
-    const map = new Map<string, { memberName: string; threads: ThreadSummary[]; latestAt: number }>();
+    const map = new Map<string, { memberName: string; avatarUrl?: string; threads: ThreadSummary[]; latestAt: number }>();
 
     for (const thread of threads) {
-      const key = (thread as any).member_name || thread.agent || "Leon";
-      if (!map.has(key)) map.set(key, { memberName: key, threads: [], latestAt: 0 });
+      const key = thread.member_name || thread.agent || "Leon";
+      if (!map.has(key)) map.set(key, { memberName: key, avatarUrl: thread.avatar_url, threads: [], latestAt: 0 });
       const g = map.get(key)!;
+      if (!g.avatarUrl && thread.avatar_url) g.avatarUrl = thread.avatar_url;
       const at = thread.updated_at ? new Date(thread.updated_at).getTime() : 0;
       g.threads.push(thread);
       g.latestAt = Math.max(g.latestAt, at);
     }
 
-    // Ensure at least one entry
-    if (map.size === 0) {
-      map.set("Leon", { memberName: "Leon", threads: [], latestAt: 0 });
+    // Ensure at least one entry — use the user's owned agent, not hardcoded "Leon"
+    if (map.size === 0 && authAgent) {
+      map.set(authAgent.name, { memberName: authAgent.name, avatarUrl: authAgent.avatar ?? undefined, threads: [], latestAt: 0 });
     }
 
     return [...map.entries()]
@@ -244,13 +252,17 @@ export default function Sidebar({
           return tb - ta;
         }),
       }));
-  }, [threads]);
+  }, [threads, authAgent]);
 
-  // Auto-expand the most recently active member on first load
+  // Auto-expand the most recently active member on first load (only if nothing saved)
   useEffect(() => {
     if (groups.length > 0 && !hasInitialized.current) {
       hasInitialized.current = true;
-      setExpandedMembers(new Set([groups[0].memberId]));
+      if (expandedMembers.size === 0) {
+        const init = new Set([groups[0].memberId]);
+        setExpandedMembers(init);
+        localStorage.setItem("sidebar-expanded-members", JSON.stringify([...init]));
+      }
     }
   }, [groups]);
 
@@ -259,6 +271,7 @@ export default function Sidebar({
       const next = new Set(prev);
       if (next.has(memberId)) next.delete(memberId);
       else next.add(memberId);
+      localStorage.setItem("sidebar-expanded-members", JSON.stringify([...next]));
       return next;
     });
   };
@@ -286,13 +299,13 @@ export default function Sidebar({
                   <div className="absolute -left-[4px] top-1/2 -translate-y-1/2 w-[3px] h-5 rounded-r-full bg-primary" />
                 )}
                 <Link
-                  to={`/threads`}
+                  to={`/threads/${encodeURIComponent(group.memberId)}`}
                   title={group.memberName}
                   className="flex items-center justify-center"
                 >
                   {isRunning
                     ? <span className="w-9 h-9 rounded-xl flex items-center justify-center bg-muted"><span className="w-3 h-3 rounded-full border-2 border-muted-foreground border-t-transparent animate-spin" /></span>
-                    : <MemberAvatar name={group.memberName} size="sm" />}
+                    : <MemberAvatar name={group.memberName} avatarUrl={group.avatarUrl} type="mycel_agent" size="sm" />}
                 </Link>
                 <div className="absolute left-[52px] top-1/2 -translate-y-1/2 px-2 py-1 bg-foreground text-background text-xs rounded opacity-0 group-hover/item:opacity-100 pointer-events-none transition-opacity whitespace-nowrap z-50 max-w-[200px] truncate">
                   {group.memberName}
@@ -350,51 +363,42 @@ export default function Sidebar({
           ) : (
             groups.map((group) => {
               const isExpanded = expandedMembers.has(group.memberId);
+              const urlId = encodeURIComponent(group.memberId);
               return (
                 <div key={group.memberId} className="mb-1">
-                  {/* Group header: chevron toggles expand, avatar+name navigates to new chat */}
-                  <div className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg hover:bg-muted">
-                    <button
-                      onClick={() => toggleMember(group.memberId)}
-                      className="p-0.5 rounded text-muted-foreground/50 hover:bg-muted-foreground/20 hover:text-muted-foreground flex-shrink-0"
-                    >
-                      <ChevronRight className={`w-3.5 h-3.5 transition-transform ${isExpanded ? "rotate-90" : ""}`} />
-                    </button>
-                    <Link
-                      to={`/threads`}
-                      className="flex items-center gap-2 flex-1 min-w-0"
-                    >
-                      <MemberAvatar name={group.memberName} size="xs" />
-                      <span className="text-xs font-medium text-foreground flex-1 truncate">{group.memberName}</span>
-                    </Link>
+                  {/* Group header: entire row toggles expand */}
+                  <button
+                    onClick={() => toggleMember(group.memberId)}
+                    className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg hover:bg-muted w-full text-left"
+                  >
+                    <ChevronRight className={`w-3.5 h-3.5 transition-transform flex-shrink-0 text-muted-foreground/50 ${isExpanded ? "rotate-90" : ""}`} />
+                    <MemberAvatar name={group.memberName} avatarUrl={group.avatarUrl} type="mycel_agent" size="xs" />
+                    <span className="text-xs font-medium text-foreground flex-1 truncate">{group.memberName}</span>
                     <span className="text-[10px] text-muted-foreground/40 flex-shrink-0">{group.threads.length || ""}</span>
-                  </div>
+                  </button>
                   {isExpanded && (
                     <div className="mt-0.5 ml-3 space-y-0.5">
-                      {group.threads.length === 0 ? (
-                        <Link
-                          to={`/threads`}
-                          className="block px-3 py-2 text-[11px] text-muted-foreground/50 hover:text-muted-foreground transition-colors"
-                        >
-                          + 发起新对话
-                        </Link>
-                      ) : (
-                        group.threads.map((thread) => (
-                          <ThreadItem
-                            key={thread.thread_id}
-                            thread={thread}
-                            isActive={activeThreadId === thread.thread_id}
-                            label={thread.preview || thread.sandbox || "local"}
-                            to={`/threads/${thread.thread_id}`}
-                            isSelectMode={isSelectMode}
-                            isSelected={selectedIds.has(thread.thread_id)}
-                            onToggleSelect={onToggleSelect}
-                            confirmDelete={confirmDelete}
-                            setConfirmDelete={setConfirmDelete}
-                            onDeleteThread={onDeleteThread}
-                          />
-                        ))
-                      )}
+                      {group.threads.map((thread) => (
+                        <ThreadItem
+                          key={thread.thread_id}
+                          thread={thread}
+                          isActive={activeThreadId === thread.thread_id}
+                          label={thread.preview || thread.sandbox || "local"}
+                          to={`/threads/${urlId}/${thread.thread_id}`}
+                          isSelectMode={isSelectMode}
+                          isSelected={selectedIds.has(thread.thread_id)}
+                          onToggleSelect={onToggleSelect}
+                          confirmDelete={confirmDelete}
+                          setConfirmDelete={setConfirmDelete}
+                          onDeleteThread={onDeleteThread}
+                        />
+                      ))}
+                      <Link
+                        to={`/threads/${urlId}`}
+                        className="block px-3 py-2 text-[11px] text-muted-foreground/50 hover:text-muted-foreground transition-colors"
+                      >
+                        + 发起新对话
+                      </Link>
                     </div>
                   )}
                 </div>

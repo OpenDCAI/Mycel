@@ -10,38 +10,53 @@ from typing import Literal
 
 
 def format_chat_message(content: str, sender_name: str, chat_id: str) -> str:
-    """Wrap chat message in XML for agent brain thread.
+    """Wrap incoming chat message for agent brain thread.
 
-    @@@external-routing-instruction - the routing instruction MUST be inside
-    <system-reminder> and BEFORE the message so the LLM treats it as
-    authoritative. Placing it after (as a hint) causes the LLM to sometimes
-    respond in plain text, which is invisible to the sender.
+    @@@external-routing-instruction - wrapped in <system-reminder> so the LLM
+    treats routing rules as authoritative. Frontend strips this via
+    stripSystemReminders regex.
     """
     return (
         "<system-reminder>\n"
-        f"INCOMING CHAT MESSAGE from [{escape(sender_name)}] in chat {escape(chat_id)}.\n"
-        f"RULES:\n"
-        f"1. Reply using chat_send(chat_id='{escape(chat_id)}', content=...). Plain text is INVISIBLE.\n"
-        f"2. If [{escape(sender_name)}] asks you to notify/inform/tell your owner, "
-        f"use tell_owner(message=...).\n"
-        f"3. If this is a reply to something you sent earlier, CONTINUE the conversation.\n\n"
+        f"[{escape(sender_name)}] sent you a chat message.\n\n"
         f'<chat-message sender="{escape(sender_name)}" chat="{escape(chat_id)}">\n'
         f"{content}\n"
-        "</chat-message>\n"
+        "</chat-message>\n\n"
+        "You are now in a private context — your owner cannot see your text output here.\n"
+        f"- To [{escape(sender_name)}]: chat_send(chat_id='{escape(chat_id)}', content=...)\n"
+        "- To your owner: tell_owner(message=...)\n"
+        "- Plain text goes nowhere. Nobody sees it.\n"
         "</system-reminder>"
     )
 
 
-def format_steer_reminder(content: str) -> str:
-    """Format user steer message as system-reminder XML."""
+def format_owner_message(content: str) -> str:
+    """Wrap owner's direct message with visibility context.
+
+    @@@owner-context-shift — after external messages, the agent may not realize
+    its text output is visible again. This hint restores awareness.
+    """
+    return (
+        f"{content}\n\n"
+        "<system-reminder>\n"
+        "Context shift: you are now talking to your owner. Your text output is visible to them.\n"
+        "</system-reminder>"
+    )
+
+
+def format_owner_steer(content: str) -> str:
+    """Owner sent a message while agent was busy."""
     return (
         "<system-reminder>\n"
-        "The user sent a new message while you were working:\n"
+        "Your owner sent a message while you were working:\n"
         f"{content}\n\n"
-        "IMPORTANT: After completing your current task, "
-        "you MUST address the user's message above. Do not ignore it.\n"
+        "Context shift: you are now talking to your owner. Your text output is visible to them. Address their message.\n"
         "</system-reminder>"
     )
+
+
+# Alias for TUI and tests that still import the old name
+format_steer_reminder = format_owner_steer
 
 
 def format_background_notification(
@@ -81,19 +96,7 @@ def format_command_notification(
     output: str,
     description: str | None = None,
 ) -> str:
-    """Format Bash command completion as system-reminder XML.
-
-    Args:
-        command_id: Command ID
-        status: Completion status
-        exit_code: Exit code
-        command_line: Command line
-        output: Output content (truncated to first 1000 characters)
-        description: Human-readable description for frontend rendering
-
-    Returns:
-        XML formatted notification string
-    """
+    """Format Bash command completion as system-reminder XML."""
     # Truncate output to 1000 characters
     truncated_output = output[:1000] if output else ""
 

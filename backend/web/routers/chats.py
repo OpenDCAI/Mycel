@@ -70,7 +70,7 @@ async def get_chat(
     for p in participants:
         e = entity_repo.get_by_id(p.entity_id)
         if e:
-            entities_info.append({"id": e.id, "name": e.name, "type": e.type, "avatar": getattr(e, "avatar", None)})
+            entities_info.append({"id": e.id, "name": e.name, "type": e.type, "avatar_url": f"/api/members/{e.member_id}/avatar" if e.avatar else None})
     return {"id": chat.id, "title": chat.title, "status": chat.status, "created_at": chat.created_at, "entities": entities_info}
 
 

@@ -24,12 +24,12 @@ export interface SandboxManagerActions {
 }
 
 export function useSandboxManager(deps: SandboxManagerDeps): SandboxManagerState & SandboxManagerActions {
-  const { activeThreadId, isStreaming, setActiveSandbox, loadThread } = deps;
+  const { activeThreadId, isStreaming, activeSandbox, setActiveSandbox, loadThread } = deps;
   const [sandboxActionError, setSandboxActionError] = useState<string | null>(null);
 
-  // Poll sandbox status while streaming
+  // Poll sandbox status while streaming (remote sandboxes only)
   useEffect(() => {
-    if (!isStreaming || !activeThreadId) return;
+    if (!isStreaming || !activeThreadId || !activeSandbox || activeSandbox.type === "local") return;
     let cancelled = false;
     const threadId = activeThreadId;
 
@@ -58,7 +58,7 @@ export function useSandboxManager(deps: SandboxManagerDeps): SandboxManagerState
       cancelled = true;
       window.clearInterval(timer);
     };
-  }, [isStreaming, activeThreadId, setActiveSandbox]);
+  }, [isStreaming, activeThreadId, activeSandbox?.type, setActiveSandbox]);
 
   const handlePauseSandbox = useCallback(async () => {
     if (!activeThreadId) return;

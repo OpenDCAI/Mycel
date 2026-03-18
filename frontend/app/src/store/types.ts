@@ -44,6 +44,7 @@ export interface Member {
   description: string;
   status: MemberStatus;
   version: string;
+  avatar_url?: string;
   config: MemberConfig;
   created_at: number;
   updated_at: number;

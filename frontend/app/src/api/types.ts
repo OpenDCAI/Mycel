@@ -53,6 +53,9 @@ export interface ThreadSummary {
   updated_at?: string;
   running?: boolean;
   agent?: string | null;
+  member_id?: string;
+  member_name?: string;
+  avatar_url?: string;
 }
 
 export interface SandboxType {
@@ -135,8 +138,6 @@ export interface RetrySegment {
 
 export type TurnSegment = TextSegment | ToolSegment | NoticeSegment | RetrySegment;
 
-export type DisplayMode = "expanded" | "collapsed" | "punch_through" | "waterline";
-
 export interface AssistantTurn {
   id: string;
   messageIds?: string[];
@@ -145,7 +146,10 @@ export interface AssistantTurn {
   timestamp: number;
   endTimestamp?: number;
   streaming?: boolean;
-  displayMode?: DisplayMode;
+  /** Backend-computed: is this turn visible to thread owner? */
+  showing?: boolean;
+  /** Is this turn a tell_owner extraction from a hidden run? */
+  isTellOwner?: boolean;
   senderName?: string;
 }
 
@@ -154,6 +158,9 @@ export interface UserMessage {
   role: "user";
   content: string;
   timestamp: number;
+  /** Backend-computed: is this message visible to thread owner? */
+  showing?: boolean;
+  senderName?: string;
 }
 
 export interface NoticeMessage {
@@ -164,14 +171,7 @@ export interface NoticeMessage {
   timestamp: number;
 }
 
-export interface WaterlineEntry {
-  id: string;
-  role: "waterline";
-  content: string;
-  timestamp: number;
-}
-
-export type ChatEntry = UserMessage | AssistantTurn | NoticeMessage | WaterlineEntry;
+export type ChatEntry = UserMessage | AssistantTurn | NoticeMessage;
 
 export interface StreamStatus {
   state: { state: string; flags: Record<string, boolean> };

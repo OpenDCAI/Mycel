@@ -32,6 +32,7 @@ except ImportError:
     ModelCallResult = Any
     ToolCallRequest = Any
 
+from core.display import compute_showing
 from .manager import MessageQueueManager
 
 
@@ -42,10 +43,12 @@ class SteeringMiddleware(AgentMiddleware):
     1. Tool calls execute normally (no skipping)
     2. Before next model call, drain ALL pending messages from SQLite queue
     3. Inject as HumanMessage with metadata source="system"
+    4. Update runtime.display_latent so streaming tags events correctly
     """
 
-    def __init__(self, queue_manager: MessageQueueManager) -> None:
+    def __init__(self, queue_manager: MessageQueueManager, agent_runtime: Any = None) -> None:
         self._queue_manager = queue_manager
+        self._agent_runtime = agent_runtime  # our AgentRuntime, not LangGraph's Runtime
 
     def wrap_tool_call(
         self,
@@ -76,21 +79,31 @@ class SteeringMiddleware(AgentMiddleware):
             return None
 
         items = self._queue_manager.drain_all(thread_id)
+        rt = self._agent_runtime
         if not items:
             return None
 
-        messages = [
-            HumanMessage(
+        messages = []
+        for item in items:
+            source = item.source or "system"
+            is_steer = item.is_steer
+            messages.append(HumanMessage(
                 content=item.content,
                 metadata={
-                    "source": item.source or "system",
+                    "source": source,
                     "notification_type": item.notification_type,
                     "sender_name": item.sender_name,
                     "sender_entity_id": item.sender_entity_id,
+                    "is_steer": is_steer,
                 },
-            )
-            for item in items
-        ]
+            ))
+            # @@@display-latent-sync — advance latent so streaming tags
+            # subsequent events with correct showing metadata.
+            rt = self._agent_runtime
+            if rt and hasattr(rt, "display_latent"):
+                _, new_latent = compute_showing(source, bool(is_steer), rt.display_latent)
+                rt.display_latent = new_latent
+
         return {"messages": messages}
 
     async def abefore_model(

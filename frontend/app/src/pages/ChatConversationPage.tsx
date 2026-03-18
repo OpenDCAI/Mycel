@@ -1,13 +1,15 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import { useParams, Link } from "react-router-dom";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useParams, Link, useOutletContext } from "react-router-dom";
 import { PanelLeft, Send } from "lucide-react";
 import { authFetch, useAuthStore } from "../store/auth-store";
+import { UserBubble } from "../components/chat-area/UserBubble";
+import { ChatBubble } from "../components/chat-area/ChatBubble";
 
 interface ChatEntity {
   id: string;
   name: string;
   type: string;
-  avatar?: string | null;
+  avatar_url?: string;
 }
 
 interface ChatMessage {
@@ -46,7 +48,13 @@ export default function ChatConversationPage() {
 }
 
 function ChatConversationInner({ chatId }: { chatId: string }) {
+  const { setSidebarCollapsed, refreshChatList } = useOutletContext<{
+    sidebarCollapsed: boolean;
+    setSidebarCollapsed: React.Dispatch<React.SetStateAction<boolean>>;
+    refreshChatList: () => void;
+  }>();
   const myEntityId = useAuthStore(s => s.entityId);
+  const myName = useAuthStore(s => s.member?.name) || "You";
   const [chat, setChat] = useState<ChatDetail | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [loading, setLoading] = useState(true);
@@ -56,6 +64,13 @@ function ChatConversationInner({ chatId }: { chatId: string }) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const isAtBottomRef = useRef(true);
+
+  const entityMap = useMemo(() => {
+    const m = new Map<string, ChatEntity>();
+    chat?.entities.forEach(e => m.set(e.id, e));
+    return m;
+  }, [chat?.entities]);
+  const isGroup = (chat?.entities.length ?? 0) > 2;
 
   // Track if user is at bottom for sticky scroll
   const onScroll = useCallback(() => {
@@ -89,8 +104,10 @@ function ChatConversationInner({ chatId }: { chatId: string }) {
         setChat(chatData);
         setMessages(msgsData);
         setLoading(false);
-        // Mark read
-        authFetch(`/api/chats/${chatId}/read`, { method: "POST" }).catch(() => {});
+        // Mark read + refresh sidebar
+        authFetch(`/api/chats/${chatId}/read`, { method: "POST" })
+          .then(() => refreshChatList())
+          .catch(() => {});
       })
       .catch(err => {
         if (cancelled) return;
@@ -135,6 +152,9 @@ function ChatConversationInner({ chatId }: { chatId: string }) {
         });
         if (isAtBottomRef.current) {
           setTimeout(scrollToBottom, 50);
+          // User is viewing → mark read + refresh sidebar
+          authFetch(`/api/chats/${chatId}/read`, { method: "POST" }).catch(() => {});
+          refreshChatList();
         }
       } catch (err) {
         console.error("[ChatSSE] parse error:", err);
@@ -163,13 +183,15 @@ function ChatConversationInner({ chatId }: { chatId: string }) {
       console.warn("[ChatSSE] connection error, will auto-reconnect");
     };
 
-    return () => es.close();
-  }, [chatId, scrollToBottom]);
+    return () => {
+      es.close();
+      refreshChatList(); // refresh sidebar on leave
+    };
+  }, [chatId, scrollToBottom, refreshChatList]);
 
   // Typing indicator state
   const [typingEntities, setTypingEntities] = useState<Set<string>>(new Set());
 
-  const isGroup = (chat?.entities.length ?? 0) >= 3;
 
   // Send message
   const handleSend = useCallback(async () => {
@@ -220,8 +242,9 @@ function ChatConversationInner({ chatId }: { chatId: string }) {
       setMessages(prev => prev.filter(m => m.id !== optimisticMsg.id));
     } finally {
       setSending(false);
+      refreshChatList(); // update last_message in sidebar
     }
-  }, [input, myEntityId, sending, chatId, scrollToBottom]);
+  }, [input, myEntityId, sending, chatId, scrollToBottom, refreshChatList]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -270,7 +293,7 @@ function ChatConversationInner({ chatId }: { chatId: string }) {
       <header className="h-12 flex items-center justify-between px-4 flex-shrink-0 bg-white border-b border-[#e5e5e5]">
         <div className="flex items-center gap-3 min-w-0">
           <button
-            onClick={() => window.history.back()}
+            onClick={() => setSidebarCollapsed(v => !v)}
             className="w-8 h-8 rounded-lg flex items-center justify-center text-[#737373] hover:bg-[#f5f5f5] hover:text-[#171717]"
           >
             <PanelLeft className="w-4 h-4" />
@@ -290,68 +313,67 @@ function ChatConversationInner({ chatId }: { chatId: string }) {
       <div
         ref={scrollContainerRef}
         onScroll={onScroll}
-        className="flex-1 overflow-y-auto px-4 py-3"
+        className="flex-1 overflow-y-auto px-5 py-5 bg-white"
       >
         {messages.length === 0 ? (
           <div className="flex items-center justify-center h-full">
             <p className="text-sm text-muted-foreground">Send a message to start the conversation</p>
           </div>
         ) : (
-          messages.map((msg, i) => {
-            const isMine = msg.sender_entity_id === myEntityId;
-            const prev = i > 0 ? messages[i - 1] : null;
-            const showTime = shouldShowTime(prev, msg);
+          <div className="max-w-3xl mx-auto space-y-3.5">
+            {messages.map((msg, i) => {
+              const isMine = msg.sender_entity_id === myEntityId;
+              const prev = i > 0 ? messages[i - 1] : null;
+              const showTime = shouldShowTime(prev, msg);
+              const entity = entityMap.get(msg.sender_entity_id);
+              const ts = msg.created_at * 1000;
 
-            return (
-              <div key={msg.id}>
-                {showTime && (
-                  <div className="text-center my-3">
-                    <span className="text-[10px] text-muted-foreground/50 bg-muted/50 px-2 py-0.5 rounded-full">
-                      {formatMessageTime(msg.created_at)}
-                    </span>
-                  </div>
-                )}
-                <div className={`flex mb-1 ${isMine ? "justify-end" : "justify-start"}`}>
-                  <div className={`max-w-[70%] ${isMine ? "order-1" : ""}`}>
-                    {/* Show sender name in group chats for non-self messages */}
-                    {!isMine && isGroup && (
-                      <p className="text-[10px] text-muted-foreground mb-0.5 px-1">{msg.sender_name}</p>
-                    )}
-                    <div
-                      className={`px-3 py-2 rounded-2xl text-sm break-words whitespace-pre-wrap ${
-                        isMine
-                          ? "bg-primary text-primary-foreground rounded-br-md"
-                          : "bg-muted text-foreground rounded-bl-md"
-                      }`}
-                    >
-                      {msg.content}
+              return (
+                <div key={msg.id}>
+                  {showTime && (
+                    <div className="text-center my-3">
+                      <span className="text-[10px] text-[#d4d4d4] bg-[#fafafa] px-2 py-0.5 rounded-full">
+                        {formatMessageTime(msg.created_at)}
+                      </span>
                     </div>
-                  </div>
+                  )}
+                  {isMine ? (
+                    <UserBubble content={msg.content} timestamp={ts} userName={myName} />
+                  ) : (
+                    <ChatBubble
+                      content={msg.content}
+                      senderName={msg.sender_name}
+                      avatarUrl={entity?.avatar_url}
+                      entityType={entity?.type}
+                      timestamp={ts}
+                      showName={isGroup}
+                    />
+                  )}
                 </div>
-              </div>
-            );
-          })
+              );
+            })}
+          </div>
         )}
         {typingDisplay}
         <div ref={messagesEndRef} />
       </div>
 
       {/* Input */}
-      <div className="px-4 py-3 border-t border-border shrink-0">
-        <div className="flex items-end gap-2">
+      <div className="px-4 py-3 border-t border-[#e5e5e5] shrink-0">
+        <div className="max-w-3xl mx-auto flex items-end gap-2">
           <textarea
             value={input}
             onChange={e => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder="Type a message..."
             rows={1}
-            className="flex-1 resize-none px-3 py-2 rounded-lg border border-border bg-card text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 max-h-32"
+            className="flex-1 resize-none px-3.5 py-2.5 rounded-xl border border-[#e5e5e5] bg-white text-[13px] text-[#171717] focus:outline-none focus:ring-2 focus:ring-[#171717]/10 max-h-32"
             style={{ minHeight: "38px" }}
           />
           <button
             onClick={() => void handleSend()}
             disabled={!input.trim() || sending}
-            className="w-9 h-9 rounded-lg bg-primary text-primary-foreground flex items-center justify-center hover:opacity-90 disabled:opacity-40 transition-opacity shrink-0"
+            className="w-9 h-9 rounded-xl bg-[#171717] text-white flex items-center justify-center hover:bg-[#333] disabled:opacity-30 transition-colors shrink-0"
           >
             <Send className="w-4 h-4" />
           </button>

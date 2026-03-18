@@ -38,6 +38,7 @@ function ChatPageInner({ threadId }: { threadId: string }) {
   const userName = useAuthStore(s => s.member?.name);
   const agentName = useAuthStore(s => s.agent?.name);
   const [currentModel, setCurrentModel] = useState<string>("");
+  const [showHidden, setShowHidden] = useState(false);
 
   const state = location.state as { selectedModel?: string; runStarted?: boolean; message?: string } | null;
 
@@ -82,7 +83,7 @@ function ChatPageInner({ threadId }: { threadId: string }) {
     }
   }, [state?.selectedModel, threadId]);
 
-  const { entries, activeSandbox, loading, setEntries, setActiveSandbox, refreshThread } = useThreadData(threadId, runStarted, initialEntries);
+  const { entries, activeSandbox, loading, setEntries, setActiveSandbox, refreshThread } = useThreadData(threadId, runStarted, initialEntries, showHidden);
 
   const { runtimeStatus, isRunning, handleSendMessage, handleStopStreaming } =
     useStreamHandler({
@@ -150,7 +151,6 @@ function ChatPageInner({ threadId }: { threadId: string }) {
   );
 
   const computerResize = useResizableX(600, 360, 1200, true);
-  const [showExternalRuns, setShowExternalRuns] = useState(false);
 
   return (
     <>
@@ -159,9 +159,9 @@ function ChatPageInner({ threadId }: { threadId: string }) {
         threadPreview={tm.threads.find((t) => t.thread_id === threadId)?.preview ?? null}
         sandboxInfo={activeSandbox}
         currentModel={currentModel}
-        showExternalRuns={showExternalRuns}
-        onToggleExternalRuns={() => setShowExternalRuns(v => !v)}
+        showHidden={showHidden}
         onToggleSidebar={() => setSidebarCollapsed(v => !v)}
+        onToggleHidden={() => setShowHidden(v => !v)}
         onPauseSandbox={() => void handlePauseSandbox()}
         onResumeSandbox={() => void handleResumeSandbox()}
         onModelChange={setCurrentModel}
@@ -181,7 +181,6 @@ function ChatPageInner({ threadId }: { threadId: string }) {
               isStreaming={isStreaming}
               runtimeStatus={runtimeStatus}
               loading={loading}
-              showExternalRuns={showExternalRuns}
               onFocusAgent={handleFocusAgent}
               onTaskNoticeClick={handleTaskNoticeClick}
               agentName={agentName}

@@ -21,9 +21,9 @@ interface HeaderProps {
   threadPreview: string | null;
   sandboxInfo: SandboxInfo | null;
   currentModel?: string;
-  showExternalRuns?: boolean;
-  onToggleExternalRuns?: () => void;
+  showHidden?: boolean;
   onToggleSidebar: () => void;
+  onToggleHidden?: () => void;
   onPauseSandbox: () => void;
   onResumeSandbox: () => void;
   onModelChange?: (model: string) => void;
@@ -34,9 +34,9 @@ export default function Header({
   threadPreview,
   sandboxInfo,
   currentModel = "leon:medium",
-  showExternalRuns,
-  onToggleExternalRuns,
+  showHidden = false,
   onToggleSidebar,
+  onToggleHidden,
   onPauseSandbox,
   onResumeSandbox,
   onModelChange,
@@ -56,7 +56,7 @@ export default function Header({
       <div className="flex items-center gap-3 min-w-0">
         {isMobile ? (
           <button
-            onClick={() => navigate("/chat")}
+            onClick={() => navigate("/threads")}
             className="w-8 h-8 rounded-lg flex items-center justify-center text-[#737373] hover:bg-[#f5f5f5] hover:text-[#171717]"
           >
             <ChevronLeft className="w-5 h-5" />
@@ -89,17 +89,17 @@ export default function Header({
       </div>
 
       <div className="flex items-center gap-1.5">
-        {onToggleExternalRuns && (
+        {onToggleHidden && (
           <button
-            onClick={onToggleExternalRuns}
-            className={`px-2.5 py-1.5 rounded-lg text-xs flex items-center gap-1.5 border transition-colors ${
-              showExternalRuns
-                ? "border-primary/30 text-primary bg-primary/5"
-                : "border-border text-muted-foreground hover:text-foreground hover:bg-muted"
+            onClick={onToggleHidden}
+            className={`w-8 h-8 rounded-lg flex items-center justify-center ${
+              showHidden
+                ? "text-[#171717] bg-[#f0f0f0]"
+                : "text-[#737373] hover:bg-[#f5f5f5] hover:text-[#171717]"
             }`}
-            title={showExternalRuns ? "Hide external runs" : "Show external runs"}
+            title={showHidden ? "隐藏外部消息" : "显示外部消息"}
           >
-            {showExternalRuns ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
+            {showHidden ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
           </button>
         )}
         <ModelSelector

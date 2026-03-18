@@ -252,9 +252,11 @@ class LeonAgent:
         # Get runtime from MonitorMiddleware
         self.runtime = self._monitor_middleware.runtime
 
-        # Inject runtime/model into MemoryMiddleware
+        # Inject runtime into MemoryMiddleware and SteeringMiddleware
         if hasattr(self, "_memory_middleware"):
             self._memory_middleware.set_runtime(self.runtime)
+        if hasattr(self, "_steering_middleware"):
+            self._steering_middleware._agent_runtime = self.runtime
             self._memory_middleware.set_model(self.model)
 
         if self.verbose:
@@ -799,7 +801,8 @@ class LeonAgent:
             self._add_memory_middleware(middleware)
 
         # 4. Steering — injects queued messages before model call
-        middleware.append(SteeringMiddleware(queue_manager=self.queue_manager))
+        self._steering_middleware = SteeringMiddleware(queue_manager=self.queue_manager)
+        middleware.append(self._steering_middleware)
 
         # 5. ToolRunner (innermost — routes all ToolRegistry-registered tool calls)
         self._tool_runner = ToolRunner(

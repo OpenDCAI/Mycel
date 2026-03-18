@@ -166,17 +166,6 @@ class ChatToolService:
             target = self._entities.get_by_id(entity_id)
             if not target:
                 raise RuntimeError(f"Entity not found: {entity_id}")
-            # @@@reachability-gate - only agent entities with brain threads can receive chat messages
-            if target.type != "agent" or not target.thread_id:
-                agent_hint = ""
-                all_entities = self._entities.list_all()
-                for e in all_entities:
-                    if e.member_id == target.member_id and e.type == "agent" and e.thread_id:
-                        agent_hint = f" Try their agent entity instead: entity_id={e.id} ({e.name})"
-                        break
-                raise RuntimeError(
-                    f"{target.name} is a {target.type} entity and cannot receive chat messages.{agent_hint}"
-                )
             chat = self._chat_service.find_or_create_chat([eid, entity_id])
             self._chat_service.send_message(chat.id, eid, content, mentions)
             return f"Message sent to {target.name}."
@@ -266,18 +255,15 @@ class ChatToolService:
                     owner_member = self._members.get_by_id(member.owner_id)
                     if owner_member:
                         owner_info = f" (owner: {owner_member.name})"
-                # @@@reachability-tag - show which entities can receive chat messages
-                reachable = " ✉" if e.type == "agent" and e.thread_id else ""
-                lines.append(f"- {e.name} [{e.type}]{reachable} entity_id={e.id}{owner_info}")
-            header = "✉ = can receive chat messages (use their entity_id with chat_send)\n"
-            return header + "\n".join(lines)
+                lines.append(f"- {e.name} [{e.type}] entity_id={e.id}{owner_info}")
+            return "\n".join(lines)
 
         registry.register(ToolEntry(
             name="directory",
             mode=ToolMode.INLINE,
             schema={
                 "name": "directory",
-                "description": "Browse the entity directory. Returns entity_ids for use with chat_send, chat_read. Only entities marked ✉ (agents) can receive chat messages.",
+                "description": "Browse the entity directory. Returns entity_ids for use with chat_send, chat_read.",
                 "parameters": {
                     "type": "object",
                     "properties": {

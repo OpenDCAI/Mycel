@@ -71,18 +71,17 @@ export async function streamThreadEvents(
   let attempts = 0;
   const MAX_ATTEMPTS = 10;
 
-  while (!signal?.aborted) {
+  while (!signal.aborted) {
     try {
-      // @@@sse-token-auth — thread events endpoint uses ?token= (not Bearer header)
       const { useAuthStore } = await import("../store/auth-store");
       const token = useAuthStore.getState().token || "";
       const url = `/api/threads/${encodeURIComponent(threadId)}/events?after=${after}&token=${encodeURIComponent(token)}`;
       console.log(`[SSE-FETCH] fetching ${url.replace(/token=[^&]+/, "token=***")}`);
-      const res = await fetch(url, { signal });
+      const res = await fetch(url, { signal: signal });
+      if (signal.aborted) return;
       console.log(`[SSE-FETCH] response status=${res.status}, ok=${res.ok}`);
 
       if (!res.ok) {
-        // 4xx = unrecoverable
         if (res.status >= 400 && res.status < 500) {
           onEvent({ type: "error", data: { error: `SSE connect failed: ${res.status}` } });
           return;
@@ -97,10 +96,9 @@ export async function streamThreadEvents(
       console.log(`[SSE-FETCH] stream ended, lastSeq=${lastSeq}, reconnecting...`);
       after = lastSeq;
 
-      // Server closed connection (normal disconnect) — reconnect
-      if (signal?.aborted) return;
+      if (signal.aborted) return;
     } catch (fetchErr) {
-      if (signal?.aborted) return;
+      if (signal.aborted) return;
       console.log(`[SSE-FETCH] catch: ${fetchErr}`);
 
       if (++attempts > MAX_ATTEMPTS) {

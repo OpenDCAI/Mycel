@@ -108,7 +108,7 @@ function NewChatDialog({ onClose, onCreated }: { onClose: () => void; onCreated:
                 disabled={creating}
                 className="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-muted transition-colors text-left disabled:opacity-50"
               >
-                <MemberAvatar name={e.name} size="sm" />
+                <MemberAvatar name={e.name} avatarUrl={(e as any).avatar_url} type={e.type} size="sm" />
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-medium truncate">{e.name}</p>
                   <p className="text-[10px] text-muted-foreground">{e.type}</p>
@@ -190,7 +190,7 @@ export default function ChatsListPage() {
             to={`/chats/${chat.id}`}
             className="flex items-center gap-3 px-6 py-3 hover:bg-muted/50 transition-colors border-b border-border/50"
           >
-            <MemberAvatar name={chatDisplayName(chat, myEntityId)} size="md" />
+            <MemberAvatar name={chatDisplayName(chat, myEntityId)} avatarUrl={chat.entities.find(e => e.id !== myEntityId)?.avatar_url} type={chat.entities.find(e => e.id !== myEntityId)?.type} size="md" />
             <div className="flex-1 min-w-0">
               <div className="flex items-center justify-between">
                 <span className={`text-sm truncate ${chat.unread_count > 0 ? "font-semibold text-foreground" : "font-medium text-foreground"}`}>

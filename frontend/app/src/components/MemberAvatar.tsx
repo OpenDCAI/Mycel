@@ -1,7 +1,8 @@
 /**
  * @@@universal-avatar — THE single avatar component. Used everywhere.
- * Shows avatar image from /api/members/{id}/avatar with initials fallback.
- * Radix Avatar handles the fallback automatically on 404 or load error.
+ * Displays avatar image from backend-provided URL with initials+color fallback.
+ * Backend decides the URL (human → account avatar, agent → member avatar).
+ * Frontend just renders what backend gives.
  */
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -17,9 +18,9 @@ const SIZE_MAP = {
 
 interface MemberAvatarProps {
   name: string;
-  /** Member/entity ID — used for image URL + deterministic color hash. */
-  id?: string;
-  /** Member type — human | mycel_agent | openclaw_agent → type-based color. */
+  /** Avatar image URL from backend. Frontend doesn't build URLs. */
+  avatarUrl?: string;
+  /** Entity/member type — for deterministic fallback color. */
   type?: string;
   size?: keyof typeof SIZE_MAP;
   className?: string;
@@ -29,15 +30,15 @@ interface MemberAvatarProps {
 
 export default function MemberAvatar({
   name,
-  id,
+  avatarUrl,
   type,
   size = "md",
   className,
   rev,
 }: MemberAvatarProps) {
   const sizeClass = SIZE_MAP[size];
-  const fallbackColor = type ? colorForType(type).tw : id ? colorForId(id) : colorForId(name);
-  const src = id ? `/api/members/${id}/avatar${rev ? `?v=${rev}` : ""}` : undefined;
+  const fallbackColor = type ? colorForType(type).tw : colorForId(name);
+  const src = avatarUrl ? `${avatarUrl}${rev ? `?v=${rev}` : ""}` : undefined;
 
   return (
     <Avatar className={cn(sizeClass, "shrink-0", className)}>

@@ -7,7 +7,7 @@ import logging
 from typing import Any
 
 from core.runtime.middleware.monitor import AgentState
-from core.runtime.middleware.queue.formatters import format_steer_reminder
+from core.runtime.middleware.queue.formatters import format_owner_message, format_owner_steer
 
 logger = logging.getLogger(__name__)
 
@@ -34,9 +34,23 @@ async def route_message_to_brain(
     state = agent.runtime.current_state if hasattr(agent, "runtime") else "no-runtime"
     logger.debug("[route] thread=%s state=%s source=%s", thread_id[:15], state, source)
 
+    # @@@context-shift — only inject visibility hint when shifting from private → owner.
+    # External messages arrive pre-formatted by format_chat_message (always has hint).
+    needs_shift_hint = source == "owner" and agent.runtime.display_latent != "owner"
+
+    if source == "owner" and needs_shift_hint:
+        steer_content = format_owner_steer(content)
+        run_content = format_owner_message(content)
+    elif source == "owner":
+        steer_content = content  # already in owner context, no hint needed
+        run_content = content
+    else:
+        steer_content = content  # already wrapped by format_chat_message
+        run_content = content
+
     if hasattr(agent, "runtime") and agent.runtime.current_state == AgentState.ACTIVE:
-        qm.enqueue(format_steer_reminder(content), thread_id, "steer",
-                    source=source, sender_name=sender_name)
+        qm.enqueue(steer_content, thread_id, "steer",
+                    source=source, sender_name=sender_name, is_steer=True)
         logger.debug("[route] → ENQUEUED (agent active)")
         return {"status": "injected", "routing": "steer", "thread_id": thread_id}
 
@@ -46,11 +60,11 @@ async def route_message_to_brain(
         lock = locks.setdefault(thread_id, asyncio.Lock())
     async with lock:
         if hasattr(agent, "runtime") and not agent.runtime.transition(AgentState.ACTIVE):
-            qm.enqueue(format_steer_reminder(content), thread_id, "steer",
-                        source=source, sender_name=sender_name)
+            qm.enqueue(steer_content, thread_id, "steer",
+                        source=source, sender_name=sender_name, is_steer=True)
             logger.debug("[route] → ENQUEUED (transition failed)")
             return {"status": "injected", "routing": "steer", "thread_id": thread_id}
         logger.debug("[route] → START RUN (idle→active)")
-        run_id = start_agent_run(agent, thread_id, content, app,
+        run_id = start_agent_run(agent, thread_id, run_content, app,
                                   message_metadata={"source": source, "sender_name": sender_name})
     return {"status": "started", "routing": "direct", "run_id": run_id, "thread_id": thread_id}

@@ -34,7 +34,8 @@ class ThreadConnectionManager {
   // --- internal ---
   private threadId = "";
   private ac: AbortController | null = null;
-  private version = 0; // monotonic; async callbacks check against captured ver
+  private version = 0;
+  private lastSeenSeq = 0; // @@@dedup-events — monotonic seq from backend, skip duplicates
   private subscribers = new Set<(event: StreamEvent) => void>();
   private listener: (() => void) | null = null; // React re-render trigger
   private refreshThreads: (() => Promise<void>) | null = null;
@@ -66,7 +67,7 @@ class ThreadConnectionManager {
 
   /** Establish persistent SSE connection. Idempotent — aborts any prior connection. */
   connect(startSeq = 0) {
-    console.log(`[SSE-DIAG] connect(${startSeq}) called, threadId=${this.threadId}`);
+    // @@@dedup-connect — abort previous connection, bump version to invalidate stale callbacks
     this.ac?.abort();
 
     const ac = new AbortController();
@@ -77,12 +78,19 @@ class ThreadConnectionManager {
     void (async () => {
       try {
         this.setPhase("connected");
-        console.log(`[SSE-DIAG] streamThreadEvents starting, after=${startSeq}`);
         await streamThreadEvents(
           this.threadId,
           (event) => {
-            if (this.version !== ver) return;
-            console.log(`[SSE-DIAG] event received: type=${event.type}, subscribers=${this.subscribers.size}`);
+            if (this.version !== ver) return; // stale connection
+            // @@@dedup-events — skip events with seq we've already seen (React strict mode
+            // can open duplicate SSE connections in dev; both deliver the same events).
+            const d = (event.data ?? {}) as { _seq?: number };
+            if (typeof d._seq === "number") {
+              if (d._seq <= this.lastSeenSeq) {
+                return;
+              }
+              this.lastSeenSeq = d._seq;
+            }
             if (event.type === "status" && event.data) {
               this.setStatus(event.data as StreamStatus);
             }
@@ -101,11 +109,10 @@ class ThreadConnectionManager {
         );
 
         if (this.version !== ver) return;
-        console.log("[SSE-DIAG] streamThreadEvents returned normally → phase=error");
         this.setPhase("error");
       } catch (err) {
         if (this.version !== ver) return;
-        console.error("[SSE-DIAG] connection error:", err);
+        console.error("[useThreadStream] connection error:", err);
         this.setPhase("error");
       }
     })();

@@ -282,10 +282,10 @@ def _ensure_thread_handlers(agent: Any, thread_id: str, app: Any) -> None:
         """Called by enqueue() with the newly-enqueued QueueItem — may run in any thread."""
         if not (hasattr(agent, "runtime") and agent.runtime.transition(AgentState.ACTIVE)):
             # Agent already ACTIVE — before_model will drain_all on the next LLM call.
-            # Emit only this one notice immediately so the frontend sees it in real-time
-            # instead of requiring a page refresh. The item is the exact QueueItem just
-            # enqueued — no list_queue() needed, so no duplicate emissions.
-            if loop and not loop.is_closed():
+            # Emit notice for external sources only. Owner steers are already shown
+            # as an optimistic UserBubble by the frontend — emitting a notice would duplicate.
+            source = getattr(item, "source", None)
+            if source and source != "owner" and loop and not loop.is_closed():
                 async def _emit_one_notice() -> None:
                     await activity_sink({
                         "event": "notice",
@@ -314,6 +314,7 @@ def _ensure_thread_handlers(agent: Any, thread_id: str, app: Any) -> None:
                         "source": getattr(item, "source", None) or "system",
                         "notification_type": item.notification_type,
                         "sender_name": getattr(item, "sender_name", None),
+                        "is_steer": getattr(item, "is_steer", False),
                     },
                 )
             except Exception:
@@ -483,6 +484,23 @@ async def _run_agent_to_buffer(
 
         emitted_tool_call_ids: set[str] = set()
 
+        # @@@checkpoint-dedup — pre-populate from checkpoint so replayed tool_calls
+        # and their ToolMessages from astream(None) are skipped.
+        checkpoint_tc_ids: set[str] = set()
+        try:
+            pre_state = await agent.agent.aget_state(config)
+            if pre_state and pre_state.values:
+                for msg in pre_state.values.get("messages", []):
+                    if msg.__class__.__name__ == "AIMessage":
+                        for tc in getattr(msg, "tool_calls", []):
+                            tc_id = tc.get("id")
+                            if tc_id:
+                                checkpoint_tc_ids.add(tc_id)
+        except Exception:
+            pass
+        emitted_tool_call_ids.update(checkpoint_tc_ids)
+        logger.debug("[stream:checkpoint] thread=%s pre-populated %d tc_ids", thread_id[:15], len(checkpoint_tc_ids))
+
         # Repair broken thread state: if last AIMessage has tool_calls without
         # matching ToolMessages, inject synthetic error ToolMessages so the LLM
         # won't reject the message history.
@@ -504,8 +522,12 @@ async def _run_agent_to_buffer(
         if hasattr(agent, "runtime"):
             agent.runtime.current_run_source = src or "owner"
 
-        # @@@display-projection-sse — run_start carries display_mode for frontend
-        display_mode = "collapsed" if src and src != "owner" else "expanded"
+        # @@@display-showing-sse — same functions as refresh path in display_projection.py.
+        # run_latent is local to this run; written back to agent.runtime.display_latent at run end.
+        from backend.web.services.display_projection import compute_showing, ai_display, tool_display, tool_call_display
+        is_steer = bool((message_metadata or {}).get("is_steer"))
+        showing, run_latent = compute_showing(src or "owner", is_steer, agent.runtime.display_latent)
+
         await emit({
             "event": "run_start",
             "data": json.dumps({
@@ -513,7 +535,7 @@ async def _run_agent_to_buffer(
                 "run_id": run_id,
                 "source": src,
                 "sender_name": (message_metadata or {}).get("sender_name"),
-                "display_mode": display_mode,
+                "showing": showing,
             }),
         })
 
@@ -599,27 +621,26 @@ async def _run_agent_to_buffer(
                             await emit(
                                 {
                                     "event": "text",
-                                    "data": json.dumps({"content": content}, ensure_ascii=False),
+                                    "data": json.dumps({
+                                        "content": content,
+                                        "showing": run_latent == "owner",
+                                    }, ensure_ascii=False),
                                 },
                                 message_id=chunk_msg_id,
                             )
 
-                        # Early tool_call emission: LangGraph streams tool_call_chunks in real-time
-                        # but the "updates" mode only fires after the full LLM response is generated.
-                        # By emitting tool_call as soon as we see the first chunk with name+id,
-                        # the UI can show the tool name immediately (typically within 1 second of
-                        # LLM start) rather than waiting for the full generation (3-8 seconds).
+                        # Early tool_call emission — tagged via tool_call_display()
                         for tc_chunk in getattr(msg_chunk, "tool_call_chunks", []):
                             tc_id = tc_chunk.get("id")
                             tc_name = tc_chunk.get("name", "")
                             if tc_id and tc_name and tc_id not in emitted_tool_call_ids:
                                 emitted_tool_call_ids.add(tc_id)
                                 pending_tool_calls[tc_id] = {"name": tc_name, "args": {}}
-                                # @@@display-projection-sse — tell_owner punch through
-                                tc_display = "punch_through" if tc_name == "tell_owner" else None
-                                tc_data = {"id": tc_id, "name": tc_name, "args": {}}
-                                if tc_display:
-                                    tc_data["display_mode"] = tc_display
+                                disp = tool_call_display(run_latent, tc_name)
+                                tc_data: dict[str, Any] = {
+                                    "id": tc_id, "name": tc_name, "args": {},
+                                    **disp,
+                                }
                                 await emit(
                                     {
                                         "event": "tool_call",
@@ -627,7 +648,6 @@ async def _run_agent_to_buffer(
                                     },
                                     message_id=chunk_msg_id,
                                 )
-                                # Also update status so ThinkingIndicator shows current tool
                                 if hasattr(agent, "runtime"):
                                     status = agent.runtime.get_status_dict()
                                     status["current_tool"] = tc_name
@@ -649,32 +669,47 @@ async def _run_agent_to_buffer(
                             messages = [messages]
                         for msg in messages:
                             msg_class = msg.__class__.__name__
+
+                            # @@@per-message-showing — HumanMessage advances latent,
+                            # AI/Tool messages tagged with showing. No suppression.
+                            if msg_class == "HumanMessage":
+                                hmeta = getattr(msg, "metadata", {}) or {}
+                                hsrc = hmeta.get("source", "owner")
+                                his_steer = bool(hmeta.get("is_steer"))
+                                _showing, new_lat = compute_showing(hsrc, his_steer, run_latent)
+                                run_latent = new_lat
+                                continue
+
                             if msg_class == "AIMessage":
                                 ai_msg_id = getattr(msg, "id", None)
-                                # A6: inject run_id into message metadata
                                 if hasattr(msg, "metadata") and isinstance(msg.metadata, dict):
                                     msg.metadata["run_id"] = run_id
+
+                                tc_names = [tc.get("name", "") for tc in getattr(msg, "tool_calls", [])]
+                                disp = ai_display(run_latent, tc_names)
+
                                 for tc in getattr(msg, "tool_calls", []):
                                     tc_id = tc.get("id")
+                                    tc_name = tc.get("name", "unknown")
                                     full_args = tc.get("args", {})
+                                    logger.debug("[stream:update] tc=%s name=%s dup=%s chk=%s thread=%s",
+                                                 tc_id or "?", tc_name, tc_id in emitted_tool_call_ids, tc_id in checkpoint_tc_ids, thread_id)
+                                    # @@@checkpoint-dedup — skip tool_calls from previous runs
+                                    # but allow current run's updates (delivers full args after early emission)
+                                    if tc_id and tc_id in checkpoint_tc_ids:
+                                        continue
                                     if tc_id and tc_id not in emitted_tool_call_ids:
                                         emitted_tool_call_ids.add(tc_id)
                                         pending_tool_calls[tc_id] = {
-                                            "name": tc.get("name", "unknown"),
+                                            "name": tc_name,
                                             "args": full_args,
                                         }
-                                    # Always emit from updates mode — carries complete args.
-                                    # Early emission (messages mode) sends args:{} for real-time
-                                    # tool name display; this emission delivers the full args.
+                                    tc_disp = tool_call_display(run_latent, tc_name)
                                     await emit(
                                         {
                                             "event": "tool_call",
                                             "data": json.dumps(
-                                                {
-                                                    "id": tc_id,
-                                                    "name": tc.get("name", "unknown"),
-                                                    "args": full_args,
-                                                },
+                                                {"id": tc_id, "name": tc_name, "args": full_args, **tc_disp},
                                                 ensure_ascii=False,
                                             ),
                                         },
@@ -683,20 +718,25 @@ async def _run_agent_to_buffer(
                             elif msg_class == "ToolMessage":
                                 tc_id = getattr(msg, "tool_call_id", None)
                                 tool_msg_id = getattr(msg, "id", None)
+                                # @@@checkpoint-dedup — skip replayed ToolMessages
+                                if tc_id and tc_id in checkpoint_tc_ids:
+                                    continue
                                 if tc_id:
                                     pending_tool_calls.pop(tc_id, None)
-                                # A6: inject run_id into ToolMessage metadata
                                 if hasattr(msg, "metadata") and isinstance(msg.metadata, dict):
                                     msg.metadata["run_id"] = run_id
+                                tool_name = getattr(msg, "name", "") or ""
+                                disp = tool_display(run_latent, tool_name)
                                 await emit(
                                     {
                                         "event": "tool_result",
                                         "data": json.dumps(
                                             {
                                                 "tool_call_id": tc_id,
-                                                "name": getattr(msg, "name", "unknown"),
+                                                "name": tool_name,
                                                 "content": str(getattr(msg, "content", "")),
                                                 "metadata": getattr(msg, "metadata", None) or {},
+                                                **disp,
                                             },
                                             ensure_ascii=False,
                                         ),
@@ -739,6 +779,9 @@ async def _run_agent_to_buffer(
                 await emit({"event": "error", "data": json.dumps(
                     {"error": str(stream_err)}, ensure_ascii=False)})
                 break
+
+        # Write local latent back to runtime at run end
+        agent.runtime.display_latent = run_latent
 
         # Final status
         if hasattr(agent, "runtime"):

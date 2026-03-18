@@ -19,7 +19,7 @@ export interface ThreadManagerActions {
   setSelectedSandbox: (name: string) => void;
   setThreads: React.Dispatch<React.SetStateAction<ThreadSummary[]>>;
   refreshThreads: () => Promise<void>;
-  handleCreateThread: (sandbox?: string, cwd?: string, agent?: string) => Promise<string>;
+  handleCreateThread: (sandbox?: string, cwd?: string, agent?: string, memberId?: string) => Promise<string>;
   handleDeleteThread: (threadId: string) => Promise<void>;
 }
 
@@ -50,9 +50,9 @@ export function useThreadManager(): ThreadManagerState & ThreadManagerActions {
     })();
   }, [refreshThreads]);
 
-  const handleCreateThread = useCallback(async (sandbox?: string, cwd?: string, agent?: string): Promise<string> => {
+  const handleCreateThread = useCallback(async (sandbox?: string, cwd?: string, agent?: string, memberId?: string): Promise<string> => {
     const type = sandbox ?? selectedSandbox;
-    const thread = await createThread(type, cwd, agent);
+    const thread = await createThread(type, cwd, agent, memberId);
     setThreads((prev) => [thread, ...prev]);
     setSelectedSandbox(type);
     return thread.thread_id;

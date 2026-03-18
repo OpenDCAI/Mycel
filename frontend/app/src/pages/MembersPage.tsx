@@ -18,7 +18,7 @@ const statusConfig = {
 type SortKey = "name" | "skills" | "status" | null;
 
 // @@@avatar-upload — click-to-upload avatar overlay on member cards
-function AvatarUploadTrigger({ memberId, name }: { memberId: string; name: string }) {
+function AvatarUploadTrigger({ memberId, name, hasAvatar }: { memberId: string; name: string; hasAvatar: boolean }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
   const [rev, setRev] = useState(0);
@@ -37,7 +37,7 @@ function AvatarUploadTrigger({ memberId, name }: { memberId: string; name: strin
 
   return (
     <div className="relative group/avatar" onClick={(e) => { e.stopPropagation(); inputRef.current?.click(); }}>
-      <MemberAvatar memberId={memberId} name={name} size="md" className="rounded-xl" rev={rev} />
+      <MemberAvatar avatarUrl={(hasAvatar || rev > 0) ? `/api/members/${memberId}/avatar` : undefined} name={name} size="md" className="rounded-xl" rev={rev} type="mycel_agent" />
       <div className="absolute inset-0 rounded-xl bg-black/40 opacity-0 group-hover/avatar:opacity-100 transition-opacity flex items-center justify-center cursor-pointer">
         {uploading ? (
           <div className="w-4 h-4 border-2 border-white/60 border-t-white rounded-full animate-spin" />
@@ -172,6 +172,7 @@ export default function MembersPage() {
             {filtered.map((member, index) => {
               const status = statusConfig[member.status];
               const isBuiltin = member.builtin === true;
+              const canDelete = !isBuiltin && filtered.length > 1;
               const handleCardClick = () => {
                 navigate(`/members/${member.id}`);
               };
@@ -205,7 +206,7 @@ export default function MembersPage() {
               return (
                 <div key={member.id} onClick={handleCardClick} className="surface-interactive p-4 cursor-pointer group hover:-translate-y-0.5 hover:shadow-md" role="button" aria-label={isBuiltin ? `与 ${member.name} 对话` : `查看成员 ${member.name}`} tabIndex={0} onKeyDown={(e) => e.key === "Enter" && handleCardClick()}>
                   <div className="flex items-start justify-between mb-3">
-                    <AvatarUploadTrigger memberId={member.id} name={member.name} />
+                    <AvatarUploadTrigger memberId={member.id} name={member.name} hasAvatar={!!member.avatar_url} />
                     <div className="flex items-center gap-1.5">
                       {isBuiltin && <span className="text-[10px] px-1.5 py-0.5 rounded bg-primary/10 text-primary font-medium">内置</span>}
                       <div className={`w-1.5 h-1.5 ${status.shape} ${status.dot}`} />
@@ -238,7 +239,7 @@ export default function MembersPage() {
                         </TooltipTrigger>
                         <TooltipContent side="bottom"><p>复制</p></TooltipContent>
                       </Tooltip>
-                      {!isBuiltin && (
+                      {canDelete && (
                         <Tooltip>
                           <TooltipTrigger asChild>
                             <button onClick={handleDelete} className="w-7 h-7 rounded-lg flex items-center justify-center text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors opacity-0 group-hover:opacity-100">

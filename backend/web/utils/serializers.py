@@ -3,13 +3,20 @@
 import re
 from typing import Any
 
-# @@@strip-system-hint — remove <system-hint>...</system-hint> injected by prompt_injection
+# @@@strip-system-tags — remove injected system tags from user-visible content
 _SYSTEM_HINT_RE = re.compile(r"\s*<system-hint>.*?</system-hint>\s*", re.DOTALL)
+_SYSTEM_REMINDER_RE = re.compile(r"\s*<system-reminder>.*?</system-reminder>\s*", re.DOTALL)
 
 
-def strip_system_hints(content: str) -> str:
-    """Remove <system-hint> tags from user-visible content."""
-    return _SYSTEM_HINT_RE.sub("", content).strip()
+def strip_system_tags(content: str) -> str:
+    """Remove <system-hint> and <system-reminder> tags from user-visible content."""
+    content = _SYSTEM_HINT_RE.sub("", content)
+    content = _SYSTEM_REMINDER_RE.sub("", content)
+    return content.strip()
+
+
+# Keep old name for any existing callers
+strip_system_hints = strip_system_tags
 
 
 def extract_text_content(raw_content: Any) -> str:
@@ -30,10 +37,15 @@ def extract_text_content(raw_content: Any) -> str:
 def serialize_message(msg: Any) -> dict[str, Any]:
     """Serialize a LangChain message to a JSON-compatible dict."""
     content = getattr(msg, "content", "")
-    # Strip system hints from HumanMessage content (injected by prompt_injection)
+    # Strip system tags from owner HumanMessages (context-shift hints).
+    # External HumanMessages keep their <system-reminder> so frontend can
+    # extract <chat-message> content for the "show hidden" toggle.
     msg_type = msg.__class__.__name__
-    if msg_type == "HumanMessage" and isinstance(content, str) and "<system-hint>" in content:
-        content = strip_system_hints(content)
+    metadata = getattr(msg, "metadata", None) or {}
+    source = metadata.get("source", "owner") if isinstance(metadata, dict) else "owner"
+    if msg_type == "HumanMessage" and isinstance(content, str) and source == "owner":
+        if "<system-hint>" in content or "<system-reminder>" in content:
+            content = strip_system_tags(content)
     result = {
         "id": getattr(msg, "id", None),
         "type": msg_type,

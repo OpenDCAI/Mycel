@@ -229,13 +229,15 @@ def _member_to_dict(member_dir: Path) -> dict[str, Any] | None:
         for name, srv in bundle.mcp.items()
     ]
 
+    member_id = member_dir.name
     return {
-        "id": member_dir.name,
+        "id": member_id,
         "name": agent.name,
         "description": agent.description,
         "model": agent.model,
         "status": meta.get("status", "draft"),
         "version": meta.get("version", "0.1.0"),
+        "avatar_url": f"/api/members/{member_id}/avatar" if (Path.home() / ".leon" / "avatars" / f"{member_id}.png").exists() else None,
         "config": {
             "prompt": agent.system_prompt,
             "rules": rules_list,

@@ -3,6 +3,7 @@ import { MessageSquare, MessagesSquare, Users, ListTodo, Library, Layers, Settin
 import { useState, useEffect, useCallback, useRef } from "react";
 import { uploadMemberAvatar } from "@/api/conversations";
 import MemberAvatar from "@/components/MemberAvatar";
+import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import CreateMemberDialog from "@/components/CreateMemberDialog";
 import NewChatDialog from "@/components/NewChatDialog";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -41,7 +42,6 @@ function AuthenticatedLayout() {
   const [showCreate, setShowCreate] = useState(false);
   const [createMemberOpen, setCreateMemberOpen] = useState(false);
   const [newChatOpen, setNewChatOpen] = useState(false);
-  const [showProfile, setShowProfile] = useState(false);
   const [avatarRev, setAvatarRev] = useState(0);
   const avatarInputRef = useRef<HTMLInputElement>(null);
 
@@ -250,49 +250,39 @@ function AuthenticatedLayout() {
           </nav>
 
           <div className={`flex flex-col ${showLabels ? "px-2" : "items-center"} gap-0.5`}>
-            {/* @@@avatar-popover — click avatar → popover with upload + logout */}
-            <div className="relative">
-              <button
-                onClick={() => setShowProfile(!showProfile)}
-                className={`flex items-center ${showLabels ? "px-3 gap-3" : "justify-center"} h-10 mb-1 rounded-xl hover:bg-muted transition-colors w-full`}
-              >
-                <MemberAvatar name={authMember?.name || "User"} id={authMember?.id} size="sm" type="human" rev={avatarRev} />
-                {showLabels && (
-                  <div className="min-w-0 flex-1 text-left">
-                    <p className="text-xs font-medium text-foreground truncate">{authMember?.name || "User"}</p>
-                  </div>
-                )}
-                {showLabels && (
-                  <LogOut className="w-3.5 h-3.5 text-muted-foreground" />
-                )}
-              </button>
-              {showProfile && (
-                <>
-                  <div className="fixed inset-0 z-40" onClick={() => setShowProfile(false)} />
-                  <div className={`absolute z-50 w-56 bg-card border border-border rounded-xl shadow-xl py-3 px-3 ${
-                    showLabels ? "bottom-12 left-0" : "bottom-0 left-14"
-                  }`}>
-                    <div className="flex flex-col items-center mb-3">
-                      <div className="relative group/avatar mb-2 cursor-pointer" onClick={() => avatarInputRef.current?.click()}>
-                        <MemberAvatar name={authMember?.name || "User"} id={authMember?.id} size="lg" type="human" rev={avatarRev} />
-                        <div className="absolute inset-0 rounded-full bg-black/40 opacity-0 group-hover/avatar:opacity-100 transition-opacity flex items-center justify-center">
-                          <Camera className="w-5 h-5 text-white" />
-                        </div>
-                      </div>
-                      <p className="text-sm font-semibold text-foreground">{authMember?.name || "User"}</p>
-                      <p className="text-[10px] text-muted-foreground">{authMember?.id || ""}</p>
+            {/* @@@avatar-popover — Radix Popover for profile + avatar upload + logout */}
+            <Popover>
+              <PopoverTrigger asChild>
+                <button className={`flex items-center ${showLabels ? "px-3 gap-3" : "justify-center"} h-10 mb-1 rounded-xl hover:bg-muted transition-colors w-full`}>
+                  <MemberAvatar name={authMember?.name || "User"} avatarUrl={(authMember?.avatar || avatarRev > 0) && authMember?.id ? `/api/members/${authMember.id}/avatar` : undefined} size="sm" type="human" rev={avatarRev} />
+                  {showLabels && (
+                    <div className="min-w-0 flex-1 text-left">
+                      <p className="text-xs font-medium text-foreground truncate">{authMember?.name || "User"}</p>
                     </div>
-                    <button
-                      onClick={() => { setShowProfile(false); authLogout(); }}
-                      className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-destructive hover:bg-destructive/10 transition-colors"
-                    >
-                      <LogOut className="w-3.5 h-3.5" /> Logout
-                    </button>
+                  )}
+                </button>
+              </PopoverTrigger>
+              <PopoverContent side="top" align="start" className="w-56">
+                <div className="flex flex-col items-center gap-3">
+                  <div className="relative group/avatar cursor-pointer" onClick={() => avatarInputRef.current?.click()}>
+                    <MemberAvatar name={authMember?.name || "User"} avatarUrl={(authMember?.avatar || avatarRev > 0) && authMember?.id ? `/api/members/${authMember.id}/avatar` : undefined} size="lg" type="human" rev={avatarRev} />
+                    <div className="absolute inset-0 rounded-full bg-black/40 opacity-0 group-hover/avatar:opacity-100 transition-opacity flex items-center justify-center">
+                      <Camera className="w-5 h-5 text-white" />
+                    </div>
                     <input ref={avatarInputRef} type="file" accept="image/png,image/jpeg,image/webp,image/gif" className="hidden" onChange={handleAvatarUpload} />
                   </div>
-                </>
-              )}
-            </div>
+                  <div className="text-center">
+                    <p className="text-sm font-medium">{authMember?.name || "User"}</p>
+                  </div>
+                  <button
+                    onClick={authLogout}
+                    className="flex items-center gap-2 w-full px-3 py-2 rounded-lg text-xs text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+                  >
+                    <LogOut className="w-3.5 h-3.5" /> 退出登录
+                  </button>
+                </div>
+              </PopoverContent>
+            </Popover>
             <NavLink to="/settings" className="group relative block overflow-visible">
               <div className={`flex items-center ${showLabels ? "px-3 gap-3" : "justify-center"} h-10 rounded-xl transition-all duration-150 ${
                 location.pathname.startsWith("/settings") ? "bg-sidebar-accent text-sidebar-accent-foreground" : "text-sidebar-foreground hover:bg-muted hover:text-foreground"

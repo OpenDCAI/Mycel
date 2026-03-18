@@ -34,7 +34,7 @@ export default function NewChatDialog({ open, onOpenChange }: NewChatDialogProps
 
   const handleSelect = (member: typeof memberList[0]) => {
     onOpenChange(false);
-    navigate(`/chat/${member.name}`);
+    navigate(`/threads/${member.name}`);
   };
 
   return (
@@ -68,7 +68,7 @@ export default function NewChatDialog({ open, onOpenChange }: NewChatDialogProps
                 onClick={() => handleSelect(member)}
                 className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-muted transition-colors"
               >
-                <MemberAvatar name={member.name} id={member.id} size="sm" />
+                <MemberAvatar name={member.name} avatarUrl={member.avatar_url} type="mycel_agent" size="sm" />
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
                     <span className="text-sm font-medium truncate">{member.name}</span>

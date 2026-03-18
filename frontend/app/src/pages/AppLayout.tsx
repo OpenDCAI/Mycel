@@ -133,8 +133,8 @@ function MobileThreadList({ threads, loading, onNewChat, onDeleteThread, newChat
             const preview = t.preview || "新会话";
             return (
               <div key={t.thread_id} className="flex items-center border-b border-border">
-                <Link to={`/chat/${t.thread_id}`} className="flex items-center gap-3 px-4 py-3 flex-1 min-w-0 hover:bg-muted/50 transition-colors">
-                  <MemberAvatar name={memberName} size="md" />
+                <Link to={`/threads/${memberName === "Leon" ? "leon" : memberName}/${t.thread_id}`} className="flex items-center gap-3 px-4 py-3 flex-1 min-w-0 hover:bg-muted/50 transition-colors">
+                  <MemberAvatar name={memberName} avatarUrl={t.avatar_url} type="mycel_agent" size="md" />
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-medium text-foreground truncate">{memberName}</p>
                     <p className="text-xs text-muted-foreground truncate">{preview}</p>

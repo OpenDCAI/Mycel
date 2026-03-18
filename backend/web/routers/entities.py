@@ -45,7 +45,7 @@ async def list_members(
             "id": m.id,
             "name": m.name,
             "type": m.type,
-            "avatar": m.avatar,
+            "avatar_url": f"/api/members/{m.id}/avatar" if m.avatar else None,
             "description": m.description,
             "owner_name": owner.name if owner else None,
             "is_mine": m.owner_id == member_id,
@@ -149,7 +149,8 @@ async def list_entities(
 
     all_entities = entity_repo.list_all()
     return [
-        {"id": e.id, "name": e.name, "type": e.type, "avatar": getattr(e, "avatar", None)}
+        {"id": e.id, "name": e.name, "type": e.type, "member_id": e.member_id,
+         "avatar_url": f"/api/members/{e.member_id}/avatar" if e.avatar else None}
         for e in all_entities
         if e.member_id not in exclude_member_ids
     ]

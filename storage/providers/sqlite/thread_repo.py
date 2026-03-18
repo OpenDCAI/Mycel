@@ -64,14 +64,14 @@ class SQLiteThreadRepo:
         """Return all threads owned by this member (via members.owner_id JOIN)."""
         with self._lock:
             rows = self._conn.execute(
-                "SELECT t.*, m.name as member_name FROM threads t"
+                "SELECT t.*, m.name as member_name, m.avatar as member_avatar FROM threads t"
                 " JOIN members m ON t.member_id = m.id"
                 " WHERE m.owner_id = ?"
                 " ORDER BY t.created_at",
                 (owner_member_id,),
             ).fetchall()
-            # JOIN adds member_name as extra column
-            return [{**self._to_dict(r[:len(self._COLS)]), "member_name": r[len(self._COLS)]} for r in rows]
+            ncols = len(self._COLS)
+            return [{**self._to_dict(r[:ncols]), "member_name": r[ncols], "member_avatar": r[ncols + 1]} for r in rows]
 
     def update(self, thread_id: str, **fields: Any) -> None:
         allowed = {"sandbox_type", "model", "cwd", "observation_provider", "agent"}

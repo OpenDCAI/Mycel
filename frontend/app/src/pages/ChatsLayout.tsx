@@ -8,7 +8,7 @@ interface ChatEntity {
   id: string;
   name: string;
   type: string;
-  avatar?: string | null;
+  avatar_url?: string;
 }
 
 interface ChatSummary {
@@ -96,7 +96,7 @@ function NewChatDialog({ onClose, onCreated }: { onClose: () => void; onCreated:
           ) : filtered.map(e => (
             <button key={e.id} onClick={() => void handleSelect(e)} disabled={creating}
               className="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-muted transition-colors text-left disabled:opacity-50">
-              <MemberAvatar name={e.name} size="sm" />
+              <MemberAvatar name={e.name} avatarUrl={e.avatar_url} type={e.type} size="sm" />
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-medium truncate">{e.name}</p>
                 <p className="text-[10px] text-muted-foreground">{e.type}</p>
@@ -147,13 +147,14 @@ function ChatSearchModal({ chats, myEntityId, onSelect, onClose }: {
             <p className="text-xs text-muted-foreground text-center py-6">No results</p>
           ) : filtered.map(chat => {
             const name = chatDisplayName(chat, myEntityId);
+            const otherEntity = chat.entities.find(e => e.id !== myEntityId);
             return (
               <button
                 key={chat.id}
                 onClick={() => { onSelect(chat.id); onClose(); }}
                 className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-muted transition-colors text-left"
               >
-                <MemberAvatar name={name} size="sm" />
+                <MemberAvatar name={name} avatarUrl={otherEntity?.avatar_url} type={otherEntity?.type} size="sm" />
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-medium truncate">{name}</p>
                   {chat.last_message && (
@@ -177,6 +178,7 @@ export default function ChatsLayout() {
   const [loading, setLoading] = useState(true);
   const [showNewChat, setShowNewChat] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   const refresh = useCallback(() => {
     authFetch("/api/chats")
@@ -187,6 +189,17 @@ export default function ChatsLayout() {
   }, []);
 
   useEffect(() => { refresh(); }, [refresh]);
+
+  // Poll every 5s while tab is visible
+  useEffect(() => {
+    let timer: ReturnType<typeof setInterval> | null = null;
+    const start = () => { if (!timer) timer = setInterval(refresh, 5000); };
+    const stop = () => { if (timer) { clearInterval(timer); timer = null; } };
+    const onVis = () => document.visibilityState === "visible" ? start() : stop();
+    start();
+    document.addEventListener("visibilitychange", onVis);
+    return () => { stop(); document.removeEventListener("visibilitychange", onVis); };
+  }, [refresh]);
 
   const handleCreated = useCallback((newChatId: string) => {
     setShowNewChat(false);
@@ -205,7 +218,8 @@ export default function ChatsLayout() {
 
   return (
     <div className="h-full w-full flex overflow-hidden">
-      {/* Sidebar — mirrors Sidebar.tsx structure exactly */}
+      {/* Sidebar — mirrors Sidebar.tsx structure. Collapsible via header toggle. */}
+      {!sidebarCollapsed && (
       <div className="w-72 h-full flex flex-col bg-card border-r border-border shrink-0">
         {/* Header — same as Sidebar.tsx */}
         <div className="px-4 pt-3 pb-1 flex items-center justify-between">
@@ -259,6 +273,7 @@ export default function ChatsLayout() {
             ) : sorted.map(chat => {
               const isActive = chatId === chat.id;
               const name = chatDisplayName(chat, myEntityId);
+              const otherEntity = chat.entities.find(e => e.id !== myEntityId);
               return (
                 <div key={chat.id} className={`group/item flex items-center rounded-lg transition-colors ${
                   isActive ? "bg-background shadow-sm" : "hover:bg-muted"
@@ -271,7 +286,7 @@ export default function ChatsLayout() {
                   </div>
 
                   <Link to={`/chats/${chat.id}`} className="flex-1 min-w-0 py-2.5 pr-2 flex items-center gap-2">
-                    <MemberAvatar name={name} size="xs" />
+                    <MemberAvatar name={name} avatarUrl={otherEntity?.avatar_url} type={otherEntity?.type} size="xs" />
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-1.5">
                         <span className={`text-sm font-medium truncate ${isActive ? "text-foreground" : ""}`}>
@@ -303,10 +318,11 @@ export default function ChatsLayout() {
           </div>
         </div>
       </div>
+      )}
 
       {/* Main content */}
       <div className="flex-1 min-w-0">
-        <Outlet />
+        <Outlet context={{ sidebarCollapsed, setSidebarCollapsed, refreshChatList: refresh }} />
       </div>
 
       {showNewChat && <NewChatDialog onClose={() => setShowNewChat(false)} onCreated={handleCreated} />}
