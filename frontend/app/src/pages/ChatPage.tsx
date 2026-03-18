@@ -36,7 +36,14 @@ function ChatPageInner({ threadId }: { threadId: string }) {
   const location = useLocation();
   const { tm, setSidebarCollapsed } = useOutletContext<OutletContext>();
   const userName = useAuthStore(s => s.member?.name);
+  const userMemberId = useAuthStore(s => s.member?.id);
+  const userHasAvatar = useAuthStore(s => !!s.member?.avatar);
   const agentName = useAuthStore(s => s.agent?.name);
+
+  // Derive avatar URLs from thread data
+  const currentThread = tm.threads.find(t => t.thread_id === threadId);
+  const agentAvatarUrl = currentThread?.avatar_url;
+  const userAvatarUrl = userHasAvatar && userMemberId ? `/api/members/${userMemberId}/avatar` : undefined;
   const [currentModel, setCurrentModel] = useState<string>("");
   const [showHidden, setShowHidden] = useState(false);
 
@@ -184,7 +191,9 @@ function ChatPageInner({ threadId }: { threadId: string }) {
               onFocusAgent={handleFocusAgent}
               onTaskNoticeClick={handleTaskNoticeClick}
               agentName={agentName}
+              agentAvatarUrl={agentAvatarUrl}
               userName={userName}
+              userAvatarUrl={userAvatarUrl}
             />
           </div>
           <TaskProgress

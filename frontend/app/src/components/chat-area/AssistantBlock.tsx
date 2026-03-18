@@ -84,6 +84,7 @@ interface AssistantBlockProps {
   runtimeStatus?: StreamStatus | null;
   onFocusAgent?: (taskId: string) => void;
   agentName?: string;
+  agentAvatarUrl?: string;
 }
 
 function formatDuration(ms: number): string {
@@ -91,7 +92,7 @@ function formatDuration(ms: number): string {
   return `${Math.floor(ms / 60000)}m ${Math.round((ms % 60000) / 1000)}s`;
 }
 
-export const AssistantBlock = memo(function AssistantBlock({ entry, isStreamingThis, runtimeStatus, onFocusAgent, agentName }: AssistantBlockProps) {
+export const AssistantBlock = memo(function AssistantBlock({ entry, isStreamingThis, runtimeStatus, onFocusAgent, agentName, agentAvatarUrl }: AssistantBlockProps) {
   const displayName = agentName || "Agent";
   const hasNotice = entry.segments.some((s) => s.type === "notice");
 
@@ -121,7 +122,7 @@ export const AssistantBlock = memo(function AssistantBlock({ entry, isStreamingT
 
   return (
     <div className="flex gap-2.5 animate-fade-in group/block">
-      <MemberAvatar name={displayName} size="xs" type="mycel_agent" className={`mt-0.5${isBooting ? " avatar-booting" : ""}`} />
+      <MemberAvatar name={displayName} avatarUrl={agentAvatarUrl} size="xs" type="mycel_agent" className={`mt-0.5${isBooting ? " avatar-booting" : ""}`} />
       <div className="flex-1 min-w-0 space-y-1.5 overflow-hidden">
         <div className="flex items-center gap-2">
           <span className="text-[13px] font-medium text-[#171717]">{displayName}</span>

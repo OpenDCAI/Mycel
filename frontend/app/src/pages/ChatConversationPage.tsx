@@ -330,7 +330,7 @@ function ChatConversationInner({ chatId }: { chatId: string }) {
                       avatarUrl={entity?.avatar_url}
                       entityType={entity?.type}
                       timestamp={ts}
-                      showName={isGroup}
+                      showName
                     />
                   )}
                 </div>
