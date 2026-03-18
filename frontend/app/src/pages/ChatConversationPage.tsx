@@ -237,15 +237,20 @@ function ChatConversationInner({ chatId }: { chatId: string }) {
     }
   };
 
-  // Typing indicator display — only 1:1
-  const typingDisplay = !isGroup && typingEntities.size > 0 ? (
+  // Typing indicator display — works for both 1:1 and group
+  const typingNames = [...typingEntities]
+    .map(id => entityMap.get(id)?.name)
+    .filter(Boolean);
+  const typingDisplay = typingEntities.size > 0 ? (
     <div className="flex items-center gap-2 px-4 py-1">
       <div className="flex gap-1">
         <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground/40 animate-bounce" style={{ animationDelay: "0ms" }} />
         <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground/40 animate-bounce" style={{ animationDelay: "150ms" }} />
         <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground/40 animate-bounce" style={{ animationDelay: "300ms" }} />
       </div>
-      <span className="text-xs text-muted-foreground">typing</span>
+      <span className="text-xs text-muted-foreground">
+        {typingNames.length > 0 ? `${typingNames.join(", ")} typing` : "typing"}
+      </span>
     </div>
   ) : null;
 

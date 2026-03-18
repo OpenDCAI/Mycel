@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, Outlet, useParams, useNavigate } from "react-router-dom";
-import { Plus, Search, X } from "lucide-react";
+import { Check, Plus, Search, Users, X } from "lucide-react";
 import MemberAvatar from "../components/MemberAvatar";
 import { authFetch, useAuthStore } from "../store/auth-store";
 import type { ChatEntity, ChatSummary } from "../api/types";
@@ -21,10 +21,12 @@ function chatDisplayName(chat: ChatSummary, myEntityId: string | null): string {
   return others.map(e => e.name).join(", ") || "Chat";
 }
 
-// @@@new-chat-dialog — entity picker for creating 1:1 chat
+// @@@new-chat-dialog — entity picker with multi-select for 1:1 and group chat
 function NewChatDialog({ onClose, onCreated }: { onClose: () => void; onCreated: (chatId: string) => void }) {
   const [entities, setEntities] = useState<ChatEntity[]>([]);
   const [search, setSearch] = useState("");
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [title, setTitle] = useState("");
   const [creating, setCreating] = useState(false);
   const myEntityId = useAuthStore(s => s.entityId);
 
@@ -39,17 +41,30 @@ function NewChatDialog({ onClose, onCreated }: { onClose: () => void; onCreated:
     ? entities.filter(e => e.name.toLowerCase().includes(search.toLowerCase()))
     : entities;
 
-  const handleSelect = useCallback(async (target: ChatEntity) => {
-    if (!myEntityId || creating) return;
+  const toggle = (id: string) => {
+    setSelected(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const isGroup = selected.size >= 2;
+  const selectedEntities = entities.filter(e => selected.has(e.id));
+
+  const handleCreate = useCallback(async () => {
+    if (!myEntityId || selected.size === 0 || creating) return;
     setCreating(true);
     try {
+      const body: Record<string, unknown> = { entity_ids: [myEntityId, ...selected] };
+      if (isGroup && title.trim()) body.title = title.trim();
       const res = await authFetch("/api/chats", {
         method: "POST",
-        body: JSON.stringify({ entity_ids: [myEntityId, target.id] }),
+        body: JSON.stringify(body),
       });
       if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error(body.detail || `${res.status}`);
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.detail || `${res.status}`);
       }
       const data = await res.json();
       onCreated(data.id);
@@ -57,7 +72,7 @@ function NewChatDialog({ onClose, onCreated }: { onClose: () => void; onCreated:
       console.error("[NewChat] error:", err);
       setCreating(false);
     }
-  }, [myEntityId, creating, onCreated]);
+  }, [myEntityId, selected, isGroup, title, creating, onCreated]);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onClose}>
@@ -66,6 +81,28 @@ function NewChatDialog({ onClose, onCreated }: { onClose: () => void; onCreated:
           <h3 className="text-sm font-semibold">New Chat</h3>
           <button onClick={onClose} className="text-muted-foreground hover:text-foreground"><X className="w-4 h-4" /></button>
         </div>
+
+        {/* Selected chips */}
+        {selectedEntities.length > 0 && (
+          <div className="flex flex-wrap gap-1.5 px-4 py-2 border-b border-border">
+            {selectedEntities.map(e => (
+              <button key={e.id} onClick={() => toggle(e.id)}
+                className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-primary/10 text-primary text-xs">
+                {e.name} <X className="w-3 h-3" />
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* Group title input — only when 2+ selected */}
+        {isGroup && (
+          <div className="px-4 py-2 border-b border-border">
+            <input type="text" placeholder="Group name (optional)" value={title}
+              onChange={e => setTitle(e.target.value)}
+              className="w-full text-sm bg-transparent outline-none text-foreground placeholder:text-muted-foreground/50" />
+          </div>
+        )}
+
         <div className="px-4 py-2">
           <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-muted/50 border border-border">
             <Search className="w-4 h-4 text-muted-foreground" />
@@ -73,22 +110,38 @@ function NewChatDialog({ onClose, onCreated }: { onClose: () => void; onCreated:
               className="flex-1 bg-transparent text-sm outline-none" autoFocus />
           </div>
         </div>
-        <div className="max-h-64 overflow-y-auto px-2 pb-2">
+        <div className="max-h-56 overflow-y-auto px-2 pb-2">
           {filtered.length === 0 ? (
             <p className="text-xs text-muted-foreground text-center py-4">
               {entities.length === 0 ? "No other users registered yet" : "No matches"}
             </p>
-          ) : filtered.map(e => (
-            <button key={e.id} onClick={() => void handleSelect(e)} disabled={creating}
-              className="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-muted transition-colors text-left disabled:opacity-50">
-              <MemberAvatar name={e.name} avatarUrl={e.avatar_url} type={e.type} size="sm" />
-              <div className="min-w-0 flex-1">
-                <p className="text-sm font-medium truncate">{e.name}</p>
-                <p className="text-[10px] text-muted-foreground">{e.type}</p>
-              </div>
-            </button>
-          ))}
+          ) : filtered.map(e => {
+            const isSelected = selected.has(e.id);
+            return (
+              <button key={e.id} onClick={() => toggle(e.id)}
+                className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-colors text-left ${
+                  isSelected ? "bg-primary/5" : "hover:bg-muted"
+                }`}>
+                <MemberAvatar name={e.name} avatarUrl={e.avatar_url} type={e.type} size="sm" />
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-medium truncate">{e.name}</p>
+                  <p className="text-[10px] text-muted-foreground">{e.type}</p>
+                </div>
+                {isSelected && <Check className="w-4 h-4 text-primary shrink-0" />}
+              </button>
+            );
+          })}
         </div>
+
+        {/* Create button */}
+        {selected.size > 0 && (
+          <div className="px-4 py-3 border-t border-border">
+            <button onClick={() => void handleCreate()} disabled={creating}
+              className="w-full py-2 rounded-lg bg-foreground text-background text-sm font-medium hover:bg-foreground/90 disabled:opacity-50 transition-colors">
+              {creating ? "Creating..." : isGroup ? `Create Group (${selected.size + 1})` : "Start Chat"}
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -265,7 +318,8 @@ export default function ChatsLayout() {
             ) : sorted.map(chat => {
               const isActive = chatId === chat.id;
               const name = chatDisplayName(chat, myEntityId);
-              const otherEntity = chat.entities.find(e => e.id !== myEntityId);
+              const others = chat.entities.filter(e => e.id !== myEntityId);
+              const isGroupChat = others.length > 1;
               return (
                 <div key={chat.id} className={`group/item flex items-center rounded-lg transition-colors ${
                   isActive ? "bg-background shadow-sm" : "hover:bg-muted"
@@ -278,7 +332,16 @@ export default function ChatsLayout() {
                   </div>
 
                   <Link to={`/chats/${chat.id}`} className="flex-1 min-w-0 py-2.5 pr-2 flex items-center gap-2">
-                    <MemberAvatar name={name} avatarUrl={otherEntity?.avatar_url} type={otherEntity?.type} size="xs" />
+                    {isGroupChat ? (
+                      <div className="relative w-7 h-7 shrink-0">
+                        <Users className="w-7 h-7 p-1.5 rounded-full bg-muted text-muted-foreground" />
+                        <span className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full bg-foreground text-background text-[8px] font-bold flex items-center justify-center">
+                          {others.length + 1}
+                        </span>
+                      </div>
+                    ) : (
+                      <MemberAvatar name={name} avatarUrl={others[0]?.avatar_url} type={others[0]?.type} size="xs" />
+                    )}
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-1.5">
                         <span className={`text-sm font-medium truncate ${isActive ? "text-foreground" : ""}`}>
