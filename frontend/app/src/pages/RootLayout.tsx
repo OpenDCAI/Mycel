@@ -1,7 +1,7 @@
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { MessageSquare, MessagesSquare, Users, ListTodo, Library, Layers, Settings, Plus, ChevronLeft, ChevronRight, LogOut, Camera } from "lucide-react";
 import { useState, useEffect, useCallback, useRef } from "react";
-import { uploadMemberAvatar } from "@/api/conversations";
+import { uploadMemberAvatar } from "@/api/client";
 import MemberAvatar from "@/components/MemberAvatar";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import CreateMemberDialog from "@/components/CreateMemberDialog";

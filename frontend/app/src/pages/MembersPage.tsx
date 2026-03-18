@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { Search, Plus, Zap, Users, Wrench, Plug, SearchX, ArrowUpDown, AlertTriangle, RefreshCw, MessageSquare, Copy, Trash2, Bot, Camera } from "lucide-react";
 import MemberAvatar from "@/components/MemberAvatar";
-import { uploadMemberAvatar } from "@/api/conversations";
+import { uploadMemberAvatar } from "@/api/client";
 import { useNavigate } from "react-router-dom";
 import CreateMemberDialog from "@/components/CreateMemberDialog";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";

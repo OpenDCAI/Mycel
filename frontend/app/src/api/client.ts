@@ -211,3 +211,18 @@ export async function verifyObservation(): Promise<{
 }> {
   return request("/api/settings/observation/verify");
 }
+
+// --- Member API ---
+
+export async function uploadMemberAvatar(memberId: string, file: File): Promise<void> {
+  const form = new FormData();
+  form.append("file", file);
+  const response = await authFetch(`/api/members/${memberId}/avatar`, {
+    method: "PUT",
+    body: form,
+  });
+  if (!response.ok) {
+    const body = await response.text();
+    throw new Error(`API ${response.status}: ${body || response.statusText}`);
+  }
+}
