@@ -36,35 +36,37 @@ class SQLiteThreadRepo:
                cwd: str | None = None, created_at: float = 0, **extra: Any) -> None:
         with self._lock:
             self._conn.execute(
-                "INSERT INTO threads (id, member_id, sandbox_type, cwd, model, observation_provider, agent, created_at)"
-                " VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                "INSERT INTO threads (id, member_id, sandbox_type, cwd, model, observation_provider, created_at)"
+                " VALUES (?, ?, ?, ?, ?, ?, ?)",
                 (thread_id, member_id, sandbox_type, cwd,
-                 extra.get("model"), extra.get("observation_provider"), extra.get("agent"), created_at),
+                 extra.get("model"), extra.get("observation_provider"), created_at),
             )
             self._conn.commit()
 
-    _COLS = ("id", "member_id", "sandbox_type", "model", "cwd", "observation_provider", "agent", "created_at")
+    _COLS = ("id", "member_id", "sandbox_type", "model", "cwd", "observation_provider", "created_at")
+    _SELECT = ", ".join(_COLS)
 
     def _to_dict(self, r: tuple) -> dict[str, Any]:
         return dict(zip(self._COLS, r))
 
     def get_by_id(self, thread_id: str) -> dict[str, Any] | None:
         with self._lock:
-            row = self._conn.execute("SELECT * FROM threads WHERE id = ?", (thread_id,)).fetchone()
+            row = self._conn.execute(f"SELECT {self._SELECT} FROM threads WHERE id = ?", (thread_id,)).fetchone()
             return self._to_dict(row) if row else None
 
     def list_by_member(self, member_id: str) -> list[dict[str, Any]]:
         with self._lock:
             rows = self._conn.execute(
-                "SELECT * FROM threads WHERE member_id = ? ORDER BY created_at", (member_id,),
+                f"SELECT {self._SELECT} FROM threads WHERE member_id = ? ORDER BY created_at", (member_id,),
             ).fetchall()
             return [self._to_dict(r) for r in rows]
 
     def list_by_owner(self, owner_member_id: str) -> list[dict[str, Any]]:
         """Return all threads owned by this member (via members.owner_id JOIN)."""
+        cols = ", ".join(f"t.{c}" for c in self._COLS)
         with self._lock:
             rows = self._conn.execute(
-                "SELECT t.*, m.name as member_name, m.avatar as member_avatar FROM threads t"
+                f"SELECT {cols}, m.name as member_name, m.avatar as member_avatar FROM threads t"
                 " JOIN members m ON t.member_id = m.id"
                 " WHERE m.owner_id = ?"
                 " ORDER BY t.created_at",
@@ -74,7 +76,7 @@ class SQLiteThreadRepo:
             return [{**self._to_dict(r[:ncols]), "member_name": r[ncols], "member_avatar": r[ncols + 1]} for r in rows]
 
     def update(self, thread_id: str, **fields: Any) -> None:
-        allowed = {"sandbox_type", "model", "cwd", "observation_provider", "agent"}
+        allowed = {"sandbox_type", "model", "cwd", "observation_provider"}
         sets = {k: v for k, v in fields.items() if k in allowed}
         if not sets:
             return

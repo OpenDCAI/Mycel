@@ -50,7 +50,7 @@ export default function NewChatPage() {
     }
 
     const cwd = workspace || settings?.default_workspace || undefined;
-    const threadId = await handleCreateThread(sandbox, cwd, memberName, resolvedMemberId);
+    const threadId = await handleCreateThread(sandbox, cwd, resolvedMemberId);
     postRun(threadId, message, undefined, model ? { model } : undefined).catch(err => {
       console.error('[NewChatPage] postRun failed:', err);
     });

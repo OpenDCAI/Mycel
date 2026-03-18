@@ -128,8 +128,7 @@ function MobileThreadList({ threads, loading, onNewChat, onDeleteThread, newChat
           </div>
         ) : (
           threads.map(t => {
-            const member = memberList.find((m: any) => m.id === t.agent);
-            const memberName = member?.name || t.member_name || t.agent || "Agent";
+            const memberName = t.member_name || "Agent";
             const preview = t.preview || "新会话";
             return (
               <div key={t.thread_id} className="flex items-center border-b border-border">

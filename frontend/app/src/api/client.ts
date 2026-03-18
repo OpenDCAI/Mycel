@@ -41,10 +41,9 @@ export async function listThreads(): Promise<ThreadSummary[]> {
   return toThreads(payload);
 }
 
-export async function createThread(sandbox: string, cwd?: string, agent?: string, memberId?: string): Promise<ThreadSummary> {
+export async function createThread(sandbox: string, cwd?: string, memberId?: string): Promise<ThreadSummary> {
   const body: Record<string, string> = { sandbox };
   if (cwd) body.cwd = cwd;
-  if (agent) body.agent = agent;
   if (memberId) body.member_id = memberId;
   return request<ThreadSummary>("/api/threads", { method: "POST", body: JSON.stringify(body) });
 }

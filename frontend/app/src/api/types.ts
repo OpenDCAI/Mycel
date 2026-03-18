@@ -52,7 +52,6 @@ export interface ThreadSummary {
   preview?: string;
   updated_at?: string;
   running?: boolean;
-  agent?: string | null;
   member_id?: string;
   member_name?: string;
   avatar_url?: string;
@@ -161,6 +160,7 @@ export interface UserMessage {
   /** Backend-computed: is this message visible to thread owner? */
   showing?: boolean;
   senderName?: string;
+  senderAvatarUrl?: string;
 }
 
 export interface NoticeMessage {

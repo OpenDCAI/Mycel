@@ -80,7 +80,6 @@ async def create_thread(
         cwd=payload.cwd,
         created_at=time.time(),
         model=payload.model,
-        agent=payload.agent,
     )
 
     app.state.entity_repo.create(EntityRow(
@@ -101,7 +100,6 @@ async def create_thread(
         "member_id": agent_member_id,
         "member_name": agent_member.name,
         "avatar_url": avatar_url(agent_member_id, bool(agent_member.avatar)),
-        "agent": payload.agent,
     }
 
 
@@ -113,7 +111,7 @@ async def list_threads(
     """List threads owned by the current user."""
     raw = app.state.thread_repo.list_by_owner(member_id)
     threads = [
-        {"thread_id": t["id"], "sandbox": t.get("sandbox_type", "local"), "agent": t.get("agent"),
+        {"thread_id": t["id"], "sandbox": t.get("sandbox_type", "local"),
          "member_name": t.get("member_name"), "member_id": t.get("member_id"),
          "avatar_url": avatar_url(t.get("member_id"), bool(t.get("member_avatar")))}
         for t in raw
