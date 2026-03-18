@@ -217,26 +217,12 @@ def _to_session_metrics(snapshot: dict[str, Any] | None) -> dict[str, Any] | Non
 
 
 def _member_name_map() -> dict[str, str]:
-    mapping: dict[str, str] = {}
-    # Filesystem-backed members (legacy)
-    try:
-        from backend.web.services.member_service import list_members
-        for member in list_members():
-            member_id = str(member.get("id") or "").strip()
-            member_name = str(member.get("name") or "").strip()
-            if member_id and member_name:
-                mapping[member_id] = member_name
-    except Exception:
-        pass
-    # DB-backed members (entity-chat)
+    """Build member_id → name map from DB."""
     try:
         from storage.providers.sqlite.member_repo import SQLiteMemberRepo
-        for m in SQLiteMemberRepo().list_all():
-            if m.id and m.name:
-                mapping[m.id] = m.name
+        return {m.id: m.name for m in SQLiteMemberRepo().list_all() if m.id and m.name}
     except Exception:
-        pass
-    return mapping
+        return {}
 
 
 def _thread_agent_refs(thread_ids: list[str]) -> dict[str, str]:
