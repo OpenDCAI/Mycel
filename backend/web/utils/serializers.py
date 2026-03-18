@@ -15,9 +15,6 @@ def strip_system_tags(content: str) -> str:
     return content.strip()
 
 
-# Keep old name for any existing callers
-strip_system_hints = strip_system_tags
-
 
 def avatar_url(member_id: str | None, has_avatar: bool) -> str | None:
     """Build avatar URL. Returns None if no avatar uploaded."""
