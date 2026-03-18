@@ -149,9 +149,11 @@ async def list_entities(
         exclude_member_ids.add(m.id)
 
     all_entities = entity_repo.list_all()
+    # Avatars live on members, not entities — build lookup
+    member_avatars = {m.id: bool(m.avatar) for m in member_repo.list_all()}
     return [
         {"id": e.id, "name": e.name, "type": e.type, "member_id": e.member_id,
-         "avatar_url": avatar_url(e.member_id, bool(e.avatar))}
+         "avatar_url": avatar_url(e.member_id, member_avatars.get(e.member_id, False))}
         for e in all_entities
         if e.member_id not in exclude_member_ids
     ]
