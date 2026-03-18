@@ -67,11 +67,13 @@ async def get_chat(
         raise HTTPException(404, "Chat not found")
     participants = app.state.chat_entity_repo.list_entities(chat_id)
     entity_repo = app.state.entity_repo
+    member_repo = app.state.member_repo
     entities_info = []
     for p in participants:
         e = entity_repo.get_by_id(p.entity_id)
         if e:
-            entities_info.append({"id": e.id, "name": e.name, "type": e.type, "avatar_url": avatar_url(e.member_id, bool(e.avatar))})
+            m = member_repo.get_by_id(e.member_id)
+            entities_info.append({"id": e.id, "name": e.name, "type": e.type, "avatar_url": avatar_url(e.member_id, bool(m.avatar if m else None))})
     return {"id": chat.id, "title": chat.title, "status": chat.status, "created_at": chat.created_at, "entities": entities_info}
 
 

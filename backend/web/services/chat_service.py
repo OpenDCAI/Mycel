@@ -177,7 +177,8 @@ class ChatService:
                 e = self._entities.get_by_id(p.entity_id)
                 if e:
                     from backend.web.utils.serializers import avatar_url
-                    entities_info.append({"id": e.id, "name": e.name, "type": e.type, "avatar_url": avatar_url(e.member_id, bool(e.avatar))})
+                    m = self._members.get_by_id(e.member_id) if self._members else None
+                    entities_info.append({"id": e.id, "name": e.name, "type": e.type, "avatar_url": avatar_url(e.member_id, bool(m.avatar if m else None))})
             msgs = self._messages.list_by_chat(cid, limit=1)
             last_msg = None
             if msgs:
