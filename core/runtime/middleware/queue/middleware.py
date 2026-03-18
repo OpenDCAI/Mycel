@@ -32,7 +32,7 @@ except ImportError:
     ModelCallResult = Any
     ToolCallRequest = Any
 
-from core.display import compute_showing
+from core.runtime.visibility import compute_visibility
 from .manager import MessageQueueManager
 
 
@@ -43,7 +43,7 @@ class SteeringMiddleware(AgentMiddleware):
     1. Tool calls execute normally (no skipping)
     2. Before next model call, drain ALL pending messages from SQLite queue
     3. Inject as HumanMessage with metadata source="system"
-    4. Update runtime.display_latent so streaming tags events correctly
+    4. Update runtime.visibility_context so streaming tags events correctly
     """
 
     def __init__(self, queue_manager: MessageQueueManager, agent_runtime: Any = None) -> None:
@@ -100,9 +100,9 @@ class SteeringMiddleware(AgentMiddleware):
             ))
             # @@@display-latent-sync — advance latent so streaming tags
             # subsequent events with correct showing metadata.
-            if rt and hasattr(rt, "display_latent"):
-                _, new_latent = compute_showing(source, bool(is_steer), rt.display_latent)
-                rt.display_latent = new_latent
+            if rt and hasattr(rt, "visibility_context"):
+                _, new_ctx = compute_visibility(source, bool(is_steer), rt.visibility_context)
+                rt.visibility_context = new_ctx
 
         return {"messages": messages}
 

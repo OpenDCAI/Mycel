@@ -140,11 +140,11 @@ async def get_thread_messages(
 
     serialized = [serialize_message(msg) for msg in messages]
 
-    # @@@display-projection — annotate messages with display metadata.
-    # Do NOT update agent.runtime.display_latent here — streaming owns the live state.
+    # @@@owner-visibility — annotate messages with visibility metadata.
+    # Do NOT update agent.runtime.visibility_context here — streaming owns the live state.
     # Updating it would race with active runs.
-    from backend.web.services.display_projection import project_thread_display
-    annotated, _final_latent = project_thread_display(serialized)
+    from backend.web.services.display_projection import annotate_owner_visibility
+    annotated, _final_ctx = annotate_owner_visibility(serialized)
 
     return {
         "thread_id": thread_id,
