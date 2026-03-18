@@ -38,7 +38,7 @@ export default function ChatArea({ entries, isStreaming: _isStreaming, runtimeSt
                   {isHidden && entry.senderName && (
                     <div className="text-[10px] text-[#a3a3a3] mb-0.5 text-right mr-2">{entry.senderName}</div>
                   )}
-                  <UserBubble entry={entry} userName={isHidden ? (entry.senderName || "external") : userName} avatarUrl={isHidden ? undefined : userAvatarUrl} />
+                  <UserBubble entry={entry} userName={isHidden ? (entry.senderName || "external") : userName} avatarUrl={isHidden ? entry.senderAvatarUrl : userAvatarUrl} />
                 </div>
               );
             }

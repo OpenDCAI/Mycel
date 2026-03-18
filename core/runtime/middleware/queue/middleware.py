@@ -93,6 +93,7 @@ class SteeringMiddleware(AgentMiddleware):
                     "source": source,
                     "notification_type": item.notification_type,
                     "sender_name": item.sender_name,
+                    "sender_avatar_url": item.sender_avatar_url,
                     "sender_entity_id": item.sender_entity_id,
                     "is_steer": is_steer,
                 },

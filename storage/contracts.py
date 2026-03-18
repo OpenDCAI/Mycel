@@ -192,6 +192,7 @@ class QueueItem(BaseModel):
     source: str | None = None          # "owner" | "external" | "system"
     sender_entity_id: str | None = None
     sender_name: str | None = None
+    sender_avatar_url: str | None = None
     is_steer: bool = False
 
 

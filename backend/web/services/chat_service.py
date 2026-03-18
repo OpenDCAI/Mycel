@@ -115,6 +115,12 @@ class ChatService:
         participants = self._chat_entities.list_entities(chat_id)
         sender_entity = self._entities.get_by_id(sender_entity_id)
         sender_name = sender_entity.name if sender_entity else "unknown"
+        # @@@sender-avatar — compute once for all recipients
+        sender_avatar_url = None
+        if sender_entity:
+            from backend.web.utils.serializers import avatar_url
+            sender_member = self._members.get_by_id(sender_entity.member_id) if self._members else None
+            sender_avatar_url = avatar_url(sender_entity.member_id, bool(sender_member.avatar if sender_member else None))
 
         for ce in participants:
             if ce.entity_id == sender_entity_id:
@@ -137,7 +143,7 @@ class ChatService:
             if self._delivery_fn:
                 logger.debug("[deliver] → %s (thread=%s) from=%s", entity.id, entity.thread_id, sender_name)
                 try:
-                    self._delivery_fn(entity, content, sender_name, chat_id, sender_entity_id)
+                    self._delivery_fn(entity, content, sender_name, chat_id, sender_entity_id, sender_avatar_url)
                 except Exception:
                     logger.exception("Failed to deliver chat message to entity %s", entity.id)
             else:

@@ -314,6 +314,7 @@ def _ensure_thread_handlers(agent: Any, thread_id: str, app: Any) -> None:
                         "source": getattr(item, "source", None) or "system",
                         "notification_type": item.notification_type,
                         "sender_name": getattr(item, "sender_name", None),
+                        "sender_avatar_url": getattr(item, "sender_avatar_url", None),
                         "is_steer": getattr(item, "is_steer", False),
                     },
                 )
@@ -899,6 +900,7 @@ async def _consume_followup_queue(agent: Any, thread_id: str, app: Any) -> None:
                                     "source": item.source or "system",
                                     "notification_type": item.notification_type,
                                     "sender_name": item.sender_name,
+                                    "sender_avatar_url": item.sender_avatar_url,
                                 })
     except Exception:
         logger.exception("Failed to consume followup queue for thread %s", thread_id)

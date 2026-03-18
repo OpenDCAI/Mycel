@@ -37,7 +37,8 @@ class MessageQueueManager:
 
     def enqueue(self, content: str, thread_id: str, notification_type: str = "steer",
                 source: str | None = None, sender_entity_id: str | None = None,
-                sender_name: str | None = None, is_steer: bool = False) -> None:
+                sender_name: str | None = None, sender_avatar_url: str | None = None,
+                is_steer: bool = False) -> None:
         """Persist a message. Fires wake handler after INSERT."""
         self._repo.enqueue(thread_id, content, notification_type,
                            source=source, sender_entity_id=sender_entity_id, sender_name=sender_name)
@@ -47,7 +48,8 @@ class MessageQueueManager:
             try:
                 handler(QueueItem(content=content, notification_type=notification_type,
                                   source=source, sender_entity_id=sender_entity_id,
-                                  sender_name=sender_name, is_steer=is_steer))
+                                  sender_name=sender_name, sender_avatar_url=sender_avatar_url,
+                                  is_steer=is_steer))
             except Exception:
                 logger.exception("Wake handler raised for thread %s", thread_id)
 

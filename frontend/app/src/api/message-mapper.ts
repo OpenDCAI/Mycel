@@ -90,6 +90,7 @@ function handleHuman(msg: BackendMessage, i: number, state: MapState): void {
         timestamp: state.now,
         showing: false,
         senderName: (meta.sender_name as string) || undefined,
+        senderAvatarUrl: (meta.sender_avatar_url as string) || undefined,
       });
     }
     return;

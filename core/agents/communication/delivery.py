@@ -24,10 +24,10 @@ def make_chat_delivery_fn(app: Any):
     loop = asyncio.get_running_loop()
     logger.info("[delivery] make_chat_delivery_fn: loop=%s", loop)
 
-    def _deliver(entity: EntityRow, content: str, sender_name: str, chat_id: str, sender_entity_id: str) -> None:
+    def _deliver(entity: EntityRow, content: str, sender_name: str, chat_id: str, sender_entity_id: str, sender_avatar_url: str | None = None) -> None:
         logger.info("[delivery] _deliver called: entity=%s, thread=%s", entity.id, entity.thread_id)
         future = asyncio.run_coroutine_threadsafe(
-            _async_deliver(app, entity, content, sender_name, chat_id, sender_entity_id),
+            _async_deliver(app, entity, content, sender_name, chat_id, sender_entity_id, sender_avatar_url),
             loop,
         )
         # Add callback to log errors
@@ -49,6 +49,7 @@ async def _async_deliver(
     sender_name: str,
     chat_id: str,
     sender_entity_id: str,
+    sender_avatar_url: str | None = None,
 ) -> None:
     """Deliver chat message to an agent's brain thread."""
     # @@@context-isolation — clear inherited LangChain ContextVar so the recipient
@@ -80,4 +81,5 @@ async def _async_deliver(
         app, thread_id, formatted,
         source="external",
         sender_name=sender_name,
+        sender_avatar_url=sender_avatar_url,
     )
