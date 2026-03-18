@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, Outlet, useParams, useNavigate } from "react-router-dom";
 import { Plus, Search, X } from "lucide-react";
 import MemberAvatar from "../components/MemberAvatar";
@@ -180,10 +180,17 @@ export default function ChatsLayout() {
   const [showSearch, setShowSearch] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
+  const chatsRef = useRef(chats);
+  chatsRef.current = chats;
   const refresh = useCallback(() => {
     authFetch("/api/chats")
       .then(r => r.json())
-      .then(setChats)
+      .then((data: ChatSummary[]) => {
+        // Skip re-render if data unchanged (polling no-op guard)
+        const prev = chatsRef.current;
+        if (prev.length === data.length && JSON.stringify(prev) === JSON.stringify(data)) return;
+        setChats(data);
+      })
       .catch(console.error)
       .finally(() => setLoading(false));
   }, []);

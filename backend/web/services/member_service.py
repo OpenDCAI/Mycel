@@ -21,6 +21,7 @@ from typing import Any
 import yaml
 
 from config.defaults.tool_catalog import TOOLS_BY_NAME, ToolDef
+from backend.web.utils.serializers import avatar_url
 from config.loader import AgentLoader
 
 logger = logging.getLogger(__name__)
@@ -237,7 +238,7 @@ def _member_to_dict(member_dir: Path) -> dict[str, Any] | None:
         "model": agent.model,
         "status": meta.get("status", "draft"),
         "version": meta.get("version", "0.1.0"),
-        "avatar_url": f"/api/members/{member_id}/avatar" if (Path.home() / ".leon" / "avatars" / f"{member_id}.png").exists() else None,
+        "avatar_url": avatar_url(member_id, (Path.home() / ".leon" / "avatars" / f"{member_id}.png").exists()),
         "config": {
             "prompt": agent.system_prompt,
             "rules": rules_list,

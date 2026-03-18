@@ -48,11 +48,20 @@ export default function ChatConversationPage() {
 }
 
 function ChatConversationInner({ chatId }: { chatId: string }) {
-  const { setSidebarCollapsed, refreshChatList } = useOutletContext<{
+  const { setSidebarCollapsed, refreshChatList: _refreshRaw } = useOutletContext<{
     sidebarCollapsed: boolean;
     setSidebarCollapsed: React.Dispatch<React.SetStateAction<boolean>>;
     refreshChatList: () => void;
   }>();
+
+  // Debounce refreshChatList — SSE bursts can fire many times per second
+  const refreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const refreshChatList = useCallback(() => {
+    if (refreshTimer.current) return;
+    refreshTimer.current = setTimeout(() => { refreshTimer.current = null; _refreshRaw(); }, 1000);
+  }, [_refreshRaw]);
+  useEffect(() => () => { if (refreshTimer.current) clearTimeout(refreshTimer.current); }, []);
+
   const myEntityId = useAuthStore(s => s.entityId);
   const myName = useAuthStore(s => s.member?.name) || "You";
   const [chat, setChat] = useState<ChatDetail | null>(null);

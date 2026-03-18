@@ -10,6 +10,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from backend.web.core.dependencies import get_app, get_current_entity_id, get_current_member_id
+from backend.web.utils.serializers import avatar_url
 
 logger = logging.getLogger(__name__)
 
@@ -70,7 +71,7 @@ async def get_chat(
     for p in participants:
         e = entity_repo.get_by_id(p.entity_id)
         if e:
-            entities_info.append({"id": e.id, "name": e.name, "type": e.type, "avatar_url": f"/api/members/{e.member_id}/avatar" if e.avatar else None})
+            entities_info.append({"id": e.id, "name": e.name, "type": e.type, "avatar_url": avatar_url(e.member_id, bool(e.avatar))})
     return {"id": chat.id, "title": chat.title, "status": chat.status, "created_at": chat.created_at, "entities": entities_info}
 
 
