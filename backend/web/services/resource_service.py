@@ -249,7 +249,7 @@ def _thread_agent_refs(thread_ids: list[str]) -> dict[str, str]:
         refs: dict[str, str] = {}
         for tid in unique:
             data = repo.get_by_id(tid)
-            agent_ref = str(data.get("agent") or data.get("member_id") or "").strip() if data else ""
+            agent_ref = str(data.get("member_id") or "").strip() if data else ""
             if agent_ref:
                 refs[tid] = agent_ref
         return refs
