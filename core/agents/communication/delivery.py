@@ -14,8 +14,13 @@ from storage.contracts import EntityRow
 logger = logging.getLogger(__name__)
 
 
-def make_chat_delivery_fn(app: Any):
+def make_chat_delivery_fn(app: Any, route_fn: Any = None):
     """Create a delivery callback for ChatService.
+
+    Args:
+        app: FastAPI app instance
+        route_fn: async function(app, thread_id, content, source=, sender_name=, sender_avatar_url=)
+                  Injected from backend layer to avoid core → backend import.
 
     Returns a sync function that schedules async delivery on the event loop.
     """
@@ -27,7 +32,7 @@ def make_chat_delivery_fn(app: Any):
     def _deliver(entity: EntityRow, content: str, sender_name: str, chat_id: str, sender_entity_id: str, sender_avatar_url: str | None = None) -> None:
         logger.info("[delivery] _deliver called: entity=%s, thread=%s", entity.id, entity.thread_id)
         future = asyncio.run_coroutine_threadsafe(
-            _async_deliver(app, entity, content, sender_name, chat_id, sender_entity_id, sender_avatar_url),
+            _async_deliver(app, entity, content, sender_name, chat_id, sender_entity_id, sender_avatar_url, route_fn),
             loop,
         )
         # Add callback to log errors
@@ -50,6 +55,7 @@ async def _async_deliver(
     chat_id: str,
     sender_entity_id: str,
     sender_avatar_url: str | None = None,
+    route_fn: Any = None,
 ) -> None:
     """Deliver chat message to an agent's brain thread."""
     # @@@context-isolation — clear inherited LangChain ContextVar so the recipient
@@ -59,11 +65,13 @@ async def _async_deliver(
     var_child_runnable_config.set(None)
 
     logger.info("[delivery] _async_deliver: entity=%s thread=%s from=%s", entity.id, entity.thread_id, sender_name)
-    from backend.web.services.message_routing import route_message_to_brain
     from core.runtime.middleware.queue.formatters import format_chat_message
 
     if not entity.thread_id:
         logger.warning("Entity %s has no thread_id, skipping delivery", entity.id)
+        return
+    if not route_fn:
+        logger.error("No route_fn provided for delivery to %s", entity.id)
         return
 
     thread_id = entity.thread_id
@@ -77,7 +85,7 @@ async def _async_deliver(
     # format_chat_message, no separate hint needed
     formatted = format_chat_message(content, sender_name, chat_id)
 
-    await route_message_to_brain(
+    await route_fn(
         app, thread_id, formatted,
         source="external",
         sender_name=sender_name,

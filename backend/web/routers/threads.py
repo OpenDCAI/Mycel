@@ -143,7 +143,7 @@ async def get_thread_messages(
     # @@@owner-visibility — annotate messages with visibility metadata.
     # Do NOT update agent.runtime.visibility_context here — streaming owns the live state.
     # Updating it would race with active runs.
-    from backend.web.services.visibility import annotate_owner_visibility
+    from core.runtime.visibility import annotate_owner_visibility
     annotated, _final_ctx = annotate_owner_visibility(serialized)
 
     return {
