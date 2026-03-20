@@ -149,7 +149,6 @@ class ChatToolService:
 
     def _register_chat_send(self, registry: ToolRegistry) -> None:
         eid = self._entity_id
-        owner_eid = self._owner_entity_id
 
         def handle(content: str, entity_id: str | None = None, chat_id: str | None = None, mentions: list[str] | None = None) -> str:
             # @@@group-chat-support - chat_id for groups, entity_id for 1:1
@@ -160,9 +159,6 @@ class ChatToolService:
                 return f"Message sent to chat."
             if not entity_id:
                 raise RuntimeError("Provide entity_id (for 1:1) or chat_id (for group)")
-            # @@@owner-gate - block direct chat to owner; use tell_owner instead
-            if entity_id == owner_eid:
-                raise RuntimeError("Use tell_owner() to contact your owner, not chat_send.")
             target = self._entities.get_by_id(entity_id)
             if not target:
                 raise RuntimeError(f"Entity not found: {entity_id}")

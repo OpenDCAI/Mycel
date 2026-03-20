@@ -47,8 +47,6 @@ class ChatService:
         if len(entity_ids) != 2:
             raise ValueError("Use create_group_chat() for 3+ entities")
 
-        self._check_owner_agent_rule(entity_ids)
-
         existing_id = self._chat_entities.find_chat_between(entity_ids[0], entity_ids[1])
         if existing_id:
             return self._chats.get_by_id(existing_id)
@@ -148,23 +146,6 @@ class ChatService:
                     logger.exception("Failed to deliver chat message to entity %s", entity.id)
             else:
                 logger.warning("[deliver] NO delivery_fn for %s", entity.id)
-
-    # @@@owner-agent-rule - owner and own agent use workspace thread, not chat
-    def _check_owner_agent_rule(self, entity_ids: list[str]) -> None:
-        """Prevent owner <-> own agent from creating a chat."""
-        entities = [self._entities.get_by_id(eid) for eid in entity_ids]
-        for e in entities:
-            if not e:
-                raise ValueError(f"Entity not found: {entity_ids}")
-            if e.type == "agent":
-                agent_member = self._members.get_by_id(e.member_id)
-                if not agent_member:
-                    continue
-                for other in entities:
-                    if other and other.id != e.id:
-                        other_member = self._members.get_by_id(other.member_id) if other.type == "human" else None
-                        if other_member and agent_member.owner_id == other_member.id:
-                            raise ValueError("Owner <-> own agent: use workspace, not chat")
 
     def set_delivery_fn(self, fn) -> None:
         self._delivery_fn = fn

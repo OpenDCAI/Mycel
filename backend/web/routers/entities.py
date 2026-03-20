@@ -139,17 +139,14 @@ async def list_entities(
     app: Annotated[Any, Depends(get_app)],
 ):
     """List chattable entities for discovery (New Chat picker).
-    Excludes: current user's own human entity + own agent entities (those use workspace)."""
+    Excludes only the current user's own human entity (you don't chat with yourself)."""
     entity_repo = app.state.entity_repo
     member_repo = app.state.member_repo
 
-    # Find member IDs to exclude: self + own agents
+    # Only exclude self (human entity). Own agents are allowed — user can pull them into group chats.
     exclude_member_ids = {member_id}
-    for m in member_repo.list_by_owner(member_id):
-        exclude_member_ids.add(m.id)
 
     all_entities = entity_repo.list_all()
-    # Avatars live on members, not entities — build lookup
     member_avatars = {m.id: bool(m.avatar) for m in member_repo.list_all()}
     return [
         {"id": e.id, "name": e.name, "type": e.type, "member_id": e.member_id,
