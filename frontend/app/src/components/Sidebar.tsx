@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import type { ThreadSummary } from "../api";
 import MemberAvatar from "./MemberAvatar";
+import { useAppStore } from "../store/app-store";
 import { useAuthStore } from "../store/auth-store";
 import { Skeleton } from "./ui/skeleton";
 
@@ -206,7 +207,9 @@ export default function Sidebar({
     return () => document.removeEventListener("keydown", onKey);
   }, [isSelectMode]);
 
-  // Group threads by member — uses thread.member_name (auth-scoped from API)
+  const memberList = useAppStore(s => s.memberList);
+
+  // Group threads by member, then merge in members with no threads
   const groups = useMemo(() => {
     const map = new Map<string, { memberName: string; avatarUrl?: string; threads: ThreadSummary[]; latestAt: number }>();
 
@@ -220,9 +223,11 @@ export default function Sidebar({
       g.latestAt = Math.max(g.latestAt, at);
     }
 
-    // Ensure at least one entry — use the user's owned agent, not hardcoded "Leon"
-    if (map.size === 0 && authAgent) {
-      map.set(authAgent.name, { memberName: authAgent.name, avatarUrl: authAgent.avatar ?? undefined, threads: [], latestAt: 0 });
+    // Add members that have no threads yet (e.g. newly created copies)
+    for (const member of memberList) {
+      if (!map.has(member.name)) {
+        map.set(member.name, { memberName: member.name, avatarUrl: member.avatar_url, threads: [], latestAt: 0 });
+      }
     }
 
     return [...map.entries()]
@@ -236,7 +241,7 @@ export default function Sidebar({
           return tb - ta;
         }),
       }));
-  }, [threads, authAgent]);
+  }, [threads, authAgent, memberList]);
 
   // Auto-expand the most recently active member on first load (only if nothing saved)
   useEffect(() => {
