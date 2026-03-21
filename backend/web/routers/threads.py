@@ -82,10 +82,12 @@ async def create_thread(
         model=payload.model,
     )
 
+    # @@@entity-name-convention — {member.name}-{seq} ({sandbox_type})
+    entity_name = f"{agent_member.name}-{seq} ({sandbox_type})"
     app.state.entity_repo.create(EntityRow(
         id=thread_entity_id, type="agent",
         member_id=agent_member_id,
-        name=agent_member.name,
+        name=entity_name,
         thread_id=thread_entity_id,
         created_at=time.time(),
     ))
@@ -99,6 +101,7 @@ async def create_thread(
         "sandbox": sandbox_type,
         "member_id": agent_member_id,
         "member_name": agent_member.name,
+        "entity_name": entity_name,
         "avatar_url": avatar_url(agent_member_id, bool(agent_member.avatar)),
     }
 
@@ -113,6 +116,7 @@ async def list_threads(
     threads = [
         {"thread_id": t["id"], "sandbox": t.get("sandbox_type", "local"),
          "member_name": t.get("member_name"), "member_id": t.get("member_id"),
+         "entity_name": t.get("entity_name"),
          "avatar_url": avatar_url(t.get("member_id"), bool(t.get("member_avatar")))}
         for t in raw
     ]

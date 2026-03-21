@@ -100,19 +100,24 @@ class AuthService:
         # 5. Agent entity + thread (entity_id = thread_id for agents)
         agent_seq = self._members.increment_entity_seq(agent_member_id)
         agent_entity_id = f"{agent_member_id}-{agent_seq}"
+        sandbox_type = "local"
 
         # 6. Write threads table (replaces thread_config)
         self._threads.create(
             thread_id=agent_entity_id,
             member_id=agent_member_id,
-            sandbox_type="local",
+            sandbox_type=sandbox_type,
             created_at=now,
         )
+
+        # @@@entity-name-convention — {member.name}-{seq} ({sandbox_type})
+        agent_member_name = f"{username}'s Leon"
+        entity_name = f"{agent_member_name}-{agent_seq} ({sandbox_type})"
 
         # 7. Agent entity
         self._entities.create(EntityRow(
             id=agent_entity_id, type="agent", member_id=agent_member_id,
-            name=f"{username}'s Leon", thread_id=agent_entity_id,
+            name=entity_name, thread_id=agent_entity_id,
             created_at=now,
         ))
 

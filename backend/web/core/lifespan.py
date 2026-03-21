@@ -80,8 +80,7 @@ async def lifespan(app: FastAPI):
 
     # Wire chat delivery after event loop is available
     from core.agents.communication.delivery import make_chat_delivery_fn
-    from backend.web.services.message_routing import route_message_to_brain
-    app.state.chat_service.set_delivery_fn(make_chat_delivery_fn(app, route_fn=route_message_to_brain))
+    app.state.chat_service.set_delivery_fn(make_chat_delivery_fn(app))
 
     # ---- Existing state ----
     app.state.queue_manager = MessageQueueManager()

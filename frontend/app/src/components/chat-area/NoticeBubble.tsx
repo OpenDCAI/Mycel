@@ -1,4 +1,4 @@
-import { CheckCircle2, XCircle, Clock, Terminal } from "lucide-react";
+import { CheckCircle2, XCircle, Clock, Terminal, MessageCircle } from "lucide-react";
 import type { NoticeMessage, NotificationType } from "../../api";
 
 interface NoticeBubbleProps {
@@ -84,6 +84,22 @@ function AgentDivider({ parsed, inline, onClick }: { parsed: ParsedNotice; inlin
   );
 }
 
+// --- Chat: centered divider with message icon ---
+
+function ChatDivider({ parsed, inline }: { parsed: ParsedNotice; inline?: boolean }) {
+  if (!parsed.text) return null;
+  return (
+    <div className={`flex items-center gap-3 ${inline ? "my-2" : "my-3"} select-none`}>
+      <div className="flex-1 h-px bg-blue-100" />
+      <span className="inline-flex items-center gap-1.5 px-2.5 text-[11px] text-blue-400">
+        <MessageCircle className="w-3 h-3 shrink-0" />
+        {parsed.text}
+      </span>
+      <div className="flex-1 h-px bg-blue-100" />
+    </div>
+  );
+}
+
 // --- Generic fallback divider (no notification_type) ---
 
 function GenericDivider({ parsed, inline }: { parsed: ParsedNotice; inline?: boolean }) {
@@ -142,6 +158,8 @@ function renderNotice(
       return <CommandDivider parsed={parsed} inline={opts.inline} />;
     case "agent":
       return <AgentDivider parsed={parsed} inline={opts.inline} onClick={opts.onTaskClick} />;
+    case "chat":
+      return <ChatDivider parsed={parsed} inline={opts.inline} />;
     default:
       return <GenericDivider parsed={parsed} inline={opts.inline} />;
   }
@@ -164,9 +182,25 @@ export function parseNoticeContent(raw: string, notificationType?: NotificationT
       return parseCommand(raw);
     case "agent":
       return parseAgent(raw);
+    case "chat":
+      return parseChat(raw);
     default:
       return { text: raw.replace(/<[^>]+>/g, "").trim() };
   }
+}
+
+function parseChat(raw: string): ParsedNotice {
+  const stripped = unescapeXml(raw.replace(/<\/?system-reminder>/g, "").trim());
+  const firstLine = stripped.split("\n")[0]?.trim() ?? "";
+  // "New message from bob's Leon-1 (local) in chat bf28... (1 unread). [signal: close]"
+  // → "bob's Leon-1 (local) — 1 unread"
+  const match = firstLine.match(/New message from (.+?) in chat \S+ \((\d+) unread\)/);
+  if (match) {
+    const signal = firstLine.match(/\[signal: (\w+)\]/)?.[1];
+    const signalSuffix = signal ? ` [${signal}]` : "";
+    return { text: `${match[1]} — ${match[2]} unread${signalSuffix}` };
+  }
+  return { text: firstLine || stripped };
 }
 
 function parseSteer(raw: string): ParsedNotice {

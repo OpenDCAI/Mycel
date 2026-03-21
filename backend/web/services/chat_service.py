@@ -72,9 +72,10 @@ class ChatService:
     def send_message(
         self, chat_id: str, sender_entity_id: str, content: str,
         mentioned_entity_ids: list[str] | None = None,
+        signal: str | None = None,
     ) -> ChatMessageRow:
         """Send a message in a chat."""
-        logger.debug("[send_message] chat=%s sender=%s content=%.50s", chat_id[:8], sender_entity_id[:15], content[:50])
+        logger.debug("[send_message] chat=%s sender=%s content=%.50s signal=%s", chat_id[:8], sender_entity_id[:15], content[:50], signal)
         mentions = mentioned_entity_ids or []
         now = time.time()
         msg_id = str(uuid.uuid4())
@@ -101,12 +102,13 @@ class ChatService:
                 },
             })
 
-        self._deliver_to_agents(chat_id, sender_entity_id, content, mentions)
+        self._deliver_to_agents(chat_id, sender_entity_id, content, mentions, signal=signal)
         return msg
 
     def _deliver_to_agents(
         self, chat_id: str, sender_entity_id: str, content: str,
         mentioned_entity_ids: list[str] | None = None,
+        signal: str | None = None,
     ) -> None:
         """For each non-sender agent entity in the chat, deliver to their brain thread."""
         mentions = set(mentioned_entity_ids or [])
@@ -141,7 +143,7 @@ class ChatService:
             if self._delivery_fn:
                 logger.debug("[deliver] → %s (thread=%s) from=%s", entity.id, entity.thread_id, sender_name)
                 try:
-                    self._delivery_fn(entity, content, sender_name, chat_id, sender_entity_id, sender_avatar_url)
+                    self._delivery_fn(entity, content, sender_name, chat_id, sender_entity_id, sender_avatar_url, signal=signal)
                 except Exception:
                     logger.exception("Failed to deliver chat message to entity %s", entity.id)
             else:

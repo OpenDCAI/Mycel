@@ -282,8 +282,7 @@ def _ensure_thread_handlers(agent: Any, thread_id: str, app: Any) -> None:
         """Called by enqueue() with the newly-enqueued QueueItem — may run in any thread."""
         if not (hasattr(agent, "runtime") and agent.runtime.transition(AgentState.ACTIVE)):
             # Agent already ACTIVE — before_model will drain_all on the next LLM call.
-            # Emit notice for external sources only. Owner steers are already shown
-            # as an optimistic UserBubble by the frontend — emitting a notice would duplicate.
+            # Emit notice for external sources so frontend can render inline divider.
             source = getattr(item, "source", None)
             if source and source != "owner" and loop and not loop.is_closed():
                 async def _emit_one_notice() -> None:
@@ -507,28 +506,12 @@ async def _run_agent_to_buffer(
         # won't reject the message history.
         await _repair_incomplete_tool_calls(agent, config)
 
-        # Emit notice BEFORE run_start when this run was triggered by a queue notification.
         meta = message_metadata or {}
         src = meta.get("source")
-        if src and src != "owner":
-            await emit({
-                "event": "notice",
-                "data": json.dumps({
-                    "content": message,
-                    "source": src,
-                    "notification_type": meta.get("notification_type"),
-                }, ensure_ascii=False),
-            })
 
-        # @@@run-source-tracking — set on runtime so tell_owner can check context
+        # @@@run-source-tracking — set on runtime for source tracking
         if hasattr(agent, "runtime"):
             agent.runtime.current_run_source = src or "owner"
-
-        # @@@owner-visibility-sse — same functions as refresh path in visibility.py.
-        # run_ctx is local to this run; written back to agent.runtime.visibility_context at run end.
-        from core.runtime.visibility import compute_visibility, message_visibility, tool_event_visibility
-        is_steer = bool(meta.get("is_steer"))
-        showing, run_ctx = compute_visibility(src or "owner", is_steer, agent.runtime.visibility_context)
 
         await emit({
             "event": "run_start",
@@ -537,7 +520,7 @@ async def _run_agent_to_buffer(
                 "run_id": run_id,
                 "source": src,
                 "sender_name": meta.get("sender_name"),
-                "showing": showing,
+                "showing": True,
             }),
         })
 
@@ -605,6 +588,15 @@ async def _run_agent_to_buffer(
                 if not chunk:
                     continue
 
+                # @@@drain-before-chunk — drain activity events BEFORE processing chunk.
+                while not activity_queue.empty():
+                    try:
+                        act_event = activity_queue.get_nowait()
+                    except asyncio.QueueEmpty:
+                        break
+                    logger.info("[stream:drain] emitting activity event: %s", act_event.get("event", "?"))
+                    await emit(act_event)
+
                 if not isinstance(chunk, tuple) or len(chunk) != 2:
                     continue
                 mode, data = chunk
@@ -621,23 +613,22 @@ async def _run_agent_to_buffer(
                                     "event": "text",
                                     "data": json.dumps({
                                         "content": content,
-                                        "showing": run_ctx == "owner",
+                                        "showing": True,
                                     }, ensure_ascii=False),
                                 },
                                 message_id=chunk_msg_id,
                             )
 
-                        # Early tool_call emission — tagged via message_visibility()
+                        # Early tool_call emission
                         for tc_chunk in getattr(msg_chunk, "tool_call_chunks", []):
                             tc_id = tc_chunk.get("id")
                             tc_name = tc_chunk.get("name", "")
                             if tc_id and tc_name and tc_id not in emitted_tool_call_ids:
                                 emitted_tool_call_ids.add(tc_id)
                                 pending_tool_calls[tc_id] = {"name": tc_name, "args": {}}
-                                disp = tool_event_visibility(run_ctx, tc_name)
                                 tc_data: dict[str, Any] = {
                                     "id": tc_id, "name": tc_name, "args": {},
-                                    **disp,
+                                    "showing": True,
                                 }
                                 await emit(
                                     {
@@ -668,23 +659,13 @@ async def _run_agent_to_buffer(
                         for msg in messages:
                             msg_class = msg.__class__.__name__
 
-                            # @@@per-message-showing — HumanMessage advances latent,
-                            # AI/Tool messages tagged with showing. No suppression.
                             if msg_class == "HumanMessage":
-                                hmeta = getattr(msg, "metadata", {}) or {}
-                                hsrc = hmeta.get("source", "owner")
-                                his_steer = bool(hmeta.get("is_steer"))
-                                _showing, new_lat = compute_visibility(hsrc, his_steer, run_ctx)
-                                run_ctx = new_lat
                                 continue
 
                             if msg_class == "AIMessage":
                                 ai_msg_id = getattr(msg, "id", None)
                                 if hasattr(msg, "metadata") and isinstance(msg.metadata, dict):
                                     msg.metadata["run_id"] = run_id
-
-                                tc_names = [tc.get("name", "") for tc in getattr(msg, "tool_calls", [])]
-                                disp = message_visibility(run_ctx, tc_names)
 
                                 for tc in getattr(msg, "tool_calls", []):
                                     tc_id = tc.get("id")
@@ -702,12 +683,11 @@ async def _run_agent_to_buffer(
                                             "name": tc_name,
                                             "args": full_args,
                                         }
-                                    tc_disp = tool_event_visibility(run_ctx, tc_name)
                                     await emit(
                                         {
                                             "event": "tool_call",
                                             "data": json.dumps(
-                                                {"id": tc_id, "name": tc_name, "args": full_args, **tc_disp},
+                                                {"id": tc_id, "name": tc_name, "args": full_args, "showing": True},
                                                 ensure_ascii=False,
                                             ),
                                         },
@@ -724,7 +704,6 @@ async def _run_agent_to_buffer(
                                 if hasattr(msg, "metadata") and isinstance(msg.metadata, dict):
                                     msg.metadata["run_id"] = run_id
                                 tool_name = getattr(msg, "name", "") or ""
-                                disp = message_visibility(run_ctx, [tool_name])
                                 await emit(
                                     {
                                         "event": "tool_result",
@@ -734,7 +713,7 @@ async def _run_agent_to_buffer(
                                                 "name": tool_name,
                                                 "content": str(getattr(msg, "content", "")),
                                                 "metadata": getattr(msg, "metadata", None) or {},
-                                                **disp,
+                                                "showing": True,
                                             },
                                             ensure_ascii=False,
                                         ),
@@ -777,9 +756,6 @@ async def _run_agent_to_buffer(
                 await emit({"event": "error", "data": json.dumps(
                     {"error": str(stream_err)}, ensure_ascii=False)})
                 break
-
-        # Write local latent back to runtime at run end
-        agent.runtime.visibility_context = run_ctx
 
         # Final status
         if hasattr(agent, "runtime"):

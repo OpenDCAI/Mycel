@@ -29,8 +29,6 @@ def test_queue_mode_steer_non_preemptive():
     4. Verify steer message is injected before next model call
     """
     from agent import create_leon_agent
-    from core.runtime.middleware.queue import format_steer_reminder
-
     agent = create_leon_agent()
     queue_manager = agent.queue_manager
 
@@ -43,9 +41,9 @@ def test_queue_mode_steer_non_preemptive():
 
     def inject_steer():
         time.sleep(2)
-        print("[TEST] Injecting steer message (XML-formatted)...")
+        print("[TEST] Injecting steer message...")
         queue_manager.enqueue(
-            format_steer_reminder("停止！改为告诉我今天星期几"),
+            "停止！改为告诉我今天星期几",
             thread_id="test-queue-mode",
         )
 

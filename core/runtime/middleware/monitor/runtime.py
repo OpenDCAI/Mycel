@@ -28,11 +28,8 @@ class AgentRuntime:
         self._subagent_event_buffer: dict[str, list[dict[str, Any]]] = {}  # tool_call_id -> events
         self._event_callback: Callable[[dict], None] | None = None
         self._activity_sink: Callable[[dict], Any] | None = None
-        # @@@run-source-tracking — set per-run by streaming_service, read by tell_owner
+        # @@@run-source-tracking — set per-run by streaming_service
         self.current_run_source: str | None = None  # "owner" | "external" | "system"
-        # @@@owner-visibility — single source of truth for visibility context.
-        # Updated by middleware (before_model), streaming_service, and annotate_owner_visibility.
-        self.visibility_context: str = "owner"
 
     # ========== 状态代理 ==========
 

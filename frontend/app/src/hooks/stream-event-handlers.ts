@@ -49,25 +49,10 @@ function handleText(event: StreamEvent, turnId: string, onUpdate: UpdateEntries)
 }
 
 function handleToolCall(event: StreamEvent, turnId: string, onUpdate: UpdateEntries) {
-  const payload = (event.data ?? {}) as { id?: string; name?: string; args?: unknown; is_tell_owner?: boolean };
+  const payload = (event.data ?? {}) as { id?: string; name?: string; args?: unknown };
   const toolCallId = payload.id ?? makeId("tc");
   const newArgs = payload.args;
   const hasRealArgs = newArgs != null && !(typeof newArgs === "object" && Object.keys(newArgs as object).length === 0);
-
-  // @@@tell-owner-as-text — tell_owner renders as text, not as a tool box.
-  if (payload.is_tell_owner) {
-    if (!hasRealArgs) return; // wait for full args from updates mode
-    const message = (newArgs as { message?: string })?.message;
-    if (message) {
-      updateTurnSegments(onUpdate, turnId, (turn) => {
-        const segs = [...turn.segments];
-        segs.push({ type: "text", content: message });
-        return { ...turn, segments: segs, isTellOwner: true };
-      });
-      _tellOwnerIds.add(toolCallId);
-      return;
-    }
-  }
 
   onUpdate((prev) => {
     const existing = findTurnToolSeg(prev, turnId, toolCallId);
@@ -98,9 +83,6 @@ function handleToolCall(event: StreamEvent, turnId: string, onUpdate: UpdateEntr
   });
 }
 
-// Track tell_owner tool_call IDs so their tool_results can be skipped
-const _tellOwnerIds = new Set<string>();
-
 function markToolDone(turn: AssistantTurn, tcId: string | undefined, result: string, metadata?: Record<string, unknown>): AssistantTurn {
   return { ...turn, segments: turn.segments.map((s) => {
     if (s.type !== "tool" || s.step.id !== tcId) return s;
@@ -125,11 +107,6 @@ function markToolDone(turn: AssistantTurn, tcId: string | undefined, result: str
 function handleToolResult(event: StreamEvent, turnId: string, onUpdate: UpdateEntries) {
   const payload = (event.data ?? {}) as { content?: string; tool_call_id?: string; metadata?: Record<string, unknown> };
   const tcId = payload.tool_call_id;
-  // @@@tell-owner-skip-result — tell_owner was rendered as text, skip its result
-  if (tcId && _tellOwnerIds.has(tcId)) {
-    _tellOwnerIds.delete(tcId);
-    return;
-  }
   const result = payload.content ?? "";
   const metadata = payload.metadata;
 

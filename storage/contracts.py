@@ -7,7 +7,7 @@ from typing import Any, Literal, Protocol
 
 from pydantic import BaseModel
 
-NotificationType = Literal["steer", "command", "agent"]
+NotificationType = Literal["steer", "command", "agent", "chat"]
 
 
 # ---------------------------------------------------------------------------

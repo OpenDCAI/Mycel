@@ -54,6 +54,8 @@ export interface ThreadSummary {
   running?: boolean;
   member_id?: string;
   member_name?: string;
+  /** Entity name — source of truth for thread label. Format: {member}-{seq} ({sandbox}) */
+  entity_name?: string;
   avatar_url?: string;
 }
 
@@ -120,7 +122,7 @@ export interface ToolSegment {
   step: ToolStep;
 }
 
-export type NotificationType = "steer" | "command" | "agent";
+export type NotificationType = "steer" | "command" | "agent" | "chat";
 
 export interface NoticeSegment {
   type: "notice";
@@ -147,8 +149,6 @@ export interface AssistantTurn {
   streaming?: boolean;
   /** Backend-computed: is this turn visible to thread owner? */
   showing?: boolean;
-  /** Is this turn a tell_owner extraction from a hidden run? */
-  isTellOwner?: boolean;
   senderName?: string;
 }
 

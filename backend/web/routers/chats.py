@@ -192,10 +192,21 @@ class SetContactBody(BaseModel):
 
 
 def _verify_entity_ownership(app: Any, entity_id: str, member_id: str) -> None:
-    """Raise 403 if entity does not belong to the authenticated member."""
+    """Raise 403 if entity does not belong to the authenticated member.
+
+    Ownership: entity belongs to member directly, OR entity belongs to
+    an agent member owned by the authenticated member.
+    """
     entity = app.state.entity_repo.get_by_id(entity_id)
-    if not entity or entity.member_id != member_id:
+    if not entity:
         raise HTTPException(403, "Entity does not belong to you")
+    if entity.member_id == member_id:
+        return
+    # Check if entity belongs to an agent owned by this member
+    agent_member = app.state.member_repo.get_by_id(entity.member_id)
+    if agent_member and agent_member.owner_id == member_id:
+        return
+    raise HTTPException(403, "Entity does not belong to you")
 
 
 @router.post("/contacts")

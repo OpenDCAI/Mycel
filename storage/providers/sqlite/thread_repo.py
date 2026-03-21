@@ -62,18 +62,25 @@ class SQLiteThreadRepo:
             return [self._to_dict(r) for r in rows]
 
     def list_by_owner(self, owner_member_id: str) -> list[dict[str, Any]]:
-        """Return all threads owned by this member (via members.owner_id JOIN)."""
+        """Return all threads owned by this member (via members.owner_id JOIN).
+
+        Also JOINs entities (thread_id == entity_id) for entity_name.
+        """
         cols = ", ".join(f"t.{c}" for c in self._COLS)
         with self._lock:
             rows = self._conn.execute(
-                f"SELECT {cols}, m.name as member_name, m.avatar as member_avatar FROM threads t"
+                f"SELECT {cols}, m.name as member_name, m.avatar as member_avatar,"
+                " e.name as entity_name FROM threads t"
                 " JOIN members m ON t.member_id = m.id"
+                " LEFT JOIN entities e ON e.thread_id = t.id"
                 " WHERE m.owner_id = ?"
                 " ORDER BY t.created_at",
                 (owner_member_id,),
             ).fetchall()
             ncols = len(self._COLS)
-            return [{**self._to_dict(r[:ncols]), "member_name": r[ncols], "member_avatar": r[ncols + 1]} for r in rows]
+            return [{**self._to_dict(r[:ncols]),
+                     "member_name": r[ncols], "member_avatar": r[ncols + 1],
+                     "entity_name": r[ncols + 2]} for r in rows]
 
     def update(self, thread_id: str, **fields: Any) -> None:
         allowed = {"sandbox_type", "model", "cwd", "observation_provider"}

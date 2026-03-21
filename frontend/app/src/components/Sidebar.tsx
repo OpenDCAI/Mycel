@@ -395,7 +395,7 @@ export default function Sidebar({
                           key={thread.thread_id}
                           thread={thread}
                           isActive={activeThreadId === thread.thread_id}
-                          label={thread.preview || thread.sandbox || "local"}
+                          label={thread.entity_name || thread.preview || thread.sandbox || "local"}
                           to={`/threads/${urlId}/${thread.thread_id}`}
                           isSelectMode={isSelectMode}
                           isSelected={selectedIds.has(thread.thread_id)}

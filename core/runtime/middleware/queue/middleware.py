@@ -5,6 +5,7 @@ SQLite queue and injected as HumanMessage(metadata={"source": "system"}) before
 the next LLM call.
 """
 
+import json
 import logging
 from collections.abc import Awaitable, Callable
 from typing import Any
@@ -32,7 +33,6 @@ except ImportError:
     ModelCallResult = Any
     ToolCallRequest = Any
 
-from core.runtime.visibility import compute_visibility
 from .manager import MessageQueueManager
 
 
@@ -84,9 +84,13 @@ class SteeringMiddleware(AgentMiddleware):
             return None
 
         messages = []
+        has_steer = False
         for item in items:
             source = item.source or "system"
-            is_steer = item.is_steer
+            # is_steer may not survive DB round-trip; owner source = steer
+            is_steer = item.is_steer or source == "owner"
+            if is_steer:
+                has_steer = True
             messages.append(HumanMessage(
                 content=item.content,
                 metadata={
@@ -98,11 +102,18 @@ class SteeringMiddleware(AgentMiddleware):
                     "is_steer": is_steer,
                 },
             ))
-            # @@@display-latent-sync — advance latent so streaming tags
-            # subsequent events with correct showing metadata.
-            if rt and hasattr(rt, "visibility_context"):
-                _, new_ctx = compute_visibility(source, bool(is_steer), rt.visibility_context)
-                rt.visibility_context = new_ctx
+
+        # @@@steer-phase-boundary — emit run_done + run_start so frontend
+        # breaks the turn at the steer injection point.
+        if has_steer and rt and hasattr(rt, "emit_activity_event"):
+            rt.emit_activity_event({
+                "event": "run_done",
+                "data": json.dumps({"thread_id": thread_id}),
+            })
+            rt.emit_activity_event({
+                "event": "run_start",
+                "data": json.dumps({"thread_id": thread_id, "showing": True}),
+            })
 
         return {"messages": messages}
 

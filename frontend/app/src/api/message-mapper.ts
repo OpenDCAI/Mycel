@@ -55,7 +55,6 @@ function appendToTurn(turn: AssistantTurn, msgId: string, segments: TurnSegment[
 // @@@display — read backend-computed display metadata
 interface DisplayAnnotation {
   showing?: boolean;
-  is_tell_owner?: boolean;
   sender_name?: string;
 }
 
@@ -96,11 +95,11 @@ function handleHuman(msg: BackendMessage, i: number, state: MapState): void {
     return;
   }
 
-  // System-injected messages → notice
-  if (meta.source === "system") {
+  // System-injected or external chat notifications → notice
+  const ntype = meta.notification_type as NotificationType | undefined;
+  if (meta.source === "system" || (meta.source === "external" && ntype === "chat")) {
     const content = extractTextContent(msg.content);
     const msgRunId = (meta.run_id as string) || null;
-    const ntype = meta.notification_type as NotificationType | undefined;
 
     // Fold into current turn if same run or no run tracking
     if (state.currentTurn && (!msgRunId || msgRunId === state.currentRunId)) {
@@ -138,27 +137,8 @@ function handleAI(msg: BackendMessage, i: number, state: MapState): void {
   const msgId = msg.id ?? `hist-turn-${i}`;
   const msgRunId = (msg.metadata?.run_id as string) || null;
 
-  // Hidden: skip (unless tell_owner or showHidden)
-  if (display.showing === false && !display.is_tell_owner && !state.showHidden) {
-    return;
-  }
-
-  // tell_owner from hidden run: extract tell_owner content only
-  if (display.showing === false && display.is_tell_owner) {
-    const tellMsgs: string[] = [];
-    for (const tc of toolCalls) {
-      const call = tc as { name?: string; args?: unknown };
-      if (call.name === "tell_owner") {
-        const args = call.args as { message?: string } | undefined;
-        if (args?.message) tellMsgs.push(args.message);
-      }
-    }
-    if (tellMsgs.length > 0) {
-      const turn = createTurn(msgId, tellMsgs.map(t => ({ type: "text" as const, content: t })), state.now);
-      turn.isTellOwner = true;
-      turn.showing = true; // tell_owner content IS shown
-      state.entries.push(turn);
-    }
+  // Hidden: skip (unless showHidden)
+  if (display.showing === false && !state.showHidden) {
     return;
   }
 
@@ -197,8 +177,8 @@ function handleAI(msg: BackendMessage, i: number, state: MapState): void {
 function handleTool(msg: BackendMessage, _i: number, state: MapState): void {
   const display = getDisplay(msg);
 
-  // Hidden: skip (unless tell_owner result or showHidden)
-  if (display.showing === false && !display.is_tell_owner && !state.showHidden) {
+  // Hidden: skip (unless showHidden)
+  if (display.showing === false && !state.showHidden) {
     return;
   }
 

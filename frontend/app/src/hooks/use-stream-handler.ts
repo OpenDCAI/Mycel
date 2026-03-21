@@ -109,10 +109,20 @@ export function useStreamHandler(
     }
 
     return subscribe((event) => {
-      // notice: standalone entry
+      // notice: fold into current turn if active, otherwise standalone
       if (event.type === "notice") {
         const d = (event.data ?? {}) as { content?: string; notification_type?: string; source?: string };
-        if (d.source === "external") return;
+        if (turnIdRef.current) {
+          // Active turn — fold as inline notice segment
+          onUpdateRef.current((prev) =>
+            prev.map((e) =>
+              e.id === turnIdRef.current && e.role === "assistant"
+                ? { ...e, segments: [...(e as AssistantTurn).segments, { type: "notice" as const, content: d.content ?? "", notification_type: d.notification_type as NotificationType | undefined }] } as AssistantTurn
+                : e,
+            ),
+          );
+          return;
+        }
         const noticeEntry: NoticeMessage = {
           id: makeId("stream-notice"),
           role: "notice",
@@ -124,12 +134,35 @@ export function useStreamHandler(
         return;
       }
 
-      // run_start: create turn for visible runs
+      // run_start: create or reopen turn
       if (event.type === "run_start") {
-        const d = (event.data ?? {}) as { showing?: boolean };
-        if (d.showing !== false) {
-          ensureReconnectTurn();
+        const d = (event.data ?? {}) as { showing?: boolean; source?: string };
+        if (d.showing === false) return;
+
+        // @@@notification-fold — external notification run reopens last turn
+        // so subsequent events fold in (matches refresh path behavior).
+        if (d.source && d.source !== "owner") {
+          flushSync(() => {
+            onUpdateRef.current((prev) => {
+              const last = prev[prev.length - 1];
+              if (last?.role === "assistant") {
+                turnIdRef.current = last.id;
+                hasBoundRef.current = true;
+                return prev.map((e) =>
+                  e.id === last.id ? { ...e, streaming: true } as AssistantTurn : e,
+                );
+              }
+              // No previous turn — create new
+              const fallbackId = makeId("reconnect-turn");
+              turnIdRef.current = fallbackId;
+              const newTurn: AssistantTurn = { id: fallbackId, role: "assistant", segments: [], timestamp: Date.now(), streaming: true };
+              return [...prev, newTurn];
+            });
+          });
+          return;
         }
+
+        ensureReconnectTurn();
         return;
       }
 
@@ -152,8 +185,8 @@ export function useStreamHandler(
 
       // @@@per-event-showing — each content event carries its own `showing`.
       // Skip hidden events (frontend decides, same logic as mapBackendEntries).
-      const eventData = (event.data ?? {}) as { showing?: boolean; is_tell_owner?: boolean };
-      if (eventData.showing === false && !eventData.is_tell_owner) {
+      const eventData = (event.data ?? {}) as { showing?: boolean };
+      if (eventData.showing === false) {
         return;
       }
 

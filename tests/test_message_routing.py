@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 
 from core.runtime.middleware.queue import MessageQueueManager
-from core.runtime.middleware.queue.formatters import format_steer_reminder, format_background_notification
+from core.runtime.middleware.queue.formatters import format_background_notification
 
 
 @pytest.fixture()
@@ -350,13 +350,6 @@ class TestSteeringMiddlewareIntegration:
 
 
 class TestFormatters:
-    def test_format_steer_reminder(self):
-        xml = format_steer_reminder("stop and do X")
-        assert "<system-reminder>" in xml
-        assert "stop and do X" in xml
-        assert "IMPORTANT" in xml
-        assert "</system-reminder>" in xml
-
     def test_format_background_notification(self):
         xml = format_background_notification(
             task_id="abc123",

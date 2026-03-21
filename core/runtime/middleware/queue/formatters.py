@@ -9,54 +9,20 @@ from html import escape
 from typing import Literal
 
 
-def format_chat_message(content: str, sender_name: str, chat_id: str) -> str:
-    """Wrap incoming chat message for agent brain thread.
+def format_chat_notification(sender_name: str, chat_id: str, unread_count: int,
+                              signal: str | None = None) -> str:
+    """Lightweight notification — agent must chat_read to see content.
 
-    @@@external-routing-instruction - wrapped in <system-reminder> so the LLM
-    treats routing rules as authoritative. Frontend strips this via
-    stripSystemReminders regex.
+    @@@v3-notification-only — no message content injected. Agent calls
+    chat_read(chat_id=...) to read, then chat_send() to reply.
     """
+    signal_hint = f" [signal: {signal}]" if signal and signal != "open" else ""
     return (
         "<system-reminder>\n"
-        f"[{escape(sender_name)}] sent you a chat message.\n\n"
-        f'<chat-message sender="{escape(sender_name)}" chat="{escape(chat_id)}">\n'
-        f"{content}\n"
-        "</chat-message>\n\n"
-        "You are now in a private context — your owner cannot see your text output here.\n"
-        f"- To [{escape(sender_name)}]: chat_send(chat_id='{escape(chat_id)}', content=...)\n"
-        "- To your owner: tell_owner(message=...)\n"
-        "- Plain text goes nowhere. Nobody sees it.\n"
+        f"New message from {sender_name} in chat {chat_id} "
+        f"({unread_count} unread).{signal_hint}\n"
         "</system-reminder>"
     )
-
-
-def format_owner_message(content: str) -> str:
-    """Wrap owner's direct message with visibility context.
-
-    @@@owner-context-shift — after external messages, the agent may not realize
-    its text output is visible again. This hint restores awareness.
-    """
-    return (
-        f"{content}\n\n"
-        "<system-reminder>\n"
-        "Context shift: you are now talking to your owner. Your text output is visible to them.\n"
-        "</system-reminder>"
-    )
-
-
-def format_owner_steer(content: str) -> str:
-    """Owner sent a message while agent was busy."""
-    return (
-        "<system-reminder>\n"
-        "Your owner sent a message while you were working:\n"
-        f"{content}\n\n"
-        "Context shift: you are now talking to your owner. Your text output is visible to them. Address their message.\n"
-        "</system-reminder>"
-    )
-
-
-# Alias for TUI and tests that still import the old name
-format_steer_reminder = format_owner_steer
 
 
 def format_background_notification(

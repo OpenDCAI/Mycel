@@ -240,6 +240,27 @@ class LeonAgent:
         if custom_prompt:
             self.system_prompt += f"\n\n**Custom Instructions:**\n{custom_prompt}"
 
+        # @@@entity-identity — inject chat identity so agent knows who it is in the social layer
+        if self._chat_repos:
+            repos = self._chat_repos
+            eid = repos.get("entity_id")
+            owner_eid = repos.get("owner_entity_id", "")
+            if eid:
+                entity_repo = repos.get("entity_repo")
+                entity = entity_repo.get_by_id(eid) if entity_repo else None
+                owner_entity = entity_repo.get_by_id(owner_eid) if entity_repo and owner_eid else None
+                name = entity.name if entity else eid
+                owner_name = owner_entity.name if owner_entity else "unknown"
+                self.system_prompt += (
+                    f"\n\n**Chat Identity:**\n"
+                    f"- Your name: {name}\n"
+                    f"- Your entity_id: {eid}\n"
+                    f"- Your owner: {owner_name} (entity_id: {owner_eid})\n"
+                    f"- When you receive a chat notification, READ the message with chat_read(), "
+                    f"then REPLY with chat_send(). Your text output goes to your owner's thread, "
+                    f"not to the chat — only chat_send() delivers to the other party.\n"
+                )
+
         # Create agent
         self.agent = create_agent(
             model=self.model,

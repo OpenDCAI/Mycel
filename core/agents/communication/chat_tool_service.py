@@ -16,10 +16,9 @@ logger = logging.getLogger(__name__)
 
 
 class ChatToolService:
-    """Registers 6 chat tools into ToolRegistry.
+    """Registers 5 chat tools into ToolRegistry.
 
-    Each tool closure captures entity_id (the calling agent's identity)
-    and owner_entity_id (for tell_owner gating).
+    Each tool closure captures entity_id (the calling agent's identity).
     """
 
     def __init__(
@@ -53,7 +52,6 @@ class ChatToolService:
         self._register_chat_send(registry)
         self._register_chat_search(registry)
         self._register_directory(registry)
-        self._register_tell_owner(registry)
 
     def _register_chats(self, registry: ToolRegistry) -> None:
         eid = self._entity_id
@@ -150,21 +148,46 @@ class ChatToolService:
     def _register_chat_send(self, registry: ToolRegistry) -> None:
         eid = self._entity_id
 
-        def handle(content: str, entity_id: str | None = None, chat_id: str | None = None, mentions: list[str] | None = None) -> str:
-            # @@@group-chat-support - chat_id for groups, entity_id for 1:1
+        def handle(content: str, entity_id: str | None = None, chat_id: str | None = None,
+                   signal: str = "open", mentions: list[str] | None = None) -> str:
+            # @@@read-before-write — resolve chat_id, then check unread
+            resolved_chat_id = chat_id
+            target_name = "chat"
+
             if chat_id:
                 if not self._chat_entities.is_entity_in_chat(chat_id, eid):
                     raise RuntimeError(f"You are not a member of chat {chat_id}")
-                self._chat_service.send_message(chat_id, eid, content, mentions)
-                return f"Message sent to chat."
-            if not entity_id:
+            elif entity_id:
+                if entity_id == eid:
+                    raise RuntimeError("Cannot send a message to yourself.")
+                target = self._entities.get_by_id(entity_id)
+                if not target:
+                    raise RuntimeError(f"Entity not found: {entity_id}")
+                target_name = target.name
+                resolved_chat_id = self._chat_entities.find_chat_between(eid, entity_id)
+                if not resolved_chat_id:
+                    # New chat — no unread possible, create and send
+                    chat = self._chat_service.find_or_create_chat([eid, entity_id])
+                    resolved_chat_id = chat.id
+            else:
                 raise RuntimeError("Provide entity_id (for 1:1) or chat_id (for group)")
-            target = self._entities.get_by_id(entity_id)
-            if not target:
-                raise RuntimeError(f"Entity not found: {entity_id}")
-            chat = self._chat_service.find_or_create_chat([eid, entity_id])
-            self._chat_service.send_message(chat.id, eid, content, mentions)
-            return f"Message sent to {target.name}."
+
+            # @@@read-before-write-gate — reject if unread messages exist
+            unread = self._messages.count_unread(resolved_chat_id, eid)
+            if unread > 0:
+                raise RuntimeError(
+                    f"You have {unread} unread message(s). "
+                    f"Call chat_read(chat_id='{resolved_chat_id}') first."
+                )
+
+            # Append signal to content (for chat_read) + pass through chain (for notification)
+            effective_signal = signal if signal in ("yield", "close") else None
+            if effective_signal:
+                content = f"{content}\n[signal: {effective_signal}]"
+
+            self._chat_service.send_message(resolved_chat_id, eid, content, mentions,
+                                            signal=effective_signal)
+            return f"Message sent to {target_name}."
 
         registry.register(ToolEntry(
             name="chat_send",
@@ -173,6 +196,7 @@ class ChatToolService:
                 "name": "chat_send",
                 "description": (
                     "Send a message. Use entity_id for 1:1 chats, chat_id for group chats.\n\n"
+                    "You MUST call chat_read() first if you have unread messages — sending will fail otherwise.\n\n"
                     "Signal protocol — append to content:\n"
                     "  (no tag) = I expect a reply from you\n"
                     "  ::yield = I'm done with my turn; reply only if you want to\n"
@@ -185,6 +209,7 @@ class ChatToolService:
                         "content": {"type": "string", "description": "Message content"},
                         "entity_id": {"type": "string", "description": "Target entity_id (for 1:1 chat)"},
                         "chat_id": {"type": "string", "description": "Target chat_id (for group chat)"},
+                        "signal": {"type": "string", "enum": ["open", "yield", "close"], "description": "Signal intent to recipient", "default": "open"},
                         "mentions": {"type": "array", "items": {"type": "string"}, "description": "Entity IDs to @mention (overrides mute for these recipients)"},
                     },
                     "required": ["content"],
@@ -272,39 +297,4 @@ class ChatToolService:
             source="chat",
         ))
 
-    def _register_tell_owner(self, registry: ToolRegistry) -> None:
-        runtime_fn = self._runtime_fn
-
-        def handle(message: str) -> str:
-            # @@@tell-owner-context-gate — only valid in external runs
-            runtime = runtime_fn() if runtime_fn else None
-            if runtime and getattr(runtime, "current_run_source", None) == "owner":
-                raise RuntimeError(
-                    "Your owner is right here in this conversation — just say it directly. "
-                    "tell_owner is for external conversations when your owner isn't present."
-                )
-            logger.info("[tell_owner] %s", message[:100])
-            return f"Owner notified: {message}"
-
-        registry.register(ToolEntry(
-            name="tell_owner",
-            mode=ToolMode.INLINE,
-            schema={
-                "name": "tell_owner",
-                "description": (
-                    "Notify your owner about something important. "
-                    "ONLY use this during external conversations (when someone else messaged you). "
-                    "Do NOT use this when your owner is already talking to you — just respond directly."
-                ),
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "message": {"type": "string", "description": "The message for your owner"},
-                    },
-                    "required": ["message"],
-                },
-            },
-            handler=handle,
-            source="chat",
-        ))
 
