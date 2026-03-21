@@ -35,7 +35,11 @@ class ThreadConnectionManager {
   private threadId = "";
   private ac: AbortController | null = null;
   private version = 0;
-  private lastSeenSeq = 0; // @@@dedup-events — monotonic seq from backend, skip duplicates
+  // @@@dedup-events — track seen seqs in a set (not monotonic max) because
+  // activity_sink and run emit write to thread_buf concurrently, so events
+  // can arrive out of seq order.  A monotonic lastSeenSeq would wrongly skip
+  // lower-seq events that arrive after a higher-seq one.
+  private seenSeqs = new Set<number>();
   private subscribers = new Set<(event: StreamEvent) => void>();
   private listener: (() => void) | null = null; // React re-render trigger
   private refreshThreads: (() => Promise<void>) | null = null;
@@ -82,14 +86,19 @@ class ThreadConnectionManager {
           this.threadId,
           (event) => {
             if (this.version !== ver) return; // stale connection
-            // @@@dedup-events — skip events with seq we've already seen (React strict mode
+            // @@@dedup-events — skip events we've already seen (React strict mode
             // can open duplicate SSE connections in dev; both deliver the same events).
             const d = (event.data ?? {}) as { _seq?: number };
             if (typeof d._seq === "number") {
-              if (d._seq <= this.lastSeenSeq) {
+              if (this.seenSeqs.has(d._seq)) {
                 return;
               }
-              this.lastSeenSeq = d._seq;
+              this.seenSeqs.add(d._seq);
+              // Cap set size to prevent unbounded growth
+              if (this.seenSeqs.size > 5000) {
+                const sorted = [...this.seenSeqs].sort((a, b) => a - b);
+                for (let i = 0; i < 2500; i++) this.seenSeqs.delete(sorted[i]);
+              }
             }
             if (event.type === "status" && event.data) {
               this.setStatus(event.data as StreamStatus);

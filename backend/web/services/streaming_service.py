@@ -306,6 +306,9 @@ def _ensure_thread_handlers(agent: Any, thread_id: str, app: Any) -> None:
             return
 
         async def _start_run():
+            # @@@idle-notice — notice is emitted inside _run_agent_to_buffer
+            # after run_start (@@@run-notice) so frontend folds it into the
+            # reopened turn.
             try:
                 start_agent_run(
                     agent, thread_id, item.content, app,
@@ -523,6 +526,19 @@ async def _run_agent_to_buffer(
                 "showing": True,
             }),
         })
+
+        # @@@run-notice — emit notice right after run_start so frontend folds it
+        # into the (re)opened turn.  Only for external notifications (not owner steer).
+        ntype = meta.get("notification_type")
+        if src and src != "owner" and ntype == "chat":
+            await emit({
+                "event": "notice",
+                "data": json.dumps({
+                    "content": message,
+                    "source": src,
+                    "notification_type": ntype,
+                }, ensure_ascii=False),
+            })
 
         if message_metadata:
             from langchain_core.messages import HumanMessage
