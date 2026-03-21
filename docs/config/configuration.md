@@ -1,65 +1,80 @@
-# Leon Configuration System
+# Leon Configuration Guide
 
-Leon uses a three-tier configuration system with JSON files, providing flexible control over agent behavior, tools, and runtime settings.
+Leon uses a split configuration system: **runtime.json** for behavior settings, **models.json** for model/provider identity, and **config.env** for quick API key setup. Each config file follows a three-tier merge with system defaults, user overrides, and project overrides.
 
-## Quick Start
+## Quick Setup (First Run)
+
+On first launch without an API key, Leon automatically opens the config wizard:
 
 ```bash
-# Use default configuration
-leonai
-
-# Use a specific agent preset
-leonai --agent coder
-leonai --agent researcher
-
-# Override model
-leonai --model claude-opus-4-6
-leonai --model leon:powerful
-
-# View current configuration
-leonai config show
+leonai config        # Interactive wizard: API key, base URL, model name
+leonai config show   # Show current config.env values
 ```
 
-## Configuration Tiers
+The wizard writes `~/.leon/config.env` with three values:
 
-Configuration is loaded and merged from three levels (highest priority first):
+```env
+OPENAI_API_KEY=sk-xxx
+OPENAI_BASE_URL=https://api.openai.com/v1
+MODEL_NAME=claude-sonnet-4-5-20250929
+```
 
-1. **Project Config**: `.leon/config.json` in workspace root
-2. **User Config**: `~/.leon/config.json` in home directory
-3. **System Defaults**: Built-in presets (`default`, `coder`, `researcher`, `tester`)
+This is enough to start using Leon. The sections below cover advanced configuration.
+
+## Config File Locations
+
+Leon has three separate config domains, each with its own file:
+
+| Domain | Filename | Purpose |
+|--------|----------|---------|
+| Runtime behavior | `runtime.json` | Tools, memory, MCP, skills, security |
+| Model identity | `models.json` | Providers, API keys, virtual model mapping |
+| Observation | `observation.json` | Langfuse / LangSmith tracing |
+| Quick setup | `config.env` | API key + base URL (loaded to env vars) |
+| Sandbox | `~/.leon/sandboxes/<name>.json` | Per-sandbox-provider config |
+
+Each JSON config file is loaded from three tiers (highest priority first):
+
+1. **Project config**: `.leon/<file>` in workspace root
+2. **User config**: `~/.leon/<file>` in home directory
+3. **System defaults**: Built-in defaults in `config/defaults/`
+
+CLI arguments (`--model`, `--workspace`, etc.) override everything.
 
 ### Merge Strategy
 
-- **API/Memory/Tools**: Deep merge (all tiers combined, later overrides earlier)
-- **MCP/Skills**: Lookup (first found wins, no merge)
-- **System Prompt**: Lookup (project > user > system)
+- **runtime / memory / tools**: Deep merge across all tiers (fields from higher-priority tiers override lower)
+- **mcp / skills**: Lookup merge (first tier that defines it wins, no merging)
+- **system_prompt**: Lookup (project > user > system)
+- **providers / mapping** (models.json): Deep merge per-key
+- **pool** (models.json): Last wins (no list merge)
+- **catalog / virtual_models** (models.json): System-only, never overridden
 
-## Configuration Structure
+## Runtime Configuration (runtime.json)
+
+Controls agent behavior, tools, memory, MCP, and skills. **Not** where model/provider identity goes (that's `models.json`).
+
+Full structure with defaults:
 
 ```json
 {
-  "api": {
-    "model": "claude-sonnet-4-5-20250929",
-    "model_provider": null,
-    "api_key": null,
-    "base_url": null,
-    "temperature": 0.5,
-    "max_tokens": 8192,
+  "runtime": {
+    "temperature": null,
+    "max_tokens": null,
     "model_kwargs": {},
-    "context_limit": 100000,
+    "context_limit": 0,
     "enable_audit_log": true,
     "allowed_extensions": null,
     "block_dangerous_commands": true,
-    "block_network_commands": false,
-    "queue_mode": "steer"
+    "block_network_commands": false
   },
   "memory": {
     "pruning": {
       "enabled": true,
-      "protect_recent": 3,
-      "trim_tool_results": true,
       "soft_trim_chars": 3000,
-      "hard_clear_threshold": 10000
+      "hard_clear_threshold": 10000,
+      "protect_recent": 3,
+      "trim_tool_results": true
     },
     "compaction": {
       "enabled": true,
@@ -69,209 +84,22 @@ Configuration is loaded and merged from three levels (highest priority first):
     }
   },
   "tools": {
-    "filesystem": { "enabled": true, "tools": {...} },
-    "search": { "enabled": true, "tools": {...} },
-    "web": { "enabled": true, "tools": {...} },
-    "command": { "enabled": true, "tools": {...} }
-  },
-  "mcp": {
-    "enabled": true,
-    "servers": {}
-  },
-  "skills": {
-    "enabled": true,
-    "paths": ["./skills"],
-    "skills": {}
-  },
-  "system_prompt": null
-}
-```
-
-## API Configuration
-
-### Basic Settings
-
-```json
-{
-  "api": {
-    "model": "claude-sonnet-4-5-20250929",
-    "temperature": 0.5,
-    "max_tokens": 8192
-  }
-}
-```
-
-### Provider Configuration
-
-For OpenAI-compatible proxies:
-
-```json
-{
-  "api": {
-    "model": "claude-opus-4-6",
-    "model_provider": "openai",
-    "base_url": "https://api.example.com/v1",
-    "api_key": "${OPENAI_API_KEY}"
-  }
-}
-```
-
-### Security Settings
-
-```json
-{
-  "api": {
-    "enable_audit_log": true,
-    "allowed_extensions": ["py", "js", "ts", "md"],
-    "block_dangerous_commands": true,
-    "block_network_commands": false
-  }
-}
-```
-
-### Queue Mode
-
-Controls message processing priority:
-
-- `steer`: User messages take priority
-- `followup`: Agent follow-up messages take priority
-- `collect`: Batch process all messages
-- `steer_backlog`: Process backlog before user messages
-- `interrupt`: Interrupt current processing
-
-```json
-{
-  "api": {
-    "queue_mode": "steer"
-  }
-}
-```
-
-## Virtual Model Mapping
-
-Leon provides virtual model names for easy switching:
-
-| Virtual Name | Actual Model | Temperature | Max Tokens | Use Case |
-|--------------|--------------|-------------|------------|----------|
-| `leon:fast` | claude-sonnet-4-5 | 0.7 | 4096 | Simple tasks |
-| `leon:balanced` | claude-sonnet-4-5 | 0.5 | 8192 | General use |
-| `leon:powerful` | claude-opus-4-6 | 0.3 | 16384 | Complex reasoning |
-| `leon:coding` | claude-opus-4-6 | 0.0 | 16384 | Code generation |
-| `leon:research` | claude-sonnet-4-5 | 0.3 | 8192 | Research |
-| `leon:creative` | claude-sonnet-4-5 | 0.9 | 8192 | Creative tasks |
-
-Usage:
-
-```bash
-leonai --model leon:coding
-leonai --model leon:research
-```
-
-In config:
-
-```json
-{
-  "api": {
-    "model": "leon:powerful"
-  }
-}
-```
-
-## Memory Configuration
-
-### Pruning
-
-Automatically trim old messages to stay within context limits:
-
-```json
-{
-  "memory": {
-    "pruning": {
-      "enabled": true,
-      "protect_recent": 3,
-      "trim_tool_results": true,
-      "soft_trim_chars": 3000,
-      "hard_clear_threshold": 10000
-    }
-  }
-}
-```
-
-- `protect_recent`: Number of recent tool messages to keep untrimmed
-- `trim_tool_results`: Truncate large tool outputs
-- `soft_trim_chars`: Soft trim tool results longer than this (characters)
-- `hard_clear_threshold`: Clear tool results longer than this (characters)
-
-### Compaction
-
-Compress conversation history using LLM summarization:
-
-```json
-{
-  "memory": {
-    "compaction": {
-      "enabled": true,
-      "reserve_tokens": 16384,
-      "keep_recent_tokens": 20000,
-      "min_messages": 20
-    }
-  }
-}
-```
-
-- `reserve_tokens`: Reserve space for new messages (tokens)
-- `keep_recent_tokens`: Keep recent messages verbatim (tokens)
-- `min_messages`: Minimum messages before compaction
-
-## Tools Configuration
-
-### Filesystem Tools
-
-```json
-{
-  "tools": {
     "filesystem": {
       "enabled": true,
       "tools": {
-        "read_file": {
-          "enabled": true,
-          "max_file_size": 10485760
-        },
+        "read_file": { "enabled": true, "max_file_size": 10485760 },
         "write_file": true,
         "edit_file": true,
-        "multi_edit": true,
         "list_dir": true
       }
-    }
-  }
-}
-```
-
-### Search Tools
-
-```json
-{
-  "tools": {
+    },
     "search": {
       "enabled": true,
-      "max_results": 50,
       "tools": {
-        "grep_search": {
-          "enabled": true,
-          "max_file_size": 10485760
-        },
-        "find_by_name": true
+        "grep": { "enabled": true, "max_file_size": 10485760 },
+        "glob": true
       }
-    }
-  }
-}
-```
-
-### Web Tools
-
-```json
-{
-  "tools": {
+    },
     "web": {
       "enabled": true,
       "timeout": 15,
@@ -279,61 +107,409 @@ Compress conversation history using LLM summarization:
         "web_search": {
           "enabled": true,
           "max_results": 5,
-          "tavily_api_key": "${TAVILY_API_KEY}",
+          "tavily_api_key": null,
           "exa_api_key": null,
           "firecrawl_api_key": null
         },
-        "read_url_content": {
+        "fetch": {
           "enabled": true,
-          "jina_api_key": "${JINA_API_KEY}"
-        },
-        "view_web_content": true
+          "jina_api_key": null
+        }
       }
-    }
-  }
+    },
+    "command": {
+      "enabled": true,
+      "tools": {
+        "run_command": { "enabled": true, "default_timeout": 120 },
+        "command_status": true
+      }
+    },
+    "spill_buffer": {
+      "enabled": true,
+      "default_threshold": 50000,
+      "thresholds": {
+        "Grep": 20000,
+        "Glob": 20000,
+        "run_command": 50000,
+        "command_status": 50000,
+        "Fetch": 50000
+      }
+    },
+    "tool_modes": {}
+  },
+  "mcp": {
+    "enabled": true,
+    "servers": {}
+  },
+  "skills": {
+    "enabled": true,
+    "paths": ["~/.leon/skills"],
+    "skills": {}
+  },
+  "system_prompt": null,
+  "workspace_root": null
 }
 ```
 
-### Command Tools
+### Runtime Fields
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `temperature` | float (0-2) | null (model default) | Sampling temperature |
+| `max_tokens` | int | null (model default) | Max output tokens |
+| `context_limit` | int | 0 | Context window limit in tokens. 0 = auto-detect from model |
+| `enable_audit_log` | bool | true | Enable audit logging |
+| `allowed_extensions` | list | null | Restrict file access to these extensions. null = all |
+| `block_dangerous_commands` | bool | true | Block dangerous shell commands (rm -rf, etc.) |
+| `block_network_commands` | bool | false | Block network commands |
+
+### Memory
+
+**Pruning** trims old tool results to save context space:
+
+| Field | Default | Description |
+|-------|---------|-------------|
+| `soft_trim_chars` | 3000 | Soft-trim tool results longer than this |
+| `hard_clear_threshold` | 10000 | Hard-clear tool results longer than this |
+| `protect_recent` | 3 | Keep last N tool messages untrimmed |
+| `trim_tool_results` | true | Enable tool result trimming |
+
+**Compaction** summarizes old conversation history via LLM:
+
+| Field | Default | Description |
+|-------|---------|-------------|
+| `reserve_tokens` | 16384 | Reserve space for new messages |
+| `keep_recent_tokens` | 20000 | Keep recent messages verbatim |
+| `min_messages` | 20 | Minimum messages before compaction triggers |
+
+### Tools
+
+Each tool group (filesystem, search, web, command) has an `enabled` flag and a `tools` sub-object. Both the group and individual tool must be enabled for the tool to be available.
+
+Available tools and their config-level names:
+
+| Config Name | UI/Tool Catalog Name | Group |
+|------------|----------------------|-------|
+| `read_file` | Read | filesystem |
+| `write_file` | Write | filesystem |
+| `edit_file` | Edit | filesystem |
+| `list_dir` | list_dir | filesystem |
+| `grep` | Grep | search |
+| `glob` | Glob | search |
+| `web_search` | WebSearch | web |
+| `fetch` | WebFetch | web |
+| `run_command` | Bash | command |
+| `command_status` | - | command |
+
+**Spill buffer** automatically writes large tool outputs to temp files instead of inlining them in conversation:
 
 ```json
 {
   "tools": {
-    "command": {
-      "enabled": true,
-      "tools": {
-        "run_command": {
-          "enabled": true,
-          "default_timeout": 120
-        },
-        "command_status": true
+    "spill_buffer": {
+      "default_threshold": 50000,
+      "thresholds": {
+        "Grep": 20000,
+        "run_command": 100000
       }
     }
   }
 }
 ```
 
+**Tool modes** can be set per-tool to `"inline"` (default) or `"deferred"`:
+
+```json
+{
+  "tools": {
+    "tool_modes": {
+      "TaskCreate": "deferred",
+      "TaskList": "deferred"
+    }
+  }
+}
+```
+
+### Example: Project-level runtime.json
+
+`.leon/runtime.json` in your project root:
+
+```json
+{
+  "runtime": {
+    "allowed_extensions": ["py", "js", "ts", "json", "yaml", "md"],
+    "block_dangerous_commands": true
+  },
+  "tools": {
+    "web": { "enabled": false },
+    "command": {
+      "tools": {
+        "run_command": { "default_timeout": 300 }
+      }
+    }
+  },
+  "system_prompt": "You are a Python expert working on a FastAPI project."
+}
+```
+
+## Models Configuration (models.json)
+
+Controls which model to use, provider credentials, and virtual model mapping.
+
+### Structure
+
+```json
+{
+  "active": {
+    "model": "claude-sonnet-4-5-20250929",
+    "provider": null,
+    "based_on": null,
+    "context_limit": null
+  },
+  "providers": {
+    "anthropic": {
+      "api_key": "${ANTHROPIC_API_KEY}",
+      "base_url": "https://api.anthropic.com"
+    },
+    "openai": {
+      "api_key": "${OPENAI_API_KEY}",
+      "base_url": "https://api.openai.com/v1"
+    }
+  },
+  "mapping": { ... },
+  "pool": {
+    "enabled": [],
+    "custom": [],
+    "custom_config": {}
+  }
+}
+```
+
+### Providers
+
+Define API credentials per provider. The `active.provider` field determines which provider's credentials are used:
+
+```json
+{
+  "providers": {
+    "openrouter": {
+      "api_key": "${OPENROUTER_API_KEY}",
+      "base_url": "https://openrouter.ai/api/v1"
+    }
+  },
+  "active": {
+    "model": "anthropic/claude-sonnet-4-5",
+    "provider": "openrouter"
+  }
+}
+```
+
+### API Key Resolution
+
+Leon looks for an API key in this order:
+1. Active provider's `api_key` from `models.json`
+2. Any provider with an `api_key` in `models.json`
+3. Environment variables: `ANTHROPIC_API_KEY` > `OPENAI_API_KEY` > `OPENROUTER_API_KEY`
+
+### Provider Auto-Detection
+
+When no explicit `provider` is set, Leon auto-detects from environment:
+- `ANTHROPIC_API_KEY` set -> provider = `anthropic`
+- `OPENAI_API_KEY` set -> provider = `openai`
+- `OPENROUTER_API_KEY` set -> provider = `openai`
+
+### Custom Models
+
+Add models not in the built-in catalog via the `pool.custom` list:
+
+```json
+{
+  "pool": {
+    "custom": ["deepseek-chat", "qwen-72b"],
+    "custom_config": {
+      "deepseek-chat": {
+        "based_on": "gpt-4o",
+        "context_limit": 65536
+      }
+    }
+  }
+}
+```
+
+`based_on` tells Leon which model family to use for tokenizer/context detection. `context_limit` overrides the auto-detected context window.
+
+## Virtual Models
+
+Leon provides four virtual model aliases (`leon:*`) that map to concrete models with preset parameters:
+
+| Virtual Name | Concrete Model | Provider | Extras | Use Case |
+|-------------|---------------|----------|--------|----------|
+| `leon:mini` | claude-haiku-4-5-20250929 | anthropic | - | Fast, simple tasks |
+| `leon:medium` | claude-sonnet-4-5-20250929 | anthropic | - | Balanced, daily work |
+| `leon:large` | claude-opus-4-6 | anthropic | - | Complex reasoning |
+| `leon:max` | claude-opus-4-6 | anthropic | temperature=0.0 | Maximum precision |
+
+Usage:
+
+```bash
+leonai --model leon:mini
+leonai --model leon:large
+```
+
+Or in `~/.leon/models.json`:
+
+```json
+{
+  "active": {
+    "model": "leon:large"
+  }
+}
+```
+
+### Overriding Virtual Model Mapping
+
+You can remap virtual models to different concrete models in your user or project `models.json`:
+
+```json
+{
+  "mapping": {
+    "leon:medium": {
+      "model": "gpt-4o",
+      "provider": "openai"
+    }
+  }
+}
+```
+
+When you override just the `model` without specifying `provider`, the inherited provider is cleared (you need to re-specify it if it differs from auto-detection).
+
+## Agent Profiles
+
+Leon ships with four built-in agent profiles defined as Markdown files with YAML frontmatter:
+
+| Name | Description |
+|------|-------------|
+| `general` | Full-capability general agent, default sub-agent |
+| `bash` | Shell command specialist |
+| `explore` | Codebase exploration and analysis |
+| `plan` | Task planning and decomposition |
+
+Usage:
+
+```bash
+leonai --agent general
+leonai --agent explore
+```
+
+### Agent File Format
+
+Agents are `.md` files with YAML frontmatter:
+
+```markdown
+---
+name: my-agent
+description: What this agent does
+tools:
+  - "*"
+model: leon:large
+---
+
+Your system prompt goes here. This is the body of the Markdown file.
+```
+
+Frontmatter fields:
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| `name` | yes | Agent identifier |
+| `description` | no | Human-readable description |
+| `tools` | no | Tool whitelist. `["*"]` = all tools (default) |
+| `model` | no | Model override for this agent |
+
+### Agent Loading Priority
+
+Agents are loaded from multiple directories (later overrides earlier by name):
+
+1. Built-in agents: `config/defaults/agents/*.md`
+2. User agents: `~/.leon/agents/*.md`
+3. Project agents: `.leon/agents/*.md`
+4. Member agents: `~/.leon/members/<id>/agent.md` (highest priority)
+
+## Tool Configuration
+
+The full tool catalog includes tools beyond the runtime.json config groups:
+
+| Tool | Group | Mode | Description |
+|------|-------|------|-------------|
+| Read | filesystem | inline | Read file contents |
+| Write | filesystem | inline | Write file |
+| Edit | filesystem | inline | Edit file (exact replacement) |
+| list_dir | filesystem | inline | List directory contents |
+| Grep | search | inline | Regex search (ripgrep-based) |
+| Glob | search | inline | Glob pattern file search |
+| Bash | command | inline | Execute shell commands |
+| WebSearch | web | inline | Internet search |
+| WebFetch | web | inline | Fetch web page with AI extraction |
+| Agent | agent | inline | Spawn sub-agent |
+| SendMessage | agent | inline | Send message to another agent |
+| TaskOutput | agent | inline | Get background task output |
+| TaskStop | agent | inline | Stop background task |
+| TaskCreate | todo | deferred | Create todo task |
+| TaskGet | todo | deferred | Get task details |
+| TaskList | todo | deferred | List all tasks |
+| TaskUpdate | todo | deferred | Update task status |
+| load_skill | skills | inline | Load a skill |
+| tool_search | system | inline | Search available tools |
+
+Tools in `deferred` mode run asynchronously without blocking the conversation.
+
 ## MCP Configuration
 
-Configure Model Context Protocol servers:
+MCP servers are configured in `runtime.json` under the `mcp` key. Each server can use either stdio (command + args) or HTTP transport (url):
 
 ```json
 {
   "mcp": {
     "enabled": true,
     "servers": {
-      "filesystem": {
-        "command": "npx",
-        "args": ["-y", "@modelcontextprotocol/server-filesystem", "/workspace"],
-        "env": {}
-      },
       "github": {
         "command": "npx",
         "args": ["-y", "@modelcontextprotocol/server-github"],
         "env": {
           "GITHUB_TOKEN": "${GITHUB_TOKEN}"
-        }
+        },
+        "allowed_tools": null
+      },
+      "remote-server": {
+        "url": "https://mcp.example.com/sse",
+        "allowed_tools": ["search", "fetch"]
       }
+    }
+  }
+}
+```
+
+MCP server fields:
+
+| Field | Description |
+|-------|-------------|
+| `command` | Executable to launch (stdio transport) |
+| `args` | Command arguments |
+| `env` | Environment variables passed to the server process |
+| `url` | URL for streamable HTTP transport (alternative to command) |
+| `allowed_tools` | Whitelist of tool names. null = all tools exposed |
+
+### Member-level MCP
+
+Members (`~/.leon/members/<id>/`) can have their own `.mcp.json` following the same format as Claude's MCP config:
+
+```json
+{
+  "mcpServers": {
+    "supabase": {
+      "command": "npx",
+      "args": ["-y", "@supabase/mcp-server"],
+      "env": { "SUPABASE_URL": "..." }
     }
   }
 }
@@ -345,1016 +521,157 @@ Configure Model Context Protocol servers:
 {
   "skills": {
     "enabled": true,
-    "paths": ["./skills", "~/.leon/skills"],
+    "paths": ["~/.leon/skills", "./skills"],
     "skills": {
       "code-review": true,
-      "git-workflow": true,
       "debugging": false
     }
   }
 }
 ```
 
+Skill paths are directories containing skill subdirectories. Each skill has a `SKILL.md` file. The `skills` map enables/disables individual skills by name.
+
+On first run, Leon creates `~/.leon/skills` automatically if it's in the paths list.
+
+## Observation Configuration (observation.json)
+
+Configure observability providers for tracing agent runs:
+
+```json
+{
+  "active": "langfuse",
+  "langfuse": {
+    "secret_key": "${LANGFUSE_SECRET_KEY}",
+    "public_key": "${LANGFUSE_PUBLIC_KEY}",
+    "host": "https://cloud.langfuse.com"
+  },
+  "langsmith": {
+    "api_key": "${LANGSMITH_API_KEY}",
+    "project": "leon",
+    "endpoint": null
+  }
+}
+```
+
+Set `active` to `"langfuse"`, `"langsmith"`, or `null` (disabled).
+
+## Sandbox Configuration
+
+Sandbox configs live at `~/.leon/sandboxes/<name>.json`. Each file defines a sandbox provider:
+
+```json
+{
+  "provider": "daytona",
+  "on_exit": "pause",
+  "daytona": {
+    "api_key": "your-key",
+    "api_url": "https://app.daytona.io/api",
+    "target": "local",
+    "cwd": "/home/daytona"
+  }
+}
+```
+
+Supported providers: `local`, `docker`, `e2b`, `daytona`, `agentbay`.
+
+Select at launch:
+
+```bash
+leonai --sandbox daytona       # Uses ~/.leon/sandboxes/daytona.json
+leonai --sandbox docker        # Uses ~/.leon/sandboxes/docker.json
+export LEON_SANDBOX=e2b        # Or set via env var
+```
+
+Provider-specific fields:
+
+| Provider | Fields |
+|----------|--------|
+| docker | `image`, `mount_path`, `docker_host` |
+| e2b | `api_key`, `template`, `cwd`, `timeout` |
+| daytona | `api_key`, `api_url`, `target`, `cwd` |
+| agentbay | `api_key`, `region_id`, `context_path`, `image_id` |
+
 ## Environment Variables
 
-All string values support environment variable expansion:
+### In config.env
+
+`~/.leon/config.env` is a simple key=value file loaded into environment variables at startup (only if the variable is not already set):
+
+```env
+OPENAI_API_KEY=sk-xxx
+OPENAI_BASE_URL=https://openrouter.ai/api/v1
+MODEL_NAME=claude-sonnet-4-5-20250929
+```
+
+The `OPENAI_BASE_URL` value is auto-normalized to include `/v1` if missing.
+
+### In JSON config files
+
+All string values in `runtime.json`, `models.json`, and `observation.json` support:
+
+- `${VAR}` -- environment variable expansion
+- `~` -- home directory expansion
 
 ```json
 {
-  "api": {
-    "api_key": "${OPENAI_API_KEY}",
-    "base_url": "${OPENAI_BASE_URL}"
-  },
-  "tools": {
-    "web": {
-      "tools": {
-        "web_search": {
-          "tavily_api_key": "${TAVILY_API_KEY}"
-        }
-      }
+  "providers": {
+    "anthropic": {
+      "api_key": "${ANTHROPIC_API_KEY}"
     }
   }
 }
 ```
 
-Supported formats:
-- `${VAR}`: Environment variable
-- `~`: Home directory expansion
+### Relevant Environment Variables
 
-### Environment Variable Prefix
+| Variable | Purpose |
+|----------|---------|
+| `OPENAI_API_KEY` | API key (OpenAI-compatible format) |
+| `OPENAI_BASE_URL` | API base URL |
+| `ANTHROPIC_API_KEY` | Anthropic API key |
+| `ANTHROPIC_BASE_URL` | Anthropic base URL |
+| `OPENROUTER_API_KEY` | OpenRouter API key |
+| `MODEL_NAME` | Override model name |
+| `LEON_SANDBOX` | Default sandbox name |
+| `LEON_SANDBOX_DB_PATH` | Override sandbox database path |
+| `TAVILY_API_KEY` | Tavily web search API key |
+| `JINA_API_KEY` | Jina AI fetch API key |
+| `EXA_API_KEY` | Exa search API key |
+| `FIRECRAWL_API_KEY` | Firecrawl API key |
+| `AGENTBAY_API_KEY` | AgentBay API key |
+| `E2B_API_KEY` | E2B API key |
+| `DAYTONA_API_KEY` | Daytona API key |
 
-You can also use the `LEON__` prefix for nested configuration:
+## CLI Reference
 
 ```bash
-export LEON__API__MODEL=claude-opus-4-6
-export LEON__API__TEMPERATURE=0.3
-export LEON__TOOLS__COMMAND__ENABLED=false
+leonai                          # Start new session (TUI)
+leonai -c                       # Continue last session
+leonai --model leon:large       # Override model
+leonai --agent explore          # Use agent preset
+leonai --workspace /path        # Set workspace root
+leonai --sandbox docker         # Use sandbox config
+leonai --thread <id>            # Resume specific thread
+
+leonai config                   # Interactive config wizard
+leonai config show              # Show current config.env
+
+leonai thread ls                # List all threads
+leonai thread history <id>      # Show thread history
+leonai thread rewind <id> <cp>  # Rewind to checkpoint
+leonai thread rm <id>           # Delete thread
+
+leonai sandbox                  # Sandbox manager TUI
+leonai sandbox ls               # List sandbox sessions
+leonai sandbox new [provider]   # Create session
+leonai sandbox pause <id>       # Pause session
+leonai sandbox resume <id>      # Resume session
+leonai sandbox rm <id>          # Delete session
+leonai sandbox metrics <id>     # Show resource metrics
+
+leonai run "message"            # Non-interactive single message
+leonai run --stdin              # Read messages from stdin
+leonai run -i                   # Interactive mode (no TUI)
+leonai run -d                   # With debug output
 ```
-
-Use double underscore (`__`) for nesting.
-
-### Provider Auto-Detection
-
-Leon automatically detects the model provider based on which API key environment variable is set:
-
-**Priority**: `ANTHROPIC_API_KEY` > `OPENAI_API_KEY` > `OPENROUTER_API_KEY`
-
-```bash
-# Use Anthropic format (supports prompt caching)
-export ANTHROPIC_API_KEY=sk-ant-xxx
-export ANTHROPIC_BASE_URL=https://api.anthropic.com
-export MODEL=claude-sonnet-4-5-20250929
-
-# Use OpenAI format
-export OPENAI_API_KEY=sk-xxx
-export OPENAI_BASE_URL=https://api.openai.com
-export MODEL=gpt-4o
-
-# Use OpenRouter
-export OPENROUTER_API_KEY=sk-or-xxx
-export OPENAI_BASE_URL=https://openrouter.ai/api
-export MODEL=anthropic/claude-3.5-sonnet
-```
-
-The system will:
-1. Detect which API key is set
-2. Automatically set `model_provider` (anthropic/openai)
-3. Create the correct ChatModel instance (ChatAnthropic/ChatOpenAI)
-
-**Note**: Environment variable detection overrides config file settings, allowing easy switching between providers.
-
-### Base URL Normalization
-
-Leon automatically normalizes `base_url` based on the provider to handle different API conventions:
-
-- **OpenAI/OpenRouter**: Adds `/v1` suffix if not present
-  - User config: `https://api.openai.com` or `https://api.openai.com/v1`
-  - Actual usage: `https://api.openai.com/v1`
-
-- **Anthropic**: Removes `/v1` suffix (SDK adds `/v1/messages` automatically)
-  - User config: `https://api.anthropic.com` or `https://api.anthropic.com/v1`
-  - Actual usage: `https://api.anthropic.com`
-
-**Example with proxy**:
-
-```json
-{
-  "api": {
-    "model": "claude-haiku-4-5-20251001",
-    "base_url": "https://proxy.example.com"
-  }
-}
-```
-
-You don't need to worry about the `/v1` suffix - the system handles it automatically based on the detected provider.
-
-## Agent Presets
-
-Leon includes four built-in agent presets:
-
-### Default Agent
-
-Balanced configuration for general use:
-
-```bash
-leonai --agent default
-```
-
-- Model: claude-sonnet-4-5
-- All tools enabled
-- Standard security settings
-
-### Coder Agent
-
-Optimized for software development:
-
-```bash
-leonai --agent coder
-```
-
-- Model: claude-opus-4-6 (temperature 0.0)
-- All tools enabled including command execution
-- Multi-edit support
-- Larger context window (200k tokens)
-- System prompt focused on clean code and best practices
-
-### Researcher Agent
-
-Optimized for information gathering:
-
-```bash
-leonai --agent researcher
-```
-
-- Model: claude-sonnet-4-5 (temperature 0.3)
-- Command execution disabled (read-only)
-- Enhanced web search (10 results)
-- Larger file size limits (20MB)
-- System prompt focused on research and analysis
-
-### Tester Agent
-
-Optimized for testing and QA:
-
-```bash
-leonai --agent tester
-```
-
-- Model: claude-sonnet-4-5
-- All tools enabled
-- System prompt focused on test coverage and quality
-
-## Configuration Examples
-
-### Example 1: Local Development Setup
-
-Perfect for local development with all tools enabled:
-
-`.leon/config.json` in your project:
-
-```json
-{
-  "api": {
-    "model": "leon:coding",
-    "temperature": 0.0,
-    "allowed_extensions": ["py", "js", "ts", "json", "yaml", "md"]
-  },
-  "system_prompt": "You are a Python expert working on a FastAPI project. Follow PEP 8 and use type hints.",
-  "tools": {
-    "filesystem": {
-      "enabled": true,
-      "tools": {
-        "read_file": {
-          "enabled": true,
-          "max_file_size": 10485760
-        },
-        "write_file": true,
-        "edit_file": true,
-        "multi_edit": true
-      }
-    },
-    "command": {
-      "enabled": true,
-      "tools": {
-        "run_command": {
-          "enabled": true,
-          "default_timeout": 120
-        }
-      }
-    },
-    "web": {
-      "enabled": false
-    }
-  },
-  "memory": {
-    "pruning": {
-      "enabled": true,
-      "protect_recent": 3
-    },
-    "compaction": {
-      "enabled": true,
-      "reserve_tokens": 16384,
-      "keep_recent_tokens": 20000
-    }
-  }
-}
-```
-
-**Use case**: Working on a local codebase where you need full file system and command access but don't need web search.
-
-### Example 2: Production Deployment
-
-Secure configuration for production environments:
-
-`~/.leon/config.json`:
-
-```json
-{
-  "api": {
-    "model": "claude-opus-4-6",
-    "api_key": "${OPENAI_API_KEY}",
-    "base_url": "${OPENAI_BASE_URL}",
-    "model_provider": "openai",
-    "temperature": 0.3,
-    "enable_audit_log": true,
-    "allowed_extensions": ["py", "js", "ts", "json", "yaml"],
-    "block_dangerous_commands": true,
-    "block_network_commands": true
-  },
-  "tools": {
-    "filesystem": {
-      "enabled": true,
-      "tools": {
-        "read_file": {
-          "enabled": true,
-          "max_file_size": 5242880
-        },
-        "write_file": false,
-        "edit_file": false
-      }
-    },
-    "command": {
-      "enabled": false
-    },
-    "web": {
-      "enabled": false
-    }
-  },
-  "memory": {
-    "pruning": {
-      "enabled": true,
-      "protect_recent": 3,
-      "trim_tool_results": true,
-      "soft_trim_chars": 3000,
-      "hard_clear_threshold": 10000
-    }
-  }
-}
-```
-
-**Use case**: Production environment where you need read-only access with strict security controls.
-
-### Example 3: Testing Environment
-
-Configuration optimized for running tests:
-
-`.leon/config.json`:
-
-```json
-{
-  "api": {
-    "model": "leon:balanced",
-    "temperature": 0.5
-  },
-  "tools": {
-    "filesystem": {
-      "enabled": true
-    },
-    "command": {
-      "enabled": true,
-      "tools": {
-        "run_command": {
-          "enabled": true,
-          "default_timeout": 300
-        }
-      }
-    },
-    "web": {
-      "enabled": false
-    }
-  },
-  "system_prompt": "You are a testing expert. Focus on test coverage, edge cases, and quality assurance."
-}
-```
-
-**Use case**: Running automated tests where you need longer timeouts and balanced model performance.
-
-### Example 4: Research-Only Agent
-
-Disable code execution for safe research:
-
-```json
-{
-  "api": {
-    "model": "leon:research",
-    "temperature": 0.3
-  },
-  "tools": {
-    "command": {
-      "enabled": false
-    },
-    "filesystem": {
-      "enabled": true,
-      "tools": {
-        "read_file": {
-          "enabled": true,
-          "max_file_size": 20971520
-        },
-        "write_file": false,
-        "edit_file": false
-      }
-    },
-    "web": {
-      "enabled": true,
-      "tools": {
-        "web_search": {
-          "enabled": true,
-          "max_results": 20,
-          "tavily_api_key": "${TAVILY_API_KEY}"
-        }
-      }
-    }
-  }
-}
-```
-
-**Use case**: Research tasks where you need web access and file reading but no code execution.
-
-### Example 5: Multi-Environment Setup
-
-User global config with API credentials:
-
-`~/.leon/config.json`:
-
-```json
-{
-  "api": {
-    "api_key": "${OPENAI_API_KEY}",
-    "base_url": "${OPENAI_BASE_URL}",
-    "model_provider": "openai"
-  },
-  "tools": {
-    "web": {
-      "tools": {
-        "web_search": {
-          "tavily_api_key": "${TAVILY_API_KEY}"
-        },
-        "read_url_content": {
-          "jina_api_key": "${JINA_API_KEY}"
-        }
-      }
-    }
-  },
-  "mcp": {
-    "enabled": true,
-    "servers": {
-      "github": {
-        "command": "npx",
-        "args": ["-y", "@modelcontextprotocol/server-github"],
-        "env": {
-          "GITHUB_TOKEN": "${GITHUB_TOKEN}"
-        }
-      }
-    }
-  }
-}
-```
-
-Project-specific overrides:
-
-`.leon/config.json`:
-
-```json
-{
-  "api": {
-    "model": "leon:powerful",
-    "temperature": 0.0
-  },
-  "system_prompt": "You are working on a critical production system. Be extra careful with changes."
-}
-```
-
-**Use case**: Keep credentials in user config, override model and behavior per project.
-
-## CLI Overrides
-
-Command-line arguments override all configuration:
-
-```bash
-# Override model
-leonai --model claude-opus-4-6
-
-# Override workspace
-leonai --workspace /path/to/project
-
-# Override agent preset
-leonai --agent coder
-
-# Combine overrides
-leonai --agent researcher --model leon:powerful
-```
-
-## Hot Reloading
-
-Configuration changes are applied on next agent initialization. For immediate effect:
-
-1. Exit current session (Ctrl+D)
-2. Restart leonai
-3. Configuration is reloaded automatically
-
-## Troubleshooting
-
-### Common Issues and Solutions
-
-#### 1. API Key Not Found
-
-**Error**: `No API key found. Set LEON__API__API_KEY, OPENAI_API_KEY, ANTHROPIC_API_KEY, or OPENROUTER_API_KEY environment variable.`
-
-**Cause**: No API key configured in environment or config file.
-
-**Solution**:
-
-Option A - Environment variable:
-```bash
-export OPENAI_API_KEY=sk-...
-# or
-export ANTHROPIC_API_KEY=sk-ant-...
-```
-
-Option B - User config (`~/.leon/config.json`):
-```json
-{
-  "api": {
-    "api_key": "${OPENAI_API_KEY}"
-  }
-}
-```
-
-**Verification**:
-```bash
-leonai config show  # Check if API key is loaded
-```
-
-#### 2. Invalid Model Name
-
-**Error**: `Unknown virtual model: leon:xyz`
-
-**Cause**: Using a virtual model name that doesn't exist in the mapping.
-
-**Valid virtual models**:
-- `leon:fast` → claude-sonnet-4-5 (temp 0.7, 409kens)
-- `leon:balanced` → claude-sonnet-4-5 (temp 0.5, 8192 tokens)
-- `leon:powerful` → claude-opus-4-6 (temp 0.3, 16384 tokens)
-- `leon:coding` → claude-opus-4-6 (temp 0.0, 16384 tokens)
-- `leon:research` → claude-sonnet-4-5 (temp 0.3, 8192 tokens)
-- `leon:creative` → claude-sonnet-4-5 (temp 0.9, 8192 tokens)
-
-**Solution**:
-```bash
-leonai --model leon:balanced  # Use valid virtual name
-leonai --model claude-opus-4-6  # Or use actual model name
-```
-
-#### 3. Configuration Not Loading
-
-**Issue**: Changes to config.json not taking effect
-
-**Cause**: JSON syntax error, wrong file location, or config not reloade*Solution**:
-
-Step 1 - Validate JSON syntax:
-```bash
-jq . < ~/.leon/config.json  # Should output formatted JSON
-jq . < .leon/config.json    # Check project config too
-```
-
-Step 2 - Check file location:
-```bash
-ls -la ~/.leon/config.json      # User config
-ls -la .leon/config.json        # Project config
-```
-
-Step 3 - Verify config is loaded:
-```bash
-leonai config show  # View merged configuration
-```
-
-Step 4 - Restart Leon:
-```bash
-# Exit current session (Ctrl+D)
-leonai  # Start fresh
-```
-
-**Remember**: Configuration priority is Project > User > System. Project config overrides user config.
-
-#### 4. Tool Not Available
-
-**Issue**: Expected tool not showing up in agent
-
-**Cause**: Tool disabled in configuration or parent middleware disabled.
-
-**Solution**:
-
-Check tool hierarchy - both parent and child must be enabled:
-
-```json
-{
-  "tools": {
-    "web": {
-      "enabled": true,  // Parent must be enabled
-      "tools": {
-        "web_search": {
-          "enabled": true  // Child must be enabled
-        }
-      }
-    }
-  }
-}
-```
-
-**Verification**:
-```bash
-leonai config show | grep -A 10 "web"
-```
-
-#### 5. MCP Server Not Starting
-
-**Issue**: MCP tools not available, server fails to start
-
-**Cause**: Invalid command, missing dependencies, or environment variables not set.
-
-**Solution**:
-
-Step 1 - Test command manually:
-```bash
-npx -y @modelcontextprotocol/server-github
-# Should start without errors
-```
-
-Step 2 - Check environment variables:
-```bash
-echo $GITHUB_TOKEN  # Should output token
-```
-
-Step 3 - Enable verbose logging:
-```bash
-leonai --verbose
-# Look for MCP server startup messages
-```
-
-Step 4 - Verify config:
-```json
-{
-  "mcp": {
-    "enabled": true,
-    "servers": {
-      "github": {
-        "command": "npx",
-        "args": ["-y", "@modelcontextprotocol/server-github"],
-        "env": {
-          "GITHUB_TOKEN": "${GITHUB_TOKEN}"
-        }
-      }
-    }
-  }
-}
-```
-
-#### 6. Base URL Not Working with Proxy
-
-**Issue**: Using OpenAI-compatible proxy but getting connection errors
-
-**Cause**: Missing `/v1` suffix or incorrect provider setting.
-
-**Solution**:
-
-For OpenAI-compatible proxies serving Claude:
-```json
-{
-  "api": {
-    "model": "claude-opus-4-6",
-    "model_provider": "openai",  // Must set to "openai"
-    "base_url": "https://api.example.com/v1",  // Must end with /v1
-    "api_key": "${OPENAI_API_KEY}"
-  }
-}
-```
-
-**Note**: The schema automatically adds `/v1` if missing, but explicit provider is required.
-
-#### 7. Memory Issues - Context Too Large
-
-**Issue**: Agent runs out of context, messages getting truncated
-
-**Cause**: Long conversation exceeding context limit.
-
-**Solution**:
-
-Enable aggressive pruning and compaction:
-```json
-{
-  "memory": {
-    "pruning": {
-      "enabled": true,
-      "protect_recent": 2,
-      "trim_tool_results": true,
-      "soft_trim_chars": 2000,
-      "hard_clear_threshold": 8000
-    },
-    "compaction": {
-      "enabled": true,
-      "reserve_tokens": 24576,
-      "keep_recent_tokens": 16000,
-      "min_messages": 15
-    }
-  }
-}
-```
-
-#### 8. File Size Limit Exceeded
-
-**Issue**: Cannot read large files
-
-**Cause**: File exceeds max_file_size limit.
-
-**Solution**:
-
-Increase file size limit:
-```json
-{
-  "tools": {
-    "filesystem": {
-      "tools": {
-        "read_file": {
-          "enabled": true,
-          "max_file_size": 20971520  // 20MB instead of 10MB
-        }
-      }
-    }
-  }
-}
-```
-
-**Warning**: Larger files consume more tokens and may hit context limits.
-
-#### 9. Command Timeout
-
-**Issue**: Long-running commands getting killed
-
-**Cause**: Command exceeds default timeout (120 seconds).
-
-**Solution**:
-
-Increase timeout:
-```json
-{
-  "tools": {
-    "command": {
-      "tools": {
-        "run_command": {
-          "enabled": true,
-          "default_timeout": 300  // 5 minutes
-        }
-      }
-    }
-  }
-}
-```
-
-#### 10. Environment Variables Not Expanding
-
-**Issue**: `${VAR}` not being replaced with actual value
-
-**Cause**: Environment variable not set or typo in variable name.
-
-**Solution**:
-
-Step 1 - Verify variable is set:
-```bash
-echo $OPENAI_API_KEY  # Should output value
-```
-
-Step 2 - Check config syntax:
-```json
-{
-  "api": {
-    "api_key": "${OPENAI_API_KEY}"  // Correct
-    // NOT: "api_key": "$OPENAI_API_KEY"  // Wrong
-  }
-}
-```
-
-Step 3 - Verify expansion:
-```bash
-leonai config show  # Should show actual value, not ${VAR}
-```
-
-## Schema Reference
-
-Full JSON schema available at: `config/schema.py`
-
-Key types:
-- `LeonSettings`: Root configuration object
-- `APIConfig`: API and model settings
-- `MemoryConfig`: Memory management settings
-- `ToolsConfig`: Tool enable/disable settings
-- `MCPConfig`: MCP server configurations
-- `SkillsConfig`: Skills system settings
-
-## Best Practices
-
-### 1. Use Virtual Models for Portability
-
-Virtual models make it easy to switch between different model configurations without changing your code:
-
-```json
-{
-  "api": {
-    "model": "leon:coding"  // Easy to switch to leon:research later
-  }
-}
-```
-
-**Benefits**:
-- Switch models without remembering exact names
-- Consistent temperature/token settings per use case
-- Easy to update all projects when new models release
-
-### 2. Never Commit API Keys
-
-Always use environment variables for sensitive data:
-
-**Bad** ❌:
-```json
-{
-  "api": {
-    "api_key": "sk-ant-api03-actual-key-here"
-  }
-}
-```
-
-**Good** ✅:
-```json
-{
-  "api": {
-    "api_key": "${OPENAI_API_KEY}"
-  }
-}
-```
-
-Add `.leon/config.json` to `.gitignore` if it contains secrets, or use `~/.leon/config.json` for credentials.
-
-### 3. Separate Project and User Configs
-
-**User config** (`~/.leon/config.json`) - API credentials and personal preferences:
-```json
-{
-  "api": {
-    "api_key": "${OPENAI_API_KEY}",
-    "base_url": "${OPENAI_BASE_URL}",
-    "model_provider": "openai"
-  },
-  "tools": {
-    "web": {
-      "tools": {
-        "web_search": {
-          "tavily_api_key": "${TAVILY_API_KEY}"
-        }
-      }
-    }
-  }
-}
-```
-
-**Project config** (`.leon/config.json`) - Project-specific settings:
-```json
-{
-  "api": {
-    "model": "leon:coding",
-    "allowed_extensions": ["py", "js", "ts"]
-  },
-  "system_prompt": "You are working on a FastAPI project. Follow PEP 8."
-}
-```
-
-**Benefits**:
-- Credentials stay in user config (not committed)
-- Project settings can be shared with team
-- Easy to work on multiple projects
-
-### 4. Start with Agent Presets
-
-Use built-in presets as starting points:
-
-```bash
-leonai --agent coder      # For development
-leonai --agent researcher # For research
-leonai --agent tester     # For testing
-```
-
-Then customize only what you need:
-```json
-{
-  "api": {
-    "temperature": 0.1  // Slightly more deterministic than default
-  }
-}
-```
-
-**Benefits**:
-- Proven configurations for common use cases
-- Less configuration to maintain
-- Easy to understand what changed
-
-### 5. Enable Security Features in Production
-
-Always enable audit logging and command blocking:
-
-```json
-{
-  "api": {
-    "enable_audit_log": true,
-    "allowed_extensions": ["py", "js", "ts", "json", "yaml"],
-    "block_dangerous_commands": true,
-    "block_network_commands": true
-  }
-}
-```
-
-**What this protects against**:
-- Accidental file deletions (`rm -rf`)
-- Unauthorized network access
-- Execution of dangerous system commands
-- Access to sensitive file types
-
-### 6. Tune Memory Settings Based on Usage
-
-**Short conversations** (< 20 messages):
-```json
-{
-  "memory": {
-    "pruning": {
-      "enabled": false  // No need to prune
-    },
-    "compaction": {
-      "enabled": false  // No need to compact
-    }
-  }
-}
-```
-
-**Long conversations** (> 50 messages):
-```json
-{
-  "memory": {
-    "pruning": {
-      "enabled": true,
-      "protect_recent": 3,
-      "trim_tool_results": true,
-      "soft_trim_chars": 3000,
-      "hard_clear_threshold": 10000
-    },
-    "compaction": {
-      "enabled": true,
-      "reserve_tokens": 24576,
-      "keep_recent_tokens": 16000,
-      "min_messages": 15
-    }
-  }
-}
-```
-
-### 7. Disable Unused Tools to Reduce Token Usage
-
-Every enabled tool adds to the system prompt. Disable tools you don't need:
-
-```json
-{
-  "tools": {
-    "web": {
-      "enabled": false  // Disable if no internet access needed
-    },
-    "command": {
-      "enabled": false  // Disable if read-only access sufficient
-    }
-  }
-}
-```
-
-**Token savings**: ~200-500 tokens per disabled middleware.
-
-### 8. Use Appropriate File Size Limits
-
-**Default** (10MB):
-```json
-{
-  "tools": {
-    "filesystem": {
-      "tools": {
-        "read_file": {
-          "max_file_size": 10485760
-        }
-      }
-    }
-  }
-}
-```
-
-**For large codebases** (20MB):
-```json
-{
-  "tools": {
-    "filesystem": {
-      "tools": {
-        "read_file": {
-          "max_file_size": 20971520
-        }
-      }
-    }
-  }
-}
-```
-
-**For restricted environments** (5MB):
-```json
-{
-  "tools": {
-    "filesystem": {
-      "tools": {
-        "read_file": {
-          "max_file_size": 5242880
-        }
-      }
-    }
-  }
-}
-```
-
-### 9. Configure Timeouts Based on Task Type
-
-**Quick tasks** (default 120s):
-```json
-{
-  "tools": {
-    "command": {
-      "tools": {
-        "run_command": {
-          "default_timeout": 120
-        }
-      }
-    }
-  }
-}
-```
-
-**Long-running tasks** (tests, builds):
-```json
-{
-  "tools": {
-    "command": {
-      "tools": {
-        "run_command": {
-          "default_timeout": 600  // 10 minutes
-        }
-      }
-    }
-  }
-}
-```
-
-### 10. Document Your Configuration
-
-Add comments to your config (use a separate README if JSON doesn't support comments):
-
-**config-notes.md**:
-```markdown
-# Leon Configuration Notes
-
-## Model Choice
-Using leon:coding for deterministic code generation (temp=0.0)
-
-## Security
-- Dangerous commands blocked for safety
-- Only Python/JS/TS files allowed
-- Audit log enabled for compliance
-
-## Memory
-- Aggressive pruning (protect_recent=2) due to long conversations
-- Early compaction (reserve_tokens=24576) to avoid context limits
-```
-
-## See Also
-
-- [Migration Guide](migration-guide.md) - Migrating from profile.yaml
-- [Sandbox Documentation](SANDBOX.md) - Sandbox configuration
-- [Skills System](../skills/README.md) - Creating custom skills
-- [MCP Integration](../mcp/README.md) - MCP server setup

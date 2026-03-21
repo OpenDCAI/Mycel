@@ -276,6 +276,16 @@ leonai sandbox pause <id>
 - Hook system, Plugin ecosystem
 - Agent evaluation
 
+## Documentation
+
+- [Getting Started](docs/getting-started.md) — Installation, LLM provider setup, first run
+- [Configuration](docs/config/configuration.md) — Config files, virtual models, tool settings
+- [Multi-Agent Chat](docs/multi-agent-chat.md) — Entity-Chat system, agent communication
+- [Sandbox](docs/sandbox/SANDBOX.md) — Providers, lifecycle, session management
+- [Deployment](docs/deployment/DEPLOYMENT.md) — Production deployment guide
+- [Concepts](docs/product-primitives.md) — Core abstractions (Thread, Member, Task, Resource)
+- [Troubleshooting](docs/TROUBLESHOOTING.md) — Common issues and fixes
+
 ## Contributing
 
 ```bash

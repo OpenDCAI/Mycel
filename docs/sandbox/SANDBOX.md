@@ -130,22 +130,9 @@ The file name (minus `.json`) is the sandbox name you pass to `--sandbox`.
 |-------|---------|-------------|
 | `agentbay.api_key` | — | AgentBay API key (or set `AGENTBAY_API_KEY` env var) |
 | `agentbay.region_id` | `ap-southeast-1` | Cloud region |
-| `agentbay.context_path` | `/root` | Working directory |
+| `agentbay.context_path` | `/home/wuying` | Working directory |
 | `agentbay.image_id` | `null` | Specific image (optional) |
 | `on_exit` | `pause` | `pause` or `destroy` |
-
-### Shared Fields
-
-**`context_id`** (optional, top-level): Enables persistent storage across sessions. For Docker, this creates a named volume. For AgentBay, this enables context sync.
-
-```json
-{
-  "provider": "docker",
-  "context_id": "my-project",
-  "docker": { "image": "python:3.12-slim" },
-  "on_exit": "pause"
-}
-```
 
 ### API Key Resolution
 
@@ -344,18 +331,25 @@ Provider command results use `ProviderExecResult` (sandbox/provider.py), which `
 sandbox/
 ├── __init__.py          # Factory: create_sandbox()
 ├── base.py              # Abstract Sandbox interface
-├── config.py            # SandboxConfig, provider configs
-├── local.py             # LocalSandbox (null object, passthrough)
-├── agentbay.py          # AgentBaySandbox
-├── docker.py            # DockerSandbox
-├── e2b.py               # E2BSandbox
-├── manager.py           # SandboxManager (persistent SQLite connection)
+├── config.py            # SandboxConfig, provider configs, DEFAULT_DB_PATH
+├── capability.py        # Provider capability detection
+├── chat_session.py      # Chat session lifecycle
+├── lease.py             # Lease state machine
+├── lifecycle.py         # Sandbox lifecycle orchestration
+├── manager.py           # SandboxManager (session orchestration)
 ├── provider.py          # SandboxProvider ABC, ProviderExecResult, Metrics
+├── provider_events.py   # Provider event handling
+├── resource_snapshot.py # Resource metric snapshots
+├── runtime.py           # Runtime environment
+├── shell_output.py      # Shell output processing
+├── terminal.py          # Abstract terminal management
 ├── thread_context.py    # ContextVar for thread_id tracking
 └── providers/
     ├── agentbay.py      # AgentBayProvider (Alibaba SDK)
+    ├── daytona.py       # DaytonaProvider (Daytona SDK, SaaS or self-hosted)
     ├── docker.py        # DockerProvider (Docker CLI)
-    └── e2b.py           # E2BProvider (E2B SDK)
+    ├── e2b.py           # E2BProvider (E2B SDK)
+    └── local.py         # LocalProvider (host passthrough)
 
 middleware/
 ├── filesystem/
@@ -377,17 +371,22 @@ The Sandbox layer handles session caching, thread context, and lifecycle. The Pr
 
 ### Session Tracking
 
-Sessions are tracked in SQLite (`~/.leon/leon.db`, table `sandbox_sessions`):
+Sessions are tracked in SQLite (`~/.leon/sandbox.db`) across several tables:
 
-```
-thread_id (PK) | provider | session_id | context_id | status  | created_at | last_active
-abc123         | docker   | d7f8e9...  | null       | running | 2025-01-15 | 2025-01-15
-def456         | e2b      | sbx_a1b2.. | null       | paused  | 2025-01-14 | 2025-01-15
-```
+| Table | Purpose |
+|-------|---------|
+| `sandbox_leases` | Lease lifecycle — one lease per sandbox environment. Tracks provider, desired/observed state, instance binding. |
+| `sandbox_instances` | Provider-side session IDs bound to a lease. |
+| `lease_events` | Audit log of lease state transitions. |
+| `abstract_terminals` | Virtual terminals bound to a thread + lease. Tracks cwd and env delta. |
+| `thread_terminal_pointers` | Maps each thread to its active and default terminal. |
+| `chat_sessions` | Conversation sessions linking thread, terminal, and lease with TTL/budget. |
+| `terminal_commands` | Command history per terminal (stdin, stdout, stderr, exit code). |
+| `terminal_command_chunks` | Streaming stdout/stderr chunks for long-running commands. |
+| `provider_events` | Raw events received from providers (for reconciliation). |
+| `lease_resource_snapshots` | CPU, memory, disk metrics per lease (written by resource monitor). |
 
-`SandboxManager` uses a single persistent SQLite connection with `threading.Lock` for thread safety (needed because `leonai sandbox ls` and `destroy-all-sessions` use `ThreadPoolExecutor` for parallel operations).
-
-Session IDs are cached in memory per thread to avoid SQLite lookups on every tool call.
+Thread-to-sandbox mapping goes through `abstract_terminals.thread_id` + `abstract_terminals.lease_id` (there is no `thread_id` column on `sandbox_leases`).
 
 The standalone `lookup_sandbox_for_thread()` function enables sandbox auto-detection when resuming threads — it does a pure SQLite lookup without initializing any provider.
 
