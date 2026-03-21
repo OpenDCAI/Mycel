@@ -8,7 +8,6 @@
 
 🇬🇧 English | [🇨🇳 中文](README.zh.md)
 
-[![PyPI version](https://badge.fury.io/py/leonai.svg)](https://badge.fury.io/py/leonai)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
 
@@ -29,56 +28,77 @@ Existing agent frameworks focus on *building* agents. Mycel focuses on *running*
 
 ## Quick Start
 
-### Installation
+### Prerequisites
+
+- Python 3.11+
+- Node.js 18+
+- An OpenAI-compatible API key
+
+### 1. Get the source
 
 ```bash
-pip install leonai
+git clone https://github.com/OpenDCAI/Mycel.git
+cd Mycel
 ```
 
-Or with uv (recommended):
+### 2. Install dependencies
 
 ```bash
-uv tool install leonai
+# Backend (Python)
+uv sync
+
+# Frontend
+cd frontend/app && npm install && cd ../..
 ```
 
-### First Run
+### 3. Start the services
 
 ```bash
-leonai
+# Terminal 1: Backend
+uv run python -m backend.web.main
+# → http://localhost:8001
+
+# Terminal 2: Frontend
+cd frontend/app && npm run dev
+# → http://localhost:5173
 ```
 
-On first launch, Mycel will guide you through configuration. You'll need an OpenAI-compatible API key.
+### 4. Open and configure
 
-### Minimal Configuration
+1. Open **http://localhost:5173** in your browser
+2. **Register** an account
+3. Go to **Settings** → configure your LLM provider (API key, model)
+4. Start chatting with your first agent
 
-Create `~/.leon/config.json`:
+## Features
 
-```json
-{
-  "api": {
-    "api_key": "${OPENAI_API_KEY}",
-    "model": "leon:balanced"
-  }
-}
+### Web Interface
+
+Full-featured web platform for managing and interacting with agents:
+
+- Real-time chat with multiple agents
+- Multi-agent communication — agents message each other autonomously
+- Sandbox resource dashboard
+- Token usage and cost tracking
+- File upload and workspace sync
+- Thread history and search
+
+### Multi-Agent Communication
+
+Agents are first-class social entities. They can discover each other, send messages, and collaborate autonomously:
+
+```
+Member (template)
+  └→ Entity (social identity — agents and humans both get one)
+       └→ Thread (agent brain / conversation)
 ```
 
-### Your First Conversation
+- **`chat_send`**: Agent A messages Agent B; B responds autonomously
+- **`directory`**: Agents browse and discover other entities
+- **`tell_owner`**: Agents escalate to their human owner
+- **Real-time delivery**: SSE-based chat with typing indicators and read receipts
 
-```bash
-leonai
-```
-
-```
-You: What files are in the current directory?
-Agent: [Uses list_dir tool]
-Found 12 files: README.md, pyproject.toml, src/, tests/, ...
-
-You: Read the README and summarize it
-Agent: [Uses read_file tool]
-This project is...
-```
-
-## Core Concepts
+Humans also have entities — agents can initiate conversations with humans, not just the other way around.
 
 ### Middleware Pipeline
 
@@ -109,103 +129,16 @@ Agents run in isolated environments with managed lifecycles:
 
 **Lifecycle**: `idle → active → paused → destroyed`
 
-**Supported Providers**:
-- **Local**: Direct host access (development)
-- **Docker**: Containerized isolation (testing)
-- **E2B**: Cloud sandboxes (production)
-- **AgentBay**: Alibaba Cloud (China region)
-
-### Configuration System
-
-Three-layer configuration merge:
-
-```
-System Defaults → User Config → Project Config → CLI Args
-```
-
-**Virtual Models**:
-```bash
-leonai --model leon:fast       # Sonnet, temp=0.7
-leonai --model leon:balanced   # Sonnet, temp=0.5
-leonai --model leon:powerful   # Opus, temp=0.3
-leonai --model leon:coding     # Opus, temp=0.0
-```
-
-### Agent Profiles
-
-```bash
-leonai --agent coder        # Code development
-leonai --agent researcher   # Research (read-only)
-leonai --agent tester       # QA testing
-```
-
-## Features
-
-### TUI Interface
-
-Modern terminal interface with keyboard shortcuts:
-
-| Key | Action |
-|-----|--------|
-| `Enter` | Send message |
-| `Shift+Enter` | New line |
-| `Ctrl+↑/↓` | Browse history |
-| `Ctrl+Y` | Copy last message |
-| `Ctrl+E` | Export conversation |
-| `Ctrl+L` | Clear history |
-| `Ctrl+T` | Switch thread |
-| `ESC ESC` | History browser |
-
-### Web UI
-
-Full-featured web interface:
-
-```bash
-leonai web
-# Opens http://localhost:8000
-```
-
-**Features**:
-- Real-time chat with multiple agents
-- Sandbox resource dashboard
-- Token usage and cost tracking
-- Thread history and search
-
-### Multi-Agent Communication
-
-Agents are first-class social entities. They can discover each other, send messages, and collaborate autonomously:
-
-```
-Member (template)
-  └→ Entity (social identity — agents and humans both get one)
-       └→ Thread (agent brain / conversation)
-```
-
-- **`chat_send`**: Agent A messages Agent B; B responds autonomously
-- **`directory`**: Agents browse and discover other entities
-- **`tell_owner`**: Agents escalate to their human owner
-- **Real-time delivery**: SSE-based chat with typing indicators and read receipts
-
-Humans also have entities — agents can initiate conversations with humans, not just the other way around.
-
-### File Upload & Workspace Sync
-
-Upload files to agent workspace and sync changes ([PR #130](https://github.com/OpenDCAI/leonai/pull/130)):
-
-```bash
-# Upload files via Web UI
-# Files persist across sandbox restarts
-```
-
-**Use Cases**:
-- Upload datasets for analysis
-- Share code files with agents
-- Persist configuration files
-- Download agent-generated artifacts
+| Provider | Use Case | Cost |
+|----------|----------|------|
+| **Local** | Development | Free |
+| **Docker** | Testing | Free |
+| **E2B** | Production | $0.15/hr |
+| **AgentBay** | China Region | ¥1/hr |
 
 ### MCP Integration
 
-Connect external services:
+Connect external services via [Model Context Protocol](https://modelcontextprotocol.io):
 
 ```json
 {
@@ -220,30 +153,6 @@ Connect external services:
     }
   }
 }
-```
-
-### Skills System
-
-Load expertise on demand:
-
-```bash
-You: Load the code-review skill
-Agent: Skill loaded. I can now perform detailed code reviews.
-```
-
-### Multi-Sandbox Support
-
-| Provider | Use Case | Cost |
-|----------|----------|------|
-| **Local** | Development | Free |
-| **Docker** | Testing | Free |
-| **E2B** | Production | $0.15/hr |
-| **AgentBay** | China Region | ¥1/hr |
-
-```bash
-leonai --sandbox docker
-leonai sandbox ls
-leonai sandbox pause <id>
 ```
 
 ### Security & Governance
@@ -263,22 +172,9 @@ leonai sandbox pause <id>
 
 **Relationships**: Member (1:N) → Thread (N:1) → Sandbox
 
-## Roadmap
-
-**Completed** ✓
-- Configuration system, TUI, MCP, Skills
-- Multi-provider sandboxes
-- Web UI with dashboard
-- File upload/download ([PR #130](https://github.com/OpenDCAI/leonai/pull/130))
-- Multi-agent communication (Entity-Chat)
-
-**In Progress** 🚧
-- Hook system, Plugin ecosystem
-- Agent evaluation
-
 ## Documentation
 
-- [Getting Started](docs/en/getting-started.md) — Installation, LLM provider setup, first run
+- [Getting Started](docs/en/getting-started.md) — Setup, LLM provider configuration
 - [Configuration](docs/en/configuration.md) — Config files, virtual models, tool settings
 - [Multi-Agent Chat](docs/en/multi-agent-chat.md) — Entity-Chat system, agent communication
 - [Sandbox](docs/en/sandbox.md) — Providers, lifecycle, session management
@@ -288,8 +184,8 @@ leonai sandbox pause <id>
 ## Contributing
 
 ```bash
-git clone https://github.com/OpenDCAI/leonai.git
-cd leonai
+git clone https://github.com/OpenDCAI/Mycel.git
+cd Mycel
 uv sync
 uv run pytest
 ```
