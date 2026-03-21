@@ -58,16 +58,57 @@ echo "Summarize this" | leonai run --stdin    # Read from stdin
 leonai run -i                                  # Interactive without TUI
 ```
 
-## Sandbox Management
+## Sandbox via CLI
+
+### Starting with a Sandbox
+
+```bash
+leonai --sandbox docker     # Start with Docker sandbox
+leonai --sandbox e2b        # Start with E2B cloud sandbox
+leonai --sandbox daytona    # Start with Daytona sandbox
+leonai --sandbox agentbay   # Start with AgentBay sandbox
+```
+
+When resuming a thread (`-c` or `--thread`), the sandbox provider is auto-detected from the database — no need to pass `--sandbox` again.
+
+Resolution order: CLI flag → auto-detect from thread → `LEON_SANDBOX` env var → `local` (no sandbox).
+
+### Session Management
 
 ```bash
 leonai sandbox              # Open sandbox manager TUI
 leonai sandbox ls           # List active sessions
 leonai sandbox new docker   # Create a new Docker session
-leonai sandbox metrics <id> # View resource usage
-leonai sandbox delete <id>            # Delete a session (alias for rm)
-leonai sandbox destroy-all-sessions   # Destroy all sessions
+leonai sandbox pause <id>   # Pause session (state preserved)
+leonai sandbox resume <id>  # Resume paused session
+leonai sandbox rm <id>      # Delete session
+leonai sandbox metrics <id> # View CPU/RAM/disk usage
+leonai sandbox delete <id>  # Alias for rm
+leonai sandbox destroy-all-sessions   # Destroy all (requires confirmation)
 ```
+
+Session IDs can be abbreviated — any unique prefix works.
+
+### Headless / Scripting
+
+```bash
+leonai run --sandbox docker -d "Run echo hello"   # Single command
+leonai run --sandbox e2b -i                        # Interactive without TUI
+```
+
+### TUI Manager Keybindings
+
+Launch with `leonai sandbox` (no subcommand):
+
+| Key | Action |
+|-----|--------|
+| `r` | Refresh session list |
+| `n` | Create new session |
+| `d` | Delete selected session |
+| `p` | Pause selected session |
+| `u` | Resume selected session |
+| `m` | Show metrics |
+| `q` | Quit |
 
 ## LLM Provider Examples
 

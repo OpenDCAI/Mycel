@@ -58,16 +58,57 @@ echo "总结一下" | leonai run --stdin        # 从 stdin 读取
 leonai run -i                               # 无 TUI 交互模式
 ```
 
-## 沙箱管理
+## 通过 CLI 使用沙箱
+
+### 启动时指定沙箱
+
+```bash
+leonai --sandbox docker     # Docker 容器
+leonai --sandbox e2b        # E2B 云沙箱
+leonai --sandbox daytona    # Daytona 沙箱
+leonai --sandbox agentbay   # AgentBay 沙箱
+```
+
+恢复对话（`-c` 或 `--thread`）时，沙箱 Provider 从数据库自动检测，无需再次传 `--sandbox`。
+
+解析顺序：CLI 参数 → 从对话自动检测 → `LEON_SANDBOX` 环境变量 → `local`（无沙箱）。
+
+### 会话管理
 
 ```bash
 leonai sandbox              # 打开沙箱管理 TUI
 leonai sandbox ls           # 列出活跃会话
 leonai sandbox new docker   # 创建新 Docker 会话
-leonai sandbox metrics <id> # 查看资源使用
-leonai sandbox delete <id>            # 删除会话（rm 的别名）
-leonai sandbox destroy-all-sessions   # 销毁所有会话
+leonai sandbox pause <id>   # 暂停会话（状态保留）
+leonai sandbox resume <id>  # 恢复暂停的会话
+leonai sandbox rm <id>      # 删除会话
+leonai sandbox metrics <id> # 查看 CPU/RAM/磁盘
+leonai sandbox delete <id>  # rm 的别名
+leonai sandbox destroy-all-sessions   # 销毁所有（需确认）
 ```
+
+会话 ID 可以缩写——任何唯一前缀都有效。
+
+### Headless / 脚本化
+
+```bash
+leonai run --sandbox docker -d "Run echo hello"   # 单条命令
+leonai run --sandbox e2b -i                        # 无 TUI 交互模式
+```
+
+### TUI 管理器快捷键
+
+用 `leonai sandbox`（不带子命令）启动：
+
+| 按键 | 操作 |
+|------|------|
+| `r` | 刷新会话列表 |
+| `n` | 创建新会话 |
+| `d` | 删除选中的会话 |
+| `p` | 暂停选中的会话 |
+| `u` | 恢复选中的会话 |
+| `m` | 显示指标 |
+| `q` | 退出 |
 
 ## LLM 提供商示例
 
