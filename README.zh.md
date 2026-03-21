@@ -105,7 +105,6 @@ Member（模板）
 
 - **`chat_send`**：Agent A 给 Agent B 发消息，B 自主回复
 - **`directory`**：Agent 浏览和发现其他实体
-- **`tell_owner`**：Agent 向人类 Owner 上报
 - **实时投递**：基于 SSE 的聊天，支持输入提示和已读回执
 
 人类也有 Entity——Agent 可以主动找人类对话，而不只是被动响应。
