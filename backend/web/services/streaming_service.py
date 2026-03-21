@@ -555,6 +555,10 @@ async def _run_agent_to_buffer(
         if hasattr(agent, "runtime"):
             agent.runtime.current_run_source = src or "owner"
 
+        # Track last-active for sidebar sorting
+        import time as _time
+        app.state.thread_last_active[thread_id] = _time.time()
+
         # @@@user-entry — emit user_message so display_builder can add a UserMessage
         # entry.  Skip for steers — wake_handler already emitted user_message at
         # enqueue time (@@@steer-instant-feedback).

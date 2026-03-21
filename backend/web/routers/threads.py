@@ -125,6 +125,11 @@ async def list_threads(
         agent = pool.get(f"{tid}:{sandbox_type}")
         if agent and hasattr(agent, "runtime"):
             running = agent.runtime.current_state == AgentState.ACTIVE
+        # last_active from in-memory tracking (run start/done)
+        last_active = app.state.thread_last_active.get(tid)
+        from datetime import datetime, timezone
+        updated_at = datetime.fromtimestamp(last_active, tz=timezone.utc).isoformat() if last_active else None
+
         threads.append({
             "thread_id": tid,
             "sandbox": t.get("sandbox_type", "local"),
@@ -133,6 +138,7 @@ async def list_threads(
             "entity_name": t.get("entity_name"),
             "avatar_url": avatar_url(t.get("member_id"), bool(t.get("member_avatar"))),
             "running": running,
+            "updated_at": updated_at,
         })
     return {"threads": threads}
 
