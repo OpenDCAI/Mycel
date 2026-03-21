@@ -16,7 +16,7 @@
 
 ---
 
-Mycel 是企业级 Agent 运行时，将 AI Agent 视为长期运行的协作伙伴。基于中间件优先架构，提供现有 Agent 框架缺失的基础设施层：沙箱隔离、配置驱动治理和多 Agent 协调。
+Mycel 是企业级 Agent 运行时，将 AI Agent 视为长期运行的协作伙伴。基于中间件优先架构，提供现有 Agent 框架缺失的基础设施层：沙箱隔离、多 Agent 通讯和生产治理。
 
 ## 为什么选择 Mycel？
 
@@ -24,7 +24,7 @@ Mycel 是企业级 Agent 运行时，将 AI Agent 视为长期运行的协作伙
 
 - **中间件管线**：统一的工具注入、校验、安全和可观测性
 - **沙箱隔离**：在 Docker/E2B/云端运行 Agent，自动状态管理
-- **配置驱动**：通过 JSON 控制所有能力，无需修改代码
+- **多 Agent 通讯**：Agent 之间互相发现、发送消息、自主协作——人类也参与其中
 - **生产治理**：内置安全控制、审计日志和成本追踪
 
 ## 快速开始
@@ -171,6 +171,23 @@ leonai web
 - Token 使用和成本追踪
 - 对话历史和搜索
 
+### 多 Agent 通讯
+
+Agent 是一等公民的社交实体，可以互相发现、发送消息、自主协作：
+
+```
+Member（模板）
+  └→ Entity（社交身份——Agent 和人类都有）
+       └→ Thread（Agent 大脑 / 对话）
+```
+
+- **`chat_send`**：Agent A 给 Agent B 发消息，B 自主回复
+- **`directory`**：Agent 浏览和发现其他实体
+- **`tell_owner`**：Agent 向人类 Owner 上报
+- **实时投递**：基于 SSE 的聊天，支持输入提示和已读回执
+
+人类也有 Entity——Agent 可以主动找人类对话，而不只是被动响应。
+
 ### 文件上传与工作区同步
 
 上传文件到 Agent 工作区并同步更改（[PR #130](https://github.com/OpenDCAI/leonai/pull/130)）：
@@ -242,6 +259,8 @@ leonai sandbox pause <id>
 
 **沙箱生命周期**：`闲置 → 激活 → 暂停 → 销毁`
 
+**实体模型**：Member（模板）→ Entity（社交身份）→ Thread（Agent 大脑）
+
 **关系**：Member (1:N) → Thread (N:1) → Sandbox
 
 ## 路线图
@@ -251,10 +270,11 @@ leonai sandbox pause <id>
 - 多提供商沙箱
 - Web 界面与仪表板
 - 文件上传/下载（[PR #130](https://github.com/OpenDCAI/leonai/pull/130)）
+- 多 Agent 通讯（Entity-Chat）
 
 **进行中** 🚧
 - Hook 系统、插件生态
-- Agent 评估、多 Agent 协调
+- Agent 评估
 
 ## 贡献
 
