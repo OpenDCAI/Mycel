@@ -19,6 +19,32 @@ MAX_UPLOAD_BYTES = 5 * 1024 * 1024
 AVATAR_SIZE = 256
 ALLOWED_CONTENT_TYPES = {"image/png", "image/jpeg", "image/webp", "image/gif"}
 
+
+def process_and_save_avatar(source: Path | bytes, member_id: str) -> str:
+    """Process image through PIL pipeline and save as 256x256 PNG.
+
+    Args:
+        source: Path to image file or raw bytes
+        member_id: used for filename
+
+    Returns:
+        Relative avatar path (e.g. "avatars/{member_id}.png")
+    """
+    from PIL import Image, ImageOps
+    import io
+
+    if isinstance(source, (bytes, bytearray)):
+        img = Image.open(io.BytesIO(source))
+    else:
+        img = Image.open(source)
+    img = ImageOps.exif_transpose(img)
+    if img.mode not in ("RGB", "RGBA"):
+        img = img.convert("RGB")
+    img = ImageOps.fit(img, (AVATAR_SIZE, AVATAR_SIZE), method=Image.LANCZOS)
+    AVATARS_DIR.mkdir(parents=True, exist_ok=True)
+    img.save(AVATARS_DIR / f"{member_id}.png", format="PNG", optimize=True)
+    return f"avatars/{member_id}.png"
+
 router = APIRouter(prefix="/api/entities", tags=["entities"])
 
 # ---------------------------------------------------------------------------
@@ -82,21 +108,12 @@ async def upload_avatar(
         raise HTTPException(400, "Empty file")
     if len(data) > MAX_UPLOAD_BYTES:
         raise HTTPException(400, f"File too large (max {MAX_UPLOAD_BYTES // 1024 // 1024}MB)")
-    # @@@pillow-re-encode — strip metadata, normalize format, resize
     try:
-        from PIL import Image, ImageOps
-        img = Image.open(io.BytesIO(data))
-        img = ImageOps.exif_transpose(img)
-        if img.mode not in ("RGB", "RGBA"):
-            img = img.convert("RGB")
-        img = ImageOps.fit(img, (AVATAR_SIZE, AVATAR_SIZE), method=Image.LANCZOS)
-        dest = _avatar_path(member_id)
-        AVATARS_DIR.mkdir(parents=True, exist_ok=True)
-        img.save(dest, format="PNG", optimize=True)
+        avatar_path = process_and_save_avatar(data, member_id)
     except Exception as e:
         logger.error(f"Avatar processing failed for {member_id}: {e}")
         raise HTTPException(400, f"Invalid image: {e}")
-    repo.update(member_id, avatar=f"avatars/{member_id}.png", updated_at=time.time())
+    repo.update(member_id, avatar=avatar_path, updated_at=time.time())
     return {"status": "ok", "avatar": f"avatars/{member_id}.png"}
 
 
