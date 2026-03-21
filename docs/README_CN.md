@@ -276,6 +276,15 @@ leonai sandbox pause <id>
 - Hook 系统、插件生态
 - Agent 评估
 
+## 文档
+
+- [快速入门](getting-started.md) — 安装、LLM 配置、首次运行
+- [配置指南](config/configuration.md) — 配置文件、虚拟模型、工具设置
+- [多 Agent 通讯](multi-agent-chat.md) — Entity-Chat 系统、Agent 间通讯
+- [沙箱](sandbox/SANDBOX.md) — 提供商、生命周期、会话管理
+- [部署](deployment/DEPLOYMENT.md) — 生产部署指南
+- [核心概念](product-primitives.md) — 核心抽象（Thread、Member、Task、Resource）
+
 ## 贡献
 
 ```bash
