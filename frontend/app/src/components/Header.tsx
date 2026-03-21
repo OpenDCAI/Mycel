@@ -1,4 +1,4 @@
-import { ChevronLeft, Eye, EyeOff, PanelLeft, Pause, Play } from "lucide-react";
+import { ChevronLeft, PanelLeft, Pause, Play } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import type { SandboxInfo } from "../api";
 import { useIsMobile } from "../hooks/use-mobile";
@@ -21,9 +21,7 @@ interface HeaderProps {
   threadPreview: string | null;
   sandboxInfo: SandboxInfo | null;
   currentModel?: string;
-  showHidden?: boolean;
   onToggleSidebar: () => void;
-  onToggleHidden?: () => void;
   onPauseSandbox: () => void;
   onResumeSandbox: () => void;
   onModelChange?: (model: string) => void;
@@ -89,19 +87,6 @@ export default function Header({
       </div>
 
       <div className="flex items-center gap-1.5">
-        {onToggleHidden && (
-          <button
-            onClick={onToggleHidden}
-            className={`w-8 h-8 rounded-lg flex items-center justify-center ${
-              showHidden
-                ? "text-[#171717] bg-[#f0f0f0]"
-                : "text-[#737373] hover:bg-[#f5f5f5] hover:text-[#171717]"
-            }`}
-            title={showHidden ? "隐藏外部消息" : "显示外部消息"}
-          >
-            {showHidden ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
-          </button>
-        )}
         <ModelSelector
           currentModel={currentModel}
           threadId={activeThreadId}

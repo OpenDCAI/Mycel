@@ -45,7 +45,6 @@ function ChatPageInner({ threadId }: { threadId: string }) {
   const agentAvatarUrl = currentThread?.avatar_url;
   const userAvatarUrl = userHasAvatar && userMemberId ? `/api/members/${userMemberId}/avatar` : undefined;
   const [currentModel, setCurrentModel] = useState<string>("");
-  const [showHidden, setShowHidden] = useState(false);
 
   const state = location.state as { selectedModel?: string; runStarted?: boolean; message?: string } | null;
 
@@ -82,7 +81,7 @@ function ChatPageInner({ threadId }: { threadId: string }) {
     }
   }, [state?.selectedModel, threadId]);
 
-  const { entries, activeSandbox, loading, displaySeq, setEntries, setActiveSandbox, refreshThread } = useThreadData(threadId, runStarted, initialEntries, showHidden);
+  const { entries, activeSandbox, loading, displaySeq, setEntries, setActiveSandbox, refreshThread } = useThreadData(threadId, runStarted, initialEntries);
 
   const { runtimeStatus, isRunning, handleSendMessage, handleStopStreaming } =
     useDisplayDeltas({
@@ -162,9 +161,7 @@ function ChatPageInner({ threadId }: { threadId: string }) {
         threadPreview={tm.threads.find((t) => t.thread_id === threadId)?.preview ?? null}
         sandboxInfo={activeSandbox}
         currentModel={currentModel}
-        showHidden={showHidden}
         onToggleSidebar={() => setSidebarCollapsed(v => !v)}
-        onToggleHidden={() => setShowHidden(v => !v)}
         onPauseSandbox={() => void handlePauseSandbox()}
         onResumeSandbox={() => void handleResumeSandbox()}
         onModelChange={setCurrentModel}

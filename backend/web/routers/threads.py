@@ -112,14 +112,27 @@ async def list_threads(
     app: Annotated[Any, Depends(get_app)] = None,
 ) -> dict[str, Any]:
     """List threads owned by the current user."""
+    from core.runtime.middleware.monitor import AgentState
+
     raw = app.state.thread_repo.list_by_owner(member_id)
-    threads = [
-        {"thread_id": t["id"], "sandbox": t.get("sandbox_type", "local"),
-         "member_name": t.get("member_name"), "member_id": t.get("member_id"),
-         "entity_name": t.get("entity_name"),
-         "avatar_url": avatar_url(t.get("member_id"), bool(t.get("member_avatar")))}
-        for t in raw
-    ]
+    pool = app.state.agent_pool
+    threads = []
+    for t in raw:
+        tid = t["id"]
+        # Check if agent is currently running
+        running = False
+        agent = pool.get(tid)
+        if agent and hasattr(agent, "runtime"):
+            running = agent.runtime.current_state == AgentState.ACTIVE
+        threads.append({
+            "thread_id": tid,
+            "sandbox": t.get("sandbox_type", "local"),
+            "member_name": t.get("member_name"),
+            "member_id": t.get("member_id"),
+            "entity_name": t.get("entity_name"),
+            "avatar_url": avatar_url(t.get("member_id"), bool(t.get("member_avatar"))),
+            "running": running,
+        })
     return {"threads": threads}
 
 
