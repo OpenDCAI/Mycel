@@ -142,13 +142,16 @@ class SQLiteChatEntityRepo:
                 self._conn.commit()
         _retry_on_locked(_do)
 
-    # @@@find-chat-between - core uniqueness query: two entities share at most one chat
+    # @@@find-chat-between — find the 1:1 chat (exactly 2 members) between two entities.
+    # Must NOT return group chats that happen to contain both entities.
     def find_chat_between(self, entity_a: str, entity_b: str) -> str | None:
         with self._lock:
             row = self._conn.execute(
                 "SELECT ce1.chat_id FROM chat_entities ce1"
                 " JOIN chat_entities ce2 ON ce1.chat_id = ce2.chat_id"
-                " WHERE ce1.entity_id = ? AND ce2.entity_id = ?",
+                " WHERE ce1.entity_id = ? AND ce2.entity_id = ?"
+                " AND (SELECT COUNT(*) FROM chat_entities ce3"
+                "      WHERE ce3.chat_id = ce1.chat_id) = 2",
                 (entity_a, entity_b),
             ).fetchone()
             return row[0] if row else None
