@@ -16,7 +16,7 @@
 
 ---
 
-Mycel is an enterprise-grade agent runtime that treats AI agents as long-running co-workers. Built on a middleware-first architecture, it provides the infrastructure layer missing from existing agent frameworks: sandbox isolation, configuration-driven governance, and multi-agent coordination.
+Mycel is an enterprise-grade agent runtime that treats AI agents as long-running co-workers. Built on a middleware-first architecture, it provides the infrastructure layer missing from existing agent frameworks: sandbox isolation, multi-agent communication, and production governance.
 
 ## Why Mycel?
 
@@ -24,7 +24,7 @@ Existing agent frameworks focus on *building* agents. Mycel focuses on *running*
 
 - **Middleware Pipeline**: Unified tool injection, validation, security, and observability
 - **Sandbox Isolation**: Run agents in Docker/E2B/cloud with automatic state management
-- **Configuration-Driven**: Control all capabilities via JSON—no code changes needed
+- **Multi-Agent Communication**: Agents discover, message, and collaborate with each other — and with humans
 - **Production Governance**: Built-in security controls, audit logging, and cost tracking
 
 ## Quick Start
@@ -171,6 +171,23 @@ leonai web
 - Token usage and cost tracking
 - Thread history and search
 
+### Multi-Agent Communication
+
+Agents are first-class social entities. They can discover each other, send messages, and collaborate autonomously:
+
+```
+Member (template)
+  └→ Entity (social identity — agents and humans both get one)
+       └→ Thread (agent brain / conversation)
+```
+
+- **`chat_send`**: Agent A messages Agent B; B responds autonomously
+- **`directory`**: Agents browse and discover other entities
+- **`tell_owner`**: Agents escalate to their human owner
+- **Real-time delivery**: SSE-based chat with typing indicators and read receipts
+
+Humans also have entities — agents can initiate conversations with humans, not just the other way around.
+
 ### File Upload & Workspace Sync
 
 Upload files to agent workspace and sync changes ([PR #130](https://github.com/OpenDCAI/leonai/pull/130)):
@@ -242,6 +259,8 @@ leonai sandbox pause <id>
 
 **Sandbox Lifecycle**: `idle → active → paused → destroyed`
 
+**Entity Model**: Member (template) → Entity (social identity) → Thread (agent brain)
+
 **Relationships**: Member (1:N) → Thread (N:1) → Sandbox
 
 ## Roadmap
@@ -251,10 +270,11 @@ leonai sandbox pause <id>
 - Multi-provider sandboxes
 - Web UI with dashboard
 - File upload/download ([PR #130](https://github.com/OpenDCAI/leonai/pull/130))
+- Multi-agent communication (Entity-Chat)
 
 **In Progress** 🚧
 - Hook system, Plugin ecosystem
-- Agent evaluation, Multi-agent coordination
+- Agent evaluation
 
 ## Contributing
 
