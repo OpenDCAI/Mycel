@@ -263,8 +263,8 @@ def _leon_builtin() -> dict[str, Any]:
 
     return {
         "id": "__leon__",
-        "name": "Leon",
-        "description": "通用数字成员，随时准备为你工作",
+        "name": "Mycel",
+        "description": "Universal digital worker, ready to work for you",
         "status": "active",
         "version": "1.0.0",
         "config": {"prompt": "", "rules": [], "tools": tools, "mcps": [], "skills": [], "subAgents": builtin_agents},
