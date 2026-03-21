@@ -225,7 +225,7 @@ function AuthenticatedLayout() {
       <div className="relative shrink-0 flex z-20" style={{ width: sidebarPx }}>
         <aside className={`w-full bg-sidebar flex flex-col py-4 overflow-hidden ${dragging ? "" : "transition-all duration-200"}`}>
           <div className={`flex items-center ${showLabels ? "px-4 gap-3" : "justify-center"} mb-6`}>
-            <img src="/logo.png" alt="Mycel" className="w-8 h-8 rounded-lg shrink-0" />
+            <img src="/logo.png" alt="Mycel" className="w-8 h-8 rounded-lg shrink-0 object-contain" />
             {showLabels && <span className="text-sm font-semibold text-foreground truncate">Mycel</span>}
           </div>
 
@@ -394,7 +394,7 @@ function LoginForm() {
     <div className="h-screen flex items-center justify-center bg-background">
       <div className="w-full max-w-sm px-6">
         <div className="text-center mb-8">
-          <img src="/logo.png" alt="Mycel" className="w-12 h-12 rounded-xl mx-auto mb-4" />
+          <img src="/logo.png" alt="Mycel" className="w-24 mx-auto mb-4" />
           <h1 className="text-xl font-semibold text-foreground">Mycel</h1>
           <p className="text-sm text-muted-foreground mt-1">
             {mode === "login" ? "Sign in to your account" : "Create a new account"}

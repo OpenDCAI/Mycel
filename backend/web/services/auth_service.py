@@ -81,7 +81,6 @@ class AuthService:
         # 4. Create two initial agent members: Toad and Morel
         from backend.web.services.member_service import MEMBERS_DIR, _write_agent_md, _write_json
         from pathlib import Path
-        import shutil
 
         # @@@initial-agents - Toad (lightweight assistant) + Morel (senior analyst)
         initial_agents = [
@@ -89,8 +88,6 @@ class AuthService:
             {"name": f"Morel of {username}", "description": "Thoughtful senior analyst", "avatar": "morel.jpeg"},
         ]
 
-        avatars_dir = Path.home() / ".leon" / "avatars"
-        avatars_dir.mkdir(parents=True, exist_ok=True)
         assets_dir = Path(__file__).resolve().parents[3] / "assets"
 
         first_agent_info = None
@@ -112,10 +109,26 @@ class AuthService:
                 created_at=now,
             ))
 
-            # Copy default avatar from assets/
+            # @@@avatar-same-pipeline — process default avatar through same PIL pipeline as upload
+            avatar_value = None
             src_avatar = assets_dir / agent_def["avatar"]
             if src_avatar.exists():
-                shutil.copy2(src_avatar, avatars_dir / f"{agent_member_id}.png")
+                try:
+                    from PIL import Image, ImageOps
+                    avatars_dir = Path.home() / ".leon" / "avatars"
+                    avatars_dir.mkdir(parents=True, exist_ok=True)
+                    img = Image.open(src_avatar)
+                    img = ImageOps.exif_transpose(img)
+                    if img.mode not in ("RGB", "RGBA"):
+                        img = img.convert("RGB")
+                    img = ImageOps.fit(img, (256, 256), method=Image.LANCZOS)
+                    img.save(avatars_dir / f"{agent_member_id}.png", format="PNG", optimize=True)
+                    avatar_value = f"avatars/{agent_member_id}.png"
+                except Exception as e:
+                    logger.warning("Failed to process default avatar for %s: %s", agent_def["name"], e)
+            # Update member with avatar path (same as upload endpoint does)
+            if avatar_value:
+                self._members.update(agent_member_id, avatar=avatar_value, updated_at=now)
 
             # 5. Agent entity + thread
             agent_seq = self._members.increment_entity_seq(agent_member_id)
