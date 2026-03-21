@@ -357,16 +357,33 @@ def get_member(member_id: str) -> dict[str, Any] | None:
     return _member_to_dict(member_dir)
 
 
-def create_member(name: str, description: str = "") -> dict[str, Any]:
-    now = int(time.time() * 1000)
-    member_id = str(now)
+def create_member(name: str, description: str = "", owner_id: str | None = None) -> dict[str, Any]:
+    from storage.providers.sqlite.member_repo import SQLiteMemberRepo, generate_member_id
+    from storage.contracts import MemberRow, MemberType
+
+    now = time.time()
+    now_ms = int(now * 1000)
+    member_id = generate_member_id()
     member_dir = MEMBERS_DIR / member_id
     member_dir.mkdir(parents=True, exist_ok=True)
     _write_agent_md(member_dir / "agent.md", name=name, description=description)
     _write_json(member_dir / "meta.json", {
         "status": "draft", "version": "0.1.0",
-        "created_at": now, "updated_at": now,
+        "created_at": now_ms, "updated_at": now_ms,
     })
+
+    # Persist to SQLite members table so list_members finds it
+    if owner_id:
+        repo = SQLiteMemberRepo()
+        try:
+            repo.create(MemberRow(
+                id=member_id, name=name, type=MemberType.MYCEL_AGENT,
+                description=description, config_dir=str(member_dir),
+                owner_id=owner_id, created_at=now,
+            ))
+        finally:
+            repo.close()
+
     return get_member(member_id)  # type: ignore
 
 
@@ -595,4 +612,13 @@ def delete_member(member_id: str) -> bool:
     if not member_dir.is_dir():
         return False
     shutil.rmtree(member_dir)
+
+    # Also remove from SQLite
+    from storage.providers.sqlite.member_repo import SQLiteMemberRepo
+    repo = SQLiteMemberRepo()
+    try:
+        repo.delete(member_id)
+    finally:
+        repo.close()
+
     return True

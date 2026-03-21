@@ -47,8 +47,11 @@ async def get_member(member_id: str) -> dict[str, Any]:
 
 
 @router.post("/members")
-async def create_member(req: CreateMemberRequest) -> dict[str, Any]:
-    return await asyncio.to_thread(member_service.create_member, req.name, req.description)
+async def create_member(
+    req: CreateMemberRequest,
+    member_id: Annotated[str, Depends(get_current_member_id)],
+) -> dict[str, Any]:
+    return await asyncio.to_thread(member_service.create_member, req.name, req.description, owner_id=member_id)
 
 @router.put("/members/{member_id}")
 async def update_member(member_id: str, req: UpdateMemberRequest) -> dict[str, Any]:
