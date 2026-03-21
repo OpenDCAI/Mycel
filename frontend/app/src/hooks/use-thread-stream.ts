@@ -105,6 +105,7 @@ class ThreadConnectionManager {
             }
             if (event.type === "run_start") {
               this.setRunning(true);
+              void this.refreshThreads?.();  // update sidebar running indicator
             }
             if (event.type === "run_done") {
               this.setRunning(false);

@@ -119,9 +119,10 @@ async def list_threads(
     threads = []
     for t in raw:
         tid = t["id"]
-        # Check if agent is currently running
+        sandbox_type = t.get("sandbox_type", "local")
+        # Check if agent is currently running — pool key is "{thread_id}:{sandbox_type}"
         running = False
-        agent = pool.get(tid)
+        agent = pool.get(f"{tid}:{sandbox_type}")
         if agent and hasattr(agent, "runtime"):
             running = agent.runtime.current_state == AgentState.ACTIVE
         threads.append({
