@@ -111,8 +111,17 @@ class ContextCompactor:
         return 0
 
     def _adjust_boundary(self, messages: list[Any], split_idx: int) -> int:
-        """Adjust split boundary so we don't separate AIMessage(tool_calls) from ToolMessages."""
-        while split_idx < len(messages) and messages[split_idx].__class__.__name__ == "ToolMessage":
+        """Adjust split boundary so to_keep starts at a valid conversation point.
+
+        Rules:
+        1. Never start with ToolMessage (orphaned from its AIMessage)
+        2. Never start with AIMessage (LLM expects Human→AI alternation after summary)
+        Move boundary backward until to_keep starts with HumanMessage.
+        """
+        while split_idx < len(messages):
+            cls = messages[split_idx].__class__.__name__
+            if cls == "HumanMessage":
+                break
             split_idx -= 1
             if split_idx <= 0:
                 break

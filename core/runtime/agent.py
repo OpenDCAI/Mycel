@@ -278,7 +278,7 @@ class LeonAgent:
             self._memory_middleware.set_runtime(self.runtime)
         if hasattr(self, "_steering_middleware"):
             self._steering_middleware._agent_runtime = self.runtime
-            self._memory_middleware.set_model(self.model)
+            self._memory_middleware.set_model(self.model, self._current_model_config)
 
         if self.verbose:
             print("[LeonAgent] Initialized successfully")
@@ -601,9 +601,10 @@ class LeonAgent:
         """Build model parameters for model initialization and sub-agents."""
         kwargs = {}
 
-        # Include virtual model overrides
+        # Include virtual model overrides (filter out Leon-internal keys)
         if hasattr(self, "_model_overrides"):
-            kwargs.update(self._model_overrides)
+            kwargs.update({k: v for k, v in self._model_overrides.items()
+                           if k not in ("context_limit", "based_on")})
 
         # Use provider from model overrides (mapping) first, then infer
         provider = self._resolve_provider_name(self.model_name, kwargs if kwargs else None)
@@ -675,13 +676,14 @@ class LeonAgent:
         if hasattr(self, "_monitor_middleware"):
             self._monitor_middleware.update_model(resolved_model, overrides=model_overrides)
 
-        # Update memory middleware context_limit
+        # Update memory middleware context_limit + model config
         if hasattr(self, "_memory_middleware"):
             from core.runtime.middleware.monitor.cost import get_model_context_limit
             lookup_name = model_overrides.get("based_on") or resolved_model
             self._memory_middleware.set_context_limit(
                 model_overrides.get("context_limit") or get_model_context_limit(lookup_name)
             )
+            self._memory_middleware.set_model(self.model, self._current_model_config)
 
         if self.verbose:
             print(f"[LeonAgent] Config updated: model={resolved_model}")
@@ -851,7 +853,12 @@ class LeonAgent:
 
     def _add_memory_middleware(self, middleware: list) -> None:
         """Add memory middleware to stack."""
-        context_limit = self.config.runtime.context_limit
+        # @@@context-limit-fallback — prefer mapping override (e.g. leon:tiny → 8000),
+        # then Monitor's resolved value (model API → 128000 fallback).
+        context_limit = (
+            self._model_overrides.get("context_limit")
+            or self._monitor_middleware._context_monitor.context_limit
+        )
         pruning_config = self.config.memory.pruning
         compaction_config = self.config.memory.compaction
 
@@ -868,6 +875,8 @@ class LeonAgent:
             compaction_threshold=0.7,
             verbose=self.verbose,
         )
+        # Cap keep_recent_tokens for small context windows
+        self._memory_middleware.set_context_limit(context_limit)
         middleware.append(self._memory_middleware)
 
     def _init_services(self) -> None:

@@ -678,6 +678,10 @@ async def _run_agent_to_buffer(
                     msg_chunk, metadata = data
                     msg_class = msg_chunk.__class__.__name__
                     if msg_class == "AIMessageChunk":
+                        # @@@compact-leak-guard — skip chunks from compact's summary LLM call.
+                        # Compact sets isCompacting flag; these chunks are internal, not agent output.
+                        if hasattr(agent, "runtime") and agent.runtime.state.flags.isCompacting:
+                            continue
                         content = extract_text_content(getattr(msg_chunk, "content", ""))
                         chunk_msg_id = getattr(msg_chunk, "id", None)
                         if content:

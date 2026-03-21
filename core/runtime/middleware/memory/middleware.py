@@ -78,6 +78,7 @@ class MemoryMiddleware(AgentMiddleware):
 
         # Injected references (set by agent.py after construction)
         self._model: Any = None
+        self._model_config: dict[str, Any] | None = None
         self._runtime: Any = None
 
         # Compaction cache
@@ -90,13 +91,34 @@ class MemoryMiddleware(AgentMiddleware):
             if self.summary_store:
                 print(f"[MemoryMiddleware] SummaryStore enabled at {db_path}")
 
-    def set_model(self, model: Any) -> None:
-        """Inject LLM model reference (called by agent.py)."""
+    def set_model(self, model: Any, model_config: dict[str, Any] | None = None) -> None:
+        """Inject LLM model reference (called by agent.py).
+
+        model_config: configurable fields (model, api_key, base_url, etc.)
+        so compact invokes the correct model, not the ConfigurableModel default.
+        """
         self._model = model
+        self._model_config = model_config
+
+    @property
+    def _resolved_model(self) -> Any:
+        """Return model with config bound so it uses the correct model/provider."""
+        if self._model_config and hasattr(self._model, "with_config"):
+            return self._model.with_config(configurable=self._model_config)
+        return self._model
 
     def set_context_limit(self, context_limit: int) -> None:
-        """Update context limit (called on model switch)."""
+        """Update context limit (called on model switch).
+
+        Also caps keep_recent_tokens so compactor can actually split
+        messages when context_limit is small.
+        """
         self._context_limit = context_limit
+        # @@@keep-recent-cap — keep_recent must be < threshold, otherwise
+        # split_messages keeps everything and compact never actually runs.
+        max_keep = int(context_limit * 0.4)
+        if self.compactor.keep_recent_tokens > max_keep > 0:
+            self.compactor.keep_recent_tokens = max_keep
 
     def set_runtime(self, runtime: Any) -> None:
         """Inject AgentRuntime reference (called by agent.py)."""
@@ -185,7 +207,7 @@ class MemoryMiddleware(AgentMiddleware):
 
             if is_split_turn:
                 summary_text, prefix_summary = await self.compactor.compact_with_split_turn(
-                    to_summarize, turn_prefix, self._model
+                    to_summarize, turn_prefix, self._resolved_model
                 )
                 to_keep = to_keep[len(turn_prefix) :]
                 if self.verbose:
@@ -194,7 +216,7 @@ class MemoryMiddleware(AgentMiddleware):
                         f"{len(turn_prefix)} prefix msgs → summary + {len(to_keep)} suffix msgs"
                     )
             else:
-                summary_text = await self.compactor.compact(to_summarize, self._model)
+                summary_text = await self.compactor.compact(to_summarize, self._resolved_model)
                 prefix_summary = None
                 if self.verbose:
                     print(f"[Memory] Compacted: {len(to_summarize)} msgs → summary + {len(to_keep)} recent")
@@ -236,7 +258,7 @@ class MemoryMiddleware(AgentMiddleware):
         if self._runtime:
             self._runtime.set_flag("isCompacting", True)
         try:
-            summary_text = await self.compactor.compact(to_summarize, self._model)
+            summary_text = await self.compactor.compact(to_summarize, self._resolved_model)
             self._cached_summary = summary_text
             self._compact_up_to_index = len(messages) - len(to_keep)
             return {
@@ -273,14 +295,19 @@ class MemoryMiddleware(AgentMiddleware):
         return len(content) // 2 if isinstance(content, str) else 0
 
     def _extract_thread_id(self, request: ModelRequest) -> str | None:
-        """Extract thread_id from request config."""
+        """Extract thread_id from thread context (ContextVar set by streaming/agent)."""
+        from sandbox.thread_context import get_current_thread_id
+        tid = get_current_thread_id()
+        if tid:
+            return tid
+        # Fallback: try request.config (used in tests)
         config = getattr(request, "config", None)
         if not config:
             return None
         configurable = getattr(config, "configurable", None)
-        if not configurable:
-            return None
-        return configurable.get("thread_id")
+        if isinstance(configurable, dict):
+            return configurable.get("thread_id")
+        return getattr(configurable, "thread_id", None) if configurable else None
 
     async def _restore_summary_from_store(self, thread_id: str) -> None:
         """Restore summary from SummaryStore."""
@@ -296,14 +323,15 @@ class MemoryMiddleware(AgentMiddleware):
             if not summary_data:
                 if self.verbose:
                     print(f"[Memory] No summary found in store for thread {thread_id}")
-                if self.checkpointer:
-                    await self._rebuild_summary_from_checkpointer(thread_id)
+                # @@@no-rebuild-on-missing — don't rebuild from checkpointer here.
+                # _rebuild_summary_from_checkpointer calls checkpointer.get() which
+                # blocks the event loop when checkpointer is AsyncSqliteSaver (the
+                # sync .get() uses concurrent.futures internally, deadlocking uvicorn).
+                # Normal flow: first compact will create the summary.
                 return
 
             if not summary_data.summary_text or summary_data.compact_up_to_index < 0:
-                logger.warning(f"[Memory] Invalid summary data for thread {thread_id}, rebuilding...")
-                if self.checkpointer:
-                    await self._rebuild_summary_from_checkpointer(thread_id)
+                logger.warning(f"[Memory] Invalid summary data for thread {thread_id}, skipping")
                 return
 
             self._cached_summary = summary_data.summary_text
@@ -319,8 +347,6 @@ class MemoryMiddleware(AgentMiddleware):
 
         except Exception as e:
             logger.error(f"[Memory] Failed to restore summary: {e}")
-            if self.checkpointer:
-                await self._rebuild_summary_from_checkpointer(thread_id)
 
     async def _rebuild_summary_from_checkpointer(self, thread_id: str) -> None:
         """Rebuild summary from checkpointer when store data is corrupted."""
@@ -357,11 +383,11 @@ class MemoryMiddleware(AgentMiddleware):
 
             if is_split_turn:
                 summary_text, prefix_summary = await self.compactor.compact_with_split_turn(
-                    to_summarize, turn_prefix, self._model
+                    to_summarize, turn_prefix, self._resolved_model
                 )
                 to_keep = to_keep[len(turn_prefix) :]
             else:
-                summary_text = await self.compactor.compact(to_summarize, self._model)
+                summary_text = await self.compactor.compact(to_summarize, self._resolved_model)
                 prefix_summary = None
 
             self._cached_summary = summary_text
