@@ -33,6 +33,10 @@ Mycel 的沙箱系统将 Agent 操作（文件 I/O、Shell 命令）运行在隔
 - **沙箱卡片** — 每个运行中/暂停的沙箱，包含 Agent 头像、持续时间和指标（CPU/RAM/Disk）
 - **详情面板** — 点击沙箱卡片查看使用它的 Agent、详细指标和文件浏览器
 
+## 示例配置
+
+参见 [`examples/sandboxes/`](../../examples/sandboxes/)，包含所有 Provider 的即用配置模板。复制到 `~/.leon/sandboxes/` 或直接在 Web UI 设置中配置。
+
 ## Provider 配置
 
 ### Docker

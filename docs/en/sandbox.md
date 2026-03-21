@@ -33,6 +33,10 @@ Go to the **Resources** page (sidebar icon). You'll see:
 - **Sandbox cards** — each running/paused sandbox with agent avatars, duration, and metrics (CPU/RAM/Disk)
 - **Detail sheet** — click a sandbox card to see agents using it, detailed metrics, and a file browser
 
+## Example Configurations
+
+See [`examples/sandboxes/`](../../examples/sandboxes/) for ready-to-use config templates for all providers. Copy to `~/.leon/sandboxes/` or configure directly in the Web UI Settings.
+
 ## Provider Configuration
 
 ### Docker

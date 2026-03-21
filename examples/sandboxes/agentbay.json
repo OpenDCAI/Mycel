@@ -1,0 +1,9 @@
+{
+  "provider": "agentbay",
+  "on_exit": "pause",
+  "agentbay": {
+    "api_key": "${AGENTBAY_API_KEY}",
+    "region_id": "ap-southeast-1",
+    "context_path": "/home/wuying"
+  }
+}

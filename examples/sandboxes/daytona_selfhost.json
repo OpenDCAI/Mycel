@@ -1,0 +1,11 @@
+{
+  "_comment": "Self-hosted Daytona — point api_url to your own instance",
+  "provider": "daytona",
+  "on_exit": "pause",
+  "daytona": {
+    "api_key": "${DAYTONA_API_KEY}",
+    "api_url": "http://localhost:3986/api",
+    "target": "us",
+    "cwd": "/home/daytona"
+  }
+}

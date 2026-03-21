@@ -1,0 +1,10 @@
+{
+  "provider": "e2b",
+  "on_exit": "pause",
+  "e2b": {
+    "api_key": "${E2B_API_KEY}",
+    "template": "base",
+    "cwd": "/home/user",
+    "timeout": 300
+  }
+}

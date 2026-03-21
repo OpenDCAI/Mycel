@@ -1,0 +1,9 @@
+{
+  "provider": "docker",
+  "on_exit": "pause",
+  "docker": {
+    "image": "python:3.12-slim",
+    "mount_path": "/workspace",
+    "cwd": "/workspace"
+  }
+}
