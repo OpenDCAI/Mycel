@@ -260,6 +260,8 @@ def _ensure_thread_handlers(agent: Any, thread_id: str, app: Any) -> None:
 
     thread_buf = get_or_create_thread_buffer(app, thread_id)
 
+    display_builder_ref = app.state.display_builder
+
     async def activity_sink(event: dict) -> None:
         from backend.web.services.event_store import append_event as _append
 
@@ -273,7 +275,18 @@ def _ensure_thread_handlers(agent: Any, thread_id: str, app: Any) -> None:
             event = {**event, "data": json.dumps(data, ensure_ascii=False)}
         # Only SSE-valid fields: extra metadata (agent_id, agent_name) stays in event_store
         _SSE_FIELDS = frozenset({"event", "data", "id", "retry", "comment"})
-        await thread_buf.put({k: v for k, v in event.items() if k in _SSE_FIELDS})
+        sse_event = {k: v for k, v in event.items() if k in _SSE_FIELDS}
+        await thread_buf.put(sse_event)
+
+        # @@@display-builder — compute display delta for activity events (notices, etc.)
+        event_type = sse_event.get("event", "")
+        if event_type and isinstance(data, dict):
+            delta = display_builder_ref.apply_event(thread_id, event_type, data)
+            if delta:
+                await thread_buf.put({
+                    "event": "display_delta",
+                    "data": json.dumps(delta, ensure_ascii=False),
+                })
 
     qm = app.state.queue_manager
     loop = getattr(app.state, "_event_loop", None)
@@ -365,6 +378,9 @@ async def _run_agent_to_buffer(
 
     run_event_repo = _resolve_run_event_repo(agent)
 
+    # @@@display-builder — compute display deltas alongside raw events
+    display_builder = app.state.display_builder
+
     async def emit(event: dict, message_id: str | None = None) -> None:
         seq = await append_event(
             thread_id,
@@ -384,6 +400,17 @@ async def _run_agent_to_buffer(
                 data["message_id"] = message_id
             event = {**event, "data": json.dumps(data, ensure_ascii=False)}
         await thread_buf.put(event)
+
+        # Compute display delta and emit it (no _seq — avoids dedup conflict
+        # with the raw event that shares the same seq)
+        event_type = event.get("event", "")
+        if event_type and isinstance(data, dict):
+            delta = display_builder.apply_event(thread_id, event_type, data)
+            if delta:
+                await thread_buf.put({
+                    "event": "display_delta",
+                    "data": json.dumps(delta, ensure_ascii=False),
+                })
 
     task = None
     stream_gen = None
@@ -515,6 +542,17 @@ async def _run_agent_to_buffer(
         # @@@run-source-tracking — set on runtime for source tracking
         if hasattr(agent, "runtime"):
             agent.runtime.current_run_source = src or "owner"
+
+        # @@@user-entry — emit user_message so display_builder can add a UserMessage
+        # entry.  Owner messages show as user bubbles; external messages don't.
+        if not src or src == "owner":
+            await emit({
+                "event": "user_message",
+                "data": json.dumps({
+                    "content": message,
+                    "showing": True,
+                }, ensure_ascii=False),
+            })
 
         await emit({
             "event": "run_start",
@@ -965,8 +1003,11 @@ async def observe_thread_events(
             except (json.JSONDecodeError, TypeError):
                 pass
 
-            if after > 0 and isinstance(parsed_data, dict):
-                if parsed_data.get("_seq", 0) <= after:
+            # @@@after-filter — skip events already seen on reconnect.
+            # Events without _seq (e.g. display_delta) are never filtered —
+            # they are ephemeral derivatives of persisted events.
+            if after > 0 and isinstance(parsed_data, dict) and "_seq" in parsed_data:
+                if parsed_data["_seq"] <= after:
                     continue
 
             seq_id = str(parsed_data["_seq"]) if isinstance(parsed_data, dict) and "_seq" in parsed_data else None
@@ -1000,8 +1041,11 @@ async def observe_run_events(
             except (json.JSONDecodeError, TypeError):
                 pass
 
-            if after > 0 and isinstance(parsed_data, dict):
-                if parsed_data.get("_seq", 0) <= after:
+            # @@@after-filter — skip events already seen on reconnect.
+            # Events without _seq (e.g. display_delta) are never filtered —
+            # they are ephemeral derivatives of persisted events.
+            if after > 0 and isinstance(parsed_data, dict) and "_seq" in parsed_data:
+                if parsed_data["_seq"] <= after:
                     continue
 
             seq_id = str(parsed_data["_seq"]) if isinstance(parsed_data, dict) and "_seq" in parsed_data else None

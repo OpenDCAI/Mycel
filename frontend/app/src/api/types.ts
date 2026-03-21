@@ -7,8 +7,10 @@ export const STREAM_EVENT_TYPES = [
   "status", "run_start", "run_done",
   // Retry notification
   "retry",
-  // Notice — system notification emitted before run_start (e.g. task completion)
+  // Notice — system notification emitted before run_start
   "notice",
+  // @@@display-builder — backend-owned display model
+  "user_message", "display_delta",
 ] as const;
 
 export type StreamEventType = (typeof STREAM_EVENT_TYPES)[number];

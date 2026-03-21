@@ -14,7 +14,7 @@ import { useBackgroundTasks } from "../hooks/use-background-tasks";
 import { BackgroundSessionsIndicator } from "../components/chat-area/BackgroundSessionsIndicator";
 import { useResizableX } from "../hooks/use-resizable-x";
 import { useSandboxManager } from "../hooks/use-sandbox-manager";
-import { useStreamHandler } from "../hooks/use-stream-handler";
+import { useDisplayDeltas } from "../hooks/use-display-deltas";
 import { useThreadData } from "../hooks/use-thread-data";
 import type { ThreadManagerState, ThreadManagerActions } from "../hooks/use-thread-manager";
 
@@ -54,17 +54,9 @@ function ChatPageInner({ threadId }: { threadId: string }) {
   // so state?.runStarted will already be falsy after a real reload — no navEntry check needed.
   const runStarted = !!state?.runStarted;
 
-  // Pre-populate user + empty assistant turn so ThinkingIndicator shows immediately (no skeleton).
-  // The empty assistant turn (streaming=true, segments=[]) renders the three-dot indicator
-  // until stream events arrive and populate it.
-  const [initialEntries] = useState(() => {
-    if (!runStarted || !state?.message) return undefined;
-    const now = Date.now();
-    return [
-      { id: `user-${now}`, role: "user" as const, content: state.message, timestamp: now },
-      { id: `assistant-${now + 1}`, role: "assistant" as const, segments: [], streaming: true, timestamp: now + 1 } as AssistantTurn,
-    ];
-  });
+  // @@@display-builder — no optimistic initialEntries.
+  // Backend sends user_message + run_start via display_delta.
+  const initialEntries = undefined;
 
   useEffect(() => {
     if (state?.selectedModel) {
@@ -90,18 +82,22 @@ function ChatPageInner({ threadId }: { threadId: string }) {
     }
   }, [state?.selectedModel, threadId]);
 
-  const { entries, activeSandbox, loading, setEntries, setActiveSandbox, refreshThread } = useThreadData(threadId, runStarted, initialEntries, showHidden);
+  const { entries, activeSandbox, loading, displaySeq, setEntries, setActiveSandbox, refreshThread } = useThreadData(threadId, runStarted, initialEntries, showHidden);
 
   const { runtimeStatus, isRunning, handleSendMessage, handleStopStreaming } =
-    useStreamHandler({
+    useDisplayDeltas({
       threadId,
-      // Use tm.refreshThreads (sidebar list only) — NOT refreshThread (which calls
-      // setEntries(history) and would wipe any in-flight streaming entries for the next run).
       refreshThreads: tm.refreshThreads,
       onUpdate: (updater) => setEntries(updater),
       loading,
       runStarted,
+      displaySeq,
     });
+
+  // @@@debug-entries — expose current entries for backend comparison
+  useEffect(() => {
+    (window as any).__debugEntries = () => JSON.parse(JSON.stringify(entries));
+  }, [entries]);
 
   const { tasks, refresh: refreshTasks } = useBackgroundTasks({ threadId, loading, refreshThreads: tm.refreshThreads });
 

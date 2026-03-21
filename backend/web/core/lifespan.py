@@ -92,6 +92,9 @@ async def lifespan(app: FastAPI):
     app.state.thread_tasks: dict[str, asyncio.Task] = {}
     app.state.thread_event_buffers: dict[str, ThreadEventBuffer] = {}
     app.state.subagent_buffers: dict[str, RunEventBuffer] = {}
+
+    from backend.web.services.display_builder import DisplayBuilder
+    app.state.display_builder = DisplayBuilder()
     app.state.idle_reaper_task: asyncio.Task | None = None
     app.state.cron_service = None
     app.state._event_loop = asyncio.get_running_loop()

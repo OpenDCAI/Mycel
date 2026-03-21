@@ -129,30 +129,35 @@ async def get_thread_messages(
     member_id: Annotated[str, Depends(verify_thread_owner)],
     app: Annotated[Any, Depends(get_app)] = None,
 ) -> dict[str, Any]:
-    """Get messages and sandbox info for a thread."""
+    """Get display entries and sandbox info for a thread.
+
+    @@@display-builder — returns pre-computed ChatEntry[] from DisplayBuilder.
+    Hot path: return in-memory state.  Cold path: rebuild from checkpoint.
+    """
+    display_builder = app.state.display_builder
     sandbox_type = resolve_thread_sandbox(app, thread_id)
     agent = await get_or_create_agent(app, sandbox_type, thread_id=thread_id)
-    set_current_thread_id(thread_id)  # Set thread_id before accessing agent state
-    config = {"configurable": {"thread_id": thread_id}}
-    state = await agent.agent.aget_state(config)
 
-    values = getattr(state, "values", {}) if state else {}
-    messages = values.get("messages", []) if isinstance(values, dict) else []
+    # Hot path: return cached display entries
+    entries = display_builder.get_entries(thread_id)
+    if entries is None:
+        # Cold path: rebuild from checkpoint
+        set_current_thread_id(thread_id)
+        config = {"configurable": {"thread_id": thread_id}}
+        state = await agent.agent.aget_state(config)
+        values = getattr(state, "values", {}) if state else {}
+        messages = values.get("messages", []) if isinstance(values, dict) else []
+        serialized = [serialize_message(msg) for msg in messages]
 
-    # Get sandbox session info (new architecture)
+        from core.runtime.visibility import annotate_owner_visibility
+        annotated, _ = annotate_owner_visibility(serialized)
+        entries = display_builder.build_from_checkpoint(thread_id, annotated)
+
     sandbox_info = get_sandbox_info(agent, thread_id, sandbox_type)
-
-    serialized = [serialize_message(msg) for msg in messages]
-
-    # @@@owner-visibility — annotate messages with visibility metadata.
-    # Do NOT update agent.runtime.visibility_context here — streaming owns the live state.
-    # Updating it would race with active runs.
-    from core.runtime.visibility import annotate_owner_visibility
-    annotated, _final_ctx = annotate_owner_visibility(serialized)
-
     return {
         "thread_id": thread_id,
-        "messages": annotated,
+        "entries": entries,
+        "display_seq": display_builder.get_display_seq(thread_id),
         "sandbox": sandbox_info,
     }
 
