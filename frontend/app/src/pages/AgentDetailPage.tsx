@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import {
   ArrowLeft, Bot, FileText, Wrench, Plug, Zap, Users, BookOpen,
@@ -42,6 +42,7 @@ export default function AgentDetail() {
   const [activeModule, setActiveModule] = useState<ModuleId>("role");
 
   const member = useAppStore(s => s.getMemberById(id || ""));
+  const updateMember = useAppStore(s => s.updateMember);
   const updateMemberConfig = useAppStore(s => s.updateMemberConfig);
   const loadAll = useAppStore(s => s.loadAll);
   const librarySkills = useAppStore(s => s.librarySkills);
@@ -50,6 +51,24 @@ export default function AgentDetail() {
   useEffect(() => { loadAll(); }, [loadAll]);
 
   const [pickerType, setPickerType] = useState<"skill" | "mcp" | "agent" | null>(null);
+  const [editingName, setEditingName] = useState(false);
+  const [nameDraft, setNameDraft] = useState("");
+  const nameInputRef = useRef<HTMLInputElement>(null);
+
+  const startRename = () => {
+    if (!member) return;
+    setNameDraft(member.name);
+    setEditingName(true);
+    setTimeout(() => nameInputRef.current?.select(), 0);
+  };
+  const commitRename = async () => {
+    setEditingName(false);
+    const trimmed = nameDraft.trim();
+    if (!member || !trimmed || trimmed === member.name) return;
+    try {
+      await updateMember(member.id, { name: trimmed });
+    } catch { toast.error("重命名失败"); }
+  };
 
   const statusLabels: Record<string, string> = { active: "在岗", draft: "草稿", inactive: "离线" };
 
@@ -181,7 +200,18 @@ export default function AgentDetail() {
           <ArrowLeft className="h-4 w-4" />
         </Button>
         <Bot className="h-5 w-5 text-primary" />
-        <span className="font-medium">{member.name}</span>
+        {editingName ? (
+          <input
+            ref={nameInputRef}
+            className="font-medium bg-transparent border-b border-primary outline-none px-0 py-0 text-sm w-48"
+            value={nameDraft}
+            onChange={e => setNameDraft(e.target.value)}
+            onBlur={commitRename}
+            onKeyDown={e => { if (e.key === "Enter") commitRename(); if (e.key === "Escape") setEditingName(false); }}
+          />
+        ) : (
+          <span className="font-medium cursor-pointer hover:underline decoration-dashed underline-offset-4" onDoubleClick={startRename}>{member.name}</span>
+        )}
         <span className="text-xs px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
           {statusLabels[member.status] || member.status}
         </span>

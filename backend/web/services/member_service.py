@@ -416,6 +416,18 @@ def update_member(member_id: str, **fields: Any) -> dict[str, Any] | None:
         meta = _read_json(member_dir / "meta.json", {})
         meta["updated_at"] = int(time.time() * 1000)
         _write_json(member_dir / "meta.json", meta)
+
+        # Sync name to SQLite
+        if "name" in updates:
+            from storage.providers.sqlite.member_repo import SQLiteMemberRepo
+            repo = SQLiteMemberRepo()
+            try:
+                repo.update(member_id, name=updates["name"])
+            except Exception:
+                pass
+            finally:
+                repo.close()
+
     return get_member(member_id)
 
 
