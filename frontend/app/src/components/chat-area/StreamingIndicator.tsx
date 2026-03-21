@@ -21,8 +21,8 @@ export function StreamingIndicator({ entries, runtimeStatus }: StreamingIndicato
     <div className="flex items-center animate-fade-in">
       <span className="text-sm text-[#a3a3a3]">
         {runtimeStatus?.current_tool
-          ? `Leon 正在使用 ${runtimeStatus.current_tool}...`
-          : "Leon 正在思考..."}
+          ? `Mycel 正在使用 ${runtimeStatus.current_tool}...`
+          : "Mycel 正在思考..."}
       </span>
     </div>
   );

@@ -12,7 +12,7 @@ interface InputBoxProps {
 
 export default function InputBox({
   disabled = false,
-  placeholder = "告诉 Leon 你需要什么帮助...",
+  placeholder = "告诉 Mycel 你需要什么帮助...",
   isStreaming = false,
   onSendMessage,
   onSendQueueMessage,

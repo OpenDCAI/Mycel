@@ -199,7 +199,7 @@ function ChatPageInner({ threadId }: { threadId: string }) {
           <InputBox
             disabled={isStreaming}
             isStreaming={isStreaming}
-            placeholder="告诉 Leon 你需要什么帮助..."
+            placeholder="告诉 Mycel 你需要什么帮助..."
             onSendMessage={(msg) => void handleSendMessage(msg)}
             onSendQueueMessage={handleSendQueueMessage}
             onStop={handleStopStreaming}

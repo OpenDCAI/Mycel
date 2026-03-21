@@ -135,7 +135,7 @@ export default function TaskProgress(props: TaskProgressProps) {
                 </span>
                 <span className="text-[#e5e5e5]">&middot;</span>
                 <span className={isStreaming ? "text-[#171717] font-medium" : "text-[#a3a3a3]"}>
-                  {isStreaming ? "Leon 正在工作" : "Leon 待命中"}
+                  {isStreaming ? "Mycel 正在工作" : "Mycel 待命中"}
                 </span>
               </div>
             </div>

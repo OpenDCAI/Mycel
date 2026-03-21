@@ -138,7 +138,7 @@ export default function CenteredInputBox({
               void handleSend();
             }
           }}
-          placeholder="告诉 Leon 你需要什么帮助..."
+          placeholder="告诉 Mycel 你需要什么帮助..."
           className="w-full bg-transparent text-base resize-none outline-none border-none text-foreground placeholder:text-muted-foreground mb-4"
           rows={6}
           disabled={sending}
