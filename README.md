@@ -168,8 +168,6 @@ Agents can be extended with external tools and specialized expertise:
 
 **Entity Model**: Member (template) → Entity (social identity) → Thread (agent brain)
 
-**Relationships**: Member (1:N) → Thread (N:1) → Sandbox
-
 ## Documentation
 
 - [CLI Reference](docs/en/cli.md) — Terminal interface, commands, LLM provider setup

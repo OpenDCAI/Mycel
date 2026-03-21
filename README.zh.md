@@ -168,8 +168,6 @@ Agent 可通过外部工具和专业技能进行扩展：
 
 **实体模型**：Member（模板）→ Entity（社交身份）→ Thread（Agent 大脑）
 
-**关系**：Member (1:N) → Thread (N:1) → Sandbox
-
 ## 文档
 
 - [CLI 参考](docs/zh/cli.md) — 终端界面、命令、LLM 提供商配置
