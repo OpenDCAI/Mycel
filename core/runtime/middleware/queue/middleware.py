@@ -105,6 +105,8 @@ class SteeringMiddleware(AgentMiddleware):
 
         # @@@steer-phase-boundary — emit run_done + run_start so frontend
         # breaks the turn at the steer injection point.
+        # user_message is NOT emitted here — wake_handler already did it
+        # at enqueue time (@@@steer-instant-feedback).
         if has_steer and rt and hasattr(rt, "emit_activity_event"):
             rt.emit_activity_event({
                 "event": "run_done",

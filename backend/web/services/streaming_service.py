@@ -295,19 +295,31 @@ def _ensure_thread_handlers(agent: Any, thread_id: str, app: Any) -> None:
         """Called by enqueue() with the newly-enqueued QueueItem — may run in any thread."""
         if not (hasattr(agent, "runtime") and agent.runtime.transition(AgentState.ACTIVE)):
             # Agent already ACTIVE — before_model will drain_all on the next LLM call.
-            # Emit notice for external sources so frontend can render inline divider.
             source = getattr(item, "source", None)
-            if source and source != "owner" and loop and not loop.is_closed():
-                async def _emit_one_notice() -> None:
-                    await activity_sink({
-                        "event": "notice",
-                        "data": json.dumps({
-                            "content": item.content,
-                            "source": getattr(item, "source", None),
-                            "notification_type": item.notification_type,
-                        }, ensure_ascii=False),
-                    })
-                loop.call_soon_threadsafe(loop.create_task, _emit_one_notice())
+            if loop and not loop.is_closed():
+                async def _emit_active_event() -> None:
+                    if source == "owner":
+                        # @@@steer-instant-feedback — emit user_message immediately
+                        # so display_builder creates user entry without waiting for
+                        # before_model or _consume_followup_queue.
+                        await activity_sink({
+                            "event": "user_message",
+                            "data": json.dumps({
+                                "content": item.content,
+                                "showing": True,
+                            }, ensure_ascii=False),
+                        })
+                    elif source:
+                        # External notification → notice divider
+                        await activity_sink({
+                            "event": "notice",
+                            "data": json.dumps({
+                                "content": item.content,
+                                "source": source,
+                                "notification_type": item.notification_type,
+                            }, ensure_ascii=False),
+                        })
+                loop.call_soon_threadsafe(loop.create_task, _emit_active_event())
             return
 
         item = qm.dequeue(thread_id)
@@ -544,8 +556,11 @@ async def _run_agent_to_buffer(
             agent.runtime.current_run_source = src or "owner"
 
         # @@@user-entry — emit user_message so display_builder can add a UserMessage
-        # entry.  Owner messages show as user bubbles; external messages don't.
-        if not src or src == "owner":
+        # entry.  Skip for steers — wake_handler already emitted user_message at
+        # enqueue time (@@@steer-instant-feedback).
+        # Note: is_steer is NOT persisted in queue, so check notification_type too.
+        is_steer = meta.get("is_steer") or meta.get("notification_type") == "steer"
+        if (not src or src == "owner") and not is_steer:
             await emit({
                 "event": "user_message",
                 "data": json.dumps({
@@ -931,6 +946,7 @@ async def _consume_followup_queue(agent: Any, thread_id: str, app: Any) -> None:
                                     "notification_type": item.notification_type,
                                     "sender_name": item.sender_name,
                                     "sender_avatar_url": item.sender_avatar_url,
+                                    "is_steer": getattr(item, "is_steer", False),
                                 })
     except Exception:
         logger.exception("Failed to consume followup queue for thread %s", thread_id)

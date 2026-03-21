@@ -5,9 +5,6 @@ import {
 } from "../api";
 import type { TabType } from "../components/computer-panel/types";
 
-function makeId(prefix: string): string {
-  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-}
 
 interface AppActionsDeps {
   activeThreadId: string | null;
@@ -59,12 +56,12 @@ export function useAppActions(deps: AppActionsDeps): AppActionsState & AppAction
   const handleSendQueueMessage = useCallback(
     async (message: string) => {
       if (!activeThreadId) return;
-      const userEntry: ChatEntry = { id: makeId("user"), role: "user", content: message, timestamp: Date.now() };
-      setEntries((prev) => [...prev, userEntry]);
-      // Server auto-routes: ACTIVE → steer, IDLE → new run
+      // @@@display-builder — no local user entry. Backend emits user_message
+      // via display_delta when the steer is consumed (either by before_model
+      // in current run, or by _consume_followup_queue as a new run).
       await sendMessage(activeThreadId, message);
     },
-    [activeThreadId, setEntries],
+    [activeThreadId],
   );
 
   return {

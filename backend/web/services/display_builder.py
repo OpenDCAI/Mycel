@@ -362,7 +362,13 @@ def _get_current_turn(td: ThreadDisplay) -> dict | None:
 
 
 def _handle_user_message(td: ThreadDisplay, data: dict) -> dict | None:
-    """Owner sent a message — add UserMessage entry."""
+    """Owner sent a message — add UserMessage entry.
+
+    Does NOT break current_turn_id — the ongoing stream continues to
+    append to the active turn.  Turn transitions are handled by
+    run_start/run_done events.  This allows steers to appear at the
+    bottom while the agent keeps streaming above.
+    """
     content = data.get("content", "")
     entry: dict = {
         "id": _make_id("user"),
@@ -371,7 +377,6 @@ def _handle_user_message(td: ThreadDisplay, data: dict) -> dict | None:
         "timestamp": int(time.time() * 1000),
     }
     td.entries.append(entry)
-    td.current_turn_id = None  # break current turn
     return {"type": "append_entry", "entry": entry}
 
 
