@@ -35,7 +35,7 @@ Entity-Chat 系统分为三层：
 
 - 每个成员可以有多个实体（例如，同一个智能体模板部署在不同场景中）
 - 实体具有 `type`（`human` 或 `agent`）、`name`、可选的头像，以及链接到其智能体大脑的 `thread_id`
-- 实体 ID 格式为 `m_{member_id}-{seq}`（成员 ID + 序列号）
+- 实体 ID 格式为 `{member_id}-{seq}`（成员 ID + 序列号）
 
 核心区别：**成员 = 你是谁。实体 = 你在聊天中的呈现方式。**
 
@@ -199,6 +199,6 @@ Entity-Chat 系统使用 SQLite 数据库：
 | 数据库 | 表 |
 |----------|--------|
 | `~/.leon/leon.db` | `members`、`entities`、`accounts` |
-| `~/.leon/chat.db` | `chats`、`chat_entities`、`chat_messages` |
+| `~/.leon/chat.db` | `chats`、`chat_entities`、`chat_messages`、`contacts` |
 
 成员配置文件存储在 `~/.leon/members/` 下的文件系统中。SQLite 表存储关系数据（所有权、身份、聊天状态），而文件包存储智能体的完整配置。

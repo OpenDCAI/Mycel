@@ -56,20 +56,19 @@ CLI arguments (`--model`, `--workspace`, etc.) override everything.
 
 Controls agent behavior, tools, memory, MCP, and skills. **Not** where model/provider identity goes (that's `models.json`).
 
-Full structure with defaults:
+Full structure with defaults (from `config/defaults/runtime.json`):
 
 ```json
 {
-  "runtime": {
-    "temperature": null,
-    "max_tokens": null,
-    "model_kwargs": {},
-    "context_limit": 0,
-    "enable_audit_log": true,
-    "allowed_extensions": null,
-    "block_dangerous_commands": true,
-    "block_network_commands": false
-  },
+  "context_limit": 0,
+  "enable_audit_log": true,
+  "allowed_extensions": null,
+  "block_dangerous_commands": true,
+  "block_network_commands": false,
+  "queue_mode": "steer",
+  "temperature": null,
+  "max_tokens": null,
+  "model_kwargs": {},
   "memory": {
     "pruning": {
       "enabled": true,
@@ -85,6 +84,7 @@ Full structure with defaults:
       "min_messages": 20
     }
   },
+  "system_prompt": null,
   "tools": {
     "filesystem": {
       "enabled": true,
@@ -97,6 +97,7 @@ Full structure with defaults:
     },
     "search": {
       "enabled": true,
+      "max_results": 50,
       "tools": {
         "grep": { "enabled": true, "max_file_size": 10485760 },
         "glob": true
@@ -125,19 +126,7 @@ Full structure with defaults:
         "run_command": { "enabled": true, "default_timeout": 120 },
         "command_status": true
       }
-    },
-    "spill_buffer": {
-      "enabled": true,
-      "default_threshold": 50000,
-      "thresholds": {
-        "Grep": 20000,
-        "Glob": 20000,
-        "run_command": 50000,
-        "command_status": 50000,
-        "Fetch": 50000
-      }
-    },
-    "tool_modes": {}
+    }
   },
   "mcp": {
     "enabled": true,
@@ -147,11 +136,11 @@ Full structure with defaults:
     "enabled": true,
     "paths": ["~/.leon/skills"],
     "skills": {}
-  },
-  "system_prompt": null,
-  "workspace_root": null
+  }
 }
 ```
+
+> **Note:** The file is flat -- there is no `"runtime"` wrapper key. The config loader wraps these fields internally at load time. Fields like `spill_buffer`, `tool_modes`, `workspace_root` are optional overrides not present in the defaults file; see [Tools](#tools) below for details.
 
 ### Runtime Fields
 
@@ -203,7 +192,7 @@ Available tools and their config-level names:
 | `run_command` | Bash | command |
 | `command_status` | - | command |
 
-**Spill buffer** automatically writes large tool outputs to temp files instead of inlining them in conversation:
+**Spill buffer** automatically writes large tool outputs to temp files instead of inlining them in conversation. This is an optional override -- it is not part of the system defaults file:
 
 ```json
 {
@@ -219,7 +208,7 @@ Available tools and their config-level names:
 }
 ```
 
-**Tool modes** can be set per-tool to `"inline"` (default) or `"deferred"`:
+**Tool modes** can be set per-tool to `"inline"` (default) or `"deferred"`. Also an optional override, not in defaults:
 
 ```json
 {
@@ -238,10 +227,8 @@ Available tools and their config-level names:
 
 ```json
 {
-  "runtime": {
-    "allowed_extensions": ["py", "js", "ts", "json", "yaml", "md"],
-    "block_dangerous_commands": true
-  },
+  "allowed_extensions": ["py", "js", "ts", "json", "yaml", "md"],
+  "block_dangerous_commands": true,
   "tools": {
     "web": { "enabled": false },
     "command": {
@@ -534,7 +521,7 @@ Members (`~/.leon/members/<id>/`) can have their own `.mcp.json` following the s
 
 Skill paths are directories containing skill subdirectories. Each skill has a `SKILL.md` file. The `skills` map enables/disables individual skills by name.
 
-On first run, Mycel creates `~/.leon/skills` automatically if it's in the paths list.
+Skill paths must exist on disk -- the validator requires each directory in `paths` to be present. Mycel does not create them automatically.
 
 ## Observation Configuration (observation.json)
 

@@ -121,7 +121,7 @@ The file name (minus `.json`) is the sandbox name you pass to `--sandbox`.
   "provider": "agentbay",
   "agentbay": {
     "region_id": "ap-southeast-1",
-    "context_path": "/root",
+    "context_path": "/home/wuying",
     "image_id": null
   },
   "on_exit": "pause"
