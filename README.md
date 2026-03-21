@@ -174,7 +174,7 @@ Connect external services via [Model Context Protocol](https://modelcontextproto
 
 ## Documentation
 
-- [Getting Started](docs/en/getting-started.md) — Setup, LLM provider configuration
+- [CLI Reference](docs/en/cli.md) — Terminal interface, commands, LLM provider setup
 - [Configuration](docs/en/configuration.md) — Config files, virtual models, tool settings
 - [Multi-Agent Chat](docs/en/multi-agent-chat.md) — Entity-Chat system, agent communication
 - [Sandbox](docs/en/sandbox.md) — Providers, lifecycle, session management

@@ -174,7 +174,7 @@ Agent 在隔离环境中运行，具有托管生命周期：
 
 ## 文档
 
-- [快速入门](docs/zh/getting-started.md) — 安装、LLM 配置、首次运行
+- [CLI 参考](docs/zh/cli.md) — 终端界面、命令、LLM 提供商配置
 - [配置指南](docs/zh/configuration.md) — 配置文件、虚拟模型、工具设置
 - [多 Agent 通讯](docs/zh/multi-agent-chat.md) — Entity-Chat 系统、Agent 间通讯
 - [沙箱](docs/zh/sandbox.md) — 提供商、生命周期、会话管理
