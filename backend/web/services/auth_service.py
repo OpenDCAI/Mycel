@@ -78,61 +78,82 @@ class AuthService:
             name=username, thread_id=None, created_at=now,
         ))
 
-        # 4. Agent member — own config directory
-        agent_member_id = generate_member_id()
+        # 4. Create two initial agent members: Toad and Morel
         from backend.web.services.member_service import MEMBERS_DIR, _write_agent_md, _write_json
-        agent_dir = MEMBERS_DIR / agent_member_id
-        agent_dir.mkdir(parents=True, exist_ok=True)
-        _write_agent_md(agent_dir / "agent.md", name=f"{username}'s Leon",
-                        description="Your AI assistant")
-        _write_json(agent_dir / "meta.json", {
-            "status": "active", "version": "1.0.0",
-            "created_at": int(now * 1000), "updated_at": int(now * 1000),
-        })
-        self._members.create(MemberRow(
-            id=agent_member_id, name=f"{username}'s Leon", type=MemberType.MYCEL_AGENT,
-            description="Your AI assistant",
-            config_dir=str(agent_dir),
-            owner_id=human_member_id,
-            created_at=now,
-        ))
+        from pathlib import Path
+        import shutil
 
-        # 5. Agent entity + thread (entity_id = thread_id for agents)
-        agent_seq = self._members.increment_entity_seq(agent_member_id)
-        agent_entity_id = f"{agent_member_id}-{agent_seq}"
-        sandbox_type = "local"
+        # @@@initial-agents - Toad (lightweight assistant) + Morel (senior analyst)
+        initial_agents = [
+            {"name": f"Toad of {username}", "description": "Curious and energetic assistant", "avatar": "toad.jpeg"},
+            {"name": f"Morel of {username}", "description": "Thoughtful senior analyst", "avatar": "morel.jpeg"},
+        ]
 
-        # 6. Write threads table (replaces thread_config)
-        self._threads.create(
-            thread_id=agent_entity_id,
-            member_id=agent_member_id,
-            sandbox_type=sandbox_type,
-            created_at=now,
-        )
+        avatars_dir = Path.home() / ".leon" / "avatars"
+        avatars_dir.mkdir(parents=True, exist_ok=True)
+        assets_dir = Path(__file__).resolve().parents[3] / "assets"
 
-        # @@@entity-name-convention — {member.name}-{seq} ({sandbox_type})
-        agent_member_name = f"{username}'s Leon"
-        entity_name = f"{agent_member_name}-{agent_seq} ({sandbox_type})"
+        first_agent_info = None
+        for i, agent_def in enumerate(initial_agents):
+            agent_member_id = generate_member_id()
+            agent_dir = MEMBERS_DIR / agent_member_id
+            agent_dir.mkdir(parents=True, exist_ok=True)
+            _write_agent_md(agent_dir / "agent.md", name=agent_def["name"],
+                            description=agent_def["description"])
+            _write_json(agent_dir / "meta.json", {
+                "status": "active", "version": "1.0.0",
+                "created_at": int(now * 1000), "updated_at": int(now * 1000),
+            })
+            self._members.create(MemberRow(
+                id=agent_member_id, name=agent_def["name"], type=MemberType.MYCEL_AGENT,
+                description=agent_def["description"],
+                config_dir=str(agent_dir),
+                owner_id=human_member_id,
+                created_at=now,
+            ))
 
-        # 7. Agent entity
-        self._entities.create(EntityRow(
-            id=agent_entity_id, type="agent", member_id=agent_member_id,
-            name=entity_name, thread_id=agent_entity_id,
-            created_at=now,
-        ))
+            # Copy default avatar from assets/
+            src_avatar = assets_dir / agent_def["avatar"]
+            if src_avatar.exists():
+                shutil.copy2(src_avatar, avatars_dir / f"{agent_member_id}.png")
 
-        # 8. No contact (owner↔own agent = bare chat)
-        # 9. No chat
+            # 5. Agent entity + thread
+            agent_seq = self._members.increment_entity_seq(agent_member_id)
+            agent_entity_id = f"{agent_member_id}-{agent_seq}"
+            sandbox_type = "local"
 
-        # 10. JWT — carries both member_id and entity_id
+            self._threads.create(
+                thread_id=agent_entity_id,
+                member_id=agent_member_id,
+                sandbox_type=sandbox_type,
+                created_at=now,
+            )
+
+            entity_name = f"{agent_def['name']}-{agent_seq} ({sandbox_type})"
+            self._entities.create(EntityRow(
+                id=agent_entity_id, type="agent", member_id=agent_member_id,
+                name=entity_name, thread_id=agent_entity_id,
+                created_at=now,
+            ))
+
+            if i == 0:
+                first_agent_info = {
+                    "id": agent_member_id, "name": agent_def["name"],
+                    "type": "mycel_agent", "avatar": None,
+                }
+
+            logger.info("Created agent '%s' (member=%s) for user '%s'",
+                        agent_def["name"], agent_member_id[:8], username)
+
+        # JWT — carries both member_id and entity_id
         token = self._make_token(human_member_id, human_entity_id)
 
-        logger.info("Registered user '%s' (member=%s, agent=%s)", username, human_member_id[:8], agent_member_id[:8])
+        logger.info("Registered user '%s' (member=%s)", username, human_member_id[:8])
 
         return {
             "token": token,
             "member": {"id": human_member_id, "name": username, "type": "human", "avatar": None},
-            "agent": {"id": agent_member_id, "name": f"{username}'s Leon", "type": "mycel_agent", "avatar": None},
+            "agent": first_agent_info,
             "entity_id": human_entity_id,
         }
 
