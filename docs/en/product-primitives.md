@@ -1,144 +1,144 @@
-# Mycel 产品原语设计
+# Mycel Product Primitives
 
-English | [中文](../zh/product-primitives.md)
+🇬🇧 English | [🇨🇳 中文](../zh/product-primitives.md)
 
-## 核心哲学
+## Core Philosophy
 
-> Agent 拥有一切的能力，关键在于有没有对应的资源。
+> An Agent has all the capabilities it needs -- the key is whether it has the corresponding resources.
 
-能力是天生的，资源是给的。有资源就能用，没资源就不能用。
+Capabilities are innate; resources are granted. With resources, an agent can act. Without them, it cannot.
 
-## 六大原语
+## Six Primitives
 
-| 原语 | 英文 | 含义 | 例子 |
-|------|------|------|------|
-| **对话** | Thread | 一次交互过程 | 用户与 Agent 的会话 |
-| **成员** | Member | 执行工作的 Agent | 主 Agent、Sub-Agent |
-| **任务** | Task | 要完成的工作 | 用户指令、拆分出的子任务 |
-| **资源** | Resource | Agent 可使用的基础交互面 | 文件系统、终端、浏览器、手机 |
-| **连接** | Connection | Agent 接入的外部服务 | GitHub、Slack、Jira（MCP） |
-| **模型** | Model | AI 大脑 | Mini / Medium / Large / Max |
+| Primitive | Term | Meaning | Example |
+|-----------|------|---------|---------|
+| **Thread** | Thread | A single interaction session | A user's conversation with an Agent |
+| **Member** | Member | The Agent performing work | Main Agent, Sub-Agent |
+| **Task** | Task | Work to be completed | User instructions, decomposed subtasks |
+| **Resource** | Resource | A fundamental interaction surface available to the Agent | File system, terminal, browser, phone |
+| **Connection** | Connection | An external service the Agent connects to | GitHub, Slack, Jira (MCP) |
+| **Model** | Model | The AI brain | Mini / Medium / Large / Max |
 
-### 关系图
+### Relationship Diagram
 
 ```
-对话
-├── 成员（谁来干）
-│   ├── 主 Agent
+Thread
+├── Member (who does the work)
+│   ├── Main Agent
 │   └── Sub-Agent × N
-├── 任务（干什么）
-│   ├── 任务 A → 分配给成员 1
-│   └── 任务 B → 分配给成员 2
-├── 资源（用什么干）← 使用权分配给成员
-│   ├── 文件系统
-│   ├── 终端
-│   └── 浏览器
-├── 连接（接了什么外部服务）
+├── Task (what to do)
+│   ├── Task A → assigned to Member 1
+│   └── Task B → assigned to Member 2
+├── Resource (what to use) ← usage rights assigned to Members
+│   ├── File system
+│   ├── Terminal
+│   └── Browser
+├── Connection (which external services are connected)
 │   ├── GitHub
 │   └── Slack
-└── 模型（用什么脑子想）
+└── Model (which brain to think with)
 ```
 
-## "资源"与"连接"的本质区别
+## The Essential Difference Between "Resources" and "Connections"
 
-### 资源（Resource）
+### Resource
 
-Agent 与世界交互的**根本通道**。每一个资源都打开一整个交互维度：
+The **fundamental channels** through which an Agent interacts with the world. Each resource opens an entire interaction dimension:
 
-| 资源 | 打开的世界 | Agent 能做什么 |
-|------|-----------|---------------|
-| 文件系统 | 数据世界 | 读写文件、管理项目 |
-| 终端 | 命令世界 | 执行系统命令、运行程序 |
-| 浏览器 | Web 世界 | 浏览网页、操作 Web 应用 |
-| 手机 | App 世界 | 操作移动应用、测试 App |
-| 摄像头 | 视觉世界 | 看到物理环境（未来） |
-| 麦克风 | 听觉世界 | 接收语音输入（未来） |
+| Resource | World It Opens | What the Agent Can Do |
+|----------|---------------|----------------------|
+| File system | Data world | Read/write files, manage projects |
+| Terminal | Command world | Execute system commands, run programs |
+| Browser | Web world | Browse pages, operate web applications |
+| Phone | App world | Operate mobile apps, test applications |
+| Camera | Visual world | See the physical environment (future) |
+| Microphone | Audio world | Receive voice input (future) |
 
-### 连接（Connection）
+### Connection
 
-Agent 接入的**外部服务**（通过 MCP 协议）。点对点的数据通道：
+**External services** the Agent connects to (via MCP protocol). Point-to-point data channels:
 
-- GitHub、Slack、Jira、数据库、Supabase 等
-- 接上就多一个，拔掉就少一个
-- 不改变 Agent 的交互维度，只增加信息来源
+- GitHub, Slack, Jira, databases, Supabase, etc.
+- Plug one in, gain one more; unplug it, lose one
+- Does not change the Agent's interaction dimensions -- only adds information sources
 
-### 区分标准
+### Distinction Criteria
 
-| | 资源 | 连接 |
+| | Resource | Connection |
 |---|---|---|
-| 本质 | 交互维度 | 数据管道 |
-| 粒度 | 一整个世界 | 单个服务 |
-| 交互方式 | 感知 + 操控 | 请求 - 响应 |
-| 用户感知 | "Agent 能做什么" | "Agent 接了什么服务" |
+| Essence | Interaction dimension | Data pipeline |
+| Granularity | An entire world | A single service |
+| Interaction mode | Perception + control | Request-response |
+| User perception | "What the Agent can do" | "What services the Agent is connected to" |
 
-## 所有权与使用权
+## Ownership and Usage Rights
 
-- 平台/用户**拥有**资源（所有权）
-- 对话创建时**授权**哪些资源可用（使用权）
-- 主 Agent 可以**分配**资源使用权给 Sub-Agent
-- 不同 Agent 可以有不同的资源权限
+- The platform/user **owns** resources (ownership)
+- When a thread is created, it **authorizes** which resources are available (usage rights)
+- The main Agent can **delegate** resource usage rights to Sub-Agents
+- Different Agents can have different resource permissions
 
-## 资源页设计方向
+## Resource Page Design Direction
 
-### 原则
+### Principles
 
-1. **资源是主角，Provider 是实现细节** — 用户关心"Agent 有什么"，不关心"用的哪家云"
-2. **原子粒度** — 每个资源独立呈现、独立启用/关闭
-3. **Provider 抽象化** — 不暴露配置表单，用 icon + 卡片呈现
+1. **Resources are the star, Providers are implementation details** -- Users care about "what the Agent has", not "which cloud vendor it uses"
+2. **Atomic granularity** -- Each resource is presented independently, enabled/disabled independently
+3. **Provider abstraction** -- Don't expose configuration forms; use icons + cards instead
 
-### 用户视角（目标）
+### User Perspective (Goal)
 
 ```
-资源                            来源
-├── ✓ 文件系统  ~/projects/app    本地
-├── ✓ 终端                       本地
-├── ○ 浏览器（点击启用）           Playwright
-└── ○ 手机（点击连接）             未配置
+Resources                          Source
+├── ✓ File system  ~/projects/app    Local
+├── ✓ Terminal                       Local
+├── ○ Browser (click to enable)      Playwright
+└── ○ Phone (click to connect)       Not configured
 
-连接
+Connections
 ├── ✓ GitHub
 ├── ✓ Supabase
-└── ○ Slack（未连接）
+└── ○ Slack (not connected)
 ```
 
-### Provider 的位置
+### Where Providers Fit
 
-Provider（Local / AgentBay / Docker / E2B / Daytona）决定了**文件系统和终端从哪来**：
+Providers (Local / AgentBay / Docker / E2B / Daytona) determine **where the file system and terminal come from**:
 
-- 选 Local → 文件系统 = 本地磁盘，终端 = 本地 Shell
-- 选 AgentBay → 文件系统 = 云端 VM，终端 = 云端 Shell，+ 浏览器
-- 选 Docker → 文件系统 = 容器内，终端 = 容器 Shell
+- Choose Local → File system = local disk, Terminal = local shell
+- Choose AgentBay → File system = cloud VM, Terminal = cloud shell, + Browser
+- Choose Docker → File system = inside container, Terminal = container shell
 
-Provider 是资源的**来源属性**，不是顶层概念。在设置中作为"运行方式"呈现：
+A Provider is a **source attribute** of a resource, not a top-level concept. It appears in settings as "Runtime Mode":
 
 ```
-运行方式
-  ● 本地（文件系统和终端在你的电脑上）
-  ○ 云端（文件系统和终端在云端机器上）
+Runtime Mode
+  ● Local (file system and terminal on your computer)
+  ○ Cloud (file system and terminal on a cloud machine)
 ```
 
-### 能力矩阵的抽象
+### Abstracting the Capability Matrix
 
-当前设计（provider × 能力矩阵表）的问题：
-- 视角是 Provider-first（"这个 Provider 支持什么"）
-- 应该是 Resource-first（"我要这个资源，谁能提供"）
-- 圆点矩阵太"数据库"风格，应换成 icon + 卡片 + 开关
+The problem with the current design (provider × capability matrix table):
+- The perspective is Provider-first ("what does this Provider support")
+- It should be Resource-first ("I need this resource -- who can provide it")
+- The dot matrix is too "database-style" -- should be replaced with icons + cards + toggles
 
-## 术语对照
+## Terminology Mapping
 
-| 用户看到的 | 代码/技术概念 | 说明 |
-|-----------|-------------|------|
-| 资源 | Sandbox capabilities | 文件系统、终端、浏览器、手机 |
-| 连接 | MCP Server | 外部服务接入 |
-| 运行方式 | Sandbox Provider | Local / AgentBay / Docker |
-| 对话 | Thread | thread_id |
-| 成员 | Agent / Sub-Agent | LeonAgent 实例 |
-| 任务 | Task | TaskMiddleware |
-| 模型 | Model | leon:mini/medium/large/max |
+| User Sees | Code / Technical Concept | Notes |
+|-----------|-------------------------|-------|
+| Resource | Sandbox capabilities | File system, terminal, browser, phone |
+| Connection | MCP Server | External service integration |
+| Runtime Mode | Sandbox Provider | Local / AgentBay / Docker |
+| Thread | Thread | thread_id |
+| Member | Agent / Sub-Agent | LeonAgent instance |
+| Task | Task | TaskMiddleware |
+| Model | Model | leon:mini/medium/large/max |
 
-## 设计禁区
+## Design Anti-Patterns
 
-- ❌ 不要在用户界面出现"沙盒"这个词
-- ❌ 不要让用户每次新建对话都选 Provider
-- ❌ 不要把 Provider 配置表单直接暴露给用户
-- ❌ 不要把资源和连接混为一谈（它们是不同层次）
+- Do not use the word "sandbox" in the user interface
+- Do not make users choose a Provider every time they create a new thread
+- Do not expose Provider configuration forms directly to users
+- Do not conflate resources and connections (they are different layers)

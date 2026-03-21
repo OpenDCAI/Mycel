@@ -148,8 +148,7 @@ leon --sandbox local
     "api_key": "${DAYTONA_API_KEY}",
     "api_url": "https://app.daytona.io/api",
     "target": "local",
-    "cwd": "/home/daytona",
-    "shell": "/bin/bash"
+    "cwd": "/home/daytona"
   }
 }
 ```
@@ -174,8 +173,7 @@ leon --sandbox local
     "api_key": "${DAYTONA_API_KEY}",
     "api_url": "http://localhost:3986/api",
     "target": "us",
-    "cwd": "/workspace",
-    "shell": "/bin/bash"
+    "cwd": "/workspace"
   }
 }
 ```
@@ -240,7 +238,7 @@ Runner 必须同时在 Compose 网络和 Workspace 容器所在的默认 bridge 
 leon --version
 
 # 列出可用 Sandbox
-leon sandbox list
+leonai sandbox ls
 
 # 测试 Sandbox Provider
 leon --sandbox docker

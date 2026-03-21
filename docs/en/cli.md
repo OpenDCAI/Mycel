@@ -65,6 +65,8 @@ leonai sandbox              # Open sandbox manager TUI
 leonai sandbox ls           # List active sessions
 leonai sandbox new docker   # Create a new Docker session
 leonai sandbox metrics <id> # View resource usage
+leonai sandbox delete <id>            # Delete a session (alias for rm)
+leonai sandbox destroy-all-sessions   # Destroy all sessions
 ```
 
 ## LLM Provider Examples

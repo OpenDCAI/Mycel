@@ -56,20 +56,19 @@ CLI 参数（`--model`、`--workspace` 等）优先级最高，覆盖一切。
 
 控制智能体行为、工具、记忆、MCP 和技能。模型/提供商身份**不在**此处配置（那是 `models.json` 的职责）。
 
-完整结构及默认值：
+完整结构及默认值（来自 `config/defaults/runtime.json`）：
 
 ```json
 {
-  "runtime": {
-    "temperature": null,
-    "max_tokens": null,
-    "model_kwargs": {},
-    "context_limit": 0,
-    "enable_audit_log": true,
-    "allowed_extensions": null,
-    "block_dangerous_commands": true,
-    "block_network_commands": false
-  },
+  "context_limit": 0,
+  "enable_audit_log": true,
+  "allowed_extensions": null,
+  "block_dangerous_commands": true,
+  "block_network_commands": false,
+  "queue_mode": "steer",
+  "temperature": null,
+  "max_tokens": null,
+  "model_kwargs": {},
   "memory": {
     "pruning": {
       "enabled": true,
@@ -85,6 +84,7 @@ CLI 参数（`--model`、`--workspace` 等）优先级最高，覆盖一切。
       "min_messages": 20
     }
   },
+  "system_prompt": null,
   "tools": {
     "filesystem": {
       "enabled": true,
@@ -97,6 +97,7 @@ CLI 参数（`--model`、`--workspace` 等）优先级最高，覆盖一切。
     },
     "search": {
       "enabled": true,
+      "max_results": 50,
       "tools": {
         "grep": { "enabled": true, "max_file_size": 10485760 },
         "glob": true
@@ -125,19 +126,7 @@ CLI 参数（`--model`、`--workspace` 等）优先级最高，覆盖一切。
         "run_command": { "enabled": true, "default_timeout": 120 },
         "command_status": true
       }
-    },
-    "spill_buffer": {
-      "enabled": true,
-      "default_threshold": 50000,
-      "thresholds": {
-        "Grep": 20000,
-        "Glob": 20000,
-        "run_command": 50000,
-        "command_status": 50000,
-        "Fetch": 50000
-      }
-    },
-    "tool_modes": {}
+    }
   },
   "mcp": {
     "enabled": true,
@@ -147,11 +136,11 @@ CLI 参数（`--model`、`--workspace` 等）优先级最高，覆盖一切。
     "enabled": true,
     "paths": ["~/.leon/skills"],
     "skills": {}
-  },
-  "system_prompt": null,
-  "workspace_root": null
+  }
 }
 ```
+
+> **注意：** 文件是扁平结构——没有 `"runtime"` 包装键。配置加载器在加载时会内部包装这些字段。`spill_buffer`、`tool_modes`、`workspace_root` 等字段是可选覆盖项，不在默认文件中；详见下方[工具](#工具)章节。
 
 ### 运行时字段
 
@@ -203,7 +192,7 @@ CLI 参数（`--model`、`--workspace` 等）优先级最高，覆盖一切。
 | `run_command` | Bash | command |
 | `command_status` | - | command |
 
-**溢出缓冲区（Spill buffer）** 自动将大型工具输出写入临时文件，而不是内联到对话中：
+**溢出缓冲区（Spill buffer）** 自动将大型工具输出写入临时文件，而不是内联到对话中。这是可选覆盖项，不在系统默认文件中：
 
 ```json
 {
@@ -219,7 +208,7 @@ CLI 参数（`--model`、`--workspace` 等）优先级最高，覆盖一切。
 }
 ```
 
-**工具模式** 可以为每个工具设置为 `"inline"`（默认）或 `"deferred"`：
+**工具模式** 可以为每个工具设置为 `"inline"`（默认）或 `"deferred"`。同样是可选覆盖项，不在默认文件中：
 
 ```json
 {
@@ -238,10 +227,8 @@ CLI 参数（`--model`、`--workspace` 等）优先级最高，覆盖一切。
 
 ```json
 {
-  "runtime": {
-    "allowed_extensions": ["py", "js", "ts", "json", "yaml", "md"],
-    "block_dangerous_commands": true
-  },
+  "allowed_extensions": ["py", "js", "ts", "json", "yaml", "md"],
+  "block_dangerous_commands": true,
   "tools": {
     "web": { "enabled": false },
     "command": {
@@ -534,7 +521,7 @@ MCP 服务器字段：
 
 技能路径是包含技能子目录的目录。每个技能有一个 `SKILL.md` 文件。`skills` 映射按名称启用/禁用单个技能。
 
-首次运行时，如果 `~/.leon/skills` 在路径列表中，Mycel 会自动创建它。
+技能路径必须在磁盘上存在——验证器要求 `paths` 中的每个目录都已创建。Mycel 不会自动创建它们。
 
 ## 可观测性配置（observation.json）
 

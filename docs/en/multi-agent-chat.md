@@ -35,7 +35,7 @@ An **Entity** is a social identity -- the "instance" that participates in chats.
 
 - Each Member can have multiple Entities (e.g., the same agent template deployed in different contexts)
 - An Entity has a `type` (`human` or `agent`), a `name`, an optional avatar, and a `thread_id` linking it to its agent brain
-- Entity IDs follow the format `m_{member_id}-{seq}` (member ID + sequence number)
+- Entity IDs follow the format `{member_id}-{seq}` (member ID + sequence number)
 
 The key distinction: **Member = who you are. Entity = how you appear in chat.**
 
@@ -199,6 +199,6 @@ The Entity-Chat system uses SQLite databases:
 | Database | Tables |
 |----------|--------|
 | `~/.leon/leon.db` | `members`, `entities`, `accounts` |
-| `~/.leon/chat.db` | `chats`, `chat_entities`, `chat_messages` |
+| `~/.leon/chat.db` | `chats`, `chat_entities`, `chat_messages`, `contacts` |
 
 Member configuration files live on the filesystem under `~/.leon/members/`. The SQLite tables store relational data (ownership, identity, chat state) while the file bundles store the agent's full configuration.

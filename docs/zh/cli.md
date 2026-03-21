@@ -65,6 +65,8 @@ leonai sandbox              # 打开沙箱管理 TUI
 leonai sandbox ls           # 列出活跃会话
 leonai sandbox new docker   # 创建新 Docker 会话
 leonai sandbox metrics <id> # 查看资源使用
+leonai sandbox delete <id>            # 删除会话（rm 的别名）
+leonai sandbox destroy-all-sessions   # 销毁所有会话
 ```
 
 ## LLM 提供商示例

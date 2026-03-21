@@ -146,8 +146,7 @@ Create `~/.leon/sandboxes/daytona_saas.json`:
     "api_key": "${DAYTONA_API_KEY}",
     "api_url": "https://app.daytona.io/api",
     "target": "local",
-    "cwd": "/home/daytona",
-    "shell": "/bin/bash"
+    "cwd": "/home/daytona"
   }
 }
 ```
@@ -172,8 +171,7 @@ Create `~/.leon/sandboxes/daytona_selfhost.json`:
     "api_key": "${DAYTONA_API_KEY}",
     "api_url": "http://localhost:3986/api",
     "target": "us",
-    "cwd": "/workspace",
-    "shell": "/bin/bash"
+    "cwd": "/workspace"
   }
 }
 ```
@@ -238,7 +236,7 @@ Create `~/.leon/sandboxes/agentbay.json`:
 leon --version
 
 # List available sandboxes
-leon sandbox list
+leonai sandbox ls
 
 # Test sandbox provider
 leon --sandbox docker
