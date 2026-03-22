@@ -14,6 +14,7 @@ import AgentDetailPage from './pages/AgentDetailPage';
 import TasksPage from './pages/TasksPage';
 import LibraryPage from './pages/LibraryPage';
 import ResourcesPage from './pages/ResourcesPage';
+import ConnectionsPage from './pages/ConnectionsPage';
 
 /** Redirect /threads → /threads/{owned agent name} dynamically. */
 function ThreadsIndexRedirect() {
@@ -92,6 +93,10 @@ export const router = createBrowserRouter([
       {
         path: 'library',
         element: <LibraryPage />,
+      },
+      {
+        path: 'connections',
+        element: <ConnectionsPage />,
       },
       {
         path: 'settings',

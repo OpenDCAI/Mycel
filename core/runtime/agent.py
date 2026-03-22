@@ -12,7 +12,6 @@ Tools are registered via Services into ToolRegistry:
 - SkillsService: load_skill (dynamic schema)
 - TaskService: TaskCreate/Update/List/Get (deferred)
 - AgentService: Agent, TaskOutput, TaskStop
-- SendMessageService: SendMessage
 - TaskBoardService: ListBoardTasks, ClaimTask, UpdateTaskProgress, CompleteTask, FailTask, CreateBoardTask
 - ToolSearchService: tool_search
 
@@ -80,7 +79,6 @@ from core.tools.web.service import WebService
 # Multi-agent services
 from core.agents.registry import AgentRegistry
 from core.agents.service import AgentService
-from core.agents.communication.service import SendMessageService
 
 # Import file operation recorder for time travel
 from core.operations import get_recorder
@@ -997,7 +995,7 @@ class LeonAgent:
             registry=self._tool_registry,
         )
 
-        # Multi-agent tools (Agent/TaskOutput/TaskStop/SendMessage)
+        # Multi-agent tools (Agent/TaskOutput/TaskStop)
         self._agent_registry = AgentRegistry()
         self._agent_service = AgentService(
             tool_registry=self._tool_registry,
@@ -1006,12 +1004,6 @@ class LeonAgent:
             model_name=self.model_name,
             queue_manager=self.queue_manager,
             shared_runs=self._background_runs,
-        )
-        self._send_message_service = SendMessageService(
-            registry=self._tool_registry,
-            agent_registry=self._agent_registry,
-            queue_manager=self.queue_manager,
-            current_thread_id="",  # Updated dynamically per invocation via thread_context
         )
 
         # Team coordination (TeamCreate/TeamDelete — deferred mode)
@@ -1048,6 +1040,28 @@ class LeonAgent:
                     chat_event_bus=repos.get("chat_event_bus"),
                     runtime_fn=lambda: getattr(self, "runtime", None),
                 )
+
+        # @@@wechat-tools — register WeChat tools via lazy connection lookup
+        owner_eid = self._chat_repos.get("owner_entity_id", "") if self._chat_repos else ""
+        if owner_eid:
+            try:
+                from core.tools.wechat.service import WeChatToolService
+
+                def _get_wechat_conn(eid=owner_eid):
+                    """Lazy lookup — returns None if registry not on app.state yet."""
+                    try:
+                        from backend.web.main import app
+                        registry = getattr(app.state, "wechat_registry", None)
+                        return registry.get(eid) if registry else None
+                    except Exception:
+                        return None
+
+                self._wechat_tool_service = WeChatToolService(
+                    registry=self._tool_registry,
+                    connection_fn=_get_wechat_conn,
+                )
+            except ImportError:
+                self._wechat_tool_service = None
 
         if self.verbose:
             all_tools = self._tool_registry.list_all()

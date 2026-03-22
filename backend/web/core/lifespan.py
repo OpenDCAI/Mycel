@@ -115,6 +115,27 @@ async def lifespan(app: FastAPI):
         await cron_svc.start()
         app.state.cron_service = cron_svc
 
+        # @@@wechat-registry — create registry with delivery callback, auto-start all
+        from backend.web.services.wechat_service import WeChatConnectionRegistry
+        from core.runtime.middleware.queue.formatters import format_wechat_message
+
+        async def _wechat_deliver(conn, msg):
+            """Delivery callback — routes WeChat messages to configured thread/chat."""
+            routing = conn.routing
+            if not routing.type or not routing.id:
+                return
+            sender_name = msg.from_user_id.split("@")[0] or msg.from_user_id
+            if routing.type == "thread":
+                from backend.web.services.message_routing import route_message_to_brain
+                content = format_wechat_message(sender_name, msg.from_user_id, msg.text)
+                await route_message_to_brain(app, routing.id, content, source="owner", sender_name=sender_name)
+            elif routing.type == "chat":
+                content = format_wechat_message(sender_name, msg.from_user_id, msg.text)
+                app.state.chat_service.send_message(routing.id, conn.entity_id, content)
+
+        app.state.wechat_registry = WeChatConnectionRegistry(delivery_fn=_wechat_deliver)
+        app.state.wechat_registry.auto_start_all()
+
         yield
     finally:
         # @@@background-task-shutdown-order - cancel monitor/reaper before provider cleanup.
@@ -126,6 +147,10 @@ async def lifespan(app: FastAPI):
                     await task
                 except asyncio.CancelledError:
                     pass
+
+        # Cleanup: stop WeChat connections
+        if hasattr(app.state, "wechat_registry"):
+            await app.state.wechat_registry.shutdown()
 
         # Cleanup: stop cron scheduler
         if app.state.cron_service:

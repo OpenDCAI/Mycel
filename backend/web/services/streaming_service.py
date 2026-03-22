@@ -565,10 +565,14 @@ async def _run_agent_to_buffer(
         # Note: is_steer is NOT persisted in queue, so check notification_type too.
         is_steer = meta.get("is_steer") or meta.get("notification_type") == "steer"
         if (not src or src == "owner") and not is_steer:
+            # @@@strip-for-display — agent sees full content (with system-reminder),
+            # frontend sees clean text (tags stripped)
+            from backend.web.utils.serializers import strip_system_tags
+            display_content = strip_system_tags(message) if "<system-reminder>" in message else message
             await emit({
                 "event": "user_message",
                 "data": json.dumps({
-                    "content": message,
+                    "content": display_content,
                     "showing": True,
                 }, ensure_ascii=False),
             })

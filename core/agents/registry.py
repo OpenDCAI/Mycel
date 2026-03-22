@@ -1,4 +1,8 @@
-"""Agent Registry - SQLite-backed agent name -> thread_id mapping."""
+"""Agent Registry — SQLite-backed agent_id -> thread_id mapping.
+
+@@@id-based — all lookups use agent_id, never name.
+Name is stored for display only.
+"""
 
 from __future__ import annotations
 
@@ -19,7 +23,7 @@ class AgentEntry:
 
 
 class AgentRegistry:
-    """SQLite-backed registry mapping agent names to thread IDs.
+    """SQLite-backed registry mapping agent_ids to thread IDs.
 
     Persisted at ~/.leon/agent_registry.db
     """
@@ -45,7 +49,6 @@ class AgentRegistry:
                     created_at REAL DEFAULT (strftime('%s', 'now'))
                 )
             """)
-            conn.execute("CREATE INDEX IF NOT EXISTS idx_name ON agents(name)")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_thread ON agents(thread_id)")
             conn.commit()
 
@@ -66,24 +69,6 @@ class AgentRegistry:
                     ),
                 )
                 conn.commit()
-
-    async def get_by_name(self, name: str) -> AgentEntry | None:
-        with sqlite3.connect(self._db_path) as conn:
-            row = conn.execute(
-                "SELECT agent_id, name, thread_id, status, parent_agent_id, subagent_type "
-                "FROM agents WHERE name=? ORDER BY created_at DESC LIMIT 1",
-                (name,),
-            ).fetchone()
-        if row is None:
-            return None
-        return AgentEntry(
-            agent_id=row[0],
-            name=row[1],
-            thread_id=row[2],
-            status=row[3],
-            parent_agent_id=row[4],
-            subagent_type=row[5],
-        )
 
     async def get_by_id(self, agent_id: str) -> AgentEntry | None:
         with sqlite3.connect(self._db_path) as conn:

@@ -165,8 +165,10 @@ async def list_entities(
 
     all_entities = entity_repo.list_all()
     member_avatars = {m.id: bool(m.avatar) for m in member_repo.list_all()}
+    # @@@entity-is-social-identity — response uses entity_id only, no member_id leak.
+    # member_id is internal (template), entity_id is the social identity.
     return [
-        {"id": e.id, "name": e.name, "type": e.type, "member_id": e.member_id,
+        {"id": e.id, "name": e.name, "type": e.type,
          "avatar_url": avatar_url(e.member_id, member_avatars.get(e.member_id, False))}
         for e in all_entities
         if e.member_id not in exclude_member_ids

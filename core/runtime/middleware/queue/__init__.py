@@ -2,7 +2,7 @@
 
 from storage.contracts import QueueItem
 
-from .formatters import format_background_notification, format_chat_notification
+from .formatters import format_background_notification, format_chat_notification, format_wechat_message
 from .manager import MessageQueueManager
 from .middleware import SteeringMiddleware
 
@@ -12,4 +12,5 @@ __all__ = [
     "SteeringMiddleware",
     "format_background_notification",
     "format_chat_notification",
+    "format_wechat_message",
 ]

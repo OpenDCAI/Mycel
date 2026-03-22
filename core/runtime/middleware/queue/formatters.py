@@ -2,6 +2,7 @@
 
 Matches Claude Code's system-reminder convention so the LLM treats
 injected content as authoritative system instructions.
+Frontend strips <system-reminder> tags — agent sees full XML, user sees clean text.
 """
 
 import json
@@ -52,6 +53,24 @@ def format_background_notification(
     parts.append("</background-notification>")
     parts.append("</system-reminder>")
     return "\n".join(parts)
+
+
+def format_wechat_message(sender_name: str, user_id: str, text: str) -> str:
+    """Format incoming WeChat message for thread delivery.
+
+    Agent sees: full message with user_id metadata (needed for wechat_send reply).
+    Frontend sees: just the message text (system-reminder stripped).
+    """
+    return (
+        f"{text}\n"
+        "<system-reminder>\n"
+        "<wechat-message>\n"
+        f"  <sender>{escape(sender_name)}</sender>\n"
+        f"  <user-id>{escape(user_id)}</user-id>\n"
+        "</wechat-message>\n"
+        "To reply, use wechat_send(user_id=\"" + escape(user_id) + "\", text=\"...\").\n"
+        "</system-reminder>"
+    )
 
 
 def format_command_notification(
