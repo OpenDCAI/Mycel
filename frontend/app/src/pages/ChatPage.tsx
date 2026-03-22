@@ -213,8 +213,8 @@ function ChatPageInner({ threadId }: { threadId: string }) {
           <TaskProgress
             isStreaming={isStreaming}
             runtimeStatus={runtimeStatus}
-            sandboxType={activeSandbox?.type ?? "local"}
-            sandboxStatus={activeSandbox?.status ?? (activeSandbox?.type === "local" ? "running" : null)}
+            sandboxType={activeSandbox?.type ?? currentThread?.sandbox ?? "local"}
+            sandboxStatus={activeSandbox?.status ?? ((activeSandbox?.type ?? currentThread?.sandbox ?? "local") === "local" ? "running" : null)}
             computerOpen={computerOpen}
             onToggleComputer={() => setComputerOpen((v) => !v)}
           />
