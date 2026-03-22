@@ -94,3 +94,10 @@ worktrees/
 /dogfood-output/
 /current-chat.yaml
 /.claude/skills/
+
+# Development artifacts — never commit
+docs/lessons/
+docs/plans/
+frontend/.vite/
+.playwright-cli/
+ops
