@@ -7,13 +7,13 @@ const AVATAR_COLORS = [
   "bg-accent text-accent-foreground",
 ];
 
-export function getAgentColor(agentId: string): string {
-  if (!agentId) return AVATAR_COLORS[0];
-  const hash = agentId.split("").reduce((acc, char) => acc + char.charCodeAt(0), 0);
+export function getMemberColor(memberId: string): string {
+  if (!memberId) return AVATAR_COLORS[0];
+  const hash = memberId.split("").reduce((acc, char) => acc + char.charCodeAt(0), 0);
   return AVATAR_COLORS[hash % AVATAR_COLORS.length];
 }
 
-export function getAgentInitials(name: string): string {
+export function getMemberInitials(name: string): string {
   if (!name) return "?";
   return name
     .split(" ")
