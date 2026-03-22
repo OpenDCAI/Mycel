@@ -244,11 +244,11 @@ class DisplayBuilder:
             })
             return None, None
 
-        # Normal user message
+        # Normal user message — strip system-reminder tags (e.g. WeChat metadata)
         entries.append({
             "id": msg.get("id") or f"hist-user-{i}",
             "role": "user",
-            "content": _extract_text_content(msg.get("content")),
+            "content": _strip_system_tags(_extract_text_content(msg.get("content"))),
             "timestamp": now,
         })
         return None, None
