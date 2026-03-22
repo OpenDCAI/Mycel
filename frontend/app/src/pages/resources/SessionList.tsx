@@ -140,7 +140,7 @@ function LeaseItem({ group, providerType }: { group: LeaseGroup; providerType: s
         {/* Crew avatars */}
         <div className="flex -space-x-1 shrink-0">
           {group.sessions.slice(0, 4).map((s) => (
-            <MemberAvatar key={s.id || s.leaseId} name={s.agentName || "?"} size="xs" type="mycel_agent" className="border border-background" />
+            <MemberAvatar key={s.id || s.leaseId} name={s.memberName || "?"} avatarUrl={s.memberId ? `/api/members/${s.memberId}/avatar` : undefined} size="xs" type="mycel_agent" className="border border-background" />
           ))}
           {group.sessions.length > 4 && (
             <div className="w-5 h-5 rounded-full bg-muted border border-background flex items-center justify-center text-[8px] text-muted-foreground">
@@ -151,7 +151,7 @@ function LeaseItem({ group, providerType }: { group: LeaseGroup; providerType: s
 
         {/* Names */}
         <span className="text-xs text-foreground flex-1 truncate">
-          {group.sessions.map((s) => s.agentName || "未绑定").join(", ")}
+          {group.sessions.map((s) => s.memberName || "未绑定").join(", ")}
         </span>
 
         {/* Lease ID */}
