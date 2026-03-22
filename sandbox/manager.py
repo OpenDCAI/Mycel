@@ -74,16 +74,15 @@ class SandboxManager:
             workspace_root=_ws_root,
         )
 
-    def _resolve_workplace(self, thread_id: str, member_name: str | None = None) -> dict[str, Any] | None:
+    def _resolve_workplace(self, thread_id: str, member_id: str | None = None) -> dict[str, Any] | None:
         """Strategy gate: decide Workplace vs File Channel.
         Returns workplace record if Workplace should be used, None for File Channel fallback.
         """
-        if not member_name:
-            # Look up member from ThreadConfig
+        if not member_id:
             from backend.web.utils.helpers import load_thread_config
             tc = load_thread_config(thread_id)
-            member_name = tc.agent if tc else None
-        if not member_name:
+            member_id = tc.get("member_id") if tc else None
+        if not member_id:
             return None
 
         capability = self.provider.get_capability()
@@ -93,22 +92,22 @@ class SandboxManager:
         from backend.web.services.workspace_service import get_agent_workplace, create_agent_workplace
 
         provider_type = self.provider.name
-        workplace = get_agent_workplace(member_name, provider_type)
+        workplace = get_agent_workplace(member_id, provider_type)
         if workplace:
             return workplace
 
         # @@@strategy-gate-lazy-create - first sandbox start for this member + provider
         mount_path = self.resolve_agent_files_dir(thread_id)
-        logger.info("Creating workplace for member=%s provider=%s", member_name, provider_type)
-        backend_ref = self.provider.create_workplace(member_name, mount_path)
-        return create_agent_workplace(member_name, provider_type, backend_ref, mount_path)
+        logger.info("Creating workplace for member_id=%s provider=%s", member_id, provider_type)
+        backend_ref = self.provider.create_workplace(member_id, mount_path)
+        return create_agent_workplace(member_id, provider_type, backend_ref, mount_path)
 
     def _lookup_workplace(self, thread_id: str) -> dict[str, Any] | None:
         """Read-only workplace lookup. No side effects — never creates resources."""
         from backend.web.utils.helpers import load_thread_config
         tc = load_thread_config(thread_id)
-        member_name = tc.agent if tc else None
-        if not member_name:
+        member_id = tc.get("member_id") if tc else None
+        if not member_id:
             return None
 
         capability = self.provider.get_capability()
@@ -116,7 +115,7 @@ class SandboxManager:
             return None
 
         from backend.web.services.workspace_service import get_agent_workplace
-        return get_agent_workplace(member_name, self.provider.name)
+        return get_agent_workplace(member_id, self.provider.name)
 
     def resolve_agent_files_dir(self, thread_id: str) -> str:
         """Path where the agent sees uploaded files for this thread.
@@ -211,7 +210,7 @@ class SandboxManager:
     def close(self):
         self.session_manager.close(reason="manager_close")
 
-    def get_sandbox(self, thread_id: str) -> SandboxCapability:
+    def get_sandbox(self, thread_id: str, bind_mounts: list | None = None) -> SandboxCapability:
         from sandbox.thread_context import set_current_thread_id
         set_current_thread_id(thread_id)
 
@@ -230,7 +229,7 @@ class SandboxManager:
             # Stamp bind_mounts on lease so lazy creation paths pick them up
             if bind_mounts:
                 session.lease.bind_mounts = bind_mounts
-            self._ensure_bound_instance(session.lease, bind_mounts=bind_mounts)
+            self._ensure_bound_instance(session.lease)
             return SandboxCapability(session, manager=self)
 
         if not terminal:
@@ -267,7 +266,7 @@ class SandboxManager:
                 MountSpec(source=str(workspace_path), target=target, read_only=False)
             ])
 
-        self._ensure_bound_instance(lease, bind_mounts=bind_mounts)
+        self._ensure_bound_instance(lease)
 
         # @@@force-instance-for-sync - Non-eager providers (E2B, Daytona, etc.) create instances lazily.
         # Force instance creation here so workspace sync can upload files before tools run.

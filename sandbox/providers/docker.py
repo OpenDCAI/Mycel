@@ -118,9 +118,9 @@ class DockerProvider(SandboxProvider):
 
     # ==================== Workplace ====================
 
-    def create_workplace(self, member_name: str, mount_path: str) -> str:
+    def create_workplace(self, member_id: str, mount_path: str) -> str:
         """Create a host directory for the agent. Returns host path as backend_ref."""
-        workplace_dir = Path.home() / ".leon" / "workplaces" / member_name
+        workplace_dir = Path.home() / ".leon" / "workplaces" / member_id
         workplace_dir.mkdir(parents=True, exist_ok=True)
         logger.info("Created Docker workplace: %s", workplace_dir)
         return str(workplace_dir)

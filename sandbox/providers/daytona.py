@@ -116,9 +116,9 @@ class DaytonaProvider(SandboxProvider):
 
     # ==================== Workplace ====================
 
-    def create_workplace(self, member_name: str, mount_path: str) -> str:
+    def create_workplace(self, member_id: str, mount_path: str) -> str:
         """Create a Daytona volume for the agent. Returns volume name as backend_ref."""
-        volume_name = f"leon-workplace-{member_name}"
+        volume_name = f"leon-workplace-{member_id}"
         logger.info("Creating workplace volume: %s", volume_name)
         # @@@workplace-volume-ready - volume transitions pending_create → ready (~6s)
         self.client.volume.create(volume_name)

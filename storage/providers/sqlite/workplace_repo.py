@@ -23,48 +23,48 @@ class SQLiteWorkplaceRepo:
         if self._own_conn:
             self._conn.close()
 
-    def upsert(self, member_name: str, provider_type: str,
+    def upsert(self, member_id: str, provider_type: str,
                backend_ref: str, mount_path: str, created_at: str) -> None:
         self._conn.execute(
             "INSERT OR REPLACE INTO agent_workplaces"
-            "(member_name, provider_type, backend_ref, mount_path, created_at)"
+            "(member_id, provider_type, backend_ref, mount_path, created_at)"
             " VALUES (?, ?, ?, ?, ?)",
-            (member_name, provider_type, backend_ref, mount_path, created_at),
+            (member_id, provider_type, backend_ref, mount_path, created_at),
         )
         self._conn.commit()
 
-    def get(self, member_name: str, provider_type: str) -> dict[str, Any] | None:
+    def get(self, member_id: str, provider_type: str) -> dict[str, Any] | None:
         self._conn.row_factory = sqlite3.Row
         row = self._conn.execute(
-            "SELECT member_name, provider_type, backend_ref, mount_path, created_at"
-            " FROM agent_workplaces WHERE member_name = ? AND provider_type = ?",
-            (member_name, provider_type),
+            "SELECT member_id, provider_type, backend_ref, mount_path, created_at"
+            " FROM agent_workplaces WHERE member_id = ? AND provider_type = ?",
+            (member_id, provider_type),
         ).fetchone()
         self._conn.row_factory = None
         return dict(row) if row else None
 
-    def list_by_member(self, member_name: str) -> list[dict[str, Any]]:
+    def list_by_member(self, member_id: str) -> list[dict[str, Any]]:
         self._conn.row_factory = sqlite3.Row
         rows = self._conn.execute(
-            "SELECT member_name, provider_type, backend_ref, mount_path, created_at"
-            " FROM agent_workplaces WHERE member_name = ?",
-            (member_name,),
+            "SELECT member_id, provider_type, backend_ref, mount_path, created_at"
+            " FROM agent_workplaces WHERE member_id = ?",
+            (member_id,),
         ).fetchall()
         self._conn.row_factory = None
         return [dict(r) for r in rows]
 
-    def delete(self, member_name: str, provider_type: str) -> bool:
+    def delete(self, member_id: str, provider_type: str) -> bool:
         cur = self._conn.execute(
-            "DELETE FROM agent_workplaces WHERE member_name = ? AND provider_type = ?",
-            (member_name, provider_type),
+            "DELETE FROM agent_workplaces WHERE member_id = ? AND provider_type = ?",
+            (member_id, provider_type),
         )
         self._conn.commit()
         return cur.rowcount > 0
 
-    def delete_all_for_member(self, member_name: str) -> int:
+    def delete_all_for_member(self, member_id: str) -> int:
         cur = self._conn.execute(
-            "DELETE FROM agent_workplaces WHERE member_name = ?",
-            (member_name,),
+            "DELETE FROM agent_workplaces WHERE member_id = ?",
+            (member_id,),
         )
         self._conn.commit()
         return cur.rowcount
@@ -73,13 +73,18 @@ class SQLiteWorkplaceRepo:
         self._conn.execute(
             """
             CREATE TABLE IF NOT EXISTS agent_workplaces (
-                member_name    TEXT NOT NULL,
+                member_id      TEXT NOT NULL,
                 provider_type  TEXT NOT NULL,
                 backend_ref    TEXT NOT NULL,
                 mount_path     TEXT NOT NULL,
                 created_at     TEXT NOT NULL,
-                PRIMARY KEY (member_name, provider_type)
+                PRIMARY KEY (member_id, provider_type)
             )
             """
         )
+        # Migrate old schema: rename member_name → member_id
+        try:
+            self._conn.execute("ALTER TABLE agent_workplaces RENAME COLUMN member_name TO member_id")
+        except sqlite3.OperationalError:
+            pass  # column already named member_id or table is new
         self._conn.commit()

@@ -8,6 +8,7 @@ import TestPanel from "@/components/TestPanel";
 import PublishDialog from "@/components/PublishDialog";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
+import { authFetch } from "@/store/auth-store";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -17,7 +18,7 @@ import type { CrudItem, RuleItem, ResourceItem, SubAgent } from "@/store/types";
 // ==================== Types ====================
 
 interface WorkplaceItem {
-  member_name: string;
+  member_id: string;
   provider_type: string;
   backend_ref: string;
   mount_path: string;
@@ -82,7 +83,7 @@ export default function AgentDetail() {
   const [workplaces, setWorkplaces] = useState<WorkplaceItem[]>([]);
   useEffect(() => {
     if (member) {
-      fetch(`/api/panel/members/${member.id}/workplaces`)
+      authFetch(`/api/panel/members/${member.id}/workplaces`)
         .then(r => r.json())
         .then(d => setWorkplaces(d.items || []))
         .catch(() => setWorkplaces([]));

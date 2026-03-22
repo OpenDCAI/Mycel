@@ -571,6 +571,7 @@ async def _run_agent_to_buffer(
                 "data": json.dumps({
                     "content": display_content,
                     "showing": True,
+                    **({"attachments": meta["attachments"]} if meta.get("attachments") else {}),
                 }, ensure_ascii=False),
             })
 

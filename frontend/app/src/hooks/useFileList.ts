@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { authFetch } from '../store/auth-store';
 
 interface FileEntry {
   relative_path: string;
@@ -15,7 +16,7 @@ export function useFileList(threadId: string) {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`/api/threads/${threadId}/workspace/channel-files`);
+      const res = await authFetch(`/api/threads/${threadId}/workspace/channel-files`);
       if (!res.ok) throw new Error('Failed to fetch files');
       const data = await res.json();
       setFiles(data.entries || []);

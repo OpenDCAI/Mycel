@@ -229,7 +229,7 @@ class SandboxProvider(ABC):
     def get_web_url(self, session_id: str) -> str | None:
         return None
 
-    def create_workplace(self, member_name: str, mount_path: str) -> str:
+    def create_workplace(self, member_id: str, mount_path: str) -> str:
         """Create persistent storage for an agent. Returns backend_ref.
         Override in providers where supports_workplace=True.
         """

@@ -155,6 +155,7 @@ export interface UserMessage {
   showing?: boolean;
   senderName?: string;
   senderAvatarUrl?: string;
+  attachments?: string[];
 }
 
 export interface NoticeMessage {

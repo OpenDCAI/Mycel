@@ -114,6 +114,6 @@ export async function streamThreadEvents(
 }
 
 export async function cancelRun(threadId: string): Promise<void> {
-  const res = await fetch(`/api/threads/${encodeURIComponent(threadId)}/runs/cancel`, { method: "POST" });
+  const res = await authFetch(`/api/threads/${encodeURIComponent(threadId)}/runs/cancel`, { method: "POST" });
   if (!res.ok) throw new Error(`Cancel failed: ${res.statusText}`);
 }

@@ -14,12 +14,8 @@ from .contracts import (
     QueueRepo,
     RunEventRepo,
     SummaryRepo,
-<<<<<<< HEAD
-=======
-    ThreadConfigRepo,
     WorkplaceRepo,
     WorkspaceRepo,
->>>>>>> da734586 (refactor: architecture cleanup + docker proxy fix)
 )
 
 StorageStrategy = Literal["sqlite", "supabase"]

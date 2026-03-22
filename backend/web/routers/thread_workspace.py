@@ -6,7 +6,7 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse
 
-from backend.web.core.dependencies import get_app
+from backend.web.core.dependencies import get_app, verify_thread_owner
 from backend.web.services.agent_pool import resolve_thread_sandbox
 from backend.web.services.workspace_service import (
     ensure_thread_files,
@@ -24,6 +24,7 @@ router = APIRouter(prefix="/api/threads/{thread_id}/workspace", tags=["workspace
 async def list_workspace_path(
     thread_id: str,
     path: str | None = Query(default=None),
+    member_id: Annotated[str, Depends(verify_thread_owner)] = None,
     app: Annotated[Any, Depends(get_app)] = None,
 ) -> dict[str, Any]:
     """List files and directories in workspace path."""
@@ -95,6 +96,7 @@ async def list_workspace_path(
 async def read_workspace_file(
     thread_id: str,
     path: str = Query(...),
+    member_id: Annotated[str, Depends(verify_thread_owner)] = None,
     app: Annotated[Any, Depends(get_app)] = None,
 ) -> dict[str, Any]:
     """Read file content from workspace."""
@@ -146,13 +148,16 @@ async def read_workspace_file(
 
 
 @router.get("/channels")
-async def get_workspace_channels(thread_id: str) -> dict[str, Any]:
+async def get_workspace_channels(
+    thread_id: str,
+    member_id: Annotated[str, Depends(verify_thread_owner)] = None,
+) -> dict[str, Any]:
     """Get thread-scoped upload/download channel paths."""
     from backend.web.utils.helpers import load_thread_config
 
     # @@@workspace-lookup - pass stored workspace_id so ensure is idempotent even if called multiple times
     tc = await asyncio.to_thread(load_thread_config, thread_id)
-    workspace_id = tc.workspace_id if tc else None
+    workspace_id = tc.get("workspace_id") if tc else None
     payload = await asyncio.to_thread(ensure_thread_files, thread_id, workspace_id=workspace_id)
     return payload
 
@@ -166,6 +171,7 @@ async def upload_workspace_file(
     file: UploadFile = File(...),
     path: str | None = Query(default=None),
     workspace_id: str | None = Query(default=None),
+    member_id: Annotated[str, Depends(verify_thread_owner)] = None,
     app: Annotated[Any, Depends(get_app)] = None,
 ) -> dict[str, Any]:
     """Upload a file into thread file channel."""
@@ -215,6 +221,7 @@ async def delete_workspace_file(
     thread_id: str,
     path: str = Query(...),
     workspace_id: str | None = Query(default=None),
+    member_id: Annotated[str, Depends(verify_thread_owner)] = None,
 ) -> dict[str, Any]:
     """Delete a file from workspace."""
     from backend.web.services.workspace_service import delete_file
@@ -237,6 +244,7 @@ async def delete_workspace_file(
 async def list_workspace_channel_files(
     thread_id: str,
     workspace_id: str | None = Query(default=None),
+    member_id: Annotated[str, Depends(verify_thread_owner)] = None,
 ) -> dict[str, Any]:
     """List files under thread-scoped files directory."""
     try:

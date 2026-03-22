@@ -109,7 +109,7 @@ def _get_workspace_id(thread_id: str) -> str | None:
     from backend.web.utils.helpers import load_thread_config
 
     tc = load_thread_config(thread_id)
-    return tc.workspace_id if tc else None
+    return tc.get("workspace_id") if tc else None
 
 
 def _get_files_dir(thread_id: str, workspace_id: str | None = None) -> Path:
@@ -235,57 +235,57 @@ def _workplace_repo():
     return _get_container().workplace_repo()
 
 
-def get_agent_workplace(member_name: str, provider_type: str) -> dict[str, Any] | None:
+def get_agent_workplace(member_id: str, provider_type: str) -> dict[str, Any] | None:
     repo = _workplace_repo()
     try:
-        return repo.get(member_name, provider_type)
+        return repo.get(member_id, provider_type)
     finally:
         repo.close()
 
 
 def create_agent_workplace(
-    member_name: str, provider_type: str, backend_ref: str, mount_path: str,
+    member_id: str, provider_type: str, backend_ref: str, mount_path: str,
 ) -> dict[str, Any]:
     now = _now_utc()
     repo = _workplace_repo()
     try:
-        repo.upsert(member_name, provider_type, backend_ref, mount_path, now)
+        repo.upsert(member_id, provider_type, backend_ref, mount_path, now)
     finally:
         repo.close()
-    logger.info("Created workplace: member=%s provider=%s ref=%s", member_name, provider_type, backend_ref)
+    logger.info("Created workplace: member_id=%s provider=%s ref=%s", member_id, provider_type, backend_ref)
     return {
-        "member_name": member_name, "provider_type": provider_type,
+        "member_id": member_id, "provider_type": provider_type,
         "backend_ref": backend_ref, "mount_path": mount_path, "created_at": now,
     }
 
 
-def list_agent_workplaces(member_name: str) -> list[dict[str, Any]]:
+def list_agent_workplaces(member_id: str) -> list[dict[str, Any]]:
     repo = _workplace_repo()
     try:
-        return repo.list_by_member(member_name)
+        return repo.list_by_member(member_id)
     finally:
         repo.close()
 
 
-def delete_agent_workplace(member_name: str, provider_type: str) -> bool:
+def delete_agent_workplace(member_id: str, provider_type: str) -> bool:
     repo = _workplace_repo()
     try:
-        deleted = repo.delete(member_name, provider_type)
+        deleted = repo.delete(member_id, provider_type)
     finally:
         repo.close()
     if deleted:
-        logger.info("Deleted workplace: member=%s provider=%s", member_name, provider_type)
+        logger.info("Deleted workplace: member_id=%s provider=%s", member_id, provider_type)
     return deleted
 
 
-def delete_all_agent_workplaces(member_name: str) -> int:
+def delete_all_agent_workplaces(member_id: str) -> int:
     repo = _workplace_repo()
     try:
-        count = repo.delete_all_for_member(member_name)
+        count = repo.delete_all_for_member(member_id)
     finally:
         repo.close()
     if count:
-        logger.info("Deleted %d workplace(s) for member=%s", count, member_name)
+        logger.info("Deleted %d workplace(s) for member_id=%s", count, member_id)
     return count
 
 

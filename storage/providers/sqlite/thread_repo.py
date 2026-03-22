@@ -48,14 +48,15 @@ class SQLiteThreadRepo:
         _validate_thread_identity(is_main=is_main, branch_index=branch_index)
         with self._lock:
             self._conn.execute(
-                "INSERT INTO threads (id, member_id, sandbox_type, cwd, model, observation_provider, is_main, branch_index, created_at)"
-                " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                "INSERT INTO threads (id, member_id, sandbox_type, cwd, model, observation_provider, is_main, branch_index, workspace_id, created_at)"
+                " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (thread_id, member_id, sandbox_type, cwd,
-                 extra.get("model"), extra.get("observation_provider"), int(is_main), branch_index, created_at),
+                 extra.get("model"), extra.get("observation_provider"),
+                 int(is_main), branch_index, extra.get("workspace_id"), created_at),
             )
             self._conn.commit()
 
-    _COLS = ("id", "member_id", "sandbox_type", "model", "cwd", "observation_provider", "is_main", "branch_index", "created_at")
+    _COLS = ("id", "member_id", "sandbox_type", "model", "cwd", "observation_provider", "is_main", "branch_index", "workspace_id", "created_at")
     _SELECT = ", ".join(_COLS)
 
     def _to_dict(self, r: tuple) -> dict[str, Any]:
@@ -114,7 +115,7 @@ class SQLiteThreadRepo:
                      "entity_name": r[ncols + 2]} for r in rows]
 
     def update(self, thread_id: str, **fields: Any) -> None:
-        allowed = {"sandbox_type", "model", "cwd", "observation_provider", "is_main", "branch_index"}
+        allowed = {"sandbox_type", "model", "cwd", "observation_provider", "is_main", "branch_index", "workspace_id"}
         sets = {k: v for k, v in fields.items() if k in allowed}
         if not sets:
             return
@@ -151,6 +152,7 @@ class SQLiteThreadRepo:
                 agent TEXT,
                 is_main INTEGER NOT NULL DEFAULT 0,
                 branch_index INTEGER NOT NULL,
+                workspace_id TEXT,
                 created_at REAL NOT NULL
             )
             """

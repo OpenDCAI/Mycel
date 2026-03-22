@@ -2,9 +2,14 @@ import { memo } from "react";
 import { useParams } from "react-router-dom";
 import { FileText } from "lucide-react";
 import type { UserMessage } from "../../api";
-<<<<<<< HEAD
+import { getWorkspaceDownloadUrl } from "../../api";
 import MemberAvatar from "../MemberAvatar";
 import { formatTime } from "./utils";
+
+/** Strip "[User uploaded N file(s)...]" prefix from message content. */
+function stripUploadPrefix(content: string): string {
+  return content.replace(/^\[User uploaded \d+ file\(s\)[^\]]*\]\s*/i, "");
+}
 
 interface UserBubbleProps {
   entry?: UserMessage;   // threads path
@@ -15,23 +20,12 @@ interface UserBubbleProps {
 }
 
 export const UserBubble = memo(function UserBubble(props: UserBubbleProps) {
-  const text = props.content ?? props.entry?.content ?? "";
-  const ts = props.timestamp ?? props.entry?.timestamp;
-=======
-import { getWorkspaceDownloadUrl } from "../../api";
-import { formatTime } from "./utils";
-
-/** Strip legacy "[User uploaded N file(s) to /workspace/files/: ...]" prefix from message content. */
-function stripUploadPrefix(content: string): string {
-  return content.replace(/^\[User uploaded \d+ file\(s\) to [^\]]+\]\s*/i, "");
-}
-
-export const UserBubble = memo(function UserBubble({ entry }: { entry: UserMessage }) {
   const { threadId } = useParams<{ threadId: string }>();
-  const attachments = entry.attachments;
-  const displayContent = attachments?.length ? stripUploadPrefix(entry.content) : entry.content;
+  const attachments = props.entry?.attachments;
+  const rawText = props.content ?? props.entry?.content ?? "";
+  const displayContent = stripUploadPrefix(rawText);
+  const ts = props.timestamp ?? props.entry?.timestamp;
 
->>>>>>> da734586 (refactor: architecture cleanup + docker proxy fix)
   return (
     <div className="flex justify-end gap-2 mb-1 animate-fade-in">
       <div className="max-w-[78%]">
@@ -53,11 +47,7 @@ export const UserBubble = memo(function UserBubble({ entry }: { entry: UserMessa
         )}
         <div className="rounded-xl rounded-br-sm px-3.5 py-2 bg-[#f5f5f5] border border-[#e5e5e5]">
           <p className="text-[13px] whitespace-pre-wrap leading-[1.55] text-[#171717]">
-<<<<<<< HEAD
-            {text}
-=======
             {displayContent}
->>>>>>> da734586 (refactor: architecture cleanup + docker proxy fix)
           </p>
         </div>
         {ts && (

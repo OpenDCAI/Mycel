@@ -18,6 +18,7 @@ async def route_message_to_brain(
     source: str = "owner",
     sender_name: str | None = None,
     sender_avatar_url: str | None = None,
+    attachments: list[str] | None = None,
 ) -> dict:
     """Route message to agent brain thread.
 
@@ -57,7 +58,10 @@ async def route_message_to_brain(
             logger.debug("[route] → ENQUEUED (transition failed)")
             return {"status": "injected", "routing": "steer", "thread_id": thread_id}
         logger.debug("[route] → START RUN (idle→active)")
+        meta = {"source": source, "sender_name": sender_name,
+                "sender_avatar_url": sender_avatar_url}
+        if attachments:
+            meta["attachments"] = attachments
         run_id = start_agent_run(agent, thread_id, run_content, app,
-                                  message_metadata={"source": source, "sender_name": sender_name,
-                                                     "sender_avatar_url": sender_avatar_url})
+                                  message_metadata=meta)
     return {"status": "started", "routing": "direct", "run_id": run_id, "thread_id": thread_id}

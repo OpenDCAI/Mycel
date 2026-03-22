@@ -10,12 +10,13 @@ import Header from "../components/Header";
 import InputBox from "../components/InputBox";
 import TaskProgress from "../components/TaskProgress";
 import TokenStats from "../components/TokenStats";
+import { authFetch, useAuthStore } from "../store/auth-store";
 import { useAppActions } from "../hooks/use-app-actions";
 import { useBackgroundTasks } from "../hooks/use-background-tasks";
 import { BackgroundSessionsIndicator } from "../components/chat-area/BackgroundSessionsIndicator";
 import { useResizableX } from "../hooks/use-resizable-x";
 import { useSandboxManager } from "../hooks/use-sandbox-manager";
-import { useStreamHandler } from "../hooks/use-stream-handler";
+import { useDisplayDeltas } from "../hooks/use-display-deltas";
 import { useThreadData } from "../hooks/use-thread-data";
 import type { ThreadManagerState, ThreadManagerActions } from "../hooks/use-thread-manager";
 
@@ -55,17 +56,9 @@ function ChatPageInner({ threadId }: { threadId: string }) {
   // so state?.runStarted will already be falsy after a real reload — no navEntry check needed.
   const runStarted = !!state?.runStarted;
 
-  // Pre-populate user + empty assistant turn so ThinkingIndicator shows immediately (no skeleton).
-  // The empty assistant turn (streaming=true, segments=[]) renders the three-dot indicator
-  // until stream events arrive and populate it.
-  const [initialEntries] = useState(() => {
-    if (!runStarted || !state?.message) return undefined;
-    const now = Date.now();
-    return [
-      { id: `user-${now}`, role: "user" as const, content: state.message, timestamp: now },
-      { id: `assistant-${now + 1}`, role: "assistant" as const, segments: [], streaming: true, timestamp: now + 1 } as AssistantTurn,
-    ];
-  });
+  // @@@display-builder — no optimistic initialEntries.
+  // Backend sends user_message + run_start via display_delta.
+  const initialEntries = undefined;
 
   useEffect(() => {
     if (state?.selectedModel) return;
@@ -83,17 +76,16 @@ function ChatPageInner({ threadId }: { threadId: string }) {
       .catch(() => setCurrentModel("leon:large"));
   }, [state?.selectedModel, threadId]);
 
-  const { entries, activeSandbox, loading, setEntries, setActiveSandbox, refreshThread } = useThreadData(threadId, runStarted, initialEntries);
+  const { entries, activeSandbox, loading, displaySeq, setEntries, setActiveSandbox, refreshThread } = useThreadData(threadId, runStarted, initialEntries);
 
   const { runtimeStatus, isRunning, handleSendMessage, handleStopStreaming } =
-    useStreamHandler({
+    useDisplayDeltas({
       threadId,
-      // Use tm.refreshThreads (sidebar list only) — NOT refreshThread (which calls
-      // setEntries(history) and would wipe any in-flight streaming entries for the next run).
       refreshThreads: tm.refreshThreads,
       onUpdate: (updater) => setEntries(updater),
       loading,
       runStarted,
+      displaySeq,
     });
 
   // @@@debug-entries — expose current entries for backend comparison
@@ -127,7 +119,7 @@ function ChatPageInner({ threadId }: { threadId: string }) {
       for (const entry of entries) {
         if (entry.role !== "assistant") continue;
         for (const seg of (entry as AssistantTurn).segments) {
-          if (seg.type === "tool" && seg.step.name === "Task" && seg.step.subagent_stream?.task_id === taskId) {
+          if (seg.type === "tool" && seg.step.name === "Agent" && seg.step.subagent_stream?.task_id === taskId) {
             handleFocusAgent(seg.step.id);
             return;
           }
@@ -140,13 +132,12 @@ function ChatPageInner({ threadId }: { threadId: string }) {
   const handleCancelTask = useCallback(
     async (taskId: string) => {
       try {
-        const response = await fetch(`/api/threads/${threadId}/tasks/${taskId}/cancel`, {
+        const response = await authFetch(`/api/threads/${threadId}/tasks/${taskId}/cancel`, {
           method: "POST",
         });
         if (!response.ok) {
           console.error("[ChatPage] Failed to cancel task:", response.statusText);
         } else {
-          // 取消成功后刷新任务列表
           await refreshTasks();
         }
       } catch (err) {
@@ -158,28 +149,22 @@ function ChatPageInner({ threadId }: { threadId: string }) {
 
   const computerResize = useResizableX(600, 360, 1200, true);
 
-  async function handleUploadFiles(files: File[]): Promise<void> {
-    const toastId = toast.loading(`Uploading ${files.length} file(s)...`);
-    try {
-      for (const file of files) {
-        await uploadWorkspaceFile(threadId, {
-          file,
-          path: file.name,
-        });
-      }
-      toast.success(`Uploaded ${files.length} file(s)`, { id: toastId });
-    } catch (error) {
-      const msg = error instanceof Error ? error.message : String(error);
-      toast.error(`Upload failed: ${msg}`, { id: toastId });
-      throw error;
-    }
-  }
-
+  // @@@workspace-upload — upload attached files then send message with attachment filenames
   async function handleSendWithAttachments(message: string): Promise<void> {
     const filenames = attachedFiles.map((f) => f.name);
     if (attachedFiles.length > 0) {
-      await handleUploadFiles(attachedFiles);
-      setAttachedFiles([]);
+      const toastId = toast.loading(`Uploading ${attachedFiles.length} file(s)...`);
+      try {
+        for (const file of attachedFiles) {
+          await uploadWorkspaceFile(threadId, { file, path: file.name });
+        }
+        toast.success(`Uploaded ${attachedFiles.length} file(s)`, { id: toastId });
+        setAttachedFiles([]);
+      } catch (error) {
+        const msg = error instanceof Error ? error.message : String(error);
+        toast.error(`Upload failed: ${msg}`, { id: toastId });
+        return;
+      }
     }
     await handleSendMessage(message, filenames.length > 0 ? filenames : undefined);
   }
@@ -208,11 +193,14 @@ function ChatPageInner({ threadId }: { threadId: string }) {
             <BackgroundSessionsIndicator tasks={tasks} onCancelTask={handleCancelTask} />
             <ChatArea
               entries={entries}
-              isStreaming={isStreaming}
               runtimeStatus={runtimeStatus}
               loading={loading}
               onFocusAgent={handleFocusAgent}
               onTaskNoticeClick={handleTaskNoticeClick}
+              agentName={agentName}
+              agentAvatarUrl={agentAvatarUrl}
+              userName={userName}
+              userAvatarUrl={userAvatarUrl}
             />
           </div>
           <TaskProgress
