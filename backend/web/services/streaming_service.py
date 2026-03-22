@@ -309,16 +309,13 @@ def _ensure_thread_handlers(agent: Any, thread_id: str, app: Any) -> None:
                                 "showing": True,
                             }, ensure_ascii=False),
                         })
-                    elif source:
-                        # External notification → notice divider
-                        await activity_sink({
-                            "event": "notice",
-                            "data": json.dumps({
-                                "content": item.content,
-                                "source": source,
-                                "notification_type": item.notification_type,
-                            }, ensure_ascii=False),
-                        })
+                    # @@@no-steer-notice — external notifications (chat, etc.) should NOT
+                    # emit notice here. Two cases:
+                    #   1. before_model drains it → agent processes inline, no divider needed
+                    #   2. Not drained → _consume_followup_queue starts new run →
+                    #      _run_agent_to_buffer emits notice at run-start (the correct path)
+                    # Emitting here causes duplicate: this transient notice + the persistent
+                    # run-notice from case 2 (which has checkpoint backing).
                 loop.call_soon_threadsafe(loop.create_task, _emit_active_event())
             return
 
