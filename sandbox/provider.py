@@ -244,3 +244,7 @@ class SandboxProvider(ABC):
     def delete_workplace(self, backend_ref: str) -> None:
         """Delete persistent storage. Called on agent deletion."""
         raise NotImplementedError(f"{self.name} does not support Workplaces")
+
+    def set_thread_bind_mounts(self, thread_id: str, mounts: list) -> None:
+        """Set per-thread bind mounts for next create_session(). No-op for providers without mount support."""
+        pass

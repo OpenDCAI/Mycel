@@ -103,16 +103,8 @@ def _find_mount_capability_mismatch(
     mode_handlers = capability.get("mode_handlers", {})
     for mount in requested_mounts:
         requested = {"mode": mount.mode, "read_only": mount.read_only}
-        # @@@mode-handler-gate - Prefer explicit per-mode capability declaration; fall back to legacy booleans for backward compatibility.
-        mode_supported = None
-        if mode_handlers:
-            mode_supported = bool(mode_handlers.get(mount.mode, False))
-        elif mount.mode == "mount":
-            mode_supported = capability["supports_mount"]
-        elif mount.mode == "copy":
-            mode_supported = capability["supports_copy"]
-        else:
-            mode_supported = False
+        # @@@mode-handler-gate - check provider supports the requested mount mode
+        mode_supported = bool(mode_handlers.get(mount.mode, False)) if mode_handlers else False
 
         if not mode_supported:
             return {"requested": requested, "capability": capability}

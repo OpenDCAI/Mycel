@@ -10,7 +10,7 @@ import os
 from pathlib import Path
 from typing import Literal
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field
 
 
 class MountSpec(BaseModel):
@@ -18,18 +18,6 @@ class MountSpec(BaseModel):
     target: str
     mode: Literal["mount", "copy"] = "mount"
     read_only: bool = False
-
-    @model_validator(mode="before")
-    @classmethod
-    def _from_legacy_bind_mount_keys(cls, value):
-        if not isinstance(value, dict):
-            return value
-        payload = dict(value)
-        if "source" not in payload and "host_path" in payload:
-            payload["source"] = payload["host_path"]
-        if "target" not in payload and "mount_path" in payload:
-            payload["target"] = payload["mount_path"]
-        return payload
 
 # @@@env-at-import - This is evaluated at import time. For web backend, prefer exporting env vars before process start.
 DEFAULT_DB_PATH = Path(os.getenv("LEON_SANDBOX_DB_PATH") or (Path.home() / ".leon" / "sandbox.db"))

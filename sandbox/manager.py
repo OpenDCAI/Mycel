@@ -257,7 +257,7 @@ class SandboxManager:
         workplace = self._resolve_workplace(thread_id)
         if workplace:
             self.provider.set_workplace_mount(thread_id, workplace["backend_ref"], workplace["mount_path"])
-        elif hasattr(self.provider, 'set_thread_bind_mounts'):
+        else:
             workspace_path = self.workspace_sync.get_thread_workspace_path(thread_id)
             workspace_path.mkdir(parents=True, exist_ok=True)
             from sandbox.config import MountSpec
