@@ -7,12 +7,85 @@ Two entities share at most one chat; the system auto-resolves entity_id -> chat.
 from __future__ import annotations
 
 import logging
+import re
 import time
+from datetime import datetime, timezone
 from typing import Any
 
 from core.runtime.registry import ToolEntry, ToolMode, ToolRegistry
 
 logger = logging.getLogger(__name__)
+
+# @@@range-parser — parse range strings for chat_read history queries.
+# Supports: negative index (-10:-1), relative time (-2h:, -1d:-6h), ISO dates (2026-03-20:2026-03-22).
+_RELATIVE_RE = re.compile(r"^-(\d+)([hdm])$")
+
+
+def _parse_range(range_str: str) -> dict:
+    """Parse a range string into query parameters.
+
+    Returns dict with either:
+      {"type": "index", "limit": int, "skip_last": int}
+      {"type": "time", "after": float|None, "before": float|None}
+    Raises ValueError on invalid input.
+    """
+    # @@@range-split — split on ':' but ISO dates (YYYY-MM-DD) don't contain ':' so it's safe.
+    # We only support date-level ISO (no HH:MM) to avoid ':' collision. Use -Nh/-Nm for sub-day precision.
+    parts = range_str.split(":", 1)
+    if len(parts) != 2:
+        raise ValueError(f"Invalid range format '{range_str}'. Use 'start:end' (e.g. '-10:-1', '-1h:').")
+
+    left, right = parts[0].strip(), parts[1].strip()
+
+    # --- Detect index range: both parts are negative integers (or empty) ---
+    left_is_neg_int = bool(re.match(r"^-\d+$", left)) if left else True
+    right_is_neg_int = bool(re.match(r"^-\d+$", right)) if right else True
+    # Reject positive integers
+    left_is_pos_int = bool(re.match(r"^\d+$", left)) if left else False
+    right_is_pos_int = bool(re.match(r"^\d+$", right)) if right else False
+    if left_is_pos_int or right_is_pos_int:
+        raise ValueError("Positive indices not allowed. Use negative indices like '-10:-1'.")
+
+    if left_is_neg_int and right_is_neg_int and not _RELATIVE_RE.match(left or "") and not _RELATIVE_RE.match(right or ""):
+        # Pure negative integer range
+        start = int(left) if left else None  # e.g. -10
+        end = int(right) if right else None  # e.g. -1
+        if start is not None and end is not None:
+            if start >= end:
+                raise ValueError(f"Start ({start}) must be less than end ({end}). E.g. '-10:-1'.")
+            limit = end - start
+            skip_last = -end  # -1 means skip 0 from the end, -5 means skip 4
+        elif start is not None:
+            limit = -start
+            skip_last = 0
+        else:
+            limit = -end if end else 20
+            skip_last = 0
+        return {"type": "index", "limit": limit, "skip_last": skip_last}
+
+    # --- Time range: relative (-2h, -1d) or ISO date ---
+    now = time.time()
+    after_ts = _parse_time_endpoint(left, now) if left else None
+    before_ts = _parse_time_endpoint(right, now) if right else None
+    if after_ts is None and before_ts is None:
+        raise ValueError(f"Invalid range '{range_str}'. Use '-10:-1', '-1h:', or '2026-03-20:'.")
+    return {"type": "time", "after": after_ts, "before": before_ts}
+
+
+def _parse_time_endpoint(s: str, now: float) -> float | None:
+    """Parse a single time endpoint: relative (-2h, -1d, -30m) or ISO date."""
+    m = _RELATIVE_RE.match(s)
+    if m:
+        n, unit = int(m.group(1)), m.group(2)
+        seconds = {"h": 3600, "d": 86400, "m": 60}[unit]
+        return now - n * seconds
+    # Try ISO date parsing (date-level only — no HH:MM to avoid ':' collision with range separator)
+    try:
+        dt = datetime.strptime(s, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+        return dt.timestamp()
+    except ValueError:
+        pass
+    raise ValueError(f"Cannot parse time '{s}'. Use '-2h', '-1d', '-30m', or '2026-03-20'.")
 
 
 class ChatToolService:
@@ -52,6 +125,30 @@ class ChatToolService:
         self._register_chat_send(registry)
         self._register_chat_search(registry)
         self._register_directory(registry)
+
+    def _format_msgs(self, msgs: list, eid: str) -> str:
+        lines = []
+        for m in msgs:
+            sender = self._entities.get_by_id(m.sender_entity_id)
+            name = sender.name if sender else "unknown"
+            tag = "you" if m.sender_entity_id == eid else name
+            lines.append(f"[{tag}]: {m.content}")
+        return "\n".join(lines)
+
+    def _fetch_by_range(self, chat_id: str, parsed: dict) -> list:
+        if parsed["type"] == "index":
+            limit = parsed["limit"]
+            skip_last = parsed["skip_last"]
+            # Fetch limit + skip_last, then trim the tail
+            fetch_count = limit + skip_last
+            msgs = self._messages.list_by_chat(chat_id, limit=fetch_count)
+            if skip_last > 0:
+                msgs = msgs[:len(msgs) - skip_last] if len(msgs) > skip_last else []
+            return msgs
+        else:
+            return self._messages.list_by_time_range(
+                chat_id, after=parsed["after"], before=parsed["before"],
+            )
 
     def _register_chats(self, registry: ToolRegistry) -> None:
         eid = self._entity_id
@@ -101,7 +198,8 @@ class ChatToolService:
     def _register_chat_read(self, registry: ToolRegistry) -> None:
         eid = self._entity_id
 
-        def handle(entity_id: str | None = None, chat_id: str | None = None) -> str:
+        def handle(entity_id: str | None = None, chat_id: str | None = None,
+                   range: str | None = None) -> str:
             if chat_id:
                 pass  # use chat_id directly
             elif entity_id:
@@ -113,22 +211,32 @@ class ChatToolService:
             else:
                 return "Provide entity_id or chat_id."
 
-            # @@@read-unread-only — default to unread messages only.
-            # Falls back to last 20 if nothing is unread (context on re-entry).
-            msgs = self._messages.list_unread(chat_id, eid)
-            if not msgs:
-                msgs = self._messages.list_by_chat(chat_id, limit=20)
-            if not msgs:
-                return "No messages yet."
+            # @@@range-dispatch — if range is provided, use it regardless of unread state.
+            if range:
+                try:
+                    parsed = _parse_range(range)
+                except ValueError as e:
+                    return str(e)
+                msgs = self._fetch_by_range(chat_id, parsed)
+                if not msgs:
+                    return "No messages in that range."
+                return self._format_msgs(msgs, eid)
 
-            self._chat_entities.update_last_read(chat_id, eid, time.time())
-            lines = []
-            for m in msgs:
-                sender = self._entities.get_by_id(m.sender_entity_id)
-                name = sender.name if sender else "unknown"
-                tag = "you" if m.sender_entity_id == eid else name
-                lines.append(f"[{tag}]: {m.content}")
-            return "\n".join(lines)
+            # @@@read-unread-only — default to unread messages only.
+            msgs = self._messages.list_unread(chat_id, eid)
+            if msgs:
+                self._chat_entities.update_last_read(chat_id, eid, time.time())
+                return self._format_msgs(msgs, eid)
+
+            # Nothing unread — prompt agent to use range parameter
+            return (
+                "No unread messages. To read history, call again with range:\n"
+                "  range='-10:-1'  (last 10 messages)\n"
+                "  range='-5:'     (last 5 messages)\n"
+                "  range='-1h:'    (last hour)\n"
+                "  range='-2d:-1d' (yesterday)\n"
+                "  range='2026-03-20:2026-03-22' (date range)"
+            )
 
         registry.register(ToolEntry(
             name="chat_read",
@@ -136,14 +244,18 @@ class ChatToolService:
             schema={
                 "name": "chat_read",
                 "description": (
-                    "Read chat messages. Returns only unread messages by default.\n"
-                    "Use entity_id for 1:1, chat_id for group chats."
+                    "Read chat messages. Returns unread messages by default.\n"
+                    "If nothing unread, use range to read history:\n"
+                    "  Negative index: '-10:-1' (last 10), '-5:' (last 5)\n"
+                    "  Time interval: '-1h:', '-2d:-1d', '2026-03-20:2026-03-22'\n"
+                    "Positive indices are NOT allowed."
                 ),
                 "parameters": {
                     "type": "object",
                     "properties": {
                         "entity_id": {"type": "string", "description": "Entity_id for 1:1 chat history"},
                         "chat_id": {"type": "string", "description": "Chat_id for group chat history"},
+                        "range": {"type": "string", "description": "History range. Negative index '-X:-Y' or time '-1h:', '2026-03-20:'. Positive indices NOT allowed."},
                     },
                 },
             },

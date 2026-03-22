@@ -266,6 +266,28 @@ class SQLiteChatMessageRepo:
                 ).fetchall()
         return [self._to_msg(r) for r in rows]
 
+    def list_by_time_range(
+        self, chat_id: str, *, after: float | None = None, before: float | None = None, limit: int = 100,
+    ) -> list[ChatMessageRow]:
+        """Return messages in a time range, chronological order."""
+        with self._lock:
+            clauses = ["chat_id = ?"]
+            params: list = [chat_id]
+            if after is not None:
+                clauses.append("created_at >= ?")
+                params.append(after)
+            if before is not None:
+                clauses.append("created_at <= ?")
+                params.append(before)
+            where = " AND ".join(clauses)
+            params.append(limit)
+            rows = self._conn.execute(
+                f"SELECT {self._MSG_COLS} FROM chat_messages"
+                f" WHERE {where} ORDER BY created_at ASC LIMIT ?",
+                tuple(params),
+            ).fetchall()
+        return [self._to_msg(r) for r in rows]
+
     def count_unread(self, chat_id: str, entity_id: str) -> int:
         with self._lock:
             cursor_row = self._conn.execute(
