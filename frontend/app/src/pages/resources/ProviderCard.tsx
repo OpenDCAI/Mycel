@@ -75,7 +75,9 @@ export default function ProviderCard({ provider, selected, onSelect }: ProviderC
         {isUnavailable ? (
           <div className="text-center">
             <p className="text-xs text-muted-foreground">未就绪</p>
-            <p className="text-[10px] text-muted-foreground/60 mt-0.5">需要 Docker</p>
+            <p className="text-[10px] text-muted-foreground/60 mt-0.5">
+              {type === "container" ? "需要 Docker" : "需要安装 SDK"}
+            </p>
           </div>
         ) : (
           <div className="flex items-center justify-center gap-6">
