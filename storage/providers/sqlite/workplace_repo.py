@@ -82,9 +82,4 @@ class SQLiteWorkplaceRepo:
             )
             """
         )
-        # Migrate old schema: rename member_name → member_id
-        try:
-            self._conn.execute("ALTER TABLE agent_workplaces RENAME COLUMN member_name TO member_id")
-        except sqlite3.OperationalError:
-            pass  # column already named member_id or table is new
         self._conn.commit()

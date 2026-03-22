@@ -17,14 +17,20 @@ from backend.web.services.workspace_service import (
 from backend.web.utils.helpers import resolve_local_workspace_path
 from sandbox.thread_context import set_current_thread_id
 
-router = APIRouter(prefix="/api/threads/{thread_id}/workspace", tags=["workspace"])
+router = APIRouter(
+    prefix="/api/threads/{thread_id}/workspace",
+    tags=["workspace"],
+    dependencies=[Depends(verify_thread_owner)],
+)
+# @@@public-download — download is accessed via <a href> which can't carry auth headers
+_public = APIRouter(prefix="/api/threads/{thread_id}/workspace", tags=["workspace"])
 
 
 @router.get("/list")
 async def list_workspace_path(
     thread_id: str,
     path: str | None = Query(default=None),
-    member_id: Annotated[str, Depends(verify_thread_owner)] = None,
+
     app: Annotated[Any, Depends(get_app)] = None,
 ) -> dict[str, Any]:
     """List files and directories in workspace path."""
@@ -96,7 +102,7 @@ async def list_workspace_path(
 async def read_workspace_file(
     thread_id: str,
     path: str = Query(...),
-    member_id: Annotated[str, Depends(verify_thread_owner)] = None,
+
     app: Annotated[Any, Depends(get_app)] = None,
 ) -> dict[str, Any]:
     """Read file content from workspace."""
@@ -150,7 +156,7 @@ async def read_workspace_file(
 @router.get("/channels")
 async def get_workspace_channels(
     thread_id: str,
-    member_id: Annotated[str, Depends(verify_thread_owner)] = None,
+
 ) -> dict[str, Any]:
     """Get thread-scoped upload/download channel paths."""
     from backend.web.utils.helpers import load_thread_config
@@ -171,7 +177,7 @@ async def upload_workspace_file(
     file: UploadFile = File(...),
     path: str | None = Query(default=None),
     workspace_id: str | None = Query(default=None),
-    member_id: Annotated[str, Depends(verify_thread_owner)] = None,
+
     app: Annotated[Any, Depends(get_app)] = None,
 ) -> dict[str, Any]:
     """Upload a file into thread file channel."""
@@ -195,7 +201,7 @@ async def upload_workspace_file(
     return payload
 
 
-@router.get("/download")
+@_public.get("/download")
 async def download_workspace_file(
     thread_id: str,
     path: str = Query(...),
@@ -221,7 +227,7 @@ async def delete_workspace_file(
     thread_id: str,
     path: str = Query(...),
     workspace_id: str | None = Query(default=None),
-    member_id: Annotated[str, Depends(verify_thread_owner)] = None,
+
 ) -> dict[str, Any]:
     """Delete a file from workspace."""
     from backend.web.services.workspace_service import delete_file
@@ -244,7 +250,7 @@ async def delete_workspace_file(
 async def list_workspace_channel_files(
     thread_id: str,
     workspace_id: str | None = Query(default=None),
-    member_id: Annotated[str, Depends(verify_thread_owner)] = None,
+
 ) -> dict[str, Any]:
     """List files under thread-scoped files directory."""
     try:
