@@ -114,9 +114,4 @@ class SQLiteThreadRepo:
             )
             """
         )
-        # Add workspace_id column if missing (existing DBs)
-        try:
-            self._conn.execute("ALTER TABLE threads ADD COLUMN workspace_id TEXT")
-        except sqlite3.OperationalError:
-            pass  # column already exists
         self._conn.commit()

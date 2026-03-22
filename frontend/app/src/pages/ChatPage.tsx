@@ -162,9 +162,9 @@ function ChatPageInner({ threadId }: { threadId: string }) {
     if (attachedFiles.length > 0) {
       const toastId = toast.loading(`Uploading ${attachedFiles.length} file(s)...`);
       try {
-        for (const file of attachedFiles) {
-          await uploadWorkspaceFile(threadId, { file, path: file.name });
-        }
+        await Promise.all(attachedFiles.map((file) =>
+          uploadWorkspaceFile(threadId, { file, path: file.name }),
+        ));
         toast.success(`Uploaded ${attachedFiles.length} file(s)`, { id: toastId });
         setAttachedFiles([]);
       } catch (error) {

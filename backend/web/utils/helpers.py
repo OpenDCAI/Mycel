@@ -78,12 +78,16 @@ def _get_container() -> StorageContainer:
     return _cached_container
 
 
+_cached_thread_repo = None
+
 def _get_thread_repo():
-    """Get ThreadRepo instance."""
+    """Get cached ThreadRepo instance."""
+    global _cached_thread_repo
+    if _cached_thread_repo is not None:
+        return _cached_thread_repo
     from storage.providers.sqlite.thread_repo import SQLiteThreadRepo
-    from pathlib import Path
-    db = Path("~/.leon/leon.db").expanduser()
-    return SQLiteThreadRepo(db)
+    _cached_thread_repo = SQLiteThreadRepo(DB_PATH)
+    return _cached_thread_repo
 
 
 def save_thread_config(thread_id: str, **fields: Any) -> None:
@@ -92,27 +96,12 @@ def save_thread_config(thread_id: str, **fields: Any) -> None:
     updates = {k: v for k, v in fields.items() if k in allowed}
     if not updates:
         return
-    repo = _get_thread_repo()
-    try:
-        repo.update(thread_id, **updates)
-    finally:
-        if hasattr(repo, 'close'):
-            repo.close()
+    _get_thread_repo().update(thread_id, **updates)
 
 
-def load_thread_config(thread_id: str):
-    """Load thread data from SQLite. Returns dict-like object or None."""
-    repo = _get_thread_repo()
-    try:
-        return repo.get_by_id(thread_id)
-    finally:
-        if hasattr(repo, 'close'):
-            repo.close()
-
-
-def init_thread_config(thread_id: str, sandbox_type: str, cwd: str | None) -> None:
-    """Deprecated - threads are now created via ThreadRepo.create()."""
-    pass
+def load_thread_config(thread_id: str) -> dict[str, Any] | None:
+    """Load thread data from SQLite. Returns dict or None."""
+    return _get_thread_repo().get_by_id(thread_id)
 
 
 def get_active_observation_provider() -> str | None:
@@ -121,27 +110,6 @@ def get_active_observation_provider() -> str | None:
 
     config = ObservationLoader().load()
     return config.active if config.active else None
-
-
-def save_thread_model(thread_id: str, model: str) -> None:
-    """Persist the selected model for a thread."""
-    repo = _get_thread_repo()
-    try:
-        repo.update(thread_id, model=model)
-    finally:
-        if hasattr(repo, 'close'):
-            repo.close()
-
-
-def lookup_thread_model(thread_id: str) -> str | None:
-    """Look up persisted model for a thread."""
-    repo = _get_thread_repo()
-    try:
-        thread = repo.get_by_id(thread_id)
-        return thread.get("model") if thread else None
-    finally:
-        if hasattr(repo, 'close'):
-            repo.close()
 
 
 def resolve_local_workspace_path(
@@ -164,7 +132,7 @@ def resolve_local_workspace_path(
         if not thread_cwd:
             tc = load_thread_config(thread_id)
             if tc:
-                thread_cwd = tc.get("cwd") if isinstance(tc, dict) else getattr(tc, "cwd", None)
+                thread_cwd = tc.get("cwd")
     # @@@workspace-base-normalize - relative LOCAL_WORKSPACE_ROOT must be normalized, or target.relative_to(base) always fails.
     base = Path(thread_cwd).resolve() if thread_cwd else local_workspace_root.resolve()
 
