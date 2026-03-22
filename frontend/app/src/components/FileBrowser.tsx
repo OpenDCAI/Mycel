@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { authFetch } from '@/store/auth-store';
 import { useFileList } from '@/hooks/useFileList';
 import { MoreVertical } from 'lucide-react';
 import {
@@ -37,7 +38,7 @@ export function FileBrowser({ threadId }: FileBrowserProps) {
     if (!deleteTarget) return;
     setDeleting(true);
     try {
-      const res = await fetch(
+      const res = await authFetch(
         `/api/threads/${threadId}/workspace/files?path=${encodeURIComponent(deleteTarget)}`,
         { method: 'DELETE' }
       );

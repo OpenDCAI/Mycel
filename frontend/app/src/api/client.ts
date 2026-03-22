@@ -195,7 +195,7 @@ export async function uploadWorkspaceFile(
   const form = new FormData();
   form.set("file", opts.file, opts.file.name);
 
-  const response = await fetch(`${workspaceBase(threadId)}/upload?${query.toString()}`, {
+  const response = await authFetch(`${workspaceBase(threadId)}/upload?${query.toString()}`, {
     method: "POST",
     body: form,
   });

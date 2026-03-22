@@ -34,9 +34,9 @@ class FakeWorkplaceProvider(SandboxProvider):
             mount=MountCapability(supports_workplace=True),
         )
 
-    def create_workplace(self, member_name: str, mount_path: str) -> str:
-        ref = f"vol-{member_name}"
-        self._created_workplaces.append((member_name, mount_path))
+    def create_workplace(self, member_id: str, mount_path: str) -> str:
+        ref = f"vol-{member_id}"
+        self._created_workplaces.append((member_id, mount_path))
         return ref
 
     def create_session(self, context_id=None, thread_id=None):
@@ -94,16 +94,11 @@ def _make_manager(provider, tmp_path):
 
 
 def test_resolve_workplace_no_member():
-    """No member_name and no thread config → returns None (File Channel)."""
+    """No member_id in thread config → returns None (File Channel)."""
     with tempfile.TemporaryDirectory() as td:
         mgr = _make_manager(FakeWorkplaceProvider(), td)
-        with patch("sandbox.manager.load_thread_config", create=True) as mock_ltc:
-            # Patch the lazy import target
-            with patch.dict("sys.modules", {}):
-                pass
-            # _resolve_workplace does: from backend.web.utils.helpers import load_thread_config
-            with patch("backend.web.utils.helpers.load_thread_config", return_value=None, create=True):
-                result = mgr._resolve_workplace("thread-no-member")
+        with patch("backend.web.utils.helpers.load_thread_config", return_value=None, create=True):
+            result = mgr._resolve_workplace("thread-no-member")
         assert result is None
 
 
@@ -111,23 +106,23 @@ def test_resolve_workplace_provider_unsupported():
     """Provider without supports_workplace → returns None."""
     with tempfile.TemporaryDirectory() as td:
         mgr = _make_manager(FakeNoWorkplaceProvider(), td)
-        result = mgr._resolve_workplace("thread-1", member_name="leon")
+        result = mgr._resolve_workplace("thread-1", member_id="m_abc123")
         assert result is None
 
 
 def test_resolve_workplace_existing():
     """Existing workplace → returns it without creating."""
     existing = {
-        "member_name": "leon",
+        "member_id": "m_abc123",
         "provider_type": "fake-wp",
-        "backend_ref": "vol-leon",
+        "backend_ref": "vol-m_abc123",
         "mount_path": "/workspace/files",
     }
     with tempfile.TemporaryDirectory() as td:
         provider = FakeWorkplaceProvider()
         mgr = _make_manager(provider, td)
         with patch("backend.web.services.workspace_service.get_agent_workplace", return_value=existing, create=True):
-            result = mgr._resolve_workplace("thread-1", member_name="leon")
+            result = mgr._resolve_workplace("thread-1", member_id="m_abc123")
         assert result == existing
         assert provider._created_workplaces == []  # no new workplace created
 
@@ -138,15 +133,15 @@ def test_resolve_workplace_lazy_create():
         provider = FakeWorkplaceProvider()
         mgr = _make_manager(provider, td)
         expected = {
-            "member_name": "leon",
+            "member_id": "m_abc123",
             "provider_type": "fake-wp",
-            "backend_ref": "vol-leon",
+            "backend_ref": "vol-m_abc123",
             "mount_path": "/workspace/files",
         }
         with patch("backend.web.services.workspace_service.get_agent_workplace", return_value=None, create=True):
             with patch("backend.web.services.workspace_service.create_agent_workplace", return_value=expected, create=True) as mock_create:
-                result = mgr._resolve_workplace("thread-1", member_name="leon")
+                result = mgr._resolve_workplace("thread-1", member_id="m_abc123")
         assert result == expected
         assert len(provider._created_workplaces) == 1
-        assert provider._created_workplaces[0][0] == "leon"
+        assert provider._created_workplaces[0][0] == "m_abc123"
         mock_create.assert_called_once()

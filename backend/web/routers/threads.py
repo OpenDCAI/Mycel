@@ -39,7 +39,6 @@ from storage.contracts import EntityRow
 logger = logging.getLogger(__name__)
 from core.runtime.middleware.monitor import AgentState
 from backend.web.utils.serializers import avatar_url
-from core.runtime.middleware.queue import format_steer_reminder
 from sandbox.config import MountSpec
 from sandbox.thread_context import set_current_thread_id
 
@@ -220,7 +219,7 @@ async def create_thread(
         app.state.thread_cwd[thread_entity_id] = payload.cwd
 
     # Create file channel workspace
-    await asyncio.to_thread(ensure_thread_file_channel, thread_entity_id, workspace_id=payload.workspace_id)
+    ws_info = await asyncio.to_thread(ensure_thread_files, thread_entity_id, workspace_id=payload.workspace_id)
 
     return {
         "thread_id": thread_entity_id,
@@ -229,7 +228,7 @@ async def create_thread(
         "member_name": agent_member.name,
         "entity_name": entity_name,
         "avatar_url": avatar_url(agent_member_id, bool(agent_member.avatar)),
-        "workspace_id": payload.workspace_id,
+        "workspace_id": ws_info.get("workspace_id"),
     }
 
 
@@ -368,12 +367,19 @@ async def send_message(
         raise HTTPException(status_code=400, detail="message cannot be empty")
 
     from backend.web.services.message_routing import route_message_to_brain
+    from backend.web.services.agent_pool import resolve_thread_sandbox, get_or_create_agent
 
-    return await route_message_to_brain(app, thread_id, payload.message, source="owner")
+    message = payload.message
+    # @@@attachment-wire - sync files to sandbox and prepend paths
+    if payload.attachments:
+        sandbox_type = resolve_thread_sandbox(app, thread_id)
+        agent = await get_or_create_agent(app, sandbox_type, thread_id=thread_id)
+        message, _ = await _prepare_attachment_message(
+            thread_id, sandbox_type, message, payload.attachments, agent=agent,
+        )
 
-            return {"status": "injected", "routing": "steer", "thread_id": thread_id}
-        run_id = start_agent_run(agent, thread_id, message, app, message_metadata=message_metadata)
-    return {"status": "started", "routing": "direct", "run_id": run_id, "thread_id": thread_id}
+    return await route_message_to_brain(app, thread_id, message, source="owner",
+                                       attachments=payload.attachments or None)
 
 
 @router.post("/{thread_id}/queue")
@@ -397,7 +403,7 @@ async def get_queue(
     """List pending followup messages in the queue."""
     messages = app.state.queue_manager.list_queue(thread_id)
     return {"messages": messages, "thread_id": thread_id}
->>>>>>> 14241d17 (fix: reorder sync after agent creation, prime sandbox before upload)
+
 
 
 @router.get("/{thread_id}/history")
