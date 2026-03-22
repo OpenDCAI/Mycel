@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { Plug, QrCode, Loader2, CheckCircle2, XCircle, MessageCircle, Settings, X, ArrowRight } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import { request } from "@/api/client";
+import MemberAvatar from "@/components/MemberAvatar";
 import { toast } from "sonner";
 
 // --- Types ---
@@ -24,7 +25,7 @@ interface WeChatState {
 interface RoutingTarget {
   id: string;
   label: string;
-  member_name?: string;
+  avatar_url?: string;
 }
 
 interface RoutingTargets {
@@ -440,9 +441,7 @@ function ItemList({
               : "hover:bg-muted"
           }`}
         >
-          <div className="w-7 h-7 rounded-full bg-muted flex items-center justify-center text-xs font-medium shrink-0">
-            {item.label[0]?.toUpperCase()}
-          </div>
+          <MemberAvatar name={item.label} avatarUrl={item.avatar_url} size="sm" type="mycel_agent" />
           <div className="min-w-0 flex-1">
             <p className="text-sm text-foreground truncate">{item.label}</p>
             <p className="text-[10px] text-muted-foreground font-mono truncate">{item.id}</p>

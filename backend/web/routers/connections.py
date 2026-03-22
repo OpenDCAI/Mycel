@@ -135,9 +135,14 @@ async def wechat_routing_targets(
     member_id: needed for thread ownership lookup (threads belong to agent members owned by this human).
     entity_id: needed for chat lookup (chats the user's social identity participates in).
     """
+    from backend.web.utils.serializers import avatar_url
     raw_threads = app.state.thread_repo.list_by_owner(member_id)
     threads = [
-        {"id": t["id"], "label": t.get("entity_name") or t.get("member_name") or t["id"][:12]}
+        {
+            "id": t["id"],
+            "label": t.get("entity_name") or t.get("member_name") or t["id"][:12],
+            "avatar_url": avatar_url(t.get("member_id"), bool(t.get("member_avatar"))),
+        }
         for t in raw_threads
     ]
 
