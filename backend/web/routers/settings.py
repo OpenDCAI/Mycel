@@ -527,8 +527,8 @@ class ProviderRequest(BaseModel):
 
 
 @router.post("/providers")
-async def update_provider(request: ProviderRequest) -> dict[str, Any]:
-    """Update provider config → models.json providers."""
+async def update_provider(request: ProviderRequest, req: Request) -> dict[str, Any]:
+    """Update provider config → models.json providers, then reload all agents."""
     data = load_models()
     providers = data.setdefault("providers", {})
     provider_data: dict[str, Any] = {}
@@ -538,7 +538,18 @@ async def update_provider(request: ProviderRequest) -> dict[str, Any]:
         provider_data["base_url"] = request.base_url
     providers[request.provider] = provider_data
     save_models(data)
-    return {"success": True, "provider": request.provider}
+
+    # @@@reload-agents-on-key-change — hot-reload all cached agents so they pick up new API keys
+    pool = getattr(req.app.state, "agent_pool", {})
+    reloaded = 0
+    for agent in pool.values():
+        try:
+            agent.update_config()
+            reloaded += 1
+        except Exception:
+            pass
+
+    return {"success": True, "provider": request.provider, "agents_reloaded": reloaded}
 
 
 # ============================================================================

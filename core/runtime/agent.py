@@ -640,13 +640,24 @@ class LeonAgent:
             loader = AgentLoader(workspace_root=self.workspace_root)
             self.config = loader.load(cli_overrides=cli_overrides)
 
-        if model is None:
-            return
-
-        # Reload models config with new model
-        models_cli = {"active": {"model": model}}
+        # Reload models config (picks up new API keys + model changes from disk)
+        models_cli = {"active": {"model": model}} if model else None
         models_loader = ModelsLoader(workspace_root=self.workspace_root)
         self.models_config = models_loader.load(cli_overrides=models_cli)
+
+        if model is None:
+            # @@@api-key-reload — no model change, just refresh credentials from disk
+            provider_name = self._resolve_provider_name(self.model_name, self._model_overrides)
+            p = self.models_config.get_provider(provider_name) if provider_name else None
+            self.api_key = (p.api_key if p else None) or self.models_config.get_api_key()
+            base_url = (p.base_url if p else None) or self.models_config.get_base_url()
+            if base_url:
+                base_url = self._normalize_base_url(base_url, provider_name)
+            self._current_model_config.update({
+                "api_key": self.api_key,
+                "base_url": base_url,
+            })
+            return
 
         # Resolve virtual model
         active_model = self.models_config.active.model if self.models_config.active else model
