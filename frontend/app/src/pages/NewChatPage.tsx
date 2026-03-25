@@ -21,7 +21,7 @@ export default function NewChatPage() {
   const { memberId: memberUrlId } = useParams<{ memberId: string }>();
   const { tm } = useOutletContext<OutletContext>();
   const { sandboxTypes, selectedSandbox, handleCreateThread } = tm;
-  const { settings, loading, hasWorkspace } = useWorkspaceSettings();
+  const { settings, loading, hasWorkspace, refreshSettings } = useWorkspaceSettings();
   const [showWorkspaceSetup, setShowWorkspaceSetup] = useState(false);
 
   const authAgent = useAuthStore(s => s.agent);
@@ -59,7 +59,8 @@ export default function NewChatPage() {
     });
   }
 
-  function handleWorkspaceSet(_workspace: string) {
+  async function handleWorkspaceSet(_workspace: string) {
+    await refreshSettings();
     setShowWorkspaceSetup(false);
   }
 
