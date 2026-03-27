@@ -4,8 +4,15 @@ import { Link, useParams } from "react-router-dom";
 import type { ThreadSummary } from "../api";
 import MemberAvatar from "./MemberAvatar";
 import { useAppStore } from "../store/app-store";
-import { useAuthStore } from "../store/auth-store";
 import { Skeleton } from "./ui/skeleton";
+
+function requireThreadMemberId(thread: ThreadSummary): string {
+  // @@@thread-member-id-required - thread grouping/routing must use stable member IDs, never display names.
+  if (!thread.member_id) {
+    throw new Error(`Thread ${thread.thread_id} missing member_id`);
+  }
+  return thread.member_id;
+}
 
 function formatRelativeTime(dateStr?: string): string {
   if (!dateStr) return "";
@@ -165,7 +172,6 @@ export default function Sidebar({
 }: SidebarProps) {
   const { threadId } = useParams<{ threadId?: string }>();
   const activeThreadId = threadId || null;
-  const authAgent = useAuthStore(s => s.agent);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   const [expandedMembers, setExpandedMembers] = useState<Set<string>>(() => {
     try {
@@ -214,9 +220,10 @@ export default function Sidebar({
     const map = new Map<string, { memberName: string; avatarUrl?: string; threads: ThreadSummary[]; latestAt: number }>();
 
     for (const thread of threads) {
-      const key = thread.member_name || "Agent";
-      if (!map.has(key)) map.set(key, { memberName: key, avatarUrl: thread.avatar_url, threads: [], latestAt: 0 });
+      const key = requireThreadMemberId(thread);
+      if (!map.has(key)) map.set(key, { memberName: thread.member_name || "Agent", avatarUrl: thread.avatar_url, threads: [], latestAt: 0 });
       const g = map.get(key)!;
+      if (!g.memberName && thread.member_name) g.memberName = thread.member_name;
       if (!g.avatarUrl && thread.avatar_url) g.avatarUrl = thread.avatar_url;
       const at = thread.updated_at ? new Date(thread.updated_at).getTime() : 0;
       g.threads.push(thread);
@@ -225,8 +232,8 @@ export default function Sidebar({
 
     // Add members that have no threads yet (e.g. newly created copies)
     for (const member of memberList) {
-      if (!map.has(member.name)) {
-        map.set(member.name, { memberName: member.name, avatarUrl: member.avatar_url, threads: [], latestAt: 0 });
+      if (!map.has(member.id)) {
+        map.set(member.id, { memberName: member.name, avatarUrl: member.avatar_url, threads: [], latestAt: 0 });
       }
     }
 
@@ -241,7 +248,7 @@ export default function Sidebar({
           return tb - ta;
         }),
       }));
-  }, [threads, authAgent, memberList]);
+  }, [threads, memberList]);
 
   // Auto-expand the most recently active member on first load (only if nothing saved)
   useEffect(() => {

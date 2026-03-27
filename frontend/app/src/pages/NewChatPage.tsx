@@ -18,7 +18,7 @@ interface OutletContext {
 
 export default function NewChatPage() {
   const navigate = useNavigate();
-  const { memberId: memberUrlId } = useParams<{ memberId: string }>();
+  const { memberId } = useParams<{ memberId: string }>();
   const { tm } = useOutletContext<OutletContext>();
   const { sandboxTypes, selectedSandbox, handleCreateThread } = tm;
   const { settings, loading, hasWorkspace, refreshSettings } = useWorkspaceSettings();
@@ -27,16 +27,15 @@ export default function NewChatPage() {
   const authAgent = useAuthStore(s => s.agent);
   const memberList = useAppStore(s => s.memberList);
 
-  // Resolve URL member name → member ID
-  const decodedName = memberUrlId ? decodeURIComponent(memberUrlId) : undefined;
-  const isOwnedAgent = !decodedName || decodedName === authAgent?.name;
-  const memberName = isOwnedAgent ? (authAgent?.name || "Agent") : decodedName;
-
-  // Get the actual member ID for thread creation
-  const resolvedMember = isOwnedAgent
-    ? memberList.find(m => m.id === authAgent?.id)
-    : memberList.find(m => m.name === decodedName);
-  const resolvedMemberId = isOwnedAgent ? authAgent?.id : resolvedMember?.id;
+  const decodedMemberId = memberId ? decodeURIComponent(memberId) : undefined;
+  const isOwnedAgent = decodedMemberId === authAgent?.id;
+  const resolvedMember = decodedMemberId
+    ? memberList.find(m => m.id === decodedMemberId)
+    : authAgent?.id
+      ? memberList.find(m => m.id === authAgent.id)
+      : undefined;
+  const resolvedMemberId = resolvedMember?.id ?? decodedMemberId ?? authAgent?.id;
+  const memberName = resolvedMember?.name ?? (isOwnedAgent ? (authAgent?.name || "Agent") : "Agent");
   const memberAvatarUrl = resolvedMember?.avatar_url;
 
   async function handleSend(message: string, sandbox: string, model: string, workspace?: string) {
@@ -54,7 +53,7 @@ export default function NewChatPage() {
     postRun(threadId, message, undefined, model ? { model } : undefined).catch(err => {
       console.error('[NewChatPage] postRun failed:', err);
     });
-    navigate(`/threads/${memberUrlId}/${threadId}`, {
+    navigate(`/threads/${encodeURIComponent(resolvedMemberId)}/${threadId}`, {
       state: { selectedModel: model, runStarted: true, message },
     });
   }

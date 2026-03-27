@@ -13,6 +13,14 @@ import { useAppStore } from "../store/app-store";
 import MemberAvatar from "../components/MemberAvatar";
 import { Plus, Trash2 } from "lucide-react";
 
+function requireThreadMemberId(thread: { thread_id: string; member_id?: string }): string {
+  // @@@thread-member-id-required - mobile thread navigation must use stable member IDs, not mutable display names.
+  if (!thread.member_id) {
+    throw new Error(`Thread ${thread.thread_id} missing member_id`);
+  }
+  return thread.member_id;
+}
+
 export default function AppLayout() {
   const tm = useThreadManager();
   const {
@@ -109,7 +117,6 @@ function MobileThreadList({ threads, loading, onNewChat, onDeleteThread, newChat
   newChatOpen: boolean;
   setNewChatOpen: (v: boolean) => void;
 }) {
-  const memberList = useAppStore(s => s.memberList);
   return (
     <div className="h-full w-full bg-background flex flex-col overflow-hidden">
       <div className="h-14 flex items-center justify-between px-4 border-b border-border shrink-0">
@@ -128,11 +135,12 @@ function MobileThreadList({ threads, loading, onNewChat, onDeleteThread, newChat
           </div>
         ) : (
           threads.map(t => {
+            const memberId = requireThreadMemberId(t);
             const memberName = t.member_name || "Agent";
             const preview = t.preview || "新会话";
             return (
               <div key={t.thread_id} className="flex items-center border-b border-border">
-                <Link to={`/threads/${encodeURIComponent(memberName)}/${t.thread_id}`} className="flex items-center gap-3 px-4 py-3 flex-1 min-w-0 hover:bg-muted/50 transition-colors">
+                <Link to={`/threads/${encodeURIComponent(memberId)}/${t.thread_id}`} className="flex items-center gap-3 px-4 py-3 flex-1 min-w-0 hover:bg-muted/50 transition-colors">
                   <MemberAvatar name={memberName} avatarUrl={t.avatar_url} type="mycel_agent" size="md" />
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-medium text-foreground truncate">{memberName}</p>
