@@ -56,8 +56,6 @@ function ChatConversationInner({ chatId }: { chatId: string }) {
     chat?.entities.forEach(e => m.set(e.id, e));
     return m;
   }, [chat?.entities]);
-  const isGroup = (chat?.entities.length ?? 0) > 2;
-
   // Track if user is at bottom for sticky scroll
   const onScroll = useCallback(() => {
     const el = scrollContainerRef.current;
@@ -109,7 +107,7 @@ function ChatConversationInner({ chatId }: { chatId: string }) {
     if (!loading && messages.length > 0) {
       setTimeout(() => messagesEndRef.current?.scrollIntoView(), 50);
     }
-  }, [loading]);
+  }, [loading, messages.length]);
 
   // SSE for real-time messages
   useEffect(() => {

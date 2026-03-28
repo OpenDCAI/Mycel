@@ -103,7 +103,7 @@ function ChatPageInner({ threadId }: { threadId: string }) {
       loadThread: refreshThread,
     });
 
-  const ui = useAppActions({ activeThreadId: threadId, setEntries });
+  const ui = useAppActions({ activeThreadId: threadId });
   const {
     computerOpen, computerTab,
     setComputerOpen, setComputerTab,

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   getThread,
   type ChatEntry,
@@ -20,7 +20,7 @@ export interface ThreadDataActions {
   refreshThread: () => Promise<void>;
 }
 
-export function useThreadData(threadId: string | undefined, skipInitialLoad = false, initialEntries?: ChatEntry[], _showHidden = false): ThreadDataState & ThreadDataActions {
+export function useThreadData(threadId: string | undefined, skipInitialLoad = false, initialEntries?: ChatEntry[]): ThreadDataState & ThreadDataActions {
   const [entries, setEntries] = useState<ChatEntry[]>(initialEntries ?? []);
   const [activeSandbox, setActiveSandbox] = useState<SandboxInfo | null>(null);
   const [loading, setLoading] = useState(!skipInitialLoad);
@@ -31,10 +31,10 @@ export function useThreadData(threadId: string | undefined, skipInitialLoad = fa
     try {
       const thread = await getThread(id);
       // @@@display-builder — backend returns pre-computed entries + display_seq
-      setEntries((thread.entries ?? []) as ChatEntry[]);
-      setDisplaySeq((thread as any).display_seq ?? 0);
+      setEntries(thread.entries ?? []);
+      setDisplaySeq(thread.display_seq ?? 0);
       const sandbox = thread.sandbox;
-      setActiveSandbox(sandbox && typeof sandbox === "object" ? (sandbox as SandboxInfo) : null);
+      setActiveSandbox(sandbox);
     } catch (err) {
       console.error("[useThreadData] Failed to load thread:", err);
     } finally {
@@ -47,7 +47,7 @@ export function useThreadData(threadId: string | undefined, skipInitialLoad = fa
     await loadThread(threadId, true);
   }, [threadId, loadThread]);
 
-  // Load thread data when threadId or showHidden changes
+  // Load thread data when threadId changes
   useEffect(() => {
     if (!threadId) {
       setEntries([]);

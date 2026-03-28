@@ -37,6 +37,13 @@ export interface ThreadSummary {
   is_main?: boolean;
 }
 
+export interface ThreadDetail {
+  thread_id: string;
+  entries: ChatEntry[];
+  display_seq: number;
+  sandbox: SandboxInfo | null;
+}
+
 export interface SandboxType {
   name: string;
   available: boolean;

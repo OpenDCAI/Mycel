@@ -1,14 +1,12 @@
 import { useCallback, useState } from "react";
 import {
   sendMessage,
-  type ChatEntry,
 } from "../api";
 import type { TabType } from "../components/computer-panel/types";
 
 
 interface AppActionsDeps {
   activeThreadId: string | null;
-  setEntries: React.Dispatch<React.SetStateAction<ChatEntry[]>>;
 }
 
 export interface AppActionsState {
@@ -37,7 +35,7 @@ export interface AppActionsHandlers {
 }
 
 export function useAppActions(deps: AppActionsDeps): AppActionsState & AppActionsSetters & AppActionsHandlers {
-  const { activeThreadId, setEntries } = deps;
+  const { activeThreadId } = deps;
 
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [computerOpen, setComputerOpen] = useState(false);

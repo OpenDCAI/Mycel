@@ -71,14 +71,14 @@ export async function streamThreadEvents(
   let attempts = 0;
   const MAX_ATTEMPTS = 10;
 
-  while (!signal.aborted) {
+  while (!signal?.aborted) {
     try {
       const { useAuthStore } = await import("../store/auth-store");
       const token = useAuthStore.getState().token || "";
       const url = `/api/threads/${encodeURIComponent(threadId)}/events?after=${after}&token=${encodeURIComponent(token)}`;
       console.log(`[SSE-FETCH] fetching ${url.replace(/token=[^&]+/, "token=***")}`);
       const res = await fetch(url, { signal: signal });
-      if (signal.aborted) return;
+      if (signal?.aborted) return;
       console.log(`[SSE-FETCH] response status=${res.status}, ok=${res.ok}`);
 
       if (!res.ok) {
@@ -96,9 +96,9 @@ export async function streamThreadEvents(
       console.log(`[SSE-FETCH] stream ended, lastSeq=${lastSeq}, reconnecting...`);
       after = lastSeq;
 
-      if (signal.aborted) return;
+      if (signal?.aborted) return;
     } catch (fetchErr) {
-      if (signal.aborted) return;
+      if (signal?.aborted) return;
       console.log(`[SSE-FETCH] catch: ${fetchErr}`);
 
       if (++attempts > MAX_ATTEMPTS) {
@@ -117,4 +117,3 @@ export async function cancelRun(threadId: string): Promise<void> {
   const res = await fetch(`/api/threads/${encodeURIComponent(threadId)}/runs/cancel`, { method: "POST" });
   if (!res.ok) throw new Error(`Cancel failed: ${res.statusText}`);
 }
-
