@@ -6,8 +6,8 @@ from pathlib import Path
 # Database paths
 DB_PATH = Path.home() / ".leon" / "leon.db"
 SANDBOXES_DIR = Path.home() / ".leon" / "sandboxes"
-SANDBOX_FILES_ROOT = Path(
-    os.environ.get("LEON_SANDBOX_FILES_ROOT", str(Path.home() / ".leon" / "sandbox_files"))
+SANDBOX_VOLUME_ROOT = Path(
+    os.environ.get("LEON_SANDBOX_VOLUME_ROOT", str(Path.home() / ".leon" / "volumes"))
 ).expanduser().resolve()
 
 # Workspace
