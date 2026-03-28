@@ -1,6 +1,6 @@
 import { Check, ChevronRight, MoreHorizontal, Plus, Search, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useLocation, useParams } from "react-router-dom";
 import type { ThreadSummary } from "../api";
 import MemberAvatar from "./MemberAvatar";
 import { useAppStore } from "../store/app-store";
@@ -180,6 +180,7 @@ export default function Sidebar({
   onSearchClick,
   onNewChat,
 }: SidebarProps) {
+  const location = useLocation();
   const { memberId, threadId } = useParams<{ memberId?: string; threadId?: string }>();
   const activeMemberId = memberId ? decodeURIComponent(memberId) : null;
   const activeThreadId = threadId || null;
@@ -270,6 +271,12 @@ export default function Sidebar({
     });
   };
 
+  function isMemberActive(memberId: string, mainThreadId?: string): boolean {
+    if (memberId !== activeMemberId) return false;
+    if (location.pathname === `/threads/${encodeURIComponent(memberId)}/new`) return false;
+    return !activeThreadId || activeThreadId === mainThreadId;
+  }
+
   // ── Collapsed (narrow) mode ──────────────────────────────────────────────
   if (collapsed) {
     return (
@@ -286,8 +293,7 @@ export default function Sidebar({
         <div className="flex-1 min-h-0 overflow-y-auto w-full flex flex-col items-center gap-1 px-2 py-1 custom-scrollbar">
           {groups.map((group) => {
             const mainThread = group.threads.find((thread) => thread.is_main);
-            const isActive = group.memberId === activeMemberId
-              && (!activeThreadId || activeThreadId === mainThread?.thread_id);
+            const isActive = isMemberActive(group.memberId, mainThread?.thread_id);
             const isRunning = group.threads.some(t => t.running);
             return (
               <div key={group.memberId} className="relative group/item w-full flex justify-center">
@@ -388,25 +394,24 @@ export default function Sidebar({
               const isExpanded = expandedMembers.has(group.memberId);
               const urlId = encodeURIComponent(group.memberId);
               const mainThread = group.threads.find((thread) => thread.is_main);
-              const isMemberActive = group.memberId === activeMemberId
-                && (!activeThreadId || activeThreadId === mainThread?.thread_id);
+              const memberIsActive = isMemberActive(group.memberId, mainThread?.thread_id);
               const childThreads = group.threads.filter((thread) => !thread.is_main);
               return (
                 <div key={group.memberId} className="mb-1">
                   <div className={`flex items-center gap-1 px-2 py-1.5 rounded-xl transition-colors ${
-                    isMemberActive
+                    memberIsActive
                       ? "bg-muted"
                       : "hover:bg-muted/70"
                   }`}>
                     <button
                       onClick={() => toggleMember(group.memberId)}
                       className={`w-5 h-5 flex items-center justify-center rounded transition-colors ${
-                        isMemberActive ? "hover:bg-background/80" : "hover:bg-background/60"
+                        memberIsActive ? "hover:bg-background/80" : "hover:bg-background/60"
                       }`}
                       aria-label={isExpanded ? "收起分支对话" : "展开分支对话"}
                     >
                       <ChevronRight className={`w-3.5 h-3.5 transition-transform flex-shrink-0 ${
-                        isMemberActive ? "text-foreground/70" : "text-muted-foreground/50"
+                        memberIsActive ? "text-foreground/70" : "text-muted-foreground/50"
                       } ${isExpanded ? "rotate-90" : ""}`} />
                     </button>
                     <Link
@@ -415,7 +420,7 @@ export default function Sidebar({
                     >
                       <MemberAvatar name={group.memberName} avatarUrl={group.avatarUrl} type="mycel_agent" size="xs" />
                       <span className={`text-xs flex-1 truncate ${
-                        isMemberActive ? "font-semibold text-foreground" : "font-medium text-foreground"
+                        memberIsActive ? "font-semibold text-foreground" : "font-medium text-foreground"
                       }`}>
                         {group.memberName}
                       </span>
