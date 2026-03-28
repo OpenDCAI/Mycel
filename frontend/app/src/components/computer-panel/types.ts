@@ -1,5 +1,5 @@
 import type { ChatEntry, LeaseStatus, SessionStatus, TerminalStatus } from "../../api";
-import type { WorkspaceChannelFileEntry, WorkspaceChannelKind } from "../../api";
+import type { SandboxChannelFileEntry, SandboxChannelKind } from "../../api";
 
 export type TabType = "terminal" | "files" | "agents";
 
@@ -42,14 +42,14 @@ export interface FileExplorerState {
   selectedFileContent: string;
   loadingWorkspace: boolean;
   workspaceError: string | null;
-  channel: WorkspaceChannelKind;
+  channel: SandboxChannelKind;
   channelRootPath: string;
-  workspaceId: string | null;
-  channelEntries: WorkspaceChannelFileEntry[];
+  sandboxFilesId: string | null;
+  channelEntries: SandboxChannelFileEntry[];
   loadingChannelFiles: boolean;
   uploadingChannelFile: boolean;
   channelError: string | null;
-  setChannel: (channel: WorkspaceChannelKind) => void;
+  setChannel: (channel: SandboxChannelKind) => void;
   refreshChannelFiles: () => Promise<void>;
   uploadChannelFile: (file: File) => Promise<void>;
   downloadChannelFile: (relativePath: string) => void;

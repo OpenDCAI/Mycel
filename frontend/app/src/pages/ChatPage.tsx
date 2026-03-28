@@ -3,7 +3,7 @@ import { useParams, useOutletContext, useLocation } from "react-router-dom";
 import { toast } from "sonner";
 import ChatArea from "../components/ChatArea";
 import type { AssistantTurn } from "../api";
-import { uploadWorkspaceFile } from "../api";
+import { uploadSandboxFile } from "../api";
 import ComputerPanel from "../components/ComputerPanel";
 import { DragHandle } from "../components/DragHandle";
 import Header from "../components/Header";
@@ -156,7 +156,7 @@ function ChatPageInner({ threadId }: { threadId: string }) {
       const toastId = toast.loading(`Uploading ${attachedFiles.length} file(s)...`);
       try {
         await Promise.all(attachedFiles.map((file) =>
-          uploadWorkspaceFile(threadId, { file, path: file.name }),
+          uploadSandboxFile(threadId, { file, path: file.name }),
         ));
         toast.success(`Uploaded ${attachedFiles.length} file(s)`, { id: toastId });
         setAttachedFiles([]);

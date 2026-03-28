@@ -2,7 +2,7 @@ import { memo } from "react";
 import { useParams } from "react-router-dom";
 import { FileText } from "lucide-react";
 import type { UserMessage } from "../../api";
-import { getWorkspaceDownloadUrl } from "../../api";
+import { getSandboxDownloadUrl } from "../../api";
 import MemberAvatar from "../MemberAvatar";
 import { formatTime } from "./utils";
 
@@ -34,7 +34,7 @@ export const UserBubble = memo(function UserBubble(props: UserBubbleProps) {
             {attachments.map((filename) => (
               <a
                 key={filename}
-                href={getWorkspaceDownloadUrl(threadId, filename)}
+                href={getSandboxDownloadUrl(threadId, filename)}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="flex items-center gap-1.5 px-2.5 py-1.5 bg-[#f0f0f0] hover:bg-[#e8e8e8] rounded-lg text-xs transition-colors cursor-pointer"

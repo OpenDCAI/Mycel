@@ -1,4 +1,4 @@
-import type { ChatEntry, ToolStep, WorkspaceEntry } from "../../api";
+import type { ChatEntry, ToolStep, SandboxFileEntry } from "../../api";
 import type { TreeNode } from "./types";
 
 /* ── Flow types for message-flow panel ── */
@@ -106,7 +106,7 @@ export function parseAgentArgs(args: unknown): { description?: string; prompt?: 
   return {};
 }
 
-export function buildTreeNodes(entries: WorkspaceEntry[], parentPath: string): TreeNode[] {
+export function buildTreeNodes(entries: SandboxFileEntry[], parentPath: string): TreeNode[] {
   return entries.map((e) => ({
     ...e,
     fullPath: joinPath(parentPath, e.name),
