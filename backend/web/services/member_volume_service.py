@@ -72,3 +72,146 @@ def delete_all_member_volumes(member_id: str) -> int:
     if count:
         logger.info("Deleted %d member volume(s) for member_id=%s", count, member_id)
     return count
+
+
+# ---------------------------------------------------------------------------
+# Orchestration — lease-based volume lookup + sandbox mount setup
+# ---------------------------------------------------------------------------
+
+
+def get_lease_volume_source(thread_id: str) -> "VolumeSource":
+    """Get VolumeSource for a thread via lease chain.
+
+    Chain: thread → active terminal → lease → volume_id → sandbox_volumes.source → deserialize.
+    This is the primary way all code paths (upload, sync, pause, resume) get the VolumeSource.
+    """
+    import json
+    from sandbox.terminal import TerminalStore
+    from sandbox.lease import LeaseStore
+    from sandbox.config import DEFAULT_DB_PATH
+    from storage.providers.sqlite.sandbox_volume_repo import SQLiteSandboxVolumeRepo
+    from sandbox.volume_source import deserialize_volume_source
+
+    terminal_store = TerminalStore(db_path=DEFAULT_DB_PATH)
+    terminal = terminal_store.get_active(thread_id)
+    if not terminal:
+        raise ValueError(f"No active terminal for thread {thread_id}")
+
+    lease_store = LeaseStore(db_path=DEFAULT_DB_PATH)
+    lease = lease_store.get(terminal.lease_id)
+    if not lease:
+        raise ValueError(f"Lease not found: {terminal.lease_id}")
+
+    volume_id = lease.volume_id
+    if not volume_id:
+        raise ValueError(f"Lease {terminal.lease_id} has no volume_id")
+
+    repo = SQLiteSandboxVolumeRepo()
+    try:
+        entry = repo.get(volume_id)
+    finally:
+        repo.close()
+
+    if not entry:
+        raise ValueError(f"Volume not found: {volume_id}")
+
+    return deserialize_volume_source(json.loads(entry["source"]))
+
+
+def setup_sandbox_mounts(
+    thread_id: str,
+    sandbox_vol: "SandboxVolume",
+) -> dict:
+    """Called at sandbox startup. Mount the lease's volume into the sandbox.
+
+    For Daytona: first startup upgrades HostVolume → DaytonaVolume.
+    For Docker/others with bind mount: bind-mounts the volume dir.
+    For E2B/AgentBay (no mount support): no-op here, sync handles it.
+    """
+    from sandbox.volume_source import DaytonaVolume
+
+    source = get_lease_volume_source(thread_id)
+    remote_path = sandbox_vol.resolve_remote_path()
+
+    # Daytona upgrade: first startup creates managed volume
+    if (sandbox_vol.capability.runtime_kind == "daytona_pty"
+            and not isinstance(source, DaytonaVolume)):
+        source = _upgrade_to_daytona_volume(thread_id, source, sandbox_vol.provider)
+
+    # Mount
+    if isinstance(source, DaytonaVolume):
+        sandbox_vol.mount_volume(thread_id, source.volume_name, remote_path)
+    else:
+        sandbox_vol.mount(thread_id, source, remote_path)
+
+    return {"source": source, "remote_path": remote_path}
+
+
+def _upgrade_to_daytona_volume(thread_id, current_source, provider):
+    """First Daytona sandbox start: create managed volume, upgrade VolumeSource in DB."""
+    import json
+    from sandbox.volume_source import DaytonaVolume
+    from sandbox.terminal import TerminalStore
+    from sandbox.lease import LeaseStore
+    from sandbox.config import DEFAULT_DB_PATH
+    from storage.providers.sqlite.sandbox_volume_repo import SQLiteSandboxVolumeRepo
+
+    # Get member_id from thread config for volume naming
+    from backend.web.utils.helpers import load_thread_config
+    tc = load_thread_config(thread_id)
+    member_id = tc.get("member_id", "unknown") if tc else "unknown"
+
+    volume_name = f"leon-volume-{member_id}"
+    remote_path = getattr(provider, "WORKSPACE_ROOT", "/workspace") + "/files"
+
+    logger.info("Creating Daytona volume: %s", volume_name)
+    provider.create_member_volume(member_id, remote_path)
+
+    new_source = DaytonaVolume(
+        staging_path=current_source.host_path,
+        volume_name=volume_name,
+    )
+
+    # Update DB
+    terminal_store = TerminalStore(db_path=DEFAULT_DB_PATH)
+    terminal = terminal_store.get_active(thread_id)
+    lease_store = LeaseStore(db_path=DEFAULT_DB_PATH)
+    lease = lease_store.get(terminal.lease_id)
+
+    repo = SQLiteSandboxVolumeRepo()
+    try:
+        repo.update_source(lease.volume_id, json.dumps(new_source.serialize()))
+    finally:
+        repo.close()
+
+    return new_source
+
+
+# ---------------------------------------------------------------------------
+# File CRUD — delegates to VolumeSource via lease lookup
+# ---------------------------------------------------------------------------
+
+
+def save_file(*, thread_id: str, relative_path: str, content: bytes) -> dict:
+    """Save file to the thread's volume (via lease chain)."""
+    source = get_lease_volume_source(thread_id)
+    result = source.save_file(relative_path, content)
+    result["thread_id"] = thread_id
+    from backend.web.services.activity_tracker import track_thread_activity
+    track_thread_activity(thread_id, "file_upload")
+    return result
+
+
+def list_volume_files(*, thread_id: str) -> list[dict]:
+    """List files in the thread's volume."""
+    return get_lease_volume_source(thread_id).list_files()
+
+
+def resolve_volume_file(*, thread_id: str, relative_path: str):
+    """Resolve file path in the thread's volume."""
+    return get_lease_volume_source(thread_id).resolve_file(relative_path)
+
+
+def delete_volume_file(*, thread_id: str, relative_path: str) -> None:
+    """Delete file from the thread's volume."""
+    get_lease_volume_source(thread_id).delete_file(relative_path)
