@@ -1,3 +1,4 @@
+import asyncio
 import time
 from types import SimpleNamespace
 
@@ -38,7 +39,7 @@ async def test_get_or_create_agent_creates_once_per_thread(monkeypatch: pytest.M
         thread_sandbox={},
     ))
 
-    first, second = await __import__("asyncio").gather(
+    first, second = await asyncio.gather(
         agent_pool.get_or_create_agent(app, "local", thread_id="thread-1"),
         agent_pool.get_or_create_agent(app, "local", thread_id="thread-1"),
     )
