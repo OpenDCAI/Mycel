@@ -91,7 +91,7 @@ export default function NewChatPage({ mode = "member" }: { mode?: "member" | "ne
     });
   }
 
-  async function handleWorkspaceSet(_workspace: string) {
+  async function handleWorkspaceSet() {
     await refreshSettings();
     setShowWorkspaceSetup(false);
   }
@@ -180,7 +180,9 @@ export default function NewChatPage({ mode = "member" }: { mode?: "member" | "ne
       <WorkspaceSetupModal
         open={showWorkspaceSetup}
         onClose={() => setShowWorkspaceSetup(false)}
-        onWorkspaceSet={handleWorkspaceSet}
+        onWorkspaceSet={() => {
+          void handleWorkspaceSet();
+        }}
       />
     </div>
   );
