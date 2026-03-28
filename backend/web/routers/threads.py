@@ -320,7 +320,9 @@ async def resolve_main_thread(
     """Return the main thread for a member, or null when none exists."""
     agent_member = app.state.member_repo.get_by_id(payload.member_id)
     if not agent_member or agent_member.owner_user_id != user_id:
-        raise HTTPException(403, "Not authorized")
+        # Return null instead of 403 — member may not exist yet (stale client state)
+        # or belong to another user (harmless to reveal "no thread")
+        return {"thread": None}
 
     existing = app.state.thread_repo.get_main_thread(payload.member_id)
     if existing is None:
