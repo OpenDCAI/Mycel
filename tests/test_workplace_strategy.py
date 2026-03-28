@@ -1,4 +1,4 @@
-"""Unit tests for SandboxManager._resolve_workplace strategy gate."""
+"""Unit tests for SandboxManager._resolve_member_volume strategy gate."""
 import tempfile
 import uuid
 from pathlib import Path
@@ -17,26 +17,26 @@ from sandbox.provider import (
 )
 
 
-class FakeWorkplaceProvider(SandboxProvider):
-    """Provider with supports_workplace=True for strategy gate tests."""
+class FakeVolumeProvider(SandboxProvider):
+    """Provider with supports_member_volume=True for strategy gate tests."""
 
-    name = "fake-wp"
+    name = "fake-vol"
     WORKSPACE_ROOT = "/workspace"
 
     def __init__(self):
-        self._created_workplaces: list[tuple[str, str]] = []
+        self._created_volumes: list[tuple[str, str]] = []
 
     def get_capability(self) -> ProviderCapability:
         return ProviderCapability(
             can_pause=True,
             can_resume=True,
             can_destroy=True,
-            mount=MountCapability(supports_workplace=True),
+            mount=MountCapability(supports_member_volume=True),
         )
 
-    def create_workplace(self, member_id: str, mount_path: str) -> str:
+    def create_member_volume(self, member_id: str, mount_path: str) -> str:
         ref = f"vol-{member_id}"
-        self._created_workplaces.append((member_id, mount_path))
+        self._created_volumes.append((member_id, mount_path))
         return ref
 
     def create_session(self, context_id=None, thread_id=None):
@@ -74,17 +74,17 @@ class FakeWorkplaceProvider(SandboxProvider):
         return RemoteWrappedRuntime(terminal, lease, self)
 
 
-class FakeNoWorkplaceProvider(FakeWorkplaceProvider):
-    """Provider with supports_workplace=False."""
+class FakeNoVolumeProvider(FakeVolumeProvider):
+    """Provider with supports_member_volume=False."""
 
-    name = "fake-no-wp"
+    name = "fake-no-vol"
 
     def get_capability(self) -> ProviderCapability:
         return ProviderCapability(
             can_pause=True,
             can_resume=True,
             can_destroy=True,
-            mount=MountCapability(supports_workplace=False),
+            mount=MountCapability(supports_member_volume=False),
         )
 
 
@@ -93,55 +93,55 @@ def _make_manager(provider, tmp_path):
     return SandboxManager(provider=provider, db_path=db)
 
 
-def test_resolve_workplace_no_member():
+def test_resolve_member_volume_no_member():
     """No member_id in thread config → returns None (File Channel)."""
     with tempfile.TemporaryDirectory() as td:
-        mgr = _make_manager(FakeWorkplaceProvider(), td)
+        mgr = _make_manager(FakeVolumeProvider(), td)
         with patch("backend.web.utils.helpers.load_thread_config", return_value=None, create=True):
-            result = mgr._resolve_workplace("thread-no-member")
+            result = mgr._resolve_member_volume("thread-no-member")
         assert result is None
 
 
-def test_resolve_workplace_provider_unsupported():
-    """Provider without supports_workplace → returns None."""
+def test_resolve_member_volume_provider_unsupported():
+    """Provider without supports_member_volume → returns None."""
     with tempfile.TemporaryDirectory() as td:
-        mgr = _make_manager(FakeNoWorkplaceProvider(), td)
-        result = mgr._resolve_workplace("thread-1", member_id="m_abc123")
+        mgr = _make_manager(FakeNoVolumeProvider(), td)
+        result = mgr._resolve_member_volume("thread-1", member_id="m_abc123")
         assert result is None
 
 
-def test_resolve_workplace_existing():
-    """Existing workplace → returns it without creating."""
+def test_resolve_member_volume_existing():
+    """Existing volume → returns it without creating."""
     existing = {
         "member_id": "m_abc123",
-        "provider_type": "fake-wp",
+        "provider_type": "fake-vol",
         "backend_ref": "vol-m_abc123",
         "mount_path": "/workspace/files",
     }
     with tempfile.TemporaryDirectory() as td:
-        provider = FakeWorkplaceProvider()
+        provider = FakeVolumeProvider()
         mgr = _make_manager(provider, td)
-        with patch("backend.web.services.workspace_service.get_agent_workplace", return_value=existing, create=True):
-            result = mgr._resolve_workplace("thread-1", member_id="m_abc123")
+        with patch("backend.web.services.member_volume_service.get_member_volume", return_value=existing, create=True):
+            result = mgr._resolve_member_volume("thread-1", member_id="m_abc123")
         assert result == existing
-        assert provider._created_workplaces == []  # no new workplace created
+        assert provider._created_volumes == []  # no new volume created
 
 
-def test_resolve_workplace_lazy_create():
-    """No existing workplace → creates one via provider and persists to DB."""
+def test_resolve_member_volume_lazy_create():
+    """No existing volume → creates one via provider and persists to DB."""
     with tempfile.TemporaryDirectory() as td:
-        provider = FakeWorkplaceProvider()
+        provider = FakeVolumeProvider()
         mgr = _make_manager(provider, td)
         expected = {
             "member_id": "m_abc123",
-            "provider_type": "fake-wp",
+            "provider_type": "fake-vol",
             "backend_ref": "vol-m_abc123",
             "mount_path": "/workspace/files",
         }
-        with patch("backend.web.services.workspace_service.get_agent_workplace", return_value=None, create=True):
-            with patch("backend.web.services.workspace_service.create_agent_workplace", return_value=expected, create=True) as mock_create:
-                result = mgr._resolve_workplace("thread-1", member_id="m_abc123")
+        with patch("backend.web.services.member_volume_service.get_member_volume", return_value=None, create=True):
+            with patch("backend.web.services.member_volume_service.create_member_volume", return_value=expected, create=True) as mock_create:
+                result = mgr._resolve_member_volume("thread-1", member_id="m_abc123")
         assert result == expected
-        assert len(provider._created_workplaces) == 1
-        assert provider._created_workplaces[0][0] == "m_abc123"
+        assert len(provider._created_volumes) == 1
+        assert provider._created_volumes[0][0] == "m_abc123"
         mock_create.assert_called_once()
