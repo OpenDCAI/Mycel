@@ -440,7 +440,7 @@ export default function Sidebar({
                       ))}
                       <Link
                         to={`/threads/${urlId}/new`}
-                        className="block px-3 py-2 text-[11px] text-muted-foreground/50 hover:text-muted-foreground transition-colors"
+                        className="block -ml-3 w-[calc(100%+0.75rem)] px-3 py-2 text-center text-[11px] text-muted-foreground/50 hover:text-muted-foreground transition-colors"
                       >
                         + 发起新对话
                       </Link>
