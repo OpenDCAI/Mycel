@@ -13,7 +13,7 @@ def test_upsert_and_get():
         assert result is not None
         assert result["member_id"] == "m_abc123"
         assert result["provider_type"] == "daytona"
-        assert result["backend_ref"] == "vol-abc"
+        assert result["volume_id"] == "vol-abc"
         assert result["mount_path"] == "/workspace/files"
         repo.close()
 
@@ -24,7 +24,7 @@ def test_upsert_overwrites():
         repo.upsert("m_abc123", "daytona", "vol-old", "/workspace/files", "2026-01-01T00:00:00")
         repo.upsert("m_abc123", "daytona", "vol-new", "/workspace/files", "2026-01-02T00:00:00")
         result = repo.get("m_abc123", "daytona")
-        assert result["backend_ref"] == "vol-new"
+        assert result["volume_id"] == "vol-new"
         repo.close()
 
 

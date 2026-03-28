@@ -8,7 +8,7 @@ from sandbox.sync.strategy import IncrementalSyncStrategy
 def sync_env(tmp_path: Path, monkeypatch):
     monkeypatch.setenv("LEON_SANDBOX_DB_PATH", str(tmp_path / "sandbox.db"))
     state = SyncState()
-    strategy = IncrementalSyncStrategy(workspace_root=tmp_path, state=state)
+    strategy = IncrementalSyncStrategy(state=state)
     workspace = tmp_path / "thread-1" / "files"
     workspace.mkdir(parents=True)
     return state, strategy, workspace
@@ -28,7 +28,7 @@ def test_download_updates_checksums(sync_env):
     new_checksum = _calculate_checksum(workspace / "readme.txt")
 
     # After download, checksums should be updated
-    strategy._update_checksums_after_download("thread-1")
+    strategy._update_checksums_after_download("thread-1", workspace)
 
     # Verify DB has new checksum
     info = state.get_file_info("thread-1", "readme.txt")
