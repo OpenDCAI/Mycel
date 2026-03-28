@@ -1,12 +1,12 @@
 /**
- * Auth store — JWT token, member identity, login/register/logout.
+ * Auth store — JWT token, user identity, login/register/logout.
  * Persisted to localStorage via Zustand persist middleware.
  */
 
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
-export interface AuthMember {
+export interface AuthIdentity {
   id: string;
   name: string;
   type: string;
@@ -15,8 +15,8 @@ export interface AuthMember {
 
 interface AuthState {
   token: string | null;
-  member: AuthMember | null;
-  agent: AuthMember | null;
+  user: AuthIdentity | null;
+  agent: AuthIdentity | null;
   entityId: string | null;
 
   login: (username: string, password: string) => Promise<void>;
@@ -48,7 +48,7 @@ export const useAuthStore = create<AuthState>()(
   persist(
     (set) => ({
       token: null,
-      member: null,
+      user: null,
       agent: null,
       entityId: null,
 
@@ -56,7 +56,7 @@ export const useAuthStore = create<AuthState>()(
         const data = await authCall("login", username, password);
         set({
           token: data.token,
-          member: data.member,
+          user: data.user,
           agent: data.agent,
           entityId: data.entity_id ?? null,
         });
@@ -66,14 +66,14 @@ export const useAuthStore = create<AuthState>()(
         const data = await authCall("register", username, password);
         set({
           token: data.token,
-          member: data.member,
+          user: data.user,
           agent: data.agent,
           entityId: data.entity_id ?? null,
         });
       },
 
       logout: () => {
-        set({ token: null, member: null, agent: null, entityId: null });
+        set({ token: null, user: null, agent: null, entityId: null });
       },
     }),
     { name: "leon-auth" },

@@ -39,7 +39,7 @@ function ChatConversationInner({ chatId }: { chatId: string }) {
   useEffect(() => () => { if (refreshTimer.current) clearTimeout(refreshTimer.current); }, []);
 
   const myEntityId = useAuthStore(s => s.entityId);
-  const myName = useAuthStore(s => s.member?.name) || "You";
+  const myName = useAuthStore(s => s.user?.name) || "You";
   const [chat, setChat] = useState<ChatDetail | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [loading, setLoading] = useState(true);
@@ -188,7 +188,7 @@ function ChatConversationInner({ chatId }: { chatId: string }) {
       id: `optimistic-${Date.now()}`,
       chat_id: chatId,
       sender_entity_id: myEntityId,
-      sender_name: useAuthStore.getState().member?.name || "me",
+      sender_name: useAuthStore.getState().user?.name || "me",
       content: text,
       mentioned_entity_ids: [],
       created_at: Date.now() / 1000,

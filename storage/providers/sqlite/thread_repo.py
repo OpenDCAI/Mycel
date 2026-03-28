@@ -92,8 +92,8 @@ class SQLiteThreadRepo:
             ).fetchall()
             return [self._to_dict(r) for r in rows]
 
-    def list_by_owner(self, owner_member_id: str) -> list[dict[str, Any]]:
-        """Return all threads owned by this member (via members.owner_id JOIN).
+    def list_by_owner_user_id(self, owner_user_id: str) -> list[dict[str, Any]]:
+        """Return all threads owned by this user (via members.owner_user_id JOIN).
 
         Also JOINs entities (thread_id == entity_id) for entity_name.
         """
@@ -104,9 +104,9 @@ class SQLiteThreadRepo:
                 " e.name as entity_name FROM threads t"
                 " JOIN members m ON t.member_id = m.id"
                 " LEFT JOIN entities e ON e.thread_id = t.id"
-                " WHERE m.owner_id = ?"
+                " WHERE m.owner_user_id = ?"
                 " ORDER BY t.is_main DESC, t.created_at",
-                (owner_member_id,),
+                (owner_user_id,),
             ).fetchall()
             ncols = len(self._COLS)
             return [{**self._to_dict(r[:ncols]),

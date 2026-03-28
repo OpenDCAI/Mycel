@@ -91,7 +91,7 @@ def test_rejects_duplicate_branch_index_for_same_member(tmp_path):
         repo.close()
 
 
-def test_list_by_owner_includes_main_flag(tmp_path):
+def test_list_by_owner_user_id_includes_main_flag(tmp_path):
     db_path = tmp_path / "leon.db"
     member_repo = SQLiteMemberRepo(db_path)
     entity_repo = SQLiteEntityRepo(db_path)
@@ -107,7 +107,7 @@ def test_list_by_owner_includes_main_flag(tmp_path):
             id="member-1",
             name="Toad",
             type=MemberType.MYCEL_AGENT,
-            owner_id="owner-1",
+            owner_user_id="owner-1",
             created_at=2.0,
         ))
         entity_repo.create(EntityRow(
@@ -127,7 +127,7 @@ def test_list_by_owner_includes_main_flag(tmp_path):
             branch_index=0,
         )
 
-        rows = thread_repo.list_by_owner("owner-1")
+        rows = thread_repo.list_by_owner_user_id("owner-1")
         assert len(rows) == 1
         assert rows[0]["is_main"] is True
         assert rows[0]["branch_index"] == 0

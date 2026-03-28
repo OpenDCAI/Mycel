@@ -42,8 +42,8 @@ class AuthService:
     def register(self, username: str, password: str) -> dict:
         """Register a new human user.
 
+        Returns: {token, user, agent, entity_id}
         Creates: human member, account, human entity, agent members.
-        Returns: {token, member, agent, entity_id}
         """
         if self._accounts.get_by_username(username) is not None:
             raise ValueError(f"Username '{username}' already taken")
@@ -53,24 +53,24 @@ class AuthService:
         # @@@non-atomic-register - steps 1-7 are not atomic. Acceptable for dev.
         # Wrap in DB transaction when migrating to Supabase.
         # 1. Human member
-        human_member_id = generate_member_id()
+        user_id = generate_member_id()
         self._members.create(MemberRow(
-            id=human_member_id, name=username, type=MemberType.HUMAN, created_at=now,
+            id=user_id, name=username, type=MemberType.HUMAN, created_at=now,
         ))
 
         # 2. Account (bcrypt hash)
         password_hash = bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
         account_id = str(uuid.uuid4())
         self._accounts.create(AccountRow(
-            id=account_id, member_id=human_member_id, username=username,
+            id=account_id, user_id=user_id, username=username,
             password_hash=password_hash, created_at=now,
         ))
 
         # 3. Human entity (entity_id = {member_id}-{seq}, hyphen separator per decision #24)
-        human_seq = self._members.increment_entity_seq(human_member_id)
-        human_entity_id = f"{human_member_id}-{human_seq}"
+        human_seq = self._members.increment_entity_seq(user_id)
+        human_entity_id = f"{user_id}-{human_seq}"
         self._entities.create(EntityRow(
-            id=human_entity_id, type="human", member_id=human_member_id,
+            id=human_entity_id, type="human", member_id=user_id,
             name=username, thread_id=None, created_at=now,
         ))
 
@@ -101,7 +101,7 @@ class AuthService:
                 id=agent_member_id, name=agent_def["name"], type=MemberType.MYCEL_AGENT,
                 description=agent_def["description"],
                 config_dir=str(agent_dir),
-                owner_id=human_member_id,
+                owner_user_id=user_id,
                 created_at=now,
             ))
 
@@ -124,14 +124,14 @@ class AuthService:
             logger.info("Created agent '%s' (member=%s) for user '%s'",
                         agent_def["name"], agent_member_id[:8], username)
 
-        # JWT — carries both member_id and entity_id
-        token = self._make_token(human_member_id, human_entity_id)
+        # JWT — carries both user_id and entity_id
+        token = self._make_token(user_id, human_entity_id)
 
-        logger.info("Registered user '%s' (member=%s)", username, human_member_id[:8])
+        logger.info("Registered user '%s' (user=%s)", username, user_id[:8])
 
         return {
             "token": token,
-            "member": {"id": human_member_id, "name": username, "type": "human", "avatar": None},
+            "user": {"id": user_id, "name": username, "type": "human", "avatar": None},
             "agent": first_agent_info,
             "entity_id": human_entity_id,
         }
@@ -145,42 +145,42 @@ class AuthService:
         if not bcrypt.checkpw(password.encode(), account.password_hash.encode()):
             raise ValueError("Invalid username or password")
 
-        member = self._members.get_by_id(account.member_id)
-        if member is None:
-            raise ValueError("Account has no associated member")
+        user = self._members.get_by_id(account.user_id)
+        if user is None:
+            raise ValueError("Account has no associated user")
 
         # Find the user's agent
-        owned_agents = self._members.list_by_owner(member.id)
+        owned_agents = self._members.list_by_owner_user_id(user.id)
         agent_info = None
         if owned_agents:
             a = owned_agents[0]
             agent_info = {"id": a.id, "name": a.name, "type": a.type.value, "avatar": a.avatar}
 
         # Look up human entity
-        entities = self._entities.get_by_member_id(member.id)
+        entities = self._entities.get_by_member_id(user.id)
         human_entity = next((e for e in entities if e.type == "human"), None)
 
-        token = self._make_token(member.id, human_entity.id if human_entity else None)
+        token = self._make_token(user.id, human_entity.id if human_entity else None)
 
         return {
             "token": token,
-            "member": {"id": member.id, "name": member.name, "type": member.type.value, "avatar": member.avatar},
+            "user": {"id": user.id, "name": user.name, "type": user.type.value, "avatar": user.avatar},
             "agent": agent_info,
             "entity_id": human_entity.id if human_entity else None,
         }
 
     def verify_token(self, token: str) -> dict:
-        """Verify JWT and return payload dict with member_id + entity_id. Raises ValueError on failure."""
+        """Verify JWT and return payload dict with user_id + entity_id. Raises ValueError on failure."""
         try:
             payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
-            return {"member_id": payload["member_id"], "entity_id": payload.get("entity_id")}
+            return {"user_id": payload["user_id"], "entity_id": payload.get("entity_id")}
         except jwt.ExpiredSignatureError:
             raise ValueError("Token expired")
         except jwt.InvalidTokenError:
             raise ValueError("Invalid token")
 
-    def _make_token(self, member_id: str, entity_id: str | None = None) -> str:
-        payload = {"member_id": member_id, "exp": time.time() + JWT_EXPIRE_SECONDS}
+    def _make_token(self, user_id: str, entity_id: str | None = None) -> str:
+        payload = {"user_id": user_id, "exp": time.time() + JWT_EXPIRE_SECONDS}
         if entity_id:
             payload["entity_id"] = entity_id
         return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)

@@ -312,14 +312,14 @@ def _ensure_leon_dir() -> Path:
 
 # ── CRUD operations ──
 
-def list_members(owner_id: str | None = None) -> list[dict[str, Any]]:
-    """List agent members. If owner_id given, only that user's agents (no builtin Leon)."""
+def list_members(owner_user_id: str | None = None) -> list[dict[str, Any]]:
+    """List agent members. If owner_user_id given, only that user's agents (no builtin Leon)."""
     # @@@auth-scope — scoped by owner from DB, config from filesystem
-    if owner_id:
+    if owner_user_id:
         from storage.providers.sqlite.member_repo import SQLiteMemberRepo
         repo = SQLiteMemberRepo()
         try:
-            agents = repo.list_by_owner(owner_id)
+            agents = repo.list_by_owner_user_id(owner_user_id)
         finally:
             repo.close()
         results = []
@@ -358,7 +358,7 @@ def get_member(member_id: str) -> dict[str, Any] | None:
     return _member_to_dict(member_dir)
 
 
-def create_member(name: str, description: str = "", owner_id: str | None = None) -> dict[str, Any]:
+def create_member(name: str, description: str = "", owner_user_id: str | None = None) -> dict[str, Any]:
     from storage.providers.sqlite.member_repo import SQLiteMemberRepo, generate_member_id
     from storage.contracts import MemberRow, MemberType
 
@@ -374,13 +374,13 @@ def create_member(name: str, description: str = "", owner_id: str | None = None)
     })
 
     # Persist to SQLite members table so list_members finds it
-    if owner_id:
+    if owner_user_id:
         repo = SQLiteMemberRepo()
         try:
             repo.create(MemberRow(
                 id=member_id, name=name, type=MemberType.MYCEL_AGENT,
                 description=description, config_dir=str(member_dir),
-                owner_id=owner_id, created_at=now,
+                owner_user_id=owner_user_id, created_at=now,
             ))
         finally:
             repo.close()

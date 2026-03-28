@@ -15,6 +15,7 @@ from core.identity.agent_registry import get_or_create_agent_id
 
 # Thread lock for config updates
 _config_update_locks: dict[str, asyncio.Lock] = {}
+_agent_create_locks: dict[str, asyncio.Lock] = {}
 
 
 def create_agent_sync(sandbox_name: str, workspace_root: Path | None = None, model_name: str | None = None, agent: str | None = None, queue_manager: Any = None, chat_repos: dict | None = None) -> Any:
@@ -53,67 +54,74 @@ async def get_or_create_agent(app_obj: FastAPI, sandbox_type: str, thread_id: st
     if pool_key in pool:
         return pool[pool_key]
 
-    # For local sandbox, check if thread has custom cwd (memory → SQLite fallback)
-    workspace_root = None
-    thread_data = app_obj.state.thread_repo.get_by_id(thread_id) if hasattr(app_obj.state, "thread_repo") else None
-    if sandbox_type == "local":
-        cwd = app_obj.state.thread_cwd.get(thread_id)
-        if not cwd and thread_data and thread_data.get("cwd"):
-            cwd = thread_data["cwd"]
-            app_obj.state.thread_cwd[thread_id] = cwd
-        if cwd:
-            workspace_root = Path(cwd).resolve()
+    # @@@agent-create-lock - first-hit thread loads can race between /runtime and /messages.
+    # Serialize creation per pool key so a new thread gets exactly one LeonAgent instance.
+    create_lock = _agent_create_locks.setdefault(pool_key, asyncio.Lock())
+    async with create_lock:
+        if pool_key in pool:
+            return pool[pool_key]
 
-    # Look up model for this thread (threads table → preferences default)
-    model_name = thread_data.get("model") if thread_data else None
-    if not model_name:
-        from backend.web.routers.settings import load_settings as load_preferences
+        # For local sandbox, check if thread has custom cwd (memory → SQLite fallback)
+        workspace_root = None
+        thread_data = app_obj.state.thread_repo.get_by_id(thread_id) if hasattr(app_obj.state, "thread_repo") else None
+        if sandbox_type == "local":
+            cwd = app_obj.state.thread_cwd.get(thread_id)
+            if not cwd and thread_data and thread_data.get("cwd"):
+                cwd = thread_data["cwd"]
+                app_obj.state.thread_cwd[thread_id] = cwd
+            if cwd:
+                workspace_root = Path(cwd).resolve()
 
-        prefs = load_preferences()
-        model_name = prefs.default_model
+        # Look up model for this thread (threads table → preferences default)
+        model_name = thread_data.get("model") if thread_data else None
+        if not model_name:
+            from backend.web.routers.settings import load_settings as load_preferences
 
-    # @@@agent-vs-member - thread_config.agent stores a member ID (e.g. "__leon__") for display,
-    # NOT an agent type name ("bash", "general", etc.). Never pass it to create_leon_agent.
-    agent_name = agent  # explicit caller-provided type only; None → default Leon agent
+            prefs = load_preferences()
+            model_name = prefs.default_model
 
-    # @@@chat-repos - construct chat_repos for ChatToolService if entity system is available
-    chat_repos = None
-    if hasattr(app_obj.state, "entity_repo") and thread_data:
-        entity_repo = app_obj.state.entity_repo
-        agent_entity = entity_repo.get_by_thread_id(thread_id)
-        if agent_entity:
-            # @@@admin-chain — find owner's human entity via Member domain (template ownership).
-            # This is NOT Entity→Member ownership; it's Thread→Entity→Member(template)→Owner→Entity(human).
-            agent_member = app_obj.state.member_repo.get_by_id(agent_entity.member_id) if hasattr(app_obj.state, "member_repo") else None
-            owner_entity_id = ""
-            if agent_member and agent_member.owner_id:
-                owner_entities = entity_repo.get_by_member_id(agent_member.owner_id)
-                human_entity = next((e for e in owner_entities if e.type == "human"), None)
-                if human_entity:
-                    owner_entity_id = human_entity.id
-            chat_repos = {
-                "entity_id": agent_entity.id,
-                "owner_entity_id": owner_entity_id,
-                "entity_repo": entity_repo,
-                "chat_service": getattr(app_obj.state, "chat_service", None),
-                "chat_entity_repo": getattr(app_obj.state, "chat_entity_repo", None),
-                "chat_message_repo": getattr(app_obj.state, "chat_message_repo", None),
-                "member_repo": getattr(app_obj.state, "member_repo", None),
-                "chat_event_bus": getattr(app_obj.state, "chat_event_bus", None),
-            }
+        # @@@agent-vs-member - thread_config.agent stores a member ID (e.g. "__leon__") for display,
+        # NOT an agent type name ("bash", "general", etc.). Never pass it to create_leon_agent.
+        agent_name = agent  # explicit caller-provided type only; None → default Leon agent
 
-    # @@@ agent-init-thread - LeonAgent.__init__ uses run_until_complete, must run in thread
-    qm = getattr(app_obj.state, "queue_manager", None)
-    agent_obj = await asyncio.to_thread(create_agent_sync, sandbox_type, workspace_root, model_name, agent_name, qm, chat_repos)
-    member = agent_name or "leon"
-    agent_id = get_or_create_agent_id(
-        member=member,
-        thread_id=thread_id,
-        sandbox_type=sandbox_type,
-    )
-    agent_obj.agent_id = agent_id
-    pool[pool_key] = agent_obj
-    return agent_obj
+        # @@@chat-repos - construct chat_repos for ChatToolService if entity system is available
+        chat_repos = None
+        if hasattr(app_obj.state, "entity_repo") and thread_data:
+            entity_repo = app_obj.state.entity_repo
+            agent_entity = entity_repo.get_by_thread_id(thread_id)
+            if agent_entity:
+                # @@@admin-chain — find owner's human entity via Member domain (template ownership).
+                # This is NOT Entity→Member ownership; it's Thread→Entity→Member(template)→Owner→Entity(human).
+                agent_member = app_obj.state.member_repo.get_by_id(agent_entity.member_id) if hasattr(app_obj.state, "member_repo") else None
+                owner_entity_id = ""
+                if agent_member and agent_member.owner_user_id:
+                    owner_entities = entity_repo.get_by_member_id(agent_member.owner_user_id)
+                    human_entity = next((e for e in owner_entities if e.type == "human"), None)
+                    if human_entity:
+                        owner_entity_id = human_entity.id
+                chat_repos = {
+                    "entity_id": agent_entity.id,
+                    "owner_entity_id": owner_entity_id,
+                    "entity_repo": entity_repo,
+                    "chat_service": getattr(app_obj.state, "chat_service", None),
+                    "chat_entity_repo": getattr(app_obj.state, "chat_entity_repo", None),
+                    "chat_message_repo": getattr(app_obj.state, "chat_message_repo", None),
+                    "member_repo": getattr(app_obj.state, "member_repo", None),
+                    "chat_event_bus": getattr(app_obj.state, "chat_event_bus", None),
+                }
+
+        # @@@ agent-init-thread - LeonAgent.__init__ uses run_until_complete, must run in thread
+        qm = getattr(app_obj.state, "queue_manager", None)
+        agent_obj = await asyncio.to_thread(create_agent_sync, sandbox_type, workspace_root, model_name, agent_name, qm, chat_repos)
+        member = agent_name or "leon"
+        agent_id = get_or_create_agent_id(
+            member=member,
+            thread_id=thread_id,
+            sandbox_type=sandbox_type,
+        )
+        agent_obj.agent_id = agent_id
+        pool[pool_key] = agent_obj
+        return agent_obj
 
 
 def resolve_thread_sandbox(app_obj: FastAPI, thread_id: str) -> str:

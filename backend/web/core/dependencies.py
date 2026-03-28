@@ -23,7 +23,7 @@ def _get_auth_service(app: FastAPI):
 
 
 def _extract_jwt_payload(request: Request) -> dict:
-    """Extract and verify JWT payload from Bearer token. Returns {member_id, entity_id}."""
+    """Extract and verify JWT payload from Bearer token. Returns {user_id, entity_id}."""
     auth_header = request.headers.get("Authorization", "")
     if not auth_header.startswith("Bearer "):
         raise HTTPException(401, "Missing or invalid Authorization header")
@@ -34,9 +34,9 @@ def _extract_jwt_payload(request: Request) -> dict:
         raise HTTPException(401, str(e))
 
 
-async def get_current_member_id(request: Request) -> str:
-    """Extract member_id from JWT. Used for thread/workspace scoping."""
-    return _extract_jwt_payload(request)["member_id"]
+async def get_current_user_id(request: Request) -> str:
+    """Extract user_id from JWT. Used for auth/ownership scoping."""
+    return _extract_jwt_payload(request)["user_id"]
 
 
 async def get_current_entity_id(request: Request) -> str:
@@ -50,17 +50,17 @@ async def get_current_entity_id(request: Request) -> str:
 
 async def verify_thread_owner(
     thread_id: str,
-    member_id: Annotated[str, Depends(get_current_member_id)],
+    user_id: Annotated[str, Depends(get_current_user_id)],
     app: Annotated[FastAPI, Depends(get_app)],
 ) -> str:
-    """Verify that member_id owns the thread. Returns member_id."""
+    """Verify that user_id owns the thread. Returns user_id."""
     thread = app.state.thread_repo.get_by_id(thread_id)
     if not thread:
         raise HTTPException(404, "Thread not found")
     agent_member = app.state.member_repo.get_by_id(thread["member_id"])
-    if not agent_member or agent_member.owner_id != member_id:
+    if not agent_member or agent_member.owner_user_id != user_id:
         raise HTTPException(403, "Not authorized")
-    return member_id
+    return user_id
 
 
 async def get_thread_lock(app: Annotated[FastAPI, Depends(get_app)], thread_id: str) -> asyncio.Lock:
