@@ -179,6 +179,40 @@ def _thread_payload(app: Any, thread_id: str, sandbox_type: str) -> dict[str, An
     }
 
 
+def _create_thread_sandbox_resources(thread_id: str, sandbox_type: str) -> None:
+    """Create volume, lease, and terminal eagerly so volume exists before file uploads."""
+    from datetime import datetime
+
+    from backend.web.core.config import SANDBOX_VOLUME_ROOT
+    from sandbox.config import DEFAULT_DB_PATH
+    from sandbox.lease import LeaseStore
+    from sandbox.terminal import TerminalStore
+    from sandbox.volume_source import HostVolume
+    from storage.providers.sqlite.sandbox_volume_repo import SQLiteSandboxVolumeRepo
+
+    now_str = datetime.now().isoformat()
+    volume_id = str(uuid.uuid4())
+    vol_path = SANDBOX_VOLUME_ROOT / volume_id
+    source = HostVolume(vol_path)
+
+    sandbox_vol_repo = SQLiteSandboxVolumeRepo()
+    sandbox_vol_repo.create(volume_id, json.dumps(source.serialize()), f"file-channel-{thread_id}", now_str)
+
+    lease_store = LeaseStore(db_path=DEFAULT_DB_PATH)
+    lease_id = f"lease-{uuid.uuid4().hex[:12]}"
+    lease_store.create(lease_id, sandbox_type, volume_id=volume_id)
+
+    terminal_store = TerminalStore(db_path=DEFAULT_DB_PATH)
+    terminal_id = f"term-{uuid.uuid4().hex[:12]}"
+    initial_cwd = "/home/user"
+    terminal_store.create(
+        terminal_id=terminal_id,
+        thread_id=thread_id,
+        lease_id=lease_id,
+        initial_cwd=initial_cwd,
+    )
+
+
 def _create_owned_thread(
     app: Any,
     owner_user_id: str,
@@ -230,7 +264,9 @@ def _create_owned_thread(
     if payload.cwd:
         app.state.thread_cwd[thread_entity_id] = payload.cwd
 
-
+    # @@@lease-early-creation - Create volume + lease + terminal at thread creation
+    # so volume exists BEFORE any file uploads.
+    _create_thread_sandbox_resources(thread_entity_id, sandbox_type)
 
     return {
         "thread_id": thread_entity_id,

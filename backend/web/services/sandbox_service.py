@@ -9,7 +9,7 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
-from backend.web.core.config import LOCAL_WORKSPACE_ROOT, SANDBOXES_DIR, SANDBOX_FILES_ROOT
+from backend.web.core.config import LOCAL_WORKSPACE_ROOT, SANDBOXES_DIR, SANDBOX_VOLUME_ROOT as SANDBOX_FILES_ROOT
 from backend.web.utils.helpers import is_virtual_thread_id
 from sandbox.config import SandboxConfig
 from sandbox.config import DEFAULT_DB_PATH as SANDBOX_DB_PATH

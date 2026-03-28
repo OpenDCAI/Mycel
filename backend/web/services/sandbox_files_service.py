@@ -21,9 +21,9 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
-from backend.web.core.config import SANDBOX_FILES_ROOT
+from backend.web.core.config import SANDBOX_VOLUME_ROOT as SANDBOX_FILES_ROOT
 from backend.web.utils.helpers import _get_container
-from storage.contracts import SandboxFilesRepo
+from storage.contracts import SandboxVolumeRepo as SandboxFilesRepo
 
 
 def _now_utc() -> str:

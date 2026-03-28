@@ -49,6 +49,7 @@ REQUIRED_LEASE_COLUMNS = {
     "needs_refresh",
     "refresh_hint_at",
     "status",
+    "volume_id",
     "created_at",
     "updated_at",
 }
@@ -102,6 +103,7 @@ class SandboxLease(ABC):
         last_error: str | None = None,
         needs_refresh: bool = False,
         refresh_hint_at: datetime | None = None,
+        volume_id: str | None = None,
     ):
         self.lease_id = lease_id
         self.provider_name = provider_name
@@ -115,6 +117,7 @@ class SandboxLease(ABC):
         self.last_error = last_error
         self.needs_refresh = needs_refresh
         self.refresh_hint_at = refresh_hint_at
+        self.volume_id = volume_id
 
     # @@@compat-refresh-error - legacy callers still read refresh_error while storage canonicalized to last_error.
     @property
@@ -185,6 +188,7 @@ class SQLiteLease(SandboxLease):
         last_error: str | None = None,
         needs_refresh: bool = False,
         refresh_hint_at: datetime | None = None,
+        volume_id: str | None = None,
     ):
         super().__init__(
             lease_id=lease_id,
@@ -199,6 +203,7 @@ class SQLiteLease(SandboxLease):
             last_error=last_error,
             needs_refresh=needs_refresh,
             refresh_hint_at=refresh_hint_at,
+            volume_id=volume_id,
         )
         self.db_path = db_path
         self._detached_instance: SandboxInstance | None = None
@@ -459,6 +464,7 @@ class SQLiteLease(SandboxLease):
         self.observed_at = other.observed_at
         self.last_error = other.last_error
         self.needs_refresh = other.needs_refresh
+        self.volume_id = other.volume_id
         self.refresh_hint_at = other.refresh_hint_at
 
     def apply(
@@ -786,6 +792,7 @@ class LeaseStore:
                     needs_refresh INTEGER NOT NULL DEFAULT 0,
                     refresh_hint_at TIMESTAMP,
                     status TEXT DEFAULT 'active',
+                    volume_id TEXT,
                     created_at TIMESTAMP NOT NULL,
                     updated_at TIMESTAMP NOT NULL
                 )
@@ -830,6 +837,10 @@ class LeaseStore:
                     "ALTER TABLE sandbox_leases ADD COLUMN instance_status TEXT NOT NULL DEFAULT 'detached'"
                 )
                 conn.execute("UPDATE sandbox_leases SET instance_status = observed_state")
+                conn.commit()
+                lease_cols = {row[1] for row in conn.execute("PRAGMA table_info(sandbox_leases)").fetchall()}
+            if "volume_id" not in lease_cols:
+                conn.execute("ALTER TABLE sandbox_leases ADD COLUMN volume_id TEXT")
                 conn.commit()
                 lease_cols = {row[1] for row in conn.execute("PRAGMA table_info(sandbox_leases)").fetchall()}
             instance_cols = {row[1] for row in conn.execute("PRAGMA table_info(sandbox_instances)").fetchall()}
@@ -882,6 +893,7 @@ class LeaseStore:
                 last_error=row["last_error"],
                 needs_refresh=bool(row["needs_refresh"]),
                 refresh_hint_at=datetime.fromisoformat(row["refresh_hint_at"]) if row["refresh_hint_at"] else None,
+                volume_id=row.get("volume_id"),
             )
 
         # Fallback to inline SQL
@@ -901,7 +913,8 @@ class LeaseStore:
                        last_error,
                        needs_refresh,
                        refresh_hint_at,
-                       status
+                       status,
+                       volume_id
                 FROM sandbox_leases
                 WHERE lease_id = ?
                 """,
@@ -935,9 +948,10 @@ class LeaseStore:
                 last_error=row["last_error"],
                 needs_refresh=bool(row["needs_refresh"]),
                 refresh_hint_at=datetime.fromisoformat(row["refresh_hint_at"]) if row["refresh_hint_at"] else None,
+                volume_id=row["volume_id"],
             )
 
-    def create(self, lease_id: str, provider_name: str) -> SandboxLease:
+    def create(self, lease_id: str, provider_name: str, volume_id: str | None = None) -> SandboxLease:
         now = datetime.now().isoformat()
 
         # @@@repository-migration - use repository if available
@@ -975,10 +989,11 @@ class LeaseStore:
                         needs_refresh,
                         refresh_hint_at,
                         status,
+                        volume_id,
                         created_at,
                         updated_at
                     )
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         lease_id,
@@ -992,6 +1007,7 @@ class LeaseStore:
                         0,
                         None,
                         "active",
+                        volume_id,
                         now,
                         now,
                     ),
