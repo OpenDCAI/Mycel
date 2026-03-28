@@ -4,7 +4,9 @@ import json
 from pathlib import Path
 from typing import Any
 
-LEON_HOME = Path.home() / ".leon"
+from config.user_paths import first_existing_user_home_path, user_home_path
+
+LEON_HOME = user_home_path()
 CONFIG_PATH = LEON_HOME / "config.json"
 
 
@@ -23,7 +25,7 @@ def _write_json(path: Path, data: Any) -> None:
 
 
 def get_profile() -> dict[str, Any]:
-    cfg = _read_json(CONFIG_PATH, {})
+    cfg = _read_json(first_existing_user_home_path("config.json"), {})
     profile = cfg.get("profile", {})
     return {
         "name": profile.get("name", "用户名"),
@@ -37,7 +39,7 @@ def update_profile(**fields: Any) -> dict[str, Any]:
     updates = {k: v for k, v in fields.items() if k in allowed and v is not None}
     if not updates:
         return get_profile()
-    cfg = _read_json(CONFIG_PATH, {})
+    cfg = _read_json(first_existing_user_home_path("config.json"), {})
     profile = cfg.get("profile", {})
     profile.update(updates)
     cfg["profile"] = profile

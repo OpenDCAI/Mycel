@@ -10,6 +10,7 @@ import os
 from pathlib import Path
 
 from pydantic import BaseModel, Field
+from config.user_paths import first_existing_user_home_path, user_home_path
 
 # @@@env-at-import - This is evaluated at import time. For web backend, prefer exporting env vars before process start.
 DEFAULT_DB_PATH = Path(os.getenv("LEON_SANDBOX_DB_PATH") or (Path.home() / ".leon" / "sandbox.db"))
@@ -61,7 +62,7 @@ class SandboxConfig(BaseModel):
         if name == "local":
             return cls()
 
-        path = Path.home() / ".leon" / "sandboxes" / f"{name}.json"
+        path = first_existing_user_home_path("sandboxes", f"{name}.json")
         if not path.exists():
             raise FileNotFoundError(f"Sandbox config not found: {path}")
 
@@ -71,7 +72,7 @@ class SandboxConfig(BaseModel):
         return config
 
     def save(self, name: str) -> Path:
-        path = Path.home() / ".leon" / "sandboxes" / f"{name}.json"
+        path = user_home_path("sandboxes", f"{name}.json")
         path.parent.mkdir(parents=True, exist_ok=True)
 
         data = {"provider": self.provider, "on_exit": self.on_exit}

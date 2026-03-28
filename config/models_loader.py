@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import Any
 
 from config.models_schema import ModelsConfig
+from config.user_paths import remap_legacy_user_home_string, user_home_read_candidates
 
 
 class ModelsLoader:
@@ -29,7 +30,7 @@ class ModelsLoader:
     def load(self, cli_overrides: dict[str, Any] | None = None) -> ModelsConfig:
         """Load and merge models config from all tiers."""
         system = self._load_json(self._system_dir / "models.json")
-        user = self._load_json(Path.home() / ".leon" / "models.json")
+        user = self._load_user()
         project = self._load_project()
 
         # Merge: system → user → project
@@ -53,6 +54,12 @@ class ModelsLoader:
         if not self.workspace_root:
             return {}
         return self._load_json(self.workspace_root / ".leon" / "models.json")
+
+    def _load_user(self) -> dict[str, Any]:
+        merged: dict[str, Any] = {}
+        for path in user_home_read_candidates("models.json"):
+            merged = self._merge(merged, self._load_json(path))
+        return merged
 
     @staticmethod
     def _load_json(path: Path) -> dict[str, Any]:
@@ -113,7 +120,7 @@ class ModelsLoader:
         if isinstance(obj, list):
             return [self._expand_env_vars(v) for v in obj]
         if isinstance(obj, str):
-            return os.path.expandvars(os.path.expanduser(obj))
+            return remap_legacy_user_home_string(obj)
         return obj
 
 

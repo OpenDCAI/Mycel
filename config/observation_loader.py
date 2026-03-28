@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any
 
 from config.observation_schema import ObservationConfig
+from config.user_paths import remap_legacy_user_home_string, user_home_read_candidates
 
 
 class ObservationLoader:
@@ -24,7 +25,7 @@ class ObservationLoader:
     def load(self, cli_overrides: dict[str, Any] | None = None) -> ObservationConfig:
         """Load and merge observation config from all tiers."""
         system = self._load_json(self._system_dir / "observation.json")
-        user = self._load_json(Path.home() / ".leon" / "observation.json")
+        user = self._load_user()
         project = self._load_project()
 
         merged = self._deep_merge(system, user, project)
@@ -45,6 +46,12 @@ class ObservationLoader:
         if not self.workspace_root:
             return {}
         return self._load_json(self.workspace_root / ".leon" / "observation.json")
+
+    def _load_user(self) -> dict[str, Any]:
+        merged: dict[str, Any] = {}
+        for path in user_home_read_candidates("observation.json"):
+            merged = self._deep_merge(merged, self._load_json(path))
+        return merged
 
     @staticmethod
     def _load_json(path: Path) -> dict[str, Any]:
@@ -78,5 +85,5 @@ class ObservationLoader:
         if isinstance(obj, list):
             return [self._expand_env_vars(v) for v in obj]
         if isinstance(obj, str):
-            return os.path.expandvars(os.path.expanduser(obj))
+            return remap_legacy_user_home_string(obj)
         return obj

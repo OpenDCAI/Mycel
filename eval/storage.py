@@ -9,6 +9,7 @@ import json
 from datetime import UTC
 from pathlib import Path
 
+from config.user_paths import user_home_path
 from eval.repo import SQLiteEvalRepo
 from eval.models import (
     ObjectiveMetrics,
@@ -16,7 +17,7 @@ from eval.models import (
     SystemMetrics,
 )
 
-_DEFAULT_DB_PATH = Path.home() / ".leon" / "eval.db"
+_DEFAULT_DB_PATH = user_home_path("eval.db")
 
 class TrajectoryStore:
     """SQLite-backed storage for eval trajectories and metrics."""

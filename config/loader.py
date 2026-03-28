@@ -31,6 +31,7 @@ from config.types import (
     McpServerConfig,
     RuntimeResourceConfig,
 )
+from config.user_paths import remap_legacy_user_home_string, user_home_path, user_home_read_candidates
 
 logger = logging.getLogger(__name__)
 
@@ -117,14 +118,16 @@ class AgentLoader:
         self._load_agents_from_dir(self._system_defaults_dir / "agents")
 
         # 2. User-level agents
-        self._load_agents_from_dir(Path.home() / ".leon" / "agents")
+        for path in user_home_read_candidates("agents"):
+            self._load_agents_from_dir(path)
 
         # 3. Project-level agents
         if self.workspace_root:
             self._load_agents_from_dir(self.workspace_root / ".leon" / "agents")
 
         # 4. Members (~/.leon/members/<id>/agent.md) — highest priority
-        self._load_agents_from_members(Path.home() / ".leon" / "members")
+        for path in user_home_read_candidates("members"):
+            self._load_agents_from_members(path)
 
         return self._agents
 
@@ -332,7 +335,10 @@ class AgentLoader:
 
     def _load_user_config(self) -> dict[str, Any]:
         """Load user config from ~/.leon/runtime.json."""
-        return self._load_json(Path.home() / ".leon" / "runtime.json")
+        merged: dict[str, Any] = {}
+        for path in user_home_read_candidates("runtime.json"):
+            merged = self._deep_merge(merged, self._load_json(path))
+        return merged
 
     def _load_project_config(self) -> dict[str, Any]:
         """Load project config from .leon/runtime.json."""
@@ -379,7 +385,7 @@ class AgentLoader:
         if isinstance(obj, list):
             return [self._expand_env_vars(v) for v in obj]
         if isinstance(obj, str):
-            return os.path.expandvars(os.path.expanduser(obj))
+            return remap_legacy_user_home_string(obj)
         return obj
 
     def _remove_none_values(self, obj: Any) -> Any:
@@ -398,7 +404,7 @@ class AgentLoader:
         paths = skills.get("paths")
         if not isinstance(paths, list):
             return
-        default_home_skills = Path.home() / ".leon" / "skills"
+        default_home_skills = user_home_path("skills")
         for raw_path in paths:
             if not isinstance(raw_path, str):
                 continue

@@ -1198,7 +1198,10 @@ class LeonAgent:
         else:
             import platform
             os_name = platform.system()
-            shell_name = os.environ.get("SHELL", "/bin/bash").split("/")[-1]
+            if os_name == "Windows":
+                shell_name = "powershell"
+            else:
+                shell_name = os.environ.get("SHELL", "/bin/bash").split("/")[-1]
             return f"""- Workspace: `{self.workspace_root}`
 - OS: {os_name}
 - Shell: {shell_name}

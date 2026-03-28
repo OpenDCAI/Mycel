@@ -6,9 +6,10 @@ from pathlib import Path
 from typing import Any
 
 from storage.contracts import RunEventRepo
+from storage.providers.sqlite.kernel import SQLiteDBRole, resolve_role_db_path
 from storage.runtime import build_storage_container
 
-_DB_PATH = Path.home() / ".leon" / "leon.db"
+_DB_PATH = resolve_role_db_path(SQLiteDBRole.MAIN)
 _default_run_event_repo: RunEventRepo | None = None
 _default_run_event_repo_path: Path | None = None
 

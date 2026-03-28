@@ -32,14 +32,14 @@ async def lifespan(app: FastAPI):
     ensure_library_dir()
 
     # ---- Entity-Chat repos + services ----
-    from pathlib import Path
     from storage.providers.sqlite.member_repo import SQLiteMemberRepo, SQLiteAccountRepo
     from storage.providers.sqlite.entity_repo import SQLiteEntityRepo
     from storage.providers.sqlite.thread_repo import SQLiteThreadRepo
     from storage.providers.sqlite.chat_repo import SQLiteChatRepo, SQLiteChatEntityRepo, SQLiteChatMessageRepo
+    from storage.providers.sqlite.kernel import SQLiteDBRole, resolve_role_db_path
 
-    db = Path("~/.leon/leon.db").expanduser()
-    chat_db = db.with_name("chat.db")
+    db = resolve_role_db_path(SQLiteDBRole.MAIN)
+    chat_db = resolve_role_db_path(SQLiteDBRole.CHAT)
 
     app.state.member_repo = SQLiteMemberRepo(db)
     app.state.account_repo = SQLiteAccountRepo(db)

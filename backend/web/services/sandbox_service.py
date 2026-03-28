@@ -11,6 +11,7 @@ logger = logging.getLogger(__name__)
 
 from backend.web.core.config import LOCAL_WORKSPACE_ROOT, SANDBOXES_DIR
 from backend.web.utils.helpers import is_virtual_thread_id
+from config.user_paths import user_home_read_candidates
 from sandbox.config import SandboxConfig
 from sandbox.config import DEFAULT_DB_PATH as SANDBOX_DB_PATH
 from sandbox.manager import SandboxManager
@@ -19,15 +20,20 @@ from sandbox.manager import SandboxManager
 def available_sandbox_types() -> list[dict[str, Any]]:
     """Scan ~/.leon/sandboxes/ for configured providers."""
     types = [{"name": "local", "available": True}]
-    if not SANDBOXES_DIR.exists():
-        return types
-    for f in sorted(SANDBOXES_DIR.glob("*.json")):
-        name = f.stem
-        try:
-            SandboxConfig.load(name)
-            types.append({"name": name, "available": True})
-        except Exception as e:
-            types.append({"name": name, "available": False, "reason": str(e)})
+    seen: set[str] = set()
+    for root in user_home_read_candidates("sandboxes"):
+        if not root.exists():
+            continue
+        for f in sorted(root.glob("*.json")):
+            name = f.stem
+            if name in seen:
+                continue
+            seen.add(name)
+            try:
+                SandboxConfig.load(name)
+                types.append({"name": name, "available": True})
+            except Exception as e:
+                types.append({"name": name, "available": False, "reason": str(e)})
     return types
 
 
@@ -38,12 +44,19 @@ def init_providers_and_managers() -> tuple[dict, dict]:
     providers: dict[str, Any] = {
         "local": LocalSessionProvider(default_cwd=str(LOCAL_WORKSPACE_ROOT)),
     }
-    if not SANDBOXES_DIR.exists():
-        managers = {name: SandboxManager(provider=p, db_path=SANDBOX_DB_PATH) for name, p in providers.items()}
-        return providers, managers
+    config_names: list[str] = []
+    seen: set[str] = set()
+    for root in user_home_read_candidates("sandboxes"):
+        if not root.exists():
+            continue
+        for config_file in root.glob("*.json"):
+            name = config_file.stem
+            if name in seen:
+                continue
+            seen.add(name)
+            config_names.append(name)
 
-    for config_file in SANDBOXES_DIR.glob("*.json"):
-        name = config_file.stem
+    for name in config_names:
         try:
             config = SandboxConfig.load(name)
             if config.provider == "agentbay":

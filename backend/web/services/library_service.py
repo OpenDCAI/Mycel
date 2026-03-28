@@ -6,8 +6,9 @@ import time
 from pathlib import Path
 from typing import Any
 
-LEON_HOME = Path.home() / ".leon"
-LIBRARY_DIR = LEON_HOME / "library"
+from backend.web.core.paths import library_dir
+
+LIBRARY_DIR = library_dir()
 
 
 def ensure_library_dir() -> None:

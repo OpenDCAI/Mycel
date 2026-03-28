@@ -13,6 +13,8 @@ from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
+from config.user_paths import first_existing_user_home_path, user_home_path
+
 # 定价数据（运行时填充）
 _pricing_data: dict[str, dict[str, Decimal]] = {}
 _context_limits: dict[str, int] = {}  # model_name → context_length
@@ -21,7 +23,7 @@ _initialized = False
 
 # 路径
 _BUNDLED_PATH = Path(__file__).parent / "models.json"
-_CACHE_PATH = Path.home() / ".leon" / "pricing_cache.json"
+_CACHE_PATH = user_home_path("pricing_cache.json")
 _CACHE_TTL = 86400  # 24 小时
 
 M = Decimal("1000000")
@@ -110,10 +112,11 @@ def _infer_cache_prices(
 
 def _load_cache() -> tuple[dict[str, dict[str, str]], dict[str, int], dict[str, str]] | None:
     """从磁盘缓存加载定价数据、上下文窗口大小和 provider 映射"""
-    if not _CACHE_PATH.exists():
+    cache_path = first_existing_user_home_path("pricing_cache.json")
+    if not cache_path.exists():
         return None
     try:
-        data = json.loads(_CACHE_PATH.read_text())
+        data = json.loads(cache_path.read_text())
         if time.time() - data.get("timestamp", 0) > _CACHE_TTL:
             return None
         models = data.get("models", {})

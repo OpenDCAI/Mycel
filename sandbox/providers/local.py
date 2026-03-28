@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import platform
 import shlex
 import subprocess
@@ -120,6 +121,22 @@ class LocalSessionProvider(SandboxProvider):
         cwd: str | None = None,
     ) -> ProviderExecResult:
         workdir = cwd or self.default_cwd or str(Path.cwd())
+        if platform.system() == "Windows":
+            result = subprocess.run(
+                ["powershell.exe", "-NoLogo", "-NoProfile", "-Command", command],
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=max(timeout_ms / 1000, 0.1),
+                check=False,
+                cwd=workdir,
+            )
+            output = result.stdout or ""
+            if result.stderr:
+                output = f"{output}\n{result.stderr}" if output else result.stderr
+            return ProviderExecResult(output=output, exit_code=result.returncode)
+
         shell_cmd = f"cd {shlex.quote(workdir)} && {command}"
         result = subprocess.run(
             ["/bin/bash", "-lc", shell_cmd],
@@ -221,8 +238,44 @@ from sandbox.runtime import (  # noqa: E402
     _SubprocessPtySession,
     _build_export_block,
     _compute_env_delta,
+    _extract_state_from_output,
     _parse_env_output,
 )
+
+
+def _ps_quote(value: str) -> str:
+    return "'" + value.replace("'", "''") + "'"
+
+
+def _build_windows_shell_script(
+    command: str,
+    *,
+    cwd: str,
+    env_delta: dict[str, str],
+) -> tuple[str, str, str]:
+    start = f"__LEON_STATE_START_{uuid.uuid4().hex[:8]}__"
+    end = f"__LEON_STATE_END_{uuid.uuid4().hex[:8]}__"
+    lines = [
+        "$ErrorActionPreference = 'Continue'",
+        f"Set-Location -LiteralPath {_ps_quote(cwd)}",
+    ]
+    for key, value in env_delta.items():
+        lines.append(f"$env:{key} = {_ps_quote(str(value))}")
+    lines.extend(
+        [
+            "& {",
+            command,
+            "}",
+            "$leonExit = $LASTEXITCODE",
+            "if ($null -eq $leonExit) { $leonExit = 0 }",
+            f"Write-Output {_ps_quote(start)}",
+            "(Get-Location).Path",
+            'Get-ChildItem Env: | ForEach-Object { "{0}={1}" -f $_.Name, $_.Value }',
+            f"Write-Output {_ps_quote(end)}",
+            "exit $leonExit",
+        ]
+    )
+    return start, end, "\n".join(lines)
 
 
 class LocalPersistentShellRuntime(PhysicalTerminalRuntime):
@@ -242,6 +295,7 @@ class LocalPersistentShellRuntime(PhysicalTerminalRuntime):
         self._pty_session: _SubprocessPtySession | None = None
         self._session_lock = asyncio.Lock()
         self._baseline_env: dict[str, str] | None = None
+        self._use_windows_shell = platform.system() == "Windows"
 
     def _ensure_session_sync(self, timeout: float | None) -> _SubprocessPtySession:
         if self._pty_session and self._pty_session.is_alive():
@@ -259,12 +313,59 @@ class LocalPersistentShellRuntime(PhysicalTerminalRuntime):
         self._baseline_env = _parse_env_output(baseline_out)
         return self._pty_session
 
+    def _execute_windows_once_sync(
+        self,
+        command: str,
+        timeout: float | None,
+        on_stdout_chunk: Callable[[str], None] | None = None,
+    ) -> ExecuteResult:
+        if self.lease.observed_state == "paused":
+            raise RuntimeError(f"Sandbox lease {self.lease.lease_id} is paused. Resume before executing commands.")
+
+        state = self.terminal.get_state()
+        start, end, script = _build_windows_shell_script(command, cwd=state.cwd, env_delta=state.env_delta)
+        completed = subprocess.run(
+            ["powershell.exe", "-NoLogo", "-NoProfile", "-Command", script],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=timeout,
+            check=False,
+            cwd=state.cwd,
+            env=os.environ.copy(),
+        )
+        env_fallback = dict(self._baseline_env or os.environ.copy())
+        new_cwd, env_map, stdout = _extract_state_from_output(
+            completed.stdout,
+            start,
+            end,
+            cwd_fallback=state.cwd,
+            env_fallback=env_fallback,
+        )
+        env_delta = _compute_env_delta(env_map, env_fallback, state.env_delta)
+
+        from sandbox.terminal import TerminalState
+
+        self.update_terminal_state(TerminalState(cwd=new_cwd, env_delta=env_delta))
+        if on_stdout_chunk is not None and stdout:
+            on_stdout_chunk(stdout)
+        return ExecuteResult(
+            exit_code=completed.returncode,
+            stdout=stdout,
+            stderr=completed.stderr or "",
+            timed_out=False,
+        )
+
     def _execute_once_sync(
         self,
         command: str,
         timeout: float | None,
         on_stdout_chunk: Callable[[str], None] | None = None,
     ) -> ExecuteResult:
+        if self._use_windows_shell:
+            return self._execute_windows_once_sync(command, timeout, on_stdout_chunk=on_stdout_chunk)
+
         if self.lease.observed_state == "paused":
             raise RuntimeError(f"Sandbox lease {self.lease.lease_id} is paused. Resume before executing commands.")
 
@@ -318,6 +419,8 @@ class LocalPersistentShellRuntime(PhysicalTerminalRuntime):
 
     async def _recover_after_timeout(self) -> None:
         """Recover PTY session after a command timeout."""
+        if self._use_windows_shell:
+            return
         if self._pty_session is None:
             return
         recovered = await asyncio.to_thread(self._pty_session.interrupt_and_recover)
@@ -331,5 +434,7 @@ class LocalPersistentShellRuntime(PhysicalTerminalRuntime):
 
     async def close(self) -> None:
         """Close the shell session."""
+        if self._use_windows_shell:
+            return
         if self._pty_session:
             await asyncio.to_thread(self._pty_session.close)
