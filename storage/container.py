@@ -14,7 +14,7 @@ from .contracts import (
     QueueRepo,
     RunEventRepo,
     SummaryRepo,
-    WorkplaceRepo,
+    MemberVolumeRepo,
     WorkspaceRepo,
 )
 
@@ -30,7 +30,7 @@ _REPO_REGISTRY: dict[str, tuple[str, str]] = {
     "eval_repo":           ("storage.providers.supabase.eval_repo",           "SupabaseEvalRepo"),
     "queue_repo":          ("storage.providers.supabase.queue_repo",          "SupabaseQueueRepo"),
     "workspace_repo":      ("storage.providers.supabase.workspace_repo",     "SupabaseWorkspaceRepo"),
-    "workplace_repo":      ("storage.providers.sqlite.workplace_repo",      "SQLiteWorkplaceRepo"),  # SQLite-only for now
+    "member_volume_repo":      ("storage.providers.sqlite.member_volume_repo",      "SQLiteMemberVolumeRepo"),  # SQLite-only for now
 }
 
 
@@ -46,7 +46,7 @@ class StorageContainer:
         "eval_repo",
         "queue_repo",
         "workspace_repo",
-        "workplace_repo",
+        "member_volume_repo",
     )
 
     def __init__(
@@ -99,8 +99,8 @@ class StorageContainer:
     def workspace_repo(self) -> WorkspaceRepo:
         return self._build_repo("workspace_repo", self._sqlite_workspace_repo)
 
-    def workplace_repo(self) -> WorkplaceRepo:
-        return self._build_repo("workplace_repo", self._sqlite_workplace_repo)
+    def member_volume_repo(self) -> MemberVolumeRepo:
+        return self._build_repo("member_volume_repo", self._sqlite_member_volume_repo)
 
     def purge_thread(self, thread_id: str) -> None:
         """Delete all data for a thread across all repos."""
@@ -214,6 +214,6 @@ class StorageContainer:
         from storage.providers.sqlite.workspace_repo import SQLiteWorkspaceRepo
         return SQLiteWorkspaceRepo(db_path=self._main_db)
 
-    def _sqlite_workplace_repo(self):
-        from storage.providers.sqlite.workplace_repo import SQLiteWorkplaceRepo
-        return SQLiteWorkplaceRepo(db_path=self._main_db)
+    def _sqlite_member_volume_repo(self):
+        from storage.providers.sqlite.member_volume_repo import SQLiteMemberVolumeRepo
+        return SQLiteMemberVolumeRepo(db_path=self._main_db)

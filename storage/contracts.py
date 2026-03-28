@@ -217,8 +217,8 @@ class WorkspaceRepo(Protocol):
     def delete(self, workspace_id: str) -> bool: ...
 
 
-class WorkplaceRepo(Protocol):
-    """Agent-level persistent workplace storage. Keyed by (member_id, provider_type)."""
+class MemberVolumeRepo(Protocol):
+    """Agent-level persistent volume storage. Keyed by (member_id, provider_type)."""
     def close(self) -> None: ...
     def upsert(self, member_id: str, provider_type: str,
                backend_ref: str, mount_path: str, created_at: str) -> None: ...

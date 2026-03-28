@@ -1,4 +1,4 @@
-"""SQLite repository for agent workplaces."""
+"""SQLite repository for member volumes (persistent agent storage)."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ from typing import Any
 from storage.providers.sqlite.connection import create_connection
 
 
-class SQLiteWorkplaceRepo:
+class SQLiteMemberVolumeRepo:
 
     def __init__(self, db_path: str | Path, conn: sqlite3.Connection | None = None) -> None:
         self._own_conn = conn is None
@@ -26,7 +26,7 @@ class SQLiteWorkplaceRepo:
     def upsert(self, member_id: str, provider_type: str,
                backend_ref: str, mount_path: str, created_at: str) -> None:
         self._conn.execute(
-            "INSERT OR REPLACE INTO agent_workplaces"
+            "INSERT OR REPLACE INTO member_volumes"
             "(member_id, provider_type, backend_ref, mount_path, created_at)"
             " VALUES (?, ?, ?, ?, ?)",
             (member_id, provider_type, backend_ref, mount_path, created_at),
@@ -37,7 +37,7 @@ class SQLiteWorkplaceRepo:
         self._conn.row_factory = sqlite3.Row
         row = self._conn.execute(
             "SELECT member_id, provider_type, backend_ref, mount_path, created_at"
-            " FROM agent_workplaces WHERE member_id = ? AND provider_type = ?",
+            " FROM member_volumes WHERE member_id = ? AND provider_type = ?",
             (member_id, provider_type),
         ).fetchone()
         self._conn.row_factory = None
@@ -47,7 +47,7 @@ class SQLiteWorkplaceRepo:
         self._conn.row_factory = sqlite3.Row
         rows = self._conn.execute(
             "SELECT member_id, provider_type, backend_ref, mount_path, created_at"
-            " FROM agent_workplaces WHERE member_id = ?",
+            " FROM member_volumes WHERE member_id = ?",
             (member_id,),
         ).fetchall()
         self._conn.row_factory = None
@@ -55,7 +55,7 @@ class SQLiteWorkplaceRepo:
 
     def delete(self, member_id: str, provider_type: str) -> bool:
         cur = self._conn.execute(
-            "DELETE FROM agent_workplaces WHERE member_id = ? AND provider_type = ?",
+            "DELETE FROM member_volumes WHERE member_id = ? AND provider_type = ?",
             (member_id, provider_type),
         )
         self._conn.commit()
@@ -63,7 +63,7 @@ class SQLiteWorkplaceRepo:
 
     def delete_all_for_member(self, member_id: str) -> int:
         cur = self._conn.execute(
-            "DELETE FROM agent_workplaces WHERE member_id = ?",
+            "DELETE FROM member_volumes WHERE member_id = ?",
             (member_id,),
         )
         self._conn.commit()
@@ -72,7 +72,7 @@ class SQLiteWorkplaceRepo:
     def _ensure_tables(self) -> None:
         self._conn.execute(
             """
-            CREATE TABLE IF NOT EXISTS agent_workplaces (
+            CREATE TABLE IF NOT EXISTS member_volumes (
                 member_id      TEXT NOT NULL,
                 provider_type  TEXT NOT NULL,
                 backend_ref    TEXT NOT NULL,
