@@ -112,11 +112,13 @@ async def get_or_create_agent(app_obj: FastAPI, sandbox_type: str, thread_id: st
                 }
 
         # @@@per-thread-file-access - ensure thread files are accessible from agent
-        from backend.web.services.sandbox_files_service import ensure_sandbox_files
+        from backend.web.services.member_volume_service import get_lease_volume_source
 
-        sandbox_files_id = thread_data.get("sandbox_files_id") if thread_data else None
-        channel = ensure_sandbox_files(thread_id, sandbox_files_id=sandbox_files_id)
-        extra_allowed_paths: list[str] = [channel["files_path"]] if sandbox_type == "local" else []
+        try:
+            source = get_lease_volume_source(thread_id)
+            extra_allowed_paths: list[str] = [str(source.host_path)] if sandbox_type == "local" else []
+        except ValueError:
+            extra_allowed_paths: list[str] = []
 
         # Merge user-configured allowed_paths from sandbox config
         from sandbox.config import SandboxConfig

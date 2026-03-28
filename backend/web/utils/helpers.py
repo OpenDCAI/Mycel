@@ -92,7 +92,7 @@ def _get_thread_repo():
 
 def save_thread_config(thread_id: str, **fields: Any) -> None:
     """Update specific fields of thread in SQLite."""
-    allowed = {"sandbox_type", "cwd", "model", "observation_provider", "sandbox_files_id"}
+    allowed = {"sandbox_type", "cwd", "model", "observation_provider"}
     updates = {k: v for k, v in fields.items() if k in allowed}
     if not updates:
         return

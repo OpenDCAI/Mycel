@@ -50,7 +50,6 @@ export interface CreateThreadOptions {
   memberId: string;
   model?: string;
   agent?: string;
-  sandbox_files_id?: string;
 }
 
 export async function createThread(opts: CreateThreadOptions): Promise<ThreadSummary> {
@@ -58,7 +57,6 @@ export async function createThread(opts: CreateThreadOptions): Promise<ThreadSum
   if (opts.cwd) body.cwd = opts.cwd;
   if (opts.model) body.model = opts.model;
   if (opts.agent) body.agent = opts.agent;
-  if (opts.sandbox_files_id) body.sandbox_files_id = opts.sandbox_files_id;
   return request<ThreadSummary>("/api/threads", { method: "POST", body: JSON.stringify(body) });
 }
 

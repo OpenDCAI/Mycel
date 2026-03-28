@@ -19,7 +19,7 @@ from backend.web.models.requests import (
 )
 from backend.web.services.agent_pool import get_or_create_agent, resolve_thread_sandbox
 from backend.web.services.event_buffer import ThreadEventBuffer
-from backend.web.services.sandbox_files_service import cleanup_sandbox_files, ensure_sandbox_files
+from backend.web.services.member_volume_service import get_lease_volume_source
 from backend.web.services.sandbox_service import destroy_thread_resources_sync, init_providers_and_managers
 from backend.web.services.streaming_service import (
     get_or_create_thread_buffer,
@@ -236,7 +236,6 @@ def _create_owned_thread(
     resolved_is_main = is_main or not has_main
     branch_index = 0 if resolved_is_main else app.state.thread_repo.get_next_branch_index(agent_member_id)
 
-    # Create thread with sandbox_files_id
     app.state.thread_repo.create(
         thread_id=thread_entity_id,
         member_id=agent_member_id,
@@ -246,7 +245,6 @@ def _create_owned_thread(
         model=payload.model,
         is_main=resolved_is_main,
         branch_index=branch_index,
-        sandbox_files_id=payload.sandbox_files_id,
     )
 
     # @@@entity-name-convention - entity display names derive from member + thread role, never sandbox strings.
@@ -278,7 +276,6 @@ def _create_owned_thread(
         "sidebar_label": sidebar_label(is_main=resolved_is_main, branch_index=branch_index),
         "avatar_url": avatar_url(agent_member_id, bool(agent_member.avatar)),
         "is_main": resolved_is_main,
-        "sandbox_files_id": payload.sandbox_files_id,
     }
 
 
@@ -297,9 +294,6 @@ async def create_thread(
         return capability_error
 
     result = _create_owned_thread(app, user_id, payload, is_main=False)
-
-    # File channel setup (async I/O stays in endpoint layer)
-    await asyncio.to_thread(ensure_sandbox_files, result["thread_id"], sandbox_files_id=payload.sandbox_files_id)
 
     return result
 
@@ -427,7 +421,11 @@ async def delete_thread(
             await asyncio.to_thread(destroy_thread_resources_sync, thread_id, sandbox_type, app.state.agent_pool)
         except Exception as exc:
             logger.warning("Failed to destroy sandbox resources for thread %s: %s", thread_id, exc)
-        await asyncio.to_thread(cleanup_sandbox_files, thread_id)
+        try:
+            source = get_lease_volume_source(thread_id)
+            source.cleanup()
+        except ValueError:
+            pass  # No volume to clean up
         await asyncio.to_thread(delete_thread_in_db, thread_id)
         # Also delete from threads table (entity-chat addition)
         app.state.thread_repo.delete(thread_id)
