@@ -68,7 +68,7 @@ class SandboxManager:
             default_policy=ChatSessionPolicy(),
         )
 
-        _ws_root = workspace_root or Path.home() / ".leon" / "thread_files"
+        _ws_root = workspace_root or Path.home() / ".leon" / "sandbox_files"
         self.workspace_sync = SyncManager(
             provider_capability=self.provider_capability,
             workspace_root=_ws_root,
