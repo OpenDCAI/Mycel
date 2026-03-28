@@ -68,7 +68,7 @@ async def _prepare_attachment_message(
     else:
         _, managers = init_providers_and_managers()
         mgr = managers.get(sandbox_type)
-    files_dir = mgr.resolve_agent_files_dir(thread_id) if mgr else "/workspace/files"
+    files_dir = mgr.volume.resolve_remote_path() if mgr else "/workspace/files"
 
     original_message = message
     sync_ok = True
