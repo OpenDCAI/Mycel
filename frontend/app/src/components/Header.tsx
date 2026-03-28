@@ -18,7 +18,7 @@ function sandboxLabel(name: string): string {
 
 interface HeaderProps {
   activeThreadId: string | null;
-  threadPreview: string | null;
+  threadTitle: string | null;
   sandboxInfo: SandboxInfo | null;
   currentModel?: string;
   onToggleSidebar: () => void;
@@ -29,12 +29,10 @@ interface HeaderProps {
 
 export default function Header({
   activeThreadId,
-  threadPreview,
+  threadTitle,
   sandboxInfo,
   currentModel = "leon:medium",
-  showHidden = false,
   onToggleSidebar,
-  onToggleHidden,
   onPauseSandbox,
   onResumeSandbox,
   onModelChange,
@@ -71,7 +69,7 @@ export default function Header({
         {/* Thread title + optional sandbox badge */}
         <div className="flex items-center gap-2 min-w-0">
           <span className="text-sm font-medium text-[#171717] truncate max-w-[200px]">
-            {threadPreview || (activeThreadId ? "新对话" : "无对话")}
+            {threadTitle || (activeThreadId ? "对话" : "无对话")}
           </span>
           {/* Show sandbox as a small badge only for remote sandboxes */}
           {hasRemote && sandboxInfo?.status && (

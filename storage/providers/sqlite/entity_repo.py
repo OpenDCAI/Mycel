@@ -64,6 +64,19 @@ class SQLiteEntityRepo:
             ).fetchall()
             return [self._to_row(r) for r in rows]
 
+    def update(self, entity_id: str, **fields: str | None) -> None:
+        allowed = {"name", "avatar", "thread_id"}
+        updates = {k: v for k, v in fields.items() if k in allowed}
+        if not updates:
+            return
+        set_clause = ", ".join(f"{k} = ?" for k in updates)
+        with self._lock:
+            self._conn.execute(
+                f"UPDATE entities SET {set_clause} WHERE id = ?",
+                (*updates.values(), entity_id),
+            )
+            self._conn.commit()
+
     def delete(self, entity_id: str) -> None:
         with self._lock:
             self._conn.execute("DELETE FROM entities WHERE id = ?", (entity_id,))

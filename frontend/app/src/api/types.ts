@@ -29,9 +29,12 @@ export interface ThreadSummary {
   running?: boolean;
   member_id?: string;
   member_name?: string;
-  /** Entity name — source of truth for thread label. Format: {member}-{seq} ({sandbox}) */
+  /** Canonical thread/entity display name. Main: {member}. Child: {member} · 分身N */
   entity_name?: string;
+  branch_index?: number;
+  sidebar_label?: string | null;
   avatar_url?: string;
+  is_main?: boolean;
 }
 
 export interface SandboxType {
@@ -209,6 +212,11 @@ export interface ChatEntity {
   name: string;
   type: string;
   avatar_url?: string;
+  owner_name?: string | null;
+  member_name?: string | null;
+  thread_id?: string | null;
+  is_main?: boolean | null;
+  branch_index?: number | null;
 }
 
 export interface ChatSummary {
@@ -237,4 +245,3 @@ export interface ChatMessage {
   mentioned_entity_ids: string[];
   created_at: number;
 }
-

@@ -82,10 +82,10 @@ class AuthService:
         from backend.web.services.member_service import MEMBERS_DIR, _write_agent_md, _write_json
         from pathlib import Path
 
-        # @@@initial-agents - Toad (lightweight assistant) + Morel (senior analyst)
+        # @@@initial-agent-names - keep template names plain; owner disambiguation belongs in discovery UI metadata.
         initial_agents = [
-            {"name": f"Toad of {username}", "description": "Curious and energetic assistant", "avatar": "toad.jpeg"},
-            {"name": f"Morel of {username}", "description": "Thoughtful senior analyst", "avatar": "morel.jpeg"},
+            {"name": "Toad", "description": "Curious and energetic assistant", "avatar": "toad.jpeg"},
+            {"name": "Morel", "description": "Thoughtful senior analyst", "avatar": "morel.jpeg"},
         ]
 
         assets_dir = Path(__file__).resolve().parents[3] / "assets"
@@ -118,25 +118,6 @@ class AuthService:
                     self._members.update(agent_member_id, avatar=avatar_path, updated_at=now)
                 except Exception as e:
                     logger.warning("Failed to process default avatar for %s: %s", agent_def["name"], e)
-
-            # 5. Agent entity + thread
-            agent_seq = self._members.increment_entity_seq(agent_member_id)
-            agent_entity_id = f"{agent_member_id}-{agent_seq}"
-            sandbox_type = "local"
-
-            self._threads.create(
-                thread_id=agent_entity_id,
-                member_id=agent_member_id,
-                sandbox_type=sandbox_type,
-                created_at=now,
-            )
-
-            entity_name = f"{agent_def['name']}-{agent_seq} ({sandbox_type})"
-            self._entities.create(EntityRow(
-                id=agent_entity_id, type="agent", member_id=agent_member_id,
-                name=entity_name, thread_id=agent_entity_id,
-                created_at=now,
-            ))
 
             if i == 0:
                 first_agent_info = {

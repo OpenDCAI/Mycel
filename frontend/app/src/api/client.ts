@@ -41,11 +41,20 @@ export async function listThreads(): Promise<ThreadSummary[]> {
   return toThreads(payload);
 }
 
-export async function createThread(sandbox: string, cwd?: string, memberId?: string): Promise<ThreadSummary> {
+export async function createThread(sandbox: string, cwd?: string, memberId?: string, model?: string): Promise<ThreadSummary> {
   const body: Record<string, string> = { sandbox };
   if (cwd) body.cwd = cwd;
   if (memberId) body.member_id = memberId;
+  if (model) body.model = model;
   return request<ThreadSummary>("/api/threads", { method: "POST", body: JSON.stringify(body) });
+}
+
+export async function getMainThread(memberId: string): Promise<ThreadSummary | null> {
+  const payload = await request<{ thread: ThreadSummary | null }>("/api/threads/main", {
+    method: "POST",
+    body: JSON.stringify({ member_id: memberId }),
+  });
+  return payload.thread ?? null;
 }
 
 export async function deleteThread(threadId: string): Promise<void> {

@@ -10,6 +10,10 @@ class CreateThreadRequest(BaseModel):
     model: str | None = None
 
 
+class ResolveMainThreadRequest(BaseModel):
+    member_id: str
+
+
 class RunRequest(BaseModel):
     message: str
     enable_trajectory: bool = False
@@ -18,4 +22,3 @@ class RunRequest(BaseModel):
 
 class SendMessageRequest(BaseModel):
     message: str
-

@@ -20,6 +20,7 @@ from typing import Any
 
 import yaml
 
+from backend.web.services.thread_naming import canonical_entity_name
 from config.defaults.tool_catalog import TOOLS_BY_NAME, ToolDef
 from backend.web.utils.serializers import avatar_url
 from config.loader import AgentLoader
@@ -420,12 +421,35 @@ def update_member(member_id: str, **fields: Any) -> dict[str, Any] | None:
         # Sync name to SQLite
         if "name" in updates:
             from storage.providers.sqlite.member_repo import SQLiteMemberRepo
+            from storage.providers.sqlite.entity_repo import SQLiteEntityRepo
+            from storage.providers.sqlite.thread_repo import SQLiteThreadRepo
+
             repo = SQLiteMemberRepo()
+            entity_repo = SQLiteEntityRepo()
+            thread_repo = SQLiteThreadRepo()
             try:
                 repo.update(member_id, name=updates["name"])
-            except Exception:
-                pass
+                member = repo.get_by_id(member_id)
+                if member is None:
+                    raise ValueError(f"Member {member_id} not found after update")
+                for entity in entity_repo.get_by_member_id(member_id):
+                    if entity.thread_id is None:
+                        entity_repo.update(entity.id, name=member.name)
+                        continue
+                    thread = thread_repo.get_by_id(entity.thread_id)
+                    if thread is None:
+                        raise ValueError(f"Entity {entity.id} references missing thread {entity.thread_id}")
+                    entity_repo.update(
+                        entity.id,
+                        name=canonical_entity_name(
+                            member.name,
+                            is_main=bool(thread["is_main"]),
+                            branch_index=int(thread["branch_index"]),
+                        ),
+                    )
             finally:
+                thread_repo.close()
+                entity_repo.close()
                 repo.close()
 
     return get_member(member_id)

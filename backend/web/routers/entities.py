@@ -164,15 +164,30 @@ async def list_entities(
     exclude_member_ids = {member_id}
 
     all_entities = entity_repo.list_all()
-    member_avatars = {m.id: bool(m.avatar) for m in member_repo.list_all()}
+    members = member_repo.list_all()
+    member_map = {m.id: m for m in members}
+    member_avatars = {m.id: bool(m.avatar) for m in members}
     # @@@entity-is-social-identity — response uses entity_id only, no member_id leak.
     # member_id is internal (template), entity_id is the social identity.
-    return [
-        {"id": e.id, "name": e.name, "type": e.type,
-         "avatar_url": avatar_url(e.member_id, member_avatars.get(e.member_id, False))}
-        for e in all_entities
-        if e.member_id not in exclude_member_ids
-    ]
+    items = []
+    for entity in all_entities:
+        if entity.member_id in exclude_member_ids:
+            continue
+        member = member_map.get(entity.member_id)
+        owner = member_map.get(member.owner_id) if member and member.owner_id else None
+        thread = app.state.thread_repo.get_by_id(entity.thread_id) if entity.thread_id else None
+        items.append({
+            "id": entity.id,
+            "name": entity.name,
+            "type": entity.type,
+            "avatar_url": avatar_url(entity.member_id, member_avatars.get(entity.member_id, False)),
+            "owner_name": owner.name if owner else None,
+            "member_name": member.name if member else None,
+            "thread_id": entity.thread_id,
+            "is_main": thread["is_main"] if thread else None,
+            "branch_index": thread["branch_index"] if thread else None,
+        })
+    return items
 
 
 @router.get("/{entity_id}/agent-thread")

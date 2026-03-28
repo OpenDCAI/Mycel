@@ -6,6 +6,7 @@ import NewThreadModal from "../components/NewThreadModal";
 import SandboxSessionsModal from "../components/SandboxSessionsModal";
 import SearchModal from "../components/SearchModal";
 import Sidebar from "../components/Sidebar";
+import type { ThreadSummary } from "../api";
 import { useIsMobile } from "../hooks/use-mobile";
 import { useResizableX } from "../hooks/use-resizable-x";
 import { useThreadManager } from "../hooks/use-thread-manager";
@@ -110,7 +111,7 @@ export default function AppLayout() {
 }
 
 function MobileThreadList({ threads, loading, onNewChat, onDeleteThread, newChatOpen, setNewChatOpen }: {
-  threads: any[];
+  threads: ThreadSummary[];
   loading: boolean;
   onNewChat: () => void;
   onDeleteThread: (id: string) => void;
@@ -136,15 +137,15 @@ function MobileThreadList({ threads, loading, onNewChat, onDeleteThread, newChat
         ) : (
           threads.map(t => {
             const memberId = requireThreadMemberId(t);
-            const memberName = t.member_name || "Agent";
-            const preview = t.preview || "新会话";
+            const entityName = t.entity_name || t.member_name || "Agent";
+            const subtitle = t.is_main ? "主线对话" : (t.sidebar_label || "分支对话");
             return (
               <div key={t.thread_id} className="flex items-center border-b border-border">
                 <Link to={`/threads/${encodeURIComponent(memberId)}/${t.thread_id}`} className="flex items-center gap-3 px-4 py-3 flex-1 min-w-0 hover:bg-muted/50 transition-colors">
-                  <MemberAvatar name={memberName} avatarUrl={t.avatar_url} type="mycel_agent" size="md" />
+                  <MemberAvatar name={entityName} avatarUrl={t.avatar_url} type="mycel_agent" size="md" />
                   <div className="min-w-0 flex-1">
-                    <p className="text-sm font-medium text-foreground truncate">{memberName}</p>
-                    <p className="text-xs text-muted-foreground truncate">{preview}</p>
+                    <p className="text-sm font-medium text-foreground truncate">{entityName}</p>
+                    <p className="text-xs text-muted-foreground truncate">{subtitle}</p>
                   </div>
                 </Link>
                 <button

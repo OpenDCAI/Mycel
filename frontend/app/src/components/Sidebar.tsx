@@ -1,5 +1,5 @@
 import { Check, ChevronRight, MoreHorizontal, Plus, Search, Trash2 } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import type { ThreadSummary } from "../api";
 import MemberAvatar from "./MemberAvatar";
@@ -12,6 +12,16 @@ function requireThreadMemberId(thread: ThreadSummary): string {
     throw new Error(`Thread ${thread.thread_id} missing member_id`);
   }
   return thread.member_id;
+}
+
+function requireSidebarLabel(thread: ThreadSummary): string {
+  if (thread.is_main) {
+    throw new Error(`Main thread ${thread.thread_id} should not render as child thread`);
+  }
+  if (!thread.sidebar_label) {
+    throw new Error(`Thread ${thread.thread_id} missing sidebar_label`);
+  }
+  return thread.sidebar_label;
 }
 
 function formatRelativeTime(dateStr?: string): string {
@@ -119,7 +129,7 @@ function ThreadItem({
         </div>
         <div className="flex items-center gap-1 mt-0.5">
           <span className="text-[11px] text-muted-foreground/60 truncate flex-1 min-w-0">
-            {thread.preview || thread.sandbox || "local"}
+            {thread.sandbox || "local"}
           </span>
           {thread.updated_at && (
             <span className="text-[10px] text-muted-foreground/40 flex-shrink-0">
@@ -170,7 +180,8 @@ export default function Sidebar({
   onSearchClick,
   onNewChat,
 }: SidebarProps) {
-  const { threadId } = useParams<{ threadId?: string }>();
+  const { memberId, threadId } = useParams<{ memberId?: string; threadId?: string }>();
+  const activeMemberId = memberId ? decodeURIComponent(memberId) : null;
   const activeThreadId = threadId || null;
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   const [expandedMembers, setExpandedMembers] = useState<Set<string>>(() => {
@@ -179,7 +190,6 @@ export default function Sidebar({
       return saved ? new Set(JSON.parse(saved)) : new Set();
     } catch { return new Set(); }
   });
-  const hasInitialized = useRef(false);
   const [isSelectMode, setIsSelectMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
@@ -250,18 +260,6 @@ export default function Sidebar({
       }));
   }, [threads, memberList]);
 
-  // Auto-expand the most recently active member on first load (only if nothing saved)
-  useEffect(() => {
-    if (groups.length > 0 && !hasInitialized.current) {
-      hasInitialized.current = true;
-      if (expandedMembers.size === 0) {
-        const init = new Set([groups[0].memberId]);
-        setExpandedMembers(init);
-        localStorage.setItem("sidebar-expanded-members", JSON.stringify([...init]));
-      }
-    }
-  }, [groups]);
-
   const toggleMember = (memberId: string) => {
     setExpandedMembers(prev => {
       const next = new Set(prev);
@@ -287,17 +285,18 @@ export default function Sidebar({
 
         <div className="flex-1 min-h-0 overflow-y-auto w-full flex flex-col items-center gap-1 px-2 py-1 custom-scrollbar">
           {groups.map((group) => {
-            const isActive = group.threads.some(t => t.thread_id === activeThreadId);
+            const mainThread = group.threads.find((thread) => thread.is_main);
+            const isActive = group.memberId === activeMemberId
+              && (!activeThreadId || activeThreadId === mainThread?.thread_id);
             const isRunning = group.threads.some(t => t.running);
             return (
               <div key={group.memberId} className="relative group/item w-full flex justify-center">
-                {isActive && (
-                  <div className="absolute -left-[4px] top-1/2 -translate-y-1/2 w-[3px] h-5 rounded-r-full bg-primary" />
-                )}
                 <Link
                   to={`/threads/${encodeURIComponent(group.memberId)}`}
                   title={group.memberName}
-                  className="flex items-center justify-center"
+                  className={`flex items-center justify-center rounded-xl p-1 transition-colors ${
+                    isActive ? "bg-muted" : "hover:bg-muted/70"
+                  }`}
                 >
                   {isRunning
                     ? <span className="w-9 h-9 rounded-xl flex items-center justify-center bg-muted"><span className="w-3 h-3 rounded-full border-2 border-muted-foreground border-t-transparent animate-spin" /></span>
@@ -388,26 +387,48 @@ export default function Sidebar({
             groups.map((group) => {
               const isExpanded = expandedMembers.has(group.memberId);
               const urlId = encodeURIComponent(group.memberId);
+              const mainThread = group.threads.find((thread) => thread.is_main);
+              const isMemberActive = group.memberId === activeMemberId
+                && (!activeThreadId || activeThreadId === mainThread?.thread_id);
+              const childThreads = group.threads.filter((thread) => !thread.is_main);
               return (
                 <div key={group.memberId} className="mb-1">
-                  {/* Group header: entire row toggles expand */}
-                  <button
-                    onClick={() => toggleMember(group.memberId)}
-                    className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg hover:bg-muted w-full text-left"
-                  >
-                    <ChevronRight className={`w-3.5 h-3.5 transition-transform flex-shrink-0 text-muted-foreground/50 ${isExpanded ? "rotate-90" : ""}`} />
-                    <MemberAvatar name={group.memberName} avatarUrl={group.avatarUrl} type="mycel_agent" size="xs" />
-                    <span className="text-xs font-medium text-foreground flex-1 truncate">{group.memberName}</span>
-                    <span className="text-[10px] text-muted-foreground/40 flex-shrink-0">{group.threads.length || ""}</span>
-                  </button>
+                  <div className={`flex items-center gap-1 px-2 py-1.5 rounded-xl transition-colors ${
+                    isMemberActive
+                      ? "bg-muted"
+                      : "hover:bg-muted/70"
+                  }`}>
+                    <button
+                      onClick={() => toggleMember(group.memberId)}
+                      className={`w-5 h-5 flex items-center justify-center rounded transition-colors ${
+                        isMemberActive ? "hover:bg-background/80" : "hover:bg-background/60"
+                      }`}
+                      aria-label={isExpanded ? "收起分支对话" : "展开分支对话"}
+                    >
+                      <ChevronRight className={`w-3.5 h-3.5 transition-transform flex-shrink-0 ${
+                        isMemberActive ? "text-foreground/70" : "text-muted-foreground/50"
+                      } ${isExpanded ? "rotate-90" : ""}`} />
+                    </button>
+                    <Link
+                      to={`/threads/${urlId}`}
+                      className="flex items-center gap-1.5 min-w-0 flex-1"
+                    >
+                      <MemberAvatar name={group.memberName} avatarUrl={group.avatarUrl} type="mycel_agent" size="xs" />
+                      <span className={`text-xs flex-1 truncate ${
+                        isMemberActive ? "font-semibold text-foreground" : "font-medium text-foreground"
+                      }`}>
+                        {group.memberName}
+                      </span>
+                    </Link>
+                  </div>
                   {isExpanded && (
                     <div className="mt-0.5 ml-3 space-y-0.5">
-                      {group.threads.map((thread) => (
+                      {childThreads.map((thread) => (
                         <ThreadItem
                           key={thread.thread_id}
                           thread={thread}
                           isActive={activeThreadId === thread.thread_id}
-                          label={thread.entity_name || thread.preview || thread.sandbox || "local"}
+                          label={requireSidebarLabel(thread)}
                           to={`/threads/${urlId}/${thread.thread_id}`}
                           isSelectMode={isSelectMode}
                           isSelected={selectedIds.has(thread.thread_id)}
@@ -418,7 +439,7 @@ export default function Sidebar({
                         />
                       ))}
                       <Link
-                        to={`/threads/${urlId}`}
+                        to={`/threads/${urlId}/new`}
                         className="block px-3 py-2 text-[11px] text-muted-foreground/50 hover:text-muted-foreground transition-colors"
                       >
                         + 发起新对话
