@@ -34,7 +34,7 @@ export default function RootLayout() {
 }
 
 function AuthenticatedLayout() {
-  const authMember = useAuthStore(s => s.member);
+  const authUser = useAuthStore(s => s.user);
   const authLogout = useAuthStore(s => s.logout);
 
   const location = useLocation();
@@ -49,18 +49,18 @@ function AuthenticatedLayout() {
   // @@@profile-avatar-upload — click avatar → file picker → upload → cache bust
   const handleAvatarUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file || !authMember) return;
+    if (!file || !authUser) return;
     try {
-      await uploadMemberAvatar(authMember.id, file);
+      await uploadMemberAvatar(authUser.id, file);
       setAvatarRev(r => r + 1);
       // Persist avatar flag so it survives page refresh
-      useAuthStore.setState(s => ({ member: s.member ? { ...s.member, avatar: `avatars/${authMember.id}.png` } : s.member }));
+      useAuthStore.setState(s => ({ user: s.user ? { ...s.user, avatar: `avatars/${authUser.id}.png` } : s.user }));
       toast.success("Avatar updated");
     } catch (err) {
       toast.error(`Upload failed: ${err instanceof Error ? err.message : "unknown"}`);
     }
     if (avatarInputRef.current) avatarInputRef.current.value = "";
-  }, [authMember]);
+  }, [authUser]);
 
   const loadAll = useAppStore((s) => s.loadAll);
   const storeAddTask = useAppStore((s) => s.addTask);
@@ -256,10 +256,10 @@ function AuthenticatedLayout() {
             <Popover>
               <PopoverTrigger asChild>
                 <button className={`flex items-center ${showLabels ? "px-3 gap-3" : "justify-center"} h-10 mb-1 rounded-xl hover:bg-muted transition-colors w-full`}>
-                  <MemberAvatar name={authMember?.name || "User"} avatarUrl={(authMember?.avatar || avatarRev > 0) && authMember?.id ? `/api/members/${authMember.id}/avatar` : undefined} size="sm" type="human" rev={avatarRev} />
+                  <MemberAvatar name={authUser?.name || "User"} avatarUrl={(authUser?.avatar || avatarRev > 0) && authUser?.id ? `/api/members/${authUser.id}/avatar` : undefined} size="sm" type="human" rev={avatarRev} />
                   {showLabels && (
                     <div className="min-w-0 flex-1 text-left">
-                      <p className="text-xs font-medium text-foreground truncate">{authMember?.name || "User"}</p>
+                      <p className="text-xs font-medium text-foreground truncate">{authUser?.name || "User"}</p>
                     </div>
                   )}
                 </button>
@@ -267,14 +267,14 @@ function AuthenticatedLayout() {
               <PopoverContent side="top" align="start" className="w-56">
                 <div className="flex flex-col items-center gap-3">
                   <div className="relative group/avatar cursor-pointer" onClick={() => avatarInputRef.current?.click()}>
-                    <MemberAvatar name={authMember?.name || "User"} avatarUrl={(authMember?.avatar || avatarRev > 0) && authMember?.id ? `/api/members/${authMember.id}/avatar` : undefined} size="lg" type="human" rev={avatarRev} />
+                    <MemberAvatar name={authUser?.name || "User"} avatarUrl={(authUser?.avatar || avatarRev > 0) && authUser?.id ? `/api/members/${authUser.id}/avatar` : undefined} size="lg" type="human" rev={avatarRev} />
                     <div className="absolute inset-0 rounded-full bg-black/40 opacity-0 group-hover/avatar:opacity-100 transition-opacity flex items-center justify-center">
                       <Camera className="w-5 h-5 text-white" />
                     </div>
                     <input ref={avatarInputRef} type="file" accept="image/png,image/jpeg,image/webp,image/gif" className="hidden" onChange={handleAvatarUpload} />
                   </div>
                   <div className="text-center">
-                    <p className="text-sm font-medium">{authMember?.name || "User"}</p>
+                    <p className="text-sm font-medium">{authUser?.name || "User"}</p>
                   </div>
                   <button
                     onClick={authLogout}

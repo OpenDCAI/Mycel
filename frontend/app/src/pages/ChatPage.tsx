@@ -35,15 +35,15 @@ export default function ChatPage() {
 function ChatPageInner({ threadId }: { threadId: string }) {
   const location = useLocation();
   const { tm, setSidebarCollapsed } = useOutletContext<OutletContext>();
-  const userName = useAuthStore(s => s.member?.name);
-  const userMemberId = useAuthStore(s => s.member?.id);
-  const userHasAvatar = useAuthStore(s => !!s.member?.avatar);
+  const userName = useAuthStore(s => s.user?.name);
+  const userId = useAuthStore(s => s.user?.id);
+  const userHasAvatar = useAuthStore(s => !!s.user?.avatar);
 
   // Derive avatar URLs from thread data
   const currentThread = tm.threads.find(t => t.thread_id === threadId);
   const agentName = currentThread?.entity_name ?? currentThread?.member_name;
   const agentAvatarUrl = currentThread?.avatar_url;
-  const userAvatarUrl = userHasAvatar && userMemberId ? `/api/members/${userMemberId}/avatar` : undefined;
+  const userAvatarUrl = userHasAvatar && userId ? `/api/members/${userId}/avatar` : undefined;
   const state = location.state as { selectedModel?: string; runStarted?: boolean; message?: string } | null;
   const [currentModel, setCurrentModel] = useState<string>(state?.selectedModel ?? "");
 

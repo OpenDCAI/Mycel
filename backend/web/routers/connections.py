@@ -7,7 +7,7 @@ from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException
 
-from backend.web.core.dependencies import get_app, get_current_entity_id, get_current_member_id
+from backend.web.core.dependencies import get_app, get_current_entity_id, get_current_user_id
 from backend.web.services.wechat_service import (
     QrPollRequest,
     RoutingConfig,
@@ -126,17 +126,17 @@ async def wechat_clear_routing(
 
 @router.get("/wechat/routing/targets")
 async def wechat_routing_targets(
-    member_id: Annotated[str, Depends(get_current_member_id)],
+    user_id: Annotated[str, Depends(get_current_user_id)],
     entity_id: Annotated[str, Depends(get_current_entity_id)],
     app: Annotated[Any, Depends(get_app)],
 ) -> dict:
     """List available threads and chats for the routing picker.
 
-    member_id: needed for thread ownership lookup (threads belong to agent members owned by this human).
+    user_id: needed for thread ownership lookup (threads belong to agent members owned by this user).
     entity_id: needed for chat lookup (chats the user's social identity participates in).
     """
     from backend.web.utils.serializers import avatar_url
-    raw_threads = app.state.thread_repo.list_by_owner(member_id)
+    raw_threads = app.state.thread_repo.list_by_owner_user_id(user_id)
     threads = [
         {
             "id": t["id"],

@@ -32,8 +32,15 @@ def test_register_creates_agent_members_without_threads(tmp_path, monkeypatch):
     )
 
     payload = service.register("fresh_user", "pass1234")
+    claims = service.verify_token(payload["token"])
+    account = account_repo.get_by_username("fresh_user")
 
-    owned_agents = member_repo.list_by_owner(payload["member"]["id"])
+    owned_agents = member_repo.list_by_owner_user_id(payload["user"]["id"])
+    assert "member_id" not in claims
+    assert claims["user_id"] == payload["user"]["id"]
+    assert payload["user"]["name"] == "fresh_user"
+    assert account is not None
+    assert account.user_id == payload["user"]["id"]
     assert len(owned_agents) == 2
     assert [agent.name for agent in owned_agents] == ["Toad", "Morel"]
     for agent in owned_agents:
@@ -60,7 +67,7 @@ def test_first_explicit_thread_becomes_main_then_followups_are_children(tmp_path
         id="member-1",
         name="Template Agent",
         type=MemberType.MYCEL_AGENT,
-        owner_id="owner-1",
+        owner_user_id="owner-1",
         created_at=2.0,
     ))
 
@@ -121,7 +128,7 @@ def test_member_rename_recomputes_agent_entity_names(tmp_path, monkeypatch):
         id="member-1",
         name="Toad",
         type=MemberType.MYCEL_AGENT,
-        owner_id="owner-1",
+        owner_user_id="owner-1",
         created_at=2.0,
     ))
 
@@ -190,7 +197,7 @@ def test_resolve_main_thread_returns_null_when_member_has_no_main(tmp_path):
         id="member-1",
         name="Template Agent",
         type=MemberType.MYCEL_AGENT,
-        owner_id="owner-1",
+        owner_user_id="owner-1",
         created_at=2.0,
     ))
 

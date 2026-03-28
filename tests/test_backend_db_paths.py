@@ -54,7 +54,7 @@ def test_windows_member_service_uses_runtime_db_root(monkeypatch, tmp_path: Path
     import backend.web.services.member_service as member_service_module
     member_service_module = importlib.reload(member_service_module)
 
-    created = member_service_module.create_member("Windows Scoped Member", "desc", owner_id="owner-1")
+    created = member_service_module.create_member("Windows Scoped Member", "desc", owner_user_id="owner-1")
     member_dir = runtime_root / "members" / created["id"]
 
     assert member_dir.is_dir()

@@ -9,7 +9,7 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sse_starlette.sse import EventSourceResponse
 
-from backend.web.core.dependencies import get_app, get_current_member_id, get_thread_agent, get_thread_lock, verify_thread_owner
+from backend.web.core.dependencies import get_app, get_current_user_id, get_thread_agent, get_thread_lock, verify_thread_owner
 from backend.web.models.requests import (
     CreateThreadRequest,
     ResolveMainThreadRequest,
@@ -78,7 +78,7 @@ def _thread_payload(app: Any, thread_id: str, sandbox_type: str) -> dict[str, An
 
 def _create_owned_thread(
     app: Any,
-    owner_member_id: str,
+    owner_user_id: str,
     payload: CreateThreadRequest,
     *,
     is_main: bool,
@@ -87,7 +87,7 @@ def _create_owned_thread(
 
     agent_member_id = payload.member_id
     agent_member = app.state.member_repo.get_by_id(agent_member_id)
-    if not agent_member or agent_member.owner_id != owner_member_id:
+    if not agent_member or agent_member.owner_user_id != owner_user_id:
         raise HTTPException(403, "Not authorized")
 
     # @@@non-atomic-create - these 3 steps (seq++, thread, entity) are not atomic.
@@ -141,22 +141,22 @@ def _create_owned_thread(
 @router.post("")
 async def create_thread(
     payload: CreateThreadRequest,
-    member_id: Annotated[str, Depends(get_current_member_id)],
+    user_id: Annotated[str, Depends(get_current_user_id)],
     app: Annotated[Any, Depends(get_app)] = None,
 ) -> dict[str, Any]:
     """Create a new child thread for an agent member."""
-    return _create_owned_thread(app, member_id, payload, is_main=False)
+    return _create_owned_thread(app, user_id, payload, is_main=False)
 
 
 @router.post("/main")
 async def resolve_main_thread(
     payload: ResolveMainThreadRequest,
-    member_id: Annotated[str, Depends(get_current_member_id)],
+    user_id: Annotated[str, Depends(get_current_user_id)],
     app: Annotated[Any, Depends(get_app)] = None,
 ) -> dict[str, Any]:
     """Return the main thread for a member, or null when none exists."""
     agent_member = app.state.member_repo.get_by_id(payload.member_id)
-    if not agent_member or agent_member.owner_id != member_id:
+    if not agent_member or agent_member.owner_user_id != user_id:
         raise HTTPException(403, "Not authorized")
 
     existing = app.state.thread_repo.get_main_thread(payload.member_id)
@@ -167,13 +167,13 @@ async def resolve_main_thread(
 
 @router.get("")
 async def list_threads(
-    member_id: Annotated[str, Depends(get_current_member_id)],
+    user_id: Annotated[str, Depends(get_current_user_id)],
     app: Annotated[Any, Depends(get_app)] = None,
 ) -> dict[str, Any]:
     """List threads owned by the current user."""
     from core.runtime.middleware.monitor import AgentState
 
-    raw = app.state.thread_repo.list_by_owner(member_id)
+    raw = app.state.thread_repo.list_by_owner_user_id(user_id)
     pool = app.state.agent_pool
     threads = []
     for t in raw:
@@ -211,7 +211,7 @@ async def list_threads(
 @router.get("/{thread_id}")
 async def get_thread_messages(
     thread_id: str,
-    member_id: Annotated[str, Depends(verify_thread_owner)],
+    user_id: Annotated[str, Depends(verify_thread_owner)],
     app: Annotated[Any, Depends(get_app)] = None,
 ) -> dict[str, Any]:
     """Get display entries and sandbox info for a thread.
@@ -250,7 +250,7 @@ async def get_thread_messages(
 @router.delete("/{thread_id}")
 async def delete_thread(
     thread_id: str,
-    member_id: Annotated[str, Depends(verify_thread_owner)],
+    user_id: Annotated[str, Depends(verify_thread_owner)],
     app: Annotated[Any, Depends(get_app)] = None,
 ) -> dict[str, Any]:
     """Delete a thread and its resources."""
@@ -296,7 +296,7 @@ async def delete_thread(
 async def send_message(
     thread_id: str,
     payload: SendMessageRequest,
-    member_id: Annotated[str, Depends(verify_thread_owner)],
+    user_id: Annotated[str, Depends(verify_thread_owner)],
     app: Annotated[Any, Depends(get_app)] = None,
 ) -> dict[str, Any]:
     """Send a message to agent — thin wrapper around route_message_to_brain."""
@@ -313,7 +313,7 @@ async def get_thread_history(
     thread_id: str,
     limit: int = 20,
     truncate: int = 300,
-    member_id: Annotated[str, Depends(verify_thread_owner)] = None,
+    user_id: Annotated[str, Depends(verify_thread_owner)] = None,
     app: Annotated[Any, Depends(get_app)] = None,
 ) -> dict[str, Any]:
     """Compact conversation history for debugging — no raw LangChain noise.
@@ -386,7 +386,7 @@ async def get_thread_history(
 async def get_thread_runtime(
     thread_id: str,
     stream: bool = False,
-    member_id: Annotated[str, Depends(verify_thread_owner)] = None,
+    user_id: Annotated[str, Depends(verify_thread_owner)] = None,
     app: Annotated[Any, Depends(get_app)] = None,
 ) -> dict[str, Any]:
     """Get runtime status for a thread."""
@@ -531,14 +531,14 @@ async def stream_thread_events(
     if not token:
         raise HTTPException(401, "Missing token")
     try:
-        sse_member_id = app.state.auth_service.verify_token(token)["member_id"]
+        sse_user_id = app.state.auth_service.verify_token(token)["user_id"]
     except ValueError as e:
         raise HTTPException(401, str(e))
     thread = app.state.thread_repo.get_by_id(thread_id)
     if not thread:
         raise HTTPException(404, "Thread not found")
     agent_member = app.state.member_repo.get_by_id(thread["member_id"])
-    if not agent_member or agent_member.owner_id != sse_member_id:
+    if not agent_member or agent_member.owner_user_id != sse_user_id:
         raise HTTPException(403, "Not authorized")
 
     last_id = request.headers.get("Last-Event-ID")
@@ -587,7 +587,7 @@ async def stream_thread_events(
 @router.post("/{thread_id}/runs/cancel")
 async def cancel_run(
     thread_id: str,
-    member_id: Annotated[str, Depends(verify_thread_owner)] = None,
+    user_id: Annotated[str, Depends(verify_thread_owner)] = None,
     app: Annotated[Any, Depends(get_app)] = None,
 ):
     """Cancel an active run for the given thread."""
