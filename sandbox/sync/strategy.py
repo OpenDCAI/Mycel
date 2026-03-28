@@ -86,80 +86,80 @@ def _batch_download_tar(session_id: str, provider, workspace: Path, workspace_ro
 
 class SyncStrategy(ABC):
     @abstractmethod
-    def upload(self, thread_id: str, session_id: str, provider, files: list[str] | None = None):
+    def upload(self, source_path: Path, remote_path: str, session_id: str, provider,
+               files: list[str] | None = None, state_key: str | None = None):
         pass
 
     @abstractmethod
-    def download(self, thread_id: str, session_id: str, provider):
+    def download(self, source_path: Path, remote_path: str, session_id: str, provider,
+                 state_key: str | None = None):
         pass
 
-    def clear_thread(self, thread_id: str):
-        """Remove all sync state for a thread. Default no-op."""
+    def clear_state(self, state_key: str):
+        """Remove all sync state for a key. Default no-op."""
         pass
 
 
 class NoOpStrategy(SyncStrategy):
-    def upload(self, thread_id: str, session_id: str, provider, files: list[str] | None = None):
+    def upload(self, source_path: Path, remote_path: str, session_id: str, provider,
+               files: list[str] | None = None, state_key: str | None = None):
         pass
 
-    def download(self, thread_id: str, session_id: str, provider):
+    def download(self, source_path: Path, remote_path: str, session_id: str, provider,
+                 state_key: str | None = None):
         pass
 
 
 class IncrementalSyncStrategy(SyncStrategy):
-    def __init__(self, workspace_root: Path, state):
-        self.workspace_root = workspace_root
+    def __init__(self, state):
         self.state = state
 
     @retry_with_backoff(max_retries=3, backoff_factor=1)
-    def upload(self, thread_id: str, session_id: str, provider, files: list[str] | None = None):
-        workspace = self.workspace_root / thread_id / "files"
-        if not workspace.exists():
+    def upload(self, source_path: Path, remote_path: str, session_id: str, provider,
+               files: list[str] | None = None, state_key: str | None = None):
+        if not source_path.exists():
             return
 
         if files:
             to_upload = files
         else:
-            to_upload = self.state.detect_changes(thread_id, workspace)
+            to_upload = self.state.detect_changes(state_key, source_path)
 
         if not to_upload:
             return
 
-        remote_root = getattr(provider, 'WORKSPACE_ROOT', '/workspace') + '/files'
-        _batch_upload_tar(session_id, provider, workspace, remote_root, to_upload)
+        _batch_upload_tar(session_id, provider, source_path, remote_path, to_upload)
 
         # @@@batch-track - single DB transaction for all files
         now = int(time.time())
         records = []
         for rel_path in to_upload:
-            file_path = workspace / rel_path
+            file_path = source_path / rel_path
             if file_path.exists():
                 from sandbox.sync.state import _calculate_checksum
                 checksum = _calculate_checksum(file_path)
                 records.append((rel_path, checksum, now))
-        self.state.track_files_batch(thread_id, records)
+        self.state.track_files_batch(state_key, records)
 
-    def download(self, thread_id: str, session_id: str, provider):
-        workspace = self.workspace_root / thread_id / "files"
-        remote_root = getattr(provider, 'WORKSPACE_ROOT', '/workspace') + '/files'
-        _batch_download_tar(session_id, provider, workspace, remote_root)
-        self._update_checksums_after_download(thread_id)
+    def download(self, source_path: Path, remote_path: str, session_id: str, provider,
+                 state_key: str | None = None):
+        _batch_download_tar(session_id, provider, source_path, remote_path)
+        self._update_checksums_after_download(state_key, source_path)
 
-    def clear_thread(self, thread_id: str):
-        self.state.clear_thread(thread_id)
+    def clear_state(self, state_key: str):
+        self.state.clear_thread(state_key)
 
-    def _update_checksums_after_download(self, thread_id: str):
+    def _update_checksums_after_download(self, state_key: str, source_path: Path):
         """Update checksum DB to match downloaded files, preventing redundant re-uploads on resume."""
-        workspace = self.workspace_root / thread_id / "files"
-        if not workspace.exists():
+        if not source_path.exists():
             return
         from sandbox.sync.state import _calculate_checksum
         now = int(time.time())
         records = []
-        for file_path in workspace.rglob("*"):
+        for file_path in source_path.rglob("*"):
             if not file_path.is_file():
                 continue
-            relative = str(file_path.relative_to(workspace))
+            relative = str(file_path.relative_to(source_path))
             checksum = _calculate_checksum(file_path)
             records.append((relative, checksum, now))
-        self.state.track_files_batch(thread_id, records)
+        self.state.track_files_batch(state_key, records)
