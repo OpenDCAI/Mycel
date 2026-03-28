@@ -24,7 +24,6 @@ export interface ThreadSummary {
   thread_id: string;
   sandbox?: string;
   agent?: string;
-  messages?: BackendMessage[];
   sandbox_info?: SandboxInfo;
   preview?: string;
   updated_at?: string;
