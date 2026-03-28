@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Monitor, Cloud, Container, Lock, Settings, ArrowRight, ExternalLink } from "lucide-react";
 import { Link } from "react-router-dom";
 import type { ProviderInfo, UsageMetric } from "./types";
-import { groupByLease, useSessionCounts, type LeaseGroup } from "./SessionList";
+import { groupByLease, useSessionCounts, type LeaseGroup } from "./session-list-utils";
 import SandboxCard from "./SandboxCard";
 import SandboxDetailSheet from "./SandboxDetailSheet";
 import { formatNumber, formatLimit } from "./utils/format";
@@ -32,6 +32,8 @@ interface ProviderDetailProps {
 export default function ProviderDetail({ provider }: ProviderDetailProps) {
   const { name, description, vendor, type, status, unavailableReason, telemetry, error } = provider;
   const TypeIcon = typeIcon[type];
+  const { running: runningCount, paused: pausedCount, stopped: stoppedCount } = useSessionCounts(provider.sessions);
+  const groups = groupByLease(provider.sessions);
 
   const [selectedGroup, setSelectedGroup] = useState<LeaseGroup | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
@@ -74,9 +76,6 @@ export default function ProviderDetail({ provider }: ProviderDetailProps) {
   // @@@overview-semantic - local = host machine metrics (CPU/mem/disk are provider-level).
   // Non-local = session counts only; per-instance probe data is not a global provider quota.
   const isLocal = type === "local";
-  const { running: runningCount, paused: pausedCount, stopped: stoppedCount } = useSessionCounts(provider.sessions);
-
-  const groups = groupByLease(provider.sessions);
 
   return (
     <>

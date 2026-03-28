@@ -169,7 +169,7 @@ export default function MembersPage() {
           )
         ) : (
           <div className={`grid gap-4 ${isMobile ? "grid-cols-1" : "grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"}`}>
-            {filtered.map((member, index) => {
+            {filtered.map((member) => {
               const status = statusConfig[member.status];
               const isBuiltin = member.builtin === true;
               const canDelete = !isBuiltin && filtered.length > 1;

@@ -54,6 +54,8 @@ type DisplayDelta =
   | FinalizeTurnDelta
   | FullStateDelta;
 
+type SequencedDisplayDelta = DisplayDelta & { _display_seq?: number };
+
 // --- Helpers ---
 
 function updateLastTurn(
@@ -80,7 +82,7 @@ function applyDelta(entries: ChatEntry[], delta: DisplayDelta): ChatEntry[] {
     case "append_segment":
       return updateLastTurn(entries, (t) => ({
         ...t,
-        segments: [...t.segments, delta.segment as AssistantTurn["segments"][number]],
+        segments: [...t.segments, delta.segment as unknown as AssistantTurn["segments"][number]],
       }));
 
     case "update_segment": {
@@ -182,23 +184,29 @@ export function useDisplayDeltas(
   const isRunning = streamIsRunning || sendPending;
 
   useEffect(() => {
-    if (streamIsRunning) setSendPending(false);
+    if (!streamIsRunning) return;
+    const clearPending = window.setTimeout(() => setSendPending(false), 0);
+    return () => window.clearTimeout(clearPending);
   }, [streamIsRunning]);
 
   const onUpdateRef = useRef(onUpdate);
-  onUpdateRef.current = onUpdate;
   const displaySeqRef = useRef(displaySeq);
-  displaySeqRef.current = displaySeq;
+  useEffect(() => {
+    onUpdateRef.current = onUpdate;
+  }, [onUpdate]);
+  useEffect(() => {
+    displaySeqRef.current = displaySeq;
+  }, [displaySeq]);
 
   // Subscribe to display_delta events only
   useEffect(() => {
     return subscribe((event) => {
       if (event.type !== "display_delta") return;
-      const delta = event.data as DisplayDelta | undefined;
+      const delta = event.data as SequencedDisplayDelta | undefined;
       if (!delta || !delta.type) return;
 
       // @@@display-seq-dedup — skip stale deltas replayed from ring buffer
-      const deltaSeq = (delta as any)._display_seq;
+      const deltaSeq = delta._display_seq;
       if (typeof deltaSeq === "number" && deltaSeq <= displaySeqRef.current) return;
       flushSync(() => {
         onUpdateRef.current((prev) => applyDelta(prev, delta));

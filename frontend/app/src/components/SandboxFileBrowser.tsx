@@ -64,7 +64,7 @@ export function SandboxFileBrowser({ leaseId, providerType, className = "h-[300p
 
   return (
     <div className={`text-xs ${className}`}>
-      <ResizablePanelGroup direction="horizontal" className="h-full border rounded border-border/30">
+      <ResizablePanelGroup orientation="horizontal" className="h-full border rounded border-border/30">
         {/* Left: File list */}
         <ResizablePanel defaultSize={50} minSize={30}>
           <div className="h-full flex flex-col">

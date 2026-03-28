@@ -62,7 +62,6 @@ function AuthenticatedLayout() {
     if (avatarInputRef.current) avatarInputRef.current.value = "";
   }, [authMember]);
 
-  const userProfile = useAppStore((s) => s.userProfile);
   const loadAll = useAppStore((s) => s.loadAll);
   const storeAddTask = useAppStore((s) => s.addTask);
 
@@ -152,12 +151,14 @@ function AuthenticatedLayout() {
   // Auto-collapse sidebar when entering chat, expand when leaving
   const prevIsChatRef = useRef(isChat);
   useEffect(() => {
-    if (isChat && !prevIsChatRef.current) {
-      setExpanded(false);
-    } else if (!isChat && prevIsChatRef.current) {
-      setExpanded(true);
-    }
+    const prevIsChat = prevIsChatRef.current;
     prevIsChatRef.current = isChat;
+    if (prevIsChat === isChat) return;
+
+    const syncSidebar = window.setTimeout(() => {
+      setExpanded(!isChat);
+    }, 0);
+    return () => window.clearTimeout(syncSidebar);
   }, [isChat]);
 
   // Shared nav content

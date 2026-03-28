@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import MemberAvatar from "@/components/MemberAvatar";
-import type { LeaseGroup } from "./SessionList";
+import type { LeaseGroup } from "./session-list-utils";
 import { calculateDuration, formatDuration } from "./utils/duration";
 import { formatMetric } from "./utils/format";
 

@@ -5,6 +5,7 @@ import type {
   StreamStatus,
   TerminalStatus,
   LeaseStatus,
+  ThreadDetail,
   ThreadSummary,
   WorkspaceFileResult,
   WorkspaceListResult,
@@ -61,7 +62,7 @@ export async function deleteThread(threadId: string): Promise<void> {
   await request(`/api/threads/${encodeURIComponent(threadId)}`, { method: "DELETE" });
 }
 
-export async function getThread(threadId: string): Promise<{ thread_id: string; messages: unknown[]; sandbox: unknown }> {
+export async function getThread(threadId: string): Promise<ThreadDetail> {
   return request(`/api/threads/${encodeURIComponent(threadId)}`);
 }
 
