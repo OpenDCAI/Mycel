@@ -15,7 +15,7 @@ from .contracts import (
     RunEventRepo,
     SummaryRepo,
     MemberVolumeRepo,
-    SandboxFilesRepo,
+    SandboxVolumeRepo,
 )
 
 StorageStrategy = Literal["sqlite", "supabase"]
@@ -29,7 +29,7 @@ _REPO_REGISTRY: dict[str, tuple[str, str]] = {
     "summary_repo":        ("storage.providers.supabase.summary_repo",        "SupabaseSummaryRepo"),
     "eval_repo":           ("storage.providers.supabase.eval_repo",           "SupabaseEvalRepo"),
     "queue_repo":          ("storage.providers.supabase.queue_repo",          "SupabaseQueueRepo"),
-    "sandbox_files_repo":      ("storage.providers.supabase.sandbox_files_repo",     "SupabaseSandboxFilesRepo"),
+    "sandbox_volume_repo":     ("storage.providers.supabase.sandbox_volume_repo",    "SupabaseSandboxVolumeRepo"),
     "member_volume_repo":      ("storage.providers.sqlite.member_volume_repo",      "SQLiteMemberVolumeRepo"),  # SQLite-only for now
 }
 
@@ -45,7 +45,7 @@ class StorageContainer:
         "summary_repo",
         "eval_repo",
         "queue_repo",
-        "sandbox_files_repo",
+        "sandbox_volume_repo",
         "member_volume_repo",
     )
 
@@ -96,8 +96,8 @@ class StorageContainer:
     def eval_repo(self) -> EvalRepo:
         return self._build_repo("eval_repo", self._sqlite_eval_repo)
 
-    def sandbox_files_repo(self) -> SandboxFilesRepo:
-        return self._build_repo("sandbox_files_repo", self._sqlite_sandbox_files_repo)
+    def sandbox_volume_repo(self) -> SandboxVolumeRepo:
+        return self._build_repo("sandbox_volume_repo", self._sqlite_sandbox_volume_repo)
 
     def member_volume_repo(self) -> MemberVolumeRepo:
         return self._build_repo("member_volume_repo", self._sqlite_member_volume_repo)
@@ -210,9 +210,9 @@ class StorageContainer:
         from storage.providers.sqlite.eval_repo import SQLiteEvalRepo
         return SQLiteEvalRepo(db_path=self._eval_db)
 
-    def _sqlite_sandbox_files_repo(self):
-        from storage.providers.sqlite.sandbox_files_repo import SQLiteSandboxFilesRepo
-        return SQLiteSandboxFilesRepo(db_path=self._main_db)
+    def _sqlite_sandbox_volume_repo(self):
+        from storage.providers.sqlite.sandbox_volume_repo import SQLiteSandboxVolumeRepo
+        return SQLiteSandboxVolumeRepo()
 
     def _sqlite_member_volume_repo(self):
         from storage.providers.sqlite.member_volume_repo import SQLiteMemberVolumeRepo

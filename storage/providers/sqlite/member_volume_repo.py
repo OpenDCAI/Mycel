@@ -24,19 +24,19 @@ class SQLiteMemberVolumeRepo:
             self._conn.close()
 
     def upsert(self, member_id: str, provider_type: str,
-               backend_ref: str, mount_path: str, created_at: str) -> None:
+               volume_id: str, mount_path: str, created_at: str) -> None:
         self._conn.execute(
             "INSERT OR REPLACE INTO member_volumes"
-            "(member_id, provider_type, backend_ref, mount_path, created_at)"
+            "(member_id, provider_type, volume_id, mount_path, created_at)"
             " VALUES (?, ?, ?, ?, ?)",
-            (member_id, provider_type, backend_ref, mount_path, created_at),
+            (member_id, provider_type, volume_id, mount_path, created_at),
         )
         self._conn.commit()
 
     def get(self, member_id: str, provider_type: str) -> dict[str, Any] | None:
         self._conn.row_factory = sqlite3.Row
         row = self._conn.execute(
-            "SELECT member_id, provider_type, backend_ref, mount_path, created_at"
+            "SELECT member_id, provider_type, volume_id, mount_path, created_at"
             " FROM member_volumes WHERE member_id = ? AND provider_type = ?",
             (member_id, provider_type),
         ).fetchone()
@@ -46,7 +46,7 @@ class SQLiteMemberVolumeRepo:
     def list_by_member(self, member_id: str) -> list[dict[str, Any]]:
         self._conn.row_factory = sqlite3.Row
         rows = self._conn.execute(
-            "SELECT member_id, provider_type, backend_ref, mount_path, created_at"
+            "SELECT member_id, provider_type, volume_id, mount_path, created_at"
             " FROM member_volumes WHERE member_id = ?",
             (member_id,),
         ).fetchall()
@@ -75,7 +75,7 @@ class SQLiteMemberVolumeRepo:
             CREATE TABLE IF NOT EXISTS member_volumes (
                 member_id      TEXT NOT NULL,
                 provider_type  TEXT NOT NULL,
-                backend_ref    TEXT NOT NULL,
+                volume_id      TEXT NOT NULL,
                 mount_path     TEXT NOT NULL,
                 created_at     TEXT NOT NULL,
                 PRIMARY KEY (member_id, provider_type)
