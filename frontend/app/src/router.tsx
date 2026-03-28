@@ -1,10 +1,9 @@
-import { createBrowserRouter, Navigate, useNavigate } from 'react-router-dom';
-import { useEffect } from 'react';
-import { useAuthStore } from './store/auth-store';
+import { createBrowserRouter, Navigate } from 'react-router-dom';
 import RootLayout from './pages/RootLayout';
 import AppLayout from './pages/AppLayout';
 import ChatPage from './pages/ChatPage';
 import NewChatPage from './pages/NewChatPage';
+import ThreadsIndexRedirect from './pages/ThreadsIndexRedirect';
 import ChatsLayout from './pages/ChatsLayout';
 import ChatsEmptyState from './pages/ChatsEmptyState';
 import ChatConversationPage from './pages/ChatConversationPage';
@@ -15,17 +14,6 @@ import TasksPage from './pages/TasksPage';
 import LibraryPage from './pages/LibraryPage';
 import ResourcesPage from './pages/ResourcesPage';
 import ConnectionsPage from './pages/ConnectionsPage';
-
-/** Redirect /threads → /threads/{owned agent member ID} dynamically. */
-function ThreadsIndexRedirect() {
-  const agent = useAuthStore(s => s.agent);
-  const navigate = useNavigate();
-  useEffect(() => {
-    if (!agent?.id) return; // wait for auth to load
-    navigate(`/threads/${encodeURIComponent(agent.id)}`, { replace: true });
-  }, [agent, navigate]);
-  return null;
-}
 
 export const router = createBrowserRouter([
   // Old /chat/* URLs → redirect to /threads
@@ -52,6 +40,10 @@ export const router = createBrowserRouter([
           {
             path: ':memberId',
             element: <NewChatPage />,
+          },
+          {
+            path: ':memberId/new',
+            element: <NewChatPage mode="new" />,
           },
           {
             path: ':memberId/:threadId',

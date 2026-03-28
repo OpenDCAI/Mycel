@@ -12,6 +12,7 @@ from sse_starlette.sse import EventSourceResponse
 from backend.web.core.dependencies import get_app, get_current_member_id, get_thread_agent, get_thread_lock, verify_thread_owner
 from backend.web.models.requests import (
     CreateThreadRequest,
+    ResolveMainThreadRequest,
     RunRequest,
     SendMessageRequest,
 )
@@ -30,6 +31,7 @@ from backend.web.services.thread_state_service import (
     get_session_status,
     get_terminal_status,
 )
+from backend.web.services.thread_naming import canonical_entity_name, sidebar_label
 from backend.web.utils.helpers import delete_thread_in_db
 from backend.web.utils.serializers import serialize_message
 from storage.contracts import EntityRow
@@ -53,17 +55,39 @@ def _get_agent_for_thread(app: Any, thread_id: str) -> Any | None:
     return pool.get(pool_key)
 
 
-@router.post("")
-async def create_thread(
+def _thread_payload(app: Any, thread_id: str, sandbox_type: str) -> dict[str, Any]:
+    thread = app.state.thread_repo.get_by_id(thread_id)
+    if thread is None:
+        raise HTTPException(404, "Thread not found")
+    member = app.state.member_repo.get_by_id(thread["member_id"])
+    entity = app.state.entity_repo.get_by_thread_id(thread_id)
+    if member is None or entity is None:
+        raise HTTPException(500, f"Thread {thread_id} missing member/entity")
+    return {
+        "thread_id": thread_id,
+        "sandbox": sandbox_type,
+        "member_id": member.id,
+        "member_name": member.name,
+        "entity_name": entity.name,
+        "branch_index": thread["branch_index"],
+        "sidebar_label": sidebar_label(is_main=thread["is_main"], branch_index=thread["branch_index"]),
+        "avatar_url": avatar_url(member.id, bool(member.avatar)),
+        "is_main": thread["is_main"],
+    }
+
+
+def _create_owned_thread(
+    app: Any,
+    owner_member_id: str,
     payload: CreateThreadRequest,
-    member_id: Annotated[str, Depends(get_current_member_id)],
-    app: Annotated[Any, Depends(get_app)] = None,
+    *,
+    is_main: bool,
 ) -> dict[str, Any]:
-    """Create a new thread for an agent member."""
     import time
+
     agent_member_id = payload.member_id
     agent_member = app.state.member_repo.get_by_id(agent_member_id)
-    if not agent_member or agent_member.owner_id != member_id:
+    if not agent_member or agent_member.owner_id != owner_member_id:
         raise HTTPException(403, "Not authorized")
 
     # @@@non-atomic-create - these 3 steps (seq++, thread, entity) are not atomic.
@@ -71,6 +95,9 @@ async def create_thread(
     # Acceptable for dev (SQLite). Wrap in DB transaction when migrating to Supabase.
     seq = app.state.member_repo.increment_entity_seq(agent_member_id)
     thread_entity_id = f"{agent_member_id}-{seq}"
+    has_main = app.state.thread_repo.get_main_thread(agent_member_id) is not None
+    resolved_is_main = is_main or not has_main
+    branch_index = 0 if resolved_is_main else app.state.thread_repo.get_next_branch_index(agent_member_id)
 
     sandbox_type = payload.sandbox or "local"
     app.state.thread_repo.create(
@@ -80,10 +107,12 @@ async def create_thread(
         cwd=payload.cwd,
         created_at=time.time(),
         model=payload.model,
+        is_main=resolved_is_main,
+        branch_index=branch_index,
     )
 
-    # @@@entity-name-convention — {member.name}-{seq} ({sandbox_type})
-    entity_name = f"{agent_member.name}-{seq} ({sandbox_type})"
+    # @@@entity-name-convention - entity display names derive from member + thread role, never sandbox strings.
+    entity_name = canonical_entity_name(agent_member.name, is_main=resolved_is_main, branch_index=branch_index)
     app.state.entity_repo.create(EntityRow(
         id=thread_entity_id, type="agent",
         member_id=agent_member_id,
@@ -102,8 +131,38 @@ async def create_thread(
         "member_id": agent_member_id,
         "member_name": agent_member.name,
         "entity_name": entity_name,
+        "branch_index": branch_index,
+        "sidebar_label": sidebar_label(is_main=resolved_is_main, branch_index=branch_index),
         "avatar_url": avatar_url(agent_member_id, bool(agent_member.avatar)),
+        "is_main": resolved_is_main,
     }
+
+
+@router.post("")
+async def create_thread(
+    payload: CreateThreadRequest,
+    member_id: Annotated[str, Depends(get_current_member_id)],
+    app: Annotated[Any, Depends(get_app)] = None,
+) -> dict[str, Any]:
+    """Create a new child thread for an agent member."""
+    return _create_owned_thread(app, member_id, payload, is_main=False)
+
+
+@router.post("/main")
+async def resolve_main_thread(
+    payload: ResolveMainThreadRequest,
+    member_id: Annotated[str, Depends(get_current_member_id)],
+    app: Annotated[Any, Depends(get_app)] = None,
+) -> dict[str, Any]:
+    """Return the main thread for a member, or null when none exists."""
+    agent_member = app.state.member_repo.get_by_id(payload.member_id)
+    if not agent_member or agent_member.owner_id != member_id:
+        raise HTTPException(403, "Not authorized")
+
+    existing = app.state.thread_repo.get_main_thread(payload.member_id)
+    if existing is None:
+        return {"thread": None}
+    return {"thread": _thread_payload(app, existing["id"], existing.get("sandbox_type", "local"))}
 
 
 @router.get("")
@@ -136,7 +195,13 @@ async def list_threads(
             "member_name": t.get("member_name"),
             "member_id": t.get("member_id"),
             "entity_name": t.get("entity_name"),
+            "branch_index": t.get("branch_index"),
+            "sidebar_label": sidebar_label(
+                is_main=bool(t.get("is_main", False)),
+                branch_index=int(t.get("branch_index", 0)),
+            ),
             "avatar_url": avatar_url(t.get("member_id"), bool(t.get("member_avatar"))),
+            "is_main": t.get("is_main", False),
             "running": running,
             "updated_at": updated_at,
         })
