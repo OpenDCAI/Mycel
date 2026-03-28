@@ -21,7 +21,6 @@ from sandbox.config import DEFAULT_DB_PATH
 from sandbox.lease import LeaseStore
 from sandbox.provider import SandboxProvider
 from sandbox.terminal import TerminalState, TerminalStore
-from sandbox.sync.manager import SyncManager
 
 
 def lookup_sandbox_for_thread(thread_id: str, db_path: Path | None = None) -> str | None:
@@ -53,7 +52,6 @@ class SandboxManager:
         provider: SandboxProvider,
         db_path: Path | None = None,
         on_session_ready: Callable[[str, str], None] | None = None,
-        workspace_root: Path | None = None,
     ):
         self.provider = provider
         self.provider_capability = provider.get_capability()
@@ -68,65 +66,11 @@ class SandboxManager:
             default_policy=ChatSessionPolicy(),
         )
 
-        _ws_root = workspace_root or Path.home() / ".leon" / "sandbox_files"
-        self.workspace_sync = SyncManager(
+        from sandbox.volume import SandboxVolume
+        self.volume = SandboxVolume(
+            provider=provider,
             provider_capability=self.provider_capability,
-            workspace_root=_ws_root,
         )
-
-    def _resolve_member_volume(self, thread_id: str, member_id: str | None = None) -> dict[str, Any] | None:
-        """Strategy gate: decide Member Volume vs File Channel.
-        Returns volume record if Member Volume should be used, None for File Channel fallback.
-        """
-        if not member_id:
-            from backend.web.utils.helpers import load_thread_config
-            tc = load_thread_config(thread_id)
-            member_id = tc.get("member_id") if tc else None
-        if not member_id:
-            return None
-
-        capability = self.provider.get_capability()
-        if not capability.mount.supports_member_volume:
-            return None
-
-        from backend.web.services.member_volume_service import get_member_volume, create_member_volume
-
-        provider_type = self.provider.name
-        volume = get_member_volume(member_id, provider_type)
-        if volume:
-            return volume
-
-        # @@@strategy-gate-lazy-create - first sandbox start for this member + provider
-        mount_path = self.resolve_agent_files_dir(thread_id)
-        logger.info("Creating member volume for member_id=%s provider=%s", member_id, provider_type)
-        backend_ref = self.provider.create_member_volume(member_id, mount_path)
-        return create_member_volume(member_id, provider_type, backend_ref, mount_path)
-
-    def _lookup_member_volume(self, thread_id: str) -> dict[str, Any] | None:
-        """Read-only member volume lookup. No side effects — never creates resources."""
-        from backend.web.utils.helpers import load_thread_config
-        tc = load_thread_config(thread_id)
-        member_id = tc.get("member_id") if tc else None
-        if not member_id:
-            return None
-
-        capability = self.provider.get_capability()
-        if not capability.mount.supports_member_volume:
-            return None
-
-        from backend.web.services.member_volume_service import get_member_volume
-        return get_member_volume(member_id, self.provider.name)
-
-    def resolve_agent_files_dir(self, thread_id: str) -> str:
-        """Path where the agent sees uploaded files for this thread.
-
-        Remote providers: files mounted at {WORKSPACE_ROOT}/files inside the container.
-        Local: agent accesses files directly on the host filesystem.
-        """
-        # @@@agent-files-dir - local has no container isolation, so thread_id is in the path
-        if self.provider_capability.runtime_kind == "local":
-            return str(self.workspace_sync.get_thread_workspace_path(thread_id))
-        return f"{self.provider.WORKSPACE_ROOT}/files"
 
     def _default_terminal_cwd(self) -> str:
         for attr in ("default_cwd", "default_context_path", "mount_path"):
@@ -204,7 +148,9 @@ class SandboxManager:
         instance = session.lease.get_instance()
         if not instance:
             return False
-        self.workspace_sync.upload_workspace(thread_id, instance.instance_id, self.provider, files=files)
+        from backend.web.services.member_volume_service import get_lease_volume_source
+        source = get_lease_volume_source(thread_id)
+        self.volume.sync_upload(thread_id, instance.instance_id, source, self.volume.resolve_remote_path(), files=files)
         return True
 
     def close(self):
@@ -253,18 +199,9 @@ class SandboxManager:
         if bind_mounts:
             lease.bind_mounts = bind_mounts
 
-        # @@@volume-strategy-gate - Member Volume vs File Channel
-        volume = self._resolve_member_volume(thread_id)
-        if volume:
-            self.provider.set_volume_mount(thread_id, volume["backend_ref"], volume["mount_path"])
-        else:
-            workspace_path = self.workspace_sync.get_thread_workspace_path(thread_id)
-            workspace_path.mkdir(parents=True, exist_ok=True)
-            from sandbox.config import MountSpec
-            target = self.resolve_agent_files_dir(thread_id)
-            self.provider.set_thread_bind_mounts(thread_id, [
-                MountSpec(source=str(workspace_path), target=target, read_only=False)
-            ])
+        # @@@volume-strategy-gate - orchestrator handles mount decisions
+        from backend.web.services.member_volume_service import setup_sandbox_mounts
+        storage = setup_sandbox_mounts(thread_id, self.volume)
 
         self._ensure_bound_instance(lease)
 
@@ -284,7 +221,9 @@ class SandboxManager:
         instance = lease.get_instance()
         if instance:
             # @@@workspace-upload - sync files to sandbox after creation
-            self.workspace_sync.upload_workspace(thread_id, instance.instance_id, self.provider)
+            from backend.web.services.member_volume_service import get_lease_volume_source
+            source = get_lease_volume_source(thread_id)
+            self.volume.sync_upload(thread_id, instance.instance_id, source, self.volume.resolve_remote_path())
             self._fire_session_ready(instance.instance_id, "create")
 
         return SandboxCapability(session, manager=self)
@@ -497,15 +436,14 @@ class SandboxManager:
             lease.ensure_active_instance(self.provider)
             instance = lease.get_instance()
             if instance:
-                # @@@volume-skip-download - Member volume storage persists independently
-                volume = self._lookup_member_volume(thread_id)
-                if not volume:
-                    # @@@workspace-download - sync files from sandbox before pause
-                    try:
-                        self.workspace_sync.download_workspace(thread_id, instance.instance_id, self.provider)
-                    except Exception:
-                        logger.error("Failed to download workspace before pause — agent changes may be lost", exc_info=True)
-                        raise
+                # @@@workspace-download - sync files from sandbox before pause
+                from backend.web.services.member_volume_service import get_lease_volume_source
+                try:
+                    source = get_lease_volume_source(thread_id)
+                    self.volume.sync_download(thread_id, instance.instance_id, source, self.volume.resolve_remote_path())
+                except Exception:
+                    logger.error("Failed to download workspace before pause — agent changes may be lost", exc_info=True)
+                    raise
             if not lease.pause_instance(self.provider, source="user_pause"):
                 return False
 
@@ -536,7 +474,9 @@ class SandboxManager:
         # @@@workspace-upload-on-resume - re-sync files that may have been uploaded while paused
         instance = lease.get_instance()
         if instance:
-            self.workspace_sync.upload_workspace(thread_id, instance.instance_id, self.provider)
+            from backend.web.services.member_volume_service import get_lease_volume_source
+            source = get_lease_volume_source(thread_id)
+            self.volume.sync_upload(thread_id, instance.instance_id, source, self.volume.resolve_remote_path())
 
         resumed_any = False
         for terminal in terminals:
@@ -588,20 +528,18 @@ class SandboxManager:
             return False
 
         # @@@workspace-download-before-destroy - sync files before destroy
-        # Skip if volume-backed or if sandbox is already paused (files synced during pause)
+        from backend.web.services.member_volume_service import get_lease_volume_source
         lease = self._get_thread_lease(thread_id)
-        volume = self._lookup_member_volume(thread_id)
-        if lease and not volume:
-            if lease.observed_state == "running":
-                instance = lease.get_instance()
-                if instance:
-                    try:
-                        self.workspace_sync.download_workspace(thread_id, instance.instance_id, self.provider)
-                    except Exception:
-                        logger.error("Failed to download workspace before destroy — agent changes are lost", exc_info=True)
-                        raise
-
-        self.workspace_sync.clear_thread(thread_id)
+        if lease and lease.observed_state == "running":
+            instance = lease.get_instance()
+            if instance:
+                try:
+                    source = get_lease_volume_source(thread_id)
+                    self.volume.sync_download(thread_id, instance.instance_id, source, self.volume.resolve_remote_path())
+                except Exception:
+                    logger.error("Failed to download workspace before destroy — agent changes are lost", exc_info=True)
+                    raise
+        self.volume.clear_sync_state(thread_id)
 
         lease_ids = {terminal.lease_id for terminal in terminals}
 
