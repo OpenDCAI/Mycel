@@ -9,7 +9,7 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Depends, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 
-from backend.web.core.dependencies import get_app, get_current_member_id
+from backend.web.core.dependencies import get_app, get_current_user_id
 from backend.web.utils.serializers import avatar_url
 
 logger = logging.getLogger(__name__)
@@ -56,7 +56,7 @@ members_router = APIRouter(prefix="/api/members", tags=["members"])
 
 @members_router.get("")
 async def list_members(
-    member_id: Annotated[str, Depends(get_current_member_id)],
+    user_id: Annotated[str, Depends(get_current_user_id)],
     app: Annotated[Any, Depends(get_app)],
 ):
     """List all agent members (templates). For member directory page."""
@@ -67,7 +67,7 @@ async def list_members(
     for m in all_members:
         if m.type != "mycel_agent":
             continue
-        owner = member_repo.get_by_id(m.owner_id) if m.owner_id else None
+        owner = member_repo.get_by_id(m.owner_user_id) if m.owner_user_id else None
         result.append({
             "id": m.id,
             "name": m.name,
@@ -75,7 +75,7 @@ async def list_members(
             "avatar_url": avatar_url(m.id, bool(m.avatar)),
             "description": m.description,
             "owner_name": owner.name if owner else None,
-            "is_mine": m.owner_id == member_id,
+            "is_mine": m.owner_user_id == user_id,
             "created_at": m.created_at,
         })
     return result
@@ -90,7 +90,7 @@ def _avatar_path(member_id: str) -> Path:
 async def upload_avatar(
     member_id: str,
     file: UploadFile,
-    current_member_id: Annotated[str, Depends(get_current_member_id)],
+    current_user_id: Annotated[str, Depends(get_current_user_id)],
     app: Annotated[Any, Depends(get_app)],
 ) -> dict[str, str]:
     """Upload/replace avatar image. Resizes to 256x256 PNG."""
@@ -98,7 +98,7 @@ async def upload_avatar(
     member = repo.get_by_id(member_id)
     if not member:
         raise HTTPException(404, "Member not found")
-    if member_id != current_member_id and member.owner_id != current_member_id:
+    if member_id != current_user_id and member.owner_user_id != current_user_id:
         raise HTTPException(403, "Not authorized")
     ct = file.content_type or ""
     if ct not in ALLOWED_CONTENT_TYPES:
@@ -129,7 +129,7 @@ async def get_avatar(member_id: str) -> FileResponse:
 @members_router.delete("/{member_id}/avatar")
 async def delete_avatar(
     member_id: str,
-    current_member_id: Annotated[str, Depends(get_current_member_id)],
+    current_user_id: Annotated[str, Depends(get_current_user_id)],
     app: Annotated[Any, Depends(get_app)],
 ) -> dict[str, str]:
     """Delete avatar."""
@@ -137,7 +137,7 @@ async def delete_avatar(
     member = repo.get_by_id(member_id)
     if not member:
         raise HTTPException(404, "Member not found")
-    if member_id != current_member_id and member.owner_id != current_member_id:
+    if member_id != current_user_id and member.owner_user_id != current_user_id:
         raise HTTPException(403, "Not authorized")
     path = _avatar_path(member_id)
     if path.exists():
@@ -152,7 +152,7 @@ async def delete_avatar(
 
 @router.get("")
 async def list_entities(
-    member_id: Annotated[str, Depends(get_current_member_id)],
+    user_id: Annotated[str, Depends(get_current_user_id)],
     app: Annotated[Any, Depends(get_app)],
 ):
     """List chattable entities for discovery (New Chat picker).
@@ -161,7 +161,7 @@ async def list_entities(
     member_repo = app.state.member_repo
 
     # Only exclude self (human entity). Own agents are allowed — user can pull them into group chats.
-    exclude_member_ids = {member_id}
+    exclude_member_ids = {user_id}
 
     all_entities = entity_repo.list_all()
     members = member_repo.list_all()
@@ -174,7 +174,7 @@ async def list_entities(
         if entity.member_id in exclude_member_ids:
             continue
         member = member_map.get(entity.member_id)
-        owner = member_map.get(member.owner_id) if member and member.owner_id else None
+        owner = member_map.get(member.owner_user_id) if member and member.owner_user_id else None
         thread = app.state.thread_repo.get_by_id(entity.thread_id) if entity.thread_id else None
         items.append({
             "id": entity.id,
@@ -193,7 +193,7 @@ async def list_entities(
 @router.get("/{entity_id}/agent-thread")
 async def get_agent_thread(
     entity_id: str,
-    member_id: Annotated[str, Depends(get_current_member_id)],
+    user_id: Annotated[str, Depends(get_current_user_id)],
     app: Annotated[Any, Depends(get_app)],
 ):
     """Get the thread_id for an entity's agent. Accepts human or agent entity."""
@@ -207,7 +207,7 @@ async def get_agent_thread(
     member = app.state.member_repo.get_by_id(entity.member_id)
     if member:
         # Find agent members owned by this member
-        agents = app.state.member_repo.list_by_owner(member.id)
+        agents = app.state.member_repo.list_by_owner_user_id(member.id)
         for agent_member in agents:
             agent_entities = app.state.entity_repo.get_by_member_id(agent_member.id)
             for ae in agent_entities:

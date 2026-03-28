@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
-from backend.web.core.dependencies import get_app, get_current_entity_id, get_current_member_id
+from backend.web.core.dependencies import get_app, get_current_entity_id, get_current_user_id
 from backend.web.utils.serializers import avatar_url
 
 logger = logging.getLogger(__name__)
@@ -40,7 +40,7 @@ async def list_chats(
 @router.post("")
 async def create_chat(
     body: CreateChatBody,
-    member_id: Annotated[str, Depends(get_current_member_id)],
+    user_id: Annotated[str, Depends(get_current_user_id)],
     app: Annotated[Any, Depends(get_app)],
 ):
     """Create a chat between entities. 2 entities = 1:1 chat, 3+ = group chat."""
@@ -58,7 +58,7 @@ async def create_chat(
 @router.get("/{chat_id}")
 async def get_chat(
     chat_id: str,
-    member_id: Annotated[str, Depends(get_current_member_id)],
+    user_id: Annotated[str, Depends(get_current_user_id)],
     app: Annotated[Any, Depends(get_app)],
 ):
     """Get chat details with member list."""
@@ -80,7 +80,7 @@ async def get_chat(
 @router.get("/{chat_id}/messages")
 async def list_messages(
     chat_id: str,
-    member_id: Annotated[str, Depends(get_current_member_id)],
+    user_id: Annotated[str, Depends(get_current_user_id)],
     app: Annotated[Any, Depends(get_app)],
     limit: int = Query(50, ge=1, le=200),
     before: float | None = Query(None),
@@ -123,7 +123,7 @@ async def mark_read(
 async def send_message(
     chat_id: str,
     body: SendMessageBody,
-    member_id: Annotated[str, Depends(get_current_member_id)],
+    user_id: Annotated[str, Depends(get_current_user_id)],
     app: Annotated[Any, Depends(get_app)],
 ):
     """Send a message in a chat."""
@@ -134,9 +134,9 @@ async def send_message(
     if not sender:
         raise HTTPException(404, "Sender entity not found")
     # Entity belongs to member directly, or to an agent owned by member
-    if sender.member_id != member_id:
+    if sender.member_id != user_id:
         agent_member = app.state.member_repo.get_by_id(sender.member_id)
-        if not agent_member or agent_member.owner_id != member_id:
+        if not agent_member or agent_member.owner_user_id != user_id:
             raise HTTPException(403, "Sender entity does not belong to you")
     chat_service = app.state.chat_service
     msg = chat_service.send_message(chat_id, body.sender_entity_id, body.content, body.mentioned_entity_ids)
@@ -191,7 +191,7 @@ class SetContactBody(BaseModel):
     relation: Literal["normal", "blocked", "muted"]
 
 
-def _verify_entity_ownership(app: Any, entity_id: str, member_id: str) -> None:
+def _verify_entity_ownership(app: Any, entity_id: str, user_id: str) -> None:
     """Raise 403 if entity does not belong to the authenticated member.
 
     Ownership: entity belongs to member directly, OR entity belongs to
@@ -200,11 +200,11 @@ def _verify_entity_ownership(app: Any, entity_id: str, member_id: str) -> None:
     entity = app.state.entity_repo.get_by_id(entity_id)
     if not entity:
         raise HTTPException(403, "Entity does not belong to you")
-    if entity.member_id == member_id:
+    if entity.member_id == user_id:
         return
-    # Check if entity belongs to an agent owned by this member
+    # Check if entity belongs to an agent owned by this user
     agent_member = app.state.member_repo.get_by_id(entity.member_id)
-    if agent_member and agent_member.owner_id == member_id:
+    if agent_member and agent_member.owner_user_id == user_id:
         return
     raise HTTPException(403, "Entity does not belong to you")
 
@@ -212,11 +212,11 @@ def _verify_entity_ownership(app: Any, entity_id: str, member_id: str) -> None:
 @router.post("/contacts")
 async def set_contact(
     body: SetContactBody,
-    member_id: Annotated[str, Depends(get_current_member_id)],
+    user_id: Annotated[str, Depends(get_current_user_id)],
     app: Annotated[Any, Depends(get_app)],
 ):
     """Set a directional contact relationship (block/mute/normal)."""
-    _verify_entity_ownership(app, body.owner_entity_id, member_id)
+    _verify_entity_ownership(app, body.owner_entity_id, user_id)
     import time
     from storage.contracts import ContactRow
     contact_repo = app.state.contact_repo
@@ -234,11 +234,11 @@ async def set_contact(
 async def delete_contact(
     owner_entity_id: str,
     target_entity_id: str,
-    member_id: Annotated[str, Depends(get_current_member_id)],
+    user_id: Annotated[str, Depends(get_current_user_id)],
     app: Annotated[Any, Depends(get_app)],
 ):
     """Delete a contact relationship."""
-    _verify_entity_ownership(app, owner_entity_id, member_id)
+    _verify_entity_ownership(app, owner_entity_id, user_id)
     contact_repo = app.state.contact_repo
     contact_repo.delete(owner_entity_id, target_entity_id)
     return {"status": "deleted"}
@@ -259,11 +259,11 @@ class MuteChatBody(BaseModel):
 async def mute_chat(
     chat_id: str,
     body: MuteChatBody,
-    member_id: Annotated[str, Depends(get_current_member_id)],
+    user_id: Annotated[str, Depends(get_current_user_id)],
     app: Annotated[Any, Depends(get_app)],
 ):
     """Mute/unmute a chat for a specific entity."""
-    _verify_entity_ownership(app, body.entity_id, member_id)
+    _verify_entity_ownership(app, body.entity_id, user_id)
     chat_entity_repo = app.state.chat_entity_repo
     chat_entity_repo.update_mute(chat_id, body.entity_id, body.muted, body.mute_until)
     return {"status": "ok", "muted": body.muted}

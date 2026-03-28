@@ -5,7 +5,7 @@ from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 
-from backend.web.core.dependencies import get_current_member_id
+from backend.web.core.dependencies import get_current_user_id
 
 from backend.web.models.panel import (
     BulkDeleteTasksRequest,
@@ -32,9 +32,9 @@ router = APIRouter(prefix="/api/panel", tags=["panel"])
 
 @router.get("/members")
 async def list_members(
-    member_id: Annotated[str, Depends(get_current_member_id)],
+    user_id: Annotated[str, Depends(get_current_user_id)],
 ) -> dict[str, Any]:
-    items = await asyncio.to_thread(member_service.list_members, member_id)
+    items = await asyncio.to_thread(member_service.list_members, user_id)
     return {"items": items}
 
 
@@ -49,9 +49,9 @@ async def get_member(member_id: str) -> dict[str, Any]:
 @router.post("/members")
 async def create_member(
     req: CreateMemberRequest,
-    member_id: Annotated[str, Depends(get_current_member_id)],
+    user_id: Annotated[str, Depends(get_current_user_id)],
 ) -> dict[str, Any]:
-    return await asyncio.to_thread(member_service.create_member, req.name, req.description, owner_id=member_id)
+    return await asyncio.to_thread(member_service.create_member, req.name, req.description, owner_user_id=user_id)
 
 @router.put("/members/{member_id}")
 async def update_member(member_id: str, req: UpdateMemberRequest) -> dict[str, Any]:
