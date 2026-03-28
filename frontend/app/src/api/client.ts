@@ -7,10 +7,10 @@ import type {
   LeaseStatus,
   ThreadDetail,
   ThreadSummary,
-  WorkspaceChannelFilesResult,
-  WorkspaceFileResult,
-  WorkspaceListResult,
-  WorkspaceUploadResult,
+  SandboxChannelFilesResult,
+  SandboxFileResult,
+  SandboxFilesListResult,
+  SandboxUploadResult,
 } from "./types";
 
 import { authFetch } from "../store/auth-store";
@@ -50,7 +50,7 @@ export interface CreateThreadOptions {
   memberId: string;
   model?: string;
   agent?: string;
-  workspace_id?: string;
+  sandbox_files_id?: string;
 }
 
 export async function createThread(opts: CreateThreadOptions): Promise<ThreadSummary> {
@@ -58,7 +58,7 @@ export async function createThread(opts: CreateThreadOptions): Promise<ThreadSum
   if (opts.cwd) body.cwd = opts.cwd;
   if (opts.model) body.model = opts.model;
   if (opts.agent) body.agent = opts.agent;
-  if (opts.workspace_id) body.workspace_id = opts.workspace_id;
+  if (opts.sandbox_files_id) body.sandbox_files_id = opts.sandbox_files_id;
   return request<ThreadSummary>("/api/threads", { method: "POST", body: JSON.stringify(body) });
 }
 
@@ -184,37 +184,37 @@ export async function getThreadLease(threadId: string): Promise<LeaseStatus> {
   return request(`/api/threads/${encodeURIComponent(threadId)}/lease`);
 }
 
-// --- Workspace API ---
+// --- Sandbox Files API ---
 
-function workspaceBase(threadId: string): string {
-  return `/api/threads/${encodeURIComponent(threadId)}/workspace`;
+function sandboxFilesBase(threadId: string): string {
+  return `/api/threads/${encodeURIComponent(threadId)}/files`;
 }
 
-export async function listWorkspace(threadId: string, path?: string): Promise<WorkspaceListResult> {
+export async function listSandboxFiles(threadId: string, path?: string): Promise<SandboxFilesListResult> {
   const q = path ? `?path=${encodeURIComponent(path)}` : "";
-  return request(`${workspaceBase(threadId)}/list${q}`);
+  return request(`${sandboxFilesBase(threadId)}/list${q}`);
 }
 
-export async function readWorkspaceFile(threadId: string, path: string): Promise<WorkspaceFileResult> {
-  return request(`${workspaceBase(threadId)}/read?path=${encodeURIComponent(path)}`);
+export async function readSandboxFile(threadId: string, path: string): Promise<SandboxFileResult> {
+  return request(`${sandboxFilesBase(threadId)}/read?path=${encodeURIComponent(path)}`);
 }
 
-export async function listWorkspaceChannelFiles(
+export async function listSandboxChannelFiles(
   threadId: string,
-): Promise<WorkspaceChannelFilesResult> {
-  return request(`${workspaceBase(threadId)}/channel-files`);
+): Promise<SandboxChannelFilesResult> {
+  return request(`${sandboxFilesBase(threadId)}/channel-files`);
 }
 
-export async function uploadWorkspaceFile(
+export async function uploadSandboxFile(
   threadId: string,
   opts: { file: File; path?: string },
-): Promise<WorkspaceUploadResult> {
+): Promise<SandboxUploadResult> {
   const query = new URLSearchParams();
   if (opts.path) query.set("path", opts.path);
   const form = new FormData();
   form.set("file", opts.file, opts.file.name);
 
-  const response = await authFetch(`${workspaceBase(threadId)}/upload?${query.toString()}`, {
+  const response = await authFetch(`${sandboxFilesBase(threadId)}/upload?${query.toString()}`, {
     method: "POST",
     body: form,
   });
@@ -222,15 +222,15 @@ export async function uploadWorkspaceFile(
     const body = await response.text();
     throw new Error(`API ${response.status}: ${body || response.statusText}`);
   }
-  return (await response.json()) as WorkspaceUploadResult;
+  return (await response.json()) as SandboxUploadResult;
 }
 
-export function getWorkspaceDownloadUrl(
+export function getSandboxDownloadUrl(
   threadId: string,
   path: string,
 ): string {
   const query = new URLSearchParams({ path });
-  return `${workspaceBase(threadId)}/download?${query.toString()}`;
+  return `${sandboxFilesBase(threadId)}/download?${query.toString()}`;
 }
 
 // --- Settings API ---

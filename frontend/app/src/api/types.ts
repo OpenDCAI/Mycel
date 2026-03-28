@@ -210,20 +210,20 @@ export interface LeaseStatus {
   updated_at: string;
 }
 
-export interface WorkspaceEntry {
+export interface SandboxFileEntry {
   name: string;
   is_dir: boolean;
   size: number;
   children_count?: number | null;
 }
 
-export interface WorkspaceListResult {
+export interface SandboxFilesListResult {
   thread_id: string;
   path: string;
-  entries: WorkspaceEntry[];
+  entries: SandboxFileEntry[];
 }
 
-export interface WorkspaceFileResult {
+export interface SandboxFileResult {
   thread_id: string;
   path: string;
   content: string;
@@ -280,21 +280,21 @@ export interface TaskAgentRequest {
 }
 
 // @@@channel-kind - string union used directly as a selector, not an object
-export type WorkspaceChannelKind = "upload" | "download";
+export type SandboxChannelKind = "upload" | "download";
 
-export interface WorkspaceChannelFileEntry {
+export interface SandboxChannelFileEntry {
   relative_path: string;
   size_bytes: number;
   updated_at: string;
 }
 
-export interface WorkspaceChannelFilesResult {
+export interface SandboxChannelFilesResult {
   thread_id: string;
-  channel: WorkspaceChannelKind;
-  entries: WorkspaceChannelFileEntry[];
+  channel: SandboxChannelKind;
+  entries: SandboxChannelFileEntry[];
 }
 
-export interface WorkspaceUploadResult {
+export interface SandboxUploadResult {
   thread_id: string;
   relative_path: string;
   absolute_path: string;
