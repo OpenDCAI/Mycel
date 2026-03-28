@@ -29,7 +29,6 @@ def test_register_creates_agent_members_without_threads(tmp_path, monkeypatch):
         members=member_repo,
         accounts=account_repo,
         entities=entity_repo,
-        threads=thread_repo,
     )
 
     payload = service.register("fresh_user", "pass1234")

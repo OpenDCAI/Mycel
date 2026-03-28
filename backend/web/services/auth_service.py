@@ -17,7 +17,6 @@ from storage.contracts import (
     MemberRepo,
     MemberRow,
     MemberType,
-    ThreadRepo,
 )
 from storage.providers.sqlite.member_repo import generate_member_id
 
@@ -35,18 +34,15 @@ class AuthService:
         members: MemberRepo,
         accounts: AccountRepo,
         entities: EntityRepo,
-        threads: ThreadRepo,
     ) -> None:
         self._members = members
         self._accounts = accounts
         self._entities = entities
-        self._threads = threads
 
     def register(self, username: str, password: str) -> dict:
         """Register a new human user.
 
-        Creates: human member, account, human entity, agent member, agent entity, thread.
-        No contact, no chat (owner↔own agent = bare chat).
+        Creates: human member, account, human entity, agent members.
         Returns: {token, member, agent, entity_id}
         """
         if self._accounts.get_by_username(username) is not None:

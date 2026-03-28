@@ -54,7 +54,6 @@ async def lifespan(app: FastAPI):
         members=app.state.member_repo,
         accounts=app.state.account_repo,
         entities=app.state.entity_repo,
-        threads=app.state.thread_repo,
     )
 
     from backend.web.services.chat_events import ChatEventBus
