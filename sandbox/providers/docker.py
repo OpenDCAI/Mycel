@@ -79,7 +79,7 @@ class DockerProvider(SandboxProvider):
             supports_copy=True,
             supports_read_only=True,
             mode_handlers={"mount": True, "copy": True},
-            supports_workplace=True,
+            supports_member_volume=True,
         ),
     )
 
@@ -108,7 +108,7 @@ class DockerProvider(SandboxProvider):
         self._docker_host = docker_host
         self._sessions: dict[str, str] = {}  # session_id -> container_id
         self._thread_bind_mounts: dict[str, list[MountSpec]] = {}  # thread_id -> bind_mounts
-        self._workplace_mounts: dict[str, MountSpec] = {}  # thread_id -> workplace bind mount
+        self._volume_mounts: dict[str, MountSpec] = {}  # thread_id -> workplace bind mount
 
     def set_thread_bind_mounts(self, thread_id: str, mounts: list[MountSpec | dict]) -> None:
         """Set thread-specific bind mounts that will be applied when creating sessions."""
@@ -116,31 +116,31 @@ class DockerProvider(SandboxProvider):
             MountSpec.model_validate(m) if isinstance(m, dict) else m for m in mounts
         ]
 
-    # ==================== Workplace ====================
+    # ==================== Member Volume ====================
 
-    def create_workplace(self, member_id: str, mount_path: str) -> str:
+    def create_member_volume(self, member_id: str, mount_path: str) -> str:
         """Create a host directory for the agent. Returns host path as backend_ref."""
-        workplace_dir = Path.home() / ".leon" / "workplaces" / member_id
-        workplace_dir.mkdir(parents=True, exist_ok=True)
-        logger.info("Created Docker workplace: %s", workplace_dir)
-        return str(workplace_dir)
+        volume_dir = Path.home() / ".leon" / "member_volumes" / member_id
+        volume_dir.mkdir(parents=True, exist_ok=True)
+        logger.info("Created Docker member volume: %s", volume_dir)
+        return str(volume_dir)
 
-    def set_workplace_mount(self, thread_id: str, backend_ref: str, mount_path: str) -> None:
-        self._workplace_mounts[thread_id] = MountSpec(
+    def set_volume_mount(self, thread_id: str, backend_ref: str, mount_path: str) -> None:
+        self._volume_mounts[thread_id] = MountSpec(
             source=backend_ref, target=mount_path, mode="mount", read_only=False,
         )
 
-    def delete_workplace(self, backend_ref: str) -> None:
-        """Delete workplace host directory. backend_ref is the host path."""
+    def delete_member_volume(self, backend_ref: str) -> None:
+        """Delete member volume host directory. backend_ref is the host path."""
         import shutil
-        workplace_dir = Path(backend_ref).resolve()
-        # @@@safe-workplace-delete - refuse to delete outside expected directory
-        expected_parent = (Path.home() / ".leon" / "workplaces").resolve()
-        if not str(workplace_dir).startswith(str(expected_parent)):
-            raise ValueError(f"Refusing to delete workplace outside {expected_parent}: {workplace_dir}")
-        if workplace_dir.exists():
-            logger.info("Deleting Docker workplace: %s", workplace_dir)
-            shutil.rmtree(workplace_dir)
+        volume_dir = Path(backend_ref).resolve()
+        # @@@safe-volume-delete - refuse to delete outside expected directory
+        expected_parent = (Path.home() / ".leon" / "member_volumes").resolve()
+        if not str(volume_dir).startswith(str(expected_parent)):
+            raise ValueError(f"Refusing to delete volume outside {expected_parent}: {volume_dir}")
+        if volume_dir.exists():
+            logger.info("Deleting Docker member volume: %s", volume_dir)
+            shutil.rmtree(volume_dir)
 
     def create_session(self, context_id: str | None = None, thread_id: str | None = None) -> SessionInfo:
         session_id = f"leon-{uuid.uuid4().hex[:12]}"
@@ -158,8 +158,8 @@ class DockerProvider(SandboxProvider):
 
         # Merge global bind_mounts with thread-specific mounts + workplace mount
         all_mounts = list(self.bind_mounts)
-        if thread_id and thread_id in self._workplace_mounts:
-            all_mounts.append(self._workplace_mounts.pop(thread_id))
+        if thread_id and thread_id in self._volume_mounts:
+            all_mounts.append(self._volume_mounts.pop(thread_id))
         if thread_id and thread_id in self._thread_bind_mounts:
             all_mounts.extend(self._thread_bind_mounts[thread_id])
 

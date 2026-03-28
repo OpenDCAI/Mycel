@@ -74,9 +74,9 @@ class SandboxManager:
             workspace_root=_ws_root,
         )
 
-    def _resolve_workplace(self, thread_id: str, member_id: str | None = None) -> dict[str, Any] | None:
-        """Strategy gate: decide Workplace vs File Channel.
-        Returns workplace record if Workplace should be used, None for File Channel fallback.
+    def _resolve_member_volume(self, thread_id: str, member_id: str | None = None) -> dict[str, Any] | None:
+        """Strategy gate: decide Member Volume vs File Channel.
+        Returns volume record if Member Volume should be used, None for File Channel fallback.
         """
         if not member_id:
             from backend.web.utils.helpers import load_thread_config
@@ -86,24 +86,24 @@ class SandboxManager:
             return None
 
         capability = self.provider.get_capability()
-        if not capability.mount.supports_workplace:
+        if not capability.mount.supports_member_volume:
             return None
 
-        from backend.web.services.workspace_service import get_agent_workplace, create_agent_workplace
+        from backend.web.services.member_volume_service import get_member_volume, create_member_volume
 
         provider_type = self.provider.name
-        workplace = get_agent_workplace(member_id, provider_type)
-        if workplace:
-            return workplace
+        volume = get_member_volume(member_id, provider_type)
+        if volume:
+            return volume
 
         # @@@strategy-gate-lazy-create - first sandbox start for this member + provider
         mount_path = self.resolve_agent_files_dir(thread_id)
-        logger.info("Creating workplace for member_id=%s provider=%s", member_id, provider_type)
-        backend_ref = self.provider.create_workplace(member_id, mount_path)
-        return create_agent_workplace(member_id, provider_type, backend_ref, mount_path)
+        logger.info("Creating member volume for member_id=%s provider=%s", member_id, provider_type)
+        backend_ref = self.provider.create_member_volume(member_id, mount_path)
+        return create_member_volume(member_id, provider_type, backend_ref, mount_path)
 
-    def _lookup_workplace(self, thread_id: str) -> dict[str, Any] | None:
-        """Read-only workplace lookup. No side effects — never creates resources."""
+    def _lookup_member_volume(self, thread_id: str) -> dict[str, Any] | None:
+        """Read-only member volume lookup. No side effects — never creates resources."""
         from backend.web.utils.helpers import load_thread_config
         tc = load_thread_config(thread_id)
         member_id = tc.get("member_id") if tc else None
@@ -111,11 +111,11 @@ class SandboxManager:
             return None
 
         capability = self.provider.get_capability()
-        if not capability.mount.supports_workplace:
+        if not capability.mount.supports_member_volume:
             return None
 
-        from backend.web.services.workspace_service import get_agent_workplace
-        return get_agent_workplace(member_id, self.provider.name)
+        from backend.web.services.member_volume_service import get_member_volume
+        return get_member_volume(member_id, self.provider.name)
 
     def resolve_agent_files_dir(self, thread_id: str) -> str:
         """Path where the agent sees uploaded files for this thread.
@@ -253,10 +253,10 @@ class SandboxManager:
         if bind_mounts:
             lease.bind_mounts = bind_mounts
 
-        # @@@workspace-strategy-gate - Workplace vs File Channel
-        workplace = self._resolve_workplace(thread_id)
-        if workplace:
-            self.provider.set_workplace_mount(thread_id, workplace["backend_ref"], workplace["mount_path"])
+        # @@@volume-strategy-gate - Member Volume vs File Channel
+        volume = self._resolve_member_volume(thread_id)
+        if volume:
+            self.provider.set_volume_mount(thread_id, volume["backend_ref"], volume["mount_path"])
         else:
             workspace_path = self.workspace_sync.get_thread_workspace_path(thread_id)
             workspace_path.mkdir(parents=True, exist_ok=True)
@@ -497,9 +497,9 @@ class SandboxManager:
             lease.ensure_active_instance(self.provider)
             instance = lease.get_instance()
             if instance:
-                # @@@workplace-skip-download - Workplace storage persists independently
-                workplace = self._lookup_workplace(thread_id)
-                if not workplace:
+                # @@@volume-skip-download - Member volume storage persists independently
+                volume = self._lookup_member_volume(thread_id)
+                if not volume:
                     # @@@workspace-download - sync files from sandbox before pause
                     try:
                         self.workspace_sync.download_workspace(thread_id, instance.instance_id, self.provider)
@@ -590,8 +590,8 @@ class SandboxManager:
         # @@@workspace-download-before-destroy - sync files before destroy
         # Skip if workplace-backed or if sandbox is already paused (files synced during pause)
         lease = self._get_thread_lease(thread_id)
-        workplace = self._lookup_workplace(thread_id)
-        if lease and not workplace:
+        volume = self._lookup_member_volume(thread_id)
+        if lease and not volume:
             if lease.observed_state == "running":
                 instance = lease.get_instance()
                 if instance:

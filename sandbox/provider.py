@@ -65,7 +65,7 @@ class MountCapability:
     supports_copy: bool = False
     supports_read_only: bool = False
     mode_handlers: dict[str, bool] = field(default_factory=dict)
-    supports_workplace: bool = False
+    supports_member_volume: bool = False
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -229,21 +229,21 @@ class SandboxProvider(ABC):
     def get_web_url(self, session_id: str) -> str | None:
         return None
 
-    def create_workplace(self, member_id: str, mount_path: str) -> str:
+    def create_member_volume(self, member_id: str, mount_path: str) -> str:
         """Create persistent storage for an agent. Returns backend_ref.
-        Override in providers where supports_workplace=True.
+        Override in providers where supports_member_volume=True.
         """
-        raise NotImplementedError(f"{self.name} does not support Workplaces")
+        raise NotImplementedError(f"{self.name} does not support member volumes")
 
-    def set_workplace_mount(self, thread_id: str, backend_ref: str, mount_path: str) -> None:
-        """Configure workplace mount for next create_session().
+    def set_volume_mount(self, thread_id: str, backend_ref: str, mount_path: str) -> None:
+        """Configure volume mount for next create_session().
         Called before create_session(). Provider stores this internally.
         """
-        raise NotImplementedError(f"{self.name} does not support Workplaces")
+        raise NotImplementedError(f"{self.name} does not support member volumes")
 
-    def delete_workplace(self, backend_ref: str) -> None:
+    def delete_member_volume(self, backend_ref: str) -> None:
         """Delete persistent storage. Called on agent deletion."""
-        raise NotImplementedError(f"{self.name} does not support Workplaces")
+        raise NotImplementedError(f"{self.name} does not support member volumes")
 
     def set_thread_bind_mounts(self, thread_id: str, mounts: list) -> None:
         """Set per-thread bind mounts for next create_session(). No-op for providers without mount support."""
