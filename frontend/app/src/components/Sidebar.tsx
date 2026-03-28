@@ -427,29 +427,33 @@ export default function Sidebar({
                     </Link>
                   </div>
                   {isExpanded && (
-                    <div className="mt-0.5 ml-3 space-y-0.5">
-                      {childThreads.map((thread) => (
-                        <ThreadItem
-                          key={thread.thread_id}
-                          thread={thread}
-                          isActive={activeThreadId === thread.thread_id}
-                          label={requireSidebarLabel(thread)}
-                          to={`/threads/${urlId}/${thread.thread_id}`}
-                          isSelectMode={isSelectMode}
-                          isSelected={selectedIds.has(thread.thread_id)}
-                          onToggleSelect={onToggleSelect}
-                          confirmDelete={confirmDelete}
-                          setConfirmDelete={setConfirmDelete}
-                          onDeleteThread={onDeleteThread}
-                        />
-                      ))}
-                      <Link
-                        to={`/threads/${urlId}/new`}
-                        className="block -ml-3 w-[calc(100%+0.75rem)] px-3 py-2 text-center text-[11px] text-muted-foreground/50 hover:text-muted-foreground transition-colors"
-                      >
-                        + 发起新对话
-                      </Link>
-                    </div>
+                    <>
+                      <div className="mt-0.5 ml-3 space-y-0.5">
+                        {childThreads.map((thread) => (
+                          <ThreadItem
+                            key={thread.thread_id}
+                            thread={thread}
+                            isActive={activeThreadId === thread.thread_id}
+                            label={requireSidebarLabel(thread)}
+                            to={`/threads/${urlId}/${thread.thread_id}`}
+                            isSelectMode={isSelectMode}
+                            isSelected={selectedIds.has(thread.thread_id)}
+                            onToggleSelect={onToggleSelect}
+                            confirmDelete={confirmDelete}
+                            setConfirmDelete={setConfirmDelete}
+                            onDeleteThread={onDeleteThread}
+                          />
+                        ))}
+                      </div>
+                      <div className="px-3">
+                        <Link
+                          to={`/threads/${urlId}/new`}
+                          className="block py-2 text-center text-[11px] text-muted-foreground/50 hover:text-muted-foreground transition-colors"
+                        >
+                          + 发起新对话
+                        </Link>
+                      </div>
+                    </>
                   )}
                 </div>
               );
