@@ -648,8 +648,8 @@ def delete_member(member_id: str) -> bool:
     if not member_dir.is_dir():
         return False
 
-    # @@@workplace-cleanup - delete provider-side storage before removing member directory
-    _cleanup_member_workplaces(member_id)
+    # @@@volume-cleanup - delete provider-side storage before removing member directory
+    _cleanup_member_volumes(member_id)
 
     shutil.rmtree(member_dir)
 
@@ -664,22 +664,22 @@ def delete_member(member_id: str) -> bool:
     return True
 
 
-def _cleanup_member_workplaces(member_id: str) -> None:
-    """Delete workplace storage (volumes, host dirs) for a member being deleted."""
-    from backend.web.services.workspace_service import list_agent_workplaces, delete_agent_workplace
+def _cleanup_member_volumes(member_id: str) -> None:
+    """Delete volume storage (volumes, host dirs) for a member being deleted."""
+    from backend.web.services.member_volume_service import list_member_volumes, delete_member_volume
 
-    workplaces = list_agent_workplaces(member_id)
-    if not workplaces:
+    volumes = list_member_volumes(member_id)
+    if not volumes:
         return
 
     from backend.web.services.sandbox_service import init_providers_and_managers
     providers, _ = init_providers_and_managers()
 
-    for wp in workplaces:
+    for vol in volumes:
         try:
-            provider = providers.get(wp["provider_type"])
+            provider = providers.get(vol["provider_type"])
             if provider:
-                provider.delete_workplace(wp["backend_ref"])
-            delete_agent_workplace(member_id, wp["provider_type"])
+                provider.delete_member_volume(vol["backend_ref"])
+            delete_member_volume(member_id, vol["provider_type"])
         except Exception:
-            logger.warning("Failed to delete workplace backend — keeping DB record: %s", wp, exc_info=True)
+            logger.warning("Failed to delete volume backend — keeping DB record: %s", vol, exc_info=True)

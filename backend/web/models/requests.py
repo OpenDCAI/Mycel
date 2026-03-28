@@ -12,7 +12,7 @@ class CreateThreadRequest(BaseModel):
     model: str | None = None
     agent: str | None = None
     bind_mounts: list[MountSpec] = Field(default_factory=list)
-    workspace_id: str | None = None
+    sandbox_files_id: str | None = None
 
 
 class ResolveMainThreadRequest(BaseModel):

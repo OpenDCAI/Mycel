@@ -112,10 +112,10 @@ async def get_or_create_agent(app_obj: FastAPI, sandbox_type: str, thread_id: st
                 }
 
         # @@@per-thread-file-access - ensure thread files are accessible from agent
-        from backend.web.services.workspace_service import ensure_thread_files
+        from backend.web.services.sandbox_files_service import ensure_sandbox_files
 
-        workspace_id = thread_data.get("workspace_id") if thread_data else None
-        channel = ensure_thread_files(thread_id, workspace_id=workspace_id)
+        sandbox_files_id = thread_data.get("sandbox_files_id") if thread_data else None
+        channel = ensure_sandbox_files(thread_id, sandbox_files_id=sandbox_files_id)
         extra_allowed_paths: list[str] = [channel["files_path"]] if sandbox_type == "local" else []
 
         # Merge user-configured allowed_paths from sandbox config
