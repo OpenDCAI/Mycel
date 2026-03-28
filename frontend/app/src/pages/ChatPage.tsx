@@ -38,15 +38,14 @@ function ChatPageInner({ threadId }: { threadId: string }) {
   const userName = useAuthStore(s => s.member?.name);
   const userMemberId = useAuthStore(s => s.member?.id);
   const userHasAvatar = useAuthStore(s => !!s.member?.avatar);
-  const agentName = useAuthStore(s => s.agent?.name);
 
   // Derive avatar URLs from thread data
   const currentThread = tm.threads.find(t => t.thread_id === threadId);
+  const agentName = currentThread?.entity_name ?? currentThread?.member_name;
   const agentAvatarUrl = currentThread?.avatar_url;
   const userAvatarUrl = userHasAvatar && userMemberId ? `/api/members/${userMemberId}/avatar` : undefined;
-  const [currentModel, setCurrentModel] = useState<string>("");
-
   const state = location.state as { selectedModel?: string; runStarted?: boolean; message?: string } | null;
+  const [currentModel, setCurrentModel] = useState<string>(state?.selectedModel ?? "");
 
   // location.state.runStarted is set by NewChatPage on SPA navigation only.
   // On page refresh the browser preserves state but React Router resets it to null,
@@ -58,27 +57,19 @@ function ChatPageInner({ threadId }: { threadId: string }) {
   const initialEntries = undefined;
 
   useEffect(() => {
-    if (state?.selectedModel) {
-      setCurrentModel(state.selectedModel);
-      void fetch("/api/settings/config", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ model: state.selectedModel, thread_id: threadId }),
-      });
-    } else {
-      authFetch(`/api/threads/${threadId}/runtime`)
-        .then((r) => r.json())
-        .then((d) => {
-          if (d.model) {
-            setCurrentModel(d.model);
-          } else {
-            return fetch("/api/settings")
-              .then((r) => r.json())
-              .then((d) => setCurrentModel(d.default_model || "leon:large"));
-          }
-        })
-        .catch(() => setCurrentModel("leon:large"));
-    }
+    if (state?.selectedModel) return;
+    authFetch(`/api/threads/${threadId}/runtime`)
+      .then((r) => r.json())
+      .then((d) => {
+        if (d.model) {
+          setCurrentModel(d.model);
+          return;
+        }
+        return fetch("/api/settings")
+          .then((r) => r.json())
+          .then((settings) => setCurrentModel(settings.default_model || "leon:large"));
+      })
+      .catch(() => setCurrentModel("leon:large"));
   }, [state?.selectedModel, threadId]);
 
   const { entries, activeSandbox, loading, displaySeq, setEntries, setActiveSandbox, refreshThread } = useThreadData(threadId, runStarted, initialEntries);
@@ -95,7 +86,8 @@ function ChatPageInner({ threadId }: { threadId: string }) {
 
   // @@@debug-entries — expose current entries for backend comparison
   useEffect(() => {
-    (window as any).__debugEntries = () => JSON.parse(JSON.stringify(entries));
+    (window as Window & { __debugEntries?: () => unknown[] }).__debugEntries =
+      () => JSON.parse(JSON.stringify(entries)) as unknown[];
   }, [entries]);
 
   const { tasks, refresh: refreshTasks } = useBackgroundTasks({ threadId, loading, refreshThreads: tm.refreshThreads });
@@ -158,7 +150,7 @@ function ChatPageInner({ threadId }: { threadId: string }) {
     <>
       <Header
         activeThreadId={threadId}
-        threadPreview={tm.threads.find((t) => t.thread_id === threadId)?.preview ?? null}
+        threadTitle={currentThread?.entity_name ?? null}
         sandboxInfo={activeSandbox}
         currentModel={currentModel}
         onToggleSidebar={() => setSidebarCollapsed(v => !v)}

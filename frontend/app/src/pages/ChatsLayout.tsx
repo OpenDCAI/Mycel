@@ -38,7 +38,10 @@ function NewChatDialog({ onClose, onCreated }: { onClose: () => void; onCreated:
   }, []);
 
   const filtered = search
-    ? entities.filter(e => e.name.toLowerCase().includes(search.toLowerCase()))
+    ? entities.filter((e) => {
+      const haystack = [e.name, e.owner_name || "", e.member_name || ""].join(" ").toLowerCase();
+      return haystack.includes(search.toLowerCase());
+    })
     : entities;
 
   const toggle = (id: string) => {
@@ -125,7 +128,9 @@ function NewChatDialog({ onClose, onCreated }: { onClose: () => void; onCreated:
                 <MemberAvatar name={e.name} avatarUrl={e.avatar_url} type={e.type} size="sm" />
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-medium truncate">{e.name}</p>
-                  <p className="text-[10px] text-muted-foreground">{e.type}</p>
+                  <p className="text-[10px] text-muted-foreground truncate">
+                    {e.owner_name ? `owner: ${e.owner_name}` : "human"}
+                  </p>
                 </div>
                 {isSelected && <Check className="w-4 h-4 text-primary shrink-0" />}
               </button>
@@ -219,7 +224,10 @@ export default function ChatsLayout() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   const chatsRef = useRef(chats);
-  chatsRef.current = chats;
+  useEffect(() => {
+    chatsRef.current = chats;
+  }, [chats]);
+
   const refresh = useCallback(() => {
     authFetch("/api/chats")
       .then(r => r.json())
