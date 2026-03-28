@@ -32,43 +32,20 @@ def test_register_creates_agent_members_without_threads(tmp_path, monkeypatch):
     )
 
     payload = service.register("fresh_user", "pass1234")
+    claims = service.verify_token(payload["token"])
+    account = account_repo.get_by_username("fresh_user")
 
     owned_agents = member_repo.list_by_owner_user_id(payload["user"]["id"])
+    assert "member_id" not in claims
+    assert claims["user_id"] == payload["user"]["id"]
+    assert payload["user"]["name"] == "fresh_user"
+    assert account is not None
+    assert account.user_id == payload["user"]["id"]
     assert len(owned_agents) == 2
     assert [agent.name for agent in owned_agents] == ["Toad", "Morel"]
     for agent in owned_agents:
         assert thread_repo.list_by_member(agent.id) == []
         assert entity_repo.get_by_member_id(agent.id) == []
-
-
-def test_register_returns_user_payload_and_user_id_token(tmp_path, monkeypatch):
-    db_path = tmp_path / "leon.db"
-    members_dir = tmp_path / "members"
-
-    import backend.web.services.member_service as member_service
-
-    monkeypatch.setattr(member_service, "MEMBERS_DIR", members_dir)
-    monkeypatch.setattr(member_service, "LEON_HOME", tmp_path)
-
-    member_repo = SQLiteMemberRepo(db_path)
-    account_repo = SQLiteAccountRepo(db_path)
-    entity_repo = SQLiteEntityRepo(db_path)
-    service = AuthService(
-        members=member_repo,
-        accounts=account_repo,
-        entities=entity_repo,
-    )
-
-    payload = service.register("semantic_user", "pass1234")
-
-    claims = service.verify_token(payload["token"])
-    account = account_repo.get_by_username("semantic_user")
-
-    assert "member_id" not in claims
-    assert claims["user_id"] == payload["user"]["id"]
-    assert payload["user"]["name"] == "semantic_user"
-    assert account is not None
-    assert account.user_id == payload["user"]["id"]
 
 
 def test_first_explicit_thread_becomes_main_then_followups_are_children(tmp_path):
