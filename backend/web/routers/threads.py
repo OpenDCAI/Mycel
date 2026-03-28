@@ -215,7 +215,9 @@ def _create_thread_sandbox_resources(thread_id: str, sandbox_type: str) -> None:
 
     terminal_store = TerminalStore(db_path=DEFAULT_DB_PATH)
     terminal_id = f"term-{uuid.uuid4().hex[:12]}"
-    initial_cwd = "/home/user"
+    # @@@initial-cwd - use project root for local, provider default for remote
+    from backend.web.core.config import LOCAL_WORKSPACE_ROOT
+    initial_cwd = str(LOCAL_WORKSPACE_ROOT) if sandbox_type == "local" else "/home/user"
     terminal_store.create(
         terminal_id=terminal_id,
         thread_id=thread_id,
