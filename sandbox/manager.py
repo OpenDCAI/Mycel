@@ -588,7 +588,7 @@ class SandboxManager:
             return False
 
         # @@@workspace-download-before-destroy - sync files before destroy
-        # Skip if workplace-backed or if sandbox is already paused (files synced during pause)
+        # Skip if volume-backed or if sandbox is already paused (files synced during pause)
         lease = self._get_thread_lease(thread_id)
         volume = self._lookup_member_volume(thread_id)
         if lease and not volume:

@@ -13,7 +13,7 @@ def track_thread_activity(thread_id: str, activity_type: str = "activity") -> No
     """Update session activity timestamp for a thread.
 
     # @@@raw-sql-touch - Bypasses ChatSession.touch() intentionally:
-    # workspace_service has no access to ChatSession objects, and we only need
+    # activity_tracker has no access to ChatSession objects, and we only need
     # to bump last_active_at to prevent idle reaper from pausing during file uploads.
     # Does NOT change session status — preserves paused/active state as-is.
     """

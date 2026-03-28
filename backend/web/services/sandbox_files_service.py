@@ -90,7 +90,7 @@ def create_sandbox_files(thread_id: str) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Thread-scoped file operations (merged from file_channel_service)
+# Thread-scoped file operations
 # ---------------------------------------------------------------------------
 
 
@@ -113,7 +113,7 @@ def _get_sandbox_files_id(thread_id: str) -> str | None:
 
 
 def _get_files_dir(thread_id: str, sandbox_files_id: str | None = None) -> Path:
-    """Derive files directory. If sandbox_files_id not provided, use thread's file channel."""
+    """Derive files directory. If sandbox_files_id not provided, look up from thread config."""
     if not sandbox_files_id:
         sandbox_files_id = _get_sandbox_files_id(thread_id)
     if not sandbox_files_id:

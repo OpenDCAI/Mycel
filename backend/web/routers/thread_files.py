@@ -154,7 +154,7 @@ async def read_workspace_file(
 
 
 @router.get("/channels")
-async def get_file_channels(
+async def get_sandbox_files(
     thread_id: str,
 
 ) -> dict[str, Any]:
@@ -178,7 +178,7 @@ async def upload_file(
 
     app: Annotated[Any, Depends(get_app)] = None,
 ) -> dict[str, Any]:
-    """Upload a file into thread file channel."""
+    """Upload a file into thread sandbox files."""
     if not file.filename and not path:
         raise HTTPException(400, "Missing upload path: provide query path or filename")
     relative_path = path or file.filename or ""

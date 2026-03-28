@@ -73,7 +73,7 @@ class MountCapability:
             "supports_copy": self.supports_copy,
             "supports_read_only": self.supports_read_only,
             "mode_handlers": dict(self.mode_handlers or {}),
-            "supports_workplace": self.supports_workplace,
+            "supports_member_volume": self.supports_member_volume,
         }
 
 

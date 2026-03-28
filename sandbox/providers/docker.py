@@ -108,7 +108,7 @@ class DockerProvider(SandboxProvider):
         self._docker_host = docker_host
         self._sessions: dict[str, str] = {}  # session_id -> container_id
         self._thread_bind_mounts: dict[str, list[MountSpec]] = {}  # thread_id -> bind_mounts
-        self._volume_mounts: dict[str, MountSpec] = {}  # thread_id -> workplace bind mount
+        self._volume_mounts: dict[str, MountSpec] = {}  # thread_id -> member volume bind mount
 
     def set_thread_bind_mounts(self, thread_id: str, mounts: list[MountSpec | dict]) -> None:
         """Set thread-specific bind mounts that will be applied when creating sessions."""
@@ -156,7 +156,7 @@ class DockerProvider(SandboxProvider):
             f"leon.session_id={session_id}",
         ]
 
-        # Merge global bind_mounts with thread-specific mounts + workplace mount
+        # Merge global bind_mounts with thread-specific mounts + member volume mount
         all_mounts = list(self.bind_mounts)
         if thread_id and thread_id in self._volume_mounts:
             all_mounts.append(self._volume_mounts.pop(thread_id))
