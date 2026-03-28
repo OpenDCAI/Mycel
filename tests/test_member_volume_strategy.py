@@ -94,7 +94,7 @@ def _make_manager(provider, tmp_path):
 
 
 def test_resolve_member_volume_no_member():
-    """No member_id in thread config → returns None (File Channel)."""
+    """No member_id in thread config → returns None (Sandbox Files)."""
     with tempfile.TemporaryDirectory() as td:
         mgr = _make_manager(FakeVolumeProvider(), td)
         with patch("backend.web.utils.helpers.load_thread_config", return_value=None, create=True):
