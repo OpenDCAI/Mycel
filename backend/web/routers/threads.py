@@ -68,7 +68,18 @@ async def _prepare_attachment_message(
     else:
         _, managers = init_providers_and_managers()
         mgr = managers.get(sandbox_type)
-    files_dir = mgr.volume.resolve_remote_path() if mgr else "/workspace/files"
+    # @@@files-dir-hint - tell agent where uploaded files live
+    # For local provider: actual host path (agent reads host FS directly)
+    # For remote providers: container-side path
+    if mgr and mgr.volume.capability.runtime_kind == "local":
+        from backend.web.services.member_volume_service import get_lease_volume_source
+        try:
+            source = get_lease_volume_source(thread_id)
+            files_dir = str(source.host_path)
+        except ValueError:
+            files_dir = "/workspace/files"
+    else:
+        files_dir = mgr.volume.resolve_remote_path() if mgr else "/workspace/files"
 
     original_message = message
     sync_ok = True
