@@ -23,6 +23,15 @@ from sandbox.provider import SandboxProvider
 from sandbox.terminal import TerminalState, TerminalStore
 
 
+def resolve_provider_cwd(provider) -> str:
+    """Get the default working directory for a provider."""
+    for attr in ("default_cwd", "default_context_path", "mount_path"):
+        val = getattr(provider, attr, None)
+        if isinstance(val, str) and val:
+            return val
+    return "/home/user"
+
+
 def lookup_sandbox_for_thread(thread_id: str, db_path: Path | None = None) -> str | None:
     target_db = db_path or DEFAULT_DB_PATH
     if not target_db.exists():
@@ -73,12 +82,7 @@ class SandboxManager:
         )
 
     def _default_terminal_cwd(self) -> str:
-        for attr in ("default_cwd", "default_context_path", "mount_path"):
-            if hasattr(self.provider, attr):
-                value = getattr(self.provider, attr)
-                if isinstance(value, str) and value:
-                    return value
-        return "/home/user"
+        return resolve_provider_cwd(self.provider)
 
     def _fire_session_ready(self, session_id: str, reason: str) -> None:
         if self._on_session_ready:

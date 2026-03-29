@@ -72,7 +72,6 @@ async def _prepare_attachment_message(
     # For local provider: actual host path (agent reads host FS directly)
     # For remote providers: container-side path
     if mgr and mgr.file_channel.capability.runtime_kind == "local":
-        from backend.web.services.file_channel_service import get_file_channel_source
         try:
             source = get_file_channel_source(thread_id)
             files_dir = str(source.host_path)
@@ -207,7 +206,10 @@ def _create_thread_sandbox_resources(thread_id: str, sandbox_type: str) -> None:
     source = HostVolume(channel_path)
 
     channel_repo = _get_container().file_channel_repo()
-    channel_repo.create(channel_id, json.dumps(source.serialize()), f"file-channel-{thread_id}", now_str)
+    try:
+        channel_repo.create(channel_id, json.dumps(source.serialize()), f"file-channel-{thread_id}", now_str)
+    finally:
+        channel_repo.close()
 
     lease_store = LeaseStore(db_path=DEFAULT_DB_PATH)
     lease_id = f"lease-{uuid.uuid4().hex[:12]}"
@@ -221,14 +223,9 @@ def _create_thread_sandbox_resources(thread_id: str, sandbox_type: str) -> None:
         initial_cwd = str(LOCAL_WORKSPACE_ROOT)
     else:
         from backend.web.services.sandbox_service import build_provider_from_config_name
+        from sandbox.manager import resolve_provider_cwd
         provider = build_provider_from_config_name(sandbox_type)
-        initial_cwd = "/home/user"
-        if provider:
-            for attr in ("default_cwd", "default_context_path", "mount_path"):
-                val = getattr(provider, attr, None)
-                if isinstance(val, str) and val:
-                    initial_cwd = val
-                    break
+        initial_cwd = resolve_provider_cwd(provider) if provider else "/home/user"
     terminal_store.create(
         terminal_id=terminal_id,
         thread_id=thread_id,

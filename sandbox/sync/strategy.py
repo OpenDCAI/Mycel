@@ -19,19 +19,23 @@ def _native_upload(session_id: str, provider, workspace: Path, workspace_root: s
     """
     t0 = time.time()
     total_bytes = 0
-    # @@@mkdir-once - ensure remote dir exists before uploading
-    provider.execute(session_id, f"mkdir -p {workspace_root}", timeout_ms=10000)
+    # @@@mkdir-batch - collect all needed dirs, create in one command
+    dirs_needed = {workspace_root}
+    upload_items: list[tuple[str, bytes]] = []
     for rel_path in files:
         local = workspace / rel_path
         if not local.exists() or not local.is_file():
             logger.warning("[SYNC] native_upload: skipping missing file %s", local)
             continue
-        data = local.read_bytes()
         remote = f"{workspace_root}/{rel_path}"
-        # Ensure parent directory exists for nested paths
         parent = str(Path(remote).parent)
         if parent != workspace_root:
-            provider.execute(session_id, f"mkdir -p {parent}", timeout_ms=10000)
+            dirs_needed.add(parent)
+        upload_items.append((remote, local.read_bytes()))
+    if not upload_items:
+        return
+    provider.execute(session_id, "mkdir -p " + " ".join(sorted(dirs_needed)), timeout_ms=10000)
+    for remote, data in upload_items:
         provider.upload_bytes(session_id, remote, data)
         total_bytes += len(data)
     logger.info("[SYNC-PERF] native_upload: %d files, %d bytes, %.3fs", len(files), total_bytes, time.time() - t0)
