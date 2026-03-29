@@ -1027,6 +1027,7 @@ class LeaseStore:
             last_error=None,
             needs_refresh=False,
             refresh_hint_at=None,
+            file_channel_id=file_channel_id,
         )
 
     def find_by_instance(self, *, provider_name: str, instance_id: str) -> SandboxLease | None:
