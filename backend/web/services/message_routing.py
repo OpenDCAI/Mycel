@@ -19,6 +19,7 @@ async def route_message_to_brain(
     sender_name: str | None = None,
     sender_avatar_url: str | None = None,
     attachments: list[str] | None = None,
+    extra_metadata: dict[str, Any] | None = None,
 ) -> dict:
     """Route message to agent brain thread.
 
@@ -42,7 +43,8 @@ async def route_message_to_brain(
     if hasattr(agent, "runtime") and agent.runtime.current_state == AgentState.ACTIVE:
         qm.enqueue(steer_content, thread_id, "steer",
                     source=source, sender_name=sender_name,
-                    sender_avatar_url=sender_avatar_url, is_steer=True)
+                    sender_avatar_url=sender_avatar_url, is_steer=True,
+                    extra_metadata=extra_metadata)
         logger.debug("[route] → ENQUEUED (agent active)")
         return {"status": "injected", "routing": "steer", "thread_id": thread_id}
 
@@ -54,7 +56,8 @@ async def route_message_to_brain(
         if hasattr(agent, "runtime") and not agent.runtime.transition(AgentState.ACTIVE):
             qm.enqueue(steer_content, thread_id, "steer",
                         source=source, sender_name=sender_name,
-                        sender_avatar_url=sender_avatar_url, is_steer=True)
+                        sender_avatar_url=sender_avatar_url, is_steer=True,
+                        extra_metadata=extra_metadata)
             logger.debug("[route] → ENQUEUED (transition failed)")
             return {"status": "injected", "routing": "steer", "thread_id": thread_id}
         logger.debug("[route] → START RUN (idle→active)")
@@ -62,6 +65,8 @@ async def route_message_to_brain(
                 "sender_avatar_url": sender_avatar_url}
         if attachments:
             meta["attachments"] = attachments
+        if extra_metadata:
+            meta.update(extra_metadata)
         run_id = start_agent_run(agent, thread_id, run_content, app,
                                   message_metadata=meta)
     return {"status": "started", "routing": "direct", "run_id": run_id, "thread_id": thread_id}

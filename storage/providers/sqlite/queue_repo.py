@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import sqlite3
 import threading
 from pathlib import Path
@@ -36,13 +37,31 @@ class SQLiteQueueRepo:
         if self._own_conn:
             self._conn.close()
 
+    def _decode_extra_metadata(self, raw: str | None) -> dict[str, Any] | None:
+        if not raw:
+            return None
+        try:
+            decoded = json.loads(raw)
+        except json.JSONDecodeError:
+            return None
+        return decoded if isinstance(decoded, dict) else None
+
     def enqueue(self, thread_id: str, content: str, notification_type: str = "steer",
-                source: str | None = None, sender_entity_id: str | None = None, sender_name: str | None = None) -> None:
+                source: str | None = None, sender_entity_id: str | None = None, sender_name: str | None = None,
+                extra_metadata: dict[str, Any] | None = None) -> None:
         with self._lock:
             self._conn.execute(
-                "INSERT INTO message_queue (thread_id, content, notification_type, source, sender_entity_id, sender_name)"
-                " VALUES (?, ?, ?, ?, ?, ?)",
-                (thread_id, content, notification_type, source, sender_entity_id, sender_name),
+                "INSERT INTO message_queue (thread_id, content, notification_type, source, sender_entity_id, sender_name, extra_metadata)"
+                " VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (
+                    thread_id,
+                    content,
+                    notification_type,
+                    source,
+                    sender_entity_id,
+                    sender_name,
+                    json.dumps(extra_metadata) if extra_metadata is not None else None,
+                ),
             )
             self._conn.commit()
 
@@ -57,12 +76,13 @@ class SQLiteQueueRepo:
             row = self._conn.execute(
                 "DELETE FROM message_queue "
                 "WHERE id = (SELECT MIN(id) FROM message_queue WHERE thread_id = ?) "
-                "RETURNING content, notification_type, source, sender_entity_id, sender_name",
+                "RETURNING content, notification_type, source, sender_entity_id, sender_name, extra_metadata",
                 (thread_id,),
             ).fetchone()
             self._conn.commit()
             return QueueItem(content=row[0], notification_type=row[1],
-                             source=row[2], sender_entity_id=row[3], sender_name=row[4]) if row else None
+                             source=row[2], sender_entity_id=row[3], sender_name=row[4],
+                             extra_metadata=self._decode_extra_metadata(row[5])) if row else None
 
     def drain_all(self, thread_id: str) -> list[QueueItem]:
         with self._lock:
@@ -74,12 +94,13 @@ class SQLiteQueueRepo:
                 return []
             rows = self._conn.execute(
                 "DELETE FROM message_queue WHERE thread_id = ?"
-                " RETURNING content, notification_type, id, source, sender_entity_id, sender_name",
+                " RETURNING content, notification_type, id, source, sender_entity_id, sender_name, extra_metadata",
                 (thread_id,),
             ).fetchall()
             self._conn.commit()
         return [QueueItem(content=r[0], notification_type=r[1],
-                          source=r[3], sender_entity_id=r[4], sender_name=r[5])
+                          source=r[3], sender_entity_id=r[4], sender_name=r[5],
+                          extra_metadata=self._decode_extra_metadata(r[6]))
                 for r in sorted(rows, key=lambda r: r[2])]
 
     def peek(self, thread_id: str) -> bool:
@@ -128,6 +149,7 @@ class SQLiteQueueRepo:
             "  source            TEXT,"
             "  sender_entity_id  TEXT,"
             "  sender_name       TEXT,"
+            "  extra_metadata    TEXT,"
             "  created_at        TEXT DEFAULT (datetime('now'))"
             ")"
         )
@@ -136,7 +158,8 @@ class SQLiteQueueRepo:
         )
         # Migration: add columns to existing tables
         for col, col_type in [("notification_type", "TEXT NOT NULL DEFAULT 'steer'"),
-                               ("source", "TEXT"), ("sender_entity_id", "TEXT"), ("sender_name", "TEXT")]:
+                               ("source", "TEXT"), ("sender_entity_id", "TEXT"), ("sender_name", "TEXT"),
+                               ("extra_metadata", "TEXT")]:
             try:
                 self._conn.execute(f"ALTER TABLE message_queue ADD COLUMN {col} {col_type}")
             except sqlite3.OperationalError:

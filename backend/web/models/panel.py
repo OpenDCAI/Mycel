@@ -141,6 +141,34 @@ class UpdateCronJobRequest(BaseModel):
         return _check_json_template(v)
 
 
+# ── Scheduled Tasks ──
+
+class CreateScheduledTaskRequest(BaseModel):
+    thread_id: str
+    name: str
+    instruction: str
+    cron_expression: str
+    enabled: bool = True
+
+    @field_validator("cron_expression")
+    @classmethod
+    def validate_cron_expression(cls, v: str) -> str:
+        return _check_cron_expr(v)  # type: ignore[return-value]
+
+
+class UpdateScheduledTaskRequest(BaseModel):
+    thread_id: str | None = None
+    name: str | None = None
+    instruction: str | None = None
+    cron_expression: str | None = None
+    enabled: bool | None = None
+
+    @field_validator("cron_expression")
+    @classmethod
+    def validate_cron_expression(cls, v: str | None) -> str | None:
+        return _check_cron_expr(v)
+
+
 # ── Backward compatibility aliases ──
 
 StaffConfigPayload = MemberConfigPayload

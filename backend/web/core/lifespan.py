@@ -97,6 +97,7 @@ async def lifespan(app: FastAPI):
     app.state.thread_last_active: dict[str, float] = {}  # thread_id → epoch timestamp
     app.state.idle_reaper_task: asyncio.Task | None = None
     app.state.cron_service = None
+    app.state.scheduled_task_scheduler = None
     app.state._event_loop = asyncio.get_running_loop()
     app.state.monitor_resources_task: asyncio.Task | None = None
 
@@ -113,6 +114,12 @@ async def lifespan(app: FastAPI):
         cron_svc = CronService()
         await cron_svc.start()
         app.state.cron_service = cron_svc
+
+        from backend.scheduled_tasks.runtime import ScheduledTaskScheduler
+
+        scheduled_task_scheduler = ScheduledTaskScheduler(app=app)
+        await scheduled_task_scheduler.start()
+        app.state.scheduled_task_scheduler = scheduled_task_scheduler
 
         # @@@wechat-registry — create registry with delivery callback, auto-start all
         from backend.web.services.wechat_service import WeChatConnectionRegistry
@@ -154,6 +161,9 @@ async def lifespan(app: FastAPI):
         # Cleanup: stop cron scheduler
         if app.state.cron_service:
             await app.state.cron_service.stop()
+
+        if app.state.scheduled_task_scheduler:
+            await app.state.scheduled_task_scheduler.stop()
 
         # Cleanup: close all agents
         for agent in app.state.agent_pool.values():

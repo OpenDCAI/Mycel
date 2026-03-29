@@ -13,6 +13,7 @@ from backend.web.models.panel import (
     CreateCronJobRequest,
     CreateMemberRequest,
     CreateResourceRequest,
+    CreateScheduledTaskRequest,
     CreateTaskRequest,
     MemberConfigPayload,
     PublishMemberRequest,
@@ -21,9 +22,11 @@ from backend.web.models.panel import (
     UpdateProfileRequest,
     UpdateResourceContentRequest,
     UpdateResourceRequest,
+    UpdateScheduledTaskRequest,
     UpdateTaskRequest,
 )
 from backend.web.services import member_service, task_service, library_service, profile_service, cron_job_service
+from backend.scheduled_tasks import service as scheduled_task_service
 
 router = APIRouter(prefix="/api/panel", tags=["panel"])
 
@@ -179,6 +182,65 @@ async def trigger_cron_job(job_id: str, request: Request) -> dict[str, Any]:
     if not task:
         raise HTTPException(404, "Cron job not found or disabled")
     return {"item": task}
+
+
+# ── Scheduled Tasks ──
+
+
+@router.get("/scheduled-tasks")
+async def list_scheduled_tasks() -> dict[str, Any]:
+    items = await asyncio.to_thread(scheduled_task_service.list_scheduled_tasks)
+    return {"items": items}
+
+
+@router.post("/scheduled-tasks")
+async def create_scheduled_task(req: CreateScheduledTaskRequest) -> dict[str, Any]:
+    item = await asyncio.to_thread(
+        scheduled_task_service.create_scheduled_task,
+        thread_id=req.thread_id,
+        name=req.name,
+        instruction=req.instruction,
+        cron_expression=req.cron_expression,
+        enabled=int(req.enabled),
+    )
+    return {"item": item}
+
+
+@router.put("/scheduled-tasks/{task_id}")
+async def update_scheduled_task(task_id: str, req: UpdateScheduledTaskRequest) -> dict[str, Any]:
+    fields = req.model_dump(exclude_none=True)
+    if "enabled" in fields:
+        fields["enabled"] = int(fields["enabled"])
+    item = await asyncio.to_thread(scheduled_task_service.update_scheduled_task, task_id, **fields)
+    if not item:
+        raise HTTPException(404, "Scheduled task not found")
+    return {"item": item}
+
+
+@router.delete("/scheduled-tasks/{task_id}")
+async def delete_scheduled_task(task_id: str) -> dict[str, Any]:
+    ok = await asyncio.to_thread(scheduled_task_service.delete_scheduled_task, task_id)
+    if not ok:
+        raise HTTPException(404, "Scheduled task not found")
+    return {"ok": True}
+
+
+@router.get("/scheduled-tasks/{task_id}/runs")
+async def list_scheduled_task_runs(task_id: str) -> dict[str, Any]:
+    items = await asyncio.to_thread(scheduled_task_service.list_scheduled_task_runs, task_id)
+    return {"items": items}
+
+
+@router.post("/scheduled-tasks/{task_id}/run")
+async def trigger_scheduled_task(task_id: str, request: Request) -> dict[str, Any]:
+    scheduler = getattr(request.app.state, "scheduled_task_scheduler", None)
+    if not scheduler:
+        raise HTTPException(503, "Scheduled task scheduler not available")
+    try:
+        item = await scheduler.trigger_task(task_id)
+    except ValueError as exc:
+        raise HTTPException(404, "Scheduled task not found") from exc
+    return {"item": item}
 
 
 # ── Library ──
