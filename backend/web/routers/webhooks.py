@@ -6,10 +6,9 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, Query
 
 from backend.web.services.sandbox_service import init_providers_and_managers
-from backend.web.utils.helpers import extract_webhook_instance_id
+from backend.web.utils.helpers import _get_container, extract_webhook_instance_id
 from sandbox.config import DEFAULT_DB_PATH as SANDBOX_DB_PATH
 from sandbox.lease import LeaseStore
-from sandbox.provider_events import ProviderEventStore
 
 router = APIRouter(prefix="/api/webhooks", tags=["webhooks"])
 
@@ -23,19 +22,22 @@ async def ingest_provider_webhook(provider_name: str, payload: dict[str, Any]) -
 
     event_type = str(payload.get("event") or payload.get("type") or "unknown")
     store = LeaseStore(db_path=SANDBOX_DB_PATH)
-    event_store = ProviderEventStore(db_path=SANDBOX_DB_PATH)
-    lease = await asyncio.to_thread(store.find_by_instance, provider_name=provider_name, instance_id=instance_id)
-    matched_lease_id = lease.lease_id if lease else None
+    event_repo = _get_container().provider_event_repo()
+    try:
+        lease = await asyncio.to_thread(store.find_by_instance, provider_name=provider_name, instance_id=instance_id)
+        matched_lease_id = lease.lease_id if lease else None
 
-    # @@@webhook-invalidation-only - Webhook is optimization only: persist event + mark lease stale.
-    await asyncio.to_thread(
-        event_store.record,
-        provider_name=provider_name,
-        instance_id=instance_id,
-        event_type=event_type,
-        payload=payload,
-        matched_lease_id=matched_lease_id,
-    )
+        # @@@webhook-invalidation-only - Webhook is optimization only: persist event + mark lease stale.
+        await asyncio.to_thread(
+            event_repo.record,
+            provider_name=provider_name,
+            instance_id=instance_id,
+            event_type=event_type,
+            payload=payload,
+            matched_lease_id=matched_lease_id,
+        )
+    finally:
+        event_repo.close()
 
     if not lease:
         return {
@@ -79,6 +81,9 @@ async def ingest_provider_webhook(provider_name: str, payload: dict[str, Any]) -
 @router.get("/events")
 async def list_provider_events(limit: int = Query(default=100, ge=1, le=1000)) -> dict[str, Any]:
     """List recent provider webhook events."""
-    store = ProviderEventStore(db_path=SANDBOX_DB_PATH)
-    items = await asyncio.to_thread(store.list_recent, limit)
+    repo = _get_container().provider_event_repo()
+    try:
+        items = await asyncio.to_thread(repo.list_recent, limit)
+    finally:
+        repo.close()
     return {"items": items, "count": len(items)}
