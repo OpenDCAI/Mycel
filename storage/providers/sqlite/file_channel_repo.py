@@ -59,14 +59,21 @@ class SQLiteFileChannelRepo:
         return cur.rowcount > 0
 
     def _ensure_tables(self) -> None:
-        self._conn.execute(
-            """
-            CREATE TABLE IF NOT EXISTS file_channels (
-                channel_id TEXT PRIMARY KEY,
-                name       TEXT,
-                source     TEXT NOT NULL,
-                created_at TEXT NOT NULL
+        # @@@migrate-sandbox-volumes - rename old table if it exists
+        tables = {r[0] for r in self._conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()}
+        if "sandbox_volumes" in tables and "file_channels" not in tables:
+            self._conn.execute("ALTER TABLE sandbox_volumes RENAME TO file_channels")
+            self._conn.execute("ALTER TABLE file_channels RENAME COLUMN volume_id TO channel_id")
+            self._conn.commit()
+        else:
+            self._conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS file_channels (
+                    channel_id TEXT PRIMARY KEY,
+                    name       TEXT,
+                    source     TEXT NOT NULL,
+                    created_at TEXT NOT NULL
+                )
+                """
             )
-            """
-        )
-        self._conn.commit()
+            self._conn.commit()
