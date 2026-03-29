@@ -1,7 +1,7 @@
 """Chat delivery — enqueues lightweight notifications for agent threads.
 
 v3: no full message text injected. Agent must chat_read to see content.
-ChatService._deliver_to_agents calls the delivery function for each
+ChatService.deliver_to_agents calls the delivery function for each
 non-sender agent entity.
 """
 
@@ -16,32 +16,20 @@ logger = logging.getLogger(__name__)
 
 
 def make_chat_delivery_fn(app: Any):
-    """Create a delivery callback for ChatService.
+    """Create an async delivery callback for ChatService.
 
-    Uses qm.enqueue() + wake_handler to route notifications.
-    No more route_fn injection from backend layer.
+    Returns an async function — caller must await it.
     """
-    import asyncio
 
-    loop = asyncio.get_running_loop()
-    logger.info("[delivery] make_chat_delivery_fn: loop=%s", loop)
-
-    def _deliver(entity: EntityRow, content: str, sender_name: str, chat_id: str,
-                 sender_entity_id: str, sender_avatar_url: str | None = None,
-                 signal: str | None = None) -> None:
-        logger.info("[delivery] _deliver called: entity=%s, thread=%s", entity.id, entity.thread_id)
-        future = asyncio.run_coroutine_threadsafe(
-            _async_deliver(app, entity, sender_name, chat_id, sender_entity_id,
-                           sender_avatar_url, signal=signal),
-            loop,
-        )
-        def _on_done(f):
-            exc = f.exception()
-            if exc:
-                logger.error("[delivery] async delivery failed for %s: %s", entity.id, exc, exc_info=exc)
-            else:
-                logger.info("[delivery] async delivery completed for %s", entity.id)
-        future.add_done_callback(_on_done)
+    async def _deliver(entity: EntityRow, content: str, sender_name: str, chat_id: str,
+                       sender_entity_id: str, sender_avatar_url: str | None = None,
+                       signal: str | None = None) -> None:
+        logger.info("[delivery] _deliver: entity=%s thread=%s", entity.id, entity.thread_id)
+        try:
+            await _async_deliver(app, entity, sender_name, chat_id, sender_entity_id,
+                                 sender_avatar_url, signal=signal)
+        except Exception:
+            logger.exception("[delivery] delivery failed for %s", entity.id)
 
     return _deliver
 

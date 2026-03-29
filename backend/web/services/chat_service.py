@@ -74,7 +74,11 @@ class ChatService:
         mentioned_entity_ids: list[str] | None = None,
         signal: str | None = None,
     ) -> ChatMessageRow:
-        """Send a message in a chat."""
+        """Send a message in a chat. Sync — stores message + publishes event.
+
+        Delivery to agents is async — callers in async context should
+        call deliver_to_agents() after this returns.
+        """
         logger.debug("[send_message] chat=%s sender=%s content=%.50s signal=%s", chat_id[:8], sender_entity_id[:15], content[:50], signal)
         mentions = mentioned_entity_ids or []
         now = time.time()
@@ -102,10 +106,17 @@ class ChatService:
                 },
             })
 
-        self._deliver_to_agents(chat_id, sender_entity_id, content, mentions, signal=signal)
         return msg
 
-    def _deliver_to_agents(
+    async def deliver_to_agents(
+        self, chat_id: str, sender_entity_id: str, content: str,
+        mentioned_entity_ids: list[str] | None = None,
+        signal: str | None = None,
+    ) -> None:
+        """Public async entry point for delivery. Call from async endpoints after send_message."""
+        await self._deliver_to_agents(chat_id, sender_entity_id, content, mentioned_entity_ids, signal=signal)
+
+    async def _deliver_to_agents(
         self, chat_id: str, sender_entity_id: str, content: str,
         mentioned_entity_ids: list[str] | None = None,
         signal: str | None = None,
@@ -143,7 +154,7 @@ class ChatService:
             if self._delivery_fn:
                 logger.debug("[deliver] → %s (thread=%s) from=%s", entity.id, entity.thread_id, sender_name)
                 try:
-                    self._delivery_fn(entity, content, sender_name, chat_id, sender_entity_id, sender_avatar_url, signal=signal)
+                    await self._delivery_fn(entity, content, sender_name, chat_id, sender_entity_id, sender_avatar_url, signal=signal)
                 except Exception:
                     logger.exception("Failed to deliver chat message to entity %s", entity.id)
             else:
