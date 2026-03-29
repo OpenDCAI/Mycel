@@ -1,8 +1,8 @@
-"""SandboxVolume — provider-agnostic mount/sync engine.
+"""FileChannelEngine — provider-agnostic mount/sync engine for file channels.
 
 "Mount" is abstract: establish persistent storage for the sandbox.
 Docker uses bind mount, E2B uses tar sync, Daytona uses managed volume.
-SandboxVolume smooths over these differences.
+FileChannelEngine smooths over these differences.
 
 File CRUD delegated to VolumeSource (HostVolume, DaytonaVolume, etc.).
 """
@@ -18,8 +18,8 @@ from sandbox.volume_source import VolumeSource
 logger = logging.getLogger(__name__)
 
 
-class SandboxVolume:
-    """Provider-agnostic volume engine.
+class FileChannelEngine:
+    """Provider-agnostic file channel engine.
 
     Created once per SandboxManager (per provider).
     VolumeSource is per-thread, passed to operations or resolved from DB.
@@ -46,12 +46,12 @@ class SandboxVolume:
             MountSpec(source=str(host), target=target_path, read_only=False)
         ])
 
-    def mount_volume(self, thread_id: str, backend_ref: str, target_path: str) -> None:
+    def mount_managed_volume(self, thread_id: str, backend_ref: str, target_path: str) -> None:
         """Mount provider-managed persistent volume."""
-        self.provider.set_volume_mount(thread_id, backend_ref, target_path)
+        self.provider.set_managed_volume_mount(thread_id, backend_ref, target_path)
 
-    def resolve_remote_path(self) -> str:
-        """Container-side path where files appear."""
+    def resolve_channel_path(self) -> str:
+        """Container-side path where file channel files appear."""
         return getattr(self.provider, "WORKSPACE_ROOT", "/workspace") + "/files"
 
     def sync_upload(self, thread_id: str, session_id: str,

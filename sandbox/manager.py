@@ -66,8 +66,8 @@ class SandboxManager:
             default_policy=ChatSessionPolicy(),
         )
 
-        from sandbox.volume import SandboxVolume
-        self.volume = SandboxVolume(
+        from sandbox.file_channel import FileChannelEngine
+        self.file_channel = FileChannelEngine(
             provider=provider,
             provider_capability=self.provider_capability,
         )
@@ -140,15 +140,15 @@ class SandboxManager:
     def _sync_to_sandbox(self, thread_id: str, instance_id: str,
                          source=None, files: list[str] | None = None) -> None:
         if source is None:
-            from backend.web.services.member_volume_service import get_lease_volume_source
-            source = get_lease_volume_source(thread_id)
-        self.volume.sync_upload(thread_id, instance_id, source, self.volume.resolve_remote_path(), files=files)
+            from backend.web.services.file_channel_service import get_file_channel_source
+            source = get_file_channel_source(thread_id)
+        self.file_channel.sync_upload(thread_id, instance_id, source, self.file_channel.resolve_channel_path(), files=files)
 
     def _sync_from_sandbox(self, thread_id: str, instance_id: str, source=None) -> None:
         if source is None:
-            from backend.web.services.member_volume_service import get_lease_volume_source
-            source = get_lease_volume_source(thread_id)
-        self.volume.sync_download(thread_id, instance_id, source, self.volume.resolve_remote_path())
+            from backend.web.services.file_channel_service import get_file_channel_source
+            source = get_file_channel_source(thread_id)
+        self.file_channel.sync_download(thread_id, instance_id, source, self.file_channel.resolve_channel_path())
 
     def sync_uploads(self, thread_id: str, files: list[str] | None = None) -> bool:
         """Upload files to the active sandbox. Returns False if no active session."""
@@ -211,8 +211,8 @@ class SandboxManager:
             lease.bind_mounts = bind_mounts
 
         # @@@volume-strategy-gate - orchestrator handles mount decisions
-        from backend.web.services.member_volume_service import setup_sandbox_mounts
-        storage = setup_sandbox_mounts(thread_id, self.volume)
+        from backend.web.services.file_channel_service import setup_sandbox_mounts
+        storage = setup_sandbox_mounts(thread_id, self.file_channel)
 
         self._ensure_bound_instance(lease)
 
@@ -542,7 +542,7 @@ class SandboxManager:
                 except Exception:
                     logger.error("Failed to download workspace before destroy — agent changes are lost", exc_info=True)
                     raise
-        self.volume.clear_sync_state(thread_id)
+        self.file_channel.clear_sync_state(thread_id)
 
         lease_ids = {terminal.lease_id for terminal in terminals}
 
