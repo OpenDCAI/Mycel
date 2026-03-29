@@ -8,7 +8,7 @@ logger = logging.getLogger(__name__)
 class retry_with_backoff:
     """Decorator: retry on transient errors with exponential backoff."""
 
-    TRANSIENT = (OSError, ConnectionError, TimeoutError, RuntimeError)
+    TRANSIENT = (OSError, ConnectionError, TimeoutError)
 
     def __init__(self, max_retries: int = 3, backoff_factor: int = 2):
         self.max_retries = max_retries
@@ -24,6 +24,6 @@ class retry_with_backoff:
                     if attempt == self.max_retries - 1:
                         raise
                     wait_time = self.backoff_factor ** attempt
-                    logger.warning(f"Attempt {attempt + 1} failed: {e}. Retrying in {wait_time}s...")
+                    logger.warning("Attempt %d failed: %s. Retrying in %ds...", attempt + 1, e, wait_time)
                     time.sleep(wait_time)
         return wrapper

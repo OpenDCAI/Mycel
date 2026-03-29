@@ -199,14 +199,14 @@ def _create_thread_sandbox_resources(thread_id: str, sandbox_type: str) -> None:
     from sandbox.lease import LeaseStore
     from sandbox.terminal import TerminalStore
     from sandbox.volume_source import HostVolume
-    from storage.providers.sqlite.sandbox_volume_repo import SQLiteSandboxVolumeRepo
+    from backend.web.utils.helpers import _get_container
 
     now_str = datetime.now().isoformat()
     volume_id = str(uuid.uuid4())
     vol_path = SANDBOX_VOLUME_ROOT / volume_id
     source = HostVolume(vol_path)
 
-    sandbox_vol_repo = SQLiteSandboxVolumeRepo()
+    sandbox_vol_repo = _get_container().sandbox_volume_repo()
     sandbox_vol_repo.create(volume_id, json.dumps(source.serialize()), f"file-channel-{thread_id}", now_str)
 
     lease_store = LeaseStore(db_path=DEFAULT_DB_PATH)

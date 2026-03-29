@@ -88,7 +88,6 @@ def _get_lease_volume(thread_id: str) -> tuple["VolumeSource", str]:
     from sandbox.terminal import TerminalStore
     from sandbox.lease import LeaseStore
     from sandbox.config import DEFAULT_DB_PATH
-    from storage.providers.sqlite.sandbox_volume_repo import SQLiteSandboxVolumeRepo
     from sandbox.volume_source import deserialize_volume_source
 
     terminal_store = TerminalStore(db_path=DEFAULT_DB_PATH)
@@ -105,7 +104,7 @@ def _get_lease_volume(thread_id: str) -> tuple["VolumeSource", str]:
     if not volume_id:
         raise ValueError(f"Lease {terminal.lease_id} has no volume_id")
 
-    repo = SQLiteSandboxVolumeRepo()
+    repo = _get_container().sandbox_volume_repo()
     try:
         entry = repo.get(volume_id)
     finally:
@@ -162,7 +161,6 @@ def _upgrade_to_daytona_volume(thread_id, current_source, provider, volume_id: s
     """First Daytona sandbox start: create managed volume, upgrade VolumeSource in DB."""
     import json
     from sandbox.volume_source import DaytonaVolume
-    from storage.providers.sqlite.sandbox_volume_repo import SQLiteSandboxVolumeRepo
 
     # Get member_id from thread config for volume naming
     from backend.web.utils.helpers import load_thread_config
@@ -180,7 +178,7 @@ def _upgrade_to_daytona_volume(thread_id, current_source, provider, volume_id: s
     )
 
     # Update DB
-    repo = SQLiteSandboxVolumeRepo()
+    repo = _get_container().sandbox_volume_repo()
     try:
         repo.update_source(volume_id, json.dumps(new_source.serialize()))
     finally:

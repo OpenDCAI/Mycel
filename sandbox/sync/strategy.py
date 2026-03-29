@@ -50,7 +50,7 @@ def _batch_upload_tar(session_id: str, provider, workspace: Path, workspace_root
     if exit_code is not None and exit_code != 0:
         error_msg = getattr(result, 'error', '') or getattr(result, 'output', '')
         raise RuntimeError(f"Batch upload failed (exit {exit_code}): {error_msg}")
-    logger.info(f"[SYNC-PERF] batch_upload_tar: {len(files)} files, {len(tar_bytes)} bytes tar, {time.time()-t0:.3f}s")
+    logger.info("[SYNC-PERF] batch_upload_tar: %d files, %d bytes tar, %.3fs", len(files), len(tar_bytes), time.time()-t0)
 
 
 def _batch_download_tar(session_id: str, provider, workspace: Path, workspace_root: str):
@@ -60,7 +60,7 @@ def _batch_download_tar(session_id: str, provider, workspace: Path, workspace_ro
     check = provider.execute(session_id, f"test -d {workspace_root} && echo EXISTS", timeout_ms=10000)
     check_out = (getattr(check, 'output', '') or '').strip()
     if check_out != "EXISTS":
-        logger.info(f"[SYNC] download skipped: {workspace_root} does not exist in sandbox")
+        logger.info("[SYNC] download skipped: %s does not exist in sandbox", workspace_root)
         return
 
     cmd = f"cd {workspace_root} && tar czf - . | base64"
@@ -81,7 +81,7 @@ def _batch_download_tar(session_id: str, provider, workspace: Path, workspace_ro
     buf = io.BytesIO(tar_bytes)
     with tarfile.open(fileobj=buf, mode='r:gz') as tar:
         tar.extractall(path=str(workspace), filter='data')
-    logger.info(f"[SYNC-PERF] batch_download_tar: {len(tar_bytes)} bytes, {time.time()-t0:.3f}s")
+    logger.info("[SYNC-PERF] batch_download_tar: %d bytes, %.3fs", len(tar_bytes), time.time()-t0)
 
 
 class SyncStrategy(ABC):

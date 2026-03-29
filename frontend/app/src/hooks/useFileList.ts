@@ -1,10 +1,15 @@
 import { useState, useEffect, useCallback } from 'react';
-import { authFetch } from '../store/auth-store';
+import { authRequest } from '../store/auth-store';
 
 interface FileEntry {
   relative_path: string;
   size_bytes: number;
   updated_at: string;
+}
+
+interface ChannelFilesResponse {
+  thread_id: string;
+  entries: FileEntry[];
 }
 
 export function useFileList(threadId: string) {
@@ -16,9 +21,7 @@ export function useFileList(threadId: string) {
     setLoading(true);
     setError(null);
     try {
-      const res = await authFetch(`/api/threads/${threadId}/files/channel-files`);
-      if (!res.ok) throw new Error('Failed to fetch files');
-      const data = await res.json();
+      const data = await authRequest<ChannelFilesResponse>(`/api/threads/${threadId}/files/channel-files`);
       setFiles(data.entries || []);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Unknown error');

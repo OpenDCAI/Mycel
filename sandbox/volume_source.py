@@ -75,10 +75,11 @@ class HostVolume:
         for item in sorted(self.base_path.rglob("*")):
             if not item.is_file():
                 continue
+            st = item.stat()
             entries.append({
                 "relative_path": str(item.relative_to(self.base_path)),
-                "size_bytes": item.stat().st_size,
-                "updated_at": datetime.fromtimestamp(item.stat().st_mtime, tz=UTC).isoformat(),
+                "size_bytes": st.st_size,
+                "updated_at": datetime.fromtimestamp(st.st_mtime, tz=UTC).isoformat(),
             })
         return entries
 

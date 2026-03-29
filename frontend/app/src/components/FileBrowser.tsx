@@ -30,7 +30,7 @@ export function FileBrowser({ threadId }: FileBrowserProps) {
   const [deleting, setDeleting] = useState(false);
 
   const handleDownload = (path: string) => {
-    const url = `/api/threads/${threadId}/workspace/download?path=${encodeURIComponent(path)}`;
+    const url = `/api/threads/${threadId}/files/download?path=${encodeURIComponent(path)}`;
     window.open(url, '_blank');
   };
 
@@ -39,7 +39,7 @@ export function FileBrowser({ threadId }: FileBrowserProps) {
     setDeleting(true);
     try {
       const res = await authFetch(
-        `/api/threads/${threadId}/workspace/files?path=${encodeURIComponent(deleteTarget)}`,
+        `/api/threads/${threadId}/files/files?path=${encodeURIComponent(deleteTarget)}`,
         { method: 'DELETE' }
       );
       if (!res.ok) throw new Error('Failed to delete file');
