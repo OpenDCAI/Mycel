@@ -215,6 +215,15 @@ class E2BProvider(SandboxProvider):
             logger.warning("[E2BProvider] list_dir failed for path %s", path, exc_info=True)
             return []
 
+    def upload_bytes(self, session_id: str, remote_path: str, data: bytes) -> None:
+        sandbox = self._get_sandbox(session_id)
+        sandbox.files.write(remote_path, data)
+
+    def download_bytes(self, session_id: str, remote_path: str) -> bytes:
+        sandbox = self._get_sandbox(session_id)
+        content = sandbox.files.read(remote_path, format="bytes")
+        return bytes(content) if content else b""
+
     def get_metrics(self, session_id: str) -> Metrics | None:
         # E2B is Ubuntu-based; free/top/df are available → delegate to shell command probing.
         return self.get_metrics_via_commands(session_id)

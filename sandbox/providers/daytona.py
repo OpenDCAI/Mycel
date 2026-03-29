@@ -281,6 +281,15 @@ class DaytonaProvider(SandboxProvider):
             {"name": e.name, "type": "directory" if e.is_dir else "file", "size": e.size or 0} for e in (entries or [])
         ]
 
+    def upload_bytes(self, session_id: str, remote_path: str, data: bytes) -> None:
+        sb = self._get_sandbox(session_id)
+        sb.fs.upload_file(data, remote_path)
+
+    def download_bytes(self, session_id: str, remote_path: str) -> bytes:
+        sb = self._get_sandbox(session_id)
+        content = sb.fs.download_file(remote_path)
+        return content if isinstance(content, bytes) else content.encode("utf-8")
+
     # ==================== Batch Status ====================
 
     def list_provider_sessions(self) -> list[SessionInfo]:
