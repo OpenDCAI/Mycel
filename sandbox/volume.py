@@ -29,7 +29,7 @@ class SandboxVolume:
         self.provider = provider
         self.capability = provider_capability
         from sandbox.sync.manager import SyncManager
-        self.sync = SyncManager(provider_capability=provider_capability)
+        self._sync = SyncManager(provider_capability=provider_capability)
 
     def mount(self, thread_id: str, source: VolumeSource, target_path: str) -> None:
         """Make source visible at target_path inside sandbox.
@@ -61,7 +61,7 @@ class SandboxVolume:
         host = source.host_path
         if not host:
             return
-        self.sync.upload(host, remote_path, session_id, self.provider,
+        self._sync.upload(host, remote_path, session_id, self.provider,
                          files=files, state_key=thread_id)
 
     def sync_download(self, thread_id: str, session_id: str,
@@ -70,9 +70,9 @@ class SandboxVolume:
         host = source.host_path
         if not host:
             return
-        self.sync.download(host, remote_path, session_id, self.provider,
+        self._sync.download(host, remote_path, session_id, self.provider,
                            state_key=thread_id)
 
     def clear_sync_state(self, thread_id: str) -> None:
         """Remove all sync tracking state for a thread."""
-        self.sync.clear_state(thread_id)
+        self._sync.clear_state(thread_id)

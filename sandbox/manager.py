@@ -137,6 +137,19 @@ class SandboxManager:
         lease = self.lease_store.get(terminals[0].lease_id)
         return bool(lease and lease.provider_name == self.provider.name)
 
+    def _sync_to_sandbox(self, thread_id: str, instance_id: str,
+                         source=None, files: list[str] | None = None) -> None:
+        if source is None:
+            from backend.web.services.member_volume_service import get_lease_volume_source
+            source = get_lease_volume_source(thread_id)
+        self.volume.sync_upload(thread_id, instance_id, source, self.volume.resolve_remote_path(), files=files)
+
+    def _sync_from_sandbox(self, thread_id: str, instance_id: str, source=None) -> None:
+        if source is None:
+            from backend.web.services.member_volume_service import get_lease_volume_source
+            source = get_lease_volume_source(thread_id)
+        self.volume.sync_download(thread_id, instance_id, source, self.volume.resolve_remote_path())
+
     def sync_uploads(self, thread_id: str, files: list[str] | None = None) -> bool:
         """Upload files to the active sandbox. Returns False if no active session."""
         terminal = self._get_active_terminal(thread_id)
@@ -148,9 +161,7 @@ class SandboxManager:
         instance = session.lease.get_instance()
         if not instance:
             return False
-        from backend.web.services.member_volume_service import get_lease_volume_source
-        source = get_lease_volume_source(thread_id)
-        self.volume.sync_upload(thread_id, instance.instance_id, source, self.volume.resolve_remote_path(), files=files)
+        self._sync_to_sandbox(thread_id, instance.instance_id, files=files)
         return True
 
     def close(self):
@@ -221,9 +232,7 @@ class SandboxManager:
         instance = lease.get_instance()
         if instance:
             # @@@workspace-upload - sync files to sandbox after creation
-            from backend.web.services.member_volume_service import get_lease_volume_source
-            source = get_lease_volume_source(thread_id)
-            self.volume.sync_upload(thread_id, instance.instance_id, source, self.volume.resolve_remote_path())
+            self._sync_to_sandbox(thread_id, instance.instance_id, source=storage["source"])
             self._fire_session_ready(instance.instance_id, "create")
 
         return SandboxCapability(session, manager=self)
@@ -437,10 +446,8 @@ class SandboxManager:
             instance = lease.get_instance()
             if instance:
                 # @@@workspace-download - sync files from sandbox before pause
-                from backend.web.services.member_volume_service import get_lease_volume_source
                 try:
-                    source = get_lease_volume_source(thread_id)
-                    self.volume.sync_download(thread_id, instance.instance_id, source, self.volume.resolve_remote_path())
+                    self._sync_from_sandbox(thread_id, instance.instance_id)
                 except Exception:
                     logger.error("Failed to download workspace before pause — agent changes may be lost", exc_info=True)
                     raise
@@ -474,9 +481,7 @@ class SandboxManager:
         # @@@workspace-upload-on-resume - re-sync files that may have been uploaded while paused
         instance = lease.get_instance()
         if instance:
-            from backend.web.services.member_volume_service import get_lease_volume_source
-            source = get_lease_volume_source(thread_id)
-            self.volume.sync_upload(thread_id, instance.instance_id, source, self.volume.resolve_remote_path())
+            self._sync_to_sandbox(thread_id, instance.instance_id)
 
         resumed_any = False
         for terminal in terminals:
@@ -528,14 +533,12 @@ class SandboxManager:
             return False
 
         # @@@workspace-download-before-destroy - sync files before destroy
-        from backend.web.services.member_volume_service import get_lease_volume_source
         lease = self._get_thread_lease(thread_id)
         if lease and lease.observed_state == "running":
             instance = lease.get_instance()
             if instance:
                 try:
-                    source = get_lease_volume_source(thread_id)
-                    self.volume.sync_download(thread_id, instance.instance_id, source, self.volume.resolve_remote_path())
+                    self._sync_from_sandbox(thread_id, instance.instance_id)
                 except Exception:
                     logger.error("Failed to download workspace before destroy — agent changes are lost", exc_info=True)
                     raise
