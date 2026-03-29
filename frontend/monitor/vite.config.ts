@@ -1,6 +1,8 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 
+const backendPort = process.env.LEON_BACKEND_PORT || "8001";
+
 export default defineConfig({
   plugins: [react()],
   server: {
@@ -8,7 +10,7 @@ export default defineConfig({
     strictPort: true,
     proxy: {
       "/api": {
-        target: "http://127.0.0.1:8001",
+        target: `http://127.0.0.1:${backendPort}`,
         changeOrigin: true,
       },
     },
@@ -18,4 +20,3 @@ export default defineConfig({
     strictPort: true,
   },
 });
-

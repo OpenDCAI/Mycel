@@ -253,11 +253,264 @@ section li {
   color: #e0e0e0;
 }
 
-/* Loading */
-div:has(> :only-child:is(div:contains("Loading"))) {
+.trace-summary {
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-width: 56ch;
+}
+
+.trace-actor {
+  display: inline-block;
+  padding: 0.15rem 0.45rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.trace-assistant {
+  background: #1f3a5a;
+  color: #8dc3ff;
+}
+
+.trace-tool {
+  background: #2d3f24;
+  color: #a9e684;
+}
+
+.trace-runtime {
+  background: #4b3d1f;
+  color: #f2c56b;
+}
+
+.trace-details summary {
+  cursor: pointer;
+  color: #8db9ff;
+}
+
+.trace-payload {
+  margin-top: 0.5rem;
+  max-height: 220px;
+  overflow: auto;
+  padding: 0.75rem;
+}
+
+.trace-toolbar {
+  margin: 0.8rem 0;
   display: flex;
-  justify-content: center;
+  justify-content: flex-start;
+  flex-wrap: wrap;
   align-items: center;
-  min-height: 200px;
-  color: #888;
+  gap: 1rem;
+}
+
+.trace-run-select {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.trace-run-select select {
+  border: 1px solid #2e3e57;
+  background: #101721;
+  color: #dbe9f7;
+  border-radius: 6px;
+  padding: 0.3rem 0.45rem;
+}
+
+.trace-filters {
+  display: flex;
+  gap: 0.4rem;
+}
+
+.trace-view-switch {
+  display: flex;
+  gap: 0.4rem;
+}
+
+.trace-filter-btn {
+  border: 1px solid #2e3e57;
+  background: #1a2432;
+  color: #9ec2ef;
+  border-radius: 6px;
+  padding: 0.28rem 0.62rem;
+  cursor: pointer;
+}
+
+.trace-filter-btn.is-active {
+  background: #2a4f7a;
+  color: #e8f3ff;
+  border-color: #4d85bf;
+}
+
+.trace-raw-toggle {
+  color: #9aa7b6;
+  font-size: 0.9rem;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.trace-metrics {
+  display: flex;
+  gap: 1rem;
+  color: #91a4b8;
+  font-size: 0.9rem;
+}
+
+.trace-timeline {
+  margin-top: 0.8rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+}
+
+.trace-card {
+  border: 1px solid #2a2f36;
+  background: #12161c;
+  border-radius: 10px;
+  padding: 0.7rem 0.8rem;
+}
+
+.trace-card-assistant {
+  border-left: 4px solid #4f7fd8;
+}
+
+.trace-card-tool {
+  border-left: 4px solid #5f9446;
+}
+
+.trace-card-runtime {
+  border-left: 4px solid #a07932;
+}
+
+.trace-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.6rem;
+  gap: 0.8rem;
+}
+
+.trace-card-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.42rem;
+}
+
+.trace-step {
+  color: #89a4c0;
+  font-family: 'SF Mono', Monaco, monospace;
+  font-size: 0.85rem;
+}
+
+.trace-event {
+  color: #ccd6e0;
+  font-size: 0.85rem;
+  font-family: 'SF Mono', Monaco, monospace;
+}
+
+.trace-run-id {
+  color: #8395aa;
+}
+
+.trace-block-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.trace-label {
+  color: #8ea0b4;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.trace-block {
+  background: #0c1014;
+  border: 1px solid #1f2732;
+  border-radius: 7px;
+  padding: 0.55rem 0.65rem;
+  font-family: 'SF Mono', Monaco, monospace;
+  font-size: 0.82rem;
+  color: #dae5f2;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 300px;
+  overflow: auto;
+}
+
+.trace-output {
+  max-height: 460px;
+}
+
+.trace-assistant-text {
+  max-height: 340px;
+}
+
+.trace-command {
+  color: #bde59d;
+}
+
+.trace-empty {
+  border: 1px dashed #33404f;
+  color: #95a4b4;
+  border-radius: 8px;
+  padding: 1rem;
+}
+
+.trace-raw-table {
+  margin-top: 1rem;
+}
+
+.trace-step-card {
+  border: 1px solid #2a2f36;
+  background: #0f141b;
+  border-left: 4px solid #4f7fd8;
+  border-radius: 10px;
+  padding: 0.8rem;
+}
+
+.conversation-card {
+  border: 1px solid #30363d;
+  background: #0d1117;
+  border-radius: 10px;
+  padding: 0.8rem;
+}
+
+.trace-step-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.8rem;
+  margin-bottom: 0.55rem;
+}
+
+.trace-step-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.trace-step-index {
+  color: #e7f1ff;
+  font-weight: 600;
+}
+
+.trace-step-block {
+  display: flex;
+  flex-direction: column;
+  gap: 0.28rem;
+  margin: 0.4rem 0 0.65rem;
+}
+
+.trace-raw-item {
+  margin-top: 0.5rem;
+}
+
+.trace-raw-item-title {
+  display: flex;
+  gap: 0.45rem;
+  color: #9eb3c9;
+  font-size: 0.82rem;
 }
