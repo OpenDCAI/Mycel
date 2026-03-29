@@ -841,11 +841,8 @@ class LeaseStore:
                 lease_cols = {row[1] for row in conn.execute("PRAGMA table_info(sandbox_leases)").fetchall()}
             if "file_channel_id" not in lease_cols:
                 conn.execute("ALTER TABLE sandbox_leases ADD COLUMN file_channel_id TEXT")
+                conn.commit()
                 lease_cols = {row[1] for row in conn.execute("PRAGMA table_info(sandbox_leases)").fetchall()}
-            # @@@migrate-volume-id - copy old volume_id data to new column (idempotent)
-            if "volume_id" in lease_cols:
-                conn.execute("UPDATE sandbox_leases SET file_channel_id = volume_id WHERE (file_channel_id IS NULL OR file_channel_id = '') AND volume_id IS NOT NULL")
-            conn.commit()
             instance_cols = {row[1] for row in conn.execute("PRAGMA table_info(sandbox_instances)").fetchall()}
             event_cols = {row[1] for row in conn.execute("PRAGMA table_info(lease_events)").fetchall()}
 
