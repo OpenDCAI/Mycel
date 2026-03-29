@@ -6,14 +6,11 @@ import json
 import sqlite3
 from datetime import datetime
 from pathlib import Path
-from typing import Any, TYPE_CHECKING
+from typing import Any
 
 from storage.providers.sqlite.kernel import connect_sqlite
 
 from sandbox.config import DEFAULT_DB_PATH
-
-if TYPE_CHECKING:
-    from storage.providers.sqlite.sandbox_repository_protocol import SandboxRepositoryProtocol
 
 
 def _connect(db_path: Path) -> sqlite3.Connection:
@@ -21,9 +18,8 @@ def _connect(db_path: Path) -> sqlite3.Connection:
 
 
 class ProviderEventStore:
-    def __init__(self, db_path: Path = DEFAULT_DB_PATH, repository: SandboxRepositoryProtocol | None = None):
+    def __init__(self, db_path: Path = DEFAULT_DB_PATH):
         self.db_path = db_path
-        self._repo = repository  # @@@repository-migration - optional injection
         self._ensure_table()
 
     def _ensure_table(self) -> None:
@@ -59,35 +55,24 @@ class ProviderEventStore:
         payload: dict[str, Any],
         matched_lease_id: str | None,
     ) -> None:
-        # @@@repository-migration - use repository if available, fallback to inline SQL
-        if self._repo:
-            self._repo.insert_provider_event(
-                provider_name=provider_name,
-                instance_id=instance_id,
-                event_type=event_type,
-                payload_json=json.dumps(payload),
-                matched_lease_id=matched_lease_id,
-                created_at=datetime.now().isoformat(),
-            )
-        else:
-            with _connect(self.db_path) as conn:
-                conn.execute(
-                    """
-                    INSERT INTO provider_events (
-                        provider_name, instance_id, event_type, payload_json, matched_lease_id, created_at
-                    )
-                    VALUES (?, ?, ?, ?, ?, ?)
-                    """,
-                    (
-                        provider_name,
-                        instance_id,
-                        event_type,
-                        json.dumps(payload),
-                        matched_lease_id,
-                        datetime.now().isoformat(),
-                    ),
+        with _connect(self.db_path) as conn:
+            conn.execute(
+                """
+                INSERT INTO provider_events (
+                    provider_name, instance_id, event_type, payload_json, matched_lease_id, created_at
                 )
-                conn.commit()
+                VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    provider_name,
+                    instance_id,
+                    event_type,
+                    json.dumps(payload),
+                    matched_lease_id,
+                    datetime.now().isoformat(),
+                ),
+            )
+            conn.commit()
 
     def list_recent(self, limit: int = 100) -> list[dict[str, Any]]:
         with _connect(self.db_path) as conn:

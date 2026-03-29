@@ -104,11 +104,3 @@ def resolve_sandbox_name(cli_arg: str | None) -> str:
     if cli_arg:
         return cli_arg
     return os.getenv("LEON_SANDBOX", "local")
-
-
-# === REPOSITORY DEPENDENCY INJECTION ===
-
-def get_sandbox_repository():
-    """Factory for sandbox repository implementation."""
-    from storage.providers.sqlite.sandbox_repo import SandboxRepository
-    return SandboxRepository(DEFAULT_DB_PATH)
