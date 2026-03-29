@@ -94,6 +94,8 @@ export interface ResourceItem {
   type: string;
   created_at: number;
   updated_at: number;
+  provider_name?: string;
+  available?: boolean;
 }
 
 export interface UserProfile {

@@ -409,7 +409,8 @@ class AgentLoader:
             if not isinstance(raw_path, str):
                 continue
             path = Path(raw_path).expanduser()
-            if path == default_home_skills and not path.exists():
+            # @@@tmp-home-normalization - macOS maps /tmp -> /private/tmp, so compare normalized paths before bootstrap.
+            if path.resolve() == default_home_skills.resolve() and not path.exists():
                 path.mkdir(parents=True, exist_ok=True)
 
 

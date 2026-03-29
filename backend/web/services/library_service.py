@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from backend.web.core.paths import library_dir
+from backend.web.services import sandbox_service
 
 LIBRARY_DIR = library_dir()
 
@@ -33,6 +34,8 @@ def _write_json(path: Path, data: Any) -> None:
 
 def list_library(resource_type: str) -> list[dict[str, Any]]:
     results: list[dict[str, Any]] = []
+    if resource_type == "recipe":
+        return list_default_recipes()
     if resource_type == "skill":
         skills_dir = LIBRARY_DIR / "skills"
         if skills_dir.exists():
@@ -64,9 +67,15 @@ def list_library(resource_type: str) -> list[dict[str, Any]]:
             })
     return results
 
+
+def list_default_recipes() -> list[dict[str, Any]]:
+    return sandbox_service.list_default_recipes()
+
 def create_resource(resource_type: str, name: str, desc: str = "", category: str = "") -> dict[str, Any]:
     now = int(time.time() * 1000)
     cat = category or "未分类"
+    if resource_type == "recipe":
+        raise ValueError("Recipes are builtin and read-only")
     if resource_type == "skill":
         rid = name.lower().replace(" ", "-")
         skill_dir = LIBRARY_DIR / "skills" / rid
@@ -103,6 +112,8 @@ def update_resource(resource_type: str, resource_id: str, **fields: Any) -> dict
     allowed = {"name", "desc"}
     updates = {k: v for k, v in fields.items() if k in allowed and v is not None}
     now = int(time.time() * 1000)
+    if resource_type == "recipe":
+        return None
     if resource_type == "skill":
         meta_path = LIBRARY_DIR / "skills" / resource_id / "meta.json"
         if not meta_path.exists():
@@ -134,6 +145,8 @@ def update_resource(resource_type: str, resource_id: str, **fields: Any) -> dict
     return None
 
 def delete_resource(resource_type: str, resource_id: str) -> bool:
+    if resource_type == "recipe":
+        return False
     if resource_type == "skill":
         target = LIBRARY_DIR / "skills" / resource_id
         if not target.is_dir():
@@ -165,6 +178,8 @@ def delete_resource(resource_type: str, resource_id: str) -> bool:
 def list_library_names(resource_type: str) -> list[dict[str, str]]:
     """Lightweight name+desc list for Picker UI."""
     results: list[dict[str, str]] = []
+    if resource_type == "recipe":
+        return [{"name": item["name"], "desc": item["desc"]} for item in list_default_recipes()]
     if resource_type == "skill":
         skills_dir = LIBRARY_DIR / "skills"
         if skills_dir.exists():
@@ -239,6 +254,11 @@ def get_resource_used_by(resource_type: str, resource_name: str) -> list[str]:
 
 def get_resource_content(resource_type: str, resource_id: str) -> str | None:
     """Read the .md content file for a skill or agent resource."""
+    if resource_type == "recipe":
+        for item in list_default_recipes():
+            if item["id"] == resource_id:
+                return json.dumps(item, ensure_ascii=False, indent=2)
+        return None
     if resource_type == "skill":
         path = LIBRARY_DIR / "skills" / resource_id / "SKILL.md"
         if path.exists():
@@ -267,6 +287,8 @@ def get_resource_content(resource_type: str, resource_id: str) -> str | None:
 def update_resource_content(resource_type: str, resource_id: str, content: str) -> bool:
     """Write the .md content file for a skill or agent resource."""
     now = int(time.time() * 1000)
+    if resource_type == "recipe":
+        return False
     if resource_type == "skill":
         skill_dir = LIBRARY_DIR / "skills" / resource_id
         if not skill_dir.is_dir():

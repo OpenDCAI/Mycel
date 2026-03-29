@@ -3,6 +3,7 @@
 import asyncio
 import json
 import logging
+import sqlite3
 import uuid
 from typing import Annotated, Any
 
@@ -21,6 +22,7 @@ from backend.web.services.agent_pool import get_or_create_agent, resolve_thread_
 from backend.web.services.event_buffer import ThreadEventBuffer
 from backend.web.services.file_channel_service import get_file_channel_source
 from backend.web.services.sandbox_service import destroy_thread_resources_sync, init_providers_and_managers
+from backend.web.services import sandbox_service
 from backend.web.services.streaming_service import (
     get_or_create_thread_buffer,
     observe_run_events,
@@ -42,6 +44,7 @@ logger = logging.getLogger(__name__)
 from core.runtime.middleware.monitor import AgentState
 from backend.web.utils.serializers import avatar_url
 from sandbox.config import MountSpec
+from sandbox.recipes import normalize_recipe_id
 from sandbox.thread_context import set_current_thread_id
 
 router = APIRouter(prefix="/api/threads", tags=["threads"])
@@ -189,7 +192,7 @@ def _thread_payload(app: Any, thread_id: str, sandbox_type: str) -> dict[str, An
     }
 
 
-def _create_thread_sandbox_resources(thread_id: str, sandbox_type: str) -> None:
+def _create_thread_sandbox_resources(thread_id: str, sandbox_type: str, recipe_id: str | None) -> None:
     """Create volume, lease, and terminal eagerly so volume exists before file uploads."""
     from datetime import datetime
 
@@ -215,7 +218,12 @@ def _create_thread_sandbox_resources(thread_id: str, sandbox_type: str) -> None:
     lease_repo = SQLiteLeaseRepo(db_path=sandbox_db)
     try:
         lease_id = f"lease-{uuid.uuid4().hex[:12]}"
-        lease_repo.create(lease_id, sandbox_type, volume_id=volume_id)
+        lease_repo.create(
+            lease_id,
+            sandbox_type,
+            volume_id=volume_id,
+            recipe_id=normalize_recipe_id(sandbox_type, recipe_id),
+        )
     finally:
         lease_repo.close()
 
@@ -241,6 +249,47 @@ def _create_thread_sandbox_resources(thread_id: str, sandbox_type: str) -> None:
         terminal_repo.close()
 
 
+def _resolve_existing_lease_cwd(lease_id: str, fallback_cwd: str | None) -> str:
+    if fallback_cwd:
+        return fallback_cwd
+
+    from storage.providers.sqlite.kernel import SQLiteDBRole, resolve_role_db_path
+
+    with sqlite3.connect(resolve_role_db_path(SQLiteDBRole.SANDBOX)) as conn:
+        row = conn.execute(
+            """
+            SELECT cwd
+            FROM abstract_terminals
+            WHERE lease_id = ?
+            ORDER BY created_at DESC
+            LIMIT 1
+            """,
+            (lease_id,),
+        ).fetchone()
+    if row and row[0]:
+        return str(row[0])
+
+    return str(LOCAL_WORKSPACE_ROOT)
+
+
+def _bind_thread_to_existing_lease(thread_id: str, lease_id: str, *, cwd: str | None) -> str:
+    from storage.providers.sqlite.kernel import SQLiteDBRole, resolve_role_db_path
+    from storage.providers.sqlite.terminal_repo import SQLiteTerminalRepo
+
+    initial_cwd = _resolve_existing_lease_cwd(lease_id, cwd)
+    terminal_repo = SQLiteTerminalRepo(db_path=resolve_role_db_path(SQLiteDBRole.SANDBOX))
+    try:
+        terminal_repo.create(
+            terminal_id=f"term-{uuid.uuid4().hex[:12]}",
+            thread_id=thread_id,
+            lease_id=lease_id,
+            initial_cwd=initial_cwd,
+        )
+    finally:
+        terminal_repo.close()
+    return initial_cwd
+
+
 def _create_owned_thread(
     app: Any,
     owner_user_id: str,
@@ -250,12 +299,24 @@ def _create_owned_thread(
 ) -> dict[str, Any]:
     import time
 
-
     sandbox_type = payload.sandbox or "local"
     agent_member_id = payload.member_id
     agent_member = app.state.member_repo.get_by_id(agent_member_id)
     if not agent_member or agent_member.owner_user_id != owner_user_id:
         raise HTTPException(403, "Not authorized")
+
+    selected_lease_id = payload.lease_id
+    if selected_lease_id:
+        owned_lease = next(
+            (
+                lease for lease in sandbox_service.list_user_leases(owner_user_id)
+                if lease["lease_id"] == selected_lease_id
+            ),
+            None,
+        )
+        if owned_lease is None:
+            raise HTTPException(403, "Lease not authorized")
+        sandbox_type = str(owned_lease["provider_name"] or sandbox_type)
 
     # @@@non-atomic-create - these 3 steps (seq++, thread, entity) are not atomic.
     seq = app.state.member_repo.increment_entity_seq(agent_member_id)
@@ -290,9 +351,18 @@ def _create_owned_thread(
     if payload.cwd:
         app.state.thread_cwd[thread_entity_id] = payload.cwd
 
-    # @@@lease-early-creation - Create volume + lease + terminal at thread creation
-    # so volume exists BEFORE any file uploads.
-    _create_thread_sandbox_resources(thread_entity_id, sandbox_type)
+    if selected_lease_id:
+        # @@@reuse-lease-binding - Reuse an existing lease by attaching a fresh terminal for the new thread.
+        bound_cwd = _bind_thread_to_existing_lease(
+            thread_entity_id,
+            selected_lease_id,
+            cwd=payload.cwd,
+        )
+        app.state.thread_cwd[thread_entity_id] = bound_cwd
+    else:
+        # @@@lease-early-creation - Create volume + lease + terminal at thread creation
+        # so volume exists BEFORE any file uploads.
+        _create_thread_sandbox_resources(thread_entity_id, sandbox_type, payload.recipe_id)
 
     return {
         "thread_id": thread_entity_id,

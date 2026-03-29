@@ -20,6 +20,7 @@ from sandbox.chat_session import ChatSessionManager, ChatSessionPolicy
 from sandbox.lease import lease_from_row
 from storage.providers.sqlite.lease_repo import SQLiteLeaseRepo
 from sandbox.provider import SandboxProvider
+from sandbox.recipes import bootstrap_recipe
 from sandbox.terminal import TerminalState, terminal_from_row
 from storage.providers.sqlite.terminal_repo import SQLiteTerminalRepo
 
@@ -361,6 +362,7 @@ class SandboxManager:
 
         instance = lease.get_instance()
         if instance:
+            bootstrap_recipe(self.provider, session_id=instance.instance_id, recipe_id=lease.recipe_id)
             # @@@workspace-upload - sync files to sandbox after creation
             self._sync_to_sandbox(thread_id, instance.instance_id, source=storage["source"])
             self._fire_session_ready(instance.instance_id, "create")

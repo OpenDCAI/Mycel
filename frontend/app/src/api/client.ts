@@ -1,6 +1,7 @@
 import type {
   SandboxSession,
   SandboxType,
+  UserLeaseSummary,
   SessionStatus,
   StreamStatus,
   TerminalStatus,
@@ -46,6 +47,8 @@ export async function listThreads(): Promise<ThreadSummary[]> {
 
 export interface CreateThreadOptions {
   sandbox: string;
+  recipeId?: string;
+  leaseId?: string;
   cwd?: string;
   memberId: string;
   model?: string;
@@ -54,6 +57,8 @@ export interface CreateThreadOptions {
 
 export async function createThread(opts: CreateThreadOptions): Promise<ThreadSummary> {
   const body: Record<string, unknown> = { sandbox: opts.sandbox, member_id: opts.memberId };
+  if (opts.recipeId) body.recipe_id = opts.recipeId;
+  if (opts.leaseId) body.lease_id = opts.leaseId;
   if (opts.cwd) body.cwd = opts.cwd;
   if (opts.model) body.model = opts.model;
   if (opts.agent) body.agent = opts.agent;
@@ -133,6 +138,11 @@ export async function listSandboxSessions(): Promise<SandboxSession[]> {
     if (threadDiff !== 0) return threadDiff;
     return a.session_id.localeCompare(b.session_id);
   });
+}
+
+export async function listMyLeases(): Promise<UserLeaseSummary[]> {
+  const payload = await request<{ leases: UserLeaseSummary[] }>("/api/sandbox/leases/mine");
+  return payload.leases;
 }
 
 export async function pauseThreadSandbox(threadId: string): Promise<void> {

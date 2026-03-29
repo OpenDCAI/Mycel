@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Search, Plus, Zap, Plug, Bot, Edit, Trash2, AlertTriangle, RefreshCw } from "lucide-react";
+import { Search, Plus, Zap, Plug, Bot, Edit, Trash2, AlertTriangle, RefreshCw, FlaskConical } from "lucide-react";
 import LibraryEditor from "@/components/LibraryEditor";
 import { toast } from "sonner";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -7,14 +7,15 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { useAppStore } from "@/store/app-store";
 import type { ResourceItem } from "@/store/types";
 
-type ResourceType = "skills" | "mcp" | "agents";
+type ResourceType = "skills" | "mcp" | "agents" | "recipes";
 
-const typeMap: Record<ResourceType, string> = { skills: "skill", mcp: "mcp", agents: "agent" };
+const typeMap: Record<ResourceType, string> = { skills: "skill", mcp: "mcp", agents: "agent", recipes: "recipe" };
 
 const tabs: { id: ResourceType; label: string; icon: typeof Zap }[] = [
   { id: "skills", label: "Skill", icon: Zap },
   { id: "mcp", label: "MCP", icon: Plug },
   { id: "agents", label: "Agent", icon: Bot },
+  { id: "recipes", label: "Recipe", icon: FlaskConical },
 ];
 
 export default function LibraryPage() {
@@ -22,6 +23,7 @@ export default function LibraryPage() {
   const librarySkills = useAppStore((s) => s.librarySkills);
   const libraryMcps = useAppStore((s) => s.libraryMcps);
   const libraryAgents = useAppStore((s) => s.libraryAgents);
+  const libraryRecipes = useAppStore((s) => s.libraryRecipes);
   const loadAll = useAppStore((s) => s.loadAll);
   const error = useAppStore((s) => s.error);
   const retry = useAppStore((s) => s.retry);
@@ -39,11 +41,19 @@ export default function LibraryPage() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deletingItem, setDeletingItem] = useState<ResourceItem | null>(null);
 
-  const getList = () => tab === "skills" ? librarySkills : tab === "mcp" ? libraryMcps : libraryAgents;
+  const getList = () =>
+    tab === "skills"
+      ? librarySkills
+      : tab === "mcp"
+        ? libraryMcps
+        : tab === "agents"
+          ? libraryAgents
+          : libraryRecipes;
 
   const items = getList();
   const filtered = items.filter((i) => i.name.toLowerCase().includes(search.toLowerCase()));
-  const Icon = tab === "skills" ? Zap : tab === "mcp" ? Plug : Bot;
+  const Icon = tab === "skills" ? Zap : tab === "mcp" ? Plug : tab === "agents" ? Bot : FlaskConical;
+  const isRecipeTab = tab === "recipes";
 
   const handleCardClick = (item: ResourceItem) => {
     setCreating(false);
@@ -89,7 +99,12 @@ export default function LibraryPage() {
           </div>
           <div className="flex-1 p-2 space-y-0.5">
             {tabs.map((t) => {
-              const count = (t.id === "skills" ? librarySkills : t.id === "mcp" ? libraryMcps : libraryAgents).length;
+              const count = (
+                t.id === "skills" ? librarySkills :
+                t.id === "mcp" ? libraryMcps :
+                t.id === "agents" ? libraryAgents :
+                libraryRecipes
+              ).length;
               const isActive = tab === t.id;
               return (
                 <button key={t.id} onClick={() => { setTab(t.id); setSearch(""); setSelected(null); setCreating(false); }} className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-sm transition-all ${
@@ -127,16 +142,18 @@ export default function LibraryPage() {
             {!isMobile && (
               <>
                 <h3 className="text-sm font-semibold text-foreground">
-                  {tab === "skills" ? "Skill" : tab === "mcp" ? "MCP" : "Agent"}
+                  {tab === "skills" ? "Skill" : tab === "mcp" ? "MCP" : tab === "agents" ? "Agent" : "Recipe"}
                 </h3>
                 <span className="text-xs text-muted-foreground font-mono">{items.length}</span>
               </>
             )}
           </div>
-          <button onClick={openCreate} className="flex items-center gap-2 px-3 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition-opacity">
-            <Plus className="w-4 h-4" />
-            <span className="hidden md:inline">新建</span>
-          </button>
+          {!isRecipeTab && (
+            <button onClick={openCreate} className="flex items-center gap-2 px-3 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition-opacity">
+              <Plus className="w-4 h-4" />
+              <span className="hidden md:inline">新建</span>
+            </button>
+          )}
         </div>
 
         <div className={`flex-1 overflow-y-auto`}>
@@ -175,18 +192,26 @@ export default function LibraryPage() {
                       <h4 className="text-sm font-medium text-foreground group-hover:text-primary transition-colors">{item.name}</h4>
                     </div>
                     <p className="text-xs text-muted-foreground mt-1">{item.desc}</p>
-                    <p className="text-[11px] text-muted-foreground mt-2">{(() => { const n = getResourceUsedBy(typeMap[tab], item.name).length; return n ? `被 ${n} 位成员使用` : "未被使用"; })()}</p>
+                    <p className="text-[11px] text-muted-foreground mt-2">
+                      {isRecipeTab
+                        ? `${item.provider_name ?? "unknown"} · builtin recipe`
+                        : (() => {
+                            const n = getResourceUsedBy(typeMap[tab], item.name).length;
+                            return n ? `被 ${n} 位成员使用` : "未被使用";
+                          })()}
+                    </p>
                   </div>
                 </div>
-                {/* Edit/Delete hover actions */}
-                <div className="absolute top-2 right-2 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <button onClick={(e) => { e.stopPropagation(); handleCardClick(item); }} className="p-1 rounded hover:bg-muted transition-colors" title="编辑">
-                    <Edit className="w-3 h-3 text-muted-foreground" />
-                  </button>
-                  <button onClick={(e) => { e.stopPropagation(); openDelete(item); }} className="p-1 rounded hover:bg-destructive/10 transition-colors" title="删除">
-                    <Trash2 className="w-3 h-3 text-muted-foreground hover:text-destructive" />
-                  </button>
-                </div>
+                {!isRecipeTab && (
+                  <div className="absolute top-2 right-2 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button onClick={(e) => { e.stopPropagation(); handleCardClick(item); }} className="p-1 rounded hover:bg-muted transition-colors" title="编辑">
+                      <Edit className="w-3 h-3 text-muted-foreground" />
+                    </button>
+                    <button onClick={(e) => { e.stopPropagation(); openDelete(item); }} className="p-1 rounded hover:bg-destructive/10 transition-colors" title="删除">
+                      <Trash2 className="w-3 h-3 text-muted-foreground hover:text-destructive" />
+                    </button>
+                  </div>
+                )}
               </div>
             ))}
           </div>
@@ -199,10 +224,10 @@ export default function LibraryPage() {
       </div>
 
       {/* Editor panel */}
-      {!isMobile && showDetail && (
+      {!isMobile && showDetail && !isRecipeTab && (
         <LibraryEditor item={selected} type={typeMap[tab] as "skill" | "mcp" | "agent"} onClose={() => { setSelected(null); setCreating(false); }} onCreated={handleCreated} />
       )}
-      {isMobile && showDetail && (
+      {isMobile && showDetail && !isRecipeTab && (
         <div className="fixed inset-0 z-50 bg-background overflow-y-auto">
           <LibraryEditor item={selected} type={typeMap[tab] as "skill" | "mcp" | "agent"} onClose={() => { setSelected(null); setCreating(false); }} onCreated={handleCreated} />
         </div>
@@ -224,5 +249,4 @@ export default function LibraryPage() {
     </div>
   );
 }
-
 

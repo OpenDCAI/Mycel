@@ -50,7 +50,7 @@ class SQLiteLeaseRepo:
             self._conn.row_factory = sqlite3.Row
             row = self._conn.execute(
                 """
-                SELECT lease_id, provider_name, workspace_key,
+                SELECT lease_id, provider_name, recipe_id, workspace_key,
                        current_instance_id, instance_created_at,
                        desired_state, observed_state, version,
                        observed_at, last_error, needs_refresh,
@@ -87,21 +87,27 @@ class SQLiteLeaseRepo:
 
             return result
 
-    def create(self, lease_id: str, provider_name: str, volume_id: str | None = None) -> dict[str, Any]:
+    def create(
+        self,
+        lease_id: str,
+        provider_name: str,
+        volume_id: str | None = None,
+        recipe_id: str | None = None,
+    ) -> dict[str, Any]:
         now = datetime.now().isoformat()
         with self._lock:
             self._conn.execute(
                 """
                 INSERT INTO sandbox_leases (
-                    lease_id, provider_name, desired_state, observed_state,
+                    lease_id, provider_name, recipe_id, desired_state, observed_state,
                     instance_status, version, observed_at, last_error,
                     needs_refresh, refresh_hint_at, status, volume_id,
                     created_at, updated_at
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
-                    lease_id, provider_name, "running", "detached",
+                    lease_id, provider_name, recipe_id, "running", "detached",
                     "detached", 0, now, None,
                     0, None, "active", volume_id,
                     now, now,
@@ -246,7 +252,7 @@ class SQLiteLeaseRepo:
             self._conn.row_factory = sqlite3.Row
             rows = self._conn.execute(
                 """
-                SELECT lease_id, provider_name, current_instance_id,
+                SELECT lease_id, provider_name, recipe_id, current_instance_id,
                        desired_state, observed_state, version,
                        created_at, updated_at
                 FROM sandbox_leases
@@ -261,7 +267,7 @@ class SQLiteLeaseRepo:
             self._conn.row_factory = sqlite3.Row
             rows = self._conn.execute(
                 """
-                SELECT lease_id, provider_name, current_instance_id,
+                SELECT lease_id, provider_name, recipe_id, current_instance_id,
                        desired_state, observed_state, version,
                        created_at, updated_at
                 FROM sandbox_leases
@@ -280,6 +286,7 @@ class SQLiteLeaseRepo:
             CREATE TABLE IF NOT EXISTS sandbox_leases (
                 lease_id TEXT PRIMARY KEY,
                 provider_name TEXT NOT NULL,
+                recipe_id TEXT,
                 workspace_key TEXT,
                 current_instance_id TEXT,
                 instance_created_at TIMESTAMP,
@@ -340,6 +347,10 @@ class SQLiteLeaseRepo:
                 "ALTER TABLE sandbox_leases ADD COLUMN instance_status TEXT NOT NULL DEFAULT 'detached'"
             )
             self._conn.execute("UPDATE sandbox_leases SET instance_status = observed_state")
+            self._conn.commit()
+            lease_cols = {row[1] for row in self._conn.execute("PRAGMA table_info(sandbox_leases)").fetchall()}
+        if "recipe_id" not in lease_cols:
+            self._conn.execute("ALTER TABLE sandbox_leases ADD COLUMN recipe_id TEXT")
             self._conn.commit()
             lease_cols = {row[1] for row in self._conn.execute("PRAGMA table_info(sandbox_leases)").fetchall()}
         if "volume_id" not in lease_cols:
