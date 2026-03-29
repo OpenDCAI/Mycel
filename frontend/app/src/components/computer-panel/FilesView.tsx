@@ -64,7 +64,7 @@ export function FilesView({
       />
 
       {/* File preview */}
-      <div className="flex-1 overflow-auto min-w-0">
+      <div className="flex-1 min-w-0 overflow-auto">
         {!selectedFilePath ? (
           <div className="h-full flex items-center justify-center text-sm text-[#a3a3a3]">
             选择文件以预览

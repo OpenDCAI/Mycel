@@ -1,10 +1,14 @@
 """Configuration constants for Leon web backend."""
 
+import os
 from pathlib import Path
 
 # Database paths
 DB_PATH = Path.home() / ".leon" / "leon.db"
 SANDBOXES_DIR = Path.home() / ".leon" / "sandboxes"
+SANDBOX_VOLUME_ROOT = Path(
+    os.environ.get("LEON_SANDBOX_VOLUME_ROOT", str(Path.home() / ".leon" / "volumes"))
+).expanduser().resolve()
 
 # Workspace
 LOCAL_WORKSPACE_ROOT = Path.cwd().resolve()

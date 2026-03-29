@@ -6,7 +6,7 @@ import {
   Globe,
   Cpu,
   Webhook,
-  Save,
+  HardDrive,
 } from "lucide-react";
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import type { ProviderCapabilities } from "./types";
@@ -20,7 +20,7 @@ export const CAPABILITY_ICON_MAP: Record<string, React.ElementType> = {
   web: Globe,
   process: Cpu,
   hooks: Webhook,
-  snapshot: Save,
+  mount: HardDrive,
 };
 
 /** Compact icon strip for ProviderCard — shows lit/dim icons inline */

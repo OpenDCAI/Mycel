@@ -1,14 +1,16 @@
 import { useCallback, useEffect, useState } from "react";
 import { useParams, useOutletContext, useLocation } from "react-router-dom";
+import { toast } from "sonner";
 import ChatArea from "../components/ChatArea";
 import type { AssistantTurn } from "../api";
-import { authFetch, useAuthStore } from "../store/auth-store";
+import { uploadSandboxFile } from "../api";
 import ComputerPanel from "../components/ComputerPanel";
 import { DragHandle } from "../components/DragHandle";
 import Header from "../components/Header";
 import InputBox from "../components/InputBox";
 import TaskProgress from "../components/TaskProgress";
 import TokenStats from "../components/TokenStats";
+import { authFetch, useAuthStore } from "../store/auth-store";
 import { useAppActions } from "../hooks/use-app-actions";
 import { useBackgroundTasks } from "../hooks/use-background-tasks";
 import { BackgroundSessionsIndicator } from "../components/chat-area/BackgroundSessionsIndicator";
@@ -27,7 +29,7 @@ interface OutletContext {
 
 /** Thin wrapper: key={threadId} forces remount → all hook state resets naturally. */
 export default function ChatPage() {
-  const { threadId } = useParams<{ threadId: string }>();
+  const { threadId } = useParams<{ memberId: string; threadId: string }>();
   if (!threadId) return null;
   return <ChatPageInner key={threadId} threadId={threadId} />;
 }
@@ -44,6 +46,8 @@ function ChatPageInner({ threadId }: { threadId: string }) {
   const agentName = currentThread?.entity_name ?? currentThread?.member_name;
   const agentAvatarUrl = currentThread?.avatar_url;
   const userAvatarUrl = userHasAvatar && userId ? `/api/members/${userId}/avatar` : undefined;
+  const [attachedFiles, setAttachedFiles] = useState<File[]>([]);
+
   const state = location.state as { selectedModel?: string; runStarted?: boolean; message?: string } | null;
   const [currentModel, setCurrentModel] = useState<string>(state?.selectedModel ?? "");
 
@@ -128,13 +132,12 @@ function ChatPageInner({ threadId }: { threadId: string }) {
   const handleCancelTask = useCallback(
     async (taskId: string) => {
       try {
-        const response = await fetch(`/api/threads/${threadId}/tasks/${taskId}/cancel`, {
+        const response = await authFetch(`/api/threads/${threadId}/tasks/${taskId}/cancel`, {
           method: "POST",
         });
         if (!response.ok) {
           console.error("[ChatPage] Failed to cancel task:", response.statusText);
         } else {
-          // 取消成功后刷新任务列表
           await refreshTasks();
         }
       } catch (err) {
@@ -145,6 +148,26 @@ function ChatPageInner({ threadId }: { threadId: string }) {
   );
 
   const computerResize = useResizableX(600, 360, 1200, true);
+
+  // @@@workspace-upload — upload attached files then send message with attachment filenames
+  async function handleSendWithAttachments(message: string): Promise<void> {
+    const filenames = attachedFiles.map((f) => f.name);
+    if (attachedFiles.length > 0) {
+      const toastId = toast.loading(`Uploading ${attachedFiles.length} file(s)...`);
+      try {
+        await Promise.all(attachedFiles.map((file) =>
+          uploadSandboxFile(threadId, { file, path: file.name }),
+        ));
+        toast.success(`Uploaded ${attachedFiles.length} file(s)`, { id: toastId });
+        setAttachedFiles([]);
+      } catch (error) {
+        const msg = error instanceof Error ? error.message : String(error);
+        toast.error(`Upload failed: ${msg}`, { id: toastId });
+        return;
+      }
+    }
+    await handleSendMessage(message, filenames.length > 0 ? filenames : undefined);
+  }
 
   return (
     <>
@@ -184,17 +207,20 @@ function ChatPageInner({ threadId }: { threadId: string }) {
             isStreaming={isStreaming}
             runtimeStatus={runtimeStatus}
             sandboxType={activeSandbox?.type ?? "local"}
-            sandboxStatus={activeSandbox?.status ?? (activeSandbox?.type === "local" ? "running" : null)}
+            sandboxStatus={activeSandbox?.status ?? null}
             computerOpen={computerOpen}
             onToggleComputer={() => setComputerOpen((v) => !v)}
           />
           <InputBox
             disabled={isStreaming}
             isStreaming={isStreaming}
-            placeholder="告诉 Mycel 你需要什么帮助..."
-            onSendMessage={(msg) => void handleSendMessage(msg)}
+            placeholder="告诉 Leon 你需要什么帮助..."
+            onSendMessage={(msg) => void handleSendWithAttachments(msg)}
             onSendQueueMessage={handleSendQueueMessage}
             onStop={handleStopStreaming}
+            attachedFiles={attachedFiles}
+            onAttachFiles={(files) => setAttachedFiles((prev) => [...prev, ...files])}
+            onRemoveFile={(index) => setAttachedFiles((prev) => prev.filter((_, i) => i !== index))}
           />
           <TokenStats runtimeStatus={runtimeStatus} />
         </div>

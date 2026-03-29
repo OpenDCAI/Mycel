@@ -39,15 +39,21 @@ def extract_text_content(raw_content: Any) -> str:
 def serialize_message(msg: Any) -> dict[str, Any]:
     """Serialize a LangChain message to a JSON-compatible dict."""
     content = getattr(msg, "content", "")
+    metadata = getattr(msg, "metadata", None) or {}
+
     # Strip system tags from owner HumanMessages (context-shift hints).
     # External HumanMessages keep their <system-reminder> so frontend can
     # extract <chat-message> content for the "show hidden" toggle.
     msg_type = msg.__class__.__name__
-    metadata = getattr(msg, "metadata", None) or {}
     source = metadata.get("source", "owner") if isinstance(metadata, dict) else "owner"
     if msg_type == "HumanMessage" and isinstance(content, str) and source == "owner":
         if "<system-hint>" in content or "<system-reminder>" in content:
             content = strip_system_tags(content)
+
+    # @@@display-content-split - LLM sees the prefixed message; frontend sees the original.
+    if metadata and "original_message" in metadata:
+        content = metadata["original_message"]
+
     result = {
         "id": getattr(msg, "id", None),
         "type": msg_type,
@@ -56,7 +62,6 @@ def serialize_message(msg: Any) -> dict[str, Any]:
         "tool_call_id": getattr(msg, "tool_call_id", None),
         "name": getattr(msg, "name", None),
     }
-    metadata = getattr(msg, "metadata", None)
     if metadata:
         result["metadata"] = metadata
     return result

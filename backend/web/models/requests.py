@@ -1,6 +1,8 @@
 """Pydantic request models for Leon web API."""
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
+
+from sandbox.config import MountSpec
 
 
 class CreateThreadRequest(BaseModel):
@@ -8,6 +10,8 @@ class CreateThreadRequest(BaseModel):
     sandbox: str = "local"
     cwd: str | None = None
     model: str | None = None
+    agent: str | None = None
+    bind_mounts: list[MountSpec] = Field(default_factory=list)
 
 
 class ResolveMainThreadRequest(BaseModel):
@@ -18,7 +22,10 @@ class RunRequest(BaseModel):
     message: str
     enable_trajectory: bool = False
     model: str | None = None
+    attachments: list[str] = Field(default_factory=list)
 
 
 class SendMessageRequest(BaseModel):
     message: str
+    attachments: list[str] = Field(default_factory=list)
+

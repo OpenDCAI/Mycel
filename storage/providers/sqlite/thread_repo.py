@@ -51,7 +51,8 @@ class SQLiteThreadRepo:
                 "INSERT INTO threads (id, member_id, sandbox_type, cwd, model, observation_provider, is_main, branch_index, created_at)"
                 " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (thread_id, member_id, sandbox_type, cwd,
-                 extra.get("model"), extra.get("observation_provider"), int(is_main), branch_index, created_at),
+                 extra.get("model"), extra.get("observation_provider"),
+                 int(is_main), branch_index, created_at),
             )
             self._conn.commit()
 

@@ -51,9 +51,10 @@ class AgentBayProvider(SandboxProvider):
             web=True,
             process=True,
             hooks=False,
-            snapshot=False,
+            mount=False,
         ),
     )
+    WORKSPACE_ROOT = "/home/wuying"
 
     def get_capability(self) -> ProviderCapability:
         return self._capability
@@ -81,7 +82,7 @@ class AgentBayProvider(SandboxProvider):
         can_resume = self.CAPABILITY.can_resume if supports_resume is None else supports_resume
         self._capability = replace(self.CAPABILITY, can_pause=can_pause, can_resume=can_resume)
 
-    def create_session(self, context_id: str | None = None) -> SessionInfo:
+    def create_session(self, context_id: str | None = None, thread_id: str | None = None) -> SessionInfo:
         from agentbay import ContextSync, CreateSessionParams
 
         params = CreateSessionParams()

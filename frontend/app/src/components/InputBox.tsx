@@ -1,4 +1,4 @@
-import { Send, Square } from "lucide-react";
+import { Paperclip, Send, Square, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 interface InputBoxProps {
@@ -8,6 +8,9 @@ interface InputBoxProps {
   onSendMessage: (message: string) => Promise<void> | void;
   onSendQueueMessage?: (message: string) => Promise<void> | void;
   onStop?: () => void;
+  attachedFiles?: File[];
+  onAttachFiles?: (files: File[]) => void;
+  onRemoveFile?: (index: number) => void;
 }
 
 export default function InputBox({
@@ -17,10 +20,14 @@ export default function InputBox({
   onSendMessage,
   onSendQueueMessage,
   onStop,
+  attachedFiles = [],
+  onAttachFiles,
+  onRemoveFile,
 }: InputBoxProps) {
   const [value, setValue] = useState("");
   const [focused, setFocused] = useState(false);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const sendingRef = useRef(false);
 
   const autoResize = useCallback(() => {
@@ -67,11 +74,34 @@ export default function InputBox({
   return (
     <div className="bg-white pb-4">
       <div className="max-w-3xl mx-auto px-4">
+        {attachedFiles.length > 0 && (
+          <div className="mb-2 flex flex-wrap gap-2">
+            {attachedFiles.map((file, index) => (
+              <div
+                key={index}
+                className="flex items-center gap-2 px-3 py-2 bg-[#f5f5f5] rounded-lg text-sm"
+              >
+                <span className="text-[#171717] truncate max-w-[200px]">{file.name}</span>
+                {onRemoveFile && (
+                  <button
+                    type="button"
+                    onClick={() => onRemoveFile(index)}
+                    className="text-[#737373] hover:text-[#171717] transition-colors"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
         <div
           onClick={() => inputRef.current?.focus()}
-          className={`flex items-end gap-2 rounded-2xl border transition-[border-color,box-shadow] duration-150 cursor-text ${
-            focused ? "border-[#e5e5e5] shadow-sm" : "border-transparent"
-          } bg-[#fafafa]`}
+          className={`flex items-end gap-2 rounded-2xl border transition-all cursor-text ${
+            focused
+              ? "border-[#e5e5e5] shadow-sm bg-[#fafafa]"
+              : "border-transparent bg-[#fafafa]"
+          }`}
         >
           <div className="flex-1 py-4 pl-4">
             <textarea
@@ -94,6 +124,32 @@ export default function InputBox({
             />
           </div>
           <div className="flex items-center pr-3 py-4">
+            {onAttachFiles && (
+              <>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  multiple
+                  onChange={(e) => {
+                    const files = Array.from(e.target.files || []);
+                    if (files.length > 0) {
+                      onAttachFiles(files);
+                    }
+                    e.target.value = "";
+                  }}
+                  className="hidden"
+                />
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={inputDisabled}
+                  className="w-8 h-8 rounded-full flex items-center justify-center transition-colors text-[#737373] hover:text-[#171717] hover:bg-[#f5f5f5] disabled:opacity-50"
+                  title="Attach files"
+                >
+                  <Paperclip className="w-4 h-4" />
+                </button>
+              </>
+            )}
             <button
               onClick={(e) => {
                 e.stopPropagation();

@@ -167,7 +167,7 @@ export interface DisplayDeltaState {
 }
 
 export interface DisplayDeltaActions {
-  handleSendMessage: (message: string) => Promise<void>;
+  handleSendMessage: (message: string, attachments?: string[]) => Promise<void>;
   handleStopStreaming: () => Promise<void>;
 }
 
@@ -215,12 +215,12 @@ export function useDisplayDeltas(
   }, [subscribe]);
 
   const handleSendMessage = useCallback(
-    async (message: string) => {
+    async (message: string, attachments?: string[]) => {
       // No optimistic user entry — backend emits user_message event via SSE,
       // which display_builder converts to append_entry delta.
       setSendPending(true);
       try {
-        await postRun(threadId, message);
+        await postRun(threadId, message, undefined, attachments?.length ? { attachments } : undefined);
       } catch (err) {
         setSendPending(false);
         if (err instanceof Error) {

@@ -7,6 +7,7 @@ import uuid
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi.responses import JSONResponse
 from sse_starlette.sse import EventSourceResponse
 
 from backend.web.core.dependencies import get_app, get_current_user_id, get_thread_agent, get_thread_lock, verify_thread_owner
@@ -18,7 +19,8 @@ from backend.web.models.requests import (
 )
 from backend.web.services.agent_pool import get_or_create_agent, resolve_thread_sandbox
 from backend.web.services.event_buffer import ThreadEventBuffer
-from backend.web.services.sandbox_service import destroy_thread_resources_sync
+from backend.web.services.member_volume_service import get_lease_volume_source
+from backend.web.services.sandbox_service import destroy_thread_resources_sync, init_providers_and_managers
 from backend.web.services.streaming_service import (
     get_or_create_thread_buffer,
     observe_run_events,
@@ -38,11 +40,123 @@ from storage.contracts import EntityRow
 
 logger = logging.getLogger(__name__)
 from core.runtime.middleware.monitor import AgentState
-
 from backend.web.utils.serializers import avatar_url
+from sandbox.config import MountSpec
 from sandbox.thread_context import set_current_thread_id
 
 router = APIRouter(prefix="/api/threads", tags=["threads"])
+
+
+async def _prepare_attachment_message(
+    thread_id: str,
+    sandbox_type: str,
+    message: str,
+    attachments: list[str],
+    agent: Any | None = None,
+) -> tuple[str, dict[str, Any] | None]:
+    """Build LLM notification prefix and sync uploads to running sandbox.
+
+    Returns (modified_message, message_metadata).
+    When *agent* is supplied, uses its live manager and primes the sandbox
+    (resume if paused) before syncing.
+    """
+    from backend.web.services.streaming_service import prime_sandbox
+
+    message_metadata: dict[str, Any] = {"attachments": attachments, "original_message": message}
+    if agent is not None and getattr(agent, '_sandbox', None):
+        mgr = agent._sandbox.manager
+    else:
+        _, managers = init_providers_and_managers()
+        mgr = managers.get(sandbox_type)
+    # @@@files-dir-hint - tell agent where uploaded files live
+    # For local provider: actual host path (agent reads host FS directly)
+    # For remote providers: container-side path
+    if mgr and mgr.volume.capability.runtime_kind == "local":
+        from backend.web.services.member_volume_service import get_lease_volume_source
+        try:
+            source = get_lease_volume_source(thread_id)
+            files_dir = str(source.host_path)
+        except ValueError:
+            files_dir = "/workspace/files"
+    else:
+        files_dir = mgr.volume.resolve_remote_path() if mgr else "/workspace/files"
+
+    original_message = message
+    sync_ok = True
+
+    # @@@sync-prime-then-upload - resume sandbox if paused, then push files
+    if mgr and agent is not None:
+        try:
+            await prime_sandbox(agent, thread_id)
+        except Exception:
+            logger.warning("prime_sandbox before sync_uploads failed", exc_info=True)
+    if mgr:
+        try:
+            sync_ok = await asyncio.to_thread(mgr.sync_uploads, thread_id, attachments)
+        except Exception:
+            logger.error("Failed to sync uploads to sandbox", exc_info=True)
+            sync_ok = False
+
+    # @@@sync-fail-honest - don't tell agent files are in sandbox if sync failed
+    if sync_ok:
+        message = f"[User uploaded {len(attachments)} file(s) to {files_dir}/: {', '.join(attachments)}]\n\n{original_message}"
+    else:
+        message = f"[User uploaded {len(attachments)} file(s) but sync to sandbox failed. Files may not be available in {files_dir}/.]\n\n{original_message}"
+
+    return message, message_metadata
+
+
+def _find_mount_capability_mismatch(
+    requested_mounts: list[MountSpec],
+    mount_capability: Any,
+) -> dict[str, Any] | None:
+    capability = mount_capability.to_dict()
+    mode_handlers = capability.get("mode_handlers", {})
+    for mount in requested_mounts:
+        requested = {"mode": mount.mode, "read_only": mount.read_only}
+        # @@@mode-handler-gate - check provider supports the requested mount mode
+        mode_supported = bool(mode_handlers.get(mount.mode, False)) if mode_handlers else False
+
+        if not mode_supported:
+            return {"requested": requested, "capability": capability}
+        if mount.read_only and not capability["supports_read_only"]:
+            return {"requested": requested, "capability": capability}
+    return None
+
+
+async def _validate_mount_capability_gate(
+    sandbox_type: str,
+    requested_mounts: list[MountSpec],
+) -> JSONResponse | None:
+    if not requested_mounts:
+        return None
+
+    providers, _ = await asyncio.to_thread(init_providers_and_managers)
+    provider_obj = providers.get(sandbox_type)
+    if provider_obj is None:
+        return JSONResponse(
+            status_code=400,
+            content={
+                "error": "sandbox_provider_unavailable",
+                "provider": sandbox_type,
+            },
+        )
+
+    capability = provider_obj.get_capability()
+    mismatch = _find_mount_capability_mismatch(requested_mounts, capability.mount)
+    if mismatch is None:
+        return None
+
+    # @@@request-stage-capability-gate - Fail at create-thread request stage so unsupported mount semantics never enter runtime lifecycle.
+    return JSONResponse(
+        status_code=400,
+        content={
+            "error": "sandbox_capability_mismatch",
+            "provider": sandbox_type,
+            "requested": mismatch["requested"],
+            "capability": mismatch["capability"],
+        },
+    )
 
 
 def _get_agent_for_thread(app: Any, thread_id: str) -> Any | None:
@@ -76,6 +190,53 @@ def _thread_payload(app: Any, thread_id: str, sandbox_type: str) -> dict[str, An
     }
 
 
+def _create_thread_sandbox_resources(thread_id: str, sandbox_type: str) -> None:
+    """Create volume, lease, and terminal eagerly so volume exists before file uploads."""
+    from datetime import datetime
+
+    from backend.web.core.config import SANDBOX_VOLUME_ROOT
+    from sandbox.config import DEFAULT_DB_PATH
+    from sandbox.lease import LeaseStore
+    from sandbox.terminal import TerminalStore
+    from sandbox.volume_source import HostVolume
+    from backend.web.utils.helpers import _get_container
+
+    now_str = datetime.now().isoformat()
+    volume_id = str(uuid.uuid4())
+    vol_path = SANDBOX_VOLUME_ROOT / volume_id
+    source = HostVolume(vol_path)
+
+    sandbox_vol_repo = _get_container().sandbox_volume_repo()
+    sandbox_vol_repo.create(volume_id, json.dumps(source.serialize()), f"file-channel-{thread_id}", now_str)
+
+    lease_store = LeaseStore(db_path=DEFAULT_DB_PATH)
+    lease_id = f"lease-{uuid.uuid4().hex[:12]}"
+    lease_store.create(lease_id, sandbox_type, volume_id=volume_id)
+
+    terminal_store = TerminalStore(db_path=DEFAULT_DB_PATH)
+    terminal_id = f"term-{uuid.uuid4().hex[:12]}"
+    # @@@initial-cwd - use project root for local, provider default for remote
+    from backend.web.core.config import LOCAL_WORKSPACE_ROOT
+    if sandbox_type == "local":
+        initial_cwd = str(LOCAL_WORKSPACE_ROOT)
+    else:
+        from backend.web.services.sandbox_service import build_provider_from_config_name
+        provider = build_provider_from_config_name(sandbox_type)
+        initial_cwd = "/home/user"
+        if provider:
+            for attr in ("default_cwd", "default_context_path", "mount_path"):
+                val = getattr(provider, attr, None)
+                if isinstance(val, str) and val:
+                    initial_cwd = val
+                    break
+    terminal_store.create(
+        terminal_id=terminal_id,
+        thread_id=thread_id,
+        lease_id=lease_id,
+        initial_cwd=initial_cwd,
+    )
+
+
 def _create_owned_thread(
     app: Any,
     owner_user_id: str,
@@ -85,21 +246,20 @@ def _create_owned_thread(
 ) -> dict[str, Any]:
     import time
 
+
+    sandbox_type = payload.sandbox or "local"
     agent_member_id = payload.member_id
     agent_member = app.state.member_repo.get_by_id(agent_member_id)
     if not agent_member or agent_member.owner_user_id != owner_user_id:
         raise HTTPException(403, "Not authorized")
 
     # @@@non-atomic-create - these 3 steps (seq++, thread, entity) are not atomic.
-    # If step 2 or 3 fails, seq has a gap and thread/entity may be orphaned.
-    # Acceptable for dev (SQLite). Wrap in DB transaction when migrating to Supabase.
     seq = app.state.member_repo.increment_entity_seq(agent_member_id)
     thread_entity_id = f"{agent_member_id}-{seq}"
     has_main = app.state.thread_repo.get_main_thread(agent_member_id) is not None
     resolved_is_main = is_main or not has_main
     branch_index = 0 if resolved_is_main else app.state.thread_repo.get_next_branch_index(agent_member_id)
 
-    sandbox_type = payload.sandbox or "local"
     app.state.thread_repo.create(
         thread_id=thread_entity_id,
         member_id=agent_member_id,
@@ -121,9 +281,14 @@ def _create_owned_thread(
         created_at=time.time(),
     ))
 
+    # Set thread state
     app.state.thread_sandbox[thread_entity_id] = sandbox_type
     if payload.cwd:
         app.state.thread_cwd[thread_entity_id] = payload.cwd
+
+    # @@@lease-early-creation - Create volume + lease + terminal at thread creation
+    # so volume exists BEFORE any file uploads.
+    _create_thread_sandbox_resources(thread_entity_id, sandbox_type)
 
     return {
         "thread_id": thread_entity_id,
@@ -138,14 +303,23 @@ def _create_owned_thread(
     }
 
 
-@router.post("")
+@router.post("", response_model=None)
 async def create_thread(
     payload: CreateThreadRequest,
     user_id: Annotated[str, Depends(get_current_user_id)],
     app: Annotated[Any, Depends(get_app)] = None,
-) -> dict[str, Any]:
+) -> dict[str, Any] | JSONResponse:
     """Create a new child thread for an agent member."""
-    return _create_owned_thread(app, user_id, payload, is_main=False)
+    # Validate bind_mounts capability before creating thread
+    sandbox_type = payload.sandbox or "local"
+    requested_mounts = payload.bind_mounts if payload.bind_mounts else []
+    capability_error = await _validate_mount_capability_gate(sandbox_type, requested_mounts)
+    if capability_error is not None:
+        return capability_error
+
+    result = _create_owned_thread(app, user_id, payload, is_main=False)
+
+    return result
 
 
 @router.post("/main")
@@ -157,7 +331,9 @@ async def resolve_main_thread(
     """Return the main thread for a member, or null when none exists."""
     agent_member = app.state.member_repo.get_by_id(payload.member_id)
     if not agent_member or agent_member.owner_user_id != user_id:
-        raise HTTPException(403, "Not authorized")
+        # Return null instead of 403 — member may not exist yet (stale client state)
+        # or belong to another user (harmless to reveal "no thread")
+        return {"thread": None}
 
     existing = app.state.thread_repo.get_main_thread(payload.member_id)
     if existing is None:
@@ -267,6 +443,12 @@ async def delete_thread(
             agent.runtime.unbind_thread()
         # Unregister wake handler
         app.state.queue_manager.unregister_wake(thread_id)
+        # Clean up volume BEFORE destroying lease/terminal (destroy deletes those records)
+        try:
+            source = get_lease_volume_source(thread_id)
+            source.cleanup()
+        except ValueError:
+            pass  # No volume to clean up
         try:
             await asyncio.to_thread(destroy_thread_resources_sync, thread_id, sandbox_type, app.state.agent_pool)
         except Exception as exc:
@@ -304,8 +486,43 @@ async def send_message(
         raise HTTPException(status_code=400, detail="message cannot be empty")
 
     from backend.web.services.message_routing import route_message_to_brain
+    from backend.web.services.agent_pool import resolve_thread_sandbox, get_or_create_agent
 
-    return await route_message_to_brain(app, thread_id, payload.message, source="owner")
+    message = payload.message
+    # @@@attachment-wire - sync files to sandbox and prepend paths
+    if payload.attachments:
+        sandbox_type = resolve_thread_sandbox(app, thread_id)
+        agent = await get_or_create_agent(app, sandbox_type, thread_id=thread_id)
+        message, _ = await _prepare_attachment_message(
+            thread_id, sandbox_type, message, payload.attachments, agent=agent,
+        )
+
+    return await route_message_to_brain(app, thread_id, message, source="owner",
+                                       attachments=payload.attachments or None)
+
+
+@router.post("/{thread_id}/queue")
+async def queue_message(
+    thread_id: str,
+    payload: SendMessageRequest,
+    app: Annotated[Any, Depends(get_app)] = None,
+) -> dict[str, Any]:
+    """Enqueue a followup message. Will be consumed when agent reaches IDLE."""
+    if not payload.message.strip():
+        raise HTTPException(status_code=400, detail="message cannot be empty")
+    app.state.queue_manager.enqueue(payload.message, thread_id, notification_type="steer")
+    return {"status": "queued", "thread_id": thread_id}
+
+
+@router.get("/{thread_id}/queue")
+async def get_queue(
+    thread_id: str,
+    app: Annotated[Any, Depends(get_app)] = None,
+) -> dict[str, Any]:
+    """List pending followup messages in the queue."""
+    messages = app.state.queue_manager.list_queue(thread_id)
+    return {"messages": messages, "thread_id": thread_id}
+
 
 
 @router.get("/{thread_id}/history")

@@ -518,7 +518,9 @@ async def _run_agent_to_buffer(
         # Bind per-thread handlers (idempotent — safe across runs)
         _ensure_thread_handlers(agent, thread_id, app)
 
-        if hasattr(agent, "_sandbox"):
+        # @@@lazy-sandbox — only prime sandbox eagerly when attachments need syncing.
+        # Without attachments, sandbox starts lazily on first tool call.
+        if hasattr(agent, "_sandbox") and message_metadata and message_metadata.get("attachments"):
             await prime_sandbox(agent, thread_id)
 
         emitted_tool_call_ids: set[str] = set()
@@ -571,6 +573,7 @@ async def _run_agent_to_buffer(
                 "data": json.dumps({
                     "content": display_content,
                     "showing": True,
+                    **({"attachments": meta["attachments"]} if meta.get("attachments") else {}),
                 }, ensure_ascii=False),
             })
 

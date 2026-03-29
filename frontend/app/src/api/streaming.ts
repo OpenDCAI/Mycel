@@ -55,7 +55,7 @@ export async function postRun(
   threadId: string,
   message: string,
   signal?: AbortSignal,
-  options?: { model?: string; enable_trajectory?: boolean },
+  options?: { model?: string; enable_trajectory?: boolean; attachments?: string[] },
 ): Promise<{ run_id: string; thread_id: string }> {
   return postJSON(`/api/threads/${encodeURIComponent(threadId)}/messages`, { message, ...options }, signal);
 }
@@ -114,6 +114,6 @@ export async function streamThreadEvents(
 }
 
 export async function cancelRun(threadId: string): Promise<void> {
-  const res = await fetch(`/api/threads/${encodeURIComponent(threadId)}/runs/cancel`, { method: "POST" });
+  const res = await authFetch(`/api/threads/${encodeURIComponent(threadId)}/runs/cancel`, { method: "POST" });
   if (!res.ok) throw new Error(`Cancel failed: ${res.statusText}`);
 }

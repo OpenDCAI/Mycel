@@ -56,8 +56,14 @@ export function useThreadData(threadId: string | undefined, skipInitialLoad = fa
       return;
     }
     if (skipInitialLoad) {
-      console.log('[useThreadData] Skipping initial load for new thread');
       setLoading(false);
+      // @@@skip-entries-not-sandbox — skipInitialLoad skips ENTRIES (to avoid
+      // overwriting optimistic entries), but we still need sandbox status so
+      // TaskProgress shows the correct indicator from the start.
+      getThread(threadId).then(thread => {
+        const sandbox = thread.sandbox;
+        setActiveSandbox(sandbox && typeof sandbox === "object" ? (sandbox as SandboxInfo) : null);
+      }).catch(() => {});
       return;
     }
     void loadThread(threadId);

@@ -359,6 +359,8 @@ def _handle_user_message(td: ThreadDisplay, data: dict) -> dict | None:
         "content": content,
         "timestamp": int(time.time() * 1000),
     }
+    if data.get("attachments"):
+        entry["attachments"] = data["attachments"]
     td.entries.append(entry)
     return {"type": "append_entry", "entry": entry}
 

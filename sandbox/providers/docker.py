@@ -7,16 +7,22 @@ Implements SandboxProvider using local Docker containers.
 from __future__ import annotations
 
 import asyncio
+import logging
 import os
 import shlex
 import subprocess
 import uuid
 from collections.abc import Callable
+from pathlib import Path
 from typing import TYPE_CHECKING
 
+logger = logging.getLogger(__name__)
+
+from sandbox.config import MountSpec
 from sandbox.interfaces.executor import ExecuteResult
 from sandbox.provider import (
     Metrics,
+    MountCapability,
     ProviderCapability,
     ProviderExecResult,
     SandboxProvider,
@@ -66,7 +72,14 @@ class DockerProvider(SandboxProvider):
             web=False,
             process=False,
             hooks=False,
-            snapshot=False,
+            mount=True,
+        ),
+        mount=MountCapability(
+            supports_mount=True,
+            supports_copy=True,
+            supports_read_only=True,
+            mode_handlers={"mount": True, "copy": True},
+            supports_member_volume=True,
         ),
     )
 
@@ -77,6 +90,8 @@ class DockerProvider(SandboxProvider):
         self,
         image: str,
         mount_path: str = "/workspace",
+        default_cwd: str = "/workspace",
+        bind_mounts: list[MountSpec] | None = None,
         command_timeout_sec: float = 20.0,
         provider_name: str | None = None,
         docker_host: str | None = None,
@@ -85,11 +100,49 @@ class DockerProvider(SandboxProvider):
             self.name = provider_name
         self.image = image
         self.mount_path = mount_path
+        self.default_cwd = default_cwd
+        self.bind_mounts: list[MountSpec] = [
+            MountSpec.model_validate(m) if isinstance(m, dict) else m for m in (bind_mounts or [])
+        ]
         self.command_timeout_sec = command_timeout_sec
         self._docker_host = docker_host
         self._sessions: dict[str, str] = {}  # session_id -> container_id
+        self._thread_bind_mounts: dict[str, list[MountSpec]] = {}  # thread_id -> bind_mounts
+        self._volume_mounts: dict[str, MountSpec] = {}  # thread_id -> member volume bind mount
 
-    def create_session(self, context_id: str | None = None) -> SessionInfo:
+    def set_thread_bind_mounts(self, thread_id: str, mounts: list[MountSpec | dict]) -> None:
+        """Set thread-specific bind mounts that will be applied when creating sessions."""
+        self._thread_bind_mounts[thread_id] = [
+            MountSpec.model_validate(m) if isinstance(m, dict) else m for m in mounts
+        ]
+
+    # ==================== Member Volume ====================
+
+    def create_member_volume(self, member_id: str, mount_path: str) -> str:
+        """Create a host directory for the agent. Returns host path as backend_ref."""
+        volume_dir = Path.home() / ".leon" / "member_volumes" / member_id
+        volume_dir.mkdir(parents=True, exist_ok=True)
+        logger.info("Created Docker member volume: %s", volume_dir)
+        return str(volume_dir)
+
+    def set_volume_mount(self, thread_id: str, backend_ref: str, mount_path: str) -> None:
+        self._volume_mounts[thread_id] = MountSpec(
+            source=backend_ref, target=mount_path, mode="mount", read_only=False,
+        )
+
+    def delete_member_volume(self, backend_ref: str) -> None:
+        """Delete member volume host directory. backend_ref is the host path."""
+        import shutil
+        volume_dir = Path(backend_ref).resolve()
+        # @@@safe-volume-delete - refuse to delete outside expected directory
+        expected_parent = (Path.home() / ".leon" / "member_volumes").resolve()
+        if not str(volume_dir).startswith(str(expected_parent)):
+            raise ValueError(f"Refusing to delete volume outside {expected_parent}: {volume_dir}")
+        if volume_dir.exists():
+            logger.info("Deleting Docker member volume: %s", volume_dir)
+            shutil.rmtree(volume_dir)
+
+    def create_session(self, context_id: str | None = None, thread_id: str | None = None) -> SessionInfo:
         session_id = f"leon-{uuid.uuid4().hex[:12]}"
         container_name = session_id
 
@@ -103,18 +156,38 @@ class DockerProvider(SandboxProvider):
             f"leon.session_id={session_id}",
         ]
 
+        # Merge global bind_mounts with thread-specific mounts + member volume mount
+        all_mounts = list(self.bind_mounts)
+        if thread_id and thread_id in self._volume_mounts:
+            all_mounts.append(self._volume_mounts.pop(thread_id))
+        if thread_id and thread_id in self._thread_bind_mounts:
+            all_mounts.extend(self._thread_bind_mounts[thread_id])
+
+        copy_mounts: list[tuple[str, str]] = []
+        for mount in all_mounts:
+            if mount.mode == "copy":
+                copy_mounts.append((mount.source, mount.target))
+                continue
+            volume_arg = f"{mount.source}:{mount.target}"
+            if mount.read_only:
+                volume_arg = f"{volume_arg}:ro"
+            cmd.extend(["-v", volume_arg])
+
         if context_id:
             # @@@context-label - also label with context_id so probe can find container via lease_id
             cmd.extend(["--label", f"leon.context_id={context_id}"])
             volume = context_id
             cmd.extend(["-v", f"{volume}:{self.mount_path}"])
 
-        cmd.extend(["-w", self.mount_path, self.image, "sleep", "infinity"])
+        cmd.extend(["-w", self.default_cwd, self.image, "sleep", "infinity"])
 
         result = self._run(cmd, timeout=self.command_timeout_sec)
         container_id = result.stdout.strip()
         if not container_id:
             raise RuntimeError("Failed to create docker container session")
+
+        for source, target in copy_mounts:
+            self._copy_host_path_into_container(container_id, source=source, target=target)
 
         self._sessions[session_id] = container_id
         return SessionInfo(session_id=session_id, provider=self.name, status="running")
@@ -162,7 +235,7 @@ class DockerProvider(SandboxProvider):
         cwd: str | None = None,
     ) -> ProviderExecResult:
         container_id = self._get_container_id(session_id)
-        workdir = cwd or self.mount_path
+        workdir = cwd or self.default_cwd
         shell_cmd = f"cd {shlex.quote(workdir)} && {command}"
         result = self._run(
             ["docker", "exec", container_id, "/bin/sh", "-lc", shell_cmd],
@@ -341,6 +414,33 @@ class DockerProvider(SandboxProvider):
             pass
         return None
 
+    def _copy_host_path_into_container(self, container_id: str, *, source: str, target: str) -> None:
+        source_path = Path(source)
+        if not source_path.exists():
+            raise RuntimeError(f"Copy source path does not exist: {source}")
+        if source_path.is_dir():
+            self._run(
+                ["docker", "exec", container_id, "/bin/sh", "-lc", f"mkdir -p {shlex.quote(target)}"],
+                timeout=self.command_timeout_sec,
+            )
+            self._run(
+                ["docker", "cp", f"{source_path}/.", f"{container_id}:{target}"],
+                timeout=self.command_timeout_sec,
+            )
+            return
+        if source_path.is_file():
+            parent = str(Path(target).parent)
+            self._run(
+                ["docker", "exec", container_id, "/bin/sh", "-lc", f"mkdir -p {shlex.quote(parent)}"],
+                timeout=self.command_timeout_sec,
+            )
+            self._run(
+                ["docker", "cp", str(source_path), f"{container_id}:{target}"],
+                timeout=self.command_timeout_sec,
+            )
+            return
+        raise RuntimeError(f"Unsupported copy source path type: {source}")
+
     def create_runtime(self, terminal: AbstractTerminal, lease: SandboxLease) -> PhysicalTerminalRuntime:
         return DockerPtyRuntime(terminal, lease, self)
 
@@ -361,6 +461,9 @@ class DockerProvider(SandboxProvider):
             return None
         raise RuntimeError(f"Docker session not found: {session_id}")
 
+    # @@@proxy-isolation - docker CLI hangs when it inherits http_proxy/all_proxy from parent
+    _PROXY_VARS = ("http_proxy", "https_proxy", "all_proxy", "HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY")
+
     def _run(
         self,
         cmd: list[str],
@@ -370,10 +473,9 @@ class DockerProvider(SandboxProvider):
         check: bool = True,
     ) -> subprocess.CompletedProcess[str]:
         effective_timeout = timeout if timeout is not None else self.command_timeout_sec
-        # @@@proxy-isolation - strip proxy vars to prevent docker CLI hangs
-        env = os.environ.copy()
-        for key in ['http_proxy', 'https_proxy', 'all_proxy', 'HTTP_PROXY', 'HTTPS_PROXY', 'ALL_PROXY']:
-            env.pop(key, None)
+        # @@@proxy-isolation - strip proxy vars so Docker CLI uses unix socket directly
+        env = {k: v for k, v in os.environ.items() if k not in self._PROXY_VARS}
+        # @@@docker-host - pass DOCKER_HOST when configured to bypass stuck Docker Desktop context
         if self._docker_host:
             env["DOCKER_HOST"] = self._docker_host
         try:

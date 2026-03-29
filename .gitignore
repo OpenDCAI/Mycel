@@ -13,9 +13,6 @@ CLAUDE.md
 # Virtual environments
 .venv
 
-# Playwright CLI snapshots
-.playwright-cli/
-
 # Runtime cache
 .claude/.sks-last-search.json
 .claude/skill-groups/
@@ -90,16 +87,17 @@ docs/assets/
 CLAUDE.local.md
 worktrees/
 
-# Playwright CLI artifacts
-frontend/app/.playwright-cli/
-frontend/app/*.png
-frontend/app/*.yml
-
 # Root-level test/debug artifacts
 /*.png
 /*.yml
 /*.yaml
 /dogfood-output/
-/.playwright-mcp/
 /current-chat.yaml
 /.claude/skills/
+
+# Development artifacts — never commit
+docs/lessons/
+docs/plans/
+frontend/.vite/
+.playwright-cli/
+ops

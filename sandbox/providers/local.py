@@ -49,7 +49,7 @@ class LocalSessionProvider(SandboxProvider):
             web=False,
             process=False,
             hooks=False,
-            snapshot=False,
+            mount=False,
         ),
     )
     default_cwd: str | None = None
@@ -59,7 +59,7 @@ class LocalSessionProvider(SandboxProvider):
     def get_capability(self) -> ProviderCapability:
         return self.CAPABILITY
 
-    def create_session(self, context_id: str | None = None) -> SessionInfo:
+    def create_session(self, context_id: str | None = None, thread_id: str | None = None) -> SessionInfo:
         session_id = context_id or f"local-{uuid.uuid4().hex[:12]}"
         with self._state_lock:
             self._session_states[session_id] = "running"

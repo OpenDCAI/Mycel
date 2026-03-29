@@ -647,6 +647,10 @@ def delete_member(member_id: str) -> bool:
     member_dir = MEMBERS_DIR / member_id
     if not member_dir.is_dir():
         return False
+
+    # @@@volume-cleanup - delete provider-side storage before removing member directory
+    _cleanup_member_volumes(member_id)
+
     shutil.rmtree(member_dir)
 
     # Also remove from SQLite
@@ -658,3 +662,24 @@ def delete_member(member_id: str) -> bool:
         repo.close()
 
     return True
+
+
+def _cleanup_member_volumes(member_id: str) -> None:
+    """Delete volume storage (volumes, host dirs) for a member being deleted."""
+    from backend.web.services.member_volume_service import list_member_volumes, delete_member_volume
+
+    volumes = list_member_volumes(member_id)
+    if not volumes:
+        return
+
+    from backend.web.services.sandbox_service import init_providers_and_managers
+    providers, _ = init_providers_and_managers()
+
+    for vol in volumes:
+        try:
+            provider = providers.get(vol["provider_type"])
+            if provider:
+                provider.delete_member_volume(vol["backend_ref"])
+            delete_member_volume(member_id, vol["provider_type"])
+        except Exception:
+            logger.warning("Failed to delete volume backend — keeping DB record: %s", vol, exc_info=True)

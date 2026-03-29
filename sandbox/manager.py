@@ -3,12 +3,15 @@
 Orchestrates: Thread → ChatSession → Runtime → Terminal → Lease → Instance
 """
 
+import logging
 import sqlite3
 import uuid
 from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 from storage.providers.sqlite.kernel import connect_sqlite
 
@@ -61,6 +64,12 @@ class SandboxManager:
             provider=provider,
             db_path=self.db_path,
             default_policy=ChatSessionPolicy(),
+        )
+
+        from sandbox.volume import SandboxVolume
+        self.volume = SandboxVolume(
+            provider=provider,
+            provider_capability=self.provider_capability,
         )
 
     def _default_terminal_cwd(self) -> str:
@@ -128,22 +137,55 @@ class SandboxManager:
         lease = self.lease_store.get(terminals[0].lease_id)
         return bool(lease and lease.provider_name == self.provider.name)
 
+    def _sync_to_sandbox(self, thread_id: str, instance_id: str,
+                         source=None, files: list[str] | None = None) -> None:
+        if source is None:
+            from backend.web.services.member_volume_service import get_lease_volume_source
+            source = get_lease_volume_source(thread_id)
+        self.volume.sync_upload(thread_id, instance_id, source, self.volume.resolve_remote_path(), files=files)
+
+    def _sync_from_sandbox(self, thread_id: str, instance_id: str, source=None) -> None:
+        if source is None:
+            from backend.web.services.member_volume_service import get_lease_volume_source
+            source = get_lease_volume_source(thread_id)
+        self.volume.sync_download(thread_id, instance_id, source, self.volume.resolve_remote_path())
+
+    def sync_uploads(self, thread_id: str, files: list[str] | None = None) -> bool:
+        """Upload files to the active sandbox. Returns False if no active session."""
+        terminal = self._get_active_terminal(thread_id)
+        if not terminal:
+            return False
+        session = self.session_manager.get(thread_id, terminal.terminal_id)
+        if not session:
+            return False
+        instance = session.lease.get_instance()
+        if not instance:
+            return False
+        self._sync_to_sandbox(thread_id, instance.instance_id, files=files)
+        return True
+
     def close(self):
         self.session_manager.close(reason="manager_close")
 
-    def get_sandbox(self, thread_id: str) -> SandboxCapability:
+    def get_sandbox(self, thread_id: str, bind_mounts: list | None = None) -> SandboxCapability:
+        from sandbox.thread_context import set_current_thread_id
+        set_current_thread_id(thread_id)
+
         terminal = self._get_active_terminal(thread_id)
         session = self.session_manager.get(thread_id, terminal.terminal_id) if terminal else None
         if session:
             self._assert_lease_provider(session.lease, thread_id)
             # @@@activity-resume - Any new activity against a paused thread must resume before command execution.
             if session.status == "paused":
-                if not self.resume_session(thread_id):
+                if not self.resume_session(thread_id, source="auto_resume"):
                     raise RuntimeError(f"Failed to resume paused session for thread {thread_id}")
                 session = self.session_manager.get(thread_id, session.terminal.terminal_id)
                 if not session:
                     raise RuntimeError(f"Session disappeared after resume for thread {thread_id}")
                 self._assert_lease_provider(session.lease, thread_id)
+            # Stamp bind_mounts on lease so lazy creation paths pick them up
+            if bind_mounts:
+                session.lease.bind_mounts = bind_mounts
             self._ensure_bound_instance(session.lease)
             return SandboxCapability(session, manager=self)
 
@@ -164,7 +206,20 @@ class SandboxManager:
                 lease = self.lease_store.create(terminal.lease_id, self.provider.name)
             self._assert_lease_provider(lease, thread_id)
 
+        # Stamp bind_mounts on lease so lazy creation paths pick them up
+        if bind_mounts:
+            lease.bind_mounts = bind_mounts
+
+        # @@@volume-strategy-gate - orchestrator handles mount decisions
+        from backend.web.services.member_volume_service import setup_sandbox_mounts
+        storage = setup_sandbox_mounts(thread_id, self.volume)
+
         self._ensure_bound_instance(lease)
+
+        # @@@force-instance-for-sync - Non-eager providers (E2B, Daytona, etc.) create instances lazily.
+        # Force instance creation here so workspace sync can upload files before tools run.
+        if not lease.get_instance():
+            lease.ensure_active_instance(self.provider)
 
         session_id = f"sess-{uuid.uuid4().hex[:12]}"
         session = self.session_manager.create(
@@ -176,9 +231,12 @@ class SandboxManager:
 
         instance = lease.get_instance()
         if instance:
+            # @@@workspace-upload - sync files to sandbox after creation
+            self._sync_to_sandbox(thread_id, instance.instance_id, source=storage["source"])
             self._fire_session_ready(instance.instance_id, "create")
 
         return SandboxCapability(session, manager=self)
+
 
     def create_background_command_session(self, thread_id: str, initial_cwd: str) -> Any:
         default_terminal = self.terminal_store.get_default(thread_id)
@@ -350,7 +408,7 @@ class SandboxManager:
                     # Only pause remote providers (local sandbox doesn't need pause)
                     if status == "running" and self.provider.name != "local":
                         try:
-                            paused = lease.pause_instance(self.provider)
+                            paused = lease.pause_instance(self.provider, source="idle_reaper")
                         except Exception as exc:
                             print(
                                 f"[idle-reaper] failed to pause expired lease {lease.lease_id} for thread {thread_id}: {exc}"
@@ -385,7 +443,15 @@ class SandboxManager:
             # @@@pause-rebind-instance - Pause must operate on a concrete running instance.
             # Re-resolve through lease to avoid pausing stale detached bindings.
             lease.ensure_active_instance(self.provider)
-            if not lease.pause_instance(self.provider):
+            instance = lease.get_instance()
+            if instance:
+                # @@@workspace-download - sync files from sandbox before pause
+                try:
+                    self._sync_from_sandbox(thread_id, instance.instance_id)
+                except Exception:
+                    logger.error("Failed to download workspace before pause — agent changes may be lost", exc_info=True)
+                    raise
+            if not lease.pause_instance(self.provider, source="user_pause"):
                 return False
 
         for terminal in terminals:
@@ -400,7 +466,7 @@ class SandboxManager:
             return
         self.get_sandbox(thread_id)
 
-    def resume_session(self, thread_id: str) -> bool:
+    def resume_session(self, thread_id: str, source: str = "user_resume") -> bool:
         terminals = self._get_thread_terminals(thread_id)
         if not terminals:
             return False
@@ -409,8 +475,13 @@ class SandboxManager:
         if not lease:
             return False
 
-        if not lease.resume_instance(self.provider):
+        if not lease.resume_instance(self.provider, source=source):
             return False
+
+        # @@@workspace-upload-on-resume - re-sync files that may have been uploaded while paused
+        instance = lease.get_instance()
+        if instance:
+            self._sync_to_sandbox(thread_id, instance.instance_id)
 
         resumed_any = False
         for terminal in terminals:
@@ -460,6 +531,18 @@ class SandboxManager:
         terminals = self.terminal_store.list_by_thread(thread_id)
         if not terminals:
             return False
+
+        # @@@workspace-download-before-destroy - sync files before destroy
+        lease = self._get_thread_lease(thread_id)
+        if lease and lease.observed_state == "running":
+            instance = lease.get_instance()
+            if instance:
+                try:
+                    self._sync_from_sandbox(thread_id, instance.instance_id)
+                except Exception:
+                    logger.error("Failed to download workspace before destroy — agent changes are lost", exc_info=True)
+                    raise
+        self.volume.clear_sync_state(thread_id)
 
         lease_ids = {terminal.lease_id for terminal in terminals}
 
@@ -565,6 +648,7 @@ class SandboxManager:
             try:
                 provider_sessions = self.provider.list_provider_sessions() or []
             except Exception:
+                logger.warning("Failed to list provider sessions for %s", self.provider.name, exc_info=True)
                 provider_sessions = []
 
             for ps in provider_sessions:

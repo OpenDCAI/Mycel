@@ -259,15 +259,23 @@ export default function AgentDetail() {
 
       {showTest && <TestPanel memberName={member.name} onClose={() => setShowTest(false)} />}
       {showPublish && <PublishDialog open={showPublish} onOpenChange={setShowPublish} memberId={member.id} />}
-      {pickerType && (
-        <ResourcePicker
-          type={pickerType}
-          library={pickerType === "skill" ? librarySkills : pickerType === "mcp" ? libraryMcps : libraryAgents}
-          assigned={pickerType === "skill" ? member.config.skills.map(s => s.name) : pickerType === "mcp" ? member.config.mcps.map(m => m.name) : member.config.subAgents.map(a => a.name)}
-          onConfirm={(names) => { handleAssign(pickerType, names); setPickerType(null); }}
-          onClose={() => setPickerType(null)}
-        />
-      )}
+      {pickerType && (() => {
+        const libraryMap = { skill: librarySkills, mcp: libraryMcps, agent: libraryAgents };
+        const assignedMap = {
+          skill: member.config.skills.map(s => s.name),
+          mcp: member.config.mcps.map(m => m.name),
+          agent: member.config.subAgents.map(a => a.name),
+        };
+        return (
+          <ResourcePicker
+            type={pickerType}
+            library={libraryMap[pickerType]}
+            assigned={assignedMap[pickerType]}
+            onConfirm={(names) => { handleAssign(pickerType, names); setPickerType(null); }}
+            onClose={() => setPickerType(null)}
+          />
+        );
+      })()}
     </div>
   );
 }
@@ -824,3 +832,4 @@ function ResourcePicker({ type, library, assigned, onConfirm, onClose }: {
     </Dialog>
   );
 }
+
