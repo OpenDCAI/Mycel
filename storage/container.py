@@ -17,6 +17,7 @@ from .contracts import (
     QueueRepo,
     RunEventRepo,
     SummaryRepo,
+    TerminalRepo,
 )
 
 StorageStrategy = Literal["sqlite", "supabase"]
@@ -33,6 +34,7 @@ _REPO_REGISTRY: dict[str, tuple[str, str]] = {
     "sandbox_volume_repo":       ("storage.providers.supabase.sandbox_volume_repo",      "SupabaseSandboxVolumeRepo"),
     "provider_event_repo":       ("storage.providers.supabase.provider_event_repo",      "SupabaseProviderEventRepo"),
     "lease_repo":                ("storage.providers.supabase.lease_repo",               "SupabaseLeaseRepo"),
+    "terminal_repo":             ("storage.providers.supabase.terminal_repo",            "SupabaseTerminalRepo"),
 }
 
 
@@ -50,6 +52,7 @@ class StorageContainer:
         "sandbox_volume_repo",
         "provider_event_repo",
         "lease_repo",
+        "terminal_repo",
     )
 
     def __init__(
@@ -108,6 +111,9 @@ class StorageContainer:
 
     def lease_repo(self) -> LeaseRepo:
         return self._build_repo("lease_repo", self._sqlite_lease_repo)
+
+    def terminal_repo(self) -> TerminalRepo:
+        return self._build_repo("terminal_repo", self._sqlite_terminal_repo)
 
     def purge_thread(self, thread_id: str) -> None:
         """Delete all data for a thread across all repos."""
@@ -228,3 +234,7 @@ class StorageContainer:
     def _sqlite_lease_repo(self):
         from storage.providers.sqlite.lease_repo import SQLiteLeaseRepo
         return SQLiteLeaseRepo(db_path=self._sandbox_db)
+
+    def _sqlite_terminal_repo(self):
+        from storage.providers.sqlite.terminal_repo import SQLiteTerminalRepo
+        return SQLiteTerminalRepo(db_path=self._sandbox_db)

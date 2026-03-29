@@ -308,13 +308,18 @@ class ChatSessionManager:
 
     def get(self, thread_id: str, terminal_id: str | None = None) -> ChatSession | None:
         if terminal_id is None:
-            from sandbox.terminal import TerminalStore
+            from storage.providers.sqlite.terminal_repo import SQLiteTerminalRepo
+            from sandbox.terminal import terminal_from_row
 
             # @@@thread-get-back-compat - Legacy callers query by thread only; route to current active terminal.
-            terminal = TerminalStore(db_path=self.db_path).get_active(thread_id)
-            if terminal is None:
+            _term_repo = SQLiteTerminalRepo(db_path=self.db_path)
+            try:
+                _term_row = _term_repo.get_active(thread_id)
+            finally:
+                _term_repo.close()
+            if _term_row is None:
                 return None
-            terminal_id = terminal.terminal_id
+            terminal_id = _term_row["terminal_id"]
         live = self._live_sessions.get(terminal_id)
         if live:
             if live.is_expired():
@@ -342,9 +347,15 @@ class ChatSessionManager:
 
         from sandbox.lease import lease_from_row
         from storage.providers.sqlite.lease_repo import SQLiteLeaseRepo
-        from sandbox.terminal import TerminalStore
+        from storage.providers.sqlite.terminal_repo import SQLiteTerminalRepo
+        from sandbox.terminal import terminal_from_row
 
-        terminal = TerminalStore(db_path=self.db_path).get_by_id(row["terminal_id"])
+        _term_repo = SQLiteTerminalRepo(db_path=self.db_path)
+        try:
+            _term_row = _term_repo.get_by_id(row["terminal_id"])
+        finally:
+            _term_repo.close()
+        terminal = terminal_from_row(_term_row, self.db_path) if _term_row else None
         _lease_repo = SQLiteLeaseRepo(db_path=self.db_path)
         try:
             _lease_row = _lease_repo.get(row["lease_id"])

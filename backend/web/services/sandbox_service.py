@@ -244,16 +244,18 @@ def mutate_sandbox_session(
         else:
             raise RuntimeError(f"Unknown action: {action}")
     else:
-        lease = manager.lease_store.get(lease_id) if lease_id else None
+        lease = manager.get_lease(lease_id) if lease_id else None
         if not lease:
             adopt_lease_id = str(lease_id or f"lease-adopt-{uuid.uuid4().hex[:12]}")
             adopt_status = str(session.get("status") or "unknown")
-            lease = manager.lease_store.adopt_instance(
+            from sandbox.lease import lease_from_row
+            adopt_row = manager.lease_store.adopt_instance(
                 lease_id=adopt_lease_id,
                 provider_name=provider_name,
                 instance_id=target_session_id,
                 status=adopt_status,
             )
+            lease = lease_from_row(adopt_row, manager.lease_store.db_path)
             lease_id = lease.lease_id
 
         mode = "manager_lease"

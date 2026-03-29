@@ -19,12 +19,12 @@ def get_sandbox_info(agent: Any, thread_id: str, sandbox_type: str) -> dict[str,
 
     try:
         mgr = agent._sandbox.manager
-        terminal = mgr.terminal_store.get(thread_id)
+        terminal = mgr.get_terminal(thread_id)
         if terminal:
             session = mgr.session_manager.get(thread_id, terminal.terminal_id)
             if session:
                 sandbox_info["session_id"] = session.session_id
-            lease = mgr.lease_store.get(terminal.lease_id)
+            lease = mgr.get_lease(terminal.lease_id)
             if lease:
                 instance = lease.get_instance()
                 if instance:
@@ -51,7 +51,7 @@ async def get_session_status(agent: Any, thread_id: str) -> dict[str, Any]:
 
     def _get_session():
         mgr = agent._sandbox.manager
-        terminal = mgr.terminal_store.get(thread_id)
+        terminal = mgr.get_terminal(thread_id)
         if not terminal:
             return None
         return mgr.session_manager.get(thread_id, terminal.terminal_id)
@@ -87,7 +87,7 @@ async def get_terminal_status(agent: Any, thread_id: str) -> dict[str, Any]:
 
     def _get_terminal():
         mgr = agent._sandbox.manager
-        return mgr.terminal_store.get(thread_id)
+        return mgr.get_terminal(thread_id)
 
     terminal = await asyncio.to_thread(_get_terminal)
     if not terminal:
@@ -119,10 +119,10 @@ async def get_lease_status(agent: Any, thread_id: str) -> dict[str, Any]:
 
     def _get_lease():
         mgr = agent._sandbox.manager
-        terminal = mgr.terminal_store.get(thread_id)
+        terminal = mgr.get_terminal(thread_id)
         if not terminal:
             return None
-        lease = mgr.lease_store.get(terminal.lease_id)
+        lease = mgr.get_lease(terminal.lease_id)
         if not lease:
             return None
         return lease

@@ -21,29 +21,32 @@ def _resolve_volume_source(thread_id: str):
     This is the application-layer entry point. Uses sandbox-layer stores
     to walk: thread → terminal → lease → volume_id → sandbox_volumes.
     """
-    from sandbox.terminal import TerminalStore
+    from storage.providers.sqlite.terminal_repo import SQLiteTerminalRepo
     from sandbox.lease import lease_from_row
     from storage.providers.sqlite.lease_repo import SQLiteLeaseRepo
     from sandbox.config import DEFAULT_DB_PATH
     from sandbox.volume_source import deserialize_volume_source
 
-    terminal_store = TerminalStore(db_path=DEFAULT_DB_PATH)
-    terminal = terminal_store.get_active(thread_id)
-    if not terminal:
+    terminal_repo = SQLiteTerminalRepo(db_path=DEFAULT_DB_PATH)
+    try:
+        terminal_row = terminal_repo.get_active(thread_id)
+    finally:
+        terminal_repo.close()
+    if not terminal_row:
         raise ValueError(f"No active terminal for thread {thread_id}")
 
     lease_repo = SQLiteLeaseRepo(db_path=DEFAULT_DB_PATH)
     try:
-        lease_row = lease_repo.get(terminal.lease_id)
+        lease_row = lease_repo.get(terminal_row["lease_id"])
     finally:
         lease_repo.close()
     if not lease_row:
-        raise ValueError(f"Lease not found: {terminal.lease_id}")
+        raise ValueError(f"Lease not found: {terminal_row['lease_id']}")
 
     lease = lease_from_row(lease_row, DEFAULT_DB_PATH)
     volume_id = lease.volume_id
     if not volume_id:
-        raise ValueError(f"Lease {terminal.lease_id} has no volume_id")
+        raise ValueError(f"Lease {terminal_row['lease_id']} has no volume_id")
 
     repo = _get_container().sandbox_volume_repo()
     try:

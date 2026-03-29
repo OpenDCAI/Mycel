@@ -16,7 +16,8 @@ from sandbox.chat_session import (
 )
 from sandbox.lease import lease_from_row
 from storage.providers.sqlite.lease_repo import SQLiteLeaseRepo
-from sandbox.terminal import TerminalStore
+from sandbox.terminal import terminal_from_row
+from storage.providers.sqlite.terminal_repo import SQLiteTerminalRepo
 
 
 @pytest.fixture
@@ -30,8 +31,8 @@ def temp_db():
 
 @pytest.fixture
 def terminal_store(temp_db):
-    """Create TerminalStore with temp database."""
-    return TerminalStore(db_path=temp_db)
+    """Create SQLiteTerminalRepo with temp database."""
+    return SQLiteTerminalRepo(db_path=temp_db)
 
 
 class _LeaseStoreCompat:
@@ -94,7 +95,7 @@ class TestChatSession:
 
     def test_is_expired_idle_timeout(self, terminal_store, lease_store):
         """Test session expires after idle timeout."""
-        terminal = terminal_store.create("term-1", "thread-1", "lease-1")
+        terminal = terminal_from_row(terminal_store.create("term-1", "thread-1", "lease-1"), terminal_store.db_path)
         lease = lease_store.create("lease-1", "local")
         runtime = MagicMock()
 
@@ -116,7 +117,7 @@ class TestChatSession:
 
     def test_is_expired_max_duration(self, terminal_store, lease_store):
         """Test session expires after max duration."""
-        terminal = terminal_store.create("term-1", "thread-1", "lease-1")
+        terminal = terminal_from_row(terminal_store.create("term-1", "thread-1", "lease-1"), terminal_store.db_path)
         lease = lease_store.create("lease-1", "local")
         runtime = MagicMock()
 
@@ -138,7 +139,7 @@ class TestChatSession:
 
     def test_not_expired(self, terminal_store, lease_store):
         """Test session not expired when within limits."""
-        terminal = terminal_store.create("term-1", "thread-1", "lease-1")
+        terminal = terminal_from_row(terminal_store.create("term-1", "thread-1", "lease-1"), terminal_store.db_path)
         lease = lease_store.create("lease-1", "local")
         runtime = MagicMock()
 
@@ -161,7 +162,7 @@ class TestChatSession:
     def test_touch_updates_activity(self, terminal_store, lease_store, temp_db, mock_provider):
         """Test touch updates last_active_at."""
         ChatSessionManager(provider=mock_provider, db_path=temp_db)
-        terminal = terminal_store.create("term-1", "thread-1", "lease-1")
+        terminal = terminal_from_row(terminal_store.create("term-1", "thread-1", "lease-1"), terminal_store.db_path)
         lease = lease_store.create("lease-1", "local")
         runtime = MagicMock()
 
@@ -190,7 +191,7 @@ class TestChatSession:
     async def test_close_calls_runtime_close(self, terminal_store, lease_store, temp_db, mock_provider):
         """Test close calls runtime.close()."""
         ChatSessionManager(provider=mock_provider, db_path=temp_db)
-        terminal = terminal_store.create("term-1", "thread-1", "lease-1")
+        terminal = terminal_from_row(terminal_store.create("term-1", "thread-1", "lease-1"), terminal_store.db_path)
         lease = lease_store.create("lease-1", "local")
         runtime = MagicMock()
         runtime.close = MagicMock(return_value=asyncio.Future())
@@ -232,7 +233,7 @@ class TestChatSessionManager:
 
     def test_create_session(self, session_manager, terminal_store, lease_store):
         """Test creating a new session."""
-        terminal = terminal_store.create("term-1", "thread-1", "lease-1")
+        terminal = terminal_from_row(terminal_store.create("term-1", "thread-1", "lease-1"), terminal_store.db_path)
         lease = lease_store.create("lease-1", "local")
 
         session = session_manager.create(
@@ -250,7 +251,7 @@ class TestChatSessionManager:
 
     def test_get_session(self, session_manager, terminal_store, lease_store):
         """Test retrieving session by thread_id."""
-        terminal = terminal_store.create("term-1", "thread-1", "lease-1")
+        terminal = terminal_from_row(terminal_store.create("term-1", "thread-1", "lease-1"), terminal_store.db_path)
         lease = lease_store.create("lease-1", "local")
 
         session_manager.create(
@@ -272,7 +273,7 @@ class TestChatSessionManager:
 
     def test_get_expired_session_returns_none(self, session_manager, terminal_store, lease_store):
         """Test that expired session returns None and is cleaned up."""
-        terminal = terminal_store.create("term-1", "thread-1", "lease-1")
+        terminal = terminal_from_row(terminal_store.create("term-1", "thread-1", "lease-1"), terminal_store.db_path)
         lease = lease_store.create("lease-1", "local")
 
         # Create session with very short timeout
@@ -293,7 +294,7 @@ class TestChatSessionManager:
 
     def test_touch_updates_db(self, session_manager, terminal_store, lease_store, temp_db):
         """Test that touch updates database."""
-        terminal = terminal_store.create("term-1", "thread-1", "lease-1")
+        terminal = terminal_from_row(terminal_store.create("term-1", "thread-1", "lease-1"), terminal_store.db_path)
         lease = lease_store.create("lease-1", "local")
 
         session = session_manager.create(
@@ -314,7 +315,7 @@ class TestChatSessionManager:
 
     def test_delete_session(self, session_manager, terminal_store, lease_store):
         """Test deleting a session."""
-        terminal = terminal_store.create("term-1", "thread-1", "lease-1")
+        terminal = terminal_from_row(terminal_store.create("term-1", "thread-1", "lease-1"), terminal_store.db_path)
         lease = lease_store.create("lease-1", "local")
 
         session_manager.create(
@@ -336,7 +337,7 @@ class TestChatSessionManager:
     def test_list_all_sessions(self, session_manager, terminal_store, lease_store):
         """Test listing all sessions."""
         terminal1 = terminal_store.create("term-1", "thread-1", "lease-1")
-        terminal2 = terminal_store.create("term-2", "thread-2", "lease-1")
+        terminal2 = terminal_from_row(terminal_store.create("term-2", "thread-2", "lease-1"), terminal_store.db_path)
         lease = lease_store.create("lease-1", "local")
 
         time.sleep(0.01)
@@ -354,7 +355,7 @@ class TestChatSessionManager:
     def test_cleanup_expired(self, session_manager, terminal_store, lease_store):
         """Test cleanup_expired removes expired sessions."""
         terminal1 = terminal_store.create("term-1", "thread-1", "lease-1")
-        terminal2 = terminal_store.create("term-2", "thread-2", "lease-1")
+        terminal2 = terminal_from_row(terminal_store.create("term-2", "thread-2", "lease-1"), terminal_store.db_path)
         lease = lease_store.create("lease-1", "local")
 
         # Create one expired session
@@ -380,7 +381,7 @@ class TestChatSessionIntegration:
 
     def test_full_lifecycle(self, session_manager, terminal_store, lease_store):
         """Test complete session lifecycle: create → use → expire → cleanup."""
-        terminal = terminal_store.create("term-1", "thread-1", "lease-1")
+        terminal = terminal_from_row(terminal_store.create("term-1", "thread-1", "lease-1"), terminal_store.db_path)
         lease = lease_store.create("lease-1", "local")
 
         # Create session
@@ -400,7 +401,7 @@ class TestChatSessionIntegration:
 
     def test_session_with_custom_policy(self, session_manager, terminal_store, lease_store):
         """Test session with custom policy."""
-        terminal = terminal_store.create("term-1", "thread-1", "lease-1")
+        terminal = terminal_from_row(terminal_store.create("term-1", "thread-1", "lease-1"), terminal_store.db_path)
         lease = lease_store.create("lease-1", "local")
 
         policy = ChatSessionPolicy(idle_ttl_sec=1800, max_duration_sec=43200)
