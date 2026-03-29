@@ -13,11 +13,12 @@ from pydantic import BaseModel
 
 from config.models_loader import ModelsLoader
 from config.models_schema import ModelsConfig
+from config.user_paths import first_existing_user_home_path, user_home_path, user_home_read_candidates
 
 router = APIRouter(prefix="/api/settings", tags=["settings"])
 
-SETTINGS_FILE = Path.home() / ".leon" / "preferences.json"
-MODELS_FILE = Path.home() / ".leon" / "models.json"
+SETTINGS_FILE = user_home_path("preferences.json")
+MODELS_FILE = user_home_path("models.json")
 
 
 # ============================================================================
@@ -42,11 +43,8 @@ class DirectoryItem(BaseModel):
 
 
 def load_settings() -> WorkspaceSettings:
-    if not SETTINGS_FILE.exists():
-        return WorkspaceSettings()
     try:
-        with open(SETTINGS_FILE, encoding="utf-8") as f:
-            data = json.load(f)
+        data = _load_user_json("preferences.json")
         return WorkspaceSettings(**data)
     except Exception:
         return WorkspaceSettings()
@@ -65,13 +63,7 @@ def save_settings(settings: WorkspaceSettings) -> None:
 
 def load_models() -> dict[str, Any]:
     """Load raw models.json from disk (user-level only)."""
-    if not MODELS_FILE.exists():
-        return {}
-    try:
-        with open(MODELS_FILE, encoding="utf-8") as f:
-            return json.load(f)
-    except Exception:
-        return {}
+    return _load_user_json("models.json")
 
 
 def save_models(data: dict[str, Any]) -> None:
@@ -84,6 +76,18 @@ def save_models(data: dict[str, Any]) -> None:
 def load_merged_models() -> ModelsConfig:
     """Load fully merged ModelsConfig (system + user)."""
     return ModelsLoader().load()
+
+
+def _load_user_json(*parts: str) -> dict[str, Any]:
+    for path in reversed(user_home_read_candidates(*parts)):
+        if not path.exists():
+            continue
+        try:
+            with open(path, encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            continue
+    return {}
 
 
 # ============================================================================
@@ -556,8 +560,8 @@ async def update_provider(request: ProviderRequest, req: Request) -> dict[str, A
 # Sandboxes (unchanged)
 # ============================================================================
 
-SANDBOXES_DIR = Path.home() / ".leon" / "sandboxes"
-OBSERVATION_FILE = Path.home() / ".leon" / "observation.json"
+SANDBOXES_DIR = user_home_path("sandboxes")
+OBSERVATION_FILE = user_home_path("observation.json")
 
 
 # ============================================================================
@@ -587,13 +591,7 @@ async def update_observation_settings(request: ObservationRequest) -> dict[str, 
     New threads will pick up the active provider at creation time.
     Existing threads keep their locked provider — only credentials are read live.
     """
-    data: dict[str, Any] = {}
-    if OBSERVATION_FILE.exists():
-        try:
-            with open(OBSERVATION_FILE, encoding="utf-8") as f:
-                data = json.load(f)
-        except Exception:
-            pass
+    data = _load_user_json("observation.json")
 
     data["active"] = request.active
     if request.langfuse is not None:
@@ -690,8 +688,14 @@ class SandboxConfigRequest(BaseModel):
 async def list_sandbox_configs() -> dict[str, Any]:
     """List all sandbox configurations from ~/.leon/sandboxes/."""
     sandboxes: dict[str, Any] = {}
-    if SANDBOXES_DIR.exists():
-        for f in SANDBOXES_DIR.glob("*.json"):
+    seen: set[Path] = set()
+    for root in user_home_read_candidates("sandboxes"):
+        if not root.exists():
+            continue
+        for f in root.glob("*.json"):
+            if f.resolve() in seen:
+                continue
+            seen.add(f.resolve())
             try:
                 with open(f, encoding="utf-8") as fh:
                     sandboxes[f.stem] = json.load(fh)

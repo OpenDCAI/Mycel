@@ -9,21 +9,25 @@ from __future__ import annotations
 import json
 import logging
 import uuid
-from pathlib import Path
 from typing import Any
+
+from config.user_paths import user_home_path, user_home_read_candidates
 
 logger = logging.getLogger(__name__)
 
-INSTANCES_FILE = Path.home() / ".leon" / "agent_instances.json"
+INSTANCES_FILE = user_home_path("agent_instances.json")
 
 
 def _load() -> dict[str, Any]:
-    if INSTANCES_FILE.exists():
+    merged: dict[str, Any] = {}
+    for path in user_home_read_candidates("agent_instances.json"):
+        if not path.exists():
+            continue
         try:
-            return json.loads(INSTANCES_FILE.read_text())
+            merged.update(json.loads(path.read_text()))
         except (json.JSONDecodeError, OSError) as e:
             logger.warning("Failed to load agent_instances.json: %s", e)
-    return {}
+    return merged
 
 
 def _save(data: dict[str, Any]) -> None:

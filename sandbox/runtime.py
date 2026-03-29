@@ -4,9 +4,8 @@ from __future__ import annotations
 
 import asyncio
 import os
-import pty
+import platform
 import re
-import select
 import shlex
 import sqlite3
 import subprocess
@@ -26,6 +25,13 @@ if TYPE_CHECKING:
 from sandbox.interfaces.executor import AsyncCommand, ExecuteResult
 from sandbox.shell_output import normalize_pty_result
 from storage.providers.sqlite.kernel import connect_sqlite
+
+if platform.system() == "Windows":
+    pty = None
+    select = None
+else:
+    import pty
+    import select
 
 ENV_NAME_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 
@@ -156,6 +162,8 @@ class _SubprocessPtySession:
     def start(self) -> None:
         if self.is_alive():
             return
+        if pty is None:
+            raise RuntimeError("PTY sessions are not supported on Windows")
         master_fd, slave_fd = pty.openpty()
         try:
             self._proc = subprocess.Popen(

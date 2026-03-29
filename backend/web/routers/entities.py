@@ -10,11 +10,12 @@ from fastapi import APIRouter, Depends, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 
 from backend.web.core.dependencies import get_app, get_current_user_id
+from backend.web.core.paths import avatars_dir
 from backend.web.utils.serializers import avatar_url
 
 logger = logging.getLogger(__name__)
 
-AVATARS_DIR = Path.home() / ".leon" / "avatars"
+AVATARS_DIR = avatars_dir()
 MAX_UPLOAD_BYTES = 5 * 1024 * 1024
 AVATAR_SIZE = 256
 ALLOWED_CONTENT_TYPES = {"image/png", "image/jpeg", "image/webp", "image/gif"}

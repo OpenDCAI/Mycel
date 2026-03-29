@@ -25,6 +25,8 @@ from typing import Awaitable, Callable, Literal
 import httpx
 from pydantic import BaseModel
 
+from config.user_paths import user_home_path, user_home_read_candidates
+
 logger = logging.getLogger(__name__)
 
 DEFAULT_BASE_URL = "https://ilinkai.weixin.qq.com"
@@ -39,7 +41,7 @@ MSG_ITEM_TEXT = 1
 MSG_ITEM_VOICE = 3
 MSG_STATE_FINISH = 2
 
-CONNECTIONS_BASE = Path(os.path.expanduser("~/.leon/connections/wechat"))
+CONNECTIONS_BASE = user_home_path("connections", "wechat")
 
 RoutingType = Literal["thread", "chat"]
 
@@ -133,6 +135,10 @@ def _user_dir(entity_id: str) -> Path:
     return CONNECTIONS_BASE / entity_id
 
 
+def _user_dir_candidates(entity_id: str) -> tuple[Path, ...]:
+    return tuple(path / entity_id for path in user_home_read_candidates("connections", "wechat"))
+
+
 def _save_json(entity_id: str, filename: str, data: dict) -> None:
     d = _user_dir(entity_id)
     d.mkdir(parents=True, exist_ok=True)
@@ -143,20 +149,26 @@ def _save_json(entity_id: str, filename: str, data: dict) -> None:
 
 
 def _load_json(entity_id: str, filename: str) -> dict | None:
-    path = _user_dir(entity_id) / filename
-    if not path.exists():
-        return None
-    try:
-        return json.loads(path.read_text())
-    except (json.JSONDecodeError, KeyError) as e:
-        logger.error("Failed to load %s for %s: %s", filename, entity_id[:12], e)
-        return None
+    for path in reversed(_user_dir_candidates(entity_id)):
+        candidate = path / filename
+        if not candidate.exists():
+            continue
+        try:
+            return json.loads(candidate.read_text())
+        except (json.JSONDecodeError, KeyError) as e:
+            logger.error("Failed to load %s for %s: %s", filename, entity_id[:12], e)
+    return None
 
 
 def _delete_file(entity_id: str, filename: str) -> None:
-    path = _user_dir(entity_id) / filename
-    if path.exists():
-        path.unlink()
+    seen: set[Path] = set()
+    for user_dir in _user_dir_candidates(entity_id):
+        path = user_dir / filename
+        if path in seen:
+            continue
+        seen.add(path)
+        if path.exists():
+            path.unlink()
 
 
 # --- WeChatConnection (one per human entity) ---

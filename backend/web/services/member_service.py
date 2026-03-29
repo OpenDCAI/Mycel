@@ -20,6 +20,7 @@ from typing import Any
 
 import yaml
 
+from backend.web.core.paths import avatars_dir, members_dir
 from backend.web.services.thread_naming import canonical_entity_name
 from config.defaults.tool_catalog import TOOLS_BY_NAME, ToolDef
 from backend.web.utils.serializers import avatar_url
@@ -27,8 +28,7 @@ from config.loader import AgentLoader
 
 logger = logging.getLogger(__name__)
 
-LEON_HOME = Path.home() / ".leon"
-MEMBERS_DIR = LEON_HOME / "members"
+MEMBERS_DIR = members_dir()
 _SYSTEM_AGENTS_DIR = (Path(__file__).resolve().parents[3] / "config" / "defaults" / "agents").resolve()
 
 
@@ -239,7 +239,7 @@ def _member_to_dict(member_dir: Path) -> dict[str, Any] | None:
         "model": agent.model,
         "status": meta.get("status", "draft"),
         "version": meta.get("version", "0.1.0"),
-        "avatar_url": avatar_url(member_id, (Path.home() / ".leon" / "avatars" / f"{member_id}.png").exists()),
+        "avatar_url": avatar_url(member_id, (avatars_dir() / f"{member_id}.png").exists()),
         "config": {
             "prompt": agent.system_prompt,
             "rules": rules_list,

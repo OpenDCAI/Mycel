@@ -1,11 +1,76 @@
 """Leon Web Backend - FastAPI Application."""
 
 import os
+import sqlite3
 import subprocess
+import sys
+from pathlib import Path
 
 import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+
+
+def _ensure_windows_db_env_defaults() -> None:
+    """On Windows, default Leon DBs to a LOCALAPPDATA-backed path."""
+    if sys.platform != "win32":
+        return
+
+    root = _resolve_windows_db_root()
+    root.mkdir(parents=True, exist_ok=True)
+    defaults = {
+        "LEON_DB_PATH": root / "leon.db",
+        "LEON_RUN_EVENT_DB_PATH": root / "events.db",
+        "LEON_QUEUE_DB_PATH": root / "queue.db",
+        "LEON_CHAT_DB_PATH": root / "chat.db",
+        "LEON_SANDBOX_DB_PATH": root / "sandbox.db",
+        "LEON_SUBAGENT_DB_PATH": root / "subagent.db",
+        "LEON_EVAL_DB_PATH": root / "eval.db",
+    }
+    for key, value in defaults.items():
+        os.environ.setdefault(key, str(value))
+
+
+def _resolve_windows_db_root() -> Path:
+    local_appdata = Path(os.getenv("LOCALAPPDATA") or (Path.home() / "AppData" / "Local"))
+    candidates = [
+        local_appdata / "Leon",
+        Path.home() / ".codex" / "memories" / "mycel-run",
+        Path.home() / ".leon-win",
+    ]
+    seen: set[Path] = set()
+    for root in candidates:
+        if root in seen:
+            continue
+        seen.add(root)
+        if _sqlite_root_supports_wal(root):
+            return root
+    return candidates[0]
+
+
+def _sqlite_root_supports_wal(root: Path) -> bool:
+    probe = root / ".leon-probe.db"
+    conn: sqlite3.Connection | None = None
+    try:
+        root.mkdir(parents=True, exist_ok=True)
+        conn = sqlite3.connect(str(probe), timeout=1.0)
+        mode = conn.execute("PRAGMA journal_mode=WAL").fetchone()
+        conn.execute("CREATE TABLE IF NOT EXISTS _probe(x INTEGER)")
+        conn.commit()
+        return bool(mode and str(mode[0]).lower() == "wal")
+    except Exception:
+        return False
+    finally:
+        if conn is not None:
+            conn.close()
+        for suffix in ("", "-wal", "-shm"):
+            try:
+                (root / f".leon-probe.db{suffix}").unlink(missing_ok=True)
+            except OSError:
+                pass
+
+
+_ensure_windows_db_env_defaults()
 
 from backend.web.core.lifespan import lifespan
 from backend.web.routers import auth, chats, connections, debug, entities, monitor, panel, sandbox, settings, threads, thread_files, webhooks

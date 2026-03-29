@@ -11,6 +11,7 @@ logger = logging.getLogger(__name__)
 
 from backend.web.core.config import LOCAL_WORKSPACE_ROOT, SANDBOXES_DIR
 from backend.web.utils.helpers import is_virtual_thread_id
+from config.user_paths import user_home_read_candidates
 from sandbox.config import SandboxConfig
 from sandbox.config import DEFAULT_DB_PATH as SANDBOX_DB_PATH
 from sandbox.manager import SandboxManager
@@ -31,6 +32,21 @@ def _capability_to_dict(capability: ProviderCapability) -> dict[str, Any]:
     }
 
 
+def _configured_sandbox_names() -> list[str]:
+    names: list[str] = []
+    seen: set[str] = set()
+    for root in user_home_read_candidates("sandboxes"):
+        if not root.exists():
+            continue
+        for config_file in sorted(root.glob("*.json")):
+            name = config_file.stem
+            if name in seen:
+                continue
+            seen.add(name)
+            names.append(name)
+    return names
+
+
 def available_sandbox_types() -> list[dict[str, Any]]:
     """Scan ~/.leon/sandboxes/ for configured providers."""
     providers, _ = init_providers_and_managers()
@@ -43,10 +59,7 @@ def available_sandbox_types() -> list[dict[str, Any]]:
             "capability": _capability_to_dict(local_capability),
         }
     ]
-    if not SANDBOXES_DIR.exists():
-        return types
-    for f in sorted(SANDBOXES_DIR.glob("*.json")):
-        name = f.stem
+    for name in _configured_sandbox_names():
         try:
             config = SandboxConfig.load(name)
             provider_obj = providers.get(name)
@@ -70,12 +83,7 @@ def init_providers_and_managers() -> tuple[dict, dict]:
     providers: dict[str, Any] = {
         "local": LocalSessionProvider(default_cwd=str(LOCAL_WORKSPACE_ROOT)),
     }
-    if not SANDBOXES_DIR.exists():
-        managers = {name: SandboxManager(provider=p, db_path=SANDBOX_DB_PATH) for name, p in providers.items()}
-        return providers, managers
-
-    for config_file in SANDBOXES_DIR.glob("*.json"):
-        name = config_file.stem
+    for name in _configured_sandbox_names():
         try:
             config = SandboxConfig.load(name)
             if config.provider == "agentbay":

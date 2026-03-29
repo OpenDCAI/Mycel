@@ -11,6 +11,8 @@ import sqlite3
 from dataclasses import dataclass
 from pathlib import Path
 
+from config.user_paths import user_home_path
+
 
 @dataclass
 class AgentEntry:
@@ -28,7 +30,7 @@ class AgentRegistry:
     Persisted at ~/.leon/agent_registry.db
     """
 
-    DEFAULT_DB_PATH = Path.home() / ".leon" / "agent_registry.db"
+    DEFAULT_DB_PATH = user_home_path("agent_registry.db")
 
     def __init__(self, db_path: Path | None = None):
         self._db_path = db_path or self.DEFAULT_DB_PATH
