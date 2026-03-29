@@ -741,6 +741,20 @@ async def _run_agent_to_buffer(
                             msg_class = msg.__class__.__name__
 
                             if msg_class == "HumanMessage":
+                                # @@@mid-turn-chat-notice — emit notice for chat
+                                # notifications injected by before_model. display_builder
+                                # folds it into the current turn as a segment (same as
+                                # cold-path checkpoint rebuild behavior).
+                                meta = getattr(msg, "metadata", None) or {}
+                                if meta.get("notification_type") == "chat" and meta.get("source") in ("external", "system"):
+                                    await emit({
+                                        "event": "notice",
+                                        "data": json.dumps({
+                                            "content": msg.content if isinstance(msg.content, str) else str(msg.content),
+                                            "source": meta.get("source", "external"),
+                                            "notification_type": "chat",
+                                        }, ensure_ascii=False),
+                                    })
                                 continue
 
                             if msg_class == "AIMessage":
