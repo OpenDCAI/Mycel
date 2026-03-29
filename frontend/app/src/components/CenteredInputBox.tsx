@@ -1,5 +1,6 @@
 import { ChevronDown, Folder, Send } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import type { SandboxType } from "../api";
 import { Button } from "./ui/button";
 import {
@@ -21,11 +22,33 @@ import FilesystemBrowser from "./FilesystemBrowser";
 interface CenteredInputBoxProps {
   sandboxTypes: SandboxType[];
   defaultSandbox?: string;
+  sandboxChoices?: Array<{ value: string; label: string; available?: boolean }>;
+  hideSandboxSelector?: boolean;
   defaultWorkspace?: string;
+  workspaceSelectionEnabled?: boolean;
   defaultModel?: string;
   recentWorkspaces?: string[];
-  enabledModels?: string[];
+  environmentControl?: {
+    renderSummary: (args: EnvironmentControlArgs) => ReactNode;
+    renderPanel: (args: EnvironmentControlArgs) => ReactNode;
+    isDetailView?: boolean;
+    panelClassName?: string;
+    onOpen?: () => void;
+    onCancel?: () => void;
+    onApply?: () => boolean | Promise<boolean>;
+    applyLabel?: string;
+  };
   onSend: (message: string, sandbox: string, model: string, workspace?: string) => Promise<void>;
+}
+
+interface EnvironmentControlArgs {
+  sandbox: string;
+  setSandbox: (value: string) => void;
+  workspace: string;
+  setWorkspace: (value: string) => void;
+  customWorkspace: string;
+  setCustomWorkspace: (value: string) => void;
+  persistWorkspace: (path: string) => Promise<void>;
 }
 
 const MODELS = [
@@ -57,10 +80,13 @@ function formatSandboxLabel(name: string): string {
 export default function CenteredInputBox({
   sandboxTypes,
   defaultSandbox = "local",
+  sandboxChoices,
+  hideSandboxSelector = false,
   defaultWorkspace,
+  workspaceSelectionEnabled = true,
   defaultModel = "leon:large",
   recentWorkspaces = [],
-  enabledModels = [],
+  environmentControl,
   onSend,
 }: CenteredInputBoxProps) {
   const [message, setMessage] = useState("");
@@ -71,11 +97,29 @@ export default function CenteredInputBox({
   const [sending, setSending] = useState(false);
   const [workspacePopoverOpen, setWorkspacePopoverOpen] = useState(false);
   const [modelPopoverOpen, setModelPopoverOpen] = useState(false);
-  const [showCustomModels, setShowCustomModels] = useState(
-    () => !MODELS.some((m) => m.value === defaultModel) && !!defaultModel
-  );
+  const [advancedConfigOpen, setAdvancedConfigOpen] = useState(false);
+  const [draftModel, setDraftModel] = useState(defaultModel);
+  const [applyingConfig, setApplyingConfig] = useState(false);
+
+  useEffect(() => {
+    setSandbox(defaultSandbox);
+  }, [defaultSandbox]);
+
+  useEffect(() => {
+    setWorkspace(defaultWorkspace || "");
+  }, [defaultWorkspace]);
+
+  useEffect(() => {
+    setModel(defaultModel);
+    setDraftModel(defaultModel);
+  }, [defaultModel]);
 
   const isLocalSandbox = sandbox === "local";
+  const choices = sandboxChoices ?? sandboxTypes.map((type) => ({
+    value: type.name,
+    label: formatSandboxLabel(type.name),
+    available: type.available,
+  }));
 
   async function handleSend() {
     const text = message.trim();
@@ -87,6 +131,7 @@ export default function CenteredInputBox({
       await onSend(text, sandbox, model, finalWorkspace);
       setMessage("");
       setCustomWorkspace("");
+      setAdvancedConfigOpen(false);
     } finally {
       setSending(false);
     }
@@ -114,12 +159,54 @@ export default function CenteredInputBox({
     }
   }
 
-  function persistWorkspace(path: string) {
-    return fetch("/api/settings/workspace", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ workspace: path }),
-    }).catch(() => {});
+  async function persistWorkspace(path: string): Promise<void> {
+    try {
+      await fetch("/api/settings/workspace", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ workspace: path }),
+      });
+    } catch {
+      // @@@workspace-persist-best-effort - input should still move forward even if the settings write fails.
+    }
+  }
+
+  const environmentArgs: EnvironmentControlArgs = {
+    sandbox,
+    setSandbox,
+    workspace,
+    setWorkspace,
+    customWorkspace,
+    setCustomWorkspace,
+    persistWorkspace,
+  };
+  const activeModelLabel = MODELS.find((entry) => entry.value === model)?.label ?? model;
+  const quietSummary = environmentControl
+    ? `${environmentControl.renderSummary(environmentArgs)} · ${activeModelLabel}`
+    : activeModelLabel;
+
+  function openAdvancedConfig() {
+    setDraftModel(model);
+    environmentControl?.onOpen?.();
+    setAdvancedConfigOpen(true);
+  }
+
+  function cancelAdvancedConfig() {
+    setDraftModel(model);
+    environmentControl?.onCancel?.();
+    setAdvancedConfigOpen(false);
+  }
+
+  async function applyAdvancedConfig() {
+    setApplyingConfig(true);
+    try {
+      const shouldClose = (await environmentControl?.onApply?.()) ?? true;
+      if (!shouldClose) return;
+      setModel(draftModel);
+      setAdvancedConfigOpen(false);
+    } finally {
+      setApplyingConfig(false);
+    }
   }
 
   // ============================================================
@@ -146,21 +233,29 @@ export default function CenteredInputBox({
         />
         <p className="text-[11px] text-[#a3a3a3] mb-4">Enter 发送，Shift + Enter 换行</p>
 
-        <div className="flex items-center gap-2 flex-wrap">
-          <Select value={sandbox} onValueChange={setSandbox}>
-            <SelectTrigger className="w-[140px] h-9 text-sm">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {sandboxTypes.map((type) => (
-                <SelectItem key={type.name} value={type.name} disabled={!type.available}>
-                  {formatSandboxLabel(type.name)}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+        <div className="flex items-center gap-3 min-w-0">
+          {environmentControl ? (
+            <div className="min-w-0 flex-1 text-left">
+              <div className="truncate text-xs text-muted-foreground">
+                当前环境：{quietSummary}
+              </div>
+            </div>
+          ) : !hideSandboxSelector && (
+            <Select value={sandbox} onValueChange={setSandbox}>
+              <SelectTrigger className="w-[170px] h-9 text-sm">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {choices.map((choice) => (
+                  <SelectItem key={choice.value} value={choice.value} disabled={choice.available === false}>
+                    {choice.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
 
-          {isLocalSandbox && (
+          {workspaceSelectionEnabled && isLocalSandbox && (
             <Popover open={workspacePopoverOpen} onOpenChange={setWorkspacePopoverOpen}>
               <PopoverTrigger asChild>
                 <Button
@@ -242,46 +337,109 @@ export default function CenteredInputBox({
             </Popover>
           )}
 
-          <Popover open={modelPopoverOpen} onOpenChange={setModelPopoverOpen}>
-            <PopoverTrigger asChild>
-              <button className="h-9 px-3 text-sm border rounded-md flex items-center gap-2 max-w-[200px] hover:bg-accent">
-                <span className="truncate">{MODELS.find((m) => m.value === model)?.label || model}</span>
-                <ChevronDown className="h-4 w-4 shrink-0 opacity-50" />
-              </button>
-            </PopoverTrigger>
-            <PopoverContent className="w-[180px] p-1" align="start">
-              {MODELS.map((m) => (
-                <button
-                  key={m.value}
-                  onClick={() => { setModel(m.value); setModelPopoverOpen(false); }}
-                  className={`w-full text-left px-3 py-1.5 text-sm rounded-md ${model === m.value ? "bg-accent font-medium" : "hover:bg-accent/50"}`}
-                >
-                  {m.label}
+          {!environmentControl && (
+            <Popover open={modelPopoverOpen} onOpenChange={setModelPopoverOpen}>
+              <PopoverTrigger asChild>
+                <button className="h-9 px-3 text-sm border rounded-md flex items-center gap-2 max-w-[200px] hover:bg-accent">
+                  <span className="truncate">{activeModelLabel}</span>
+                  <ChevronDown className="h-4 w-4 shrink-0 opacity-50" />
                 </button>
-              ))}
-              <div className="border-t my-1" />
-              <div className="flex items-center justify-between px-3 py-1.5">
-                <span className="text-xs text-muted-foreground">Custom</span>
-                <button
-                  onClick={() => setShowCustomModels(!showCustomModels)}
-                  className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${showCustomModels ? "bg-primary" : "bg-muted"}`}
-                >
-                  <span className={`inline-block h-3.5 w-3.5 rounded-full bg-white shadow-sm transition-transform ${showCustomModels ? "translate-x-4" : "translate-x-0.5"}`} />
-                </button>
-              </div>
-              {showCustomModels && enabledModels.map((id) => (
-                <button
-                  key={id}
-                  onClick={() => { setModel(id); setModelPopoverOpen(false); }}
-                  className={`w-full text-left px-3 py-1.5 text-xs rounded-md truncate ${model === id ? "bg-accent font-medium" : "hover:bg-accent/50"}`}
-                >
-                  {id}
-                </button>
-              ))}
-            </PopoverContent>
-          </Popover>
+              </PopoverTrigger>
+              <PopoverContent className="w-[180px] p-1" align="start">
+                {MODELS.map((m) => (
+                  <button
+                    key={m.value}
+                    onClick={() => { setModel(m.value); setModelPopoverOpen(false); }}
+                    className={`w-full text-left px-3 py-1.5 text-sm rounded-md ${model === m.value ? "bg-accent font-medium" : "hover:bg-accent/50"}`}
+                  >
+                    {m.label}
+                  </button>
+                ))}
+              </PopoverContent>
+            </Popover>
+          )}
 
-          <div className="flex-1" />
+          {!environmentControl && <div className="flex-1 min-w-0" />}
+
+          {environmentControl && (
+            <Popover
+              open={advancedConfigOpen}
+              onOpenChange={(nextOpen) => {
+                if (nextOpen) {
+                  openAdvancedConfig();
+                  return;
+                }
+                cancelAdvancedConfig();
+              }}
+            >
+              {advancedConfigOpen && typeof document !== "undefined" && createPortal(
+                <div
+                  className="fixed inset-0 z-40 bg-black/50"
+                  onClick={cancelAdvancedConfig}
+                />,
+                document.body,
+              )}
+              <PopoverTrigger asChild>
+                <Button
+                  variant="ghost"
+                  className="h-9 px-3 text-sm text-muted-foreground hover:text-foreground"
+                  onClick={(event) => {
+                    event.preventDefault();
+                    if (advancedConfigOpen) {
+                      cancelAdvancedConfig();
+                    } else {
+                      openAdvancedConfig();
+                    }
+                  }}
+                >
+                  配置
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent
+                side="top"
+                align="end"
+                sideOffset={12}
+                className={`flex w-[680px] max-w-[calc(100vw-3rem)] flex-col overflow-hidden rounded-[24px] border border-border bg-background p-0 shadow-xl ${
+                  environmentControl.panelClassName ?? "max-h-[calc(100vh-4rem)]"
+                }`}
+              >
+                <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
+                  {!environmentControl.isDetailView && (
+                    <div className="mb-6 space-y-3">
+                      <div className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Model</div>
+                      <div className="flex flex-wrap gap-2">
+                        {MODELS.map((entry) => (
+                          <button
+                            key={entry.value}
+                            type="button"
+                            onClick={() => setDraftModel(entry.value)}
+                            className={`rounded-xl border px-3 py-2 text-sm transition-colors ${
+                              draftModel === entry.value
+                                ? "border-foreground bg-foreground text-background"
+                                : "border-border bg-card text-foreground hover:bg-accent"
+                            }`}
+                          >
+                            {entry.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {environmentControl.renderPanel(environmentArgs)}
+                </div>
+
+                <div className="flex items-center justify-end gap-3 border-t border-border px-6 py-4">
+                  <Button type="button" variant="ghost" onClick={cancelAdvancedConfig} disabled={applyingConfig}>
+                    取消
+                  </Button>
+                  <Button type="button" onClick={() => void applyAdvancedConfig()} disabled={applyingConfig}>
+                    {environmentControl.applyLabel ?? "确认"}
+                  </Button>
+                </div>
+              </PopoverContent>
+            </Popover>
+          )}
 
           <Button
             onClick={() => void handleSend()}

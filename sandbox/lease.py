@@ -35,6 +35,7 @@ LEASE_FRESHNESS_TTL_SEC = 3.0
 REQUIRED_LEASE_COLUMNS = {
     "lease_id",
     "provider_name",
+    "recipe_id",
     "workspace_key",
     "current_instance_id",
     "instance_created_at",
@@ -90,6 +91,7 @@ class SandboxLease(ABC):
         self,
         lease_id: str,
         provider_name: str,
+        recipe_id: str | None = None,
         current_instance: SandboxInstance | None = None,
         status: str = "active",
         workspace_key: str | None = None,
@@ -104,6 +106,7 @@ class SandboxLease(ABC):
     ):
         self.lease_id = lease_id
         self.provider_name = provider_name
+        self.recipe_id = recipe_id
         self._current_instance = current_instance
         self.status = status
         self.workspace_key = workspace_key
@@ -174,6 +177,7 @@ class SQLiteLease(SandboxLease):
         self,
         lease_id: str,
         provider_name: str,
+        recipe_id: str | None = None,
         current_instance: SandboxInstance | None = None,
         db_path: Path | None = None,
         status: str = "active",
@@ -190,6 +194,7 @@ class SQLiteLease(SandboxLease):
         super().__init__(
             lease_id=lease_id,
             provider_name=provider_name,
+            recipe_id=recipe_id,
             current_instance=current_instance,
             status=status,
             workspace_key=workspace_key,
@@ -334,6 +339,7 @@ class SQLiteLease(SandboxLease):
                 UPDATE sandbox_leases
                 SET current_instance_id = ?,
                     instance_created_at = ?,
+                    recipe_id = ?,
                     desired_state = ?,
                     observed_state = ?,
                     instance_status = ?,
@@ -349,6 +355,7 @@ class SQLiteLease(SandboxLease):
                 (
                     self._current_instance.instance_id if self._current_instance else None,
                     self._current_instance.created_at.isoformat() if self._current_instance else None,
+                    self.recipe_id,
                     self.desired_state,
                     self.observed_state,
                     self.observed_state,
@@ -412,7 +419,8 @@ class SQLiteLease(SandboxLease):
             target.execute(
                 """
                 UPDATE sandbox_leases
-                SET desired_state = ?,
+                SET recipe_id = ?,
+                    desired_state = ?,
                     observed_state = ?,
                     instance_status = ?,
                     version = ?,
@@ -425,6 +433,7 @@ class SQLiteLease(SandboxLease):
                 WHERE lease_id = ?
                 """,
                 (
+                    self.recipe_id,
                     self.desired_state,
                     self.observed_state,
                     self.observed_state,
@@ -455,6 +464,7 @@ class SQLiteLease(SandboxLease):
         self._current_instance = other._current_instance
         self.status = other.status
         self.workspace_key = other.workspace_key
+        self.recipe_id = other.recipe_id
         self.desired_state = other.desired_state
         self.observed_state = other.observed_state
         self.version = other.version
@@ -773,8 +783,6 @@ class SQLiteLease(SandboxLease):
 
 def lease_from_row(row: dict, db_path: Path) -> SQLiteLease:
     """Construct SQLiteLease from a dict returned by the repo."""
-    from datetime import timezone as _tz
-
     instance = None
     inst_data = row.get("_instance")
     if inst_data:
@@ -803,6 +811,7 @@ def lease_from_row(row: dict, db_path: Path) -> SQLiteLease:
     return SQLiteLease(
         lease_id=row["lease_id"],
         provider_name=row["provider_name"],
+        recipe_id=row.get("recipe_id"),
         current_instance=instance,
         db_path=db_path,
         status=row.get("status") or "active",

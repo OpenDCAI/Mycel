@@ -15,6 +15,7 @@ interface AppState {
   librarySkills: ResourceItem[];
   libraryMcps: ResourceItem[];
   libraryAgents: ResourceItem[];
+  libraryRecipes: ResourceItem[];
   userProfile: UserProfile;
   loaded: boolean;
   error: string | null;
@@ -81,6 +82,7 @@ export const useAppStore = create<AppState>()((set, get) => ({
   librarySkills: [],
   libraryMcps: [],
   libraryAgents: [],
+  libraryRecipes: [],
   userProfile: { name: "User", initials: "U", email: "" },
   loaded: false,
   error: null,
@@ -96,6 +98,7 @@ export const useAppStore = create<AppState>()((set, get) => ({
         get().fetchLibrary("skill"),
         get().fetchLibrary("mcp"),
         get().fetchLibrary("agent"),
+        get().fetchLibrary("recipe"),
         get().fetchProfile(),
       ]);
       set({ loaded: true });
@@ -248,7 +251,8 @@ export const useAppStore = create<AppState>()((set, get) => ({
     const data = await api<{ items: ResourceItem[] }>(`/library/${type}`);
     if (type === "skill") set({ librarySkills: data.items });
     else if (type === "mcp") set({ libraryMcps: data.items });
-    else set({ libraryAgents: data.items });
+    else if (type === "agent") set({ libraryAgents: data.items });
+    else if (type === "recipe") set({ libraryRecipes: data.items });
   },
 
   fetchLibraryNames: async (type) => {
@@ -316,6 +320,7 @@ export const useAppStore = create<AppState>()((set, get) => ({
   getMemberNames: () => get().memberList.map((s) => ({ id: s.id, name: s.name })),
 
   getResourceUsedBy: (type, name) => {
+    if (type === "recipe") return [];
     const key = type === "skill" ? "skills" : type === "mcp" ? "mcps" : "subAgents";
     return get().memberList.filter((s) =>
       (s.config?.[key as keyof typeof s.config] as { name: string }[] | undefined)?.some((i) => i.name === name)

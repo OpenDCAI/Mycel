@@ -80,6 +80,7 @@ class SQLiteSandboxMonitorRepo:
             SELECT
                 sl.lease_id,
                 sl.provider_name,
+                sl.recipe_id,
                 sl.desired_state,
                 sl.observed_state,
                 sl.current_instance_id,
@@ -90,6 +91,25 @@ class SQLiteSandboxMonitorRepo:
             LEFT JOIN chat_sessions cs ON sl.lease_id = cs.lease_id AND cs.status != 'closed'
             GROUP BY sl.lease_id
             ORDER BY sl.updated_at DESC
+            """
+        ).fetchall()
+        return [_row_to_dict(r) for r in rows]
+
+    def list_leases_with_threads(self) -> list[dict]:
+        rows = self._conn.execute(
+            """
+            SELECT
+                sl.lease_id,
+                sl.provider_name,
+                sl.recipe_id,
+                sl.desired_state,
+                sl.observed_state,
+                sl.updated_at,
+                at.thread_id,
+                at.cwd
+            FROM sandbox_leases sl
+            LEFT JOIN abstract_terminals at ON sl.lease_id = at.lease_id
+            ORDER BY sl.updated_at DESC, at.created_at DESC
             """
         ).fetchall()
         return [_row_to_dict(r) for r in rows]
