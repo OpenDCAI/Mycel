@@ -8,13 +8,7 @@ from fastapi.responses import FileResponse
 
 from backend.web.core.dependencies import get_app, verify_thread_owner
 from backend.web.services.agent_pool import resolve_thread_sandbox
-from backend.web.services.file_channel_service import (
-    get_file_channel_source,
-    save_file,
-    list_channel_files,
-    resolve_channel_file,
-    delete_channel_file,
-)
+from backend.web.services import file_channel_service
 from backend.web.utils.helpers import resolve_local_workspace_path
 from sandbox.thread_context import set_current_thread_id
 
@@ -160,7 +154,7 @@ async def get_sandbox_files(
 
 ) -> dict[str, Any]:
     """Get thread-scoped upload/download channel paths."""
-    source = await asyncio.to_thread(get_file_channel_source, thread_id)
+    source = await asyncio.to_thread(file_channel_service.get_file_channel_source, thread_id)
     return {"thread_id": thread_id, "files_path": str(source.host_path)}
 
 
@@ -184,7 +178,7 @@ async def upload_file(
         raise HTTPException(413, f"Upload exceeds {_MAX_UPLOAD_BYTES // (1024 * 1024)} MB limit")
     try:
         payload = await asyncio.to_thread(
-            save_file,
+            file_channel_service.save_file,
             thread_id=thread_id,
             relative_path=relative_path,
             content=content,
@@ -203,7 +197,7 @@ async def download_file(
     """Download a file from thread-scoped files directory."""
     try:
         target = await asyncio.to_thread(
-            resolve_channel_file,
+            file_channel_service.resolve_channel_file,
             thread_id=thread_id,
             relative_path=path,
         )
@@ -223,7 +217,7 @@ async def delete_workspace_file(
     """Delete a file from workspace."""
     try:
         await asyncio.to_thread(
-            delete_channel_file,
+            file_channel_service.delete_channel_file,
             thread_id=thread_id,
             relative_path=path,
         )
@@ -242,7 +236,7 @@ async def list_channel_files(
     """List files under thread-scoped files directory."""
     try:
         entries = await asyncio.to_thread(
-            list_channel_files,
+            file_channel_service.list_channel_files,
             thread_id=thread_id,
         )
     except ValueError as e:
