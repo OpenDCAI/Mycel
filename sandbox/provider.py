@@ -171,6 +171,20 @@ class SandboxProvider(ABC):
     def write_file(self, session_id: str, path: str, content: str) -> str:
         pass
 
+    def upload_bytes(self, session_id: str, remote_path: str, data: bytes) -> None:
+        """Upload raw bytes to remote path. Uses native SDK file API when available.
+        Default: falls back to write_file with utf-8 decode (lossy for binary).
+        Override in providers with native binary upload support.
+        """
+        self.write_file(session_id, remote_path, data.decode("utf-8", errors="replace"))
+
+    def download_bytes(self, session_id: str, remote_path: str) -> bytes:
+        """Download raw bytes from remote path. Uses native SDK file API when available.
+        Default: falls back to read_file with utf-8 encode.
+        Override in providers with native binary download support.
+        """
+        return self.read_file(session_id, remote_path).encode("utf-8")
+
     @abstractmethod
     def list_dir(self, session_id: str, path: str) -> list[dict]:
         pass
