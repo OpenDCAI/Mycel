@@ -10,12 +10,11 @@ from typing import Any, Literal
 from .contracts import (
     CheckpointRepo,
     EvalRepo,
+    FileChannelRepo,
     FileOperationRepo,
     QueueRepo,
     RunEventRepo,
     SummaryRepo,
-    MemberVolumeRepo,
-    SandboxVolumeRepo,
 )
 
 StorageStrategy = Literal["sqlite", "supabase"]
@@ -29,8 +28,7 @@ _REPO_REGISTRY: dict[str, tuple[str, str]] = {
     "summary_repo":        ("storage.providers.supabase.summary_repo",        "SupabaseSummaryRepo"),
     "eval_repo":           ("storage.providers.supabase.eval_repo",           "SupabaseEvalRepo"),
     "queue_repo":          ("storage.providers.supabase.queue_repo",          "SupabaseQueueRepo"),
-    "sandbox_volume_repo":     ("storage.providers.supabase.sandbox_volume_repo",    "SupabaseSandboxVolumeRepo"),
-    "member_volume_repo":      ("storage.providers.sqlite.member_volume_repo",      "SQLiteMemberVolumeRepo"),  # SQLite-only for now
+    "file_channel_repo":       ("storage.providers.supabase.file_channel_repo",      "SupabaseFileChannelRepo"),
 }
 
 
@@ -45,8 +43,7 @@ class StorageContainer:
         "summary_repo",
         "eval_repo",
         "queue_repo",
-        "sandbox_volume_repo",
-        "member_volume_repo",
+        "file_channel_repo",
     )
 
     def __init__(
@@ -96,11 +93,8 @@ class StorageContainer:
     def eval_repo(self) -> EvalRepo:
         return self._build_repo("eval_repo", self._sqlite_eval_repo)
 
-    def sandbox_volume_repo(self) -> SandboxVolumeRepo:
-        return self._build_repo("sandbox_volume_repo", self._sqlite_sandbox_volume_repo)
-
-    def member_volume_repo(self) -> MemberVolumeRepo:
-        return self._build_repo("member_volume_repo", self._sqlite_member_volume_repo)
+    def file_channel_repo(self) -> FileChannelRepo:
+        return self._build_repo("file_channel_repo", self._sqlite_file_channel_repo)
 
     def purge_thread(self, thread_id: str) -> None:
         """Delete all data for a thread across all repos."""
@@ -210,10 +204,6 @@ class StorageContainer:
         from storage.providers.sqlite.eval_repo import SQLiteEvalRepo
         return SQLiteEvalRepo(db_path=self._eval_db)
 
-    def _sqlite_sandbox_volume_repo(self):
-        from storage.providers.sqlite.sandbox_volume_repo import SQLiteSandboxVolumeRepo
-        return SQLiteSandboxVolumeRepo()
-
-    def _sqlite_member_volume_repo(self):
-        from storage.providers.sqlite.member_volume_repo import SQLiteMemberVolumeRepo
-        return SQLiteMemberVolumeRepo(db_path=self._main_db)
+    def _sqlite_file_channel_repo(self):
+        from storage.providers.sqlite.file_channel_repo import SQLiteFileChannelRepo
+        return SQLiteFileChannelRepo()

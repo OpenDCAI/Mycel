@@ -72,7 +72,7 @@ class DaytonaProvider(SandboxProvider):
             supports_copy=True,
             supports_read_only=True,
             mode_handlers={"mount": True, "copy": True},
-            supports_member_volume=True,
+            supports_managed_volume=True,
         ),
     )
     WORKSPACE_ROOT = "/home/daytona"
@@ -116,26 +116,26 @@ class DaytonaProvider(SandboxProvider):
 
     # ==================== Member Volume ====================
 
-    def create_member_volume(self, member_id: str, mount_path: str) -> str:
-        """Create a Daytona volume for the agent. Returns volume name as backend_ref."""
+    def create_managed_volume(self, member_id: str, mount_path: str) -> str:
+        """Create a Daytona managed volume. Returns volume name as backend_ref."""
         volume_name = f"leon-volume-{member_id}"
-        logger.info("Creating member volume: %s", volume_name)
+        logger.info("Creating managed volume: %s", volume_name)
         # @@@volume-ready - volume transitions pending_create → ready (~6s)
         self.client.volume.create(volume_name)
         for _ in range(30):
             vol = self.client.volume.get(volume_name)
             if vol.state == "ready":
-                logger.info("Member volume ready: %s (id=%s)", volume_name, vol.id)
+                logger.info("Managed volume ready: %s (id=%s)", volume_name, vol.id)
                 return volume_name
             time.sleep(1)
         raise RuntimeError(f"Volume {volume_name} did not become ready within 30s")
 
-    def set_volume_mount(self, thread_id: str, backend_ref: str, mount_path: str) -> None:
+    def set_managed_volume_mount(self, thread_id: str, backend_ref: str, mount_path: str) -> None:
         self._volume_mounts[thread_id] = (backend_ref, mount_path)
 
-    def delete_member_volume(self, backend_ref: str) -> None:
-        """Delete member volume. backend_ref is the volume name."""
-        logger.info("Deleting member volume: %s", backend_ref)
+    def delete_managed_volume(self, backend_ref: str) -> None:
+        """Delete provider-managed volume. backend_ref is the volume name."""
+        logger.info("Deleting managed volume: %s", backend_ref)
         vol = self.client.volume.get(backend_ref)
         self.client.volume.delete(vol)
 
@@ -280,6 +280,15 @@ class DaytonaProvider(SandboxProvider):
         return [
             {"name": e.name, "type": "directory" if e.is_dir else "file", "size": e.size or 0} for e in (entries or [])
         ]
+
+    def upload_bytes(self, session_id: str, remote_path: str, data: bytes) -> None:
+        sb = self._get_sandbox(session_id)
+        sb.fs.upload_file(data, remote_path)
+
+    def download_bytes(self, session_id: str, remote_path: str) -> bytes:
+        sb = self._get_sandbox(session_id)
+        content = sb.fs.download_file(remote_path)
+        return content if isinstance(content, bytes) else content.encode("utf-8")
 
     # ==================== Batch Status ====================
 

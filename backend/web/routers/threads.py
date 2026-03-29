@@ -19,7 +19,7 @@ from backend.web.models.requests import (
 )
 from backend.web.services.agent_pool import get_or_create_agent, resolve_thread_sandbox
 from backend.web.services.event_buffer import ThreadEventBuffer
-from backend.web.services.member_volume_service import get_lease_volume_source
+from backend.web.services.file_channel_service import get_file_channel_source
 from backend.web.services.sandbox_service import destroy_thread_resources_sync, init_providers_and_managers
 from backend.web.services.streaming_service import (
     get_or_create_thread_buffer,
@@ -71,15 +71,15 @@ async def _prepare_attachment_message(
     # @@@files-dir-hint - tell agent where uploaded files live
     # For local provider: actual host path (agent reads host FS directly)
     # For remote providers: container-side path
-    if mgr and mgr.volume.capability.runtime_kind == "local":
-        from backend.web.services.member_volume_service import get_lease_volume_source
+    if mgr and mgr.file_channel.capability.runtime_kind == "local":
+        from backend.web.services.file_channel_service import get_file_channel_source
         try:
-            source = get_lease_volume_source(thread_id)
+            source = get_file_channel_source(thread_id)
             files_dir = str(source.host_path)
         except ValueError:
             files_dir = "/workspace/files"
     else:
-        files_dir = mgr.volume.resolve_remote_path() if mgr else "/workspace/files"
+        files_dir = mgr.file_channel.resolve_channel_path() if mgr else "/workspace/files"
 
     original_message = message
     sync_ok = True
@@ -194,7 +194,7 @@ def _create_thread_sandbox_resources(thread_id: str, sandbox_type: str) -> None:
     """Create volume, lease, and terminal eagerly so volume exists before file uploads."""
     from datetime import datetime
 
-    from backend.web.core.config import SANDBOX_VOLUME_ROOT
+    from backend.web.core.config import FILE_CHANNEL_ROOT
     from sandbox.config import DEFAULT_DB_PATH
     from sandbox.lease import LeaseStore
     from sandbox.terminal import TerminalStore
@@ -202,16 +202,16 @@ def _create_thread_sandbox_resources(thread_id: str, sandbox_type: str) -> None:
     from backend.web.utils.helpers import _get_container
 
     now_str = datetime.now().isoformat()
-    volume_id = str(uuid.uuid4())
-    vol_path = SANDBOX_VOLUME_ROOT / volume_id
-    source = HostVolume(vol_path)
+    channel_id = str(uuid.uuid4())
+    channel_path = FILE_CHANNEL_ROOT / channel_id
+    source = HostVolume(channel_path)
 
-    sandbox_vol_repo = _get_container().sandbox_volume_repo()
-    sandbox_vol_repo.create(volume_id, json.dumps(source.serialize()), f"file-channel-{thread_id}", now_str)
+    channel_repo = _get_container().file_channel_repo()
+    channel_repo.create(channel_id, json.dumps(source.serialize()), f"file-channel-{thread_id}", now_str)
 
     lease_store = LeaseStore(db_path=DEFAULT_DB_PATH)
     lease_id = f"lease-{uuid.uuid4().hex[:12]}"
-    lease_store.create(lease_id, sandbox_type, volume_id=volume_id)
+    lease_store.create(lease_id, sandbox_type, file_channel_id=channel_id)
 
     terminal_store = TerminalStore(db_path=DEFAULT_DB_PATH)
     terminal_id = f"term-{uuid.uuid4().hex[:12]}"
@@ -445,7 +445,7 @@ async def delete_thread(
         app.state.queue_manager.unregister_wake(thread_id)
         # Clean up volume BEFORE destroying lease/terminal (destroy deletes those records)
         try:
-            source = get_lease_volume_source(thread_id)
+            source = get_file_channel_source(thread_id)
             source.cleanup()
         except ValueError:
             pass  # No volume to clean up
