@@ -1,5 +1,5 @@
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
-import { MessageSquare, MessagesSquare, Users, ListTodo, Library, Layers, Plug, Settings, Plus, ChevronLeft, ChevronRight, LogOut, Camera } from "lucide-react";
+import { MessageSquare, MessagesSquare, Users, ListTodo, Library, Layers, Plug, Settings, Plus, ChevronLeft, ChevronRight, LogOut, Camera, Timer } from "lucide-react";
 import { useState, useEffect, useCallback, useRef } from "react";
 import { uploadMemberAvatar } from "@/api/client";
 import MemberAvatar from "@/components/MemberAvatar";
@@ -7,19 +7,28 @@ import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover
 import CreateMemberDialog from "@/components/CreateMemberDialog";
 import NewChatDialog from "@/components/NewChatDialog";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { isTasksNavActive, tasksHref, type TasksTab } from "@/lib/tasks-navigation";
 import { useAppStore } from "@/store/app-store";
 import { useAuthStore } from "@/store/auth-store";
 import { toast } from "sonner";
+
+type NavItem = {
+  to: string;
+  icon: React.ComponentType<{ className?: string }>;
+  label: string;
+  taskTab?: TasksTab;
+};
 
 const navItems = [
   { to: "/threads", icon: MessageSquare, label: "Workspace" },
   { to: "/chats", icon: MessagesSquare, label: "Chats" },
   { to: "/members", icon: Users, label: "Members" },
-  { to: "/tasks", icon: ListTodo, label: "Tasks" },
+  { to: tasksHref("tasks"), icon: ListTodo, label: "Tasks", taskTab: "tasks" },
+  { to: tasksHref("cron"), icon: Timer, label: "定时任务", taskTab: "cron" },
   { to: "/resources", icon: Layers, label: "Resources" },
   { to: "/library", icon: Library, label: "能力库" },
   { to: "/connections", icon: Plug, label: "Connections" },
-];
+] satisfies NavItem[];
 
 const mobileNavItems = [
   ...navItems,
@@ -89,6 +98,13 @@ function AuthenticatedLayout() {
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, []);
+
+  const isNavItemActive = useCallback((item: NavItem) => {
+    if (item.taskTab) {
+      return isTasksNavActive(location.pathname, location.search, item.taskTab);
+    }
+    return location.pathname.startsWith(item.to);
+  }, [location.pathname, location.search]);
 
   const handleCreateAction = useCallback(async (action: string) => {
     setShowCreate(false);
@@ -165,7 +181,7 @@ function AuthenticatedLayout() {
   const renderNavItems = (closeMobile?: () => void) => (
     <>
       {navItems.map((item) => {
-        const isActive = location.pathname.startsWith(item.to);
+        const isActive = isNavItemActive(item);
         const labelsVisible = isMobile || showLabels;
         return (
           <NavLink key={item.to} to={item.to} onClick={closeMobile} className="group relative block overflow-visible">
@@ -198,7 +214,7 @@ function AuthenticatedLayout() {
         {/* Bottom tab bar */}
         <nav className="shrink-0 border-t border-border bg-card flex items-stretch" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
           {mobileNavItems.map((item) => {
-            const isActive = location.pathname.startsWith(item.to);
+            const isActive = isNavItemActive(item);
             return (
               <NavLink
                 key={item.to}

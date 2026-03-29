@@ -37,6 +37,7 @@ dependencies = [
     "langchain-openai>=1.1.7",
     "duckduckgo-search>=8.1.1",
     "httpx>=0.28.1",
+    "socksio>=1.0.0",
     "pyyaml>=6.0",
     "pydantic>=2.0",
     "Pillow>=10.0.0",
@@ -111,6 +112,7 @@ packages = [
     "eval",
     "eval.harness",
     "backend.taskboard",
+    "backend.scheduled_tasks",
 ]
 py-modules = ["agent"]
 

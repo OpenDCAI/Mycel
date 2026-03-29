@@ -91,6 +91,20 @@ class SteeringMiddleware(AgentMiddleware):
             is_steer = item.is_steer or source == "owner"
             if is_steer:
                 has_steer = True
+            extra_metadata = item.extra_metadata or {}
+            scheduled_task_run_id = extra_metadata.get("scheduled_task_run_id")
+            if scheduled_task_run_id and rt is not None:
+                from backend.scheduled_tasks.runtime import mark_run_dispatched
+
+                if not hasattr(rt, "current_scheduled_task_run_ids"):
+                    rt.current_scheduled_task_run_ids = set()
+                rt.current_scheduled_task_run_ids.add(str(scheduled_task_run_id))
+                run_id = str((config or {}).get("configurable", {}).get("run_id") or "")
+                mark_run_dispatched(
+                    str(scheduled_task_run_id),
+                    thread_run_id=run_id,
+                    routing="inline",
+                )
             messages.append(HumanMessage(
                 content=item.content,
                 metadata={
@@ -100,6 +114,7 @@ class SteeringMiddleware(AgentMiddleware):
                     "sender_avatar_url": item.sender_avatar_url,
                     "sender_entity_id": item.sender_entity_id,
                     "is_steer": is_steer,
+                    **extra_metadata,
                 },
             ))
 

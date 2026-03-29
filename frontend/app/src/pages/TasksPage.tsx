@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
+import { useSearchParams } from "react-router-dom";
 import {
   Search, CheckCircle2, Circle, Clock, AlertCircle,
   ListTodo, ArrowUpDown, ChevronDown, ChevronUp, ChevronRight, LayoutGrid, List,
@@ -13,9 +14,10 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { useAppStore } from "@/store/app-store";
-import type { Task, TaskStatus, CronJob, Priority } from "@/store/types";
-import CronEditor from "@/components/cron-editor";
+import type { Task, TaskStatus, Priority, ScheduledTask } from "@/store/types";
 import TaskModal from "@/components/task-modal";
+import ScheduledTaskEditor from "@/components/scheduled-task-editor";
+import { resolveTasksTab, type TasksTab } from "@/lib/tasks-navigation";
 
 const statusConfig: Record<TaskStatus, { label: string; icon: typeof Circle; color: string }> = {
   pending: { label: "等待中", icon: Circle, color: "text-muted-foreground" },
@@ -38,7 +40,25 @@ const sourceLabel: Record<string, string> = {
 type SortField = "title" | "priority" | "created_at" | null;
 type SortDir = "asc" | "desc";
 type ViewMode = "table" | "board";
-type ActiveTab = "tasks" | "cron";
+type ScheduledTaskDraft = Pick<
+  ScheduledTask,
+  "id" | "thread_id" | "name" | "instruction" | "cron_expression" | "enabled"
+> & Partial<Pick<ScheduledTask, "last_triggered_at" | "next_trigger_at" | "created_at" | "updated_at">>;
+
+function emptyScheduledTaskDraft(): ScheduledTaskDraft {
+  return {
+    id: "",
+    thread_id: "",
+    name: "",
+    instruction: "",
+    cron_expression: "0 9 * * *",
+    enabled: 1,
+    last_triggered_at: 0,
+    next_trigger_at: 0,
+    created_at: 0,
+    updated_at: 0,
+  };
+}
 
 function cronToHuman(expr: string): string {
   const parts = expr.split(" ");
@@ -58,6 +78,7 @@ function cronToHuman(expr: string): string {
 
 export default function Tasks() {
   const isMobile = useIsMobile();
+  const [searchParams, setSearchParams] = useSearchParams();
   const tasks = useAppStore((s) => s.taskList);
   const memberList = useAppStore((s) => s.memberList);
   const loadAll = useAppStore((s) => s.loadAll);
@@ -68,11 +89,13 @@ export default function Tasks() {
   const storeDeleteTask = useAppStore((s) => s.deleteTask);
   const storeBulkUpdate = useAppStore((s) => s.bulkUpdateTaskStatus);
   const storeBulkDelete = useAppStore((s) => s.bulkDeleteTasks);
-  const cronJobs = useAppStore((s) => s.cronJobs);
-  const storeAddCronJob = useAppStore((s) => s.addCronJob);
-  const storeUpdateCronJob = useAppStore((s) => s.updateCronJob);
-  const storeDeleteCronJob = useAppStore((s) => s.deleteCronJob);
-  const storeTriggerCronJob = useAppStore((s) => s.triggerCronJob);
+  const scheduledTasks = useAppStore((s) => s.scheduledTasks);
+  const scheduledTaskRuns = useAppStore((s) => s.scheduledTaskRuns);
+  const fetchScheduledTaskRuns = useAppStore((s) => s.fetchScheduledTaskRuns);
+  const storeAddScheduledTask = useAppStore((s) => s.addScheduledTask);
+  const storeUpdateScheduledTask = useAppStore((s) => s.updateScheduledTask);
+  const storeDeleteScheduledTask = useAppStore((s) => s.deleteScheduledTask);
+  const storeTriggerScheduledTask = useAppStore((s) => s.triggerScheduledTask);
 
   const fetchTasks = useAppStore((s) => s.fetchTasks);
 
@@ -93,7 +116,6 @@ export default function Tasks() {
   const [selectedRows, setSelectedRows] = useState<Set<string>>(new Set());
   const [viewMode, setViewMode] = useState<ViewMode>("table");
   const [dragOverColumn, setDragOverColumn] = useState<TaskStatus | null>(null);
-  const [activeTab, setActiveTab] = useState<ActiveTab>("tasks");
   const [tagFilter, setTagFilter] = useState<string | null>(null);
 
   // Unified task modal state (create + edit)
@@ -107,9 +129,22 @@ export default function Tasks() {
   const [threadCache, setThreadCache] = useState<Record<string, { text: string | null; loading: boolean; error: string | null }>>({});
 
   // Cron editing state
-  const [editingCron, setEditingCron] = useState<CronJob | null>(null);
-  const [cronForm, setCronForm] = useState<CronJob | null>(null);
-  const [deleteCronConfirmId, setDeleteCronConfirmId] = useState<string | null>(null);
+  const [scheduledTaskModalOpen, setScheduledTaskModalOpen] = useState(false);
+  const [editingScheduledTaskId, setEditingScheduledTaskId] = useState<string | null>(null);
+  const [scheduledTaskDraft, setScheduledTaskDraft] = useState<ScheduledTaskDraft>(emptyScheduledTaskDraft);
+  const [deleteScheduledTaskConfirmId, setDeleteScheduledTaskConfirmId] = useState<string | null>(null);
+
+  const activeTab = resolveTasksTab(searchParams);
+
+  const setActiveTab = useCallback((nextTab: TasksTab) => {
+    const nextParams = new URLSearchParams(searchParams);
+    if (nextTab === "cron") {
+      nextParams.set("tab", "scheduled");
+    } else {
+      nextParams.delete("tab");
+    }
+    setSearchParams(nextParams, { replace: true });
+  }, [searchParams, setSearchParams]);
 
   // Helper: resolve assignee name/avatar from memberList
   const getAssigneeInfo = (assigneeId: string) => {
@@ -159,54 +194,75 @@ export default function Tasks() {
     }
   };
 
-  const handleCreateCronJob = async (fields: Partial<CronJob>) => {
+  const openScheduledCreate = () => {
+    setEditingScheduledTaskId(null);
+    setScheduledTaskDraft(emptyScheduledTaskDraft());
+    setScheduledTaskModalOpen(true);
+  };
+
+  const closeScheduledModal = () => {
+    setScheduledTaskModalOpen(false);
+    setEditingScheduledTaskId(null);
+    setScheduledTaskDraft(emptyScheduledTaskDraft());
+  };
+
+  const openScheduledEdit = async (task: ScheduledTask) => {
+    setEditingScheduledTaskId(task.id);
+    setScheduledTaskDraft({ ...task });
+    if (isMobile) setScheduledTaskModalOpen(true);
     try {
-      await storeAddCronJob(fields);
-      toast.success("定时任务已创建");
+      await fetchScheduledTaskRuns(task.id);
     } catch (e: unknown) {
-      toast.error("创建失败: " + (e instanceof Error ? e.message : String(e)));
-      throw e;
+      toast.error("加载运行记录失败: " + (e instanceof Error ? e.message : String(e)));
     }
   };
-  // Cron helpers
-  const openCronEdit = (cron: CronJob) => {
-    setEditingCron(cron);
-    setCronForm({ ...cron });
-  };
 
-  const closeCronEdit = () => {
-    setEditingCron(null);
-    setCronForm(null);
-  };
-
-  const saveCronEdit = async () => {
-    if (!cronForm) return;
+  const saveScheduledTask = async () => {
     try {
-      await storeUpdateCronJob(cronForm.id, cronForm);
-      setEditingCron(cronForm);
-      toast.success("定时任务已保存");
+      if (editingScheduledTaskId) {
+        await storeUpdateScheduledTask(editingScheduledTaskId, scheduledTaskDraft);
+        toast.success("定时任务已保存");
+      } else {
+        const created = await storeAddScheduledTask(scheduledTaskDraft);
+        toast.success("定时任务已创建");
+        setEditingScheduledTaskId(created.id);
+        setScheduledTaskDraft({ ...created });
+        await fetchScheduledTaskRuns(created.id);
+      }
+      if (!isMobile && editingScheduledTaskId) {
+        await fetchScheduledTaskRuns(editingScheduledTaskId);
+      }
+      if (isMobile) {
+        closeScheduledModal();
+      } else {
+        setScheduledTaskModalOpen(false);
+      }
     } catch (e: unknown) {
       toast.error("保存失败: " + (e instanceof Error ? e.message : String(e)));
     }
   };
 
-
-  const executeCronDelete = async () => {
-    if (!deleteCronConfirmId) return;
+  const executeScheduledTaskDelete = async () => {
+    if (!deleteScheduledTaskConfirmId) return;
     try {
-      await storeDeleteCronJob(deleteCronConfirmId);
-      if (editingCron?.id === deleteCronConfirmId) closeCronEdit();
+      await storeDeleteScheduledTask(deleteScheduledTaskConfirmId);
+      if (editingScheduledTaskId === deleteScheduledTaskConfirmId) {
+        closeScheduledModal();
+      }
       toast.success("定时任务已删除");
-      setDeleteCronConfirmId(null);
+      setDeleteScheduledTaskConfirmId(null);
     } catch (e: unknown) {
       toast.error("删除失败: " + (e instanceof Error ? e.message : String(e)));
     }
   };
 
-  const handleTriggerCron = async (id: string) => {
+  const handleTriggerScheduledTask = async (id: string) => {
     try {
-      await storeTriggerCronJob(id);
-      toast.success("已触发执行");
+      const run = await storeTriggerScheduledTask(id);
+      if (editingScheduledTaskId === id) {
+        await fetchScheduledTaskRuns(id);
+      }
+      toast.success(`已触发执行: ${run.status}`);
     } catch (e: unknown) {
       toast.error("触发失败: " + (e instanceof Error ? e.message : String(e)));
     }
@@ -343,18 +399,7 @@ export default function Tasks() {
   };
 
   const kanbanColumns: TaskStatus[] = ["pending", "running", "completed", "failed"];
-
-  // Cron edit panel (Apple-style)
-  const cronEditPanel = cronForm && (
-    <CronEditor
-      cronForm={cronForm}
-      isMobile={isMobile}
-      onUpdate={(updated) => setCronForm(updated)}
-      onSave={saveCronEdit}
-      onClose={closeCronEdit}
-      onDelete={() => setDeleteCronConfirmId(cronForm.id)}
-    />
-  );
+  const activeScheduledTaskRuns = editingScheduledTaskId ? (scheduledTaskRuns[editingScheduledTaskId] || []) : [];
 
   return (
     <div className="flex h-full">
@@ -404,7 +449,7 @@ export default function Tasks() {
                 </button>
               </>
             ) : (
-              <button onClick={() => openCreateModal("cron")} className="flex items-center gap-2 px-3 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition-opacity">
+              <button onClick={openScheduledCreate} className="flex items-center gap-2 px-3 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition-opacity">
                 <Plus className="w-4 h-4" />
                 <span className="hidden md:inline">新建定时任务</span>
               </button>
@@ -787,13 +832,13 @@ export default function Tasks() {
         {/* Cron tab content */}
         {activeTab === "cron" && (
           <div className="flex-1 overflow-y-auto">
-            {cronJobs.length === 0 ? (
+            {scheduledTasks.length === 0 ? (
               <div className="flex items-center justify-center py-20">
                 <div className="text-center">
                   <Timer className="w-10 h-10 text-muted-foreground mx-auto mb-3" />
                   <p className="text-sm font-medium text-foreground mb-1">暂无定时任务</p>
-                  <p className="text-xs text-muted-foreground mb-3">创建定时任务自动执行工作</p>
-                  <button onClick={() => openCreateModal("cron")} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-xs font-medium hover:opacity-90 transition-opacity">
+                  <p className="text-xs text-muted-foreground mb-3">创建定时任务，按计划直接驱动 thread 执行</p>
+                  <button onClick={openScheduledCreate} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-xs font-medium hover:opacity-90 transition-opacity">
                     <Plus className="w-3.5 h-3.5" />新建定时任务
                   </button>
                 </div>
@@ -801,50 +846,47 @@ export default function Tasks() {
             ) : (
               <>
                 {/* Cron table header */}
-                <div className="grid grid-cols-[1fr_160px_64px_120px_80px] gap-2 px-6 py-2 border-b border-border text-[11px] text-muted-foreground uppercase tracking-wider font-medium sticky top-0 bg-background z-10">
+                <div className="grid grid-cols-[1fr_170px_84px_120px_80px] gap-2 px-6 py-2 border-b border-border text-[11px] text-muted-foreground uppercase tracking-wider font-medium sticky top-0 bg-background z-10">
                   <span>名称</span>
                   <span>执行频率</span>
-                  <span>状态</span>
+                  <span>Thread</span>
                   <span>上次触发</span>
                   <span>操作</span>
                 </div>
-                {cronJobs.map((cron) => (
+                {scheduledTasks.map((task) => (
                   <div
-                    key={cron.id}
-                    onClick={() => openCronEdit(cron)}
-                    className={`grid grid-cols-[1fr_160px_64px_120px_80px] gap-2 px-6 py-3 border-b border-border hover:bg-muted/30 transition-colors cursor-pointer items-center ${
-                      editingCron?.id === cron.id ? "bg-primary/[0.03]" : ""
+                    key={task.id}
+                    onClick={() => openScheduledEdit(task)}
+                    className={`grid grid-cols-[1fr_170px_84px_120px_80px] gap-2 px-6 py-3 border-b border-border hover:bg-muted/30 transition-colors cursor-pointer items-center ${
+                      editingScheduledTaskId === task.id ? "bg-primary/[0.03]" : ""
                     }`}
                   >
                     <div className="flex flex-col gap-0.5">
-                      <span className="text-sm font-medium text-foreground truncate">{cron.name}</span>
-                      {cron.description && (
-                        <span className="text-[11px] text-muted-foreground truncate">{cron.description}</span>
-                      )}
+                      <span className="text-sm font-medium text-foreground truncate">{task.name}</span>
+                      <span className="text-[11px] text-muted-foreground truncate">{task.instruction}</span>
                     </div>
                     <div className="flex flex-col gap-0.5">
-                      <span className="text-sm text-foreground">{cronToHuman(cron.cron_expression)}</span>
-                    </div>
-                    <span>
-                      <span className={`inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded font-medium ${
-                        cron.enabled ? "bg-success/10 text-success" : "bg-muted text-muted-foreground"
+                      <span className="text-sm text-foreground">{cronToHuman(task.cron_expression)}</span>
+                      <span className={`inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded font-medium w-fit ${
+                        task.enabled ? "bg-success/10 text-success" : "bg-muted text-muted-foreground"
                       }`}>
-                        {cron.enabled ? "启用" : "停用"}
+                        {task.enabled ? "启用" : "停用"}
                       </span>
-                    </span>
+                    </div>
+                    <span className="text-[11px] text-muted-foreground font-mono truncate">{task.thread_id}</span>
                     <span className="text-[11px] text-muted-foreground font-mono">
-                      {cron.last_run_at ? new Date(cron.last_run_at).toLocaleString("zh-CN", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }) : "--"}
+                      {task.last_triggered_at ? new Date(task.last_triggered_at).toLocaleString("zh-CN", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }) : "--"}
                     </span>
                     <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
                       <button
-                        onClick={() => handleTriggerCron(cron.id)}
+                        onClick={() => handleTriggerScheduledTask(task.id)}
                         className="p-1.5 rounded-md hover:bg-primary/10 text-muted-foreground hover:text-primary transition-colors"
                         title="立即触发"
                       >
                         <Play className="w-3.5 h-3.5" />
                       </button>
                       <button
-                        onClick={() => setDeleteCronConfirmId(cron.id)}
+                        onClick={() => setDeleteScheduledTaskConfirmId(task.id)}
                         className="p-1.5 rounded-md hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
                         title="删除"
                       >
@@ -860,10 +902,23 @@ export default function Tasks() {
       </div>
 
       {/* Edit panel (cron) */}
-      {activeTab === "cron" && editingCron && cronEditPanel}
+      {activeTab === "cron" && editingScheduledTaskId && !scheduledTaskModalOpen && (
+        <ScheduledTaskEditor
+          open
+          mode="edit"
+          isMobile={isMobile}
+          draft={scheduledTaskDraft}
+          runs={activeScheduledTaskRuns}
+          onUpdate={setScheduledTaskDraft}
+          onSave={saveScheduledTask}
+          onClose={closeScheduledModal}
+          onDelete={() => setDeleteScheduledTaskConfirmId(editingScheduledTaskId)}
+          onTrigger={() => handleTriggerScheduledTask(editingScheduledTaskId)}
+        />
+      )}
 
       {/* Cron delete confirmation dialog */}
-      <AlertDialog open={!!deleteCronConfirmId} onOpenChange={(open) => !open && setDeleteCronConfirmId(null)}>
+      <AlertDialog open={!!deleteScheduledTaskConfirmId} onOpenChange={(open) => !open && setDeleteScheduledTaskConfirmId(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>确认删除定时任务</AlertDialogTitle>
@@ -873,7 +928,7 @@ export default function Tasks() {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>取消</AlertDialogCancel>
-            <AlertDialogAction onClick={executeCronDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+            <AlertDialogAction onClick={executeScheduledTaskDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
               确认删除
             </AlertDialogAction>
           </AlertDialogFooter>
@@ -909,17 +964,21 @@ export default function Tasks() {
         onCreateTask={handleCreateTask}
         onSaveTask={handleSaveTask}
         onDeleteTask={(id) => setDeleteConfirmId(id)}
-        onCreateCronJob={handleCreateCronJob}
+        onCreateCronJob={async () => { throw new Error("Legacy cron creation is disabled on this page"); }}
+      />
+
+      <ScheduledTaskEditor
+        open={scheduledTaskModalOpen}
+        mode="create"
+        isMobile={isMobile}
+        draft={scheduledTaskDraft}
+        runs={[]}
+        onUpdate={setScheduledTaskDraft}
+        onSave={saveScheduledTask}
+        onClose={closeScheduledModal}
       />
     </div>
   );
 }
-
-
-
-
-
-
-
 
 

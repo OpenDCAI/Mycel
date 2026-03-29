@@ -237,6 +237,23 @@ def get_or_create_thread_buffer(app: Any, thread_id: str) -> ThreadEventBuffer:
     return buf
 
 
+def _queue_item_message_metadata(item: Any) -> dict[str, Any]:
+    metadata: dict[str, Any] = {
+        "source": getattr(item, "source", None) or "system",
+        "notification_type": item.notification_type,
+    }
+    sender_name = getattr(item, "sender_name", None)
+    if sender_name:
+        metadata["sender_name"] = sender_name
+    sender_avatar_url = getattr(item, "sender_avatar_url", None)
+    if sender_avatar_url:
+        metadata["sender_avatar_url"] = sender_avatar_url
+    if getattr(item, "is_steer", False):
+        metadata["is_steer"] = True
+    metadata.update(getattr(item, "extra_metadata", None) or {})
+    return metadata
+
+
 # ---------------------------------------------------------------------------
 # Per-thread handler setup (idempotent, survives across runs)
 # ---------------------------------------------------------------------------
@@ -332,16 +349,19 @@ def _ensure_thread_handlers(agent: Any, thread_id: str, app: Any) -> None:
             # after run_start (@@@run-notice) so frontend folds it into the
             # reopened turn.
             try:
-                start_agent_run(
+                run_id = start_agent_run(
                     agent, thread_id, item.content, app,
-                    message_metadata={
-                        "source": getattr(item, "source", None) or "system",
-                        "notification_type": item.notification_type,
-                        "sender_name": getattr(item, "sender_name", None),
-                        "sender_avatar_url": getattr(item, "sender_avatar_url", None),
-                        "is_steer": getattr(item, "is_steer", False),
-                    },
+                    message_metadata=_queue_item_message_metadata(item),
                 )
+                scheduled_task_run_id = (getattr(item, "extra_metadata", None) or {}).get("scheduled_task_run_id")
+                if scheduled_task_run_id:
+                    from backend.scheduled_tasks.runtime import mark_run_dispatched
+
+                    mark_run_dispatched(
+                        str(scheduled_task_run_id),
+                        thread_run_id=str(run_id),
+                        routing="wake",
+                    )
             except Exception:
                 logger.error("wake_handler failed for thread %s", thread_id, exc_info=True)
                 if hasattr(agent, "runtime"):
@@ -384,6 +404,7 @@ async def _run_agent_to_buffer(
 ) -> None:
     """Run agent execution and write all SSE events into *thread_buf*."""
     from backend.web.services.event_store import append_event
+    from backend.scheduled_tasks.runtime import collect_scheduled_task_run_ids, finalize_scheduled_task_run_ids
 
     run_event_repo = _resolve_run_event_repo(agent)
 
@@ -553,6 +574,9 @@ async def _run_agent_to_buffer(
         # @@@run-source-tracking — set on runtime for source tracking
         if hasattr(agent, "runtime"):
             agent.runtime.current_run_source = src or "owner"
+            tracked_run_ids = set(getattr(agent.runtime, "current_scheduled_task_run_ids", set()) or set())
+            tracked_run_ids.update(collect_scheduled_task_run_ids(message_metadata))
+            agent.runtime.current_scheduled_task_run_ids = tracked_run_ids
 
         # Track last-active for sidebar sorting
         import time as _time
@@ -866,6 +890,11 @@ async def _run_agent_to_buffer(
         # run_id is available from run_start SSE event; no need to patch checkpoint.
         # See: https://github.com/langchain-ai/langgraph/issues/XXX
 
+        if hasattr(agent, "runtime"):
+            finalize_scheduled_task_run_ids(getattr(agent.runtime, "current_scheduled_task_run_ids", set()), error=None)
+        else:
+            finalize_scheduled_task_run_ids(collect_scheduled_task_run_ids(message_metadata), error=None)
+
         # A5: emit run_done instead of done (persistent buffer — no mark_done)
         await emit({"event": "run_done", "data": json.dumps({"thread_id": thread_id, "run_id": run_id})})
     except asyncio.CancelledError:
@@ -881,10 +910,27 @@ async def _run_agent_to_buffer(
                 ),
             }
         )
+        if hasattr(agent, "runtime"):
+            finalize_scheduled_task_run_ids(
+                getattr(agent.runtime, "current_scheduled_task_run_ids", set()),
+                error="Run cancelled by user",
+            )
+        else:
+            finalize_scheduled_task_run_ids(
+                collect_scheduled_task_run_ids(message_metadata),
+                error="Run cancelled by user",
+            )
         # Also emit run_done so frontend knows the run ended
         await emit({"event": "run_done", "data": json.dumps({"thread_id": thread_id, "run_id": run_id})})
     except Exception as e:
         traceback.print_exc()
+        if hasattr(agent, "runtime"):
+            finalize_scheduled_task_run_ids(
+                getattr(agent.runtime, "current_scheduled_task_run_ids", set()),
+                error=str(e),
+            )
+        else:
+            finalize_scheduled_task_run_ids(collect_scheduled_task_run_ids(message_metadata), error=str(e))
         await emit({"event": "error", "data": json.dumps({"error": str(e)}, ensure_ascii=False)})
         await emit({"event": "run_done", "data": json.dumps({"thread_id": thread_id, "run_id": run_id})})
     finally:
@@ -895,6 +941,7 @@ async def _run_agent_to_buffer(
         # Detach per-run event callback (per-thread handlers survive across runs)
         if hasattr(agent, "runtime"):
             agent.runtime.set_event_callback(None)
+            agent.runtime.current_scheduled_task_run_ids = set()
         # Flush observation handler
         if obs_handler is not None:
             try:
@@ -952,20 +999,32 @@ async def _consume_followup_queue(agent: Any, thread_id: str, app: Any) -> None:
         item = qm.dequeue(thread_id)
         if item and app:
             if hasattr(agent, "runtime") and agent.runtime.transition(AgentState.ACTIVE):
-                start_agent_run(agent, thread_id, item.content, app,
-                                message_metadata={
-                                    "source": item.source or "system",
-                                    "notification_type": item.notification_type,
-                                    "sender_name": item.sender_name,
-                                    "sender_avatar_url": item.sender_avatar_url,
-                                    "is_steer": getattr(item, "is_steer", False),
-                                })
+                run_id = start_agent_run(agent, thread_id, item.content, app,
+                                         message_metadata=_queue_item_message_metadata(item))
+                scheduled_task_run_id = (getattr(item, "extra_metadata", None) or {}).get("scheduled_task_run_id")
+                if scheduled_task_run_id:
+                    from backend.scheduled_tasks.runtime import mark_run_dispatched
+
+                    mark_run_dispatched(
+                        str(scheduled_task_run_id),
+                        thread_run_id=str(run_id),
+                        routing="followup",
+                    )
     except Exception:
         logger.exception("Failed to consume followup queue for thread %s", thread_id)
         # Re-enqueue the message if it was already dequeued to prevent data loss
         if item:
             try:
-                app.state.queue_manager.enqueue(item.content, thread_id, notification_type=item.notification_type)
+                app.state.queue_manager.enqueue(
+                    item.content,
+                    thread_id,
+                    notification_type=item.notification_type,
+                    source=item.source,
+                    sender_name=item.sender_name,
+                    sender_avatar_url=getattr(item, "sender_avatar_url", None),
+                    is_steer=getattr(item, "is_steer", False),
+                    extra_metadata=getattr(item, "extra_metadata", None),
+                )
             except Exception:
                 logger.error("Failed to re-enqueue followup for thread %s — message lost: %.200s", thread_id, item.content)
 
@@ -1081,4 +1140,3 @@ async def observe_run_events(
                 yield {**event, "id": seq_id}
             else:
                 yield event
-

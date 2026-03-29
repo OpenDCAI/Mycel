@@ -1,0 +1,475 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Thread 定时任务架构调研</title>
+  <style>
+    :root {
+      --bg: #f5f1e8;
+      --paper: #fffaf0;
+      --ink: #1f1a17;
+      --muted: #6b625a;
+      --line: #d8cfc4;
+      --accent: #a44d2f;
+      --accent-soft: #f4ddd2;
+      --good: #2d6a4f;
+      --warn: #9c6644;
+      --bad: #8a1c1c;
+      --shadow: 0 10px 30px rgba(60, 40, 20, 0.08);
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Georgia, serif;
+      background:
+        radial-gradient(circle at top left, rgba(164, 77, 47, 0.08), transparent 30%),
+        linear-gradient(180deg, #f7f2e9 0%, #f2ece3 100%);
+      color: var(--ink);
+    }
+
+    .page {
+      max-width: 1180px;
+      margin: 0 auto;
+      padding: 40px 24px 80px;
+    }
+
+    .hero {
+      background: linear-gradient(135deg, rgba(255,250,240,0.96), rgba(248, 239, 227, 0.96));
+      border: 1px solid var(--line);
+      border-radius: 24px;
+      padding: 28px;
+      box-shadow: var(--shadow);
+      margin-bottom: 24px;
+    }
+
+    .eyebrow {
+      display: inline-block;
+      padding: 6px 10px;
+      border-radius: 999px;
+      background: var(--accent-soft);
+      color: var(--accent);
+      font-size: 12px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      margin-bottom: 14px;
+    }
+
+    h1, h2, h3 { margin: 0 0 12px; line-height: 1.15; }
+    h1 { font-size: clamp(34px, 6vw, 56px); max-width: 11ch; }
+    h2 { font-size: 28px; margin-top: 30px; }
+    h3 { font-size: 18px; }
+    p, li { color: var(--ink); line-height: 1.65; }
+    .muted { color: var(--muted); }
+
+    .grid {
+      display: grid;
+      gap: 18px;
+    }
+
+    .grid-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .grid-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+
+    .card {
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      padding: 18px 18px 16px;
+      box-shadow: var(--shadow);
+    }
+
+    .pill {
+      display: inline-block;
+      font-size: 12px;
+      padding: 4px 8px;
+      border-radius: 999px;
+      margin-right: 8px;
+      margin-bottom: 8px;
+      border: 1px solid var(--line);
+      background: rgba(255,255,255,0.6);
+    }
+
+    .callout {
+      border-left: 5px solid var(--accent);
+      background: #fff5ef;
+      padding: 16px 18px;
+      border-radius: 14px;
+      margin: 20px 0;
+    }
+
+    .callout.good { border-left-color: var(--good); background: #edf8f2; }
+    .callout.warn { border-left-color: var(--warn); background: #fdf1e7; }
+    .callout.bad { border-left-color: var(--bad); background: #fdecec; }
+
+    .diagram {
+      display: grid;
+      gap: 10px;
+      margin-top: 16px;
+    }
+
+    .node {
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 14px;
+      background: rgba(255,255,255,0.72);
+    }
+
+    .node strong {
+      display: block;
+      margin-bottom: 6px;
+      font-size: 16px;
+    }
+
+    .arrow {
+      text-align: center;
+      color: var(--accent);
+      font-weight: 700;
+      letter-spacing: 0.08em;
+    }
+
+    .comparison {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 14px;
+      overflow: hidden;
+      border-radius: 16px;
+      background: var(--paper);
+      box-shadow: var(--shadow);
+    }
+
+    .comparison th,
+    .comparison td {
+      text-align: left;
+      vertical-align: top;
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .comparison th {
+      background: #f1e8db;
+      font-size: 13px;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+
+    .comparison tr:last-child td { border-bottom: none; }
+
+    .score {
+      font-weight: 700;
+      color: var(--accent);
+    }
+
+    ol, ul { margin: 0; padding-left: 20px; }
+    section { margin-top: 24px; }
+
+    .footer {
+      margin-top: 32px;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    @media (max-width: 900px) {
+      .grid-3, .grid-2 { grid-template-columns: 1fr; }
+      .page { padding: 20px 14px 48px; }
+      .hero { padding: 20px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <header class="hero">
+      <div class="eyebrow">Architecture Research</div>
+      <h1>Thread 级定时任务系统</h1>
+      <p class="muted">
+        目标不是“定时创建一条任务”，而是“定时唤醒某个长期存在的 brain thread，让它执行一项工作，同时和任务系统保持同一个语义世界，对外有清晰边界”。
+      </p>
+      <div>
+        <span class="pill">现状调研</span>
+        <span class="pill">方案比较</span>
+        <span class="pill">推荐模型</span>
+        <span class="pill">边界设计</span>
+        <span class="pill">实施分期</span>
+      </div>
+    </header>
+
+    <section>
+      <h2>现状结论</h2>
+      <div class="grid grid-3">
+        <article class="card">
+          <h3>已有的 Scheduler</h3>
+          <p>现在的 <code>CronService</code> 只会扫描 <code>cron_jobs</code>，然后往 <code>panel_tasks</code> 里插一条记录。它不会驱动 thread，也不会保证 agent 被唤醒。</p>
+        </article>
+        <article class="card">
+          <h3>已有的 Thread 唤醒链路</h3>
+          <p><code>route_message_to_brain()</code> 已经能把消息投递到长期存在的 thread：如果 thread 空闲就直接启动 run，如果忙就入 followup queue。</p>
+        </article>
+        <article class="card">
+          <h3>已有的 Task 语义过多</h3>
+          <p>仓库里至少有三套任务：<code>panel_tasks</code>、<code>core/tools/task</code> 里的 thread todo、还有 <code>/threads/{id}/tasks</code> 这套后台 run 查询接口。名字相同，语义不同。</p>
+        </article>
+      </div>
+
+      <div class="callout bad">
+        <strong>关键问题</strong>
+        <p>
+          如果继续在现有 <code>cron_jobs -> panel_tasks</code> 上补丁式迭代，最后会得到一个“定时、任务、后台 run、thread 注入”互相缠绕的系统。功能能堆出来，但边界会继续塌。
+        </p>
+      </div>
+    </section>
+
+    <section>
+      <h2>当前系统其实长这样</h2>
+      <div class="grid grid-2">
+        <div class="card">
+          <h3>今天的定时链路</h3>
+          <div class="diagram">
+            <div class="node"><strong>cron_jobs</strong> 定时定义：cron 表达式 + task_template JSON</div>
+            <div class="arrow">↓ every 60s</div>
+            <div class="node"><strong>CronService</strong> 判断是否 due，创建 panel task</div>
+            <div class="arrow">↓</div>
+            <div class="node"><strong>panel_tasks</strong> UI 可见任务板记录，source=cron</div>
+          </div>
+        </div>
+        <div class="card">
+          <h3>今天的 thread 唤醒链路</h3>
+          <div class="diagram">
+            <div class="node"><strong>route_message_to_brain()</strong> 接收一段消息</div>
+            <div class="arrow">↓</div>
+            <div class="node"><strong>IDLE</strong> 直接 <code>start_agent_run()</code></div>
+            <div class="arrow">or</div>
+            <div class="node"><strong>ACTIVE</strong> 入 queue，等当前 run 结束后继续</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="callout warn">
+        <strong>事实判断</strong>
+        <p>
+          现成能力已经足够实现“定时直驱 thread”，但当前代码没有把 scheduler 和 thread delivery 收进同一个任务域模型里。
+        </p>
+      </div>
+    </section>
+
+    <section>
+      <h2>三种候选架构</h2>
+      <table class="comparison">
+        <thead>
+          <tr>
+            <th>方案</th>
+            <th>核心做法</th>
+            <th>优点</th>
+            <th>问题</th>
+            <th>结论</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>A. 在现有 cron 上硬接 thread</strong></td>
+            <td>给 <code>cron_jobs</code> 增加 <code>thread_id</code>，到点后直接 <code>route_message_to_brain()</code>，顺手写一条 <code>panel_tasks</code>。</td>
+            <td>改动最少，最快落地。</td>
+            <td>还是把“调度定义”“任务实例”“执行结果”揉在一起，长期会继续脏。</td>
+            <td><span class="score">不推荐</span></td>
+          </tr>
+          <tr>
+            <td><strong>B. 建一个统一的 Tasks 域模块</strong></td>
+            <td>把 schedule、task definition、task run、thread dispatch 收到一个模块里；UI 上的任务板只是它的 projection。</td>
+            <td>边界清楚，能把“定时”和“任务”变成同一体系。</td>
+            <td>需要做一次结构调整，但范围可控。</td>
+            <td><span class="score">推荐</span></td>
+          </tr>
+          <tr>
+            <td><strong>C. 再加一层事件总线 / outbox</strong></td>
+            <td>scheduler 只产生命令，dispatcher 异步消费再投递 thread。</td>
+            <td>扩展性、恢复性最好。</td>
+            <td>当前仓库还没到这个复杂度，容易过度设计。</td>
+            <td><span class="score">保留为第二阶段</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>推荐建模</h2>
+      <div class="callout good">
+        <strong>推荐句子版</strong>
+        <p>
+          把“定时任务”定义成一种 <em>Task Trigger</em>，它触发的是同一个任务域里的 <em>Task Run</em>；Task Run 的执行目标是长期存在的 <em>thread</em>；对外暴露的只有任务 API 和调度 API，内部再通过 thread delivery gateway 去唤醒 brain。
+        </p>
+      </div>
+
+      <div class="grid grid-2">
+        <article class="card">
+          <h3>建议的新域对象</h3>
+          <ul>
+            <li><strong>TaskSpec</strong>：任务定义。描述要做什么，绑定哪个 thread，注入什么 prompt/template。</li>
+            <li><strong>TaskTrigger</strong>：触发规则。cron 只是其中一种 trigger。</li>
+            <li><strong>TaskRun</strong>：某次真正执行实例。状态、开始时间、结束时间、失败原因、关联 run_id 都在这里。</li>
+            <li><strong>ThreadDispatchGateway</strong>：唯一负责把 TaskRun 投递进 thread 的边界口。</li>
+          </ul>
+        </article>
+        <article class="card">
+          <h3>明确不要再混在一起的东西</h3>
+          <ul>
+            <li>不要再让 <code>task_template</code> 继续做裸 JSON 黑箱。</li>
+            <li>不要让 <code>cron_jobs</code> 直接变成“任务实例表”。</li>
+            <li>不要让前端任务板记录直接代表执行状态真相。</li>
+            <li>不要让 scheduler 直接知道 UI 细节。</li>
+          </ul>
+        </article>
+      </div>
+    </section>
+
+    <section>
+      <h2>建议的模块边界</h2>
+      <div class="card">
+        <div class="diagram">
+          <div class="node">
+            <strong>backend/tasks/</strong>
+            任务域主模块。只关心 TaskSpec / Trigger / Run / Dispatch。
+          </div>
+          <div class="arrow">↓ expose ports</div>
+          <div class="grid grid-2">
+            <div class="node">
+              <strong>infra repositories</strong>
+              SQLite / storage provider 实现：task_specs、task_triggers、task_runs。
+            </div>
+            <div class="node">
+              <strong>thread gateway</strong>
+              通过现有 <code>route_message_to_brain()</code> 和 <code>start_agent_run()</code> 投递。
+            </div>
+          </div>
+          <div class="arrow">↓ projections</div>
+          <div class="grid grid-2">
+            <div class="node">
+              <strong>panel projection</strong>
+              UI 任务板读取 task_runs 或 task_specs 的投影，而不是自己独立长一套语义。
+            </div>
+            <div class="node">
+              <strong>scheduler worker</strong>
+              只负责 claim due trigger → create run → dispatch，不直接做业务分支判断。
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="callout">
+        <strong>外部边界应该很明显</strong>
+        <p>
+          外界不应该直接操作 thread queue、background run registry、panel_tasks 这些内部实现。外界应该只看到：创建任务定义、配置调度、查看执行实例、取消执行实例。
+        </p>
+      </div>
+    </section>
+
+    <section>
+      <h2>推荐的数据关系</h2>
+      <div class="grid grid-3">
+        <article class="card">
+          <h3>task_specs</h3>
+          <p>定义层。字段建议包含：<code>id</code>、<code>thread_id</code>、<code>title</code>、<code>instruction_template</code>、<code>enabled</code>、<code>created_at</code>。</p>
+        </article>
+        <article class="card">
+          <h3>task_triggers</h3>
+          <p>触发层。字段建议包含：<code>id</code>、<code>task_spec_id</code>、<code>type=cron</code>、<code>cron_expression</code>、<code>next_fire_at</code>、<code>last_fire_at</code>。</p>
+        </article>
+        <article class="card">
+          <h3>task_runs</h3>
+          <p>实例层。字段建议包含：<code>id</code>、<code>task_spec_id</code>、<code>trigger_id</code>、<code>thread_id</code>、<code>status</code>、<code>dispatch_run_id</code>、<code>started_at</code>、<code>completed_at</code>、<code>result_summary</code>。</p>
+        </article>
+      </div>
+    </section>
+
+    <section>
+      <h2>执行流应该变成什么样</h2>
+      <div class="card">
+        <div class="diagram">
+          <div class="node"><strong>1. Scheduler</strong> 扫描 due trigger，claim 一条 trigger</div>
+          <div class="arrow">↓</div>
+          <div class="node"><strong>2. TaskRunFactory</strong> 创建一条 task_run，状态 = dispatching</div>
+          <div class="arrow">↓</div>
+          <div class="node"><strong>3. ThreadDispatchGateway</strong> 生成调度消息，调用 <code>route_message_to_brain(thread_id, ...)</code></div>
+          <div class="arrow">↓</div>
+          <div class="node"><strong>4. Thread</strong> 空闲则立即执行，忙则入 queue</div>
+          <div class="arrow">↓</div>
+          <div class="node"><strong>5. Run Correlator</strong> 把 thread run_id / 完成状态 / 失败原因写回 task_run</div>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>为什么这比现在好</h2>
+      <div class="grid grid-2">
+        <article class="card">
+          <h3>统一语义</h3>
+          <p>“定时任务”和“任务实例”不再平行。定时只是 trigger，真正的执行单位始终是 task_run。</p>
+        </article>
+        <article class="card">
+          <h3>thread 是一等公民</h3>
+          <p>执行目标是长期存在的 brain，而不是临时 agent。符合你的核心要求。</p>
+        </article>
+        <article class="card">
+          <h3>边界清楚</h3>
+          <p>外界调 API 看任务；内部如何投递到 queue / start run / correlate 完全被关在 tasks 域内。</p>
+        </article>
+        <article class="card">
+          <h3>前端也会更干净</h3>
+          <p>任务板看的是 task_run 投影，调度页看的是 trigger 配置，不再混着展示假字段。</p>
+        </article>
+      </div>
+    </section>
+
+    <section>
+      <h2>实施计划草案</h2>
+      <div class="grid grid-2">
+        <article class="card">
+          <h3>Phase 1. 语义收口</h3>
+          <ol>
+            <li>引入 <code>backend/tasks/</code> 模块，定义 TaskSpec / Trigger / Run。</li>
+            <li>保留旧 API 入口，但改成调用新模块。</li>
+            <li>把现有 <code>cron_jobs</code> 和 <code>panel_tasks</code> 明确标记成 legacy projection。</li>
+          </ol>
+        </article>
+        <article class="card">
+          <h3>Phase 2. Thread 调度接入</h3>
+          <ol>
+            <li>增加 thread-bound task spec。</li>
+            <li>scheduler 到点后创建 task_run，不再只创建 panel task。</li>
+            <li>通过 thread gateway 调 <code>route_message_to_brain()</code> 触发执行。</li>
+          </ol>
+        </article>
+        <article class="card">
+          <h3>Phase 3. 状态对齐</h3>
+          <ol>
+            <li>把 thread run_id 和 task_run 建立关联。</li>
+            <li>完成 / 失败 / 取消回写 task_run。</li>
+            <li>前端任务板切到 task_run projection。</li>
+          </ol>
+        </article>
+        <article class="card">
+          <h3>Phase 4. 清理旧结构</h3>
+          <ol>
+            <li>裁剪旧 <code>cron_service</code>、旧 cron UI 假字段。</li>
+            <li>决定 <code>core/tools/task</code> 是否并入同一任务域，还是保留为 thread-local checklist 工具。</li>
+            <li>必要时再引入 outbox / worker 分离。</li>
+          </ol>
+        </article>
+      </div>
+    </section>
+
+    <section>
+      <h2>当前最需要你拍板的点</h2>
+      <div class="callout warn">
+        <strong>唯一还没完全定死的问题</strong>
+        <p>
+          <code>core/tools/task</code> 这套 thread 内部 todo 工具，未来是要并入同一个任务域，还是继续保留为 agent 自己的轻量 checklist 子系统。我的倾向是：先保留，后续只通过 adapter 关联，不急着第一阶段强并。
+        </p>
+      </div>
+    </section>
+
+    <p class="footer">
+      生成时间：2026-03-29。结论偏向最小可维护实现，不追求一开始就事件总线化。
+    </p>
+  </div>
+</body>
+</html>

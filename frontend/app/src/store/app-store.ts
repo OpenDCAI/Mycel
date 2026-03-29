@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import type {
   Member, Task, ResourceItem, UserProfile,
-  MemberConfig, TaskStatus, CronJob,
+  MemberConfig, TaskStatus, CronJob, ScheduledTask, ScheduledTaskRun,
 } from "./types";
 import { useAuthStore } from "./auth-store";
 
@@ -12,6 +12,8 @@ interface AppState {
   memberList: Member[];
   taskList: Task[];
   cronJobs: CronJob[];
+  scheduledTasks: ScheduledTask[];
+  scheduledTaskRuns: Record<string, ScheduledTaskRun[]>;
   librarySkills: ResourceItem[];
   libraryMcps: ResourceItem[];
   libraryAgents: ResourceItem[];
@@ -47,6 +49,14 @@ interface AppState {
   deleteCronJob: (id: string) => Promise<void>;
   triggerCronJob: (id: string) => Promise<void>;
 
+  // ── Scheduled Tasks ──
+  fetchScheduledTasks: () => Promise<void>;
+  addScheduledTask: (fields: Partial<ScheduledTask>) => Promise<ScheduledTask>;
+  updateScheduledTask: (id: string, fields: Partial<ScheduledTask>) => Promise<void>;
+  deleteScheduledTask: (id: string) => Promise<void>;
+  fetchScheduledTaskRuns: (id: string) => Promise<void>;
+  triggerScheduledTask: (id: string) => Promise<ScheduledTaskRun>;
+
   // ── Library ──
   fetchLibrary: (type: string) => Promise<void>;
   fetchLibraryNames: (type: string) => Promise<{ name: string; desc: string }[]>;
@@ -78,6 +88,8 @@ export const useAppStore = create<AppState>()((set, get) => ({
   memberList: [],
   taskList: [],
   cronJobs: [],
+  scheduledTasks: [],
+  scheduledTaskRuns: {},
   librarySkills: [],
   libraryMcps: [],
   libraryAgents: [],
@@ -92,7 +104,7 @@ export const useAppStore = create<AppState>()((set, get) => ({
       await Promise.all([
         get().fetchMembers(),
         get().fetchTasks(),
-        get().fetchCronJobs(),
+        get().fetchScheduledTasks(),
         get().fetchLibrary("skill"),
         get().fetchLibrary("mcp"),
         get().fetchLibrary("agent"),
@@ -241,6 +253,56 @@ export const useAppStore = create<AppState>()((set, get) => ({
 
   triggerCronJob: async (id) => {
     await api(`/cron-jobs/${id}/run`, { method: "POST" });
+  },
+
+  // ── Scheduled Tasks ──
+  fetchScheduledTasks: async () => {
+    const data = await api<{ items: ScheduledTask[] }>("/scheduled-tasks");
+    set({ scheduledTasks: data.items });
+  },
+
+  addScheduledTask: async (fields = {}) => {
+    const data = await api<{ item: ScheduledTask }>("/scheduled-tasks", {
+      method: "POST",
+      body: JSON.stringify(fields),
+    });
+    const item = data.item;
+    set((s) => ({ scheduledTasks: [item, ...s.scheduledTasks] }));
+    return item;
+  },
+
+  updateScheduledTask: async (id, fields) => {
+    const data = await api<{ item: ScheduledTask }>(`/scheduled-tasks/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(fields),
+    });
+    const updated = data.item;
+    set((s) => ({ scheduledTasks: s.scheduledTasks.map((x) => (x.id === id ? updated : x)) }));
+  },
+
+  deleteScheduledTask: async (id) => {
+    await api(`/scheduled-tasks/${id}`, { method: "DELETE" });
+    set((s) => {
+      const nextRuns = { ...s.scheduledTaskRuns };
+      delete nextRuns[id];
+      return {
+        scheduledTasks: s.scheduledTasks.filter((x) => x.id !== id),
+        scheduledTaskRuns: nextRuns,
+      };
+    });
+  },
+
+  fetchScheduledTaskRuns: async (id) => {
+    const data = await api<{ items: ScheduledTaskRun[] }>(`/scheduled-tasks/${id}/runs`);
+    set((s) => ({ scheduledTaskRuns: { ...s.scheduledTaskRuns, [id]: data.items } }));
+  },
+
+  triggerScheduledTask: async (id) => {
+    const data = await api<{ item: ScheduledTaskRun }>(`/scheduled-tasks/${id}/run`, {
+      method: "POST",
+    });
+    await get().fetchScheduledTaskRuns(id);
+    return data.item;
   },
 
   // ── Library ──

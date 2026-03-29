@@ -87,6 +87,32 @@ export interface CronJob {
   created_at: number;
 }
 
+export interface ScheduledTask {
+  id: string;
+  thread_id: string;
+  name: string;
+  instruction: string;
+  cron_expression: string;
+  enabled: number;
+  last_triggered_at: number;
+  next_trigger_at: number;
+  created_at: number;
+  updated_at: number;
+}
+
+export interface ScheduledTaskRun {
+  id: string;
+  scheduled_task_id: string;
+  thread_id: string;
+  status: "queued" | "dispatched" | "completed" | "failed";
+  triggered_at: number;
+  started_at: number;
+  completed_at: number;
+  thread_run_id: string;
+  error: string;
+  dispatch_result?: Record<string, unknown> | null;
+}
+
 export interface ResourceItem {
   id: string;
   name: string;
