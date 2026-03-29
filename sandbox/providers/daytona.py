@@ -114,7 +114,7 @@ class DaytonaProvider(SandboxProvider):
             MountSpec.model_validate(m) if isinstance(m, dict) else m for m in mounts
         ]
 
-    # ==================== Member Volume ====================
+    # ==================== Managed Volume ====================
 
     def create_managed_volume(self, member_id: str, mount_path: str) -> str:
         """Create a Daytona managed volume. Returns volume name as backend_ref."""
