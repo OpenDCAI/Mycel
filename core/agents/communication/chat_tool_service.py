@@ -220,6 +220,8 @@ class ChatToolService:
                 msgs = self._fetch_by_range(chat_id, parsed)
                 if not msgs:
                     return "No messages in that range."
+                # @@@range-marks-read — update last_read_at so subsequent chat_send doesn't block.
+                self._chat_entities.update_last_read(chat_id, eid, time.time())
                 return self._format_msgs(msgs, eid)
 
             # @@@read-unread-only — default to unread messages only.
