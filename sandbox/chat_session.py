@@ -16,9 +16,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from storage.providers.sqlite.kernel import connect_sqlite
-
-from sandbox.config import DEFAULT_DB_PATH
+from storage.providers.sqlite.kernel import SQLiteDBRole, connect_sqlite, resolve_role_db_path
 from sandbox.lifecycle import (
     ChatSessionState,
     assert_chat_session_transition,
@@ -73,7 +71,7 @@ class ChatSession:
         policy: ChatSessionPolicy,
         started_at: datetime,
         last_active_at: datetime,
-        db_path: Path = DEFAULT_DB_PATH,
+        db_path: Path | None = None,
         *,
         runtime_id: str | None = None,
         status: str = "active",
@@ -95,7 +93,7 @@ class ChatSession:
         self.budget_json = budget_json
         self.ended_at = ended_at
         self.close_reason = close_reason
-        self._db_path = db_path
+        self._db_path = db_path or resolve_role_db_path(SQLiteDBRole.SANDBOX)
 
     def is_expired(self) -> bool:
         now = datetime.now()
@@ -157,12 +155,12 @@ class ChatSessionManager:
     def __init__(
         self,
         provider: SandboxProvider,
-        db_path: Path = DEFAULT_DB_PATH,
+        db_path: Path | None = None,
         default_policy: ChatSessionPolicy | None = None,
         chat_session_repo=None,
     ):
         self.provider = provider
-        self.db_path = db_path
+        self.db_path = db_path or resolve_role_db_path(SQLiteDBRole.SANDBOX)
         self.default_policy = default_policy or ChatSessionPolicy()
         self._live_sessions: dict[str, ChatSession] = {}
         if chat_session_repo:

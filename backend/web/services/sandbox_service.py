@@ -12,7 +12,9 @@ logger = logging.getLogger(__name__)
 from backend.web.core.config import LOCAL_WORKSPACE_ROOT, SANDBOXES_DIR
 from backend.web.utils.helpers import is_virtual_thread_id
 from sandbox.config import SandboxConfig
-from sandbox.config import DEFAULT_DB_PATH as SANDBOX_DB_PATH
+from storage.providers.sqlite.kernel import SQLiteDBRole, resolve_role_db_path
+
+SANDBOX_DB_PATH = resolve_role_db_path(SQLiteDBRole.SANDBOX)
 from sandbox.manager import SandboxManager
 from sandbox.provider import ProviderCapability
 

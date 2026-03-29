@@ -13,11 +13,10 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
-from storage.providers.sqlite.kernel import connect_sqlite
+from storage.providers.sqlite.kernel import SQLiteDBRole, connect_sqlite, resolve_role_db_path
 
 from sandbox.capability import SandboxCapability
 from sandbox.chat_session import ChatSessionManager, ChatSessionPolicy
-from sandbox.config import DEFAULT_DB_PATH
 from sandbox.lease import lease_from_row
 from storage.providers.sqlite.lease_repo import SQLiteLeaseRepo
 from sandbox.provider import SandboxProvider
@@ -35,7 +34,7 @@ def resolve_provider_cwd(provider) -> str:
 
 
 def lookup_sandbox_for_thread(thread_id: str, db_path: Path | None = None) -> str | None:
-    target_db = db_path or DEFAULT_DB_PATH
+    target_db = db_path or resolve_role_db_path(SQLiteDBRole.SANDBOX)
     if not target_db.exists():
         return None
 
@@ -68,7 +67,7 @@ class SandboxManager:
         self.provider_capability = provider.get_capability()
         self._on_session_ready = on_session_ready
 
-        self.db_path = db_path or DEFAULT_DB_PATH
+        self.db_path = db_path or resolve_role_db_path(SQLiteDBRole.SANDBOX)
         self.terminal_store = SQLiteTerminalRepo(db_path=self.db_path)
         self.lease_store = SQLiteLeaseRepo(db_path=self.db_path)
 

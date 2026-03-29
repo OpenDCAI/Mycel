@@ -194,12 +194,13 @@ def _create_thread_sandbox_resources(thread_id: str, sandbox_type: str) -> None:
     from datetime import datetime
 
     from backend.web.core.config import SANDBOX_VOLUME_ROOT
-    from sandbox.config import DEFAULT_DB_PATH
+    from storage.providers.sqlite.kernel import SQLiteDBRole, resolve_role_db_path
     from storage.providers.sqlite.lease_repo import SQLiteLeaseRepo
     from storage.providers.sqlite.terminal_repo import SQLiteTerminalRepo
     from sandbox.volume_source import HostVolume
     from backend.web.utils.helpers import _get_container
 
+    sandbox_db = resolve_role_db_path(SQLiteDBRole.SANDBOX)
     now_str = datetime.now().isoformat()
     volume_id = str(uuid.uuid4())
     vol_path = SANDBOX_VOLUME_ROOT / volume_id
@@ -211,14 +212,14 @@ def _create_thread_sandbox_resources(thread_id: str, sandbox_type: str) -> None:
     finally:
         vol_repo.close()
 
-    lease_repo = SQLiteLeaseRepo(db_path=DEFAULT_DB_PATH)
+    lease_repo = SQLiteLeaseRepo(db_path=sandbox_db)
     try:
         lease_id = f"lease-{uuid.uuid4().hex[:12]}"
         lease_repo.create(lease_id, sandbox_type, volume_id=volume_id)
     finally:
         lease_repo.close()
 
-    terminal_repo = SQLiteTerminalRepo(db_path=DEFAULT_DB_PATH)
+    terminal_repo = SQLiteTerminalRepo(db_path=sandbox_db)
     try:
         terminal_id = f"term-{uuid.uuid4().hex[:12]}"
         # @@@initial-cwd - use project root for local, provider default for remote

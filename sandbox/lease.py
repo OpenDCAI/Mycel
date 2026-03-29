@@ -20,9 +20,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from storage.providers.sqlite.kernel import connect_sqlite
-
-from sandbox.config import DEFAULT_DB_PATH
+from storage.providers.sqlite.kernel import SQLiteDBRole, connect_sqlite, resolve_role_db_path
 from sandbox.lifecycle import (
     LeaseInstanceState,
     assert_lease_instance_transition,
@@ -177,7 +175,7 @@ class SQLiteLease(SandboxLease):
         lease_id: str,
         provider_name: str,
         current_instance: SandboxInstance | None = None,
-        db_path: Path = DEFAULT_DB_PATH,
+        db_path: Path | None = None,
         status: str = "active",
         workspace_key: str | None = None,
         desired_state: str = "running",
@@ -204,7 +202,7 @@ class SQLiteLease(SandboxLease):
             refresh_hint_at=refresh_hint_at,
             volume_id=volume_id,
         )
-        self.db_path = db_path
+        self.db_path = db_path or resolve_role_db_path(SQLiteDBRole.SANDBOX)
         self._detached_instance: SandboxInstance | None = None
 
     def _instance_lock(self) -> threading.RLock:

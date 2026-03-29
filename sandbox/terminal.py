@@ -16,9 +16,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from storage.providers.sqlite.kernel import connect_sqlite
-
-from sandbox.config import DEFAULT_DB_PATH
+from storage.providers.sqlite.kernel import SQLiteDBRole, connect_sqlite, resolve_role_db_path
 
 REQUIRED_ABSTRACT_TERMINAL_COLUMNS = {
     "terminal_id",
@@ -136,10 +134,10 @@ class SQLiteTerminal(AbstractTerminal):
         thread_id: str,
         lease_id: str,
         state: TerminalState,
-        db_path: Path = DEFAULT_DB_PATH,
+        db_path: Path | None = None,
     ):
         super().__init__(terminal_id, thread_id, lease_id, state)
-        self.db_path = db_path
+        self.db_path = db_path or resolve_role_db_path(SQLiteDBRole.SANDBOX)
 
     def _persist_state(self) -> None:
         """Persist state to SQLite."""

@@ -24,10 +24,11 @@ def _resolve_volume_source(thread_id: str):
     from storage.providers.sqlite.terminal_repo import SQLiteTerminalRepo
     from sandbox.lease import lease_from_row
     from storage.providers.sqlite.lease_repo import SQLiteLeaseRepo
-    from sandbox.config import DEFAULT_DB_PATH
+    from storage.providers.sqlite.kernel import SQLiteDBRole, resolve_role_db_path
     from sandbox.volume_source import deserialize_volume_source
 
-    terminal_repo = SQLiteTerminalRepo(db_path=DEFAULT_DB_PATH)
+    sandbox_db = resolve_role_db_path(SQLiteDBRole.SANDBOX)
+    terminal_repo = SQLiteTerminalRepo(db_path=sandbox_db)
     try:
         terminal_row = terminal_repo.get_active(thread_id)
     finally:
@@ -35,7 +36,7 @@ def _resolve_volume_source(thread_id: str):
     if not terminal_row:
         raise ValueError(f"No active terminal for thread {thread_id}")
 
-    lease_repo = SQLiteLeaseRepo(db_path=DEFAULT_DB_PATH)
+    lease_repo = SQLiteLeaseRepo(db_path=sandbox_db)
     try:
         lease_row = lease_repo.get(terminal_row["lease_id"])
     finally:
@@ -43,7 +44,7 @@ def _resolve_volume_source(thread_id: str):
     if not lease_row:
         raise ValueError(f"Lease not found: {terminal_row['lease_id']}")
 
-    lease = lease_from_row(lease_row, DEFAULT_DB_PATH)
+    lease = lease_from_row(lease_row, sandbox_db)
     volume_id = lease.volume_id
     if not volume_id:
         raise ValueError(f"Lease {terminal_row['lease_id']} has no volume_id")
