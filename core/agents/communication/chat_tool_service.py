@@ -220,6 +220,11 @@ class ChatToolService:
                 msgs = self._fetch_by_range(chat_id, parsed)
                 if not msgs:
                     return "No messages in that range."
+                # @@@range-marks-read — WORKAROUND: unblock chat_send by pushing
+                # last_read_at to now. This marks ALL messages as read, not just
+                # the requested range. Proper fix needs per-message read tracking
+                # instead of the current single-timestamp waterline model.
+                self._chat_entities.update_last_read(chat_id, eid, time.time())
                 return self._format_msgs(msgs, eid)
 
             # @@@read-unread-only — default to unread messages only.
