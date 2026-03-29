@@ -56,7 +56,7 @@ def _connect(db_path: Path) -> sqlite3.Connection:
 class ChatSessionPolicy:
     """Policy configuration for ChatSession lifecycle."""
 
-    idle_ttl_sec: int = 300
+    idle_ttl_sec: int = 600
     max_duration_sec: int = 86400
 
 

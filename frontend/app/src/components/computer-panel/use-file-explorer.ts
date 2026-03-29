@@ -1,5 +1,8 @@
 import { useCallback, useState } from "react";
-import { listWorkspace, readWorkspaceFile } from "../../api";
+import {
+  listSandboxFiles,
+  readSandboxFile,
+} from "../../api";
 import type { TreeNode } from "./types";
 import { buildTreeNodes, updateNodeAtPath } from "./utils";
 
@@ -36,7 +39,7 @@ export function useFileExplorer({ threadId }: UseFileExplorerOptions): FileExplo
     setLoadingWorkspace(true);
     setWorkspaceError(null);
     try {
-      const data = await listWorkspace(threadId, target || undefined);
+      const data = await listSandboxFiles(threadId, target || undefined);
       setCurrentPath(data.path);
       if (!workspaceRoot) setWorkspaceRoot(data.path);
       setTreeNodes(buildTreeNodes(data.entries, data.path));
@@ -77,7 +80,7 @@ export function useFileExplorer({ threadId }: UseFileExplorerOptions): FileExplo
     // Lazy load children
     setTreeNodes((prev) => updateNodeAtPath(prev, fullPath, (n) => ({ ...n, loading: true })));
     try {
-      const data = await listWorkspace(threadId, fullPath);
+      const data = await listSandboxFiles(threadId, fullPath);
       const children = buildTreeNodes(data.entries, fullPath);
       setTreeNodes((prev) =>
         updateNodeAtPath(prev, fullPath, (n) => ({ ...n, children, expanded: true, loading: false })),
@@ -91,7 +94,7 @@ export function useFileExplorer({ threadId }: UseFileExplorerOptions): FileExplo
     if (!threadId) return;
     setSelectedFilePath(fullPath);
     try {
-      const file = await readWorkspaceFile(threadId, fullPath);
+      const file = await readSandboxFile(threadId, fullPath);
       setSelectedFileContent(file.content);
     } catch {
       setSelectedFileContent("(无法读取文件)");

@@ -19,7 +19,7 @@ RESOURCE_CAPABILITY_KEYS = (
     "web",
     "process",
     "hooks",
-    "snapshot",
+    "mount",
 )
 
 
@@ -41,7 +41,7 @@ def build_resource_capabilities(
     web: bool,
     process: bool,
     hooks: bool,
-    snapshot: bool,
+    mount: bool,
 ) -> dict[str, bool]:
     return normalize_resource_capabilities(
         {
@@ -52,9 +52,29 @@ def build_resource_capabilities(
             "web": web,
             "process": process,
             "hooks": hooks,
-            "snapshot": snapshot,
+            "mount": mount,
         }
     )
+
+
+@dataclass(frozen=True)
+class MountCapability:
+    """Mount behavior capability shared across providers."""
+
+    supports_mount: bool = False
+    supports_copy: bool = False
+    supports_read_only: bool = False
+    mode_handlers: dict[str, bool] = field(default_factory=dict)
+    supports_managed_volume: bool = False
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "supports_mount": self.supports_mount,
+            "supports_copy": self.supports_copy,
+            "supports_read_only": self.supports_read_only,
+            "mode_handlers": dict(self.mode_handlers or {}),
+            "supports_managed_volume": self.supports_managed_volume,
+        }
 
 
 @dataclass(frozen=True)
@@ -70,6 +90,7 @@ class ProviderCapability:
     inspect_visible: bool = True
     runtime_kind: str = "remote"
     resource_capabilities: dict[str, bool] = field(default_factory=dict)
+    mount: MountCapability = field(default_factory=MountCapability)
 
     def declared_resource_capabilities(self) -> dict[str, bool]:
         return normalize_resource_capabilities(self.resource_capabilities)
@@ -105,6 +126,7 @@ class SandboxProvider(ABC):
     """Abstract interface for sandbox providers."""
 
     name: str  # Provider identifier: 'agentbay', 'e2b', 'docker', 'local'
+    WORKSPACE_ROOT: str = "/workspace"  # Override in subclasses with non-standard workspace paths
 
     @abstractmethod
     def get_capability(self) -> ProviderCapability:
@@ -112,7 +134,7 @@ class SandboxProvider(ABC):
         pass
 
     @abstractmethod
-    def create_session(self, context_id: str | None = None) -> SessionInfo:
+    def create_session(self, context_id: str | None = None, thread_id: str | None = None) -> SessionInfo:
         pass
 
     @abstractmethod
@@ -148,6 +170,20 @@ class SandboxProvider(ABC):
     @abstractmethod
     def write_file(self, session_id: str, path: str, content: str) -> str:
         pass
+
+    def upload_bytes(self, session_id: str, remote_path: str, data: bytes) -> None:
+        """Upload raw bytes to remote path. Uses native SDK file API when available.
+        Default: falls back to write_file with utf-8 decode (lossy for binary).
+        Override in providers with native binary upload support.
+        """
+        self.write_file(session_id, remote_path, data.decode("utf-8", errors="replace"))
+
+    def download_bytes(self, session_id: str, remote_path: str) -> bytes:
+        """Download raw bytes from remote path. Uses native SDK file API when available.
+        Default: falls back to read_file with utf-8 encode.
+        Override in providers with native binary download support.
+        """
+        return self.read_file(session_id, remote_path).encode("utf-8")
 
     @abstractmethod
     def list_dir(self, session_id: str, path: str) -> list[dict]:
@@ -206,3 +242,23 @@ class SandboxProvider(ABC):
 
     def get_web_url(self, session_id: str) -> str | None:
         return None
+
+    def create_managed_volume(self, member_id: str, mount_path: str) -> str:
+        """Create provider-managed persistent volume. Returns backend_ref (volume name).
+        Override in providers with managed volume support (Daytona, Docker).
+        """
+        raise NotImplementedError(f"{self.name} does not support managed volumes")
+
+    def set_managed_volume_mount(self, thread_id: str, backend_ref: str, mount_path: str) -> None:
+        """Configure managed volume mount for next create_session().
+        Called before create_session(). Provider stores this internally.
+        """
+        raise NotImplementedError(f"{self.name} does not support managed volumes")
+
+    def delete_managed_volume(self, backend_ref: str) -> None:
+        """Delete provider-managed persistent volume."""
+        raise NotImplementedError(f"{self.name} does not support managed volumes")
+
+    def set_thread_bind_mounts(self, thread_id: str, mounts: list) -> None:
+        """Set per-thread bind mounts for next create_session(). No-op for providers without mount support."""
+        pass

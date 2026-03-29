@@ -31,7 +31,7 @@ export default function ComputerPanel({
   const agentSteps = useMemo(() => extractAgentSteps(chatEntries), [chatEntries]);
   const { width: treeWidth, onMouseDown: onDragStart } = useResizable(288, 160, 500);
 
-  const { lease, statusError: _statusError, refreshStatus } = useSandboxStatus({ threadId, isRemote });
+  const { lease, refreshStatus } = useSandboxStatus({ threadId, isRemote });
 
   const fileExplorer = useFileExplorer({ threadId });
 
@@ -96,6 +96,7 @@ export default function ComputerPanel({
             onSelectFile={fileExplorer.handleSelectFile}
           />
         )}
+
       </div>
     </div>
   );

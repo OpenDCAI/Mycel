@@ -52,7 +52,7 @@ class E2BProvider(SandboxProvider):
             web=False,
             process=False,
             hooks=False,
-            snapshot=True,
+            mount=False,
         ),
     )
     WORKSPACE_ROOT = "/home/user/workspace"
@@ -78,7 +78,7 @@ class E2BProvider(SandboxProvider):
         self.timeout = timeout
         self._sandboxes: dict[str, Any] = {}
 
-    def create_session(self, context_id: str | None = None) -> SessionInfo:
+    def create_session(self, context_id: str | None = None, thread_id: str | None = None) -> SessionInfo:
         from e2b import Sandbox
 
         sandbox = Sandbox.beta_create(
@@ -214,6 +214,15 @@ class E2BProvider(SandboxProvider):
         except Exception:
             logger.warning("[E2BProvider] list_dir failed for path %s", path, exc_info=True)
             return []
+
+    def upload_bytes(self, session_id: str, remote_path: str, data: bytes) -> None:
+        sandbox = self._get_sandbox(session_id)
+        sandbox.files.write(remote_path, data)
+
+    def download_bytes(self, session_id: str, remote_path: str) -> bytes:
+        sandbox = self._get_sandbox(session_id)
+        content = sandbox.files.read(remote_path, format="bytes")
+        return bytes(content) if content else b""
 
     def get_metrics(self, session_id: str) -> Metrics | None:
         # E2B is Ubuntu-based; free/top/df are available → delegate to shell command probing.

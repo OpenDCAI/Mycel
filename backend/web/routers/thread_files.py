@@ -1,22 +1,31 @@
-"""Workspace file browsing endpoints."""
+"""Thread file browsing endpoints."""
 
 import asyncio
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
+from fastapi.responses import FileResponse
 
-from backend.web.core.dependencies import get_app
+from backend.web.core.dependencies import get_app, verify_thread_owner
 from backend.web.services.agent_pool import resolve_thread_sandbox
+from backend.web.services import file_channel_service
 from backend.web.utils.helpers import resolve_local_workspace_path
 from sandbox.thread_context import set_current_thread_id
 
-router = APIRouter(prefix="/api/threads/{thread_id}/workspace", tags=["workspace"])
+router = APIRouter(
+    prefix="/api/threads/{thread_id}/files",
+    tags=["thread-files"],
+    dependencies=[Depends(verify_thread_owner)],
+)
+# @@@public-download — download is accessed via <a href> which can't carry auth headers
+_public = APIRouter(prefix="/api/threads/{thread_id}/files", tags=["thread-files"])
 
 
 @router.get("/list")
 async def list_workspace_path(
     thread_id: str,
     path: str | None = Query(default=None),
+
     app: Annotated[Any, Depends(get_app)] = None,
 ) -> dict[str, Any]:
     """List files and directories in workspace path."""
@@ -88,6 +97,7 @@ async def list_workspace_path(
 async def read_workspace_file(
     thread_id: str,
     path: str = Query(...),
+
     app: Annotated[Any, Depends(get_app)] = None,
 ) -> dict[str, Any]:
     """Read file content from workspace."""
@@ -113,7 +123,6 @@ async def read_workspace_file(
     try:
         set_current_thread_id(thread_id)
         agent = await get_or_create_agent(app, sandbox_type, thread_id=thread_id)
-    # @@@http_passthrough - preserve policy/validation errors from agent creation
     except HTTPException:
         raise
     except Exception as e:
@@ -132,9 +141,104 @@ async def read_workspace_file(
 
     try:
         payload = await asyncio.to_thread(_read_remote)
-    # @@@http_passthrough - preserve explicit status from remote capability path
     except HTTPException:
         raise
     except Exception as e:
         raise HTTPException(400, str(e)) from e
     return {"thread_id": thread_id, **payload}
+
+
+@router.get("/channels")
+async def get_sandbox_files(
+    thread_id: str,
+
+) -> dict[str, Any]:
+    """Get thread-scoped upload/download channel paths."""
+    source = await asyncio.to_thread(file_channel_service.get_file_channel_source, thread_id)
+    return {"thread_id": thread_id, "files_path": str(source.host_path)}
+
+
+_MAX_UPLOAD_BYTES = 100 * 1024 * 1024  # 100 MB
+
+
+@router.post("/upload")
+async def upload_file(
+    thread_id: str,
+    file: UploadFile = File(...),
+    path: str | None = Query(default=None),
+
+    app: Annotated[Any, Depends(get_app)] = None,
+) -> dict[str, Any]:
+    """Upload a file into thread sandbox files."""
+    if not file.filename and not path:
+        raise HTTPException(400, "Missing upload path: provide query path or filename")
+    relative_path = path or file.filename or ""
+    content = await file.read(_MAX_UPLOAD_BYTES + 1)
+    if len(content) > _MAX_UPLOAD_BYTES:
+        raise HTTPException(413, f"Upload exceeds {_MAX_UPLOAD_BYTES // (1024 * 1024)} MB limit")
+    try:
+        payload = await asyncio.to_thread(
+            file_channel_service.save_file,
+            thread_id=thread_id,
+            relative_path=relative_path,
+            content=content,
+        )
+
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
+    return payload
+
+
+@_public.get("/download")
+async def download_file(
+    thread_id: str,
+    path: str = Query(...),
+) -> FileResponse:
+    """Download a file from thread-scoped files directory."""
+    try:
+        target = await asyncio.to_thread(
+            file_channel_service.resolve_channel_file,
+            thread_id=thread_id,
+            relative_path=path,
+        )
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
+    except FileNotFoundError as e:
+        raise HTTPException(404, str(e)) from e
+    return FileResponse(path=str(target), filename=target.name, media_type="application/octet-stream")
+
+
+@router.delete("/files")
+async def delete_workspace_file(
+    thread_id: str,
+    path: str = Query(...),
+
+) -> dict[str, Any]:
+    """Delete a file from workspace."""
+    try:
+        await asyncio.to_thread(
+            file_channel_service.delete_channel_file,
+            thread_id=thread_id,
+            relative_path=path,
+        )
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
+    except FileNotFoundError as e:
+        raise HTTPException(404, str(e)) from e
+    return {"ok": True, "path": path}
+
+
+@router.get("/channel-files")
+async def list_channel_files(
+    thread_id: str,
+
+) -> dict[str, Any]:
+    """List files under thread-scoped files directory."""
+    try:
+        entries = await asyncio.to_thread(
+            file_channel_service.list_channel_files,
+            thread_id=thread_id,
+        )
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
+    return {"thread_id": thread_id, "entries": entries}

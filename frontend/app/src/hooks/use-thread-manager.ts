@@ -59,7 +59,7 @@ export function useThreadManager(): ThreadManagerState & ThreadManagerActions {
 
   const handleCreateThread = useCallback(async (sandbox?: string, cwd?: string, memberId?: string, model?: string): Promise<string> => {
     const type = sandbox ?? selectedSandbox;
-    const thread = await createThread(type, cwd, memberId, model);
+    const thread = await createThread({ sandbox: type, cwd, memberId: memberId ?? "", model });
     setThreads((prev) => upsertThread(prev, thread));
     setSelectedSandbox(type);
     return thread.thread_id;

@@ -647,6 +647,7 @@ def delete_member(member_id: str) -> bool:
     member_dir = MEMBERS_DIR / member_id
     if not member_dir.is_dir():
         return False
+
     shutil.rmtree(member_dir)
 
     # Also remove from SQLite
@@ -658,3 +659,5 @@ def delete_member(member_id: str) -> bool:
         repo.close()
 
     return True
+
+

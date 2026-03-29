@@ -78,6 +78,32 @@ def _get_container() -> StorageContainer:
     return _cached_container
 
 
+_cached_thread_repo = None
+
+def _get_thread_repo():
+    """Get cached ThreadRepo instance."""
+    global _cached_thread_repo
+    if _cached_thread_repo is not None:
+        return _cached_thread_repo
+    from storage.providers.sqlite.thread_repo import SQLiteThreadRepo
+    _cached_thread_repo = SQLiteThreadRepo(DB_PATH)
+    return _cached_thread_repo
+
+
+def save_thread_config(thread_id: str, **fields: Any) -> None:
+    """Update specific fields of thread in SQLite."""
+    allowed = {"sandbox_type", "cwd", "model", "observation_provider"}
+    updates = {k: v for k, v in fields.items() if k in allowed}
+    if not updates:
+        return
+    _get_thread_repo().update(thread_id, **updates)
+
+
+def load_thread_config(thread_id: str) -> dict[str, Any] | None:
+    """Load thread data from SQLite. Returns dict or None."""
+    return _get_thread_repo().get_by_id(thread_id)
+
+
 def get_active_observation_provider() -> str | None:
     """Read global observation config and return the active provider name."""
     from config.observation_loader import ObservationLoader
@@ -98,11 +124,15 @@ def resolve_local_workspace_path(
     if local_workspace_root is None:
         local_workspace_root = LOCAL_WORKSPACE_ROOT
 
-    # Use thread-specific workspace root if available from memory cache
+    # Use thread-specific workspace root if available (memory → SQLite fallback)
     thread_cwd = None
     if thread_id:
         if thread_cwd_map:
             thread_cwd = thread_cwd_map.get(thread_id)
+        if not thread_cwd:
+            tc = load_thread_config(thread_id)
+            if tc:
+                thread_cwd = tc.get("cwd")
     # @@@workspace-base-normalize - relative LOCAL_WORKSPACE_ROOT must be normalized, or target.relative_to(base) always fails.
     base = Path(thread_cwd).resolve() if thread_cwd else local_workspace_root.resolve()
 

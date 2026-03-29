@@ -10,7 +10,7 @@ export interface ProviderCapabilities {
   web: boolean;
   process: boolean;
   hooks: boolean;
-  snapshot: boolean;
+  mount: boolean;
 }
 
 export interface ProviderQuota {
@@ -56,8 +56,8 @@ export interface ResourceSession {
   id: string;
   leaseId?: string;
   threadId: string;
-  agentId: string;
-  agentName: string;
+  memberId: string;
+  memberName: string;
   status: "running" | "paused" | "stopped" | "destroying";
   startedAt: string;
   createdAt?: string;
@@ -93,8 +93,8 @@ export interface AllocatedResource {
   providerId: string;
   providerName: string;
   threadId: string;
-  agentId: string;
-  agentName: string;
+  memberId: string;
+  memberName: string;
   sessionId: string;
   sessionStatus: ResourceSession["status"];
 }

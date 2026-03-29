@@ -8,9 +8,17 @@ from __future__ import annotations
 import json
 import os
 from pathlib import Path
+from typing import Literal
 
 from pydantic import BaseModel, Field
 from config.user_paths import first_existing_user_home_path, user_home_path
+
+
+class MountSpec(BaseModel):
+    source: str
+    target: str
+    mode: Literal["mount", "copy"] = "mount"
+    read_only: bool = False
 
 # @@@env-at-import - This is evaluated at import time. For web backend, prefer exporting env vars before process start.
 DEFAULT_DB_PATH = Path(os.getenv("LEON_SANDBOX_DB_PATH") or (Path.home() / ".leon" / "sandbox.db"))
@@ -29,6 +37,8 @@ class DockerConfig(BaseModel):
     image: str = "python:3.12-slim"
     mount_path: str = "/workspace"
     docker_host: str | None = None  # e.g. "unix:///var/run/docker.sock" to bypass stuck Docker Desktop context
+    cwd: str = "/workspace"
+    bind_mounts: list[MountSpec] = Field(default_factory=list)
 
 
 class E2BConfig(BaseModel):
@@ -43,6 +53,7 @@ class DaytonaConfig(BaseModel):
     api_url: str = "https://app.daytona.io/api"
     target: str = "local"
     cwd: str = "/home/daytona"
+    bind_mounts: list[MountSpec] = Field(default_factory=list)
 
 
 class SandboxConfig(BaseModel):
@@ -56,6 +67,7 @@ class SandboxConfig(BaseModel):
     daytona: DaytonaConfig = Field(default_factory=DaytonaConfig)
     on_exit: str = "pause"
     init_commands: list[str] = Field(default_factory=list)
+    allowed_paths: list[str] = Field(default_factory=list)
 
     @classmethod
     def load(cls, name: str) -> SandboxConfig:
@@ -80,6 +92,8 @@ class SandboxConfig(BaseModel):
             data["console_url"] = self.console_url
         if self.init_commands:
             data["init_commands"] = self.init_commands
+        if self.allowed_paths:
+            data["allowed_paths"] = self.allowed_paths
         if self.provider in ("agentbay", "docker", "e2b", "daytona"):
             data[self.provider] = getattr(self, self.provider).model_dump()
 

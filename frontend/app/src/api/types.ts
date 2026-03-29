@@ -23,6 +23,7 @@ export interface StreamEvent {
 export interface ThreadSummary {
   thread_id: string;
   sandbox?: string;
+  agent?: string;
   sandbox_info?: SandboxInfo;
   preview?: string;
   updated_at?: string;
@@ -46,8 +47,24 @@ export interface ThreadDetail {
 
 export interface SandboxType {
   name: string;
+  provider?: string;
   available: boolean;
   reason?: string;
+  capability?: {
+    can_pause: boolean;
+    can_resume: boolean;
+    can_destroy: boolean;
+    supports_webhook: boolean;
+    supports_status_probe: boolean;
+    eager_instance_binding: boolean;
+    inspect_visible: boolean;
+    runtime_kind: string;
+    mount: {
+      supports_mount: boolean;
+      supports_copy: boolean;
+      supports_read_only: boolean;
+    };
+  };
 }
 
 export interface SandboxSession {
@@ -137,6 +154,7 @@ export interface UserMessage {
   showing?: boolean;
   senderName?: string;
   senderAvatarUrl?: string;
+  attachments?: string[];
 }
 
 export interface NoticeMessage {
@@ -192,20 +210,20 @@ export interface LeaseStatus {
   updated_at: string;
 }
 
-export interface WorkspaceEntry {
+export interface SandboxFileEntry {
   name: string;
   is_dir: boolean;
   size: number;
   children_count?: number | null;
 }
 
-export interface WorkspaceListResult {
+export interface SandboxFilesListResult {
   thread_id: string;
   path: string;
-  entries: WorkspaceEntry[];
+  entries: SandboxFileEntry[];
 }
 
-export interface WorkspaceFileResult {
+export interface SandboxFileResult {
   thread_id: string;
   path: string;
   content: string;
@@ -251,4 +269,35 @@ export interface ChatMessage {
   content: string;
   mentioned_entity_ids: string[];
   created_at: number;
+}
+
+export interface TaskAgentRequest {
+  subagent_type: string;
+  prompt: string;
+  description?: string;
+  model?: string;
+  max_turns?: number;
+}
+
+// @@@channel-kind - string union used directly as a selector, not an object
+export type SandboxChannelKind = "upload" | "download";
+
+export interface SandboxChannelFileEntry {
+  relative_path: string;
+  size_bytes: number;
+  updated_at: string;
+}
+
+export interface SandboxChannelFilesResult {
+  thread_id: string;
+  channel: SandboxChannelKind;
+  entries: SandboxChannelFileEntry[];
+}
+
+export interface SandboxUploadResult {
+  thread_id: string;
+  relative_path: string;
+  absolute_path: string;
+  size_bytes: number;
+  sha256: string;
 }
