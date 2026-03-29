@@ -79,11 +79,10 @@ def delete_all_member_volumes(member_id: str) -> int:
 # ---------------------------------------------------------------------------
 
 
-def get_lease_volume_source(thread_id: str) -> "VolumeSource":
-    """Get VolumeSource for a thread via lease chain.
+def _get_lease_volume(thread_id: str) -> tuple["VolumeSource", str]:
+    """Internal: get (VolumeSource, volume_id) for a thread via lease chain.
 
     Chain: thread → active terminal → lease → volume_id → sandbox_volumes.source → deserialize.
-    This is the primary way all code paths (upload, sync, pause, resume) get the VolumeSource.
     """
     import json
     from sandbox.terminal import TerminalStore
@@ -115,7 +114,16 @@ def get_lease_volume_source(thread_id: str) -> "VolumeSource":
     if not entry:
         raise ValueError(f"Volume not found: {volume_id}")
 
-    return deserialize_volume_source(json.loads(entry["source"]))
+    return deserialize_volume_source(json.loads(entry["source"])), volume_id
+
+
+def get_lease_volume_source(thread_id: str) -> "VolumeSource":
+    """Get VolumeSource for a thread via lease chain.
+
+    This is the primary way all code paths (upload, sync, pause, resume) get the VolumeSource.
+    """
+    source, _ = _get_lease_volume(thread_id)
+    return source
 
 
 def setup_sandbox_mounts(
@@ -130,13 +138,16 @@ def setup_sandbox_mounts(
     """
     from sandbox.volume_source import DaytonaVolume
 
-    source = get_lease_volume_source(thread_id)
+    source, volume_id = _get_lease_volume(thread_id)
     remote_path = sandbox_vol.resolve_remote_path()
 
     # Daytona upgrade: first startup creates managed volume
     if (sandbox_vol.capability.runtime_kind == "daytona_pty"
             and not isinstance(source, DaytonaVolume)):
-        source = _upgrade_to_daytona_volume(thread_id, source, sandbox_vol.provider)
+        source = _upgrade_to_daytona_volume(
+            thread_id, current_source=source, provider=sandbox_vol.provider,
+            volume_id=volume_id, remote_path=remote_path,
+        )
 
     # Mount
     if isinstance(source, DaytonaVolume):
@@ -147,13 +158,10 @@ def setup_sandbox_mounts(
     return {"source": source, "remote_path": remote_path}
 
 
-def _upgrade_to_daytona_volume(thread_id, current_source, provider):
+def _upgrade_to_daytona_volume(thread_id, current_source, provider, volume_id: str, remote_path: str):
     """First Daytona sandbox start: create managed volume, upgrade VolumeSource in DB."""
     import json
     from sandbox.volume_source import DaytonaVolume
-    from sandbox.terminal import TerminalStore
-    from sandbox.lease import LeaseStore
-    from sandbox.config import DEFAULT_DB_PATH
     from storage.providers.sqlite.sandbox_volume_repo import SQLiteSandboxVolumeRepo
 
     # Get member_id from thread config for volume naming
@@ -162,7 +170,6 @@ def _upgrade_to_daytona_volume(thread_id, current_source, provider):
     member_id = tc.get("member_id", "unknown") if tc else "unknown"
 
     volume_name = f"leon-volume-{member_id}"
-    remote_path = getattr(provider, "WORKSPACE_ROOT", "/workspace") + "/files"
 
     logger.info("Creating Daytona volume: %s", volume_name)
     provider.create_member_volume(member_id, remote_path)
@@ -173,14 +180,9 @@ def _upgrade_to_daytona_volume(thread_id, current_source, provider):
     )
 
     # Update DB
-    terminal_store = TerminalStore(db_path=DEFAULT_DB_PATH)
-    terminal = terminal_store.get_active(thread_id)
-    lease_store = LeaseStore(db_path=DEFAULT_DB_PATH)
-    lease = lease_store.get(terminal.lease_id)
-
     repo = SQLiteSandboxVolumeRepo()
     try:
-        repo.update_source(lease.volume_id, json.dumps(new_source.serialize()))
+        repo.update_source(volume_id, json.dumps(new_source.serialize()))
     finally:
         repo.close()
 
