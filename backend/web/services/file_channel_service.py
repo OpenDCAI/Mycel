@@ -1,7 +1,8 @@
 """File channel service — per-lease file storage and sync orchestration.
 
-Each sandbox lease owns a file channel (stored in the file_channels table).
-User uploads → VolumeSource (host disk) → sync/mount into sandbox → agent reads.
+File channel is an application-layer concept: each lease has a file channel
+for user↔agent file transfer. Under the hood it uses sandbox volumes
+(VolumeSource + SandboxVolume mount/sync engine).
 """
 
 from __future__ import annotations
@@ -14,14 +15,14 @@ from backend.web.utils.helpers import _get_container
 
 
 # ---------------------------------------------------------------------------
-# Lease-based file channel lookup
+# Lease-based volume lookup (sandbox layer)
 # ---------------------------------------------------------------------------
 
 
-def _get_file_channel(thread_id: str) -> tuple["VolumeSource", str]:
-    """Get (VolumeSource, channel_id) for a thread via lease chain.
+def _get_lease_volume(thread_id: str) -> tuple["VolumeSource", str]:
+    """Get (VolumeSource, volume_id) for a thread via lease chain.
 
-    Chain: thread → active terminal → lease → file_channel_id → file_channels.source → deserialize.
+    Chain: thread → active terminal → lease → volume_id → sandbox_volumes.source → deserialize.
     """
     import json
     from sandbox.terminal import TerminalStore
@@ -39,28 +40,28 @@ def _get_file_channel(thread_id: str) -> tuple["VolumeSource", str]:
     if not lease:
         raise ValueError(f"Lease not found: {terminal.lease_id}")
 
-    channel_id = lease.file_channel_id
-    if not channel_id:
-        raise ValueError(f"Lease {terminal.lease_id} has no file_channel_id")
+    volume_id = lease.volume_id
+    if not volume_id:
+        raise ValueError(f"Lease {terminal.lease_id} has no volume_id")
 
-    repo = _get_container().file_channel_repo()
+    repo = _get_container().sandbox_volume_repo()
     try:
-        entry = repo.get(channel_id)
+        entry = repo.get(volume_id)
     finally:
         repo.close()
 
     if not entry:
-        raise ValueError(f"File channel not found: {channel_id}")
+        raise ValueError(f"Volume not found: {volume_id}")
 
-    return deserialize_volume_source(json.loads(entry["source"])), channel_id
+    return deserialize_volume_source(json.loads(entry["source"])), volume_id
 
 
 def get_file_channel_source(thread_id: str) -> "VolumeSource":
-    """Get VolumeSource for a thread via lease chain.
+    """Get VolumeSource for a thread's file channel via lease chain.
 
     This is the primary way all code paths (upload, sync, pause, resume) get the VolumeSource.
     """
-    source, _ = _get_file_channel(thread_id)
+    source, _ = _get_lease_volume(thread_id)
     return source
 
 
@@ -71,9 +72,9 @@ def get_file_channel_source(thread_id: str) -> "VolumeSource":
 
 def setup_sandbox_mounts(
     thread_id: str,
-    engine: "FileChannelEngine",
+    sandbox_vol: "SandboxVolume",
 ) -> dict:
-    """Called at sandbox startup. Mount the lease's file channel into the sandbox.
+    """Called at sandbox startup. Mount the lease's volume into the sandbox.
 
     For Daytona: first startup upgrades HostVolume → DaytonaVolume.
     For Docker/others with bind mount: bind-mounts the volume dir.
@@ -81,27 +82,27 @@ def setup_sandbox_mounts(
     """
     from sandbox.volume_source import DaytonaVolume
 
-    source, channel_id = _get_file_channel(thread_id)
-    remote_path = engine.resolve_channel_path()
+    source, volume_id = _get_lease_volume(thread_id)
+    remote_path = sandbox_vol.resolve_mount_path()
 
     # Daytona upgrade: first startup creates managed volume
-    if (engine.capability.runtime_kind == "daytona_pty"
+    if (sandbox_vol.capability.runtime_kind == "daytona_pty"
             and not isinstance(source, DaytonaVolume)):
         source = _upgrade_to_daytona_volume(
-            thread_id, current_source=source, provider=engine.provider,
-            channel_id=channel_id, remote_path=remote_path,
+            thread_id, current_source=source, provider=sandbox_vol.provider,
+            volume_id=volume_id, remote_path=remote_path,
         )
 
     # Mount
     if isinstance(source, DaytonaVolume):
-        engine.mount_managed_volume(thread_id, source.volume_name, remote_path)
+        sandbox_vol.mount_managed_volume(thread_id, source.volume_name, remote_path)
     else:
-        engine.mount(thread_id, source, remote_path)
+        sandbox_vol.mount(thread_id, source, remote_path)
 
     return {"source": source, "remote_path": remote_path}
 
 
-def _upgrade_to_daytona_volume(thread_id, current_source, provider, channel_id: str, remote_path: str):
+def _upgrade_to_daytona_volume(thread_id, current_source, provider, volume_id: str, remote_path: str):
     """First Daytona sandbox start: create managed volume, upgrade VolumeSource in DB."""
     import json
     from sandbox.volume_source import DaytonaVolume
@@ -124,9 +125,9 @@ def _upgrade_to_daytona_volume(thread_id, current_source, provider, channel_id: 
         volume_name=volume_name,
     )
 
-    repo = _get_container().file_channel_repo()
+    repo = _get_container().sandbox_volume_repo()
     try:
-        repo.update_source(channel_id, json.dumps(new_source.serialize()))
+        repo.update_source(volume_id, json.dumps(new_source.serialize()))
     finally:
         repo.close()
 

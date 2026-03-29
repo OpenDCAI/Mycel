@@ -9,8 +9,8 @@ from storage.providers.sqlite.kernel import SQLiteDBRole, resolve_role_db_path
 # Database paths
 DB_PATH = resolve_role_db_path(SQLiteDBRole.MAIN)
 SANDBOXES_DIR = user_home_path("sandboxes")
-FILE_CHANNEL_ROOT = Path(
-    os.environ.get("LEON_FILE_CHANNEL_ROOT", str(user_home_path("volumes")))
+SANDBOX_VOLUME_ROOT = Path(
+    os.environ.get("LEON_SANDBOX_VOLUME_ROOT", str(user_home_path("volumes")))
 ).expanduser().resolve()
 
 # Workspace
