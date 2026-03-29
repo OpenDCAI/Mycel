@@ -20,7 +20,14 @@ export interface ThreadManagerActions {
   setSelectedSandbox: (name: string) => void;
   setThreads: React.Dispatch<React.SetStateAction<ThreadSummary[]>>;
   refreshThreads: () => Promise<void>;
-  handleCreateThread: (sandbox?: string, cwd?: string, memberId?: string, model?: string) => Promise<string>;
+  handleCreateThread: (
+    sandbox?: string,
+    cwd?: string,
+    memberId?: string,
+    model?: string,
+    leaseId?: string,
+    recipeId?: string,
+  ) => Promise<string>;
   handleGetMainThread: (memberId: string) => Promise<ThreadSummary | null>;
   handleDeleteThread: (threadId: string) => Promise<void>;
 }
@@ -57,9 +64,16 @@ export function useThreadManager(): ThreadManagerState & ThreadManagerActions {
     })();
   }, [refreshThreads]);
 
-  const handleCreateThread = useCallback(async (sandbox?: string, cwd?: string, memberId?: string, model?: string): Promise<string> => {
+  const handleCreateThread = useCallback(async (
+    sandbox?: string,
+    cwd?: string,
+    memberId?: string,
+    model?: string,
+    leaseId?: string,
+    recipeId?: string,
+  ): Promise<string> => {
     const type = sandbox ?? selectedSandbox;
-    const thread = await createThread({ sandbox: type, cwd, memberId: memberId ?? "", model });
+    const thread = await createThread({ sandbox: type, cwd, memberId: memberId ?? "", model, leaseId, recipeId });
     setThreads((prev) => upsertThread(prev, thread));
     setSelectedSandbox(type);
     return thread.thread_id;

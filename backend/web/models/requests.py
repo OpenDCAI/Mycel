@@ -8,6 +8,8 @@ from sandbox.config import MountSpec
 class CreateThreadRequest(BaseModel):
     member_id: str  # which agent template to create thread from
     sandbox: str = "local"
+    recipe_id: str | None = None
+    lease_id: str | None = None
     cwd: str | None = None
     model: str | None = None
     agent: str | None = None
@@ -28,4 +30,3 @@ class RunRequest(BaseModel):
 class SendMessageRequest(BaseModel):
     message: str
     attachments: list[str] = Field(default_factory=list)
-

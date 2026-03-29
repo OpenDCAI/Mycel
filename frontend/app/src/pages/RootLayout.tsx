@@ -17,7 +17,7 @@ const navItems = [
   { to: "/members", icon: Users, label: "Members" },
   { to: "/tasks", icon: ListTodo, label: "Tasks" },
   { to: "/resources", icon: Layers, label: "Resources" },
-  { to: "/library", icon: Library, label: "能力库" },
+  { to: "/library", icon: Library, label: "Library" },
   { to: "/connections", icon: Plug, label: "Connections" },
 ];
 

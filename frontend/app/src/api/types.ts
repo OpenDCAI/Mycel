@@ -67,6 +67,22 @@ export interface SandboxType {
   };
 }
 
+export interface UserLeaseSummary {
+  lease_id: string;
+  provider_name: string;
+  recipe_id: string;
+  recipe_name: string;
+  observed_state?: string | null;
+  desired_state?: string | null;
+  cwd?: string | null;
+  thread_ids: string[];
+  agents: Array<{
+    member_id: string;
+    member_name: string;
+    avatar_url?: string | null;
+  }>;
+}
+
 export interface SandboxSession {
   session_id: string;
   thread_id: string;
