@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any, Literal
 
 from .contracts import (
+    ChatSessionRepo,
     CheckpointRepo,
     EvalRepo,
     LeaseRepo,
@@ -35,6 +36,7 @@ _REPO_REGISTRY: dict[str, tuple[str, str]] = {
     "provider_event_repo":       ("storage.providers.supabase.provider_event_repo",      "SupabaseProviderEventRepo"),
     "lease_repo":                ("storage.providers.supabase.lease_repo",               "SupabaseLeaseRepo"),
     "terminal_repo":             ("storage.providers.supabase.terminal_repo",            "SupabaseTerminalRepo"),
+    "chat_session_repo":         ("storage.providers.supabase.chat_session_repo",        "SupabaseChatSessionRepo"),
 }
 
 
@@ -53,6 +55,7 @@ class StorageContainer:
         "provider_event_repo",
         "lease_repo",
         "terminal_repo",
+        "chat_session_repo",
     )
 
     def __init__(
@@ -114,6 +117,9 @@ class StorageContainer:
 
     def terminal_repo(self) -> TerminalRepo:
         return self._build_repo("terminal_repo", self._sqlite_terminal_repo)
+
+    def chat_session_repo(self) -> ChatSessionRepo:
+        return self._build_repo("chat_session_repo", self._sqlite_chat_session_repo)
 
     def purge_thread(self, thread_id: str) -> None:
         """Delete all data for a thread across all repos."""
@@ -238,3 +244,7 @@ class StorageContainer:
     def _sqlite_terminal_repo(self):
         from storage.providers.sqlite.terminal_repo import SQLiteTerminalRepo
         return SQLiteTerminalRepo(db_path=self._sandbox_db)
+
+    def _sqlite_chat_session_repo(self):
+        from storage.providers.sqlite.chat_session_repo import SQLiteChatSessionRepo
+        return SQLiteChatSessionRepo(db_path=self._sandbox_db)

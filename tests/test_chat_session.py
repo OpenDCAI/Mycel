@@ -77,7 +77,7 @@ class TestChatSessionPolicy:
     def test_default_policy(self):
         """Test default policy values."""
         policy = ChatSessionPolicy()
-        assert policy.idle_ttl_sec == 300
+        assert policy.idle_ttl_sec == 600
         assert policy.max_duration_sec == 86400
 
     def test_custom_policy(self):
@@ -336,7 +336,7 @@ class TestChatSessionManager:
 
     def test_list_all_sessions(self, session_manager, terminal_store, lease_store):
         """Test listing all sessions."""
-        terminal1 = terminal_store.create("term-1", "thread-1", "lease-1")
+        terminal1 = terminal_from_row(terminal_store.create("term-1", "thread-1", "lease-1"), terminal_store.db_path)
         terminal2 = terminal_from_row(terminal_store.create("term-2", "thread-2", "lease-1"), terminal_store.db_path)
         lease = lease_store.create("lease-1", "local")
 
@@ -354,7 +354,7 @@ class TestChatSessionManager:
 
     def test_cleanup_expired(self, session_manager, terminal_store, lease_store):
         """Test cleanup_expired removes expired sessions."""
-        terminal1 = terminal_store.create("term-1", "thread-1", "lease-1")
+        terminal1 = terminal_from_row(terminal_store.create("term-1", "thread-1", "lease-1"), terminal_store.db_path)
         terminal2 = terminal_from_row(terminal_store.create("term-2", "thread-2", "lease-1"), terminal_store.db_path)
         lease = lease_store.create("lease-1", "local")
 

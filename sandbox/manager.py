@@ -71,10 +71,13 @@ class SandboxManager:
         self.db_path = db_path or DEFAULT_DB_PATH
         self.terminal_store = SQLiteTerminalRepo(db_path=self.db_path)
         self.lease_store = SQLiteLeaseRepo(db_path=self.db_path)
+
+        from storage.providers.sqlite.chat_session_repo import SQLiteChatSessionRepo
         self.session_manager = ChatSessionManager(
             provider=provider,
             db_path=self.db_path,
             default_policy=ChatSessionPolicy(),
+            chat_session_repo=SQLiteChatSessionRepo(db_path=self.db_path),
         )
 
         from sandbox.volume import SandboxVolume
