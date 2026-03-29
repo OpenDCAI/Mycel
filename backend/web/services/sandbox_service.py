@@ -32,6 +32,21 @@ def _capability_to_dict(capability: ProviderCapability) -> dict[str, Any]:
     }
 
 
+def _configured_sandbox_names() -> list[str]:
+    names: list[str] = []
+    seen: set[str] = set()
+    for root in user_home_read_candidates("sandboxes"):
+        if not root.exists():
+            continue
+        for config_file in sorted(root.glob("*.json")):
+            name = config_file.stem
+            if name in seen:
+                continue
+            seen.add(name)
+            names.append(name)
+    return names
+
+
 def available_sandbox_types() -> list[dict[str, Any]]:
     """Scan ~/.leon/sandboxes/ for configured providers."""
     providers, _ = init_providers_and_managers()
@@ -44,28 +59,20 @@ def available_sandbox_types() -> list[dict[str, Any]]:
             "capability": _capability_to_dict(local_capability),
         }
     ]
-    seen: set[str] = set()
-    for root in user_home_read_candidates("sandboxes"):
-        if not root.exists():
-            continue
-        for f in sorted(root.glob("*.json")):
-            name = f.stem
-            if name in seen:
-                continue
-            seen.add(name)
-            try:
-                config = SandboxConfig.load(name)
-                provider_obj = providers.get(name)
-                item: dict[str, Any] = {
-                    "name": name,
-                    "provider": config.provider,
-                    "available": True,
-                }
-                if provider_obj:
-                    item["capability"] = _capability_to_dict(provider_obj.get_capability())
-                types.append(item)
-            except Exception as e:
-                types.append({"name": name, "available": False, "reason": str(e)})
+    for name in _configured_sandbox_names():
+        try:
+            config = SandboxConfig.load(name)
+            provider_obj = providers.get(name)
+            item: dict[str, Any] = {
+                "name": name,
+                "provider": config.provider,
+                "available": True,
+            }
+            if provider_obj:
+                item["capability"] = _capability_to_dict(provider_obj.get_capability())
+            types.append(item)
+        except Exception as e:
+            types.append({"name": name, "available": False, "reason": str(e)})
     return types
 
 
@@ -76,19 +83,7 @@ def init_providers_and_managers() -> tuple[dict, dict]:
     providers: dict[str, Any] = {
         "local": LocalSessionProvider(default_cwd=str(LOCAL_WORKSPACE_ROOT)),
     }
-    config_names: list[str] = []
-    seen: set[str] = set()
-    for root in user_home_read_candidates("sandboxes"):
-        if not root.exists():
-            continue
-        for config_file in root.glob("*.json"):
-            name = config_file.stem
-            if name in seen:
-                continue
-            seen.add(name)
-            config_names.append(name)
-
-    for name in config_names:
+    for name in _configured_sandbox_names():
         try:
             config = SandboxConfig.load(name)
             if config.provider == "agentbay":

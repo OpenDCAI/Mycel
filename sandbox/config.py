@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Literal
 
 from pydantic import BaseModel, Field
-from config.user_paths import first_existing_user_home_path, user_home_path
+from config.user_paths import preferred_existing_user_home_path, user_home_path
 
 
 class MountSpec(BaseModel):
@@ -74,7 +74,7 @@ class SandboxConfig(BaseModel):
         if name == "local":
             return cls()
 
-        path = first_existing_user_home_path("sandboxes", f"{name}.json")
+        path = preferred_existing_user_home_path("sandboxes", f"{name}.json")
         if not path.exists():
             raise FileNotFoundError(f"Sandbox config not found: {path}")
 

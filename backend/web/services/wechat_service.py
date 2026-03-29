@@ -161,9 +161,14 @@ def _load_json(entity_id: str, filename: str) -> dict | None:
 
 
 def _delete_file(entity_id: str, filename: str) -> None:
-    path = _user_dir(entity_id) / filename
-    if path.exists():
-        path.unlink()
+    seen: set[Path] = set()
+    for user_dir in _user_dir_candidates(entity_id):
+        path = user_dir / filename
+        if path in seen:
+            continue
+        seen.add(path)
+        if path.exists():
+            path.unlink()
 
 
 # --- WeChatConnection (one per human entity) ---

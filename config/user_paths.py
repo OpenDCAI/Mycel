@@ -40,6 +40,18 @@ def first_existing_user_home_path(*parts: str) -> Path:
     return user_home_path(*parts)
 
 
+def preferred_existing_user_home_path(*parts: str) -> Path:
+    preferred = user_home_path(*parts)
+    if preferred.exists():
+        return preferred
+    for path in user_home_read_candidates(*parts):
+        if path == preferred:
+            continue
+        if path.exists():
+            return path
+    return preferred
+
+
 def remap_legacy_user_home_string(value: str) -> str:
     expanded = os.path.expandvars(os.path.expanduser(value))
     preferred = preferred_user_home_dir()

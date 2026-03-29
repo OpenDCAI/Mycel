@@ -13,7 +13,7 @@ from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
-from config.user_paths import first_existing_user_home_path, user_home_path
+from config.user_paths import preferred_existing_user_home_path, user_home_path
 
 # 定价数据（运行时填充）
 _pricing_data: dict[str, dict[str, Decimal]] = {}
@@ -112,7 +112,7 @@ def _infer_cache_prices(
 
 def _load_cache() -> tuple[dict[str, dict[str, str]], dict[str, int], dict[str, str]] | None:
     """从磁盘缓存加载定价数据、上下文窗口大小和 provider 映射"""
-    cache_path = first_existing_user_home_path("pricing_cache.json")
+    cache_path = preferred_existing_user_home_path("pricing_cache.json")
     if not cache_path.exists():
         return None
     try:

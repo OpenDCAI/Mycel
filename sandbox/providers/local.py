@@ -402,7 +402,7 @@ class LocalPersistentShellRuntime(PhysicalTerminalRuntime):
         async with self._session_lock:
             try:
                 return await asyncio.to_thread(self._execute_once_sync, command, timeout, on_stdout_chunk)
-            except TimeoutError:
+            except (TimeoutError, subprocess.TimeoutExpired):
                 await self._recover_after_timeout()
                 return ExecuteResult(
                     exit_code=-1,
