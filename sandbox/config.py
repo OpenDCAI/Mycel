@@ -19,10 +19,6 @@ class MountSpec(BaseModel):
     mode: Literal["mount", "copy"] = "mount"
     read_only: bool = False
 
-# @@@deprecated - use resolve_role_db_path(SQLiteDBRole.SANDBOX) from storage.providers.sqlite.kernel instead.
-# Kept only as a tombstone; no callers remain.
-DEFAULT_DB_PATH = Path(os.getenv("LEON_SANDBOX_DB_PATH") or (Path.home() / ".leon" / "sandbox.db"))
-
 
 class AgentBayConfig(BaseModel):
     api_key: str | None = None
