@@ -340,11 +340,17 @@ class ChatSessionManager:
         if not row:
             return None
 
-        from sandbox.lease import LeaseStore
+        from sandbox.lease import lease_from_row
+        from storage.providers.sqlite.lease_repo import SQLiteLeaseRepo
         from sandbox.terminal import TerminalStore
 
         terminal = TerminalStore(db_path=self.db_path).get_by_id(row["terminal_id"])
-        lease = LeaseStore(db_path=self.db_path).get(row["lease_id"])
+        _lease_repo = SQLiteLeaseRepo(db_path=self.db_path)
+        try:
+            _lease_row = _lease_repo.get(row["lease_id"])
+        finally:
+            _lease_repo.close()
+        lease = lease_from_row(_lease_row, self.db_path) if _lease_row else None
         if not terminal or not lease:
             return None
 

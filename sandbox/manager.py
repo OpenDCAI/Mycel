@@ -18,7 +18,8 @@ from storage.providers.sqlite.kernel import connect_sqlite
 from sandbox.capability import SandboxCapability
 from sandbox.chat_session import ChatSessionManager, ChatSessionPolicy
 from sandbox.config import DEFAULT_DB_PATH
-from sandbox.lease import LeaseStore
+from sandbox.lease import lease_from_row
+from storage.providers.sqlite.lease_repo import SQLiteLeaseRepo
 from sandbox.provider import SandboxProvider
 from sandbox.terminal import TerminalState, TerminalStore
 
@@ -68,7 +69,7 @@ class SandboxManager:
 
         self.db_path = db_path or DEFAULT_DB_PATH
         self.terminal_store = TerminalStore(db_path=self.db_path)
-        self.lease_store = LeaseStore(db_path=self.db_path)
+        self.lease_store = SQLiteLeaseRepo(db_path=self.db_path)
         self.session_manager = ChatSessionManager(
             provider=provider,
             db_path=self.db_path,
@@ -80,6 +81,18 @@ class SandboxManager:
             provider=provider,
             provider_capability=self.provider_capability,
         )
+
+    def _get_lease(self, lease_id: str):
+        """Get lease as domain object, or None."""
+        row = self.lease_store.get(lease_id)
+        if row is None:
+            return None
+        return lease_from_row(row, self.lease_store.db_path)
+
+    def _create_lease(self, lease_id: str, provider_name: str, volume_id: str | None = None):
+        """Create lease and return as domain object."""
+        row = self.lease_store.create(lease_id, provider_name, volume_id=volume_id)
+        return lease_from_row(row, self.lease_store.db_path)
 
     def _default_terminal_cwd(self) -> str:
         return resolve_provider_cwd(self.provider)
@@ -93,7 +106,7 @@ class SandboxManager:
         terminal = self._get_active_terminal(thread_id)
         if not terminal:
             raise ValueError(f"No active terminal for thread {thread_id}")
-        lease = self.lease_store.get(terminal.lease_id)
+        lease = self._get_lease(terminal.lease_id)
         if not lease or not lease.volume_id:
             raise ValueError(f"No volume for thread {thread_id}")
 
@@ -206,7 +219,7 @@ class SandboxManager:
         if len(lease_ids) != 1:
             raise RuntimeError(f"Thread {thread_id} has inconsistent lease_ids: {sorted(lease_ids)}")
         lease_id = next(iter(lease_ids))
-        lease = self.lease_store.get(lease_id)
+        lease = self._get_lease(lease_id)
         if lease is None:
             return None
         self._assert_lease_provider(lease, thread_id)
@@ -216,7 +229,7 @@ class SandboxManager:
         terminals = self._get_thread_terminals(thread_id)
         if not terminals:
             return False
-        lease = self.lease_store.get(terminals[0].lease_id)
+        lease = self._get_lease(terminals[0].lease_id)
         return bool(lease and lease.provider_name == self.provider.name)
 
     def resolve_volume_source(self, thread_id: str):
@@ -228,7 +241,7 @@ class SandboxManager:
         terminal = self._get_active_terminal(thread_id)
         if not terminal:
             raise ValueError(f"No active terminal for thread {thread_id}")
-        lease = self.lease_store.get(terminal.lease_id)
+        lease = self._get_lease(terminal.lease_id)
         if not lease or not lease.volume_id:
             raise ValueError(f"No volume for thread {thread_id}")
         repo = SQLiteSandboxVolumeRepo()
@@ -293,7 +306,7 @@ class SandboxManager:
         if not terminal:
             terminal_id = f"term-{uuid.uuid4().hex[:12]}"
             lease_id = f"lease-{uuid.uuid4().hex[:12]}"
-            lease = self.lease_store.create(lease_id, self.provider.name)
+            lease = self._create_lease(lease_id, self.provider.name)
             initial_cwd = self._default_terminal_cwd()
             terminal = self.terminal_store.create(
                 terminal_id=terminal_id,
@@ -302,9 +315,9 @@ class SandboxManager:
                 initial_cwd=initial_cwd,
             )
         else:
-            lease = self.lease_store.get(terminal.lease_id)
+            lease = self._get_lease(terminal.lease_id)
             if not lease:
-                lease = self.lease_store.create(terminal.lease_id, self.provider.name)
+                lease = self._create_lease(terminal.lease_id, self.provider.name)
             self._assert_lease_provider(lease, thread_id)
 
         # Stamp bind_mounts on lease so lazy creation paths pick them up
@@ -345,7 +358,7 @@ class SandboxManager:
             default_terminal = self.terminal_store.get_active(thread_id)
         if default_terminal is None:
             raise RuntimeError(f"Thread {thread_id} has no default terminal")
-        lease = self.lease_store.get(default_terminal.lease_id)
+        lease = self._get_lease(default_terminal.lease_id)
         if lease is None:
             raise RuntimeError(f"Missing lease {default_terminal.lease_id} for thread {thread_id}")
         self._assert_lease_provider(lease, thread_id)
@@ -477,7 +490,7 @@ class SandboxManager:
 
             terminal_id = row.get("terminal_id")
             terminal = self.terminal_store.get_by_id(str(terminal_id)) if terminal_id else None
-            lease = self.lease_store.get(terminal.lease_id) if terminal else None
+            lease = self._get_lease(terminal.lease_id) if terminal else None
             if lease and lease.provider_name != self.provider.name:
                 continue
 
@@ -655,7 +668,7 @@ class SandboxManager:
             self.terminal_store.delete(terminal.terminal_id)
 
         for lease_id in lease_ids:
-            lease = self.lease_store.get(lease_id)
+            lease = self._get_lease(lease_id)
             if not lease:
                 raise RuntimeError(f"Missing lease {lease_id} for thread {thread_id}")
             lease.destroy_instance(self.provider)
@@ -692,7 +705,7 @@ class SandboxManager:
 
         for lease_row in self.lease_store.list_by_provider(self.provider.name):
             lease_id = lease_row["lease_id"]
-            lease = self.lease_store.get(lease_id)
+            lease = self._get_lease(lease_id)
             if not lease:
                 continue
 

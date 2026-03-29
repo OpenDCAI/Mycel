@@ -195,7 +195,7 @@ def _create_thread_sandbox_resources(thread_id: str, sandbox_type: str) -> None:
 
     from backend.web.core.config import SANDBOX_VOLUME_ROOT
     from sandbox.config import DEFAULT_DB_PATH
-    from sandbox.lease import LeaseStore
+    from storage.providers.sqlite.lease_repo import SQLiteLeaseRepo
     from sandbox.terminal import TerminalStore
     from sandbox.volume_source import HostVolume
     from backend.web.utils.helpers import _get_container
@@ -211,9 +211,12 @@ def _create_thread_sandbox_resources(thread_id: str, sandbox_type: str) -> None:
     finally:
         vol_repo.close()
 
-    lease_store = LeaseStore(db_path=DEFAULT_DB_PATH)
-    lease_id = f"lease-{uuid.uuid4().hex[:12]}"
-    lease_store.create(lease_id, sandbox_type, volume_id=volume_id)
+    lease_repo = SQLiteLeaseRepo(db_path=DEFAULT_DB_PATH)
+    try:
+        lease_id = f"lease-{uuid.uuid4().hex[:12]}"
+        lease_repo.create(lease_id, sandbox_type, volume_id=volume_id)
+    finally:
+        lease_repo.close()
 
     terminal_store = TerminalStore(db_path=DEFAULT_DB_PATH)
     terminal_id = f"term-{uuid.uuid4().hex[:12]}"

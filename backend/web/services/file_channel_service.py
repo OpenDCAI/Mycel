@@ -22,7 +22,8 @@ def _resolve_volume_source(thread_id: str):
     to walk: thread → terminal → lease → volume_id → sandbox_volumes.
     """
     from sandbox.terminal import TerminalStore
-    from sandbox.lease import LeaseStore
+    from sandbox.lease import lease_from_row
+    from storage.providers.sqlite.lease_repo import SQLiteLeaseRepo
     from sandbox.config import DEFAULT_DB_PATH
     from sandbox.volume_source import deserialize_volume_source
 
@@ -31,11 +32,15 @@ def _resolve_volume_source(thread_id: str):
     if not terminal:
         raise ValueError(f"No active terminal for thread {thread_id}")
 
-    lease_store = LeaseStore(db_path=DEFAULT_DB_PATH)
-    lease = lease_store.get(terminal.lease_id)
-    if not lease:
+    lease_repo = SQLiteLeaseRepo(db_path=DEFAULT_DB_PATH)
+    try:
+        lease_row = lease_repo.get(terminal.lease_id)
+    finally:
+        lease_repo.close()
+    if not lease_row:
         raise ValueError(f"Lease not found: {terminal.lease_id}")
 
+    lease = lease_from_row(lease_row, DEFAULT_DB_PATH)
     volume_id = lease.volume_id
     if not volume_id:
         raise ValueError(f"Lease {terminal.lease_id} has no volume_id")

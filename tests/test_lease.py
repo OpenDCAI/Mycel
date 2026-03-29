@@ -1,4 +1,4 @@
-"""Unit tests for SandboxLease and LeaseStore."""
+"""Unit tests for SandboxLease and SQLiteLeaseRepo."""
 
 import sqlite3
 import tempfile
@@ -9,9 +9,10 @@ from unittest.mock import MagicMock
 import pytest
 
 from sandbox.lease import (
-    LeaseStore,
     SandboxInstance,
+    lease_from_row,
 )
+from storage.providers.sqlite.lease_repo import SQLiteLeaseRepo
 from sandbox.provider import SessionInfo
 
 
@@ -26,8 +27,8 @@ def temp_db():
 
 @pytest.fixture
 def store(temp_db):
-    """Create LeaseStore with temp database."""
-    return LeaseStore(db_path=temp_db)
+    """Create SQLiteLeaseRepo with temp database."""
+    return SQLiteLeaseRepo(db_path=temp_db)
 
 
 @pytest.fixture
@@ -36,6 +37,20 @@ def mock_provider():
     provider = MagicMock()
     provider.name = "test-provider"
     return provider
+
+
+def _create_lease(store, lease_id, provider_name, volume_id=None):
+    """Create lease via repo and return as domain object."""
+    row = store.create(lease_id, provider_name, volume_id=volume_id)
+    return lease_from_row(row, store.db_path)
+
+
+def _get_lease(store, lease_id):
+    """Get lease via repo and return as domain object."""
+    row = store.get(lease_id)
+    if row is None:
+        return None
+    return lease_from_row(row, store.db_path)
 
 
 class TestSandboxInstance:
@@ -57,12 +72,12 @@ class TestSandboxInstance:
         assert instance.created_at == now
 
 
-class TestLeaseStore:
-    """Test LeaseStore CRUD operations."""
+class TestLeaseRepo:
+    """Test SQLiteLeaseRepo CRUD operations."""
 
     def test_ensure_tables(self, temp_db):
         """Test table creation."""
-        store = LeaseStore(db_path=temp_db)
+        SQLiteLeaseRepo(db_path=temp_db)
 
         # Verify table exists
         with sqlite3.connect(str(temp_db)) as conn:
@@ -71,7 +86,7 @@ class TestLeaseStore:
 
     def test_create_lease(self, store):
         """Test creating a new lease."""
-        lease = store.create(lease_id="lease-123", provider_name="e2b")
+        lease = _create_lease(store, "lease-123", "e2b")
 
         assert lease.lease_id == "lease-123"
         assert lease.provider_name == "e2b"
@@ -83,10 +98,10 @@ class TestLeaseStore:
         """Test retrieving lease by lease_id."""
         store.create(lease_id="lease-123", provider_name="e2b")
 
-        lease = store.get("lease-123")
-        assert lease is not None
-        assert lease.lease_id == "lease-123"
-        assert lease.provider_name == "e2b"
+        row = store.get("lease-123")
+        assert row is not None
+        assert row["lease_id"] == "lease-123"
+        assert row["provider_name"] == "e2b"
 
     def test_get_nonexistent_lease(self, store):
         """Test retrieving non-existent lease returns None."""
@@ -139,7 +154,7 @@ class TestLeaseStore:
         assert agentbay_leases[0]["provider_name"] == "agentbay"
 
     def test_find_by_instance(self, store, mock_provider):
-        lease = store.create("lease-1", "test-provider")
+        lease = _create_lease(store, "lease-1", "test-provider")
         mock_provider.create_session.return_value = SessionInfo(
             session_id="inst-lookup",
             provider="test-provider",
@@ -147,9 +162,9 @@ class TestLeaseStore:
         )
         lease.ensure_active_instance(mock_provider)
 
-        found = store.find_by_instance(provider_name="test-provider", instance_id="inst-lookup")
-        assert found is not None
-        assert found.lease_id == "lease-1"
+        found_row = store.find_by_instance(provider_name="test-provider", instance_id="inst-lookup")
+        assert found_row is not None
+        assert found_row["lease_id"] == "lease-1"
 
 
 class TestSQLiteLease:
@@ -157,7 +172,7 @@ class TestSQLiteLease:
 
     def test_ensure_active_instance_creates_new(self, store, mock_provider):
         """Test ensure_active_instance creates new instance when none exists."""
-        lease = store.create("lease-1", "test-provider")
+        lease = _create_lease(store, "lease-1", "test-provider")
 
         # Mock provider to return new session
         mock_provider.create_session.return_value = SessionInfo(
@@ -175,7 +190,7 @@ class TestSQLiteLease:
 
     def test_ensure_active_instance_reuses_running(self, store, mock_provider):
         """Test ensure_active_instance reuses running instance."""
-        lease = store.create("lease-1", "test-provider")
+        lease = _create_lease(store, "lease-1", "test-provider")
 
         # Create initial instance
         mock_provider.create_session.return_value = SessionInfo(
@@ -197,7 +212,7 @@ class TestSQLiteLease:
 
     def test_ensure_active_instance_converges_stale_paused_state(self, store, mock_provider):
         """If DB says paused but provider says running, lease status must converge to running."""
-        lease = store.create("lease-1", "test-provider")
+        lease = _create_lease(store, "lease-1", "test-provider")
 
         mock_provider.create_session.return_value = SessionInfo(
             session_id="inst-123",
@@ -214,13 +229,13 @@ class TestSQLiteLease:
         instance = lease.ensure_active_instance(mock_provider)
         assert instance.status == "running"
 
-        reloaded = store.get("lease-1")
+        reloaded = _get_lease(store, "lease-1")
         assert reloaded is not None
         assert reloaded.get_instance() is not None
         assert reloaded.get_instance().status == "running"
 
     def test_invalidation_forces_refresh_even_when_snapshot_fresh(self, store, mock_provider):
-        lease = store.create("lease-1", "test-provider")
+        lease = _create_lease(store, "lease-1", "test-provider")
         mock_provider.create_session.return_value = SessionInfo(
             session_id="inst-123",
             provider="test-provider",
@@ -239,19 +254,18 @@ class TestSQLiteLease:
         assert lease.needs_refresh is False
 
     def test_store_mark_needs_refresh(self, store):
-        lease = store.create("lease-1", "test-provider")
-        assert lease.needs_refresh is False
+        _create_lease(store, "lease-1", "test-provider")
         updated = store.mark_needs_refresh(lease_id="lease-1")
         assert updated is True
 
-        reloaded = store.get("lease-1")
+        reloaded = _get_lease(store, "lease-1")
         assert reloaded is not None
         assert reloaded.needs_refresh is True
         assert reloaded.refresh_hint_at is not None
 
     def test_destroy_instance(self, store, mock_provider):
         """Test destroying instance."""
-        lease = store.create("lease-1", "test-provider")
+        lease = _create_lease(store, "lease-1", "test-provider")
 
         # Create instance
         mock_provider.create_session.return_value = SessionInfo(
@@ -269,7 +283,7 @@ class TestSQLiteLease:
 
     def test_pause_instance(self, store, mock_provider):
         """Test pausing instance."""
-        lease = store.create("lease-1", "test-provider")
+        lease = _create_lease(store, "lease-1", "test-provider")
 
         # Create instance
         mock_provider.create_session.return_value = SessionInfo(
@@ -289,7 +303,7 @@ class TestSQLiteLease:
 
     def test_resume_instance(self, store, mock_provider):
         """Test resuming instance."""
-        lease = store.create("lease-1", "test-provider")
+        lease = _create_lease(store, "lease-1", "test-provider")
 
         # Create and pause instance
         mock_provider.create_session.return_value = SessionInfo(
@@ -311,7 +325,7 @@ class TestSQLiteLease:
 
     def test_instance_persists_across_retrieval(self, store, mock_provider):
         """Test that instance persists when lease is retrieved again."""
-        lease = store.create("lease-1", "test-provider")
+        lease = _create_lease(store, "lease-1", "test-provider")
 
         # Create instance
         mock_provider.create_session.return_value = SessionInfo(
@@ -322,7 +336,7 @@ class TestSQLiteLease:
         lease.ensure_active_instance(mock_provider)
 
         # Retrieve lease again
-        lease2 = store.get("lease-1")
+        lease2 = _get_lease(store, "lease-1")
         assert lease2 is not None
         instance = lease2.get_instance()
         assert instance is not None
@@ -331,7 +345,7 @@ class TestSQLiteLease:
 
     def test_apply_rolls_back_state_when_event_insert_conflicts(self, store, mock_provider):
         """Snapshot/metadata updates must roll back when event append fails."""
-        lease = store.create("lease-atomic", "test-provider")
+        lease = _create_lease(store, "lease-atomic", "test-provider")
         lease.apply(
             mock_provider,
             event_type="provider.error",
@@ -340,7 +354,7 @@ class TestSQLiteLease:
             event_id="evt-duplicate",
         )
 
-        before = store.get("lease-atomic")
+        before = _get_lease(store, "lease-atomic")
         assert before is not None
 
         with pytest.raises(sqlite3.IntegrityError):
@@ -352,7 +366,7 @@ class TestSQLiteLease:
                 event_id="evt-duplicate",
             )
 
-        after = store.get("lease-atomic")
+        after = _get_lease(store, "lease-atomic")
         assert after is not None
         assert after.version == before.version
         assert after.last_error == before.last_error
@@ -372,9 +386,9 @@ class TestLeaseIntegration:
     """Integration tests for lease lifecycle."""
 
     def test_full_lifecycle(self, store, mock_provider):
-        """Test complete lease lifecycle: create → instance → pause → resume → destroy."""
+        """Test complete lease lifecycle: create -> instance -> pause -> resume -> destroy."""
         # Create lease
-        lease = store.create("lease-1", "test-provider")
+        lease = _create_lease(store, "lease-1", "test-provider")
         assert lease.get_instance() is None
 
         # Create instance
@@ -404,11 +418,11 @@ class TestLeaseIntegration:
         store.delete("lease-1")
         assert store.get("lease-1") is None
 
-    def test_multiple_leases_different_providers(self, store, mock_provider):
+    def test_multiple_leases_different_providers(self, store):
         """Test multiple leases with different providers."""
-        lease1 = store.create("lease-1", "e2b")
-        lease2 = store.create("lease-2", "agentbay")
-        lease3 = store.create("lease-3", "e2b")
+        lease1 = _create_lease(store, "lease-1", "e2b")
+        lease2 = _create_lease(store, "lease-2", "agentbay")
+        lease3 = _create_lease(store, "lease-3", "e2b")
 
         assert lease1.provider_name == "e2b"
         assert lease2.provider_name == "agentbay"

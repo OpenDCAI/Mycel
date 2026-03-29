@@ -12,7 +12,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from sandbox.chat_session import ChatSessionManager
-from sandbox.lease import LeaseStore
+from storage.providers.sqlite.lease_repo import SQLiteLeaseRepo
 from sandbox.manager import SandboxManager
 from sandbox.provider import ProviderCapability, SessionInfo
 from sandbox.terminal import TerminalStore
@@ -138,9 +138,10 @@ class TestFullArchitectureFlow:
         terminal = terminal_store.get(thread_id)
         assert terminal is not None
 
-        lease_store = LeaseStore(db_path=temp_db)
-        lease = lease_store.get(terminal.lease_id)
-        assert lease is not None
+        lease_repo = SQLiteLeaseRepo(db_path=temp_db)
+        lease_row = lease_repo.get(terminal.lease_id)
+        lease_repo.close()
+        assert lease_row is not None
 
     def test_get_sandbox_reuses_existing_session(self, sandbox_manager):
         """Test that get_sandbox reuses existing session."""
@@ -557,8 +558,9 @@ class TestErrorHandling:
         lease_id = capability._session.lease.lease_id
 
         # Delete lease from DB
-        lease_store = LeaseStore(db_path=temp_db)
-        lease_store.delete(lease_id)
+        lease_repo = SQLiteLeaseRepo(db_path=temp_db)
+        lease_repo.delete(lease_id)
+        lease_repo.close()
 
         # Delete session AND terminal to force full recreation
         sandbox_manager.session_manager.delete(capability._session.session_id)

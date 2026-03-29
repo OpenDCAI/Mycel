@@ -10,6 +10,7 @@ from typing import Any, Literal
 from .contracts import (
     CheckpointRepo,
     EvalRepo,
+    LeaseRepo,
     ProviderEventRepo,
     SandboxVolumeRepo,
     FileOperationRepo,
@@ -31,6 +32,7 @@ _REPO_REGISTRY: dict[str, tuple[str, str]] = {
     "queue_repo":          ("storage.providers.supabase.queue_repo",          "SupabaseQueueRepo"),
     "sandbox_volume_repo":       ("storage.providers.supabase.sandbox_volume_repo",      "SupabaseSandboxVolumeRepo"),
     "provider_event_repo":       ("storage.providers.supabase.provider_event_repo",      "SupabaseProviderEventRepo"),
+    "lease_repo":                ("storage.providers.supabase.lease_repo",               "SupabaseLeaseRepo"),
 }
 
 
@@ -47,6 +49,7 @@ class StorageContainer:
         "queue_repo",
         "sandbox_volume_repo",
         "provider_event_repo",
+        "lease_repo",
     )
 
     def __init__(
@@ -102,6 +105,9 @@ class StorageContainer:
 
     def provider_event_repo(self) -> ProviderEventRepo:
         return self._build_repo("provider_event_repo", self._sqlite_provider_event_repo)
+
+    def lease_repo(self) -> LeaseRepo:
+        return self._build_repo("lease_repo", self._sqlite_lease_repo)
 
     def purge_thread(self, thread_id: str) -> None:
         """Delete all data for a thread across all repos."""
@@ -218,3 +224,7 @@ class StorageContainer:
     def _sqlite_provider_event_repo(self):
         from storage.providers.sqlite.provider_event_repo import SQLiteProviderEventRepo
         return SQLiteProviderEventRepo(db_path=self._sandbox_db)
+
+    def _sqlite_lease_repo(self):
+        from storage.providers.sqlite.lease_repo import SQLiteLeaseRepo
+        return SQLiteLeaseRepo(db_path=self._sandbox_db)

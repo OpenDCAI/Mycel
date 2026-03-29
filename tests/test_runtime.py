@@ -11,7 +11,8 @@ from unittest.mock import MagicMock
 import pytest
 
 from sandbox.chat_session import ChatSessionManager
-from sandbox.lease import LeaseStore, SandboxInstance
+from sandbox.lease import SandboxInstance, lease_from_row
+from storage.providers.sqlite.lease_repo import SQLiteLeaseRepo
 from sandbox.provider import ProviderExecResult
 from sandbox.interfaces.executor import ExecuteResult
 from sandbox.runtime import (
@@ -39,10 +40,24 @@ def terminal_store(temp_db):
     return TerminalStore(db_path=temp_db)
 
 
+class _LeaseStoreCompat:
+    """Thin wrapper: repo returns dicts, tests expect domain objects from create/get."""
+    def __init__(self, repo: SQLiteLeaseRepo):
+        self._repo = repo
+    def create(self, lease_id, provider_name, **kw):
+        row = self._repo.create(lease_id, provider_name, **kw)
+        return lease_from_row(row, self._repo.db_path)
+    def get(self, lease_id):
+        row = self._repo.get(lease_id)
+        return lease_from_row(row, self._repo.db_path) if row else None
+    def __getattr__(self, name):
+        return getattr(self._repo, name)
+
+
 @pytest.fixture
 def lease_store(temp_db):
-    """Create LeaseStore with temp database."""
-    return LeaseStore(db_path=temp_db)
+    """Create SQLiteLeaseRepo with compat wrapper for tests."""
+    return _LeaseStoreCompat(SQLiteLeaseRepo(db_path=temp_db))
 
 
 @pytest.fixture
