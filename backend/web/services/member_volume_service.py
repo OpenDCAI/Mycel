@@ -167,10 +167,15 @@ def _upgrade_to_daytona_volume(thread_id, current_source, provider, volume_id: s
     tc = load_thread_config(thread_id)
     member_id = tc.get("member_id", "unknown") if tc else "unknown"
 
-    volume_name = f"leon-volume-{member_id}"
-
-    logger.info("Creating Daytona volume: %s", volume_name)
-    provider.create_member_volume(member_id, remote_path)
+    try:
+        volume_name = provider.create_member_volume(member_id, remote_path)
+    except Exception as e:
+        if "already exists" in str(e):
+            # Reuse existing volume — name follows provider convention
+            volume_name = f"leon-volume-{member_id}"
+            logger.info("Daytona volume already exists: %s, reusing", volume_name)
+        else:
+            raise
 
     new_source = DaytonaVolume(
         staging_path=current_source.host_path,
