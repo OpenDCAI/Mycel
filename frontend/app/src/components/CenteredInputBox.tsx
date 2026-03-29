@@ -31,6 +31,9 @@ interface CenteredInputBoxProps {
   environmentControl?: {
     renderSummary: (args: EnvironmentControlArgs) => ReactNode;
     renderPanel: (args: EnvironmentControlArgs) => ReactNode;
+    onOpen?: () => void;
+    onCancel?: () => void;
+    onApply?: () => void | Promise<void>;
   };
   onSend: (message: string, sandbox: string, model: string, workspace?: string) => Promise<void>;
 }
@@ -92,6 +95,8 @@ export default function CenteredInputBox({
   const [workspacePopoverOpen, setWorkspacePopoverOpen] = useState(false);
   const [modelPopoverOpen, setModelPopoverOpen] = useState(false);
   const [advancedConfigOpen, setAdvancedConfigOpen] = useState(false);
+  const [draftModel, setDraftModel] = useState(defaultModel);
+  const [applyingConfig, setApplyingConfig] = useState(false);
 
   useEffect(() => {
     setSandbox(defaultSandbox);
@@ -103,6 +108,7 @@ export default function CenteredInputBox({
 
   useEffect(() => {
     setModel(defaultModel);
+    setDraftModel(defaultModel);
   }, [defaultModel]);
 
   const isLocalSandbox = sandbox === "local";
@@ -175,6 +181,29 @@ export default function CenteredInputBox({
   const quietSummary = environmentControl
     ? `${environmentControl.renderSummary(environmentArgs)} · ${activeModelLabel}`
     : activeModelLabel;
+
+  function openAdvancedConfig() {
+    setDraftModel(model);
+    environmentControl?.onOpen?.();
+    setAdvancedConfigOpen(true);
+  }
+
+  function cancelAdvancedConfig() {
+    setDraftModel(model);
+    environmentControl?.onCancel?.();
+    setAdvancedConfigOpen(false);
+  }
+
+  async function applyAdvancedConfig() {
+    setApplyingConfig(true);
+    try {
+      setModel(draftModel);
+      await environmentControl?.onApply?.();
+      setAdvancedConfigOpen(false);
+    } finally {
+      setApplyingConfig(false);
+    }
+  }
 
   // ============================================================
   // IMPORTANT: DO NOT remove or truncate the return statement below!
@@ -329,16 +358,36 @@ export default function CenteredInputBox({
           {!environmentControl && <div className="flex-1 min-w-0" />}
 
           {environmentControl && (
-            <Popover open={advancedConfigOpen} onOpenChange={setAdvancedConfigOpen}>
+            <Popover
+              open={advancedConfigOpen}
+              onOpenChange={(nextOpen) => {
+                if (nextOpen) {
+                  openAdvancedConfig();
+                  return;
+                }
+                cancelAdvancedConfig();
+              }}
+            >
               {advancedConfigOpen && typeof document !== "undefined" && createPortal(
                 <div
                   className="fixed inset-0 z-40 bg-black/50"
-                  onClick={() => setAdvancedConfigOpen(false)}
+                  onClick={cancelAdvancedConfig}
                 />,
                 document.body,
               )}
               <PopoverTrigger asChild>
-                <Button variant="ghost" className="h-9 px-3 text-sm text-muted-foreground hover:text-foreground">
+                <Button
+                  variant="ghost"
+                  className="h-9 px-3 text-sm text-muted-foreground hover:text-foreground"
+                  onClick={(event) => {
+                    event.preventDefault();
+                    if (advancedConfigOpen) {
+                      cancelAdvancedConfig();
+                    } else {
+                      openAdvancedConfig();
+                    }
+                  }}
+                >
                   高级配置
                 </Button>
               </PopoverTrigger>
@@ -360,9 +409,9 @@ export default function CenteredInputBox({
                         <button
                           key={entry.value}
                           type="button"
-                          onClick={() => setModel(entry.value)}
+                          onClick={() => setDraftModel(entry.value)}
                           className={`rounded-xl border px-3 py-2 text-sm transition-colors ${
-                            model === entry.value
+                            draftModel === entry.value
                               ? "border-foreground bg-foreground text-background"
                               : "border-border bg-card text-foreground hover:bg-accent"
                           }`}
@@ -374,6 +423,15 @@ export default function CenteredInputBox({
                   </div>
 
                   {environmentControl.renderPanel(environmentArgs)}
+                </div>
+
+                <div className="flex items-center justify-end gap-3 border-t border-border px-6 py-4">
+                  <Button type="button" variant="ghost" onClick={cancelAdvancedConfig} disabled={applyingConfig}>
+                    取消
+                  </Button>
+                  <Button type="button" onClick={() => void applyAdvancedConfig()} disabled={applyingConfig}>
+                    确认
+                  </Button>
                 </div>
               </PopoverContent>
             </Popover>

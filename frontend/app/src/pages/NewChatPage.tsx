@@ -37,10 +37,17 @@ export default function NewChatPage({ mode = "member" }: { mode?: "member" | "ne
   );
   const [showWorkspaceSetup, setShowWorkspaceSetup] = useState(false);
   const [createMode, setCreateMode] = useState<"new" | "existing">("new");
+  const [draftCreateMode, setDraftCreateMode] = useState<"new" | "existing">("new");
   const [leaseOptions, setLeaseOptions] = useState<UserLeaseSummary[]>([]);
   const [leaseError, setLeaseError] = useState<string | null>(null);
   const [leaseLoading, setLeaseLoading] = useState(false);
   const [selectedLeaseId, setSelectedLeaseId] = useState<string>("");
+  const [draftSelectedLeaseId, setDraftSelectedLeaseId] = useState<string>("");
+  const [selectedRecipeId, setSelectedRecipeId] = useState<string>("");
+  const [draftRecipeId, setDraftRecipeId] = useState<string>("");
+  const [selectedWorkspace, setSelectedWorkspace] = useState<string>("");
+  const [draftWorkspace, setDraftWorkspace] = useState<string>("");
+  const [draftCustomWorkspace, setDraftCustomWorkspace] = useState<string>("");
   const [workspaceMode, setWorkspaceMode] = useState<"browse" | "recent" | "manual">("browse");
   const [workspacePickerOpen, setWorkspacePickerOpen] = useState(false);
 
@@ -121,6 +128,23 @@ export default function NewChatPage({ mode = "member" }: { mode?: "member" | "ne
       providerName: item.provider_name as string,
     }));
   const selectedLease = leaseOptions.find((lease) => lease.lease_id === selectedLeaseId) ?? null;
+  useEffect(() => {
+    if (!selectedRecipeId && recipeOptions[0]?.value) {
+      setSelectedRecipeId(recipeOptions[0].value);
+    }
+  }, [recipeOptions, selectedRecipeId]);
+
+  useEffect(() => {
+    if (!selectedLeaseId && leaseOptions[0]?.lease_id) {
+      setSelectedLeaseId(leaseOptions[0].lease_id);
+    }
+  }, [leaseOptions, selectedLeaseId]);
+
+  useEffect(() => {
+    if (!selectedWorkspace && settings?.default_workspace) {
+      setSelectedWorkspace(settings.default_workspace);
+    }
+  }, [selectedWorkspace, settings?.default_workspace]);
 
   async function handleSend(message: string, sandbox: string, model: string, workspace?: string) {
     if (createMode === "new" && sandbox === "local" && !workspace && !hasWorkspace) {
@@ -169,13 +193,49 @@ export default function NewChatPage({ mode = "member" }: { mode?: "member" | "ne
       if (!selectedLease) return "复用旧沙盒";
       return `${selectedLease.provider_name} · ${selectedLease.recipe_name}`;
     }
-    const recipe = recipeOptions.find((item) => item.value === sandboxValue);
+    const recipe = recipeOptions.find((item) => item.value === selectedRecipeId || item.value === sandboxValue);
     if (!recipe) return "选择 recipe";
     if (recipe.providerName !== "local") return recipe.label;
-    const activeWorkspace = workspaceValue || settings?.default_workspace || "";
+    const activeWorkspace = selectedWorkspace || workspaceValue || settings?.default_workspace || "";
     if (!activeWorkspace) return `${recipe.label} · 选择工作区`;
     const parts = activeWorkspace.split("/").filter(Boolean);
     return `${recipe.label} · ${parts.at(-1) ?? activeWorkspace}`;
+  }
+
+  function openDraftConfig() {
+    setDraftCreateMode(createMode);
+    setDraftSelectedLeaseId(selectedLeaseId || leaseOptions[0]?.lease_id || "");
+    setDraftRecipeId(selectedRecipeId || recipeOptions[0]?.value || "");
+    setDraftWorkspace(selectedWorkspace || settings?.default_workspace || "");
+    setDraftCustomWorkspace("");
+    setWorkspaceMode("browse");
+    setWorkspacePickerOpen(false);
+  }
+
+  function cancelDraftConfig() {
+    setDraftCreateMode(createMode);
+    setDraftSelectedLeaseId(selectedLeaseId || leaseOptions[0]?.lease_id || "");
+    setDraftRecipeId(selectedRecipeId || recipeOptions[0]?.value || "");
+    setDraftWorkspace(selectedWorkspace || settings?.default_workspace || "");
+    setDraftCustomWorkspace("");
+    setWorkspaceMode("browse");
+    setWorkspacePickerOpen(false);
+  }
+
+  async function applyDraftConfig() {
+    setCreateMode(draftCreateMode);
+    setSelectedLeaseId(draftSelectedLeaseId);
+    setSelectedRecipeId(draftRecipeId);
+    const nextWorkspace = draftWorkspace || settings?.default_workspace || "";
+    setSelectedWorkspace(nextWorkspace);
+    setWorkspacePickerOpen(false);
+    if (draftCreateMode === "new" && draftRecipeId.startsWith("local:") && nextWorkspace) {
+      await fetch("/api/settings/workspace", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ workspace: nextWorkspace }),
+      });
+    }
   }
 
   if (loading || resolveState === "resolving") {
@@ -250,26 +310,29 @@ export default function NewChatPage({ mode = "member" }: { mode?: "member" | "ne
 
         <CenteredInputBox
           sandboxTypes={sandboxTypes}
-          defaultSandbox={createMode === "new" ? (recipeOptions[0]?.value ?? selectedSandbox) : (selectedLease?.provider_name ?? selectedSandbox)}
-          defaultWorkspace={settings?.default_workspace || undefined}
+          defaultSandbox={createMode === "new" ? (selectedRecipeId || (recipeOptions[0]?.value ?? selectedSandbox)) : (selectedLease?.provider_name ?? selectedSandbox)}
+          defaultWorkspace={selectedWorkspace || settings?.default_workspace || undefined}
           workspaceSelectionEnabled={false}
           defaultModel={settings?.default_model || "leon:large"}
           recentWorkspaces={settings?.recent_workspaces || []}
           environmentControl={{
             renderSummary: ({ sandbox, workspace }) => summarizeEnvironment(sandbox, workspace),
-            renderPanel: ({ sandbox, setSandbox, workspace, setWorkspace, customWorkspace, setCustomWorkspace, persistWorkspace }) => {
-              const activeRecipe = recipeOptions.find((item) => item.value === sandbox) ?? recipeOptions[0] ?? null;
-              const localWorkspace = workspace || settings?.default_workspace || "";
+            onOpen: openDraftConfig,
+            onCancel: cancelDraftConfig,
+            onApply: applyDraftConfig,
+            renderPanel: () => {
+              const activeRecipe = recipeOptions.find((item) => item.value === draftRecipeId) ?? recipeOptions[0] ?? null;
+              const localWorkspace = draftWorkspace || settings?.default_workspace || "";
 
               return (
                 <div className="space-y-4">
                   <div className="grid gap-2 sm:grid-cols-2">
                     <button
                       type="button"
-                      onClick={() => setCreateMode("new")}
+                      onClick={() => setDraftCreateMode("new")}
                       className={cn(
                         "rounded-2xl border px-4 py-3 text-left transition-colors",
-                        createMode === "new"
+                        draftCreateMode === "new"
                           ? "border-foreground/30 bg-accent/60"
                           : "border-border bg-card hover:bg-accent/30",
                       )}
@@ -281,10 +344,10 @@ export default function NewChatPage({ mode = "member" }: { mode?: "member" | "ne
                     </button>
                     <button
                       type="button"
-                      onClick={() => setCreateMode("existing")}
+                      onClick={() => setDraftCreateMode("existing")}
                       className={cn(
                         "rounded-2xl border px-4 py-3 text-left transition-colors",
-                        createMode === "existing"
+                        draftCreateMode === "existing"
                           ? "border-foreground/30 bg-accent/60"
                           : "border-border bg-card hover:bg-accent/30",
                       )}
@@ -296,14 +359,14 @@ export default function NewChatPage({ mode = "member" }: { mode?: "member" | "ne
                     </button>
                   </div>
 
-                  {createMode === "new" ? (
+                  {draftCreateMode === "new" ? (
                     <div className="space-y-4">
                       {activeRecipe?.providerName === "local" ? (
                         <div className="rounded-2xl border border-border bg-background/70 p-3">
                           <div className="grid gap-3 md:grid-cols-[200px_minmax(0,1fr)_auto] md:items-end">
                             <div>
                               <div className="mb-2 text-xs uppercase tracking-[0.18em] text-muted-foreground">Recipe</div>
-                              <Select value={sandbox} onValueChange={setSandbox}>
+                              <Select value={draftRecipeId} onValueChange={setDraftRecipeId}>
                                 <SelectTrigger className="h-10 text-sm">
                                   <SelectValue placeholder="Choose a recipe" />
                                 </SelectTrigger>
@@ -321,7 +384,7 @@ export default function NewChatPage({ mode = "member" }: { mode?: "member" | "ne
                               <div className="mb-2 text-xs uppercase tracking-[0.18em] text-muted-foreground">Workspace</div>
                               <div
                                 className="flex h-10 items-center rounded-xl border border-border bg-card px-3 text-sm text-foreground"
-                                title={localWorkspace || "Choose a workspace before sending"}
+                                      title={localWorkspace || "Choose a workspace before sending"}
                               >
                                 <span className="truncate">
                                   {localWorkspace || "Choose a workspace before sending"}
@@ -357,10 +420,9 @@ export default function NewChatPage({ mode = "member" }: { mode?: "member" | "ne
                                   {workspaceMode === "browse" && (
                                     <FilesystemBrowser
                                       onSelect={(path) => {
-                                        setWorkspace(path);
-                                        setCustomWorkspace("");
+                                        setDraftWorkspace(path);
+                                        setDraftCustomWorkspace("");
                                         setWorkspacePickerOpen(false);
-                                        void persistWorkspace(path);
                                       }}
                                       initialPath={localWorkspace || "~"}
                                     />
@@ -374,10 +436,9 @@ export default function NewChatPage({ mode = "member" }: { mode?: "member" | "ne
                                             key={path}
                                             type="button"
                                             onClick={() => {
-                                              setWorkspace(path);
-                                              setCustomWorkspace("");
+                                              setDraftWorkspace(path);
+                                              setDraftCustomWorkspace("");
                                               setWorkspacePickerOpen(false);
-                                              void persistWorkspace(path);
                                             }}
                                             className="w-full rounded-xl border border-border bg-card px-3 py-2 text-left text-sm hover:bg-accent"
                                           >
@@ -395,21 +456,20 @@ export default function NewChatPage({ mode = "member" }: { mode?: "member" | "ne
                                   {workspaceMode === "manual" && (
                                     <div className="flex gap-2">
                                       <Input
-                                        value={customWorkspace}
-                                        onChange={(e) => setCustomWorkspace(e.target.value)}
+                                        value={draftCustomWorkspace}
+                                        onChange={(e) => setDraftCustomWorkspace(e.target.value)}
                                         placeholder="例如: ~/Projects"
                                         className="h-9"
                                       />
                                       <Button
                                         type="button"
                                         size="sm"
-                                        disabled={!customWorkspace.trim()}
+                                        disabled={!draftCustomWorkspace.trim()}
                                         onClick={() => {
-                                          const path = customWorkspace.trim();
+                                          const path = draftCustomWorkspace.trim();
                                           if (!path) return;
-                                          setWorkspace(path);
+                                          setDraftWorkspace(path);
                                           setWorkspacePickerOpen(false);
-                                          void persistWorkspace(path);
                                         }}
                                       >
                                         保存
@@ -424,7 +484,7 @@ export default function NewChatPage({ mode = "member" }: { mode?: "member" | "ne
                       ) : (
                         <div>
                           <div className="mb-2 text-xs uppercase tracking-[0.18em] text-muted-foreground">Recipe</div>
-                          <Select value={sandbox} onValueChange={setSandbox}>
+                          <Select value={draftRecipeId} onValueChange={setDraftRecipeId}>
                             <SelectTrigger className="h-10 text-sm">
                               <SelectValue placeholder="Choose a recipe" />
                             </SelectTrigger>
@@ -444,12 +504,12 @@ export default function NewChatPage({ mode = "member" }: { mode?: "member" | "ne
                       <div className="mb-2 text-xs uppercase tracking-[0.18em] text-muted-foreground">My Leases</div>
                       <div className="max-h-[320px] space-y-2 overflow-y-auto pr-1">
                         {leaseOptions.map((lease) => {
-                          const isActive = selectedLeaseId === lease.lease_id;
+                          const isActive = draftSelectedLeaseId === lease.lease_id;
                           return (
                             <button
                               key={lease.lease_id}
                               type="button"
-                              onClick={() => setSelectedLeaseId(lease.lease_id)}
+                              onClick={() => setDraftSelectedLeaseId(lease.lease_id)}
                               className={cn(
                                 "w-full rounded-2xl border p-3 text-left transition-colors",
                                 isActive ? "border-primary/40 bg-primary/5" : "border-border bg-card hover:bg-accent/40",
