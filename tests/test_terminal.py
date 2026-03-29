@@ -7,10 +7,8 @@ from pathlib import Path
 
 import pytest
 
-from sandbox.terminal import (
-    TerminalState,
-    TerminalStore,
-)
+from sandbox.terminal import TerminalState, terminal_from_row
+from storage.providers.sqlite.terminal_repo import SQLiteTerminalRepo
 
 
 @pytest.fixture
@@ -24,8 +22,15 @@ def temp_db():
 
 @pytest.fixture
 def store(temp_db):
-    """Create TerminalStore with temp database."""
-    return TerminalStore(db_path=temp_db)
+    """Create SQLiteTerminalRepo with temp database."""
+    return SQLiteTerminalRepo(db_path=temp_db)
+
+
+def _wrap(store, row):
+    """Wrap a repo dict into an AbstractTerminal domain object."""
+    if row is None:
+        return None
+    return terminal_from_row(row, store.db_path)
 
 
 class TestTerminalState:
@@ -89,11 +94,11 @@ class TestTerminalState:
 
 
 class TestTerminalStore:
-    """Test TerminalStore CRUD operations."""
+    """Test SQLiteTerminalRepo CRUD operations."""
 
     def test_ensure_tables(self, temp_db):
         """Test table creation."""
-        store = TerminalStore(db_path=temp_db)
+        store = SQLiteTerminalRepo(db_path=temp_db)
 
         # Verify table exists
         with sqlite3.connect(str(temp_db)) as conn:
@@ -102,12 +107,12 @@ class TestTerminalStore:
 
     def test_create_terminal(self, store):
         """Test creating a new terminal."""
-        terminal = store.create(
+        terminal = _wrap(store, store.create(
             terminal_id="term-123",
             thread_id="thread-456",
             lease_id="lease-789",
             initial_cwd="/home/user",
-        )
+        ))
 
         assert terminal.terminal_id == "term-123"
         assert terminal.thread_id == "thread-456"
@@ -125,7 +130,7 @@ class TestTerminalStore:
             initial_cwd="/home/user",
         )
 
-        terminal = store.get("thread-456")
+        terminal = _wrap(store, store.get_active("thread-456"))
         assert terminal is not None
         assert terminal.terminal_id == "term-123"
         assert terminal.thread_id == "thread-456"
@@ -140,14 +145,14 @@ class TestTerminalStore:
             initial_cwd="/home/user",
         )
 
-        terminal = store.get_by_id("term-123")
+        terminal = _wrap(store, store.get_by_id("term-123"))
         assert terminal is not None
         assert terminal.terminal_id == "term-123"
         assert terminal.thread_id == "thread-456"
 
     def test_get_nonexistent_terminal(self, store):
         """Test retrieving non-existent terminal returns None."""
-        terminal = store.get("nonexistent-thread")
+        terminal = store.get_active("nonexistent-thread")
         assert terminal is None
 
         terminal = store.get_by_id("nonexistent-terminal")
@@ -162,13 +167,13 @@ class TestTerminalStore:
         )
 
         # Verify exists
-        assert store.get("thread-456") is not None
+        assert store.get_active("thread-456") is not None
 
         # Delete
         store.delete("term-123")
 
         # Verify deleted
-        assert store.get("thread-456") is None
+        assert store.get_active("thread-456") is None
 
     def test_delete_terminal_cleans_command_chunks(self, store, temp_db):
         """Deleting a terminal should remove command rows and associated output chunks."""
@@ -244,7 +249,7 @@ class TestSQLiteTerminal:
 
     def test_update_state_increments_version(self, store):
         """Test that update_state increments state_version."""
-        terminal = store.create("term-1", "thread-1", "lease-1", "/home/user")
+        terminal = _wrap(store, store.create("term-1", "thread-1", "lease-1", "/home/user"))
 
         assert terminal.get_state().state_version == 0
 
@@ -258,7 +263,7 @@ class TestSQLiteTerminal:
 
     def test_update_state_persists_to_db(self, store, temp_db):
         """Test that update_state persists to database."""
-        terminal = store.create("term-1", "thread-1", "lease-1", "/home/user")
+        terminal = _wrap(store, store.create("term-1", "thread-1", "lease-1", "/home/user"))
 
         # Update state
         new_state = TerminalState(
@@ -281,14 +286,14 @@ class TestSQLiteTerminal:
 
     def test_state_persists_across_retrieval(self, store):
         """Test that state persists when terminal is retrieved again."""
-        terminal = store.create("term-1", "thread-1", "lease-1", "/home/user")
+        terminal = _wrap(store, store.create("term-1", "thread-1", "lease-1", "/home/user"))
 
         # Update state
         new_state = TerminalState(cwd="/home/user/project", env_delta={"FOO": "bar"})
         terminal.update_state(new_state)
 
         # Retrieve terminal again
-        terminal2 = store.get("thread-1")
+        terminal2 = _wrap(store, store.get_active("thread-1"))
         assert terminal2 is not None
         assert terminal2.get_state().cwd == "/home/user/project"
         assert terminal2.get_state().env_delta == {"FOO": "bar"}
@@ -296,7 +301,7 @@ class TestSQLiteTerminal:
 
     def test_multiple_state_updates(self, store):
         """Test multiple state updates increment version correctly."""
-        terminal = store.create("term-1", "thread-1", "lease-1", "/home/user")
+        terminal = _wrap(store, store.create("term-1", "thread-1", "lease-1", "/home/user"))
 
         # Update 1
         terminal.update_state(TerminalState(cwd="/home/user/project1"))
@@ -323,7 +328,7 @@ class TestTerminalIntegration:
     def test_full_lifecycle(self, store):
         """Test complete terminal lifecycle: create → update → retrieve → delete."""
         # Create
-        terminal = store.create("term-1", "thread-1", "lease-1", "/home/user")
+        terminal = _wrap(store, store.create("term-1", "thread-1", "lease-1", "/home/user"))
         assert terminal.get_state().cwd == "/home/user"
 
         # Update state multiple times
@@ -331,7 +336,7 @@ class TestTerminalIntegration:
         terminal.update_state(TerminalState(cwd="/home/user/project/src", env_delta={"PATH": "/usr/local/bin"}))
 
         # Retrieve and verify
-        terminal2 = store.get("thread-1")
+        terminal2 = _wrap(store, store.get_active("thread-1"))
         assert terminal2 is not None
         assert terminal2.get_state().cwd == "/home/user/project/src"
         assert terminal2.get_state().env_delta == {"PATH": "/usr/local/bin"}
@@ -339,18 +344,18 @@ class TestTerminalIntegration:
 
         # Delete
         store.delete("term-1")
-        assert store.get("thread-1") is None
+        assert store.get_active("thread-1") is None
 
     def test_multiple_terminals_different_leases(self, store):
         """Test multiple terminals can point to different leases."""
-        term1 = store.create("term-1", "thread-1", "lease-1", "/home/user1")
-        term2 = store.create("term-2", "thread-2", "lease-2", "/home/user2")
-        term3 = store.create("term-3", "thread-3", "lease-1", "/home/user3")
+        term1 = _wrap(store, store.create("term-1", "thread-1", "lease-1", "/home/user1"))
+        term2 = _wrap(store, store.create("term-2", "thread-2", "lease-2", "/home/user2"))
+        term3 = _wrap(store, store.create("term-3", "thread-3", "lease-1", "/home/user3"))
 
         # Verify all created
-        assert store.get("thread-1") is not None
-        assert store.get("thread-2") is not None
-        assert store.get("thread-3") is not None
+        assert store.get_active("thread-1") is not None
+        assert store.get_active("thread-2") is not None
+        assert store.get_active("thread-3") is not None
 
         # Verify lease associations
         assert term1.lease_id == "lease-1"
@@ -359,14 +364,14 @@ class TestTerminalIntegration:
 
     def test_state_isolation_between_terminals(self, store):
         """Test that state updates are isolated between terminals."""
-        term1 = store.create("term-1", "thread-1", "lease-1", "/home/user1")
-        term2 = store.create("term-2", "thread-2", "lease-1", "/home/user2")
+        term1 = _wrap(store, store.create("term-1", "thread-1", "lease-1", "/home/user1"))
+        term2 = _wrap(store, store.create("term-2", "thread-2", "lease-1", "/home/user2"))
 
         # Update term1 state
         term1.update_state(TerminalState(cwd="/home/user1/project", env_delta={"FOO": "bar"}))
 
         # Verify term2 state unchanged
-        term2_retrieved = store.get("thread-2")
+        term2_retrieved = _wrap(store, store.get_active("thread-2"))
         assert term2_retrieved.get_state().cwd == "/home/user2"
         assert term2_retrieved.get_state().env_delta == {}
         assert term2_retrieved.get_state().state_version == 0

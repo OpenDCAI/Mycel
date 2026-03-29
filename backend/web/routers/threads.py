@@ -194,12 +194,13 @@ def _create_thread_sandbox_resources(thread_id: str, sandbox_type: str) -> None:
     from datetime import datetime
 
     from backend.web.core.config import SANDBOX_VOLUME_ROOT
-    from sandbox.config import DEFAULT_DB_PATH
-    from sandbox.lease import LeaseStore
-    from sandbox.terminal import TerminalStore
+    from storage.providers.sqlite.kernel import SQLiteDBRole, resolve_role_db_path
+    from storage.providers.sqlite.lease_repo import SQLiteLeaseRepo
+    from storage.providers.sqlite.terminal_repo import SQLiteTerminalRepo
     from sandbox.volume_source import HostVolume
     from backend.web.utils.helpers import _get_container
 
+    sandbox_db = resolve_role_db_path(SQLiteDBRole.SANDBOX)
     now_str = datetime.now().isoformat()
     volume_id = str(uuid.uuid4())
     vol_path = SANDBOX_VOLUME_ROOT / volume_id
@@ -211,27 +212,33 @@ def _create_thread_sandbox_resources(thread_id: str, sandbox_type: str) -> None:
     finally:
         vol_repo.close()
 
-    lease_store = LeaseStore(db_path=DEFAULT_DB_PATH)
-    lease_id = f"lease-{uuid.uuid4().hex[:12]}"
-    lease_store.create(lease_id, sandbox_type, volume_id=volume_id)
+    lease_repo = SQLiteLeaseRepo(db_path=sandbox_db)
+    try:
+        lease_id = f"lease-{uuid.uuid4().hex[:12]}"
+        lease_repo.create(lease_id, sandbox_type, volume_id=volume_id)
+    finally:
+        lease_repo.close()
 
-    terminal_store = TerminalStore(db_path=DEFAULT_DB_PATH)
-    terminal_id = f"term-{uuid.uuid4().hex[:12]}"
-    # @@@initial-cwd - use project root for local, provider default for remote
-    from backend.web.core.config import LOCAL_WORKSPACE_ROOT
-    if sandbox_type == "local":
-        initial_cwd = str(LOCAL_WORKSPACE_ROOT)
-    else:
-        from backend.web.services.sandbox_service import build_provider_from_config_name
-        from sandbox.manager import resolve_provider_cwd
-        provider = build_provider_from_config_name(sandbox_type)
-        initial_cwd = resolve_provider_cwd(provider) if provider else "/home/user"
-    terminal_store.create(
-        terminal_id=terminal_id,
-        thread_id=thread_id,
-        lease_id=lease_id,
-        initial_cwd=initial_cwd,
-    )
+    terminal_repo = SQLiteTerminalRepo(db_path=sandbox_db)
+    try:
+        terminal_id = f"term-{uuid.uuid4().hex[:12]}"
+        # @@@initial-cwd - use project root for local, provider default for remote
+        from backend.web.core.config import LOCAL_WORKSPACE_ROOT
+        if sandbox_type == "local":
+            initial_cwd = str(LOCAL_WORKSPACE_ROOT)
+        else:
+            from backend.web.services.sandbox_service import build_provider_from_config_name
+            from sandbox.manager import resolve_provider_cwd
+            provider = build_provider_from_config_name(sandbox_type)
+            initial_cwd = resolve_provider_cwd(provider) if provider else "/home/user"
+        terminal_repo.create(
+            terminal_id=terminal_id,
+            thread_id=thread_id,
+            lease_id=lease_id,
+            initial_cwd=initial_cwd,
+        )
+    finally:
+        terminal_repo.close()
 
 
 def _create_owned_thread(

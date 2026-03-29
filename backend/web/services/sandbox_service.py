@@ -11,9 +11,10 @@ logger = logging.getLogger(__name__)
 
 from backend.web.core.config import LOCAL_WORKSPACE_ROOT, SANDBOXES_DIR
 from backend.web.utils.helpers import is_virtual_thread_id
-from config.user_paths import user_home_read_candidates
 from sandbox.config import SandboxConfig
-from sandbox.config import DEFAULT_DB_PATH as SANDBOX_DB_PATH
+from storage.providers.sqlite.kernel import SQLiteDBRole, resolve_role_db_path
+
+SANDBOX_DB_PATH = resolve_role_db_path(SQLiteDBRole.SANDBOX)
 from sandbox.manager import SandboxManager
 from sandbox.provider import ProviderCapability
 
@@ -32,21 +33,6 @@ def _capability_to_dict(capability: ProviderCapability) -> dict[str, Any]:
     }
 
 
-def _configured_sandbox_names() -> list[str]:
-    names: list[str] = []
-    seen: set[str] = set()
-    for root in user_home_read_candidates("sandboxes"):
-        if not root.exists():
-            continue
-        for config_file in sorted(root.glob("*.json")):
-            name = config_file.stem
-            if name in seen:
-                continue
-            seen.add(name)
-            names.append(name)
-    return names
-
-
 def available_sandbox_types() -> list[dict[str, Any]]:
     """Scan ~/.leon/sandboxes/ for configured providers."""
     providers, _ = init_providers_and_managers()
@@ -59,7 +45,10 @@ def available_sandbox_types() -> list[dict[str, Any]]:
             "capability": _capability_to_dict(local_capability),
         }
     ]
-    for name in _configured_sandbox_names():
+    if not SANDBOXES_DIR.exists():
+        return types
+    for f in sorted(SANDBOXES_DIR.glob("*.json")):
+        name = f.stem
         try:
             config = SandboxConfig.load(name)
             provider_obj = providers.get(name)
@@ -83,7 +72,12 @@ def init_providers_and_managers() -> tuple[dict, dict]:
     providers: dict[str, Any] = {
         "local": LocalSessionProvider(default_cwd=str(LOCAL_WORKSPACE_ROOT)),
     }
-    for name in _configured_sandbox_names():
+    if not SANDBOXES_DIR.exists():
+        managers = {name: SandboxManager(provider=p, db_path=SANDBOX_DB_PATH) for name, p in providers.items()}
+        return providers, managers
+
+    for config_file in SANDBOXES_DIR.glob("*.json"):
+        name = config_file.stem
         try:
             config = SandboxConfig.load(name)
             if config.provider == "agentbay":
@@ -252,16 +246,18 @@ def mutate_sandbox_session(
         else:
             raise RuntimeError(f"Unknown action: {action}")
     else:
-        lease = manager.lease_store.get(lease_id) if lease_id else None
+        lease = manager.get_lease(lease_id) if lease_id else None
         if not lease:
             adopt_lease_id = str(lease_id or f"lease-adopt-{uuid.uuid4().hex[:12]}")
             adopt_status = str(session.get("status") or "unknown")
-            lease = manager.lease_store.adopt_instance(
+            from sandbox.lease import lease_from_row
+            adopt_row = manager.lease_store.adopt_instance(
                 lease_id=adopt_lease_id,
                 provider_name=provider_name,
                 instance_id=target_session_id,
                 status=adopt_status,
             )
+            lease = lease_from_row(adopt_row, manager.lease_store.db_path)
             lease_id = lease.lease_id
 
         mode = "manager_lease"

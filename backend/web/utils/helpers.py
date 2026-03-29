@@ -9,9 +9,10 @@ from fastapi import HTTPException
 
 from backend.web.core.config import DB_PATH
 from storage.container import StorageContainer
-from storage.providers.sqlite.kernel import connect_sqlite
+from storage.providers.sqlite.kernel import SQLiteDBRole, connect_sqlite, resolve_role_db_path
 from storage.runtime import build_storage_container
-from sandbox.config import DEFAULT_DB_PATH as SANDBOX_DB_PATH
+
+SANDBOX_DB_PATH = resolve_role_db_path(SQLiteDBRole.SANDBOX)
 
 # @@@cached-container - reuse a single StorageContainer across helper calls to avoid per-call rebuild.
 _cached_container: StorageContainer | None = None

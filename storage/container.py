@@ -8,13 +8,17 @@ from pathlib import Path
 from typing import Any, Literal
 
 from .contracts import (
+    ChatSessionRepo,
     CheckpointRepo,
     EvalRepo,
+    LeaseRepo,
+    ProviderEventRepo,
     SandboxVolumeRepo,
     FileOperationRepo,
     QueueRepo,
     RunEventRepo,
     SummaryRepo,
+    TerminalRepo,
 )
 
 StorageStrategy = Literal["sqlite", "supabase"]
@@ -29,6 +33,10 @@ _REPO_REGISTRY: dict[str, tuple[str, str]] = {
     "eval_repo":           ("storage.providers.supabase.eval_repo",           "SupabaseEvalRepo"),
     "queue_repo":          ("storage.providers.supabase.queue_repo",          "SupabaseQueueRepo"),
     "sandbox_volume_repo":       ("storage.providers.supabase.sandbox_volume_repo",      "SupabaseSandboxVolumeRepo"),
+    "provider_event_repo":       ("storage.providers.supabase.provider_event_repo",      "SupabaseProviderEventRepo"),
+    "lease_repo":                ("storage.providers.supabase.lease_repo",               "SupabaseLeaseRepo"),
+    "terminal_repo":             ("storage.providers.supabase.terminal_repo",            "SupabaseTerminalRepo"),
+    "chat_session_repo":         ("storage.providers.supabase.chat_session_repo",        "SupabaseChatSessionRepo"),
 }
 
 
@@ -44,6 +52,10 @@ class StorageContainer:
         "eval_repo",
         "queue_repo",
         "sandbox_volume_repo",
+        "provider_event_repo",
+        "lease_repo",
+        "terminal_repo",
+        "chat_session_repo",
     )
 
     def __init__(
@@ -67,6 +79,7 @@ class StorageContainer:
         self._file_op_db = self._main_db.with_name("file_ops.db")
         self._summary_db = self._main_db.with_name("summary.db")
         self._eval_db = Path(eval_db_path) if eval_db_path else root / "eval.db"
+        self._sandbox_db = self._main_db.with_name("sandbox.db")
         self._strategy: StorageStrategy = strategy
         self._supabase_client = supabase_client
         self._repo_providers = self._resolve_repo_providers(
@@ -95,6 +108,18 @@ class StorageContainer:
 
     def sandbox_volume_repo(self) -> SandboxVolumeRepo:
         return self._build_repo("sandbox_volume_repo", self._sqlite_sandbox_volume_repo)
+
+    def provider_event_repo(self) -> ProviderEventRepo:
+        return self._build_repo("provider_event_repo", self._sqlite_provider_event_repo)
+
+    def lease_repo(self) -> LeaseRepo:
+        return self._build_repo("lease_repo", self._sqlite_lease_repo)
+
+    def terminal_repo(self) -> TerminalRepo:
+        return self._build_repo("terminal_repo", self._sqlite_terminal_repo)
+
+    def chat_session_repo(self) -> ChatSessionRepo:
+        return self._build_repo("chat_session_repo", self._sqlite_chat_session_repo)
 
     def purge_thread(self, thread_id: str) -> None:
         """Delete all data for a thread across all repos."""
@@ -207,3 +232,19 @@ class StorageContainer:
     def _sqlite_sandbox_volume_repo(self):
         from storage.providers.sqlite.sandbox_volume_repo import SQLiteSandboxVolumeRepo
         return SQLiteSandboxVolumeRepo()
+
+    def _sqlite_provider_event_repo(self):
+        from storage.providers.sqlite.provider_event_repo import SQLiteProviderEventRepo
+        return SQLiteProviderEventRepo(db_path=self._sandbox_db)
+
+    def _sqlite_lease_repo(self):
+        from storage.providers.sqlite.lease_repo import SQLiteLeaseRepo
+        return SQLiteLeaseRepo(db_path=self._sandbox_db)
+
+    def _sqlite_terminal_repo(self):
+        from storage.providers.sqlite.terminal_repo import SQLiteTerminalRepo
+        return SQLiteTerminalRepo(db_path=self._sandbox_db)
+
+    def _sqlite_chat_session_repo(self):
+        from storage.providers.sqlite.chat_session_repo import SQLiteChatSessionRepo
+        return SQLiteChatSessionRepo(db_path=self._sandbox_db)

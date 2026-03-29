@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from sandbox.config import DEFAULT_DB_PATH
+from storage.providers.sqlite.kernel import SQLiteDBRole, resolve_role_db_path
 
 
 def _connect(db_path: Path) -> sqlite3.Connection:
@@ -20,7 +20,8 @@ def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
 
-def ensure_resource_snapshot_table(db_path: Path = DEFAULT_DB_PATH) -> None:
+def ensure_resource_snapshot_table(db_path: Path | None = None) -> None:
+    db_path = db_path or resolve_role_db_path(SQLiteDBRole.SANDBOX)
     with _connect(db_path) as conn:
         conn.execute(
             """
@@ -61,8 +62,9 @@ def upsert_lease_resource_snapshot(
     network_rx_kbps: float | None = None,
     network_tx_kbps: float | None = None,
     probe_error: str | None = None,
-    db_path: Path = DEFAULT_DB_PATH,
+    db_path: Path | None = None,
 ) -> None:
+    db_path = db_path or resolve_role_db_path(SQLiteDBRole.SANDBOX)
     ensure_resource_snapshot_table(db_path)
     now = _now_iso()
     with _connect(db_path) as conn:
@@ -112,7 +114,8 @@ def upsert_lease_resource_snapshot(
         conn.commit()
 
 
-def list_snapshots_by_lease_ids(lease_ids: list[str], db_path: Path = DEFAULT_DB_PATH) -> dict[str, dict[str, Any]]:
+def list_snapshots_by_lease_ids(lease_ids: list[str], db_path: Path | None = None) -> dict[str, dict[str, Any]]:
+    db_path = db_path or resolve_role_db_path(SQLiteDBRole.SANDBOX)
     unique_lease_ids = sorted({lease_id for lease_id in lease_ids if lease_id})
     if not unique_lease_ids or not db_path.exists():
         return {}

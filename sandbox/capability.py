@@ -136,14 +136,16 @@ class _CommandWrapper(BaseExecutor):
         session = self._manager.session_manager.get(self._session.thread_id, terminal_id)
         if session:
             return session
-        terminal = self._manager.terminal_store.get_by_id(terminal_id)
-        if terminal is None:
+        terminal_row = self._manager.terminal_store.get_by_id(terminal_id)
+        if terminal_row is None:
             raise RuntimeError(f"Terminal {terminal_id} not found")
+        from sandbox.terminal import terminal_from_row
+        terminal = terminal_from_row(terminal_row, self._manager.terminal_store.db_path)
         if terminal.thread_id != self._session.thread_id:
             raise RuntimeError(
                 f"Terminal {terminal_id} belongs to thread {terminal.thread_id}, not {self._session.thread_id}"
             )
-        lease = self._manager.lease_store.get(terminal.lease_id)
+        lease = self._manager.get_lease(terminal.lease_id)
         if lease is None:
             raise RuntimeError(f"Lease {terminal.lease_id} not found for terminal {terminal_id}")
         return self._manager.session_manager.create(
