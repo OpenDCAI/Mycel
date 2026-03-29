@@ -84,6 +84,84 @@ class SandboxManager:
     def _default_terminal_cwd(self) -> str:
         return resolve_provider_cwd(self.provider)
 
+    def _setup_mounts(self, thread_id: str) -> dict:
+        """Mount the lease's volume into the sandbox. Pure sandbox-layer operation."""
+        import json
+        from sandbox.volume_source import DaytonaVolume, deserialize_volume_source
+        from storage.providers.sqlite.sandbox_volume_repo import SQLiteSandboxVolumeRepo
+
+        terminal = self._get_active_terminal(thread_id)
+        if not terminal:
+            raise ValueError(f"No active terminal for thread {thread_id}")
+        lease = self.lease_store.get(terminal.lease_id)
+        if not lease or not lease.volume_id:
+            raise ValueError(f"No volume for thread {thread_id}")
+
+        repo = SQLiteSandboxVolumeRepo()
+        try:
+            entry = repo.get(lease.volume_id)
+        finally:
+            repo.close()
+        if not entry:
+            raise ValueError(f"Volume not found: {lease.volume_id}")
+
+        source = deserialize_volume_source(json.loads(entry["source"]))
+        volume_id = lease.volume_id
+        remote_path = self.volume.resolve_mount_path()
+
+        # @@@daytona-upgrade - first startup creates managed volume
+        if (self.provider_capability.runtime_kind == "daytona_pty"
+                and not isinstance(source, DaytonaVolume)):
+            source = self._upgrade_to_daytona_volume(
+                thread_id, source, volume_id, remote_path,
+            )
+
+        if isinstance(source, DaytonaVolume):
+            self.volume.mount_managed_volume(thread_id, source.volume_name, remote_path)
+        else:
+            self.volume.mount(thread_id, source, remote_path)
+
+        return {"source": source, "remote_path": remote_path}
+
+    def _upgrade_to_daytona_volume(self, thread_id: str, current_source, volume_id: str, remote_path: str):
+        """First Daytona sandbox start: create managed volume, upgrade VolumeSource in DB."""
+        import json
+        from sandbox.volume_source import DaytonaVolume
+        from storage.providers.sqlite.sandbox_volume_repo import SQLiteSandboxVolumeRepo
+
+        # @@@member-id-for-volume-naming - read from thread config in leon.db
+        member_id = "unknown"
+        try:
+            from storage.providers.sqlite.kernel import connect_sqlite_role, SQLiteDBRole
+            with connect_sqlite_role(SQLiteDBRole.MAIN) as conn:
+                row = conn.execute("SELECT member_id FROM threads WHERE id = ?", (thread_id,)).fetchone()
+                if row:
+                    member_id = row[0]
+        except Exception:
+            pass
+
+        try:
+            volume_name = self.provider.create_managed_volume(member_id, remote_path)
+        except Exception as e:
+            if "already exists" in str(e):
+                volume_name = f"leon-volume-{member_id}"
+                logger.info("Daytona volume already exists: %s, reusing", volume_name)
+            else:
+                raise
+
+        new_source = DaytonaVolume(
+            staging_path=current_source.host_path,
+            volume_name=volume_name,
+        )
+
+        repo = SQLiteSandboxVolumeRepo()
+        try:
+            repo.update_source(volume_id, json.dumps(new_source.serialize()))
+        finally:
+            repo.close()
+
+        return new_source
+
     def _fire_session_ready(self, session_id: str, reason: str) -> None:
         if self._on_session_ready:
             self._on_session_ready(session_id, reason)
@@ -141,17 +219,36 @@ class SandboxManager:
         lease = self.lease_store.get(terminals[0].lease_id)
         return bool(lease and lease.provider_name == self.provider.name)
 
+    def resolve_volume_source(self, thread_id: str):
+        """Resolve VolumeSource for a thread via lease chain. Pure sandbox-layer lookup."""
+        import json
+        from sandbox.volume_source import deserialize_volume_source
+        from storage.providers.sqlite.sandbox_volume_repo import SQLiteSandboxVolumeRepo
+
+        terminal = self._get_active_terminal(thread_id)
+        if not terminal:
+            raise ValueError(f"No active terminal for thread {thread_id}")
+        lease = self.lease_store.get(terminal.lease_id)
+        if not lease or not lease.volume_id:
+            raise ValueError(f"No volume for thread {thread_id}")
+        repo = SQLiteSandboxVolumeRepo()
+        try:
+            entry = repo.get(lease.volume_id)
+        finally:
+            repo.close()
+        if not entry:
+            raise ValueError(f"Volume not found: {lease.volume_id}")
+        return deserialize_volume_source(json.loads(entry["source"]))
+
     def _sync_to_sandbox(self, thread_id: str, instance_id: str,
                          source=None, files: list[str] | None = None) -> None:
         if source is None:
-            from backend.web.services.file_channel_service import get_file_channel_source
-            source = get_file_channel_source(thread_id)
+            source = self.resolve_volume_source(thread_id)
         self.volume.sync_upload(thread_id, instance_id, source, self.volume.resolve_mount_path(), files=files)
 
     def _sync_from_sandbox(self, thread_id: str, instance_id: str, source=None) -> None:
         if source is None:
-            from backend.web.services.file_channel_service import get_file_channel_source
-            source = get_file_channel_source(thread_id)
+            source = self.resolve_volume_source(thread_id)
         self.volume.sync_download(thread_id, instance_id, source, self.volume.resolve_mount_path())
 
     def sync_uploads(self, thread_id: str, files: list[str] | None = None) -> bool:
@@ -214,9 +311,8 @@ class SandboxManager:
         if bind_mounts:
             lease.bind_mounts = bind_mounts
 
-        # @@@volume-strategy-gate - orchestrator handles mount decisions
-        from backend.web.services.file_channel_service import setup_sandbox_mounts
-        storage = setup_sandbox_mounts(thread_id, self.volume)
+        # @@@volume-strategy-gate - mount volume into sandbox
+        storage = self._setup_mounts(thread_id)
 
         self._ensure_bound_instance(lease)
 
