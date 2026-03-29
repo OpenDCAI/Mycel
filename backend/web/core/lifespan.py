@@ -131,7 +131,6 @@ async def lifespan(app: FastAPI):
             elif routing.type == "chat":
                 content = format_wechat_message(sender_name, msg.from_user_id, msg.text)
                 app.state.chat_service.send_message(routing.id, conn.entity_id, content)
-                await app.state.chat_service.deliver_to_agents(routing.id, conn.entity_id, content)
 
         app.state.wechat_registry = WeChatConnectionRegistry(delivery_fn=_wechat_deliver)
         app.state.wechat_registry.auto_start_all()

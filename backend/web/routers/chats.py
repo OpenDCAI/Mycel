@@ -140,8 +140,6 @@ async def send_message(
             raise HTTPException(403, "Sender entity does not belong to you")
     chat_service = app.state.chat_service
     msg = chat_service.send_message(chat_id, body.sender_entity_id, body.content, body.mentioned_entity_ids)
-    # @@@async-delivery — deliver notifications to agents after message is stored.
-    await chat_service.deliver_to_agents(chat_id, body.sender_entity_id, body.content, body.mentioned_entity_ids)
     return {
         "id": msg.id, "chat_id": msg.chat_id, "sender_entity_id": msg.sender_entity_id,
         "content": msg.content, "mentioned_entity_ids": msg.mentioned_entity_ids, "created_at": msg.created_at,

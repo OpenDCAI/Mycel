@@ -305,14 +305,6 @@ class ChatToolService:
 
             self._chat_service.send_message(resolved_chat_id, eid, content, mentions,
                                             signal=effective_signal)
-            # @@@async-delivery — fire-and-forget delivery from sync tool handler
-            import asyncio
-            try:
-                loop = asyncio.get_running_loop()
-                loop.create_task(self._chat_service.deliver_to_agents(
-                    resolved_chat_id, eid, content, mentions, signal=effective_signal))
-            except RuntimeError:
-                pass  # no loop = no delivery (shouldn't happen in agent context)
             return f"Message sent to {target_name}."
 
         registry.register(ToolEntry(
