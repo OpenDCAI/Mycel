@@ -101,3 +101,4 @@ docs/plans/
 frontend/.vite/
 .playwright-cli/
 ops
+frontend/app/test-results/
