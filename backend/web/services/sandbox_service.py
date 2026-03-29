@@ -11,6 +11,7 @@ logger = logging.getLogger(__name__)
 
 from backend.web.core.config import LOCAL_WORKSPACE_ROOT, SANDBOXES_DIR
 from backend.web.utils.helpers import is_virtual_thread_id
+from backend.web.utils.serializers import avatar_url
 from sandbox.config import SandboxConfig
 from storage.providers.sqlite.kernel import SQLiteDBRole, resolve_role_db_path
 
@@ -83,7 +84,7 @@ def list_user_leases(
                 {
                     "member_id": member.id,
                     "member_name": member.name,
-                    "avatar_url": None,
+                    "avatar_url": avatar_url(member.id, bool(member.avatar)),
                 }
             )
             if not group["cwd"] and row.get("cwd"):

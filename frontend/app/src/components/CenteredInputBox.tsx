@@ -31,9 +31,12 @@ interface CenteredInputBoxProps {
   environmentControl?: {
     renderSummary: (args: EnvironmentControlArgs) => ReactNode;
     renderPanel: (args: EnvironmentControlArgs) => ReactNode;
+    isDetailView?: boolean;
+    panelClassName?: string;
     onOpen?: () => void;
     onCancel?: () => void;
-    onApply?: () => void | Promise<void>;
+    onApply?: () => boolean | Promise<boolean>;
+    applyLabel?: string;
   };
   onSend: (message: string, sandbox: string, model: string, workspace?: string) => Promise<void>;
 }
@@ -197,8 +200,9 @@ export default function CenteredInputBox({
   async function applyAdvancedConfig() {
     setApplyingConfig(true);
     try {
+      const shouldClose = (await environmentControl?.onApply?.()) ?? true;
+      if (!shouldClose) return;
       setModel(draftModel);
-      await environmentControl?.onApply?.();
       setAdvancedConfigOpen(false);
     } finally {
       setApplyingConfig(false);
@@ -388,39 +392,39 @@ export default function CenteredInputBox({
                     }
                   }}
                 >
-                  高级配置
+                  配置
                 </Button>
               </PopoverTrigger>
               <PopoverContent
                 side="top"
                 align="end"
                 sideOffset={12}
-                className="w-[680px] max-w-[calc(100vw-3rem)] rounded-[24px] border border-border bg-background p-0 shadow-xl overflow-hidden"
+                className={`flex w-[680px] max-w-[calc(100vw-3rem)] flex-col overflow-hidden rounded-[24px] border border-border bg-background p-0 shadow-xl ${
+                  environmentControl.panelClassName ?? "max-h-[calc(100vh-4rem)]"
+                }`}
               >
-                <div className="border-b border-border px-6 py-4">
-                  <div className="text-lg font-semibold text-foreground">高级配置</div>
-                </div>
-
-                <div className="space-y-6 overflow-y-auto px-6 py-5">
-                  <div className="space-y-3">
-                    <div className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Model</div>
-                    <div className="flex flex-wrap gap-2">
-                      {MODELS.map((entry) => (
-                        <button
-                          key={entry.value}
-                          type="button"
-                          onClick={() => setDraftModel(entry.value)}
-                          className={`rounded-xl border px-3 py-2 text-sm transition-colors ${
-                            draftModel === entry.value
-                              ? "border-foreground bg-foreground text-background"
-                              : "border-border bg-card text-foreground hover:bg-accent"
-                          }`}
-                        >
-                          {entry.label}
-                        </button>
-                      ))}
+                <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
+                  {!environmentControl.isDetailView && (
+                    <div className="mb-6 space-y-3">
+                      <div className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Model</div>
+                      <div className="flex flex-wrap gap-2">
+                        {MODELS.map((entry) => (
+                          <button
+                            key={entry.value}
+                            type="button"
+                            onClick={() => setDraftModel(entry.value)}
+                            className={`rounded-xl border px-3 py-2 text-sm transition-colors ${
+                              draftModel === entry.value
+                                ? "border-foreground bg-foreground text-background"
+                                : "border-border bg-card text-foreground hover:bg-accent"
+                            }`}
+                          >
+                            {entry.label}
+                          </button>
+                        ))}
+                      </div>
                     </div>
-                  </div>
+                  )}
 
                   {environmentControl.renderPanel(environmentArgs)}
                 </div>
@@ -430,7 +434,7 @@ export default function CenteredInputBox({
                     取消
                   </Button>
                   <Button type="button" onClick={() => void applyAdvancedConfig()} disabled={applyingConfig}>
-                    确认
+                    {environmentControl.applyLabel ?? "确认"}
                   </Button>
                 </div>
               </PopoverContent>

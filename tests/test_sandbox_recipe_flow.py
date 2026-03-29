@@ -75,18 +75,34 @@ def test_library_recipes_expose_default_recipe_per_sandbox(monkeypatch: pytest.M
     assert items[1]["provider_name"] == "daytona_selfhost"
 
 
-def test_builtin_recipes_include_local_lark_cli_variant() -> None:
+def test_builtin_recipes_dedupe_provider_variants_and_only_expose_defaults() -> None:
     items = list_builtin_recipes([
         {
             "name": "local",
             "available": True,
             "capability": {"runtime_kind": "local"},
         },
+        {
+            "name": "daytona",
+            "available": True,
+            "provider": "daytona",
+            "capability": {"runtime_kind": "remote"},
+        },
+        {
+            "name": "daytona_selfhost",
+            "available": True,
+            "provider": "daytona",
+            "capability": {"runtime_kind": "remote"},
+        },
     ])
 
-    assert [item["id"] for item in items] == ["local:default", "local:lark-cli"]
-    assert items[1]["name"] == "Local + Lark CLI"
-    assert items[1]["features"] == {"lark_cli": True}
+    assert [item["id"] for item in items] == ["local:default", "daytona:default"]
+    assert items[0]["provider_name"] == "local"
+    assert items[0]["provider_type"] == "local"
+    assert items[0]["features"] == {"lark_cli": False}
+    assert items[0]["configurable_features"] == {"lark_cli": True}
+    assert items[1]["provider_name"] == "daytona"
+    assert items[1]["provider_type"] == "daytona"
 
 
 def test_create_thread_can_reuse_existing_lease(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -162,6 +178,7 @@ def test_list_user_leases_only_returns_owned_leases(tmp_path: Path, monkeypatch:
         id="member-1",
         name="Toad",
         type=MemberType.MYCEL_AGENT,
+        avatar="uploaded",
         owner_user_id="user-1",
         created_at=3.0,
     ))
@@ -194,6 +211,7 @@ def test_list_user_leases_only_returns_owned_leases(tmp_path: Path, monkeypatch:
     assert leases[0]["provider_name"] == "local"
     assert leases[0]["thread_ids"] == [owned["thread_id"]]
     assert [agent["member_id"] for agent in leases[0]["agents"]] == ["member-1"]
+    assert leases[0]["agents"][0]["avatar_url"] == "/api/members/member-1/avatar"
 
 
 def test_create_thread_persists_selected_recipe_on_lease(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

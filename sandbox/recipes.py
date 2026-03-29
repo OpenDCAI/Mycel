@@ -3,6 +3,18 @@ from __future__ import annotations
 from typing import Any
 
 
+def provider_type_from_name(name: str) -> str:
+    if name.startswith("daytona"):
+        return "daytona"
+    if name.startswith("docker"):
+        return "docker"
+    if name.startswith("e2b"):
+        return "e2b"
+    if name.startswith("agentbay"):
+        return "agentbay"
+    return "local"
+
+
 def humanize_recipe_provider(name: str) -> str:
     return " ".join(
         part[:1].upper() + part[1:]
@@ -12,19 +24,19 @@ def humanize_recipe_provider(name: str) -> str:
 
 
 def default_recipe_id(provider_name: str) -> str:
-    return f"{provider_name}:default"
+    return f"{provider_type_from_name(provider_name)}:default"
 
 
 def lark_cli_recipe_id(provider_name: str) -> str:
-    return f"{provider_name}:lark-cli"
+    return f"{provider_type_from_name(provider_name)}:lark-cli"
 
 
 def default_recipe_name(provider_name: str) -> str:
-    return f"{humanize_recipe_provider(provider_name)} Default"
+    return f"{humanize_recipe_provider(provider_type_from_name(provider_name))} Default"
 
 
 def lark_cli_recipe_name(provider_name: str) -> str:
-    return f"{humanize_recipe_provider(provider_name)} + Lark CLI"
+    return f"{humanize_recipe_provider(provider_type_from_name(provider_name))} + Lark CLI"
 
 
 def recipe_features(recipe_id: str | None) -> dict[str, bool]:
@@ -60,25 +72,30 @@ def resolve_builtin_recipe(provider_name: str, recipe_id: str | None = None) -> 
 
 def list_builtin_recipes(sandbox_types: list[dict[str, Any]]) -> list[dict[str, Any]]:
     items: list[dict[str, Any]] = []
+    providers_by_type: dict[str, dict[str, Any]] = {}
     for sandbox in sandbox_types:
+        provider_name = str(sandbox["name"])
+        provider_type = provider_type_from_name(provider_name)
+        existing = providers_by_type.get(provider_type)
+        if existing and not existing.get("available", False) and sandbox.get("available", False):
+            providers_by_type[provider_type] = sandbox
+            continue
+        if existing:
+            continue
+        providers_by_type[provider_type] = sandbox
+
+    for provider_type, sandbox in providers_by_type.items():
         provider_name = str(sandbox["name"])
         available = bool(sandbox.get("available", False))
         default_item = resolve_builtin_recipe(provider_name)
         items.append(
             {
                 **default_item,
+                "provider_type": provider_type,
                 "type": "recipe",
                 "available": available,
-                "created_at": 0,
-                "updated_at": 0,
-            }
-        )
-        lark_item = resolve_builtin_recipe(provider_name, lark_cli_recipe_id(provider_name))
-        items.append(
-            {
-                **lark_item,
-                "type": "recipe",
-                "available": available,
+                "features": {"lark_cli": False},
+                "configurable_features": {"lark_cli": True},
                 "created_at": 0,
                 "updated_at": 0,
             }
