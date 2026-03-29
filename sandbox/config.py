@@ -11,7 +11,6 @@ from pathlib import Path
 from typing import Literal
 
 from pydantic import BaseModel, Field
-from config.user_paths import preferred_existing_user_home_path, user_home_path
 
 
 class MountSpec(BaseModel):
@@ -19,9 +18,6 @@ class MountSpec(BaseModel):
     target: str
     mode: Literal["mount", "copy"] = "mount"
     read_only: bool = False
-
-# @@@env-at-import - This is evaluated at import time. For web backend, prefer exporting env vars before process start.
-DEFAULT_DB_PATH = Path(os.getenv("LEON_SANDBOX_DB_PATH") or (Path.home() / ".leon" / "sandbox.db"))
 
 
 class AgentBayConfig(BaseModel):
@@ -74,7 +70,7 @@ class SandboxConfig(BaseModel):
         if name == "local":
             return cls()
 
-        path = preferred_existing_user_home_path("sandboxes", f"{name}.json")
+        path = Path.home() / ".leon" / "sandboxes" / f"{name}.json"
         if not path.exists():
             raise FileNotFoundError(f"Sandbox config not found: {path}")
 
@@ -84,7 +80,7 @@ class SandboxConfig(BaseModel):
         return config
 
     def save(self, name: str) -> Path:
-        path = user_home_path("sandboxes", f"{name}.json")
+        path = Path.home() / ".leon" / "sandboxes" / f"{name}.json"
         path.parent.mkdir(parents=True, exist_ok=True)
 
         data = {"provider": self.provider, "on_exit": self.on_exit}
@@ -105,11 +101,3 @@ def resolve_sandbox_name(cli_arg: str | None) -> str:
     if cli_arg:
         return cli_arg
     return os.getenv("LEON_SANDBOX", "local")
-
-
-# === REPOSITORY DEPENDENCY INJECTION ===
-
-def get_sandbox_repository():
-    """Factory for sandbox repository implementation."""
-    from storage.providers.sqlite.sandbox_repo import SandboxRepository
-    return SandboxRepository(DEFAULT_DB_PATH)

@@ -13,14 +13,15 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
-from storage.providers.sqlite.kernel import connect_sqlite
+from storage.providers.sqlite.kernel import SQLiteDBRole, connect_sqlite, resolve_role_db_path
 
 from sandbox.capability import SandboxCapability
 from sandbox.chat_session import ChatSessionManager, ChatSessionPolicy
-from sandbox.config import DEFAULT_DB_PATH
-from sandbox.lease import LeaseStore
+from sandbox.lease import lease_from_row
+from storage.providers.sqlite.lease_repo import SQLiteLeaseRepo
 from sandbox.provider import SandboxProvider
-from sandbox.terminal import TerminalState, TerminalStore
+from sandbox.terminal import TerminalState, terminal_from_row
+from storage.providers.sqlite.terminal_repo import SQLiteTerminalRepo
 
 
 def resolve_provider_cwd(provider) -> str:
@@ -33,7 +34,7 @@ def resolve_provider_cwd(provider) -> str:
 
 
 def lookup_sandbox_for_thread(thread_id: str, db_path: Path | None = None) -> str | None:
-    target_db = db_path or DEFAULT_DB_PATH
+    target_db = db_path or resolve_role_db_path(SQLiteDBRole.SANDBOX)
     if not target_db.exists():
         return None
 
@@ -66,13 +67,16 @@ class SandboxManager:
         self.provider_capability = provider.get_capability()
         self._on_session_ready = on_session_ready
 
-        self.db_path = db_path or DEFAULT_DB_PATH
-        self.terminal_store = TerminalStore(db_path=self.db_path)
-        self.lease_store = LeaseStore(db_path=self.db_path)
+        self.db_path = db_path or resolve_role_db_path(SQLiteDBRole.SANDBOX)
+        self.terminal_store = SQLiteTerminalRepo(db_path=self.db_path)
+        self.lease_store = SQLiteLeaseRepo(db_path=self.db_path)
+
+        from storage.providers.sqlite.chat_session_repo import SQLiteChatSessionRepo
         self.session_manager = ChatSessionManager(
             provider=provider,
             db_path=self.db_path,
             default_policy=ChatSessionPolicy(),
+            chat_session_repo=SQLiteChatSessionRepo(db_path=self.db_path),
         )
 
         from sandbox.volume import SandboxVolume
@@ -80,6 +84,26 @@ class SandboxManager:
             provider=provider,
             provider_capability=self.provider_capability,
         )
+
+    def _get_lease(self, lease_id: str):
+        """Get lease as domain object, or None."""
+        row = self.lease_store.get(lease_id)
+        if row is None:
+            return None
+        return lease_from_row(row, self.lease_store.db_path)
+
+    def _create_lease(self, lease_id: str, provider_name: str, volume_id: str | None = None):
+        """Create lease and return as domain object."""
+        row = self.lease_store.create(lease_id, provider_name, volume_id=volume_id)
+        return lease_from_row(row, self.lease_store.db_path)
+
+    def get_terminal(self, thread_id: str):
+        """Public API: get active terminal as domain object."""
+        return self._get_active_terminal(thread_id)
+
+    def get_lease(self, lease_id: str):
+        """Public API: get lease as domain object."""
+        return self._get_lease(lease_id)
 
     def _default_terminal_cwd(self) -> str:
         return resolve_provider_cwd(self.provider)
@@ -93,7 +117,7 @@ class SandboxManager:
         terminal = self._get_active_terminal(thread_id)
         if not terminal:
             raise ValueError(f"No active terminal for thread {thread_id}")
-        lease = self.lease_store.get(terminal.lease_id)
+        lease = self._get_lease(terminal.lease_id)
         if not lease or not lease.volume_id:
             raise ValueError(f"No volume for thread {thread_id}")
 
@@ -179,9 +203,9 @@ class SandboxManager:
             )
 
     def _get_active_terminal(self, thread_id: str):
-        terminal = self.terminal_store.get_active(thread_id)
-        if terminal:
-            return terminal
+        row = self.terminal_store.get_active(thread_id)
+        if row:
+            return terminal_from_row(row, self.terminal_store.db_path)
         thread_terminals = self.terminal_store.list_by_thread(thread_id)
         # @@@thread-pointer-consistency - If terminals exist but no active pointer, DB is inconsistent and must fail loudly.
         if thread_terminals:
@@ -195,7 +219,8 @@ class SandboxManager:
         return self.session_manager.get(thread_id, terminal.terminal_id)
 
     def _get_thread_terminals(self, thread_id: str):
-        return self.terminal_store.list_by_thread(thread_id)
+        rows = self.terminal_store.list_by_thread(thread_id)
+        return [terminal_from_row(row, self.terminal_store.db_path) for row in rows]
 
     def _get_thread_lease(self, thread_id: str):
         terminals = self._get_thread_terminals(thread_id)
@@ -206,7 +231,7 @@ class SandboxManager:
         if len(lease_ids) != 1:
             raise RuntimeError(f"Thread {thread_id} has inconsistent lease_ids: {sorted(lease_ids)}")
         lease_id = next(iter(lease_ids))
-        lease = self.lease_store.get(lease_id)
+        lease = self._get_lease(lease_id)
         if lease is None:
             return None
         self._assert_lease_provider(lease, thread_id)
@@ -216,7 +241,7 @@ class SandboxManager:
         terminals = self._get_thread_terminals(thread_id)
         if not terminals:
             return False
-        lease = self.lease_store.get(terminals[0].lease_id)
+        lease = self._get_lease(terminals[0].lease_id)
         return bool(lease and lease.provider_name == self.provider.name)
 
     def resolve_volume_source(self, thread_id: str):
@@ -228,7 +253,7 @@ class SandboxManager:
         terminal = self._get_active_terminal(thread_id)
         if not terminal:
             raise ValueError(f"No active terminal for thread {thread_id}")
-        lease = self.lease_store.get(terminal.lease_id)
+        lease = self._get_lease(terminal.lease_id)
         if not lease or not lease.volume_id:
             raise ValueError(f"No volume for thread {thread_id}")
         repo = SQLiteSandboxVolumeRepo()
@@ -267,6 +292,8 @@ class SandboxManager:
 
     def close(self):
         self.session_manager.close(reason="manager_close")
+        self.terminal_store.close()
+        self.lease_store.close()
 
     def get_sandbox(self, thread_id: str, bind_mounts: list | None = None) -> SandboxCapability:
         from sandbox.thread_context import set_current_thread_id
@@ -293,18 +320,21 @@ class SandboxManager:
         if not terminal:
             terminal_id = f"term-{uuid.uuid4().hex[:12]}"
             lease_id = f"lease-{uuid.uuid4().hex[:12]}"
-            lease = self.lease_store.create(lease_id, self.provider.name)
+            lease = self._create_lease(lease_id, self.provider.name)
             initial_cwd = self._default_terminal_cwd()
-            terminal = self.terminal_store.create(
-                terminal_id=terminal_id,
-                thread_id=thread_id,
-                lease_id=lease_id,
-                initial_cwd=initial_cwd,
+            terminal = terminal_from_row(
+                self.terminal_store.create(
+                    terminal_id=terminal_id,
+                    thread_id=thread_id,
+                    lease_id=lease_id,
+                    initial_cwd=initial_cwd,
+                ),
+                self.terminal_store.db_path,
             )
         else:
-            lease = self.lease_store.get(terminal.lease_id)
+            lease = self._get_lease(terminal.lease_id)
             if not lease:
-                lease = self.lease_store.create(terminal.lease_id, self.provider.name)
+                lease = self._create_lease(terminal.lease_id, self.provider.name)
             self._assert_lease_provider(lease, thread_id)
 
         # Stamp bind_mounts on lease so lazy creation paths pick them up
@@ -339,24 +369,28 @@ class SandboxManager:
 
 
     def create_background_command_session(self, thread_id: str, initial_cwd: str) -> Any:
-        default_terminal = self.terminal_store.get_default(thread_id)
-        if default_terminal is None:
+        default_row = self.terminal_store.get_default(thread_id)
+        if default_row is None:
             # Fallback: pointer row may predate default_terminal_id tracking; try active terminal
-            default_terminal = self.terminal_store.get_active(thread_id)
-        if default_terminal is None:
+            default_row = self.terminal_store.get_active(thread_id)
+        if default_row is None:
             raise RuntimeError(f"Thread {thread_id} has no default terminal")
-        lease = self.lease_store.get(default_terminal.lease_id)
+        default_terminal = terminal_from_row(default_row, self.terminal_store.db_path)
+        lease = self._get_lease(default_terminal.lease_id)
         if lease is None:
             raise RuntimeError(f"Missing lease {default_terminal.lease_id} for thread {thread_id}")
         self._assert_lease_provider(lease, thread_id)
 
         inherited = default_terminal.get_state()
         terminal_id = f"term-{uuid.uuid4().hex[:12]}"
-        terminal = self.terminal_store.create(
-            terminal_id=terminal_id,
-            thread_id=thread_id,
-            lease_id=lease.lease_id,
-            initial_cwd=initial_cwd,
+        terminal = terminal_from_row(
+            self.terminal_store.create(
+                terminal_id=terminal_id,
+                thread_id=thread_id,
+                lease_id=lease.lease_id,
+                initial_cwd=initial_cwd,
+            ),
+            self.terminal_store.db_path,
         )
         # @@@async-terminal-inherit-state - non-blocking commands fork from default terminal cwd/env snapshot.
         terminal.update_state(
@@ -476,8 +510,9 @@ class SandboxManager:
                 continue
 
             terminal_id = row.get("terminal_id")
-            terminal = self.terminal_store.get_by_id(str(terminal_id)) if terminal_id else None
-            lease = self.lease_store.get(terminal.lease_id) if terminal else None
+            terminal_row = self.terminal_store.get_by_id(str(terminal_id)) if terminal_id else None
+            terminal = terminal_from_row(terminal_row, self.terminal_store.db_path) if terminal_row else None
+            lease = self._get_lease(terminal.lease_id) if terminal else None
             if lease and lease.provider_name != self.provider.name:
                 continue
 
@@ -628,7 +663,8 @@ class SandboxManager:
 
     def destroy_thread_resources(self, thread_id: str) -> bool:
         """Destroy physical resources and detach thread from terminal/lease records."""
-        terminals = self.terminal_store.list_by_thread(thread_id)
+        terminal_rows = self.terminal_store.list_by_thread(thread_id)
+        terminals = [terminal_from_row(r, self.terminal_store.db_path) for r in terminal_rows]
         if not terminals:
             return False
 
@@ -655,7 +691,7 @@ class SandboxManager:
             self.terminal_store.delete(terminal.terminal_id)
 
         for lease_id in lease_ids:
-            lease = self.lease_store.get(lease_id)
+            lease = self._get_lease(lease_id)
             if not lease:
                 raise RuntimeError(f"Missing lease {lease_id} for thread {thread_id}")
             lease.destroy_instance(self.provider)
@@ -692,7 +728,7 @@ class SandboxManager:
 
         for lease_row in self.lease_store.list_by_provider(self.provider.name):
             lease_id = lease_row["lease_id"]
-            lease = self.lease_store.get(lease_id)
+            lease = self._get_lease(lease_id)
             if not lease:
                 continue
 

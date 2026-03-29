@@ -12,10 +12,11 @@ from unittest.mock import MagicMock
 import pytest
 
 from sandbox.chat_session import ChatSessionManager
-from sandbox.lease import LeaseStore
+from storage.providers.sqlite.lease_repo import SQLiteLeaseRepo
 from sandbox.manager import SandboxManager
 from sandbox.provider import ProviderCapability, SessionInfo
-from sandbox.terminal import TerminalStore
+from sandbox.terminal import terminal_from_row
+from storage.providers.sqlite.terminal_repo import SQLiteTerminalRepo
 
 
 @pytest.fixture
@@ -134,13 +135,14 @@ class TestFullArchitectureFlow:
         assert capability._session.runtime is not None
 
         # Verify persistence
-        terminal_store = TerminalStore(db_path=temp_db)
-        terminal = terminal_store.get(thread_id)
-        assert terminal is not None
+        terminal_store = SQLiteTerminalRepo(db_path=temp_db)
+        terminal_row = terminal_store.get_active(thread_id)
+        assert terminal_row is not None
 
-        lease_store = LeaseStore(db_path=temp_db)
-        lease = lease_store.get(terminal.lease_id)
-        assert lease is not None
+        lease_repo = SQLiteLeaseRepo(db_path=temp_db)
+        lease_row = lease_repo.get(terminal_row["lease_id"])
+        lease_repo.close()
+        assert lease_row is not None
 
     def test_get_sandbox_reuses_existing_session(self, sandbox_manager):
         """Test that get_sandbox reuses existing session."""
@@ -212,10 +214,12 @@ class TestFullArchitectureFlow:
         assert result.exit_code == 0
         assert "bg-terminal" in result.stdout
 
-        terminals = sandbox_manager.terminal_store.list_by_thread(thread_id)
-        assert len(terminals) == 2
-        default_terminal = sandbox_manager.terminal_store.get_default(thread_id)
-        assert default_terminal is not None
+        terminal_rows = sandbox_manager.terminal_store.list_by_thread(thread_id)
+        assert len(terminal_rows) == 2
+        terminals = [terminal_from_row(r, sandbox_manager.terminal_store.db_path) for r in terminal_rows]
+        default_row = sandbox_manager.terminal_store.get_default(thread_id)
+        assert default_row is not None
+        default_terminal = terminal_from_row(default_row, sandbox_manager.terminal_store.db_path)
         assert default_terminal.terminal_id == default_terminal_id
 
         background_terminal = next(t for t in terminals if t.terminal_id != default_terminal_id)
@@ -310,7 +314,7 @@ class TestFullArchitectureFlow:
         lease_id1 = capability1._session.lease.lease_id
 
         # Manually create second terminal with same lease
-        terminal_store = TerminalStore(db_path=temp_db)
+        terminal_store = SQLiteTerminalRepo(db_path=temp_db)
         terminal2 = terminal_store.create(
             terminal_id="term-shared",
             thread_id=thread_id2,
@@ -422,18 +426,18 @@ class TestSessionLifecycle:
         capability = sandbox_manager.get_sandbox(thread_id)
         asyncio.run(capability.command.execute_async("echo bg"))
 
-        terminals = sandbox_manager.terminal_store.list_by_thread(thread_id)
-        assert len(terminals) == 2
+        terminal_rows = sandbox_manager.terminal_store.list_by_thread(thread_id)
+        assert len(terminal_rows) == 2
 
         assert sandbox_manager.pause_session(thread_id)
-        for terminal in terminals:
-            session = sandbox_manager.session_manager.get(thread_id, terminal.terminal_id)
+        for row in terminal_rows:
+            session = sandbox_manager.session_manager.get(thread_id, row["terminal_id"])
             assert session is not None
             assert session.status == "paused"
 
         assert sandbox_manager.resume_session(thread_id)
-        for terminal in terminals:
-            session = sandbox_manager.session_manager.get(thread_id, terminal.terminal_id)
+        for row in terminal_rows:
+            session = sandbox_manager.session_manager.get(thread_id, row["terminal_id"])
             assert session is not None
             assert session.status == "active"
 
@@ -458,14 +462,14 @@ class TestSessionLifecycle:
         capability = sandbox_manager.get_sandbox(thread_id)
         asyncio.run(capability.command.execute_async("echo bg"))
 
-        terminals_before = sandbox_manager.terminal_store.list_by_thread(thread_id)
-        assert len(terminals_before) == 2
+        terminal_rows_before = sandbox_manager.terminal_store.list_by_thread(thread_id)
+        assert len(terminal_rows_before) == 2
 
         assert sandbox_manager.destroy_session(thread_id)
         assert sandbox_manager.terminal_store.list_by_thread(thread_id) == []
         assert all(
-            sandbox_manager.session_manager.get(thread_id, terminal.terminal_id) is None
-            for terminal in terminals_before
+            sandbox_manager.session_manager.get(thread_id, row["terminal_id"]) is None
+            for row in terminal_rows_before
         )
 
 
@@ -530,7 +534,7 @@ class TestErrorHandling:
         terminal_id = capability._session.terminal.terminal_id
 
         # Delete terminal from DB (but not session)
-        terminal_store = TerminalStore(db_path=temp_db)
+        terminal_store = SQLiteTerminalRepo(db_path=temp_db)
         terminal_store.delete(terminal_id)
 
         # Delete session to force full recreation
@@ -540,7 +544,7 @@ class TestErrorHandling:
         capability2 = sandbox_manager.get_sandbox(thread_id)
 
         # Terminal should exist in DB now
-        terminal2 = terminal_store.get(thread_id)
+        terminal2 = terminal_store.get_active(thread_id)
         assert terminal2 is not None
 
     def test_missing_lease_recreates_with_same_id(self, sandbox_manager, temp_db):
@@ -557,12 +561,13 @@ class TestErrorHandling:
         lease_id = capability._session.lease.lease_id
 
         # Delete lease from DB
-        lease_store = LeaseStore(db_path=temp_db)
-        lease_store.delete(lease_id)
+        lease_repo = SQLiteLeaseRepo(db_path=temp_db)
+        lease_repo.delete(lease_id)
+        lease_repo.close()
 
         # Delete session AND terminal to force full recreation
         sandbox_manager.session_manager.delete(capability._session.session_id)
-        terminal_store = TerminalStore(db_path=temp_db)
+        terminal_store = SQLiteTerminalRepo(db_path=temp_db)
         terminal_store.delete(capability._session.terminal.terminal_id)
 
         # Get sandbox again - creates new terminal + lease

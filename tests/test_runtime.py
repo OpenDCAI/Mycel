@@ -11,7 +11,8 @@ from unittest.mock import MagicMock
 import pytest
 
 from sandbox.chat_session import ChatSessionManager
-from sandbox.lease import LeaseStore, SandboxInstance
+from sandbox.lease import SandboxInstance, lease_from_row
+from storage.providers.sqlite.lease_repo import SQLiteLeaseRepo
 from sandbox.provider import ProviderExecResult
 from sandbox.interfaces.executor import ExecuteResult
 from sandbox.runtime import (
@@ -21,7 +22,8 @@ from sandbox.runtime import (
     _extract_state_from_output,
     _normalize_pty_result,
 )
-from sandbox.terminal import TerminalState, TerminalStore
+from sandbox.terminal import TerminalState, terminal_from_row
+from storage.providers.sqlite.terminal_repo import SQLiteTerminalRepo
 
 
 @pytest.fixture
@@ -35,14 +37,28 @@ def temp_db():
 
 @pytest.fixture
 def terminal_store(temp_db):
-    """Create TerminalStore with temp database."""
-    return TerminalStore(db_path=temp_db)
+    """Create SQLiteTerminalRepo with temp database."""
+    return SQLiteTerminalRepo(db_path=temp_db)
+
+
+class _LeaseStoreCompat:
+    """Thin wrapper: repo returns dicts, tests expect domain objects from create/get."""
+    def __init__(self, repo: SQLiteLeaseRepo):
+        self._repo = repo
+    def create(self, lease_id, provider_name, **kw):
+        row = self._repo.create(lease_id, provider_name, **kw)
+        return lease_from_row(row, self._repo.db_path)
+    def get(self, lease_id):
+        row = self._repo.get(lease_id)
+        return lease_from_row(row, self._repo.db_path) if row else None
+    def __getattr__(self, name):
+        return getattr(self._repo, name)
 
 
 @pytest.fixture
 def lease_store(temp_db):
-    """Create LeaseStore with temp database."""
-    return LeaseStore(db_path=temp_db)
+    """Create SQLiteLeaseRepo with compat wrapper for tests."""
+    return _LeaseStoreCompat(SQLiteLeaseRepo(db_path=temp_db))
 
 
 @pytest.fixture
@@ -81,7 +97,7 @@ class TestLocalPersistentShellRuntime:
     @pytest.mark.asyncio
     async def test_execute_simple_command(self, terminal_store, lease_store):
         """Test executing a simple command."""
-        terminal = terminal_store.create("term-1", "thread-1", "lease-1", "/tmp")
+        terminal = terminal_from_row(terminal_store.create("term-1", "thread-1", "lease-1", "/tmp"), terminal_store.db_path)
         lease = lease_store.create("lease-1", "local")
 
         runtime = LocalPersistentShellRuntime(terminal, lease)
@@ -95,7 +111,7 @@ class TestLocalPersistentShellRuntime:
     @pytest.mark.asyncio
     async def test_execute_updates_cwd(self, terminal_store, lease_store):
         """Test that cwd is updated after command execution."""
-        terminal = terminal_store.create("term-1", "thread-1", "lease-1", "/tmp")
+        terminal = terminal_from_row(terminal_store.create("term-1", "thread-1", "lease-1", "/tmp"), terminal_store.db_path)
         lease = lease_store.create("lease-1", "local")
 
         runtime = LocalPersistentShellRuntime(terminal, lease)
@@ -110,7 +126,7 @@ class TestLocalPersistentShellRuntime:
     @pytest.mark.asyncio
     async def test_state_persists_across_commands(self, terminal_store, lease_store):
         """Test that state persists across multiple commands."""
-        terminal = terminal_store.create("term-1", "thread-1", "lease-1", "/tmp")
+        terminal = terminal_from_row(terminal_store.create("term-1", "thread-1", "lease-1", "/tmp"), terminal_store.db_path)
         lease = lease_store.create("lease-1", "local")
 
         runtime = LocalPersistentShellRuntime(terminal, lease)
@@ -126,7 +142,7 @@ class TestLocalPersistentShellRuntime:
     @pytest.mark.asyncio
     async def test_execute_with_timeout(self, terminal_store, lease_store):
         """Test command timeout."""
-        terminal = terminal_store.create("term-1", "thread-1", "lease-1", "/tmp")
+        terminal = terminal_from_row(terminal_store.create("term-1", "thread-1", "lease-1", "/tmp"), terminal_store.db_path)
         lease = lease_store.create("lease-1", "local")
 
         runtime = LocalPersistentShellRuntime(terminal, lease)
@@ -140,7 +156,7 @@ class TestLocalPersistentShellRuntime:
     @pytest.mark.asyncio
     async def test_close_terminates_session(self, terminal_store, lease_store):
         """Test that close terminates the shell session."""
-        terminal = terminal_store.create("term-1", "thread-1", "lease-1", "/tmp")
+        terminal = terminal_from_row(terminal_store.create("term-1", "thread-1", "lease-1", "/tmp"), terminal_store.db_path)
         lease = lease_store.create("lease-1", "local")
 
         runtime = LocalPersistentShellRuntime(terminal, lease)
@@ -159,7 +175,7 @@ class TestLocalPersistentShellRuntime:
     @pytest.mark.asyncio
     async def test_state_version_increments(self, terminal_store, lease_store):
         """Test that state version increments after updates."""
-        terminal = terminal_store.create("term-1", "thread-1", "lease-1", "/tmp")
+        terminal = terminal_from_row(terminal_store.create("term-1", "thread-1", "lease-1", "/tmp"), terminal_store.db_path)
         lease = lease_store.create("lease-1", "local")
 
         runtime = LocalPersistentShellRuntime(terminal, lease)
@@ -181,7 +197,7 @@ class TestRemoteWrappedRuntime:
     @pytest.mark.asyncio
     async def test_execute_simple_command(self, terminal_store, lease_store, mock_provider):
         """Test executing a simple command via provider."""
-        terminal = terminal_store.create("term-1", "thread-1", "lease-1", "/root")
+        terminal = terminal_from_row(terminal_store.create("term-1", "thread-1", "lease-1", "/root"), terminal_store.db_path)
         lease = lease_store.create("lease-1", "test-provider")
 
         # Mock lease to return instance
@@ -210,7 +226,7 @@ class TestRemoteWrappedRuntime:
     @pytest.mark.asyncio
     async def test_hydrate_state_on_first_execution(self, terminal_store, lease_store, mock_provider):
         """Test that state is hydrated on first execution."""
-        terminal = terminal_store.create("term-1", "thread-1", "lease-1", "/home/user")
+        terminal = terminal_from_row(terminal_store.create("term-1", "thread-1", "lease-1", "/home/user"), terminal_store.db_path)
         lease = lease_store.create("lease-1", "test-provider")
 
         # Mock lease to return instance
@@ -239,7 +255,7 @@ class TestRemoteWrappedRuntime:
     @pytest.mark.asyncio
     async def test_execute_updates_cwd(self, terminal_store, lease_store, mock_provider):
         """Test that cwd is updated after command execution."""
-        terminal = terminal_store.create("term-1", "thread-1", "lease-1", "/root")
+        terminal = terminal_from_row(terminal_store.create("term-1", "thread-1", "lease-1", "/root"), terminal_store.db_path)
         lease = lease_store.create("lease-1", "test-provider")
 
         # Mock lease to return instance
@@ -273,7 +289,7 @@ class TestRemoteWrappedRuntime:
     @pytest.mark.asyncio
     async def test_close_is_noop(self, terminal_store, lease_store, mock_provider):
         """Test that close is a no-op for remote runtime."""
-        terminal = terminal_store.create("term-1", "thread-1", "lease-1", "/root")
+        terminal = terminal_from_row(terminal_store.create("term-1", "thread-1", "lease-1", "/root"), terminal_store.db_path)
         lease = lease_store.create("lease-1", "test-provider")
 
         runtime = RemoteWrappedRuntime(terminal, lease, mock_provider)
@@ -284,7 +300,7 @@ class TestRemoteWrappedRuntime:
     @pytest.mark.asyncio
     async def test_infra_error_retries_once(self, terminal_store, lease_store, mock_provider):
         """Infra execution error should trigger one recovery retry."""
-        terminal = terminal_store.create("term-1", "thread-1", "lease-1", "/root")
+        terminal = terminal_from_row(terminal_store.create("term-1", "thread-1", "lease-1", "/root"), terminal_store.db_path)
         lease = lease_store.create("lease-1", "test-provider")
 
         instance = SandboxInstance(
@@ -319,7 +335,7 @@ class TestRemoteWrappedRuntime:
     @pytest.mark.asyncio
     async def test_non_infra_error_no_retry(self, terminal_store, lease_store, mock_provider):
         """Normal command failure should not trigger recovery retry."""
-        terminal = terminal_store.create("term-1", "thread-1", "lease-1", "/root")
+        terminal = terminal_from_row(terminal_store.create("term-1", "thread-1", "lease-1", "/root"), terminal_store.db_path)
         lease = lease_store.create("lease-1", "test-provider")
 
         instance = SandboxInstance(
@@ -347,7 +363,7 @@ class TestRemoteWrappedRuntime:
     @pytest.mark.asyncio
     async def test_daytona_transient_no_ip_error_retries_once(self, terminal_store, lease_store, mock_provider):
         """Transient Daytona PTY bootstrap error should be treated as infra and retried once."""
-        terminal = terminal_store.create("term-1", "thread-1", "lease-1", "/root")
+        terminal = terminal_from_row(terminal_store.create("term-1", "thread-1", "lease-1", "/root"), terminal_store.db_path)
         lease = lease_store.create("lease-1", "test-provider")
 
         instance = SandboxInstance(
@@ -389,7 +405,7 @@ class TestRuntimeIntegration:
     @pytest.mark.asyncio
     async def test_local_runtime_full_lifecycle(self, terminal_store, lease_store):
         """Test complete local runtime lifecycle."""
-        terminal = terminal_store.create("term-1", "thread-1", "lease-1", "/tmp")
+        terminal = terminal_from_row(terminal_store.create("term-1", "thread-1", "lease-1", "/tmp"), terminal_store.db_path)
         lease = lease_store.create("lease-1", "local")
 
         runtime = LocalPersistentShellRuntime(terminal, lease)
@@ -416,7 +432,7 @@ class TestRuntimeIntegration:
     @pytest.mark.asyncio
     async def test_state_persists_across_runtime_instances(self, terminal_store, lease_store):
         """Test that terminal state persists when runtime is recreated."""
-        terminal = terminal_store.create("term-1", "thread-1", "lease-1", "/tmp")
+        terminal = terminal_from_row(terminal_store.create("term-1", "thread-1", "lease-1", "/tmp"), terminal_store.db_path)
         lease = lease_store.create("lease-1", "local")
 
         # First runtime
@@ -425,7 +441,7 @@ class TestRuntimeIntegration:
         await runtime1.close()
 
         # Retrieve terminal again
-        terminal2 = terminal_store.get("thread-1")
+        terminal2 = terminal_from_row(terminal_store.get_active("thread-1"), terminal_store.db_path)
         assert terminal2.get_state().cwd == "/"
 
         # Second runtime should start with persisted state
@@ -439,7 +455,7 @@ class TestRuntimeIntegration:
 def test_docker_provider_create_runtime(terminal_store, lease_store):
     pytest.importorskip("docker")
     from sandbox.providers.docker import DockerProvider, DockerPtyRuntime as DockerPtyRuntimeDirect
-    terminal = terminal_store.create("term-1", "thread-1", "lease-1", "/tmp")
+    terminal = terminal_from_row(terminal_store.create("term-1", "thread-1", "lease-1", "/tmp"), terminal_store.db_path)
     lease = lease_store.create("lease-1", "docker")
     provider = DockerProvider(image="ubuntu:latest", mount_path="/workspace")
     runtime = provider.create_runtime(terminal, lease)
@@ -448,7 +464,7 @@ def test_docker_provider_create_runtime(terminal_store, lease_store):
 
 def test_local_provider_create_runtime(terminal_store, lease_store):
     from sandbox.providers.local import LocalPersistentShellRuntime as LocalRuntimeDirect, LocalSessionProvider
-    terminal = terminal_store.create("term-2", "thread-2", "lease-2", "/tmp")
+    terminal = terminal_from_row(terminal_store.create("term-2", "thread-2", "lease-2", "/tmp"), terminal_store.db_path)
     lease = lease_store.create("lease-2", "local")
     provider = LocalSessionProvider()
     runtime = provider.create_runtime(terminal, lease)
@@ -457,7 +473,7 @@ def test_local_provider_create_runtime(terminal_store, lease_store):
 
 @pytest.mark.asyncio
 async def test_daytona_runtime_streams_running_output(terminal_store, lease_store):
-    terminal = terminal_store.create("term-2", "thread-2", "lease-2", "/tmp")
+    terminal = terminal_from_row(terminal_store.create("term-2", "thread-2", "lease-2", "/tmp"), terminal_store.db_path)
     lease = lease_store.create("lease-2", "daytona")
     provider = MagicMock()
     from sandbox.providers.daytona import DaytonaSessionRuntime
@@ -499,7 +515,7 @@ async def test_daytona_runtime_streams_running_output(terminal_store, lease_stor
 
 @pytest.mark.asyncio
 async def test_running_command_survives_runtime_reload_without_false_failure(terminal_store, lease_store):
-    terminal = terminal_store.create("term-running-db", "thread-running-db", "lease-running-db", "/tmp")
+    terminal = terminal_from_row(terminal_store.create("term-running-db", "thread-running-db", "lease-running-db", "/tmp"), terminal_store.db_path)
     lease = lease_store.create("lease-running-db", "local")
     provider = MagicMock()
     from sandbox.providers.local import LocalPersistentShellRuntime
@@ -528,7 +544,7 @@ async def test_running_command_survives_runtime_reload_without_false_failure(ter
 @pytest.mark.asyncio
 async def test_daytona_runtime_hydrates_once_per_pty_session(terminal_store, lease_store):
     pytest.importorskip("daytona_sdk")
-    terminal = terminal_store.create("term-3", "thread-3", "lease-3", "/tmp")
+    terminal = terminal_from_row(terminal_store.create("term-3", "thread-3", "lease-3", "/tmp"), terminal_store.db_path)
     lease = lease_store.create("lease-3", "daytona")
     instance = SandboxInstance(
         instance_id="inst-daytona-test",
@@ -649,7 +665,7 @@ def test_normalize_pty_result_strips_prompt_echo_and_tail_prompt():
 @pytest.mark.asyncio
 async def test_daytona_runtime_sanitizes_corrupted_terminal_state_before_create(terminal_store, lease_store):
     pytest.importorskip("daytona_sdk")
-    terminal = terminal_store.create("term-4", "thread-4", "lease-4", "/tmp")
+    terminal = terminal_from_row(terminal_store.create("term-4", "thread-4", "lease-4", "/tmp"), terminal_store.db_path)
     # Simulate legacy-corrupted snapshot.
     terminal.update_state(
         TerminalState(
