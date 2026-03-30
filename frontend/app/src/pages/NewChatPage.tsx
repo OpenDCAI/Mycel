@@ -430,7 +430,8 @@ export default function NewChatPage({ mode = "member" }: { mode?: "member" | "ne
           environmentControl={{
             panelClassName: "max-h-[calc(100vh-4rem)]",
             applyLabel: configStep === 3 ? "确认" : (configStep === 1 ? "下一步" : (localRecipeSelected ? "下一步" : "确认")),
-            applyDisabled: configStep === 3 && workspaceRequired,
+            applyDisabled: (configStep === 2 && createMode === "existing" && !selectedLeaseId)
+              || (configStep === 3 && workspaceRequired),
             showBack: configStep > 1,
             backLabel: "返回上一步",
             onBack: stepBack,
@@ -493,7 +494,7 @@ export default function NewChatPage({ mode = "member" }: { mode?: "member" | "ne
                   {configStep === 1 ? (
                     <div className="space-y-3 rounded-2xl border border-border bg-card p-4">
                       <div>
-                        <div className="text-sm font-medium text-foreground">选择创建方式和 Provider</div>
+                        <div className="text-sm font-medium text-foreground">先确定模型与沙盒来源</div>
                       </div>
 
                       <div>
