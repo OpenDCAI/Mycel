@@ -249,7 +249,8 @@ export default function NewChatPage({ mode = "member" }: { mode?: "member" | "ne
     && selectedRecipe?.provider_type === "local"
     && !(selectedWorkspace || settings?.default_workspace || "");
 
-  async function handleSend(message: string, _sandbox: string, model: string, workspace?: string) {
+  async function handleSend(message: string, model: string) {
+    const workspace = selectedWorkspace || settings?.default_workspace || undefined;
     if (createMode === "new" && selectedRecipeSnapshot?.provider_type === "local" && !workspace && !hasWorkspace) {
       setShowWorkspaceSetup(true);
       return;
@@ -297,7 +298,7 @@ export default function NewChatPage({ mode = "member" }: { mode?: "member" | "ne
     setShowWorkspaceSetup(false);
   }
 
-  function summarizeEnvironment(_sandboxValue: string, workspaceValue: string) {
+  function summarizeEnvironment() {
     if (createMode === "existing") {
       if (!selectedLease) return "复用旧沙盒";
       return `${selectedLease.provider_name} · ${selectedLease.recipe_name}`;
@@ -306,7 +307,7 @@ export default function NewChatPage({ mode = "member" }: { mode?: "member" | "ne
     if (!recipe) return "选择 recipe";
     const featureSuffix = enabledFeatureLabels(recipe).join(" · ");
     if (recipe.provider_type !== "local") return [recipe.name, featureSuffix].filter(Boolean).join(" · ");
-    const activeWorkspace = selectedWorkspace || workspaceValue || settings?.default_workspace || "";
+    const activeWorkspace = selectedWorkspace || settings?.default_workspace || "";
     if (!activeWorkspace) return [recipe.name, featureSuffix, "选择工作区"].filter(Boolean).join(" · ");
     const parts = activeWorkspace.split("/").filter(Boolean);
     return [recipe.name, featureSuffix, parts.at(-1) ?? activeWorkspace].filter(Boolean).join(" · ");
@@ -450,16 +451,7 @@ export default function NewChatPage({ mode = "member" }: { mode?: "member" | "ne
         </div>
 
         <CenteredInputBox
-          sandboxTypes={sandboxTypes}
-          defaultSandbox={
-            createMode === "new"
-              ? (selectedProviderConfig || selectedSandbox)
-              : ((selectedLease?.provider_name ?? selectedProviderConfig) || selectedSandbox)
-          }
-          defaultWorkspace={selectedWorkspace || settings?.default_workspace || undefined}
-          workspaceSelectionEnabled={false}
           defaultModel={settings?.default_model || "leon:large"}
-          recentWorkspaces={settings?.recent_workspaces || []}
           environmentControl={{
             panelClassName: "max-h-[calc(100vh-4rem)]",
             applyLabel: configStep === 3 ? "确认" : (configStep === 1 ? "下一步" : (localRecipeSelected ? "下一步" : "确认")),
@@ -468,7 +460,7 @@ export default function NewChatPage({ mode = "member" }: { mode?: "member" | "ne
             showBack: configStep > 1,
             backLabel: "返回上一步",
             onBack: stepBack,
-            renderSummary: ({ sandbox, workspace }) => summarizeEnvironment(sandbox, workspace),
+            summary: summarizeEnvironment(),
             onOpen: openConfigSnapshot,
             onCancel: cancelConfigChanges,
             onApply: applyConfigChanges,
