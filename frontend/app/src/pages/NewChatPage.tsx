@@ -84,7 +84,7 @@ export default function NewChatPage({ mode = "member" }: { mode?: "member" | "ne
   const [createMode, setCreateMode] = useState<"new" | "existing">("new");
   const [leaseOptions, setLeaseOptions] = useState<UserLeaseSummary[]>([]);
   const [leaseError, setLeaseError] = useState<string | null>(null);
-  const [leaseLoading, setLeaseLoading] = useState(false);
+  const [leaseLoading, setLeaseLoading] = useState(true);
   const [selectedLeaseId, setSelectedLeaseId] = useState<string>("");
   const [selectedRecipeId, setSelectedRecipeId] = useState<string>("");
   const [selectedRecipeFeatures, setSelectedRecipeFeatures] = useState<Record<string, boolean>>({});
@@ -218,10 +218,11 @@ export default function NewChatPage({ mode = "member" }: { mode?: "member" | "ne
   }, [createModeInitialized, leaseLoading, leaseOptions.length]);
 
   useEffect(() => {
+    if (leaseLoading) return;
     if (selectedProviderConfig) return;
     const nextConfig = leaseOptions[0]?.provider_name || providerConfigOptions[0]?.value || selectedSandbox || "local";
     if (nextConfig) setSelectedProviderConfig(nextConfig);
-  }, [leaseOptions, providerConfigOptions, selectedProviderConfig, selectedSandbox]);
+  }, [leaseLoading, leaseOptions, providerConfigOptions, selectedProviderConfig, selectedSandbox]);
 
   useEffect(() => {
     if (!selectedWorkspace && settings?.default_workspace) {
@@ -386,6 +387,14 @@ export default function NewChatPage({ mode = "member" }: { mode?: "member" | "ne
 
   const selectedProviderType = providerConfigOptions.find((item) => item.value === selectedProviderConfig)?.providerType
     || providerTypeFromName(selectedProviderConfig || "local");
+  useEffect(() => {
+    if (createMode !== "new") return;
+    const firstMatchingRecipe = recipeOptions.find((item) => item.recipe.provider_type === selectedProviderType);
+    if (!firstMatchingRecipe) return;
+    if (selectedRecipe?.provider_type === selectedProviderType) return;
+    setSelectedRecipeId(firstMatchingRecipe.value);
+  }, [createMode, recipeOptions, selectedProviderType, selectedRecipe?.provider_type]);
+
   const providerSummaryLabel = selectedProviderConfig
     ? providerConfigLabel(selectedProviderConfig)
     : "未选择 provider";
