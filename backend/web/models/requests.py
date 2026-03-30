@@ -8,8 +8,8 @@ from sandbox.config import MountSpec
 class RecipeSnapshotRequest(BaseModel):
     id: str
     name: str
-    provider_name: str
     provider_type: str
+    desc: str | None = None
     features: dict[str, bool] = Field(default_factory=dict)
 
 

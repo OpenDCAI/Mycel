@@ -78,7 +78,6 @@ export interface RecipeSnapshot {
   id: string;
   name: string;
   desc?: string;
-  provider_name: string;
   provider_type: string;
   features: Record<string, boolean>;
   configurable_features?: Record<string, boolean>;

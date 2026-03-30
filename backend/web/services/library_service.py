@@ -3,11 +3,13 @@
 import json
 import shutil
 import time
+import uuid
 from pathlib import Path
 from typing import Any
 
 from backend.web.core.paths import library_dir
 from backend.web.services import sandbox_service
+from sandbox.recipes import FEATURE_CATALOG, normalize_recipe_snapshot
 
 LIBRARY_DIR = library_dir()
 
@@ -38,32 +40,64 @@ def _recipe_override_path(recipe_id: str) -> Path:
     return LIBRARY_DIR / "recipes" / f"{safe_name}.json"
 
 
+def _recipe_custom_path(recipe_id: str) -> Path:
+    safe_name = recipe_id.replace(":", "__")
+    return LIBRARY_DIR / "recipes" / f"{safe_name}.json"
+
+
+def _normalize_recipe_item(data: dict[str, Any], *, builtin: bool) -> dict[str, Any]:
+    provider_type = str(data.get("provider_type") or "").strip()
+    if not provider_type:
+        raise ValueError("recipe.provider_type is required")
+    snapshot = normalize_recipe_snapshot(provider_type, data)
+    return {
+        **snapshot,
+        "type": "recipe",
+        "provider_type": provider_type,
+        "created_at": int(data.get("created_at") or 0),
+        "updated_at": int(data.get("updated_at") or 0),
+        "available": True,
+        "builtin": builtin,
+    }
+
+
 def _merge_recipe_override(base: dict[str, Any], override: dict[str, Any] | None) -> dict[str, Any]:
     if not override:
         return base
-    merged = dict(base)
-    if "name" in override:
-        merged["name"] = override["name"]
-    if "desc" in override:
-        merged["desc"] = override["desc"]
-    if isinstance(override.get("features"), dict):
-        merged["features"] = {
-            **(base.get("features") or {}),
-            **override["features"],
-        }
-    if "updated_at" in override:
-        merged["updated_at"] = override["updated_at"]
-    merged["builtin"] = True
-    return merged
+    return _normalize_recipe_item(
+        {
+            **base,
+            **override,
+            "features": {
+                **(base.get("features") or {}),
+                **(override.get("features") or {}),
+            },
+            "created_at": base.get("created_at", 0),
+            "updated_at": override.get("updated_at", base.get("updated_at", 0)),
+        },
+        builtin=True,
+    )
 
 
 def list_library(resource_type: str) -> list[dict[str, Any]]:
     results: list[dict[str, Any]] = []
     if resource_type == "recipe":
         items = []
+        builtin_ids: set[str] = set()
         for recipe in list_default_recipes():
+            builtin_ids.add(str(recipe["id"]))
             override = _read_json(_recipe_override_path(recipe["id"]), None)
             items.append(_merge_recipe_override(recipe, override))
+        recipes_dir = LIBRARY_DIR / "recipes"
+        if recipes_dir.exists():
+            for path in sorted(recipes_dir.glob("*.json")):
+                data = _read_json(path, None)
+                if not isinstance(data, dict):
+                    continue
+                recipe_id = str(data.get("id") or "").strip()
+                if not recipe_id or recipe_id in builtin_ids:
+                    continue
+                items.append(_normalize_recipe_item(data, builtin=False))
         return items
     if resource_type == "skill":
         skills_dir = LIBRARY_DIR / "skills"
@@ -100,11 +134,38 @@ def list_library(resource_type: str) -> list[dict[str, Any]]:
 def list_default_recipes() -> list[dict[str, Any]]:
     return sandbox_service.list_default_recipes()
 
-def create_resource(resource_type: str, name: str, desc: str = "", category: str = "") -> dict[str, Any]:
+def create_resource(
+    resource_type: str,
+    name: str,
+    desc: str = "",
+    category: str = "",
+    features: dict[str, bool] | None = None,
+) -> dict[str, Any]:
     now = int(time.time() * 1000)
     cat = category or "未分类"
     if resource_type == "recipe":
-        raise ValueError("Recipes are builtin defaults and cannot be created")
+        provider_type = cat.strip()
+        if not provider_type:
+            raise ValueError("Recipe provider_type is required")
+        feature_values = {
+            key: bool(features.get(key, False)) if isinstance(features, dict) else False
+            for key in FEATURE_CATALOG
+        }
+        recipe_id = f"{provider_type}:custom:{uuid.uuid4().hex[:8]}"
+        item = _normalize_recipe_item(
+            {
+                "id": recipe_id,
+                "name": name,
+                "desc": desc,
+                "provider_type": provider_type,
+                "features": feature_values,
+                "created_at": now,
+                "updated_at": now,
+            },
+            builtin=False,
+        )
+        _write_json(_recipe_custom_path(recipe_id), item)
+        return item
     if resource_type == "skill":
         rid = name.lower().replace(" ", "-")
         skill_dir = LIBRARY_DIR / "skills" / rid
@@ -143,14 +204,21 @@ def update_resource(resource_type: str, resource_id: str, **fields: Any) -> dict
     now = int(time.time() * 1000)
     if resource_type == "recipe":
         base = next((item for item in list_default_recipes() if item["id"] == resource_id), None)
-        if base is None:
+        if base is not None:
+            override_path = _recipe_override_path(resource_id)
+            override = _read_json(override_path, {})
+            override.update(updates)
+            override["updated_at"] = now
+            _write_json(override_path, override)
+            return _merge_recipe_override(base, override)
+        custom_path = _recipe_custom_path(resource_id)
+        if not custom_path.exists():
             return None
-        override_path = _recipe_override_path(resource_id)
-        override = _read_json(override_path, {})
-        override.update(updates)
-        override["updated_at"] = now
-        _write_json(override_path, override)
-        return _merge_recipe_override(base, override)
+        current = _read_json(custom_path, {})
+        current.update(updates)
+        current["updated_at"] = now
+        _write_json(custom_path, current)
+        return _normalize_recipe_item(current, builtin=False)
     if resource_type == "skill":
         meta_path = LIBRARY_DIR / "skills" / resource_id / "meta.json"
         if not meta_path.exists():
@@ -184,11 +252,15 @@ def update_resource(resource_type: str, resource_id: str, **fields: Any) -> dict
 def delete_resource(resource_type: str, resource_id: str) -> bool:
     if resource_type == "recipe":
         base = next((item for item in list_default_recipes() if item["id"] == resource_id), None)
-        if base is None:
+        if base is not None:
+            override_path = _recipe_override_path(resource_id)
+            if override_path.exists():
+                override_path.unlink()
+            return True
+        custom_path = _recipe_custom_path(resource_id)
+        if not custom_path.exists():
             return False
-        override_path = _recipe_override_path(resource_id)
-        if override_path.exists():
-            override_path.unlink()
+        custom_path.unlink()
         return True
     if resource_type == "skill":
         target = LIBRARY_DIR / "skills" / resource_id
@@ -298,7 +370,7 @@ def get_resource_used_by(resource_type: str, resource_name: str) -> list[str]:
 def get_resource_content(resource_type: str, resource_id: str) -> str | None:
     """Read the .md content file for a skill or agent resource."""
     if resource_type == "recipe":
-        for item in list_default_recipes():
+        for item in list_library("recipe"):
             if item["id"] == resource_id:
                 return json.dumps(item, ensure_ascii=False, indent=2)
         return None

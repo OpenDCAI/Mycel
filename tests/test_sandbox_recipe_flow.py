@@ -42,26 +42,32 @@ def _make_app(member_repo: SQLiteMemberRepo, thread_repo: SQLiteThreadRepo) -> S
     )
 
 
-def test_library_recipes_expose_default_recipe_per_sandbox(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_library_recipes_expose_default_recipe_per_provider_type(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    library_root = tmp_path / "library"
+    monkeypatch.setattr(library_service, "LIBRARY_DIR", library_root)
+    library_service.ensure_library_dir()
     monkeypatch.setattr(
         library_service,
         "list_default_recipes",
         lambda: [
-            {
-                "id": "local:default",
-                "type": "recipe",
-                "name": "Local Default",
-                "desc": "Default recipe for Local",
-                "provider_name": "local",
-                "created_at": 0,
-                "updated_at": 0,
-            },
+                {
+                    "id": "local:default",
+                    "type": "recipe",
+                    "name": "Local Default",
+                    "desc": "Default recipe for Local",
+                    "provider_type": "local",
+                    "created_at": 0,
+                    "updated_at": 0,
+                },
             {
                 "id": "daytona_selfhost:default",
                 "type": "recipe",
                 "name": "Daytona Selfhost Default",
                 "desc": "Default recipe for Daytona Selfhost",
-                "provider_name": "daytona_selfhost",
+                "provider_type": "daytona",
                 "created_at": 0,
                 "updated_at": 0,
             },
@@ -71,8 +77,8 @@ def test_library_recipes_expose_default_recipe_per_sandbox(monkeypatch: pytest.M
     items = library_service.list_library("recipe")
 
     assert [item["id"] for item in items] == ["local:default", "daytona_selfhost:default"]
-    assert items[0]["provider_name"] == "local"
-    assert items[1]["provider_name"] == "daytona_selfhost"
+    assert items[0]["provider_type"] == "local"
+    assert items[1]["provider_type"] == "daytona"
 
 
 def test_builtin_recipes_dedupe_provider_variants_and_only_expose_defaults() -> None:
@@ -97,12 +103,10 @@ def test_builtin_recipes_dedupe_provider_variants_and_only_expose_defaults() -> 
     ])
 
     assert [item["id"] for item in items] == ["local:default", "daytona:default"]
-    assert items[0]["provider_name"] == "local"
     assert items[0]["provider_type"] == "local"
     assert items[0]["features"] == {"lark_cli": False}
     assert items[0]["configurable_features"] == {"lark_cli": True}
     assert items[0]["feature_options"][0]["key"] == "lark_cli"
-    assert items[1]["provider_name"] == "daytona"
     assert items[1]["provider_type"] == "daytona"
 
 
@@ -261,3 +265,50 @@ def test_create_thread_persists_selected_recipe_snapshot_on_lease(tmp_path: Path
     assert leases[0]["recipe_id"] == "local:default"
     assert leases[0]["recipe_name"] == "Local Default"
     assert leases[0]["recipe"]["features"] == {"lark_cli": True}
+
+
+def test_daytona_provider_config_uses_daytona_type_recipe_snapshot(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    sandbox_db = _patch_sandbox_paths(monkeypatch, tmp_path)
+    main_db = tmp_path / "leon.db"
+
+    member_repo = SQLiteMemberRepo(main_db)
+    thread_repo = SQLiteThreadRepo(main_db)
+
+    member_repo.create(MemberRow(
+        id="user-1",
+        name="owner",
+        type=MemberType.HUMAN,
+        created_at=1.0,
+    ))
+    member_repo.create(MemberRow(
+        id="member-1",
+        name="Toad",
+        type=MemberType.MYCEL_AGENT,
+        owner_user_id="user-1",
+        created_at=2.0,
+    ))
+
+    app = _make_app(member_repo, thread_repo)
+
+    threads_router._create_owned_thread(
+        app,
+        "user-1",
+        CreateThreadRequest(
+            member_id="member-1",
+            sandbox="daytona_selfhost",
+            recipe={
+                "id": "daytona:default",
+                "name": "Daytona Default",
+                "provider_type": "daytona",
+                "features": {"lark_cli": False},
+            },
+        ),
+        is_main=False,
+    )
+
+    leases = sandbox_service.list_user_leases("user-1", main_db_path=main_db, sandbox_db_path=sandbox_db)
+
+    assert len(leases) == 1
+    assert leases[0]["provider_name"] == "daytona_selfhost"
+    assert leases[0]["recipe_id"] == "daytona:default"
+    assert leases[0]["recipe"]["provider_type"] == "daytona"

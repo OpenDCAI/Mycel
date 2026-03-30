@@ -30,6 +30,14 @@ const PROVIDER_TYPE_LABELS: Record<string, string> = {
   agentbay: "AgentBay",
 };
 
+function providerConfigLabel(name: string): string {
+  return name
+    .split(/[_-]+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
 function providerTypeFromName(name: string): string {
   if (name.startsWith("daytona")) return "daytona";
   if (name.startsWith("docker")) return "docker";
@@ -80,17 +88,17 @@ export default function NewChatPage({ mode = "member" }: { mode?: "member" | "ne
   const [selectedLeaseId, setSelectedLeaseId] = useState<string>("");
   const [selectedRecipeId, setSelectedRecipeId] = useState<string>("");
   const [selectedRecipeFeatures, setSelectedRecipeFeatures] = useState<Record<string, boolean>>({});
-  const [panelProviderType, setPanelProviderType] = useState<string>("");
+  const [selectedProviderConfig, setSelectedProviderConfig] = useState<string>("");
   const [selectedWorkspace, setSelectedWorkspace] = useState<string>("");
   const [configStep, setConfigStep] = useState<1 | 2 | 3>(1);
   const [createModeInitialized, setCreateModeInitialized] = useState(false);
   const [configSnapshot, setConfigSnapshot] = useState<{
     createMode: "new" | "existing";
-    selectedLeaseId: string;
-    selectedRecipeId: string;
-    selectedRecipeFeatures: Record<string, boolean>;
-    selectedWorkspace: string;
-    panelProviderType: string;
+      selectedLeaseId: string;
+      selectedRecipeId: string;
+      selectedRecipeFeatures: Record<string, boolean>;
+      selectedWorkspace: string;
+      selectedProviderConfig: string;
   } | null>(null);
 
   const authAgent = useAuthStore(s => s.agent);
@@ -164,7 +172,7 @@ export default function NewChatPage({ mode = "member" }: { mode?: "member" | "ne
 
   const recipeOptions = useMemo(() => (
     libraryRecipes
-      .filter((item) => item.available !== false && item.provider_name)
+      .filter((item) => item.available !== false && item.provider_type)
       .map((item) => ({
         value: item.id,
         label: item.name,
@@ -172,8 +180,7 @@ export default function NewChatPage({ mode = "member" }: { mode?: "member" | "ne
           id: item.id,
           name: item.name,
           desc: item.desc,
-          provider_name: item.provider_name as string,
-          provider_type: providerTypeFromName(item.provider_name as string),
+          provider_type: item.provider_type as string,
           features: (item as { features?: Record<string, boolean> }).features ?? {},
           configurable_features: (item as { configurable_features?: Record<string, boolean> }).configurable_features ?? {},
           feature_options: (item as { feature_options?: RecipeFeatureOption[] }).feature_options ?? [],
@@ -181,11 +188,17 @@ export default function NewChatPage({ mode = "member" }: { mode?: "member" | "ne
       }))
   ), [libraryRecipes]);
   const selectedLease = leaseOptions.find((lease) => lease.lease_id === selectedLeaseId) ?? null;
-  const providerTypeOptions = Array.from(new Set(recipeOptions.map((item) => item.recipe.provider_type)))
-    .map((value) => ({
-      value,
-      label: PROVIDER_TYPE_LABELS[value] ?? value,
-    }));
+  const providerConfigOptions = useMemo(
+    () =>
+      sandboxTypes
+        .filter((item) => item.available)
+        .map((item) => ({
+          value: item.name,
+          label: providerConfigLabel(item.name),
+          providerType: item.provider || providerTypeFromName(item.name),
+        })),
+    [sandboxTypes],
+  );
   useEffect(() => {
     if (!selectedRecipeId && recipeOptions[0]?.value) {
       setSelectedRecipeId(recipeOptions[0].value);
@@ -203,6 +216,12 @@ export default function NewChatPage({ mode = "member" }: { mode?: "member" | "ne
     setCreateMode(leaseOptions.length > 0 ? "existing" : "new");
     setCreateModeInitialized(true);
   }, [createModeInitialized, leaseLoading, leaseOptions.length]);
+
+  useEffect(() => {
+    if (selectedProviderConfig) return;
+    const nextConfig = leaseOptions[0]?.provider_name || providerConfigOptions[0]?.value || selectedSandbox || "local";
+    if (nextConfig) setSelectedProviderConfig(nextConfig);
+  }, [leaseOptions, providerConfigOptions, selectedProviderConfig, selectedSandbox]);
 
   useEffect(() => {
     if (!selectedWorkspace && settings?.default_workspace) {
@@ -231,7 +250,7 @@ export default function NewChatPage({ mode = "member" }: { mode?: "member" | "ne
     && !(selectedWorkspace || settings?.default_workspace || "");
 
   async function handleSend(message: string, _sandbox: string, model: string, workspace?: string) {
-    if (createMode === "new" && selectedRecipeSnapshot?.provider_name === "local" && !workspace && !hasWorkspace) {
+    if (createMode === "new" && selectedRecipeSnapshot?.provider_type === "local" && !workspace && !hasWorkspace) {
       setShowWorkspaceSetup(true);
       return;
     }
@@ -257,7 +276,7 @@ export default function NewChatPage({ mode = "member" }: { mode?: "member" | "ne
       }
       const cwd = workspace || settings?.default_workspace || undefined;
       threadId = await handleCreateThread(
-        selectedRecipeSnapshot.provider_name,
+        selectedProviderConfig || selectedSandbox,
         cwd,
         decodedMemberId,
         model,
@@ -286,7 +305,7 @@ export default function NewChatPage({ mode = "member" }: { mode?: "member" | "ne
     const recipe = selectedRecipeSnapshot;
     if (!recipe) return "选择 recipe";
     const featureSuffix = enabledFeatureLabels(recipe).join(" · ");
-    if (recipe.provider_name !== "local") return [recipe.name, featureSuffix].filter(Boolean).join(" · ");
+    if (recipe.provider_type !== "local") return [recipe.name, featureSuffix].filter(Boolean).join(" · ");
     const activeWorkspace = selectedWorkspace || workspaceValue || settings?.default_workspace || "";
     if (!activeWorkspace) return [recipe.name, featureSuffix, "选择工作区"].filter(Boolean).join(" · ");
     const parts = activeWorkspace.split("/").filter(Boolean);
@@ -301,9 +320,9 @@ export default function NewChatPage({ mode = "member" }: { mode?: "member" | "ne
       selectedRecipeId,
       selectedRecipeFeatures: { ...selectedRecipeFeatures },
       selectedWorkspace: selectedWorkspace || settings?.default_workspace || "",
-      panelProviderType: selectedRecipe?.provider_type || "",
+      selectedProviderConfig: selectedLease?.provider_name || selectedProviderConfig || selectedSandbox || "local",
     });
-    setPanelProviderType(selectedRecipe?.provider_type || "");
+    setSelectedProviderConfig(selectedLease?.provider_name || selectedProviderConfig || selectedSandbox || "local");
   }
 
   function cancelConfigChanges() {
@@ -314,7 +333,7 @@ export default function NewChatPage({ mode = "member" }: { mode?: "member" | "ne
       setSelectedRecipeId(configSnapshot.selectedRecipeId);
       setSelectedRecipeFeatures(configSnapshot.selectedRecipeFeatures);
       setSelectedWorkspace(configSnapshot.selectedWorkspace);
-      setPanelProviderType(configSnapshot.panelProviderType);
+      setSelectedProviderConfig(configSnapshot.selectedProviderConfig);
     }
     setConfigSnapshot(null);
   }
@@ -356,9 +375,11 @@ export default function NewChatPage({ mode = "member" }: { mode?: "member" | "ne
     }
   }
 
-  const providerSummaryLabel = panelProviderType
-    ? (PROVIDER_TYPE_LABELS[panelProviderType] ?? panelProviderType)
-    : "所有 provider";
+  const selectedProviderType = providerConfigOptions.find((item) => item.value === selectedProviderConfig)?.providerType
+    || providerTypeFromName(selectedProviderConfig || "local");
+  const providerSummaryLabel = selectedProviderConfig
+    ? providerConfigLabel(selectedProviderConfig)
+    : "未选择 provider";
   const recipeSummaryLabel = selectedRecipe?.name ?? "未选择 recipe";
   const localWorkspace = selectedWorkspace || settings?.default_workspace || "";
   const stepSummary = createMode === "existing"
@@ -422,7 +443,11 @@ export default function NewChatPage({ mode = "member" }: { mode?: "member" | "ne
 
         <CenteredInputBox
           sandboxTypes={sandboxTypes}
-          defaultSandbox={createMode === "new" ? (selectedRecipeSnapshot?.provider_name ?? selectedSandbox) : (selectedLease?.provider_name ?? selectedSandbox)}
+          defaultSandbox={
+            createMode === "new"
+              ? (selectedProviderConfig || selectedSandbox)
+              : ((selectedLease?.provider_name ?? selectedProviderConfig) || selectedSandbox)
+          }
           defaultWorkspace={selectedWorkspace || settings?.default_workspace || undefined}
           workspaceSelectionEnabled={false}
           defaultModel={settings?.default_model || "leon:large"}
@@ -441,11 +466,11 @@ export default function NewChatPage({ mode = "member" }: { mode?: "member" | "ne
             onApply: applyConfigChanges,
             renderPanel: ({ draftModel, setDraftModel }) => {
               const activeRecipe = selectedRecipe;
-              const filteredRecipeOptions = panelProviderType
-                ? recipeOptions.filter((item) => item.recipe.provider_type === panelProviderType)
+              const filteredRecipeOptions = selectedProviderType
+                ? recipeOptions.filter((item) => item.recipe.provider_type === selectedProviderType)
                 : recipeOptions;
-              const filteredLeaseOptions = panelProviderType
-                ? leaseOptions.filter((lease) => providerTypeFromName(lease.provider_name) === panelProviderType)
+              const filteredLeaseOptions = selectedProviderConfig
+                ? leaseOptions.filter((lease) => lease.provider_name === selectedProviderConfig)
                 : leaseOptions;
               const configurableFeatureOptions = (activeRecipe?.feature_options ?? [])
                 .filter((item) => activeRecipe?.configurable_features?.[item.key]);
@@ -537,30 +562,27 @@ export default function NewChatPage({ mode = "member" }: { mode?: "member" | "ne
                       <div>
                         <div className="mb-2 text-xs uppercase tracking-[0.18em] text-muted-foreground">Provider</div>
                         <Select
-                          value={panelProviderType || "__all__"}
+                          value={selectedProviderConfig}
                           onValueChange={(value) => {
-                            const nextProvider = value === "__all__" ? "" : value;
-                            setPanelProviderType(nextProvider);
-                            const nextRecipes = nextProvider
-                              ? recipeOptions.filter((item) => item.recipe.provider_type === nextProvider)
-                              : recipeOptions;
+                            const nextProviderConfig = value;
+                            const nextProviderType = providerConfigOptions.find((item) => item.value === nextProviderConfig)?.providerType
+                              || providerTypeFromName(nextProviderConfig);
+                            setSelectedProviderConfig(nextProviderConfig);
+                            const nextRecipes = recipeOptions.filter((item) => item.recipe.provider_type === nextProviderType);
                             if (nextRecipes.length > 0 && !nextRecipes.some((item) => item.value === selectedRecipeId)) {
                               setSelectedRecipeId(nextRecipes[0].value);
                             }
-                            const nextLease = nextProvider
-                              ? leaseOptions.find((lease) => providerTypeFromName(lease.provider_name) === nextProvider)
-                              : leaseOptions[0];
+                            const nextLease = leaseOptions.find((lease) => lease.provider_name === nextProviderConfig);
                             if (createMode === "existing") {
                               setSelectedLeaseId(nextLease?.lease_id || "");
                             }
                           }}
                         >
                           <SelectTrigger className="h-10 text-sm">
-                            <SelectValue placeholder="All providers" />
+                            <SelectValue placeholder="Choose a provider" />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="__all__">All providers</SelectItem>
-                            {providerTypeOptions.map((item) => (
+                            {providerConfigOptions.map((item) => (
                               <SelectItem key={item.value} value={item.value}>
                                 {item.label}
                               </SelectItem>
@@ -607,15 +629,25 @@ export default function NewChatPage({ mode = "member" }: { mode?: "member" | "ne
                                 {configurableFeatureOptions.map((option) => {
                                   const checked = Boolean(selectedRecipeFeatures[option.key]);
                                   return (
-                                    <button
+                                    <div
                                       key={option.key}
-                                      type="button"
                                       onClick={() => {
                                         setSelectedRecipeFeatures((current) => ({
                                           ...current,
                                           [option.key]: !checked,
                                         }));
                                       }}
+                                      onKeyDown={(event) => {
+                                        if (event.key === "Enter" || event.key === " ") {
+                                          event.preventDefault();
+                                          setSelectedRecipeFeatures((current) => ({
+                                            ...current,
+                                            [option.key]: !checked,
+                                          }));
+                                        }
+                                      }}
+                                      role="button"
+                                      tabIndex={0}
                                       className={cn(
                                         "rounded-xl border px-3 py-2.5 text-left transition-colors",
                                         checked
@@ -637,7 +669,7 @@ export default function NewChatPage({ mode = "member" }: { mode?: "member" | "ne
                                           <div className="mt-0.5 text-xs text-muted-foreground">{option.description}</div>
                                         </div>
                                       </div>
-                                    </button>
+                                    </div>
                                   );
                                 })}
                               </div>

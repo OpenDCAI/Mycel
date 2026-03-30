@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Search, Plus, Zap, Plug, Bot, Edit, Trash2, AlertTriangle, RefreshCw, FlaskConical } from "lucide-react";
 import LibraryEditor from "@/components/LibraryEditor";
 import RecipeEditor from "@/components/RecipeEditor";
@@ -26,6 +26,8 @@ const RECIPE_PROVIDER_LABELS: Record<string, string> = {
   e2b: "E2B",
   agentbay: "AgentBay",
 };
+
+const FALLBACK_RECIPE_PROVIDER_TYPES = ["local", "daytona", "docker", "e2b", "agentbay"];
 
 function providerLabel(name?: string): string {
   if (!name) return "Unknown";
@@ -75,6 +77,27 @@ export default function LibraryPage() {
   const filtered = items.filter((i) => i.name.toLowerCase().includes(search.toLowerCase()));
   const Icon = tab === "skills" ? Zap : tab === "mcp" ? Plug : tab === "agents" ? Bot : FlaskConical;
   const isRecipeTab = tab === "recipes";
+  const recipeProviderOptions = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          [
+            ...libraryRecipes.map((item) => item.provider_type).filter((value): value is string => Boolean(value)),
+            ...FALLBACK_RECIPE_PROVIDER_TYPES,
+          ],
+        ),
+      ).map((value) => ({ value, label: providerLabel(value) })),
+    [libraryRecipes],
+  );
+  const recipeFeatureOptions = useMemo(
+    () =>
+      Array.from(
+        new Map(
+          libraryRecipes.flatMap((item) => item.feature_options ?? []).map((option) => [option.key, option]),
+        ).values(),
+      ),
+    [libraryRecipes],
+  );
 
   const handleCardClick = (item: ResourceItem) => {
     if (isRecipeTab && recipeDirty && selected?.id !== item.id) {
@@ -87,13 +110,19 @@ export default function LibraryPage() {
   };
 
   const openCreate = () => {
+    if (isRecipeTab && recipeDirty) {
+      const confirmed = window.confirm("当前 recipe 还有未保存的修改，确定要新建另一个 recipe 吗？");
+      if (!confirmed) return;
+    }
     setSelected(null);
     setCreating(true);
+    setRecipeDirty(false);
   };
 
   const handleCreated = (item: ResourceItem) => {
     setCreating(false);
     setSelected(item);
+    setRecipeDirty(false);
   };
 
   const openDelete = (item: ResourceItem) => {
@@ -187,12 +216,10 @@ export default function LibraryPage() {
               </>
             )}
           </div>
-          {!isRecipeTab && (
-            <button onClick={openCreate} className="flex items-center gap-2 px-3 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition-opacity">
-              <Plus className="w-4 h-4" />
-              <span className="hidden md:inline">新建</span>
-            </button>
-          )}
+          <button onClick={openCreate} className="flex items-center gap-2 px-3 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition-opacity">
+            <Plus className="w-4 h-4" />
+            <span className="hidden md:inline">新建</span>
+          </button>
         </div>
 
         <div className={`flex-1 overflow-y-auto`}>
@@ -206,7 +233,7 @@ export default function LibraryPage() {
 
           {isRecipeTab && (
             <div className="mb-4 rounded-2xl border border-border bg-card px-4 py-3 text-sm text-muted-foreground">
-              Recipes 是每种 provider 的默认环境模板。可以直接修改默认配置，也可以随时重置回系统默认值。
+              Recipes 是按 provider type 归类的 sandbox 模板。默认 recipe 可以修改或重置；自定义 recipe 可以新增和删除。
             </div>
           )}
 
@@ -243,7 +270,7 @@ export default function LibraryPage() {
                     <p className="text-xs text-muted-foreground mt-1">{item.desc}</p>
                     <p className="text-[11px] text-muted-foreground mt-2">
                       {isRecipeTab
-                        ? `${providerLabel(item.provider_name)} · 默认 recipe`
+                        ? `${providerLabel(item.provider_type)} · ${item.builtin ? "默认 recipe" : "自定义 recipe"}`
                         : (() => {
                             const n = getResourceUsedBy(typeMap[tab], item.name).length;
                             return n ? `被 ${n} 位成员使用` : "未被使用";
@@ -276,10 +303,18 @@ export default function LibraryPage() {
       {!isMobile && showDetail && !isRecipeTab && (
         <LibraryEditor item={resolvedSelected} type={typeMap[tab] as "skill" | "mcp" | "agent"} onClose={() => { setSelected(null); setCreating(false); }} onCreated={handleCreated} />
       )}
-      {!isMobile && showDetail && isRecipeTab && resolvedSelected && (
+      {!isMobile && showDetail && isRecipeTab && (
         <RecipeEditor
           item={resolvedSelected}
+          providerTypeOptions={recipeProviderOptions}
+          featureOptions={recipeFeatureOptions}
           onDirtyChange={setRecipeDirty}
+          onCreated={handleCreated}
+          onDeleted={() => {
+            setSelected(null);
+            setCreating(false);
+            setRecipeDirty(false);
+          }}
           onClose={() => {
             if (recipeDirty) {
               const confirmed = window.confirm("当前 recipe 还有未保存的修改，确定要关闭吗？");
@@ -296,11 +331,19 @@ export default function LibraryPage() {
           <LibraryEditor item={resolvedSelected} type={typeMap[tab] as "skill" | "mcp" | "agent"} onClose={() => { setSelected(null); setCreating(false); }} onCreated={handleCreated} />
         </div>
       )}
-      {isMobile && showDetail && isRecipeTab && resolvedSelected && (
+      {isMobile && showDetail && isRecipeTab && (
         <div className="fixed inset-0 z-50 bg-background overflow-y-auto">
           <RecipeEditor
             item={resolvedSelected}
+            providerTypeOptions={recipeProviderOptions}
+            featureOptions={recipeFeatureOptions}
             onDirtyChange={setRecipeDirty}
+            onCreated={handleCreated}
+            onDeleted={() => {
+              setSelected(null);
+              setCreating(false);
+              setRecipeDirty(false);
+            }}
             onClose={() => {
               if (recipeDirty) {
                 const confirmed = window.confirm("当前 recipe 还有未保存的修改，确定要关闭吗？");
