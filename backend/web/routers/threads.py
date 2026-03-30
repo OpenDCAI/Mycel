@@ -3,7 +3,6 @@
 import asyncio
 import json
 import logging
-import sqlite3
 import uuid
 from typing import Annotated, Any
 
@@ -256,20 +255,15 @@ def _resolve_existing_lease_cwd(lease_id: str, fallback_cwd: str | None) -> str:
         return fallback_cwd
 
     from storage.providers.sqlite.kernel import SQLiteDBRole, resolve_role_db_path
+    from storage.providers.sqlite.terminal_repo import SQLiteTerminalRepo
 
-    with sqlite3.connect(resolve_role_db_path(SQLiteDBRole.SANDBOX)) as conn:
-        row = conn.execute(
-            """
-            SELECT cwd
-            FROM abstract_terminals
-            WHERE lease_id = ?
-            ORDER BY created_at DESC
-            LIMIT 1
-            """,
-            (lease_id,),
-        ).fetchone()
-    if row and row[0]:
-        return str(row[0])
+    terminal_repo = SQLiteTerminalRepo(db_path=resolve_role_db_path(SQLiteDBRole.SANDBOX))
+    try:
+        row = terminal_repo.get_latest_by_lease(lease_id)
+    finally:
+        terminal_repo.close()
+    if row and row.get("cwd"):
+        return str(row["cwd"])
 
     return str(LOCAL_WORKSPACE_ROOT)
 

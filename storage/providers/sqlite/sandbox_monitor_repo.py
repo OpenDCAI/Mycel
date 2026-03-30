@@ -50,6 +50,62 @@ class SQLiteSandboxMonitorRepo:
         ).fetchall()
         return [_row_to_dict(r) for r in rows]
 
+    def query_thread_summary(self, thread_id: str) -> dict | None:
+        row = self._conn.execute(
+            """
+            SELECT
+                cs.thread_id,
+                COUNT(DISTINCT cs.chat_session_id) as session_count,
+                MAX(cs.last_active_at) as last_active,
+                MAX(cs.started_at) as latest_started_at,
+                (
+                    SELECT sl.lease_id
+                    FROM chat_sessions cs2
+                    LEFT JOIN sandbox_leases sl ON cs2.lease_id = sl.lease_id
+                    WHERE cs2.thread_id = cs.thread_id
+                    ORDER BY cs2.started_at DESC
+                    LIMIT 1
+                ) as lease_id,
+                (
+                    SELECT sl.provider_name
+                    FROM chat_sessions cs2
+                    LEFT JOIN sandbox_leases sl ON cs2.lease_id = sl.lease_id
+                    WHERE cs2.thread_id = cs.thread_id
+                    ORDER BY cs2.started_at DESC
+                    LIMIT 1
+                ) as provider_name,
+                (
+                    SELECT sl.desired_state
+                    FROM chat_sessions cs2
+                    LEFT JOIN sandbox_leases sl ON cs2.lease_id = sl.lease_id
+                    WHERE cs2.thread_id = cs.thread_id
+                    ORDER BY cs2.started_at DESC
+                    LIMIT 1
+                ) as desired_state,
+                (
+                    SELECT sl.observed_state
+                    FROM chat_sessions cs2
+                    LEFT JOIN sandbox_leases sl ON cs2.lease_id = sl.lease_id
+                    WHERE cs2.thread_id = cs.thread_id
+                    ORDER BY cs2.started_at DESC
+                    LIMIT 1
+                ) as observed_state,
+                (
+                    SELECT sl.current_instance_id
+                    FROM chat_sessions cs2
+                    LEFT JOIN sandbox_leases sl ON cs2.lease_id = sl.lease_id
+                    WHERE cs2.thread_id = cs.thread_id
+                    ORDER BY cs2.started_at DESC
+                    LIMIT 1
+                ) as current_instance_id
+            FROM chat_sessions cs
+            WHERE cs.thread_id = ?
+            GROUP BY cs.thread_id
+            """,
+            (thread_id,),
+        ).fetchone()
+        return _row_to_dict(row) if row else None
+
     def query_thread_sessions(self, thread_id: str) -> list[dict]:
         rows = self._conn.execute(
             """
@@ -195,6 +251,28 @@ class SQLiteSandboxMonitorRepo:
             (limit,),
         ).fetchall()
         return [_row_to_dict(r) for r in rows]
+
+    def query_event(self, event_id: str) -> dict | None:
+        row = self._conn.execute(
+            """
+            SELECT le.*, sl.provider_name
+            FROM lease_events le
+            LEFT JOIN sandbox_leases sl ON le.lease_id = sl.lease_id
+            WHERE le.event_id = ?
+            """,
+            (event_id,),
+        ).fetchone()
+        return _row_to_dict(row) if row else None
+
+    def count_rows(self, table_names: list[str]) -> dict[str, int]:
+        counts: dict[str, int] = {}
+        for table_name in table_names:
+            if not self._table_exists(table_name):
+                counts[table_name] = 0
+                continue
+            row = self._conn.execute(f"SELECT COUNT(1) FROM {table_name}").fetchone()
+            counts[table_name] = int(row[0]) if row else 0
+        return counts
 
     def list_sessions_with_leases(self) -> list[dict]:
         """Leases with crew info for resource overview.

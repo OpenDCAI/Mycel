@@ -358,6 +358,19 @@ class SQLiteChatSessionRepo:
                 )
             self._conn.commit()
 
+    def touch_thread_activity(self, thread_id: str, last_active_at: str | None = None) -> None:
+        now = last_active_at or datetime.now().isoformat()
+        with self._lock:
+            self._conn.execute(
+                """
+                UPDATE chat_sessions
+                SET last_active_at = ?
+                WHERE thread_id = ? AND status != 'closed'
+                """,
+                (now, thread_id),
+            )
+            self._conn.commit()
+
     def pause(self, session_id: str) -> None:
         with self._lock:
             self._conn.execute(
@@ -393,6 +406,53 @@ class SQLiteChatSessionRepo:
                 (datetime.now().isoformat(), reason, session_id),
             )
             self._conn.commit()
+
+    def delete_by_thread(self, thread_id: str) -> None:
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT command_id FROM terminal_commands WHERE terminal_id IN (SELECT terminal_id FROM abstract_terminals WHERE thread_id = ?)",
+                (thread_id,),
+            ).fetchall()
+            if rows:
+                command_ids = [str(row[0]) for row in rows]
+                placeholders = ",".join("?" for _ in command_ids)
+                self._conn.execute(
+                    f"DELETE FROM terminal_command_chunks WHERE command_id IN ({placeholders})",
+                    command_ids,
+                )
+            self._conn.execute(
+                "DELETE FROM terminal_commands WHERE terminal_id IN (SELECT terminal_id FROM abstract_terminals WHERE thread_id = ?)",
+                (thread_id,),
+            )
+            self._conn.execute("DELETE FROM chat_sessions WHERE thread_id = ?", (thread_id,))
+            self._conn.commit()
+
+    def terminal_has_running_command(self, terminal_id: str) -> bool:
+        with self._lock:
+            row = self._conn.execute(
+                """
+                SELECT 1
+                FROM terminal_commands
+                WHERE terminal_id = ? AND status = 'running'
+                LIMIT 1
+                """,
+                (terminal_id,),
+            ).fetchone()
+            return row is not None
+
+    def lease_has_running_command(self, lease_id: str) -> bool:
+        with self._lock:
+            row = self._conn.execute(
+                """
+                SELECT 1
+                FROM terminal_commands tc
+                JOIN abstract_terminals at ON at.terminal_id = tc.terminal_id
+                WHERE at.lease_id = ? AND tc.status = 'running'
+                LIMIT 1
+                """,
+                (lease_id,),
+            ).fetchone()
+            return row is not None
 
     def close_all_active(self, reason: str, ended_at: str | None = None) -> None:
         ts = ended_at or datetime.now().isoformat()

@@ -4,7 +4,6 @@ Orchestrates: Thread → ChatSession → Runtime → Terminal → Lease → Inst
 """
 
 import logging
-import sqlite3
 import uuid
 from collections.abc import Callable
 from datetime import datetime
@@ -13,12 +12,14 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
-from storage.providers.sqlite.kernel import SQLiteDBRole, connect_sqlite, resolve_role_db_path
+from storage.providers.sqlite.chat_session_repo import SQLiteChatSessionRepo
+from storage.providers.sqlite.kernel import SQLiteDBRole, resolve_role_db_path
 
 from sandbox.capability import SandboxCapability
 from sandbox.chat_session import ChatSessionManager, ChatSessionPolicy
 from sandbox.lease import lease_from_row
 from storage.providers.sqlite.lease_repo import SQLiteLeaseRepo
+from storage.providers.sqlite.thread_repo import SQLiteThreadRepo
 from sandbox.provider import SandboxProvider
 from sandbox.recipes import bootstrap_recipe
 from sandbox.terminal import TerminalState, terminal_from_row
@@ -39,22 +40,18 @@ def lookup_sandbox_for_thread(thread_id: str, db_path: Path | None = None) -> st
     if not target_db.exists():
         return None
 
-    with connect_sqlite(target_db, timeout_ms=5_000) as conn:
-        existing = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()}
-        if "abstract_terminals" not in existing or "sandbox_leases" not in existing:
+    terminal_repo = SQLiteTerminalRepo(db_path=target_db)
+    lease_repo = SQLiteLeaseRepo(db_path=target_db)
+    try:
+        terminals = terminal_repo.list_by_thread(thread_id)
+        if not terminals:
             return None
-
-        row = conn.execute(
-            """
-            SELECT sl.provider_name
-            FROM abstract_terminals at
-            JOIN sandbox_leases sl ON at.lease_id = sl.lease_id
-            WHERE at.thread_id = ?
-            LIMIT 1
-            """,
-            (thread_id,),
-        ).fetchone()
-        return row[0] if row else None
+        lease_id = str(terminals[0]["lease_id"])
+        lease = lease_repo.get(lease_id)
+        return str(lease["provider_name"]) if lease else None
+    finally:
+        terminal_repo.close()
+        lease_repo.close()
 
 
 class SandboxManager:
@@ -72,7 +69,6 @@ class SandboxManager:
         self.terminal_store = SQLiteTerminalRepo(db_path=self.db_path)
         self.lease_store = SQLiteLeaseRepo(db_path=self.db_path)
 
-        from storage.providers.sqlite.chat_session_repo import SQLiteChatSessionRepo
         self.session_manager = ChatSessionManager(
             provider=provider,
             db_path=self.db_path,
@@ -156,14 +152,15 @@ class SandboxManager:
 
         # @@@member-id-for-volume-naming - read from thread config in leon.db
         member_id = "unknown"
+        thread_repo = SQLiteThreadRepo(resolve_role_db_path(SQLiteDBRole.MAIN))
         try:
-            from storage.providers.sqlite.kernel import connect_sqlite_role, SQLiteDBRole
-            with connect_sqlite_role(SQLiteDBRole.MAIN) as conn:
-                row = conn.execute("SELECT member_id FROM threads WHERE id = ?", (thread_id,)).fetchone()
-                if row:
-                    member_id = row[0]
+            row = thread_repo.get_by_id(thread_id)
+            if row:
+                member_id = str(row["member_id"])
         except Exception:
             pass
+        finally:
+            thread_repo.close()
 
         try:
             volume_name = self.provider.create_managed_volume(member_id, remote_path)
@@ -421,34 +418,13 @@ class SandboxManager:
         )
         return session
 
-    def _db_has_table(self, conn: sqlite3.Connection, name: str) -> bool:
-        return (
-            conn.execute(
-                "SELECT 1 FROM sqlite_master WHERE type='table' AND name = ? LIMIT 1",
-                (name,),
-            ).fetchone()
-            is not None
-        )
-
     def _terminal_is_busy(self, terminal_id: str) -> bool:
         """Return True if this terminal has a running command."""
         if not terminal_id:
             return False
         if not self.db_path.exists():
             return False
-        with connect_sqlite(self.db_path) as conn:
-            if not self._db_has_table(conn, "terminal_commands"):
-                return False
-            row = conn.execute(
-                """
-                SELECT 1
-                FROM terminal_commands
-                WHERE terminal_id = ? AND status = 'running'
-                LIMIT 1
-                """,
-                (terminal_id,),
-            ).fetchone()
-            return row is not None
+        return self.session_manager._repo.terminal_has_running_command(terminal_id)
 
     def _lease_is_busy(self, lease_id: str) -> bool:
         """Return True if any terminal under this lease has a running command."""
@@ -456,22 +432,7 @@ class SandboxManager:
             return False
         if not self.db_path.exists():
             return False
-        with connect_sqlite(self.db_path) as conn:
-            if not self._db_has_table(conn, "terminal_commands"):
-                return False
-            if not self._db_has_table(conn, "abstract_terminals"):
-                return False
-            row = conn.execute(
-                """
-                SELECT 1
-                FROM terminal_commands tc
-                JOIN abstract_terminals at ON at.terminal_id = tc.terminal_id
-                WHERE at.lease_id = ? AND tc.status = 'running'
-                LIMIT 1
-                """,
-                (lease_id,),
-            ).fetchone()
-            return row is not None
+        return self.session_manager._repo.lease_has_running_command(lease_id)
 
     def _is_expired(self, session_row: dict, now: datetime) -> bool:
         started_at_raw = session_row.get("started_at")

@@ -163,6 +163,29 @@ class SQLiteTerminalRepo:
             self._conn.row_factory = None
             return dict(row) if row else None
 
+    def get_latest_by_lease(self, lease_id: str) -> dict[str, Any] | None:
+        with self._lock:
+            self._conn.row_factory = sqlite3.Row
+            row = self._conn.execute(
+                """
+                SELECT terminal_id, thread_id, lease_id, cwd, env_delta_json, state_version,
+                       created_at, updated_at
+                FROM abstract_terminals
+                WHERE lease_id = ?
+                ORDER BY created_at DESC
+                LIMIT 1
+                """,
+                (lease_id,),
+            ).fetchone()
+            self._conn.row_factory = None
+            return dict(row) if row else None
+
+    def get_timestamps(self, terminal_id: str) -> tuple[str | None, str | None]:
+        row = self.get_by_id(terminal_id)
+        if row is None:
+            return None, None
+        return str(row.get("created_at") or "") or None, str(row.get("updated_at") or "") or None
+
     def list_by_thread(self, thread_id: str) -> list[dict[str, Any]]:
         with self._lock:
             self._conn.row_factory = sqlite3.Row
@@ -289,6 +312,10 @@ class SQLiteTerminalRepo:
                 )
             self._conn.row_factory = None
             self._conn.commit()
+
+    def delete_by_thread(self, thread_id: str) -> None:
+        for terminal in self.list_by_thread(thread_id):
+            self.delete(str(terminal["terminal_id"]))
 
     def delete(self, terminal_id: str) -> None:
         with self._lock:
