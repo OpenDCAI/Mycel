@@ -48,16 +48,19 @@ export default function ScheduledTaskEditor({
   if (!open) return null;
 
   const isCreate = mode === "create";
+  const isDialog = isCreate || isMobile;
   const normalizedCronExpression = normalizeCronExpression(draft.cron_expression);
   const cronValid = isValidCronExpression(draft.cron_expression);
   const threadLinkHref = draft.thread_id ? resolveThreadHref(draft.thread_id, threadOptions) : null;
   const canSave = draft.name.trim() && draft.thread_id.trim() && draft.instruction.trim() && draft.cron_expression.trim() && cronValid;
+  const saveLabel = saving ? (isCreate ? "创建中..." : "保存中...") : (isCreate ? "创建" : "保存");
+  const updateDraft = (fields: Partial<ScheduledTaskDraft>) => onUpdate({ ...draft, ...fields });
 
-  const shellClassName = isCreate || isMobile
+  const shellClassName = isDialog
     ? "fixed inset-0 z-50 flex items-center justify-center"
     : "w-[420px] shrink-0 border-l border-border bg-background flex flex-col";
 
-  const cardClassName = isCreate || isMobile
+  const cardClassName = isDialog
     ? "relative w-full max-w-xl mx-4 bg-background rounded-2xl shadow-2xl border border-border flex flex-col max-h-[88vh] overflow-hidden"
     : "flex flex-col h-full";
 
@@ -88,7 +91,7 @@ export default function ScheduledTaskEditor({
           <span className="text-[11px] text-muted-foreground font-medium uppercase tracking-wider">名称</span>
           <input
             value={draft.name}
-            onChange={(e) => onUpdate({ ...draft, name: e.target.value })}
+            onChange={(e) => updateDraft({ name: e.target.value })}
             placeholder="例如：每日 thread 总结"
             className="w-full px-3.5 py-2.5 rounded-xl bg-card border border-border text-sm font-medium text-foreground outline-none focus:border-primary/40 transition-colors"
           />
@@ -100,7 +103,7 @@ export default function ScheduledTaskEditor({
             scope="owned"
             value={draft.thread_id}
             threads={threadOptions}
-            onSelect={(thread) => onUpdate({ ...draft, thread_id: thread.thread_id })}
+            onSelect={(thread) => updateDraft({ thread_id: thread.thread_id })}
           />
         </div>
 
@@ -111,7 +114,7 @@ export default function ScheduledTaskEditor({
               <button
                 key={preset.expression}
                 type="button"
-                onClick={() => onUpdate({ ...draft, cron_expression: preset.expression })}
+                onClick={() => updateDraft({ cron_expression: preset.expression })}
                 className={`rounded-full border px-3 py-1 text-xs transition-colors ${
                   normalizedCronExpression === preset.expression
                     ? "border-primary bg-primary/10 text-primary"
@@ -124,7 +127,7 @@ export default function ScheduledTaskEditor({
           </div>
           <input
             value={draft.cron_expression}
-            onChange={(e) => onUpdate({ ...draft, cron_expression: e.target.value })}
+            onChange={(e) => updateDraft({ cron_expression: e.target.value })}
             placeholder="0 9 * * *"
             className={`w-full rounded-xl border bg-card px-3.5 py-2.5 text-sm font-mono text-foreground outline-none transition-colors ${
               cronValid ? "border-border focus:border-primary/40" : "border-destructive/50 focus:border-destructive"
@@ -145,7 +148,7 @@ export default function ScheduledTaskEditor({
           <span className="text-[11px] text-muted-foreground font-medium uppercase tracking-wider">指令</span>
           <textarea
             value={draft.instruction}
-            onChange={(e) => onUpdate({ ...draft, instruction: e.target.value })}
+            onChange={(e) => updateDraft({ instruction: e.target.value })}
             placeholder="例如：总结今天 thread 中最重要的决策和风险。"
             rows={5}
             className="w-full px-3.5 py-2.5 rounded-xl bg-card border border-border text-sm text-foreground outline-none focus:border-primary/40 transition-colors resize-none leading-relaxed"
@@ -158,7 +161,7 @@ export default function ScheduledTaskEditor({
             <p className="text-xs text-muted-foreground mt-1">关闭后不会自动触发，但仍可手动运行。</p>
           </div>
           <button
-            onClick={() => onUpdate({ ...draft, enabled: draft.enabled ? 0 : 1 })}
+            onClick={() => updateDraft({ enabled: draft.enabled ? 0 : 1 })}
             className={`relative w-11 h-6 rounded-full transition-colors ${draft.enabled ? "bg-primary" : "bg-muted"}`}
           >
             <span className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow-sm transition-transform ${draft.enabled ? "left-[22px]" : "left-0.5"}`} />
@@ -239,14 +242,14 @@ export default function ScheduledTaskEditor({
             disabled={!canSave || saving}
             className="px-5 py-2 rounded-xl bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {saving ? (isCreate ? "创建中..." : "保存中...") : (isCreate ? "创建" : "保存")}
+            {saveLabel}
           </button>
         </div>
       </div>
     </div>
   );
 
-  if (isCreate || isMobile) {
+  if (isDialog) {
     return (
       <div className={shellClassName}>
         <div className="absolute inset-0 bg-black/50" onClick={onClose} />

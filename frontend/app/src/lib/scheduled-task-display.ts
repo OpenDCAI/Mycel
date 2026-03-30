@@ -11,23 +11,23 @@ export const schedulePresets = [
   { label: "每小时", expression: "0 * * * *" },
 ] as const;
 
-function findThread(threadId: string, threads: ThreadSummary[]): ThreadSummary | null {
+export function findThreadSummary(threadId: string, threads: ThreadSummary[]): ThreadSummary | null {
   return threads.find((thread) => thread.thread_id === threadId) ?? null;
 }
 
 export function resolveThreadLabel(threadId: string, threads: ThreadSummary[]): string {
-  const thread = findThread(threadId, threads);
+  const thread = findThreadSummary(threadId, threads);
   return thread?.entity_name || thread?.member_name || threadId;
 }
 
 export function resolveThreadMeta(threadId: string, threads: ThreadSummary[]): string {
-  const thread = findThread(threadId, threads);
+  const thread = findThreadSummary(threadId, threads);
   if (!thread) return threadId;
   return [thread.sidebar_label, thread.thread_id].filter(Boolean).join(" · ");
 }
 
 export function resolveThreadHref(threadId: string, threads: ThreadSummary[]): string | null {
-  const thread = findThread(threadId, threads);
+  const thread = findThreadSummary(threadId, threads);
   if (!thread?.member_id) return null;
   return `/threads/${encodeURIComponent(thread.member_id)}/${encodeURIComponent(thread.thread_id)}`;
 }

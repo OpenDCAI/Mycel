@@ -86,15 +86,16 @@ export default function Tasks() {
 
   const fetchTasks = useAppStore((s) => s.fetchTasks);
   const activeTab = resolveTasksTab(searchParams);
+  const isScheduledTab = activeTab === "cron";
 
   useEffect(() => { loadAll(); }, [loadAll]);
 
   useEffect(() => {
-    if (activeTab !== "cron") return;
+    if (!isScheduledTab) return;
     listThreads("owned").then(setThreadSummaries).catch(() => {
       setThreadSummaries([]);
     });
-  }, [activeTab]);
+  }, [isScheduledTab]);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -394,7 +395,8 @@ export default function Tasks() {
   };
 
   const kanbanColumns: TaskStatus[] = ["pending", "running", "completed", "failed"];
-  const activeScheduledTaskRuns = editingScheduledTaskId ? (scheduledTaskRuns[editingScheduledTaskId] || []) : [];
+  const selectedScheduledTaskId = editingScheduledTaskId;
+  const activeScheduledTaskRuns = selectedScheduledTaskId ? (scheduledTaskRuns[selectedScheduledTaskId] || []) : [];
   const filteredScheduledTasks = useMemo(
     () => scheduledTasks.filter((task) => matchesScheduledTaskQuery(task, cronSearch)),
     [scheduledTasks, cronSearch],
@@ -416,7 +418,7 @@ export default function Tasks() {
                 任务看板
               </button>
               <button
-                className={`px-3 py-1 rounded text-sm ${activeTab === "cron" ? "bg-background shadow-sm" : "text-muted-foreground"}`}
+                className={`px-3 py-1 rounded text-sm ${isScheduledTab ? "bg-background shadow-sm" : "text-muted-foreground"}`}
                 onClick={() => setActiveTab("cron")}
               >
                 定时任务
@@ -829,7 +831,7 @@ export default function Tasks() {
         </>)}
 
         {/* Cron tab content */}
-        {activeTab === "cron" && (
+        {isScheduledTab && (
           <div className="flex-1 overflow-y-auto">
             {scheduledTasks.length === 0 ? (
               <div className="flex items-center justify-center py-20">
@@ -873,7 +875,7 @@ export default function Tasks() {
                     key={task.id}
                     onClick={() => openScheduledEdit(task)}
                     className={`grid grid-cols-[minmax(0,1.1fr)_170px_minmax(0,0.9fr)_140px_140px_80px] gap-3 px-6 py-3 border-b border-border hover:bg-muted/30 transition-colors cursor-pointer items-center ${
-                      editingScheduledTaskId === task.id ? "bg-primary/[0.03]" : ""
+                      selectedScheduledTaskId === task.id ? "bg-primary/[0.03]" : ""
                     }`}
                   >
                     <div className="flex flex-col gap-0.5">
@@ -919,7 +921,7 @@ export default function Tasks() {
       </div>
 
       {/* Edit panel (cron) */}
-      {activeTab === "cron" && editingScheduledTaskId && !scheduledTaskModalOpen && (
+      {isScheduledTab && selectedScheduledTaskId && !scheduledTaskModalOpen && (
         <ScheduledTaskEditor
           open
           mode="edit"
@@ -929,8 +931,8 @@ export default function Tasks() {
           onUpdate={setScheduledTaskDraft}
           onSave={saveScheduledTask}
           onClose={closeScheduledModal}
-          onDelete={() => setDeleteScheduledTaskConfirmId(editingScheduledTaskId)}
-          onTrigger={() => handleTriggerScheduledTask(editingScheduledTaskId)}
+          onDelete={() => setDeleteScheduledTaskConfirmId(selectedScheduledTaskId)}
+          onTrigger={() => handleTriggerScheduledTask(selectedScheduledTaskId)}
           threadOptions={threadSummaries}
         />
       )}
