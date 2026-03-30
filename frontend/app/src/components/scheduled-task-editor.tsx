@@ -1,7 +1,10 @@
-import { ExternalLink, Play, Trash2, X } from "lucide-react";
+import { Play, Trash2, X } from "lucide-react";
+import type { ThreadSummary } from "@/api";
 import type { ScheduledTask, ScheduledTaskRun } from "@/store/types";
+import { cronToHuman, formatEventTime, isValidCronExpression, normalizeCronExpression, resolveThreadHref, schedulePresets } from "@/lib/scheduled-task-display";
+import { ThreadPicker } from "./thread-picker";
 
-type ScheduledTaskDraft = Pick<
+export type ScheduledTaskDraft = Pick<
   ScheduledTask,
   "id" | "thread_id" | "name" | "instruction" | "cron_expression" | "enabled"
 > & Partial<Pick<ScheduledTask, "last_triggered_at" | "next_trigger_at" | "created_at" | "updated_at">>;
@@ -18,16 +21,7 @@ interface ScheduledTaskEditorProps {
   onDelete?: () => void;
   onTrigger?: () => void;
   saving?: boolean;
-}
-
-function formatTimestamp(value?: number): string {
-  if (!value) return "--";
-  return new Date(value).toLocaleString("zh-CN", {
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+  threadOptions?: ThreadSummary[];
 }
 
 function runTone(status: ScheduledTaskRun["status"]): string {
@@ -49,11 +43,15 @@ export default function ScheduledTaskEditor({
   onDelete,
   onTrigger,
   saving = false,
+  threadOptions = [],
 }: ScheduledTaskEditorProps) {
   if (!open) return null;
 
   const isCreate = mode === "create";
-  const canSave = draft.name.trim() && draft.thread_id.trim() && draft.instruction.trim() && draft.cron_expression.trim();
+  const normalizedCronExpression = normalizeCronExpression(draft.cron_expression);
+  const cronValid = isValidCronExpression(draft.cron_expression);
+  const threadLinkHref = draft.thread_id ? resolveThreadHref(draft.thread_id, threadOptions) : null;
+  const canSave = draft.name.trim() && draft.thread_id.trim() && draft.instruction.trim() && draft.cron_expression.trim() && cronValid;
 
   const shellClassName = isCreate || isMobile
     ? "fixed inset-0 z-50 flex items-center justify-center"
@@ -97,34 +95,50 @@ export default function ScheduledTaskEditor({
         </div>
 
         <div className="space-y-2">
-          <span className="text-[11px] text-muted-foreground font-medium uppercase tracking-wider">Thread ID</span>
-          <div className="flex items-center gap-2">
-            <input
-              value={draft.thread_id}
-              onChange={(e) => onUpdate({ ...draft, thread_id: e.target.value })}
-              placeholder="thread-main"
-              className="flex-1 px-3.5 py-2.5 rounded-xl bg-card border border-border text-sm font-mono text-foreground outline-none focus:border-primary/40 transition-colors"
-            />
-            {draft.thread_id ? (
-              <a
-                href={`/chat/${draft.thread_id}`}
-                className="inline-flex items-center gap-1 px-3 py-2 rounded-xl border border-border text-xs text-primary hover:bg-primary/5 transition-colors"
-              >
-                <ExternalLink className="w-3.5 h-3.5" />
-                查看
-              </a>
-            ) : null}
-          </div>
+          <span className="text-[11px] text-muted-foreground font-medium uppercase tracking-wider">Thread</span>
+          <ThreadPicker
+            scope="owned"
+            value={draft.thread_id}
+            threads={threadOptions}
+            onSelect={(thread) => onUpdate({ ...draft, thread_id: thread.thread_id })}
+          />
         </div>
 
         <div className="space-y-2">
           <span className="text-[11px] text-muted-foreground font-medium uppercase tracking-wider">Cron</span>
+          <div className="flex flex-wrap gap-2">
+            {schedulePresets.map((preset) => (
+              <button
+                key={preset.expression}
+                type="button"
+                onClick={() => onUpdate({ ...draft, cron_expression: preset.expression })}
+                className={`rounded-full border px-3 py-1 text-xs transition-colors ${
+                  normalizedCronExpression === preset.expression
+                    ? "border-primary bg-primary/10 text-primary"
+                    : "border-border bg-card text-muted-foreground hover:border-primary/40 hover:text-foreground"
+                }`}
+              >
+                {preset.label}
+              </button>
+            ))}
+          </div>
           <input
             value={draft.cron_expression}
             onChange={(e) => onUpdate({ ...draft, cron_expression: e.target.value })}
             placeholder="0 9 * * *"
-            className="w-full px-3.5 py-2.5 rounded-xl bg-card border border-border text-sm font-mono text-foreground outline-none focus:border-primary/40 transition-colors"
+            className={`w-full rounded-xl border bg-card px-3.5 py-2.5 text-sm font-mono text-foreground outline-none transition-colors ${
+              cronValid ? "border-border focus:border-primary/40" : "border-destructive/50 focus:border-destructive"
+            }`}
           />
+          {!cronValid ? (
+            <div className="text-xs text-destructive">无效 Cron：请使用 5 段表达式，例如 `0 9 * * *`。</div>
+          ) : null}
+          <div className="rounded-xl border border-border bg-card/50 px-3.5 py-2.5 text-xs text-muted-foreground">
+            <div className="font-medium text-foreground">{cronValid ? cronToHuman(normalizedCronExpression) : "—"}</div>
+            {draft.next_trigger_at ? (
+              <div className="mt-1">下次触发: {formatEventTime(draft.next_trigger_at)}</div>
+            ) : null}
+          </div>
         </div>
 
         <div className="space-y-2">
@@ -156,11 +170,11 @@ export default function ScheduledTaskEditor({
             <div className="grid grid-cols-2 gap-3">
               <div className="rounded-xl border border-border bg-card/70 px-3.5 py-3">
                 <div className="text-[11px] text-muted-foreground uppercase tracking-wider">上次触发</div>
-                <div className="mt-2 text-sm font-medium text-foreground">{formatTimestamp(draft.last_triggered_at)}</div>
+                <div className="mt-2 text-sm font-medium text-foreground">{formatEventTime(draft.last_triggered_at)}</div>
               </div>
               <div className="rounded-xl border border-border bg-card/70 px-3.5 py-3">
                 <div className="text-[11px] text-muted-foreground uppercase tracking-wider">下次触发</div>
-                <div className="mt-2 text-sm font-medium text-foreground">{formatTimestamp(draft.next_trigger_at)}</div>
+                <div className="mt-2 text-sm font-medium text-foreground">{formatEventTime(draft.next_trigger_at)}</div>
               </div>
             </div>
 
@@ -180,10 +194,15 @@ export default function ScheduledTaskEditor({
                       <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium ${runTone(run.status)}`}>
                         {run.status}
                       </span>
-                      <span className="text-[11px] font-mono text-muted-foreground">{formatTimestamp(run.triggered_at)}</span>
+                      <span className="text-[11px] text-muted-foreground">{formatEventTime(run.triggered_at)}</span>
                     </div>
-                    <div className="mt-2 text-xs text-foreground break-all">
-                      thread_run_id: {run.thread_run_id || "--"}
+                    <div className="mt-2 flex items-center justify-between gap-3 text-xs">
+                      <span className="text-muted-foreground">{run.thread_run_id ? "已派发到 thread 对话" : "尚未绑定 thread run"}</span>
+                      {threadLinkHref ? (
+                        <a href={threadLinkHref} className="text-primary hover:underline">
+                          查看对话
+                        </a>
+                      ) : null}
                     </div>
                     {run.error ? (
                       <div className="mt-2 text-xs text-destructive break-all">{run.error}</div>

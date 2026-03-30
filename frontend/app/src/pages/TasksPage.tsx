@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { useSearchParams } from "react-router-dom";
+import { listThreads, type ThreadSummary } from "@/api";
 import {
   Search, CheckCircle2, Circle, Clock, AlertCircle,
   ListTodo, ArrowUpDown, ChevronDown, ChevronUp, ChevronRight, LayoutGrid, List,
@@ -16,8 +17,15 @@ import {
 import { useAppStore } from "@/store/app-store";
 import type { Task, TaskStatus, Priority, ScheduledTask } from "@/store/types";
 import TaskModal from "@/components/task-modal";
-import ScheduledTaskEditor from "@/components/scheduled-task-editor";
+import ScheduledTaskEditor, { type ScheduledTaskDraft } from "@/components/scheduled-task-editor";
 import { resolveTasksTab, type TasksTab } from "@/lib/tasks-navigation";
+import {
+  cronToHuman,
+  formatEventTime,
+  matchesScheduledTaskQuery,
+  resolveThreadLabel,
+  resolveThreadMeta,
+} from "@/lib/scheduled-task-display";
 
 const statusConfig: Record<TaskStatus, { label: string; icon: typeof Circle; color: string }> = {
   pending: { label: "等待中", icon: Circle, color: "text-muted-foreground" },
@@ -40,11 +48,6 @@ const sourceLabel: Record<string, string> = {
 type SortField = "title" | "priority" | "created_at" | null;
 type SortDir = "asc" | "desc";
 type ViewMode = "table" | "board";
-type ScheduledTaskDraft = Pick<
-  ScheduledTask,
-  "id" | "thread_id" | "name" | "instruction" | "cron_expression" | "enabled"
-> & Partial<Pick<ScheduledTask, "last_triggered_at" | "next_trigger_at" | "created_at" | "updated_at">>;
-
 function emptyScheduledTaskDraft(): ScheduledTaskDraft {
   return {
     id: "",
@@ -58,22 +61,6 @@ function emptyScheduledTaskDraft(): ScheduledTaskDraft {
     created_at: 0,
     updated_at: 0,
   };
-}
-
-function cronToHuman(expr: string): string {
-  const parts = expr.split(" ");
-  if (parts.length !== 5) return expr;
-  const [min, hour, dom, , dow] = parts;
-  if (dow === "1-5" && dom === "*") return `工作日 ${hour}:${min.padStart(2, "0")}`;
-  if (min === "0" && hour !== "*" && dom === "*" && dow === "*") return `每天 ${hour}:00`;
-  if (hour !== "*" && dom === "*" && dow === "*") return `每天 ${hour}:${min.padStart(2, "0")}`;
-  if (dom === "*" && dow !== "*") {
-    const labels = ["日","一","二","三","四","五","六"];
-    const days = dow.split(",").map((d: string) => labels[parseInt(d)] || d).join("、");
-    return `每周${days} ${hour}:${min.padStart(2, "0")}`;
-  }
-  if (dom !== "*" && dow === "*") return `每月 ${dom} 日 ${hour}:${min.padStart(2, "0")}`;
-  return expr;
 }
 
 export default function Tasks() {
@@ -98,8 +85,16 @@ export default function Tasks() {
   const storeTriggerScheduledTask = useAppStore((s) => s.triggerScheduledTask);
 
   const fetchTasks = useAppStore((s) => s.fetchTasks);
+  const activeTab = resolveTasksTab(searchParams);
 
   useEffect(() => { loadAll(); }, [loadAll]);
+
+  useEffect(() => {
+    if (activeTab !== "cron") return;
+    listThreads("owned").then(setThreadSummaries).catch(() => {
+      setThreadSummaries([]);
+    });
+  }, [activeTab]);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -133,8 +128,8 @@ export default function Tasks() {
   const [editingScheduledTaskId, setEditingScheduledTaskId] = useState<string | null>(null);
   const [scheduledTaskDraft, setScheduledTaskDraft] = useState<ScheduledTaskDraft>(emptyScheduledTaskDraft);
   const [deleteScheduledTaskConfirmId, setDeleteScheduledTaskConfirmId] = useState<string | null>(null);
-
-  const activeTab = resolveTasksTab(searchParams);
+  const [threadSummaries, setThreadSummaries] = useState<ThreadSummary[]>([]);
+  const [cronSearch, setCronSearch] = useState("");
 
   const setActiveTab = useCallback((nextTab: TasksTab) => {
     const nextParams = new URLSearchParams(searchParams);
@@ -400,6 +395,10 @@ export default function Tasks() {
 
   const kanbanColumns: TaskStatus[] = ["pending", "running", "completed", "failed"];
   const activeScheduledTaskRuns = editingScheduledTaskId ? (scheduledTaskRuns[editingScheduledTaskId] || []) : [];
+  const filteredScheduledTasks = useMemo(
+    () => scheduledTasks.filter((task) => matchesScheduledTaskQuery(task, cronSearch)),
+    [scheduledTasks, cronSearch],
+  );
 
   return (
     <div className="flex h-full">
@@ -845,19 +844,35 @@ export default function Tasks() {
               </div>
             ) : (
               <>
+                <div className="flex items-center gap-2 px-6 py-2.5 border-b border-border shrink-0">
+                  <div className="relative w-60 max-w-full">
+                    <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+                    <input
+                      value={cronSearch}
+                      onChange={(e) => setCronSearch(e.target.value)}
+                      placeholder="搜索定时任务..."
+                      className="w-full rounded-md border border-border bg-card pl-8 pr-3 py-1.5 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary/40 transition-colors"
+                    />
+                  </div>
+                </div>
                 {/* Cron table header */}
-                <div className="grid grid-cols-[1fr_170px_84px_120px_80px] gap-2 px-6 py-2 border-b border-border text-[11px] text-muted-foreground uppercase tracking-wider font-medium sticky top-0 bg-background z-10">
+                <div className="grid grid-cols-[minmax(0,1.1fr)_170px_minmax(0,0.9fr)_140px_140px_80px] gap-3 px-6 py-2 border-b border-border text-[11px] text-muted-foreground uppercase tracking-wider font-medium sticky top-0 bg-background z-10">
                   <span>名称</span>
                   <span>执行频率</span>
                   <span>Thread</span>
+                  <span>下次触发</span>
                   <span>上次触发</span>
                   <span>操作</span>
                 </div>
-                {scheduledTasks.map((task) => (
+                {filteredScheduledTasks.length === 0 ? (
+                  <div className="px-6 py-10 text-center text-sm text-muted-foreground">
+                    没有匹配的定时任务。
+                  </div>
+                ) : filteredScheduledTasks.map((task) => (
                   <div
                     key={task.id}
                     onClick={() => openScheduledEdit(task)}
-                    className={`grid grid-cols-[1fr_170px_84px_120px_80px] gap-2 px-6 py-3 border-b border-border hover:bg-muted/30 transition-colors cursor-pointer items-center ${
+                    className={`grid grid-cols-[minmax(0,1.1fr)_170px_minmax(0,0.9fr)_140px_140px_80px] gap-3 px-6 py-3 border-b border-border hover:bg-muted/30 transition-colors cursor-pointer items-center ${
                       editingScheduledTaskId === task.id ? "bg-primary/[0.03]" : ""
                     }`}
                   >
@@ -873,10 +888,12 @@ export default function Tasks() {
                         {task.enabled ? "启用" : "停用"}
                       </span>
                     </div>
-                    <span className="text-[11px] text-muted-foreground font-mono truncate">{task.thread_id}</span>
-                    <span className="text-[11px] text-muted-foreground font-mono">
-                      {task.last_triggered_at ? new Date(task.last_triggered_at).toLocaleString("zh-CN", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }) : "--"}
-                    </span>
+                    <div className="min-w-0">
+                      <div className="text-sm font-medium text-foreground truncate">{resolveThreadLabel(task.thread_id, threadSummaries)}</div>
+                      <div className="text-[11px] text-muted-foreground truncate">{resolveThreadMeta(task.thread_id, threadSummaries)}</div>
+                    </div>
+                    <span className="text-[11px] text-muted-foreground">{formatEventTime(task.next_trigger_at)}</span>
+                    <span className="text-[11px] text-muted-foreground">{formatEventTime(task.last_triggered_at)}</span>
                     <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
                       <button
                         onClick={() => handleTriggerScheduledTask(task.id)}
@@ -914,6 +931,7 @@ export default function Tasks() {
           onClose={closeScheduledModal}
           onDelete={() => setDeleteScheduledTaskConfirmId(editingScheduledTaskId)}
           onTrigger={() => handleTriggerScheduledTask(editingScheduledTaskId)}
+          threadOptions={threadSummaries}
         />
       )}
 
@@ -976,9 +994,8 @@ export default function Tasks() {
         onUpdate={setScheduledTaskDraft}
         onSave={saveScheduledTask}
         onClose={closeScheduledModal}
+        threadOptions={threadSummaries}
       />
     </div>
   );
 }
-
-
