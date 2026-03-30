@@ -44,7 +44,7 @@ logger = logging.getLogger(__name__)
 from core.runtime.middleware.monitor import AgentState
 from backend.web.utils.serializers import avatar_url
 from sandbox.config import MountSpec
-from sandbox.recipes import normalize_recipe_id
+from sandbox.recipes import normalize_recipe_snapshot
 from sandbox.thread_context import set_current_thread_id
 
 router = APIRouter(prefix="/api/threads", tags=["threads"])
@@ -192,7 +192,7 @@ def _thread_payload(app: Any, thread_id: str, sandbox_type: str) -> dict[str, An
     }
 
 
-def _create_thread_sandbox_resources(thread_id: str, sandbox_type: str, recipe_id: str | None) -> None:
+def _create_thread_sandbox_resources(thread_id: str, sandbox_type: str, recipe: dict[str, Any] | None) -> None:
     """Create volume, lease, and terminal eagerly so volume exists before file uploads."""
     from datetime import datetime
 
@@ -218,11 +218,13 @@ def _create_thread_sandbox_resources(thread_id: str, sandbox_type: str, recipe_i
     lease_repo = SQLiteLeaseRepo(db_path=sandbox_db)
     try:
         lease_id = f"lease-{uuid.uuid4().hex[:12]}"
+        normalized_recipe = normalize_recipe_snapshot(sandbox_type, recipe)
         lease_repo.create(
             lease_id,
             sandbox_type,
             volume_id=volume_id,
-            recipe_id=normalize_recipe_id(sandbox_type, recipe_id),
+            recipe_id=normalized_recipe["id"],
+            recipe_json=json.dumps(normalized_recipe, ensure_ascii=False),
         )
     finally:
         lease_repo.close()
@@ -362,7 +364,11 @@ def _create_owned_thread(
     else:
         # @@@lease-early-creation - Create volume + lease + terminal at thread creation
         # so volume exists BEFORE any file uploads.
-        _create_thread_sandbox_resources(thread_entity_id, sandbox_type, payload.recipe_id)
+        _create_thread_sandbox_resources(
+            thread_entity_id,
+            sandbox_type,
+            payload.recipe.model_dump() if payload.recipe else None,
+        )
 
     return {
         "thread_id": thread_entity_id,

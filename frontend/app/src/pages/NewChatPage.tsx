@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useOutletContext, useParams } from "react-router-dom";
 import { postRun } from "../api";
 import CenteredInputBox from "../components/CenteredInputBox";
@@ -10,12 +10,10 @@ import { useAppStore } from "../store/app-store";
 import MemberAvatar from "../components/MemberAvatar";
 import FilesystemBrowser from "../components/FilesystemBrowser";
 import { listMyLeases } from "../api/client";
-import type { UserLeaseSummary } from "../api/types";
+import type { RecipeFeatureOption, RecipeSnapshot, UserLeaseSummary } from "../api/types";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
-import { Input } from "../components/ui/input";
-import { Button } from "../components/ui/button";
+import { Checkbox } from "../components/ui/checkbox";
 import { cn } from "../lib/utils";
-import { ArrowLeft } from "lucide-react";
 
 interface OutletContext {
   tm: ThreadManagerState & ThreadManagerActions;
@@ -40,16 +38,27 @@ function providerTypeFromName(name: string): string {
   return "local";
 }
 
-function defaultRecipeIdForProvider(providerName: string): string {
-  return `${providerName}:default`;
+function leaseStateMeta(state?: string | null): { dot: string; label: string } {
+  switch (state) {
+    case "running":
+    case "started":
+      return { dot: "bg-emerald-500", label: "运行中" };
+    case "paused":
+    case "stopped":
+      return { dot: "bg-amber-500", label: "已暂停" };
+    case "error":
+    case "failed":
+      return { dot: "bg-rose-500", label: "异常" };
+    default:
+      return { dot: "bg-zinc-400", label: "未知" };
+  }
 }
 
-function larkCliRecipeIdForProvider(providerName: string): string {
-  return `${providerName}:lark-cli`;
-}
-
-function baseRecipeId(recipeId: string): string {
-  return recipeId.endsWith(":lark-cli") ? recipeId.replace(/:lark-cli$/, ":default") : recipeId;
+function enabledFeatureLabels(recipe: RecipeSnapshot | null): string[] {
+  if (!recipe?.feature_options?.length) return [];
+  return recipe.feature_options
+    .filter((item) => recipe.features?.[item.key])
+    .map((item) => item.name);
 }
 
 export default function NewChatPage({ mode = "member" }: { mode?: "member" | "new" }) {
@@ -65,21 +74,24 @@ export default function NewChatPage({ mode = "member" }: { mode?: "member" | "ne
   );
   const [showWorkspaceSetup, setShowWorkspaceSetup] = useState(false);
   const [createMode, setCreateMode] = useState<"new" | "existing">("new");
-  const [draftCreateMode, setDraftCreateMode] = useState<"new" | "existing">("new");
   const [leaseOptions, setLeaseOptions] = useState<UserLeaseSummary[]>([]);
   const [leaseError, setLeaseError] = useState<string | null>(null);
   const [leaseLoading, setLeaseLoading] = useState(false);
   const [selectedLeaseId, setSelectedLeaseId] = useState<string>("");
-  const [draftSelectedLeaseId, setDraftSelectedLeaseId] = useState<string>("");
   const [selectedRecipeId, setSelectedRecipeId] = useState<string>("");
-  const [draftRecipeId, setDraftRecipeId] = useState<string>("");
-  const [draftProviderType, setDraftProviderType] = useState<string>("");
-  const [draftLarkCliEnabled, setDraftLarkCliEnabled] = useState(false);
+  const [selectedRecipeFeatures, setSelectedRecipeFeatures] = useState<Record<string, boolean>>({});
+  const [panelProviderType, setPanelProviderType] = useState<string>("");
   const [selectedWorkspace, setSelectedWorkspace] = useState<string>("");
-  const [draftWorkspace, setDraftWorkspace] = useState<string>("");
-  const [draftCustomWorkspace, setDraftCustomWorkspace] = useState<string>("");
-  const [workspaceMode, setWorkspaceMode] = useState<"browse" | "recent" | "manual">("browse");
-  const [configStep, setConfigStep] = useState<1 | 2>(1);
+  const [configStep, setConfigStep] = useState<1 | 2 | 3>(1);
+  const [createModeInitialized, setCreateModeInitialized] = useState(false);
+  const [configSnapshot, setConfigSnapshot] = useState<{
+    createMode: "new" | "existing";
+    selectedLeaseId: string;
+    selectedRecipeId: string;
+    selectedRecipeFeatures: Record<string, boolean>;
+    selectedWorkspace: string;
+    panelProviderType: string;
+  } | null>(null);
 
   const authAgent = useAuthStore(s => s.agent);
   const memberList = useAppStore(s => s.memberList);
@@ -150,17 +162,26 @@ export default function NewChatPage({ mode = "member" }: { mode?: "member" | "ne
     };
   }, []);
 
-  const recipeOptions = libraryRecipes
-    .filter((item) => item.available !== false && item.provider_name)
-    .map((item) => ({
-      value: item.id,
-      label: item.name,
-      providerName: item.provider_name as string,
-      providerType: providerTypeFromName(item.provider_name as string),
-      configurableFeatures: (item as { configurable_features?: Record<string, boolean> }).configurable_features ?? {},
-    }));
+  const recipeOptions = useMemo(() => (
+    libraryRecipes
+      .filter((item) => item.available !== false && item.provider_name)
+      .map((item) => ({
+        value: item.id,
+        label: item.name,
+        recipe: {
+          id: item.id,
+          name: item.name,
+          desc: item.desc,
+          provider_name: item.provider_name as string,
+          provider_type: providerTypeFromName(item.provider_name as string),
+          features: (item as { features?: Record<string, boolean> }).features ?? {},
+          configurable_features: (item as { configurable_features?: Record<string, boolean> }).configurable_features ?? {},
+          feature_options: (item as { feature_options?: RecipeFeatureOption[] }).feature_options ?? [],
+        } satisfies RecipeSnapshot,
+      }))
+  ), [libraryRecipes]);
   const selectedLease = leaseOptions.find((lease) => lease.lease_id === selectedLeaseId) ?? null;
-  const providerTypeOptions = Array.from(new Set(recipeOptions.map((item) => item.providerType)))
+  const providerTypeOptions = Array.from(new Set(recipeOptions.map((item) => item.recipe.provider_type)))
     .map((value) => ({
       value,
       label: PROVIDER_TYPE_LABELS[value] ?? value,
@@ -178,14 +199,39 @@ export default function NewChatPage({ mode = "member" }: { mode?: "member" | "ne
   }, [leaseOptions, selectedLeaseId]);
 
   useEffect(() => {
+    if (createModeInitialized || leaseLoading) return;
+    setCreateMode(leaseOptions.length > 0 ? "existing" : "new");
+    setCreateModeInitialized(true);
+  }, [createModeInitialized, leaseLoading, leaseOptions.length]);
+
+  useEffect(() => {
     if (!selectedWorkspace && settings?.default_workspace) {
       setSelectedWorkspace(settings.default_workspace);
     }
   }, [selectedWorkspace, settings?.default_workspace]);
 
-  async function handleSend(message: string, sandbox: string, model: string, workspace?: string) {
-    const activeRecipe = recipeOptions.find((item) => item.value === baseRecipeId(sandbox));
-    if (createMode === "new" && activeRecipe?.providerName === "local" && !workspace && !hasWorkspace) {
+  const selectedRecipe = useMemo(
+    () => recipeOptions.find((item) => item.value === selectedRecipeId)?.recipe ?? recipeOptions[0]?.recipe ?? null,
+    [recipeOptions, selectedRecipeId],
+  );
+  useEffect(() => {
+    if (!selectedRecipe) return;
+    setSelectedRecipeFeatures(selectedRecipe.features ?? {});
+  }, [selectedRecipeId, selectedRecipe]);
+
+  const selectedRecipeSnapshot = selectedRecipe
+    ? {
+      ...selectedRecipe,
+      features: { ...(selectedRecipe.features ?? {}), ...selectedRecipeFeatures },
+    }
+    : null;
+  const localRecipeSelected = createMode === "new" && selectedRecipe?.provider_type === "local";
+  const workspaceRequired = createMode === "new"
+    && selectedRecipe?.provider_type === "local"
+    && !(selectedWorkspace || settings?.default_workspace || "");
+
+  async function handleSend(message: string, _sandbox: string, model: string, workspace?: string) {
+    if (createMode === "new" && selectedRecipeSnapshot?.provider_name === "local" && !workspace && !hasWorkspace) {
       setShowWorkspaceSetup(true);
       return;
     }
@@ -206,12 +252,18 @@ export default function NewChatPage({ mode = "member" }: { mode?: "member" | "ne
         selectedLease.lease_id,
       );
     } else {
-      const recipe = recipeOptions.find((item) => item.value === baseRecipeId(sandbox));
-      if (!recipe) {
+      if (!selectedRecipeSnapshot) {
         throw new Error("Recipe not found");
       }
       const cwd = workspace || settings?.default_workspace || undefined;
-      threadId = await handleCreateThread(recipe.providerName, cwd, decodedMemberId, model, undefined, sandbox);
+      threadId = await handleCreateThread(
+        selectedRecipeSnapshot.provider_name,
+        cwd,
+        decodedMemberId,
+        model,
+        undefined,
+        selectedRecipeSnapshot,
+      );
     }
     postRun(threadId, message, undefined, model ? { model } : undefined).catch(err => {
       console.error("[NewChatPage] postRun failed:", err);
@@ -226,80 +278,92 @@ export default function NewChatPage({ mode = "member" }: { mode?: "member" | "ne
     setShowWorkspaceSetup(false);
   }
 
-  function summarizeEnvironment(sandboxValue: string, workspaceValue: string) {
+  function summarizeEnvironment(_sandboxValue: string, workspaceValue: string) {
     if (createMode === "existing") {
       if (!selectedLease) return "复用旧沙盒";
       return `${selectedLease.provider_name} · ${selectedLease.recipe_name}`;
     }
-    const activeRecipeId = baseRecipeId(selectedRecipeId || sandboxValue);
-    const recipe = recipeOptions.find((item) => item.value === activeRecipeId);
+    const recipe = selectedRecipeSnapshot;
     if (!recipe) return "选择 recipe";
-    const larkSuffix = (selectedRecipeId || sandboxValue).endsWith(":lark-cli") ? " · Lark CLI" : "";
-    if (recipe.providerName !== "local") return `${recipe.label}${larkSuffix}`;
+    const featureSuffix = enabledFeatureLabels(recipe).join(" · ");
+    if (recipe.provider_name !== "local") return [recipe.name, featureSuffix].filter(Boolean).join(" · ");
     const activeWorkspace = selectedWorkspace || workspaceValue || settings?.default_workspace || "";
-    if (!activeWorkspace) return `${recipe.label}${larkSuffix} · 选择工作区`;
+    if (!activeWorkspace) return [recipe.name, featureSuffix, "选择工作区"].filter(Boolean).join(" · ");
     const parts = activeWorkspace.split("/").filter(Boolean);
-    return `${recipe.label}${larkSuffix} · ${parts.at(-1) ?? activeWorkspace}`;
+    return [recipe.name, featureSuffix, parts.at(-1) ?? activeWorkspace].filter(Boolean).join(" · ");
   }
 
-  function openDraftConfig() {
-    const activeRecipe = recipeOptions.find((item) => item.value === baseRecipeId(selectedRecipeId)) ?? recipeOptions[0];
-    setDraftCreateMode(createMode);
-    setDraftSelectedLeaseId(selectedLeaseId || leaseOptions[0]?.lease_id || "");
-    setDraftRecipeId(activeRecipe?.value || "");
-    setDraftProviderType(
-      activeRecipe?.providerType || "",
-    );
-    setDraftLarkCliEnabled(selectedRecipeId.endsWith(":lark-cli"));
-    setDraftWorkspace(selectedWorkspace || settings?.default_workspace || "");
-    setDraftCustomWorkspace("");
-    setWorkspaceMode("browse");
+  function openConfigSnapshot() {
     setConfigStep(1);
+    setConfigSnapshot({
+      createMode,
+      selectedLeaseId: selectedLeaseId || leaseOptions[0]?.lease_id || "",
+      selectedRecipeId,
+      selectedRecipeFeatures: { ...selectedRecipeFeatures },
+      selectedWorkspace: selectedWorkspace || settings?.default_workspace || "",
+      panelProviderType: selectedRecipe?.provider_type || "",
+    });
+    setPanelProviderType(selectedRecipe?.provider_type || "");
   }
 
-  function cancelDraftConfig() {
-    const activeRecipe = recipeOptions.find((item) => item.value === baseRecipeId(selectedRecipeId)) ?? recipeOptions[0];
-    setDraftCreateMode(createMode);
-    setDraftSelectedLeaseId(selectedLeaseId || leaseOptions[0]?.lease_id || "");
-    setDraftRecipeId(activeRecipe?.value || "");
-    setDraftProviderType(
-      activeRecipe?.providerType || "",
-    );
-    setDraftLarkCliEnabled(selectedRecipeId.endsWith(":lark-cli"));
-    setDraftWorkspace(selectedWorkspace || settings?.default_workspace || "");
-    setDraftCustomWorkspace("");
-    setWorkspaceMode("browse");
+  function cancelConfigChanges() {
     setConfigStep(1);
+    if (configSnapshot) {
+      setCreateMode(configSnapshot.createMode);
+      setSelectedLeaseId(configSnapshot.selectedLeaseId);
+      setSelectedRecipeId(configSnapshot.selectedRecipeId);
+      setSelectedRecipeFeatures(configSnapshot.selectedRecipeFeatures);
+      setSelectedWorkspace(configSnapshot.selectedWorkspace);
+      setPanelProviderType(configSnapshot.panelProviderType);
+    }
+    setConfigSnapshot(null);
   }
 
-  async function applyDraftConfig() {
+  async function applyConfigChanges() {
     if (configStep === 1) {
       setConfigStep(2);
       return false;
     }
-
-    setCreateMode(draftCreateMode);
-    setSelectedLeaseId(draftSelectedLeaseId);
-    const activeRecipe = recipeOptions.find((item) => item.value === draftRecipeId) ?? recipeOptions[0] ?? null;
-    if (activeRecipe) {
-      setSelectedRecipeId(
-        draftLarkCliEnabled
-          ? larkCliRecipeIdForProvider(activeRecipe.providerName)
-          : defaultRecipeIdForProvider(activeRecipe.providerName),
-      );
+    if (configStep === 2) {
+      if (localRecipeSelected) {
+        setConfigStep(3);
+        return false;
+      }
+      setConfigSnapshot(null);
+      setConfigStep(1);
+      return true;
     }
-    const nextWorkspace = draftWorkspace || settings?.default_workspace || "";
-    setSelectedWorkspace(nextWorkspace);
-    setConfigStep(1);
-    if (draftCreateMode === "new" && draftRecipeId.startsWith("local:") && nextWorkspace) {
+    const nextWorkspace = selectedWorkspace || settings?.default_workspace || "";
+    if (createMode === "new" && selectedRecipeSnapshot?.provider_type === "local" && nextWorkspace) {
       await fetch("/api/settings/workspace", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ workspace: nextWorkspace }),
       });
     }
+    setConfigSnapshot(null);
+    setConfigStep(1);
     return true;
   }
+
+  function stepBack() {
+    if (configStep === 3) {
+      setConfigStep(2);
+      return;
+    }
+    if (configStep === 2) {
+      setConfigStep(1);
+    }
+  }
+
+  const providerSummaryLabel = panelProviderType
+    ? (PROVIDER_TYPE_LABELS[panelProviderType] ?? panelProviderType)
+    : "所有 provider";
+  const recipeSummaryLabel = selectedRecipe?.name ?? "未选择 recipe";
+  const localWorkspace = selectedWorkspace || settings?.default_workspace || "";
+  const stepSummary = createMode === "existing"
+    ? `复用 ${providerSummaryLabel} 的现有 sandbox`
+    : `新建 ${providerSummaryLabel} sandbox · ${recipeSummaryLabel}`;
 
   if (loading || resolveState === "resolving") {
     return (
@@ -345,343 +409,183 @@ export default function NewChatPage({ mode = "member" }: { mode?: "member" | "ne
             <MemberAvatar name={memberName} avatarUrl={memberAvatarUrl} type="mycel_agent" size="lg" />
           </div>
           <h1 className="text-2xl font-medium text-foreground mb-2">
-            你好，我是 {memberName}
+            {mode === "new" ? `为 ${memberName} 创建新对话` : `开始与 ${memberName} 对话`}
           </h1>
-          <p className="text-sm text-muted-foreground mb-6">
+          <p className="text-sm text-muted-foreground">
             {mode === "new"
-              ? `为 ${memberName} 创建一个新对话`
+              ? "先确认这次要复用还是新建 sandbox，再发送第一条消息。"
               : isOwnedAgent
-                ? "你的通用数字成员，随时准备为你工作"
-                : `${memberName} 准备为你工作`}
+                ? "选择好环境后，直接发送第一条消息开始主线对话。"
+                : `${memberName} 已准备好，先确认环境再开始。`}
           </p>
-
-          <div className="flex flex-wrap justify-center gap-2">
-            <div className="px-3 py-1.5 bg-card border border-border rounded-lg text-xs text-muted-foreground">
-              文件操作
-            </div>
-            <div className="px-3 py-1.5 bg-card border border-border rounded-lg text-xs text-muted-foreground">
-              代码探索
-            </div>
-            <div className="px-3 py-1.5 bg-card border border-border rounded-lg text-xs text-muted-foreground">
-              命令执行
-            </div>
-            <div className="px-3 py-1.5 bg-card border border-border rounded-lg text-xs text-muted-foreground">
-              信息检索
-            </div>
-          </div>
         </div>
 
         <CenteredInputBox
           sandboxTypes={sandboxTypes}
-          defaultSandbox={createMode === "new" ? (selectedRecipeId || (recipeOptions[0]?.value ?? selectedSandbox)) : (selectedLease?.provider_name ?? selectedSandbox)}
+          defaultSandbox={createMode === "new" ? (selectedRecipeSnapshot?.provider_name ?? selectedSandbox) : (selectedLease?.provider_name ?? selectedSandbox)}
           defaultWorkspace={selectedWorkspace || settings?.default_workspace || undefined}
           workspaceSelectionEnabled={false}
           defaultModel={settings?.default_model || "leon:large"}
           recentWorkspaces={settings?.recent_workspaces || []}
           environmentControl={{
-            isDetailView: configStep === 2,
-            panelClassName:
-              configStep === 2 && draftCreateMode === "new" && (recipeOptions.find((item) => item.value === draftRecipeId)?.providerType === "local")
-                ? "h-[560px] max-h-[calc(100vh-4rem)]"
-                : "max-h-[calc(100vh-4rem)]",
-            applyLabel: configStep === 1 ? "下一步" : "确认",
+            panelClassName: "max-h-[calc(100vh-4rem)]",
+            applyLabel: configStep === 3 ? "确认" : (configStep === 1 ? "下一步" : (localRecipeSelected ? "下一步" : "确认")),
+            applyDisabled: configStep === 3 && workspaceRequired,
+            showBack: configStep > 1,
+            backLabel: "返回上一步",
+            onBack: stepBack,
             renderSummary: ({ sandbox, workspace }) => summarizeEnvironment(sandbox, workspace),
-            onOpen: openDraftConfig,
-            onCancel: cancelDraftConfig,
-            onApply: applyDraftConfig,
-            renderPanel: () => {
-              const activeRecipe = recipeOptions.find((item) => item.value === draftRecipeId) ?? recipeOptions[0] ?? null;
-              const filteredRecipeOptions = draftProviderType
-                ? recipeOptions.filter((item) => item.providerType === draftProviderType)
+            onOpen: openConfigSnapshot,
+            onCancel: cancelConfigChanges,
+            onApply: applyConfigChanges,
+            renderPanel: ({ draftModel, setDraftModel }) => {
+              const activeRecipe = selectedRecipe;
+              const filteredRecipeOptions = panelProviderType
+                ? recipeOptions.filter((item) => item.recipe.provider_type === panelProviderType)
                 : recipeOptions;
-              const filteredLeaseOptions = draftProviderType
-                ? leaseOptions.filter((lease) => providerTypeFromName(lease.provider_name) === draftProviderType)
+              const filteredLeaseOptions = panelProviderType
+                ? leaseOptions.filter((lease) => providerTypeFromName(lease.provider_name) === panelProviderType)
                 : leaseOptions;
-              const localWorkspace = draftWorkspace || settings?.default_workspace || "";
-              const showWorkspaceStep = configStep === 2 && draftCreateMode === "new" && activeRecipe?.providerType === "local";
-              const showExistingStep = configStep === 2 && draftCreateMode === "existing";
-              const showRecipeDetailsStep = configStep === 2 && draftCreateMode === "new";
-              const canToggleLarkCli = Boolean(activeRecipe?.configurableFeatures.lark_cli);
+              const configurableFeatureOptions = (activeRecipe?.feature_options ?? [])
+                .filter((item) => activeRecipe?.configurable_features?.[item.key]);
+              const existingCount = filteredLeaseOptions.length;
+              const totalSteps = localRecipeSelected ? 3 : 2;
+              const renderModelChoices = (compact = false) => (
+                <div className={cn("flex flex-wrap items-center", compact ? "gap-1.5" : "gap-2")}>
+                  {[
+                    { value: "leon:mini", label: "Mini" },
+                    { value: "leon:medium", label: "Medium" },
+                    { value: "leon:large", label: "Large" },
+                    { value: "leon:max", label: "Max" },
+                  ].map((entry) => (
+                    <button
+                      key={entry.value}
+                      type="button"
+                      onClick={() => setDraftModel(entry.value)}
+                      className={cn(
+                        "border transition-colors",
+                        compact ? "rounded-lg px-2.5 py-1 text-xs" : "rounded-xl px-3 py-1.5 text-sm",
+                        draftModel === entry.value
+                          ? "border-foreground bg-foreground text-background"
+                          : "border-border bg-card text-foreground hover:bg-accent",
+                      )}
+                    >
+                      {entry.label}
+                    </button>
+                  ))}
+                </div>
+              );
 
               return (
                 <div className="space-y-4">
-                  {showWorkspaceStep ? (
-                    <div className="flex min-h-0 flex-1 flex-col">
-                      <div className="mb-4 flex items-center justify-between">
-                        <button
-                          type="button"
-                          onClick={() => setConfigStep(1)}
-                          className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground"
-                        >
-                          <ArrowLeft className="h-4 w-4" />
-                          返回上一步
-                        </button>
-                        {canToggleLarkCli && (
-                          <label className="inline-flex items-center gap-2 rounded-xl border border-border bg-card px-3 py-2 text-sm">
-                            <input
-                              type="checkbox"
-                              checked={draftLarkCliEnabled}
-                              onChange={(event) => setDraftLarkCliEnabled(event.target.checked)}
-                            />
-                            启用 Lark CLI
-                          </label>
+                  <div className="flex items-center justify-center gap-2 pb-1">
+                    {Array.from({ length: totalSteps }, (_, index) => index + 1).map((step) => (
+                      <div
+                        key={step}
+                        className={cn(
+                          "h-1.5 rounded-full transition-colors",
+                          step === configStep ? "w-6 bg-foreground" : "w-1.5 bg-border",
                         )}
+                      />
+                    ))}
+                  </div>
+
+                  {configStep === 1 ? (
+                    <div className="space-y-3 rounded-2xl border border-border bg-card p-4">
+                      <div>
+                        <div className="text-sm font-medium text-foreground">选择创建方式和 Provider</div>
                       </div>
 
-                      <div className="mb-4 grid gap-3 md:grid-cols-[minmax(0,1fr)_160px]">
-                        <div className="rounded-2xl border border-border bg-card px-3 py-3">
-                          <div className="mb-1 text-xs uppercase tracking-[0.18em] text-muted-foreground">Workspace</div>
-                          <div className="truncate text-sm text-foreground">{localWorkspace || "Choose a workspace"}</div>
-                        </div>
-                        <Select
-                          value={workspaceMode}
-                          onValueChange={(value) => setWorkspaceMode(value as "browse" | "recent" | "manual")}
-                        >
-                          <SelectTrigger className="h-11 text-sm">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="browse">Browse</SelectItem>
-                            <SelectItem value="recent">Recent</SelectItem>
-                            <SelectItem value="manual">Manual</SelectItem>
-                          </SelectContent>
-                        </Select>
+                      <div>
+                        <div className="mb-2 text-xs uppercase tracking-[0.18em] text-muted-foreground">Model</div>
+                        {renderModelChoices()}
                       </div>
 
-                      <div className="min-h-0 flex-1 overflow-y-auto rounded-2xl border border-border bg-background/70 p-3">
-                        {workspaceMode === "browse" && (
-                          <FilesystemBrowser
-                            onSelect={(path) => {
-                              setDraftWorkspace(path);
-                              setDraftCustomWorkspace("");
-                            }}
-                            initialPath={localWorkspace || "~"}
-                          />
-                        )}
-
-                        {workspaceMode === "recent" && (
-                          <div className="space-y-1">
-                            {(settings?.recent_workspaces || []).length > 0 ? (
-                              (settings?.recent_workspaces || []).map((path) => (
-                                <button
-                                  key={path}
-                                  type="button"
-                                  onClick={() => {
-                                    setDraftWorkspace(path);
-                                    setDraftCustomWorkspace("");
-                                  }}
-                                  className="w-full rounded-xl border border-border bg-card px-3 py-2 text-left text-sm hover:bg-accent"
-                                >
-                                  {path}
-                                </button>
-                              ))
-                            ) : (
-                              <div className="rounded-xl border border-dashed border-border px-3 py-4 text-sm text-muted-foreground">
-                                暂无最近工作区
-                              </div>
-                            )}
-                          </div>
-                        )}
-
-                        {workspaceMode === "manual" && (
-                          <div className="flex gap-2">
-                            <Input
-                              value={draftCustomWorkspace}
-                              onChange={(e) => setDraftCustomWorkspace(e.target.value)}
-                              placeholder="例如: ~/Projects"
-                              className="h-9"
-                            />
-                            <Button
-                              type="button"
-                              size="sm"
-                              disabled={!draftCustomWorkspace.trim()}
-                              onClick={() => {
-                                const path = draftCustomWorkspace.trim();
-                                if (!path) return;
-                                setDraftWorkspace(path);
-                              }}
-                            >
-                              保存
-                            </Button>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  ) : showExistingStep ? (
-                    <div className="space-y-4">
-                      <button
-                        type="button"
-                        onClick={() => setConfigStep(1)}
-                        className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground"
-                      >
-                        <ArrowLeft className="h-4 w-4" />
-                        返回上一步
-                      </button>
-                      <div className="space-y-2">
-                        <div className="mb-2 text-xs uppercase tracking-[0.18em] text-muted-foreground">My Leases</div>
-                        <div className="max-h-[320px] space-y-2 overflow-y-auto pr-1">
-                          {filteredLeaseOptions.map((lease) => {
-                            const isActive = draftSelectedLeaseId === lease.lease_id;
-                            return (
-                              <button
-                                key={lease.lease_id}
-                                type="button"
-                                onClick={() => setDraftSelectedLeaseId(lease.lease_id)}
-                                className={cn(
-                                  "w-full rounded-2xl border p-3 text-left transition-colors",
-                                  isActive ? "border-primary/40 bg-primary/5" : "border-border bg-card hover:bg-accent/40",
-                                )}
-                              >
-                                <div className="flex items-start justify-between gap-3">
-                                  <div className="min-w-0">
-                                    <div className="text-sm font-medium text-foreground">
-                                      {PROVIDER_TYPE_LABELS[providerTypeFromName(lease.provider_name)] ?? lease.provider_name} · {lease.recipe_name}
-                                    </div>
-                                    <div className="mt-1 text-xs text-muted-foreground">
-                                      {lease.cwd || "No working directory"}
-                                    </div>
-                                  </div>
-                                  <div className="flex -space-x-2">
-                                    {lease.agents.slice(0, 4).map((agent) => (
-                                      <MemberAvatar
-                                        key={agent.member_id}
-                                        name={agent.member_name}
-                                        avatarUrl={agent.avatar_url ?? undefined}
-                                        type="mycel_agent"
-                                        size="xs"
-                                        className="ring-2 ring-background"
-                                      />
-                                    ))}
-                                  </div>
-                                </div>
-                              </button>
-                            );
-                          })}
-                          {!leaseLoading && filteredLeaseOptions.length === 0 && (
-                            <div className="rounded-2xl border border-dashed border-border px-3 py-4 text-sm text-muted-foreground">
-                              You do not have any reusable sandboxes yet.
-                            </div>
-                          )}
-                        </div>
-                        {leaseError && <p className="mt-2 text-xs text-destructive">{leaseError}</p>}
-                      </div>
-                    </div>
-                  ) : showRecipeDetailsStep ? (
-                    <div className="space-y-4">
-                      <button
-                        type="button"
-                        onClick={() => setConfigStep(1)}
-                        className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground"
-                      >
-                        <ArrowLeft className="h-4 w-4" />
-                        返回上一步
-                      </button>
-                      <div className="rounded-2xl border border-border bg-background/70 p-4">
-                        <div className="text-sm font-medium text-foreground">{activeRecipe?.label ?? "选择 recipe"}</div>
-                        <div className="mt-2 text-sm text-muted-foreground">
-                          {PROVIDER_TYPE_LABELS[activeRecipe?.providerType ?? "local"] ?? activeRecipe?.providerName}
-                          {" "}会基于这个默认 recipe 创建新的 sandbox。
-                        </div>
-                      </div>
-                      {canToggleLarkCli && (
-                        <button
-                          type="button"
-                          onClick={() => setDraftLarkCliEnabled((current) => !current)}
-                          className={cn(
-                            "w-full rounded-2xl border px-4 py-3 text-left transition-colors",
-                            draftLarkCliEnabled
-                              ? "border-foreground/30 bg-accent/60"
-                              : "border-border bg-card hover:bg-accent/30",
-                          )}
-                        >
-                          <div className="text-sm font-medium text-foreground">Lark CLI</div>
-                          <div className="mt-1 text-xs text-muted-foreground">
-                            {draftLarkCliEnabled ? "将在 sandbox 初始化时懒安装并校验。": "保持默认环境，不注入 Lark CLI。"}
-                          </div>
-                        </button>
-                      )}
-                      <div className="rounded-2xl border border-dashed border-border px-4 py-3 text-sm text-muted-foreground">
-                        {draftLarkCliEnabled
-                          ? "确认后，这次 thread 会使用开启了 Lark CLI 的 recipe 变体。"
-                          : "确认后，这次 thread 会使用默认 recipe。"}
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="space-y-4">
                       <div className="grid gap-2 sm:grid-cols-2">
                         <button
                           type="button"
-                          onClick={() => setDraftCreateMode("new")}
+                          onClick={() => setCreateMode("new")}
                           className={cn(
                             "rounded-2xl border px-4 py-3 text-left transition-colors",
-                            draftCreateMode === "new"
+                            createMode === "new"
                               ? "border-foreground/30 bg-accent/60"
-                              : "border-border bg-card hover:bg-accent/30",
+                              : "border-border bg-background hover:bg-accent/30",
                           )}
                         >
                           <div className="text-sm font-medium text-foreground">New sandbox</div>
-                          <div className="mt-1 text-xs text-muted-foreground">
-                            Start a fresh sandbox from a default recipe.
-                          </div>
+                          <div className="mt-1 text-xs text-muted-foreground">新建一个 sandbox，再进入这次 thread。</div>
                         </button>
                         <button
                           type="button"
-                          onClick={() => setDraftCreateMode("existing")}
+                          onClick={() => setCreateMode("existing")}
                           className={cn(
                             "rounded-2xl border px-4 py-3 text-left transition-colors",
-                            draftCreateMode === "existing"
+                            createMode === "existing"
                               ? "border-foreground/30 bg-accent/60"
-                              : "border-border bg-card hover:bg-accent/30",
+                              : "border-border bg-background hover:bg-accent/30",
                           )}
                         >
-                          <div className="text-sm font-medium text-foreground">Existing sandbox</div>
-                          <div className="mt-1 text-xs text-muted-foreground">
-                            Reuse one of your current leases.
+                          <div className="flex items-center justify-between gap-3">
+                            <div className="text-sm font-medium text-foreground">Existing sandbox</div>
+                            <span className="rounded-full bg-card px-2 py-0.5 text-[11px] text-muted-foreground">{existingCount}</span>
                           </div>
+                          <div className="mt-1 text-xs text-muted-foreground">复用你已经拥有的 sandbox lease。</div>
                         </button>
                       </div>
 
-                      <div className={cn("grid gap-4", draftCreateMode === "new" ? "sm:grid-cols-2" : "sm:grid-cols-1")}>
-                        <div>
-                          <div className="mb-2 text-xs uppercase tracking-[0.18em] text-muted-foreground">Provider</div>
-                          <Select
-                            value={draftProviderType || "__all__"}
-                            onValueChange={(value) => {
-                              const nextProvider = value === "__all__" ? "" : value;
-                              setDraftProviderType(nextProvider);
-                              const nextRecipes = nextProvider
-                                ? recipeOptions.filter((item) => item.providerType === nextProvider)
-                                : recipeOptions;
-                              if (nextRecipes.length > 0 && !nextRecipes.some((item) => item.value === draftRecipeId)) {
-                                setDraftRecipeId(nextRecipes[0].value);
-                                setDraftLarkCliEnabled(false);
-                              }
-                            }}
-                          >
-                            <SelectTrigger className="h-10 text-sm">
-                              <SelectValue placeholder="All providers" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="__all__">All providers</SelectItem>
-                              {providerTypeOptions.map((item) => (
-                                <SelectItem key={item.value} value={item.value}>
-                                  {item.label}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
+                      <div>
+                        <div className="mb-2 text-xs uppercase tracking-[0.18em] text-muted-foreground">Provider</div>
+                        <Select
+                          value={panelProviderType || "__all__"}
+                          onValueChange={(value) => {
+                            const nextProvider = value === "__all__" ? "" : value;
+                            setPanelProviderType(nextProvider);
+                            const nextRecipes = nextProvider
+                              ? recipeOptions.filter((item) => item.recipe.provider_type === nextProvider)
+                              : recipeOptions;
+                            if (nextRecipes.length > 0 && !nextRecipes.some((item) => item.value === selectedRecipeId)) {
+                              setSelectedRecipeId(nextRecipes[0].value);
+                            }
+                            const nextLease = nextProvider
+                              ? leaseOptions.find((lease) => providerTypeFromName(lease.provider_name) === nextProvider)
+                              : leaseOptions[0];
+                            if (createMode === "existing") {
+                              setSelectedLeaseId(nextLease?.lease_id || "");
+                            }
+                          }}
+                        >
+                          <SelectTrigger className="h-10 text-sm">
+                            <SelectValue placeholder="All providers" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="__all__">All providers</SelectItem>
+                            {providerTypeOptions.map((item) => (
+                              <SelectItem key={item.value} value={item.value}>
+                                {item.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                  ) : null}
 
-                        {draftCreateMode === "new" && (
+                  {configStep === 2 && (
+                    <div className="space-y-3 rounded-2xl border border-border bg-card p-4">
+                      <div className="space-y-3">
+                        <div>
+                          <div className="text-sm font-medium text-foreground">
+                            {createMode === "new" ? "确认 Recipe 与工具" : "选择要复用的 sandbox"}
+                          </div>
+                          <div className="mt-1 text-xs text-muted-foreground">{stepSummary}</div>
+                        </div>
+                      </div>
+
+                      {createMode === "new" && (
+                        <>
                           <div>
                             <div className="mb-2 text-xs uppercase tracking-[0.18em] text-muted-foreground">Recipe</div>
-                            <Select
-                              value={draftRecipeId}
-                              onValueChange={(value) => {
-                                setDraftRecipeId(value);
-                                setDraftLarkCliEnabled(false);
-                              }}
-                            >
+                            <Select value={selectedRecipeId} onValueChange={setSelectedRecipeId}>
                               <SelectTrigger className="h-10 text-sm">
                                 <SelectValue placeholder="Choose a recipe" />
                               </SelectTrigger>
@@ -694,8 +598,141 @@ export default function NewChatPage({ mode = "member" }: { mode?: "member" | "ne
                               </SelectContent>
                             </Select>
                           </div>
-                        )}
+
+                          {configurableFeatureOptions.length > 0 && (
+                            <div className="space-y-2">
+                              <div className="text-xs uppercase tracking-[0.18em] text-muted-foreground">临时修改</div>
+                              <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+                                {configurableFeatureOptions.map((option) => {
+                                  const checked = Boolean(selectedRecipeFeatures[option.key]);
+                                  return (
+                                    <button
+                                      key={option.key}
+                                      type="button"
+                                      onClick={() => {
+                                        setSelectedRecipeFeatures((current) => ({
+                                          ...current,
+                                          [option.key]: !checked,
+                                        }));
+                                      }}
+                                      className={cn(
+                                        "rounded-2xl border px-4 py-3 text-left transition-colors",
+                                        checked
+                                          ? "border-foreground/30 bg-accent/60"
+                                          : "border-border bg-background hover:bg-accent/30",
+                                      )}
+                                    >
+                                      <div className="flex items-start gap-3">
+                                        <Checkbox checked={checked} className="pointer-events-none mt-0.5" />
+                                        <div className="min-w-0">
+                                          <div className="flex items-center gap-2">
+                                            <div className="text-sm font-medium text-foreground">{option.name}</div>
+                                            {option.icon === "feishu" && (
+                                              <span className="rounded-full bg-sky-50 px-2 py-0.5 text-[10px] font-medium text-sky-700">
+                                                飞书
+                                              </span>
+                                            )}
+                                          </div>
+                                          <div className="mt-1 text-xs text-muted-foreground">{option.description}</div>
+                                        </div>
+                                      </div>
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          )}
+                        </>
+                      )}
+
+                      {createMode === "existing" && (
+                        <div className="space-y-2">
+                          <div className="flex items-center justify-between gap-3">
+                            <div className="text-xs uppercase tracking-[0.18em] text-muted-foreground">My Leases</div>
+                            <div className="text-xs text-muted-foreground">{existingCount} available</div>
+                          </div>
+                          <div className="max-h-[320px] space-y-2 overflow-y-auto pr-1">
+                            {filteredLeaseOptions.map((lease) => {
+                              const isActive = selectedLeaseId === lease.lease_id;
+                              const stateMeta = leaseStateMeta(lease.observed_state);
+                              return (
+                                <button
+                                  key={lease.lease_id}
+                                  type="button"
+                                  onClick={() => setSelectedLeaseId(lease.lease_id)}
+                                  className={cn(
+                                    "w-full rounded-2xl border p-3 text-left transition-colors",
+                                    isActive ? "border-primary/40 bg-primary/5" : "border-border bg-background hover:bg-accent/40",
+                                  )}
+                                >
+                                  <div className="flex items-start justify-between gap-3">
+                                    <div className="min-w-0">
+                                      <div className="flex items-center gap-2">
+                                        <span className={cn("h-2 w-2 rounded-full", stateMeta.dot)} />
+                                        <div className="text-sm font-medium text-foreground">
+                                          {PROVIDER_TYPE_LABELS[providerTypeFromName(lease.provider_name)] ?? lease.provider_name} · {lease.recipe_name}
+                                        </div>
+                                      </div>
+                                      <div className="mt-1 text-xs text-muted-foreground">
+                                        {stateMeta.label} · {lease.cwd || "No working directory"}
+                                      </div>
+                                    </div>
+                                    <div className="flex -space-x-2">
+                                      {lease.agents.slice(0, 4).map((agent) => (
+                                        <MemberAvatar
+                                          key={agent.member_id}
+                                          name={agent.member_name}
+                                          avatarUrl={agent.avatar_url ?? undefined}
+                                          type="mycel_agent"
+                                          size="xs"
+                                          className="ring-2 ring-background"
+                                        />
+                                      ))}
+                                    </div>
+                                  </div>
+                                </button>
+                              );
+                            })}
+                            {!leaseLoading && filteredLeaseOptions.length === 0 && (
+                              <div className="rounded-2xl border border-dashed border-border px-3 py-4 text-sm text-muted-foreground">
+                                你还没有可复用的 sandbox。
+                              </div>
+                            )}
+                          </div>
+                          {leaseError && <p className="mt-2 text-xs text-destructive">{leaseError}</p>}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {configStep === 3 && localRecipeSelected && (
+                    <div className="space-y-3 rounded-2xl border border-border bg-card p-4">
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="truncate text-xs text-muted-foreground">
+                          {[recipeSummaryLabel, ...enabledFeatureLabels(selectedRecipeSnapshot)].join(" · ")}
+                        </div>
                       </div>
+
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <div className="text-sm font-medium text-foreground">选择工作区</div>
+                        </div>
+                      </div>
+
+                      <div className="max-h-[360px] overflow-y-auto">
+                        <FilesystemBrowser
+                          onSelect={(path) => {
+                            setSelectedWorkspace(path);
+                          }}
+                          initialPath={localWorkspace || "~"}
+                        />
+                      </div>
+
+                      {workspaceRequired && (
+                        <div className="text-xs text-destructive">
+                          Local sandbox 需要先选择一个工作区，才能确认配置。
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>

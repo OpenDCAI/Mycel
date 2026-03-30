@@ -36,6 +36,7 @@ REQUIRED_LEASE_COLUMNS = {
     "lease_id",
     "provider_name",
     "recipe_id",
+    "recipe_json",
     "workspace_key",
     "current_instance_id",
     "instance_created_at",
@@ -92,6 +93,7 @@ class SandboxLease(ABC):
         lease_id: str,
         provider_name: str,
         recipe_id: str | None = None,
+        recipe: dict[str, Any] | None = None,
         current_instance: SandboxInstance | None = None,
         status: str = "active",
         workspace_key: str | None = None,
@@ -106,7 +108,8 @@ class SandboxLease(ABC):
     ):
         self.lease_id = lease_id
         self.provider_name = provider_name
-        self.recipe_id = recipe_id
+        self.recipe = recipe
+        self.recipe_id = recipe_id or (str(recipe.get("id")) if isinstance(recipe, dict) and recipe.get("id") else None)
         self._current_instance = current_instance
         self.status = status
         self.workspace_key = workspace_key
@@ -178,6 +181,7 @@ class SQLiteLease(SandboxLease):
         lease_id: str,
         provider_name: str,
         recipe_id: str | None = None,
+        recipe: dict[str, Any] | None = None,
         current_instance: SandboxInstance | None = None,
         db_path: Path | None = None,
         status: str = "active",
@@ -195,6 +199,7 @@ class SQLiteLease(SandboxLease):
             lease_id=lease_id,
             provider_name=provider_name,
             recipe_id=recipe_id,
+            recipe=recipe,
             current_instance=current_instance,
             status=status,
             workspace_key=workspace_key,
@@ -340,6 +345,7 @@ class SQLiteLease(SandboxLease):
                 SET current_instance_id = ?,
                     instance_created_at = ?,
                     recipe_id = ?,
+                    recipe_json = ?,
                     desired_state = ?,
                     observed_state = ?,
                     instance_status = ?,
@@ -356,6 +362,7 @@ class SQLiteLease(SandboxLease):
                     self._current_instance.instance_id if self._current_instance else None,
                     self._current_instance.created_at.isoformat() if self._current_instance else None,
                     self.recipe_id,
+                    json.dumps(self.recipe, ensure_ascii=False) if self.recipe is not None else None,
                     self.desired_state,
                     self.observed_state,
                     self.observed_state,
@@ -420,6 +427,7 @@ class SQLiteLease(SandboxLease):
                 """
                 UPDATE sandbox_leases
                 SET recipe_id = ?,
+                    recipe_json = ?,
                     desired_state = ?,
                     observed_state = ?,
                     instance_status = ?,
@@ -434,6 +442,7 @@ class SQLiteLease(SandboxLease):
                 """,
                 (
                     self.recipe_id,
+                    json.dumps(self.recipe, ensure_ascii=False) if self.recipe is not None else None,
                     self.desired_state,
                     self.observed_state,
                     self.observed_state,
@@ -464,6 +473,7 @@ class SQLiteLease(SandboxLease):
         self._current_instance = other._current_instance
         self.status = other.status
         self.workspace_key = other.workspace_key
+        self.recipe = other.recipe
         self.recipe_id = other.recipe_id
         self.desired_state = other.desired_state
         self.observed_state = other.observed_state
@@ -812,6 +822,7 @@ def lease_from_row(row: dict, db_path: Path) -> SQLiteLease:
         lease_id=row["lease_id"],
         provider_name=row["provider_name"],
         recipe_id=row.get("recipe_id"),
+        recipe=json.loads(str(row["recipe_json"])) if row.get("recipe_json") else None,
         current_instance=instance,
         db_path=db_path,
         status=row.get("status") or "active",

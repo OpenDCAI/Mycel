@@ -18,7 +18,7 @@ from storage.providers.sqlite.kernel import SQLiteDBRole, resolve_role_db_path
 SANDBOX_DB_PATH = resolve_role_db_path(SQLiteDBRole.SANDBOX)
 from sandbox.manager import SandboxManager
 from sandbox.provider import ProviderCapability
-from sandbox.recipes import default_recipe_id, list_builtin_recipes, resolve_builtin_recipe
+from sandbox.recipes import default_recipe_id, list_builtin_recipes, normalize_recipe_snapshot
 from storage.providers.sqlite.member_repo import SQLiteMemberRepo
 from storage.providers.sqlite.thread_repo import SQLiteThreadRepo
 from storage.providers.sqlite.sandbox_monitor_repo import SQLiteSandboxMonitorRepo
@@ -63,6 +63,7 @@ def list_user_leases(
                     "lease_id": lease_id,
                     "provider_name": str(row.get("provider_name") or "local"),
                     "recipe_id": str(row.get("recipe_id") or "") or None,
+                    "recipe": row.get("recipe_json"),
                     "observed_state": row.get("observed_state"),
                     "desired_state": row.get("desired_state"),
                     "cwd": row.get("cwd"),
@@ -95,8 +96,14 @@ def list_user_leases(
             if not lease["thread_ids"]:
                 continue
             provider_name = lease["provider_name"]
-            lease["recipe_id"] = lease["recipe_id"] or default_recipe_id(provider_name)
-            lease["recipe_name"] = resolve_builtin_recipe(provider_name, lease["recipe_id"])["name"]
+            if lease["recipe"]:
+                import json
+                recipe_snapshot = normalize_recipe_snapshot(provider_name, json.loads(str(lease["recipe"])))
+            else:
+                recipe_snapshot = normalize_recipe_snapshot(provider_name)
+            lease["recipe_id"] = recipe_snapshot["id"] or lease["recipe_id"] or default_recipe_id(provider_name)
+            lease["recipe"] = recipe_snapshot
+            lease["recipe_name"] = recipe_snapshot["name"]
             leases.append(lease)
         return leases
     finally:

@@ -67,11 +67,30 @@ export interface SandboxType {
   };
 }
 
+export interface RecipeFeatureOption {
+  key: string;
+  name: string;
+  description: string;
+  icon?: string;
+}
+
+export interface RecipeSnapshot {
+  id: string;
+  name: string;
+  desc?: string;
+  provider_name: string;
+  provider_type: string;
+  features: Record<string, boolean>;
+  configurable_features?: Record<string, boolean>;
+  feature_options?: RecipeFeatureOption[];
+}
+
 export interface UserLeaseSummary {
   lease_id: string;
   provider_name: string;
   recipe_id: string;
   recipe_name: string;
+  recipe?: RecipeSnapshot;
   observed_state?: string | null;
   desired_state?: string | null;
   cwd?: string | null;

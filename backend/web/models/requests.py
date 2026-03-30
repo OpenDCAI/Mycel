@@ -5,10 +5,18 @@ from pydantic import BaseModel, Field
 from sandbox.config import MountSpec
 
 
+class RecipeSnapshotRequest(BaseModel):
+    id: str
+    name: str
+    provider_name: str
+    provider_type: str
+    features: dict[str, bool] = Field(default_factory=dict)
+
+
 class CreateThreadRequest(BaseModel):
     member_id: str  # which agent template to create thread from
     sandbox: str = "local"
-    recipe_id: str | None = None
+    recipe: RecipeSnapshotRequest | None = None
     lease_id: str | None = None
     cwd: str | None = None
     model: str | None = None

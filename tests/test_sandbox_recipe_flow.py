@@ -101,6 +101,7 @@ def test_builtin_recipes_dedupe_provider_variants_and_only_expose_defaults() -> 
     assert items[0]["provider_type"] == "local"
     assert items[0]["features"] == {"lark_cli": False}
     assert items[0]["configurable_features"] == {"lark_cli": True}
+    assert items[0]["feature_options"][0]["key"] == "lark_cli"
     assert items[1]["provider_name"] == "daytona"
     assert items[1]["provider_type"] == "daytona"
 
@@ -214,7 +215,7 @@ def test_list_user_leases_only_returns_owned_leases(tmp_path: Path, monkeypatch:
     assert leases[0]["agents"][0]["avatar_url"] == "/api/members/member-1/avatar"
 
 
-def test_create_thread_persists_selected_recipe_on_lease(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_create_thread_persists_selected_recipe_snapshot_on_lease(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     sandbox_db = _patch_sandbox_paths(monkeypatch, tmp_path)
     main_db = tmp_path / "leon.db"
 
@@ -240,12 +241,23 @@ def test_create_thread_persists_selected_recipe_on_lease(tmp_path: Path, monkeyp
     threads_router._create_owned_thread(
         app,
         "user-1",
-        CreateThreadRequest(member_id="member-1", sandbox="local", recipe_id="local:lark-cli"),
+        CreateThreadRequest(
+            member_id="member-1",
+            sandbox="local",
+            recipe={
+                "id": "local:default",
+                "name": "Local Default",
+                "provider_name": "local",
+                "provider_type": "local",
+                "features": {"lark_cli": True},
+            },
+        ),
         is_main=False,
     )
 
     leases = sandbox_service.list_user_leases("user-1", main_db_path=main_db, sandbox_db_path=sandbox_db)
 
     assert len(leases) == 1
-    assert leases[0]["recipe_id"] == "local:lark-cli"
-    assert leases[0]["recipe_name"] == "Local + Lark CLI"
+    assert leases[0]["recipe_id"] == "local:default"
+    assert leases[0]["recipe_name"] == "Local Default"
+    assert leases[0]["recipe"]["features"] == {"lark_cli": True}
