@@ -39,8 +39,9 @@ function toThreads(payload: unknown): ThreadSummary[] {
 
 // --- Thread API ---
 
-export async function listThreads(): Promise<ThreadSummary[]> {
-  const payload = await request<unknown>("/api/threads");
+export async function listThreads(scope?: "owned" | "visible"): Promise<ThreadSummary[]> {
+  const query = scope ? `?scope=${encodeURIComponent(scope)}` : "";
+  const payload = await request<unknown>(`/api/threads${query}`);
   return toThreads(payload);
 }
 

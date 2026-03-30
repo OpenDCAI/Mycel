@@ -3,7 +3,7 @@
 import asyncio
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request, FastAPI
 
 from backend.web.core.dependencies import get_current_user_id
 
@@ -29,6 +29,23 @@ from backend.web.services import member_service, task_service, library_service, 
 from backend.scheduled_tasks import service as scheduled_task_service
 
 router = APIRouter(prefix="/api/panel", tags=["panel"])
+
+
+def _verify_thread_owned_by_user(app: FastAPI, thread_id: str, user_id: str) -> None:
+    thread = app.state.thread_repo.get_by_id(thread_id) if hasattr(app.state, "thread_repo") else None
+    if not thread:
+        raise HTTPException(404, "Thread not found")
+    member = app.state.member_repo.get_by_id(thread["member_id"]) if hasattr(app.state, "member_repo") else None
+    if not member or member.owner_user_id != user_id:
+        raise HTTPException(403, "Not authorized")
+
+
+def _get_owned_scheduled_task(app: FastAPI, task_id: str, user_id: str) -> dict[str, Any]:
+    task = scheduled_task_service.get_scheduled_task(task_id)
+    if task is None:
+        raise HTTPException(404, "Scheduled task not found")
+    _verify_thread_owned_by_user(app, str(task["thread_id"]), user_id)
+    return task
 
 
 # ── Members ──
@@ -188,13 +205,28 @@ async def trigger_cron_job(job_id: str, request: Request) -> dict[str, Any]:
 
 
 @router.get("/scheduled-tasks")
-async def list_scheduled_tasks() -> dict[str, Any]:
+async def list_scheduled_tasks(
+    request: Request,
+    user_id: Annotated[str, Depends(get_current_user_id)],
+) -> dict[str, Any]:
     items = await asyncio.to_thread(scheduled_task_service.list_scheduled_tasks)
-    return {"items": items}
+    owned_items = []
+    for item in items:
+        try:
+            _verify_thread_owned_by_user(request.app, str(item["thread_id"]), user_id)
+        except HTTPException:
+            continue
+        owned_items.append(item)
+    return {"items": owned_items}
 
 
 @router.post("/scheduled-tasks")
-async def create_scheduled_task(req: CreateScheduledTaskRequest) -> dict[str, Any]:
+async def create_scheduled_task(
+    req: CreateScheduledTaskRequest,
+    request: Request,
+    user_id: Annotated[str, Depends(get_current_user_id)],
+) -> dict[str, Any]:
+    _verify_thread_owned_by_user(request.app, req.thread_id, user_id)
     item = await asyncio.to_thread(
         scheduled_task_service.create_scheduled_task,
         thread_id=req.thread_id,
@@ -207,10 +239,18 @@ async def create_scheduled_task(req: CreateScheduledTaskRequest) -> dict[str, An
 
 
 @router.put("/scheduled-tasks/{task_id}")
-async def update_scheduled_task(task_id: str, req: UpdateScheduledTaskRequest) -> dict[str, Any]:
+async def update_scheduled_task(
+    task_id: str,
+    req: UpdateScheduledTaskRequest,
+    request: Request,
+    user_id: Annotated[str, Depends(get_current_user_id)],
+) -> dict[str, Any]:
+    _get_owned_scheduled_task(request.app, task_id, user_id)
     fields = req.model_dump(exclude_none=True)
     if "enabled" in fields:
         fields["enabled"] = int(fields["enabled"])
+    if "thread_id" in fields:
+        _verify_thread_owned_by_user(request.app, str(fields["thread_id"]), user_id)
     item = await asyncio.to_thread(scheduled_task_service.update_scheduled_task, task_id, **fields)
     if not item:
         raise HTTPException(404, "Scheduled task not found")
@@ -218,7 +258,12 @@ async def update_scheduled_task(task_id: str, req: UpdateScheduledTaskRequest) -
 
 
 @router.delete("/scheduled-tasks/{task_id}")
-async def delete_scheduled_task(task_id: str) -> dict[str, Any]:
+async def delete_scheduled_task(
+    task_id: str,
+    request: Request,
+    user_id: Annotated[str, Depends(get_current_user_id)],
+) -> dict[str, Any]:
+    _get_owned_scheduled_task(request.app, task_id, user_id)
     ok = await asyncio.to_thread(scheduled_task_service.delete_scheduled_task, task_id)
     if not ok:
         raise HTTPException(404, "Scheduled task not found")
@@ -226,13 +271,23 @@ async def delete_scheduled_task(task_id: str) -> dict[str, Any]:
 
 
 @router.get("/scheduled-tasks/{task_id}/runs")
-async def list_scheduled_task_runs(task_id: str) -> dict[str, Any]:
+async def list_scheduled_task_runs(
+    task_id: str,
+    request: Request,
+    user_id: Annotated[str, Depends(get_current_user_id)],
+) -> dict[str, Any]:
+    _get_owned_scheduled_task(request.app, task_id, user_id)
     items = await asyncio.to_thread(scheduled_task_service.list_scheduled_task_runs, task_id)
     return {"items": items}
 
 
 @router.post("/scheduled-tasks/{task_id}/run")
-async def trigger_scheduled_task(task_id: str, request: Request) -> dict[str, Any]:
+async def trigger_scheduled_task(
+    task_id: str,
+    request: Request,
+    user_id: Annotated[str, Depends(get_current_user_id)],
+) -> dict[str, Any]:
+    _get_owned_scheduled_task(request.app, task_id, user_id)
     scheduler = getattr(request.app.state, "scheduled_task_scheduler", None)
     if not scheduler:
         raise HTTPException(503, "Scheduled task scheduler not available")

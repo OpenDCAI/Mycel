@@ -4,9 +4,9 @@ import asyncio
 import json
 import logging
 import uuid
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
 from sse_starlette.sse import EventSourceResponse
 
@@ -45,6 +45,7 @@ from sandbox.config import MountSpec
 from sandbox.thread_context import set_current_thread_id
 
 router = APIRouter(prefix="/api/threads", tags=["threads"])
+ThreadListScope = Literal["owned", "visible"]
 
 
 async def _prepare_attachment_message(
@@ -187,6 +188,14 @@ def _thread_payload(app: Any, thread_id: str, sandbox_type: str) -> dict[str, An
         "avatar_url": avatar_url(member.id, bool(member.avatar)),
         "is_main": thread["is_main"],
     }
+
+
+def _list_thread_rows(app: Any, user_id: str, scope: ThreadListScope) -> list[dict[str, Any]]:
+    if scope == "owned":
+        return app.state.thread_repo.list_by_owner_user_id(user_id)
+    if scope == "visible":
+        return app.state.thread_repo.list_by_owner_user_id(user_id)
+    raise HTTPException(400, "Invalid thread scope")
 
 
 def _create_thread_sandbox_resources(thread_id: str, sandbox_type: str) -> None:
@@ -341,12 +350,15 @@ async def resolve_main_thread(
 @router.get("")
 async def list_threads(
     user_id: Annotated[str, Depends(get_current_user_id)],
+    scope: Annotated[str, Query()] = "owned",
     app: Annotated[Any, Depends(get_app)] = None,
 ) -> dict[str, Any]:
     """List threads owned by the current user."""
     from core.runtime.middleware.monitor import AgentState
 
-    raw = app.state.thread_repo.list_by_owner_user_id(user_id)
+    if scope not in {"owned", "visible"}:
+        raise HTTPException(400, "Invalid thread scope")
+    raw = _list_thread_rows(app, user_id, scope)
     pool = app.state.agent_pool
     threads = []
     for t in raw:
