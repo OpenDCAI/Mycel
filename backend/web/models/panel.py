@@ -84,6 +84,8 @@ class BulkDeleteTasksRequest(BaseModel):
 class CreateResourceRequest(BaseModel):
     name: str
     desc: str = ""
+    provider_type: str | None = None
+    features: dict[str, bool] | None = None
 
 
 class UpdateResourceRequest(BaseModel):

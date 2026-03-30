@@ -51,7 +51,12 @@ interface AppState {
   // ── Library ──
   fetchLibrary: (type: string) => Promise<void>;
   fetchLibraryNames: (type: string) => Promise<{ name: string; desc: string }[]>;
-  addResource: (type: string, name: string, desc?: string) => Promise<ResourceItem>;
+  addResource: (
+    type: string,
+    name: string,
+    desc?: string,
+    extra?: { provider_type?: string; features?: Record<string, boolean> },
+  ) => Promise<ResourceItem>;
   updateResource: (type: string, id: string, fields: Partial<ResourceItem>) => Promise<void>;
   deleteResource: (type: string, id: string) => Promise<void>;
   fetchResourceContent: (type: string, id: string) => Promise<string>;
@@ -260,14 +265,15 @@ export const useAppStore = create<AppState>()((set, get) => ({
     return data.items;
   },
 
-  addResource: async (type, name, desc = "") => {
+  addResource: async (type, name, desc = "", extra = {}) => {
     const item = await api<ResourceItem>(`/library/${type}`, {
       method: "POST",
-      body: JSON.stringify({ name, desc }),
+      body: JSON.stringify({ name, desc, ...extra }),
     });
     if (type === "skill") set((s) => ({ librarySkills: [...s.librarySkills, item] }));
     else if (type === "mcp") set((s) => ({ libraryMcps: [...s.libraryMcps, item] }));
-    else set((s) => ({ libraryAgents: [...s.libraryAgents, item] }));
+    else if (type === "agent") set((s) => ({ libraryAgents: [...s.libraryAgents, item] }));
+    else set((s) => ({ libraryRecipes: [...s.libraryRecipes, item] }));
     return item;
   },
 

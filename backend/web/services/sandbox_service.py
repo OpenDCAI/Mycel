@@ -18,7 +18,7 @@ from storage.providers.sqlite.kernel import SQLiteDBRole, resolve_role_db_path
 SANDBOX_DB_PATH = resolve_role_db_path(SQLiteDBRole.SANDBOX)
 from sandbox.manager import SandboxManager
 from sandbox.provider import ProviderCapability
-from sandbox.recipes import default_recipe_id, list_builtin_recipes, normalize_recipe_snapshot
+from sandbox.recipes import default_recipe_id, list_builtin_recipes, normalize_recipe_snapshot, provider_type_from_name
 from storage.providers.sqlite.member_repo import SQLiteMemberRepo
 from storage.providers.sqlite.thread_repo import SQLiteThreadRepo
 from storage.providers.sqlite.sandbox_monitor_repo import SQLiteSandboxMonitorRepo
@@ -96,12 +96,13 @@ def list_user_leases(
             if not lease["thread_ids"]:
                 continue
             provider_name = lease["provider_name"]
+            provider_type = provider_type_from_name(provider_name)
             if lease["recipe"]:
                 import json
-                recipe_snapshot = normalize_recipe_snapshot(provider_name, json.loads(str(lease["recipe"])))
+                recipe_snapshot = normalize_recipe_snapshot(provider_type, json.loads(str(lease["recipe"])))
             else:
-                recipe_snapshot = normalize_recipe_snapshot(provider_name)
-            lease["recipe_id"] = recipe_snapshot["id"] or lease["recipe_id"] or default_recipe_id(provider_name)
+                recipe_snapshot = normalize_recipe_snapshot(provider_type)
+            lease["recipe_id"] = recipe_snapshot["id"] or lease["recipe_id"] or default_recipe_id(provider_type)
             lease["recipe"] = recipe_snapshot
             lease["recipe_name"] = recipe_snapshot["name"]
             leases.append(lease)

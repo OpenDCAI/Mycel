@@ -34,32 +34,37 @@ def humanize_recipe_provider(name: str) -> str:
     )
 
 
-def default_recipe_id(provider_name: str) -> str:
-    return f"{provider_type_from_name(provider_name)}:default"
+def default_recipe_id(provider_type: str) -> str:
+    return f"{provider_type}:default"
 
 
-def default_recipe_name(provider_name: str) -> str:
-    return f"{humanize_recipe_provider(provider_type_from_name(provider_name))} Default"
+def default_recipe_name(provider_type: str) -> str:
+    return f"{humanize_recipe_provider(provider_type)} Default"
 
 
-def default_recipe_snapshot(provider_name: str) -> dict[str, Any]:
-    provider_type = provider_type_from_name(provider_name)
+def default_recipe_snapshot(provider_type: str) -> dict[str, Any]:
     return {
-        "id": default_recipe_id(provider_name),
-        "name": default_recipe_name(provider_name),
+        "id": default_recipe_id(provider_type),
+        "name": default_recipe_name(provider_type),
         "desc": f"Default recipe for {provider_type}",
-        "provider_name": provider_name,
         "provider_type": provider_type,
         "features": {"lark_cli": False},
         "configurable_features": {"lark_cli": True},
         "feature_options": [deepcopy(FEATURE_CATALOG["lark_cli"])],
+        "builtin": True,
     }
 
 
-def normalize_recipe_snapshot(provider_name: str, recipe: dict[str, Any] | None = None) -> dict[str, Any]:
-    base = default_recipe_snapshot(provider_name)
+def normalize_recipe_snapshot(provider_type: str, recipe: dict[str, Any] | None = None) -> dict[str, Any]:
+    base = default_recipe_snapshot(provider_type)
     if recipe is None:
         return base
+
+    requested_type = str(recipe.get("provider_type") or provider_type).strip() or provider_type
+    if requested_type != provider_type:
+        raise RuntimeError(
+            f"Recipe provider_type {requested_type!r} does not match selected provider_type {provider_type!r}"
+        )
 
     requested_features = recipe.get("features")
     normalized_features = dict(base["features"])
@@ -72,7 +77,9 @@ def normalize_recipe_snapshot(provider_name: str, recipe: dict[str, Any] | None 
         **base,
         "id": str(recipe.get("id") or base["id"]),
         "name": str(recipe.get("name") or base["name"]),
+        "desc": str(recipe.get("desc") or base["desc"]),
         "features": normalized_features,
+        "builtin": bool(recipe.get("builtin", base["builtin"])),
     }
 
 
@@ -94,7 +101,7 @@ def list_builtin_recipes(sandbox_types: list[dict[str, Any]]) -> list[dict[str, 
     providers_by_type: dict[str, dict[str, Any]] = {}
     for sandbox in sandbox_types:
         provider_name = str(sandbox["name"])
-        provider_type = provider_type_from_name(provider_name)
+        provider_type = str(sandbox.get("provider") or provider_type_from_name(provider_name))
         existing = providers_by_type.get(provider_type)
         if existing and not existing.get("available", False) and sandbox.get("available", False):
             providers_by_type[provider_type] = sandbox
@@ -104,9 +111,8 @@ def list_builtin_recipes(sandbox_types: list[dict[str, Any]]) -> list[dict[str, 
         providers_by_type[provider_type] = sandbox
 
     for provider_type, sandbox in providers_by_type.items():
-        provider_name = str(sandbox["name"])
         available = bool(sandbox.get("available", False))
-        item = default_recipe_snapshot(provider_name)
+        item = default_recipe_snapshot(provider_type)
         items.append(
             {
                 **item,
@@ -120,11 +126,11 @@ def list_builtin_recipes(sandbox_types: list[dict[str, Any]]) -> list[dict[str, 
     return items
 
 
-def resolve_builtin_recipe(provider_name: str, recipe_id: str | None = None) -> dict[str, Any]:
-    base = default_recipe_snapshot(provider_name)
+def resolve_builtin_recipe(provider_type: str, recipe_id: str | None = None) -> dict[str, Any]:
+    base = default_recipe_snapshot(provider_type)
     if recipe_id and recipe_id != base["id"]:
         raise RuntimeError(
-            f"Unknown recipe id {recipe_id!r} for provider {provider_name}. Builtin recipes only expose defaults."
+            f"Unknown recipe id {recipe_id!r} for provider type {provider_type}. Builtin recipes only expose defaults."
         )
     return base
 
