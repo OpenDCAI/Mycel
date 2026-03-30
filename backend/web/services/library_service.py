@@ -35,12 +35,7 @@ def _write_json(path: Path, data: Any) -> None:
     path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
-def _recipe_override_path(recipe_id: str) -> Path:
-    safe_name = recipe_id.replace(":", "__")
-    return LIBRARY_DIR / "recipes" / f"{safe_name}.json"
-
-
-def _recipe_custom_path(recipe_id: str) -> Path:
+def _recipe_path(recipe_id: str) -> Path:
     safe_name = recipe_id.replace(":", "__")
     return LIBRARY_DIR / "recipes" / f"{safe_name}.json"
 
@@ -86,7 +81,7 @@ def list_library(resource_type: str) -> list[dict[str, Any]]:
         builtin_ids: set[str] = set()
         for recipe in list_default_recipes():
             builtin_ids.add(str(recipe["id"]))
-            override = _read_json(_recipe_override_path(recipe["id"]), None)
+            override = _read_json(_recipe_path(recipe["id"]), None)
             items.append(_merge_recipe_override(recipe, override))
         recipes_dir = LIBRARY_DIR / "recipes"
         if recipes_dir.exists():
@@ -164,7 +159,7 @@ def create_resource(
             },
             builtin=False,
         )
-        _write_json(_recipe_custom_path(recipe_id), item)
+        _write_json(_recipe_path(recipe_id), item)
         return item
     if resource_type == "skill":
         rid = name.lower().replace(" ", "-")
@@ -205,13 +200,13 @@ def update_resource(resource_type: str, resource_id: str, **fields: Any) -> dict
     if resource_type == "recipe":
         base = next((item for item in list_default_recipes() if item["id"] == resource_id), None)
         if base is not None:
-            override_path = _recipe_override_path(resource_id)
+            override_path = _recipe_path(resource_id)
             override = _read_json(override_path, {})
             override.update(updates)
             override["updated_at"] = now
             _write_json(override_path, override)
             return _merge_recipe_override(base, override)
-        custom_path = _recipe_custom_path(resource_id)
+        custom_path = _recipe_path(resource_id)
         if not custom_path.exists():
             return None
         current = _read_json(custom_path, {})
@@ -253,11 +248,11 @@ def delete_resource(resource_type: str, resource_id: str) -> bool:
     if resource_type == "recipe":
         base = next((item for item in list_default_recipes() if item["id"] == resource_id), None)
         if base is not None:
-            override_path = _recipe_override_path(resource_id)
+            override_path = _recipe_path(resource_id)
             if override_path.exists():
                 override_path.unlink()
             return True
-        custom_path = _recipe_custom_path(resource_id)
+        custom_path = _recipe_path(resource_id)
         if not custom_path.exists():
             return False
         custom_path.unlink()
