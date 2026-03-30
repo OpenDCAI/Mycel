@@ -90,7 +90,7 @@ export default function NewChatPage({ mode = "member" }: { mode?: "member" | "ne
   const { memberId } = useParams<{ memberId: string }>();
   const { tm } = useOutletContext<OutletContext>();
   const { sandboxTypes, selectedSandbox, handleCreateThread, handleGetMainThread } = tm;
-  const { settings, loading, hasWorkspace, refreshSettings } = useWorkspaceSettings();
+  const { settings, loading, hasWorkspace, refreshSettings, setDefaultWorkspace } = useWorkspaceSettings();
   const shouldResolveMain = mode === "member";
   const [error, setError] = useState<string | null>(null);
   const [resolveState, setResolveState] = useState<"resolving" | "ready" | "error">(
@@ -436,11 +436,7 @@ export default function NewChatPage({ mode = "member" }: { mode?: "member" | "ne
     }
     const nextWorkspace = activeWorkspace;
     if (createMode === "new" && selectedRecipeSnapshot?.provider_type === "local" && nextWorkspace) {
-      await fetch("/api/settings/workspace", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ workspace: nextWorkspace }),
-      });
+      await setDefaultWorkspace(nextWorkspace);
     }
     await persistDefaultConfig(draftModel, nextWorkspace || null);
     setSelectedModel(draftModel);
