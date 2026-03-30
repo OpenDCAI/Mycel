@@ -1,5 +1,7 @@
 """Pydantic request models for Leon web API."""
 
+from typing import Literal
+
 from pydantic import BaseModel, Field
 
 from sandbox.config import MountSpec
@@ -26,6 +28,16 @@ class CreateThreadRequest(BaseModel):
 
 class ResolveMainThreadRequest(BaseModel):
     member_id: str
+
+
+class SaveThreadLaunchConfigRequest(BaseModel):
+    member_id: str
+    create_mode: Literal["new", "existing"]
+    provider_config: str
+    recipe: RecipeSnapshotRequest | None = None
+    lease_id: str | None = None
+    model: str | None = None
+    workspace: str | None = None
 
 
 class RunRequest(BaseModel):

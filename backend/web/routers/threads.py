@@ -15,6 +15,7 @@ from backend.web.models.requests import (
     CreateThreadRequest,
     ResolveMainThreadRequest,
     RunRequest,
+    SaveThreadLaunchConfigRequest,
     SendMessageRequest,
 )
 from backend.web.services.agent_pool import get_or_create_agent, resolve_thread_sandbox
@@ -35,6 +36,11 @@ from backend.web.services.thread_state_service import (
     get_terminal_status,
 )
 from backend.web.services.thread_naming import canonical_entity_name, sidebar_label
+from backend.web.services.thread_launch_config_service import (
+    resolve_default_config,
+    save_last_confirmed_config,
+    save_last_successful_config,
+)
 from backend.web.utils.helpers import delete_thread_in_db
 from backend.web.utils.serializers import serialize_message
 from storage.contracts import EntityRow
@@ -302,6 +308,7 @@ def _create_owned_thread(
         raise HTTPException(403, "Not authorized")
 
     selected_lease_id = payload.lease_id
+    owned_lease: dict[str, Any] | None = None
     if selected_lease_id:
         owned_lease = next(
             (
@@ -364,6 +371,29 @@ def _create_owned_thread(
             payload.recipe.model_dump() if payload.recipe else None,
         )
 
+    if selected_lease_id and owned_lease is not None:
+        successful_config = {
+            "create_mode": "existing",
+            "provider_config": sandbox_type,
+            "recipe": owned_lease.get("recipe"),
+            "lease_id": owned_lease["lease_id"],
+            "model": payload.model,
+            "workspace": app.state.thread_cwd.get(thread_entity_id),
+        }
+    else:
+        successful_config = {
+            "create_mode": "new",
+            "provider_config": sandbox_type,
+            "recipe": normalize_recipe_snapshot(
+                provider_type_from_name(sandbox_type),
+                payload.recipe.model_dump() if payload.recipe else None,
+            ),
+            "lease_id": None,
+            "model": payload.model,
+            "workspace": app.state.thread_cwd.get(thread_entity_id) or payload.cwd,
+        }
+    save_last_successful_config(app, owner_user_id, agent_member_id, successful_config)
+
     return {
         "thread_id": thread_entity_id,
         "sandbox": sandbox_type,
@@ -413,6 +443,31 @@ async def resolve_main_thread(
     if existing is None:
         return {"thread": None}
     return {"thread": _thread_payload(app, existing["id"], existing.get("sandbox_type", "local"))}
+
+
+@router.get("/default-config")
+async def get_default_thread_config(
+    member_id: str,
+    user_id: Annotated[str, Depends(get_current_user_id)],
+    app: Annotated[Any, Depends(get_app)] = None,
+) -> dict[str, Any]:
+    agent_member = app.state.member_repo.get_by_id(member_id)
+    if not agent_member or agent_member.owner_user_id != user_id:
+        raise HTTPException(403, "Not authorized")
+    return resolve_default_config(app, user_id, member_id)
+
+
+@router.post("/default-config")
+async def save_default_thread_config(
+    payload: SaveThreadLaunchConfigRequest,
+    user_id: Annotated[str, Depends(get_current_user_id)],
+    app: Annotated[Any, Depends(get_app)] = None,
+) -> dict[str, Any]:
+    agent_member = app.state.member_repo.get_by_id(payload.member_id)
+    if not agent_member or agent_member.owner_user_id != user_id:
+        raise HTTPException(403, "Not authorized")
+    save_last_confirmed_config(app, user_id, payload.member_id, payload.model_dump())
+    return {"ok": True}
 
 
 @router.get("")
