@@ -56,6 +56,7 @@ export default function LibraryPage() {
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState<ResourceItem | null>(null);
   const [creating, setCreating] = useState(false);
+  const [recipeDirty, setRecipeDirty] = useState(false);
 
   // Delete dialog state
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -76,8 +77,13 @@ export default function LibraryPage() {
   const isRecipeTab = tab === "recipes";
 
   const handleCardClick = (item: ResourceItem) => {
+    if (isRecipeTab && recipeDirty && selected?.id !== item.id) {
+      const confirmed = window.confirm("当前 recipe 还有未保存的修改，确定要切换吗？");
+      if (!confirmed) return;
+    }
     setCreating(false);
     setSelected(item);
+    setRecipeDirty(false);
   };
 
   const openCreate = () => {
@@ -128,7 +134,13 @@ export default function LibraryPage() {
               ).length;
               const isActive = tab === t.id;
               return (
-                <button key={t.id} onClick={() => { setTab(t.id); setSearch(""); setSelected(null); setCreating(false); }} className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-sm transition-all ${
+                <button key={t.id} onClick={() => {
+                  if (recipeDirty && isRecipeTab) {
+                    const confirmed = window.confirm("当前 recipe 还有未保存的修改，确定要离开吗？");
+                    if (!confirmed) return;
+                  }
+                  setTab(t.id); setSearch(""); setSelected(null); setCreating(false); setRecipeDirty(false);
+                }} className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-sm transition-all ${
                   isActive ? "bg-primary/5 text-foreground border border-primary/15" : "text-muted-foreground hover:bg-muted hover:text-foreground border border-transparent"
                 }`}>
                   <div className="flex items-center gap-2.5"><t.icon className={`w-4 h-4 ${isActive ? "text-primary" : ""}`} /><span>{t.label}</span></div>
@@ -151,7 +163,13 @@ export default function LibraryPage() {
                 {tabs.map((t) => {
                   const isActive = tab === t.id;
                   return (
-                    <button key={t.id} onClick={() => { setTab(t.id); setSearch(""); setSelected(null); setCreating(false); }} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs whitespace-nowrap shrink-0 transition-colors ${
+                    <button key={t.id} onClick={() => {
+                      if (recipeDirty && isRecipeTab) {
+                        const confirmed = window.confirm("当前 recipe 还有未保存的修改，确定要离开吗？");
+                        if (!confirmed) return;
+                      }
+                      setTab(t.id); setSearch(""); setSelected(null); setCreating(false); setRecipeDirty(false);
+                    }} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs whitespace-nowrap shrink-0 transition-colors ${
                       isActive ? "bg-primary/10 text-primary font-medium" : "text-muted-foreground hover:text-foreground hover:bg-muted"
                     }`}>
                       <t.icon className="w-3.5 h-3.5" />{t.label}
@@ -259,7 +277,19 @@ export default function LibraryPage() {
         <LibraryEditor item={resolvedSelected} type={typeMap[tab] as "skill" | "mcp" | "agent"} onClose={() => { setSelected(null); setCreating(false); }} onCreated={handleCreated} />
       )}
       {!isMobile && showDetail && isRecipeTab && resolvedSelected && (
-        <RecipeEditor item={resolvedSelected} onClose={() => { setSelected(null); setCreating(false); }} />
+        <RecipeEditor
+          item={resolvedSelected}
+          onDirtyChange={setRecipeDirty}
+          onClose={() => {
+            if (recipeDirty) {
+              const confirmed = window.confirm("当前 recipe 还有未保存的修改，确定要关闭吗？");
+              if (!confirmed) return;
+            }
+            setSelected(null);
+            setCreating(false);
+            setRecipeDirty(false);
+          }}
+        />
       )}
       {isMobile && showDetail && !isRecipeTab && (
         <div className="fixed inset-0 z-50 bg-background overflow-y-auto">
@@ -268,7 +298,19 @@ export default function LibraryPage() {
       )}
       {isMobile && showDetail && isRecipeTab && resolvedSelected && (
         <div className="fixed inset-0 z-50 bg-background overflow-y-auto">
-          <RecipeEditor item={resolvedSelected} onClose={() => { setSelected(null); setCreating(false); }} />
+          <RecipeEditor
+            item={resolvedSelected}
+            onDirtyChange={setRecipeDirty}
+            onClose={() => {
+              if (recipeDirty) {
+                const confirmed = window.confirm("当前 recipe 还有未保存的修改，确定要关闭吗？");
+                if (!confirmed) return;
+              }
+              setSelected(null);
+              setCreating(false);
+              setRecipeDirty(false);
+            }}
+          />
         </div>
       )}
 

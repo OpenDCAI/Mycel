@@ -422,7 +422,7 @@ export default function CenteredInputBox({
                   {environmentControl.showBack && environmentControl.onBack && (
                     <Button
                       type="button"
-                      variant="ghost"
+                      variant="outline"
                       onClick={environmentControl.onBack}
                       disabled={applyingConfig}
                     >

@@ -2,6 +2,16 @@ import { useEffect, useMemo, useState } from "react";
 import { RotateCcw, Save, X } from "lucide-react";
 import { toast } from "sonner";
 
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
@@ -11,9 +21,10 @@ import type { ResourceItem } from "@/store/types";
 interface Props {
   item: ResourceItem;
   onClose: () => void;
+  onDirtyChange?: (dirty: boolean) => void;
 }
 
-export default function RecipeEditor({ item, onClose }: Props) {
+export default function RecipeEditor({ item, onClose, onDirtyChange }: Props) {
   const updateResource = useAppStore((s) => s.updateResource);
   const deleteResource = useAppStore((s) => s.deleteResource);
 
@@ -21,6 +32,7 @@ export default function RecipeEditor({ item, onClose }: Props) {
   const [desc, setDesc] = useState(item.desc);
   const [features, setFeatures] = useState<Record<string, boolean>>(item.features ?? {});
   const [saving, setSaving] = useState(false);
+  const [resetOpen, setResetOpen] = useState(false);
 
   useEffect(() => {
     setName(item.name);
@@ -35,6 +47,13 @@ export default function RecipeEditor({ item, onClose }: Props) {
     const keys = new Set([...Object.keys(base), ...Object.keys(features)]);
     return [...keys].some((key) => Boolean(base[key]) !== Boolean(features[key]));
   }, [desc, features, item.desc, item.features, item.name, name]);
+
+  useEffect(() => {
+    onDirtyChange?.(dirty);
+    return () => {
+      onDirtyChange?.(false);
+    };
+  }, [dirty, onDirtyChange]);
 
   async function handleSave() {
     setSaving(true);
@@ -57,6 +76,7 @@ export default function RecipeEditor({ item, onClose }: Props) {
     try {
       await deleteResource("recipe", item.id);
       toast.success("已重置为默认配置");
+      setResetOpen(false);
       onClose();
     } catch (error) {
       toast.error(`重置失败: ${error instanceof Error ? error.message : String(error)}`);
@@ -70,10 +90,15 @@ export default function RecipeEditor({ item, onClose }: Props) {
       <div className="h-12 flex items-center justify-between px-4 border-b border-border shrink-0">
         <h3 className="text-sm font-semibold text-foreground truncate">{item.name}</h3>
         <div className="flex items-center gap-1.5 shrink-0">
-          <Button size="sm" variant="outline" className="h-7" disabled={saving} onClick={() => void handleReset()}>
+          <Button size="sm" variant="outline" className="h-7" disabled={saving} onClick={() => setResetOpen(true)}>
             <RotateCcw className="h-3.5 w-3.5 mr-1" /> 重置
           </Button>
-          <Button size="sm" className="h-7" disabled={!dirty || saving} onClick={() => void handleSave()}>
+          <Button
+            size="sm"
+            className={dirty ? "h-7 ring-2 ring-primary/20" : "h-7"}
+            disabled={!dirty || saving}
+            onClick={() => void handleSave()}
+          >
             <Save className="h-3.5 w-3.5 mr-1" /> 保存
           </Button>
           <button onClick={onClose} className="p-1 rounded-md hover:bg-muted transition-colors">
@@ -123,6 +148,21 @@ export default function RecipeEditor({ item, onClose }: Props) {
           </div>
         </div>
       </div>
+
+      <AlertDialog open={resetOpen} onOpenChange={setResetOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>重置 recipe</AlertDialogTitle>
+            <AlertDialogDescription>
+              这会丢掉你对默认 recipe 的自定义修改，并恢复到系统默认值。
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>取消</AlertDialogCancel>
+            <AlertDialogAction onClick={() => void handleReset()}>确认重置</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
