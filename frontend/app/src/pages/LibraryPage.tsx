@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { Search, Plus, Zap, Plug, Bot, Edit, Trash2, AlertTriangle, RefreshCw, FlaskConical } from "lucide-react";
 import LibraryEditor from "@/components/LibraryEditor";
+import RecipeEditor from "@/components/RecipeEditor";
 import { toast } from "sonner";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
@@ -106,7 +107,8 @@ export default function LibraryPage() {
     }
   };
 
-  const showDetail = selected !== null || creating;
+  const resolvedSelected = selected ? items.find((item) => item.id === selected.id) ?? selected : null;
+  const showDetail = resolvedSelected !== null || creating;
 
   return (
     <div className="flex h-full">
@@ -186,7 +188,7 @@ export default function LibraryPage() {
 
           {isRecipeTab && (
             <div className="mb-4 rounded-2xl border border-border bg-card px-4 py-3 text-sm text-muted-foreground">
-              Recipes 是每种 provider 的默认环境模板。当前版本先在创建 thread 时选择和微调，不在这里直接编辑。
+              Recipes 是每种 provider 的默认环境模板。可以直接修改默认配置，也可以随时重置回系统默认值。
             </div>
           )}
 
@@ -207,10 +209,10 @@ export default function LibraryPage() {
             {filtered.map((item) => (
               <div
                 key={item.id}
-                onClick={() => { if (!isRecipeTab) handleCardClick(item); }}
-                className={`${isRecipeTab ? "rounded-2xl border border-border bg-card" : "surface-interactive cursor-pointer"} p-4 group relative ${
+                onClick={() => { handleCardClick(item); }}
+                className={`${isRecipeTab ? "rounded-2xl border border-border bg-card cursor-pointer hover:bg-accent/20" : "surface-interactive cursor-pointer"} p-4 group relative ${
                   isRecipeTab ? "" : ""
-                } ${selected?.id === item.id ? "border-primary/40 glow-sm" : ""}`}
+                } ${resolvedSelected?.id === item.id ? "border-primary/40 glow-sm" : ""}`}
               >
                 <div className="flex items-start gap-3">
                   <div className="w-9 h-9 rounded-lg bg-primary/8 flex items-center justify-center shrink-0">
@@ -223,7 +225,7 @@ export default function LibraryPage() {
                     <p className="text-xs text-muted-foreground mt-1">{item.desc}</p>
                     <p className="text-[11px] text-muted-foreground mt-2">
                       {isRecipeTab
-                        ? `${providerLabel(item.provider_name)} · builtin recipe`
+                        ? `${providerLabel(item.provider_name)} · 默认 recipe`
                         : (() => {
                             const n = getResourceUsedBy(typeMap[tab], item.name).length;
                             return n ? `被 ${n} 位成员使用` : "未被使用";
@@ -254,11 +256,19 @@ export default function LibraryPage() {
 
       {/* Editor panel */}
       {!isMobile && showDetail && !isRecipeTab && (
-        <LibraryEditor item={selected} type={typeMap[tab] as "skill" | "mcp" | "agent"} onClose={() => { setSelected(null); setCreating(false); }} onCreated={handleCreated} />
+        <LibraryEditor item={resolvedSelected} type={typeMap[tab] as "skill" | "mcp" | "agent"} onClose={() => { setSelected(null); setCreating(false); }} onCreated={handleCreated} />
+      )}
+      {!isMobile && showDetail && isRecipeTab && resolvedSelected && (
+        <RecipeEditor item={resolvedSelected} onClose={() => { setSelected(null); setCreating(false); }} />
       )}
       {isMobile && showDetail && !isRecipeTab && (
         <div className="fixed inset-0 z-50 bg-background overflow-y-auto">
-          <LibraryEditor item={selected} type={typeMap[tab] as "skill" | "mcp" | "agent"} onClose={() => { setSelected(null); setCreating(false); }} onCreated={handleCreated} />
+          <LibraryEditor item={resolvedSelected} type={typeMap[tab] as "skill" | "mcp" | "agent"} onClose={() => { setSelected(null); setCreating(false); }} onCreated={handleCreated} />
+        </div>
+      )}
+      {isMobile && showDetail && isRecipeTab && resolvedSelected && (
+        <div className="fixed inset-0 z-50 bg-background overflow-y-auto">
+          <RecipeEditor item={resolvedSelected} onClose={() => { setSelected(null); setCreating(false); }} />
         </div>
       )}
 

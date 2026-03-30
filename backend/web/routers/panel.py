@@ -192,14 +192,12 @@ async def list_library(resource_type: str) -> dict[str, Any]:
 @router.post("/library/{resource_type}")
 async def create_resource(resource_type: str, req: CreateResourceRequest) -> dict[str, Any]:
     if resource_type == "recipe":
-        raise HTTPException(400, "Recipes are read-only")
+        raise HTTPException(400, "Recipes are builtin defaults and cannot be created")
     return await asyncio.to_thread(library_service.create_resource, resource_type, req.name, req.desc, req.category)
 
 
 @router.put("/library/{resource_type}/{resource_id}")
 async def update_resource(resource_type: str, resource_id: str, req: UpdateResourceRequest) -> dict[str, Any]:
-    if resource_type == "recipe":
-        raise HTTPException(400, "Recipes are read-only")
     item = await asyncio.to_thread(library_service.update_resource, resource_type, resource_id, **req.model_dump())
     if not item:
         raise HTTPException(404, "Resource not found")
@@ -208,8 +206,6 @@ async def update_resource(resource_type: str, resource_id: str, req: UpdateResou
 
 @router.delete("/library/{resource_type}/{resource_id}")
 async def delete_resource(resource_type: str, resource_id: str) -> dict[str, Any]:
-    if resource_type == "recipe":
-        raise HTTPException(400, "Recipes are read-only")
     ok = await asyncio.to_thread(library_service.delete_resource, resource_type, resource_id)
     if not ok:
         raise HTTPException(404, "Resource not found")

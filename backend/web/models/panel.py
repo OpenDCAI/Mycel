@@ -89,6 +89,7 @@ class CreateResourceRequest(BaseModel):
 class UpdateResourceRequest(BaseModel):
     name: str | None = None
     desc: str | None = None
+    features: dict[str, bool] | None = None
 
 
 class UpdateResourceContentRequest(BaseModel):

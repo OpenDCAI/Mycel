@@ -16,6 +16,7 @@ def ensure_library_dir() -> None:
     LIBRARY_DIR.mkdir(parents=True, exist_ok=True)
     (LIBRARY_DIR / "skills").mkdir(exist_ok=True)
     (LIBRARY_DIR / "agents").mkdir(exist_ok=True)
+    (LIBRARY_DIR / "recipes").mkdir(exist_ok=True)
 
 
 def _read_json(path: Path, default: Any = None) -> Any:
@@ -32,10 +33,38 @@ def _write_json(path: Path, data: Any) -> None:
     path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
+def _recipe_override_path(recipe_id: str) -> Path:
+    safe_name = recipe_id.replace(":", "__")
+    return LIBRARY_DIR / "recipes" / f"{safe_name}.json"
+
+
+def _merge_recipe_override(base: dict[str, Any], override: dict[str, Any] | None) -> dict[str, Any]:
+    if not override:
+        return base
+    merged = dict(base)
+    if "name" in override:
+        merged["name"] = override["name"]
+    if "desc" in override:
+        merged["desc"] = override["desc"]
+    if isinstance(override.get("features"), dict):
+        merged["features"] = {
+            **(base.get("features") or {}),
+            **override["features"],
+        }
+    if "updated_at" in override:
+        merged["updated_at"] = override["updated_at"]
+    merged["builtin"] = True
+    return merged
+
+
 def list_library(resource_type: str) -> list[dict[str, Any]]:
     results: list[dict[str, Any]] = []
     if resource_type == "recipe":
-        return list_default_recipes()
+        items = []
+        for recipe in list_default_recipes():
+            override = _read_json(_recipe_override_path(recipe["id"]), None)
+            items.append(_merge_recipe_override(recipe, override))
+        return items
     if resource_type == "skill":
         skills_dir = LIBRARY_DIR / "skills"
         if skills_dir.exists():
@@ -75,7 +104,7 @@ def create_resource(resource_type: str, name: str, desc: str = "", category: str
     now = int(time.time() * 1000)
     cat = category or "未分类"
     if resource_type == "recipe":
-        raise ValueError("Recipes are builtin and read-only")
+        raise ValueError("Recipes are builtin defaults and cannot be created")
     if resource_type == "skill":
         rid = name.lower().replace(" ", "-")
         skill_dir = LIBRARY_DIR / "skills" / rid
@@ -109,11 +138,19 @@ def create_resource(resource_type: str, name: str, desc: str = "", category: str
 
 
 def update_resource(resource_type: str, resource_id: str, **fields: Any) -> dict[str, Any] | None:
-    allowed = {"name", "desc"}
+    allowed = {"name", "desc", "features"}
     updates = {k: v for k, v in fields.items() if k in allowed and v is not None}
     now = int(time.time() * 1000)
     if resource_type == "recipe":
-        return None
+        base = next((item for item in list_default_recipes() if item["id"] == resource_id), None)
+        if base is None:
+            return None
+        override_path = _recipe_override_path(resource_id)
+        override = _read_json(override_path, {})
+        override.update(updates)
+        override["updated_at"] = now
+        _write_json(override_path, override)
+        return _merge_recipe_override(base, override)
     if resource_type == "skill":
         meta_path = LIBRARY_DIR / "skills" / resource_id / "meta.json"
         if not meta_path.exists():
@@ -146,7 +183,13 @@ def update_resource(resource_type: str, resource_id: str, **fields: Any) -> dict
 
 def delete_resource(resource_type: str, resource_id: str) -> bool:
     if resource_type == "recipe":
-        return False
+        base = next((item for item in list_default_recipes() if item["id"] == resource_id), None)
+        if base is None:
+            return False
+        override_path = _recipe_override_path(resource_id)
+        if override_path.exists():
+            override_path.unlink()
+        return True
     if resource_type == "skill":
         target = LIBRARY_DIR / "skills" / resource_id
         if not target.is_dir():
@@ -179,7 +222,7 @@ def list_library_names(resource_type: str) -> list[dict[str, str]]:
     """Lightweight name+desc list for Picker UI."""
     results: list[dict[str, str]] = []
     if resource_type == "recipe":
-        return [{"name": item["name"], "desc": item["desc"]} for item in list_default_recipes()]
+        return [{"name": item["name"], "desc": item["desc"]} for item in list_library("recipe")]
     if resource_type == "skill":
         skills_dir = LIBRARY_DIR / "skills"
         if skills_dir.exists():

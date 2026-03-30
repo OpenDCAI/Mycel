@@ -279,7 +279,8 @@ export const useAppStore = create<AppState>()((set, get) => ({
     const updater = (list: ResourceItem[]) => list.map((x) => (x.id === id ? updated : x));
     if (type === "skill") set((s) => ({ librarySkills: updater(s.librarySkills) }));
     else if (type === "mcp") set((s) => ({ libraryMcps: updater(s.libraryMcps) }));
-    else set((s) => ({ libraryAgents: updater(s.libraryAgents) }));
+    else if (type === "agent") set((s) => ({ libraryAgents: updater(s.libraryAgents) }));
+    else set((s) => ({ libraryRecipes: updater(s.libraryRecipes) }));
   },
 
   deleteResource: async (type, id) => {
@@ -287,7 +288,11 @@ export const useAppStore = create<AppState>()((set, get) => ({
     const filter = (list: ResourceItem[]) => list.filter((x) => x.id !== id);
     if (type === "skill") set((s) => ({ librarySkills: filter(s.librarySkills) }));
     else if (type === "mcp") set((s) => ({ libraryMcps: filter(s.libraryMcps) }));
-    else set((s) => ({ libraryAgents: filter(s.libraryAgents) }));
+    else if (type === "agent") set((s) => ({ libraryAgents: filter(s.libraryAgents) }));
+    else {
+      const data = await api<{ items: ResourceItem[] }>(`/library/${type}`);
+      set({ libraryRecipes: data.items });
+    }
   },
 
   fetchResourceContent: async (type, id) => {
