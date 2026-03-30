@@ -478,7 +478,7 @@ export default function NewChatPage({ mode = "member" }: { mode?: "member" | "ne
               );
 
               return (
-                <div className="space-y-4">
+                <div className="space-y-3">
                   <div className="flex items-center justify-center gap-2 pb-1">
                     {Array.from({ length: totalSteps }, (_, index) => index + 1).map((step) => (
                       <div
@@ -492,7 +492,7 @@ export default function NewChatPage({ mode = "member" }: { mode?: "member" | "ne
                   </div>
 
                   {configStep === 1 ? (
-                    <div className="space-y-3 rounded-2xl border border-border bg-card p-4">
+                    <div className="space-y-4">
                       <div>
                         <div className="text-sm font-medium text-foreground">先确定模型与沙盒来源</div>
                       </div>
@@ -572,8 +572,8 @@ export default function NewChatPage({ mode = "member" }: { mode?: "member" | "ne
                   ) : null}
 
                   {configStep === 2 && (
-                    <div className="space-y-3 rounded-2xl border border-border bg-card p-4">
-                      <div className="space-y-3">
+                    <div className="space-y-4">
+                      <div>
                         <div>
                           <div className="text-sm font-medium text-foreground">
                             {createMode === "new" ? "确认 Recipe 与工具" : "选择要复用的 sandbox"}
@@ -617,14 +617,14 @@ export default function NewChatPage({ mode = "member" }: { mode?: "member" | "ne
                                         }));
                                       }}
                                       className={cn(
-                                        "rounded-2xl border px-4 py-3 text-left transition-colors",
+                                        "rounded-xl border px-3 py-2.5 text-left transition-colors",
                                         checked
                                           ? "border-foreground/30 bg-accent/60"
                                           : "border-border bg-background hover:bg-accent/30",
                                       )}
                                     >
-                                      <div className="flex items-start gap-3">
-                                        <Checkbox checked={checked} className="pointer-events-none mt-0.5" />
+                                      <div className="flex items-start gap-2.5">
+                                        <Checkbox checked={checked} className="pointer-events-none mt-0.5 shrink-0" />
                                         <div className="min-w-0">
                                           <div className="flex items-center gap-2">
                                             <div className="text-sm font-medium text-foreground">{option.name}</div>
@@ -634,7 +634,7 @@ export default function NewChatPage({ mode = "member" }: { mode?: "member" | "ne
                                               </span>
                                             )}
                                           </div>
-                                          <div className="mt-1 text-xs text-muted-foreground">{option.description}</div>
+                                          <div className="mt-0.5 text-xs text-muted-foreground">{option.description}</div>
                                         </div>
                                       </div>
                                     </button>
@@ -707,7 +707,7 @@ export default function NewChatPage({ mode = "member" }: { mode?: "member" | "ne
                   )}
 
                   {configStep === 3 && localRecipeSelected && (
-                    <div className="space-y-3 rounded-2xl border border-border bg-card p-4">
+                    <div className="space-y-3">
                       <div className="flex items-center justify-between gap-3">
                         <div className="truncate text-xs text-muted-foreground">
                           {[recipeSummaryLabel, ...enabledFeatureLabels(selectedRecipeSnapshot)].join(" · ")}
