@@ -7,11 +7,10 @@ Name is stored for display only.
 from __future__ import annotations
 
 import asyncio
-import sqlite3
 from dataclasses import dataclass
 from pathlib import Path
 
-from config.user_paths import user_home_path
+from storage.providers.sqlite.agent_registry_repo import SQLiteAgentRegistryRepo
 
 
 @dataclass
@@ -30,55 +29,25 @@ class AgentRegistry:
     Persisted at ~/.leon/agent_registry.db
     """
 
-    DEFAULT_DB_PATH = user_home_path("agent_registry.db")
+    DEFAULT_DB_PATH = SQLiteAgentRegistryRepo.DEFAULT_DB_PATH
 
     def __init__(self, db_path: Path | None = None):
-        self._db_path = db_path or self.DEFAULT_DB_PATH
-        self._db_path.parent.mkdir(parents=True, exist_ok=True)
         self._lock = asyncio.Lock()
-        self._init_db()
-
-    def _init_db(self) -> None:
-        with sqlite3.connect(self._db_path) as conn:
-            conn.execute("""
-                CREATE TABLE IF NOT EXISTS agents (
-                    agent_id TEXT PRIMARY KEY,
-                    name TEXT NOT NULL,
-                    thread_id TEXT NOT NULL,
-                    status TEXT NOT NULL DEFAULT 'running',
-                    parent_agent_id TEXT,
-                    subagent_type TEXT,
-                    created_at REAL DEFAULT (strftime('%s', 'now'))
-                )
-            """)
-            conn.execute("CREATE INDEX IF NOT EXISTS idx_thread ON agents(thread_id)")
-            conn.commit()
+        self._repo = SQLiteAgentRegistryRepo(db_path or self.DEFAULT_DB_PATH)
 
     async def register(self, entry: AgentEntry) -> None:
         async with self._lock:
-            with sqlite3.connect(self._db_path) as conn:
-                conn.execute(
-                    "INSERT OR REPLACE INTO agents "
-                    "(agent_id, name, thread_id, status, parent_agent_id, subagent_type) "
-                    "VALUES (?,?,?,?,?,?)",
-                    (
-                        entry.agent_id,
-                        entry.name,
-                        entry.thread_id,
-                        entry.status,
-                        entry.parent_agent_id,
-                        entry.subagent_type,
-                    ),
-                )
-                conn.commit()
+            self._repo.register(
+                agent_id=entry.agent_id,
+                name=entry.name,
+                thread_id=entry.thread_id,
+                status=entry.status,
+                parent_agent_id=entry.parent_agent_id,
+                subagent_type=entry.subagent_type,
+            )
 
     async def get_by_id(self, agent_id: str) -> AgentEntry | None:
-        with sqlite3.connect(self._db_path) as conn:
-            row = conn.execute(
-                "SELECT agent_id, name, thread_id, status, parent_agent_id, subagent_type "
-                "FROM agents WHERE agent_id=?",
-                (agent_id,),
-            ).fetchone()
+        row = self._repo.get_by_id(agent_id)
         if row is None:
             return None
         return AgentEntry(
@@ -92,19 +61,10 @@ class AgentRegistry:
 
     async def update_status(self, agent_id: str, status: str) -> None:
         async with self._lock:
-            with sqlite3.connect(self._db_path) as conn:
-                conn.execute(
-                    "UPDATE agents SET status=? WHERE agent_id=?",
-                    (status, agent_id),
-                )
-                conn.commit()
+            self._repo.update_status(agent_id, status)
 
     async def list_running(self) -> list[AgentEntry]:
-        with sqlite3.connect(self._db_path) as conn:
-            rows = conn.execute(
-                "SELECT agent_id, name, thread_id, status, parent_agent_id, subagent_type "
-                "FROM agents WHERE status='running'"
-            ).fetchall()
+        rows = self._repo.list_running()
         return [
             AgentEntry(
                 agent_id=r[0],

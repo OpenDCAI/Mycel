@@ -160,10 +160,12 @@ def delete_thread_in_db(thread_id: str) -> None:
 
     session_repo = SQLiteChatSessionRepo(db_path=SANDBOX_DB_PATH)
     terminal_repo = SQLiteTerminalRepo(db_path=SANDBOX_DB_PATH)
+    sync_state = SyncState()
     try:
         session_repo.delete_by_thread(thread_id)
         terminal_repo.delete_by_thread(thread_id)
-        SyncState().clear_thread(thread_id)
+        sync_state.clear_thread(thread_id)
     finally:
+        sync_state.close()
         session_repo.close()
         terminal_repo.close()
