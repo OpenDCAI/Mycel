@@ -313,6 +313,12 @@ export default function NewChatPage({ mode = "member" }: { mode?: "member" | "ne
   }
 
   function openConfigSnapshot() {
+    const preferredLease = selectedLease ?? leaseOptions[0] ?? null;
+    const defaultCreateMode = leaseOptions.length > 0 ? "existing" : "new";
+    const nextProviderConfig = defaultCreateMode === "existing"
+      ? (preferredLease?.provider_name || selectedProviderConfig || selectedSandbox || "local")
+      : (selectedProviderConfig || selectedSandbox || "local");
+
     setConfigStep(1);
     setConfigSnapshot({
       createMode,
@@ -322,7 +328,9 @@ export default function NewChatPage({ mode = "member" }: { mode?: "member" | "ne
       selectedWorkspace: selectedWorkspace || settings?.default_workspace || "",
       selectedProviderConfig: selectedLease?.provider_name || selectedProviderConfig || selectedSandbox || "local",
     });
-    setSelectedProviderConfig(selectedLease?.provider_name || selectedProviderConfig || selectedSandbox || "local");
+    setCreateMode(defaultCreateMode);
+    setSelectedLeaseId(defaultCreateMode === "existing" ? (preferredLease?.lease_id || "") : "");
+    setSelectedProviderConfig(nextProviderConfig);
   }
 
   function cancelConfigChanges() {
