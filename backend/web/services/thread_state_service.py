@@ -7,6 +7,23 @@ from typing import Any
 from backend.web.utils.helpers import get_lease_timestamps, get_terminal_timestamps
 
 
+def _resolve_thread_sandbox_instance(mgr: Any, lease: Any) -> Any | None:
+    instance = lease.get_instance()
+    if instance is not None:
+        return instance
+    if getattr(mgr.provider_capability, "runtime_kind", None) != "local":
+        return None
+    # @@@local-status-convergence - local leases can have no bound instance until first capability/session
+    # touch. Converge through ensure_active_instance so TaskProgress reflects the actual local runtime
+    # instead of showing a fake detached state.
+    return lease.ensure_active_instance(mgr.provider)
+
+
+def _display_sandbox_status(lease: Any, instance: Any) -> str:
+    observed = getattr(lease, "observed_state", None)
+    return instance.status if observed in {None, "", "detached"} else observed
+
+
 def get_sandbox_info(agent: Any, thread_id: str, sandbox_type: str) -> dict[str, Any]:
     """Get sandbox session info for a thread.
 
@@ -26,9 +43,10 @@ def get_sandbox_info(agent: Any, thread_id: str, sandbox_type: str) -> dict[str,
                 sandbox_info["session_id"] = session.session_id
             lease = mgr.get_lease(terminal.lease_id)
             if lease:
-                instance = lease.get_instance()
+                instance = _resolve_thread_sandbox_instance(mgr, lease)
                 if instance:
-                    sandbox_info["status"] = lease.observed_state or instance.status
+                    sandbox_info["status"] = _display_sandbox_status(lease, instance)
+                    sandbox_info["session_id"] = sandbox_info["session_id"] or instance.instance_id
                 else:
                     sandbox_info["status"] = "detached"
             sandbox_info["terminal_id"] = terminal.terminal_id
