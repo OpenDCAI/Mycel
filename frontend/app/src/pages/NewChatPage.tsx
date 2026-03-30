@@ -116,6 +116,7 @@ export default function NewChatPage({ mode = "member" }: { mode?: "member" | "ne
     if (!shouldResolveMain) return;
 
     let cancelled = false;
+    const ac = new AbortController();
 
     async function resolveMainThread() {
       if (!decodedMemberId) {
@@ -125,7 +126,7 @@ export default function NewChatPage({ mode = "member" }: { mode?: "member" | "ne
       }
 
       try {
-        const thread = await handleGetMainThread(decodedMemberId);
+        const thread = await handleGetMainThread(decodedMemberId, ac.signal);
         if (cancelled) return;
         if (thread) {
           navigate(`/threads/${encodeURIComponent(decodedMemberId)}/${thread.thread_id}`, { replace: true });
@@ -134,6 +135,7 @@ export default function NewChatPage({ mode = "member" }: { mode?: "member" | "ne
         setResolveState("ready");
       } catch (err) {
         if (cancelled) return;
+        if (err instanceof DOMException && err.name === "AbortError") return;
         const message = err instanceof Error ? err.message : "Failed to resolve main thread";
         console.error("[NewChatPage] resolve main thread failed:", err);
         setError(message);
@@ -144,31 +146,35 @@ export default function NewChatPage({ mode = "member" }: { mode?: "member" | "ne
     void resolveMainThread();
     return () => {
       cancelled = true;
+      ac.abort();
     };
   }, [decodedMemberId, handleGetMainThread, navigate, shouldResolveMain]);
 
   useEffect(() => {
     let cancelled = false;
+    const ac = new AbortController();
 
     async function loadLeases() {
       setLeaseLoading(true);
       setLeaseError(null);
       try {
-        const leases = await listMyLeases();
+        const leases = await listMyLeases(ac.signal);
         if (cancelled) return;
         setLeaseOptions(leases);
         setSelectedLeaseId((current) => current || leases[0]?.lease_id || "");
       } catch (err) {
         if (cancelled) return;
+        if (err instanceof DOMException && err.name === "AbortError") return;
         setLeaseError(err instanceof Error ? err.message : "Failed to load leases");
       } finally {
-        if (!cancelled) setLeaseLoading(false);
+        if (!cancelled && !ac.signal.aborted) setLeaseLoading(false);
       }
     }
 
     void loadLeases();
     return () => {
       cancelled = true;
+      ac.abort();
     };
   }, []);
 
@@ -239,25 +245,28 @@ export default function NewChatPage({ mode = "member" }: { mode?: "member" | "ne
     }
     const memberIdForDefaults = decodedMemberId;
     let cancelled = false;
+    const ac = new AbortController();
 
     async function loadDefaultConfig() {
       setConfigDefaultsLoading(true);
       try {
-        const payload = await getDefaultThreadConfig(memberIdForDefaults);
+        const payload = await getDefaultThreadConfig(memberIdForDefaults, ac.signal);
         if (cancelled) return;
         applyResolvedConfig(payload.config);
         setCreateModeInitialized(true);
       } catch (err) {
         if (cancelled) return;
+        if (err instanceof DOMException && err.name === "AbortError") return;
         console.error("[NewChatPage] load default thread config failed:", err);
       } finally {
-        if (!cancelled) setConfigDefaultsLoading(false);
+        if (!cancelled && !ac.signal.aborted) setConfigDefaultsLoading(false);
       }
     }
 
     void loadDefaultConfig();
     return () => {
       cancelled = true;
+      ac.abort();
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [decodedMemberId]);

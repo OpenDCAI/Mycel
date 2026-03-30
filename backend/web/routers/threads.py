@@ -41,6 +41,7 @@ from backend.web.services.thread_launch_config_service import (
     save_last_confirmed_config,
     save_last_successful_config,
 )
+from backend.web.services.resource_cache import clear_resource_overview_cache
 from backend.web.utils.helpers import delete_thread_in_db
 from backend.web.utils.serializers import serialize_message
 from storage.contracts import EntityRow
@@ -53,6 +54,12 @@ from sandbox.recipes import normalize_recipe_snapshot, provider_type_from_name
 from sandbox.thread_context import set_current_thread_id
 
 router = APIRouter(prefix="/api/threads", tags=["threads"])
+
+
+def _invalidate_resource_overview_cache() -> None:
+    # @@@resource-overview-invalidation - thread/lease mutations change the monitor topology immediately.
+    # Clear the overview snapshot so the next /api/monitor/resources read reflects the fresh binding/state.
+    clear_resource_overview_cache()
 
 
 async def _prepare_attachment_message(
@@ -422,6 +429,7 @@ async def create_thread(
         return capability_error
 
     result = _create_owned_thread(app, user_id, payload, is_main=False)
+    _invalidate_resource_overview_cache()
 
     return result
 
@@ -599,6 +607,7 @@ async def delete_thread(
 
     # Remove per-thread Agent from pool
     app.state.agent_pool.pop(pool_key, None)
+    _invalidate_resource_overview_cache()
 
     return {"ok": True, "thread_id": thread_id}
 
@@ -780,6 +789,7 @@ async def pause_thread_sandbox(
         ok = await asyncio.to_thread(agent._sandbox.pause_thread, thread_id)
         if not ok:
             raise HTTPException(409, f"Failed to pause sandbox for thread {thread_id}")
+        _invalidate_resource_overview_cache()
         return {"ok": ok, "thread_id": thread_id}
     except RuntimeError as e:
         raise HTTPException(409, str(e)) from e
@@ -795,6 +805,7 @@ async def resume_thread_sandbox(
         ok = await asyncio.to_thread(agent._sandbox.resume_thread, thread_id)
         if not ok:
             raise HTTPException(409, f"Failed to resume sandbox for thread {thread_id}")
+        _invalidate_resource_overview_cache()
         return {"ok": ok, "thread_id": thread_id}
     except RuntimeError as e:
         raise HTTPException(409, str(e)) from e
@@ -811,6 +822,7 @@ async def destroy_thread_sandbox(
         if not ok:
             raise HTTPException(404, f"No sandbox session found for thread {thread_id}")
         agent._sandbox._capability_cache.pop(thread_id, None)
+        _invalidate_resource_overview_cache()
         return {"ok": ok, "thread_id": thread_id}
     except RuntimeError as e:
         raise HTTPException(409, str(e)) from e

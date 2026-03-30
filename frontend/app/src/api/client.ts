@@ -68,16 +68,17 @@ export async function createThread(opts: CreateThreadOptions): Promise<ThreadSum
   return request<ThreadSummary>("/api/threads", { method: "POST", body: JSON.stringify(body) });
 }
 
-export async function getMainThread(memberId: string): Promise<ThreadSummary | null> {
+export async function getMainThread(memberId: string, signal?: AbortSignal): Promise<ThreadSummary | null> {
   const payload = await request<{ thread: ThreadSummary | null }>("/api/threads/main", {
     method: "POST",
     body: JSON.stringify({ member_id: memberId }),
+    signal,
   });
   return payload.thread ?? null;
 }
 
-export async function getDefaultThreadConfig(memberId: string): Promise<ThreadLaunchConfigResponse> {
-  return request(`/api/threads/default-config?member_id=${encodeURIComponent(memberId)}`);
+export async function getDefaultThreadConfig(memberId: string, signal?: AbortSignal): Promise<ThreadLaunchConfigResponse> {
+  return request(`/api/threads/default-config?member_id=${encodeURIComponent(memberId)}`, { signal });
 }
 
 export async function saveDefaultThreadConfig(
@@ -157,8 +158,8 @@ export async function listSandboxSessions(): Promise<SandboxSession[]> {
   });
 }
 
-export async function listMyLeases(): Promise<UserLeaseSummary[]> {
-  const payload = await request<{ leases: UserLeaseSummary[] }>("/api/sandbox/leases/mine");
+export async function listMyLeases(signal?: AbortSignal): Promise<UserLeaseSummary[]> {
+  const payload = await request<{ leases: UserLeaseSummary[] }>("/api/sandbox/leases/mine", { signal });
   return payload.leases;
 }
 
