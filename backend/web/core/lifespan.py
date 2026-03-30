@@ -36,6 +36,7 @@ async def lifespan(app: FastAPI):
     from storage.providers.sqlite.entity_repo import SQLiteEntityRepo
     from storage.providers.sqlite.thread_repo import SQLiteThreadRepo
     from storage.providers.sqlite.thread_launch_pref_repo import SQLiteThreadLaunchPrefRepo
+    from storage.providers.sqlite.recipe_repo import SQLiteRecipeRepo
     from storage.providers.sqlite.chat_repo import SQLiteChatRepo, SQLiteChatEntityRepo, SQLiteChatMessageRepo
     from storage.providers.sqlite.kernel import SQLiteDBRole, resolve_role_db_path
 
@@ -47,6 +48,7 @@ async def lifespan(app: FastAPI):
     app.state.entity_repo = SQLiteEntityRepo(db)
     app.state.thread_repo = SQLiteThreadRepo(db)
     app.state.thread_launch_pref_repo = SQLiteThreadLaunchPrefRepo(db)
+    app.state.recipe_repo = SQLiteRecipeRepo(db)
     app.state.chat_repo = SQLiteChatRepo(chat_db)
     app.state.chat_entity_repo = SQLiteChatEntityRepo(chat_db)
     app.state.chat_message_repo = SQLiteChatMessageRepo(chat_db)
@@ -156,6 +158,9 @@ async def lifespan(app: FastAPI):
         # Cleanup: stop cron scheduler
         if app.state.cron_service:
             await app.state.cron_service.stop()
+
+        if hasattr(app.state, "recipe_repo"):
+            app.state.recipe_repo.close()
 
         # Cleanup: close all agents
         for agent in app.state.agent_pool.values():

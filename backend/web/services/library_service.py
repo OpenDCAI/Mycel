@@ -1,4 +1,4 @@
-"""Library CRUD — file-system based (~/.leon/library/)."""
+"""Library CRUD for file-backed assets and DB-backed recipes."""
 
 import json
 import shutil
@@ -10,6 +10,7 @@ from typing import Any
 from backend.web.core.paths import library_dir
 from backend.web.services import sandbox_service
 from sandbox.recipes import FEATURE_CATALOG, normalize_recipe_snapshot
+from storage.contracts import RecipeRepo
 
 LIBRARY_DIR = library_dir()
 
@@ -18,7 +19,13 @@ def ensure_library_dir() -> None:
     LIBRARY_DIR.mkdir(parents=True, exist_ok=True)
     (LIBRARY_DIR / "skills").mkdir(exist_ok=True)
     (LIBRARY_DIR / "agents").mkdir(exist_ok=True)
-    (LIBRARY_DIR / "recipes").mkdir(exist_ok=True)
+    legacy_recipe_dir = LIBRARY_DIR / "recipes"
+    # @@@recipe-storage-cutover - recipes now live in SQLite only; delete the dead file tree so it cannot masquerade as live state.
+    if legacy_recipe_dir.exists():
+        if legacy_recipe_dir.is_dir():
+            shutil.rmtree(legacy_recipe_dir)
+        else:
+            legacy_recipe_dir.unlink()
 
 
 def _read_json(path: Path, default: Any = None) -> Any:
@@ -33,15 +40,6 @@ def _read_json(path: Path, default: Any = None) -> Any:
 def _write_json(path: Path, data: Any) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
-
-
-def _recipe_dir(owner_user_id: str) -> Path:
-    return LIBRARY_DIR / "recipes" / owner_user_id
-
-
-def _recipe_path(owner_user_id: str, recipe_id: str) -> Path:
-    safe_name = recipe_id.replace(":", "__")
-    return _recipe_dir(owner_user_id) / f"{safe_name}.json"
 
 
 def _require_recipe_owner(owner_user_id: str | None) -> str:
@@ -86,26 +84,36 @@ def _merge_recipe_override(base: dict[str, Any], override: dict[str, Any] | None
     )
 
 
-def list_library(resource_type: str, owner_user_id: str | None = None) -> list[dict[str, Any]]:
+def _require_recipe_repo(recipe_repo: RecipeRepo | None) -> RecipeRepo:
+    if recipe_repo is None:
+        raise ValueError("recipe_repo is required for recipe operations")
+    return recipe_repo
+
+
+def list_library(
+    resource_type: str,
+    owner_user_id: str | None = None,
+    recipe_repo: RecipeRepo | None = None,
+) -> list[dict[str, Any]]:
     results: list[dict[str, Any]] = []
     if resource_type == "recipe":
         owner_user_id = _require_recipe_owner(owner_user_id)
+        recipe_repo = _require_recipe_repo(recipe_repo)
+        stored_rows = {row["recipe_id"]: row for row in recipe_repo.list_by_owner(owner_user_id)}
         items = []
         builtin_ids: set[str] = set()
         for recipe in list_default_recipes():
             builtin_ids.add(str(recipe["id"]))
-            override = _read_json(_recipe_path(owner_user_id, recipe["id"]), None)
+            override_row = stored_rows.get(str(recipe["id"]))
+            override = override_row["data"] if override_row and override_row["kind"] == "override" else None
             items.append(_merge_recipe_override(recipe, override))
-        recipes_dir = _recipe_dir(owner_user_id)
-        if recipes_dir.exists():
-            for path in sorted(recipes_dir.glob("*.json")):
-                data = _read_json(path, None)
-                if not isinstance(data, dict):
-                    continue
-                recipe_id = str(data.get("id") or "").strip()
-                if not recipe_id or recipe_id in builtin_ids:
-                    continue
-                items.append(_normalize_recipe_item(data, builtin=False))
+        for row in stored_rows.values():
+            if row["kind"] != "custom":
+                continue
+            recipe_id = str(row["recipe_id"]).strip()
+            if not recipe_id or recipe_id in builtin_ids:
+                continue
+            items.append(_normalize_recipe_item(row["data"], builtin=False))
         return items
     if resource_type == "skill":
         skills_dir = LIBRARY_DIR / "skills"
@@ -150,11 +158,13 @@ def create_resource(
     category: str = "",
     features: dict[str, bool] | None = None,
     owner_user_id: str | None = None,
+    recipe_repo: RecipeRepo | None = None,
 ) -> dict[str, Any]:
     now = int(time.time() * 1000)
     cat = category or "未分类"
     if resource_type == "recipe":
         owner_user_id = _require_recipe_owner(owner_user_id)
+        recipe_repo = _require_recipe_repo(recipe_repo)
         provider_type = cat.strip()
         if not provider_type:
             raise ValueError("Recipe provider_type is required")
@@ -176,7 +186,14 @@ def create_resource(
             },
             builtin=False,
         )
-        _write_json(_recipe_path(owner_user_id, recipe_id), item)
+        recipe_repo.upsert(
+            owner_user_id=owner_user_id,
+            recipe_id=recipe_id,
+            kind="custom",
+            provider_type=provider_type,
+            data=item,
+            created_at=now,
+        )
         return item
     if resource_type == "skill":
         rid = name.lower().replace(" ", "-")
@@ -214,6 +231,7 @@ def update_resource(
     resource_type: str,
     resource_id: str,
     owner_user_id: str | None = None,
+    recipe_repo: RecipeRepo | None = None,
     **fields: Any,
 ) -> dict[str, Any] | None:
     allowed = {"name", "desc", "features"}
@@ -221,21 +239,36 @@ def update_resource(
     now = int(time.time() * 1000)
     if resource_type == "recipe":
         owner_user_id = _require_recipe_owner(owner_user_id)
+        recipe_repo = _require_recipe_repo(recipe_repo)
         base = next((item for item in list_default_recipes() if item["id"] == resource_id), None)
         if base is not None:
-            override_path = _recipe_path(owner_user_id, resource_id)
-            override = _read_json(override_path, {})
+            row = recipe_repo.get(owner_user_id, resource_id)
+            override = row["data"] if row and row["kind"] == "override" else {}
             override.update(updates)
             override["updated_at"] = now
-            _write_json(override_path, override)
+            recipe_repo.upsert(
+                owner_user_id=owner_user_id,
+                recipe_id=resource_id,
+                kind="override",
+                provider_type=str(base["provider_type"]),
+                data=override,
+                created_at=int(base.get("created_at", now)),
+            )
             return _merge_recipe_override(base, override)
-        custom_path = _recipe_path(owner_user_id, resource_id)
-        if not custom_path.exists():
+        row = recipe_repo.get(owner_user_id, resource_id)
+        if row is None or row["kind"] != "custom":
             return None
-        current = _read_json(custom_path, {})
+        current = row["data"]
         current.update(updates)
         current["updated_at"] = now
-        _write_json(custom_path, current)
+        recipe_repo.upsert(
+            owner_user_id=owner_user_id,
+            recipe_id=resource_id,
+            kind="custom",
+            provider_type=str(current["provider_type"]),
+            data=current,
+            created_at=int(row["created_at"]),
+        )
         return _normalize_recipe_item(current, builtin=False)
     if resource_type == "skill":
         meta_path = LIBRARY_DIR / "skills" / resource_id / "meta.json"
@@ -267,19 +300,23 @@ def update_resource(
         return {"id": resource_id, "type": "mcp", "name": entry.get("name", resource_id), "desc": entry.get("desc", ""), "created_at": entry.get("created_at", 0), "updated_at": now}
     return None
 
-def delete_resource(resource_type: str, resource_id: str, owner_user_id: str | None = None) -> bool:
+def delete_resource(
+    resource_type: str,
+    resource_id: str,
+    owner_user_id: str | None = None,
+    recipe_repo: RecipeRepo | None = None,
+) -> bool:
     if resource_type == "recipe":
         owner_user_id = _require_recipe_owner(owner_user_id)
+        recipe_repo = _require_recipe_repo(recipe_repo)
         base = next((item for item in list_default_recipes() if item["id"] == resource_id), None)
         if base is not None:
-            override_path = _recipe_path(owner_user_id, resource_id)
-            if override_path.exists():
-                override_path.unlink()
+            recipe_repo.delete(owner_user_id, resource_id)
             return True
-        custom_path = _recipe_path(owner_user_id, resource_id)
-        if not custom_path.exists():
+        row = recipe_repo.get(owner_user_id, resource_id)
+        if row is None or row["kind"] != "custom":
             return False
-        custom_path.unlink()
+        recipe_repo.delete(owner_user_id, resource_id)
         return True
     if resource_type == "skill":
         target = LIBRARY_DIR / "skills" / resource_id
@@ -309,12 +346,16 @@ def delete_resource(resource_type: str, resource_id: str, owner_user_id: str | N
     return False
 
 
-def list_library_names(resource_type: str, owner_user_id: str | None = None) -> list[dict[str, str]]:
+def list_library_names(
+    resource_type: str,
+    owner_user_id: str | None = None,
+    recipe_repo: RecipeRepo | None = None,
+) -> list[dict[str, str]]:
     """Lightweight name+desc list for Picker UI."""
     results: list[dict[str, str]] = []
     if resource_type == "recipe":
         owner_user_id = _require_recipe_owner(owner_user_id)
-        return [{"name": item["name"], "desc": item["desc"]} for item in list_library("recipe", owner_user_id=owner_user_id)]
+        return [{"name": item["name"], "desc": item["desc"]} for item in list_library("recipe", owner_user_id=owner_user_id, recipe_repo=recipe_repo)]
     if resource_type == "skill":
         skills_dir = LIBRARY_DIR / "skills"
         if skills_dir.exists():
@@ -387,11 +428,16 @@ def get_resource_used_by(resource_type: str, resource_name: str) -> list[str]:
     return names
 
 
-def get_resource_content(resource_type: str, resource_id: str, owner_user_id: str | None = None) -> str | None:
+def get_resource_content(
+    resource_type: str,
+    resource_id: str,
+    owner_user_id: str | None = None,
+    recipe_repo: RecipeRepo | None = None,
+) -> str | None:
     """Read the .md content file for a skill or agent resource."""
     if resource_type == "recipe":
         owner_user_id = _require_recipe_owner(owner_user_id)
-        for item in list_library("recipe", owner_user_id=owner_user_id):
+        for item in list_library("recipe", owner_user_id=owner_user_id, recipe_repo=recipe_repo):
             if item["id"] == resource_id:
                 return json.dumps(item, ensure_ascii=False, indent=2)
         return None
