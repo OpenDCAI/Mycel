@@ -95,7 +95,17 @@ export interface ResourceItem {
   created_at: number;
   updated_at: number;
   provider_name?: string;
+  provider_type?: string;
   available?: boolean;
+  builtin?: boolean;
+  features?: Record<string, boolean>;
+  configurable_features?: Record<string, boolean>;
+  feature_options?: Array<{
+    key: string;
+    name: string;
+    description: string;
+    icon?: string;
+  }>;
 }
 
 export interface UserProfile {
