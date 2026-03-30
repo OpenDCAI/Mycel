@@ -1,4 +1,4 @@
-import { ChevronDown, Folder, Send } from "lucide-react";
+import { ChevronDown, Folder, Send, Settings2 } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import type { SandboxType } from "../api";
@@ -31,12 +31,15 @@ interface CenteredInputBoxProps {
   environmentControl?: {
     renderSummary: (args: EnvironmentControlArgs) => ReactNode;
     renderPanel: (args: EnvironmentControlArgs) => ReactNode;
-    isDetailView?: boolean;
     panelClassName?: string;
     onOpen?: () => void;
     onCancel?: () => void;
     onApply?: () => boolean | Promise<boolean>;
+    onBack?: () => void;
+    backLabel?: string;
+    showBack?: boolean;
     applyLabel?: string;
+    applyDisabled?: boolean;
   };
   onSend: (message: string, sandbox: string, model: string, workspace?: string) => Promise<void>;
 }
@@ -49,6 +52,8 @@ interface EnvironmentControlArgs {
   customWorkspace: string;
   setCustomWorkspace: (value: string) => void;
   persistWorkspace: (path: string) => Promise<void>;
+  draftModel: string;
+  setDraftModel: (value: string) => void;
 }
 
 const MODELS = [
@@ -179,6 +184,8 @@ export default function CenteredInputBox({
     customWorkspace,
     setCustomWorkspace,
     persistWorkspace,
+    draftModel,
+    setDraftModel,
   };
   const activeModelLabel = MODELS.find((entry) => entry.value === model)?.label ?? model;
   const quietSummary = environmentControl
@@ -231,12 +238,12 @@ export default function CenteredInputBox({
           disabled={sending}
           style={{ boxShadow: "none" }}
         />
-        <p className="text-[11px] text-[#a3a3a3] mb-4">Enter 发送，Shift + Enter 换行</p>
+        <p className="mb-4 text-[11px] text-muted-foreground">Enter 发送，Shift + Enter 换行</p>
 
         <div className="flex items-center gap-3 min-w-0">
           {environmentControl ? (
             <div className="min-w-0 flex-1 text-left">
-              <div className="truncate text-xs text-muted-foreground">
+              <div className="text-xs leading-5 text-muted-foreground line-clamp-2 break-all">
                 当前环境：{quietSummary}
               </div>
             </div>
@@ -381,8 +388,8 @@ export default function CenteredInputBox({
               )}
               <PopoverTrigger asChild>
                 <Button
-                  variant="ghost"
-                  className="h-9 px-3 text-sm text-muted-foreground hover:text-foreground"
+                  variant="outline"
+                  className="h-9 gap-2 rounded-full px-3 text-sm text-foreground"
                   onClick={(event) => {
                     event.preventDefault();
                     if (advancedConfigOpen) {
@@ -392,6 +399,7 @@ export default function CenteredInputBox({
                     }
                   }}
                 >
+                  <Settings2 className="h-4 w-4" />
                   配置
                 </Button>
               </PopoverTrigger>
@@ -404,28 +412,6 @@ export default function CenteredInputBox({
                 }`}
               >
                 <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
-                  {!environmentControl.isDetailView && (
-                    <div className="mb-6 space-y-3">
-                      <div className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Model</div>
-                      <div className="flex flex-wrap gap-2">
-                        {MODELS.map((entry) => (
-                          <button
-                            key={entry.value}
-                            type="button"
-                            onClick={() => setDraftModel(entry.value)}
-                            className={`rounded-xl border px-3 py-2 text-sm transition-colors ${
-                              draftModel === entry.value
-                                ? "border-foreground bg-foreground text-background"
-                                : "border-border bg-card text-foreground hover:bg-accent"
-                            }`}
-                          >
-                            {entry.label}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
                   {environmentControl.renderPanel(environmentArgs)}
                 </div>
 
@@ -433,7 +419,17 @@ export default function CenteredInputBox({
                   <Button type="button" variant="ghost" onClick={cancelAdvancedConfig} disabled={applyingConfig}>
                     取消
                   </Button>
-                  <Button type="button" onClick={() => void applyAdvancedConfig()} disabled={applyingConfig}>
+                  {environmentControl.showBack && environmentControl.onBack && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      onClick={environmentControl.onBack}
+                      disabled={applyingConfig}
+                    >
+                      {environmentControl.backLabel ?? "返回上一步"}
+                    </Button>
+                  )}
+                  <Button type="button" onClick={() => void applyAdvancedConfig()} disabled={applyingConfig || environmentControl.applyDisabled}>
                     {environmentControl.applyLabel ?? "确认"}
                   </Button>
                 </div>

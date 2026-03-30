@@ -93,8 +93,12 @@ def test_recipe_bootstrap_runs_once_when_session_is_created() -> None:
         lease_id = str(lease["lease_id"])
         with sqlite3.connect(str(db)) as conn:
             conn.execute(
-                "UPDATE sandbox_leases SET recipe_id = ? WHERE lease_id = ?",
-                ("fake:lark-cli", lease_id),
+                "UPDATE sandbox_leases SET recipe_id = ?, recipe_json = ? WHERE lease_id = ?",
+                (
+                    "fake:default",
+                    '{"id":"fake:default","name":"Fake Default","provider_name":"fake","provider_type":"fake","features":{"lark_cli":true}}',
+                    lease_id,
+                ),
             )
             conn.commit()
         mgr.terminal_store.create("term-bootstrap", "thread-bootstrap", lease_id, "/tmp")

@@ -18,6 +18,25 @@ const tabs: { id: ResourceType; label: string; icon: typeof Zap }[] = [
   { id: "recipes", label: "Recipe", icon: FlaskConical },
 ];
 
+const RECIPE_PROVIDER_LABELS: Record<string, string> = {
+  local: "Local",
+  daytona: "Daytona",
+  docker: "Docker",
+  e2b: "E2B",
+  agentbay: "AgentBay",
+};
+
+function providerLabel(name?: string): string {
+  if (!name) return "Unknown";
+  const hit = RECIPE_PROVIDER_LABELS[name];
+  if (hit) return hit;
+  return name
+    .split(/[_-]+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
 export default function LibraryPage() {
   const isMobile = useIsMobile();
   const librarySkills = useAppStore((s) => s.librarySkills);
@@ -165,6 +184,12 @@ export default function LibraryPage() {
             <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="搜索..." className="w-full pl-9 pr-3 py-2 rounded-lg bg-card border border-border text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary/40 transition-colors" />
           </div>
 
+          {isRecipeTab && (
+            <div className="mb-4 rounded-2xl border border-border bg-card px-4 py-3 text-sm text-muted-foreground">
+              Recipes 是每种 provider 的默认环境模板。当前版本先在创建 thread 时选择和微调，不在这里直接编辑。
+            </div>
+          )}
+
           {/* Grid */}
           {error ? (
             <div className="flex flex-col items-center justify-center py-20">
@@ -180,21 +205,25 @@ export default function LibraryPage() {
           ) : (<>
           <div className={`grid ${isMobile ? "grid-cols-1" : "grid-cols-2"} gap-3`}>
             {filtered.map((item) => (
-              <div key={item.id} onClick={() => handleCardClick(item)} className={`surface-interactive p-4 cursor-pointer group relative ${
-                selected?.id === item.id ? "border-primary/40 glow-sm" : ""
-              }`}>
+              <div
+                key={item.id}
+                onClick={() => { if (!isRecipeTab) handleCardClick(item); }}
+                className={`${isRecipeTab ? "rounded-2xl border border-border bg-card" : "surface-interactive cursor-pointer"} p-4 group relative ${
+                  isRecipeTab ? "" : ""
+                } ${selected?.id === item.id ? "border-primary/40 glow-sm" : ""}`}
+              >
                 <div className="flex items-start gap-3">
                   <div className="w-9 h-9 rounded-lg bg-primary/8 flex items-center justify-center shrink-0">
                     <Icon className="w-4 h-4 text-primary" />
                   </div>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center justify-between">
-                      <h4 className="text-sm font-medium text-foreground group-hover:text-primary transition-colors">{item.name}</h4>
+                      <h4 className={`text-sm font-medium text-foreground ${isRecipeTab ? "" : "group-hover:text-primary transition-colors"}`}>{item.name}</h4>
                     </div>
                     <p className="text-xs text-muted-foreground mt-1">{item.desc}</p>
                     <p className="text-[11px] text-muted-foreground mt-2">
                       {isRecipeTab
-                        ? `${item.provider_name ?? "unknown"} · builtin recipe`
+                        ? `${providerLabel(item.provider_name)} · builtin recipe`
                         : (() => {
                             const n = getResourceUsedBy(typeMap[tab], item.name).length;
                             return n ? `被 ${n} 位成员使用` : "未被使用";
@@ -249,4 +278,3 @@ export default function LibraryPage() {
     </div>
   );
 }
-

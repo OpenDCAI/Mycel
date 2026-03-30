@@ -1,6 +1,17 @@
 from __future__ import annotations
 
+from copy import deepcopy
 from typing import Any
+
+
+FEATURE_CATALOG: dict[str, dict[str, str]] = {
+    "lark_cli": {
+        "key": "lark_cli",
+        "name": "Lark CLI",
+        "description": "在 sandbox 初始化时懒安装并校验。",
+        "icon": "feishu",
+    },
+}
 
 
 def provider_type_from_name(name: str) -> str:
@@ -27,46 +38,54 @@ def default_recipe_id(provider_name: str) -> str:
     return f"{provider_type_from_name(provider_name)}:default"
 
 
-def lark_cli_recipe_id(provider_name: str) -> str:
-    return f"{provider_type_from_name(provider_name)}:lark-cli"
-
-
 def default_recipe_name(provider_name: str) -> str:
     return f"{humanize_recipe_provider(provider_type_from_name(provider_name))} Default"
 
 
-def lark_cli_recipe_name(provider_name: str) -> str:
-    return f"{humanize_recipe_provider(provider_type_from_name(provider_name))} + Lark CLI"
-
-
-def recipe_features(recipe_id: str | None) -> dict[str, bool]:
-    if not recipe_id:
-        return {}
-    if recipe_id.endswith(":lark-cli"):
-        return {"lark_cli": True}
-    return {}
-
-
-def normalize_recipe_id(provider_name: str, recipe_id: str | None) -> str:
-    return recipe_id or default_recipe_id(provider_name)
-
-
-def resolve_builtin_recipe(provider_name: str, recipe_id: str | None = None) -> dict[str, Any]:
-    resolved_id = normalize_recipe_id(provider_name, recipe_id)
-    if resolved_id == lark_cli_recipe_id(provider_name):
-        return {
-            "id": resolved_id,
-            "name": lark_cli_recipe_name(provider_name),
-            "desc": f"Lark CLI bootstrap for {provider_name}",
-            "provider_name": provider_name,
-            "features": {"lark_cli": True},
-        }
+def default_recipe_snapshot(provider_name: str) -> dict[str, Any]:
+    provider_type = provider_type_from_name(provider_name)
     return {
         "id": default_recipe_id(provider_name),
         "name": default_recipe_name(provider_name),
-        "desc": f"Default recipe for {provider_name}",
+        "desc": f"Default recipe for {provider_type}",
         "provider_name": provider_name,
-        "features": {},
+        "provider_type": provider_type,
+        "features": {"lark_cli": False},
+        "configurable_features": {"lark_cli": True},
+        "feature_options": [deepcopy(FEATURE_CATALOG["lark_cli"])],
+    }
+
+
+def normalize_recipe_snapshot(provider_name: str, recipe: dict[str, Any] | None = None) -> dict[str, Any]:
+    base = default_recipe_snapshot(provider_name)
+    if recipe is None:
+        return base
+
+    requested_features = recipe.get("features")
+    normalized_features = dict(base["features"])
+    if isinstance(requested_features, dict):
+        for key, value in requested_features.items():
+            if key in FEATURE_CATALOG:
+                normalized_features[key] = bool(value)
+
+    return {
+        **base,
+        "id": str(recipe.get("id") or base["id"]),
+        "name": str(recipe.get("name") or base["name"]),
+        "features": normalized_features,
+    }
+
+
+def recipe_features(recipe: dict[str, Any] | None) -> dict[str, bool]:
+    if not recipe:
+        return {}
+    raw = recipe.get("features")
+    if not isinstance(raw, dict):
+        return {}
+    return {
+        key: bool(value)
+        for key, value in raw.items()
+        if key in FEATURE_CATALOG
     }
 
 
@@ -87,15 +106,13 @@ def list_builtin_recipes(sandbox_types: list[dict[str, Any]]) -> list[dict[str, 
     for provider_type, sandbox in providers_by_type.items():
         provider_name = str(sandbox["name"])
         available = bool(sandbox.get("available", False))
-        default_item = resolve_builtin_recipe(provider_name)
+        item = default_recipe_snapshot(provider_name)
         items.append(
             {
-                **default_item,
+                **item,
                 "provider_type": provider_type,
                 "type": "recipe",
                 "available": available,
-                "features": {"lark_cli": False},
-                "configurable_features": {"lark_cli": True},
                 "created_at": 0,
                 "updated_at": 0,
             }
@@ -103,8 +120,17 @@ def list_builtin_recipes(sandbox_types: list[dict[str, Any]]) -> list[dict[str, 
     return items
 
 
-def bootstrap_recipe(provider, *, session_id: str, recipe_id: str | None) -> None:
-    features = recipe_features(recipe_id)
+def resolve_builtin_recipe(provider_name: str, recipe_id: str | None = None) -> dict[str, Any]:
+    base = default_recipe_snapshot(provider_name)
+    if recipe_id and recipe_id != base["id"]:
+        raise RuntimeError(
+            f"Unknown recipe id {recipe_id!r} for provider {provider_name}. Builtin recipes only expose defaults."
+        )
+    return base
+
+
+def bootstrap_recipe(provider, *, session_id: str, recipe: dict[str, Any] | None) -> None:
+    features = recipe_features(recipe)
     if not features.get("lark_cli"):
         return
 
@@ -112,7 +138,7 @@ def bootstrap_recipe(provider, *, session_id: str, recipe_id: str | None) -> Non
     if verify.exit_code == 0:
         return
 
-    # @@@recipe-bootstrap-lark-cli - install lazily when the sandbox first resolves this recipe.
+    # @@@recipe-bootstrap-lark-cli - recipe features bootstrap lazily on first real sandbox resolution.
     install = provider.execute(
         session_id,
         "npm install -g @larksuite/cli",
@@ -120,8 +146,9 @@ def bootstrap_recipe(provider, *, session_id: str, recipe_id: str | None) -> Non
         cwd=_resolve_recipe_cwd(provider),
     )
     if install.exit_code != 0:
+        recipe_name = recipe.get("name") if isinstance(recipe, dict) else None
         error = install.error or install.output or "unknown bootstrap error"
-        raise RuntimeError(f"Recipe bootstrap failed for {recipe_id}: {error}")
+        raise RuntimeError(f"Recipe bootstrap failed for {recipe_name or 'unknown recipe'}: {error}")
 
 
 def _resolve_recipe_cwd(provider) -> str:

@@ -362,7 +362,7 @@ class SandboxManager:
 
         instance = lease.get_instance()
         if instance:
-            bootstrap_recipe(self.provider, session_id=instance.instance_id, recipe_id=lease.recipe_id)
+            bootstrap_recipe(self.provider, session_id=instance.instance_id, recipe=lease.recipe)
             # @@@workspace-upload - sync files to sandbox after creation
             self._sync_to_sandbox(thread_id, instance.instance_id, source=storage["source"])
             self._fire_session_ready(instance.instance_id, "create")

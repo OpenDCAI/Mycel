@@ -25,50 +25,48 @@ export default function FilesystemBrowser({
   }, [initialPath]);
 
   return (
-    <div className="space-y-3">
-      {/* Current Path */}
+    <div className="space-y-2">
       <div className="flex items-center gap-2">
         <Button
           variant="outline"
           size="sm"
           onClick={() => loadPath("~")}
           title="返回主目录"
+          className="h-7 px-2"
         >
-          <Home className="h-3.5 w-3.5" />
+          <Home className="h-3 w-3" />
         </Button>
-        <div className="flex-1 text-sm text-muted-foreground truncate">
+        <div className="flex-1 text-xs text-muted-foreground truncate">
           {currentPath}
         </div>
       </div>
 
-      {/* Parent Directory */}
-      {parentPath && (
-        <button
-          onClick={() => loadPath(parentPath)}
-          className="w-full flex items-center gap-2 px-2 py-1.5 text-sm hover:bg-accent rounded-md"
-        >
-          <Folder className="h-4 w-4 text-muted-foreground" />
-          <span>..</span>
-        </button>
-      )}
-
-      {/* Directory List */}
-      <ScrollArea className="h-[300px] border rounded-md">
-        <div className="p-2 space-y-1">
+      <ScrollArea className="h-[220px]">
+        <div className="space-y-0.5">
           {loading && (
-            <div className="text-sm text-muted-foreground text-center py-4">
+            <div className="py-4 text-center text-xs text-muted-foreground">
               加载中...
             </div>
           )}
 
           {error && (
-            <div className="text-sm text-red-500 text-center py-4">{error}</div>
+            <div className="py-4 text-center text-xs text-red-500">{error}</div>
           )}
 
           {!loading && !error && items.length === 0 && (
-            <div className="text-sm text-muted-foreground text-center py-4">
+            <div className="py-4 text-center text-xs text-muted-foreground">
               此目录为空
             </div>
+          )}
+
+          {!loading && !error && parentPath && (
+            <button
+              onClick={() => loadPath(parentPath)}
+              className="flex w-full items-center gap-2 rounded-md px-2 py-1 text-xs hover:bg-accent"
+            >
+              <Folder className="h-3.5 w-3.5 text-muted-foreground" />
+              <span className="flex-1 text-left">..</span>
+            </button>
           )}
 
           {!loading &&
@@ -77,18 +75,17 @@ export default function FilesystemBrowser({
               <button
                 key={item.path}
                 onClick={() => loadPath(item.path)}
-                className="w-full flex items-center gap-2 px-2 py-1.5 text-sm hover:bg-accent rounded-md"
+                className="flex w-full items-center gap-2 rounded-md px-2 py-1 text-xs hover:bg-accent"
               >
-                <Folder className="h-4 w-4 text-muted-foreground" />
+                <Folder className="h-3.5 w-3.5 text-muted-foreground" />
                 <span className="flex-1 text-left truncate">{item.name}</span>
-                <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
+                <ChevronRight className="h-3 w-3 text-muted-foreground" />
               </button>
             ))}
         </div>
       </ScrollArea>
 
-      {/* Select Button */}
-      <Button onClick={() => onSelect(currentPath)} className="w-full" disabled={loading}>
+      <Button onClick={() => onSelect(currentPath)} className="h-8 w-full text-xs" disabled={loading}>
         选择此目录
       </Button>
     </div>
