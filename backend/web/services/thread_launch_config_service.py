@@ -40,7 +40,7 @@ def resolve_default_config(app: Any, owner_user_id: str, member_id: str) -> dict
     prefs = app.state.thread_launch_pref_repo.get(owner_user_id, member_id) or {}
     leases = sandbox_service.list_user_leases(owner_user_id)
     providers = [item for item in sandbox_service.available_sandbox_types() if item.get("available")]
-    recipes = list_library("recipe")
+    recipes = list_library("recipe", owner_user_id=owner_user_id)
 
     # @@@thread-launch-default-precedence - prefer the last successful thread config, then the last confirmed draft,
     # and only then derive from current leases/providers. This keeps defaults tied to actual member usage first.

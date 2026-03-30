@@ -35,9 +35,21 @@ def _write_json(path: Path, data: Any) -> None:
     path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
-def _recipe_path(recipe_id: str) -> Path:
+def _recipe_dir(owner_user_id: str) -> Path:
+    return LIBRARY_DIR / "recipes" / owner_user_id
+
+
+def _recipe_path(owner_user_id: str, recipe_id: str) -> Path:
     safe_name = recipe_id.replace(":", "__")
-    return LIBRARY_DIR / "recipes" / f"{safe_name}.json"
+    return _recipe_dir(owner_user_id) / f"{safe_name}.json"
+
+
+def _require_recipe_owner(resource_type: str, owner_user_id: str | None) -> str:
+    # @@@recipe-user-scope - custom recipes and builtin overrides are account-scoped resources.
+    # Callers must pass owner_user_id for recipe operations so one user's edits never leak into another's library.
+    if resource_type == "recipe" and not owner_user_id:
+        raise ValueError("owner_user_id is required for recipe operations")
+    return str(owner_user_id or "")
 
 
 def _normalize_recipe_item(data: dict[str, Any], *, builtin: bool) -> dict[str, Any]:
@@ -74,16 +86,17 @@ def _merge_recipe_override(base: dict[str, Any], override: dict[str, Any] | None
     )
 
 
-def list_library(resource_type: str) -> list[dict[str, Any]]:
+def list_library(resource_type: str, owner_user_id: str | None = None) -> list[dict[str, Any]]:
     results: list[dict[str, Any]] = []
     if resource_type == "recipe":
+        owner_user_id = _require_recipe_owner(resource_type, owner_user_id)
         items = []
         builtin_ids: set[str] = set()
         for recipe in list_default_recipes():
             builtin_ids.add(str(recipe["id"]))
-            override = _read_json(_recipe_path(recipe["id"]), None)
+            override = _read_json(_recipe_path(owner_user_id, recipe["id"]), None)
             items.append(_merge_recipe_override(recipe, override))
-        recipes_dir = LIBRARY_DIR / "recipes"
+        recipes_dir = _recipe_dir(owner_user_id)
         if recipes_dir.exists():
             for path in sorted(recipes_dir.glob("*.json")):
                 data = _read_json(path, None)
@@ -135,10 +148,12 @@ def create_resource(
     desc: str = "",
     category: str = "",
     features: dict[str, bool] | None = None,
+    owner_user_id: str | None = None,
 ) -> dict[str, Any]:
     now = int(time.time() * 1000)
     cat = category or "未分类"
     if resource_type == "recipe":
+        owner_user_id = _require_recipe_owner(resource_type, owner_user_id)
         provider_type = cat.strip()
         if not provider_type:
             raise ValueError("Recipe provider_type is required")
@@ -159,7 +174,7 @@ def create_resource(
             },
             builtin=False,
         )
-        _write_json(_recipe_path(recipe_id), item)
+        _write_json(_recipe_path(owner_user_id, recipe_id), item)
         return item
     if resource_type == "skill":
         rid = name.lower().replace(" ", "-")
@@ -193,20 +208,26 @@ def create_resource(
     raise ValueError(f"Unknown resource type: {resource_type}")
 
 
-def update_resource(resource_type: str, resource_id: str, **fields: Any) -> dict[str, Any] | None:
+def update_resource(
+    resource_type: str,
+    resource_id: str,
+    owner_user_id: str | None = None,
+    **fields: Any,
+) -> dict[str, Any] | None:
     allowed = {"name", "desc", "features"}
     updates = {k: v for k, v in fields.items() if k in allowed and v is not None}
     now = int(time.time() * 1000)
     if resource_type == "recipe":
+        owner_user_id = _require_recipe_owner(resource_type, owner_user_id)
         base = next((item for item in list_default_recipes() if item["id"] == resource_id), None)
         if base is not None:
-            override_path = _recipe_path(resource_id)
+            override_path = _recipe_path(owner_user_id, resource_id)
             override = _read_json(override_path, {})
             override.update(updates)
             override["updated_at"] = now
             _write_json(override_path, override)
             return _merge_recipe_override(base, override)
-        custom_path = _recipe_path(resource_id)
+        custom_path = _recipe_path(owner_user_id, resource_id)
         if not custom_path.exists():
             return None
         current = _read_json(custom_path, {})
@@ -244,15 +265,16 @@ def update_resource(resource_type: str, resource_id: str, **fields: Any) -> dict
         return {"id": resource_id, "type": "mcp", "name": entry.get("name", resource_id), "desc": entry.get("desc", ""), "created_at": entry.get("created_at", 0), "updated_at": now}
     return None
 
-def delete_resource(resource_type: str, resource_id: str) -> bool:
+def delete_resource(resource_type: str, resource_id: str, owner_user_id: str | None = None) -> bool:
     if resource_type == "recipe":
+        owner_user_id = _require_recipe_owner(resource_type, owner_user_id)
         base = next((item for item in list_default_recipes() if item["id"] == resource_id), None)
         if base is not None:
-            override_path = _recipe_path(resource_id)
+            override_path = _recipe_path(owner_user_id, resource_id)
             if override_path.exists():
                 override_path.unlink()
             return True
-        custom_path = _recipe_path(resource_id)
+        custom_path = _recipe_path(owner_user_id, resource_id)
         if not custom_path.exists():
             return False
         custom_path.unlink()
@@ -285,11 +307,12 @@ def delete_resource(resource_type: str, resource_id: str) -> bool:
     return False
 
 
-def list_library_names(resource_type: str) -> list[dict[str, str]]:
+def list_library_names(resource_type: str, owner_user_id: str | None = None) -> list[dict[str, str]]:
     """Lightweight name+desc list for Picker UI."""
     results: list[dict[str, str]] = []
     if resource_type == "recipe":
-        return [{"name": item["name"], "desc": item["desc"]} for item in list_library("recipe")]
+        owner_user_id = _require_recipe_owner(resource_type, owner_user_id)
+        return [{"name": item["name"], "desc": item["desc"]} for item in list_library("recipe", owner_user_id=owner_user_id)]
     if resource_type == "skill":
         skills_dir = LIBRARY_DIR / "skills"
         if skills_dir.exists():
@@ -362,10 +385,11 @@ def get_resource_used_by(resource_type: str, resource_name: str) -> list[str]:
     return names
 
 
-def get_resource_content(resource_type: str, resource_id: str) -> str | None:
+def get_resource_content(resource_type: str, resource_id: str, owner_user_id: str | None = None) -> str | None:
     """Read the .md content file for a skill or agent resource."""
     if resource_type == "recipe":
-        for item in list_library("recipe"):
+        owner_user_id = _require_recipe_owner(resource_type, owner_user_id)
+        for item in list_library("recipe", owner_user_id=owner_user_id):
             if item["id"] == resource_id:
                 return json.dumps(item, ensure_ascii=False, indent=2)
         return None
