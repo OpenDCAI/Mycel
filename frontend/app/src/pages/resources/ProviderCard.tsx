@@ -123,7 +123,7 @@ export default function ProviderCard({ provider, selected, onSelect }: ProviderC
 
             return (
               <div
-                key={s.leaseId || s.id}
+                key={s.id}
                 className={`w-2 h-2 rounded-full ${dotClass}`}
               />
             );

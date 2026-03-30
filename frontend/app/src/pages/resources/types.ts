@@ -58,6 +58,7 @@ export interface ResourceSession {
   threadId: string;
   memberId: string;
   memberName: string;
+  avatarUrl?: string | null;
   status: "running" | "paused" | "stopped" | "destroying";
   startedAt: string;
   createdAt?: string;

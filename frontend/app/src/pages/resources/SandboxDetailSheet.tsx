@@ -129,7 +129,7 @@ export default function SandboxDetailSheet({
 function AgentRow({ session }: { session: ResourceSession }) {
   return (
     <div className="flex items-center gap-3 rounded-lg border border-border/40 bg-muted/10 px-3 py-2.5">
-      <MemberAvatar name={session.memberName || "?"} avatarUrl={session.memberId ? `/api/members/${session.memberId}/avatar` : undefined} size="sm" type="mycel_agent" />
+      <MemberAvatar name={session.memberName || "?"} avatarUrl={session.avatarUrl || undefined} size="sm" type="mycel_agent" />
       <div className="flex-1 min-w-0">
         <p className="text-sm font-medium text-foreground truncate">
           {session.memberName || "未绑定"}

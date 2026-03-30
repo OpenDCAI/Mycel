@@ -10,6 +10,7 @@ from typing import Any
 from backend.web.core.config import SANDBOXES_DIR
 from backend.web.services.config_loader import SandboxConfigLoader
 from backend.web.services.sandbox_service import available_sandbox_types, build_provider_from_config_name
+from backend.web.utils.serializers import avatar_url
 from storage.providers.sqlite.thread_repo import SQLiteThreadRepo
 from sandbox.providers.local import LocalSessionProvider
 from sandbox.providers.docker import DockerProvider
@@ -216,11 +217,18 @@ def _to_session_metrics(snapshot: dict[str, Any] | None) -> dict[str, Any] | Non
 # ---------------------------------------------------------------------------
 
 
-def _member_name_map() -> dict[str, str]:
-    """Build member_id → name map from DB."""
+def _member_meta_map() -> dict[str, dict[str, str | None]]:
+    """Build member_id → display metadata map from DB."""
     try:
         from storage.providers.sqlite.member_repo import SQLiteMemberRepo
-        return {m.id: m.name for m in SQLiteMemberRepo().list_all() if m.id and m.name}
+        return {
+            m.id: {
+                "member_name": m.name,
+                "avatar_url": avatar_url(m.id, bool(m.avatar)),
+            }
+            for m in SQLiteMemberRepo().list_all()
+            if m.id and m.name
+        }
     except Exception:
         return {}
 
@@ -247,17 +255,19 @@ def _thread_agent_refs(thread_ids: list[str]) -> dict[str, str]:
 
 def _thread_owners(thread_ids: list[str]) -> dict[str, dict[str, str | None]]:
     refs = _thread_agent_refs(thread_ids)
-    member_names = _member_name_map()
+    member_meta = _member_meta_map()
     owners: dict[str, dict[str, str | None]] = {}
     for thread_id in thread_ids:
         agent_ref = refs.get(thread_id)
         if not agent_ref:
-            owners[thread_id] = {"member_id": None, "member_name": "未绑定Agent"}
+            owners[thread_id] = {"member_id": None, "member_name": "未绑定Agent", "avatar_url": None}
             continue
         # @@@agent-name-resolution - thread_config.agent may be member id or direct display name.
+        meta = member_meta.get(agent_ref, {})
         owners[thread_id] = {
             "member_id": agent_ref,
-            "member_name": member_names.get(agent_ref, agent_ref),
+            "member_name": meta.get("member_name") or agent_ref,
+            "avatar_url": meta.get("avatar_url"),
         }
     return owners
 
@@ -382,11 +392,14 @@ def list_resource_providers() -> dict[str, Any]:
             session_metrics = _to_session_metrics(snapshot_by_lease.get(lease_id))
             owner = owners.get(thread_id, {"member_id": None, "member_name": "未绑定Agent"})
             normalized_sessions.append({
-                "id": str(session.get("session_id") or ""),
+                # @@@resource-session-identity - monitor rows can legitimately have empty chat session ids.
+                # Use stable lease+thread identity so React keys do not collapse when one lease has multiple threads.
+                "id": str(session.get("session_id") or f"{lease_id}:{thread_id or 'unbound'}"),
                 "leaseId": lease_id,
                 "threadId": thread_id,
                 "memberId": str(owner.get("member_id") or ""),
                 "memberName": str(owner.get("member_name") or "未绑定Agent"),
+                "avatarUrl": owner.get("avatar_url"),
                 "status": normalized,
                 "startedAt": str(session.get("created_at") or ""),
                 "metrics": session_metrics,
