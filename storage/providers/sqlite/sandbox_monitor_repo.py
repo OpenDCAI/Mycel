@@ -75,6 +75,8 @@ class SQLiteSandboxMonitorRepo:
         return [_row_to_dict(r) for r in rows]
 
     def query_leases(self) -> list[dict]:
+        # @@@terminal-binding-ground-truth - lease↔thread binding is durable on abstract_terminals.
+        # chat_sessions is runtime-only and may disappear while the binding still exists.
         rows = self._conn.execute(
             """
             SELECT
@@ -87,10 +89,14 @@ class SQLiteSandboxMonitorRepo:
                 sl.current_instance_id,
                 sl.last_error,
                 sl.updated_at,
-                MAX(cs.thread_id) as thread_id
+                (
+                    SELECT at.thread_id
+                    FROM abstract_terminals at
+                    WHERE at.lease_id = sl.lease_id
+                    ORDER BY at.created_at DESC
+                    LIMIT 1
+                ) as thread_id
             FROM sandbox_leases sl
-            LEFT JOIN chat_sessions cs ON sl.lease_id = cs.lease_id AND cs.status != 'closed'
-            GROUP BY sl.lease_id
             ORDER BY sl.updated_at DESC
             """
         ).fetchall()
@@ -125,7 +131,12 @@ class SQLiteSandboxMonitorRepo:
 
     def query_lease_threads(self, lease_id: str) -> list[dict]:
         rows = self._conn.execute(
-            "SELECT DISTINCT thread_id FROM chat_sessions WHERE lease_id = ? AND status != 'closed'",
+            """
+            SELECT DISTINCT thread_id
+            FROM abstract_terminals
+            WHERE lease_id = ?
+            ORDER BY created_at DESC
+            """,
             (lease_id,),
         ).fetchall()
         return [_row_to_dict(r) for r in rows]
@@ -152,13 +163,18 @@ class SQLiteSandboxMonitorRepo:
                 sl.current_instance_id,
                 sl.last_error,
                 sl.updated_at,
-                cs.thread_id,
+                (
+                    SELECT at.thread_id
+                    FROM abstract_terminals at
+                    WHERE at.lease_id = sl.lease_id
+                    ORDER BY at.created_at DESC
+                    LIMIT 1
+                ) as thread_id,
                 CAST(
                     (julianday('now', 'utc') - julianday(sl.updated_at)) * 24
                     AS INTEGER
                 ) as hours_diverged
             FROM sandbox_leases sl
-            LEFT JOIN chat_sessions cs ON sl.lease_id = cs.lease_id
             WHERE sl.desired_state != sl.observed_state
             ORDER BY hours_diverged DESC
             """
