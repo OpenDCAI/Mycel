@@ -13,6 +13,9 @@ class RecipeSnapshotRequest(BaseModel):
     provider_type: str
     desc: str | None = None
     features: dict[str, bool] = Field(default_factory=dict)
+    configurable_features: dict[str, bool] = Field(default_factory=dict)
+    feature_options: list[dict] = Field(default_factory=list)
+    builtin: bool | None = None
 
 
 class CreateThreadRequest(BaseModel):

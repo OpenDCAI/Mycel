@@ -184,13 +184,20 @@ async def trigger_cron_job(job_id: str, request: Request) -> dict[str, Any]:
 # ── Library ──
 
 @router.get("/library/{resource_type}")
-async def list_library(resource_type: str) -> dict[str, Any]:
-    items = await asyncio.to_thread(library_service.list_library, resource_type)
+async def list_library(
+    resource_type: str,
+    user_id: Annotated[str, Depends(get_current_user_id)],
+) -> dict[str, Any]:
+    items = await asyncio.to_thread(library_service.list_library, resource_type, user_id)
     return {"items": items}
 
 
 @router.post("/library/{resource_type}")
-async def create_resource(resource_type: str, req: CreateResourceRequest) -> dict[str, Any]:
+async def create_resource(
+    resource_type: str,
+    req: CreateResourceRequest,
+    user_id: Annotated[str, Depends(get_current_user_id)],
+) -> dict[str, Any]:
     category = req.provider_type or ""
     return await asyncio.to_thread(
         library_service.create_resource,
@@ -199,28 +206,47 @@ async def create_resource(resource_type: str, req: CreateResourceRequest) -> dic
         req.desc,
         category,
         req.features,
+        user_id,
     )
 
 
 @router.put("/library/{resource_type}/{resource_id}")
-async def update_resource(resource_type: str, resource_id: str, req: UpdateResourceRequest) -> dict[str, Any]:
-    item = await asyncio.to_thread(library_service.update_resource, resource_type, resource_id, **req.model_dump())
+async def update_resource(
+    resource_type: str,
+    resource_id: str,
+    req: UpdateResourceRequest,
+    user_id: Annotated[str, Depends(get_current_user_id)],
+) -> dict[str, Any]:
+    item = await asyncio.to_thread(
+        library_service.update_resource,
+        resource_type,
+        resource_id,
+        user_id,
+        **req.model_dump(),
+    )
     if not item:
         raise HTTPException(404, "Resource not found")
     return item
 
 
 @router.delete("/library/{resource_type}/{resource_id}")
-async def delete_resource(resource_type: str, resource_id: str) -> dict[str, Any]:
-    ok = await asyncio.to_thread(library_service.delete_resource, resource_type, resource_id)
+async def delete_resource(
+    resource_type: str,
+    resource_id: str,
+    user_id: Annotated[str, Depends(get_current_user_id)],
+) -> dict[str, Any]:
+    ok = await asyncio.to_thread(library_service.delete_resource, resource_type, resource_id, user_id)
     if not ok:
         raise HTTPException(404, "Resource not found")
     return {"success": True}
 
 
 @router.get("/library/{resource_type}/names")
-async def list_library_names(resource_type: str) -> dict[str, Any]:
-    items = await asyncio.to_thread(library_service.list_library_names, resource_type)
+async def list_library_names(
+    resource_type: str,
+    user_id: Annotated[str, Depends(get_current_user_id)],
+) -> dict[str, Any]:
+    items = await asyncio.to_thread(library_service.list_library_names, resource_type, user_id)
     return {"items": items}
 
 
@@ -231,8 +257,12 @@ async def get_used_by(resource_type: str, resource_name: str) -> dict[str, Any]:
 
 
 @router.get("/library/{resource_type}/{resource_id}/content")
-async def get_resource_content(resource_type: str, resource_id: str) -> dict[str, Any]:
-    content = await asyncio.to_thread(library_service.get_resource_content, resource_type, resource_id)
+async def get_resource_content(
+    resource_type: str,
+    resource_id: str,
+    user_id: Annotated[str, Depends(get_current_user_id)],
+) -> dict[str, Any]:
+    content = await asyncio.to_thread(library_service.get_resource_content, resource_type, resource_id, user_id)
     if content is None:
         raise HTTPException(404, "Resource not found")
     return {"content": content}
