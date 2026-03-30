@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 export interface UserSettings {
   default_workspace: string | null;
@@ -11,19 +11,22 @@ export function useWorkspaceSettings() {
   const [settings, setSettings] = useState<UserSettings | null>(null);
   const [loading, setLoading] = useState(true);
 
-  async function loadSettings() {
+  const loadSettings = useCallback(async (signal?: AbortSignal) => {
     try {
-      const response = await fetch("/api/settings");
+      const response = await fetch("/api/settings", { signal });
       if (response.ok) {
         const data = await response.json();
         setSettings(data);
       }
     } catch (err) {
+      if (err instanceof DOMException && err.name === "AbortError") return;
       console.error("Failed to load settings:", err);
     } finally {
-      setLoading(false);
+      if (!signal?.aborted) {
+        setLoading(false);
+      }
     }
-  }
+  }, []);
 
   async function setDefaultWorkspace(workspace: string): Promise<void> {
     const response = await fetch("/api/settings/workspace", {
@@ -54,8 +57,10 @@ export function useWorkspaceSettings() {
   }
 
   useEffect(() => {
-    void loadSettings();
-  }, []);
+    const ac = new AbortController();
+    void loadSettings(ac.signal);
+    return () => ac.abort();
+  }, [loadSettings]);
 
   return {
     settings,

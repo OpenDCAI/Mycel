@@ -29,7 +29,7 @@ export interface ThreadManagerActions {
     leaseId?: string,
     recipe?: RecipeSnapshot,
   ) => Promise<string>;
-  handleGetMainThread: (memberId: string) => Promise<ThreadSummary | null>;
+  handleGetMainThread: (memberId: string, signal?: AbortSignal) => Promise<ThreadSummary | null>;
   handleDeleteThread: (threadId: string) => Promise<void>;
 }
 
@@ -80,8 +80,8 @@ export function useThreadManager(): ThreadManagerState & ThreadManagerActions {
     return thread.thread_id;
   }, [selectedSandbox]);
 
-  const handleGetMainThread = useCallback(async (memberId: string): Promise<ThreadSummary | null> => {
-    const thread = await getMainThread(memberId);
+  const handleGetMainThread = useCallback(async (memberId: string, signal?: AbortSignal): Promise<ThreadSummary | null> => {
+    const thread = await getMainThread(memberId, signal);
     if (thread) {
       setThreads((prev) => upsertThread(prev, thread));
     }

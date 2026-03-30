@@ -41,6 +41,7 @@ def resolve_default_config(app: Any, owner_user_id: str, member_id: str) -> dict
     leases = sandbox_service.list_user_leases(owner_user_id)
     providers = [item for item in sandbox_service.available_sandbox_types() if item.get("available")]
     recipes = list_library("recipe", owner_user_id=owner_user_id, recipe_repo=app.state.recipe_repo)
+    member_threads = app.state.thread_repo.list_by_member(member_id)
 
     # @@@thread-launch-default-precedence - prefer the last successful thread config, then the last confirmed draft,
     # and only then derive from current leases/providers. This keeps defaults tied to actual member usage first.
@@ -52,7 +53,15 @@ def resolve_default_config(app: Any, owner_user_id: str, member_id: str) -> dict
     if confirmed is not None:
         return {"source": "last_confirmed", "config": confirmed}
 
-    return {"source": "derived", "config": _derive_default_config(leases=leases, providers=providers, recipes=recipes)}
+    return {
+        "source": "derived",
+        "config": _derive_default_config(
+            member_threads=member_threads,
+            leases=leases,
+            providers=providers,
+            recipes=recipes,
+        ),
+    }
 
 
 def _validate_saved_config(
@@ -112,12 +121,18 @@ def _validate_saved_config(
 
 def _derive_default_config(
     *,
+    member_threads: list[dict[str, Any]],
     leases: list[dict[str, Any]],
     providers: list[dict[str, Any]],
     recipes: list[dict[str, Any]],
 ) -> dict[str, Any]:
-    if leases:
-        lease = leases[0]
+    member_thread_ids = {str(item.get("id") or "").strip() for item in member_threads if item.get("id")}
+    member_leases = [
+        lease for lease in leases
+        if any(str(thread_id or "").strip() in member_thread_ids for thread_id in lease.get("thread_ids") or [])
+    ]
+    if member_leases:
+        lease = member_leases[0]
         return {
             "create_mode": "existing",
             "provider_config": lease["provider_name"],
@@ -127,7 +142,8 @@ def _derive_default_config(
             "workspace": lease.get("cwd"),
         }
 
-    provider_config = str(providers[0]["name"]) if providers else "local"
+    provider_names = [str(item["name"]) for item in providers]
+    provider_config = "local" if "local" in provider_names else (provider_names[0] if provider_names else "local")
     provider_type = provider_type_from_name(provider_config)
     recipe = next(
         (
