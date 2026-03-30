@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from copy import deepcopy
+import shlex
 from typing import Any
 
 
@@ -135,26 +136,60 @@ def resolve_builtin_recipe(provider_type: str, recipe_id: str | None = None) -> 
     return base
 
 
-def bootstrap_recipe(provider, *, session_id: str, recipe: dict[str, Any] | None) -> None:
+def bootstrap_recipe(provider, *, session_id: str, recipe: dict[str, Any] | None) -> dict[str, str]:
     features = recipe_features(recipe)
     if not features.get("lark_cli"):
-        return
+        return {}
 
-    verify = provider.execute(session_id, "command -v lark-cli", timeout_ms=10_000, cwd=_resolve_recipe_cwd(provider))
+    cwd = _resolve_recipe_cwd(provider)
+    home_dir = _resolve_recipe_home(provider)
+    user_local_bin = f"{home_dir}/.local/bin"
+    base_path = provider.execute(session_id, 'printf %s "$PATH"', timeout_ms=10_000, cwd=cwd).output.strip()
+    desired_path = _prepend_path(user_local_bin, base_path)
+
+    verify = provider.execute(
+        session_id,
+        f"export PATH={shlex.quote(desired_path)}\ncommand -v lark-cli",
+        timeout_ms=10_000,
+        cwd=cwd,
+    )
     if verify.exit_code == 0:
-        return
+        _install_lark_cli_wrapper(
+            provider,
+            session_id=session_id,
+            cwd=cwd,
+            home_dir=home_dir,
+            user_local_bin=user_local_bin,
+        )
+        return {"PATH": desired_path}
 
-    # @@@recipe-bootstrap-lark-cli - recipe features bootstrap lazily on first real sandbox resolution.
+    # @@@recipe-bootstrap-lark-cli - Bootstrap must install into a user-writable prefix and persist PATH into
+    # terminal env_delta, otherwise remote sandboxes like self-hosted Daytona hit EACCES on global npm installs.
     install = provider.execute(
         session_id,
-        "npm install -g @larksuite/cli",
+        "\n".join([
+            f"mkdir -p {shlex.quote(user_local_bin)}",
+            f"export NPM_CONFIG_PREFIX={shlex.quote(f'{home_dir}/.local')}",
+            f"export PATH={shlex.quote(desired_path)}",
+            "npm install -g @larksuite/cli",
+            "command -v lark-cli",
+        ]),
         timeout_ms=300_000,
-        cwd=_resolve_recipe_cwd(provider),
+        cwd=cwd,
     )
     if install.exit_code != 0:
         recipe_name = recipe.get("name") if isinstance(recipe, dict) else None
         error = install.error or install.output or "unknown bootstrap error"
         raise RuntimeError(f"Recipe bootstrap failed for {recipe_name or 'unknown recipe'}: {error}")
+
+    _install_lark_cli_wrapper(
+        provider,
+        session_id=session_id,
+        cwd=cwd,
+        home_dir=home_dir,
+        user_local_bin=user_local_bin,
+    )
+    return {"PATH": desired_path}
 
 
 def _resolve_recipe_cwd(provider) -> str:
@@ -163,3 +198,44 @@ def _resolve_recipe_cwd(provider) -> str:
         if isinstance(val, str) and val:
             return val
     return "/home/user"
+
+
+def _resolve_recipe_home(provider) -> str:
+    cwd = _resolve_recipe_cwd(provider)
+    if cwd.startswith("/home/"):
+        parts = cwd.split("/")
+        if len(parts) >= 3 and parts[2]:
+            return f"/home/{parts[2]}"
+    return "/home/user"
+
+
+def _prepend_path(path_entry: str, current_path: str) -> str:
+    parts = [item for item in current_path.split(":") if item]
+    if path_entry in parts:
+        return current_path or path_entry
+    return ":".join([path_entry, *parts]) if parts else path_entry
+
+
+def _install_lark_cli_wrapper(provider, *, session_id: str, cwd: str, home_dir: str, user_local_bin: str) -> None:
+    wrapper_path = f"{user_local_bin}/lark-cli"
+    real_bin = f"{home_dir}/.local/lib/node_modules/@larksuite/cli/bin/lark-cli"
+    # @@@lark-cli-pty-ci-wrapper - The upstream binary hangs under Daytona PTY unless CI=1.
+    # Install a tiny wrapper so agent Bash calls keep using `lark-cli`, but run the real binary
+    # with the minimal env tweak that makes PTY execution terminate.
+    script = "\n".join([
+        "#!/bin/sh",
+        f"exec env CI=1 {shlex.quote(real_bin)} \"$@\"",
+    ])
+    cmd = "\n".join([
+        f"mkdir -p {shlex.quote(user_local_bin)}",
+        f"cat <<'EOF' > {shlex.quote(wrapper_path)}",
+        script,
+        "EOF",
+        f"chmod +x {shlex.quote(wrapper_path)}",
+        f"export PATH={shlex.quote(user_local_bin)}:$PATH",
+        "lark-cli --version",
+    ])
+    result = provider.execute(session_id, cmd, timeout_ms=60_000, cwd=cwd)
+    if result.exit_code != 0:
+        error = result.error or result.output or "failed to install lark-cli wrapper"
+        raise RuntimeError(f"Recipe bootstrap failed while installing lark-cli wrapper: {error}")

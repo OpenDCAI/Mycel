@@ -352,6 +352,19 @@ class SandboxManager:
         if not lease.get_instance():
             lease.ensure_active_instance(self.provider)
 
+        instance = lease.get_instance()
+        if instance:
+            recipe_env = bootstrap_recipe(self.provider, session_id=instance.instance_id, recipe=lease.recipe)
+            if recipe_env:
+                terminal_state = terminal.get_state()
+                terminal.update_state(
+                    TerminalState(
+                        cwd=terminal_state.cwd,
+                        env_delta={**terminal_state.env_delta, **recipe_env},
+                        state_version=terminal_state.state_version,
+                    )
+                )
+
         session_id = f"sess-{uuid.uuid4().hex[:12]}"
         session = self.session_manager.create(
             session_id=session_id,
@@ -360,9 +373,7 @@ class SandboxManager:
             lease=lease,
         )
 
-        instance = lease.get_instance()
         if instance:
-            bootstrap_recipe(self.provider, session_id=instance.instance_id, recipe=lease.recipe)
             # @@@workspace-upload - sync files to sandbox after creation
             self._sync_to_sandbox(thread_id, instance.instance_id, source=storage["source"])
             self._fire_session_ready(instance.instance_id, "create")
