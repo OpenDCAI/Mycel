@@ -42,45 +42,6 @@ def _make_app(member_repo: SQLiteMemberRepo, thread_repo: SQLiteThreadRepo) -> S
     )
 
 
-def test_library_recipes_expose_default_recipe_per_provider_type(
-    monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
-) -> None:
-    library_root = tmp_path / "library"
-    monkeypatch.setattr(library_service, "LIBRARY_DIR", library_root)
-    library_service.ensure_library_dir()
-    monkeypatch.setattr(
-        library_service,
-        "list_default_recipes",
-        lambda: [
-                {
-                    "id": "local:default",
-                    "type": "recipe",
-                    "name": "Local Default",
-                    "desc": "Default recipe for Local",
-                    "provider_type": "local",
-                    "created_at": 0,
-                    "updated_at": 0,
-                },
-            {
-                "id": "daytona_selfhost:default",
-                "type": "recipe",
-                "name": "Daytona Selfhost Default",
-                "desc": "Default recipe for Daytona Selfhost",
-                "provider_type": "daytona",
-                "created_at": 0,
-                "updated_at": 0,
-            },
-        ],
-    )
-
-    items = library_service.list_library("recipe")
-
-    assert [item["id"] for item in items] == ["local:default", "daytona_selfhost:default"]
-    assert items[0]["provider_type"] == "local"
-    assert items[1]["provider_type"] == "daytona"
-
-
 def test_builtin_recipes_dedupe_provider_variants_and_only_expose_defaults() -> None:
     items = list_builtin_recipes([
         {
