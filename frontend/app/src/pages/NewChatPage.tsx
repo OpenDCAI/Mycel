@@ -30,6 +30,22 @@ const PROVIDER_TYPE_LABELS: Record<string, string> = {
   agentbay: "AgentBay",
 };
 
+const MODEL_OPTIONS = [
+  { value: "leon:mini", label: "Mini" },
+  { value: "leon:medium", label: "Medium" },
+  { value: "leon:large", label: "Large" },
+  { value: "leon:max", label: "Max" },
+] as const;
+
+type ConfigSnapshot = {
+  createMode: "new" | "existing";
+  selectedLeaseId: string;
+  selectedRecipeId: string;
+  selectedRecipeFeatures: Record<string, boolean>;
+  selectedWorkspace: string;
+  selectedProviderConfig: string;
+};
+
 function providerConfigLabel(name: string): string {
   return name
     .split(/[_-]+/)
@@ -94,14 +110,7 @@ export default function NewChatPage({ mode = "member" }: { mode?: "member" | "ne
   const [configStep, setConfigStep] = useState<1 | 2 | 3>(1);
   const [createModeInitialized, setCreateModeInitialized] = useState(false);
   const [configDefaultsLoading, setConfigDefaultsLoading] = useState(true);
-  const [configSnapshot, setConfigSnapshot] = useState<{
-    createMode: "new" | "existing";
-      selectedLeaseId: string;
-      selectedRecipeId: string;
-      selectedRecipeFeatures: Record<string, boolean>;
-      selectedWorkspace: string;
-      selectedProviderConfig: string;
-  } | null>(null);
+  const [configSnapshot, setConfigSnapshot] = useState<ConfigSnapshot | null>(null);
 
   const authAgent = useAuthStore(s => s.agent);
   const memberList = useAppStore(s => s.memberList);
@@ -286,10 +295,11 @@ export default function NewChatPage({ mode = "member" }: { mode?: "member" | "ne
       features: { ...(selectedRecipe.features ?? {}), ...selectedRecipeFeatures },
     }
     : null;
+  const activeWorkspace = selectedWorkspace || settings?.default_workspace || "";
   const localRecipeSelected = createMode === "new" && selectedRecipe?.provider_type === "local";
   const workspaceRequired = createMode === "new"
     && selectedRecipe?.provider_type === "local"
-    && !(selectedWorkspace || settings?.default_workspace || "");
+    && !activeWorkspace;
 
   async function handleSend(message: string, model: string) {
     const workspace = selectedWorkspace || settings?.default_workspace || undefined;
@@ -359,35 +369,53 @@ export default function NewChatPage({ mode = "member" }: { mode?: "member" | "ne
     if (!recipe) return "选择 recipe";
     const featureSuffix = enabledFeatureLabels(recipe).join(" · ");
     if (recipe.provider_type !== "local") return [recipe.name, featureSuffix].filter(Boolean).join(" · ");
-    const activeWorkspace = selectedWorkspace || settings?.default_workspace || "";
     if (!activeWorkspace) return [recipe.name, featureSuffix, "选择工作区"].filter(Boolean).join(" · ");
     const parts = activeWorkspace.split("/").filter(Boolean);
     return [recipe.name, featureSuffix, parts.at(-1) ?? activeWorkspace].filter(Boolean).join(" · ");
   }
 
-  function openConfigSnapshot() {
-    setConfigStep(1);
-    setConfigSnapshot({
+  function buildConfigSnapshot(): ConfigSnapshot {
+    return {
       createMode,
       selectedLeaseId: selectedLeaseId || leaseOptions[0]?.lease_id || "",
       selectedRecipeId,
       selectedRecipeFeatures: { ...selectedRecipeFeatures },
-      selectedWorkspace: selectedWorkspace || settings?.default_workspace || "",
+      selectedWorkspace: activeWorkspace,
       selectedProviderConfig: selectedProviderConfig || selectedSandbox || "local",
-    });
+    };
+  }
+
+  function resetConfigPanel() {
+    setConfigSnapshot(null);
+    setConfigStep(1);
+  }
+
+  function openConfigSnapshot() {
+    setConfigStep(1);
+    setConfigSnapshot(buildConfigSnapshot());
   }
 
   function cancelConfigChanges() {
-    setConfigStep(1);
-    if (configSnapshot) {
-      setCreateMode(configSnapshot.createMode);
-      setSelectedLeaseId(configSnapshot.selectedLeaseId);
-      setSelectedRecipeId(configSnapshot.selectedRecipeId);
-      setSelectedRecipeFeatures(configSnapshot.selectedRecipeFeatures);
-      setSelectedWorkspace(configSnapshot.selectedWorkspace);
-      setSelectedProviderConfig(configSnapshot.selectedProviderConfig);
-    }
-    setConfigSnapshot(null);
+    if (!configSnapshot) return resetConfigPanel();
+    setCreateMode(configSnapshot.createMode);
+    setSelectedLeaseId(configSnapshot.selectedLeaseId);
+    setSelectedRecipeId(configSnapshot.selectedRecipeId);
+    setSelectedRecipeFeatures(configSnapshot.selectedRecipeFeatures);
+    setSelectedWorkspace(configSnapshot.selectedWorkspace);
+    setSelectedProviderConfig(configSnapshot.selectedProviderConfig);
+    resetConfigPanel();
+  }
+
+  async function persistDefaultConfig(draftModel: string, workspace: string | null) {
+    if (!decodedMemberId) return;
+    await saveDefaultThreadConfig(decodedMemberId, {
+      create_mode: createMode,
+      provider_config: selectedProviderConfig,
+      recipe: selectedRecipeSnapshot,
+      lease_id: createMode === "existing" ? selectedLeaseId || null : null,
+      model: draftModel,
+      workspace,
+    });
   }
 
   async function applyConfigChanges(draftModel: string) {
@@ -400,22 +428,13 @@ export default function NewChatPage({ mode = "member" }: { mode?: "member" | "ne
         setConfigStep(3);
         return false;
       }
-      if (decodedMemberId) {
-        await saveDefaultThreadConfig(decodedMemberId, {
-          create_mode: createMode,
-          provider_config: selectedProviderConfig,
-          recipe: selectedRecipeSnapshot,
-          lease_id: createMode === "existing" ? selectedLeaseId || null : null,
-          model: draftModel,
-          workspace: createMode === "existing" ? selectedLease?.cwd || null : (selectedWorkspace || settings?.default_workspace || null),
-        });
-      }
+      const workspace = createMode === "existing" ? selectedLease?.cwd || null : activeWorkspace || null;
+      await persistDefaultConfig(draftModel, workspace);
       setSelectedModel(draftModel);
-      setConfigSnapshot(null);
-      setConfigStep(1);
+      resetConfigPanel();
       return true;
     }
-    const nextWorkspace = selectedWorkspace || settings?.default_workspace || "";
+    const nextWorkspace = activeWorkspace;
     if (createMode === "new" && selectedRecipeSnapshot?.provider_type === "local" && nextWorkspace) {
       await fetch("/api/settings/workspace", {
         method: "POST",
@@ -423,19 +442,9 @@ export default function NewChatPage({ mode = "member" }: { mode?: "member" | "ne
         body: JSON.stringify({ workspace: nextWorkspace }),
       });
     }
-    if (decodedMemberId) {
-      await saveDefaultThreadConfig(decodedMemberId, {
-        create_mode: createMode,
-        provider_config: selectedProviderConfig,
-        recipe: selectedRecipeSnapshot,
-        lease_id: createMode === "existing" ? selectedLeaseId || null : null,
-        model: draftModel,
-        workspace: nextWorkspace || null,
-      });
-    }
+    await persistDefaultConfig(draftModel, nextWorkspace || null);
     setSelectedModel(draftModel);
-    setConfigSnapshot(null);
-    setConfigStep(1);
+    resetConfigPanel();
     return true;
   }
 
@@ -463,7 +472,6 @@ export default function NewChatPage({ mode = "member" }: { mode?: "member" | "ne
     ? providerConfigLabel(selectedProviderConfig)
     : "未选择 provider";
   const recipeSummaryLabel = selectedRecipe?.name ?? "未选择 recipe";
-  const localWorkspace = selectedWorkspace || settings?.default_workspace || "";
   const stepSummary = createMode === "existing"
     ? `复用 ${providerSummaryLabel} 的现有 sandbox`
     : `新建 ${providerSummaryLabel} sandbox · ${recipeSummaryLabel}`;
@@ -551,12 +559,7 @@ export default function NewChatPage({ mode = "member" }: { mode?: "member" | "ne
               const totalSteps = localRecipeSelected ? 3 : 2;
               const renderModelChoices = (compact = false) => (
                 <div className={cn("flex flex-wrap items-center", compact ? "gap-1.5" : "gap-2")}>
-                  {[
-                    { value: "leon:mini", label: "Mini" },
-                    { value: "leon:medium", label: "Medium" },
-                    { value: "leon:large", label: "Large" },
-                    { value: "leon:max", label: "Max" },
-                  ].map((entry) => (
+                  {MODEL_OPTIONS.map((entry) => (
                     <button
                       key={entry.value}
                       type="button"
@@ -830,7 +833,7 @@ export default function NewChatPage({ mode = "member" }: { mode?: "member" | "ne
                           onSelect={(path) => {
                             setSelectedWorkspace(path);
                           }}
-                          initialPath={localWorkspace || "~"}
+                          initialPath={activeWorkspace || "~"}
                         />
                       </div>
 

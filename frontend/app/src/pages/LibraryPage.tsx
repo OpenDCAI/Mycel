@@ -99,21 +99,28 @@ export default function LibraryPage() {
     [libraryRecipes],
   );
 
+  function confirmRecipeLeave(message: string): boolean {
+    if (!(recipeDirty && isRecipeTab)) return true;
+    return window.confirm(message);
+  }
+
+  function resetRecipeSelection(nextTab?: ResourceType) {
+    if (nextTab) setTab(nextTab);
+    setSearch("");
+    setSelected(null);
+    setCreating(false);
+    setRecipeDirty(false);
+  }
+
   const handleCardClick = (item: ResourceItem) => {
-    if (isRecipeTab && recipeDirty && selected?.id !== item.id) {
-      const confirmed = window.confirm("当前 recipe 还有未保存的修改，确定要切换吗？");
-      if (!confirmed) return;
-    }
+    if (selected?.id !== item.id && !confirmRecipeLeave("当前 recipe 还有未保存的修改，确定要切换吗？")) return;
     setCreating(false);
     setSelected(item);
     setRecipeDirty(false);
   };
 
   const openCreate = () => {
-    if (isRecipeTab && recipeDirty) {
-      const confirmed = window.confirm("当前 recipe 还有未保存的修改，确定要新建另一个 recipe 吗？");
-      if (!confirmed) return;
-    }
+    if (!confirmRecipeLeave("当前 recipe 还有未保存的修改，确定要新建另一个 recipe 吗？")) return;
     setSelected(null);
     setCreating(true);
     setRecipeDirty(false);
@@ -164,11 +171,8 @@ export default function LibraryPage() {
               const isActive = tab === t.id;
               return (
                 <button key={t.id} onClick={() => {
-                  if (recipeDirty && isRecipeTab) {
-                    const confirmed = window.confirm("当前 recipe 还有未保存的修改，确定要离开吗？");
-                    if (!confirmed) return;
-                  }
-                  setTab(t.id); setSearch(""); setSelected(null); setCreating(false); setRecipeDirty(false);
+                  if (!confirmRecipeLeave("当前 recipe 还有未保存的修改，确定要离开吗？")) return;
+                  resetRecipeSelection(t.id);
                 }} className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-sm transition-all ${
                   isActive ? "bg-primary/5 text-foreground border border-primary/15" : "text-muted-foreground hover:bg-muted hover:text-foreground border border-transparent"
                 }`}>
@@ -193,11 +197,8 @@ export default function LibraryPage() {
                   const isActive = tab === t.id;
                   return (
                     <button key={t.id} onClick={() => {
-                      if (recipeDirty && isRecipeTab) {
-                        const confirmed = window.confirm("当前 recipe 还有未保存的修改，确定要离开吗？");
-                        if (!confirmed) return;
-                      }
-                      setTab(t.id); setSearch(""); setSelected(null); setCreating(false); setRecipeDirty(false);
+                      if (!confirmRecipeLeave("当前 recipe 还有未保存的修改，确定要离开吗？")) return;
+                      resetRecipeSelection(t.id);
                     }} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs whitespace-nowrap shrink-0 transition-colors ${
                       isActive ? "bg-primary/10 text-primary font-medium" : "text-muted-foreground hover:text-foreground hover:bg-muted"
                     }`}>
