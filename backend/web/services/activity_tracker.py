@@ -17,13 +17,12 @@ def track_thread_activity(thread_id: str, activity_type: str = "activity") -> No
     # to bump last_active_at to prevent idle reaper from pausing during file uploads.
     # Does NOT change session status — preserves paused/active state as-is.
     """
-    from storage.providers.sqlite.kernel import SQLiteDBRole, connect_sqlite, resolve_role_db_path
+    from storage.providers.sqlite.chat_session_repo import SQLiteChatSessionRepo
+    from storage.providers.sqlite.kernel import SQLiteDBRole, resolve_role_db_path
 
     now = datetime.now().isoformat()
-    with connect_sqlite(resolve_role_db_path(SQLiteDBRole.SANDBOX)) as conn:
-        conn.execute(
-            "UPDATE chat_sessions SET last_active_at = ? WHERE thread_id = ? AND status != 'closed'",
-            (now, thread_id),
-        )
-        conn.commit()
-
+    repo = SQLiteChatSessionRepo(db_path=resolve_role_db_path(SQLiteDBRole.SANDBOX))
+    try:
+        repo.touch_thread_activity(thread_id, now)
+    finally:
+        repo.close()

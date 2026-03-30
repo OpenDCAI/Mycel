@@ -7,7 +7,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from backend.web.services.sandbox_service import init_providers_and_managers, load_all_sessions
-from storage.providers.sqlite.kernel import SQLiteDBRole, connect_sqlite_role, resolve_role_db_path
+from storage.providers.sqlite.kernel import SQLiteDBRole, resolve_role_db_path
 from storage.providers.sqlite.sandbox_monitor_repo import SQLiteSandboxMonitorRepo
 
 # ---------------------------------------------------------------------------
@@ -279,6 +279,9 @@ def list_threads() -> dict[str, Any]:
 def get_thread(thread_id: str) -> dict[str, Any]:
     repo = SQLiteSandboxMonitorRepo()
     try:
+        summary = repo.query_thread_summary(thread_id)
+        if not summary:
+            raise KeyError("Thread not found")
         return _map_thread_detail(thread_id, repo.query_thread_sessions(thread_id))
     finally:
         repo.close()
@@ -344,13 +347,11 @@ def runtime_health_snapshot() -> dict[str, Any]:
     tables: dict[str, int] = {"chat_sessions": 0, "sandbox_leases": 0, "lease_events": 0}
 
     if db_exists:
-        conn = connect_sqlite_role(SQLiteDBRole.SANDBOX, check_same_thread=False)
+        repo = SQLiteSandboxMonitorRepo()
         try:
-            for table_name in tables:
-                row = conn.execute(f"SELECT COUNT(1) FROM {table_name}").fetchone()
-                tables[table_name] = int(row[0]) if row else 0
+            tables = repo.count_rows(list(tables))
         finally:
-            conn.close()
+            repo.close()
 
     _, managers = init_providers_and_managers()
     sessions = load_all_sessions(managers)

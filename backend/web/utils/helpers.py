@@ -1,7 +1,4 @@
 """General helper utilities."""
-
-import re
-import sqlite3
 from pathlib import Path
 from typing import Any
 
@@ -9,8 +6,11 @@ from fastapi import HTTPException
 
 from backend.web.core.config import DB_PATH
 from storage.container import StorageContainer
-from storage.providers.sqlite.kernel import SQLiteDBRole, connect_sqlite, resolve_role_db_path
+from storage.providers.sqlite.chat_session_repo import SQLiteChatSessionRepo
+from storage.providers.sqlite.kernel import SQLiteDBRole, resolve_role_db_path
+from storage.providers.sqlite.terminal_repo import SQLiteTerminalRepo
 from storage.runtime import build_storage_container
+from sandbox.sync.state import SyncState
 
 SANDBOX_DB_PATH = resolve_role_db_path(SQLiteDBRole.SANDBOX)
 
@@ -28,28 +28,27 @@ def get_terminal_timestamps(terminal_id: str) -> tuple[str | None, str | None]:
     """Get created_at and updated_at timestamps for a terminal."""
     if not SANDBOX_DB_PATH.exists():
         return None, None
-    with connect_sqlite(SANDBOX_DB_PATH, row_factory=sqlite3.Row) as conn:
-        row = conn.execute(
-            "SELECT created_at, updated_at FROM abstract_terminals WHERE terminal_id = ?",
-            (terminal_id,),
-        ).fetchone()
-        if not row:
-            return None, None
-        return row["created_at"], row["updated_at"]
+    repo = SQLiteTerminalRepo(db_path=SANDBOX_DB_PATH)
+    try:
+        return repo.get_timestamps(terminal_id)
+    finally:
+        repo.close()
 
 
 def get_lease_timestamps(lease_id: str) -> tuple[str | None, str | None]:
     """Get created_at and updated_at timestamps for a lease."""
+    from storage.providers.sqlite.lease_repo import SQLiteLeaseRepo
+
     if not SANDBOX_DB_PATH.exists():
         return None, None
-    with connect_sqlite(SANDBOX_DB_PATH, row_factory=sqlite3.Row) as conn:
-        row = conn.execute(
-            "SELECT created_at, updated_at FROM sandbox_leases WHERE lease_id = ?",
-            (lease_id,),
-        ).fetchone()
-        if not row:
-            return None, None
-        return row["created_at"], row["updated_at"]
+    repo = SQLiteLeaseRepo(db_path=SANDBOX_DB_PATH)
+    try:
+        row = repo.get(lease_id)
+    finally:
+        repo.close()
+    if row is None:
+        return None, None
+    return str(row.get("created_at") or "") or None, str(row.get("updated_at") or "") or None
 
 
 def extract_webhook_instance_id(payload: dict[str, Any]) -> str | None:
@@ -156,14 +155,15 @@ def delete_thread_in_db(thread_id: str) -> None:
     # Purge storage-managed repos (works for both sqlite and supabase strategies)
     _get_container().purge_thread(thread_id)
 
-    # Purge sandbox db tables (not managed by storage repos)
-    if SANDBOX_DB_PATH.exists():
-        with connect_sqlite(SANDBOX_DB_PATH) as conn:
-            tables = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()}
-            for table in tables:
-                if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", table):
-                    continue
-                cols = {r[1] for r in conn.execute(f'PRAGMA table_info("{table}")').fetchall()}
-                if "thread_id" in cols:
-                    conn.execute(f'DELETE FROM "{table}" WHERE thread_id = ?', (thread_id,))
-            conn.commit()
+    if not SANDBOX_DB_PATH.exists():
+        return
+
+    session_repo = SQLiteChatSessionRepo(db_path=SANDBOX_DB_PATH)
+    terminal_repo = SQLiteTerminalRepo(db_path=SANDBOX_DB_PATH)
+    try:
+        session_repo.delete_by_thread(thread_id)
+        terminal_repo.delete_by_thread(thread_id)
+        SyncState().clear_thread(thread_id)
+    finally:
+        session_repo.close()
+        terminal_repo.close()
