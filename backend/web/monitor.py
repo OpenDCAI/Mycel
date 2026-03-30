@@ -11,6 +11,7 @@ from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException
 
+from backend.web.services import monitor_service
 from storage.providers.sqlite.kernel import SQLiteDBRole, connect_sqlite, resolve_role_db_path
 
 SANDBOX_DB_PATH = resolve_role_db_path(SQLiteDBRole.SANDBOX)
@@ -174,159 +175,20 @@ def get_thread(thread_id: str, db: sqlite3.Connection = Depends(get_db)):
 
 @router.get("/leases")
 def list_leases(db: sqlite3.Connection = Depends(get_db)):
-    rows = db.execute("""
-        SELECT
-            sl.lease_id,
-            sl.provider_name,
-            sl.desired_state,
-            sl.observed_state,
-            sl.current_instance_id,
-            sl.last_error,
-            sl.updated_at,
-            MAX(cs.thread_id) as thread_id
-        FROM sandbox_leases sl
-        LEFT JOIN chat_sessions cs ON sl.lease_id = cs.lease_id
-        GROUP BY sl.lease_id
-        ORDER BY sl.updated_at DESC
-    """).fetchall()
-
-    items = []
-    for row in rows:
-        items.append(
-            {
-                "lease_id": row["lease_id"],
-                "lease_url": f"/lease/{row['lease_id']}",
-                "provider": row["provider_name"],
-                "instance_id": row["current_instance_id"],
-                "thread": {
-                    "thread_id": row["thread_id"],
-                    "thread_url": f"/thread/{row['thread_id']}" if row["thread_id"] else None,
-                    "is_orphan": not row["thread_id"],
-                },
-                "state_badge": make_badge(row["desired_state"], row["observed_state"]),
-                "error": row["last_error"],
-                "updated_at": row["updated_at"],
-                "updated_ago": format_time_ago(row["updated_at"]),
-            }
-        )
-
-    return {"title": "All Leases", "count": len(items), "items": items}
+    return monitor_service.list_leases()
 
 
 @router.get("/lease/{lease_id}")
 def get_lease(lease_id: str, db: sqlite3.Connection = Depends(get_db)):
-    lease = db.execute(
-        """
-        SELECT * FROM sandbox_leases WHERE lease_id = ?
-    """,
-        (lease_id,),
-    ).fetchone()
-
-    if not lease:
-        raise HTTPException(status_code=404, detail="Lease not found")
-
-    threads = db.execute(
-        """
-        SELECT DISTINCT thread_id FROM chat_sessions WHERE lease_id = ?
-    """,
-        (lease_id,),
-    ).fetchall()
-
-    # Get lease events
-    events = db.execute(
-        """
-        SELECT * FROM lease_events
-        WHERE lease_id = ?
-        ORDER BY created_at DESC
-    """,
-        (lease_id,),
-    ).fetchall()
-
-    badge = make_badge(lease["desired_state"], lease["observed_state"])
-    badge["error"] = lease["last_error"]
-
-    return {
-        "lease_id": lease_id,
-        "breadcrumb": [{"label": "Leases", "url": "/leases"}, {"label": lease_id, "url": f"/lease/{lease_id}"}],
-        "info": {
-            "provider": lease["provider_name"],
-            "instance_id": lease["current_instance_id"],
-            "created_at": lease["created_at"],
-            "created_ago": format_time_ago(lease["created_at"]),
-            "updated_at": lease["updated_at"],
-            "updated_ago": format_time_ago(lease["updated_at"]),
-        },
-        "state": badge,
-        "related_threads": {
-            "title": "Related Threads",
-            "items": [{"thread_id": t["thread_id"], "thread_url": f"/thread/{t['thread_id']}"} for t in threads],
-        },
-        "lease_events": {
-            "title": "Lease Events",
-            "count": len(events),
-            "items": [
-                {
-                    "event_id": e["event_id"],
-                    "event_url": f"/event/{e['event_id']}",
-                    "event_type": e["event_type"],
-                    "source": e["source"],
-                    "created_at": e["created_at"],
-                    "created_ago": format_time_ago(e["created_at"]),
-                }
-                for e in events
-            ],
-        },
-    }
+    try:
+        return monitor_service.get_lease(lease_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
 @router.get("/diverged")
 def list_diverged(db: sqlite3.Connection = Depends(get_db)):
-    rows = db.execute("""
-        SELECT
-            sl.lease_id,
-            sl.provider_name,
-            sl.desired_state,
-            sl.observed_state,
-            sl.current_instance_id,
-            sl.last_error,
-            sl.updated_at,
-            cs.thread_id,
-            CAST((julianday('now', 'localtime') - julianday(sl.updated_at)) * 24 AS INTEGER) as hours_diverged
-        FROM sandbox_leases sl
-        LEFT JOIN chat_sessions cs ON sl.lease_id = cs.lease_id
-        WHERE sl.desired_state != sl.observed_state
-        ORDER BY hours_diverged DESC
-    """).fetchall()
-
-    items = []
-    for row in rows:
-        items.append(
-            {
-                "lease_id": row["lease_id"],
-                "lease_url": f"/lease/{row['lease_id']}",
-                "provider": row["provider_name"],
-                "instance_id": row["current_instance_id"],
-                "thread": {
-                    "thread_id": row["thread_id"],
-                    "thread_url": f"/thread/{row['thread_id']}" if row["thread_id"] else None,
-                    "is_orphan": not row["thread_id"],
-                },
-                "state_badge": {
-                    "desired": row["desired_state"],
-                    "observed": row["observed_state"],
-                    "hours_diverged": row["hours_diverged"],
-                    "color": "red" if row["hours_diverged"] > 24 else "yellow",
-                },
-                "error": row["last_error"],
-            }
-        )
-
-    return {
-        "title": "Diverged Leases",
-        "description": "Leases where desired_state ≠ observed_state",
-        "count": len(items),
-        "items": items,
-    }
+    return monitor_service.list_diverged()
 
 
 @router.get("/events")
