@@ -9,8 +9,8 @@ import { useAuthStore } from "../store/auth-store";
 import { useAppStore } from "../store/app-store";
 import MemberAvatar from "../components/MemberAvatar";
 import FilesystemBrowser from "../components/FilesystemBrowser";
-import { listMyLeases } from "../api/client";
-import type { RecipeFeatureOption, RecipeSnapshot, UserLeaseSummary } from "../api/types";
+import { getDefaultThreadConfig, listMyLeases, saveDefaultThreadConfig } from "../api/client";
+import type { RecipeFeatureOption, RecipeSnapshot, ThreadLaunchConfig, UserLeaseSummary } from "../api/types";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
 import { Checkbox } from "../components/ui/checkbox";
 import { cn } from "../lib/utils";
@@ -90,8 +90,10 @@ export default function NewChatPage({ mode = "member" }: { mode?: "member" | "ne
   const [selectedRecipeFeatures, setSelectedRecipeFeatures] = useState<Record<string, boolean>>({});
   const [selectedProviderConfig, setSelectedProviderConfig] = useState<string>("");
   const [selectedWorkspace, setSelectedWorkspace] = useState<string>("");
+  const [selectedModel, setSelectedModel] = useState<string>("");
   const [configStep, setConfigStep] = useState<1 | 2 | 3>(1);
   const [createModeInitialized, setCreateModeInitialized] = useState(false);
+  const [configDefaultsLoading, setConfigDefaultsLoading] = useState(true);
   const [configSnapshot, setConfigSnapshot] = useState<{
     createMode: "new" | "existing";
       selectedLeaseId: string;
@@ -218,17 +220,47 @@ export default function NewChatPage({ mode = "member" }: { mode?: "member" | "ne
   }, [createModeInitialized, leaseLoading, leaseOptions.length]);
 
   useEffect(() => {
-    if (leaseLoading) return;
+    if (leaseLoading || configDefaultsLoading) return;
     if (selectedProviderConfig) return;
     const nextConfig = leaseOptions[0]?.provider_name || providerConfigOptions[0]?.value || selectedSandbox || "local";
     if (nextConfig) setSelectedProviderConfig(nextConfig);
-  }, [leaseLoading, leaseOptions, providerConfigOptions, selectedProviderConfig, selectedSandbox]);
+  }, [configDefaultsLoading, leaseLoading, leaseOptions, providerConfigOptions, selectedProviderConfig, selectedSandbox]);
 
   useEffect(() => {
     if (!selectedWorkspace && settings?.default_workspace) {
       setSelectedWorkspace(settings.default_workspace);
     }
   }, [selectedWorkspace, settings?.default_workspace]);
+
+  useEffect(() => {
+    if (!decodedMemberId) {
+      setConfigDefaultsLoading(false);
+      return;
+    }
+    const memberIdForDefaults = decodedMemberId;
+    let cancelled = false;
+
+    async function loadDefaultConfig() {
+      setConfigDefaultsLoading(true);
+      try {
+        const payload = await getDefaultThreadConfig(memberIdForDefaults);
+        if (cancelled) return;
+        applyResolvedConfig(payload.config);
+        setCreateModeInitialized(true);
+      } catch (err) {
+        if (cancelled) return;
+        console.error("[NewChatPage] load default thread config failed:", err);
+      } finally {
+        if (!cancelled) setConfigDefaultsLoading(false);
+      }
+    }
+
+    void loadDefaultConfig();
+    return () => {
+      cancelled = true;
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [decodedMemberId]);
 
   const selectedRecipe = useMemo(
     () => recipeOptions.find((item) => item.value === selectedRecipeId)?.recipe ?? recipeOptions[0]?.recipe ?? null,
@@ -299,6 +331,16 @@ export default function NewChatPage({ mode = "member" }: { mode?: "member" | "ne
     setShowWorkspaceSetup(false);
   }
 
+  function applyResolvedConfig(config: ThreadLaunchConfig) {
+    setCreateMode(config.create_mode);
+    setSelectedProviderConfig(config.provider_config || "");
+    setSelectedLeaseId(config.lease_id || "");
+    setSelectedRecipeId(config.recipe?.id || "");
+    setSelectedRecipeFeatures(config.recipe?.features ?? {});
+    setSelectedWorkspace(config.workspace || "");
+    setSelectedModel(config.model || settings?.default_model || "leon:large");
+  }
+
   function summarizeEnvironment() {
     if (createMode === "existing") {
       if (!selectedLease) return "复用旧沙盒";
@@ -315,12 +357,6 @@ export default function NewChatPage({ mode = "member" }: { mode?: "member" | "ne
   }
 
   function openConfigSnapshot() {
-    const preferredLease = selectedLease ?? leaseOptions[0] ?? null;
-    const defaultCreateMode = leaseOptions.length > 0 ? "existing" : "new";
-    const nextProviderConfig = defaultCreateMode === "existing"
-      ? (preferredLease?.provider_name || selectedProviderConfig || selectedSandbox || "local")
-      : (selectedProviderConfig || selectedSandbox || "local");
-
     setConfigStep(1);
     setConfigSnapshot({
       createMode,
@@ -328,11 +364,8 @@ export default function NewChatPage({ mode = "member" }: { mode?: "member" | "ne
       selectedRecipeId,
       selectedRecipeFeatures: { ...selectedRecipeFeatures },
       selectedWorkspace: selectedWorkspace || settings?.default_workspace || "",
-      selectedProviderConfig: selectedLease?.provider_name || selectedProviderConfig || selectedSandbox || "local",
+      selectedProviderConfig: selectedProviderConfig || selectedSandbox || "local",
     });
-    setCreateMode(defaultCreateMode);
-    setSelectedLeaseId(defaultCreateMode === "existing" ? (preferredLease?.lease_id || "") : "");
-    setSelectedProviderConfig(nextProviderConfig);
   }
 
   function cancelConfigChanges() {
@@ -348,7 +381,7 @@ export default function NewChatPage({ mode = "member" }: { mode?: "member" | "ne
     setConfigSnapshot(null);
   }
 
-  async function applyConfigChanges() {
+  async function applyConfigChanges(draftModel: string) {
     if (configStep === 1) {
       setConfigStep(2);
       return false;
@@ -358,6 +391,17 @@ export default function NewChatPage({ mode = "member" }: { mode?: "member" | "ne
         setConfigStep(3);
         return false;
       }
+      if (decodedMemberId) {
+        await saveDefaultThreadConfig(decodedMemberId, {
+          create_mode: createMode,
+          provider_config: selectedProviderConfig,
+          recipe: selectedRecipeSnapshot,
+          lease_id: createMode === "existing" ? selectedLeaseId || null : null,
+          model: draftModel,
+          workspace: createMode === "existing" ? selectedLease?.cwd || null : (selectedWorkspace || settings?.default_workspace || null),
+        });
+      }
+      setSelectedModel(draftModel);
       setConfigSnapshot(null);
       setConfigStep(1);
       return true;
@@ -370,6 +414,17 @@ export default function NewChatPage({ mode = "member" }: { mode?: "member" | "ne
         body: JSON.stringify({ workspace: nextWorkspace }),
       });
     }
+    if (decodedMemberId) {
+      await saveDefaultThreadConfig(decodedMemberId, {
+        create_mode: createMode,
+        provider_config: selectedProviderConfig,
+        recipe: selectedRecipeSnapshot,
+        lease_id: createMode === "existing" ? selectedLeaseId || null : null,
+        model: draftModel,
+        workspace: nextWorkspace || null,
+      });
+    }
+    setSelectedModel(draftModel);
     setConfigSnapshot(null);
     setConfigStep(1);
     return true;
@@ -404,7 +459,7 @@ export default function NewChatPage({ mode = "member" }: { mode?: "member" | "ne
     ? `复用 ${providerSummaryLabel} 的现有 sandbox`
     : `新建 ${providerSummaryLabel} sandbox · ${recipeSummaryLabel}`;
 
-  if (loading || resolveState === "resolving") {
+  if (loading || resolveState === "resolving" || configDefaultsLoading) {
     return (
       <div className="flex-1 flex items-center justify-center relative">
         <div className="w-full max-w-[420px] px-6 text-center">
@@ -460,7 +515,7 @@ export default function NewChatPage({ mode = "member" }: { mode?: "member" | "ne
         </div>
 
         <CenteredInputBox
-          defaultModel={settings?.default_model || "leon:large"}
+          defaultModel={selectedModel || settings?.default_model || "leon:large"}
           environmentControl={{
             panelClassName: "max-h-[calc(100vh-4rem)]",
             applyLabel: configStep === 3 ? "确认" : (configStep === 1 ? "下一步" : (localRecipeSelected ? "下一步" : "确认")),

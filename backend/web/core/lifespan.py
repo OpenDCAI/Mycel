@@ -35,6 +35,7 @@ async def lifespan(app: FastAPI):
     from storage.providers.sqlite.member_repo import SQLiteMemberRepo, SQLiteAccountRepo
     from storage.providers.sqlite.entity_repo import SQLiteEntityRepo
     from storage.providers.sqlite.thread_repo import SQLiteThreadRepo
+    from storage.providers.sqlite.thread_launch_pref_repo import SQLiteThreadLaunchPrefRepo
     from storage.providers.sqlite.chat_repo import SQLiteChatRepo, SQLiteChatEntityRepo, SQLiteChatMessageRepo
     from storage.providers.sqlite.kernel import SQLiteDBRole, resolve_role_db_path
 
@@ -45,6 +46,7 @@ async def lifespan(app: FastAPI):
     app.state.account_repo = SQLiteAccountRepo(db)
     app.state.entity_repo = SQLiteEntityRepo(db)
     app.state.thread_repo = SQLiteThreadRepo(db)
+    app.state.thread_launch_pref_repo = SQLiteThreadLaunchPrefRepo(db)
     app.state.chat_repo = SQLiteChatRepo(chat_db)
     app.state.chat_entity_repo = SQLiteChatEntityRepo(chat_db)
     app.state.chat_message_repo = SQLiteChatMessageRepo(chat_db)

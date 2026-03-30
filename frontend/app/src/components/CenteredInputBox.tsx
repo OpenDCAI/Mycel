@@ -16,7 +16,7 @@ interface CenteredInputBoxProps {
     panelClassName?: string;
     onOpen?: () => void;
     onCancel?: () => void;
-    onApply?: () => boolean | Promise<boolean>;
+    onApply?: (draftModel: string) => boolean | Promise<boolean>;
     onBack?: () => void;
     backLabel?: string;
     showBack?: boolean;
@@ -79,7 +79,7 @@ export default function CenteredInputBox({
   async function applyAdvancedConfig() {
     setApplyingConfig(true);
     try {
-      const shouldClose = (await environmentControl.onApply?.()) ?? true;
+      const shouldClose = (await environmentControl.onApply?.(draftModel)) ?? true;
       if (!shouldClose) return;
       setModel(draftModel);
       setAdvancedConfigOpen(false);

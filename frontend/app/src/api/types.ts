@@ -84,6 +84,20 @@ export interface RecipeSnapshot {
   feature_options?: RecipeFeatureOption[];
 }
 
+export interface ThreadLaunchConfig {
+  create_mode: "new" | "existing";
+  provider_config: string;
+  recipe?: RecipeSnapshot | null;
+  lease_id?: string | null;
+  model?: string | null;
+  workspace?: string | null;
+}
+
+export interface ThreadLaunchConfigResponse {
+  source: "last_successful" | "last_confirmed" | "derived";
+  config: ThreadLaunchConfig;
+}
+
 export interface UserLeaseSummary {
   lease_id: string;
   provider_name: string;

@@ -3,6 +3,8 @@ import type {
   SandboxType,
   UserLeaseSummary,
   RecipeSnapshot,
+  ThreadLaunchConfig,
+  ThreadLaunchConfigResponse,
   SessionStatus,
   StreamStatus,
   TerminalStatus,
@@ -72,6 +74,20 @@ export async function getMainThread(memberId: string): Promise<ThreadSummary | n
     body: JSON.stringify({ member_id: memberId }),
   });
   return payload.thread ?? null;
+}
+
+export async function getDefaultThreadConfig(memberId: string): Promise<ThreadLaunchConfigResponse> {
+  return request(`/api/threads/default-config?member_id=${encodeURIComponent(memberId)}`);
+}
+
+export async function saveDefaultThreadConfig(
+  memberId: string,
+  config: ThreadLaunchConfig,
+): Promise<void> {
+  await request("/api/threads/default-config", {
+    method: "POST",
+    body: JSON.stringify({ member_id: memberId, ...config }),
+  });
 }
 
 export async function deleteThread(threadId: string): Promise<void> {
