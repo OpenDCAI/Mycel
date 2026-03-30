@@ -27,7 +27,7 @@ export default function SessionList({ sessions, providerType }: SessionListProps
   return (
     <div className="space-y-2">
       {groups.map((group) => (
-        <LeaseItem key={group.leaseId || group.sessions[0].id} group={group} providerType={providerType} />
+        <LeaseItem key={group.leaseId || group.sessions.map((s) => s.id).join("|")} group={group} providerType={providerType} />
       ))}
     </div>
   );
@@ -75,7 +75,7 @@ function LeaseItem({ group, providerType }: { group: LeaseGroup; providerType: s
         {/* Crew avatars */}
         <div className="flex -space-x-1 shrink-0">
           {group.sessions.slice(0, 4).map((s) => (
-            <MemberAvatar key={s.id || s.leaseId} name={s.memberName || "?"} avatarUrl={s.memberId ? `/api/members/${s.memberId}/avatar` : undefined} size="xs" type="mycel_agent" className="border border-background" />
+            <MemberAvatar key={s.id} name={s.memberName || "?"} avatarUrl={s.avatarUrl || undefined} size="xs" type="mycel_agent" className="border border-background" />
           ))}
           {group.sessions.length > 4 && (
             <div className="w-5 h-5 rounded-full bg-muted border border-background flex items-center justify-center text-[8px] text-muted-foreground">

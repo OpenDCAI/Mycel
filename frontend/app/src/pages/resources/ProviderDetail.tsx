@@ -159,7 +159,7 @@ export default function ProviderDetail({ provider }: ProviderDetailProps) {
               <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3">
                 {groups.map((group) => (
                   <SandboxCard
-                    key={group.leaseId || group.sessions[0].id}
+                    key={group.leaseId || group.sessions.map((s) => s.id).join("|")}
                     group={group}
                     onClick={() => {
                       setSelectedGroup(group);
