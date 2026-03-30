@@ -184,34 +184,81 @@ class SQLiteSandboxMonitorRepo:
         """Leases with crew info for resource overview.
 
         @@@lease-source-of-truth - sandbox_leases is the source of truth for sandboxes.
-        chat_sessions is LEFT JOIN'd for crew info only, filtered to non-closed to avoid
-        returning phantom rows for stale/reopened sessions on the same lease.
-        @@@thread-id-permanent - thread_id is resolved via COALESCE: prefer the active
-        session's thread_id, fall back to the most recent session (including closed).
-        This ensures agent name is never lost when a sandbox is paused between runs.
+        Prefer active chat_sessions for crew rows; if none exist, fall back to abstract_terminals.
+        @@@terminal-fallback-for-monitor - terminal bindings are the durable thread→lease link.
+        Resources UI must still show bound agents after chat_sessions age out or close.
         """
         if not self._table_exists("sandbox_leases"):
             return []
         rows = self._conn.execute(
             """
-            SELECT
-                sl.lease_id AS lease_id,
-                sl.provider_name AS provider,
-                sl.observed_state AS observed_state,
-                sl.desired_state AS desired_state,
-                sl.created_at AS created_at,
-                cs.chat_session_id AS session_id,
-                COALESCE(
-                    cs.thread_id,
-                    (SELECT thread_id FROM chat_sessions
-                     WHERE lease_id = sl.lease_id
-                     ORDER BY started_at DESC LIMIT 1)
-                ) AS thread_id
-            FROM sandbox_leases sl
-            LEFT JOIN chat_sessions cs
-                ON sl.lease_id = cs.lease_id
-                AND cs.status != 'closed'
-            ORDER BY sl.created_at DESC
+            WITH active_sessions AS (
+                SELECT
+                    sl.lease_id AS lease_id,
+                    sl.provider_name AS provider,
+                    sl.observed_state AS observed_state,
+                    sl.desired_state AS desired_state,
+                    sl.created_at AS created_at,
+                    cs.chat_session_id AS session_id,
+                    cs.thread_id AS thread_id
+                FROM sandbox_leases sl
+                JOIN chat_sessions cs
+                    ON sl.lease_id = cs.lease_id
+                    AND cs.status != 'closed'
+            ),
+            terminal_fallback AS (
+                SELECT
+                    sl.lease_id AS lease_id,
+                    sl.provider_name AS provider,
+                    sl.observed_state AS observed_state,
+                    sl.desired_state AS desired_state,
+                    sl.created_at AS created_at,
+                    NULL AS session_id,
+                    at.thread_id AS thread_id
+                FROM sandbox_leases sl
+                JOIN abstract_terminals at
+                    ON sl.lease_id = at.lease_id
+                WHERE NOT EXISTS (
+                    SELECT 1
+                    FROM chat_sessions cs
+                    WHERE cs.lease_id = sl.lease_id
+                      AND cs.status != 'closed'
+                )
+            ),
+            recent_session_fallback AS (
+                SELECT
+                    sl.lease_id AS lease_id,
+                    sl.provider_name AS provider,
+                    sl.observed_state AS observed_state,
+                    sl.desired_state AS desired_state,
+                    sl.created_at AS created_at,
+                    NULL AS session_id,
+                    (
+                        SELECT cs.thread_id
+                        FROM chat_sessions cs
+                        WHERE cs.lease_id = sl.lease_id
+                        ORDER BY cs.started_at DESC
+                        LIMIT 1
+                    ) AS thread_id
+                FROM sandbox_leases sl
+                WHERE NOT EXISTS (
+                    SELECT 1
+                    FROM chat_sessions cs
+                    WHERE cs.lease_id = sl.lease_id
+                      AND cs.status != 'closed'
+                )
+                  AND NOT EXISTS (
+                    SELECT 1
+                    FROM abstract_terminals at
+                    WHERE at.lease_id = sl.lease_id
+                )
+            )
+            SELECT * FROM active_sessions
+            UNION ALL
+            SELECT * FROM terminal_fallback
+            UNION ALL
+            SELECT * FROM recent_session_fallback
+            ORDER BY created_at DESC
             """
         ).fetchall()
         return [
