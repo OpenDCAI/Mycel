@@ -44,7 +44,7 @@ export default function WorkspaceSection({ defaultWorkspace, onUpdate }: Workspa
     <div className="space-y-3">
       <div className="flex items-center gap-3">
         <div className="w-1 h-6 bg-gradient-to-b from-info to-info rounded-full" />
-        <h2 className="text-lg font-bold text-foreground" style={{ fontFamily: 'Inter, system-ui, sans-serif' }}>
+        <h2 className="text-lg font-bold text-foreground">
           本地工作区
         </h2>
       </div>

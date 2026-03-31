@@ -39,6 +39,7 @@ node_modules/
 
 # Environment
 .env
+frontend/app/.env.development
 
 # Claude Code - track config, exclude local/generated
 .claude/**/.DS_Store

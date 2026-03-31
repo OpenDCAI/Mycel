@@ -67,7 +67,7 @@ function ContentPhaseBlock({
         <MarkdownContent content={visibleText.content} />
       )}
       {retrySeg && (
-        <div className="text-xs text-amber-500 mt-1.5 flex items-center gap-1.5">
+        <div className="text-xs text-warning mt-1.5 flex items-center gap-1.5">
           <Loader2 className="w-3.5 h-3.5 animate-spin" />
           <span>正在重试 {retrySeg.attempt}/{retrySeg.maxAttempts}...</span>
         </div>

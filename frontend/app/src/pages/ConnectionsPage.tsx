@@ -229,7 +229,7 @@ function WeChatCard() {
               ) : (
                 <button
                   onClick={() => setSettingsOpen(true)}
-                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-amber-500/10 text-amber-600 text-xs font-medium hover:bg-amber-500/20 transition-colors duration-fast"
+                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-warning/10 text-warning text-xs font-medium hover:bg-warning/20 transition-colors duration-fast"
                 >
                   未配置 — 点击设置
                 </button>
@@ -466,9 +466,9 @@ function StatusBadge({ phase }: { phase: WeChatPhase }) {
   }
   if (phase === "showing-qr" || phase === "loading-qr") {
     return (
-      <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-amber-500/10 text-amber-600">
+      <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-warning/10 text-warning">
         <Loader2 className="w-3 h-3 animate-spin" />
-        Connecting
+        连接中
       </span>
     );
   }

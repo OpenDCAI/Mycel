@@ -68,7 +68,7 @@ export default memo(function RunCommandRenderer({ step, expanded }: ToolRenderer
     <div className="space-y-1.5">
       {command && (
         <div className="relative group/cmd">
-          <pre className="p-3 rounded-lg text-xs overflow-x-auto font-mono bg-[#171717] text-green-400 border border-[#333]">
+          <pre className="p-3 rounded-lg text-xs overflow-x-auto font-mono bg-[#171717] text-success border border-[#333]">
             <span className="text-[#555]">$ </span>{command}
           </pre>
           <div className="absolute top-2 right-2 opacity-0 group-hover/cmd:opacity-100 transition-opacity duration-fast">

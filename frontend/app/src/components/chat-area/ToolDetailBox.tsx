@@ -16,11 +16,11 @@ interface ToolDetailBoxProps {
 function MiniStatusIcon({ status }: { status: string }) {
   switch (status) {
     case "calling":
-      return <Loader2 className="w-3 h-3 text-blue-500 animate-spin flex-shrink-0" />;
+      return <Loader2 className="w-3 h-3 text-info animate-spin flex-shrink-0" />;
     case "done":
       return <CheckCircle2 className="w-3 h-3 text-muted-foreground/70 flex-shrink-0" />;
     case "error":
-      return <XCircle className="w-3 h-3 text-red-500 flex-shrink-0" />;
+      return <XCircle className="w-3 h-3 text-destructive flex-shrink-0" />;
     case "cancelled":
       return <XCircle className="w-3 h-3 text-muted-foreground/70 flex-shrink-0" />;
     default:
@@ -120,10 +120,10 @@ export const ToolDetailBox = memo(function ToolDetailBox({
       >
         {/* Rolling count badge — top-right corner */}
         <div className="absolute top-1.5 right-2 z-10 flex items-center gap-0.5 pointer-events-none select-none">
-          <span className="text-2xs text-[#b8b8b8] tabular-nums leading-none font-medium">
+          <span className="text-2xs text-muted-foreground tabular-nums leading-none font-medium">
             <RollingNumber value={toolCount} />
           </span>
-          <span className="text-2xs text-[#c8c8c8] leading-none"> 次工具</span>
+          <span className="text-2xs text-muted-foreground leading-none"> 次工具</span>
         </div>
 
         <div

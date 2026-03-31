@@ -85,11 +85,11 @@ export default memo(function TaskRenderer({ step, expanded }: ToolRendererProps)
 
       {/* Real-time streaming output */}
       {stream && (
-        <div className="p-3 rounded-lg text-xs bg-[#f0f9ff] border border-[#bae6fd] space-y-2">
-          <div className="flex items-center gap-2 text-[#0369a1] font-medium">
+        <div className="p-3 rounded-lg text-xs bg-info/10 border border-info/20 space-y-2">
+          <div className="flex items-center gap-2 text-info font-medium">
             <span>{stream.description || args.description || "子任务"}</span>
             {stream.status === "running" && (
-              <span className="inline-block w-2 h-2 bg-[#0369a1] rounded-full animate-pulse" />
+              <span className="inline-block w-2 h-2 bg-info rounded-full animate-pulse" />
             )}
             {stream.status === "completed" && <span className="text-success">✓</span>}
             {stream.status === "error" && <span className="text-destructive">✗</span>}
@@ -128,7 +128,7 @@ export default memo(function TaskRenderer({ step, expanded }: ToolRendererProps)
             <button
               onClick={handleViewDetails}
               disabled={loadingOutput}
-              className="text-xs text-[#0369a1] hover:underline disabled:opacity-50"
+              className="text-xs text-info hover:underline disabled:opacity-50"
             >
               {loadingOutput ? "加载中..." : "查看详情"}
             </button>
@@ -140,7 +140,7 @@ export default memo(function TaskRenderer({ step, expanded }: ToolRendererProps)
                   收起
                 </button>
               </div>
-              <pre className="p-3 rounded-lg text-xs overflow-x-auto max-h-[300px] overflow-y-auto font-mono bg-[#f0f9ff] border border-[#bae6fd] text-[#0c4a6e]">
+              <pre className="p-3 rounded-lg text-xs overflow-x-auto max-h-[300px] overflow-y-auto font-mono bg-info/5 border border-info/20 text-info">
                 {taskOutput}
               </pre>
             </div>

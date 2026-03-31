@@ -158,7 +158,7 @@ export default function SandboxSection({ sandboxes, onUpdate }: SandboxSectionPr
     <div className="space-y-3">
       <div className="flex items-center gap-3">
         <div className="w-1 h-6 bg-gradient-to-b from-info to-info rounded-full" />
-        <h2 className="text-lg font-bold text-foreground" style={{ fontFamily: 'Inter, system-ui, sans-serif' }}>
+        <h2 className="text-lg font-bold text-foreground">
           沙箱提供商
         </h2>
         <span className="text-xs text-muted-foreground">{entries.length} 个配置</span>

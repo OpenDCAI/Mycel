@@ -46,23 +46,23 @@ export function CodeBlock({
   };
 
   return (
-    <div className="relative rounded-md border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900">
+    <div className="relative rounded-md border border-border bg-muted">
       {/* Header with language and copy button */}
-      <div className="flex items-center justify-between px-4 py-2 border-b border-gray-200 dark:border-gray-700">
+      <div className="flex items-center justify-between px-4 py-2 border-b border-border">
         {language && (
-          <span className="text-xs text-gray-500 dark:text-gray-400 font-medium">
+          <span className="text-xs text-muted-foreground font-medium">
             {language}
           </span>
         )}
         <button
           onClick={handleCopy}
-          className="ml-auto p-1.5 rounded hover:bg-gray-200 dark:hover:bg-gray-800 transition-colors duration-fast"
+          className="ml-auto p-1.5 rounded hover:bg-accent transition-colors duration-fast"
           title="复制代码"
         >
           {copied ? (
             <Check className="w-4 h-4 text-success" />
           ) : (
-            <Copy className="w-4 h-4 text-gray-600 dark:text-gray-400" />
+            <Copy className="w-4 h-4 text-muted-foreground" />
           )}
         </button>
       </div>
@@ -80,7 +80,7 @@ export function CodeBlock({
                 <React.Fragment key={`line-${lineNumber}-${idx}`}>
                   {/* Line number column */}
                   <div
-                    className={`px-4 py-1 text-right text-gray-400 dark:text-gray-600 select-none border-r border-gray-200 dark:border-gray-700 ${bgClass}`}
+                    className={`px-4 py-1 text-right text-muted-foreground select-none border-r border-border ${bgClass}`}
                   >
                     {lineNumber}
                   </div>
@@ -111,15 +111,15 @@ export function CodeBlock({
 
         {/* Fade overlay and expand button */}
         {needsExpansion && !isExpanded && (
-          <div className="absolute bottom-0 left-0 right-0 h-16 bg-gradient-to-t from-gray-50 dark:from-gray-900 to-transparent pointer-events-none" />
+          <div className="absolute bottom-0 left-0 right-0 h-16 bg-gradient-to-t from-muted to-transparent pointer-events-none" />
         )}
       </div>
 
       {needsExpansion && (
-        <div className="px-4 py-2 border-t border-gray-200 dark:border-gray-700 text-center">
+        <div className="px-4 py-2 border-t border-border text-center">
           <button
             onClick={() => setIsExpanded(!isExpanded)}
-            className="text-sm text-blue-600 dark:text-blue-400 hover:underline"
+            className="text-sm text-info hover:underline"
           >
             {isExpanded
               ? '收起'

@@ -102,7 +102,7 @@ function ToolFlowLine({
   return (
     <div
       data-step-id={step.id}
-      className={isFocused ? "border-l-2 border-blue-400 pl-2" : "pl-3"}
+      className={isFocused ? "border-l-2 border-info/20 pl-2" : "pl-3"}
     >
       {/* Row: status icon + badge + summary + chevron */}
       <div
@@ -185,11 +185,11 @@ function TextFlowLine({ content }: { content: string }) {
 function StatusIcon({ status }: { status: ToolStep["status"] }) {
   switch (status) {
     case "calling":
-      return <Loader2 className="w-3.5 h-3.5 text-blue-500 animate-spin flex-shrink-0" />;
+      return <Loader2 className="w-3.5 h-3.5 text-info animate-spin flex-shrink-0" />;
     case "done":
       return <CheckCircle2 className="w-3.5 h-3.5 text-muted-foreground/70 flex-shrink-0" />;
     case "error":
-      return <XCircle className="w-3.5 h-3.5 text-red-500 flex-shrink-0" />;
+      return <XCircle className="w-3.5 h-3.5 text-destructive flex-shrink-0" />;
     case "cancelled":
       return <XCircle className="w-3.5 h-3.5 text-muted-foreground/70 flex-shrink-0" />;
   }

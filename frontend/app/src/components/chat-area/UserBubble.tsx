@@ -37,7 +37,7 @@ export const UserBubble = memo(function UserBubble(props: UserBubbleProps) {
                 href={getSandboxDownloadUrl(threadId, filename)}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex items-center gap-1.5 px-2.5 py-1.5 bg-[#f0f0f0] hover:bg-[#e8e8e8] rounded-lg text-xs transition-colors duration-fast cursor-pointer"
+                className="flex items-center gap-1.5 px-2.5 py-1.5 bg-muted hover:bg-accent rounded-lg text-xs transition-colors duration-fast cursor-pointer"
               >
                 <FileText className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
                 <span className="text-foreground-secondary truncate max-w-[180px]">{filename}</span>
