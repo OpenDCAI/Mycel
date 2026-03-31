@@ -12,6 +12,10 @@ from typing import Any
 from backend.web.core.config import DB_PATH
 from storage.providers.sqlite.connection import create_connection
 
+TASK_STATUS_ALIASES = {
+    "done": "completed",
+}
+
 
 class SQLitePanelTaskRepo:
     def __init__(self, db_path: str | Path | None = None) -> None:
@@ -56,12 +60,19 @@ class SQLitePanelTaskRepo:
                 self._conn.execute(f"ALTER TABLE panel_tasks ADD COLUMN {col_name} {col_def}")
             except sqlite3.OperationalError:
                 pass
+        # @@@task-status-canonicalize - old local boards wrote `done`; normalize persisted rows
+        # once here so the repo only emits the canonical frontend/backend task contract.
+        self._conn.execute(
+            "UPDATE panel_tasks SET status = ? WHERE status = ?",
+            ("completed", "done"),
+        )
         self._conn.commit()
 
     def _deserialize(self, row: sqlite3.Row | None) -> dict[str, Any] | None:
         if row is None:
             return None
         data = dict(row)
+        data["status"] = TASK_STATUS_ALIASES.get(data.get("status"), data.get("status"))
         try:
             data["tags"] = json.loads(data.get("tags") or "[]")
         except (json.JSONDecodeError, TypeError):
