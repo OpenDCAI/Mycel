@@ -77,7 +77,7 @@ export default function SandboxDetailSheet({
             {/* Agents */}
             <section>
               <p className="text-2xs font-semibold text-muted-foreground/60 uppercase tracking-widest mb-2.5">
-                Agents
+                成员
               </p>
               <div className="space-y-2">
                 {group.sessions.map((s) => (
@@ -90,7 +90,7 @@ export default function SandboxDetailSheet({
             {hasMetrics && (
               <section>
                 <p className="text-2xs font-semibold text-muted-foreground/60 uppercase tracking-widest mb-2.5">
-                  Metrics
+                  指标
                 </p>
                 <div className="grid grid-cols-3 gap-2">
                   <MetricBlock label="CPU" used={m?.cpu} unit="%" />
@@ -106,7 +106,7 @@ export default function SandboxDetailSheet({
         <div className="border-t border-border/50 shrink-0">
           <div className="px-5 pt-3 pb-1">
             <p className="text-2xs font-semibold text-muted-foreground/60 uppercase tracking-widest">
-              Files
+              文件
             </p>
           </div>
           {canBrowse ? (

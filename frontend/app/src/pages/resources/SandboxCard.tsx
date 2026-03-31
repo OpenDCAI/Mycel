@@ -7,25 +7,25 @@ import { formatMetric } from "./utils/format";
 const STATUS_CONFIG = {
   running: {
     dot: "bg-success animate-pulse",
-    label: "RUNNING",
+    label: "运行中",
     border: "border-l-success/70",
     glow: "shadow-[0_0_0_1px_hsl(var(--success)/0.08)]",
   },
   paused: {
     dot: "bg-warning/80",
-    label: "PAUSED",
+    label: "已暂停",
     border: "border-l-warning/50",
     glow: "",
   },
   stopped: {
     dot: "bg-muted-foreground/30",
-    label: "STOPPED",
+    label: "已停止",
     border: "border-l-border/30",
     glow: "",
   },
   destroying: {
     dot: "bg-destructive animate-pulse",
-    label: "DESTROYING",
+    label: "销毁中",
     border: "border-l-destructive/70",
     glow: "",
   },

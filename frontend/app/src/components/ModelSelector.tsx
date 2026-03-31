@@ -57,14 +57,14 @@ export default function ModelSelector({
 
       if (!response.ok) {
         const data = await response.json();
-        throw new Error(data.detail || "Failed to update model");
+        throw new Error(data.detail || "更新模型失败");
       }
 
       const result = await response.json();
       onModelChange?.(result.model || model);
       setIsOpen(false);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to update model");
+      setError(err instanceof Error ? err.message : "更新模型失败");
     } finally {
       setLoading(false);
     }
@@ -106,7 +106,7 @@ export default function ModelSelector({
 
         <div className="border-t border-border my-1" />
         <div className="flex items-center justify-between px-3 py-1.5">
-          <span className="text-xs text-muted-foreground">Custom</span>
+          <span className="text-xs text-muted-foreground">自定义</span>
           <button
             onClick={() => setShowCustomModels(!showCustomModels)}
             className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors duration-fast ${showCustomModels ? "bg-primary" : "bg-muted"}`}

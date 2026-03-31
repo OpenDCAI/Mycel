@@ -145,7 +145,7 @@ export default function NewChatPage({ mode = "member" }: { mode?: "member" | "ne
       } catch (err) {
         if (cancelled) return;
         if (err instanceof DOMException && err.name === "AbortError") return;
-        const message = err instanceof Error ? err.message : "Failed to resolve main thread";
+        const message = err instanceof Error ? err.message : "无法获取主对话";
         console.error("[NewChatPage] resolve main thread failed:", err);
         setError(message);
         setResolveState("error");
@@ -501,7 +501,7 @@ export default function NewChatPage({ mode = "member" }: { mode?: "member" | "ne
             无法检查 {memberName} 的主对话
           </h1>
           <p className="text-sm text-destructive">
-            {error ?? "Unknown error"}
+            {error ?? "未知错误"}
           </p>
         </div>
       </div>
