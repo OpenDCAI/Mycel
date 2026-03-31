@@ -1,5 +1,6 @@
 import { FolderOpen } from "lucide-react";
 import { useState } from "react";
+import { FEEDBACK_NORMAL } from "@/styles/ux-timing";
 
 interface WorkspaceSectionProps {
   defaultWorkspace: string | null;
@@ -28,7 +29,7 @@ export default function WorkspaceSection({ defaultWorkspace, onUpdate }: Workspa
         onUpdate(data.workspace);
         setPath(data.workspace);
         setSuccess(true);
-        setTimeout(() => setSuccess(false), 2000);
+        setTimeout(() => setSuccess(false), FEEDBACK_NORMAL);
       } else {
         setError(data.detail || "保存失败");
       }
@@ -56,13 +57,13 @@ export default function WorkspaceSection({ defaultWorkspace, onUpdate }: Workspa
             value={path}
             onChange={(e) => setPath(e.target.value)}
             placeholder="~/workspace"
-            className="w-full pl-8 pr-3 py-2 text-sm border border-[#e2e8f0] rounded-lg bg-white font-mono focus:outline-none focus:border-[#0ea5e9] transition-colors"
+            className="w-full pl-8 pr-3 py-2 text-sm border border-[#e2e8f0] rounded-lg bg-white font-mono focus:outline-none focus:border-[#0ea5e9] transition-colors duration-fast"
           />
         </div>
         <button
           onClick={handleSave}
           disabled={saving || !path.trim()}
-          className="px-4 py-2 text-sm bg-[#0ea5e9] text-white rounded-lg hover:bg-[#0ea5e9]/90 disabled:opacity-50 transition-colors"
+          className="px-4 py-2 text-sm bg-[#0ea5e9] text-white rounded-lg hover:bg-[#0ea5e9]/90 disabled:opacity-50 transition-colors duration-fast"
         >
           {saving ? "保存中…" : success ? "已保存" : "保存"}
         </button>

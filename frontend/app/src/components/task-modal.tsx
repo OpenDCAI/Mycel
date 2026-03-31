@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect, useRef } from "react";
 import { X, Calendar, User, Tag, ChevronDown } from "lucide-react";
 import type { Priority, CronJob, Task, TaskStatus } from "@/store/types";
+import { BLUR_CLOSE_DELAY } from "@/styles/ux-timing";
 
 // ── Constants ─────────────────────────────────────────────
 
@@ -47,7 +48,7 @@ function TagInput({
   return (
     <div className="relative">
       <div
-        className="min-h-[42px] flex flex-wrap gap-1.5 items-center px-3 py-2 rounded-xl bg-card border border-border focus-within:border-primary/40 transition-colors cursor-text"
+        className="min-h-[42px] flex flex-wrap gap-1.5 items-center px-3 py-2 rounded-xl bg-card border border-border focus-within:border-primary/40 transition-colors duration-fast cursor-text"
         onClick={() => inputRef.current?.focus()}
       >
         {tags.map((tag) => (
@@ -68,7 +69,7 @@ function TagInput({
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
           onFocus={() => setOpen(true)}
-          onBlur={() => setTimeout(() => setOpen(false), 150)}
+          onBlur={() => setTimeout(() => setOpen(false), BLUR_CLOSE_DELAY)}
           placeholder={tags.length === 0 ? placeholder : ""}
           className="flex-1 min-w-[80px] bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground/40"
         />
@@ -80,7 +81,7 @@ function TagInput({
               key={tag}
               type="button"
               onMouseDown={(e) => { e.preventDefault(); addTag(tag); }}
-              className="w-full text-left px-3 py-1.5 text-sm text-foreground hover:bg-muted transition-colors flex items-center gap-2"
+              className="w-full text-left px-3 py-1.5 text-sm text-foreground hover:bg-muted transition-colors duration-fast flex items-center gap-2"
             >
               <span className="w-1.5 h-1.5 rounded-full bg-primary/50 shrink-0" />
               {tag}
@@ -341,7 +342,7 @@ export default function TaskModal({
         <div className="flex gap-2">
           {PRIORITY_OPTIONS.map((p) => (
             <button key={p.value} onClick={() => setForm((f) => ({ ...f, priority: p.value }))}
-              className={`flex-1 py-2 rounded-xl text-xs font-medium border transition-all ${
+              className={`flex-1 py-2 rounded-xl text-xs font-medium border transition-all duration-fast ${
                 form.priority === p.value ? p.active + " shadow-sm" : "bg-transparent border-border text-muted-foreground hover:bg-muted/40"
               }`}
             >
@@ -358,7 +359,7 @@ export default function TaskModal({
           <div className="flex flex-wrap gap-1.5">
             {STATUS_OPTIONS.map((s) => (
               <button key={s.value} onClick={() => setForm((f) => ({ ...f, status: s.value }))}
-                className={`px-3 py-1.5 rounded-xl text-xs font-medium border transition-all ${
+                className={`px-3 py-1.5 rounded-xl text-xs font-medium border transition-all duration-fast ${
                   form.status === s.value ? "bg-primary/10 text-primary border-primary/20 shadow-sm" : "bg-transparent border-border text-muted-foreground hover:bg-muted/40"
                 }`}
               >
@@ -389,7 +390,7 @@ export default function TaskModal({
           <User className="w-3 h-3" />执行者
         </span>
         <select value={form.assigneeId} onChange={(e) => setForm((f) => ({ ...f, assigneeId: e.target.value }))}
-          className="w-full px-3 py-2 rounded-xl bg-card border border-border text-sm text-foreground outline-none focus:border-primary/40 transition-colors"
+          className="w-full px-3 py-2 rounded-xl bg-card border border-border text-sm text-foreground outline-none focus:border-primary/40 transition-colors duration-fast"
         >
           <option value="">未分配</option>
           {members.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
@@ -402,7 +403,7 @@ export default function TaskModal({
           <Calendar className="w-3 h-3" />截止日期
         </span>
         <input type="date" value={form.deadline} onChange={(e) => setForm((f) => ({ ...f, deadline: e.target.value }))}
-          className="w-full px-3 py-2 rounded-xl bg-card border border-border text-sm text-foreground outline-none focus:border-primary/40 transition-colors"
+          className="w-full px-3 py-2 rounded-xl bg-card border border-border text-sm text-foreground outline-none focus:border-primary/40 transition-colors duration-fast"
         />
       </div>
 
@@ -410,7 +411,7 @@ export default function TaskModal({
       {isEdit && (
         <div className="pt-2 border-t border-border">
           <button onClick={() => { onDeleteTask(editTask!.id); onClose(); }}
-            className="w-full px-3 py-2.5 rounded-xl text-destructive text-xs font-medium hover:bg-destructive/5 transition-colors"
+            className="w-full px-3 py-2.5 rounded-xl text-destructive text-xs font-medium hover:bg-destructive/5 transition-colors duration-fast"
           >
             删除任务
           </button>
@@ -447,7 +448,7 @@ export default function TaskModal({
           {/* Frequency dropdown */}
           <div className="relative">
             <button onClick={() => setFreqOpen(!freqOpen)}
-              className="flex items-center gap-1 px-3 py-2 rounded-xl bg-primary/8 border border-primary/15 text-sm font-medium text-primary hover:bg-primary/12 transition-colors"
+              className="flex items-center gap-1 px-3 py-2 rounded-xl bg-primary/8 border border-primary/15 text-sm font-medium text-primary hover:bg-primary/12 transition-colors duration-fast"
             >
               {FREQ_OPTIONS.find((f) => f.value === schedule.frequency)?.label}
               <ChevronDown className="w-3.5 h-3.5" />
@@ -456,7 +457,7 @@ export default function TaskModal({
               <div className="absolute top-full left-0 mt-1 py-1 bg-background border border-border rounded-xl shadow-lg z-20 min-w-[120px]">
                 {FREQ_OPTIONS.map((f) => (
                   <button key={f.value} onClick={() => { updateSchedule({ frequency: f.value }); setFreqOpen(false); }}
-                    className={`w-full text-left px-3 py-1.5 text-sm transition-colors ${
+                    className={`w-full text-left px-3 py-1.5 text-sm transition-colors duration-fast ${
                       schedule.frequency === f.value ? "text-primary font-medium bg-primary/5" : "text-foreground hover:bg-muted"
                     }`}
                   >
@@ -470,7 +471,7 @@ export default function TaskModal({
           {schedule.frequency === "interval" && (
             <>
               <select value={schedule.intervalValue} onChange={(e) => updateSchedule({ intervalValue: parseInt(e.target.value) })}
-                className="appearance-none px-2.5 py-2 rounded-xl bg-muted/60 border border-border text-sm font-medium text-foreground outline-none focus:border-primary/40 transition-colors cursor-pointer"
+                className="appearance-none px-2.5 py-2 rounded-xl bg-muted/60 border border-border text-sm font-medium text-foreground outline-none focus:border-primary/40 transition-colors duration-fast cursor-pointer"
               >
                 {INTERVAL_OPTIONS.map((n) => <option key={n} value={n}>{n}</option>)}
               </select>
@@ -483,13 +484,13 @@ export default function TaskModal({
               <span className="text-sm text-muted-foreground">的</span>
               <div className="flex items-center gap-1">
                 <select value={schedule.hour} onChange={(e) => updateSchedule({ hour: parseInt(e.target.value) })}
-                  className="appearance-none px-2.5 py-2 rounded-xl bg-muted/60 border border-border text-sm font-mono text-foreground outline-none focus:border-primary/40 transition-colors cursor-pointer"
+                  className="appearance-none px-2.5 py-2 rounded-xl bg-muted/60 border border-border text-sm font-mono text-foreground outline-none focus:border-primary/40 transition-colors duration-fast cursor-pointer"
                 >
                   {Array.from({ length: 24 }, (_, i) => <option key={i} value={i}>{String(i).padStart(2, "0")}</option>)}
                 </select>
                 <span className="text-sm font-medium text-muted-foreground">:</span>
                 <select value={schedule.minute} onChange={(e) => updateSchedule({ minute: parseInt(e.target.value) })}
-                  className="appearance-none px-2.5 py-2 rounded-xl bg-muted/60 border border-border text-sm font-mono text-foreground outline-none focus:border-primary/40 transition-colors cursor-pointer"
+                  className="appearance-none px-2.5 py-2 rounded-xl bg-muted/60 border border-border text-sm font-mono text-foreground outline-none focus:border-primary/40 transition-colors duration-fast cursor-pointer"
                 >
                   {Array.from({ length: 12 }, (_, i) => i * 5).map((m) => <option key={m} value={m}>{String(m).padStart(2, "0")}</option>)}
                 </select>
@@ -503,7 +504,7 @@ export default function TaskModal({
           <div className="flex items-center gap-1.5">
             {WEEK_LABELS.map((label, i) => (
               <button key={i} onClick={() => toggleWeekday(i)}
-                className={`w-9 h-9 rounded-full text-xs font-medium transition-all ${
+                className={`w-9 h-9 rounded-full text-xs font-medium transition-all duration-fast ${
                   schedule.weekdays.includes(i) ? "bg-primary text-primary-foreground shadow-sm" : "bg-muted/60 text-muted-foreground hover:bg-muted"
                 }`}
               >
@@ -519,7 +520,7 @@ export default function TaskModal({
             <div className="grid grid-cols-7 gap-1">
               {Array.from({ length: 31 }, (_, i) => i + 1).map((d) => (
                 <button key={d} onClick={() => updateSchedule({ monthDay: d })}
-                  className={`h-8 rounded-lg text-xs font-medium transition-all ${
+                  className={`h-8 rounded-lg text-xs font-medium transition-all duration-fast ${
                     schedule.monthDay === d ? "bg-primary text-primary-foreground shadow-sm" : "bg-muted/40 text-muted-foreground hover:bg-muted"
                   }`}
                 >
@@ -538,11 +539,11 @@ export default function TaskModal({
         <span className="text-[11px] text-muted-foreground font-medium uppercase tracking-wider">触发时创建的任务</span>
         <input value={cronTaskTitle} onChange={(e) => setCronTaskTitle(e.target.value)}
           placeholder="任务标题"
-          className="w-full px-3.5 py-2.5 rounded-xl bg-card border border-border text-sm font-medium text-foreground outline-none focus:border-primary/40 transition-colors placeholder:text-muted-foreground/50"
+          className="w-full px-3.5 py-2.5 rounded-xl bg-card border border-border text-sm font-medium text-foreground outline-none focus:border-primary/40 transition-colors duration-fast placeholder:text-muted-foreground/50"
         />
         <textarea value={cronTaskDescription} onChange={(e) => setCronTaskDescription(e.target.value)}
           placeholder="任务描述（可选）" rows={2}
-          className="w-full px-3.5 py-2.5 rounded-xl bg-card border border-border text-sm text-foreground outline-none focus:border-primary/40 transition-colors resize-none placeholder:text-muted-foreground/50 leading-relaxed"
+          className="w-full px-3.5 py-2.5 rounded-xl bg-card border border-border text-sm text-foreground outline-none focus:border-primary/40 transition-colors duration-fast resize-none placeholder:text-muted-foreground/50 leading-relaxed"
         />
         <div className="space-y-2">
           <span className="text-[11px] text-muted-foreground font-medium flex items-center gap-1">
@@ -559,7 +560,7 @@ export default function TaskModal({
           <div className="flex gap-2">
             {PRIORITY_OPTIONS.map((p) => (
               <button key={p.value} onClick={() => setCronTaskPriority(p.value)}
-                className={`flex-1 py-2 rounded-xl text-xs font-medium border transition-all ${
+                className={`flex-1 py-2 rounded-xl text-xs font-medium border transition-all duration-fast ${
                   cronTaskPriority === p.value ? p.active + " shadow-sm" : "bg-transparent border-border text-muted-foreground hover:bg-muted/40"
                 }`}
               >
@@ -582,7 +583,7 @@ export default function TaskModal({
           <h2 className="text-base font-semibold text-foreground">
             {isEdit ? "编辑任务" : "新建任务"}
           </h2>
-          <button onClick={handleClose} className="p-1.5 rounded-lg hover:bg-muted transition-colors">
+          <button onClick={handleClose} className="p-1.5 rounded-lg hover:bg-muted transition-colors duration-fast">
             <X className="w-4 h-4 text-muted-foreground" />
           </button>
         </div>
@@ -592,14 +593,14 @@ export default function TaskModal({
           <div className="px-6 pb-3">
             <div className="flex items-center gap-1 bg-muted rounded-lg p-0.5">
               <button onClick={() => setTab("task")}
-                className={`flex-1 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                className={`flex-1 px-3 py-1.5 rounded-md text-sm font-medium transition-colors duration-fast ${
                   tab === "task" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
                 }`}
               >
                 普通任务
               </button>
               <button onClick={() => setTab("cron")}
-                className={`flex-1 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                className={`flex-1 px-3 py-1.5 rounded-md text-sm font-medium transition-colors duration-fast ${
                   tab === "cron" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
                 }`}
               >
@@ -617,12 +618,12 @@ export default function TaskModal({
         {/* Footer */}
         <div className="flex items-center justify-end gap-2 px-6 py-4 border-t border-border">
           <button onClick={handleClose}
-            className="px-4 py-2 rounded-xl text-sm text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+            className="px-4 py-2 rounded-xl text-sm text-muted-foreground hover:text-foreground hover:bg-muted transition-colors duration-fast"
           >
             取消
           </button>
           <button onClick={handleSave} disabled={!canSave || saving}
-            className="px-5 py-2 rounded-xl bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
+            className="px-5 py-2 rounded-xl bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition-opacity duration-fast disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {saving ? (isEdit ? "保存中..." : "创建中...") : (isEdit ? "保存" : "创建")}
           </button>

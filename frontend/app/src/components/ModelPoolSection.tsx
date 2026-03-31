@@ -1,5 +1,6 @@
 
 import { useState } from "react";
+import { FEEDBACK_NORMAL } from "@/styles/ux-timing";
 
 interface Model {
   id: string;
@@ -44,7 +45,7 @@ export default function ModelPoolSection({ models, enabledModels, customConfig, 
         body: JSON.stringify({ model_id: modelId, enabled }),
       });
       setSuccessMessage(enabled ? "模型已启用" : "模型已禁用");
-      setTimeout(() => setSuccessMessage(null), 2000);
+      setTimeout(() => setSuccessMessage(null), FEEDBACK_NORMAL);
     } finally {
       setToggling(null);
     }
@@ -81,7 +82,7 @@ export default function ModelPoolSection({ models, enabledModels, customConfig, 
     });
     setEditingModel(null);
     setSuccessMessage("配置已保存");
-    setTimeout(() => setSuccessMessage(null), 2000);
+    setTimeout(() => setSuccessMessage(null), FEEDBACK_NORMAL);
   };
 
   const handleAdd = async () => {
@@ -100,7 +101,7 @@ export default function ModelPoolSection({ models, enabledModels, customConfig, 
       setAddContextLimit("");
       setShowAdvanced(false);
       setSuccessMessage("模型已添加");
-      setTimeout(() => setSuccessMessage(null), 2000);
+      setTimeout(() => setSuccessMessage(null), FEEDBACK_NORMAL);
     } finally {
       setAdding(false);
     }
@@ -134,7 +135,7 @@ export default function ModelPoolSection({ models, enabledModels, customConfig, 
         placeholder="搜索或输入模型 ID..."
         value={searchQuery}
         onChange={(e) => setSearchQuery(e.target.value)}
-        className="w-full px-3 py-2 text-sm border border-[#e2e8f0] rounded-lg bg-white focus:outline-none focus:border-[#0ea5e9] transition-colors"
+        className="w-full px-3 py-2 text-sm border border-[#e2e8f0] rounded-lg bg-white focus:outline-none focus:border-[#0ea5e9] transition-colors duration-fast"
       />
 
       {/* Add custom model form */}
@@ -153,7 +154,7 @@ export default function ModelPoolSection({ models, enabledModels, customConfig, 
             <button
               onClick={handleAdd}
               disabled={adding || !selectedProvider}
-              className="px-4 py-1.5 text-sm bg-[#0ea5e9] text-white rounded-lg hover:bg-[#0ea5e9]/90 disabled:opacity-50 transition-colors"
+              className="px-4 py-1.5 text-sm bg-[#0ea5e9] text-white rounded-lg hover:bg-[#0ea5e9]/90 disabled:opacity-50 transition-colors duration-fast"
             >
               {adding ? "添加中..." : "添加"}
             </button>
@@ -161,7 +162,7 @@ export default function ModelPoolSection({ models, enabledModels, customConfig, 
           {/* Collapsible advanced */}
           <button
             onClick={() => setShowAdvanced(!showAdvanced)}
-            className="text-xs text-[#94a3b8] hover:text-[#64748b] transition-colors"
+            className="text-xs text-[#94a3b8] hover:text-[#64748b] transition-colors duration-fast"
           >
             {showAdvanced ? "▾ 高级选项" : "▸ 高级选项"}
           </button>
@@ -195,13 +196,13 @@ export default function ModelPoolSection({ models, enabledModels, customConfig, 
           const isEditing = editingModel === model.id;
           return (
             <div key={model.id}>
-              <div className={`flex items-center gap-3 px-3 py-2 rounded-lg transition-colors ${enabled ? "bg-white" : "bg-[#f8f9fa]"}`}>
+              <div className={`flex items-center gap-3 px-3 py-2 rounded-lg transition-colors duration-fast ${enabled ? "bg-white" : "bg-[#f8f9fa]"}`}>
                 <button
                   onClick={() => handleToggle(model.id, !enabled)}
                   disabled={toggling === model.id}
-                  className={`w-8 h-4 rounded-full transition-colors relative shrink-0 ${enabled ? "bg-[#0ea5e9]" : "bg-[#cbd5e1]"}`}
+                  className={`w-8 h-4 rounded-full transition-colors duration-fast relative shrink-0 ${enabled ? "bg-[#0ea5e9]" : "bg-[#cbd5e1]"}`}
                 >
-                  <div className={`absolute top-0.5 w-3 h-3 rounded-full bg-white shadow transition-transform ${enabled ? "left-4" : "left-0.5"}`} />
+                  <div className={`absolute top-0.5 w-3 h-3 rounded-full bg-white shadow transition-transform duration-fast ${enabled ? "left-4" : "left-0.5"}`} />
                 </button>
                 <div className="flex-1 min-w-0">
                   <span className="text-sm text-[#1e293b] truncate block">{model.id}</span>
@@ -220,13 +221,13 @@ export default function ModelPoolSection({ models, enabledModels, customConfig, 
                             setEditProvider(model.provider || "");
                           }
                         }}
-                        className="text-[11px] px-2 py-0.5 rounded border border-[#e2e8f0] text-[#64748b] hover:border-[#94a3b8] transition-colors"
+                        className="text-[11px] px-2 py-0.5 rounded border border-[#e2e8f0] text-[#64748b] hover:border-[#94a3b8] transition-colors duration-fast"
                       >
                         {isEditing ? "关闭" : "配置"}
                       </button>
                       <button
                         onClick={() => onRemoveCustomModel(model.id)}
-                        className="text-[11px] px-2 py-0.5 rounded border border-[#e2e8f0] text-[#ef4444] hover:border-[#ef4444] transition-colors"
+                        className="text-[11px] px-2 py-0.5 rounded border border-[#e2e8f0] text-[#ef4444] hover:border-[#ef4444] transition-colors duration-fast"
                       >
                         移除
                       </button>
@@ -242,7 +243,7 @@ export default function ModelPoolSection({ models, enabledModels, customConfig, 
                           setTestStatus((s) => ({ ...s, [model.id]: "idle" }));
                           setTestError((s) => ({ ...s, [model.id]: "" }));
                         }}
-                        className="text-[11px] px-1 py-0.5 rounded text-[#94a3b8] hover:text-[#64748b] transition-colors"
+                        className="text-[11px] px-1 py-0.5 rounded text-[#94a3b8] hover:text-[#64748b] transition-colors duration-fast"
                         title="关闭"
                       >
                         ×
@@ -252,7 +253,7 @@ export default function ModelPoolSection({ models, enabledModels, customConfig, 
                     <button
                       onClick={() => handleTest(model.id)}
                       disabled={status === "testing"}
-                      className="text-[11px] px-2 py-0.5 rounded border border-[#e2e8f0] text-[#64748b] hover:border-[#94a3b8] disabled:opacity-50 transition-colors"
+                      className="text-[11px] px-2 py-0.5 rounded border border-[#e2e8f0] text-[#64748b] hover:border-[#94a3b8] disabled:opacity-50 transition-colors duration-fast"
                     >
                       {status === "testing" ? "测试中…" : "测试"}
                     </button>
@@ -285,7 +286,7 @@ export default function ModelPoolSection({ models, enabledModels, customConfig, 
                     </div>
                   </div>
                   <button onClick={() => handleSaveConfig(model.id)}
-                    className="text-xs px-3 py-1 bg-[#0ea5e9] text-white rounded hover:bg-[#0ea5e9]/90 transition-colors">
+                    className="text-xs px-3 py-1 bg-[#0ea5e9] text-white rounded hover:bg-[#0ea5e9]/90 transition-colors duration-fast">
                     保存
                   </button>
                 </div>

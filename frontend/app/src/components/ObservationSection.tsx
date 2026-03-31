@@ -1,6 +1,7 @@
 import { Eye, EyeOff, Check, X, Loader2, ChevronRight } from "lucide-react";
 import { useState } from "react";
 import { saveObservationConfig, verifyObservation } from "../api";
+import { FEEDBACK_BRIEF } from "@/styles/ux-timing";
 
 interface ObservationSectionProps {
   config: Record<string, unknown>;
@@ -117,7 +118,7 @@ export default function ObservationSection({ config, onUpdate }: ObservationSect
       );
       const fieldId = `${providerId}-${field.key}`;
       setSavedFields((prev) => ({ ...prev, [fieldId]: true }));
-      setTimeout(() => setSavedFields((prev) => ({ ...prev, [fieldId]: false })), 1500);
+      setTimeout(() => setSavedFields((prev) => ({ ...prev, [fieldId]: false })), FEEDBACK_BRIEF);
     } catch (err) {
       console.error("Failed to save observation config:", err);
     }
@@ -161,12 +162,12 @@ export default function ObservationSection({ config, onUpdate }: ObservationSect
             onChange={(e) => void handleFieldSave(providerId, field, e.target.value)}
             onFocus={() => { if (isSecret && !showKey) setShowKeys((s) => ({ ...s, [showKeyId]: true })); }}
             placeholder={field.placeholder}
-            className="w-full px-3 py-2 pr-10 border border-[#e2e8f0] rounded-lg text-sm text-[#1e293b] bg-white font-mono hover:border-[#cbd5e1] focus:outline-none focus:border-[#0ea5e9] focus:ring-2 focus:ring-[#0ea5e9]/20 transition-all duration-150"
+            className="w-full px-3 py-2 pr-10 border border-[#e2e8f0] rounded-lg text-sm text-[#1e293b] bg-white font-mono hover:border-[#cbd5e1] focus:outline-none focus:border-[#0ea5e9] focus:ring-2 focus:ring-[#0ea5e9]/20 transition-all duration-fast"
           />
           {isSecret && value && (
             <button
               onClick={() => setShowKeys((s) => ({ ...s, [showKeyId]: !showKey }))}
-              className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-[#94a3b8] hover:text-[#64748b] rounded transition-colors"
+              className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-[#94a3b8] hover:text-[#64748b] rounded transition-colors duration-fast"
             >
               {showKey ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
             </button>
@@ -190,7 +191,7 @@ export default function ObservationSection({ config, onUpdate }: ObservationSect
         return (
           <div
             key={provider.id}
-            className={`border rounded-xl bg-white transition-all duration-200 ${
+            className={`border rounded-xl bg-white transition-all duration-normal ${
               isActive
                 ? "border-[#0ea5e9] shadow-lg shadow-[#0ea5e9]/5"
                 : "border-[#e2e8f0] hover:border-[#cbd5e1]"
@@ -212,22 +213,22 @@ export default function ObservationSection({ config, onUpdate }: ObservationSect
               {/* Toggle */}
               <button
                 onClick={() => void handleActiveChange(provider.id)}
-                className="relative w-9 h-5 rounded-full transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-[#0ea5e9]/20"
+                className="relative w-9 h-5 rounded-full transition-colors duration-normal focus:outline-none focus:ring-2 focus:ring-[#0ea5e9]/20"
                 style={{ backgroundColor: isActive ? "#0ea5e9" : "#e2e8f0" }}
                 role="switch"
                 aria-checked={isActive}
                 aria-label={`切换 ${provider.name}`}
               >
                 <span
-                  className="absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform duration-200"
-                  style={{ transform: isActive ? "translateX(16px)" : "translateX(0)" }}
+                  className="absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform duration-normal"
+                  style={{ transform: isActive ? "translateX(var(--move-lg))" : "translateX(0)" }}
                 />
               </button>
             </div>
 
             {/* Expandable body */}
             <div
-              className="grid transition-[grid-template-rows] duration-200 ease-in-out"
+              className="grid transition-[grid-template-rows] duration-normal ease-io"
               style={{ gridTemplateRows: isActive ? "1fr" : "0fr" }}
             >
               <div className="overflow-hidden">
@@ -242,13 +243,13 @@ export default function ObservationSection({ config, onUpdate }: ObservationSect
                     <div>
                       <button
                         onClick={() => setAdvancedOpen((s) => ({ ...s, [provider.id]: !advOpen }))}
-                        className="flex items-center gap-1 text-xs font-medium text-[#64748b] hover:text-[#475569] transition-colors"
+                        className="flex items-center gap-1 text-xs font-medium text-[#64748b] hover:text-[#475569] transition-colors duration-fast"
                       >
-                        <ChevronRight className={`w-3 h-3 transition-transform duration-150 ${advOpen ? "rotate-90" : ""}`} />
+                        <ChevronRight className={`w-3 h-3 transition-transform duration-fast ${advOpen ? "rotate-90" : ""}`} />
                         高级选项
                       </button>
                       <div
-                        className="grid transition-[grid-template-rows] duration-150 ease-in-out"
+                        className="grid transition-[grid-template-rows] duration-fast ease-io"
                         style={{ gridTemplateRows: advOpen ? "1fr" : "0fr" }}
                       >
                         <div className="overflow-hidden">
@@ -279,7 +280,7 @@ export default function ObservationSection({ config, onUpdate }: ObservationSect
                     <button
                       onClick={() => void handleVerify()}
                       disabled={verifying}
-                      className="text-xs font-medium text-[#0ea5e9] hover:text-[#0284c7] disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-1.5"
+                      className="text-xs font-medium text-[#0ea5e9] hover:text-[#0284c7] disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-fast flex items-center gap-1.5"
                     >
                       {verifying && <Loader2 className="w-3 h-3 animate-spin" />}
                       {verifying ? "测试中..." : "测试连接"}
@@ -292,10 +293,6 @@ export default function ObservationSection({ config, onUpdate }: ObservationSect
         );
       })}
 
-      <style>{`
-        .animate-fadeIn { animation: fadeIn 0.3s ease-out; }
-        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-      `}</style>
     </div>
   );
 }
