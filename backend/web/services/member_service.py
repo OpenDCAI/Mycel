@@ -13,6 +13,7 @@ Storage layout per member:
 
 import json
 import logging
+import re
 import shutil
 import time
 from pathlib import Path
@@ -661,6 +662,15 @@ def delete_member(member_id: str) -> bool:
     return True
 
 
+def _sanitize_name(name: str) -> str:
+    """Strip path-unsafe characters from snapshot-derived names."""
+    sanitized = re.sub(r'[/\\<>:"|?*\x00-\x1f]', '_', name)
+    sanitized = sanitized.strip('. ')
+    if not sanitized:
+        sanitized = 'unnamed'
+    return sanitized
+
+
 def install_from_snapshot(
     snapshot: dict,
     name: str,
@@ -696,10 +706,15 @@ def install_from_snapshot(
     rules_dir = member_dir / "rules"
     if rules_dir.exists():
         shutil.rmtree(rules_dir)
+    member_dir_resolved = member_dir.resolve()
     for rule in snapshot.get("rules", []):
         rules_dir.mkdir(exist_ok=True)
-        rule_name = rule.get("name", "default").replace("/", "_").replace("\\", "_")
-        (rules_dir / f"{rule_name}.md").write_text(rule.get("content", ""), encoding="utf-8")
+        rule_name = _sanitize_name(rule.get("name", "default"))
+        rule_path = (rules_dir / f"{rule_name}.md").resolve()
+        if not str(rule_path).startswith(str(member_dir_resolved)):
+            logger.warning("Skipping snapshot rule with unsafe name: %s", rule_name)
+            continue
+        rule_path.write_text(rule.get("content", ""), encoding="utf-8")
 
     # Write agents
     agents_dir = member_dir / "agents"
@@ -707,16 +722,23 @@ def install_from_snapshot(
         shutil.rmtree(agents_dir)
     for agent in snapshot.get("agents", []):
         agents_dir.mkdir(exist_ok=True)
-        agent_name = agent.get("name", "default")
-        (agents_dir / f"{agent_name}.md").write_text(agent.get("content", ""), encoding="utf-8")
+        agent_name = _sanitize_name(agent.get("name", "default"))
+        agent_path = (agents_dir / f"{agent_name}.md").resolve()
+        if not str(agent_path).startswith(str(member_dir_resolved)):
+            logger.warning("Skipping snapshot agent with unsafe name: %s", agent_name)
+            continue
+        agent_path.write_text(agent.get("content", ""), encoding="utf-8")
 
     # Write skills
     skills_dir = member_dir / "skills"
     if skills_dir.exists():
         shutil.rmtree(skills_dir)
     for skill in snapshot.get("skills", []):
-        skill_name = skill.get("name", "default")
-        skill_sub_dir = skills_dir / skill_name
+        skill_name = _sanitize_name(skill.get("name", "default"))
+        skill_sub_dir = (skills_dir / skill_name).resolve()
+        if not str(skill_sub_dir).startswith(str(member_dir_resolved)):
+            logger.warning("Skipping snapshot skill with unsafe name: %s", skill_name)
+            continue
         skill_sub_dir.mkdir(parents=True, exist_ok=True)
         (skill_sub_dir / "SKILL.md").write_text(skill.get("content", ""), encoding="utf-8")
         if skill.get("meta"):

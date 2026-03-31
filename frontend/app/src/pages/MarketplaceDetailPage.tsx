@@ -5,13 +5,7 @@ import { Button } from "@/components/ui/button";
 import { useMarketplaceStore } from "@/store/marketplace-store";
 import LineageTree from "@/components/marketplace/LineageTree";
 import InstallDialog from "@/components/marketplace/InstallDialog";
-
-const typeBadgeColors: Record<string, string> = {
-  member: "bg-blue-500/10 text-blue-600",
-  agent: "bg-purple-500/10 text-purple-600",
-  skill: "bg-amber-500/10 text-amber-600",
-  env: "bg-green-500/10 text-green-600",
-};
+import { typeBadgeColors } from "@/components/marketplace/constants";
 
 export default function MarketplaceDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -22,6 +16,7 @@ export default function MarketplaceDetailPage() {
   const lineage = useMarketplaceStore((s) => s.lineage);
   const fetchLineage = useMarketplaceStore((s) => s.fetchLineage);
   const clearDetail = useMarketplaceStore((s) => s.clearDetail);
+  const error = useMarketplaceStore((s) => s.error);
   const [installOpen, setInstallOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<"overview" | "versions">("overview");
 
@@ -43,8 +38,15 @@ export default function MarketplaceDetailPage() {
 
   if (!detail) {
     return (
-      <div className="flex items-center justify-center h-full text-sm text-muted-foreground">
-        Item not found
+      <div className="flex flex-col items-center justify-center h-full gap-3">
+        {error ? (
+          <div className="flex items-center justify-between px-4 py-2.5 rounded-lg bg-destructive/10 text-destructive text-sm max-w-md w-full">
+            <span>{error}</span>
+            <button onClick={() => id && fetchDetail(id)} className="text-xs underline">重试</button>
+          </div>
+        ) : (
+          <span className="text-sm text-muted-foreground">Item not found</span>
+        )}
       </div>
     );
   }

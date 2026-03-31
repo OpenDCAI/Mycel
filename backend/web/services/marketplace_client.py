@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 import httpx
+from fastapi import HTTPException
 
 from backend.web.core.paths import members_dir
 from config.loader import AgentLoader
@@ -15,14 +16,26 @@ logger = logging.getLogger(__name__)
 
 HUB_URL = os.environ.get("MYCEL_HUB_URL", "http://localhost:8080")
 
+_hub_client = httpx.Client(timeout=30.0)
+
 
 def _hub_api(method: str, path: str, **kwargs: Any) -> dict:
     """Call Hub API."""
     url = f"{HUB_URL}/api/v1{path}"
-    with httpx.Client(timeout=30.0) as client:
-        resp = client.request(method, url, **kwargs)
+    try:
+        resp = _hub_client.request(method, url, **kwargs)
         resp.raise_for_status()
         return resp.json()
+    except httpx.HTTPStatusError as e:
+        status = e.response.status_code
+        if status == 404:
+            raise HTTPException(status_code=404, detail="Marketplace item not found")
+        elif status == 409:
+            raise HTTPException(status_code=409, detail="Item already exists with this version")
+        else:
+            raise HTTPException(status_code=502, detail=f"Hub API error: {status}")
+    except (httpx.ConnectError, httpx.TimeoutException):
+        raise HTTPException(status_code=503, detail="Marketplace Hub unavailable")
 
 
 def _read_json(path: Path) -> dict:
@@ -39,8 +52,6 @@ def _write_json(path: Path, data: dict) -> None:
 def _serialize_member_snapshot(member_id: str) -> dict:
     """Serialize a local member into a snapshot dict for Hub."""
     member_dir = members_dir() / member_id
-    loader = AgentLoader()
-    bundle = loader.load_bundle(member_dir)
 
     # Read raw files for faithful snapshot
     agent_md = (member_dir / "agent.md").read_text(encoding="utf-8")
@@ -161,7 +172,7 @@ def publish(
     return result
 
 
-def download(item_id: str) -> dict:
+def download(item_id: str, owner_user_id: str = "system") -> dict:
     """Download a marketplace item to local library."""
     result = _hub_api("POST", f"/items/{item_id}/download")
     snapshot = result["snapshot"]
@@ -174,7 +185,9 @@ def download(item_id: str) -> dict:
 
     if item_type == "skill":
         slug = item.get("slug", item["name"].lower().replace(" ", "-"))
-        skill_dir = LIBRARY_DIR / "skills" / slug
+        skill_dir = (LIBRARY_DIR / "skills" / slug).resolve()
+        if not skill_dir.is_relative_to((LIBRARY_DIR / "skills").resolve()):
+            raise ValueError(f"Invalid slug: {slug}")
         skill_dir.mkdir(parents=True, exist_ok=True)
 
         # Write SKILL.md
@@ -202,7 +215,9 @@ def download(item_id: str) -> dict:
 
     elif item_type == "agent":
         slug = item.get("slug", item["name"].lower().replace(" ", "-"))
-        agent_dir = LIBRARY_DIR / "agents"
+        agent_dir = (LIBRARY_DIR / "agents").resolve()
+        if not (agent_dir / slug).resolve().is_relative_to(agent_dir):
+            raise ValueError(f"Invalid slug: {slug}")
         agent_dir.mkdir(parents=True, exist_ok=True)
 
         content = snapshot.get("content", "")
@@ -233,7 +248,7 @@ def download(item_id: str) -> dict:
             description=item.get("description", ""),
             marketplace_item_id=item_id,
             installed_version=installed_version,
-            owner_user_id="system",
+            owner_user_id=owner_user_id,
         )
         return {"resource_id": member_id, "type": "member", "version": installed_version}
 
