@@ -57,13 +57,13 @@ export default function ModelMappingSection({
     <div className="space-y-4 relative">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className="w-1 h-6 bg-gradient-to-b from-[#0ea5e9] to-[#0284c7] rounded-full" />
-          <h2 className="text-lg font-bold text-[#1e293b]" style={{ fontFamily: 'Inter, system-ui, sans-serif' }}>
+          <div className="w-1 h-6 bg-gradient-to-b from-info to-info rounded-full" />
+          <h2 className="text-lg font-bold text-foreground" style={{ fontFamily: 'Inter, system-ui, sans-serif' }}>
             虚拟模型
           </h2>
         </div>
         {saving && (
-          <span className="text-xs text-[#0ea5e9] font-medium animate-pulse">同步中...</span>
+          <span className="text-xs text-info font-medium animate-pulse">同步中...</span>
         )}
         {successMessage && !saving && (
           <div className="flex items-center gap-2 px-3 py-1.5 bg-[#10b981]/10 rounded-full animate-fadeIn">
@@ -81,20 +81,20 @@ export default function ModelMappingSection({
           return (
             <div
               key={vm.id}
-              className="group relative border border-[#e2e8f0] rounded-xl p-5 bg-white hover:border-[#0ea5e9] hover:shadow-lg hover:shadow-[#0ea5e9]/10 transition-all duration-normal"
+              className="group relative border border-border rounded-xl p-5 bg-card hover:border-info hover:shadow-lg hover:shadow-info/10 transition-all duration-normal"
               style={{ animation: `motionFadeInUp var(--duration-slow) var(--ease-out) calc(var(--duration-instant) * ${index}) both` }}
             >
-              <div className="absolute inset-0 bg-gradient-to-br from-[#0ea5e9]/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-normal rounded-xl" />
+              <div className="absolute inset-0 bg-gradient-to-br from-info/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-normal rounded-xl" />
               <div className="relative flex items-start gap-3 mb-4">
                 <div className="flex-1">
-                  <h3 className="text-sm font-bold text-[#1e293b]" style={{ fontFamily: 'Inter, system-ui, sans-serif' }}>
+                  <h3 className="text-sm font-bold text-foreground" style={{ fontFamily: 'Inter, system-ui, sans-serif' }}>
                     {vm.name}
                   </h3>
-                  <p className="text-xs text-[#64748b] mt-1">{vm.description}</p>
+                  <p className="text-xs text-muted-foreground mt-1">{vm.description}</p>
                 </div>
               </div>
               {enabledModelsList.length === 0 ? (
-                <div className="w-full px-3 py-2.5 border border-[#e2e8f0] rounded-lg text-sm bg-[#f8fafc] text-[#94a3b8] flex items-center gap-2">
+                <div className="w-full px-3 py-2.5 border border-border rounded-lg text-sm bg-muted text-muted-foreground flex items-center gap-2">
                   <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
@@ -104,7 +104,7 @@ export default function ModelMappingSection({
                 <select
                   value={currentModel}
                   onChange={(e) => void handleMappingChange(vm.id, e.target.value)}
-                  className="relative w-full px-3 py-2.5 border border-[#e2e8f0] rounded-lg text-sm text-[#1e293b] bg-[#f8fafc] font-mono hover:border-[#0ea5e9] focus:outline-none focus:border-[#0ea5e9] focus:ring-2 focus:ring-[#0ea5e9]/20 transition-all duration-normal"
+                  className="relative w-full px-3 py-2.5 border border-border rounded-lg text-sm text-foreground bg-muted font-mono hover:border-info focus:outline-none focus:border-info focus:ring-2 focus:ring-info/20 transition-all duration-normal"
                 >
                   {!currentModel && <option value="">选择模型...</option>}
                   {enabledModelsList.map((model) => (

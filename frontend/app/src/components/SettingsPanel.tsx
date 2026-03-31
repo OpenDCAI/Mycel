@@ -42,7 +42,7 @@ export default function SettingsPanel() {
               <Folder className="w-4 h-4 text-muted-foreground" />
               <div className="text-left flex-1">
                 <div className="text-sm">默认工作区</div>
-                <div className="text-[11px] text-muted-foreground mt-0.5 truncate">
+                <div className="text-xs text-muted-foreground mt-0.5 truncate">
                   {settings?.default_workspace || "未设置"}
                 </div>
               </div>

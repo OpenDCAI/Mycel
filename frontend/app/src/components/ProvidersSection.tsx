@@ -61,8 +61,8 @@ export default function ProvidersSection({ providers, onUpdate }: ProvidersSecti
     <div className="space-y-4">
       {/* Section header */}
       <div className="flex items-center gap-3">
-        <div className="w-1 h-6 bg-gradient-to-b from-[#0ea5e9] to-[#0284c7] rounded-full" />
-        <h2 className="text-lg font-bold text-[#1e293b]" style={{ fontFamily: 'Inter, system-ui, sans-serif' }}>
+        <div className="w-1 h-6 bg-gradient-to-b from-info to-info rounded-full" />
+        <h2 className="text-lg font-bold text-foreground" style={{ fontFamily: 'Inter, system-ui, sans-serif' }}>
           API 提供商
         </h2>
       </div>
@@ -77,19 +77,19 @@ export default function ProvidersSection({ providers, onUpdate }: ProvidersSecti
           return (
             <div
               key={providerConfig.id}
-              className="border border-[#e2e8f0] rounded-xl p-5 bg-white hover:border-[#0ea5e9] hover:shadow-lg hover:shadow-[#0ea5e9]/10 transition-all duration-normal space-y-4"
+              className="border border-border rounded-xl p-5 bg-card hover:border-info hover:shadow-lg hover:shadow-info/10 transition-all duration-normal space-y-4"
               style={{
                 animation: `motionFadeInUp var(--duration-slow) var(--ease-out) calc(var(--duration-instant) * ${index}) both`
               }}
             >
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <h3 className="text-sm font-bold text-[#1e293b]" style={{ fontFamily: 'Inter, system-ui, sans-serif' }}>
+                  <h3 className="text-sm font-bold text-foreground" style={{ fontFamily: 'Inter, system-ui, sans-serif' }}>
                     {providerConfig.name}
                   </h3>
                 </div>
                 {isSaving && (
-                  <span className="text-xs text-[#0ea5e9] font-medium animate-pulse">保存中...</span>
+                  <span className="text-xs text-info font-medium animate-pulse">保存中...</span>
                 )}
                 {successMessage === providerConfig.id && !isSaving && (
                   <div className="flex items-center gap-2 px-3 py-1.5 bg-[#10b981]/10 rounded-full animate-fadeIn">
@@ -103,7 +103,7 @@ export default function ProvidersSection({ providers, onUpdate }: ProvidersSecti
 
               {/* API Key */}
               <div className="space-y-2">
-                <label className="text-xs font-medium text-[#64748b]">API 密钥</label>
+                <label className="text-xs font-medium text-muted-foreground">API 密钥</label>
                 <div className="relative">
                   <input
                     type={showKey ? "text" : "password"}
@@ -114,12 +114,12 @@ export default function ProvidersSection({ providers, onUpdate }: ProvidersSecti
                       void handleSave(providerConfig.id, newConfig);
                     }}
                     placeholder={`输入 ${providerConfig.name} API 密钥`}
-                    className="w-full px-3 py-2 pr-10 border border-[#e2e8f0] rounded-lg text-sm text-[#1e293b] bg-[#f8fafc] font-mono hover:border-[#0ea5e9] focus:outline-none focus:border-[#0ea5e9] focus:ring-2 focus:ring-[#0ea5e9]/20 transition-all duration-normal"
+                    className="w-full px-3 py-2 pr-10 border border-border rounded-lg text-sm text-foreground bg-muted font-mono hover:border-info focus:outline-none focus:border-info focus:ring-2 focus:ring-info/20 transition-all duration-normal"
                   />
                   {hasApiKey && (
                     <button
                       onClick={() => setShowKeys({ ...showKeys, [providerConfig.id]: !showKey })}
-                      className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 text-[#94a3b8] hover:text-[#0ea5e9] rounded transition-colors duration-fast"
+                      className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 text-muted-foreground hover:text-info rounded transition-colors duration-fast"
                     >
                       {showKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                     </button>
@@ -141,9 +141,9 @@ export default function ProvidersSection({ providers, onUpdate }: ProvidersSecti
                       };
                       void handleSave(providerConfig.id, newConfig);
                     }}
-                    className="w-4 h-4 rounded border-[#e2e8f0] text-[#0ea5e9] focus:ring-2 focus:ring-[#0ea5e9]/20"
+                    className="w-4 h-4 rounded border-border text-info focus:ring-2 focus:ring-info/20"
                   />
-                  <label htmlFor={`${providerConfig.id}-override`} className="text-xs font-medium text-[#64748b]">
+                  <label htmlFor={`${providerConfig.id}-override`} className="text-xs font-medium text-muted-foreground">
                     自定义 Base URL
                   </label>
                 </div>
@@ -157,7 +157,7 @@ export default function ProvidersSection({ providers, onUpdate }: ProvidersSecti
                       void handleSave(providerConfig.id, newConfig);
                     }}
                     placeholder={providerConfig.defaultBaseUrl}
-                    className="w-full px-3 py-2 border border-[#e2e8f0] rounded-lg text-sm text-[#1e293b] bg-[#f8fafc] font-mono hover:border-[#0ea5e9] focus:outline-none focus:border-[#0ea5e9] focus:ring-2 focus:ring-[#0ea5e9]/20 transition-all duration-normal"
+                    className="w-full px-3 py-2 border border-border rounded-lg text-sm text-foreground bg-muted font-mono hover:border-info focus:outline-none focus:border-info focus:ring-2 focus:ring-info/20 transition-all duration-normal"
                   />
                 )}
               </div>

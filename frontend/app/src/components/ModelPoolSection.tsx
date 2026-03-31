@@ -121,8 +121,8 @@ export default function ModelPoolSection({ models, enabledModels, customConfig, 
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div>
-          <h3 className="text-sm font-medium text-[#1e293b]">模型池</h3>
-          <p className="text-xs text-[#94a3b8]">启用/禁用模型，添加自定义模型</p>
+          <h3 className="text-sm font-medium text-foreground">模型池</h3>
+          <p className="text-xs text-muted-foreground">启用/禁用模型，添加自定义模型</p>
         </div>
         {successMessage && (
           <span className="text-xs text-[#10b981] bg-[#10b981]/10 px-2 py-1 rounded">{successMessage}</span>
@@ -135,18 +135,18 @@ export default function ModelPoolSection({ models, enabledModels, customConfig, 
         placeholder="搜索或输入模型 ID..."
         value={searchQuery}
         onChange={(e) => setSearchQuery(e.target.value)}
-        className="w-full px-3 py-2 text-sm border border-[#e2e8f0] rounded-lg bg-white focus:outline-none focus:border-[#0ea5e9] transition-colors duration-fast"
+        className="w-full px-3 py-2 text-sm border border-border rounded-lg bg-card focus:outline-none focus:border-info transition-colors duration-fast"
       />
 
       {/* Add custom model form */}
       {showAddForm && (
-        <div className="border border-dashed border-[#0ea5e9]/40 rounded-lg bg-[#f0f9ff]/50 p-4 space-y-3">
-          <div className="text-sm font-medium text-[#0ea5e9]">添加 "{searchQuery.trim()}"</div>
+        <div className="border border-dashed border-info/40 rounded-lg bg-info/5 p-4 space-y-3">
+          <div className="text-sm font-medium text-info">添加 "{searchQuery.trim()}"</div>
           <div className="flex gap-2">
             <select
               value={selectedProvider}
               onChange={(e) => setSelectedProvider(e.target.value)}
-              className="flex-1 px-3 py-1.5 text-sm border border-[#e2e8f0] rounded-lg bg-white focus:outline-none focus:border-[#0ea5e9]"
+              className="flex-1 px-3 py-1.5 text-sm border border-border rounded-lg bg-card focus:outline-none focus:border-info"
             >
               <option value="" disabled>选择提供商</option>
               {providerNames.map((p) => <option key={p} value={p}>{p}</option>)}
@@ -154,7 +154,7 @@ export default function ModelPoolSection({ models, enabledModels, customConfig, 
             <button
               onClick={handleAdd}
               disabled={adding || !selectedProvider}
-              className="px-4 py-1.5 text-sm bg-[#0ea5e9] text-white rounded-lg hover:bg-[#0ea5e9]/90 disabled:opacity-50 transition-colors duration-fast"
+              className="px-4 py-1.5 text-sm bg-info text-info-foreground rounded-lg hover:bg-info/90 disabled:opacity-50 transition-colors duration-fast"
             >
               {adding ? "添加中..." : "添加"}
             </button>
@@ -162,7 +162,7 @@ export default function ModelPoolSection({ models, enabledModels, customConfig, 
           {/* Collapsible advanced */}
           <button
             onClick={() => setShowAdvanced(!showAdvanced)}
-            className="text-xs text-[#94a3b8] hover:text-[#64748b] transition-colors duration-fast"
+            className="text-xs text-muted-foreground hover:text-muted-foreground transition-colors duration-fast"
           >
             {showAdvanced ? "▾ 高级选项" : "▸ 高级选项"}
           </button>
@@ -173,14 +173,14 @@ export default function ModelPoolSection({ models, enabledModels, customConfig, 
                 placeholder="基于（如 deepseek-chat）"
                 value={addAlias}
                 onChange={(e) => setAddAlias(e.target.value)}
-                className="px-3 py-1.5 text-sm border border-[#e2e8f0] rounded-lg bg-white focus:outline-none focus:border-[#0ea5e9]"
+                className="px-3 py-1.5 text-sm border border-border rounded-lg bg-card focus:outline-none focus:border-info"
               />
               <input
                 type="number"
                 placeholder="上下文限制"
                 value={addContextLimit}
                 onChange={(e) => setAddContextLimit(e.target.value)}
-                className="px-3 py-1.5 text-sm border border-[#e2e8f0] rounded-lg bg-white focus:outline-none focus:border-[#0ea5e9]"
+                className="px-3 py-1.5 text-sm border border-border rounded-lg bg-card focus:outline-none focus:border-info"
               />
             </div>
           )}
@@ -196,19 +196,19 @@ export default function ModelPoolSection({ models, enabledModels, customConfig, 
           const isEditing = editingModel === model.id;
           return (
             <div key={model.id}>
-              <div className={`flex items-center gap-3 px-3 py-2 rounded-lg transition-colors duration-fast ${enabled ? "bg-white" : "bg-[#f8f9fa]"}`}>
+              <div className={`flex items-center gap-3 px-3 py-2 rounded-lg transition-colors duration-fast ${enabled ? "bg-card" : "bg-muted"}`}>
                 <button
                   onClick={() => handleToggle(model.id, !enabled)}
                   disabled={toggling === model.id}
-                  className={`w-8 h-4 rounded-full transition-colors duration-fast relative shrink-0 ${enabled ? "bg-[#0ea5e9]" : "bg-[#cbd5e1]"}`}
+                  className={`w-8 h-4 rounded-full transition-colors duration-fast relative shrink-0 ${enabled ? "bg-info" : "bg-muted-foreground"}`}
                 >
-                  <div className={`absolute top-0.5 w-3 h-3 rounded-full bg-white shadow transition-transform duration-fast ${enabled ? "left-4" : "left-0.5"}`} />
+                  <div className={`absolute top-0.5 w-3 h-3 rounded-full bg-card shadow transition-transform duration-fast ${enabled ? "left-4" : "left-0.5"}`} />
                 </button>
                 <div className="flex-1 min-w-0">
-                  <span className="text-sm text-[#1e293b] truncate block">{model.id}</span>
-                  {cfg?.based_on && <span className="text-[10px] text-[#94a3b8]">based on: {cfg.based_on}</span>}
+                  <span className="text-sm text-foreground truncate block">{model.id}</span>
+                  {cfg?.based_on && <span className="text-2xs text-muted-foreground">based on: {cfg.based_on}</span>}
                 </div>
-                {model.custom && <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#f0f9ff] text-[#0ea5e9]">自定义</span>}
+                {model.custom && <span className="text-2xs px-1.5 py-0.5 rounded bg-info/10 text-info">自定义</span>}
                 <div className="flex gap-1 shrink-0">
                   {model.custom && (
                     <>
@@ -221,13 +221,13 @@ export default function ModelPoolSection({ models, enabledModels, customConfig, 
                             setEditProvider(model.provider || "");
                           }
                         }}
-                        className="text-[11px] px-2 py-0.5 rounded border border-[#e2e8f0] text-[#64748b] hover:border-[#94a3b8] transition-colors duration-fast"
+                        className="text-xs px-2 py-0.5 rounded border border-border text-muted-foreground hover:border-border transition-colors duration-fast"
                       >
                         {isEditing ? "关闭" : "配置"}
                       </button>
                       <button
                         onClick={() => onRemoveCustomModel(model.id)}
-                        className="text-[11px] px-2 py-0.5 rounded border border-[#e2e8f0] text-[#ef4444] hover:border-[#ef4444] transition-colors duration-fast"
+                        className="text-xs px-2 py-0.5 rounded border border-border text-[#ef4444] hover:border-[#ef4444] transition-colors duration-fast"
                       >
                         移除
                       </button>
@@ -235,7 +235,7 @@ export default function ModelPoolSection({ models, enabledModels, customConfig, 
                   )}
                   {(status === "ok" || status === "fail") ? (
                     <div className="flex items-center gap-1">
-                      <span className={`text-[11px] px-1.5 py-0.5 rounded ${status === "ok" ? "text-[#10b981]" : "text-[#ef4444]"}`}>
+                      <span className={`text-xs px-1.5 py-0.5 rounded ${status === "ok" ? "text-[#10b981]" : "text-[#ef4444]"}`}>
                         {status === "ok" ? "✓" : "✗"}
                       </span>
                       <button
@@ -243,7 +243,7 @@ export default function ModelPoolSection({ models, enabledModels, customConfig, 
                           setTestStatus((s) => ({ ...s, [model.id]: "idle" }));
                           setTestError((s) => ({ ...s, [model.id]: "" }));
                         }}
-                        className="text-[11px] px-1 py-0.5 rounded text-[#94a3b8] hover:text-[#64748b] transition-colors duration-fast"
+                        className="text-xs px-1 py-0.5 rounded text-muted-foreground hover:text-muted-foreground transition-colors duration-fast"
                         title="关闭"
                       >
                         ×
@@ -253,7 +253,7 @@ export default function ModelPoolSection({ models, enabledModels, customConfig, 
                     <button
                       onClick={() => handleTest(model.id)}
                       disabled={status === "testing"}
-                      className="text-[11px] px-2 py-0.5 rounded border border-[#e2e8f0] text-[#64748b] hover:border-[#94a3b8] disabled:opacity-50 transition-colors duration-fast"
+                      className="text-xs px-2 py-0.5 rounded border border-border text-muted-foreground hover:border-border disabled:opacity-50 transition-colors duration-fast"
                     >
                       {status === "testing" ? "测试中…" : "测试"}
                     </button>
@@ -261,32 +261,32 @@ export default function ModelPoolSection({ models, enabledModels, customConfig, 
                 </div>
               </div>
               {status === "fail" && testError[model.id] && (
-                <div className="mx-3 mt-1 text-[11px] text-[#ef4444]">{testError[model.id]}</div>
+                <div className="mx-3 mt-1 text-xs text-[#ef4444]">{testError[model.id]}</div>
               )}
               {isEditing && (
-                <div className="mx-3 mt-2 mb-1 p-3 border border-[#e2e8f0] rounded-lg bg-[#f8f9fa] space-y-2">
+                <div className="mx-3 mt-2 mb-1 p-3 border border-border rounded-lg bg-muted space-y-2">
                   <div>
-                    <label className="text-[11px] text-[#94a3b8] block mb-1">提供商</label>
+                    <label className="text-xs text-muted-foreground block mb-1">提供商</label>
                     <select value={editProvider} onChange={(e) => setEditProvider(e.target.value)}
-                      className="w-full px-2 py-1 text-sm border border-[#e2e8f0] rounded bg-white focus:outline-none focus:border-[#0ea5e9]">
+                      className="w-full px-2 py-1 text-sm border border-border rounded bg-card focus:outline-none focus:border-info">
                       <option value="">不更改</option>
                       {providerNames.map((p) => <option key={p} value={p}>{p}</option>)}
                     </select>
                   </div>
                   <div className="grid grid-cols-2 gap-2">
                     <div>
-                      <label className="text-[11px] text-[#94a3b8] block mb-1">基于模型</label>
+                      <label className="text-xs text-muted-foreground block mb-1">基于模型</label>
                       <input type="text" placeholder="如 deepseek-chat" value={editAlias} onChange={(e) => setEditAlias(e.target.value)}
-                        className="w-full px-2 py-1 text-sm border border-[#e2e8f0] rounded bg-white focus:outline-none focus:border-[#0ea5e9]" />
+                        className="w-full px-2 py-1 text-sm border border-border rounded bg-card focus:outline-none focus:border-info" />
                     </div>
                     <div>
-                      <label className="text-[11px] text-[#94a3b8] block mb-1">上下文限制</label>
+                      <label className="text-xs text-muted-foreground block mb-1">上下文限制</label>
                       <input type="number" placeholder="上下文限制" value={editContextLimit} onChange={(e) => setEditContextLimit(e.target.value)}
-                        className="w-full px-2 py-1 text-sm border border-[#e2e8f0] rounded bg-white focus:outline-none focus:border-[#0ea5e9]" />
+                        className="w-full px-2 py-1 text-sm border border-border rounded bg-card focus:outline-none focus:border-info" />
                     </div>
                   </div>
                   <button onClick={() => handleSaveConfig(model.id)}
-                    className="text-xs px-3 py-1 bg-[#0ea5e9] text-white rounded hover:bg-[#0ea5e9]/90 transition-colors duration-fast">
+                    className="text-xs px-3 py-1 bg-info text-info-foreground rounded hover:bg-info/90 transition-colors duration-fast">
                     保存
                   </button>
                 </div>

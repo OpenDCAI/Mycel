@@ -117,7 +117,7 @@ export default function SandboxSection({ sandboxes, onUpdate }: SandboxSectionPr
         <select
           value={value || field.options?.[0] || ""}
           onChange={(e) => void handleSave(configName, setNestedValue(config, field, e.target.value))}
-          className="flex-1 min-w-0 px-2 py-1 border border-[#e2e8f0] rounded text-xs text-[#1e293b] bg-[#f8fafc] focus:outline-none focus:border-[#0ea5e9] transition-colors duration-fast"
+          className="flex-1 min-w-0 px-2 py-1 border border-border rounded text-xs text-foreground bg-muted focus:outline-none focus:border-info transition-colors duration-fast"
         >
           {field.options?.map((opt) => (
             <option key={opt} value={opt}>{opt}</option>
@@ -138,12 +138,12 @@ export default function SandboxSection({ sandboxes, onUpdate }: SandboxSectionPr
           }}
           placeholder={field.placeholder}
           title={isMaskedSecret ? "点击眼睛图标进行编辑" : undefined}
-          className="w-full px-2 py-1 pr-7 border border-[#e2e8f0] rounded text-xs text-[#1e293b] bg-[#f8fafc] font-mono focus:outline-none focus:border-[#0ea5e9] transition-colors duration-fast"
+          className="w-full px-2 py-1 pr-7 border border-border rounded text-xs text-foreground bg-muted font-mono focus:outline-none focus:border-info transition-colors duration-fast"
         />
         {isSecret && value && (
           <button
             onClick={() => setShowKeys({ ...showKeys, [showKeyId]: !showKey })}
-            className="absolute right-1 top-1/2 -translate-y-1/2 p-0.5 text-[#94a3b8] hover:text-[#0ea5e9] rounded transition-colors duration-fast"
+            className="absolute right-1 top-1/2 -translate-y-1/2 p-0.5 text-muted-foreground hover:text-info rounded transition-colors duration-fast"
           >
             {showKey ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
           </button>
@@ -157,14 +157,14 @@ export default function SandboxSection({ sandboxes, onUpdate }: SandboxSectionPr
   return (
     <div className="space-y-3">
       <div className="flex items-center gap-3">
-        <div className="w-1 h-6 bg-gradient-to-b from-[#0ea5e9] to-[#0284c7] rounded-full" />
-        <h2 className="text-lg font-bold text-[#1e293b]" style={{ fontFamily: 'Inter, system-ui, sans-serif' }}>
+        <div className="w-1 h-6 bg-gradient-to-b from-info to-info rounded-full" />
+        <h2 className="text-lg font-bold text-foreground" style={{ fontFamily: 'Inter, system-ui, sans-serif' }}>
           沙箱提供商
         </h2>
-        <span className="text-xs text-[#94a3b8]">{entries.length} 个配置</span>
+        <span className="text-xs text-muted-foreground">{entries.length} 个配置</span>
       </div>
 
-      <div className="border border-[#e2e8f0] rounded-lg overflow-hidden divide-y divide-[#e2e8f0]">
+      <div className="border border-border rounded-lg overflow-hidden divide-y divide-border">
         {entries.map(([configName, rawConfig]) => {
           const config = rawConfig as Record<string, unknown>;
           const providerType = String(config.provider ?? configName);
@@ -176,24 +176,24 @@ export default function SandboxSection({ sandboxes, onUpdate }: SandboxSectionPr
             <div key={configName}>
               <button
                 onClick={() => setExpanded(isExpanded ? null : configName)}
-                className="w-full flex items-center gap-3 px-4 py-2.5 text-left hover:bg-[#f8fafc] transition-colors duration-fast"
+                className="w-full flex items-center gap-3 px-4 py-2.5 text-left hover:bg-muted transition-colors duration-fast"
               >
-                <ChevronDown className={`w-3.5 h-3.5 text-[#94a3b8] transition-transform duration-fast ${isExpanded ? "" : "-rotate-90"}`} />
-                <span className="text-sm font-medium text-[#1e293b]">{displayName(configName)}</span>
+                <ChevronDown className={`w-3.5 h-3.5 text-muted-foreground transition-transform duration-fast ${isExpanded ? "" : "-rotate-90"}`} />
+                <span className="text-sm font-medium text-foreground">{displayName(configName)}</span>
                 {configName !== providerType && (
-                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#f1f5f9] text-[#64748b]">{providerType}</span>
+                  <span className="text-2xs px-1.5 py-0.5 rounded bg-muted text-muted-foreground">{providerType}</span>
                 )}
-                <span className="text-[10px] text-[#cbd5e1] ml-auto">
+                <span className="text-2xs text-muted-foreground ml-auto">
                   {isSaving ? "保存中..." : `${fields.length + COMMON_FIELDS.length} 个字段`}
                 </span>
               </button>
 
               {isExpanded && (
-                <div className="px-4 pb-3 pt-1 bg-[#fafbfc]">
+                <div className="px-4 pb-3 pt-1 bg-muted">
                   <div className="space-y-1.5">
                     {[...fields, ...COMMON_FIELDS].map((field) => (
                       <div key={field.key} className="flex items-center gap-3">
-                        <label className="w-24 shrink-0 text-xs text-[#64748b] text-right">{field.label}</label>
+                        <label className="w-24 shrink-0 text-xs text-muted-foreground text-right">{field.label}</label>
                         {renderField(configName, field, config)}
                       </div>
                     ))}
