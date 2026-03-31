@@ -147,9 +147,9 @@ export default function ObservationSection({ config, onUpdate }: ObservationSect
     return (
       <div key={field.key} className="space-y-1">
         <div className="flex items-center gap-2">
-          <label className="text-xs font-medium text-[#64748b]">{field.label}</label>
+          <label className="text-xs font-medium text-muted-foreground">{field.label}</label>
           {!field.required && (
-            <span className="text-[10px] text-[#94a3b8] bg-[#f1f5f9] px-1.5 py-0.5 rounded">可选</span>
+            <span className="text-2xs text-muted-foreground bg-muted px-1.5 py-0.5 rounded">可选</span>
           )}
           {saved && (
             <span className="text-[#10b981] animate-fadeIn"><Check className="w-3 h-3" /></span>
@@ -162,25 +162,25 @@ export default function ObservationSection({ config, onUpdate }: ObservationSect
             onChange={(e) => void handleFieldSave(providerId, field, e.target.value)}
             onFocus={() => { if (isSecret && !showKey) setShowKeys((s) => ({ ...s, [showKeyId]: true })); }}
             placeholder={field.placeholder}
-            className="w-full px-3 py-2 pr-10 border border-[#e2e8f0] rounded-lg text-sm text-[#1e293b] bg-white font-mono hover:border-[#cbd5e1] focus:outline-none focus:border-[#0ea5e9] focus:ring-2 focus:ring-[#0ea5e9]/20 transition-all duration-fast"
+            className="w-full px-3 py-2 pr-10 border border-border rounded-lg text-sm text-foreground bg-card font-mono hover:border-border focus:outline-none focus:border-info focus:ring-2 focus:ring-info/20 transition-all duration-fast"
           />
           {isSecret && value && (
             <button
               onClick={() => setShowKeys((s) => ({ ...s, [showKeyId]: !showKey }))}
-              className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-[#94a3b8] hover:text-[#64748b] rounded transition-colors duration-fast"
+              className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-muted-foreground hover:text-muted-foreground rounded transition-colors duration-fast"
             >
               {showKey ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
             </button>
           )}
         </div>
-        {field.helpText && <p className="text-[11px] text-[#94a3b8] mt-1">{field.helpText}</p>}
+        {field.helpText && <p className="text-xs text-muted-foreground mt-1">{field.helpText}</p>}
       </div>
     );
   };
 
   return (
     <div className="space-y-3">
-      <p className="text-xs text-[#94a3b8]">连接可观测性提供商以追踪 Agent 运行。同时只能激活一个提供商。</p>
+      <p className="text-xs text-muted-foreground">连接可观测性提供商以追踪 Agent 运行。同时只能激活一个提供商。</p>
       {PROVIDERS.map((provider) => {
         const isActive = active === provider.id;
         const requiredFields = provider.fields.filter((f) => f.required);
@@ -191,36 +191,36 @@ export default function ObservationSection({ config, onUpdate }: ObservationSect
         return (
           <div
             key={provider.id}
-            className={`border rounded-xl bg-white transition-all duration-normal ${
+            className={`border rounded-xl bg-card transition-all duration-normal ${
               isActive
-                ? "border-[#0ea5e9] shadow-lg shadow-[#0ea5e9]/5"
-                : "border-[#e2e8f0] hover:border-[#cbd5e1]"
+                ? "border-info shadow-lg shadow-info/5"
+                : "border-border hover:border-border"
             }`}
           >
             {/* Header */}
             <div className="flex items-center justify-between px-5 py-4">
               <div className="flex items-center gap-3">
                 <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${
-                  isActive ? "bg-[#0ea5e9]/10 text-[#0ea5e9]" : "bg-[#f1f5f9] text-[#64748b]"
+                  isActive ? "bg-info/10 text-info" : "bg-muted text-muted-foreground"
                 }`}>
                   {provider.icon}
                 </div>
                 <div>
-                  <div className="text-sm font-semibold text-[#1e293b]">{provider.name}</div>
-                  <div className="text-xs text-[#94a3b8]">{provider.description}</div>
+                  <div className="text-sm font-semibold text-foreground">{provider.name}</div>
+                  <div className="text-xs text-muted-foreground">{provider.description}</div>
                 </div>
               </div>
               {/* Toggle */}
               <button
                 onClick={() => void handleActiveChange(provider.id)}
-                className="relative w-9 h-5 rounded-full transition-colors duration-normal focus:outline-none focus:ring-2 focus:ring-[#0ea5e9]/20"
-                style={{ backgroundColor: isActive ? "#0ea5e9" : "#e2e8f0" }}
+                className="relative w-9 h-5 rounded-full transition-colors duration-normal focus:outline-none focus:ring-2 focus:ring-info/20"
+                style={{ backgroundColor: isActive ? "hsl(var(--info))" : "hsl(var(--border))" }}
                 role="switch"
                 aria-checked={isActive}
                 aria-label={`切换 ${provider.name}`}
               >
                 <span
-                  className="absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform duration-normal"
+                  className="absolute top-0.5 left-0.5 w-4 h-4 bg-card rounded-full shadow transition-transform duration-normal"
                   style={{ transform: isActive ? "translateX(var(--move-lg))" : "translateX(0)" }}
                 />
               </button>
@@ -234,7 +234,7 @@ export default function ObservationSection({ config, onUpdate }: ObservationSect
               <div className="overflow-hidden">
                 <div className="px-5 pb-5 space-y-4">
                   {/* Required fields */}
-                  <div className="bg-[#f8fafc] rounded-lg p-4 space-y-3">
+                  <div className="bg-muted rounded-lg p-4 space-y-3">
                     {requiredFields.map((field) => renderField(provider.id, field))}
                   </div>
 
@@ -243,7 +243,7 @@ export default function ObservationSection({ config, onUpdate }: ObservationSect
                     <div>
                       <button
                         onClick={() => setAdvancedOpen((s) => ({ ...s, [provider.id]: !advOpen }))}
-                        className="flex items-center gap-1 text-xs font-medium text-[#64748b] hover:text-[#475569] transition-colors duration-fast"
+                        className="flex items-center gap-1 text-xs font-medium text-muted-foreground hover:text-foreground-secondary transition-colors duration-fast"
                       >
                         <ChevronRight className={`w-3 h-3 transition-transform duration-fast ${advOpen ? "rotate-90" : ""}`} />
                         高级选项
@@ -280,7 +280,7 @@ export default function ObservationSection({ config, onUpdate }: ObservationSect
                     <button
                       onClick={() => void handleVerify()}
                       disabled={verifying}
-                      className="text-xs font-medium text-[#0ea5e9] hover:text-[#0284c7] disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-fast flex items-center gap-1.5"
+                      className="text-xs font-medium text-info hover:text-info disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-fast flex items-center gap-1.5"
                     >
                       {verifying && <Loader2 className="w-3 h-3 animate-spin" />}
                       {verifying ? "测试中..." : "测试连接"}
