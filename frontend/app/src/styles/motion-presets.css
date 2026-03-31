@@ -1,0 +1,57 @@
+/* --- Keyframes (consume tokens) --- */
+@keyframes motionFadeIn {
+  from { opacity: 0; transform: translateY(var(--move-sm)); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes motionSlideInLeft {
+  from { opacity: 0; transform: translateX(calc(-1 * var(--move-md))); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+@keyframes motionSlideUp {
+  from { opacity: 0; transform: translateY(var(--move-md)); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes motionScaleIn {
+  from { opacity: 0; transform: scale(var(--scale-subtle)); }
+  to   { opacity: 1; transform: scale(1); }
+}
+@keyframes motionPulse {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.4; }
+}
+@keyframes motionFadeInUp {
+  from { opacity: 0; transform: translateY(var(--move-lg)); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* --- Preset + backward-compat classes (comma-grouped) --- */
+.motion-fade-in,
+.animate-fade-in,
+.animate-fadeIn        { animation: motionFadeIn    var(--duration-normal) var(--ease-out) forwards; }
+
+.motion-slide-in-left,
+.animate-slide-in      { animation: motionSlideInLeft var(--duration-normal) var(--ease-out) forwards; }
+
+.motion-slide-up,
+.animate-slide-up      { animation: motionSlideUp   var(--duration-slow) var(--ease-out) forwards; }
+
+.motion-scale-in,
+.animate-scale-in      { animation: motionScaleIn   var(--duration-fast) var(--ease-out) forwards; }
+
+.motion-page-in,
+.animate-page-in       { animation: motionFadeIn    var(--duration-fast) var(--ease-out) forwards; }
+
+.motion-pulse,
+.animate-pulse-slow    { animation: motionPulse     2s var(--ease-in-out) infinite; }
+
+.motion-fade-in-up     { animation: motionFadeInUp  var(--duration-slow) var(--ease-out) forwards; }
+
+/* --- Reduced motion --- */
+@media (prefers-reduced-motion: reduce) {
+  [class*="motion-"],
+  [class*="animate-"] {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

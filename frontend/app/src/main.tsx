@@ -4,6 +4,9 @@ import { RouterProvider } from 'react-router-dom'
 import { Toaster } from 'sonner'
 import './index.css'
 import './App.css'
+import './styles/motion-tokens.css'
+import './styles/motion-presets.css'
+import './styles/effects.css'
 import { router } from './router.tsx'
 
 const serializeLogArg = (arg: unknown): string => {

@@ -59,6 +59,20 @@ module.exports = {
         sm: "calc(var(--radius) - 4px)",
         xs: "calc(var(--radius) - 6px)",
       },
+      transitionDuration: {
+        instant: 'var(--duration-instant)',
+        fast: 'var(--duration-fast)',
+        normal: 'var(--duration-normal)',
+        slow: 'var(--duration-slow)',
+        deliberate: 'var(--duration-deliberate)',
+      },
+      transitionTimingFunction: {
+        smooth: 'var(--ease-default)',
+        'out-expo': 'var(--ease-out)',
+        'in-expo': 'var(--ease-in)',
+        io: 'var(--ease-in-out)',
+        spring: 'var(--ease-spring)',
+      },
       boxShadow: {
         xs: "0 1px 2px 0 rgb(0 0 0 / 0.05)",
       },
@@ -77,9 +91,9 @@ module.exports = {
         },
       },
       animation: {
-        "accordion-down": "accordion-down 0.2s ease-out",
-        "accordion-up": "accordion-up 0.2s ease-out",
-        "caret-blink": "caret-blink 1.25s ease-out infinite",
+        "accordion-down": "accordion-down var(--duration-normal) var(--ease-out)",
+        "accordion-up": "accordion-up var(--duration-normal) var(--ease-out)",
+        "caret-blink": "caret-blink 1.25s var(--ease-out) infinite",
       },
     },
   },
