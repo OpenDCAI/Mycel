@@ -58,7 +58,7 @@ export default function ModelMappingSection({
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <div className="w-1 h-6 bg-gradient-to-b from-info to-info rounded-full" />
-          <h2 className="text-lg font-bold text-foreground" style={{ fontFamily: 'Inter, system-ui, sans-serif' }}>
+          <h2 className="text-lg font-bold text-foreground">
             虚拟模型
           </h2>
         </div>
@@ -87,7 +87,7 @@ export default function ModelMappingSection({
               <div className="absolute inset-0 bg-gradient-to-br from-info/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-normal rounded-xl" />
               <div className="relative flex items-start gap-3 mb-4">
                 <div className="flex-1">
-                  <h3 className="text-sm font-bold text-foreground" style={{ fontFamily: 'Inter, system-ui, sans-serif' }}>
+                  <h3 className="text-sm font-bold text-foreground">
                     {vm.name}
                   </h3>
                   <p className="text-xs text-muted-foreground mt-1">{vm.description}</p>

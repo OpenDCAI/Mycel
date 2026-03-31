@@ -31,7 +31,7 @@ export default function TokenStats({ runtimeStatus }: TokenStatsProps) {
             <>
               <span>上下文: {formatTokens(context.estimated_tokens)} ({context.usage_percent}%)</span>
               {context.near_limit && (
-                <span className="text-amber-500 font-medium">接近上限</span>
+                <span className="text-warning font-medium">接近上限</span>
               )}
             </>
           )}

@@ -62,7 +62,7 @@ export default function ProvidersSection({ providers, onUpdate }: ProvidersSecti
       {/* Section header */}
       <div className="flex items-center gap-3">
         <div className="w-1 h-6 bg-gradient-to-b from-info to-info rounded-full" />
-        <h2 className="text-lg font-bold text-foreground" style={{ fontFamily: 'Inter, system-ui, sans-serif' }}>
+        <h2 className="text-lg font-bold text-foreground">
           API 提供商
         </h2>
       </div>
@@ -84,7 +84,7 @@ export default function ProvidersSection({ providers, onUpdate }: ProvidersSecti
             >
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <h3 className="text-sm font-bold text-foreground" style={{ fontFamily: 'Inter, system-ui, sans-serif' }}>
+                  <h3 className="text-sm font-bold text-foreground">
                     {providerConfig.name}
                   </h3>
                 </div>

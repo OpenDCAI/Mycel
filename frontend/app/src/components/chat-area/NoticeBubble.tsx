@@ -16,7 +16,7 @@ export interface ParsedNotice {
 const STATUS_ICON = {
   completed: <CheckCircle2 className="w-3 h-3 text-success shrink-0" />,
   error: <XCircle className="w-3 h-3 text-destructive shrink-0" />,
-  pending: <Clock className="w-3 h-3 text-gray-400 shrink-0" />,
+  pending: <Clock className="w-3 h-3 text-muted-foreground shrink-0" />,
 } as const;
 
 // --- Steer: right-aligned bubble (user injected a message while AI was working) ---
@@ -26,8 +26,8 @@ function SteerBubble({ parsed }: { parsed: ParsedNotice }) {
   return (
     <div className="flex justify-end animate-fade-in">
       <div className="max-w-[78%]">
-        <div className="rounded-xl rounded-br-sm px-3.5 py-2 bg-amber-50 border border-amber-200/60">
-          <div className="text-2xs text-amber-500 font-medium mb-0.5">Steer</div>
+        <div className="rounded-xl rounded-br-sm px-3.5 py-2 bg-warning/10 border border-warning/20">
+          <div className="text-2xs text-warning font-medium mb-0.5">Steer</div>
           <p className="text-sm whitespace-pre-wrap leading-[1.55] text-foreground">
             {parsed.text}
           </p>
@@ -44,13 +44,13 @@ function CommandDivider({ parsed, inline }: { parsed: ParsedNotice; inline?: boo
   const statusIcon = parsed.status ? STATUS_ICON[parsed.status] : null;
   return (
     <div className={`flex items-center gap-3 ${inline ? "my-2" : "my-3"} select-none`}>
-      <div className="flex-1 h-px bg-gray-100" />
-      <span className="inline-flex items-center gap-1.5 px-2.5 text-xs text-gray-400">
+      <div className="flex-1 h-px bg-border" />
+      <span className="inline-flex items-center gap-1.5 px-2.5 text-xs text-muted-foreground">
         <Terminal className="w-3 h-3 shrink-0" />
         {statusIcon}
         {parsed.text}
       </span>
-      <div className="flex-1 h-px bg-gray-100" />
+      <div className="flex-1 h-px bg-border" />
     </div>
   );
 }
@@ -63,8 +63,8 @@ function AgentDivider({ parsed, inline, onClick }: { parsed: ParsedNotice; inlin
   const isClickable = !!onClick;
 
   const content = (
-    <span className={`inline-flex items-center gap-1.5 px-2.5 text-xs text-gray-400 ${
-      isClickable ? "hover:text-gray-600 transition-colors duration-fast cursor-pointer" : ""
+    <span className={`inline-flex items-center gap-1.5 px-2.5 text-xs text-muted-foreground ${
+      isClickable ? "hover:text-foreground-secondary transition-colors duration-fast cursor-pointer" : ""
     }`}>
       {statusIcon}
       {parsed.text}
@@ -73,13 +73,13 @@ function AgentDivider({ parsed, inline, onClick }: { parsed: ParsedNotice; inlin
 
   return (
     <div className={`flex items-center gap-3 ${inline ? "my-2" : "my-3"} select-none`}>
-      <div className="flex-1 h-px bg-gray-100" />
+      <div className="flex-1 h-px bg-border" />
       {isClickable ? (
         <button onClick={onClick}>{content}</button>
       ) : (
         content
       )}
-      <div className="flex-1 h-px bg-gray-100" />
+      <div className="flex-1 h-px bg-border" />
     </div>
   );
 }
@@ -90,12 +90,12 @@ function ChatDivider({ parsed, inline }: { parsed: ParsedNotice; inline?: boolea
   if (!parsed.text) return null;
   return (
     <div className={`flex items-center gap-3 ${inline ? "my-2" : "my-3"} select-none`}>
-      <div className="flex-1 h-px bg-blue-100" />
-      <span className="inline-flex items-center gap-1.5 px-2.5 text-xs text-blue-400">
+      <div className="flex-1 h-px bg-info/10" />
+      <span className="inline-flex items-center gap-1.5 px-2.5 text-xs text-info">
         <MessageCircle className="w-3 h-3 shrink-0" />
         {parsed.text}
       </span>
-      <div className="flex-1 h-px bg-blue-100" />
+      <div className="flex-1 h-px bg-info/10" />
     </div>
   );
 }
@@ -106,11 +106,11 @@ function GenericDivider({ parsed, inline }: { parsed: ParsedNotice; inline?: boo
   if (!parsed.text) return null;
   return (
     <div className={`flex items-center gap-3 ${inline ? "my-2" : "my-3"} select-none`}>
-      <div className="flex-1 h-px bg-gray-100" />
-      <span className="inline-flex items-center gap-1.5 px-2.5 text-xs text-gray-400">
+      <div className="flex-1 h-px bg-border" />
+      <span className="inline-flex items-center gap-1.5 px-2.5 text-xs text-muted-foreground">
         {parsed.text}
       </span>
-      <div className="flex-1 h-px bg-gray-100" />
+      <div className="flex-1 h-px bg-border" />
     </div>
   );
 }

@@ -127,8 +127,8 @@ export function AgentsView({ steps }: AgentsViewProps) {
 
       {/* Resizable divider */}
       <div
-        className={`w-1 flex-shrink-0 cursor-col-resize hover:bg-blue-400 transition-colors duration-fast ${
-          isDragging ? "bg-blue-500" : "bg-transparent"
+        className={`w-1 flex-shrink-0 cursor-col-resize hover:bg-info transition-colors duration-fast ${
+          isDragging ? "bg-info" : "bg-transparent"
         }`}
         onMouseDown={handleMouseDown}
       />
@@ -177,7 +177,7 @@ function AgentListItem({ step, isSelected, onClick }: { step: ToolStep; isSelect
   return (
     <button
       className={`w-full text-left px-3 py-2.5 border-b border-muted transition-colors duration-fast ${
-        isSelected ? "bg-blue-50" : "hover:bg-muted"
+        isSelected ? "bg-info/10" : "hover:bg-muted"
       }`}
       onClick={onClick}
     >

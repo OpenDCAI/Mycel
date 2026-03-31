@@ -59,7 +59,7 @@ export function FilesView({
 
       {/* Drag handle */}
       <div
-        className="w-1 cursor-col-resize hover:bg-blue-400 active:bg-blue-500 transition-colors duration-fast flex-shrink-0"
+        className="w-1 cursor-col-resize hover:bg-info active:bg-info transition-colors duration-fast flex-shrink-0"
         onMouseDown={onDragStart}
       />
 

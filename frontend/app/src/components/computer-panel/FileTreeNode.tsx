@@ -17,7 +17,7 @@ export function FileTreeNode({ node, depth, onToggle, onSelectFile, selectedFile
       <button
         className={`w-full text-left py-1 pr-2 rounded text-sm flex items-center gap-1 transition-colors duration-fast ${
           isSelected
-            ? "bg-blue-50 text-blue-700"
+            ? "bg-info/10 text-info"
             : "text-foreground hover:bg-muted"
         }`}
         style={{ paddingLeft: `${8 + depth * 16}px` }}

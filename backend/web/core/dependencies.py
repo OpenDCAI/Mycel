@@ -10,8 +10,16 @@ from backend.web.services.agent_pool import get_or_create_agent, resolve_thread_
 from sandbox.thread_context import set_current_thread_id
 
 # Dev bypass: set LEON_DEV_SKIP_AUTH=1 to skip JWT verification and inject a mock identity.
+# WARNING: this bypasses ALL auth — never set in production.
 _DEV_SKIP_AUTH = os.environ.get("LEON_DEV_SKIP_AUTH", "").lower() in ("1", "true", "yes")
 _DEV_PAYLOAD = {"user_id": "dev-user", "entity_id": "dev-user"}
+
+if _DEV_SKIP_AUTH:
+    import logging as _logging
+    _logging.getLogger(__name__).warning(
+        "LEON_DEV_SKIP_AUTH is active — JWT auth is BYPASSED for all requests. "
+        "This must never be enabled in production."
+    )
 
 
 async def get_app(request: Request) -> FastAPI:

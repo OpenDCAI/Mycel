@@ -22,15 +22,15 @@ interface DetailBoxModalProps {
 function StatusIcon({ status }: { status: string }) {
   switch (status) {
     case "calling":
-      return <Loader2 className="w-3.5 h-3.5 text-blue-500 animate-spin flex-shrink-0" />;
+      return <Loader2 className="w-3.5 h-3.5 text-info animate-spin flex-shrink-0" />;
     case "done":
       return <CheckCircle2 className="w-3.5 h-3.5 text-success flex-shrink-0" />;
     case "error":
       return <XCircle className="w-3.5 h-3.5 text-destructive flex-shrink-0" />;
     case "cancelled":
-      return <XCircle className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />;
+      return <XCircle className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />;
     default:
-      return <CheckCircle2 className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />;
+      return <CheckCircle2 className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />;
   }
 }
 
@@ -43,15 +43,15 @@ function ToolEntry({ seg }: { seg: ToolSegment }) {
   const Renderer = getToolRenderer(step);
 
   return (
-    <div className="border-l-2 border-gray-200 pl-3 py-1.5">
+    <div className="border-l-2 border-border pl-3 py-1.5">
       <div
-        className="flex items-center gap-1.5 cursor-pointer hover:bg-gray-50 -ml-3 pl-3 -mr-3 pr-3 py-1 rounded transition-colors duration-fast"
+        className="flex items-center gap-1.5 cursor-pointer hover:bg-muted -ml-3 pl-3 -mr-3 pr-3 py-1 rounded transition-colors duration-fast"
         onClick={() => setExpanded(!expanded)}
       >
         {expanded ? (
-          <ChevronDown className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
+          <ChevronDown className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
         ) : (
-          <ChevronRight className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
+          <ChevronRight className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
         )}
         <StatusIcon status={step.status} />
         <span className={`inline-flex items-center px-1.5 py-0 rounded text-2xs font-medium ${badge.bg} ${badge.text}`}>
@@ -69,7 +69,7 @@ function ToolEntry({ seg }: { seg: ToolSegment }) {
       )}
 
       {hasSubagent && step.subagent_stream && (
-        <div className="mt-1 pl-5 text-xs text-blue-600">
+        <div className="mt-1 pl-5 text-xs text-info">
           子 Agent: {step.subagent_stream.description || step.subagent_stream.task_id}
           {step.subagent_stream.status === "completed" && " ✓"}
           {step.subagent_stream.status === "running" && " (运行中...)"}
@@ -82,10 +82,10 @@ function ToolEntry({ seg }: { seg: ToolSegment }) {
 
 function TextEntry({ content }: { content: string }) {
   return (
-    <div className="border-l-2 border-blue-200 pl-3 py-1.5">
+    <div className="border-l-2 border-info/20 pl-3 py-1.5">
       <div className="flex items-center gap-1.5 mb-1">
-        <MessageSquare className="w-3.5 h-3.5 text-blue-400 flex-shrink-0" />
-        <span className="text-2xs text-blue-400 font-medium">AI Text</span>
+        <MessageSquare className="w-3.5 h-3.5 text-info flex-shrink-0" />
+        <span className="text-2xs text-info font-medium">AI Text</span>
       </div>
       <div className="text-xs text-gray-700 min-w-0 overflow-hidden">
         <MarkdownContent content={content} />
