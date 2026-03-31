@@ -64,7 +64,7 @@ function RollingNumber({ value }: { value: number }) {
             inset: 0,
             display: "flex",
             alignItems: "center",
-            animation: "numRollOut 0.18s cubic-bezier(0.55, 0, 1, 0.45) forwards",
+            animation: "numRollOut var(--duration-fast) var(--ease-in) forwards",
           }}
         >
           {prev}
@@ -78,7 +78,7 @@ function RollingNumber({ value }: { value: number }) {
           inset: 0,
           display: "flex",
           alignItems: "center",
-          animation: tick > 0 ? "numRollIn 0.24s cubic-bezier(0.22, 1, 0.36, 1) forwards" : "none",
+          animation: tick > 0 ? "numRollIn var(--duration-normal) var(--ease-out) forwards" : "none",
         }}
       >
         {curr}
@@ -111,7 +111,7 @@ export const ToolDetailBox = memo(function ToolDetailBox({
         role="button"
         tabIndex={0}
         aria-label={`查看 ${toolCount} 次工具调用详情`}
-        className={`relative rounded-lg border bg-[#fafafa] cursor-pointer transition-colors ${
+        className={`relative rounded-lg border bg-[#fafafa] cursor-pointer transition-colors duration-fast ${
           hasRunning ? "detail-box-glow" : "border-[#e5e5e5] hover:border-[#d4d4d4]"
         }`}
         onClick={() => setModalOpen(true)}
@@ -131,7 +131,7 @@ export const ToolDetailBox = memo(function ToolDetailBox({
           className="relative z-[1] overflow-y-auto detail-box-scroll detail-box-mask px-2.5 py-1.5 pr-16"
           style={{
             maxHeight: hasRunning ? 130 : 80,
-            transition: "max-height 0.3s ease",
+            transition: "max-height var(--duration-normal) var(--ease-default)",
           }}
         >
           <div className="flex flex-col gap-0.5">

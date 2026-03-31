@@ -141,7 +141,7 @@ function MobileThreadList({ threads, loading, onNewChat, onDeleteThread, newChat
             const subtitle = t.is_main ? "主线对话" : (t.sidebar_label || "分支对话");
             return (
               <div key={t.thread_id} className="flex items-center border-b border-border">
-                <Link to={`/threads/${encodeURIComponent(memberId)}/${t.thread_id}`} className="flex items-center gap-3 px-4 py-3 flex-1 min-w-0 hover:bg-muted/50 transition-colors">
+                <Link to={`/threads/${encodeURIComponent(memberId)}/${t.thread_id}`} className="flex items-center gap-3 px-4 py-3 flex-1 min-w-0 hover:bg-muted/50 transition-colors duration-fast">
                   <MemberAvatar name={entityName} avatarUrl={t.avatar_url} type="mycel_agent" size="md" />
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-medium text-foreground truncate">{entityName}</p>
@@ -150,7 +150,7 @@ function MobileThreadList({ threads, loading, onNewChat, onDeleteThread, newChat
                 </Link>
                 <button
                   onClick={() => onDeleteThread(t.thread_id)}
-                  className="w-8 h-8 flex items-center justify-center text-muted-foreground/40 hover:text-destructive transition-colors shrink-0 mr-1"
+                  className="w-8 h-8 flex items-center justify-center text-muted-foreground/40 hover:text-destructive transition-colors duration-fast shrink-0 mr-1"
                 >
                   <Trash2 className="w-3.5 h-3.5" />
                 </button>

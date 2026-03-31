@@ -38,7 +38,7 @@ export default function ProviderCard({ provider, selected, onSelect }: ProviderC
       onClick={onSelect}
       disabled={isUnavailable}
       className={[
-        "relative p-4 text-left transition-all w-full rounded-xl border bg-card",
+        "relative p-4 text-left transition-all duration-fast w-full rounded-xl border bg-card",
         selected
           ? "border-primary/30 glow-sm shadow-md ring-1 ring-primary/10"
           : "border-border hover:border-primary/20 hover:shadow-sm",

@@ -385,26 +385,26 @@ export default function Tasks() {
                 <div className="flex items-center border border-border rounded-md overflow-hidden">
                   <button
                     onClick={() => setViewMode("table")}
-                    className={`p-1.5 transition-colors ${viewMode === "table" ? "bg-primary/10 text-primary" : "text-muted-foreground hover:text-foreground"}`}
+                    className={`p-1.5 transition-colors duration-fast ${viewMode === "table" ? "bg-primary/10 text-primary" : "text-muted-foreground hover:text-foreground"}`}
                     title="表格视图"
                   >
                     <List className="w-3.5 h-3.5" />
                   </button>
                   <button
                     onClick={() => setViewMode("board")}
-                    className={`p-1.5 transition-colors ${viewMode === "board" ? "bg-primary/10 text-primary" : "text-muted-foreground hover:text-foreground"}`}
+                    className={`p-1.5 transition-colors duration-fast ${viewMode === "board" ? "bg-primary/10 text-primary" : "text-muted-foreground hover:text-foreground"}`}
                     title="看板视图"
                   >
                     <LayoutGrid className="w-3.5 h-3.5" />
                   </button>
                 </div>
-                <button onClick={() => openCreateModal("task")} className="flex items-center gap-2 px-3 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition-opacity">
+                <button onClick={() => openCreateModal("task")} className="flex items-center gap-2 px-3 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition-opacity duration-fast">
                   <Plus className="w-4 h-4" />
                   <span className="hidden md:inline">新建任务</span>
                 </button>
               </>
             ) : (
-              <button onClick={() => openCreateModal("cron")} className="flex items-center gap-2 px-3 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition-opacity">
+              <button onClick={() => openCreateModal("cron")} className="flex items-center gap-2 px-3 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition-opacity duration-fast">
                 <Plus className="w-4 h-4" />
                 <span className="hidden md:inline">新建定时任务</span>
               </button>
@@ -420,7 +420,7 @@ export default function Tasks() {
               <button
                 key={s}
                 onClick={() => setStatusFilter(s)}
-                className={`px-2 py-1 rounded-md text-xs transition-colors whitespace-nowrap shrink-0 ${
+                className={`px-2 py-1 rounded-md text-xs transition-colors duration-fast whitespace-nowrap shrink-0 ${
                   statusFilter === s ? "bg-primary/10 text-primary font-medium" : "text-muted-foreground hover:text-foreground hover:bg-muted"
                 }`}
               >
@@ -437,7 +437,7 @@ export default function Tasks() {
                 <button
                   key={p}
                   onClick={() => setPriorityFilter(p)}
-                  className={`px-2 py-1 rounded-md text-xs transition-colors whitespace-nowrap shrink-0 ${
+                  className={`px-2 py-1 rounded-md text-xs transition-colors duration-fast whitespace-nowrap shrink-0 ${
                     priorityFilter === p ? "bg-primary/10 text-primary font-medium" : "text-muted-foreground hover:text-foreground hover:bg-muted"
                   }`}
                 >
@@ -451,7 +451,7 @@ export default function Tasks() {
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   placeholder="搜索任务..."
-                  className="w-full pl-8 pr-3 py-1.5 rounded-md bg-card border border-border text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary/40 transition-colors"
+                  className="w-full pl-8 pr-3 py-1.5 rounded-md bg-card border border-border text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary/40 transition-colors duration-fast"
                 />
               </div>
             </>
@@ -473,9 +473,9 @@ export default function Tasks() {
         {selectedRows.size > 0 && (
           <div className="flex items-center gap-3 px-6 py-2 bg-primary/5 border-b border-primary/15 text-xs shrink-0">
             <span className="text-primary font-medium">已选择 {selectedRows.size} 项</span>
-            <button onClick={async () => { try { await storeBulkUpdate([...selectedRows], "pending"); setSelectedRows(new Set()); } catch (e: unknown) { toast.error("操作失败: " + (e instanceof Error ? e.message : String(e))); } }} className="px-2 py-1 rounded bg-muted hover:bg-muted/80 text-foreground transition-colors">批量取消</button>
-            <button onClick={async () => { try { await storeBulkUpdate([...selectedRows], "running"); setSelectedRows(new Set()); } catch (e: unknown) { toast.error("操作失败: " + (e instanceof Error ? e.message : String(e))); } }} className="px-2 py-1 rounded bg-muted hover:bg-muted/80 text-foreground transition-colors">批量重试</button>
-            <button onClick={async () => { try { await storeBulkDelete([...selectedRows]); setSelectedRows(new Set()); toast.success(`已删除 ${selectedRows.size} 个任务`); } catch (e: unknown) { toast.error("删除失败: " + (e instanceof Error ? e.message : String(e))); } }} className="ml-auto text-destructive hover:text-destructive/80 transition-colors">批量删除</button>
+            <button onClick={async () => { try { await storeBulkUpdate([...selectedRows], "pending"); setSelectedRows(new Set()); } catch (e: unknown) { toast.error("操作失败: " + (e instanceof Error ? e.message : String(e))); } }} className="px-2 py-1 rounded bg-muted hover:bg-muted/80 text-foreground transition-colors duration-fast">批量取消</button>
+            <button onClick={async () => { try { await storeBulkUpdate([...selectedRows], "running"); setSelectedRows(new Set()); } catch (e: unknown) { toast.error("操作失败: " + (e instanceof Error ? e.message : String(e))); } }} className="px-2 py-1 rounded bg-muted hover:bg-muted/80 text-foreground transition-colors duration-fast">批量重试</button>
+            <button onClick={async () => { try { await storeBulkDelete([...selectedRows]); setSelectedRows(new Set()); toast.success(`已删除 ${selectedRows.size} 个任务`); } catch (e: unknown) { toast.error("删除失败: " + (e instanceof Error ? e.message : String(e))); } }} className="ml-auto text-destructive hover:text-destructive/80 transition-colors duration-fast">批量删除</button>
           </div>
         )}
         {/* Content area */}
@@ -487,7 +487,7 @@ export default function Tasks() {
               </div>
               <p className="text-sm font-medium text-foreground mb-1">加载失败</p>
               <p className="text-xs text-muted-foreground mb-4 max-w-xs text-center">{error}</p>
-              <button onClick={retry} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-xs font-medium hover:opacity-90 transition-opacity">
+              <button onClick={retry} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-xs font-medium hover:opacity-90 transition-opacity duration-fast">
                 <RefreshCw className="w-3.5 h-3.5" />重试
               </button>
             </div>
@@ -500,7 +500,7 @@ export default function Tasks() {
                 return (
                   <div
                     key={status}
-                    className={`${isMobile ? "w-full" : "w-[280px] shrink-0"} flex flex-col rounded-lg border transition-colors ${
+                    className={`${isMobile ? "w-full" : "w-[280px] shrink-0"} flex flex-col rounded-lg border transition-colors duration-fast ${
                       dragOverColumn === status ? "border-primary/40 bg-primary/5" : "border-border bg-card/50"
                     }`}
                     onDragOver={(e) => handleDragOver(e, status)}
@@ -526,7 +526,7 @@ export default function Tasks() {
                             draggable
                             onDragStart={(e) => handleDragStart(e, task.id)}
                             onClick={() => openEdit(task)}
-                            className={`p-3 rounded-lg border bg-background cursor-pointer active:cursor-grabbing transition-all hover:shadow-sm ${
+                            className={`p-3 rounded-lg border bg-background cursor-pointer active:cursor-grabbing transition-all duration-fast hover:shadow-sm ${
                               editingTask?.id === task.id ? "border-primary/40 shadow-sm" : "border-border hover:border-primary/30"
                             }`}
                           >
@@ -545,7 +545,7 @@ export default function Tasks() {
                                     <button
                                       key={tag}
                                       onClick={(e) => { e.stopPropagation(); setTagFilter(tagFilter === tag ? null : tag); }}
-                                      className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium transition-colors ${
+                                      className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium transition-colors duration-fast ${
                                         tagFilter === tag ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:bg-primary/10 hover:text-primary"
                                       }`}
                                     >
@@ -571,7 +571,7 @@ export default function Tasks() {
                             {task.status === "running" && (
                               <div className="flex items-center gap-1.5 mt-2">
                                 <div className="flex-1 h-1 rounded-full bg-muted overflow-hidden">
-                                  <div className="h-full bg-primary rounded-full transition-all" style={{ width: `${task.progress}%` }} />
+                                  <div className="h-full bg-primary rounded-full transition-all duration-fast" style={{ width: `${task.progress}%` }} />
                                 </div>
                                 <span className="text-[10px] font-mono text-primary">{task.progress}%</span>
                               </div>
@@ -592,7 +592,7 @@ export default function Tasks() {
                     <ListTodo className="w-10 h-10 text-muted-foreground mx-auto mb-3" />
                     <p className="text-sm font-medium text-foreground mb-1">暂无任务</p>
                     <p className="text-xs text-muted-foreground mb-3">创建一个新任务开始工作</p>
-                    <button onClick={() => openCreateModal("task")} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-xs font-medium hover:opacity-90 transition-opacity">
+                    <button onClick={() => openCreateModal("task")} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-xs font-medium hover:opacity-90 transition-opacity duration-fast">
                       <Plus className="w-3.5 h-3.5" />新建任务
                     </button>
                   </div>
@@ -606,7 +606,7 @@ export default function Tasks() {
                     <div
                       key={task.id}
                       onClick={() => openEdit(task)}
-                      className={`p-3 rounded-lg border bg-card cursor-pointer transition-colors ${
+                      className={`p-3 rounded-lg border bg-card cursor-pointer transition-colors duration-fast ${
                         editingTask?.id === task.id ? "border-primary/40" : "border-border"
                       } ${task.status === "failed" ? "border-l-2 border-l-destructive bg-destructive/[0.03]" : ""}`}
                     >
@@ -642,11 +642,11 @@ export default function Tasks() {
                   <input type="checkbox" aria-label="全选任务" checked={selectedRows.size === filtered.length && filtered.length > 0} onChange={toggleSelectAll} className="w-3.5 h-3.5 accent-primary rounded" />
                 </span>
                 <span />
-                <button onClick={() => handleSort("title")} className="flex items-center hover:text-foreground transition-colors text-left">任务 <SortIcon field="title" /></button>
-                <button onClick={() => handleSort("priority")} className="flex items-center hover:text-foreground transition-colors">优先级 <SortIcon field="priority" /></button>
+                <button onClick={() => handleSort("title")} className="flex items-center hover:text-foreground transition-colors duration-fast text-left">任务 <SortIcon field="title" /></button>
+                <button onClick={() => handleSort("priority")} className="flex items-center hover:text-foreground transition-colors duration-fast">优先级 <SortIcon field="priority" /></button>
                 <span>执行者</span>
                 <span>进度</span>
-                <button onClick={() => handleSort("created_at")} className="flex items-center hover:text-foreground transition-colors">时间 <SortIcon field="created_at" /></button>
+                <button onClick={() => handleSort("created_at")} className="flex items-center hover:text-foreground transition-colors duration-fast">时间 <SortIcon field="created_at" /></button>
                 <span />
               </div>
 
@@ -656,7 +656,7 @@ export default function Tasks() {
                     <ListTodo className="w-10 h-10 text-muted-foreground mx-auto mb-3" />
                     <p className="text-sm font-medium text-foreground mb-1">暂无任务</p>
                     <p className="text-xs text-muted-foreground mb-3">创建一个新任务开始工作</p>
-                    <button onClick={() => openCreateModal("task")} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-xs font-medium hover:opacity-90 transition-opacity">
+                    <button onClick={() => openCreateModal("task")} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-xs font-medium hover:opacity-90 transition-opacity duration-fast">
                       <Plus className="w-3.5 h-3.5" />新建任务
                     </button>
                   </div>
@@ -672,7 +672,7 @@ export default function Tasks() {
                     <div key={task.id}>
                       <div
                         onClick={() => openEdit(task)}
-                        className={`grid grid-cols-[32px_32px_1fr_80px_160px_80px_60px_28px] gap-2 px-6 py-3 border-b border-border hover:bg-muted/30 transition-colors cursor-pointer items-center ${
+                        className={`grid grid-cols-[32px_32px_1fr_80px_160px_80px_60px_28px] gap-2 px-6 py-3 border-b border-border hover:bg-muted/30 transition-colors duration-fast cursor-pointer items-center ${
                           editingTask?.id === task.id ? "bg-primary/[0.03]" : ""
                         } ${task.status === "failed" ? "bg-destructive/[0.03] border-l-2 border-l-destructive" : ""} ${isExpanded ? "bg-muted/20" : ""}`}
                       >
@@ -691,7 +691,7 @@ export default function Tasks() {
                             <button
                               key={tag}
                               onClick={(e) => { e.stopPropagation(); setTagFilter(tagFilter === tag ? null : tag); }}
-                              className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium shrink-0 transition-colors ${
+                              className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium shrink-0 transition-colors duration-fast ${
                                 tagFilter === tag ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:bg-primary/10 hover:text-primary"
                               }`}
                             >
@@ -729,7 +729,7 @@ export default function Tasks() {
                           {task.thread_id && (
                             <button
                               onClick={(e) => toggleExpand(e, task)}
-                              className="w-5 h-5 flex items-center justify-center rounded text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                              className="w-5 h-5 flex items-center justify-center rounded text-muted-foreground hover:text-foreground hover:bg-muted transition-colors duration-fast"
                               title={isExpanded ? "收起执行详情" : "展开执行详情"}
                             >
                               {isExpanded ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
@@ -793,7 +793,7 @@ export default function Tasks() {
                   <Timer className="w-10 h-10 text-muted-foreground mx-auto mb-3" />
                   <p className="text-sm font-medium text-foreground mb-1">暂无定时任务</p>
                   <p className="text-xs text-muted-foreground mb-3">创建定时任务自动执行工作</p>
-                  <button onClick={() => openCreateModal("cron")} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-xs font-medium hover:opacity-90 transition-opacity">
+                  <button onClick={() => openCreateModal("cron")} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-xs font-medium hover:opacity-90 transition-opacity duration-fast">
                     <Plus className="w-3.5 h-3.5" />新建定时任务
                   </button>
                 </div>
@@ -812,7 +812,7 @@ export default function Tasks() {
                   <div
                     key={cron.id}
                     onClick={() => openCronEdit(cron)}
-                    className={`grid grid-cols-[1fr_160px_64px_120px_80px] gap-2 px-6 py-3 border-b border-border hover:bg-muted/30 transition-colors cursor-pointer items-center ${
+                    className={`grid grid-cols-[1fr_160px_64px_120px_80px] gap-2 px-6 py-3 border-b border-border hover:bg-muted/30 transition-colors duration-fast cursor-pointer items-center ${
                       editingCron?.id === cron.id ? "bg-primary/[0.03]" : ""
                     }`}
                   >
@@ -838,14 +838,14 @@ export default function Tasks() {
                     <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
                       <button
                         onClick={() => handleTriggerCron(cron.id)}
-                        className="p-1.5 rounded-md hover:bg-primary/10 text-muted-foreground hover:text-primary transition-colors"
+                        className="p-1.5 rounded-md hover:bg-primary/10 text-muted-foreground hover:text-primary transition-colors duration-fast"
                         title="立即触发"
                       >
                         <Play className="w-3.5 h-3.5" />
                       </button>
                       <button
                         onClick={() => setDeleteCronConfirmId(cron.id)}
-                        className="p-1.5 rounded-md hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
+                        className="p-1.5 rounded-md hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors duration-fast"
                         title="删除"
                       >
                         <Trash2 className="w-3.5 h-3.5" />

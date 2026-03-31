@@ -21,7 +21,7 @@ export function TabBar({ activeTab, onTabChange, hasRunningAgents, hasAgents }: 
         <button
           key={key}
           onClick={() => onTabChange(key)}
-          className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm transition-colors ${
+          className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm transition-colors duration-fast ${
             activeTab === key
               ? "bg-[#f5f5f5] text-[#171717] font-medium"
               : "text-[#737373] hover:text-[#171717]"

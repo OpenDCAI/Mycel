@@ -177,10 +177,10 @@ export default function CronEditor({ cronForm, isMobile, onUpdate, onSave, onClo
       <div className="h-14 flex items-center justify-between px-5 border-b border-border shrink-0">
         <h3 className="text-sm font-semibold text-foreground">编辑定时任务</h3>
         <div className="flex items-center gap-1.5">
-          <button onClick={onSave} className="px-3.5 py-1.5 rounded-lg bg-primary text-primary-foreground text-xs font-medium hover:opacity-90 transition-opacity">
+          <button onClick={onSave} className="px-3.5 py-1.5 rounded-lg bg-primary text-primary-foreground text-xs font-medium hover:opacity-90 transition-opacity duration-fast">
             保存
           </button>
-          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-muted transition-colors">
+          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-muted transition-colors duration-fast">
             <X className="w-4 h-4 text-muted-foreground" />
           </button>
         </div>
@@ -219,7 +219,7 @@ export default function CronEditor({ cronForm, isMobile, onUpdate, onSave, onClo
             <div className="relative">
               <button
                 onClick={() => setFreqOpen(!freqOpen)}
-                className="flex items-center gap-1 px-3 py-2 rounded-xl bg-primary/8 border border-primary/15 text-sm font-medium text-primary hover:bg-primary/12 transition-colors"
+                className="flex items-center gap-1 px-3 py-2 rounded-xl bg-primary/8 border border-primary/15 text-sm font-medium text-primary hover:bg-primary/12 transition-colors duration-fast"
               >
                 {FREQ_OPTIONS.find((f) => f.value === schedule.frequency)?.label}
                 <ChevronDown className="w-3.5 h-3.5" />
@@ -230,7 +230,7 @@ export default function CronEditor({ cronForm, isMobile, onUpdate, onSave, onClo
                     <button
                       key={f.value}
                       onClick={() => { updateSchedule({ frequency: f.value }); setFreqOpen(false); }}
-                      className={`w-full text-left px-3 py-1.5 text-sm transition-colors ${
+                      className={`w-full text-left px-3 py-1.5 text-sm transition-colors duration-fast ${
                         schedule.frequency === f.value ? "text-primary font-medium bg-primary/5" : "text-foreground hover:bg-muted"
                       }`}
                     >
@@ -247,7 +247,7 @@ export default function CronEditor({ cronForm, isMobile, onUpdate, onSave, onClo
                 <select
                   value={schedule.intervalValue}
                   onChange={(e) => updateSchedule({ intervalValue: parseInt(e.target.value) })}
-                  className="appearance-none px-2.5 py-2 rounded-xl bg-muted/60 border border-border text-sm font-medium text-foreground outline-none focus:border-primary/40 transition-colors cursor-pointer"
+                  className="appearance-none px-2.5 py-2 rounded-xl bg-muted/60 border border-border text-sm font-medium text-foreground outline-none focus:border-primary/40 transition-colors duration-fast cursor-pointer"
                 >
                   {INTERVAL_OPTIONS.map((n) => (
                     <option key={n} value={n}>{n}</option>
@@ -265,7 +265,7 @@ export default function CronEditor({ cronForm, isMobile, onUpdate, onSave, onClo
                   <select
                     value={schedule.hour}
                     onChange={(e) => updateSchedule({ hour: parseInt(e.target.value) })}
-                    className="appearance-none px-2.5 py-2 rounded-xl bg-muted/60 border border-border text-sm font-mono text-foreground outline-none focus:border-primary/40 transition-colors cursor-pointer"
+                    className="appearance-none px-2.5 py-2 rounded-xl bg-muted/60 border border-border text-sm font-mono text-foreground outline-none focus:border-primary/40 transition-colors duration-fast cursor-pointer"
                   >
                     {Array.from({ length: 24 }, (_, i) => (
                       <option key={i} value={i}>{String(i).padStart(2, "0")}</option>
@@ -275,7 +275,7 @@ export default function CronEditor({ cronForm, isMobile, onUpdate, onSave, onClo
                   <select
                     value={schedule.minute}
                     onChange={(e) => updateSchedule({ minute: parseInt(e.target.value) })}
-                    className="appearance-none px-2.5 py-2 rounded-xl bg-muted/60 border border-border text-sm font-mono text-foreground outline-none focus:border-primary/40 transition-colors cursor-pointer"
+                    className="appearance-none px-2.5 py-2 rounded-xl bg-muted/60 border border-border text-sm font-mono text-foreground outline-none focus:border-primary/40 transition-colors duration-fast cursor-pointer"
                   >
                     {Array.from({ length: 12 }, (_, i) => i * 5).map((m) => (
                       <option key={m} value={m}>{String(m).padStart(2, "0")}</option>
@@ -294,7 +294,7 @@ export default function CronEditor({ cronForm, isMobile, onUpdate, onSave, onClo
                 <button
                   key={i}
                   onClick={() => toggleWeekday(i)}
-                  className={`w-9 h-9 rounded-full text-xs font-medium transition-all ${
+                  className={`w-9 h-9 rounded-full text-xs font-medium transition-all duration-fast ${
                     schedule.weekdays.includes(i)
                       ? "bg-primary text-primary-foreground shadow-sm"
                       : "bg-muted/60 text-muted-foreground hover:bg-muted"
@@ -315,7 +315,7 @@ export default function CronEditor({ cronForm, isMobile, onUpdate, onSave, onClo
                   <button
                     key={d}
                     onClick={() => updateSchedule({ monthDay: d })}
-                    className={`h-8 rounded-lg text-xs font-medium transition-all ${
+                    className={`h-8 rounded-lg text-xs font-medium transition-all duration-fast ${
                       schedule.monthDay === d
                         ? "bg-primary text-primary-foreground shadow-sm"
                         : "bg-muted/40 text-muted-foreground hover:bg-muted"
@@ -339,7 +339,7 @@ export default function CronEditor({ cronForm, isMobile, onUpdate, onSave, onClo
             value={template.title}
             onChange={(e) => updateTemplate({ title: e.target.value })}
             placeholder="任务标题"
-            className="w-full px-3.5 py-2.5 rounded-xl bg-card border border-border text-sm font-medium text-foreground outline-none focus:border-primary/40 transition-colors placeholder:text-muted-foreground/50"
+            className="w-full px-3.5 py-2.5 rounded-xl bg-card border border-border text-sm font-medium text-foreground outline-none focus:border-primary/40 transition-colors duration-fast placeholder:text-muted-foreground/50"
           />
 
           <textarea
@@ -347,7 +347,7 @@ export default function CronEditor({ cronForm, isMobile, onUpdate, onSave, onClo
             onChange={(e) => updateTemplate({ description: e.target.value })}
             placeholder="任务描述（可选）"
             rows={2}
-            className="w-full px-3.5 py-2.5 rounded-xl bg-card border border-border text-sm text-foreground outline-none focus:border-primary/40 transition-colors resize-none placeholder:text-muted-foreground/50 leading-relaxed"
+            className="w-full px-3.5 py-2.5 rounded-xl bg-card border border-border text-sm text-foreground outline-none focus:border-primary/40 transition-colors duration-fast resize-none placeholder:text-muted-foreground/50 leading-relaxed"
           />
 
           {/* Category tags */}
@@ -360,7 +360,7 @@ export default function CronEditor({ cronForm, isMobile, onUpdate, onSave, onClo
                 <button
                   key={cat.id}
                   onClick={() => updateTemplate({ category: cat.id })}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-fast ${
                     template.category === cat.id
                       ? "bg-foreground text-background shadow-sm"
                       : "bg-muted/60 text-muted-foreground hover:bg-muted"
@@ -381,7 +381,7 @@ export default function CronEditor({ cronForm, isMobile, onUpdate, onSave, onClo
                 <button
                   key={p.value}
                   onClick={() => updateTemplate({ priority: p.value })}
-                  className={`flex-1 py-2 rounded-xl text-xs font-medium border transition-all ${
+                  className={`flex-1 py-2 rounded-xl text-xs font-medium border transition-all duration-fast ${
                     template.priority === p.value
                       ? p.className + " shadow-sm"
                       : "bg-transparent border-border text-muted-foreground hover:bg-muted/40"
@@ -402,15 +402,15 @@ export default function CronEditor({ cronForm, isMobile, onUpdate, onSave, onClo
             <span className="text-sm text-foreground font-medium">启用调度</span>
             <button
               onClick={() => onUpdate({ ...cronForm, enabled: cronForm.enabled ? 0 : 1 })}
-              className={`relative w-11 h-6 rounded-full transition-colors ${cronForm.enabled ? "bg-primary" : "bg-muted"}`}
+              className={`relative w-11 h-6 rounded-full transition-colors duration-fast ${cronForm.enabled ? "bg-primary" : "bg-muted"}`}
             >
-              <span className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow-sm transition-transform ${cronForm.enabled ? "left-[22px]" : "left-0.5"}`} />
+              <span className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow-sm transition-transform duration-fast ${cronForm.enabled ? "left-[22px]" : "left-0.5"}`} />
             </button>
           </div>
 
           <button
             onClick={onDelete}
-            className="w-full px-3 py-2.5 rounded-xl text-destructive text-xs font-medium hover:bg-destructive/5 transition-colors"
+            className="w-full px-3 py-2.5 rounded-xl text-destructive text-xs font-medium hover:bg-destructive/5 transition-colors duration-fast"
           >
             删除定时任务
           </button>

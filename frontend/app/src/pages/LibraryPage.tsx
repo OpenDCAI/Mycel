@@ -173,7 +173,7 @@ export default function LibraryPage() {
                 <button key={t.id} onClick={() => {
                   if (!confirmRecipeLeave("当前 recipe 还有未保存的修改，确定要离开吗？")) return;
                   resetRecipeSelection(t.id);
-                }} className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-sm transition-all ${
+                }} className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-sm transition-all duration-fast ${
                   isActive ? "bg-primary/5 text-foreground border border-primary/15" : "text-muted-foreground hover:bg-muted hover:text-foreground border border-transparent"
                 }`}>
                   <div className="flex items-center gap-2.5"><t.icon className={`w-4 h-4 ${isActive ? "text-primary" : ""}`} /><span>{t.label}</span></div>
@@ -199,7 +199,7 @@ export default function LibraryPage() {
                     <button key={t.id} onClick={() => {
                       if (!confirmRecipeLeave("当前 recipe 还有未保存的修改，确定要离开吗？")) return;
                       resetRecipeSelection(t.id);
-                    }} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs whitespace-nowrap shrink-0 transition-colors ${
+                    }} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs whitespace-nowrap shrink-0 transition-colors duration-fast ${
                       isActive ? "bg-primary/10 text-primary font-medium" : "text-muted-foreground hover:text-foreground hover:bg-muted"
                     }`}>
                       <t.icon className="w-3.5 h-3.5" />{t.label}
@@ -217,7 +217,7 @@ export default function LibraryPage() {
               </>
             )}
           </div>
-          <button onClick={openCreate} className="flex items-center gap-2 px-3 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition-opacity">
+          <button onClick={openCreate} className="flex items-center gap-2 px-3 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition-opacity duration-fast">
             <Plus className="w-4 h-4" />
             <span className="hidden md:inline">新建</span>
           </button>
@@ -229,7 +229,7 @@ export default function LibraryPage() {
           {/* Search */}
           <div className="relative mb-4">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
-            <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="搜索..." className="w-full pl-9 pr-3 py-2 rounded-lg bg-card border border-border text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary/40 transition-colors" />
+            <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="搜索..." className="w-full pl-9 pr-3 py-2 rounded-lg bg-card border border-border text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary/40 transition-colors duration-fast" />
           </div>
 
           {isRecipeTab && (
@@ -246,7 +246,7 @@ export default function LibraryPage() {
               </div>
               <p className="text-sm font-medium text-foreground mb-1">加载失败</p>
               <p className="text-xs text-muted-foreground mb-4 max-w-xs text-center">{error}</p>
-              <button onClick={retry} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-xs font-medium hover:opacity-90 transition-opacity">
+              <button onClick={retry} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-xs font-medium hover:opacity-90 transition-opacity duration-fast">
                 <RefreshCw className="w-3.5 h-3.5" />重试
               </button>
             </div>
@@ -266,7 +266,7 @@ export default function LibraryPage() {
                   </div>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center justify-between">
-                      <h4 className={`text-sm font-medium text-foreground ${isRecipeTab ? "" : "group-hover:text-primary transition-colors"}`}>{item.name}</h4>
+                      <h4 className={`text-sm font-medium text-foreground ${isRecipeTab ? "" : "group-hover:text-primary transition-colors duration-fast"}`}>{item.name}</h4>
                     </div>
                     <p className="text-xs text-muted-foreground mt-1">{item.desc}</p>
                     <p className="text-[11px] text-muted-foreground mt-2">
@@ -280,11 +280,11 @@ export default function LibraryPage() {
                   </div>
                 </div>
                 {!isRecipeTab && (
-                  <div className="absolute top-2 right-2 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button onClick={(e) => { e.stopPropagation(); handleCardClick(item); }} className="p-1 rounded hover:bg-muted transition-colors" title="编辑">
+                  <div className="absolute top-2 right-2 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-fast">
+                    <button onClick={(e) => { e.stopPropagation(); handleCardClick(item); }} className="p-1 rounded hover:bg-muted transition-colors duration-fast" title="编辑">
                       <Edit className="w-3 h-3 text-muted-foreground" />
                     </button>
-                    <button onClick={(e) => { e.stopPropagation(); openDelete(item); }} className="p-1 rounded hover:bg-destructive/10 transition-colors" title="删除">
+                    <button onClick={(e) => { e.stopPropagation(); openDelete(item); }} className="p-1 rounded hover:bg-destructive/10 transition-colors duration-fast" title="删除">
                       <Trash2 className="w-3 h-3 text-muted-foreground hover:text-destructive" />
                     </button>
                   </div>

@@ -45,7 +45,7 @@ function ToolEntry({ seg }: { seg: ToolSegment }) {
   return (
     <div className="border-l-2 border-gray-200 pl-3 py-1.5">
       <div
-        className="flex items-center gap-1.5 cursor-pointer hover:bg-gray-50 -ml-3 pl-3 -mr-3 pr-3 py-1 rounded transition-colors"
+        className="flex items-center gap-1.5 cursor-pointer hover:bg-gray-50 -ml-3 pl-3 -mr-3 pr-3 py-1 rounded transition-colors duration-fast"
         onClick={() => setExpanded(!expanded)}
       >
         {expanded ? (

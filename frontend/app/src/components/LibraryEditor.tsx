@@ -95,7 +95,7 @@ export default function LibraryEditor({ item, type, onClose, onCreated }: Props)
           <Button size="sm" className="h-7" disabled={!canSave || saving} onClick={handleSave}>
             <Save className="h-3.5 w-3.5 mr-1" /> {saving ? "..." : isNew ? "创建" : "保存"}
           </Button>
-          <button onClick={onClose} className="p-1 rounded-md hover:bg-muted transition-colors">
+          <button onClick={onClose} className="p-1 rounded-md hover:bg-muted transition-colors duration-fast">
             <X className="w-4 h-4 text-muted-foreground" />
           </button>
         </div>

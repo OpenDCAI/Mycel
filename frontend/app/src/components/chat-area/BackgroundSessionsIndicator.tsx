@@ -38,7 +38,7 @@ export function BackgroundSessionsIndicator({ tasks, onCancelTask }: BackgroundS
       onMouseLeave={() => setIsHovered(false)}
     >
       {/* 入口：小圆点 + 数字 */}
-      <div className="flex items-center gap-1 text-[11px] text-blue-600 font-medium cursor-default px-1.5 py-0.5 bg-blue-50/90 backdrop-blur-sm rounded border border-blue-200/60 hover:bg-blue-100/90 transition-colors select-none">
+      <div className="flex items-center gap-1 text-[11px] text-blue-600 font-medium cursor-default px-1.5 py-0.5 bg-blue-50/90 backdrop-blur-sm rounded border border-blue-200/60 hover:bg-blue-100/90 transition-colors duration-fast select-none">
         <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />
         {runningCount}
       </div>
@@ -48,7 +48,7 @@ export function BackgroundSessionsIndicator({ tasks, onCancelTask }: BackgroundS
         <div className="absolute top-full left-0 pt-1">
           {/* 透明桥接区域，填充间隙 */}
           <div className="h-1" />
-          <div className="bg-white rounded-lg shadow-lg border border-gray-200 p-3 min-w-[260px] max-w-[380px] animate-in fade-in slide-in-from-top-1 duration-150">
+          <div className="bg-white rounded-lg shadow-lg border border-gray-200 p-3 min-w-[260px] max-w-[380px] animate-in fade-in slide-in-from-top-1 duration-fast">
             {agents.length > 0 && (
             <div>
               <div className="flex items-center gap-1.5 text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-1.5">
@@ -66,7 +66,7 @@ export function BackgroundSessionsIndicator({ tasks, onCancelTask }: BackgroundS
                           e.stopPropagation();
                           onCancelTask(task.task_id);
                         }}
-                        className="p-0.5 hover:bg-red-50 rounded transition-colors flex-shrink-0"
+                        className="p-0.5 hover:bg-red-50 rounded transition-colors duration-fast flex-shrink-0"
                         title="取消任务"
                       >
                         <X className="w-3 h-3 text-red-500" />
@@ -96,7 +96,7 @@ export function BackgroundSessionsIndicator({ tasks, onCancelTask }: BackgroundS
                           e.stopPropagation();
                           onCancelTask(task.task_id);
                         }}
-                        className="p-0.5 hover:bg-red-50 rounded transition-colors flex-shrink-0"
+                        className="p-0.5 hover:bg-red-50 rounded transition-colors duration-fast flex-shrink-0"
                         title="取消任务"
                       >
                         <X className="w-3 h-3 text-red-500" />

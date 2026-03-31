@@ -171,7 +171,7 @@ function WeChatCard() {
           {phase === "connected" && (
             <button
               onClick={() => setSettingsOpen(true)}
-              className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+              className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors duration-fast"
               title="Message routing settings"
             >
               <Settings className="w-4 h-4" />
@@ -186,7 +186,7 @@ function WeChatCard() {
         {phase === "idle" && (
           <button
             onClick={startConnect}
-            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition-opacity"
+            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition-opacity duration-fast"
           >
             <QrCode className="w-4 h-4" />
             Scan QR to connect
@@ -210,7 +210,7 @@ function WeChatCard() {
             <p className="text-center text-xs text-muted-foreground">{scanStatus}</p>
             <button
               onClick={() => { pollRef.current = false; setPhase("idle"); }}
-              className="block mx-auto text-xs text-muted-foreground hover:text-foreground transition-colors"
+              className="block mx-auto text-xs text-muted-foreground hover:text-foreground transition-colors duration-fast"
             >
               Cancel
             </button>
@@ -229,7 +229,7 @@ function WeChatCard() {
               ) : (
                 <button
                   onClick={() => setSettingsOpen(true)}
-                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-amber-500/10 text-amber-600 text-xs font-medium hover:bg-amber-500/20 transition-colors"
+                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-amber-500/10 text-amber-600 text-xs font-medium hover:bg-amber-500/20 transition-colors duration-fast"
                 >
                   Not configured — click to set up
                 </button>
@@ -264,7 +264,7 @@ function WeChatCard() {
 
             <button
               onClick={handleDisconnect}
-              className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs text-destructive hover:bg-destructive/10 transition-colors"
+              className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs text-destructive hover:bg-destructive/10 transition-colors duration-fast"
             >
               <XCircle className="w-3.5 h-3.5" />
               Disconnect
@@ -345,7 +345,7 @@ function RoutingDialog({
           {/* Header */}
           <div className="flex items-center justify-between px-5 py-4 border-b border-border shrink-0">
             <h3 className="text-sm font-semibold text-foreground">Message Routing</h3>
-            <button onClick={onClose} className="p-1 rounded hover:bg-muted transition-colors">
+            <button onClick={onClose} className="p-1 rounded hover:bg-muted transition-colors duration-fast">
               <X className="w-4 h-4 text-muted-foreground" />
             </button>
           </div>
@@ -358,7 +358,7 @@ function RoutingDialog({
             <div className="flex gap-1 p-0.5 bg-muted rounded-lg">
               <button
                 onClick={() => { setTab("thread"); setSelectedId(""); }}
-                className={`flex-1 py-1.5 text-xs font-medium rounded-md transition-colors ${
+                className={`flex-1 py-1.5 text-xs font-medium rounded-md transition-colors duration-fast ${
                   tab === "thread" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground"
                 }`}
               >
@@ -366,7 +366,7 @@ function RoutingDialog({
               </button>
               <button
                 onClick={() => { setTab("chat"); setSelectedId(""); }}
-                className={`flex-1 py-1.5 text-xs font-medium rounded-md transition-colors ${
+                className={`flex-1 py-1.5 text-xs font-medium rounded-md transition-colors duration-fast ${
                   tab === "chat" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground"
                 }`}
               >
@@ -396,14 +396,14 @@ function RoutingDialog({
           <div className="flex items-center justify-between px-5 py-3 border-t border-border shrink-0">
             <button
               onClick={handleClear}
-              className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+              className="text-xs text-muted-foreground hover:text-foreground transition-colors duration-fast"
             >
               Clear routing
             </button>
             <button
               onClick={handleSave}
               disabled={!selectedId}
-              className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg bg-primary text-primary-foreground text-xs font-medium hover:opacity-90 disabled:opacity-40 transition-opacity"
+              className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg bg-primary text-primary-foreground text-xs font-medium hover:opacity-90 disabled:opacity-40 transition-opacity duration-fast"
             >
               Save
               <ArrowRight className="w-3 h-3" />
@@ -435,7 +435,7 @@ function ItemList({
         <button
           key={item.id}
           onClick={() => onSelect(item.id)}
-          className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-colors ${
+          className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-colors duration-fast ${
             selectedId === item.id
               ? "bg-primary/10 ring-1 ring-primary/30"
               : "hover:bg-muted"

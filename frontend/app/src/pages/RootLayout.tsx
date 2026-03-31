@@ -169,14 +169,14 @@ function AuthenticatedLayout() {
         const labelsVisible = isMobile || showLabels;
         return (
           <NavLink key={item.to} to={item.to} onClick={closeMobile} className="group relative block overflow-visible">
-            <div className={`flex items-center ${labelsVisible ? "px-3 gap-3" : "justify-center"} h-10 rounded-xl transition-all duration-150 ${
+            <div className={`flex items-center ${labelsVisible ? "px-3 gap-3" : "justify-center"} h-10 rounded-xl transition-all duration-fast ${
               isActive ? "bg-sidebar-accent text-sidebar-accent-foreground" : "text-sidebar-foreground hover:bg-muted hover:text-foreground"
             } ${labelsVisible ? "" : "w-10"}`}>
               <item.icon className="w-[18px] h-[18px] shrink-0" />
               {labelsVisible && <span className="text-sm truncate">{item.label}</span>}
             </div>
             {!labelsVisible && !isMobile && (
-              <div className="absolute left-14 top-1/2 -translate-y-1/2 px-2 py-1 bg-foreground text-background text-xs rounded opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity whitespace-nowrap z-50">
+              <div className="absolute left-14 top-1/2 -translate-y-1/2 px-2 py-1 bg-foreground text-background text-xs rounded opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity duration-fast whitespace-nowrap z-50">
                 {item.label}
               </div>
             )}
@@ -203,7 +203,7 @@ function AuthenticatedLayout() {
               <NavLink
                 key={item.to}
                 to={item.to}
-                className="flex-1 flex flex-col items-center justify-center gap-0.5 py-2 transition-colors"
+                className="flex-1 flex flex-col items-center justify-center gap-0.5 py-2 transition-colors duration-fast"
                 aria-label={item.label}
               >
                 <item.icon className={`w-5 h-5 ${isActive ? "text-primary" : "text-muted-foreground"}`} />
@@ -225,7 +225,7 @@ function AuthenticatedLayout() {
   return (
     <div className="flex h-screen overflow-hidden bg-background">
       <div className="relative shrink-0 flex z-20" style={{ width: sidebarPx }}>
-        <aside className={`w-full bg-sidebar flex flex-col py-4 overflow-hidden ${dragging ? "" : "transition-all duration-200"}`}>
+        <aside className={`w-full bg-sidebar flex flex-col py-4 overflow-hidden ${dragging ? "" : "transition-all duration-normal"}`}>
           <div className={`flex items-center ${showLabels ? "px-4 gap-3" : "justify-center"} mb-6`}>
             <img src="/logo.png" alt="Mycel" className="w-8 h-8 rounded-lg shrink-0 object-contain" />
             {showLabels && <span className="text-sm font-semibold text-foreground truncate">Mycel</span>}
@@ -235,7 +235,7 @@ function AuthenticatedLayout() {
             <button
               ref={createBtnRef}
               onClick={() => setShowCreate(!showCreate)}
-              className={`rounded-full bg-primary text-primary-foreground flex items-center justify-center shadow-md hover:shadow-lg hover:scale-105 transition-all ${
+              className={`rounded-full bg-primary text-primary-foreground flex items-center justify-center shadow-md hover:shadow-lg hover:scale-105 transition-all duration-fast ${
                 showLabels ? "w-full h-9 rounded-lg gap-2" : "w-10 h-10"
               }`}
             >
@@ -255,7 +255,7 @@ function AuthenticatedLayout() {
             {/* @@@avatar-popover — Radix Popover for profile + avatar upload + logout */}
             <Popover>
               <PopoverTrigger asChild>
-                <button className={`flex items-center ${showLabels ? "px-3 gap-3" : "justify-center"} h-10 mb-1 rounded-xl hover:bg-muted transition-colors w-full`}>
+                <button className={`flex items-center ${showLabels ? "px-3 gap-3" : "justify-center"} h-10 mb-1 rounded-xl hover:bg-muted transition-colors duration-fast w-full`}>
                   <MemberAvatar name={authUser?.name || "User"} avatarUrl={(authUser?.avatar || avatarRev > 0) && authUser?.id ? `/api/members/${authUser.id}/avatar` : undefined} size="sm" type="human" rev={avatarRev} />
                   {showLabels && (
                     <div className="min-w-0 flex-1 text-left">
@@ -268,7 +268,7 @@ function AuthenticatedLayout() {
                 <div className="flex flex-col items-center gap-3">
                   <div className="relative group/avatar cursor-pointer" onClick={() => avatarInputRef.current?.click()}>
                     <MemberAvatar name={authUser?.name || "User"} avatarUrl={(authUser?.avatar || avatarRev > 0) && authUser?.id ? `/api/members/${authUser.id}/avatar` : undefined} size="lg" type="human" rev={avatarRev} />
-                    <div className="absolute inset-0 rounded-full bg-black/40 opacity-0 group-hover/avatar:opacity-100 transition-opacity flex items-center justify-center">
+                    <div className="absolute inset-0 rounded-full bg-black/40 opacity-0 group-hover/avatar:opacity-100 transition-opacity duration-fast flex items-center justify-center">
                       <Camera className="w-5 h-5 text-white" />
                     </div>
                     <input ref={avatarInputRef} type="file" accept="image/png,image/jpeg,image/webp,image/gif" className="hidden" onChange={handleAvatarUpload} />
@@ -278,7 +278,7 @@ function AuthenticatedLayout() {
                   </div>
                   <button
                     onClick={authLogout}
-                    className="flex items-center gap-2 w-full px-3 py-2 rounded-lg text-xs text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+                    className="flex items-center gap-2 w-full px-3 py-2 rounded-lg text-xs text-muted-foreground hover:bg-muted hover:text-foreground transition-colors duration-fast"
                   >
                     <LogOut className="w-3.5 h-3.5" /> 退出登录
                   </button>
@@ -286,14 +286,14 @@ function AuthenticatedLayout() {
               </PopoverContent>
             </Popover>
             <NavLink to="/settings" className="group relative block overflow-visible">
-              <div className={`flex items-center ${showLabels ? "px-3 gap-3" : "justify-center"} h-10 rounded-xl transition-all duration-150 ${
+              <div className={`flex items-center ${showLabels ? "px-3 gap-3" : "justify-center"} h-10 rounded-xl transition-all duration-fast ${
                 location.pathname.startsWith("/settings") ? "bg-sidebar-accent text-sidebar-accent-foreground" : "text-sidebar-foreground hover:bg-muted hover:text-foreground"
               } ${showLabels ? "" : "w-10"}`}>
                 <Settings className="w-[18px] h-[18px] shrink-0" />
                 {showLabels && <span className="text-sm">设置</span>}
               </div>
               {!showLabels && (
-                <div className="absolute left-14 top-1/2 -translate-y-1/2 px-2 py-1 bg-foreground text-background text-xs rounded opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity whitespace-nowrap z-50">设置</div>
+                <div className="absolute left-14 top-1/2 -translate-y-1/2 px-2 py-1 bg-foreground text-background text-xs rounded opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity duration-fast whitespace-nowrap z-50">设置</div>
               )}
               {location.pathname.startsWith("/settings") && <div className="absolute -left-[4px] top-1/2 -translate-y-1/2 w-[3px] h-5 rounded-r-full bg-primary" />}
             </NavLink>
@@ -306,10 +306,10 @@ function AuthenticatedLayout() {
           onDoubleClick={() => setExpanded(!expanded)}
           className={`absolute right-0 top-0 bottom-0 w-[5px] z-30 cursor-col-resize group/handle flex items-center justify-center ${
             dragging ? "bg-primary/20" : "hover:bg-primary/10"
-          } transition-colors`}
+          } transition-colors duration-fast`}
           title="拖拽调整侧栏宽度，双击切换"
         >
-          <div className={`w-4 h-8 rounded-full bg-sidebar-border flex items-center justify-center opacity-0 group-hover/handle:opacity-100 ${dragging ? "opacity-100" : ""} transition-opacity`}>
+          <div className={`w-4 h-8 rounded-full bg-sidebar-border flex items-center justify-center opacity-0 group-hover/handle:opacity-100 ${dragging ? "opacity-100" : ""} transition-opacity duration-fast`}>
             {expanded ? <ChevronLeft className="w-3 h-3 text-muted-foreground" /> : <ChevronRight className="w-3 h-3 text-muted-foreground" />}
           </div>
         </div>
@@ -355,13 +355,13 @@ function CreateDropdown({
         className="fixed z-50 w-48 bg-card border border-border rounded-lg shadow-lg py-1.5 animate-slide-in"
         style={{ top: pos.top, left: pos.left }}
       >
-        <button onClick={() => onAction("staff")} className="w-full px-3 py-2 text-left text-sm text-foreground hover:bg-muted transition-colors flex items-center gap-2.5">
+        <button onClick={() => onAction("staff")} className="w-full px-3 py-2 text-left text-sm text-foreground hover:bg-muted transition-colors duration-fast flex items-center gap-2.5">
           <Users className="w-3.5 h-3.5 text-muted-foreground" /> 新建成员
         </button>
-        <button onClick={() => onAction("chat")} className="w-full px-3 py-2 text-left text-sm text-foreground hover:bg-muted transition-colors flex items-center gap-2.5">
+        <button onClick={() => onAction("chat")} className="w-full px-3 py-2 text-left text-sm text-foreground hover:bg-muted transition-colors duration-fast flex items-center gap-2.5">
           <MessageSquare className="w-3.5 h-3.5 text-muted-foreground" /> 发起会话
         </button>
-        <button onClick={() => onAction("task")} className="w-full px-3 py-2 text-left text-sm text-foreground hover:bg-muted transition-colors flex items-center gap-2.5">
+        <button onClick={() => onAction("task")} className="w-full px-3 py-2 text-left text-sm text-foreground hover:bg-muted transition-colors duration-fast flex items-center gap-2.5">
           <ListTodo className="w-3.5 h-3.5 text-muted-foreground" /> 新建任务
         </button>
       </div>

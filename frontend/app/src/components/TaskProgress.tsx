@@ -94,7 +94,7 @@ function ToggleButton({ expanded, onClick }: { expanded: boolean; onClick?: () =
       )}
       <button
         onClick={onClick}
-        className={`w-7 h-7 rounded-full flex items-center justify-center transition-all duration-150 ${
+        className={`w-7 h-7 rounded-full flex items-center justify-center transition-all duration-fast ${
           hovered
             ? "bg-[#f0f0f0] text-[#171717] shadow-[0_0_0_1px_rgba(0,0,0,0.04)]"
             : "text-[#737373]"

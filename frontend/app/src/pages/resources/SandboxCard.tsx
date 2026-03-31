@@ -65,7 +65,7 @@ export default function SandboxCard({ group, onClick }: SandboxCardProps) {
         cfg.border,
         cfg.glow,
         "px-3 pt-2.5 pb-3 flex flex-col gap-2.5",
-        "transition-all duration-150 ease-out",
+        "transition-all duration-fast ease-out-expo",
         "hover:border-primary/25 hover:bg-muted/20 hover:shadow-md hover:-translate-y-px",
         isStopped ? "opacity-45" : "",
       ].join(" ")}

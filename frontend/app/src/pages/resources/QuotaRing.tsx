@@ -38,7 +38,7 @@ export default function QuotaRing({ used, limit, size = 48 }: QuotaRingProps) {
           strokeLinecap="round"
           strokeDasharray={circumference}
           strokeDashoffset={offset}
-          className="transition-all duration-700 ease-out"
+          className="transition-all duration-deliberate ease-out-expo"
         />
       </svg>
       <span className="absolute text-xs font-mono font-bold text-foreground">

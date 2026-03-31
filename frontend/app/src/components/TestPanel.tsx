@@ -39,7 +39,7 @@ export default function TestPanel({ memberName, onClose }: Props) {
           <Circle className="w-2 h-2 fill-success text-success" />
           <span className="text-sm font-medium text-foreground">测试面板</span>
         </div>
-        <button onClick={onClose} className="p-1 rounded-md hover:bg-muted transition-colors">
+        <button onClick={onClose} className="p-1 rounded-md hover:bg-muted transition-colors duration-fast">
           <X className="w-4 h-4 text-muted-foreground" />
         </button>
       </div>
@@ -71,9 +71,9 @@ export default function TestPanel({ memberName, onClose }: Props) {
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && handleSend()}
             placeholder="输入测试消息..."
-            className="flex-1 px-3 py-2 rounded-lg bg-background border border-border text-sm outline-none focus:border-primary/40 transition-colors"
+            className="flex-1 px-3 py-2 rounded-lg bg-background border border-border text-sm outline-none focus:border-primary/40 transition-colors duration-fast"
           />
-          <button onClick={handleSend} disabled={!input.trim()} className="p-2 rounded-lg bg-primary text-primary-foreground disabled:opacity-50 hover:opacity-90 transition-opacity">
+          <button onClick={handleSend} disabled={!input.trim()} className="p-2 rounded-lg bg-primary text-primary-foreground disabled:opacity-50 hover:opacity-90 transition-opacity duration-fast">
             <Send className="w-4 h-4" />
           </button>
         </div>

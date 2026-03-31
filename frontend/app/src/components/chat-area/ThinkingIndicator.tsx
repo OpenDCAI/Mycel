@@ -45,8 +45,8 @@ export function ThinkingIndicator({ runtimeStatus }: ThinkingIndicatorProps) {
     <div className="flex items-center gap-2 h-5">
       <div className="flex items-center gap-[3px]">
         <span className={orbClass} />
-        <span className={orbClass} style={{ animationDelay: "0.14s" }} />
-        <span className={orbClass} style={{ animationDelay: "0.28s" }} />
+        <span className={orbClass} style={{ animationDelay: "140ms" }} />
+        <span className={orbClass} style={{ animationDelay: "280ms" }} />
       </div>
       {tool ? (
         <span key={`tool-${tool}`} className="text-[12px] text-[#a3a3a3] animate-fade-in">
