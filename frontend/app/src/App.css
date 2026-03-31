@@ -67,7 +67,3 @@ button, input, textarea {
   background: hsl(var(--muted-foreground));
 }
 
-*:focus-visible {
-  outline: 2px solid hsl(var(--foreground));
-  outline-offset: 2px;
-}

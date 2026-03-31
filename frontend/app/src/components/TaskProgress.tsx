@@ -23,10 +23,10 @@ interface TaskProgressProps {
 }
 
 function statusColor(status: string | null): string {
-  if (status === "running") return "#22c55e";
-  if (status === "paused") return "#eab308";
-  if (status === "detached") return "var(--color-muted-foreground)";
-  return "#ef4444";
+  if (status === "running") return "hsl(var(--success))";
+  if (status === "paused") return "hsl(var(--warning))";
+  if (status === "detached") return "hsl(var(--muted-foreground))";
+  return "hsl(var(--destructive))";
 }
 
 /** Retro computer icon — CRT monitor with base stand */

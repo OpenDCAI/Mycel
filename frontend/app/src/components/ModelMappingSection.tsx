@@ -82,7 +82,7 @@ export default function ModelMappingSection({
             <div
               key={vm.id}
               className="group relative border border-border rounded-xl p-5 bg-card hover:border-info hover:shadow-lg hover:shadow-info/10 transition-all duration-normal"
-              style={{ animation: `motionFadeInUp var(--duration-slow) var(--ease-out) calc(var(--duration-instant) * ${index}) both` }}
+              style={{ animation: `motionFadeInUp var(--duration-slow) var(--ease-out) calc(${index} * var(--duration-instant)) both` }}
             >
               <div className="absolute inset-0 bg-gradient-to-br from-info/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-normal rounded-xl" />
               <div className="relative flex items-start gap-3 mb-4">

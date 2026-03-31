@@ -50,8 +50,8 @@ module.exports = {
           foreground: "hsl(var(--warning-foreground) / <alpha-value>)",
         },
         info: {
-          DEFAULT: "hsl(var(--info))",
-          foreground: "hsl(var(--info-foreground))",
+          DEFAULT: "hsl(var(--info) / <alpha-value>)",
+          foreground: "hsl(var(--info-foreground) / <alpha-value>)",
         },
         "chart-1": "hsl(var(--chart-1))",
         sidebar: {
