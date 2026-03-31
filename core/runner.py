@@ -1,17 +1,9 @@
 """
 Non-interactive runner for Leon AI
-
-Supports:
-- Single message execution
-- Multi-turn via stdin (messages separated by blank lines)
-- Interactive mode (simple readline, no TUI)
-- Debug output (tool calls, queue status, etc.)
 """
 
 import asyncio
 import json
-import sys
-import uuid
 from typing import Any
 
 
@@ -251,56 +243,6 @@ class NonInteractiveRunner:
                 print(f"\n[QUEUE] steer={sizes['steer']}, followup={sizes['followup']}")
         except Exception:
             pass
-
-    async def run_interactive(self) -> None:
-        """Simple interactive mode (readline, no TUI)"""
-        print("Leon AI Interactive Mode")
-        print("Commands: /exit, /quit, /clear, /thread")
-        print("-" * 40)
-
-        while True:
-            try:
-                message = input("\n> ").strip()
-                if not message:
-                    continue
-
-                if message.lower() in ("/exit", "/quit", "exit", "quit"):
-                    break
-                if message.lower() == "/clear":
-                    self.turn_count = 0
-                    self.total_tool_calls = 0
-                    self.thread_id = f"run-{uuid.uuid4().hex[:8]}"
-                    print(f"[INFO] New thread: {self.thread_id}")
-                    continue
-                if message.lower() == "/thread":
-                    print(f"[INFO] Thread: {self.thread_id}")
-                    continue
-
-                await self.run_turn(message)
-
-            except EOFError:
-                break
-            except KeyboardInterrupt:
-                print("\n[INTERRUPTED]")
-                break
-
-        self._print_summary()
-
-    async def run_stdin(self) -> None:
-        """Read multiple messages from stdin (separated by blank lines)"""
-        content = sys.stdin.read()
-        messages = [m.strip() for m in content.split("\n\n") if m.strip()]
-
-        if not messages:
-            print("[ERROR] No messages provided via stdin")
-            return
-
-        self._debug_print(f"[INFO] Processing {len(messages)} messages from stdin")
-
-        for msg in messages:
-            await self.run_turn(msg)
-
-        self._print_summary()
 
     async def run_single(self, message: str) -> None:
         """Single turn execution"""
