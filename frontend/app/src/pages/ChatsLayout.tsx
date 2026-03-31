@@ -122,7 +122,7 @@ function NewChatDialog({ onClose, onCreated }: { onClose: () => void; onCreated:
             const isSelected = selected.has(e.id);
             return (
               <button key={e.id} onClick={() => toggle(e.id)}
-                className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-colors text-left ${
+                className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-colors duration-fast text-left ${
                   isSelected ? "bg-primary/5" : "hover:bg-muted"
                 }`}>
                 <MemberAvatar name={e.name} avatarUrl={e.avatar_url} type={e.type} size="sm" />
@@ -142,7 +142,7 @@ function NewChatDialog({ onClose, onCreated }: { onClose: () => void; onCreated:
         {selected.size > 0 && (
           <div className="px-4 py-3 border-t border-border">
             <button onClick={() => void handleCreate()} disabled={creating}
-              className="w-full py-2 rounded-lg bg-foreground text-background text-sm font-medium hover:bg-foreground/90 disabled:opacity-50 transition-colors">
+              className="w-full py-2 rounded-lg bg-foreground text-background text-sm font-medium hover:bg-foreground/90 disabled:opacity-50 transition-colors duration-fast">
               {creating ? "Creating..." : isGroup ? `Create Group (${selected.size + 1})` : "Start Chat"}
             </button>
           </div>
@@ -195,7 +195,7 @@ function ChatSearchModal({ chats, myEntityId, onSelect, onClose }: {
               <button
                 key={chat.id}
                 onClick={() => { onSelect(chat.id); onClose(); }}
-                className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-muted transition-colors text-left"
+                className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-muted transition-colors duration-fast text-left"
               >
                 <MemberAvatar name={name} avatarUrl={otherEntity?.avatar_url} type={otherEntity?.type} size="sm" />
                 <div className="min-w-0 flex-1">
@@ -300,7 +300,7 @@ export default function ChatsLayout() {
               <span className="text-[11px] text-muted-foreground/40">{chats.length}</span>
               <button
                 onClick={() => setShowNewChat(true)}
-                className="text-[11px] text-muted-foreground/50 hover:text-foreground transition-colors px-1"
+                className="text-[11px] text-muted-foreground/50 hover:text-foreground transition-colors duration-fast px-1"
               >
                 <Plus className="w-3 h-3" />
               </button>
@@ -329,7 +329,7 @@ export default function ChatsLayout() {
               const others = chat.entities.filter(e => e.id !== myEntityId);
               const isGroupChat = others.length > 1;
               return (
-                <div key={chat.id} className={`group/item flex items-center rounded-lg transition-colors ${
+                <div key={chat.id} className={`group/item flex items-center rounded-lg transition-colors duration-fast ${
                   isActive ? "bg-background shadow-sm" : "hover:bg-muted"
                 }`}>
                   {/* Active indicator — same as Sidebar.tsx ThreadItem */}

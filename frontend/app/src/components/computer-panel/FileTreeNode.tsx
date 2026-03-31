@@ -15,7 +15,7 @@ export function FileTreeNode({ node, depth, onToggle, onSelectFile, selectedFile
   return (
     <>
       <button
-        className={`w-full text-left py-1 pr-2 rounded text-[13px] flex items-center gap-1 transition-colors ${
+        className={`w-full text-left py-1 pr-2 rounded text-[13px] flex items-center gap-1 transition-colors duration-fast ${
           isSelected
             ? "bg-blue-50 text-blue-700"
             : "text-[#171717] hover:bg-[#f5f5f5]"

@@ -64,7 +64,7 @@ function AgentDivider({ parsed, inline, onClick }: { parsed: ParsedNotice; inlin
 
   const content = (
     <span className={`inline-flex items-center gap-1.5 px-2.5 text-[11px] text-gray-400 ${
-      isClickable ? "hover:text-gray-600 transition-colors cursor-pointer" : ""
+      isClickable ? "hover:text-gray-600 transition-colors duration-fast cursor-pointer" : ""
     }`}>
       {statusIcon}
       {parsed.text}

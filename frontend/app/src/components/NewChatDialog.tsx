@@ -66,7 +66,7 @@ export default function NewChatDialog({ open, onOpenChange }: NewChatDialogProps
               <button
                 key={member.id}
                 onClick={() => handleSelect(member)}
-                className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-muted transition-colors"
+                className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-muted transition-colors duration-fast"
               >
                 <MemberAvatar name={member.name} avatarUrl={member.avatar_url} type="mycel_agent" size="sm" />
                 <div className="min-w-0 flex-1">

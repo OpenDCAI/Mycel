@@ -72,7 +72,7 @@ export function SandboxFileBrowser({ leaseId, providerType, className = "h-[300p
             <div className="flex items-center gap-1.5 px-2 py-1.5 border-b border-border/20 bg-muted/5">
               <button
                 onClick={() => { void loadPath(defaultPath); setSelectedFile(null); setFileContent(null); }}
-                className="text-muted-foreground hover:text-foreground transition-colors"
+                className="text-muted-foreground hover:text-foreground transition-colors duration-fast"
                 title="返回根目录"
               >
                 <Home className="w-3 h-3" />

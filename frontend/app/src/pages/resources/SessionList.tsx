@@ -62,7 +62,7 @@ function LeaseItem({ group, providerType }: { group: LeaseGroup; providerType: s
     <div className={`rounded-md border border-border/50 bg-card/60 overflow-hidden ${isStopped ? "opacity-50" : ""}`}>
       {/* Row */}
       <button
-        className="w-full flex items-center gap-2 px-3 py-2 hover:bg-muted/20 transition-colors text-left"
+        className="w-full flex items-center gap-2 px-3 py-2 hover:bg-muted/20 transition-colors duration-fast text-left"
         onClick={() => setExpanded((v) => !v)}
       >
         <StatusDot status={group.status} />

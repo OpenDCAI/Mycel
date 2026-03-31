@@ -109,9 +109,9 @@ export default function ModelSelector({
           <span className="text-xs text-muted-foreground">Custom</span>
           <button
             onClick={() => setShowCustomModels(!showCustomModels)}
-            className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${showCustomModels ? "bg-primary" : "bg-muted"}`}
+            className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors duration-fast ${showCustomModels ? "bg-primary" : "bg-muted"}`}
           >
-            <span className={`inline-block h-3.5 w-3.5 rounded-full bg-white shadow-sm transition-transform ${showCustomModels ? "translate-x-4" : "translate-x-0.5"}`} />
+            <span className={`inline-block h-3.5 w-3.5 rounded-full bg-white shadow-sm transition-transform duration-fast ${showCustomModels ? "translate-x-4" : "translate-x-0.5"}`} />
           </button>
         </div>
         {showCustomModels && enabledModels.map((id) => (

@@ -38,7 +38,7 @@ function AvatarUploadTrigger({ memberId, name, hasAvatar }: { memberId: string; 
   return (
     <div className="relative group/avatar" onClick={(e) => { e.stopPropagation(); inputRef.current?.click(); }}>
       <MemberAvatar avatarUrl={(hasAvatar || rev > 0) ? `/api/members/${memberId}/avatar` : undefined} name={name} size="md" className="rounded-xl" rev={rev} type="mycel_agent" />
-      <div className="absolute inset-0 rounded-xl bg-black/40 opacity-0 group-hover/avatar:opacity-100 transition-opacity flex items-center justify-center cursor-pointer">
+      <div className="absolute inset-0 rounded-xl bg-black/40 opacity-0 group-hover/avatar:opacity-100 transition-opacity duration-fast flex items-center justify-center cursor-pointer">
         {uploading ? (
           <div className="w-4 h-4 border-2 border-white/60 border-t-white rounded-full animate-spin" />
         ) : (
@@ -88,7 +88,7 @@ export default function MembersPage() {
           <h2 className="text-sm font-semibold text-foreground">成员</h2>
           <span className="text-xs text-muted-foreground font-mono">{memberList.length}</span>
         </div>
-        <button onClick={() => setCreateOpen(true)} className="flex items-center gap-2 px-3 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition-opacity">
+        <button onClick={() => setCreateOpen(true)} className="flex items-center gap-2 px-3 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition-opacity duration-fast">
           <Plus className="w-4 h-4" />
           <span className="hidden md:inline">创建成员</span>
         </button>
@@ -98,14 +98,14 @@ export default function MembersPage() {
       <div className={`px-4 md:px-6 py-3 border-b border-border flex items-center gap-3 ${isMobile ? "overflow-x-auto" : "gap-4"}`}>
         <div className={`relative ${isMobile ? "min-w-[150px] flex-1" : "max-w-md flex-1"}`}>
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
-          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="搜索成员..." className="w-full pl-9 pr-3 py-2 rounded-lg bg-card border border-border text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary/40 transition-colors" />
+          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="搜索成员..." className="w-full pl-9 pr-3 py-2 rounded-lg bg-card border border-border text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary/40 transition-colors duration-fast" />
         </div>
 
         <div className="flex items-center gap-1.5 shrink-0">
           {(["all", "active", "draft", "inactive"] as const).map((s) => {
             const count = s === "all" ? memberList.length : memberList.filter((st) => st.status === s).length;
             return (
-              <button key={s} onClick={() => setStatusFilter(s)} className={`px-2 py-1 rounded-md text-xs transition-colors whitespace-nowrap ${
+              <button key={s} onClick={() => setStatusFilter(s)} className={`px-2 py-1 rounded-md text-xs transition-colors duration-fast whitespace-nowrap ${
                 statusFilter === s ? "bg-primary/10 text-primary font-medium" : "text-muted-foreground hover:text-foreground hover:bg-muted"
               }`}>
                 {s === "all" ? "全部" : statusConfig[s].label}
@@ -118,7 +118,7 @@ export default function MembersPage() {
         {!isMobile && (
           <button
             onClick={() => setSortBy(sortBy === "name" ? "skills" : sortBy === "skills" ? "status" : sortBy === "status" ? null : "name")}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs text-muted-foreground hover:text-foreground hover:bg-muted transition-colors shrink-0"
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs text-muted-foreground hover:text-foreground hover:bg-muted transition-colors duration-fast shrink-0"
           >
             <ArrowUpDown className="w-3 h-3" />
             {sortBy ? `排序: ${sortBy === "name" ? "名称" : sortBy === "skills" ? "技能数" : "状态"}` : "排序"}
@@ -135,7 +135,7 @@ export default function MembersPage() {
             </div>
             <p className="text-sm font-medium text-foreground mb-1">加载失败</p>
             <p className="text-xs text-muted-foreground mb-4 max-w-xs text-center">{error}</p>
-            <button onClick={retry} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-xs font-medium hover:opacity-90 transition-opacity">
+            <button onClick={retry} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-xs font-medium hover:opacity-90 transition-opacity duration-fast">
               <RefreshCw className="w-3.5 h-3.5" />重试
             </button>
           </div>
@@ -152,7 +152,7 @@ export default function MembersPage() {
               </p>
               <button
                 onClick={() => setCreateOpen(true)}
-                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-xs font-medium hover:opacity-90 transition-opacity"
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-xs font-medium hover:opacity-90 transition-opacity duration-fast"
               >
                 <Plus className="w-3.5 h-3.5" />创建成员
               </button>
@@ -213,7 +213,7 @@ export default function MembersPage() {
                       <span className="text-[11px] text-muted-foreground">{status.label}</span>
                     </div>
                   </div>
-                  <h3 className="text-sm font-semibold text-foreground group-hover:text-primary transition-colors mb-0.5">{member.name}</h3>
+                  <h3 className="text-sm font-semibold text-foreground group-hover:text-primary transition-colors duration-fast mb-0.5">{member.name}</h3>
                   <p className="text-xs text-muted-foreground mb-3 line-clamp-2">{member.description}</p>
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3 text-[11px] text-muted-foreground">
@@ -225,7 +225,7 @@ export default function MembersPage() {
                     <div className="flex items-center gap-0.5">
                       <Tooltip>
                         <TooltipTrigger asChild>
-                          <button onClick={handleStartChat} className="w-7 h-7 rounded-lg flex items-center justify-center text-muted-foreground hover:bg-primary/10 hover:text-primary transition-colors opacity-0 group-hover:opacity-100">
+                          <button onClick={handleStartChat} className="w-7 h-7 rounded-lg flex items-center justify-center text-muted-foreground hover:bg-primary/10 hover:text-primary transition-colors duration-fast opacity-0 group-hover:opacity-100">
                             <MessageSquare className="w-3.5 h-3.5" />
                           </button>
                         </TooltipTrigger>
@@ -233,7 +233,7 @@ export default function MembersPage() {
                       </Tooltip>
                       <Tooltip>
                         <TooltipTrigger asChild>
-                          <button onClick={handleCopy} className="w-7 h-7 rounded-lg flex items-center justify-center text-muted-foreground hover:bg-primary/10 hover:text-primary transition-colors opacity-0 group-hover:opacity-100">
+                          <button onClick={handleCopy} className="w-7 h-7 rounded-lg flex items-center justify-center text-muted-foreground hover:bg-primary/10 hover:text-primary transition-colors duration-fast opacity-0 group-hover:opacity-100">
                             <Copy className="w-3.5 h-3.5" />
                           </button>
                         </TooltipTrigger>
@@ -242,7 +242,7 @@ export default function MembersPage() {
                       {canDelete && (
                         <Tooltip>
                           <TooltipTrigger asChild>
-                            <button onClick={handleDelete} className="w-7 h-7 rounded-lg flex items-center justify-center text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors opacity-0 group-hover:opacity-100">
+                            <button onClick={handleDelete} className="w-7 h-7 rounded-lg flex items-center justify-center text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors duration-fast opacity-0 group-hover:opacity-100">
                               <Trash2 className="w-3.5 h-3.5" />
                             </button>
                           </TooltipTrigger>

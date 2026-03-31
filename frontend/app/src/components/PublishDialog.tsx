@@ -79,7 +79,7 @@ export default function PublishDialog({ open, onOpenChange, memberId }: Props) {
                 <button
                   key={b.type}
                   onClick={() => setBumpType(b.type)}
-                  className={`p-2.5 rounded-lg border text-center transition-all ${
+                  className={`p-2.5 rounded-lg border text-center transition-all duration-fast ${
                     bumpType === b.type
                       ? "border-primary/40 bg-primary/5"
                       : "border-border hover:border-primary/20"

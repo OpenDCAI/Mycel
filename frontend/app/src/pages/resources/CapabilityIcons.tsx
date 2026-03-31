@@ -37,7 +37,7 @@ export function CapabilityStrip({ capabilities }: { capabilities: ProviderCapabi
             <TooltipTrigger asChild>
               <div
                 className={[
-                  "w-5 h-5 rounded flex items-center justify-center transition-colors",
+                  "w-5 h-5 rounded flex items-center justify-center transition-colors duration-fast",
                   has ? "bg-foreground/8 text-foreground" : "text-border",
                 ].join(" ")}
               >
@@ -64,7 +64,7 @@ export function CapabilityGrid({ capabilities }: { capabilities: ProviderCapabil
           <div
             key={key}
             className={[
-              "flex items-center gap-2 px-3 py-2 rounded-lg border transition-all",
+              "flex items-center gap-2 px-3 py-2 rounded-lg border transition-all duration-fast",
               has
                 ? "border-foreground/15 bg-foreground/[0.04] shadow-sm"
                 : "border-transparent bg-muted/30 opacity-40",

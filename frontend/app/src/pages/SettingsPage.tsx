@@ -154,7 +154,7 @@ export default function SettingsPage() {
                         body: JSON.stringify({ model: id }),
                       });
                     }}
-                    className={`px-4 py-2 text-sm rounded-lg border transition-colors ${
+                    className={`px-4 py-2 text-sm rounded-lg border transition-colors duration-fast ${
                       active
                         ? "bg-primary/10 border-primary/40 text-primary font-medium"
                         : "border-border text-muted-foreground hover:border-primary/20 hover:text-foreground"
@@ -245,7 +245,7 @@ export default function SettingsPage() {
           <button
             key={t.id}
             onClick={() => setTab(t.id)}
-            className={`w-full text-left px-3 py-2.5 rounded-lg transition-colors group ${
+            className={`w-full text-left px-3 py-2.5 rounded-lg transition-colors duration-fast group ${
               active
                 ? "bg-primary/5 border border-primary/15"
                 : "hover:bg-muted border border-transparent"

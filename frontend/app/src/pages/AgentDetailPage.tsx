@@ -237,7 +237,7 @@ export default function AgentDetail() {
               <button
                 key={m.id}
                 onClick={() => setActiveModule(m.id)}
-                className={`w-full flex items-center gap-2 px-4 py-2 text-sm transition-colors ${
+                className={`w-full flex items-center gap-2 px-4 py-2 text-sm transition-colors duration-fast ${
                   active ? "bg-primary/10 text-primary font-medium" : "text-muted-foreground hover:bg-muted"
                 }`}
               >
@@ -430,7 +430,7 @@ function RuleEditor({ rule, onSave, onDelete }: {
     <div className="rounded-md border">
       <button
         onClick={() => setExpanded(!expanded)}
-        className="w-full flex items-center gap-2 px-3 py-2 text-xs hover:bg-muted/50 transition-colors"
+        className="w-full flex items-center gap-2 px-3 py-2 text-xs hover:bg-muted/50 transition-colors duration-fast"
       >
         <BookOpen className="h-3 w-3 text-muted-foreground shrink-0" />
         <span className="font-medium truncate flex-1 text-left">{rule.name}</span>
@@ -529,7 +529,7 @@ function SubAgentsPanel({ agents, onSave, onAdd, onDelete }: {
                 <button
                   key={a.name}
                   onClick={() => setSelected(a.name)}
-                  className={`w-full flex items-center gap-2 px-3 py-1.5 text-xs transition-colors ${
+                  className={`w-full flex items-center gap-2 px-3 py-1.5 text-xs transition-colors duration-fast ${
                     selected === a.name
                       ? "bg-primary/10 text-primary"
                       : "text-muted-foreground hover:bg-muted/50"
@@ -555,7 +555,7 @@ function SubAgentsPanel({ agents, onSave, onAdd, onDelete }: {
                   <button
                     key={a.name}
                     onClick={() => setSelected(a.name)}
-                    className={`w-full flex items-center gap-2 px-3 py-1.5 text-xs group transition-colors ${
+                    className={`w-full flex items-center gap-2 px-3 py-1.5 text-xs group transition-colors duration-fast ${
                       selected === a.name
                         ? "bg-primary/10 text-primary"
                         : "text-muted-foreground hover:bg-muted/50"
@@ -564,7 +564,7 @@ function SubAgentsPanel({ agents, onSave, onAdd, onDelete }: {
                     <Bot className="h-3 w-3 shrink-0" />
                     <span className="truncate flex-1 text-left">{a.name}</span>
                     <span
-                      className="opacity-0 group-hover:opacity-100 shrink-0 text-muted-foreground hover:text-destructive transition-opacity"
+                      className="opacity-0 group-hover:opacity-100 shrink-0 text-muted-foreground hover:text-destructive transition-opacity duration-fast"
                       onClick={e => { e.stopPropagation(); onDelete(a.name); setSelected(agents.find(x => x.name !== a.name)?.name ?? null); }}
                     >
                       <X className="h-3 w-3" />
@@ -725,7 +725,7 @@ function ResourceCards({ type, items, onToggle, onRemove, onAdd }: {
       {items.length === 0 ? (
         <div className="text-sm text-muted-foreground py-8 text-center">
           {onAdd ? (
-            <button onClick={onAdd} className="hover:text-primary transition-colors">
+            <button onClick={onAdd} className="hover:text-primary transition-colors duration-fast">
               点击 + 从 Library 添加{labels[type]}
             </button>
           ) : (
@@ -806,7 +806,7 @@ function ResourcePicker({ type, library, assigned, onConfirm, onClose }: {
             <button
               key={item.id}
               onClick={() => toggle(item.name)}
-              className={`w-full flex items-center gap-2 px-3 py-2 rounded-md text-sm text-left transition-colors ${
+              className={`w-full flex items-center gap-2 px-3 py-2 rounded-md text-sm text-left transition-colors duration-fast ${
                 selected.has(item.name) ? "bg-primary/10 text-primary" : "hover:bg-muted"
               }`}
             >

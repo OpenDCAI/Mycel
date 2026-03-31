@@ -62,7 +62,7 @@ export default function ProviderDetail({ provider }: ProviderDetailProps) {
           <p className="text-xs text-muted-foreground mb-4">前往 设置 &gt; 沙箱 配置 {name} 环境</p>
           <Link
             to="/settings"
-            className="inline-flex items-center gap-1.5 text-xs text-foreground hover:text-primary transition-colors border border-border rounded-lg px-3 py-1.5"
+            className="inline-flex items-center gap-1.5 text-xs text-foreground hover:text-primary transition-colors duration-fast border border-border rounded-lg px-3 py-1.5"
           >
             <Settings className="w-3 h-3" />
             前往设置

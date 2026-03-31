@@ -243,8 +243,8 @@ function ChatConversationInner({ chatId }: { chatId: string }) {
     <div className="flex items-center gap-2 px-4 py-1">
       <div className="flex gap-1">
         <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground/40 animate-bounce" style={{ animationDelay: "0ms" }} />
-        <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground/40 animate-bounce" style={{ animationDelay: "150ms" }} />
-        <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground/40 animate-bounce" style={{ animationDelay: "300ms" }} />
+        <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground/40 animate-bounce" style={{ animationDelay: "var(--duration-fast)" }} />
+        <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground/40 animate-bounce" style={{ animationDelay: "var(--duration-normal)" }} />
       </div>
       <span className="text-xs text-muted-foreground">
         {typingNames.length > 0 ? `${typingNames.join(", ")} typing` : "typing"}
@@ -360,7 +360,7 @@ function ChatConversationInner({ chatId }: { chatId: string }) {
           <button
             onClick={() => void handleSend()}
             disabled={!input.trim() || sending}
-            className="w-9 h-9 rounded-xl bg-[#171717] text-white flex items-center justify-center hover:bg-[#333] disabled:opacity-30 transition-colors shrink-0"
+            className="w-9 h-9 rounded-xl bg-[#171717] text-white flex items-center justify-center hover:bg-[#333] disabled:opacity-30 transition-colors duration-fast shrink-0"
           >
             <Send className="w-4 h-4" />
           </button>

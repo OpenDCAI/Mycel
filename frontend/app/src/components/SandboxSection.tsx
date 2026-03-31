@@ -117,7 +117,7 @@ export default function SandboxSection({ sandboxes, onUpdate }: SandboxSectionPr
         <select
           value={value || field.options?.[0] || ""}
           onChange={(e) => void handleSave(configName, setNestedValue(config, field, e.target.value))}
-          className="flex-1 min-w-0 px-2 py-1 border border-[#e2e8f0] rounded text-xs text-[#1e293b] bg-[#f8fafc] focus:outline-none focus:border-[#0ea5e9] transition-colors"
+          className="flex-1 min-w-0 px-2 py-1 border border-[#e2e8f0] rounded text-xs text-[#1e293b] bg-[#f8fafc] focus:outline-none focus:border-[#0ea5e9] transition-colors duration-fast"
         >
           {field.options?.map((opt) => (
             <option key={opt} value={opt}>{opt}</option>
@@ -138,12 +138,12 @@ export default function SandboxSection({ sandboxes, onUpdate }: SandboxSectionPr
           }}
           placeholder={field.placeholder}
           title={isMaskedSecret ? "点击眼睛图标进行编辑" : undefined}
-          className="w-full px-2 py-1 pr-7 border border-[#e2e8f0] rounded text-xs text-[#1e293b] bg-[#f8fafc] font-mono focus:outline-none focus:border-[#0ea5e9] transition-colors"
+          className="w-full px-2 py-1 pr-7 border border-[#e2e8f0] rounded text-xs text-[#1e293b] bg-[#f8fafc] font-mono focus:outline-none focus:border-[#0ea5e9] transition-colors duration-fast"
         />
         {isSecret && value && (
           <button
             onClick={() => setShowKeys({ ...showKeys, [showKeyId]: !showKey })}
-            className="absolute right-1 top-1/2 -translate-y-1/2 p-0.5 text-[#94a3b8] hover:text-[#0ea5e9] rounded transition-colors"
+            className="absolute right-1 top-1/2 -translate-y-1/2 p-0.5 text-[#94a3b8] hover:text-[#0ea5e9] rounded transition-colors duration-fast"
           >
             {showKey ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
           </button>
@@ -176,9 +176,9 @@ export default function SandboxSection({ sandboxes, onUpdate }: SandboxSectionPr
             <div key={configName}>
               <button
                 onClick={() => setExpanded(isExpanded ? null : configName)}
-                className="w-full flex items-center gap-3 px-4 py-2.5 text-left hover:bg-[#f8fafc] transition-colors"
+                className="w-full flex items-center gap-3 px-4 py-2.5 text-left hover:bg-[#f8fafc] transition-colors duration-fast"
               >
-                <ChevronDown className={`w-3.5 h-3.5 text-[#94a3b8] transition-transform duration-150 ${isExpanded ? "" : "-rotate-90"}`} />
+                <ChevronDown className={`w-3.5 h-3.5 text-[#94a3b8] transition-transform duration-fast ${isExpanded ? "" : "-rotate-90"}`} />
                 <span className="text-sm font-medium text-[#1e293b]">{displayName(configName)}</span>
                 {configName !== providerType && (
                   <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#f1f5f9] text-[#64748b]">{providerType}</span>

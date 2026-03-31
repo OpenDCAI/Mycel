@@ -77,10 +77,10 @@ export default function NewThreadModal({ open, sandboxTypes, onClose, onCreate }
 
               if (item.name === "local") {
                 return (
-                  <div key="local" className="rounded-lg border border-border transition-all overflow-hidden">
+                  <div key="local" className="rounded-lg border border-border transition-all duration-fast overflow-hidden">
                     <button
                       disabled={!item.available}
-                      className={`w-full text-left px-4 py-3 transition-all ${
+                      className={`w-full text-left px-4 py-3 transition-all duration-fast ${
                         item.available
                           ? "hover:bg-accent"
                           : "opacity-30 cursor-not-allowed"
@@ -114,11 +114,11 @@ export default function NewThreadModal({ open, sandboxTypes, onClose, onCreate }
                               if (e.key === "Enter") handleLocalConfirm();
                             }}
                             placeholder="工作目录，如 ~/projects/my-app"
-                            className="flex-1 text-sm px-3 py-1.5 rounded-lg border border-border bg-accent/50 placeholder:text-muted-foreground/50 focus:outline-none focus:border-ring transition-colors"
+                            className="flex-1 text-sm px-3 py-1.5 rounded-lg border border-border bg-accent/50 placeholder:text-muted-foreground/50 focus:outline-none focus:border-ring transition-colors duration-fast"
                             autoFocus
                           />
                           <button
-                            className="px-3 py-1.5 text-xs rounded-lg border border-border bg-background text-foreground/70 hover:bg-accent hover:border-border/80 transition-colors flex items-center gap-1.5"
+                            className="px-3 py-1.5 text-xs rounded-lg border border-border bg-background text-foreground/70 hover:bg-accent hover:border-border/80 transition-colors duration-fast flex items-center gap-1.5"
                             onClick={handleBrowseFolder}
                             title="选择文件夹"
                           >
@@ -129,7 +129,7 @@ export default function NewThreadModal({ open, sandboxTypes, onClose, onCreate }
                         <div className="flex items-center justify-between mt-2">
                           <span className="text-[10px] text-muted-foreground/50">留空则使用默认目录</span>
                           <button
-                            className="text-xs px-3 py-1 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
+                            className="text-xs px-3 py-1 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors duration-fast"
                             onClick={handleLocalConfirm}
                           >
                             确认
@@ -145,7 +145,7 @@ export default function NewThreadModal({ open, sandboxTypes, onClose, onCreate }
                 <button
                   key={item.name}
                   disabled={!item.available}
-                  className={`w-full text-left px-4 py-3 rounded-lg border border-border transition-all ${
+                  className={`w-full text-left px-4 py-3 rounded-lg border border-border transition-all duration-fast ${
                     item.available
                       ? "hover:border-border/80 hover:bg-accent hover:shadow-sm"
                       : "opacity-30 cursor-not-allowed"
