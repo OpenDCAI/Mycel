@@ -17,8 +17,12 @@ export default function MarketplaceDetailPage() {
   const fetchLineage = useMarketplaceStore((s) => s.fetchLineage);
   const clearDetail = useMarketplaceStore((s) => s.clearDetail);
   const error = useMarketplaceStore((s) => s.error);
+  const versionSnapshot = useMarketplaceStore((s) => s.versionSnapshot);
+  const snapshotLoading = useMarketplaceStore((s) => s.snapshotLoading);
+  const fetchVersionSnapshot = useMarketplaceStore((s) => s.fetchVersionSnapshot);
+  const clearSnapshot = useMarketplaceStore((s) => s.clearSnapshot);
   const [installOpen, setInstallOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState<"overview" | "versions">("overview");
+  const [activeTab, setActiveTab] = useState<"overview" | "versions" | "files">("overview");
 
   useEffect(() => {
     if (id) {
@@ -27,6 +31,13 @@ export default function MarketplaceDetailPage() {
     }
     return () => clearDetail();
   }, [id, fetchDetail, fetchLineage, clearDetail]);
+
+  useEffect(() => {
+    if (activeTab === "files" && detail && detail.versions.length > 0) {
+      fetchVersionSnapshot(detail.id, detail.versions[0].version);
+    }
+    return () => clearSnapshot();
+  }, [activeTab, detail?.id, fetchVersionSnapshot, clearSnapshot]);
 
   if (detailLoading) {
     return (
@@ -98,15 +109,15 @@ export default function MarketplaceDetailPage() {
 
         {/* Tabs */}
         <div className="flex gap-4 border-b border-border mb-6">
-          {(["overview", "versions"] as const).map((tab) => (
+          {(["overview", "versions", ...(detail.type === "skill" || detail.type === "agent" ? ["files" as const] : [])] as const).map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
-              className={`pb-2 text-sm font-medium capitalize transition-colors border-b-2 ${
+              className={`pb-2 text-sm font-medium capitalize transition-colors duration-fast border-b-2 ${
                 activeTab === tab ? "border-primary text-foreground" : "border-transparent text-muted-foreground hover:text-foreground"
               }`}
             >
-              {tab}
+              {tab === "files" ? "文件" : tab}
             </button>
           ))}
         </div>
@@ -151,6 +162,47 @@ export default function MarketplaceDetailPage() {
             {detail.versions.length === 0 && (
               <p className="text-sm text-muted-foreground text-center py-8">No versions published yet</p>
             )}
+          </div>
+        )}
+
+        {activeTab === "files" && (
+          <div className="space-y-4">
+            {/* File tree */}
+            <div className="surface-card p-4">
+              <h3 className="text-sm font-medium text-foreground mb-3">文件结构</h3>
+              <div className="font-mono text-xs text-muted-foreground space-y-1">
+                <div className="flex items-center gap-2 text-foreground font-medium">
+                  <span>📁</span>
+                  <span>{detail.slug}/</span>
+                </div>
+                <div className="flex items-center gap-2 ml-5">
+                  <span>📄</span>
+                  <span className="text-primary">SKILL.md</span>
+                </div>
+                <div className="flex items-center gap-2 ml-5">
+                  <span>📄</span>
+                  <span>meta.json</span>
+                </div>
+              </div>
+            </div>
+
+            {/* SKILL.md preview */}
+            <div className="surface-card p-4">
+              <div className="flex items-center gap-2 mb-3">
+                <span className="text-xs font-mono text-muted-foreground px-2 py-0.5 rounded bg-muted">SKILL.md</span>
+              </div>
+              {snapshotLoading ? (
+                <div className="flex items-center justify-center py-8">
+                  <RefreshCw className="w-4 h-4 animate-spin text-muted-foreground" />
+                </div>
+              ) : versionSnapshot?.content ? (
+                <pre className="text-xs text-foreground whitespace-pre-wrap font-mono leading-relaxed max-h-[500px] overflow-y-auto">
+                  {versionSnapshot.content}
+                </pre>
+              ) : (
+                <p className="text-sm text-muted-foreground text-center py-6">暂无内容</p>
+              )}
+            </div>
           </div>
         )}
       </div>
