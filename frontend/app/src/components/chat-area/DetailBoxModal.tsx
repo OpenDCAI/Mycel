@@ -24,9 +24,9 @@ function StatusIcon({ status }: { status: string }) {
     case "calling":
       return <Loader2 className="w-3.5 h-3.5 text-blue-500 animate-spin flex-shrink-0" />;
     case "done":
-      return <CheckCircle2 className="w-3.5 h-3.5 text-green-600 flex-shrink-0" />;
+      return <CheckCircle2 className="w-3.5 h-3.5 text-success flex-shrink-0" />;
     case "error":
-      return <XCircle className="w-3.5 h-3.5 text-red-500 flex-shrink-0" />;
+      return <XCircle className="w-3.5 h-3.5 text-destructive flex-shrink-0" />;
     case "cancelled":
       return <XCircle className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />;
     default:

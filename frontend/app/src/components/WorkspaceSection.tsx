@@ -68,7 +68,7 @@ export default function WorkspaceSection({ defaultWorkspace, onUpdate }: Workspa
           {saving ? "保存中…" : success ? "已保存" : "保存"}
         </button>
       </div>
-      {error && <div className="text-xs text-[#ef4444]">{error}</div>}
+      {error && <div className="text-xs text-destructive">{error}</div>}
     </div>
   );
 }

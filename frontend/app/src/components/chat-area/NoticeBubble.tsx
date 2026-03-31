@@ -14,8 +14,8 @@ export interface ParsedNotice {
 }
 
 const STATUS_ICON = {
-  completed: <CheckCircle2 className="w-3 h-3 text-emerald-500 shrink-0" />,
-  error: <XCircle className="w-3 h-3 text-red-400 shrink-0" />,
+  completed: <CheckCircle2 className="w-3 h-3 text-success shrink-0" />,
+  error: <XCircle className="w-3 h-3 text-destructive shrink-0" />,
   pending: <Clock className="w-3 h-3 text-gray-400 shrink-0" />,
 } as const;
 

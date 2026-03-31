@@ -72,7 +72,7 @@ export function FileBrowser({ threadId }: FileBrowserProps) {
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
                   <DropdownMenuItem onClick={() => handleDownload(file.relative_path)}>Download</DropdownMenuItem>
-                  <DropdownMenuItem className="text-red-600" onClick={() => setDeleteTarget(file.relative_path)} disabled={deleting}>Delete</DropdownMenuItem>
+                  <DropdownMenuItem className="text-destructive" onClick={() => setDeleteTarget(file.relative_path)} disabled={deleting}>Delete</DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
             </div>

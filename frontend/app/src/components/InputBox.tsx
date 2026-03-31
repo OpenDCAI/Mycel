@@ -162,7 +162,7 @@ export default function InputBox({
               disabled={!canSend && !showStopButton}
               className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors duration-fast ${
                 showStopButton
-                  ? "bg-red-500 text-white hover:bg-red-600"
+                  ? "bg-destructive text-destructive-foreground hover:bg-destructive/90"
                   : canSend
                     ? "bg-foreground text-white hover:bg-foreground/80"
                     : "bg-muted text-muted-foreground/30"

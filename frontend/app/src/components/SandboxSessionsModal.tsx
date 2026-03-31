@@ -77,14 +77,14 @@ export default function SandboxSessionsModal({ isOpen, onClose, onSessionMutated
   function statusBadge(status: string) {
     if (status === "running") {
       return (
-        <span className="px-2 py-0.5 rounded text-xs font-medium bg-green-50 text-green-700 border border-green-200">
+        <span className="px-2 py-0.5 rounded text-xs font-medium bg-success/10 text-success border border-success/20">
           运行中
         </span>
       );
     }
     if (status === "paused") {
       return (
-        <span className="px-2 py-0.5 rounded text-xs font-medium bg-yellow-50 text-yellow-700 border border-yellow-200">
+        <span className="px-2 py-0.5 rounded text-xs font-medium bg-warning/10 text-warning border border-warning/20">
           已暂停
         </span>
       );
@@ -165,7 +165,7 @@ export default function SandboxSessionsModal({ isOpen, onClose, onSessionMutated
                     )}
                     {row.status === "paused" && (
                       <button
-                        className="w-8 h-8 rounded-lg flex items-center justify-center text-muted-foreground hover:bg-accent hover:text-green-600 disabled:opacity-30"
+                        className="w-8 h-8 rounded-lg flex items-center justify-center text-muted-foreground hover:bg-accent hover:text-success disabled:opacity-30"
                         disabled={busy === row.session_id}
                         onClick={() => void withBusy(row, () => resumeSandboxSession(row.session_id, row.provider))}
                         title="恢复"

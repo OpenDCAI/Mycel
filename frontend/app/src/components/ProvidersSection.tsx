@@ -92,11 +92,11 @@ export default function ProvidersSection({ providers, onUpdate }: ProvidersSecti
                   <span className="text-xs text-info font-medium animate-pulse">保存中...</span>
                 )}
                 {successMessage === providerConfig.id && !isSaving && (
-                  <div className="flex items-center gap-2 px-3 py-1.5 bg-[#10b981]/10 rounded-full animate-fadeIn">
-                    <svg className="w-4 h-4 text-[#10b981]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <div className="flex items-center gap-2 px-3 py-1.5 bg-success/10 rounded-full animate-fadeIn">
+                    <svg className="w-4 h-4 text-success" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                     </svg>
-                    <span className="text-xs text-[#10b981] font-medium">已保存</span>
+                    <span className="text-xs text-success font-medium">已保存</span>
                   </div>
                 )}
               </div>

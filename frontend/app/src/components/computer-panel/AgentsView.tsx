@@ -172,7 +172,7 @@ function AgentListItem({ step, isSelected, onClick }: { step: ToolStep; isSelect
   const isRunning = ss?.status === "running" || (step.status === "calling" && ss?.status !== "completed");
   const isError = step.status === "error" || ss?.status === "error";
   const isDone = !isRunning && !isError && (step.status === "done" || ss?.status === "completed");
-  const statusDot = isRunning ? "bg-green-400 animate-pulse" : isError ? "bg-red-400" : isDone ? "bg-green-500" : "bg-yellow-400 animate-pulse";
+  const statusDot = isRunning ? "bg-success animate-pulse" : isError ? "bg-destructive" : isDone ? "bg-success" : "bg-warning animate-pulse";
 
   return (
     <button
@@ -202,10 +202,10 @@ function getStatusLabel(focused: ToolStep, stream: SubagentStream | undefined): 
 }
 
 function getStatusDotClass(focused: ToolStep, stream: SubagentStream | undefined): string {
-  if (stream?.status === "running") return "bg-green-400 animate-pulse";
-  if (stream?.status === "error") return "bg-red-400";
-  if (focused.status === "calling") return "bg-yellow-400 animate-pulse";
-  return "bg-green-500";
+  if (stream?.status === "running") return "bg-success animate-pulse";
+  if (stream?.status === "error") return "bg-destructive";
+  if (focused.status === "calling") return "bg-warning animate-pulse";
+  return "bg-success";
 }
 
 function AgentDetailHeader({ focused, stream }: { focused: ToolStep; stream: SubagentStream | undefined }) {

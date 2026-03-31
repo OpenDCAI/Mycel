@@ -30,10 +30,10 @@ export function TabBar({ activeTab, onTabChange, hasRunningAgents, hasAgents }: 
           <Icon className="w-4 h-4" />
           <span>{label}</span>
           {key === "agents" && hasRunningAgents && (
-            <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
+            <span className="w-1.5 h-1.5 rounded-full bg-success animate-pulse" />
           )}
           {key === "agents" && !hasRunningAgents && hasAgents && (
-            <span className="w-1.5 h-1.5 rounded-full bg-green-500" />
+            <span className="w-1.5 h-1.5 rounded-full bg-success" />
           )}
         </button>
       ))}
