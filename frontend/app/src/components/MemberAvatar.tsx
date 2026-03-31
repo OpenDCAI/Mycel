@@ -10,8 +10,8 @@ import { colorForType, colorForId, getInitials } from "@/lib/member-colors";
 import { cn } from "@/lib/utils";
 
 const SIZE_MAP = {
-  xs: "w-6 h-6 text-[8px]",
-  sm: "w-7 h-7 text-[10px]",
+  xs: "w-6 h-6 text-3xs",
+  sm: "w-7 h-7 text-2xs",
   md: "w-10 h-10 text-xs",
   lg: "w-16 h-16 text-lg",
 } as const;

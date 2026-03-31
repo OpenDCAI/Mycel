@@ -56,14 +56,14 @@ export function FlowList({
 
   if (flowItems.length === 0) {
     return (
-      <div className="h-full flex items-center justify-center text-sm text-[#a3a3a3]">
+      <div className="h-full flex items-center justify-center text-sm text-muted-foreground/70">
         暂无活动
       </div>
     );
   }
 
   return (
-    <div ref={scrollRef} onScroll={handleScroll} className="h-full overflow-y-auto bg-white">
+    <div ref={scrollRef} onScroll={handleScroll} className="h-full overflow-y-auto bg-background">
       <div className="px-3 py-2 space-y-1.5">
         {flowItems.map((item, i) =>
           item.type === "tool" ? (
@@ -111,21 +111,21 @@ function ToolFlowLine({
       >
         <StatusIcon status={step.status} />
         <span
-          className={`inline-flex items-center px-1 py-0 rounded text-[10px] font-medium flex-shrink-0 ${badge.bg} ${badge.text}`}
+          className={`inline-flex items-center px-1 py-0 rounded text-2xs font-medium flex-shrink-0 ${badge.bg} ${badge.text}`}
         >
           {badge.label || step.name}
         </span>
-        <span className="text-[11px] text-[#737373] font-mono truncate min-w-0 flex-1">
+        <span className="text-xs text-muted-foreground font-mono truncate min-w-0 flex-1">
           {getStepSummary(step)}
         </span>
         {expanded
-          ? <ChevronDown className="w-3 h-3 text-[#a3a3a3] flex-shrink-0" />
-          : <ChevronRight className="w-3 h-3 text-[#d4d4d4] flex-shrink-0" />}
+          ? <ChevronDown className="w-3 h-3 text-muted-foreground/70 flex-shrink-0" />
+          : <ChevronRight className="w-3 h-3 text-muted-foreground/30 flex-shrink-0" />}
       </div>
 
       {/* Collapsed: 1-line result preview */}
       {!expanded && preview && (
-        <div className="text-[11px] text-[#a3a3a3] font-mono truncate pl-5 -mt-0.5">
+        <div className="text-xs text-muted-foreground/70 font-mono truncate pl-5 -mt-0.5">
           → {preview}
         </div>
       )}
@@ -137,12 +137,12 @@ function ToolFlowLine({
             <Renderer step={step} expanded={true} />
           </div>
           {step.result && (
-            <pre className="mt-1.5 whitespace-pre-wrap break-words font-mono text-[11px] text-[#525252] bg-[#fafafa] rounded p-2 max-h-[300px] overflow-y-auto">
+            <pre className="mt-1.5 whitespace-pre-wrap break-words font-mono text-xs text-foreground-secondary bg-muted rounded p-2 max-h-[300px] overflow-y-auto">
               {step.result}
             </pre>
           )}
           {step.status === "cancelled" && !step.result && (
-            <div className="mt-1 text-[11px] text-[#a3a3a3] italic">已取消</div>
+            <div className="mt-1 text-xs text-muted-foreground/70 italic">已取消</div>
           )}
         </div>
       )}
@@ -162,7 +162,7 @@ function TextFlowLine({ content }: { content: string }) {
         <MarkdownContent content={content} />
         {isLong && (
           <button
-            className="text-[11px] text-[#a3a3a3] hover:text-[#737373] mt-0.5"
+            className="text-xs text-muted-foreground/70 hover:text-muted-foreground mt-0.5"
             onClick={() => setExpanded(false)}
           >
             收起
@@ -175,7 +175,7 @@ function TextFlowLine({ content }: { content: string }) {
   return (
     <div className="pl-3 cursor-pointer" onClick={() => setExpanded(true)}>
       <MarkdownContent content={content.slice(0, 297) + "..."} />
-      <span className="text-[11px] text-[#a3a3a3] hover:text-[#737373]">展开</span>
+      <span className="text-xs text-muted-foreground/70 hover:text-muted-foreground">展开</span>
     </div>
   );
 }
@@ -187,10 +187,10 @@ function StatusIcon({ status }: { status: ToolStep["status"] }) {
     case "calling":
       return <Loader2 className="w-3.5 h-3.5 text-blue-500 animate-spin flex-shrink-0" />;
     case "done":
-      return <CheckCircle2 className="w-3.5 h-3.5 text-[#a3a3a3] flex-shrink-0" />;
+      return <CheckCircle2 className="w-3.5 h-3.5 text-muted-foreground/70 flex-shrink-0" />;
     case "error":
       return <XCircle className="w-3.5 h-3.5 text-red-500 flex-shrink-0" />;
     case "cancelled":
-      return <XCircle className="w-3.5 h-3.5 text-[#a3a3a3] flex-shrink-0" />;
+      return <XCircle className="w-3.5 h-3.5 text-muted-foreground/70 flex-shrink-0" />;
   }
 }

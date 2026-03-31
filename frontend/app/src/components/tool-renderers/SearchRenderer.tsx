@@ -27,11 +27,11 @@ export default memo(function SearchRenderer({ step, expanded }: ToolRendererProp
 
   if (!expanded) {
     return (
-      <div className="flex items-center gap-2 text-xs text-[#737373]">
-        <span className="text-[#525252]">搜索</span>
-        {query && <code className="font-mono text-[#737373] truncate max-w-[240px]">{query}</code>}
-        {shortPath && <span className="text-[#a3a3a3]">in {shortPath}</span>}
-        {step.status === "calling" && <span className="text-[#a3a3a3]">...</span>}
+      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+        <span className="text-foreground-secondary">搜索</span>
+        {query && <code className="font-mono text-muted-foreground truncate max-w-[240px]">{query}</code>}
+        {shortPath && <span className="text-muted-foreground/70">in {shortPath}</span>}
+        {step.status === "calling" && <span className="text-muted-foreground/70">...</span>}
       </div>
     );
   }

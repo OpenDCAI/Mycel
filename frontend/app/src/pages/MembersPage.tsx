@@ -208,15 +208,15 @@ export default function MembersPage() {
                   <div className="flex items-start justify-between mb-3">
                     <AvatarUploadTrigger memberId={member.id} name={member.name} hasAvatar={!!member.avatar_url} />
                     <div className="flex items-center gap-1.5">
-                      {isBuiltin && <span className="text-[10px] px-1.5 py-0.5 rounded bg-primary/10 text-primary font-medium">内置</span>}
+                      {isBuiltin && <span className="text-2xs px-1.5 py-0.5 rounded bg-primary/10 text-primary font-medium">内置</span>}
                       <div className={`w-1.5 h-1.5 ${status.shape} ${status.dot}`} />
-                      <span className="text-[11px] text-muted-foreground">{status.label}</span>
+                      <span className="text-xs text-muted-foreground">{status.label}</span>
                     </div>
                   </div>
                   <h3 className="text-sm font-semibold text-foreground group-hover:text-primary transition-colors duration-fast mb-0.5">{member.name}</h3>
                   <p className="text-xs text-muted-foreground mb-3 line-clamp-2">{member.description}</p>
                   <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3 text-[11px] text-muted-foreground">
+                    <div className="flex items-center gap-3 text-xs text-muted-foreground">
                       <Tooltip><TooltipTrigger asChild><span className="flex items-center gap-1 cursor-default"><Zap className="w-3 h-3" /> {member.config.skills.length}</span></TooltipTrigger><TooltipContent side="bottom"><p>Skills</p></TooltipContent></Tooltip>
                       <Tooltip><TooltipTrigger asChild><span className="flex items-center gap-1 cursor-default"><Wrench className="w-3 h-3" /> {member.config.tools.length}</span></TooltipTrigger><TooltipContent side="bottom"><p>Tools</p></TooltipContent></Tooltip>
                       <Tooltip><TooltipTrigger asChild><span className="flex items-center gap-1 cursor-default"><Plug className="w-3 h-3" /> {member.config.mcps.length}</span></TooltipTrigger><TooltipContent side="bottom"><p>MCP</p></TooltipContent></Tooltip>

@@ -207,7 +207,7 @@ function AuthenticatedLayout() {
                 aria-label={item.label}
               >
                 <item.icon className={`w-5 h-5 ${isActive ? "text-primary" : "text-muted-foreground"}`} />
-                <span className={`text-[10px] leading-tight ${isActive ? "text-primary font-semibold" : "text-muted-foreground"}`}>
+                <span className={`text-2xs leading-tight ${isActive ? "text-primary font-semibold" : "text-muted-foreground"}`}>
                   {item.label}
                 </span>
               </NavLink>

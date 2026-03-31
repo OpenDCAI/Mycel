@@ -67,7 +67,7 @@ export default function ProviderCard({ provider, selected, onSelect }: ProviderC
       {/* Type label */}
       <div className="flex items-center gap-1.5 mb-3">
         <TypeIcon className="w-3 h-3 text-muted-foreground" />
-        <span className="text-[11px] text-muted-foreground">{typeLabel[type]}</span>
+        <span className="text-xs text-muted-foreground">{typeLabel[type]}</span>
       </div>
 
       {/* Center: metrics (running + CPU if available) */}
@@ -75,7 +75,7 @@ export default function ProviderCard({ provider, selected, onSelect }: ProviderC
         {isUnavailable ? (
           <div className="text-center">
             <p className="text-xs text-muted-foreground">未就绪</p>
-            <p className="text-[10px] text-muted-foreground/60 mt-0.5">
+            <p className="text-2xs text-muted-foreground/60 mt-0.5">
               {type === "container" ? "需要 Docker" : "需要安装 SDK"}
             </p>
           </div>
@@ -128,7 +128,7 @@ export default function ProviderCard({ provider, selected, onSelect }: ProviderC
               />
             );
           })}
-          <span className="text-[10px] text-muted-foreground ml-1">
+          <span className="text-2xs text-muted-foreground ml-1">
             {runningSessions.length} 占用中
             {pausedSessions.length > 0 ? ` · ${pausedSessions.length} 暂停` : ""}
             {stoppedSessions.length > 0 ? ` · ${stoppedSessions.length} 已结束` : ""}
@@ -164,8 +164,8 @@ function MetricCircle({
           </span>
         </div>
       )}
-      <p className="text-[10px] text-muted-foreground mt-1">{label}</p>
-      {limit != null && <p className="text-[9px] text-muted-foreground/60 font-mono">{formatLimit(limit, unit)}</p>}
+      <p className="text-2xs text-muted-foreground mt-1">{label}</p>
+      {limit != null && <p className="text-2xs text-muted-foreground/60 font-mono">{formatLimit(limit, unit)}</p>}
     </div>
   );
 }

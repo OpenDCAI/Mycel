@@ -512,7 +512,7 @@ export default function Tasks() {
                         <StatusIcon className={`w-3.5 h-3.5 ${config.color}`} />
                         <span className="text-xs font-medium text-foreground">{config.label}</span>
                       </div>
-                      <span className="text-[11px] font-mono text-muted-foreground bg-muted px-1.5 py-0.5 rounded">{columnTasks.length}</span>
+                      <span className="text-xs font-mono text-muted-foreground bg-muted px-1.5 py-0.5 rounded">{columnTasks.length}</span>
                     </div>
                     <div className={`flex-1 p-2 space-y-2 ${isMobile ? "" : "overflow-y-auto min-h-[200px]"}`}>
                       {columnTasks.length === 0 && (
@@ -534,7 +534,7 @@ export default function Tasks() {
                               <div className="flex items-center gap-1">
                                 <p className="text-sm font-medium text-foreground leading-snug">{task.title}</p>
                                 {task.source && task.source !== "manual" && (
-                                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-primary/10 text-primary shrink-0">
+                                  <span className="text-2xs px-1.5 py-0.5 rounded bg-primary/10 text-primary shrink-0">
                                     {sourceLabel[task.source] || task.source}
                                   </span>
                                 )}
@@ -545,7 +545,7 @@ export default function Tasks() {
                                     <button
                                       key={tag}
                                       onClick={(e) => { e.stopPropagation(); setTagFilter(tagFilter === tag ? null : tag); }}
-                                      className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium transition-colors duration-fast ${
+                                      className={`text-2xs px-1.5 py-0.5 rounded-full font-medium transition-colors duration-fast ${
                                         tagFilter === tag ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:bg-primary/10 hover:text-primary"
                                       }`}
                                     >
@@ -556,14 +556,14 @@ export default function Tasks() {
                               )}
                             </div>
                             <div className="flex items-center justify-between">
-                              <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${priority.className}`}>
+                              <span className={`text-2xs px-1.5 py-0.5 rounded font-medium ${priority.className}`}>
                                 {priority.label}
                               </span>
                               <div className="flex items-center gap-1.5">
                                 {task.assignee_id && (() => { const { name } = getAssigneeInfo(task.assignee_id); return name ? (
                                   <>
                                     <MemberAvatar name={name} size="xs" />
-                                    <span className="text-[10px] text-muted-foreground">{name}</span>
+                                    <span className="text-2xs text-muted-foreground">{name}</span>
                                   </>
                                 ) : null; })()}
                               </div>
@@ -573,7 +573,7 @@ export default function Tasks() {
                                 <div className="flex-1 h-1 rounded-full bg-muted overflow-hidden">
                                   <div className="h-full bg-primary rounded-full transition-all duration-fast" style={{ width: `${task.progress}%` }} />
                                 </div>
-                                <span className="text-[10px] font-mono text-primary">{task.progress}%</span>
+                                <span className="text-2xs font-mono text-primary">{task.progress}%</span>
                               </div>
                             )}
                           </div>
@@ -615,7 +615,7 @@ export default function Tasks() {
                           <StatusIcon className={`w-4 h-4 ${status.color} shrink-0`} />
                           <p className="text-sm font-medium text-foreground">{task.title}</p>
                         </div>
-                        <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium shrink-0 ${priority.className}`}>{priority.label}</span>
+                        <span className={`text-2xs px-1.5 py-0.5 rounded font-medium shrink-0 ${priority.className}`}>{priority.label}</span>
                       </div>
                       <div className="flex items-center justify-between text-xs text-muted-foreground">
                         <div className="flex items-center gap-1.5">
@@ -637,7 +637,7 @@ export default function Tasks() {
             </div>
           ) : (
             <>
-              <div className="grid grid-cols-[32px_32px_1fr_80px_160px_80px_60px_28px] gap-2 px-6 py-2 border-b border-border text-[11px] text-muted-foreground uppercase tracking-wider font-medium sticky top-0 bg-background z-10">
+              <div className="grid grid-cols-[32px_32px_1fr_80px_160px_80px_60px_28px] gap-2 px-6 py-2 border-b border-border text-xs text-muted-foreground uppercase tracking-wider font-medium sticky top-0 bg-background z-10">
                 <span className="flex items-center">
                   <input type="checkbox" aria-label="全选任务" checked={selectedRows.size === filtered.length && filtered.length > 0} onChange={toggleSelectAll} className="w-3.5 h-3.5 accent-primary rounded" />
                 </span>
@@ -683,7 +683,7 @@ export default function Tasks() {
                         <span className="text-sm font-medium text-foreground truncate flex items-center gap-1 flex-wrap">
                           {task.title}
                           {task.source && task.source !== "manual" && (
-                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-primary/10 text-primary ml-1 shrink-0">
+                            <span className="text-2xs px-1.5 py-0.5 rounded bg-primary/10 text-primary ml-1 shrink-0">
                               {sourceLabel[task.source] || task.source}
                             </span>
                           )}
@@ -691,7 +691,7 @@ export default function Tasks() {
                             <button
                               key={tag}
                               onClick={(e) => { e.stopPropagation(); setTagFilter(tagFilter === tag ? null : tag); }}
-                              className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium shrink-0 transition-colors duration-fast ${
+                              className={`text-2xs px-1.5 py-0.5 rounded-full font-medium shrink-0 transition-colors duration-fast ${
                                 tagFilter === tag ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:bg-primary/10 hover:text-primary"
                               }`}
                             >
@@ -699,7 +699,7 @@ export default function Tasks() {
                             </button>
                           ))}
                         </span>
-                        <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium w-fit ${priority.className}`}>{priority.label}</span>
+                        <span className={`text-2xs px-1.5 py-0.5 rounded font-medium w-fit ${priority.className}`}>{priority.label}</span>
                         <div className="flex items-center gap-2">
                           {task.assignee_id ? (() => { const { name } = getAssigneeInfo(task.assignee_id); return name ? (
                             <>
@@ -716,15 +716,15 @@ export default function Tasks() {
                               <div className="w-12 h-1.5 rounded-full bg-muted overflow-hidden">
                                 <div className="h-full bg-primary rounded-full" style={{ width: `${task.progress}%` }} />
                               </div>
-                              <span className="text-[10px] font-mono text-primary">{task.progress}%</span>
+                              <span className="text-2xs font-mono text-primary">{task.progress}%</span>
                             </div>
                           ) : task.status === "completed" ? (
-                            <span className="text-[10px] font-mono text-success">100%</span>
+                            <span className="text-2xs font-mono text-success">100%</span>
                           ) : (
-                            <span className="text-[10px] text-muted-foreground">—</span>
+                            <span className="text-2xs text-muted-foreground">—</span>
                           )}
                         </div>
-                        <span className="text-[11px] text-muted-foreground font-mono">{task.created_at ? new Date(task.created_at).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" }) : "--"}</span>
+                        <span className="text-xs text-muted-foreground font-mono">{task.created_at ? new Date(task.created_at).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" }) : "--"}</span>
                         <span className="flex items-center justify-center">
                           {task.thread_id && (
                             <button
@@ -745,12 +745,12 @@ export default function Tasks() {
                             </div>
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-2 mb-2">
-                                <span className="text-[11px] text-muted-foreground font-mono">
+                                <span className="text-xs text-muted-foreground font-mono">
                                   Thread: {task.thread_id.slice(0, 8)}…
                                 </span>
                                 <a
                                   href={`/chat/${task.thread_id}`}
-                                  className="inline-flex items-center gap-1 text-[11px] text-primary hover:underline"
+                                  className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
                                   onClick={(e) => e.stopPropagation()}
                                 >
                                   <ExternalLink className="w-3 h-3" />
@@ -801,7 +801,7 @@ export default function Tasks() {
             ) : (
               <>
                 {/* Cron table header */}
-                <div className="grid grid-cols-[1fr_160px_64px_120px_80px] gap-2 px-6 py-2 border-b border-border text-[11px] text-muted-foreground uppercase tracking-wider font-medium sticky top-0 bg-background z-10">
+                <div className="grid grid-cols-[1fr_160px_64px_120px_80px] gap-2 px-6 py-2 border-b border-border text-xs text-muted-foreground uppercase tracking-wider font-medium sticky top-0 bg-background z-10">
                   <span>名称</span>
                   <span>执行频率</span>
                   <span>状态</span>
@@ -819,20 +819,20 @@ export default function Tasks() {
                     <div className="flex flex-col gap-0.5">
                       <span className="text-sm font-medium text-foreground truncate">{cron.name}</span>
                       {cron.description && (
-                        <span className="text-[11px] text-muted-foreground truncate">{cron.description}</span>
+                        <span className="text-xs text-muted-foreground truncate">{cron.description}</span>
                       )}
                     </div>
                     <div className="flex flex-col gap-0.5">
                       <span className="text-sm text-foreground">{cronToHuman(cron.cron_expression)}</span>
                     </div>
                     <span>
-                      <span className={`inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded font-medium ${
+                      <span className={`inline-flex items-center gap-1 text-2xs px-1.5 py-0.5 rounded font-medium ${
                         cron.enabled ? "bg-success/10 text-success" : "bg-muted text-muted-foreground"
                       }`}>
                         {cron.enabled ? "启用" : "停用"}
                       </span>
                     </span>
-                    <span className="text-[11px] text-muted-foreground font-mono">
+                    <span className="text-xs text-muted-foreground font-mono">
                       {cron.last_run_at ? new Date(cron.last_run_at).toLocaleString("zh-CN", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }) : "--"}
                     </span>
                     <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>

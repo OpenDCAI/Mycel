@@ -25,8 +25,8 @@ export const ChatBubble = memo(function ChatBubble({
       <MemberAvatar name={senderName} avatarUrl={avatarUrl} type={entityType} size="xs" />
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
-          {showName && <span className="text-[13px] font-medium text-[#171717]">{senderName}</span>}
-          {timestamp && <span className="text-[10px] text-[#d4d4d4]">{formatTime(timestamp)}</span>}
+          {showName && <span className="text-sm font-medium text-foreground">{senderName}</span>}
+          {timestamp && <span className="text-2xs text-muted-foreground/30">{formatTime(timestamp)}</span>}
         </div>
         <MarkdownContent content={content} />
       </div>

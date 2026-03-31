@@ -128,7 +128,7 @@ function NewChatDialog({ onClose, onCreated }: { onClose: () => void; onCreated:
                 <MemberAvatar name={e.name} avatarUrl={e.avatar_url} type={e.type} size="sm" />
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-medium truncate">{e.name}</p>
-                  <p className="text-[10px] text-muted-foreground truncate">
+                  <p className="text-2xs text-muted-foreground truncate">
                     {e.owner_name ? `owner: ${e.owner_name}` : "human"}
                   </p>
                 </div>
@@ -201,7 +201,7 @@ function ChatSearchModal({ chats, myEntityId, onSelect, onClose }: {
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-medium truncate">{name}</p>
                   {chat.last_message && (
-                    <p className="text-[11px] text-muted-foreground truncate">{chat.last_message.content}</p>
+                    <p className="text-xs text-muted-foreground truncate">{chat.last_message.content}</p>
                   )}
                 </div>
               </button>
@@ -295,12 +295,12 @@ export default function ChatsLayout() {
         {/* Chat list — same spacing as Sidebar.tsx thread list */}
         <div className="flex-1 min-h-0 px-3 pt-3 flex flex-col">
           <div className="flex items-center justify-between px-2 mb-2 flex-shrink-0">
-            <span className="text-[11px] font-medium tracking-wider uppercase text-muted-foreground/60">Chats</span>
+            <span className="text-xs font-medium tracking-wider uppercase text-muted-foreground/60">Chats</span>
             <div className="flex items-center gap-1.5">
-              <span className="text-[11px] text-muted-foreground/40">{chats.length}</span>
+              <span className="text-xs text-muted-foreground/40">{chats.length}</span>
               <button
                 onClick={() => setShowNewChat(true)}
-                className="text-[11px] text-muted-foreground/50 hover:text-foreground transition-colors duration-fast px-1"
+                className="text-xs text-muted-foreground/50 hover:text-foreground transition-colors duration-fast px-1"
               >
                 <Plus className="w-3 h-3" />
               </button>
@@ -343,7 +343,7 @@ export default function ChatsLayout() {
                     {isGroupChat ? (
                       <div className="relative w-7 h-7 shrink-0">
                         <Users className="w-7 h-7 p-1.5 rounded-full bg-muted text-muted-foreground" />
-                        <span className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full bg-foreground text-background text-[8px] font-bold flex items-center justify-center">
+                        <span className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full bg-foreground text-background text-3xs font-bold flex items-center justify-center">
                           {others.length + 1}
                         </span>
                       </div>
@@ -357,20 +357,20 @@ export default function ChatsLayout() {
                         </span>
                       </div>
                       <div className="flex items-center gap-1 mt-0.5">
-                        <span className="text-[11px] text-muted-foreground/60 truncate flex-1 min-w-0">
+                        <span className="text-xs text-muted-foreground/60 truncate flex-1 min-w-0">
                           {chat.last_message?.content || "No messages"}
                         </span>
                         {chat.last_message && (
-                          <span className="text-[10px] text-muted-foreground/40 flex-shrink-0">
+                          <span className="text-2xs text-muted-foreground/40 flex-shrink-0">
                             {formatTime(chat.last_message.created_at)}
                           </span>
                         )}
                       </div>
                     </div>
                     {chat.has_mention ? (
-                      <span className="w-4 h-4 rounded-full bg-destructive text-destructive-foreground text-[9px] font-bold flex items-center justify-center shrink-0">@</span>
+                      <span className="w-4 h-4 rounded-full bg-destructive text-destructive-foreground text-2xs font-bold flex items-center justify-center shrink-0">@</span>
                     ) : chat.unread_count > 0 ? (
-                      <span className="min-w-4 h-4 rounded-full bg-primary text-primary-foreground text-[9px] flex items-center justify-center px-1 shrink-0">
+                      <span className="min-w-4 h-4 rounded-full bg-primary text-primary-foreground text-2xs flex items-center justify-center px-1 shrink-0">
                         {chat.unread_count > 99 ? "99+" : chat.unread_count}
                       </span>
                     ) : null}

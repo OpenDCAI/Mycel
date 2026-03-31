@@ -136,19 +136,19 @@ export default function SandboxSessionsModal({ isOpen, onClose, onSessionMutated
                 >
                   <div className="flex-1 min-w-0 grid grid-cols-4 gap-3 items-center">
                     <div>
-                      <div className="text-[10px] uppercase tracking-wider mb-0.5 text-muted-foreground">对话</div>
+                      <div className="text-2xs uppercase tracking-wider mb-0.5 text-muted-foreground">对话</div>
                       <div className="text-sm font-mono truncate">{row.thread_id.slice(0, 16)}</div>
                     </div>
                     <div>
-                      <div className="text-[10px] uppercase tracking-wider mb-0.5 text-muted-foreground">会话</div>
+                      <div className="text-2xs uppercase tracking-wider mb-0.5 text-muted-foreground">会话</div>
                       <div className="text-sm font-mono truncate">{row.session_id.slice(0, 16)}</div>
                     </div>
                     <div>
-                      <div className="text-[10px] uppercase tracking-wider mb-0.5 text-muted-foreground">环境</div>
+                      <div className="text-2xs uppercase tracking-wider mb-0.5 text-muted-foreground">环境</div>
                       <div className="text-sm">{row.provider}</div>
                     </div>
                     <div>
-                      <div className="text-[10px] uppercase tracking-wider mb-0.5 text-muted-foreground">状态</div>
+                      <div className="text-2xs uppercase tracking-wider mb-0.5 text-muted-foreground">状态</div>
                       {statusBadge(row.status)}
                     </div>
                   </div>

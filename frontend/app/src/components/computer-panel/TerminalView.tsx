@@ -14,13 +14,13 @@ export function TerminalView({ steps }: { steps: ToolStep[] }) {
   return (
     <div
       ref={scrollRef}
-      className="h-full overflow-auto font-mono text-[13px] leading-[1.6] p-4"
+      className="h-full overflow-auto font-mono text-sm leading-[1.6] p-4"
       style={{ background: "#1e1e1e", color: "#d4d4d4" }}
     >
       {/* Boot banner */}
       <div style={{ color: "#6a9955" }} className="mb-3 select-none">
         <div>Mycel Terminal v1.0</div>
-        <div className="text-[11px]" style={{ color: "#555" }}>Type is streamed from agent tool calls</div>
+        <div className="text-xs" style={{ color: "#555" }}>Type is streamed from agent tool calls</div>
         <div className="mt-1" style={{ color: "#333" }}>{"─".repeat(48)}</div>
       </div>
 

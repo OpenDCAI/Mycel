@@ -277,19 +277,19 @@ function ChatConversationInner({ chatId }: { chatId: string }) {
   return (
     <div className="h-full flex flex-col min-h-0">
       {/* Header — matches Threads Header.tsx structure */}
-      <header className="h-12 flex items-center justify-between px-4 flex-shrink-0 bg-white border-b border-[#e5e5e5]">
+      <header className="h-12 flex items-center justify-between px-4 flex-shrink-0 bg-card border-b border-border">
         <div className="flex items-center gap-3 min-w-0">
           <button
             onClick={() => setSidebarCollapsed(v => !v)}
-            className="w-8 h-8 rounded-lg flex items-center justify-center text-[#737373] hover:bg-[#f5f5f5] hover:text-[#171717]"
+            className="w-8 h-8 rounded-lg flex items-center justify-center text-muted-foreground hover:bg-muted hover:text-foreground"
           >
             <PanelLeft className="w-4 h-4" />
           </button>
-          <span className="text-sm font-medium text-[#171717] truncate max-w-[200px]">
+          <span className="text-sm font-medium text-foreground truncate max-w-[200px]">
             {chatName}
           </span>
           {chat && (
-            <span className="text-[10px] px-1.5 py-0.5 rounded-md font-medium border border-[#e5e5e5] text-[#737373] bg-[#fafafa]">
+            <span className="text-2xs px-1.5 py-0.5 rounded-md font-medium border border-border text-muted-foreground bg-muted">
               {chat.entities.length} member{chat.entities.length !== 1 ? "s" : ""}
             </span>
           )}
@@ -300,7 +300,7 @@ function ChatConversationInner({ chatId }: { chatId: string }) {
       <div
         ref={scrollContainerRef}
         onScroll={onScroll}
-        className="flex-1 overflow-y-auto px-5 py-5 bg-white"
+        className="flex-1 overflow-y-auto px-5 py-5 bg-background"
       >
         {messages.length === 0 ? (
           <div className="flex items-center justify-center h-full">
@@ -319,7 +319,7 @@ function ChatConversationInner({ chatId }: { chatId: string }) {
                 <div key={msg.id}>
                   {showTime && (
                     <div className="text-center my-3">
-                      <span className="text-[10px] text-[#d4d4d4] bg-[#fafafa] px-2 py-0.5 rounded-full">
+                      <span className="text-2xs text-muted-foreground/30 bg-muted px-2 py-0.5 rounded-full">
                         {formatMessageTime(msg.created_at)}
                       </span>
                     </div>
@@ -346,7 +346,7 @@ function ChatConversationInner({ chatId }: { chatId: string }) {
       </div>
 
       {/* Input */}
-      <div className="px-4 py-3 border-t border-[#e5e5e5] shrink-0">
+      <div className="px-4 py-3 border-t border-border shrink-0">
         <div className="max-w-3xl mx-auto flex items-end gap-2">
           <textarea
             value={input}
@@ -354,13 +354,13 @@ function ChatConversationInner({ chatId }: { chatId: string }) {
             onKeyDown={handleKeyDown}
             placeholder="Type a message..."
             rows={1}
-            className="flex-1 resize-none px-3.5 py-2.5 rounded-xl border border-[#e5e5e5] bg-white text-[13px] text-[#171717] focus:outline-none focus:ring-2 focus:ring-[#171717]/10 max-h-32"
+            className="flex-1 resize-none px-3.5 py-2.5 rounded-xl border border-border bg-background text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-foreground/10 max-h-32"
             style={{ minHeight: "38px" }}
           />
           <button
             onClick={() => void handleSend()}
             disabled={!input.trim() || sending}
-            className="w-9 h-9 rounded-xl bg-[#171717] text-white flex items-center justify-center hover:bg-[#333] disabled:opacity-30 transition-colors duration-fast shrink-0"
+            className="w-9 h-9 rounded-xl bg-foreground text-white flex items-center justify-center hover:bg-foreground/80 disabled:opacity-30 transition-colors duration-fast shrink-0"
           >
             <Send className="w-4 h-4" />
           </button>

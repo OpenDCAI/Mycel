@@ -45,22 +45,22 @@ export default function Header({
     ? "#22c55e"
     : sandboxInfo?.status === "paused"
       ? "#eab308"
-      : "#a3a3a3";
+      : "var(--color-muted-foreground)";
 
   return (
-    <header className="h-12 flex items-center justify-between px-4 flex-shrink-0 bg-white border-b border-[#e5e5e5]">
+    <header className="h-12 flex items-center justify-between px-4 flex-shrink-0 bg-card border-b border-border">
       <div className="flex items-center gap-3 min-w-0">
         {isMobile ? (
           <button
             onClick={() => navigate("/threads")}
-            className="w-8 h-8 rounded-lg flex items-center justify-center text-[#737373] hover:bg-[#f5f5f5] hover:text-[#171717]"
+            className="w-8 h-8 rounded-lg flex items-center justify-center text-muted-foreground hover:bg-muted hover:text-foreground"
           >
             <ChevronLeft className="w-5 h-5" />
           </button>
         ) : (
           <button
             onClick={onToggleSidebar}
-            className="w-8 h-8 rounded-lg flex items-center justify-center text-[#737373] hover:bg-[#f5f5f5] hover:text-[#171717]"
+            className="w-8 h-8 rounded-lg flex items-center justify-center text-muted-foreground hover:bg-muted hover:text-foreground"
           >
             <PanelLeft className="w-4 h-4" />
           </button>
@@ -68,13 +68,13 @@ export default function Header({
 
         {/* Thread title + optional sandbox badge */}
         <div className="flex items-center gap-2 min-w-0">
-          <span className="text-sm font-medium text-[#171717] truncate max-w-[200px]">
+          <span className="text-sm font-medium text-foreground truncate max-w-[200px]">
             {threadTitle || (activeThreadId ? "对话" : "无对话")}
           </span>
           {/* Show sandbox as a small badge only for remote sandboxes */}
           {hasRemote && sandboxInfo?.status && (
             <span
-              className="hidden sm:inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-md font-medium border border-[#e5e5e5] text-[#737373] bg-[#fafafa] flex-shrink-0"
+              className="hidden sm:inline-flex items-center gap-1 text-2xs px-1.5 py-0.5 rounded-md font-medium border border-border text-muted-foreground bg-muted flex-shrink-0"
               title={`沙箱: ${sandboxLabelText}`}
             >
               <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: statusDotColor }} />
@@ -93,7 +93,7 @@ export default function Header({
 
         {hasRemote && sandboxInfo?.status === "running" && (
           <button
-            className="px-3 py-1.5 rounded-lg text-xs flex items-center gap-2 border border-[#e5e5e5] text-[#525252] hover:bg-[#f5f5f5] hover:text-[#171717]"
+            className="px-3 py-1.5 rounded-lg text-xs flex items-center gap-2 border border-border text-foreground-secondary hover:bg-muted hover:text-foreground"
             onClick={onPauseSandbox}
           >
             <Pause className="w-3.5 h-3.5" />
@@ -102,7 +102,7 @@ export default function Header({
         )}
         {hasRemote && sandboxInfo?.status === "paused" && (
           <button
-            className="px-3 py-1.5 rounded-lg text-xs flex items-center gap-2 border border-[#e5e5e5] text-[#525252] hover:bg-[#f5f5f5] hover:text-[#171717]"
+            className="px-3 py-1.5 rounded-lg text-xs flex items-center gap-2 border border-border text-foreground-secondary hover:bg-muted hover:text-foreground"
             onClick={onResumeSandbox}
           >
             <Play className="w-3.5 h-3.5" />

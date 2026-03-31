@@ -14,10 +14,10 @@ export default memo(function WriteFileRenderer({ step, expanded }: ToolRendererP
 
   if (!expanded) {
     return (
-      <div className="flex items-center gap-2 text-xs text-[#737373]">
-        <span className="text-[#525252]">写入</span>
-        <code className="font-mono text-[#737373] truncate max-w-[280px]">{file_path ?? shortPath}</code>
-        {step.status === "calling" && <span className="text-[#a3a3a3]">...</span>}
+      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+        <span className="text-foreground-secondary">写入</span>
+        <code className="font-mono text-muted-foreground truncate max-w-[280px]">{file_path ?? shortPath}</code>
+        {step.status === "calling" && <span className="text-muted-foreground/70">...</span>}
       </div>
     );
   }

@@ -72,7 +72,7 @@ export default function NewChatDialog({ open, onOpenChange }: NewChatDialogProps
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
                     <span className="text-sm font-medium truncate">{member.name}</span>
-                    <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${
+                    <span className={`text-2xs px-1.5 py-0.5 rounded-full ${
                       member.status === "active" ? "bg-green-100 text-green-700" : "bg-muted text-muted-foreground"
                     }`}>
                       {member.status === "active" ? "在线" : member.status === "draft" ? "草稿" : "离线"}

@@ -55,7 +55,7 @@ export default function ComputerPanel({
 
   return (
     <div
-      className="h-full flex flex-col animate-fade-in bg-white border-l border-[#e5e5e5] flex-shrink-0"
+      className="h-full flex flex-col animate-fade-in bg-card border-l border-border flex-shrink-0"
       style={{ width }}
     >
       <PanelHeader

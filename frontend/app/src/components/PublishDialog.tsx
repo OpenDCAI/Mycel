@@ -86,7 +86,7 @@ export default function PublishDialog({ open, onOpenChange, memberId }: Props) {
                   }`}
                 >
                   <p className="text-sm font-medium text-foreground">{b.label}</p>
-                  <p className="text-[10px] text-muted-foreground mt-0.5">{b.desc}</p>
+                  <p className="text-2xs text-muted-foreground mt-0.5">{b.desc}</p>
                 </button>
               ))}
             </div>

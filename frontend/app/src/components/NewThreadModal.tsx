@@ -127,7 +127,7 @@ export default function NewThreadModal({ open, sandboxTypes, onClose, onCreate }
                           </button>
                         </div>
                         <div className="flex items-center justify-between mt-2">
-                          <span className="text-[10px] text-muted-foreground/50">留空则使用默认目录</span>
+                          <span className="text-2xs text-muted-foreground/50">留空则使用默认目录</span>
                           <button
                             className="text-xs px-3 py-1 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors duration-fast"
                             onClick={handleLocalConfirm}

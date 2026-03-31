@@ -27,8 +27,8 @@ function SteerBubble({ parsed }: { parsed: ParsedNotice }) {
     <div className="flex justify-end animate-fade-in">
       <div className="max-w-[78%]">
         <div className="rounded-xl rounded-br-sm px-3.5 py-2 bg-amber-50 border border-amber-200/60">
-          <div className="text-[10px] text-amber-500 font-medium mb-0.5">Steer</div>
-          <p className="text-[13px] whitespace-pre-wrap leading-[1.55] text-[#171717]">
+          <div className="text-2xs text-amber-500 font-medium mb-0.5">Steer</div>
+          <p className="text-sm whitespace-pre-wrap leading-[1.55] text-foreground">
             {parsed.text}
           </p>
         </div>
@@ -45,7 +45,7 @@ function CommandDivider({ parsed, inline }: { parsed: ParsedNotice; inline?: boo
   return (
     <div className={`flex items-center gap-3 ${inline ? "my-2" : "my-3"} select-none`}>
       <div className="flex-1 h-px bg-gray-100" />
-      <span className="inline-flex items-center gap-1.5 px-2.5 text-[11px] text-gray-400">
+      <span className="inline-flex items-center gap-1.5 px-2.5 text-xs text-gray-400">
         <Terminal className="w-3 h-3 shrink-0" />
         {statusIcon}
         {parsed.text}
@@ -63,7 +63,7 @@ function AgentDivider({ parsed, inline, onClick }: { parsed: ParsedNotice; inlin
   const isClickable = !!onClick;
 
   const content = (
-    <span className={`inline-flex items-center gap-1.5 px-2.5 text-[11px] text-gray-400 ${
+    <span className={`inline-flex items-center gap-1.5 px-2.5 text-xs text-gray-400 ${
       isClickable ? "hover:text-gray-600 transition-colors duration-fast cursor-pointer" : ""
     }`}>
       {statusIcon}
@@ -91,7 +91,7 @@ function ChatDivider({ parsed, inline }: { parsed: ParsedNotice; inline?: boolea
   return (
     <div className={`flex items-center gap-3 ${inline ? "my-2" : "my-3"} select-none`}>
       <div className="flex-1 h-px bg-blue-100" />
-      <span className="inline-flex items-center gap-1.5 px-2.5 text-[11px] text-blue-400">
+      <span className="inline-flex items-center gap-1.5 px-2.5 text-xs text-blue-400">
         <MessageCircle className="w-3 h-3 shrink-0" />
         {parsed.text}
       </span>
@@ -107,7 +107,7 @@ function GenericDivider({ parsed, inline }: { parsed: ParsedNotice; inline?: boo
   return (
     <div className={`flex items-center gap-3 ${inline ? "my-2" : "my-3"} select-none`}>
       <div className="flex-1 h-px bg-gray-100" />
-      <span className="inline-flex items-center gap-1.5 px-2.5 text-[11px] text-gray-400">
+      <span className="inline-flex items-center gap-1.5 px-2.5 text-xs text-gray-400">
         {parsed.text}
       </span>
       <div className="flex-1 h-px bg-gray-100" />

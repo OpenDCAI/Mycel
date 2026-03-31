@@ -25,7 +25,7 @@ interface TaskProgressProps {
 function statusColor(status: string | null): string {
   if (status === "running") return "#22c55e";
   if (status === "paused") return "#eab308";
-  if (status === "detached") return "#a3a3a3";
+  if (status === "detached") return "var(--color-muted-foreground)";
   return "#ef4444";
 }
 
@@ -85,10 +85,10 @@ function ToggleButton({ expanded, onClick }: { expanded: boolean; onClick?: () =
       {/* Tooltip */}
       {hovered && (
         <div className="absolute bottom-full mb-2 pointer-events-none animate-fade-in">
-          <div className="relative bg-[#171717] text-white text-[11px] px-2.5 py-1 rounded-md whitespace-nowrap">
+          <div className="relative bg-foreground text-white text-xs px-2.5 py-1 rounded-md whitespace-nowrap">
             {label}
             {/* Triangle arrow */}
-            <div className="absolute left-1/2 -translate-x-1/2 top-full w-0 h-0 border-l-[4px] border-l-transparent border-r-[4px] border-r-transparent border-t-[4px] border-t-[#171717]" />
+            <div className="absolute left-1/2 -translate-x-1/2 top-full w-0 h-0 border-l-[4px] border-l-transparent border-r-[4px] border-r-transparent border-t-[4px] border-t-foreground" />
           </div>
         </div>
       )}
@@ -96,8 +96,8 @@ function ToggleButton({ expanded, onClick }: { expanded: boolean; onClick?: () =
         onClick={onClick}
         className={`w-7 h-7 rounded-full flex items-center justify-center transition-all duration-fast ${
           hovered
-            ? "bg-[#f0f0f0] text-[#171717] shadow-[0_0_0_1px_rgba(0,0,0,0.04)]"
-            : "text-[#737373]"
+            ? "bg-muted text-foreground shadow-[0_0_0_1px_rgba(0,0,0,0.04)]"
+            : "text-muted-foreground"
         }`}
       >
         {expanded ? (
@@ -114,17 +114,17 @@ export default function TaskProgress(props: TaskProgressProps) {
   const { isStreaming, sandboxType, sandboxStatus, computerOpen = false, onToggleComputer } = props;
 
   return (
-    <div className="bg-white">
+    <div className="bg-background">
       <div className="max-w-3xl mx-auto px-4">
         <div className="px-2 py-2">
-          <div className="w-full flex items-center gap-3 p-2.5 rounded-lg bg-[#fafafa] border border-[#e5e5e5]">
-            <div className="w-7 h-7 rounded-lg bg-[#f5f5f5] flex items-center justify-center flex-shrink-0">
-              <RetroComputerIcon className="w-4 h-4 text-[#737373]" />
+          <div className="w-full flex items-center gap-3 p-2.5 rounded-lg bg-muted border border-border">
+            <div className="w-7 h-7 rounded-lg bg-muted flex items-center justify-center flex-shrink-0">
+              <RetroComputerIcon className="w-4 h-4 text-muted-foreground" />
             </div>
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 text-sm">
                 <span className="w-2 h-2 rounded-full" style={{ background: statusColor(sandboxStatus) }} />
-                <span className="text-[#171717]">
+                <span className="text-foreground">
                   {sandboxLabel(sandboxType ?? "local")}
                   {sandboxStatus && (
                     <>
@@ -133,8 +133,8 @@ export default function TaskProgress(props: TaskProgressProps) {
                     </>
                   )}
                 </span>
-                <span className="text-[#e5e5e5]">&middot;</span>
-                <span className={isStreaming ? "text-[#171717] font-medium" : "text-[#a3a3a3]"}>
+                <span className="text-border">&middot;</span>
+                <span className={isStreaming ? "text-foreground font-medium" : "text-muted-foreground/70"}>
                   {isStreaming ? "Mycel 正在工作" : "Mycel 待命中"}
                 </span>
               </div>

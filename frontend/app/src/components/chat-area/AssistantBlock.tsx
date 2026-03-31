@@ -125,9 +125,9 @@ export const AssistantBlock = memo(function AssistantBlock({ entry, isStreamingT
       <MemberAvatar name={displayName} avatarUrl={agentAvatarUrl} size="xs" type="mycel_agent" className={`mt-0.5${isBooting ? " avatar-booting" : ""}`} />
       <div className="flex-1 min-w-0 space-y-1.5 overflow-hidden">
         <div className="flex items-center gap-2">
-          <span className="text-[13px] font-medium text-[#171717]">{displayName}</span>
+          <span className="text-sm font-medium text-foreground">{displayName}</span>
           {entry.timestamp && (
-            <span className="text-[10px] text-[#d4d4d4]">{formatTime(entry.timestamp)}</span>
+            <span className="text-2xs text-muted-foreground/30">{formatTime(entry.timestamp)}</span>
           )}
         </div>
 
@@ -162,7 +162,7 @@ export const AssistantBlock = memo(function AssistantBlock({ entry, isStreamingT
           <div className="flex items-center gap-2 mt-0.5">
             <CopyButton text={fullText} />
             {elapsed !== null && elapsed >= 1000 && (
-              <span className="text-[10px] text-[#d4d4d4] tabular-nums">{formatDuration(elapsed)}</span>
+              <span className="text-2xs text-muted-foreground/30 tabular-nums">{formatDuration(elapsed)}</span>
             )}
           </div>
         )}

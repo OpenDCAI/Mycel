@@ -54,10 +54,10 @@ function ToolEntry({ seg }: { seg: ToolSegment }) {
           <ChevronRight className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
         )}
         <StatusIcon status={step.status} />
-        <span className={`inline-flex items-center px-1.5 py-0 rounded text-[10px] font-medium ${badge.bg} ${badge.text}`}>
+        <span className={`inline-flex items-center px-1.5 py-0 rounded text-2xs font-medium ${badge.bg} ${badge.text}`}>
           {badge.label || step.name}
         </span>
-        <span className="text-[12px] text-gray-600 font-mono truncate">
+        <span className="text-xs text-gray-600 font-mono truncate">
           {resultSummary ?? getStepSummary(step)}
         </span>
       </div>
@@ -69,7 +69,7 @@ function ToolEntry({ seg }: { seg: ToolSegment }) {
       )}
 
       {hasSubagent && step.subagent_stream && (
-        <div className="mt-1 pl-5 text-[11px] text-blue-600">
+        <div className="mt-1 pl-5 text-xs text-blue-600">
           子 Agent: {step.subagent_stream.description || step.subagent_stream.task_id}
           {step.subagent_stream.status === "completed" && " ✓"}
           {step.subagent_stream.status === "running" && " (运行中...)"}
@@ -85,9 +85,9 @@ function TextEntry({ content }: { content: string }) {
     <div className="border-l-2 border-blue-200 pl-3 py-1.5">
       <div className="flex items-center gap-1.5 mb-1">
         <MessageSquare className="w-3.5 h-3.5 text-blue-400 flex-shrink-0" />
-        <span className="text-[10px] text-blue-400 font-medium">AI Text</span>
+        <span className="text-2xs text-blue-400 font-medium">AI Text</span>
       </div>
-      <div className="text-[12px] text-gray-700 min-w-0 overflow-hidden">
+      <div className="text-xs text-gray-700 min-w-0 overflow-hidden">
         <MarkdownContent content={content} />
       </div>
     </div>
@@ -97,7 +97,7 @@ function TextEntry({ content }: { content: string }) {
 function NoticeEntry({ content }: { content: string }) {
   return (
     <div className="border-l-2 border-amber-200 pl-3 py-1.5">
-      <div className="text-[11px] text-amber-600 whitespace-pre-wrap">
+      <div className="text-xs text-amber-600 whitespace-pre-wrap">
         {content}
       </div>
     </div>

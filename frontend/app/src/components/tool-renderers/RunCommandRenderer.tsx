@@ -29,7 +29,7 @@ function CopyInline({ text }: { text: string }) {
   return (
     <button
       onClick={handleCopy}
-      className="flex-shrink-0 p-0.5 rounded text-[#a3a3a3] hover:text-[#525252] hover:bg-[#f0f0f0] transition-colors duration-fast"
+      className="flex-shrink-0 p-0.5 rounded text-muted-foreground/70 hover:text-foreground-secondary hover:bg-muted transition-colors duration-fast"
       title="复制命令"
     >
       {copied ? <Check className="w-3 h-3 text-green-500" /> : <Copy className="w-3 h-3" />}
@@ -42,14 +42,14 @@ export default memo(function RunCommandRenderer({ step, expanded }: ToolRenderer
 
   if (!expanded) {
     return (
-      <div className="group flex items-center gap-2 text-xs text-[#737373]">
+      <div className="group flex items-center gap-2 text-xs text-muted-foreground">
         {command && (
-          <code className="font-mono text-[#737373] truncate max-w-[320px]">{command}</code>
+          <code className="font-mono text-muted-foreground truncate max-w-[320px]">{command}</code>
         )}
         {!command && description && (
-          <span className="text-[#a3a3a3] truncate max-w-[280px]">{description}</span>
+          <span className="text-muted-foreground/70 truncate max-w-[280px]">{description}</span>
         )}
-        {step.status === "calling" && <span className="text-[#a3a3a3]">...</span>}
+        {step.status === "calling" && <span className="text-muted-foreground/70">...</span>}
         {command && (
           <span className="opacity-0 group-hover:opacity-100 transition-opacity duration-fast">
             <CopyInline text={command} />
@@ -88,7 +88,7 @@ export default memo(function RunCommandRenderer({ step, expanded }: ToolRenderer
             <div className="mt-1 text-center">
               <button
                 onClick={() => setOutputExpanded(!outputExpanded)}
-                className="text-xs text-[#737373] hover:text-[#525252] hover:underline"
+                className="text-xs text-muted-foreground hover:text-foreground-secondary hover:underline"
               >
                 {outputExpanded ? '收起' : `展开全部 (${outputLines.length} 行)`}
               </button>

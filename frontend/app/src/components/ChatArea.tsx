@@ -21,7 +21,7 @@ export default function ChatArea({ entries, runtimeStatus, loading, onFocusAgent
   const containerRef = useStickyScroll<HTMLDivElement>();
 
   return (
-    <div ref={containerRef} className="flex-1 overflow-y-auto py-5 bg-white">
+    <div ref={containerRef} className="flex-1 overflow-y-auto py-5 bg-background">
       {loading ? (
         <ChatSkeleton />
       ) : (
@@ -35,7 +35,7 @@ export default function ChatArea({ entries, runtimeStatus, loading, onFocusAgent
               return (
                 <div key={entry.id} className={isHidden ? "opacity-40" : ""}>
                   {isHidden && entry.senderName && (
-                    <div className="text-[10px] text-[#a3a3a3] mb-0.5 text-right mr-2">{entry.senderName}</div>
+                    <div className="text-2xs text-muted-foreground/70 mb-0.5 text-right mr-2">{entry.senderName}</div>
                   )}
                   <UserBubble entry={entry} userName={isHidden ? (entry.senderName || "external") : userName} avatarUrl={isHidden ? entry.senderAvatarUrl : userAvatarUrl} />
                 </div>

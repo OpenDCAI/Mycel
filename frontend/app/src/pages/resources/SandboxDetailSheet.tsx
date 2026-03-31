@@ -61,7 +61,7 @@ export default function SandboxDetailSheet({
         <SheetHeader className="px-5 py-4 border-b border-border/60 shrink-0 gap-1">
           <div className="flex items-center gap-2">
             <span className={`w-2 h-2 rounded-full shrink-0 ${STATUS_DOT[group.status]}`} />
-            <span className="text-[11px] font-mono text-muted-foreground">
+            <span className="text-xs font-mono text-muted-foreground">
               {STATUS_LABEL[group.status]}
               {duration != null && ` · ${formatDuration(duration)}`}
             </span>
@@ -76,7 +76,7 @@ export default function SandboxDetailSheet({
           <div className="px-5 py-4 space-y-5">
             {/* Agents */}
             <section>
-              <p className="text-[9px] font-semibold text-muted-foreground/60 uppercase tracking-widest mb-2.5">
+              <p className="text-2xs font-semibold text-muted-foreground/60 uppercase tracking-widest mb-2.5">
                 Agents
               </p>
               <div className="space-y-2">
@@ -89,7 +89,7 @@ export default function SandboxDetailSheet({
             {/* Metrics */}
             {hasMetrics && (
               <section>
-                <p className="text-[9px] font-semibold text-muted-foreground/60 uppercase tracking-widest mb-2.5">
+                <p className="text-2xs font-semibold text-muted-foreground/60 uppercase tracking-widest mb-2.5">
                   Metrics
                 </p>
                 <div className="grid grid-cols-3 gap-2">
@@ -105,7 +105,7 @@ export default function SandboxDetailSheet({
         {/* File browser — fixed at bottom, flex-shrink-0 */}
         <div className="border-t border-border/50 shrink-0">
           <div className="px-5 pt-3 pb-1">
-            <p className="text-[9px] font-semibold text-muted-foreground/60 uppercase tracking-widest">
+            <p className="text-2xs font-semibold text-muted-foreground/60 uppercase tracking-widest">
               Files
             </p>
           </div>
@@ -134,13 +134,13 @@ function AgentRow({ session }: { session: ResourceSession }) {
         <p className="text-sm font-medium text-foreground truncate">
           {session.memberName || "未绑定"}
         </p>
-        <p className="text-[10px] font-mono text-muted-foreground/60 truncate mt-0.5">
+        <p className="text-2xs font-mono text-muted-foreground/60 truncate mt-0.5">
           {session.threadId}
         </p>
       </div>
       <div className="flex items-center gap-1.5 shrink-0">
         <span className={`w-1.5 h-1.5 rounded-full ${STATUS_DOT[session.status]}`} />
-        <span className="text-[10px] text-muted-foreground">{STATUS_LABEL[session.status]}</span>
+        <span className="text-2xs text-muted-foreground">{STATUS_LABEL[session.status]}</span>
       </div>
     </div>
   );
@@ -163,14 +163,14 @@ function MetricBlock({
   const limitStr = limit != null ? formatMetric(limit, unit) : null;
   return (
     <div className="rounded-md border border-border/40 bg-muted/15 px-2.5 py-2">
-      <p className="text-[8px] text-muted-foreground/50 uppercase tracking-wider mb-1">{label}</p>
+      <p className="text-3xs text-muted-foreground/50 uppercase tracking-wider mb-1">{label}</p>
       <p className="text-xs font-mono font-semibold text-foreground">
         {usedStr}
         {limitStr && <span className="text-muted-foreground/60 font-normal"> / {limitStr}</span>}
         {note && (
           <Tooltip>
             <TooltipTrigger asChild>
-              <span className="ml-1 text-muted-foreground/50 cursor-help text-[9px] inline-block">
+              <span className="ml-1 text-muted-foreground/50 cursor-help text-2xs inline-block">
                 ⓘ
               </span>
             </TooltipTrigger>

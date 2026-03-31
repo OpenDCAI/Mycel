@@ -108,7 +108,7 @@ export default function CenteredInputBox({
           disabled={sending}
           style={{ boxShadow: "none" }}
         />
-        <p className="mb-4 text-[11px] text-muted-foreground">Enter 发送，Shift + Enter 换行</p>
+        <p className="text-xs text-muted-foreground/70 mb-4">Enter 发送，Shift + Enter 换行</p>
 
         <div className="flex items-center gap-3">
           <div className="min-w-0 flex-1 text-left">

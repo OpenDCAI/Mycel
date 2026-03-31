@@ -352,7 +352,7 @@ export default function CronEditor({ cronForm, isMobile, onUpdate, onSave, onClo
 
           {/* Category tags */}
           <div className="space-y-2">
-            <span className="text-[11px] text-muted-foreground font-medium flex items-center gap-1">
+            <span className="text-xs text-muted-foreground font-medium flex items-center gap-1">
               <Tag className="w-3 h-3" />分类
             </span>
             <div className="flex flex-wrap gap-1.5">
@@ -375,7 +375,7 @@ export default function CronEditor({ cronForm, isMobile, onUpdate, onSave, onClo
 
           {/* Priority */}
           <div className="space-y-2">
-            <span className="text-[11px] text-muted-foreground font-medium">优先级</span>
+            <span className="text-xs text-muted-foreground font-medium">优先级</span>
             <div className="flex gap-2">
               {PRIORITY_OPTIONS.map((p) => (
                 <button
@@ -404,7 +404,7 @@ export default function CronEditor({ cronForm, isMobile, onUpdate, onSave, onClo
               onClick={() => onUpdate({ ...cronForm, enabled: cronForm.enabled ? 0 : 1 })}
               className={`relative w-11 h-6 rounded-full transition-colors duration-fast ${cronForm.enabled ? "bg-primary" : "bg-muted"}`}
             >
-              <span className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow-sm transition-transform duration-fast ${cronForm.enabled ? "left-[22px]" : "left-0.5"}`} />
+              <span className={`absolute top-0.5 w-5 h-5 rounded-full bg-background shadow-sm transition-transform duration-fast ${cronForm.enabled ? "left-[22px]" : "left-0.5"}`} />
             </button>
           </div>
 
