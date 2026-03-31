@@ -110,7 +110,13 @@ class ToolRunner(AgentMiddleware):
             )
 
         try:
-            result = entry.handler(**args)
+            if asyncio.iscoroutinefunction(entry.handler):
+                result = await entry.handler(**args)
+            else:
+                # @@@async-tool-offload - synchronous inline tool handlers must never run
+                # on the web event loop. Remote filesystem/shell cold starts can block for
+                # seconds, so the async path always hops sync handlers to a worker thread.
+                result = await asyncio.to_thread(entry.handler, **args)
             if asyncio.iscoroutine(result):
                 result = await result
             return ToolMessage(content=str(result), tool_call_id=call_id, name=name)
