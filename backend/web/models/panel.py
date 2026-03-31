@@ -1,6 +1,7 @@
 """Pydantic models for panel API (Members, Tasks, Library, Profile)."""
 
 import json
+from typing import Literal
 
 from croniter import croniter
 from pydantic import BaseModel, field_validator
@@ -54,7 +55,7 @@ class CreateTaskRequest(BaseModel):
     title: str = "新任务"
     description: str = ""
     assignee_id: str = ""
-    priority: str = "medium"
+    priority: Literal["high", "medium", "low"] = "medium"
     deadline: str = ""
     tags: list[str] = []
 
@@ -63,8 +64,8 @@ class UpdateTaskRequest(BaseModel):
     title: str | None = None
     description: str | None = None
     assignee_id: str | None = None
-    status: str | None = None
-    priority: str | None = None
+    status: Literal["pending", "running", "completed", "failed"] | None = None
+    priority: Literal["high", "medium", "low"] | None = None
     progress: int | None = None
     deadline: str | None = None
     tags: list[str] | None = None
@@ -72,7 +73,7 @@ class UpdateTaskRequest(BaseModel):
 
 class BulkTaskStatusRequest(BaseModel):
     ids: list[str]
-    status: str
+    status: Literal["pending", "running", "completed", "failed"]
 
 
 class BulkDeleteTasksRequest(BaseModel):
