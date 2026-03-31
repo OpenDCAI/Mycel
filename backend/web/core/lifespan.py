@@ -13,6 +13,78 @@ from backend.web.services.resource_cache import resource_overview_refresh_loop
 from tui.config import ConfigManager
 
 
+def _seed_dev_user(app: FastAPI) -> None:
+    """Create dev-user human member + initial agents if not yet seeded.
+
+    Mirrors AuthService.register() but uses the fixed 'dev-user' ID that
+    matches _DEV_PAYLOAD, so list_members('dev-user') returns results.
+    """
+    import logging
+    import time
+    from pathlib import Path
+
+    from storage.contracts import MemberRow, MemberType, EntityRow
+    from storage.providers.sqlite.member_repo import generate_member_id
+    from backend.web.services.member_service import MEMBERS_DIR, _write_agent_md, _write_json
+
+    log = logging.getLogger(__name__)
+    member_repo = app.state.member_repo
+    entity_repo = app.state.entity_repo
+
+    DEV_USER_ID = "dev-user"
+    DEV_ENTITY_ID = "dev-user-1"
+
+    if member_repo.get_by_id(DEV_USER_ID) is not None:
+        return  # already seeded
+
+    log.info("DEV: seeding dev-user member + initial agents")
+    now = time.time()
+
+    # Human member row
+    member_repo.create(MemberRow(
+        id=DEV_USER_ID, name="Dev", type=MemberType.HUMAN, created_at=now,
+    ))
+
+    # Human entity
+    entity_repo.create(EntityRow(
+        id=DEV_ENTITY_ID, type="human", member_id=DEV_USER_ID,
+        name="Dev", thread_id=None, created_at=now,
+    ))
+
+    # Initial agents (same as register())
+    initial_agents = [
+        {"name": "Toad", "description": "Curious and energetic assistant", "avatar": "toad.jpeg"},
+        {"name": "Morel", "description": "Thoughtful senior analyst", "avatar": "morel.jpeg"},
+    ]
+    assets_dir = Path(__file__).resolve().parents[3] / "assets"
+
+    for agent_def in initial_agents:
+        agent_id = generate_member_id()
+        agent_dir = MEMBERS_DIR / agent_id
+        agent_dir.mkdir(parents=True, exist_ok=True)
+        _write_agent_md(agent_dir / "agent.md", name=agent_def["name"],
+                        description=agent_def["description"])
+        _write_json(agent_dir / "meta.json", {
+            "status": "active", "version": "1.0.0",
+            "created_at": int(now * 1000), "updated_at": int(now * 1000),
+        })
+        member_repo.create(MemberRow(
+            id=agent_id, name=agent_def["name"], type=MemberType.MYCEL_AGENT,
+            description=agent_def["description"],
+            config_dir=str(agent_dir),
+            owner_user_id=DEV_USER_ID,
+            created_at=now,
+        ))
+        src_avatar = assets_dir / agent_def["avatar"]
+        if src_avatar.exists():
+            try:
+                from backend.web.routers.entities import process_and_save_avatar
+                avatar_path = process_and_save_avatar(src_avatar, agent_id)
+                member_repo.update(agent_id, avatar=avatar_path, updated_at=now)
+            except Exception as e:
+                log.warning("DEV: avatar copy failed for %s: %s", agent_def["name"], e)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """FastAPI lifespan context manager for startup and shutdown."""
@@ -59,6 +131,11 @@ async def lifespan(app: FastAPI):
         accounts=app.state.account_repo,
         entities=app.state.entity_repo,
     )
+
+    # Dev bypass: seed dev-user + initial agents on first startup
+    from backend.web.core.dependencies import _DEV_SKIP_AUTH
+    if _DEV_SKIP_AUTH:
+        _seed_dev_user(app)
 
     from backend.web.services.chat_events import ChatEventBus
     from backend.web.services.typing_tracker import TypingTracker
