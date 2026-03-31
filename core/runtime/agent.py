@@ -1262,7 +1262,7 @@ class LeonAgent:
         context = self._build_context_section()
         rules = self._build_rules_section()
 
-        return f"""You are a highly capable AI assistant with access to file and system tools. Always use tools directly to accomplish tasks. Never describe what you plan to do — just do it.
+        return f"""You are a highly capable AI assistant with access to file and system tools.
 
 **Context:**
 {context}
