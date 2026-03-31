@@ -29,6 +29,9 @@
     --success-foreground: 0 0% 100%;
     --warning: 38 92% 50%;
     --warning-foreground: 0 0% 100%;
+    --info: 199 89% 48%;
+    --info-foreground: 0 0% 100%;
+    --foreground-secondary: 0 0% 32%;
     --chart-1: 220 70% 50%;
     --sidebar-background: 0 0% 98%;
     --sidebar-foreground: 0 0% 9%;
@@ -100,11 +103,11 @@ button:focus-visible,
 }
 
 *:hover::-webkit-scrollbar-thumb {
-  background: #d4d4d4;
+  background: hsl(var(--border));
 }
 
 *:hover::-webkit-scrollbar-thumb:hover {
-  background: #a3a3a3;
+  background: hsl(var(--muted-foreground));
 }
 
 /* Firefox */
@@ -114,17 +117,17 @@ button:focus-visible,
 }
 
 *:hover {
-  scrollbar-color: #d4d4d4 transparent;
+  scrollbar-color: hsl(var(--border)) transparent;
 }
 
 /* Touch devices — always show scrollbar (no hover available) */
 @media (hover: none) {
   ::-webkit-scrollbar-thumb {
-    background: #d4d4d4;
+    background: hsl(var(--border));
   }
 
   * {
-    scrollbar-color: #d4d4d4 transparent;
+    scrollbar-color: hsl(var(--border)) transparent;
   }
 }
 
@@ -173,7 +176,7 @@ button:focus-visible,
   font-weight: 600;
   margin: 0.5em 0 0.2em !important;
   line-height: 1.3;
-  color: #171717;
+  color: hsl(var(--foreground));
 }
 
 .markdown-content h1 { font-size: 1.25rem; }
@@ -198,19 +201,19 @@ button:focus-visible,
 }
 
 .markdown-content code {
-  background: #f5f5f5;
+  background: hsl(var(--muted));
   padding: 0.15em 0.4em;
   border-radius: 4px;
   font-size: 0.88em;
-  color: #171717;
-  border: 1px solid #e5e5e5;
+  color: hsl(var(--foreground));
+  border: 1px solid hsl(var(--border));
 }
 
 .markdown-content pre {
-  background: #fafafa;
+  background: hsl(var(--sidebar-background));
   padding: 0.6em;
   border-radius: 8px;
-  border: 1px solid #e5e5e5;
+  border: 1px solid hsl(var(--border));
   overflow-x: auto;
   margin: 0.28em 0 !important;
   line-height: 1.3;
@@ -220,14 +223,14 @@ button:focus-visible,
   background: transparent;
   padding: 0;
   border: none;
-  color: #171717;
+  color: hsl(var(--foreground));
 }
 
 .markdown-content blockquote {
-  border-left: 2px solid #e5e5e5;
+  border-left: 2px solid hsl(var(--border));
   padding-left: 0.75em;
   margin: 0.28em 0 !important;
-  color: #737373;
+  color: hsl(var(--muted-foreground));
   line-height: 1.3;
 }
 
@@ -239,13 +242,13 @@ button:focus-visible,
 
 .markdown-content th,
 .markdown-content td {
-  border: 1px solid #e5e5e5;
+  border: 1px solid hsl(var(--border));
   padding: 0.35em 0.5em;
   text-align: left;
   line-height: 1.3;
 }
 
 .markdown-content th {
-  background: #fafafa;
+  background: hsl(var(--sidebar-background));
   font-weight: 500;
 }
