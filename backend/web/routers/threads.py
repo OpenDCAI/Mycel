@@ -886,12 +886,16 @@ async def stream_thread_events(
     app: Annotated[Any, Depends(get_app)] = None,
 ) -> EventSourceResponse:
     """Persistent SSE event stream — uses ?token= for auth (EventSource can't set headers)."""
-    if not token:
-        raise HTTPException(401, "Missing token")
-    try:
-        sse_user_id = app.state.auth_service.verify_token(token)["user_id"]
-    except ValueError as e:
-        raise HTTPException(401, str(e))
+    from backend.web.core.dependencies import _DEV_SKIP_AUTH, _DEV_PAYLOAD
+    if _DEV_SKIP_AUTH:
+        sse_user_id = _DEV_PAYLOAD["user_id"]
+    else:
+        if not token:
+            raise HTTPException(401, "Missing token")
+        try:
+            sse_user_id = app.state.auth_service.verify_token(token)["user_id"]
+        except ValueError as e:
+            raise HTTPException(401, str(e))
     thread = app.state.thread_repo.get_by_id(thread_id)
     if not thread:
         raise HTTPException(404, "Thread not found")
