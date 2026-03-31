@@ -26,7 +26,12 @@ textarea:focus-visible {
 
 /* Smooth transitions — explicit properties to avoid outline/ring flash */
 button, input, textarea {
-  transition: color 0.15s ease, background-color 0.15s ease, border-color 0.15s ease, opacity 0.15s ease, box-shadow 0.15s ease;
+  transition: color var(--duration-fast) var(--ease-default), background-color var(--duration-fast) var(--ease-default), border-color var(--duration-fast) var(--ease-default), opacity var(--duration-fast) var(--ease-default), box-shadow var(--duration-fast) var(--ease-default);
+}
+@media (prefers-reduced-motion: reduce) {
+  button, input, textarea {
+    transition: none;
+  }
 }
 
 /* Line clamp */
@@ -42,42 +47,6 @@ button, input, textarea {
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
-}
-
-/* Thinking orbs — soft breathing pulse */
-@keyframes thinking-breathe {
-  0%, 100% { transform: scale(0.6); opacity: 0.3; }
-  50% { transform: scale(1); opacity: 1; }
-}
-
-.thinking-orb {
-  display: inline-block;
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-  background: #171717;
-  animation: thinking-breathe 1.2s ease-in-out infinite;
-}
-
-/* Boot phase orbs — faster, slightly lighter */
-@keyframes thinking-boot {
-  0%, 100% { transform: scale(0.5); opacity: 0.25; }
-  50% { transform: scale(1.15); opacity: 0.85; }
-}
-
-.thinking-orb-boot {
-  background: #525252;
-  animation: thinking-boot 0.85s ease-in-out infinite;
-}
-
-/* Avatar boot glow */
-@keyframes avatar-boot-glow {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(82, 82, 82, 0); }
-  50% { box-shadow: 0 0 8px 2px rgba(82, 82, 82, 0.35); }
-}
-
-.avatar-booting {
-  animation: avatar-boot-glow 1.6s ease-in-out infinite;
 }
 
 /* Custom scrollbar */

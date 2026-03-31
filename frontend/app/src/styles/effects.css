@@ -1,0 +1,118 @@
+/* L0 Detail Box — flowing light border when running */
+@property --border-angle {
+  syntax: "<angle>";
+  inherits: false;
+  initial-value: 0deg;
+}
+
+@keyframes borderSpin {
+  to { --border-angle: 360deg; }
+}
+
+@keyframes glowBreath {
+  0%, 100% { box-shadow: 0 0 6px -2px rgba(59, 130, 246, 0.08); }
+  50% { box-shadow: 0 0 16px -2px rgba(59, 130, 246, 0.22); }
+}
+
+.detail-box-glow {
+  position: relative;
+  border-color: transparent;
+  animation: glowBreath 2.5s var(--ease-in-out) infinite;
+}
+
+.detail-box-glow::before {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  padding: 1.5px;
+  background: conic-gradient(
+    from var(--border-angle),
+    transparent 25%,
+    rgba(59, 130, 246, 0.6) 45%,
+    rgba(147, 197, 253, 0.9) 50%,
+    rgba(59, 130, 246, 0.6) 55%,
+    transparent 75%
+  );
+  -webkit-mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  mask-composite: exclude;
+  animation: borderSpin 3s linear infinite;
+  pointer-events: none;
+}
+
+/* Rolling number animation (slot-machine style) */
+@keyframes numRollIn {
+  from { transform: translateY(110%); opacity: 0; }
+  to   { transform: translateY(0);    opacity: 1; }
+}
+@keyframes numRollOut {
+  from { transform: translateY(0);     opacity: 1; }
+  to   { transform: translateY(-110%); opacity: 0; }
+}
+
+/* Thinking orbs — soft breathing pulse */
+@keyframes thinking-breathe {
+  0%, 100% { transform: scale(0.6); opacity: 0.3; }
+  50% { transform: scale(1); opacity: 1; }
+}
+
+.thinking-orb {
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #171717;
+  animation: thinking-breathe 1.2s var(--ease-in-out) infinite;
+}
+
+/* Boot phase orbs — faster, slightly lighter */
+@keyframes thinking-boot {
+  0%, 100% { transform: scale(0.5); opacity: 0.25; }
+  50% { transform: scale(1.15); opacity: 0.85; }
+}
+
+.thinking-orb-boot {
+  background: #525252;
+  animation: thinking-boot 0.85s var(--ease-in-out) infinite;
+}
+
+/* Avatar boot glow */
+@keyframes avatar-boot-glow {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(82, 82, 82, 0); }
+  50% { box-shadow: 0 0 8px 2px rgba(82, 82, 82, 0.35); }
+}
+
+.avatar-booting {
+  animation: avatar-boot-glow 1.6s var(--ease-in-out) infinite;
+}
+
+/* --- Reduced motion for effects --- */
+@media (prefers-reduced-motion: reduce) {
+  .detail-box-glow,
+  .detail-box-glow::before,
+  .thinking-orb,
+  .thinking-orb-boot,
+  .avatar-booting {
+    animation: none !important;
+  }
+  .thinking-orb {
+    transform: scale(0.8);
+    opacity: 0.6;
+  }
+  .detail-box-glow {
+    border-color: rgba(59, 130, 246, 0.3);
+  }
+  /* Inline-style animations (numRoll) — suppress via keyframe override */
+  @keyframes numRollIn {
+    from, to { transform: translateY(0); opacity: 1; }
+  }
+  @keyframes numRollOut {
+    from, to { transform: translateY(0); opacity: 0; }
+  }
+}
