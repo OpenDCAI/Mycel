@@ -265,7 +265,7 @@ export default function ObservationSection({ config, onUpdate }: ObservationSect
                   {verifyResult && (
                     <div className={`flex items-center gap-2 px-3 py-2.5 rounded-lg text-xs ${
                       verifyResult.success
-                        ? "bg-success/5 border border-[#10b981]/20 text-success"
+                        ? "bg-success/5 border border-success/20 text-success"
                         : "bg-destructive/10 border border-destructive/20 text-destructive"
                     }`}>
                       {verifyResult.success

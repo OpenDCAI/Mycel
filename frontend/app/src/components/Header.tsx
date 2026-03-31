@@ -42,10 +42,10 @@ export default function Header({
   const hasRemote = sandboxInfo && sandboxInfo.type !== "local";
   const sandboxLabelText = sandboxLabel(sandboxInfo?.type ?? "local");
   const statusDotColor = sandboxInfo?.status === "running"
-    ? "#22c55e"
+    ? "hsl(var(--success))"
     : sandboxInfo?.status === "paused"
-      ? "#eab308"
-      : "var(--color-muted-foreground)";
+      ? "hsl(var(--warning))"
+      : "hsl(var(--muted-foreground))";
 
   return (
     <header className="h-12 flex items-center justify-between px-4 flex-shrink-0 bg-card border-b border-border">

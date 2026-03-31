@@ -79,7 +79,7 @@ export default function ProvidersSection({ providers, onUpdate }: ProvidersSecti
               key={providerConfig.id}
               className="border border-border rounded-xl p-5 bg-card hover:border-info hover:shadow-lg hover:shadow-info/10 transition-all duration-normal space-y-4"
               style={{
-                animation: `motionFadeInUp var(--duration-slow) var(--ease-out) calc(var(--duration-instant) * ${index}) both`
+                animation: `motionFadeInUp var(--duration-slow) var(--ease-out) calc(${index} * var(--duration-instant)) both`
               }}
             >
               <div className="flex items-center justify-between">

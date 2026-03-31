@@ -13,19 +13,19 @@ All colors are CSS custom properties in HSL (no `hsl()` wrapper) for Tailwind al
 
 | Token | HSL | Hex | Usage |
 |-------|-----|-----|-------|
-| `--background` | `0 0% 100%` | `#ffffff` | Page background |
-| `--foreground` | `0 0% 9%` | `#171717` | Primary text |
-| `--foreground-secondary` | `0 0% 32%` | `#525252` | Secondary text (descriptions, metadata) |
-| `--muted` | `0 0% 96%` | `#f5f5f5` | Subtle backgrounds (input, card hover) |
-| `--muted-foreground` | `0 0% 45%` | `#737373` | Placeholder, disabled text |
-| `--card` | `0 0% 100%` | `#ffffff` | Card, popover surface |
-| `--border` | `0 0% 91%` | `#e8e8e8` | Borders, dividers |
-| `--primary` | `0 0% 9%` | `#171717` | Primary action (buttons, links) |
-| `--accent` | `0 0% 96%` | `#f5f5f5` | Hover highlight |
-| `--destructive` | `0 84% 60%` | `#ef4444` | Error, danger, delete |
-| `--success` | `160 84% 39%` | `#10b981` | Success, online, healthy |
-| `--warning` | `38 92% 50%` | `#f59e0b` | Warning, attention |
-| `--info` | `199 89% 48%` | `#0ea5e9` | Informational, active, highlight |
+| `--background` | `0 0% 100%` | Page background |
+| `--foreground` | `0 0% 9%` | Primary text |
+| `--foreground-secondary` | `0 0% 32%` | Secondary text (descriptions, metadata) |
+| `--muted` | `0 0% 96%` | Subtle backgrounds (input, card hover) |
+| `--muted-foreground` | `0 0% 45%` | Placeholder, disabled text |
+| `--card` | `0 0% 100%` | Card, popover surface |
+| `--border` | `0 0% 91%` | Borders, dividers |
+| `--primary` | `0 0% 9%` | Primary action (buttons, links) |
+| `--accent` | `0 0% 96%` | Hover highlight |
+| `--destructive` | `0 84% 60%` | Error, danger, delete |
+| `--success` | `160 84% 39%` | Success, online, healthy |
+| `--warning` | `38 92% 50%` | Warning, attention |
+| `--info` | `199 89% 48%` | Informational, active, highlight |
 
 ### Neutral Palette
 
