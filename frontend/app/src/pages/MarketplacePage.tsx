@@ -1,0 +1,331 @@
+import { useState, useEffect, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
+import { Search, Store, Package, TrendingUp, Clock, Star, RefreshCw } from "lucide-react";
+import { useMarketplaceStore } from "@/store/marketplace-store";
+import { useAppStore } from "@/store/app-store";
+import { useIsMobile } from "@/hooks/use-mobile";
+import MarketplaceCard from "@/components/marketplace/MarketplaceCard";
+import UpdateDialog from "@/components/marketplace/UpdateDialog";
+import type { Member } from "@/store/types";
+
+type Tab = "explore" | "installed";
+type TypeFilter = "all" | "member" | "agent" | "skill" | "env";
+
+const typeFilters: { id: TypeFilter; label: string }[] = [
+  { id: "all", label: "All" },
+  { id: "member", label: "Member" },
+  { id: "agent", label: "Agent" },
+  { id: "skill", label: "Skill" },
+  { id: "env", label: "Env" },
+];
+
+const sortOptions = [
+  { id: "downloads", label: "Popular", icon: TrendingUp },
+  { id: "newest", label: "Newest", icon: Clock },
+  { id: "featured", label: "Featured", icon: Star },
+];
+
+export default function MarketplacePage() {
+  const isMobile = useIsMobile();
+  const navigate = useNavigate();
+  const [tab, setTab] = useState<Tab>("explore");
+
+  // Explore state
+  const items = useMarketplaceStore((s) => s.items);
+  const total = useMarketplaceStore((s) => s.total);
+  const loading = useMarketplaceStore((s) => s.loading);
+  const filters = useMarketplaceStore((s) => s.filters);
+  const setFilter = useMarketplaceStore((s) => s.setFilter);
+  const fetchItems = useMarketplaceStore((s) => s.fetchItems);
+
+  // Installed state
+  const memberList = useAppStore((s) => s.memberList);
+  const updates = useMarketplaceStore((s) => s.updates);
+  const checkUpdates = useMarketplaceStore((s) => s.checkUpdates);
+
+  // Search
+  const [searchInput, setSearchInput] = useState("");
+  const [installedSearch, setInstalledSearch] = useState("");
+
+  // Update dialog
+  const [updateDialogOpen, setUpdateDialogOpen] = useState(false);
+  const [updateTarget, setUpdateTarget] = useState<{ member: Member; update: any } | null>(null);
+
+  // Fetch explore items when filters change
+  useEffect(() => {
+    if (tab === "explore") fetchItems();
+  }, [tab, filters, fetchItems]);
+
+  // Debounced search
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (tab === "explore") setFilter("q", searchInput);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchInput, tab, setFilter]);
+
+  const handleTypeFilter = (type: TypeFilter) => {
+    setFilter("type", type === "all" ? null : type);
+  };
+
+  // Installed members with marketplace source info
+  const installedMembers = memberList.filter((m) => !m.builtin);
+  const filteredInstalled = installedMembers.filter((m) => {
+    if (installedSearch && !m.name.toLowerCase().includes(installedSearch.toLowerCase())) return false;
+    return true;
+  });
+
+  const handleCheckUpdates = useCallback(async () => {
+    const installed = installedMembers
+      .map((m) => ({
+        marketplace_item_id: m.id,
+        installed_version: m.version,
+      }));
+    if (installed.length > 0) await checkUpdates(installed);
+  }, [installedMembers, checkUpdates]);
+
+  const tabItems = [
+    { id: "explore" as Tab, label: "Explore", icon: Store },
+    { id: "installed" as Tab, label: "Installed", icon: Package },
+  ];
+
+  return (
+    <div className="flex h-full">
+      {/* Sidebar tabs - desktop */}
+      {!isMobile && (
+        <div className="w-[200px] shrink-0 border-r border-border bg-card flex flex-col">
+          <div className="h-14 flex items-center px-4 border-b border-border">
+            <h2 className="text-sm font-semibold text-foreground">Marketplace</h2>
+          </div>
+          <div className="flex-1 p-2 space-y-0.5">
+            {tabItems.map((t) => {
+              const isActive = tab === t.id;
+              return (
+                <button
+                  key={t.id}
+                  onClick={() => setTab(t.id)}
+                  className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm transition-all ${
+                    isActive
+                      ? "bg-primary/5 text-foreground border border-primary/15"
+                      : "text-muted-foreground hover:bg-muted hover:text-foreground border border-transparent"
+                  }`}
+                >
+                  <t.icon className={`w-4 h-4 ${isActive ? "text-primary" : ""}`} />
+                  <span>{t.label}</span>
+                  {t.id === "installed" && updates.length > 0 && (
+                    <span className="ml-auto text-[10px] px-1.5 py-0.5 rounded-full bg-primary text-primary-foreground font-medium">
+                      {updates.length}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Content */}
+      <div className="flex-1 flex flex-col overflow-hidden bg-background">
+        {/* Header */}
+        <div className="h-14 flex items-center justify-between px-4 md:px-6 border-b border-border shrink-0">
+          <div className="flex items-center gap-3">
+            {isMobile && (
+              <div className="flex gap-1">
+                {tabItems.map((t) => {
+                  const isActive = tab === t.id;
+                  return (
+                    <button
+                      key={t.id}
+                      onClick={() => setTab(t.id)}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs whitespace-nowrap shrink-0 transition-colors ${
+                        isActive ? "bg-primary/10 text-primary font-medium" : "text-muted-foreground hover:text-foreground hover:bg-muted"
+                      }`}
+                    >
+                      <t.icon className="w-3.5 h-3.5" />{t.label}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+            {!isMobile && (
+              <h3 className="text-sm font-semibold text-foreground">
+                {tab === "explore" ? "Explore" : "Installed"}
+              </h3>
+            )}
+          </div>
+          {tab === "installed" && (
+            <button
+              onClick={handleCheckUpdates}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+            >
+              <RefreshCw className="w-3.5 h-3.5" />
+              Check Updates
+            </button>
+          )}
+        </div>
+
+        <div className="flex-1 overflow-y-auto">
+          <div className="max-w-3xl mx-auto py-6 px-4 md:px-6">
+            {tab === "explore" && (
+              <>
+                {/* Search */}
+                <div className="relative mb-4">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+                  <input
+                    value={searchInput}
+                    onChange={(e) => setSearchInput(e.target.value)}
+                    placeholder="Search marketplace..."
+                    className="w-full pl-9 pr-3 py-2 rounded-lg bg-card border border-border text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary/40 transition-colors"
+                  />
+                </div>
+
+                {/* Type filter + Sort */}
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex gap-1.5">
+                    {typeFilters.map((f) => (
+                      <button
+                        key={f.id}
+                        onClick={() => handleTypeFilter(f.id)}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                          (f.id === "all" && !filters.type) || filters.type === f.id
+                            ? "bg-primary/10 text-primary"
+                            : "text-muted-foreground hover:text-foreground hover:bg-muted"
+                        }`}
+                      >
+                        {f.label}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="flex gap-1">
+                    {sortOptions.map((s) => (
+                      <button
+                        key={s.id}
+                        onClick={() => setFilter("sort", s.id)}
+                        className={`p-1.5 rounded-md transition-colors ${
+                          filters.sort === s.id
+                            ? "text-primary bg-primary/10"
+                            : "text-muted-foreground hover:text-foreground hover:bg-muted"
+                        }`}
+                        title={s.label}
+                      >
+                        <s.icon className="w-3.5 h-3.5" />
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Results */}
+                {loading ? (
+                  <div className="flex items-center justify-center py-20">
+                    <RefreshCw className="w-5 h-5 animate-spin text-muted-foreground" />
+                  </div>
+                ) : (
+                  <>
+                    <div className={`grid ${isMobile ? "grid-cols-1" : "grid-cols-2"} gap-3`}>
+                      {items.map((item) => (
+                        <MarketplaceCard
+                          key={item.id}
+                          item={item}
+                          onClick={() => navigate(`/marketplace/${item.id}`)}
+                        />
+                      ))}
+                    </div>
+                    {items.length === 0 && !loading && (
+                      <div className="text-center py-12 text-sm text-muted-foreground">
+                        {filters.q ? "No results found" : "No items in marketplace yet"}
+                      </div>
+                    )}
+                    {/* Pagination */}
+                    {total > 20 && (
+                      <div className="flex items-center justify-center gap-2 mt-6">
+                        <button
+                          disabled={filters.page <= 1}
+                          onClick={() => setFilter("page", filters.page - 1)}
+                          className="px-3 py-1.5 rounded-lg text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted disabled:opacity-50 transition-colors"
+                        >
+                          Previous
+                        </button>
+                        <span className="text-xs text-muted-foreground">
+                          Page {filters.page} of {Math.ceil(total / 20)}
+                        </span>
+                        <button
+                          disabled={filters.page >= Math.ceil(total / 20)}
+                          onClick={() => setFilter("page", filters.page + 1)}
+                          className="px-3 py-1.5 rounded-lg text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted disabled:opacity-50 transition-colors"
+                        >
+                          Next
+                        </button>
+                      </div>
+                    )}
+                  </>
+                )}
+              </>
+            )}
+
+            {tab === "installed" && (
+              <>
+                {/* Search */}
+                <div className="relative mb-4">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+                  <input
+                    value={installedSearch}
+                    onChange={(e) => setInstalledSearch(e.target.value)}
+                    placeholder="Search installed..."
+                    className="w-full pl-9 pr-3 py-2 rounded-lg bg-card border border-border text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary/40 transition-colors"
+                  />
+                </div>
+
+                {/* Grid */}
+                <div className={`grid ${isMobile ? "grid-cols-1" : "grid-cols-2"} gap-3`}>
+                  {filteredInstalled.map((member) => {
+                    const update = updates.find((u) => u.marketplace_item_id === member.id);
+                    return (
+                      <div key={member.id} className="surface-interactive p-4 cursor-pointer group relative" onClick={() => navigate(`/members/${member.id}`)}>
+                        <div className="flex items-start gap-3">
+                          <div className="w-9 h-9 rounded-lg bg-primary/8 flex items-center justify-center shrink-0">
+                            <Package className="w-4 h-4 text-primary" />
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <h4 className="text-sm font-medium text-foreground group-hover:text-primary transition-colors">{member.name}</h4>
+                            <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{member.description}</p>
+                            <p className="text-[11px] text-muted-foreground mt-2 font-mono">v{member.version}</p>
+                          </div>
+                        </div>
+                        {update && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setUpdateTarget({ member, update });
+                              setUpdateDialogOpen(true);
+                            }}
+                            className="absolute top-2 right-2 text-[10px] px-2 py-0.5 rounded-full bg-primary/10 text-primary font-medium hover:bg-primary/20 transition-colors"
+                          >
+                            Update to v{update.latest_version}
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+                {filteredInstalled.length === 0 && (
+                  <div className="text-center py-12 text-sm text-muted-foreground">No installed members</div>
+                )}
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Update dialog */}
+      {updateTarget && (
+        <UpdateDialog
+          open={updateDialogOpen}
+          onOpenChange={setUpdateDialogOpen}
+          memberId={updateTarget.member.id}
+          update={updateTarget.update}
+          memberName={updateTarget.member.name}
+        />
+      )}
+    </div>
+  );
+}

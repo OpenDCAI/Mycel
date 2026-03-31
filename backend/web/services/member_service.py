@@ -661,3 +661,106 @@ def delete_member(member_id: str) -> bool:
     return True
 
 
+def install_from_snapshot(
+    snapshot: dict,
+    name: str,
+    description: str,
+    marketplace_item_id: str,
+    installed_version: str,
+    owner_user_id: str,
+    existing_member_id: str | None = None,
+) -> str:
+    """Create or update a local member from a marketplace snapshot."""
+    from storage.providers.sqlite.member_repo import SQLiteMemberRepo, generate_member_id
+    from storage.contracts import MemberRow, MemberType
+
+    now = time.time()
+    now_ms = int(now * 1000)
+
+    if existing_member_id:
+        member_id = existing_member_id
+        member_dir = MEMBERS_DIR / member_id
+    else:
+        member_id = generate_member_id()
+        member_dir = MEMBERS_DIR / member_id
+        member_dir.mkdir(parents=True, exist_ok=True)
+
+    # Write agent.md
+    agent_md_content = snapshot.get("agent_md", "")
+    if agent_md_content:
+        (member_dir / "agent.md").write_text(agent_md_content, encoding="utf-8")
+    else:
+        _write_agent_md(member_dir / "agent.md", name=name, description=description)
+
+    # Write rules
+    rules_dir = member_dir / "rules"
+    if rules_dir.exists():
+        shutil.rmtree(rules_dir)
+    for rule in snapshot.get("rules", []):
+        rules_dir.mkdir(exist_ok=True)
+        rule_name = rule.get("name", "default").replace("/", "_").replace("\\", "_")
+        (rules_dir / f"{rule_name}.md").write_text(rule.get("content", ""), encoding="utf-8")
+
+    # Write agents
+    agents_dir = member_dir / "agents"
+    if agents_dir.exists():
+        shutil.rmtree(agents_dir)
+    for agent in snapshot.get("agents", []):
+        agents_dir.mkdir(exist_ok=True)
+        agent_name = agent.get("name", "default")
+        (agents_dir / f"{agent_name}.md").write_text(agent.get("content", ""), encoding="utf-8")
+
+    # Write skills
+    skills_dir = member_dir / "skills"
+    if skills_dir.exists():
+        shutil.rmtree(skills_dir)
+    for skill in snapshot.get("skills", []):
+        skill_name = skill.get("name", "default")
+        skill_sub_dir = skills_dir / skill_name
+        skill_sub_dir.mkdir(parents=True, exist_ok=True)
+        (skill_sub_dir / "SKILL.md").write_text(skill.get("content", ""), encoding="utf-8")
+        if skill.get("meta"):
+            _write_json(skill_sub_dir / "meta.json", skill["meta"])
+
+    # Write MCP
+    mcp_data = snapshot.get("mcp", {})
+    if mcp_data:
+        _write_json(member_dir / ".mcp.json", mcp_data)
+    elif (member_dir / ".mcp.json").exists():
+        (member_dir / ".mcp.json").unlink()
+
+    # Write runtime
+    runtime_data = snapshot.get("runtime", {})
+    if runtime_data:
+        _write_json(member_dir / "runtime.json", runtime_data)
+
+    # Write meta.json with source info
+    meta = {
+        "status": "active",
+        "version": installed_version,
+        "created_at": now_ms if not existing_member_id else _read_json(member_dir / "meta.json", {}).get("created_at", now_ms),
+        "updated_at": now_ms,
+        "source": {
+            "marketplace_item_id": marketplace_item_id,
+            "installed_version": installed_version,
+            "installed_at": now_ms,
+            "modified": False,
+        },
+    }
+    _write_json(member_dir / "meta.json", meta)
+
+    # Register in SQLite (new installs only)
+    if not existing_member_id and owner_user_id:
+        repo = SQLiteMemberRepo()
+        try:
+            repo.create(MemberRow(
+                id=member_id, name=name, type=MemberType.MYCEL_AGENT,
+                description=description, config_dir=str(member_dir),
+                owner_user_id=owner_user_id, created_at=now,
+            ))
+        finally:
+            repo.close()
+
+    return member_id
+
+
