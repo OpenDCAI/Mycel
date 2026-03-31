@@ -81,7 +81,7 @@ function NewChatDialog({ onClose, onCreated }: { onClose: () => void; onCreated:
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onClose}>
       <div className="w-full max-w-sm bg-card rounded-xl shadow-xl border border-border" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between px-4 py-3 border-b border-border">
-          <h3 className="text-sm font-semibold">New Chat</h3>
+          <h3 className="text-sm font-semibold">新建聊天</h3>
           <button onClick={onClose} className="text-muted-foreground hover:text-foreground"><X className="w-4 h-4" /></button>
         </div>
 
@@ -109,14 +109,14 @@ function NewChatDialog({ onClose, onCreated }: { onClose: () => void; onCreated:
         <div className="px-4 py-2">
           <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-muted/50 border border-border">
             <Search className="w-4 h-4 text-muted-foreground" />
-            <input type="text" placeholder="Search..." value={search} onChange={e => setSearch(e.target.value)}
+            <input type="text" placeholder="搜索..." value={search} onChange={e => setSearch(e.target.value)}
               className="flex-1 bg-transparent text-sm outline-none" autoFocus />
           </div>
         </div>
         <div className="max-h-56 overflow-y-auto px-2 pb-2">
           {filtered.length === 0 ? (
             <p className="text-xs text-muted-foreground text-center py-4">
-              {entities.length === 0 ? "No other users registered yet" : "No matches"}
+              {entities.length === 0 ? "暂无其他用户" : "无匹配结果"}
             </p>
           ) : filtered.map(e => {
             const isSelected = selected.has(e.id);
@@ -178,7 +178,7 @@ function ChatSearchModal({ chats, myEntityId, onSelect, onClose }: {
           <Search className="w-4 h-4 text-muted-foreground shrink-0" />
           <input
             type="text"
-            placeholder="Search chats..."
+            placeholder="搜索聊天..."
             value={query}
             onChange={e => setQuery(e.target.value)}
             className="flex-1 bg-transparent text-sm outline-none text-foreground"
@@ -187,7 +187,7 @@ function ChatSearchModal({ chats, myEntityId, onSelect, onClose }: {
         </div>
         <div className="max-h-64 overflow-y-auto">
           {filtered.length === 0 ? (
-            <p className="text-xs text-muted-foreground text-center py-6">No results</p>
+            <p className="text-xs text-muted-foreground text-center py-6">无结果</p>
           ) : filtered.map(chat => {
             const name = chatDisplayName(chat, myEntityId);
             const otherEntity = chat.entities.find(e => e.id !== myEntityId);
@@ -286,7 +286,7 @@ export default function ChatsLayout() {
             onClick={() => setShowSearch(true)}
           >
             <Search className="w-4 h-4" />
-            <span>Search chats...</span>
+            <span>搜索聊天...</span>
           </button>
         </div>
 
@@ -295,7 +295,7 @@ export default function ChatsLayout() {
         {/* Chat list — same spacing as Sidebar.tsx thread list */}
         <div className="flex-1 min-h-0 px-3 pt-3 flex flex-col">
           <div className="flex items-center justify-between px-2 mb-2 flex-shrink-0">
-            <span className="text-xs font-medium tracking-wider uppercase text-muted-foreground/60">Chats</span>
+            <span className="text-xs font-medium tracking-wider uppercase text-muted-foreground/60">聊天</span>
             <div className="flex items-center gap-1.5">
               <span className="text-xs text-muted-foreground/40">{chats.length}</span>
               <button
@@ -319,9 +319,9 @@ export default function ChatsLayout() {
               </div>
             ) : sorted.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-12 px-4">
-                <p className="text-xs text-muted-foreground mb-2">No chats yet</p>
+                <p className="text-xs text-muted-foreground mb-2">暂无聊天</p>
                 <button onClick={() => setShowNewChat(true)}
-                  className="text-xs text-primary hover:underline">Start a conversation</button>
+                  className="text-xs text-primary hover:underline">开始对话</button>
               </div>
             ) : sorted.map(chat => {
               const isActive = chatId === chat.id;

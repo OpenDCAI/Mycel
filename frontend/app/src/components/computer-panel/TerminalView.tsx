@@ -19,8 +19,8 @@ export function TerminalView({ steps }: { steps: ToolStep[] }) {
     >
       {/* Boot banner */}
       <div style={{ color: "#6a9955" }} className="mb-3 select-none">
-        <div>Mycel Terminal v1.0</div>
-        <div className="text-xs" style={{ color: "#555" }}>Type is streamed from agent tool calls</div>
+        <div>Mycel 终端 v1.0</div>
+        <div className="text-xs" style={{ color: "#555" }}>内容来自 Agent 工具调用的流式输出</div>
         <div className="mt-1" style={{ color: "#333" }}>{"─".repeat(48)}</div>
       </div>
 

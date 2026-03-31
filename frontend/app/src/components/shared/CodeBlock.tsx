@@ -57,7 +57,7 @@ export function CodeBlock({
         <button
           onClick={handleCopy}
           className="ml-auto p-1.5 rounded hover:bg-gray-200 dark:hover:bg-gray-800 transition-colors duration-fast"
-          title="Copy code"
+          title="复制代码"
         >
           {copied ? (
             <Check className="w-4 h-4 text-success" />

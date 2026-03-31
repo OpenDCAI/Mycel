@@ -255,12 +255,12 @@ function ChatConversationInner({ chatId }: { chatId: string }) {
   // Display name for header
   const chatName = chat
     ? chat.title || chat.entities.filter(e => e.id !== myEntityId).map(e => e.name).join(", ") || "Chat"
-    : "Chat";
+    : "聊天";
 
   if (loading) {
     return (
       <div className="h-full flex items-center justify-center">
-        <p className="text-sm text-muted-foreground">Loading...</p>
+        <p className="text-sm text-muted-foreground">加载中...</p>
       </div>
     );
   }
@@ -304,7 +304,7 @@ function ChatConversationInner({ chatId }: { chatId: string }) {
       >
         {messages.length === 0 ? (
           <div className="flex items-center justify-center h-full">
-            <p className="text-sm text-muted-foreground">Send a message to start the conversation</p>
+            <p className="text-sm text-muted-foreground">发送一条消息开始对话</p>
           </div>
         ) : (
           <div className="max-w-3xl mx-auto space-y-3.5">
@@ -352,7 +352,7 @@ function ChatConversationInner({ chatId }: { chatId: string }) {
             value={input}
             onChange={e => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Type a message..."
+            placeholder="输入消息..."
             rows={1}
             className="flex-1 resize-none px-3.5 py-2.5 rounded-xl border border-border bg-background text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-foreground/10 max-h-32"
             style={{ minHeight: "38px" }}

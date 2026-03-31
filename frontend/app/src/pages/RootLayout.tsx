@@ -399,13 +399,13 @@ function LoginForm() {
           <img src="/logo.png" alt="Mycel" className="w-24 mx-auto mb-4" />
           <h1 className="text-xl font-semibold text-foreground">Mycel</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            {mode === "login" ? "Sign in to your account" : "Create a new account"}
+            {mode === "login" ? "登录你的账号" : "创建新账号"}
           </p>
         </div>
         <form onSubmit={handleSubmit} className="space-y-4">
           <input
             type="text"
-            placeholder="Username"
+            placeholder="用户名"
             value={username}
             onChange={e => setUsername(e.target.value)}
             className="w-full px-4 py-2.5 rounded-lg border border-border bg-card text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
@@ -413,7 +413,7 @@ function LoginForm() {
           />
           <input
             type="password"
-            placeholder="Password"
+            placeholder="密码"
             value={password}
             onChange={e => setPassword(e.target.value)}
             className="w-full px-4 py-2.5 rounded-lg border border-border bg-card text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
@@ -425,14 +425,14 @@ function LoginForm() {
             disabled={loading}
             className="w-full py-2.5 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 disabled:opacity-50"
           >
-            {loading ? "..." : mode === "login" ? "Sign in" : "Create account"}
+            {loading ? "..." : mode === "login" ? "登录" : "注册"}
           </button>
         </form>
         <p className="text-center text-xs text-muted-foreground mt-4">
           {mode === "login" ? (
-            <>No account? <button onClick={() => { setMode("register"); setError(null); }} className="text-primary hover:underline">Register</button></>
+            <>没有账号？<button onClick={() => { setMode("register"); setError(null); }} className="text-primary hover:underline">注册</button></>
           ) : (
-            <>Already have an account? <button onClick={() => { setMode("login"); setError(null); }} className="text-primary hover:underline">Sign in</button></>
+            <>已有账号？<button onClick={() => { setMode("login"); setError(null); }} className="text-primary hover:underline">登录</button></>
           )}
         </p>
       </div>

@@ -83,7 +83,7 @@ export function BackgroundSessionsIndicator({ tasks, onCancelTask }: BackgroundS
               {agents.length > 0 && <div className="border-t border-gray-100 mb-2.5" />}
               <div className="flex items-center gap-1.5 text-2xs font-semibold text-gray-400 uppercase tracking-wide mb-1.5">
                 <Terminal className="w-3 h-3" />
-                Terminal ({terminals.length})
+                终端 ({terminals.length})
               </div>
               <div className="space-y-1">
                 {terminals.map((task) => (

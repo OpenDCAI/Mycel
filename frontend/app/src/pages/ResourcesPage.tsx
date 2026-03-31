@@ -94,7 +94,7 @@ export default function ResourcesPage() {
   if (loading) {
     return (
       <div className="h-full flex items-center justify-center bg-background">
-        <p className="text-sm text-muted-foreground">Loading resources...</p>
+        <p className="text-sm text-muted-foreground">加载资源中...</p>
       </div>
     );
   }
@@ -103,7 +103,7 @@ export default function ResourcesPage() {
     return (
       <div className="h-full flex items-center justify-center bg-background p-6">
         <div className="max-w-lg rounded-xl border border-border bg-card px-5 py-4">
-          <h3 className="text-sm font-semibold text-foreground mb-2">Resource API error</h3>
+          <h3 className="text-sm font-semibold text-foreground mb-2">资源加载失败</h3>
           <p className="text-xs text-muted-foreground font-mono break-all">{error}</p>
         </div>
       </div>
@@ -113,7 +113,7 @@ export default function ResourcesPage() {
   if (!selected) {
     return (
       <div className="h-full flex items-center justify-center bg-background">
-        <p className="text-sm text-muted-foreground">No providers configured.</p>
+        <p className="text-sm text-muted-foreground">暂无已配置的提供商</p>
       </div>
     );
   }
