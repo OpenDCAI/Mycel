@@ -5,14 +5,14 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "leonai"
 version = "0.3.0"
-description = "Leon - Proactive AI coding assistant with persistent memory and TUI"
+description = "Leon - Proactive AI coding assistant with persistent memory"
 readme = "README.md"
 requires-python = ">=3.12"
 license = {text = "MIT"}
 authors = [
     {name = "nmhjklnm"}
 ]
-keywords = ["ai", "assistant", "langchain", "anthropic", "claude", "tui", "coding"]
+keywords = ["ai", "assistant", "langchain", "anthropic", "claude", "coding"]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Environment :: Console",
@@ -31,9 +31,7 @@ dependencies = [
     "langchain-anthropic>=1.3.1",
     "langgraph>=1.0.7",
     "langgraph-checkpoint-sqlite>=2.0.0",
-    "textual>=1.0.0",
     "rich>=13.0.0",
-    "pyperclip>=1.11.0",
     "langchain-openai>=1.1.7",
     "duckduckgo-search>=8.1.1",
     "httpx>=0.28.1",
@@ -58,9 +56,6 @@ langfuse = ["langfuse>=3.0.0"]
 langsmith = ["langsmith>=0.1.0"]
 otel = ["opentelemetry-api>=1.20.0", "opentelemetry-sdk>=1.20.0", "opentelemetry-exporter-otlp>=1.20.0"]
 all = ["pymupdf>=1.24.0", "python-pptx>=1.0.0", "wuying-agentbay-sdk>=0.10.0", "e2b>=2.13.0", "daytona-sdk>=0.139.0,<0.140.0", "python-socks>=2.7.0", "httpx-sse>=0.4.0", "langfuse>=3.0.0", "langsmith>=0.1.0"]
-
-[project.scripts]
-leonai = "tui.leon_cli:main"
 
 [project.urls]
 Homepage = "https://github.com/Ju-Yi-AI-Lab/leonai"
@@ -106,8 +101,6 @@ packages = [
     "storage.providers",
     "storage.providers.sqlite",
     "storage.providers.supabase",
-    "tui",
-    "tui.widgets",
     "eval",
     "eval.harness",
     "backend.taskboard",

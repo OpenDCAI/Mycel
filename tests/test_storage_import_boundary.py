@@ -14,7 +14,7 @@ FORBIDDEN = (
 
 def test_runtime_layers_do_not_import_memory_repo_modules_directly() -> None:
     repo_root = Path(__file__).resolve().parents[1]
-    scan_dirs = ("core", "backend", "tui", "eval")
+    scan_dirs = ("core", "backend", "eval")
     offenders: list[str] = []
 
     for scan_dir in scan_dirs:
