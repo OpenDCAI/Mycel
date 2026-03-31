@@ -15,8 +15,8 @@ html, body, #root {
 
 /* Selection */
 ::selection {
-  background: rgba(0, 0, 0, 0.08);
-  color: #171717;
+  background: hsl(var(--foreground) / 0.08);
+  color: hsl(var(--foreground));
 }
 
 /* Remove focus outline from textarea inputs (handled by container border) */
@@ -59,15 +59,15 @@ button, input, textarea {
 }
 
 .custom-scrollbar::-webkit-scrollbar-thumb {
-  background: #d4d4d4;
+  background: hsl(var(--border));
   border-radius: 2px;
 }
 
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: #a3a3a3;
+  background: hsl(var(--muted-foreground));
 }
 
 *:focus-visible {
-  outline: 2px solid #171717;
+  outline: 2px solid hsl(var(--foreground));
   outline-offset: 2px;
 }

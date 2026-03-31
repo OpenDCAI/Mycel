@@ -9,7 +9,10 @@ module.exports = {
         input: "hsl(var(--input))",
         ring: "hsl(var(--ring))",
         background: "hsl(var(--background))",
-        foreground: "hsl(var(--foreground))",
+        foreground: {
+          DEFAULT: "hsl(var(--foreground))",
+          secondary: "hsl(var(--foreground-secondary))",
+        },
         primary: {
           DEFAULT: "hsl(var(--primary))",
           foreground: "hsl(var(--primary-foreground))",
@@ -40,6 +43,10 @@ module.exports = {
         },
         success: "hsl(var(--success))",
         warning: "hsl(var(--warning))",
+        info: {
+          DEFAULT: "hsl(var(--info))",
+          foreground: "hsl(var(--info-foreground))",
+        },
         "chart-1": "hsl(var(--chart-1))",
         sidebar: {
           DEFAULT: "hsl(var(--sidebar-background))",
@@ -72,6 +79,10 @@ module.exports = {
         'in-expo': 'var(--ease-in)',
         io: 'var(--ease-in-out)',
         spring: 'var(--ease-spring)',
+      },
+      fontSize: {
+        '3xs': ['0.5rem', { lineHeight: '0.75rem' }],
+        '2xs': ['0.625rem', { lineHeight: '0.875rem' }],
       },
       boxShadow: {
         xs: "0 1px 2px 0 rgb(0 0 0 / 0.05)",
