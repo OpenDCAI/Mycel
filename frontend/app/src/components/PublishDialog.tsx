@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { useAppStore } from "@/store/app-store";
+import { useMarketplaceStore } from "@/store/marketplace-store";
 import { toast } from "sonner";
 
 interface Props {
@@ -29,7 +30,9 @@ export default function PublishDialog({ open, onOpenChange, memberId }: Props) {
   const publishMember = useAppStore(s => s.publishMember);
   const [bumpType, setBumpType] = useState<BumpType>("patch");
   const [notes, setNotes] = useState("");
+  const [tags, setTags] = useState("");
   const [publishing, setPublishing] = useState(false);
+  const publishToMarketplace = useMarketplaceStore(s => s.publishToMarketplace);
 
   if (!member) return null;
 
@@ -39,6 +42,11 @@ export default function PublishDialog({ open, onOpenChange, memberId }: Props) {
     try {
       setPublishing(true);
       await publishMember(memberId, bumpType);
+      try {
+        await publishToMarketplace(memberId, "member", bumpType, notes, tags.split(",").map(t => t.trim()).filter(Boolean), "public");
+      } catch {
+        // Hub publish is optional, don't fail the whole publish
+      }
       toast.success(`${member.name} v${newVersion} 已发布`);
       onOpenChange(false);
     } catch (e) {
@@ -104,6 +112,16 @@ export default function PublishDialog({ open, onOpenChange, memberId }: Props) {
               onChange={(e) => setNotes(e.target.value)}
               placeholder="描述此版本的变更..."
               rows={3}
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label className="text-sm">Tags <span className="text-muted-foreground text-xs">(comma separated)</span></Label>
+            <input
+              value={tags}
+              onChange={(e) => setTags(e.target.value)}
+              placeholder="e.g. coding, research, writing"
+              className="w-full px-3 py-2 rounded-lg bg-card border border-border text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary/40"
             />
           </div>
         </div>

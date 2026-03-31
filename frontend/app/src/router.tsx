@@ -11,7 +11,8 @@ import SettingsPage from './pages/SettingsPage';
 import MembersPage from './pages/MembersPage';
 import AgentDetailPage from './pages/AgentDetailPage';
 import TasksPage from './pages/TasksPage';
-import LibraryPage from './pages/LibraryPage';
+import MarketplacePage from './pages/MarketplacePage';
+import MarketplaceDetailPage from './pages/MarketplaceDetailPage';
 import ResourcesPage from './pages/ResourcesPage';
 import ConnectionsPage from './pages/ConnectionsPage';
 
@@ -82,8 +83,16 @@ export const router = createBrowserRouter([
         element: <ResourcesPage />,
       },
       {
+        path: 'marketplace',
+        element: <MarketplacePage />,
+      },
+      {
+        path: 'marketplace/:id',
+        element: <MarketplaceDetailPage />,
+      },
+      {
         path: 'library',
-        element: <LibraryPage />,
+        element: <Navigate to="/marketplace" replace />,
       },
       {
         path: 'connections',

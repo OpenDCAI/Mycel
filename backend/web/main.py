@@ -73,7 +73,7 @@ def _sqlite_root_supports_wal(root: Path) -> bool:
 _ensure_windows_db_env_defaults()
 
 from backend.web.core.lifespan import lifespan
-from backend.web.routers import auth, chats, connections, debug, entities, monitor, panel, sandbox, settings, threads, thread_files, webhooks
+from backend.web.routers import auth, chats, connections, debug, entities, marketplace, monitor, panel, sandbox, settings, threads, thread_files, webhooks
 
 # Create FastAPI app
 app = FastAPI(title="Leon Web Backend", lifespan=lifespan)
@@ -102,6 +102,7 @@ app.include_router(settings.router)
 app.include_router(debug.router)
 app.include_router(panel.router)
 app.include_router(monitor.router)
+app.include_router(marketplace.router)
 
 
 def _resolve_port() -> int:
