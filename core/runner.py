@@ -3,7 +3,6 @@ Non-interactive runner for Leon AI
 """
 
 import asyncio
-import json
 from typing import Any
 
 
@@ -22,8 +21,6 @@ class NonInteractiveRunner:
         self.debug = debug
         self.json_output = json_output
         self.turn_count = 0
-        self.total_tool_calls = 0
-        self._start_time = None
 
     def _debug_print(self, msg: str) -> None:
         """Print debug message if debug mode is enabled"""
@@ -189,7 +186,6 @@ class NonInteractiveRunner:
                 "args": tc.get("args", {}),
             }
             result["tool_calls"].append(tool_info)
-            self.total_tool_calls += 1
 
             if self.debug and not self.json_output:
                 self._print_tool_call(tool_info)
@@ -244,28 +240,3 @@ class NonInteractiveRunner:
         except Exception:
             pass
 
-    async def run_single(self, message: str) -> None:
-        """Single turn execution"""
-        result = await self.run_turn(message)
-
-        if self.json_output:
-            print(json.dumps(result, ensure_ascii=False, indent=2))
-        elif not self.debug:
-            if result.get("response"):
-                print(result["response"])
-            elif result.get("error"):
-                print(f"Error: {result['error']}")
-
-        if self.debug:
-            self._print_summary()
-
-    def _print_summary(self) -> None:
-        """Print session summary"""
-        if not self.debug or self.json_output:
-            return
-
-        print(f"\n{'=' * 50}")
-        print("[SUMMARY]")
-        print(f"  Thread: {self.thread_id}")
-        print(f"  Total turns: {self.turn_count}")
-        print(f"  Total tool calls: {self.total_tool_calls}")
