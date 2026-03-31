@@ -91,8 +91,8 @@ export default memo(function TaskRenderer({ step, expanded }: ToolRendererProps)
             {stream.status === "running" && (
               <span className="inline-block w-2 h-2 bg-[#0369a1] rounded-full animate-pulse" />
             )}
-            {stream.status === "completed" && <span className="text-green-600">✓</span>}
-            {stream.status === "error" && <span className="text-red-600">✗</span>}
+            {stream.status === "completed" && <span className="text-success">✓</span>}
+            {stream.status === "error" && <span className="text-destructive">✗</span>}
           </div>
 
           {stream.text && (
@@ -110,7 +110,7 @@ export default memo(function TaskRenderer({ step, expanded }: ToolRendererProps)
           )}
 
           {stream.error && (
-            <div className="text-red-600 text-xs">{stream.error}</div>
+            <div className="text-destructive text-xs">{stream.error}</div>
           )}
         </div>
       )}

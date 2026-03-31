@@ -123,7 +123,7 @@ function ThreadItem({
       >
         <div className={`flex items-center gap-1.5 ${isActive ? "text-foreground font-medium" : "text-foreground"}`}>
           {thread.running && !isSelectMode && (
-            <span className="w-2 h-2 rounded-full bg-green-500 flex-shrink-0 animate-pulse" />
+            <span className="w-2 h-2 rounded-full bg-success flex-shrink-0 animate-pulse" />
           )}
           <span className="text-sm font-medium truncate">{label}</span>
         </div>

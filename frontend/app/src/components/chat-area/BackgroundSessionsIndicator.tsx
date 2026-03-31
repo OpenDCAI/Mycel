@@ -12,9 +12,9 @@ function StatusIcon({ status }: { status: string }) {
     case "running":
       return <Loader2 className="w-3 h-3 text-blue-500 animate-spin flex-shrink-0" />;
     case "completed":
-      return <CheckCircle2 className="w-3 h-3 text-green-500 flex-shrink-0" />;
+      return <CheckCircle2 className="w-3 h-3 text-success flex-shrink-0" />;
     case "error":
-      return <XCircle className="w-3 h-3 text-red-500 flex-shrink-0" />;
+      return <XCircle className="w-3 h-3 text-destructive flex-shrink-0" />;
     default:
       return <Loader2 className="w-3 h-3 text-gray-400 flex-shrink-0" />;
   }
@@ -66,10 +66,10 @@ export function BackgroundSessionsIndicator({ tasks, onCancelTask }: BackgroundS
                           e.stopPropagation();
                           onCancelTask(task.task_id);
                         }}
-                        className="p-0.5 hover:bg-red-50 rounded transition-colors duration-fast flex-shrink-0"
+                        className="p-0.5 hover:bg-destructive/10 rounded transition-colors duration-fast flex-shrink-0"
                         title="取消任务"
                       >
-                        <X className="w-3 h-3 text-red-500" />
+                        <X className="w-3 h-3 text-destructive" />
                       </button>
                     )}
                   </div>
@@ -96,10 +96,10 @@ export function BackgroundSessionsIndicator({ tasks, onCancelTask }: BackgroundS
                           e.stopPropagation();
                           onCancelTask(task.task_id);
                         }}
-                        className="p-0.5 hover:bg-red-50 rounded transition-colors duration-fast flex-shrink-0"
+                        className="p-0.5 hover:bg-destructive/10 rounded transition-colors duration-fast flex-shrink-0"
                         title="取消任务"
                       >
-                        <X className="w-3 h-3 text-red-500" />
+                        <X className="w-3 h-3 text-destructive" />
                       </button>
                     )}
                   </div>

@@ -31,7 +31,7 @@ export function PanelHeader({ threadId, isRemote, lease, onClose, onRefreshStatu
         )}
         {isRemote && instanceState === "paused" && (
           <button
-            className="w-8 h-8 rounded-lg flex items-center justify-center text-muted-foreground/70 hover:bg-muted hover:text-green-600"
+            className="w-8 h-8 rounded-lg flex items-center justify-center text-muted-foreground/70 hover:bg-muted hover:text-success"
             onClick={() => void (threadId && resumeThreadSandbox(threadId).then(() => onRefreshStatus()))}
           >
             <Play className="w-4 h-4" />

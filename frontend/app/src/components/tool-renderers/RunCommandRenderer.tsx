@@ -32,7 +32,7 @@ function CopyInline({ text }: { text: string }) {
       className="flex-shrink-0 p-0.5 rounded text-muted-foreground/70 hover:text-foreground-secondary hover:bg-muted transition-colors duration-fast"
       title="复制命令"
     >
-      {copied ? <Check className="w-3 h-3 text-green-500" /> : <Copy className="w-3 h-3" />}
+      {copied ? <Check className="w-3 h-3 text-success" /> : <Copy className="w-3 h-3" />}
     </button>
   );
 }

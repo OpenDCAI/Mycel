@@ -60,7 +60,7 @@ export function CodeBlock({
           title="Copy code"
         >
           {copied ? (
-            <Check className="w-4 h-4 text-green-600" />
+            <Check className="w-4 h-4 text-success" />
           ) : (
             <Copy className="w-4 h-4 text-gray-600 dark:text-gray-400" />
           )}

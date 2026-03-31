@@ -159,8 +159,8 @@ function WeChatCard() {
       {/* Card header */}
       <div className="flex items-center justify-between px-5 py-4 border-b border-border">
         <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-lg bg-green-500/10 flex items-center justify-center">
-            <MessageCircle className="w-5 h-5 text-green-600" />
+          <div className="w-9 h-9 rounded-lg bg-success/10 flex items-center justify-center">
+            <MessageCircle className="w-5 h-5 text-success" />
           </div>
           <div>
             <h3 className="text-sm font-medium text-foreground">WeChat</h3>
@@ -458,7 +458,7 @@ function ItemList({
 function StatusBadge({ phase }: { phase: WeChatPhase }) {
   if (phase === "connected") {
     return (
-      <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-green-500/10 text-green-600">
+      <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-success/10 text-success">
         <CheckCircle2 className="w-3 h-3" />
         Connected
       </span>

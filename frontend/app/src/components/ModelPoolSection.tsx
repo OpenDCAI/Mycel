@@ -125,7 +125,7 @@ export default function ModelPoolSection({ models, enabledModels, customConfig, 
           <p className="text-xs text-muted-foreground">启用/禁用模型，添加自定义模型</p>
         </div>
         {successMessage && (
-          <span className="text-xs text-[#10b981] bg-[#10b981]/10 px-2 py-1 rounded">{successMessage}</span>
+          <span className="text-xs text-success bg-success/10 px-2 py-1 rounded">{successMessage}</span>
         )}
       </div>
 
@@ -227,7 +227,7 @@ export default function ModelPoolSection({ models, enabledModels, customConfig, 
                       </button>
                       <button
                         onClick={() => onRemoveCustomModel(model.id)}
-                        className="text-xs px-2 py-0.5 rounded border border-border text-[#ef4444] hover:border-[#ef4444] transition-colors duration-fast"
+                        className="text-xs px-2 py-0.5 rounded border border-border text-destructive hover:border-destructive transition-colors duration-fast"
                       >
                         移除
                       </button>
@@ -235,7 +235,7 @@ export default function ModelPoolSection({ models, enabledModels, customConfig, 
                   )}
                   {(status === "ok" || status === "fail") ? (
                     <div className="flex items-center gap-1">
-                      <span className={`text-xs px-1.5 py-0.5 rounded ${status === "ok" ? "text-[#10b981]" : "text-[#ef4444]"}`}>
+                      <span className={`text-xs px-1.5 py-0.5 rounded ${status === "ok" ? "text-success" : "text-destructive"}`}>
                         {status === "ok" ? "✓" : "✗"}
                       </span>
                       <button
@@ -261,7 +261,7 @@ export default function ModelPoolSection({ models, enabledModels, customConfig, 
                 </div>
               </div>
               {status === "fail" && testError[model.id] && (
-                <div className="mx-3 mt-1 text-xs text-[#ef4444]">{testError[model.id]}</div>
+                <div className="mx-3 mt-1 text-xs text-destructive">{testError[model.id]}</div>
               )}
               {isEditing && (
                 <div className="mx-3 mt-2 mb-1 p-3 border border-border rounded-lg bg-muted space-y-2">

@@ -152,7 +152,7 @@ export default function ObservationSection({ config, onUpdate }: ObservationSect
             <span className="text-2xs text-muted-foreground bg-muted px-1.5 py-0.5 rounded">可选</span>
           )}
           {saved && (
-            <span className="text-[#10b981] animate-fadeIn"><Check className="w-3 h-3" /></span>
+            <span className="text-success animate-fadeIn"><Check className="w-3 h-3" /></span>
           )}
         </div>
         <div className="relative">
@@ -265,11 +265,11 @@ export default function ObservationSection({ config, onUpdate }: ObservationSect
                   {verifyResult && (
                     <div className={`flex items-center gap-2 px-3 py-2.5 rounded-lg text-xs ${
                       verifyResult.success
-                        ? "bg-[#10b981]/5 border border-[#10b981]/20 text-[#10b981]"
-                        : "bg-red-50 border border-red-100 text-red-600"
+                        ? "bg-success/5 border border-[#10b981]/20 text-success"
+                        : "bg-destructive/10 border border-destructive/20 text-destructive"
                     }`}>
                       {verifyResult.success
-                        ? <><span className="w-1.5 h-1.5 rounded-full bg-[#10b981] shrink-0" /> 已连接 · {(verifyResult.traces as unknown[])?.length ?? 0} 条近期追踪</>
+                        ? <><span className="w-1.5 h-1.5 rounded-full bg-success shrink-0" /> 已连接 · {(verifyResult.traces as unknown[])?.length ?? 0} 条近期追踪</>
                         : <><X className="w-3.5 h-3.5 shrink-0" /> 连接失败：{verifyResult.error}</>
                       }
                     </div>
