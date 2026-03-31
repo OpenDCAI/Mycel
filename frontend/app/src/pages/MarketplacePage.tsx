@@ -37,6 +37,7 @@ export default function MarketplacePage() {
   const filters = useMarketplaceStore((s) => s.filters);
   const setFilter = useMarketplaceStore((s) => s.setFilter);
   const fetchItems = useMarketplaceStore((s) => s.fetchItems);
+  const error = useMarketplaceStore((s) => s.error);
 
   // Installed state
   const memberList = useAppStore((s) => s.memberList);
@@ -76,12 +77,14 @@ export default function MarketplacePage() {
   });
 
   const handleCheckUpdates = useCallback(async () => {
-    const installed = installedMembers
-      .map((m) => ({
-        marketplace_item_id: m.id,
-        installed_version: m.version,
+    // source field comes from meta.json; members without it cannot be checked
+    const payload = installedMembers
+      .filter((m: any) => m.source?.marketplace_item_id)
+      .map((m: any) => ({
+        marketplace_item_id: m.source.marketplace_item_id,
+        installed_version: m.source.installed_version || "0.0.0",
       }));
-    if (installed.length > 0) await checkUpdates(installed);
+    if (payload.length > 0) await checkUpdates(payload);
   }, [installedMembers, checkUpdates]);
 
   const tabItems = [
@@ -213,6 +216,14 @@ export default function MarketplacePage() {
                     ))}
                   </div>
                 </div>
+
+                {/* Error banner */}
+                {error && (
+                  <div className="flex items-center justify-between px-4 py-2.5 rounded-lg bg-destructive/10 text-destructive text-sm mb-4">
+                    <span>{error}</span>
+                    <button onClick={() => fetchItems()} className="text-xs underline">重试</button>
+                  </div>
+                )}
 
                 {/* Results */}
                 {loading ? (

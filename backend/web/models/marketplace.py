@@ -1,19 +1,20 @@
 """Marketplace request/response models (Mycel client side)."""
-from pydantic import BaseModel
+from typing import Literal
+
+from pydantic import BaseModel, Field
 
 
 class PublishToMarketplaceRequest(BaseModel):
-    member_id: str
-    type: str = "member"
-    bump_type: str = "patch"
+    member_id: str = Field(pattern=r"^[a-zA-Z0-9_-]+$")
+    type: Literal["member", "agent", "skill", "env"] = "member"
+    bump_type: Literal["major", "minor", "patch"] = "patch"
     release_notes: str = ""
     tags: list[str] = []
-    visibility: str = "public"
+    visibility: Literal["public", "private"] = "public"
 
 
 class InstallFromMarketplaceRequest(BaseModel):
     item_id: str
-    version: str | None = None  # None = latest
 
 
 class UpgradeFromMarketplaceRequest(BaseModel):
@@ -21,5 +22,10 @@ class UpgradeFromMarketplaceRequest(BaseModel):
     item_id: str    # marketplace item id
 
 
+class InstalledItemInfo(BaseModel):
+    marketplace_item_id: str
+    installed_version: str
+
+
 class CheckUpdatesRequest(BaseModel):
-    items: list[dict]  # [{marketplace_item_id, installed_version}]
+    items: list[InstalledItemInfo]

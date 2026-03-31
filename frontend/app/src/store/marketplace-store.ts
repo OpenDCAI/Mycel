@@ -60,6 +60,7 @@ interface MarketplaceState {
   items: MarketplaceItemSummary[];
   total: number;
   loading: boolean;
+  error: string | null;
   filters: MarketplaceFilters;
   setFilter: (key: keyof MarketplaceFilters, value: any) => void;
   fetchItems: () => Promise<void>;
@@ -104,6 +105,7 @@ export const useMarketplaceStore = create<MarketplaceState>()((set, get) => ({
   items: [],
   total: 0,
   loading: false,
+  error: null,
   filters: { type: null, q: "", sort: "downloads", page: 1 },
 
   setFilter: (key, value) => {
@@ -111,7 +113,7 @@ export const useMarketplaceStore = create<MarketplaceState>()((set, get) => ({
   },
 
   fetchItems: async () => {
-    set({ loading: true });
+    set({ error: null, loading: true });
     try {
       const { type, q, sort, page } = get().filters;
       const params = new URLSearchParams();
@@ -124,6 +126,7 @@ export const useMarketplaceStore = create<MarketplaceState>()((set, get) => ({
       set({ items: data.items, total: data.total });
     } catch (e) {
       console.error("Failed to fetch marketplace items:", e);
+      set({ error: e instanceof Error ? e.message : "Unknown error" });
     } finally {
       set({ loading: false });
     }
@@ -133,12 +136,13 @@ export const useMarketplaceStore = create<MarketplaceState>()((set, get) => ({
   detailLoading: false,
 
   fetchDetail: async (id) => {
-    set({ detailLoading: true, detail: null });
+    set({ error: null, detailLoading: true, detail: null });
     try {
       const data = await hubApi<MarketplaceItemDetail>(`/items/${id}`);
       set({ detail: data });
     } catch (e) {
       console.error("Failed to fetch detail:", e);
+      set({ error: e instanceof Error ? e.message : "Unknown error" });
     } finally {
       set({ detailLoading: false });
     }
@@ -149,17 +153,20 @@ export const useMarketplaceStore = create<MarketplaceState>()((set, get) => ({
   lineage: { ancestors: [], children: [] },
 
   fetchLineage: async (id) => {
+    set({ error: null });
     try {
       const data = await hubApi<{ ancestors: LineageNode[]; children: LineageNode[] }>(`/items/${id}/lineage`);
       set({ lineage: data });
     } catch (e) {
       console.error("Failed to fetch lineage:", e);
+      set({ error: e instanceof Error ? e.message : "Unknown error" });
     }
   },
 
   updates: [],
 
   checkUpdates: async (installed) => {
+    set({ error: null });
     try {
       const data = await backendApi<{ updates: UpdateAvailable[] }>("/check-updates", {
         method: "POST",
@@ -168,6 +175,7 @@ export const useMarketplaceStore = create<MarketplaceState>()((set, get) => ({
       set({ updates: data.updates || [] });
     } catch (e) {
       console.error("Failed to check updates:", e);
+      set({ error: e instanceof Error ? e.message : "Unknown error" });
     }
   },
 
