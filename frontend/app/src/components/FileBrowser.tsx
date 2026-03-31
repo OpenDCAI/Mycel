@@ -52,9 +52,9 @@ export function FileBrowser({ threadId }: FileBrowserProps) {
     }
   };
 
-  if (loading) return <div>Loading files...</div>;
-  if (error) return <div>Error: {error}</div>;
-  if (files.length === 0) return <div>No files uploaded</div>;
+  if (loading) return <div>加载文件中...</div>;
+  if (error) return <div>错误：{error}</div>;
+  if (files.length === 0) return <div>暂无已上传文件</div>;
 
   return (
     <>
@@ -71,8 +71,8 @@ export function FileBrowser({ threadId }: FileBrowserProps) {
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
-                  <DropdownMenuItem onClick={() => handleDownload(file.relative_path)}>Download</DropdownMenuItem>
-                  <DropdownMenuItem className="text-destructive" onClick={() => setDeleteTarget(file.relative_path)} disabled={deleting}>Delete</DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => handleDownload(file.relative_path)}>下载</DropdownMenuItem>
+                  <DropdownMenuItem className="text-destructive" onClick={() => setDeleteTarget(file.relative_path)} disabled={deleting}>删除</DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
             </div>
@@ -83,15 +83,15 @@ export function FileBrowser({ threadId }: FileBrowserProps) {
       <AlertDialog open={!!deleteTarget} onOpenChange={() => setDeleteTarget(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete file?</AlertDialogTitle>
+            <AlertDialogTitle>删除文件？</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to delete "{deleteTarget}"? This action cannot be undone.
+              确定要删除 "{deleteTarget}" 吗？此操作无法撤销。
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>取消</AlertDialogCancel>
             <AlertDialogAction onClick={handleDelete} disabled={deleting}>
-              {deleting ? 'Deleting...' : 'Delete'}
+              {deleting ? '删除中...' : '删除'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

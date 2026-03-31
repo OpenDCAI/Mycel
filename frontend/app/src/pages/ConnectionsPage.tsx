@@ -164,7 +164,7 @@ function WeChatCard() {
           </div>
           <div>
             <h3 className="text-sm font-medium text-foreground">WeChat</h3>
-            <p className="text-xs text-muted-foreground">Connect your WeChat to let agents send and receive messages</p>
+            <p className="text-xs text-muted-foreground">连接微信，让 Agent 收发消息</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -189,14 +189,14 @@ function WeChatCard() {
             className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition-opacity duration-fast"
           >
             <QrCode className="w-4 h-4" />
-            Scan QR to connect
+            扫码连接
           </button>
         )}
 
         {phase === "loading-qr" && (
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <Loader2 className="w-4 h-4 animate-spin" />
-            Getting QR code...
+            获取二维码中...
           </div>
         )}
 
@@ -212,7 +212,7 @@ function WeChatCard() {
               onClick={() => { pollRef.current = false; setPhase("idle"); }}
               className="block mx-auto text-xs text-muted-foreground hover:text-foreground transition-colors duration-fast"
             >
-              Cancel
+              取消
             </button>
           </div>
         )}
@@ -221,33 +221,33 @@ function WeChatCard() {
           <div className="space-y-4">
             {/* Routing indicator */}
             <div className="flex items-center gap-2 text-sm">
-              <span className="text-muted-foreground">Messages go to</span>
+              <span className="text-muted-foreground">消息发送至</span>
               {hasRouting ? (
                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-primary/10 text-primary text-xs font-medium">
-                  {routing!.type === "thread" ? "Thread" : "Chat"}: {routing!.label || routing!.id?.slice(0, 12)}
+                  {routing!.type === "thread" ? "会话" : "聊天"}：{routing!.label || routing!.id?.slice(0, 12)}
                 </span>
               ) : (
                 <button
                   onClick={() => setSettingsOpen(true)}
                   className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-amber-500/10 text-amber-600 text-xs font-medium hover:bg-amber-500/20 transition-colors duration-fast"
                 >
-                  Not configured — click to set up
+                  未配置 — 点击设置
                 </button>
               )}
             </div>
 
             <div className="grid grid-cols-2 gap-x-8 gap-y-2 text-sm">
-              <div className="text-muted-foreground">Account</div>
+              <div className="text-muted-foreground">账号</div>
               <div className="font-mono text-xs text-foreground truncate">{state.account_id}</div>
-              <div className="text-muted-foreground">Polling</div>
-              <div className="text-foreground">{state.polling ? "Active" : "Stopped"}</div>
-              <div className="text-muted-foreground">Contacts</div>
-              <div className="text-foreground">{state.contacts?.length || 0} known</div>
+              <div className="text-muted-foreground">轮询</div>
+              <div className="text-foreground">{state.polling ? "运行中" : "已停止"}</div>
+              <div className="text-muted-foreground">联系人</div>
+              <div className="text-foreground">{state.contacts?.length || 0} 个</div>
             </div>
 
             {state.contacts && state.contacts.length > 0 && (
               <div className="pt-2 border-t border-border">
-                <p className="text-xs text-muted-foreground mb-2">Recent contacts</p>
+                <p className="text-xs text-muted-foreground mb-2">最近联系人</p>
                 <div className="space-y-1">
                   {state.contacts.map((c) => (
                     <div key={c.user_id} className="flex items-center gap-2 text-xs">
@@ -267,7 +267,7 @@ function WeChatCard() {
               className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs text-destructive hover:bg-destructive/10 transition-colors duration-fast"
             >
               <XCircle className="w-3.5 h-3.5" />
-              Disconnect
+              断开连接
             </button>
           </div>
         )}
@@ -321,7 +321,7 @@ function RoutingDialog({
         body: JSON.stringify({ type: tab, id: selectedId, label: item?.label || "" }),
       });
       onSaved({ type: tab, id: selectedId, label: item?.label || "" });
-      toast.success("Routing saved");
+      toast.success("路由已保存");
     } catch (e) {
       toast.error(`Failed: ${e instanceof Error ? e.message : "unknown"}`);
     }
@@ -331,7 +331,7 @@ function RoutingDialog({
     try {
       await request("/api/connections/wechat/routing", { method: "DELETE" });
       onSaved({});
-      toast.success("Routing cleared");
+      toast.success("路由已清除");
     } catch (e) {
       toast.error(`Failed: ${e instanceof Error ? e.message : "unknown"}`);
     }
@@ -344,7 +344,7 @@ function RoutingDialog({
         <div className="bg-card border border-border rounded-xl shadow-xl w-full max-w-md max-h-[80vh] flex flex-col pointer-events-auto">
           {/* Header */}
           <div className="flex items-center justify-between px-5 py-4 border-b border-border shrink-0">
-            <h3 className="text-sm font-semibold text-foreground">Message Routing</h3>
+            <h3 className="text-sm font-semibold text-foreground">消息路由</h3>
             <button onClick={onClose} className="p-1 rounded hover:bg-muted transition-colors duration-fast">
               <X className="w-4 h-4 text-muted-foreground" />
             </button>
@@ -353,7 +353,7 @@ function RoutingDialog({
           {/* Tab selector */}
           <div className="px-5 pt-4 shrink-0">
             <p className="text-xs text-muted-foreground mb-3">
-              Choose where incoming WeChat messages are delivered
+              选择微信消息的接收目标
             </p>
             <div className="flex gap-1 p-0.5 bg-muted rounded-lg">
               <button
@@ -362,7 +362,7 @@ function RoutingDialog({
                   tab === "thread" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground"
                 }`}
               >
-                Thread
+                会话
               </button>
               <button
                 onClick={() => { setTab("chat"); setSelectedId(""); }}
@@ -370,7 +370,7 @@ function RoutingDialog({
                   tab === "chat" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground"
                 }`}
               >
-                Chat
+                聊天
               </button>
             </div>
           </div>
@@ -380,14 +380,14 @@ function RoutingDialog({
             {loading ? (
               <div className="flex items-center gap-2 text-sm text-muted-foreground py-8 justify-center">
                 <Loader2 className="w-4 h-4 animate-spin" />
-                Loading...
+                加载中...
               </div>
             ) : (
               <ItemList
                 items={(tab === "thread" ? targets?.threads : targets?.chats) || []}
                 selectedId={selectedId}
                 onSelect={setSelectedId}
-                emptyText={tab === "thread" ? "No threads found" : "No chats found"}
+                emptyText={tab === "thread" ? "暂无会话" : "暂无聊天"}
               />
             )}
           </div>
@@ -398,14 +398,14 @@ function RoutingDialog({
               onClick={handleClear}
               className="text-xs text-muted-foreground hover:text-foreground transition-colors duration-fast"
             >
-              Clear routing
+              清除路由
             </button>
             <button
               onClick={handleSave}
               disabled={!selectedId}
               className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg bg-primary text-primary-foreground text-xs font-medium hover:opacity-90 disabled:opacity-40 transition-opacity duration-fast"
             >
-              Save
+              保存
               <ArrowRight className="w-3 h-3" />
             </button>
           </div>
@@ -460,7 +460,7 @@ function StatusBadge({ phase }: { phase: WeChatPhase }) {
     return (
       <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-success/10 text-success">
         <CheckCircle2 className="w-3 h-3" />
-        Connected
+        已连接
       </span>
     );
   }

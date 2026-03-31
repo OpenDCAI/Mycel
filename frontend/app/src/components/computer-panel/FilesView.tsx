@@ -43,7 +43,7 @@ export function FilesView({
               加载中...
             </div>
           )}
-          {workspaceError && <p className="text-xs px-2 py-2 text-red-500">{workspaceError}</p>}
+          {workspaceError && <p className="text-xs px-2 py-2 text-destructive">{workspaceError}</p>}
           {!loadingWorkspace && !workspaceError && treeNodes.map((node) => (
             <FileTreeNode
               key={node.fullPath}

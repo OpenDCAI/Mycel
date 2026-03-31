@@ -9,9 +9,9 @@ interface TabBarProps {
 }
 
 const TABS: { key: TabType; label: string; icon: typeof Terminal }[] = [
-  { key: "terminal", label: "Terminal", icon: Terminal },
-  { key: "files", label: "Files", icon: FileText },
-  { key: "agents", label: "Agents", icon: Bot },
+  { key: "terminal", label: "终端", icon: Terminal },
+  { key: "files", label: "文件", icon: FileText },
+  { key: "agents", label: "Agent", icon: Bot },
 ];
 
 export function TabBar({ activeTab, onTabChange, hasRunningAgents, hasAgents }: TabBarProps) {
