@@ -108,7 +108,6 @@ def interactive_config():
     """交互式配置"""
     manager = ConfigManager()
 
-    # 标题
     title = Text()
     title.append("⚡ ", style="bright_yellow")
     title.append("Leon", style="bold bright_cyan")
@@ -159,7 +158,6 @@ def interactive_config():
             console=console,
         )
         if base_url:
-            # 规范化 URL
             normalized = normalize_base_url(base_url)
             if normalized != base_url:
                 console.print(f"      [dim]→ 已自动补全为: {normalized}[/]")
@@ -212,17 +210,3 @@ def show_config():
     )
     console.print(f"  [dim]配置文件: {manager.config_file}[/dim]")
     console.print()
-
-
-def main():
-    """配置命令入口"""
-    import sys
-
-    if len(sys.argv) > 1 and sys.argv[1] == "show":
-        show_config()
-    else:
-        interactive_config()
-
-
-if __name__ == "__main__":
-    main()

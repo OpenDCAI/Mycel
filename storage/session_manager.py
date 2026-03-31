@@ -1,4 +1,4 @@
-"""Session management for TUI resume"""
+"""Session management for agent thread persistence"""
 
 import json
 from pathlib import Path
@@ -8,7 +8,7 @@ from storage.providers.sqlite.file_operation_repo import SQLiteFileOperationRepo
 
 
 class SessionManager:
-    """管理 TUI session 状态"""
+    """管理 session 状态"""
 
     def __init__(self, session_dir: Path | None = None):
         if session_dir is None:
@@ -23,7 +23,6 @@ class SessionManager:
         data = self._load_data()
         data["last_thread_id"] = thread_id
 
-        # 更新 thread 列表（最多保留 20 个）
         threads = data.get("threads", [])
         if thread_id not in threads:
             threads.insert(0, thread_id)
@@ -70,7 +69,6 @@ class SessionManager:
 
     def delete_thread(self, thread_id: str) -> bool:
         """删除一个 thread 及其所有数据"""
-        # Remove from session.json
         data = self._load_data()
         threads = data.get("threads", [])
         if thread_id in threads:
@@ -80,7 +78,6 @@ class SessionManager:
                 data["last_thread_id"] = threads[0] if threads else None
             self.session_file.write_text(json.dumps(data, indent=2))
 
-        # Remove from SQLite database
         if self.db_path.exists():
             try:
                 repo = SQLiteCheckpointRepo(db_path=self.db_path)

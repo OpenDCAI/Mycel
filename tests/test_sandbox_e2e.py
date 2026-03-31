@@ -26,7 +26,7 @@ import pytest
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # Load config.env so API keys are available
-from tui.config import ConfigManager
+from config.env_manager import ConfigManager
 
 ConfigManager().load_to_env()
 
@@ -65,7 +65,7 @@ def _invoke_and_extract(agent, message: str, thread_id: str) -> dict:
     import asyncio
 
     from sandbox.thread_context import set_current_thread_id
-    from tui.runner import NonInteractiveRunner
+    from core.runner import NonInteractiveRunner
 
     set_current_thread_id(thread_id)
     runner = NonInteractiveRunner(agent, thread_id, debug=True)

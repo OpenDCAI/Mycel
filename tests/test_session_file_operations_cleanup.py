@@ -1,7 +1,7 @@
 import sqlite3
 
 from storage.providers.sqlite.file_operation_repo import SQLiteFileOperationRepo
-from tui.session import SessionManager
+from storage.session_manager import SessionManager
 
 
 def test_session_delete_thread_cleans_file_operations(tmp_path):

@@ -1,5 +1,5 @@
 """
-Non-interactive runner for Leon AI CLI
+Non-interactive runner for Leon AI
 
 Supports:
 - Single message execution
@@ -12,10 +12,7 @@ import asyncio
 import json
 import sys
 import uuid
-from pathlib import Path
 from typing import Any
-
-from config.schema import DEFAULT_MODEL
 
 
 class NonInteractiveRunner:
@@ -115,17 +112,11 @@ class NonInteractiveRunner:
 
         status = self.agent.runtime.get_status_dict()
 
-        # 状态
         state_info = status.get("state", {})
         print(f"\n[STATE] {state_info.get('state', 'unknown')}")
 
-        # Token 统计
         self._print_token_stats(status.get("tokens", {}))
-
-        # 上下文统计
         self._print_context_stats(status.get("context", {}))
-
-        # Memory 状态
         self._print_memory_stats(status)
 
     def _print_token_stats(self, tokens: dict) -> None:
@@ -199,7 +190,6 @@ class NonInteractiveRunner:
             if self.debug and not self.json_output:
                 print(f"\n[ASSISTANT]\n{content}")
 
-        # Extract tool calls
         tool_calls = getattr(msg, "tool_calls", [])
         for tc in tool_calls:
             tool_info = {
@@ -246,7 +236,6 @@ class NonInteractiveRunner:
 
         content = str(getattr(msg, "content", ""))
         preview = content[:200] + "..." if len(content) > 200 else content
-        # Indent multi-line output
         preview = preview.replace("\n", "\n  ")
         print(f"\n[TOOL_RESULT]\n  {preview}")
 
@@ -275,7 +264,6 @@ class NonInteractiveRunner:
                 if not message:
                     continue
 
-                # Handle commands
                 if message.lower() in ("/exit", "/quit", "exit", "quit"):
                     break
                 if message.lower() == "/clear":
@@ -321,7 +309,6 @@ class NonInteractiveRunner:
         if self.json_output:
             print(json.dumps(result, ensure_ascii=False, indent=2))
         elif not self.debug:
-            # Non-debug mode: only output response
             if result.get("response"):
                 print(result["response"])
             elif result.get("error"):
@@ -340,174 +327,3 @@ class NonInteractiveRunner:
         print(f"  Thread: {self.thread_id}")
         print(f"  Total turns: {self.turn_count}")
         print(f"  Total tool calls: {self.total_tool_calls}")
-
-
-def cmd_run(args, unknown_args: list[str]) -> None:
-    """Handle 'run' command"""
-    import os
-
-    from tui.config import ConfigManager
-
-    # Load config
-    config_manager = ConfigManager()
-    config_manager.load_to_env()
-
-    if not os.getenv("OPENAI_API_KEY") and not os.getenv("ANTHROPIC_API_KEY"):
-        print("Error: No API key configured. Run 'leonai config' first.")
-        return
-
-    # Parse arguments
-    run_config = _parse_run_args(args, unknown_args)
-
-    if run_config is None:
-        _show_run_help()
-        return
-
-    # Get workspace and thread
-    workspace = Path(args.workspace) if args.workspace else Path.cwd()
-    thread_id = args.thread or f"run-{uuid.uuid4().hex[:8]}"
-
-    # Auto-detect sandbox when resuming a thread
-    sandbox_arg = _detect_sandbox(args, thread_id)
-
-    # Create agent
-    agent = _create_agent(args, workspace, sandbox_arg, run_config["debug"])
-    if agent is None:
-        return
-
-    # Create and run
-    runner = NonInteractiveRunner(
-        agent,
-        thread_id,
-        debug=run_config["debug"],
-        json_output=run_config["json"],
-    )
-
-    try:
-        if run_config["interactive"]:
-            asyncio.run(runner.run_interactive())
-        elif run_config["stdin"]:
-            asyncio.run(runner.run_stdin())
-        elif run_config["message"]:
-            asyncio.run(runner.run_single(run_config["message"]))
-    except KeyboardInterrupt:
-        if run_config["debug"]:
-            print("\n[INTERRUPTED]")
-    finally:
-        agent.close()
-
-
-def _parse_run_args(args, unknown_args: list[str]) -> dict | None:
-    """Parse run command arguments. Returns None if help should be shown."""
-    message = None
-    stdin_mode = False
-    interactive_mode = False
-    debug_mode = False
-    json_mode = False
-
-    positional_args = []
-    for arg in unknown_args:
-        if arg == "--stdin":
-            stdin_mode = True
-        elif arg in ("-i", "--interactive"):
-            interactive_mode = True
-        elif arg in ("-d", "--debug"):
-            debug_mode = True
-        elif arg == "--json":
-            json_mode = True
-        elif not arg.startswith("-"):
-            positional_args.append(arg)
-
-    # Message can come from multiple sources
-    if args.subcommand and not args.subcommand.startswith("-"):
-        message = args.subcommand
-    elif args.extra_args:
-        message = args.extra_args[0]
-    elif positional_args:
-        message = positional_args[0]
-
-    # Validate mode combinations
-    mode_count = sum([bool(message), stdin_mode, interactive_mode])
-    if mode_count > 1:
-        print("Error: Cannot combine MESSAGE, --stdin, and --interactive")
-        print("Usage:")
-        print('  leonai run "message"       Single message')
-        print("  leonai run --stdin         Read from stdin")
-        print("  leonai run -i              Interactive mode")
-        return None
-
-    if mode_count == 0:
-        return None
-
-    return {
-        "message": message,
-        "stdin": stdin_mode,
-        "interactive": interactive_mode,
-        "debug": debug_mode,
-        "json": json_mode,
-    }
-
-
-def _show_run_help() -> None:
-    """Show help for run command"""
-    print("Usage: leonai run [OPTIONS] [MESSAGE]")
-    print()
-    print("Options:")
-    print("  MESSAGE              Single message to send")
-    print("  --stdin              Read messages from stdin (blank line separated)")
-    print("  -i, --interactive    Interactive mode (simple readline)")
-    print("  -d, --debug          Show debug output (tool calls, queue status)")
-    print("  --json               JSON output (single message mode only)")
-    print("  --workspace <dir>    Working directory")
-    print("  --thread <id>        Thread ID (for multi-turn persistence)")
-    print()
-    print("Examples:")
-    print('  leonai run "List files in current directory"')
-    print('  leonai run -d "Read README.md"')
-    print("  leonai run -i -d")
-    print('  echo -e "List files\\n\\nRead README.md" | leonai run --stdin -d')
-    print('  leonai run --thread my-test "First message"')
-    print('  leonai run --thread my-test "Continue conversation"')
-
-
-def _detect_sandbox(args, thread_id: str) -> str | None:
-    """Auto-detect sandbox when resuming a thread"""
-    sandbox_arg = getattr(args, "sandbox", None)
-    if not sandbox_arg and args.thread:
-        from sandbox.manager import lookup_sandbox_for_thread
-
-        detected = lookup_sandbox_for_thread(thread_id)
-        if detected:
-            config_path = Path.home() / ".leon" / "sandboxes" / f"{detected}.json"
-            if config_path.exists():
-                return detected
-    return sandbox_arg
-
-
-def _create_agent(args, workspace: Path, sandbox_arg: str | None, debug: bool):
-    """Create agent with error handling"""
-    import os
-
-    if debug:
-        print("[DEBUG] Initializing agent...", flush=True)
-        print(f"[DEBUG] Workspace: {workspace}", flush=True)
-        print(f"[DEBUG] Thread: {args.thread or 'auto'}", flush=True)
-
-    from agent import create_leon_agent
-
-    model_name = getattr(args, "model", None) or os.getenv("MODEL_NAME") or DEFAULT_MODEL
-
-    try:
-        agent = create_leon_agent(
-            model_name=model_name,
-            profile=args.profile,
-            workspace_root=workspace,
-            sandbox=sandbox_arg,
-            verbose=debug,
-        )
-        if debug:
-            print("[DEBUG] Agent ready", flush=True)
-        return agent
-    except Exception as e:
-        print(f"Error: Failed to initialize agent: {e}")
-        return None
