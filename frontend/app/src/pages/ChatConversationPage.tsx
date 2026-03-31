@@ -247,14 +247,14 @@ function ChatConversationInner({ chatId }: { chatId: string }) {
         <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground/40 animate-bounce" style={{ animationDelay: "var(--duration-normal)" }} />
       </div>
       <span className="text-xs text-muted-foreground">
-        {typingNames.length > 0 ? `${typingNames.join(", ")} typing` : "typing"}
+        {typingNames.length > 0 ? `${typingNames.join("、")} 正在输入` : "正在输入"}
       </span>
     </div>
   ) : null;
 
   // Display name for header
   const chatName = chat
-    ? chat.title || chat.entities.filter(e => e.id !== myEntityId).map(e => e.name).join(", ") || "Chat"
+    ? chat.title || chat.entities.filter(e => e.id !== myEntityId).map(e => e.name).join(", ") || "聊天"
     : "聊天";
 
   if (loading) {
@@ -269,7 +269,7 @@ function ChatConversationInner({ chatId }: { chatId: string }) {
     return (
       <div className="h-full flex flex-col items-center justify-center gap-2">
         <p className="text-sm text-destructive">{error}</p>
-        <Link to="/chats" className="text-xs text-primary hover:underline">Back to chats</Link>
+        <Link to="/chats" className="text-xs text-primary hover:underline">返回对话列表</Link>
       </div>
     );
   }
@@ -290,7 +290,7 @@ function ChatConversationInner({ chatId }: { chatId: string }) {
           </span>
           {chat && (
             <span className="text-2xs px-1.5 py-0.5 rounded-md font-medium border border-border text-muted-foreground bg-muted">
-              {chat.entities.length} member{chat.entities.length !== 1 ? "s" : ""}
+              {chat.entities.length} 位成员
             </span>
           )}
         </div>

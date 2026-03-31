@@ -49,9 +49,9 @@ export default function PublishDialog({ open, onOpenChange, memberId }: Props) {
   };
 
   const bumps: { type: BumpType; label: string; desc: string }[] = [
-    { type: "patch", label: "Patch", desc: "修复和微调" },
-    { type: "minor", label: "Minor", desc: "新增功能" },
-    { type: "major", label: "Major", desc: "重大变更" },
+    { type: "patch", label: "补丁", desc: "修复和微调" },
+    { type: "minor", label: "次版本", desc: "新增功能" },
+    { type: "major", label: "主版本", desc: "重大变更" },
   ];
 
   return (

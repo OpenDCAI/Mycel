@@ -26,10 +26,10 @@ interface ModuleDef {
 }
 
 const modules: ModuleDef[] = [
-  { id: "role", label: "Role", icon: FileText },
+  { id: "role", label: "角色", icon: FileText },
   { id: "mcp", label: "MCP", icon: Plug, count: c => c.mcps.length },
-  { id: "skills", label: "Skills", icon: Zap, count: c => c.skills.length },
-  { id: "subagents", label: "Agents", icon: Users, count: c => c.subAgents.length },
+  { id: "skills", label: "技能", icon: Zap, count: c => c.skills.length },
+  { id: "subagents", label: "子成员", icon: Users, count: c => c.subAgents.length },
 ];
 
 // ==================== Main Component ====================
@@ -330,7 +330,7 @@ function RolePanel({ prompt, tools, rules, onSavePrompt, onToggleTool, onSaveRul
       <section className="space-y-2">
         <div className="flex items-center gap-2">
           <FileText className="h-4 w-4 text-muted-foreground" />
-          <h3 className="text-sm font-medium">System Prompt</h3>
+          <h3 className="text-sm font-medium">系统提示词</h3>
           <div className="flex-1" />
           <Button size="sm" className="h-7" disabled={!promptDirty || savingPrompt} onClick={savePrompt}>
             <Save className="h-3.5 w-3.5 mr-1" /> {savingPrompt ? "..." : "保存"}
@@ -348,7 +348,7 @@ function RolePanel({ prompt, tools, rules, onSavePrompt, onToggleTool, onSaveRul
       <section className="space-y-2">
         <div className="flex items-center gap-2">
           <Wrench className="h-4 w-4 text-muted-foreground" />
-          <h3 className="text-sm font-medium">Tools</h3>
+          <h3 className="text-sm font-medium">工具</h3>
           <span className="text-xs text-muted-foreground">{tools.filter(t => t.enabled).length}/{tools.length}</span>
           <div className="flex-1" />
           <div className="relative w-40">
@@ -376,7 +376,7 @@ function RolePanel({ prompt, tools, rules, onSavePrompt, onToggleTool, onSaveRul
       <section className="space-y-2">
         <div className="flex items-center gap-2">
           <BookOpen className="h-4 w-4 text-muted-foreground" />
-          <h3 className="text-sm font-medium">Rules</h3>
+          <h3 className="text-sm font-medium">规则</h3>
           <span className="text-xs text-muted-foreground">{rules.length} 个文件</span>
           <div className="flex-1" />
           <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setAddRuleOpen(true)}>
@@ -515,7 +515,7 @@ function SubAgentsPanel({ agents, onSave, onAdd, onDelete }: {
       {/* Sidebar */}
       <div className="w-52 shrink-0 border-r flex flex-col">
         <div className="flex items-center justify-between px-3 py-2 border-b">
-          <span className="text-xs font-medium text-muted-foreground">Sub-Agents</span>
+          <span className="text-xs font-medium text-muted-foreground">子 Agent</span>
           <Button variant="ghost" size="icon" className="h-6 w-6" onClick={onAdd} title="添加 Agent">
             <Plus className="h-3.5 w-3.5" />
           </Button>
@@ -598,7 +598,7 @@ function SubAgentsPanel({ agents, onSave, onAdd, onDelete }: {
 
             {/* Description */}
             <div className="space-y-1">
-              <label className="text-xs font-medium text-muted-foreground">Description</label>
+              <label className="text-xs font-medium text-muted-foreground">描述</label>
               {isBuiltin ? (
                 <p className="text-sm text-foreground/80 px-1">{draft.desc || "—"}</p>
               ) : (
@@ -613,7 +613,7 @@ function SubAgentsPanel({ agents, onSave, onAdd, onDelete }: {
 
             {/* System Prompt */}
             <div className="space-y-1">
-              <label className="text-xs font-medium text-muted-foreground">System Prompt</label>
+              <label className="text-xs font-medium text-muted-foreground">系统提示词</label>
               {isBuiltin ? (
                 <pre className="w-full max-h-48 overflow-auto rounded-md border bg-muted/30 px-3 py-2 text-xs font-mono text-foreground/70 whitespace-pre-wrap">
                   {draft.system_prompt || "—"}
@@ -666,7 +666,7 @@ function SubAgentToolsGrid({ items, onToggle, readOnly = false }: {
   return (
     <div className="space-y-2">
       <div className="flex items-center gap-2">
-        <label className="text-xs font-medium text-muted-foreground">Tools</label>
+        <label className="text-xs font-medium text-muted-foreground">工具</label>
         <span className="text-xs text-muted-foreground">{enabledCount}/{items.length} 启用</span>
         <div className="flex-1" />
         <div className="relative w-40">
@@ -707,7 +707,7 @@ function ResourceCards({ type, items, onToggle, onRemove, onAdd }: {
   onRemove?: (name: string) => void;
   onAdd?: () => void;
 }) {
-  const labels = { skill: "Skills", mcp: "MCP Servers", agent: "Agents" };
+  const labels = { skill: "技能", mcp: "MCP 服务器", agent: "成员" };
   const icons = { skill: Zap, mcp: Plug, agent: Users };
   const Icon = icons[type];
 

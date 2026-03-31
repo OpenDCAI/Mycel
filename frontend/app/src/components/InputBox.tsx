@@ -144,7 +144,7 @@ export default function InputBox({
                   onClick={() => fileInputRef.current?.click()}
                   disabled={inputDisabled}
                   className="w-8 h-8 rounded-full flex items-center justify-center transition-colors duration-fast text-muted-foreground hover:text-foreground hover:bg-muted disabled:opacity-50"
-                  title="Attach files"
+                  title="附加文件"
                 >
                   <Paperclip className="w-4 h-4" />
                 </button>

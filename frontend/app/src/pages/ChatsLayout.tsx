@@ -9,7 +9,7 @@ function formatTime(ts: number): string {
   const d = new Date(ts * 1000);
   const now = new Date();
   const diffMs = now.getTime() - d.getTime();
-  if (diffMs < 60_000) return "just now";
+  if (diffMs < 60_000) return "刚刚";
   if (diffMs < 3600_000) return `${Math.floor(diffMs / 60_000)}m`;
   if (diffMs < 86400_000) return `${Math.floor(diffMs / 3600_000)}h`;
   return `${d.getMonth() + 1}/${d.getDate()}`;
@@ -100,7 +100,7 @@ function NewChatDialog({ onClose, onCreated }: { onClose: () => void; onCreated:
         {/* Group title input — only when 2+ selected */}
         {isGroup && (
           <div className="px-4 py-2 border-b border-border">
-            <input type="text" placeholder="Group name (optional)" value={title}
+            <input type="text" placeholder="群组名称（可选）" value={title}
               onChange={e => setTitle(e.target.value)}
               className="w-full text-sm bg-transparent outline-none text-foreground placeholder:text-muted-foreground/50" />
           </div>
@@ -143,7 +143,7 @@ function NewChatDialog({ onClose, onCreated }: { onClose: () => void; onCreated:
           <div className="px-4 py-3 border-t border-border">
             <button onClick={() => void handleCreate()} disabled={creating}
               className="w-full py-2 rounded-lg bg-foreground text-background text-sm font-medium hover:bg-foreground/90 disabled:opacity-50 transition-colors duration-fast">
-              {creating ? "Creating..." : isGroup ? `Create Group (${selected.size + 1})` : "Start Chat"}
+              {creating ? "创建中..." : isGroup ? `创建群组 (${selected.size + 1})` : "开始对话"}
             </button>
           </div>
         )}
@@ -276,7 +276,7 @@ export default function ChatsLayout() {
       <div className="w-72 h-full flex flex-col bg-card border-r border-border shrink-0">
         {/* Header — same as Sidebar.tsx */}
         <div className="px-4 pt-3 pb-1 flex items-center justify-between">
-          <span className="text-sm font-semibold text-foreground">Chats</span>
+          <span className="text-sm font-semibold text-foreground">对话</span>
         </div>
 
         {/* Search button — same style as Sidebar.tsx, opens modal */}
@@ -358,7 +358,7 @@ export default function ChatsLayout() {
                       </div>
                       <div className="flex items-center gap-1 mt-0.5">
                         <span className="text-xs text-muted-foreground/60 truncate flex-1 min-w-0">
-                          {chat.last_message?.content || "No messages"}
+                          {chat.last_message?.content || "暂无消息"}
                         </span>
                         {chat.last_message && (
                           <span className="text-2xs text-muted-foreground/40 flex-shrink-0">
