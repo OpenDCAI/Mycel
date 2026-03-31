@@ -44,29 +44,6 @@ class SessionManager:
         data = self._load_data()
         return data.get("threads", [])
 
-    def get_threads_from_db(self) -> list[dict]:
-        """从 SQLite 数据库获取所有 thread 信息"""
-        if not self.db_path.exists():
-            return []
-
-        threads: list[dict] = []
-        try:
-            repo = SQLiteCheckpointRepo(db_path=self.db_path)
-            try:
-                for thread_id in repo.list_thread_ids():
-                    threads.append(
-                        {
-                            "thread_id": thread_id,
-                            "last_active": None,
-                        }
-                    )
-            finally:
-                repo.close()
-        except Exception as e:
-            print(f"[SessionManager] Error reading threads from DB: {e}")
-
-        return threads
-
     def delete_thread(self, thread_id: str) -> bool:
         """删除一个 thread 及其所有数据"""
         data = self._load_data()
@@ -87,7 +64,10 @@ class SessionManager:
                     repo.close()
 
                 file_repo = SQLiteFileOperationRepo(db_path=self.db_path)
-                file_repo.delete_thread_operations(thread_id)
+                try:
+                    file_repo.delete_thread_operations(thread_id)
+                finally:
+                    file_repo.close()
                 return True
             except Exception as e:
                 print(f"[SessionManager] Error deleting thread from DB: {e}")

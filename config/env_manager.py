@@ -14,46 +14,32 @@ class ConfigManager:
         self.config_file = self.config_dir / "config.env"
         self.config_dir.mkdir(parents=True, exist_ok=True)
 
-    def get(self, key: str) -> str | None:
-        """获取配置值"""
+    def _parse_file(self) -> dict[str, str]:
         if not self.config_file.exists():
-            return None
-
+            return {}
+        config = {}
         for line in self.config_file.read_text().splitlines():
             line = line.strip()
             if line and not line.startswith("#") and "=" in line:
                 k, v = line.split("=", 1)
-                if k.strip() == key:
-                    return v.strip()
-        return None
+                config[k.strip()] = v.strip()
+        return config
+
+    def get(self, key: str) -> str | None:
+        """获取配置值"""
+        return self._parse_file().get(key)
 
     def set(self, key: str, value: str):
         """设置配置值"""
-        config = {}
-
-        if self.config_file.exists():
-            for line in self.config_file.read_text().splitlines():
-                line = line.strip()
-                if line and not line.startswith("#") and "=" in line:
-                    k, v = line.split("=", 1)
-                    config[k.strip()] = v.strip()
-
+        config = self._parse_file()
         config[key] = value
-
         with self.config_file.open("w") as f:
             for k, v in config.items():
                 f.write(f"{k}={v}\n")
 
     def list_all(self) -> dict[str, str]:
         """列出所有配置"""
-        config = {}
-        if self.config_file.exists():
-            for line in self.config_file.read_text().splitlines():
-                line = line.strip()
-                if line and not line.startswith("#") and "=" in line:
-                    k, v = line.split("=", 1)
-                    config[k.strip()] = v.strip()
-        return config
+        return self._parse_file()
 
     def load_to_env(self):
         """加载配置到环境变量"""
