@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Copy, Check } from 'lucide-react';
+import { FEEDBACK_NORMAL } from '@/styles/ux-timing';
 
 interface CodeBlockProps {
   code: string;
@@ -29,7 +30,7 @@ export function CodeBlock({
   const handleCopy = async () => {
     await navigator.clipboard.writeText(code);
     setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    setTimeout(() => setCopied(false), FEEDBACK_NORMAL);
   };
 
   const getLineBackground = (lineNumber: number) => {
@@ -55,7 +56,7 @@ export function CodeBlock({
         )}
         <button
           onClick={handleCopy}
-          className="ml-auto p-1.5 rounded hover:bg-gray-200 dark:hover:bg-gray-800 transition-colors"
+          className="ml-auto p-1.5 rounded hover:bg-gray-200 dark:hover:bg-gray-800 transition-colors duration-fast"
           title="Copy code"
         >
           {copied ? (

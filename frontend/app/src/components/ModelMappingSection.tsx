@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { FEEDBACK_NORMAL } from "@/styles/ux-timing";
 
 interface VirtualModel {
   id: string;
@@ -42,7 +43,7 @@ export default function ModelMappingSection({
         body: JSON.stringify({ mapping: { [virtualId]: { model: modelId } } }),
       });
       setSuccessMessage(true);
-      setTimeout(() => setSuccessMessage(false), 2000);
+      setTimeout(() => setSuccessMessage(false), FEEDBACK_NORMAL);
     } catch (error) {
       console.error("Failed to save mapping:", error);
     } finally {
@@ -80,10 +81,10 @@ export default function ModelMappingSection({
           return (
             <div
               key={vm.id}
-              className="group relative border border-[#e2e8f0] rounded-xl p-5 bg-white hover:border-[#0ea5e9] hover:shadow-lg hover:shadow-[#0ea5e9]/10 transition-all duration-300"
-              style={{ animation: `fadeInUp 0.5s ease-out ${index * 0.1}s both` }}
+              className="group relative border border-[#e2e8f0] rounded-xl p-5 bg-white hover:border-[#0ea5e9] hover:shadow-lg hover:shadow-[#0ea5e9]/10 transition-all duration-normal"
+              style={{ animation: `motionFadeInUp var(--duration-slow) var(--ease-out) calc(var(--duration-instant) * ${index}) both` }}
             >
-              <div className="absolute inset-0 bg-gradient-to-br from-[#0ea5e9]/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 rounded-xl" />
+              <div className="absolute inset-0 bg-gradient-to-br from-[#0ea5e9]/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-normal rounded-xl" />
               <div className="relative flex items-start gap-3 mb-4">
                 <div className="flex-1">
                   <h3 className="text-sm font-bold text-[#1e293b]" style={{ fontFamily: 'Inter, system-ui, sans-serif' }}>
@@ -103,7 +104,7 @@ export default function ModelMappingSection({
                 <select
                   value={currentModel}
                   onChange={(e) => void handleMappingChange(vm.id, e.target.value)}
-                  className="relative w-full px-3 py-2.5 border border-[#e2e8f0] rounded-lg text-sm text-[#1e293b] bg-[#f8fafc] font-mono hover:border-[#0ea5e9] focus:outline-none focus:border-[#0ea5e9] focus:ring-2 focus:ring-[#0ea5e9]/20 transition-all duration-200"
+                  className="relative w-full px-3 py-2.5 border border-[#e2e8f0] rounded-lg text-sm text-[#1e293b] bg-[#f8fafc] font-mono hover:border-[#0ea5e9] focus:outline-none focus:border-[#0ea5e9] focus:ring-2 focus:ring-[#0ea5e9]/20 transition-all duration-normal"
                 >
                   {!currentModel && <option value="">选择模型...</option>}
                   {enabledModelsList.map((model) => (
@@ -116,17 +117,6 @@ export default function ModelMappingSection({
         })}
       </div>
 
-      <style>{`
-        @keyframes fadeInUp {
-          from { opacity: 0; transform: translateY(20px); }
-          to { opacity: 1; transform: translateY(0); }
-        }
-        @keyframes fadeIn {
-          from { opacity: 0; }
-          to { opacity: 1; }
-        }
-        .animate-fadeIn { animation: fadeIn 0.3s ease-out; }
-      `}</style>
     </div>
   );
 }

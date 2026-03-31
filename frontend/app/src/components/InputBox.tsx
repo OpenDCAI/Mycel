@@ -86,7 +86,7 @@ export default function InputBox({
                   <button
                     type="button"
                     onClick={() => onRemoveFile(index)}
-                    className="text-[#737373] hover:text-[#171717] transition-colors"
+                    className="text-[#737373] hover:text-[#171717] transition-colors duration-fast"
                   >
                     <X className="w-4 h-4" />
                   </button>
@@ -97,7 +97,7 @@ export default function InputBox({
         )}
         <div
           onClick={() => inputRef.current?.focus()}
-          className={`flex items-end gap-2 rounded-2xl border transition-all cursor-text ${
+          className={`flex items-end gap-2 rounded-2xl border transition-[border-color,box-shadow,background-color] duration-fast cursor-text ${
             focused
               ? "border-[#e5e5e5] shadow-sm bg-[#fafafa]"
               : "border-transparent bg-[#fafafa]"
@@ -143,7 +143,7 @@ export default function InputBox({
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
                   disabled={inputDisabled}
-                  className="w-8 h-8 rounded-full flex items-center justify-center transition-colors text-[#737373] hover:text-[#171717] hover:bg-[#f5f5f5] disabled:opacity-50"
+                  className="w-8 h-8 rounded-full flex items-center justify-center transition-colors duration-fast text-[#737373] hover:text-[#171717] hover:bg-[#f5f5f5] disabled:opacity-50"
                   title="Attach files"
                 >
                   <Paperclip className="w-4 h-4" />
@@ -160,7 +160,7 @@ export default function InputBox({
                 }
               }}
               disabled={!canSend && !showStopButton}
-              className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${
+              className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors duration-fast ${
                 showStopButton
                   ? "bg-red-500 text-white hover:bg-red-600"
                   : canSend

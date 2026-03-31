@@ -1,5 +1,6 @@
 import { Eye, EyeOff } from "lucide-react";
 import { useState } from "react";
+import { FEEDBACK_NORMAL } from "@/styles/ux-timing";
 
 interface ProviderConfig {
   api_key: string | null;
@@ -48,7 +49,7 @@ export default function ProvidersSection({ providers, onUpdate }: ProvidersSecti
 
       // Show success feedback
       setSuccessMessage(providerId);
-      setTimeout(() => setSuccessMessage(null), 2000);
+      setTimeout(() => setSuccessMessage(null), FEEDBACK_NORMAL);
     } catch (error) {
       console.error("Failed to save provider:", error);
     } finally {
@@ -76,9 +77,9 @@ export default function ProvidersSection({ providers, onUpdate }: ProvidersSecti
           return (
             <div
               key={providerConfig.id}
-              className="border border-[#e2e8f0] rounded-xl p-5 bg-white hover:border-[#0ea5e9] hover:shadow-lg hover:shadow-[#0ea5e9]/10 transition-all duration-300 space-y-4"
+              className="border border-[#e2e8f0] rounded-xl p-5 bg-white hover:border-[#0ea5e9] hover:shadow-lg hover:shadow-[#0ea5e9]/10 transition-all duration-normal space-y-4"
               style={{
-                animation: `fadeInUp 0.5s ease-out ${index * 0.1}s both`
+                animation: `motionFadeInUp var(--duration-slow) var(--ease-out) calc(var(--duration-instant) * ${index}) both`
               }}
             >
               <div className="flex items-center justify-between">
@@ -113,12 +114,12 @@ export default function ProvidersSection({ providers, onUpdate }: ProvidersSecti
                       void handleSave(providerConfig.id, newConfig);
                     }}
                     placeholder={`输入 ${providerConfig.name} API 密钥`}
-                    className="w-full px-3 py-2 pr-10 border border-[#e2e8f0] rounded-lg text-sm text-[#1e293b] bg-[#f8fafc] font-mono hover:border-[#0ea5e9] focus:outline-none focus:border-[#0ea5e9] focus:ring-2 focus:ring-[#0ea5e9]/20 transition-all duration-200"
+                    className="w-full px-3 py-2 pr-10 border border-[#e2e8f0] rounded-lg text-sm text-[#1e293b] bg-[#f8fafc] font-mono hover:border-[#0ea5e9] focus:outline-none focus:border-[#0ea5e9] focus:ring-2 focus:ring-[#0ea5e9]/20 transition-all duration-normal"
                   />
                   {hasApiKey && (
                     <button
                       onClick={() => setShowKeys({ ...showKeys, [providerConfig.id]: !showKey })}
-                      className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 text-[#94a3b8] hover:text-[#0ea5e9] rounded transition-colors"
+                      className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 text-[#94a3b8] hover:text-[#0ea5e9] rounded transition-colors duration-fast"
                     >
                       {showKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                     </button>
@@ -156,7 +157,7 @@ export default function ProvidersSection({ providers, onUpdate }: ProvidersSecti
                       void handleSave(providerConfig.id, newConfig);
                     }}
                     placeholder={providerConfig.defaultBaseUrl}
-                    className="w-full px-3 py-2 border border-[#e2e8f0] rounded-lg text-sm text-[#1e293b] bg-[#f8fafc] font-mono hover:border-[#0ea5e9] focus:outline-none focus:border-[#0ea5e9] focus:ring-2 focus:ring-[#0ea5e9]/20 transition-all duration-200"
+                    className="w-full px-3 py-2 border border-[#e2e8f0] rounded-lg text-sm text-[#1e293b] bg-[#f8fafc] font-mono hover:border-[#0ea5e9] focus:outline-none focus:border-[#0ea5e9] focus:ring-2 focus:ring-[#0ea5e9]/20 transition-all duration-normal"
                   />
                 )}
               </div>
@@ -165,31 +166,6 @@ export default function ProvidersSection({ providers, onUpdate }: ProvidersSecti
         })}
       </div>
 
-      <style>{`
-        @keyframes fadeInUp {
-          from {
-            opacity: 0;
-            transform: translateY(20px);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0);
-          }
-        }
-
-        @keyframes fadeIn {
-          from {
-            opacity: 0;
-          }
-          to {
-            opacity: 1;
-          }
-        }
-
-        .animate-fadeIn {
-          animation: fadeIn 0.3s ease-out;
-        }
-      `}</style>
     </div>
   );
 }

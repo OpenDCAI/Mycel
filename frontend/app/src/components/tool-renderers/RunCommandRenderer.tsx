@@ -1,6 +1,7 @@
 import { Check, Copy } from "lucide-react";
 import { memo, useCallback, useState } from "react";
 import type { ToolRendererProps } from "./types";
+import { FEEDBACK_BRIEF } from "@/styles/ux-timing";
 
 function parseArgs(args: unknown): { command?: string; cwd?: string; description?: string } {
   if (args && typeof args === "object") {
@@ -21,14 +22,14 @@ function CopyInline({ text }: { text: string }) {
     e.stopPropagation();
     navigator.clipboard.writeText(text).then(() => {
       setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
+      setTimeout(() => setCopied(false), FEEDBACK_BRIEF);
     });
   }, [text]);
 
   return (
     <button
       onClick={handleCopy}
-      className="flex-shrink-0 p-0.5 rounded text-[#a3a3a3] hover:text-[#525252] hover:bg-[#f0f0f0] transition-colors"
+      className="flex-shrink-0 p-0.5 rounded text-[#a3a3a3] hover:text-[#525252] hover:bg-[#f0f0f0] transition-colors duration-fast"
       title="复制命令"
     >
       {copied ? <Check className="w-3 h-3 text-green-500" /> : <Copy className="w-3 h-3" />}
@@ -50,7 +51,7 @@ export default memo(function RunCommandRenderer({ step, expanded }: ToolRenderer
         )}
         {step.status === "calling" && <span className="text-[#a3a3a3]">...</span>}
         {command && (
-          <span className="opacity-0 group-hover:opacity-100 transition-opacity">
+          <span className="opacity-0 group-hover:opacity-100 transition-opacity duration-fast">
             <CopyInline text={command} />
           </span>
         )}
@@ -70,7 +71,7 @@ export default memo(function RunCommandRenderer({ step, expanded }: ToolRenderer
           <pre className="p-3 rounded-lg text-xs overflow-x-auto font-mono bg-[#171717] text-green-400 border border-[#333]">
             <span className="text-[#555]">$ </span>{command}
           </pre>
-          <div className="absolute top-2 right-2 opacity-0 group-hover/cmd:opacity-100 transition-opacity">
+          <div className="absolute top-2 right-2 opacity-0 group-hover/cmd:opacity-100 transition-opacity duration-fast">
             <CopyInline text={command} />
           </div>
         </div>
