@@ -326,7 +326,7 @@ export default function TaskModal({
 
       {/* Tags */}
       <div className="space-y-2">
-        <span className="text-[11px] text-muted-foreground font-medium flex items-center gap-1">
+        <span className="text-xs text-muted-foreground font-medium flex items-center gap-1">
           <Tag className="w-3 h-3" />标签
         </span>
         <TagInput
@@ -338,7 +338,7 @@ export default function TaskModal({
 
       {/* Priority */}
       <div className="space-y-2">
-        <span className="text-[11px] text-muted-foreground font-medium">优先级</span>
+        <span className="text-xs text-muted-foreground font-medium">优先级</span>
         <div className="flex gap-2">
           {PRIORITY_OPTIONS.map((p) => (
             <button key={p.value} onClick={() => setForm((f) => ({ ...f, priority: p.value }))}
@@ -355,7 +355,7 @@ export default function TaskModal({
       {/* Status (edit only) */}
       {isEdit && (
         <div className="space-y-2">
-          <span className="text-[11px] text-muted-foreground font-medium">状态</span>
+          <span className="text-xs text-muted-foreground font-medium">状态</span>
           <div className="flex flex-wrap gap-1.5">
             {STATUS_OPTIONS.map((s) => (
               <button key={s.value} onClick={() => setForm((f) => ({ ...f, status: s.value }))}
@@ -373,7 +373,7 @@ export default function TaskModal({
       {/* Progress (edit + running) */}
       {isEdit && form.status === "running" && (
         <div className="space-y-2">
-          <span className="text-[11px] text-muted-foreground font-medium">进度</span>
+          <span className="text-xs text-muted-foreground font-medium">进度</span>
           <div className="flex items-center gap-3">
             <input type="range" min={0} max={100} value={form.progress}
               onChange={(e) => setForm((f) => ({ ...f, progress: Number(e.target.value) }))}
@@ -386,7 +386,7 @@ export default function TaskModal({
 
       {/* Assignee */}
       <div className="space-y-2">
-        <span className="text-[11px] text-muted-foreground font-medium flex items-center gap-1">
+        <span className="text-xs text-muted-foreground font-medium flex items-center gap-1">
           <User className="w-3 h-3" />执行者
         </span>
         <select value={form.assigneeId} onChange={(e) => setForm((f) => ({ ...f, assigneeId: e.target.value }))}
@@ -399,7 +399,7 @@ export default function TaskModal({
 
       {/* Deadline */}
       <div className="space-y-2">
-        <span className="text-[11px] text-muted-foreground font-medium flex items-center gap-1">
+        <span className="text-xs text-muted-foreground font-medium flex items-center gap-1">
           <Calendar className="w-3 h-3" />截止日期
         </span>
         <input type="date" value={form.deadline} onChange={(e) => setForm((f) => ({ ...f, deadline: e.target.value }))}
@@ -441,7 +441,7 @@ export default function TaskModal({
       {/* Schedule */}
       <div className="space-y-3">
         <div className="flex items-center justify-between">
-          <span className="text-[11px] text-muted-foreground font-medium uppercase tracking-wider">调度频率</span>
+          <span className="text-xs text-muted-foreground font-medium uppercase tracking-wider">调度频率</span>
           <span className="text-xs text-primary font-medium">{humanSchedule}</span>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
@@ -536,7 +536,7 @@ export default function TaskModal({
 
       {/* Task template */}
       <div className="space-y-3">
-        <span className="text-[11px] text-muted-foreground font-medium uppercase tracking-wider">触发时创建的任务</span>
+        <span className="text-xs text-muted-foreground font-medium uppercase tracking-wider">触发时创建的任务</span>
         <input value={cronTaskTitle} onChange={(e) => setCronTaskTitle(e.target.value)}
           placeholder="任务标题"
           className="w-full px-3.5 py-2.5 rounded-xl bg-card border border-border text-sm font-medium text-foreground outline-none focus:border-primary/40 transition-colors duration-fast placeholder:text-muted-foreground/50"
@@ -546,7 +546,7 @@ export default function TaskModal({
           className="w-full px-3.5 py-2.5 rounded-xl bg-card border border-border text-sm text-foreground outline-none focus:border-primary/40 transition-colors duration-fast resize-none placeholder:text-muted-foreground/50 leading-relaxed"
         />
         <div className="space-y-2">
-          <span className="text-[11px] text-muted-foreground font-medium flex items-center gap-1">
+          <span className="text-xs text-muted-foreground font-medium flex items-center gap-1">
             <Tag className="w-3 h-3" />标签
           </span>
           <TagInput
@@ -556,7 +556,7 @@ export default function TaskModal({
           />
         </div>
         <div className="space-y-2">
-          <span className="text-[11px] text-muted-foreground font-medium">优先级</span>
+          <span className="text-xs text-muted-foreground font-medium">优先级</span>
           <div className="flex gap-2">
             {PRIORITY_OPTIONS.map((p) => (
               <button key={p.value} onClick={() => setCronTaskPriority(p.value)}

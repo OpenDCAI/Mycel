@@ -18,13 +18,13 @@ function MiniStatusIcon({ status }: { status: string }) {
     case "calling":
       return <Loader2 className="w-3 h-3 text-blue-500 animate-spin flex-shrink-0" />;
     case "done":
-      return <CheckCircle2 className="w-3 h-3 text-[#a3a3a3] flex-shrink-0" />;
+      return <CheckCircle2 className="w-3 h-3 text-muted-foreground/70 flex-shrink-0" />;
     case "error":
       return <XCircle className="w-3 h-3 text-red-500 flex-shrink-0" />;
     case "cancelled":
-      return <XCircle className="w-3 h-3 text-[#a3a3a3] flex-shrink-0" />;
+      return <XCircle className="w-3 h-3 text-muted-foreground/70 flex-shrink-0" />;
     default:
-      return <CheckCircle2 className="w-3 h-3 text-[#a3a3a3] flex-shrink-0" />;
+      return <CheckCircle2 className="w-3 h-3 text-muted-foreground/70 flex-shrink-0" />;
   }
 }
 
@@ -111,8 +111,8 @@ export const ToolDetailBox = memo(function ToolDetailBox({
         role="button"
         tabIndex={0}
         aria-label={`查看 ${toolCount} 次工具调用详情`}
-        className={`relative rounded-lg border bg-[#fafafa] cursor-pointer transition-colors duration-fast ${
-          hasRunning ? "detail-box-glow" : "border-[#e5e5e5] hover:border-[#d4d4d4]"
+        className={`relative rounded-lg border bg-muted cursor-pointer transition-colors duration-fast ${
+          hasRunning ? "detail-box-glow" : "border-border hover:border-border"
         }`}
         onClick={() => setModalOpen(true)}
         onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setModalOpen(true); } }}
@@ -120,10 +120,10 @@ export const ToolDetailBox = memo(function ToolDetailBox({
       >
         {/* Rolling count badge — top-right corner */}
         <div className="absolute top-1.5 right-2 z-10 flex items-center gap-0.5 pointer-events-none select-none">
-          <span className="text-[10px] text-[#b8b8b8] tabular-nums leading-none font-medium">
+          <span className="text-2xs text-[#b8b8b8] tabular-nums leading-none font-medium">
             <RollingNumber value={toolCount} />
           </span>
-          <span className="text-[10px] text-[#c8c8c8] leading-none"> 次工具</span>
+          <span className="text-2xs text-[#c8c8c8] leading-none"> 次工具</span>
         </div>
 
         <div
@@ -151,12 +151,12 @@ export const ToolDetailBox = memo(function ToolDetailBox({
                 >
                   <MiniStatusIcon status={step.status} />
                   <span
-                    className={`inline-flex items-center px-1 py-0 rounded text-[10px] font-medium flex-shrink-0 ${badge.bg} ${badge.text}`}
+                    className={`inline-flex items-center px-1 py-0 rounded text-2xs font-medium flex-shrink-0 ${badge.bg} ${badge.text}`}
                   >
                     {badge.label || step.name}
                   </span>
                   <span
-                    className={`text-[11px] text-[#737373] font-mono truncate min-w-0 ${isCalling ? "animate-pulse-slow" : ""} ${
+                    className={`text-xs text-muted-foreground font-mono truncate min-w-0 ${isCalling ? "animate-pulse-slow" : ""} ${
                       isTaskStep ? "underline decoration-dotted underline-offset-2" : ""
                     }`}
                   >

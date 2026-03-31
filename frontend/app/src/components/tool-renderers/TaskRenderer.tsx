@@ -65,12 +65,12 @@ export default memo(function TaskRenderer({ step, expanded }: ToolRendererProps)
 
   if (!expanded) {
     return (
-      <div className="flex items-center gap-2 text-xs text-[#737373]">
+      <div className="flex items-center gap-2 text-xs text-muted-foreground">
         <span className="truncate max-w-[320px]">{label}</span>
         {step.status === "calling" && stream?.status === "running" && (
-          <span className="text-[#a3a3a3]">streaming...</span>
+          <span className="text-muted-foreground/70">streaming...</span>
         )}
-        {step.status === "calling" && !stream && <span className="text-[#a3a3a3]">...</span>}
+        {step.status === "calling" && !stream && <span className="text-muted-foreground/70">...</span>}
       </div>
     );
   }
@@ -78,7 +78,7 @@ export default memo(function TaskRenderer({ step, expanded }: ToolRendererProps)
   return (
     <div className="space-y-1.5">
       {args.prompt && (
-        <div className="p-3 rounded-lg text-xs bg-[#fafafa] border border-[#e5e5e5] text-[#525252] whitespace-pre-wrap">
+        <div className="p-3 rounded-lg text-xs bg-muted border border-border text-foreground-secondary whitespace-pre-wrap">
           {args.prompt}
         </div>
       )}
@@ -96,13 +96,13 @@ export default memo(function TaskRenderer({ step, expanded }: ToolRendererProps)
           </div>
 
           {stream.text && (
-            <div className="text-[#525252] whitespace-pre-wrap">{stream.text}</div>
+            <div className="text-foreground-secondary whitespace-pre-wrap">{stream.text}</div>
           )}
 
           {stream.tool_calls.length > 0 && (
             <div className="space-y-1">
               {stream.tool_calls.map((tc, idx) => (
-                <div key={idx} className="text-[#737373] text-[11px] font-mono">
+                <div key={idx} className="text-muted-foreground text-xs font-mono">
                   → {tc.name}
                 </div>
               ))}
@@ -116,7 +116,7 @@ export default memo(function TaskRenderer({ step, expanded }: ToolRendererProps)
       )}
 
       {step.result && (
-        <pre className="p-3 rounded-lg text-xs overflow-x-auto max-h-[200px] overflow-y-auto font-mono bg-[#fafafa] border border-[#e5e5e5] text-[#525252]">
+        <pre className="p-3 rounded-lg text-xs overflow-x-auto max-h-[200px] overflow-y-auto font-mono bg-muted border border-border text-foreground-secondary">
           {step.result}
         </pre>
       )}
@@ -135,8 +135,8 @@ export default memo(function TaskRenderer({ step, expanded }: ToolRendererProps)
           ) : (
             <div className="mt-1.5 space-y-1">
               <div className="flex items-center justify-between">
-                <span className="text-xs text-[#737373]">任务输出</span>
-                <button onClick={() => setTaskOutput(null)} className="text-xs text-[#a3a3a3] hover:text-[#737373]">
+                <span className="text-xs text-muted-foreground">任务输出</span>
+                <button onClick={() => setTaskOutput(null)} className="text-xs text-muted-foreground/70 hover:text-muted-foreground">
                   收起
                 </button>
               </div>

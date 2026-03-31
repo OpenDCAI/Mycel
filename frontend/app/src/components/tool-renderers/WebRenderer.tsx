@@ -16,10 +16,10 @@ export default memo(function WebRenderer({ step, expanded }: ToolRendererProps) 
 
   if (!expanded) {
     return (
-      <div className="flex items-center gap-2 text-xs text-[#737373]">
-        <span className="text-[#525252]">访问</span>
+      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+        <span className="text-foreground-secondary">访问</span>
         <span className="truncate max-w-[280px]">{label}</span>
-        {step.status === "calling" && <span className="text-[#a3a3a3]">...</span>}
+        {step.status === "calling" && <span className="text-muted-foreground/70">...</span>}
       </div>
     );
   }

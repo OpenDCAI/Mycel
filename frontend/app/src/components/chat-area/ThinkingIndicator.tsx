@@ -49,11 +49,11 @@ export function ThinkingIndicator({ runtimeStatus }: ThinkingIndicatorProps) {
         <span className={orbClass} style={{ animationDelay: "280ms" }} />
       </div>
       {tool ? (
-        <span key={`tool-${tool}`} className="text-[12px] text-[#a3a3a3] animate-fade-in">
+        <span key={`tool-${tool}`} className="text-xs text-muted-foreground/70 animate-fade-in">
           使用 {tool}
         </span>
       ) : (
-        <span key={`${isBooting ? "boot" : "think"}-${msgIdx}`} className="text-[12px] text-[#737373] animate-fade-in">
+        <span key={`${isBooting ? "boot" : "think"}-${msgIdx}`} className="text-xs text-muted-foreground animate-fade-in">
           {messages[msgIdx]}
         </span>
       )}

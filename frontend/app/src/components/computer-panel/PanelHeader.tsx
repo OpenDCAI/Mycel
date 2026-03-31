@@ -13,17 +13,17 @@ export function PanelHeader({ threadId, isRemote, lease, onClose, onRefreshStatu
   const instanceState = lease?.instance?.state;
 
   return (
-    <div className="h-12 flex items-center justify-between px-4 flex-shrink-0 border-b border-[#e5e5e5]">
+    <div className="h-12 flex items-center justify-between px-4 flex-shrink-0 border-b border-border">
       <div>
-        <h3 className="text-sm font-semibold text-[#171717]">另一台小电脑</h3>
-        <p className="text-[11px] font-mono text-[#a3a3a3]">
+        <h3 className="text-sm font-semibold text-foreground">另一台小电脑</h3>
+        <p className="text-xs font-mono text-muted-foreground/70">
           {threadId ? threadId.slice(0, 20) : "无对话"}
         </p>
       </div>
       <div className="flex items-center gap-1">
         {isRemote && instanceState === "running" && (
           <button
-            className="w-8 h-8 rounded-lg flex items-center justify-center text-[#a3a3a3] hover:bg-[#f5f5f5] hover:text-[#171717]"
+            className="w-8 h-8 rounded-lg flex items-center justify-center text-muted-foreground/70 hover:bg-muted hover:text-foreground"
             onClick={() => void (threadId && pauseThreadSandbox(threadId).then(() => onRefreshStatus()))}
           >
             <Pause className="w-4 h-4" />
@@ -31,14 +31,14 @@ export function PanelHeader({ threadId, isRemote, lease, onClose, onRefreshStatu
         )}
         {isRemote && instanceState === "paused" && (
           <button
-            className="w-8 h-8 rounded-lg flex items-center justify-center text-[#a3a3a3] hover:bg-[#f5f5f5] hover:text-green-600"
+            className="w-8 h-8 rounded-lg flex items-center justify-center text-muted-foreground/70 hover:bg-muted hover:text-green-600"
             onClick={() => void (threadId && resumeThreadSandbox(threadId).then(() => onRefreshStatus()))}
           >
             <Play className="w-4 h-4" />
           </button>
         )}
         <button
-          className="w-8 h-8 rounded-lg flex items-center justify-center text-[#a3a3a3] hover:bg-[#f5f5f5] hover:text-[#171717]"
+          className="w-8 h-8 rounded-lg flex items-center justify-center text-muted-foreground/70 hover:bg-muted hover:text-foreground"
           onClick={onClose}
           title="收起视窗"
         >

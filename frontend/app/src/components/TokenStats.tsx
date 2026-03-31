@@ -26,7 +26,7 @@ export default function TokenStats({ runtimeStatus }: TokenStatsProps) {
   return (
     <div className="bg-background pb-3">
       <div className="max-w-3xl mx-auto px-6">
-        <div className="flex items-center gap-3 text-[10px] text-muted-foreground">
+        <div className="flex items-center gap-3 text-2xs text-muted-foreground">
           {context && (
             <>
               <span>上下文: {formatTokens(context.estimated_tokens)} ({context.usage_percent}%)</span>

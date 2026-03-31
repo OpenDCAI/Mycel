@@ -48,7 +48,7 @@ export function CapabilityStrip({ capabilities }: { capabilities: ProviderCapabi
           </Tooltip>
         );
       })}
-      <span className="text-[10px] text-muted-foreground ml-1 font-mono">{enabledCount}/{CAPABILITY_KEYS.length}</span>
+      <span className="text-2xs text-muted-foreground ml-1 font-mono">{enabledCount}/{CAPABILITY_KEYS.length}</span>
     </div>
   );
 }

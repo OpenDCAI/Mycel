@@ -15,10 +15,10 @@ export function FileTreeNode({ node, depth, onToggle, onSelectFile, selectedFile
   return (
     <>
       <button
-        className={`w-full text-left py-1 pr-2 rounded text-[13px] flex items-center gap-1 transition-colors duration-fast ${
+        className={`w-full text-left py-1 pr-2 rounded text-sm flex items-center gap-1 transition-colors duration-fast ${
           isSelected
             ? "bg-blue-50 text-blue-700"
-            : "text-[#171717] hover:bg-[#f5f5f5]"
+            : "text-foreground hover:bg-muted"
         }`}
         style={{ paddingLeft: `${8 + depth * 16}px` }}
         onClick={() => {
@@ -32,7 +32,7 @@ export function FileTreeNode({ node, depth, onToggle, onSelectFile, selectedFile
         <NodeChevron node={node} />
         <NodeIcon node={node} />
         <span className="flex-1 truncate">{node.name}</span>
-        {!node.is_dir && <span className="text-[10px] text-[#d4d4d4] flex-shrink-0">{node.size}</span>}
+        {!node.is_dir && <span className="text-2xs text-muted-foreground/30 flex-shrink-0">{node.size}</span>}
       </button>
       {node.is_dir && node.expanded && node.children?.map((child) => (
         <FileTreeNode
@@ -50,13 +50,13 @@ export function FileTreeNode({ node, depth, onToggle, onSelectFile, selectedFile
 
 function NodeChevron({ node }: { node: TreeNode }) {
   if (!node.is_dir) return <span className="w-3.5 flex-shrink-0" />;
-  if (node.loading) return <Loader2 className="w-3.5 h-3.5 animate-spin text-[#a3a3a3] flex-shrink-0" />;
-  if (node.expanded) return <ChevronDown className="w-3.5 h-3.5 text-[#a3a3a3] flex-shrink-0" />;
-  return <ChevronRight className="w-3.5 h-3.5 text-[#a3a3a3] flex-shrink-0" />;
+  if (node.loading) return <Loader2 className="w-3.5 h-3.5 animate-spin text-muted-foreground/70 flex-shrink-0" />;
+  if (node.expanded) return <ChevronDown className="w-3.5 h-3.5 text-muted-foreground/70 flex-shrink-0" />;
+  return <ChevronRight className="w-3.5 h-3.5 text-muted-foreground/70 flex-shrink-0" />;
 }
 
 function NodeIcon({ node }: { node: TreeNode }) {
-  if (!node.is_dir) return <FileText className="w-4 h-4 text-[#a3a3a3] flex-shrink-0" />;
-  if (node.expanded) return <FolderOpen className="w-4 h-4 text-[#525252] flex-shrink-0" />;
-  return <Folder className="w-4 h-4 text-[#525252] flex-shrink-0" />;
+  if (!node.is_dir) return <FileText className="w-4 h-4 text-muted-foreground/70 flex-shrink-0" />;
+  if (node.expanded) return <FolderOpen className="w-4 h-4 text-foreground-secondary flex-shrink-0" />;
+  return <Folder className="w-4 h-4 text-foreground-secondary flex-shrink-0" />;
 }

@@ -13,10 +13,10 @@ export default memo(function EditFileRenderer({ step, expanded }: ToolRendererPr
 
   if (!expanded) {
     return (
-      <div className="flex items-center gap-2 text-xs text-[#737373]">
-        <span className="text-[#525252]">编辑</span>
-        <code className="font-mono text-[#737373] truncate max-w-[280px]">{file_path ?? shortPath}</code>
-        {step.status === "calling" && <span className="text-[#a3a3a3]">...</span>}
+      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+        <span className="text-foreground-secondary">编辑</span>
+        <code className="font-mono text-muted-foreground truncate max-w-[280px]">{file_path ?? shortPath}</code>
+        {step.status === "calling" && <span className="text-muted-foreground/70">...</span>}
       </div>
     );
   }
@@ -32,7 +32,7 @@ export default memo(function EditFileRenderer({ step, expanded }: ToolRendererPr
         />
       )}
       {step.result && (
-        <pre className="p-3 rounded-lg text-xs overflow-x-auto max-h-[100px] overflow-y-auto font-mono bg-[#fafafa] border border-[#e5e5e5] text-[#525252]">
+        <pre className="p-3 rounded-lg text-xs overflow-x-auto max-h-[100px] overflow-y-auto font-mono bg-muted border border-border text-foreground-secondary">
           {step.result}
         </pre>
       )}

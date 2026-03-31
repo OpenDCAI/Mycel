@@ -28,17 +28,17 @@ export function FilesView({
   onSelectFile,
 }: FilesViewProps) {
   return (
-    <div className="h-full flex bg-white">
+    <div className="h-full flex bg-background">
       {/* File tree -- resizable */}
-      <div className="flex flex-col border-r border-[#e5e5e5] flex-shrink-0" style={{ width: treeWidth }}>
-        <div className="px-3 py-2 border-b border-[#e5e5e5]">
-          <div className="text-xs text-[#737373] font-medium truncate">
+      <div className="flex flex-col border-r border-border flex-shrink-0" style={{ width: treeWidth }}>
+        <div className="px-3 py-2 border-b border-border">
+          <div className="text-xs text-muted-foreground font-medium truncate">
             {workspaceRoot ? workspaceRoot.split("/").pop() || "/" : "/"}
           </div>
         </div>
         <div className="flex-1 overflow-auto py-1">
           {loadingWorkspace && (
-            <div className="text-xs flex items-center gap-2 px-2 py-2 text-[#737373]">
+            <div className="text-xs flex items-center gap-2 px-2 py-2 text-muted-foreground">
               <Loader2 className="w-3.5 h-3.5 animate-spin" />
               加载中...
             </div>
@@ -66,15 +66,15 @@ export function FilesView({
       {/* File preview */}
       <div className="flex-1 min-w-0 overflow-auto">
         {!selectedFilePath ? (
-          <div className="h-full flex items-center justify-center text-sm text-[#a3a3a3]">
+          <div className="h-full flex items-center justify-center text-sm text-muted-foreground/70">
             选择文件以预览
           </div>
         ) : (
           <div className="h-full flex flex-col">
-            <div className="px-4 py-2 text-xs font-mono border-b border-[#e5e5e5] text-[#737373]">
+            <div className="px-4 py-2 text-xs font-mono border-b border-border text-muted-foreground">
               {selectedFilePath}
             </div>
-            <pre className="flex-1 p-4 text-sm whitespace-pre-wrap break-words font-mono text-[#404040]">
+            <pre className="flex-1 p-4 text-sm whitespace-pre-wrap break-words font-mono text-foreground-secondary">
               {selectedFileContent}
             </pre>
           </div>

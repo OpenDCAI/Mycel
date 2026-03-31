@@ -358,7 +358,7 @@ function RolePanel({ prompt, tools, rules, onSavePrompt, onToggleTool, onSaveRul
         </div>
         {toolGroups.map(([group, items]) => (
           <div key={group}>
-            <p className="text-[10px] font-medium text-muted-foreground uppercase mb-1">{group}</p>
+            <p className="text-2xs font-medium text-muted-foreground uppercase mb-1">{group}</p>
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-1.5">
               {items.map(t => (
                 <div key={t.name} className="flex items-center gap-1.5 rounded border px-2 py-1.5 text-xs">
@@ -434,8 +434,8 @@ function RuleEditor({ rule, onSave, onDelete }: {
       >
         <BookOpen className="h-3 w-3 text-muted-foreground shrink-0" />
         <span className="font-medium truncate flex-1 text-left">{rule.name}</span>
-        {dirty && <span className="text-[10px] text-primary">未保存</span>}
-        <span className="text-muted-foreground text-[10px]">{expanded ? "收起" : "展开"}</span>
+        {dirty && <span className="text-2xs text-primary">未保存</span>}
+        <span className="text-muted-foreground text-2xs">{expanded ? "收起" : "展开"}</span>
       </button>
       {expanded && (
         <div className="border-t px-3 py-2 space-y-2">
@@ -524,7 +524,7 @@ function SubAgentsPanel({ agents, onSave, onAdd, onDelete }: {
           {/* Builtin agents section */}
           {builtinAgents.length > 0 && (
             <div className="py-1">
-              <p className="px-3 py-1 text-[10px] font-medium text-muted-foreground uppercase tracking-wider">内置</p>
+              <p className="px-3 py-1 text-2xs font-medium text-muted-foreground uppercase tracking-wider">内置</p>
               {builtinAgents.map(a => (
                 <button
                   key={a.name}
@@ -537,7 +537,7 @@ function SubAgentsPanel({ agents, onSave, onAdd, onDelete }: {
                 >
                   <Lock className="h-3 w-3 shrink-0 opacity-40" />
                   <span className="truncate flex-1 text-left">{a.name}</span>
-                  <span className="text-[10px] opacity-40">{enabledToolCount(a)}/{a.tools.length}</span>
+                  <span className="text-2xs opacity-40">{enabledToolCount(a)}/{a.tools.length}</span>
                 </button>
               ))}
             </div>
@@ -546,10 +546,10 @@ function SubAgentsPanel({ agents, onSave, onAdd, onDelete }: {
           {(customAgents.length > 0 || builtinAgents.length > 0) && (
             <div className="py-1">
               {builtinAgents.length > 0 && (
-                <p className="px-3 py-1 text-[10px] font-medium text-muted-foreground uppercase tracking-wider">自定义</p>
+                <p className="px-3 py-1 text-2xs font-medium text-muted-foreground uppercase tracking-wider">自定义</p>
               )}
               {customAgents.length === 0 ? (
-                <p className="px-3 py-2 text-[10px] text-muted-foreground/60">点击 + 添加</p>
+                <p className="px-3 py-2 text-2xs text-muted-foreground/60">点击 + 添加</p>
               ) : (
                 customAgents.map(a => (
                   <button
@@ -586,7 +586,7 @@ function SubAgentsPanel({ agents, onSave, onAdd, onDelete }: {
               {isBuiltin ? <Lock className="h-4 w-4 text-muted-foreground" /> : <Bot className="h-4 w-4 text-muted-foreground" />}
               <span className="text-sm font-medium">{draft.name}</span>
               {isBuiltin && (
-                <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground">只读</span>
+                <span className="text-2xs px-1.5 py-0.5 rounded bg-muted text-muted-foreground">只读</span>
               )}
               <div className="flex-1" />
               {!isBuiltin && (
@@ -676,7 +676,7 @@ function SubAgentToolsGrid({ items, onToggle, readOnly = false }: {
       </div>
       {groups.map(([group, tools]) => (
         <div key={group}>
-          <p className="text-[10px] font-medium text-muted-foreground uppercase mb-1">{group}</p>
+          <p className="text-2xs font-medium text-muted-foreground uppercase mb-1">{group}</p>
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-1.5">
             {tools.map(t => (
               <div key={t.name} className={`flex items-center gap-1.5 rounded border px-2 py-1.5 text-xs ${readOnly ? "opacity-60" : ""}`}>

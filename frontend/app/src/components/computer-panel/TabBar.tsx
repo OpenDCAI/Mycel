@@ -16,15 +16,15 @@ const TABS: { key: TabType; label: string; icon: typeof Terminal }[] = [
 
 export function TabBar({ activeTab, onTabChange, hasRunningAgents, hasAgents }: TabBarProps) {
   return (
-    <div className="h-10 flex items-center px-2 flex-shrink-0 border-b border-[#e5e5e5]">
+    <div className="h-10 flex items-center px-2 flex-shrink-0 border-b border-border">
       {TABS.map(({ key, label, icon: Icon }) => (
         <button
           key={key}
           onClick={() => onTabChange(key)}
           className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm transition-colors duration-fast ${
             activeTab === key
-              ? "bg-[#f5f5f5] text-[#171717] font-medium"
-              : "text-[#737373] hover:text-[#171717]"
+              ? "bg-muted text-foreground font-medium"
+              : "text-muted-foreground hover:text-foreground"
           }`}
         >
           <Icon className="w-4 h-4" />

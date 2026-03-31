@@ -74,12 +74,12 @@ export default function SandboxCard({ group, onClick }: SandboxCardProps) {
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-1.5">
           <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${cfg.dot}`} />
-          <span className="text-[9px] font-mono font-bold text-muted-foreground tracking-widest">
+          <span className="text-2xs font-mono font-bold text-muted-foreground tracking-widest">
             {cfg.label}
           </span>
         </div>
         {duration != null && (
-          <span className="text-[9px] font-mono text-muted-foreground/50 shrink-0">
+          <span className="text-2xs font-mono text-muted-foreground/50 shrink-0">
             {formatDuration(duration)}
           </span>
         )}
@@ -92,7 +92,7 @@ export default function SandboxCard({ group, onClick }: SandboxCardProps) {
             <MemberAvatar key={s.id} name={s.memberName || "?"} avatarUrl={s.avatarUrl || undefined} size="xs" type="mycel_agent" className="border-2 border-card" />
           ))}
           {group.sessions.length > 3 && (
-            <div className="w-6 h-6 rounded-full bg-muted border-2 border-card flex items-center justify-center text-[8px] font-mono text-muted-foreground">
+            <div className="w-6 h-6 rounded-full bg-muted border-2 border-card flex items-center justify-center text-3xs font-mono text-muted-foreground">
               +{group.sessions.length - 3}
             </div>
           )}
@@ -104,7 +104,7 @@ export default function SandboxCard({ group, onClick }: SandboxCardProps) {
 
       {/* Metrics mini-bar */}
       {hasMetrics && (
-        <div className="grid grid-cols-3 gap-x-2 border-t border-border/20 pt-2 text-[10px] font-mono">
+        <div className="grid grid-cols-3 gap-x-2 border-t border-border/20 pt-2 text-2xs font-mono">
           <MiniStat label="CPU" value={formatMetric(m?.cpu, "%")} />
           <MiniStat
             label="RAM"
@@ -121,7 +121,7 @@ export default function SandboxCard({ group, onClick }: SandboxCardProps) {
 
       {/* Lease ID footer */}
       {group.leaseId && (
-        <p className="text-[9px] font-mono text-muted-foreground/35 truncate -mt-1">
+        <p className="text-2xs font-mono text-muted-foreground/35 truncate -mt-1">
           {group.leaseId.length > 20 ? `${group.leaseId.slice(0, 20)}…` : group.leaseId}
         </p>
       )}
@@ -140,7 +140,7 @@ function MiniStat({
 }) {
   return (
     <div>
-      <p className="text-[8px] uppercase tracking-wider text-muted-foreground/40 mb-0.5">{label}</p>
+      <p className="text-3xs uppercase tracking-wider text-muted-foreground/40 mb-0.5">{label}</p>
       <p className="text-foreground leading-none">
         {value}
         {sub && <span className="text-muted-foreground/50">{sub}</span>}

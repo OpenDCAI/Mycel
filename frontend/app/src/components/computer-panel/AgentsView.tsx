@@ -100,18 +100,18 @@ export function AgentsView({ steps }: AgentsViewProps) {
 
   if (steps.length === 0) {
     return (
-      <div className="h-full flex items-center justify-center text-sm text-[#a3a3a3]">
+      <div className="h-full flex items-center justify-center text-sm text-muted-foreground/70">
         暂无助手任务
       </div>
     );
   }
 
   return (
-    <div className="h-full flex bg-white">
+    <div className="h-full flex bg-background">
       {/* Left sidebar - agent list */}
-      <div className="flex-shrink-0 border-r border-[#e5e5e5] flex flex-col" style={{ width: `${leftWidth}px` }}>
-        <div className="px-3 py-2 border-b border-[#e5e5e5]">
-          <div className="text-xs text-[#737373] font-medium">助手任务</div>
+      <div className="flex-shrink-0 border-r border-border flex flex-col" style={{ width: `${leftWidth}px` }}>
+        <div className="px-3 py-2 border-b border-border">
+          <div className="text-xs text-muted-foreground font-medium">助手任务</div>
         </div>
         <div className="flex-1 overflow-y-auto">
           {steps.map((step) => (
@@ -136,7 +136,7 @@ export function AgentsView({ steps }: AgentsViewProps) {
       {/* Right detail */}
       <div className="flex-1 flex flex-col min-w-0">
         {!focused ? (
-          <div className="h-full flex items-center justify-center text-sm text-[#a3a3a3]">
+          <div className="h-full flex items-center justify-center text-sm text-muted-foreground/70">
             选择一个助手查看详情
           </div>
         ) : (
@@ -145,7 +145,7 @@ export function AgentsView({ steps }: AgentsViewProps) {
             <AgentPromptSection args={focused.args} />
             {loading ? (
               <div className="h-full flex items-center justify-center">
-                <Loader2 className="w-5 h-5 text-[#a3a3a3] animate-spin" />
+                <Loader2 className="w-5 h-5 text-muted-foreground/70 animate-spin" />
               </div>
             ) : (
               <FlowList
@@ -176,17 +176,17 @@ function AgentListItem({ step, isSelected, onClick }: { step: ToolStep; isSelect
 
   return (
     <button
-      className={`w-full text-left px-3 py-2.5 border-b border-[#f5f5f5] transition-colors duration-fast ${
-        isSelected ? "bg-blue-50" : "hover:bg-[#f5f5f5]"
+      className={`w-full text-left px-3 py-2.5 border-b border-muted transition-colors duration-fast ${
+        isSelected ? "bg-blue-50" : "hover:bg-muted"
       }`}
       onClick={onClick}
     >
       <div className="flex items-center gap-2">
         <span className={`w-2 h-2 rounded-full flex-shrink-0 ${statusDot}`} />
-        <div className="text-[11px] font-semibold text-[#171717] truncate">{displayName}</div>
+        <div className="text-xs font-semibold text-foreground truncate">{displayName}</div>
       </div>
       {prompt && (
-        <div className="text-[10px] text-[#737373] truncate mt-0.5 pl-4">{prompt}</div>
+        <div className="text-2xs text-muted-foreground truncate mt-0.5 pl-4">{prompt}</div>
       )}
     </button>
   );
@@ -213,13 +213,13 @@ function AgentDetailHeader({ focused, stream }: { focused: ToolStep; stream: Sub
   const displayName = stream?.description || args.description || args.prompt?.slice(0, 40) || "子任务";
   const agentType = args.subagent_type;
   return (
-    <div className="flex items-center gap-2 px-4 py-2.5 border-b border-[#e5e5e5] bg-[#fafafa] flex-shrink-0">
+    <div className="flex items-center gap-2 px-4 py-2.5 border-b border-border bg-muted flex-shrink-0">
       {agentType && (
-        <span className="text-[10px] font-mono bg-[#e5e5e5] text-[#525252] px-1.5 py-0.5 rounded flex-shrink-0">{agentType}</span>
+        <span className="text-2xs font-mono bg-border text-foreground-secondary px-1.5 py-0.5 rounded flex-shrink-0">{agentType}</span>
       )}
-      <div className="text-sm font-medium text-[#171717] truncate flex-1">{displayName}</div>
+      <div className="text-sm font-medium text-foreground truncate flex-1">{displayName}</div>
       <span className={`w-2 h-2 rounded-full flex-shrink-0 ${getStatusDotClass(focused, stream)}`} />
-      <span className="text-[10px] text-[#a3a3a3] flex-shrink-0">{getStatusLabel(focused, stream)}</span>
+      <span className="text-2xs text-muted-foreground/70 flex-shrink-0">{getStatusLabel(focused, stream)}</span>
     </div>
   );
 }
@@ -231,9 +231,9 @@ function AgentPromptSection({ args }: { args: unknown }) {
   if (!prompt) return null;
 
   return (
-    <div className="px-4 py-2.5 border-b border-[#e5e5e5] bg-[#f9fafb] flex-shrink-0">
-      <div className="text-[10px] text-[#a3a3a3] font-medium mb-1">PROMPT</div>
-      <div className="text-[12px] text-[#525252] leading-relaxed whitespace-pre-wrap break-words max-h-[120px] overflow-y-auto">
+    <div className="px-4 py-2.5 border-b border-border bg-muted flex-shrink-0">
+      <div className="text-2xs text-muted-foreground/70 font-medium mb-1">PROMPT</div>
+      <div className="text-xs text-foreground-secondary leading-relaxed whitespace-pre-wrap break-words max-h-[120px] overflow-y-auto">
         {prompt}
       </div>
     </div>

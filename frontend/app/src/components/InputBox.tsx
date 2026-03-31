@@ -72,21 +72,21 @@ export default function InputBox({
   }
 
   return (
-    <div className="bg-white pb-4">
+    <div className="bg-background pb-4">
       <div className="max-w-3xl mx-auto px-4">
         {attachedFiles.length > 0 && (
           <div className="mb-2 flex flex-wrap gap-2">
             {attachedFiles.map((file, index) => (
               <div
                 key={index}
-                className="flex items-center gap-2 px-3 py-2 bg-[#f5f5f5] rounded-lg text-sm"
+                className="flex items-center gap-2 px-3 py-2 bg-muted rounded-lg text-sm"
               >
-                <span className="text-[#171717] truncate max-w-[200px]">{file.name}</span>
+                <span className="text-foreground truncate max-w-[200px]">{file.name}</span>
                 {onRemoveFile && (
                   <button
                     type="button"
                     onClick={() => onRemoveFile(index)}
-                    className="text-[#737373] hover:text-[#171717] transition-colors duration-fast"
+                    className="text-muted-foreground hover:text-foreground transition-colors duration-fast"
                   >
                     <X className="w-4 h-4" />
                   </button>
@@ -99,8 +99,8 @@ export default function InputBox({
           onClick={() => inputRef.current?.focus()}
           className={`flex items-end gap-2 rounded-2xl border transition-[border-color,box-shadow,background-color] duration-fast cursor-text ${
             focused
-              ? "border-[#e5e5e5] shadow-sm bg-[#fafafa]"
-              : "border-transparent bg-[#fafafa]"
+              ? "border-border shadow-sm bg-muted"
+              : "border-transparent bg-muted"
           }`}
         >
           <div className="flex-1 py-4 pl-4">
@@ -118,7 +118,7 @@ export default function InputBox({
                 }
               }}
               placeholder={canSendQueue ? "输入消息，将立即插入对话..." : placeholder}
-              className="w-full bg-transparent text-sm resize-none outline-none border-none text-[#171717] placeholder:text-[#a3a3a3] disabled:opacity-50"
+              className="w-full bg-transparent text-sm resize-none outline-none border-none text-foreground placeholder:text-muted-foreground/70 disabled:opacity-50"
               rows={1}
               style={{ boxShadow: "none", overflow: "hidden" }}
             />
@@ -143,7 +143,7 @@ export default function InputBox({
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
                   disabled={inputDisabled}
-                  className="w-8 h-8 rounded-full flex items-center justify-center transition-colors duration-fast text-[#737373] hover:text-[#171717] hover:bg-[#f5f5f5] disabled:opacity-50"
+                  className="w-8 h-8 rounded-full flex items-center justify-center transition-colors duration-fast text-muted-foreground hover:text-foreground hover:bg-muted disabled:opacity-50"
                   title="Attach files"
                 >
                   <Paperclip className="w-4 h-4" />
@@ -164,8 +164,8 @@ export default function InputBox({
                 showStopButton
                   ? "bg-red-500 text-white hover:bg-red-600"
                   : canSend
-                    ? "bg-[#171717] text-white hover:bg-[#404040]"
-                    : "bg-[#f5f5f5] text-[#d4d4d4]"
+                    ? "bg-foreground text-white hover:bg-foreground/80"
+                    : "bg-muted text-muted-foreground/30"
               }`}
             >
               {showStopButton ? <Square className="w-4 h-4" fill="currentColor" /> : <Send className="w-4 h-4" />}

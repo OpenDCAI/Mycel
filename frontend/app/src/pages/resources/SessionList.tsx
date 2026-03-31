@@ -78,7 +78,7 @@ function LeaseItem({ group, providerType }: { group: LeaseGroup; providerType: s
             <MemberAvatar key={s.id} name={s.memberName || "?"} avatarUrl={s.avatarUrl || undefined} size="xs" type="mycel_agent" className="border border-background" />
           ))}
           {group.sessions.length > 4 && (
-            <div className="w-5 h-5 rounded-full bg-muted border border-background flex items-center justify-center text-[8px] text-muted-foreground">
+            <div className="w-5 h-5 rounded-full bg-muted border border-background flex items-center justify-center text-3xs text-muted-foreground">
               +{group.sessions.length - 4}
             </div>
           )}
@@ -91,7 +91,7 @@ function LeaseItem({ group, providerType }: { group: LeaseGroup; providerType: s
 
         {/* Lease ID */}
         {group.leaseId && (
-          <span className="text-[10px] text-muted-foreground font-mono shrink-0">
+          <span className="text-2xs text-muted-foreground font-mono shrink-0">
             {shortId(group.leaseId)}
           </span>
         )}
@@ -99,9 +99,9 @@ function LeaseItem({ group, providerType }: { group: LeaseGroup; providerType: s
         {/* Duration + status */}
         <div className="flex items-center gap-2 shrink-0">
           {duration != null && (
-            <span className="text-[10px] text-muted-foreground">{formatDuration(duration)}</span>
+            <span className="text-2xs text-muted-foreground">{formatDuration(duration)}</span>
           )}
-          <span className="text-[10px] text-muted-foreground">{STATUS_LABEL[group.status]}</span>
+          <span className="text-2xs text-muted-foreground">{STATUS_LABEL[group.status]}</span>
         </div>
       </button>
 
@@ -110,7 +110,7 @@ function LeaseItem({ group, providerType }: { group: LeaseGroup; providerType: s
         <div className="border-t border-border/30">
           {/* Metrics bar */}
           {hasMetrics && (
-            <div className="grid grid-cols-3 gap-2 px-3 py-2 text-[10px] font-mono bg-muted/10 border-b border-border/20">
+            <div className="grid grid-cols-3 gap-2 px-3 py-2 text-2xs font-mono bg-muted/10 border-b border-border/20">
               <MetricCell label="CPU" used={group.metrics?.cpu} unit="%" />
               <MetricCell label="RAM" used={group.metrics?.memory} limit={group.metrics?.memoryLimit} unit="GB" note={group.metrics?.memoryNote} />
               <MetricCell label="磁盘" used={group.metrics?.disk} limit={group.metrics?.diskLimit} unit="GB" note={group.metrics?.diskNote} />
@@ -121,7 +121,7 @@ function LeaseItem({ group, providerType }: { group: LeaseGroup; providerType: s
             {canBrowse ? (
               <SandboxBrowser leaseId={group.leaseId} providerType={providerType} />
             ) : (
-              <p className="text-[11px] text-muted-foreground text-center py-2">沙盒已停止，无法浏览文件</p>
+              <p className="text-xs text-muted-foreground text-center py-2">沙盒已停止，无法浏览文件</p>
             )}
           </div>
         </div>
@@ -182,7 +182,7 @@ function MetricCell({
         {showNote && (
           <Tooltip>
             <TooltipTrigger asChild>
-              <span className="ml-1 text-muted-foreground cursor-help text-[9px] inline-block" style={{ userSelect: "none" }}>
+              <span className="ml-1 text-muted-foreground cursor-help text-2xs inline-block" style={{ userSelect: "none" }}>
                 ⓘ
               </span>
             </TooltipTrigger>

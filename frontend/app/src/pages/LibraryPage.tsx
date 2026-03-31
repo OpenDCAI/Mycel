@@ -269,7 +269,7 @@ export default function LibraryPage() {
                       <h4 className={`text-sm font-medium text-foreground ${isRecipeTab ? "" : "group-hover:text-primary transition-colors duration-fast"}`}>{item.name}</h4>
                     </div>
                     <p className="text-xs text-muted-foreground mt-1">{item.desc}</p>
-                    <p className="text-[11px] text-muted-foreground mt-2">
+                    <p className="text-xs text-muted-foreground mt-2">
                       {isRecipeTab
                         ? `${providerLabel(item.provider_type)} · ${item.builtin ? "默认 recipe" : "自定义 recipe"}`
                         : (() => {

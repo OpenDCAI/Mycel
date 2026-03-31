@@ -128,11 +128,11 @@ function ThreadItem({
           <span className="text-sm font-medium truncate">{label}</span>
         </div>
         <div className="flex items-center gap-1 mt-0.5">
-          <span className="text-[11px] text-muted-foreground/60 truncate flex-1 min-w-0">
+          <span className="text-xs text-muted-foreground/60 truncate flex-1 min-w-0">
             {thread.sandbox || "local"}
           </span>
           {thread.updated_at && (
-            <span className="text-[10px] text-muted-foreground/40 flex-shrink-0">
+            <span className="text-2xs text-muted-foreground/40 flex-shrink-0">
               {formatRelativeTime(thread.updated_at)}
             </span>
           )}
@@ -372,13 +372,13 @@ export default function Sidebar({
       {/* Thread list */}
       <div className="flex-1 min-h-0 px-3 pt-3 flex flex-col">
         <div className="flex items-center justify-between px-2 mb-2 flex-shrink-0">
-          <span className="text-[11px] font-medium tracking-wider uppercase text-muted-foreground/60">对话</span>
+          <span className="text-xs font-medium tracking-wider uppercase text-muted-foreground/60">对话</span>
           <div className="flex items-center gap-1.5">
-            <span className="text-[11px] text-muted-foreground/40">{threads.length}</span>
+            <span className="text-xs text-muted-foreground/40">{threads.length}</span>
             {!isSelectMode && (
               <button
                 onClick={() => setIsSelectMode(true)}
-                className="text-[11px] text-muted-foreground/50 hover:text-foreground transition-colors duration-fast px-1"
+                className="text-xs text-muted-foreground/50 hover:text-foreground transition-colors duration-fast px-1"
               >
                 管理
               </button>
@@ -448,7 +448,7 @@ export default function Sidebar({
                       <div className="px-3">
                         <Link
                           to={`/threads/${urlId}/new`}
-                          className="block py-2 text-center text-[11px] text-muted-foreground/50 hover:text-muted-foreground transition-colors duration-fast"
+                          className="block py-2 text-center text-xs text-muted-foreground/50 hover:text-muted-foreground transition-colors duration-fast"
                         >
                           + 发起新对话
                         </Link>

@@ -46,13 +46,13 @@ export default function ProviderDetail({ provider }: ProviderDetailProps) {
             <TypeIcon className="w-4 h-4 text-muted-foreground" />
             <div>
               <h3 className="text-sm font-semibold text-foreground">{name}</h3>
-              <p className="text-[11px] text-muted-foreground">{description}</p>
+              <p className="text-xs text-muted-foreground">{description}</p>
             </div>
           </div>
           <div className="flex items-center gap-1.5">
-            <span className="text-[11px] text-muted-foreground">{typeLabel[type]}</span>
-            <span className="text-[11px] text-muted-foreground">·</span>
-            <span className="text-[11px] text-muted-foreground">{statusLabel[status]}</span>
+            <span className="text-xs text-muted-foreground">{typeLabel[type]}</span>
+            <span className="text-xs text-muted-foreground">·</span>
+            <span className="text-xs text-muted-foreground">{statusLabel[status]}</span>
           </div>
         </div>
         <div className="flex flex-col items-center justify-center py-12 px-6">
@@ -86,7 +86,7 @@ export default function ProviderDetail({ provider }: ProviderDetailProps) {
             <TypeIcon className="w-4 h-4 text-muted-foreground" />
             <div>
               <h3 className="text-sm font-semibold text-foreground">{name}</h3>
-              <p className="text-[11px] text-muted-foreground">
+              <p className="text-xs text-muted-foreground">
                 {description}
                 {vendor && ` · ${vendor}`}
               </p>
@@ -98,15 +98,15 @@ export default function ProviderDetail({ provider }: ProviderDetailProps) {
                 href={provider.consoleUrl}
                 target="_blank"
                 rel="noreferrer"
-                className="inline-flex items-center gap-1 rounded border border-border px-2 py-1 text-[10px] text-muted-foreground hover:text-foreground"
+                className="inline-flex items-center gap-1 rounded border border-border px-2 py-1 text-2xs text-muted-foreground hover:text-foreground"
               >
                 控制台
                 <ExternalLink className="h-3 w-3" />
               </a>
             )}
-            <span className="text-[11px] text-muted-foreground">{typeLabel[type]}</span>
-            <span className="text-[11px] text-muted-foreground">·</span>
-            <span className={`text-[11px] ${status === "active" ? "text-success" : "text-muted-foreground"}`}>
+            <span className="text-xs text-muted-foreground">{typeLabel[type]}</span>
+            <span className="text-xs text-muted-foreground">·</span>
+            <span className={`text-xs ${status === "active" ? "text-success" : "text-muted-foreground"}`}>
               {statusLabel[status]}
             </span>
           </div>
@@ -115,7 +115,7 @@ export default function ProviderDetail({ provider }: ProviderDetailProps) {
         <div className="p-5">
           {/* Overview */}
           <div className="mb-1">
-            <span className="text-[11px] text-muted-foreground uppercase tracking-wider font-medium">概览</span>
+            <span className="text-xs text-muted-foreground uppercase tracking-wider font-medium">概览</span>
           </div>
 
           {isLocal ? (
@@ -140,7 +140,7 @@ export default function ProviderDetail({ provider }: ProviderDetailProps) {
           {telemetry.quota && (
             <div className="mb-5">
               <div className="mb-2">
-                <span className="text-[11px] text-muted-foreground uppercase tracking-wider font-medium">配额</span>
+                <span className="text-xs text-muted-foreground uppercase tracking-wider font-medium">配额</span>
               </div>
               <div className="rounded-lg bg-muted/15 border border-border/40 p-3">
                 <StatBlock metric={telemetry.quota} label="quota" title="额度" compact />
@@ -151,7 +151,7 @@ export default function ProviderDetail({ provider }: ProviderDetailProps) {
           {/* Sandbox card grid */}
           <div>
             <div className="mb-3">
-              <span className="text-[11px] text-muted-foreground uppercase tracking-wider font-medium">沙盒</span>
+              <span className="text-xs text-muted-foreground uppercase tracking-wider font-medium">沙盒</span>
             </div>
             {groups.length === 0 ? (
               <p className="text-xs text-muted-foreground">暂无沙盒</p>
@@ -248,9 +248,9 @@ function StatBlock({
   return (
     <div className={["rounded-lg bg-muted/30 border border-border/40", compact ? "px-3 py-2" : "py-3 px-2"].join(" ")}>
       <p className="text-lg md:text-2xl font-mono font-bold text-foreground">{valueStr}</p>
-      {metric.limit != null && <p className="text-[10px] text-muted-foreground font-mono">{formatLimit(metric.limit, metric.unit)}</p>}
-      <p className="text-[9px] text-muted-foreground/60 uppercase tracking-wider mt-1">{label}</p>
-      {!compact && <p className="text-[10px] text-muted-foreground mt-1">{title}</p>}
+      {metric.limit != null && <p className="text-2xs text-muted-foreground font-mono">{formatLimit(metric.limit, metric.unit)}</p>}
+      <p className="text-2xs text-muted-foreground/60 uppercase tracking-wider mt-1">{label}</p>
+      {!compact && <p className="text-2xs text-muted-foreground mt-1">{title}</p>}
     </div>
   );
 }

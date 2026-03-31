@@ -15,7 +15,7 @@ export function CopyButton({ text }: { text: string }) {
   return (
     <button
       onClick={handleCopy}
-      className="flex items-center gap-1 text-[10px] text-[#a3a3a3] hover:text-[#525252] transition-colors duration-fast px-1.5 py-0.5 rounded hover:bg-[#f5f5f5]"
+      className="flex items-center gap-1 text-2xs text-muted-foreground/70 hover:text-foreground-secondary transition-colors duration-fast px-1.5 py-0.5 rounded hover:bg-muted"
       title="复制"
     >
       {copied ? (

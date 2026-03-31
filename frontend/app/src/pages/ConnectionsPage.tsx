@@ -203,7 +203,7 @@ function WeChatCard() {
         {phase === "showing-qr" && qrImgUrl && (
           <div className="space-y-3">
             <div className="flex justify-center">
-              <div className="p-4 bg-white rounded-xl">
+              <div className="p-4 bg-background rounded-xl">
                 <QRCodeSVG value={qrImgUrl} size={192} level="M" />
               </div>
             </div>
@@ -251,7 +251,7 @@ function WeChatCard() {
                 <div className="space-y-1">
                   {state.contacts.map((c) => (
                     <div key={c.user_id} className="flex items-center gap-2 text-xs">
-                      <div className="w-5 h-5 rounded-full bg-muted flex items-center justify-center text-[10px] font-medium">
+                      <div className="w-5 h-5 rounded-full bg-muted flex items-center justify-center text-2xs font-medium">
                         {c.display_name[0]?.toUpperCase()}
                       </div>
                       <span className="text-foreground">{c.display_name}</span>
@@ -444,7 +444,7 @@ function ItemList({
           <MemberAvatar name={item.label} avatarUrl={item.avatar_url} size="sm" type="mycel_agent" />
           <div className="min-w-0 flex-1">
             <p className="text-sm text-foreground truncate">{item.label}</p>
-            <p className="text-[10px] text-muted-foreground font-mono truncate">{item.id}</p>
+            <p className="text-2xs text-muted-foreground font-mono truncate">{item.id}</p>
           </div>
           {selectedId === item.id && (
             <CheckCircle2 className="w-4 h-4 text-primary shrink-0" />

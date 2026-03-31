@@ -77,7 +77,7 @@ export function SandboxFileBrowser({ leaseId, providerType, className = "h-[300p
               >
                 <Home className="w-3 h-3" />
               </button>
-              <span className="font-mono text-muted-foreground truncate flex-1 text-[10px]">{currentPath}</span>
+              <span className="font-mono text-muted-foreground truncate flex-1 text-2xs">{currentPath}</span>
             </div>
 
             {/* File list */}
@@ -97,7 +97,7 @@ export function SandboxFileBrowser({ leaseId, providerType, className = "h-[300p
                   <div className="text-center py-6 text-muted-foreground">加载中...</div>
                 )}
                 {error && (
-                  <div className="text-center py-6 text-destructive text-[11px]">{error}</div>
+                  <div className="text-center py-6 text-destructive text-xs">{error}</div>
                 )}
 
                 {!loading && !error && items.length === 0 && (
@@ -141,7 +141,7 @@ export function SandboxFileBrowser({ leaseId, providerType, className = "h-[300p
               <>
                 {/* File header */}
                 <div className="flex items-center justify-between px-2 py-1.5 border-b border-border/20 bg-muted/10">
-                  <span className="text-[10px] font-mono text-muted-foreground truncate flex-1">
+                  <span className="text-2xs font-mono text-muted-foreground truncate flex-1">
                     {selectedFile.split("/").pop()}
                   </span>
                   <button
@@ -156,18 +156,18 @@ export function SandboxFileBrowser({ leaseId, providerType, className = "h-[300p
                 <ScrollArea className="flex-1">
                   <div className="p-2">
                     {fileLoading && (
-                      <div className="text-center py-6 text-muted-foreground text-[11px]">加载中...</div>
+                      <div className="text-center py-6 text-muted-foreground text-xs">加载中...</div>
                     )}
                     {!fileLoading && fileError && !fileContent && (
-                      <div className="text-center py-6 text-destructive text-[11px]">{fileError}</div>
+                      <div className="text-center py-6 text-destructive text-xs">{fileError}</div>
                     )}
                     {fileContent != null && (
                       <>
-                        <pre className="text-[10px] font-mono text-foreground whitespace-pre-wrap break-all leading-relaxed">
+                        <pre className="text-2xs font-mono text-foreground whitespace-pre-wrap break-all leading-relaxed">
                           {fileContent}
                         </pre>
                         {fileError && (
-                          <p className="text-[10px] text-muted-foreground mt-1 italic">{fileError}</p>
+                          <p className="text-2xs text-muted-foreground mt-1 italic">{fileError}</p>
                         )}
                       </>
                     )}
@@ -175,7 +175,7 @@ export function SandboxFileBrowser({ leaseId, providerType, className = "h-[300p
                 </ScrollArea>
               </>
             ) : (
-              <div className="flex items-center justify-center h-full text-muted-foreground text-[11px]">
+              <div className="flex items-center justify-center h-full text-muted-foreground text-xs">
                 选择文件以查看内容
               </div>
             )}

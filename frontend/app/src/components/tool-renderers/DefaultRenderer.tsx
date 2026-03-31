@@ -22,9 +22,9 @@ export default memo(function DefaultRenderer({ step, expanded }: ToolRendererPro
   if (!expanded) {
     const summary = summarizeArgs(step.args);
     return (
-      <div className="flex items-center gap-2 text-xs text-[#737373]">
+      <div className="flex items-center gap-2 text-xs text-muted-foreground">
         {summary && <span className="truncate max-w-[320px]">{summary}</span>}
-        {step.status === "calling" && <span className="text-[#a3a3a3]">...</span>}
+        {step.status === "calling" && <span className="text-muted-foreground/70">...</span>}
       </div>
     );
   }
@@ -32,12 +32,12 @@ export default memo(function DefaultRenderer({ step, expanded }: ToolRendererPro
   return (
     <div className="space-y-1.5">
       {step.args !== undefined && (
-        <pre className="p-3 rounded-lg text-xs overflow-x-auto max-h-[200px] overflow-y-auto font-mono bg-[#fafafa] border border-[#e5e5e5] text-[#525252]">
+        <pre className="p-3 rounded-lg text-xs overflow-x-auto max-h-[200px] overflow-y-auto font-mono bg-muted border border-border text-foreground-secondary">
           {typeof step.args === "string" ? step.args : JSON.stringify(step.args, null, 2)}
         </pre>
       )}
       {step.result && (
-        <pre className="p-3 rounded-lg text-xs overflow-x-auto max-h-[200px] overflow-y-auto font-mono bg-[#fafafa] border border-[#e5e5e5] text-[#525252]">
+        <pre className="p-3 rounded-lg text-xs overflow-x-auto max-h-[200px] overflow-y-auto font-mono bg-muted border border-border text-foreground-secondary">
           {step.result}
         </pre>
       )}

@@ -19,7 +19,7 @@ export function StreamingIndicator({ entries, runtimeStatus }: StreamingIndicato
 
   return (
     <div className="flex items-center animate-fade-in">
-      <span className="text-sm text-[#a3a3a3]">
+      <span className="text-sm text-muted-foreground/70">
         {runtimeStatus?.current_tool
           ? `Mycel 正在使用 ${runtimeStatus.current_tool}...`
           : "Mycel 正在思考..."}
