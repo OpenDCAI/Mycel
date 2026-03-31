@@ -79,6 +79,12 @@ interface MarketplaceState {
   updates: UpdateAvailable[];
   checkUpdates: (installed: { marketplace_item_id: string; installed_version: string }[]) => Promise<void>;
 
+  // Preview
+  versionSnapshot: { content?: string; meta?: any } | null;
+  snapshotLoading: boolean;
+  fetchVersionSnapshot: (itemId: string, version: string) => Promise<void>;
+  clearSnapshot: () => void;
+
   // Actions (go through Mycel backend)
   downloading: boolean;
   download: (itemId: string) => Promise<{ resource_id: string; type: string; version: string }>;
@@ -149,6 +155,23 @@ export const useMarketplaceStore = create<MarketplaceState>()((set, get) => ({
   },
 
   clearDetail: () => set({ detail: null }),
+
+  versionSnapshot: null,
+  snapshotLoading: false,
+
+  fetchVersionSnapshot: async (itemId, version) => {
+    set({ snapshotLoading: true, versionSnapshot: null });
+    try {
+      const data = await hubApi<{ snapshot: any }>(`/items/${itemId}/versions/${version}`);
+      set({ versionSnapshot: data.snapshot ?? null });
+    } catch (e) {
+      console.error("Failed to fetch snapshot:", e);
+    } finally {
+      set({ snapshotLoading: false });
+    }
+  },
+
+  clearSnapshot: () => set({ versionSnapshot: null }),
 
   lineage: { ancestors: [], children: [] },
 
