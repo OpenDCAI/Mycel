@@ -1,6 +1,9 @@
 """Tests for terminal persistence (env/cwd across commands)."""
 
 import asyncio
+import shutil
+
+import pytest
 
 from core.tools.command.bash.executor import BashExecutor
 from core.tools.command.zsh.executor import ZshExecutor
@@ -46,6 +49,7 @@ def test_bash_cwd_persistence():
     asyncio.run(run())
 
 
+@pytest.mark.skipif(shutil.which("zsh") is None, reason="zsh not available on this platform")
 def test_zsh_env_persistence():
     """Test that environment variables persist across commands in zsh."""
 
