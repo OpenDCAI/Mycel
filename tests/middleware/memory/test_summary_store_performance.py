@@ -17,7 +17,9 @@ from pathlib import Path
 
 import pytest
 
-_SKIP_WINDOWS = pytest.mark.skipif(sys.platform == "win32", reason="SQLite connection-per-call is slow on Windows; performance tests not meaningful there")
+_SKIP_WINDOWS = pytest.mark.skipif(
+    sys.platform == "win32", reason="SQLite connection-per-call is slow on Windows; performance tests not meaningful there"
+)
 
 from core.runtime.middleware.memory.summary_store import SummaryStore
 

@@ -1,6 +1,8 @@
 """Unit tests for ChatSession and ChatSessionManager."""
 
 import asyncio
+import gc
+import sys
 import tempfile
 import time
 from datetime import datetime, timedelta
@@ -26,7 +28,25 @@ def temp_db():
     with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:
         db_path = Path(f.name)
     yield db_path
-    db_path.unlink(missing_ok=True)
+    # Force GC to collect any lingering sqlite3.Connection objects.
+    # On Windows, connections opened via `with conn:` (transaction-only CM)
+    # are not closed on __exit__; they're freed by CPython refcounting when
+    # the owning frame is cleaned up. gc.collect() helps catch cyclic cases.
+    gc.collect()
+    for wal_suffix in ("-wal", "-shm"):
+        Path(str(db_path) + wal_suffix).unlink(missing_ok=True)
+    if sys.platform == "win32":
+        for _attempt in range(5):
+            try:
+                db_path.unlink(missing_ok=True)
+                break
+            except PermissionError:
+                time.sleep(0.1)
+                gc.collect()
+        else:
+            db_path.unlink(missing_ok=True)  # final attempt; raises if still locked
+    else:
+        db_path.unlink(missing_ok=True)
 
 
 @pytest.fixture
