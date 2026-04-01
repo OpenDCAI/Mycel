@@ -10,8 +10,6 @@ import logging
 from collections.abc import Awaitable, Callable
 from typing import Any
 
-logger = logging.getLogger(__name__)
-
 from langchain_core.messages import HumanMessage, ToolMessage
 from langchain_core.runnables import RunnableConfig
 
@@ -34,6 +32,8 @@ except ImportError:
     ToolCallRequest = Any
 
 from .manager import MessageQueueManager
+
+logger = logging.getLogger(__name__)
 
 
 class SteeringMiddleware(AgentMiddleware):
@@ -91,31 +91,37 @@ class SteeringMiddleware(AgentMiddleware):
             is_steer = item.is_steer or source == "owner"
             if is_steer:
                 has_steer = True
-            messages.append(HumanMessage(
-                content=item.content,
-                metadata={
-                    "source": source,
-                    "notification_type": item.notification_type,
-                    "sender_name": item.sender_name,
-                    "sender_avatar_url": item.sender_avatar_url,
-                    "sender_entity_id": item.sender_entity_id,
-                    "is_steer": is_steer,
-                },
-            ))
+            messages.append(
+                HumanMessage(
+                    content=item.content,
+                    metadata={
+                        "source": source,
+                        "notification_type": item.notification_type,
+                        "sender_name": item.sender_name,
+                        "sender_avatar_url": item.sender_avatar_url,
+                        "sender_entity_id": item.sender_entity_id,
+                        "is_steer": is_steer,
+                    },
+                )
+            )
 
         # @@@steer-phase-boundary — emit run_done + run_start so frontend
         # breaks the turn at the steer injection point.
         # user_message is NOT emitted here — wake_handler already did it
         # at enqueue time (@@@steer-instant-feedback).
         if has_steer and rt and hasattr(rt, "emit_activity_event"):
-            rt.emit_activity_event({
-                "event": "run_done",
-                "data": json.dumps({"thread_id": thread_id}),
-            })
-            rt.emit_activity_event({
-                "event": "run_start",
-                "data": json.dumps({"thread_id": thread_id, "showing": True}),
-            })
+            rt.emit_activity_event(
+                {
+                    "event": "run_done",
+                    "data": json.dumps({"thread_id": thread_id}),
+                }
+            )
+            rt.emit_activity_event(
+                {
+                    "event": "run_start",
+                    "data": json.dumps({"thread_id": thread_id, "showing": True}),
+                }
+            )
 
         return {"messages": messages}
 

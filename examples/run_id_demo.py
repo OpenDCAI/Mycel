@@ -9,7 +9,6 @@ run_id_demo.py — 验证 LangGraph 中 run_id 的完整链路
 from __future__ import annotations
 
 import uuid
-from typing import Any
 
 from langchain_core.messages import AIMessage, HumanMessage
 from langchain_core.runnables import RunnableConfig
@@ -84,15 +83,13 @@ def test_checkpoint_persistence():
     ai_msg_1 = messages[1]  # 第一轮 AI 回复
     ai_msg_2 = messages[3]  # 第二轮 AI 回复
 
-    assert ai_msg_1.metadata.get("run_id") == run_id_1, \
-        f"Turn 1 metadata 丢失: {ai_msg_1.metadata}"
-    assert ai_msg_2.metadata.get("run_id") == run_id_2, \
-        f"Turn 2 metadata 丢失: {ai_msg_2.metadata}"
+    assert ai_msg_1.metadata.get("run_id") == run_id_1, f"Turn 1 metadata 丢失: {ai_msg_1.metadata}"
+    assert ai_msg_2.metadata.get("run_id") == run_id_2, f"Turn 2 metadata 丢失: {ai_msg_2.metadata}"
     assert run_id_1 != run_id_2, "两轮 run_id 应该不同"
 
     print(f"[PASS] Turn 1 AI metadata['run_id'] = {run_id_1}")
     print(f"[PASS] Turn 2 AI metadata['run_id'] = {run_id_2}")
-    print(f"[PASS] checkpoint 持久化后 metadata.run_id 保留完好，可用于 Turn 分组")
+    print("[PASS] checkpoint 持久化后 metadata.run_id 保留完好，可用于 Turn 分组")
 
 
 def main() -> None:

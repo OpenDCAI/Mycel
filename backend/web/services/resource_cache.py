@@ -39,7 +39,11 @@ def _read_refresh_interval_sec() -> float:
 
 
 def _with_refresh_metadata(
-    payload: dict[str, Any], *, duration_ms: float, status: str, error: str | None,
+    payload: dict[str, Any],
+    *,
+    duration_ms: float,
+    status: str,
+    error: str | None,
 ) -> dict[str, Any]:
     summary = payload.setdefault("summary", {})
     snapshot_at = str(summary.get("snapshot_at") or _now_iso())
@@ -93,7 +97,8 @@ async def resource_overview_refresh_loop() -> None:
         await asyncio.sleep(interval_sec)
         try:
             await asyncio.wait_for(
-                asyncio.to_thread(resource_service.refresh_resource_snapshots), timeout=10.0,
+                asyncio.to_thread(resource_service.refresh_resource_snapshots),
+                timeout=10.0,
             )
         except asyncio.CancelledError:
             raise

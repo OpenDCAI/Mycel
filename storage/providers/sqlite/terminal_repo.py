@@ -2,20 +2,18 @@
 
 from __future__ import annotations
 
-import json
 import sqlite3
 import threading
 from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from storage.providers.sqlite.connection import create_connection
-from storage.providers.sqlite.kernel import SQLiteDBRole, resolve_role_db_path
-
 from sandbox.terminal import (
     REQUIRED_ABSTRACT_TERMINAL_COLUMNS,
     REQUIRED_TERMINAL_POINTER_COLUMNS,
 )
+from storage.providers.sqlite.connection import create_connection
+from storage.providers.sqlite.kernel import SQLiteDBRole, resolve_role_db_path
 
 
 class SQLiteTerminalRepo:
@@ -101,22 +99,17 @@ class SQLiteTerminalRepo:
         missing_abstract = REQUIRED_ABSTRACT_TERMINAL_COLUMNS - abstract_cols
         if missing_abstract:
             raise RuntimeError(
-                f"abstract_terminals schema mismatch: missing {sorted(missing_abstract)}. "
-                "Purge ~/.leon/sandbox.db and retry."
+                f"abstract_terminals schema mismatch: missing {sorted(missing_abstract)}. Purge ~/.leon/sandbox.db and retry."
             )
 
         missing_pointer = REQUIRED_TERMINAL_POINTER_COLUMNS - pointer_cols
         if missing_pointer:
             raise RuntimeError(
-                f"thread_terminal_pointers schema mismatch: missing {sorted(missing_pointer)}. "
-                "Purge ~/.leon/sandbox.db and retry."
+                f"thread_terminal_pointers schema mismatch: missing {sorted(missing_pointer)}. Purge ~/.leon/sandbox.db and retry."
             )
 
         if any(cols == {"thread_id"} for cols in unique_index_columns.values()):
-            raise RuntimeError(
-                "abstract_terminals still has UNIQUE index from single-terminal schema. "
-                "Purge ~/.leon/sandbox.db and retry."
-            )
+            raise RuntimeError("abstract_terminals still has UNIQUE index from single-terminal schema. Purge ~/.leon/sandbox.db and retry.")
 
     # ------------------------------------------------------------------
     # Reads
@@ -286,9 +279,7 @@ class SQLiteTerminalRepo:
             if row is None:
                 raise RuntimeError(f"Terminal {terminal_id} not found")
             if row["thread_id"] != thread_id:
-                raise RuntimeError(
-                    f"Terminal {terminal_id} belongs to thread {row['thread_id']}, not thread {thread_id}"
-                )
+                raise RuntimeError(f"Terminal {terminal_id} belongs to thread {row['thread_id']}, not thread {thread_id}")
             pointer = self._conn.execute(
                 "SELECT default_terminal_id FROM thread_terminal_pointers WHERE thread_id = ?",
                 (thread_id,),

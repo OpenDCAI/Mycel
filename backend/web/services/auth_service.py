@@ -54,29 +54,46 @@ class AuthService:
         # Wrap in DB transaction when migrating to Supabase.
         # 1. Human member
         user_id = generate_member_id()
-        self._members.create(MemberRow(
-            id=user_id, name=username, type=MemberType.HUMAN, created_at=now,
-        ))
+        self._members.create(
+            MemberRow(
+                id=user_id,
+                name=username,
+                type=MemberType.HUMAN,
+                created_at=now,
+            )
+        )
 
         # 2. Account (bcrypt hash)
         password_hash = bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
         account_id = str(uuid.uuid4())
-        self._accounts.create(AccountRow(
-            id=account_id, user_id=user_id, username=username,
-            password_hash=password_hash, created_at=now,
-        ))
+        self._accounts.create(
+            AccountRow(
+                id=account_id,
+                user_id=user_id,
+                username=username,
+                password_hash=password_hash,
+                created_at=now,
+            )
+        )
 
         # 3. Human entity (entity_id = {member_id}-{seq}, hyphen separator per decision #24)
         human_seq = self._members.increment_entity_seq(user_id)
         human_entity_id = f"{user_id}-{human_seq}"
-        self._entities.create(EntityRow(
-            id=human_entity_id, type="human", member_id=user_id,
-            name=username, thread_id=None, created_at=now,
-        ))
+        self._entities.create(
+            EntityRow(
+                id=human_entity_id,
+                type="human",
+                member_id=user_id,
+                name=username,
+                thread_id=None,
+                created_at=now,
+            )
+        )
 
         # 4. Create two initial agent members: Toad and Morel
-        from backend.web.services.member_service import MEMBERS_DIR, _write_agent_md, _write_json
         from pathlib import Path
+
+        from backend.web.services.member_service import MEMBERS_DIR, _write_agent_md, _write_json
 
         # @@@initial-agent-names - keep template names plain; owner disambiguation belongs in discovery UI metadata.
         initial_agents = [
@@ -91,25 +108,34 @@ class AuthService:
             agent_member_id = generate_member_id()
             agent_dir = MEMBERS_DIR / agent_member_id
             agent_dir.mkdir(parents=True, exist_ok=True)
-            _write_agent_md(agent_dir / "agent.md", name=agent_def["name"],
-                            description=agent_def["description"])
-            _write_json(agent_dir / "meta.json", {
-                "status": "active", "version": "1.0.0",
-                "created_at": int(now * 1000), "updated_at": int(now * 1000),
-            })
-            self._members.create(MemberRow(
-                id=agent_member_id, name=agent_def["name"], type=MemberType.MYCEL_AGENT,
-                description=agent_def["description"],
-                config_dir=str(agent_dir),
-                owner_user_id=user_id,
-                created_at=now,
-            ))
+            _write_agent_md(agent_dir / "agent.md", name=agent_def["name"], description=agent_def["description"])
+            _write_json(
+                agent_dir / "meta.json",
+                {
+                    "status": "active",
+                    "version": "1.0.0",
+                    "created_at": int(now * 1000),
+                    "updated_at": int(now * 1000),
+                },
+            )
+            self._members.create(
+                MemberRow(
+                    id=agent_member_id,
+                    name=agent_def["name"],
+                    type=MemberType.MYCEL_AGENT,
+                    description=agent_def["description"],
+                    config_dir=str(agent_dir),
+                    owner_user_id=user_id,
+                    created_at=now,
+                )
+            )
 
             # @@@avatar-same-pipeline — reuse shared PIL pipeline from entities.py
             src_avatar = assets_dir / agent_def["avatar"]
             if src_avatar.exists():
                 try:
                     from backend.web.routers.entities import process_and_save_avatar
+
                     avatar_path = process_and_save_avatar(src_avatar, agent_member_id)
                     self._members.update(agent_member_id, avatar=avatar_path, updated_at=now)
                 except Exception as e:
@@ -117,12 +143,13 @@ class AuthService:
 
             if i == 0:
                 first_agent_info = {
-                    "id": agent_member_id, "name": agent_def["name"],
-                    "type": "mycel_agent", "avatar": None,
+                    "id": agent_member_id,
+                    "name": agent_def["name"],
+                    "type": "mycel_agent",
+                    "avatar": None,
                 }
 
-            logger.info("Created agent '%s' (member=%s) for user '%s'",
-                        agent_def["name"], agent_member_id[:8], username)
+            logger.info("Created agent '%s' (member=%s) for user '%s'", agent_def["name"], agent_member_id[:8], username)
 
         # JWT — carries both user_id and entity_id
         token = self._make_token(user_id, human_entity_id)

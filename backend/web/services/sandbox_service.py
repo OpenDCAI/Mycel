@@ -8,21 +8,21 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-logger = logging.getLogger(__name__)
-
 from backend.web.core.config import LOCAL_WORKSPACE_ROOT, SANDBOXES_DIR
 from backend.web.utils.helpers import is_virtual_thread_id
 from backend.web.utils.serializers import avatar_url
 from sandbox.config import SandboxConfig
-from storage.providers.sqlite.kernel import SQLiteDBRole, resolve_role_db_path
-
-SANDBOX_DB_PATH = resolve_role_db_path(SQLiteDBRole.SANDBOX)
 from sandbox.manager import SandboxManager
 from sandbox.provider import ProviderCapability
 from sandbox.recipes import default_recipe_id, list_builtin_recipes, normalize_recipe_snapshot, provider_type_from_name
+from storage.providers.sqlite.kernel import SQLiteDBRole, resolve_role_db_path
 from storage.providers.sqlite.member_repo import SQLiteMemberRepo
-from storage.providers.sqlite.thread_repo import SQLiteThreadRepo
 from storage.providers.sqlite.sandbox_monitor_repo import SQLiteSandboxMonitorRepo
+from storage.providers.sqlite.thread_repo import SQLiteThreadRepo
+
+logger = logging.getLogger(__name__)
+
+SANDBOX_DB_PATH = resolve_role_db_path(SQLiteDBRole.SANDBOX)
 
 _SANDBOX_INVENTORY_LOCK = threading.Lock()
 _SANDBOX_INVENTORY: tuple[dict[str, Any], dict[str, Any]] | None = None
@@ -40,6 +40,7 @@ def _capability_to_dict(capability: ProviderCapability) -> dict[str, Any]:
         "runtime_kind": capability.runtime_kind,
         "mount": capability.mount.to_dict(),
     }
+
 
 def list_default_recipes() -> list[dict[str, Any]]:
     return list_builtin_recipes(available_sandbox_types())
@@ -103,6 +104,7 @@ def list_user_leases(
             provider_type = provider_type_from_name(provider_name)
             if lease["recipe"]:
                 import json
+
                 recipe_snapshot = normalize_recipe_snapshot(provider_type, json.loads(str(lease["recipe"])))
             else:
                 recipe_snapshot = normalize_recipe_snapshot(provider_type)
@@ -346,6 +348,7 @@ def mutate_sandbox_session(
             adopt_lease_id = str(lease_id or f"lease-adopt-{uuid.uuid4().hex[:12]}")
             adopt_status = str(session.get("status") or "unknown")
             from sandbox.lease import lease_from_row
+
             adopt_row = manager.lease_store.adopt_instance(
                 lease_id=adopt_lease_id,
                 provider_name=provider_name,

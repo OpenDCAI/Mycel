@@ -76,11 +76,7 @@ def _validate_saved_config(
 
     config = normalize_launch_config_payload(payload)
     provider_names = {str(item["name"]) for item in providers}
-    recipes_by_id = {
-        str(item["id"]): item
-        for item in recipes
-        if item.get("available", True) and item.get("provider_type")
-    }
+    recipes_by_id = {str(item["id"]): item for item in recipes if item.get("available", True) and item.get("provider_type")}
 
     if config["create_mode"] == "existing":
         lease_id = config.get("lease_id")
@@ -128,8 +124,7 @@ def _derive_default_config(
 ) -> dict[str, Any]:
     member_thread_ids = {str(item.get("id") or "").strip() for item in member_threads if item.get("id")}
     member_leases = [
-        lease for lease in leases
-        if any(str(thread_id or "").strip() in member_thread_ids for thread_id in lease.get("thread_ids") or [])
+        lease for lease in leases if any(str(thread_id or "").strip() in member_thread_ids for thread_id in lease.get("thread_ids") or [])
     ]
     if member_leases:
         lease = member_leases[0]
@@ -146,10 +141,7 @@ def _derive_default_config(
     provider_config = "local" if "local" in provider_names else (provider_names[0] if provider_names else "local")
     provider_type = provider_type_from_name(provider_config)
     recipe = next(
-        (
-            item for item in recipes
-            if item.get("available", True) and str(item.get("provider_type") or "") == provider_type
-        ),
+        (item for item in recipes if item.get("available", True) and str(item.get("provider_type") or "") == provider_type),
         None,
     )
     return {

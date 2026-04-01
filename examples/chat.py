@@ -93,9 +93,7 @@ def stream_response(agent, message: str, thread_id: str = "chat"):
         shown_tool_results = set()
 
         # LangChain 的 stream 方法
-        for chunk in agent.agent.stream(
-            {"messages": [{"role": "user", "content": message}]}, config=config, stream_mode="values"
-        ):
+        for chunk in agent.agent.stream({"messages": [{"role": "user", "content": message}]}, config=config, stream_mode="values"):
             # 获取最新的消息
             if "messages" in chunk and chunk["messages"]:
                 last_msg = chunk["messages"][-1]

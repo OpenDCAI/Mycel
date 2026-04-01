@@ -51,14 +51,16 @@ class TaskBoardMiddleware(AgentMiddleware):
     TOOL_FAIL = "FailTask"
     TOOL_CREATE = "CreateBoardTask"
 
-    ALL_TOOLS = frozenset({
-        TOOL_LIST,
-        TOOL_CLAIM,
-        TOOL_PROGRESS,
-        TOOL_COMPLETE,
-        TOOL_FAIL,
-        TOOL_CREATE,
-    })
+    ALL_TOOLS = frozenset(
+        {
+            TOOL_LIST,
+            TOOL_CLAIM,
+            TOOL_PROGRESS,
+            TOOL_COMPLETE,
+            TOOL_FAIL,
+            TOOL_CREATE,
+        }
+    )
 
     def __init__(
         self,
@@ -81,9 +83,7 @@ class TaskBoardMiddleware(AgentMiddleware):
                 "type": "function",
                 "function": {
                     "name": self.TOOL_LIST,
-                    "description": (
-                        "List tasks on the board. Optionally filter by status or priority."
-                    ),
+                    "description": ("List tasks on the board. Optionally filter by status or priority."),
                     "parameters": {
                         "type": "object",
                         "properties": {
@@ -104,9 +104,7 @@ class TaskBoardMiddleware(AgentMiddleware):
                 "type": "function",
                 "function": {
                     "name": self.TOOL_CLAIM,
-                    "description": (
-                        "Claim a board task. Sets status to running, records thread_id and started_at."
-                    ),
+                    "description": ("Claim a board task. Sets status to running, records thread_id and started_at."),
                     "parameters": {
                         "type": "object",
                         "properties": {
@@ -123,9 +121,7 @@ class TaskBoardMiddleware(AgentMiddleware):
                 "type": "function",
                 "function": {
                     "name": self.TOOL_PROGRESS,
-                    "description": (
-                        "Update a task's progress percentage. Optionally append a note to the description."
-                    ),
+                    "description": ("Update a task's progress percentage. Optionally append a note to the description."),
                     "parameters": {
                         "type": "object",
                         "properties": {
@@ -150,10 +146,7 @@ class TaskBoardMiddleware(AgentMiddleware):
                 "type": "function",
                 "function": {
                     "name": self.TOOL_COMPLETE,
-                    "description": (
-                        "Mark a board task as completed with a result summary. "
-                        "Sets progress to 100 and records completed_at."
-                    ),
+                    "description": ("Mark a board task as completed with a result summary. Sets progress to 100 and records completed_at."),
                     "parameters": {
                         "type": "object",
                         "properties": {
@@ -174,9 +167,7 @@ class TaskBoardMiddleware(AgentMiddleware):
                 "type": "function",
                 "function": {
                     "name": self.TOOL_FAIL,
-                    "description": (
-                        "Mark a board task as failed with a reason. Records completed_at."
-                    ),
+                    "description": ("Mark a board task as failed with a reason. Records completed_at."),
                     "parameters": {
                         "type": "object",
                         "properties": {
@@ -197,9 +188,7 @@ class TaskBoardMiddleware(AgentMiddleware):
                 "type": "function",
                 "function": {
                     "name": self.TOOL_CREATE,
-                    "description": (
-                        "Create a new task on the board. Source is automatically set to 'agent'."
-                    ),
+                    "description": ("Create a new task on the board. Source is automatically set to 'agent'."),
                     "parameters": {
                         "type": "object",
                         "properties": {

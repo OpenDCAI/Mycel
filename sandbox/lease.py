@@ -20,12 +20,12 @@ from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from storage.providers.sqlite.kernel import SQLiteDBRole, connect_sqlite, resolve_role_db_path
 from sandbox.lifecycle import (
     LeaseInstanceState,
     assert_lease_instance_transition,
     parse_lease_instance_state,
 )
+from storage.providers.sqlite.kernel import SQLiteDBRole, connect_sqlite, resolve_role_db_path
 
 if TYPE_CHECKING:
     from sandbox.provider import SandboxProvider
@@ -247,9 +247,7 @@ class SQLiteLease(SandboxLease):
             if observed == "unknown":
                 self.observed_state = observed
                 return
-            raise RuntimeError(
-                f"Lease {self.lease_id}: cannot set observed={observed} without bound instance ({reason})"
-            )
+            raise RuntimeError(f"Lease {self.lease_id}: cannot set observed={observed} without bound instance ({reason})")
 
         if observed == "running":
             assert_lease_instance_transition(self._instance_state(), LeaseInstanceState.RUNNING, reason=reason)
@@ -499,6 +497,7 @@ class SQLiteLease(SandboxLease):
         with self._instance_lock():
             if event_type != "intent.ensure_running":
                 from storage.providers.sqlite.lease_repo import SQLiteLeaseRepo
+
                 _repo = SQLiteLeaseRepo(db_path=self.db_path)
                 try:
                     _row = _repo.get(self.lease_id)
@@ -669,6 +668,7 @@ class SQLiteLease(SandboxLease):
 
         with self._instance_lock():
             from storage.providers.sqlite.lease_repo import SQLiteLeaseRepo
+
             _repo = SQLiteLeaseRepo(db_path=self.db_path)
             try:
                 _row = _repo.get(self.lease_id)
@@ -693,9 +693,7 @@ class SQLiteLease(SandboxLease):
                     if self.observed_state == "running" and self._current_instance:
                         return self._current_instance
                     if self.observed_state == "paused":
-                        raise RuntimeError(
-                            f"Sandbox lease {self.lease_id} is paused. Resume before executing commands."
-                        )
+                        raise RuntimeError(f"Sandbox lease {self.lease_id} is paused. Resume before executing commands.")
                 except RuntimeError:
                     raise
                 except Exception as exc:
@@ -704,6 +702,7 @@ class SQLiteLease(SandboxLease):
             self.status = "recovering"
             self._persist_lease_metadata()
             from sandbox.thread_context import get_current_thread_id
+
             thread_id = get_current_thread_id()
             session_info = provider.create_session(context_id=f"leon-{self.lease_id}", thread_id=thread_id)
             self._current_instance = SandboxInstance(

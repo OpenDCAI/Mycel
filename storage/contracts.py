@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from enum import Enum
+from enum import StrEnum
 from typing import Any, Literal, Protocol
 
 from pydantic import BaseModel
@@ -17,6 +17,7 @@ NotificationType = Literal["steer", "command", "agent", "chat"]
 
 class LeaseRepo(Protocol):
     """Sandbox lease CRUD. Returns raw dicts — domain object construction is the consumer's job."""
+
     def close(self) -> None: ...
     def get(self, lease_id: str) -> dict[str, Any] | None: ...
     def create(self, lease_id: str, provider_name: str, volume_id: str | None = None) -> dict[str, Any]: ...
@@ -30,6 +31,7 @@ class LeaseRepo(Protocol):
 
 class TerminalRepo(Protocol):
     """Abstract terminal CRUD + thread pointer management."""
+
     def close(self) -> None: ...
     def get_active(self, thread_id: str) -> dict[str, Any] | None: ...
     def get_default(self, thread_id: str) -> dict[str, Any] | None: ...
@@ -46,6 +48,7 @@ class TerminalRepo(Protocol):
 
 class ProviderEventRepo(Protocol):
     """Webhook event persistence."""
+
     def close(self) -> None: ...
     def record(
         self,
@@ -61,6 +64,7 @@ class ProviderEventRepo(Protocol):
 
 class ChatSessionRepo(Protocol):
     """Chat session + terminal command persistence."""
+
     def close(self) -> None: ...
     def ensure_tables(self) -> None: ...
     def create_session(
@@ -100,7 +104,7 @@ class ChatSessionRepo(Protocol):
 # ---------------------------------------------------------------------------
 
 
-class MemberType(str, Enum):
+class MemberType(StrEnum):
     HUMAN = "human"
     MYCEL_AGENT = "mycel_agent"
     OPENCLAW_AGENT = "openclaw_agent"
@@ -169,11 +173,12 @@ class ChatMessageRow(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-class DeliveryAction(str, Enum):
+class DeliveryAction(StrEnum):
     """What to do when a chat message reaches a recipient."""
+
     DELIVER = "deliver"  # full delivery: inject into agent context, wake agent
-    NOTIFY = "notify"    # red dot only: message stored, unread counted, no delivery
-    DROP = "drop"        # silent: message stored but invisible to this entity
+    NOTIFY = "notify"  # red dot only: message stored, unread counted, no delivery
+    DROP = "drop"  # silent: message stored but invisible to this entity
 
 
 ContactRelation = Literal["normal", "blocked", "muted"]
@@ -181,6 +186,7 @@ ContactRelation = Literal["normal", "blocked", "muted"]
 
 class ContactRow(BaseModel):
     """Directional relationship between two entities. A→B independent of B→A."""
+
     owner_entity_id: str
     target_entity_id: str
     relation: ContactRelation
@@ -289,9 +295,10 @@ class SummaryRepo(Protocol):
 
 class QueueItem(BaseModel):
     """A dequeued message with its notification type."""
+
     content: str
     notification_type: NotificationType
-    source: str | None = None          # "owner" | "external" | "system"
+    source: str | None = None  # "owner" | "external" | "system"
     sender_entity_id: str | None = None
     sender_name: str | None = None
     sender_avatar_url: str | None = None
@@ -300,9 +307,15 @@ class QueueItem(BaseModel):
 
 class QueueRepo(Protocol):
     def close(self) -> None: ...
-    def enqueue(self, thread_id: str, content: str, notification_type: NotificationType = "steer",
-                source: str | None = None, sender_entity_id: str | None = None,
-                sender_name: str | None = None) -> None: ...
+    def enqueue(
+        self,
+        thread_id: str,
+        content: str,
+        notification_type: NotificationType = "steer",
+        source: str | None = None,
+        sender_entity_id: str | None = None,
+        sender_name: str | None = None,
+    ) -> None: ...
     def dequeue(self, thread_id: str) -> QueueItem | None: ...
     def drain_all(self, thread_id: str) -> list[QueueItem]: ...
     def peek(self, thread_id: str) -> bool: ...
@@ -313,6 +326,7 @@ class QueueRepo(Protocol):
 
 class SandboxVolumeRepo(Protocol):
     """Sandbox volume metadata. Stores serialized VolumeSource per lease."""
+
     def close(self) -> None: ...
     def create(self, volume_id: str, source_json: str, name: str | None, created_at: str) -> None: ...
     def get(self, volume_id: str) -> dict[str, Any] | None: ...
@@ -392,14 +406,15 @@ class ChatMessageRepo(Protocol):
     def list_by_chat(self, chat_id: str, *, limit: int = 50, before: float | None = None) -> list[ChatMessageRow]: ...
     def list_unread(self, chat_id: str, entity_id: str) -> list[ChatMessageRow]: ...
     def count_unread(self, chat_id: str, entity_id: str) -> int: ...
-    def list_by_time_range(self, chat_id: str, *, after: float | None = None, before: float | None = None, limit: int = 100) -> list[ChatMessageRow]: ...
+    def list_by_time_range(
+        self, chat_id: str, *, after: float | None = None, before: float | None = None, limit: int = 100
+    ) -> list[ChatMessageRow]: ...
     def search(self, query: str, *, chat_id: str | None = None, limit: int = 50) -> list[ChatMessageRow]: ...
 
 
 class ThreadRepo(Protocol):
     def close(self) -> None: ...
-    def create(self, thread_id: str, member_id: str, sandbox_type: str,
-               cwd: str | None, created_at: float, **extra: Any) -> None: ...
+    def create(self, thread_id: str, member_id: str, sandbox_type: str, cwd: str | None, created_at: float, **extra: Any) -> None: ...
     def get_by_id(self, thread_id: str) -> dict[str, Any] | None: ...
     def get_main_thread(self, member_id: str) -> dict[str, Any] | None: ...
     def get_next_branch_index(self, member_id: str) -> int: ...
@@ -422,4 +437,5 @@ class DeliveryResolver(Protocol):
 
     Checks contact-level block/mute, then chat-level mute, then defaults to DELIVER.
     """
+
     def resolve(self, recipient_entity_id: str, chat_id: str, sender_entity_id: str, *, is_mentioned: bool = False) -> DeliveryAction: ...

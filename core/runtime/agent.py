@@ -23,7 +23,6 @@ import threading
 from pathlib import Path
 from typing import Any
 
-import aiosqlite
 from langchain.agents import create_agent
 from langchain.chat_models import init_chat_model
 from langchain_core.messages import SystemMessage
@@ -40,48 +39,48 @@ if _env_file.exists():
             key, value = line.split("=", 1)
             os.environ[key] = value
 
-from config import LeonSettings
-from config.loader import AgentLoader
-from config.models_loader import ModelsLoader
-from config.models_schema import ModelsConfig
-from config.observation_loader import ObservationLoader
-from config.observation_schema import ObservationConfig
+from config import LeonSettings  # noqa: E402
+from config.loader import AgentLoader  # noqa: E402
+from config.models_loader import ModelsLoader  # noqa: E402
+from config.models_schema import ModelsConfig  # noqa: E402
+from config.observation_loader import ObservationLoader  # noqa: E402
+from config.observation_schema import ObservationConfig  # noqa: E402
+
+# Multi-agent services
+from core.agents.registry import AgentRegistry  # noqa: E402
+from core.agents.service import AgentService  # noqa: E402
+from core.model_params import normalize_model_kwargs  # noqa: E402
+
+# Import file operation recorder for time travel
+from core.operations import get_recorder  # noqa: E402
+from core.runtime.middleware.memory import MemoryMiddleware  # noqa: E402
+from core.runtime.middleware.monitor import MonitorMiddleware, apply_usage_patches  # noqa: E402
+from core.runtime.middleware.prompt_caching import PromptCachingMiddleware  # noqa: E402
+from core.runtime.middleware.queue import MessageQueueManager, SteeringMiddleware  # noqa: E402
+
 # Middleware imports (migrated paths)
-from core.runtime.middleware.spill_buffer import SpillBufferMiddleware
-from core.runtime.middleware.memory import MemoryMiddleware
-from core.runtime.middleware.monitor import MonitorMiddleware, apply_usage_patches
-from core.runtime.middleware.prompt_caching import PromptCachingMiddleware
-from core.runtime.middleware.queue import MessageQueueManager, SteeringMiddleware
-
-# Hooks (used by Services)
-from core.tools.command.hooks.dangerous_commands import DangerousCommandsHook
-from core.tools.command.hooks.file_access_logger import FileAccessLoggerHook
-from core.tools.command.hooks.file_permission import FilePermissionHook
-
-from core.model_params import normalize_model_kwargs
-from storage.container import StorageContainer
+from core.runtime.middleware.spill_buffer import SpillBufferMiddleware  # noqa: E402
 
 # New architecture: ToolRegistry + ToolRunner + Services
-from core.runtime.registry import ToolRegistry
-from core.runtime.runner import ToolRunner
-from core.runtime.validator import ToolValidator
-from core.tools.command.service import CommandService
-from core.tools.filesystem.service import FileSystemService
-from core.tools.search.service import SearchService
-from core.tools.skills.service import SkillsService
-from core.tools.task.service import TaskService
-from core.tools.tool_search.service import ToolSearchService
+from core.runtime.registry import ToolRegistry  # noqa: E402
+from core.runtime.runner import ToolRunner  # noqa: E402
+from core.runtime.validator import ToolValidator  # noqa: E402
+
+# Hooks (used by Services)
+from core.tools.command.hooks.dangerous_commands import DangerousCommandsHook  # noqa: E402
+from core.tools.command.hooks.file_access_logger import FileAccessLoggerHook  # noqa: E402
+from core.tools.command.hooks.file_permission import FilePermissionHook  # noqa: E402
+from core.tools.command.service import CommandService  # noqa: E402
+from core.tools.filesystem.service import FileSystemService  # noqa: E402
+from core.tools.search.service import SearchService  # noqa: E402
+from core.tools.skills.service import SkillsService  # noqa: E402
+from core.tools.task.service import TaskService  # noqa: E402
+from core.tools.tool_search.service import ToolSearchService  # noqa: E402
 
 # Multi-agent team coordination
 # from core.agents.teams.service import TeamService  # @@@teams-removed - module doesn't exist
-from core.tools.web.service import WebService
-
-# Multi-agent services
-from core.agents.registry import AgentRegistry
-from core.agents.service import AgentService
-
-# Import file operation recorder for time travel
-from core.operations import get_recorder
+from core.tools.web.service import WebService  # noqa: E402
+from storage.container import StorageContainer  # noqa: E402
 
 # @@@langchain-anthropic-streaming-usage-regression
 apply_usage_patches()
@@ -165,9 +164,9 @@ class LeonAgent:
         # Resolve virtual model name
         active_model = self.models_config.active.model if self.models_config.active else model_name
         if not active_model:
-            from config.schema import DEFAULT_MODEL as _fallback
+            from config.schema import DEFAULT_MODEL  # noqa: E402
 
-            active_model = _fallback
+            active_model = DEFAULT_MODEL
         # Member model override: agent.md's model field takes precedence over global config
         if hasattr(self, "_agent_override") and self._agent_override and self._agent_override.model:
             active_model = self._agent_override.model
@@ -303,7 +302,7 @@ class LeonAgent:
 
         # Initialize async components
         self._aiosqlite_conn = await self._init_checkpointer()
-        mcp_tools = await self._init_mcp_tools()
+        _mcp_tools = await self._init_mcp_tools()
 
         # Update agent with checkpointer
         self.agent.checkpointer = self.checkpointer
@@ -376,11 +375,7 @@ class LeonAgent:
         runtime = self._agent_bundle.runtime
 
         # Tools explicitly disabled in runtime.json
-        blocked = {
-            k.split(":", 1)[1]
-            for k, v in runtime.items()
-            if k.startswith("tools:") and not v.enabled
-        }
+        blocked = {k.split(":", 1)[1] for k, v in runtime.items() if k.startswith("tools:") and not v.enabled}
 
         # Also block catalog tools with default=False that aren't explicitly enabled
         for tool_name, tool_def in TOOLS_BY_NAME.items():
@@ -485,9 +480,7 @@ class LeonAgent:
         env_db_path = os.getenv("LEON_DB_PATH")
         env_sandbox_db_path = os.getenv("LEON_SANDBOX_DB_PATH")
         self.db_path = Path(env_db_path).expanduser() if env_db_path else (Path.home() / ".leon" / "leon.db")
-        self.sandbox_db_path = (
-            Path(env_sandbox_db_path).expanduser() if env_sandbox_db_path else (Path.home() / ".leon" / "sandbox.db")
-        )
+        self.sandbox_db_path = Path(env_sandbox_db_path).expanduser() if env_sandbox_db_path else (Path.home() / ".leon" / "sandbox.db")
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self.sandbox_db_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -517,6 +510,7 @@ class LeonAgent:
         if self.models_config.active and self.models_config.active.provider:
             return self.models_config.active.provider
         from langchain.chat_models.base import _attempt_infer_model_provider
+
         inferred = _attempt_infer_model_provider(model_name)
         if inferred and self.models_config.get_provider(inferred):
             return inferred
@@ -603,8 +597,7 @@ class LeonAgent:
 
         # Include virtual model overrides (filter out Leon-internal keys)
         if hasattr(self, "_model_overrides"):
-            kwargs.update({k: v for k, v in self._model_overrides.items()
-                           if k not in ("context_limit", "based_on")})
+            kwargs.update({k: v for k, v in self._model_overrides.items() if k not in ("context_limit", "based_on")})
 
         # Use provider from model overrides (mapping) first, then infer
         provider = self._resolve_provider_name(self.model_name, kwargs if kwargs else None)
@@ -655,10 +648,12 @@ class LeonAgent:
             base_url = (p.base_url if p else None) or self.models_config.get_base_url()
             if base_url:
                 base_url = self._normalize_base_url(base_url, provider_name)
-            self._current_model_config.update({
-                "api_key": self.api_key,
-                "base_url": base_url,
-            })
+            self._current_model_config.update(
+                {
+                    "api_key": self.api_key,
+                    "base_url": base_url,
+                }
+            )
             return
 
         # Resolve virtual model
@@ -690,10 +685,9 @@ class LeonAgent:
         # Update memory middleware context_limit + model config
         if hasattr(self, "_memory_middleware"):
             from core.runtime.middleware.monitor.cost import get_model_context_limit
+
             lookup_name = model_overrides.get("based_on") or resolved_model
-            self._memory_middleware.set_context_limit(
-                model_overrides.get("context_limit") or get_model_context_limit(lookup_name)
-            )
+            self._memory_middleware.set_context_limit(model_overrides.get("context_limit") or get_model_context_limit(lookup_name))
             self._memory_middleware.set_model(self.model, self._current_model_config)
 
         if self.verbose:
@@ -710,9 +704,9 @@ class LeonAgent:
         Args:
             **overrides: Fields to override (e.g. active="langfuse" or active=None)
         """
-        self._observation_config = ObservationLoader(
-            workspace_root=self.workspace_root
-        ).load(cli_overrides=overrides if overrides else None)
+        self._observation_config = ObservationLoader(workspace_root=self.workspace_root).load(
+            cli_overrides=overrides if overrides else None
+        )
 
         if self.verbose:
             print(f"[LeonAgent] Observation updated: active={self._observation_config.active}")
@@ -813,7 +807,6 @@ class LeonAgent:
 
         # Get backends from sandbox
         fs_backend = self._sandbox.fs()
-        cmd_executor = self._sandbox.shell()
 
         # 1. Monitor — second from outside; observes all model calls/responses.
         #    Must come before PromptCaching/Memory/Steering so token counts
@@ -866,10 +859,7 @@ class LeonAgent:
         """Add memory middleware to stack."""
         # @@@context-limit-fallback — prefer mapping override (e.g. leon:tiny → 8000),
         # then Monitor's resolved value (model API → 128000 fallback).
-        context_limit = (
-            self._model_overrides.get("context_limit")
-            or self._monitor_middleware._context_monitor.context_limit
-        )
+        context_limit = self._model_overrides.get("context_limit") or self._monitor_middleware._context_monitor.context_limit
         pruning_config = self.config.memory.pruning
         compaction_config = self.config.memory.compaction
 
@@ -985,11 +975,7 @@ class LeonAgent:
             # Use member bundle's skills enabled/disabled state if available
             enabled_skills = self.config.skills.skills
             if hasattr(self, "_agent_bundle") and self._agent_bundle:
-                bundle_skill_entries = {
-                    k.split(":", 1)[1]: v
-                    for k, v in self._agent_bundle.runtime.items()
-                    if k.startswith("skills:")
-                }
+                bundle_skill_entries = {k.split(":", 1)[1]: v for k, v in self._agent_bundle.runtime.items() if k.startswith("skills:")}
                 if bundle_skill_entries:
                     enabled_skills = {name: rc.enabled for name, rc in bundle_skill_entries.items()}
             self._skills_service = SkillsService(
@@ -1029,6 +1015,7 @@ class LeonAgent:
         # TaskBoard tools (board management — INLINE, blocked by default via catalog)
         try:
             from backend.taskboard.service import TaskBoardService
+
             self._taskboard_service = TaskBoardService(registry=self._tool_registry)
         except ImportError:
             self._taskboard_service = None
@@ -1040,6 +1027,7 @@ class LeonAgent:
             owner_entity_id = repos.get("owner_entity_id", "")
             if entity_id:
                 from core.agents.communication.chat_tool_service import ChatToolService
+
                 # @@@lazy-runtime — runtime isn't set yet at _init_services() time.
                 # Pass a callable that resolves runtime lazily at tool call time.
                 self._chat_tool_service = ChatToolService(
@@ -1065,6 +1053,7 @@ class LeonAgent:
                     """Lazy lookup — returns None if registry not on app.state yet."""
                     try:
                         from backend.web.main import app
+
                         registry = getattr(app.state, "wechat_registry", None)
                         return registry.get(eid) if registry else None
                     except Exception:
@@ -1088,9 +1077,7 @@ class LeonAgent:
 
         # Use member bundle MCP config if available, else fall back to global config
         if hasattr(self, "_agent_bundle") and self._agent_bundle and self._agent_bundle.mcp:
-            mcp_servers = {
-                name: srv for name, srv in self._agent_bundle.mcp.items() if not srv.disabled
-            }
+            mcp_servers = {name: srv for name, srv in self._agent_bundle.mcp.items() if not srv.disabled}
         else:
             mcp_servers = self.config.mcp.servers
 
@@ -1169,11 +1156,7 @@ class LeonAgent:
             prompt = self._agent_override.system_prompt
             # Append bundle rules (from rules/*.md) to system prompt
             if hasattr(self, "_agent_bundle") and self._agent_bundle and self._agent_bundle.rules:
-                rule_parts = [
-                    f"## {r['name']}\n{r['content']}"
-                    for r in self._agent_bundle.rules
-                    if r.get("content", "").strip()
-                ]
+                rule_parts = [f"## {r['name']}\n{r['content']}" for r in self._agent_bundle.rules if r.get("content", "").strip()]
                 if rule_parts:
                     prompt += "\n\n---\n\n" + "\n\n".join(rule_parts)
             return prompt
@@ -1200,6 +1183,7 @@ class LeonAgent:
 - Mode: {mode_label}"""
         else:
             import platform
+
             os_name = platform.system()
             if os_name == "Windows":
                 shell_name = "powershell"
@@ -1239,7 +1223,9 @@ class LeonAgent:
             rules.append("3. **Security**: Dangerous commands are blocked. All operations are logged.")
 
         # Rule 4: Tool priority
-        rules.append("""4. **Tool Priority**: When a built-in tool and an MCP tool (`mcp__*`) have the same functionality, use the built-in tool.""")
+        rules.append(
+            """4. **Tool Priority**: When a built-in tool and an MCP tool (`mcp__*`) have the same functionality, use the built-in tool."""
+        )
 
         # Rule 5: Dedicated tools over shell
         rules.append("""5. **Use Dedicated Tools Instead of Shell Commands**: Do NOT use `Bash` for tasks that have dedicated tools:
@@ -1250,7 +1236,7 @@ class LeonAgent:
    - Reserve `Bash` for: git, package managers, build tools, tests, and other system operations.""")
 
         # Rule 6: Background task description
-        rules.append("""6. **Background Task Description**: When using `Bash` or `Agent` with `run_in_background: true`, always include a clear `description` parameter.
+        rules.append("""6. **Background Task Description**: When using `Bash` or `Agent` with `run_in_background: true`, always include a clear `description` parameter.  # noqa: E501
    - The description is shown to the user in the background task indicator.
    - Keep it concise (5–10 words), action-oriented, e.g. "Run test suite", "Analyze API codebase".
    - Without a description, the raw command or agent name is shown, which is hard to read.""")
@@ -1436,6 +1422,7 @@ def create_leon_agent(
     """
     # Filter out kwargs that LeonAgent.__init__ doesn't accept (e.g. profile from CLI)
     import inspect as _inspect
+
     _valid = set(_inspect.signature(LeonAgent.__init__).parameters) - {"self"}
     kwargs = {k: v for k, v in kwargs.items() if k in _valid}
     return LeonAgent(

@@ -24,32 +24,53 @@ class MessageQueueManager:
             self._repo = repo
         else:
             from storage.providers.sqlite.queue_repo import SQLiteQueueRepo
+
             resolved = Path(db_path) if db_path else None
             self._repo = SQLiteQueueRepo(db_path=resolved)
         # Expose db_path for diagnostics / tests
         self._db_path: str = getattr(self._repo, "_db_path", "")
-        self._wake_handlers: dict[str, Callable[["QueueItem"], None]] = {}
+        self._wake_handlers: dict[str, Callable[[QueueItem], None]] = {}
         self._wake_lock = threading.Lock()
 
     # ------------------------------------------------------------------
     # Core operations
     # ------------------------------------------------------------------
 
-    def enqueue(self, content: str, thread_id: str, notification_type: str = "steer",
-                source: str | None = None, sender_entity_id: str | None = None,
-                sender_name: str | None = None, sender_avatar_url: str | None = None,
-                is_steer: bool = False) -> None:
+    def enqueue(
+        self,
+        content: str,
+        thread_id: str,
+        notification_type: str = "steer",
+        source: str | None = None,
+        sender_entity_id: str | None = None,
+        sender_name: str | None = None,
+        sender_avatar_url: str | None = None,
+        is_steer: bool = False,
+    ) -> None:
         """Persist a message. Fires wake handler after INSERT."""
-        self._repo.enqueue(thread_id, content, notification_type,
-                           source=source, sender_entity_id=sender_entity_id, sender_name=sender_name)
+        self._repo.enqueue(
+            thread_id,
+            content,
+            notification_type,
+            source=source,
+            sender_entity_id=sender_entity_id,
+            sender_name=sender_name,
+        )
         with self._wake_lock:
             handler = self._wake_handlers.get(thread_id)
         if handler:
             try:
-                handler(QueueItem(content=content, notification_type=notification_type,
-                                  source=source, sender_entity_id=sender_entity_id,
-                                  sender_name=sender_name, sender_avatar_url=sender_avatar_url,
-                                  is_steer=is_steer))
+                handler(
+                    QueueItem(
+                        content=content,
+                        notification_type=notification_type,
+                        source=source,
+                        sender_entity_id=sender_entity_id,
+                        sender_name=sender_name,
+                        sender_avatar_url=sender_avatar_url,
+                        is_steer=is_steer,
+                    )
+                )
             except Exception:
                 logger.exception("Wake handler raised for thread %s", thread_id)
 
@@ -73,7 +94,7 @@ class MessageQueueManager:
     # Wake handler registration
     # ------------------------------------------------------------------
 
-    def register_wake(self, thread_id: str, handler: Callable[["QueueItem"], None]) -> None:
+    def register_wake(self, thread_id: str, handler: Callable[[QueueItem], None]) -> None:
         """Register a wake handler for a thread.
 
         The handler receives the newly-enqueued QueueItem.

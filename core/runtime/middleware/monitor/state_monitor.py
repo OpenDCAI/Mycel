@@ -27,13 +27,13 @@ class AgentState(Enum):
 class AgentFlags:
     """Agent 状态标志位"""
 
-    isStreaming: bool = False
-    isCompacting: bool = False
-    isWaiting: bool = False
-    isBlocked: bool = False
-    canInterrupt: bool = True
-    hasError: bool = False
-    needsRecovery: bool = False
+    is_streaming: bool = False
+    is_compacting: bool = False
+    is_waiting: bool = False
+    is_blocked: bool = False
+    can_interrupt: bool = True
+    has_error: bool = False
+    needs_recovery: bool = False
 
 
 # 状态转移规则

@@ -25,6 +25,7 @@ except ImportError:
     ToolCallRequest = Any
 
 from core.tools.filesystem.backend import FileSystemBackend
+
 from .spill import spill_if_needed
 
 # Tools whose output must never be silently replaced.

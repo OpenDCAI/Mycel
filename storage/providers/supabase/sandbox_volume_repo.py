@@ -6,7 +6,6 @@ from typing import Any
 
 
 class SupabaseSandboxVolumeRepo:
-
     def __init__(self, client: Any) -> None:
         raise NotImplementedError("SupabaseSandboxVolumeRepo is not yet implemented")
 

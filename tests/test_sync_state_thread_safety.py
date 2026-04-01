@@ -13,6 +13,7 @@ def test_sync_state_shared_instance_survives_cross_thread_access(tmp_path: Path)
 
     state = SyncState()
     try:
+
         def _detect() -> list[str]:
             return state.detect_changes("thread-a", workspace)
 

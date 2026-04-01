@@ -28,9 +28,7 @@ class ToolValidator:
             expected = prop.get("type")
             if expected and not self._type_matches(val, expected):
                 actual = type(val).__name__
-                raise InputValidationError(
-                    f"The parameter `{name}` type is expected as `{expected}` but provided as `{actual}`"
-                )
+                raise InputValidationError(f"The parameter `{name}` type is expected as `{expected}` but provided as `{actual}`")
 
         # Phase 3: enum validation
         issues = self._validate_enum(properties, args)

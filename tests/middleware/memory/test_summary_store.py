@@ -61,7 +61,7 @@ def test_multiple_summaries_only_latest_active(temp_db):
     store = SummaryStore(temp_db)
 
     # Save first summary
-    id1 = store.save_summary(
+    _id1 = store.save_summary(
         thread_id="test-thread-2",
         summary_text="First summary",
         compact_up_to_index=10,
@@ -97,7 +97,7 @@ def test_split_turn_summary(temp_db):
     store = SummaryStore(temp_db)
 
     # Save a split turn summary
-    summary_id = store.save_summary(
+    summary_id = store.save_summary(  # noqa: F841
         thread_id="test-thread-3",
         summary_text="Combined summary with split turn",
         compact_up_to_index=15,
@@ -159,7 +159,7 @@ def test_retry_on_failure(temp_db):
     # This test verifies the retry mechanism exists
     # In a real scenario, we'd mock sqlite3 to simulate failures
     # For now, we just verify normal operation works
-    summary_id = store.save_summary(
+    summary_id = store.save_summary(  # noqa: F841
         thread_id="test-thread-5",
         summary_text="Test retry",
         compact_up_to_index=5,
@@ -297,7 +297,7 @@ def test_special_characters_in_summary(temp_db):
         "Newlines and tabs:\n\t\tIndented text"
     )
 
-    summary_id = store.save_summary(
+    summary_id = store.save_summary(  # noqa: F841
         thread_id="special-chars-thread",
         summary_text=special_text,
         compact_up_to_index=50,
@@ -319,7 +319,7 @@ def test_negative_indices(temp_db):
     store = SummaryStore(temp_db)
 
     # Test negative index
-    summary_id_neg = store.save_summary(
+    _summary_id_neg = store.save_summary(
         thread_id="negative-index-thread",
         summary_text="Negative index test",
         compact_up_to_index=-1,
@@ -332,7 +332,7 @@ def test_negative_indices(temp_db):
     assert summary_neg.compacted_at == -10
 
     # Test zero index
-    summary_id_zero = store.save_summary(
+    _summary_id_zero = store.save_summary(
         thread_id="zero-index-thread",
         summary_text="Zero index test",
         compact_up_to_index=0,
@@ -345,7 +345,7 @@ def test_negative_indices(temp_db):
     assert summary_zero.compacted_at == 0
 
     # Test maxsize index
-    summary_id_max = store.save_summary(
+    _summary_id_max = store.save_summary(
         thread_id="maxsize-index-thread",
         summary_text="Maxsize index test",
         compact_up_to_index=sys.maxsize,

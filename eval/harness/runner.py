@@ -4,11 +4,15 @@ from __future__ import annotations
 
 import asyncio
 from datetime import UTC, datetime
+from typing import TYPE_CHECKING
 
 from eval.collector import MetricsCollector
 from eval.harness.client import EvalClient
 from eval.models import EvalResult, EvalScenario, TrajectoryCapture
 from eval.storage import TrajectoryStore
+
+if TYPE_CHECKING:
+    from eval.models import RunTrajectory
 
 
 class EvalRunner:

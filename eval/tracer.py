@@ -7,10 +7,13 @@ Captures complete Run tree with LLM calls, tool calls, timing, and token usage.
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from langchain_core.tracers.base import BaseTracer
 from langchain_core.tracers.schemas import Run
+
+if TYPE_CHECKING:
+    from eval.models import LLMCallRecord, RunTrajectory, ToolCallRecord
 
 
 class TrajectoryTracer(BaseTracer):
@@ -263,9 +266,7 @@ class TrajectoryTracer(BaseTracer):
                     if isinstance(content, str):
                         return content
                     if isinstance(content, list):
-                        return "".join(
-                            block.get("text", "") if isinstance(block, dict) else str(block) for block in content
-                        )
+                        return "".join(block.get("text", "") if isinstance(block, dict) else str(block) for block in content)
             return ""
         for msg in reversed(messages):
             if msg.__class__.__name__ in ("AIMessage", "AIMessageChunk"):
@@ -273,9 +274,7 @@ class TrajectoryTracer(BaseTracer):
                 if isinstance(content, str):
                     return content
                 if isinstance(content, list):
-                    return "".join(
-                        block.get("text", "") if isinstance(block, dict) else str(block) for block in content
-                    )
+                    return "".join(block.get("text", "") if isinstance(block, dict) else str(block) for block in content)
         return ""
 
     @staticmethod

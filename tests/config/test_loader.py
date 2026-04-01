@@ -1,9 +1,6 @@
 """Comprehensive tests for config.loader module."""
 
-import json
 import os
-
-import pytest
 
 from config.loader import ConfigLoader, load_config
 from config.schema import LeonSettings

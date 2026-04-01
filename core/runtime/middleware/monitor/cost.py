@@ -63,9 +63,7 @@ def _parse_openrouter_model(model: dict[str, Any]) -> tuple[str, dict[str, Decim
 
     # 仅在 OpenRouter 未明确提供时推断（不覆盖明确值）
     if not cache_read_per_m or not cache_write_per_m:
-        cache_read_per_m, cache_write_per_m = _infer_cache_prices(
-            provider, input_per_m, cache_read_per_m, cache_write_per_m
-        )
+        cache_read_per_m, cache_write_per_m = _infer_cache_prices(provider, input_per_m, cache_read_per_m, cache_write_per_m)
 
     costs: dict[str, Decimal] = {
         "input": input_per_m,
@@ -89,9 +87,7 @@ def _parse_cache_price(price_str: str | None) -> Decimal:
         return Decimal("0")
 
 
-def _infer_cache_prices(
-    provider: str, input_per_m: Decimal, cache_read: Decimal, cache_write: Decimal
-) -> tuple[Decimal, Decimal]:
+def _infer_cache_prices(provider: str, input_per_m: Decimal, cache_read: Decimal, cache_write: Decimal) -> tuple[Decimal, Decimal]:
     """根据 provider 推断缓存价格"""
     cache_rules = {
         "anthropic": (Decimal("0.1"), Decimal("1.25")),
@@ -323,11 +319,7 @@ class CostCalculator:
         breakdown = {
             "input": self.costs.get("input", Decimal("0")) * Decimal(str(tokens.get("input_tokens", 0))) / M,
             "output": self.costs.get("output", Decimal("0")) * Decimal(str(tokens.get("output_tokens", 0))) / M,
-            "cache_read": self.costs.get("cache_read", Decimal("0"))
-            * Decimal(str(tokens.get("cache_read_tokens", 0)))
-            / M,
-            "cache_write": self.costs.get("cache_write", Decimal("0"))
-            * Decimal(str(tokens.get("cache_write_tokens", 0)))
-            / M,
+            "cache_read": self.costs.get("cache_read", Decimal("0")) * Decimal(str(tokens.get("cache_read_tokens", 0))) / M,
+            "cache_write": self.costs.get("cache_write", Decimal("0")) * Decimal(str(tokens.get("cache_write_tokens", 0))) / M,
         }
         return {"total": sum(breakdown.values()), "breakdown": breakdown}

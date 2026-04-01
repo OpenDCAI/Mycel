@@ -15,6 +15,7 @@ def _use_tmp_db(tmp_path, monkeypatch):
 # Validation
 # ---------------------------------------------------------------------------
 
+
 class TestValidation:
     def test_create_raises_on_empty_name(self):
         with pytest.raises(ValueError, match="name"):
@@ -37,20 +38,17 @@ class TestValidation:
 # create_cron_job
 # ---------------------------------------------------------------------------
 
+
 class TestCreateCronJob:
     def test_basic_fields(self):
-        job = cron_job_service.create_cron_job(
-            name="nightly backup", cron_expression="0 2 * * *"
-        )
+        job = cron_job_service.create_cron_job(name="nightly backup", cron_expression="0 2 * * *")
         assert job["name"] == "nightly backup"
         assert job["cron_expression"] == "0 2 * * *"
         assert job["id"]  # non-empty
         assert job["created_at"] > 0
 
     def test_default_values(self):
-        job = cron_job_service.create_cron_job(
-            name="defaults", cron_expression="*/10 * * * *"
-        )
+        job = cron_job_service.create_cron_job(name="defaults", cron_expression="*/10 * * * *")
         assert job["description"] == ""
         assert job["task_template"] == "{}"
         assert job["enabled"] == 1
@@ -74,11 +72,10 @@ class TestCreateCronJob:
 # get_cron_job
 # ---------------------------------------------------------------------------
 
+
 class TestGetCronJob:
     def test_get_existing(self):
-        job = cron_job_service.create_cron_job(
-            name="fetchable", cron_expression="0 0 * * *"
-        )
+        job = cron_job_service.create_cron_job(name="fetchable", cron_expression="0 0 * * *")
         fetched = cron_job_service.get_cron_job(job["id"])
         assert fetched is not None
         assert fetched["name"] == "fetchable"
@@ -90,6 +87,7 @@ class TestGetCronJob:
 # ---------------------------------------------------------------------------
 # list_cron_jobs
 # ---------------------------------------------------------------------------
+
 
 class TestListCronJobs:
     def test_list_returns_all(self):
@@ -113,34 +111,25 @@ class TestListCronJobs:
 # update_cron_job
 # ---------------------------------------------------------------------------
 
+
 class TestUpdateCronJob:
     def test_update_name(self):
-        job = cron_job_service.create_cron_job(
-            name="original", cron_expression="* * * * *"
-        )
+        job = cron_job_service.create_cron_job(name="original", cron_expression="* * * * *")
         updated = cron_job_service.update_cron_job(job["id"], name="renamed")
         assert updated["name"] == "renamed"
 
     def test_update_cron_expression(self):
-        job = cron_job_service.create_cron_job(
-            name="expr", cron_expression="* * * * *"
-        )
-        updated = cron_job_service.update_cron_job(
-            job["id"], cron_expression="0 0 * * *"
-        )
+        job = cron_job_service.create_cron_job(name="expr", cron_expression="* * * * *")
+        updated = cron_job_service.update_cron_job(job["id"], cron_expression="0 0 * * *")
         assert updated["cron_expression"] == "0 0 * * *"
 
     def test_update_enabled(self):
-        job = cron_job_service.create_cron_job(
-            name="toggle", cron_expression="* * * * *"
-        )
+        job = cron_job_service.create_cron_job(name="toggle", cron_expression="* * * * *")
         updated = cron_job_service.update_cron_job(job["id"], enabled=0)
         assert updated["enabled"] == 0
 
     def test_update_last_run_at(self):
-        job = cron_job_service.create_cron_job(
-            name="run tracker", cron_expression="* * * * *"
-        )
+        job = cron_job_service.create_cron_job(name="run tracker", cron_expression="* * * * *")
         updated = cron_job_service.update_cron_job(job["id"], last_run_at=1234567890)
         assert updated["last_run_at"] == 1234567890
 
@@ -149,9 +138,7 @@ class TestUpdateCronJob:
         assert result is None
 
     def test_update_no_changes_returns_current(self):
-        job = cron_job_service.create_cron_job(
-            name="stable", cron_expression="* * * * *"
-        )
+        job = cron_job_service.create_cron_job(name="stable", cron_expression="* * * * *")
         result = cron_job_service.update_cron_job(job["id"])
         assert result is not None
         assert result["name"] == "stable"
@@ -161,11 +148,10 @@ class TestUpdateCronJob:
 # delete_cron_job
 # ---------------------------------------------------------------------------
 
+
 class TestDeleteCronJob:
     def test_delete_existing(self):
-        job = cron_job_service.create_cron_job(
-            name="to delete", cron_expression="* * * * *"
-        )
+        job = cron_job_service.create_cron_job(name="to delete", cron_expression="* * * * *")
         assert cron_job_service.delete_cron_job(job["id"]) is True
         assert cron_job_service.get_cron_job(job["id"]) is None
 
@@ -176,6 +162,7 @@ class TestDeleteCronJob:
 # ---------------------------------------------------------------------------
 # Full CRUD lifecycle
 # ---------------------------------------------------------------------------
+
 
 class TestCRUDLifecycle:
     def test_full_lifecycle(self):
@@ -197,9 +184,7 @@ class TestCRUDLifecycle:
         assert any(j["id"] == job_id for j in jobs)
 
         # Update
-        updated = cron_job_service.update_cron_job(
-            job_id, name="updated name", enabled=0
-        )
+        updated = cron_job_service.update_cron_job(job_id, name="updated name", enabled=0)
         assert updated["name"] == "updated name"
         assert updated["enabled"] == 0
         assert updated["description"] == "every 6 hours"  # unchanged

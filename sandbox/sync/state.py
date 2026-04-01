@@ -1,5 +1,5 @@
-from pathlib import Path
 import hashlib
+from pathlib import Path
 
 from storage.providers.sqlite.sync_file_repo import SQLiteSyncFileRepo
 
@@ -7,8 +7,8 @@ from storage.providers.sqlite.sync_file_repo import SQLiteSyncFileRepo
 def _calculate_checksum(file_path: Path) -> str:
     """Calculate SHA256 checksum of file."""
     sha256 = hashlib.sha256()
-    with open(file_path, 'rb') as f:
-        for chunk in iter(lambda: f.read(8192), b''):
+    with open(file_path, "rb") as f:
+        for chunk in iter(lambda: f.read(8192), b""):
             sha256.update(chunk)
     return sha256.hexdigest()
 

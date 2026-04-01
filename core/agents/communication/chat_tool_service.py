@@ -9,7 +9,7 @@ from __future__ import annotations
 import logging
 import re
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from core.runtime.registry import ToolEntry, ToolMode, ToolRegistry
@@ -81,7 +81,7 @@ def _parse_time_endpoint(s: str, now: float) -> float | None:
         return now - n * seconds
     # Try ISO date parsing (date-level only — no HH:MM to avoid ':' collision with range separator)
     try:
-        dt = datetime.strptime(s, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+        dt = datetime.strptime(s, "%Y-%m-%d").replace(tzinfo=UTC)
         return dt.timestamp()
     except ValueError:
         pass
@@ -143,11 +143,13 @@ class ChatToolService:
             fetch_count = limit + skip_last
             msgs = self._messages.list_by_chat(chat_id, limit=fetch_count)
             if skip_last > 0:
-                msgs = msgs[:len(msgs) - skip_last] if len(msgs) > skip_last else []
+                msgs = msgs[: len(msgs) - skip_last] if len(msgs) > skip_last else []
             return msgs
         else:
             return self._messages.list_by_time_range(
-                chat_id, after=parsed["after"], before=parsed["before"],
+                chat_id,
+                after=parsed["after"],
+                before=parsed["before"],
             )
 
     def _register_chats(self, registry: ToolRegistry) -> None:
@@ -177,29 +179,34 @@ class ChatToolService:
                 lines.append(f"- {name}{id_str}{unread_str}{last_preview}")
             return "\n".join(lines)
 
-        registry.register(ToolEntry(
-            name="chats",
-            mode=ToolMode.INLINE,
-            schema={
-                "name": "chats",
-                "description": "List your chats. Returns chat summaries with entity_ids of participants.",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "unread_only": {"type": "boolean", "description": "Only show chats with unread messages", "default": False},
-                        "limit": {"type": "integer", "description": "Max number of chats to return", "default": 20},
+        registry.register(
+            ToolEntry(
+                name="chats",
+                mode=ToolMode.INLINE,
+                schema={
+                    "name": "chats",
+                    "description": "List your chats. Returns chat summaries with entity_ids of participants.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "unread_only": {
+                                "type": "boolean",
+                                "description": "Only show chats with unread messages",
+                                "default": False,
+                            },
+                            "limit": {"type": "integer", "description": "Max number of chats to return", "default": 20},
+                        },
                     },
                 },
-            },
-            handler=handle,
-            source="chat",
-        ))
+                handler=handle,
+                source="chat",
+            )
+        )
 
     def _register_chat_read(self, registry: ToolRegistry) -> None:
         eid = self._entity_id
 
-        def handle(entity_id: str | None = None, chat_id: str | None = None,
-                   range: str | None = None) -> str:
+        def handle(entity_id: str | None = None, chat_id: str | None = None, range: str | None = None) -> str:
             if chat_id:
                 pass  # use chat_id directly
             elif entity_id:
@@ -243,36 +250,48 @@ class ChatToolService:
                 "  range='2026-03-20:2026-03-22' (date range)"
             )
 
-        registry.register(ToolEntry(
-            name="chat_read",
-            mode=ToolMode.INLINE,
-            schema={
-                "name": "chat_read",
-                "description": (
-                    "Read chat messages. Returns unread messages by default.\n"
-                    "If nothing unread, use range to read history:\n"
-                    "  Negative index: '-10:-1' (last 10), '-5:' (last 5)\n"
-                    "  Time interval: '-1h:', '-2d:-1d', '2026-03-20:2026-03-22'\n"
-                    "Positive indices are NOT allowed."
-                ),
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "entity_id": {"type": "string", "description": "Entity_id for 1:1 chat history"},
-                        "chat_id": {"type": "string", "description": "Chat_id for group chat history"},
-                        "range": {"type": "string", "description": "History range. Negative index '-X:-Y' or time '-1h:', '2026-03-20:'. Positive indices NOT allowed."},
+        registry.register(
+            ToolEntry(
+                name="chat_read",
+                mode=ToolMode.INLINE,
+                schema={
+                    "name": "chat_read",
+                    "description": (
+                        "Read chat messages. Returns unread messages by default.\n"
+                        "If nothing unread, use range to read history:\n"
+                        "  Negative index: '-10:-1' (last 10), '-5:' (last 5)\n"
+                        "  Time interval: '-1h:', '-2d:-1d', '2026-03-20:2026-03-22'\n"
+                        "Positive indices are NOT allowed."
+                    ),
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "entity_id": {"type": "string", "description": "Entity_id for 1:1 chat history"},
+                            "chat_id": {"type": "string", "description": "Chat_id for group chat history"},
+                            "range": {
+                                "type": "string",
+                                "description": (
+                                    "History range. Negative index '-X:-Y' or time '-1h:', '2026-03-20:'. Positive indices NOT allowed."
+                                ),
+                            },
+                        },
                     },
                 },
-            },
-            handler=handle,
-            source="chat",
-        ))
+                handler=handle,
+                source="chat",
+            )
+        )
 
     def _register_chat_send(self, registry: ToolRegistry) -> None:
         eid = self._entity_id
 
-        def handle(content: str, entity_id: str | None = None, chat_id: str | None = None,
-                   signal: str = "open", mentions: list[str] | None = None) -> str:
+        def handle(
+            content: str,
+            entity_id: str | None = None,
+            chat_id: str | None = None,
+            signal: str = "open",
+            mentions: list[str] | None = None,
+        ) -> str:
             # @@@read-before-write — resolve chat_id, then check unread
             resolved_chat_id = chat_id
             target_name = "chat"
@@ -298,49 +317,56 @@ class ChatToolService:
             # @@@read-before-write-gate — reject if unread messages exist
             unread = self._messages.count_unread(resolved_chat_id, eid)
             if unread > 0:
-                raise RuntimeError(
-                    f"You have {unread} unread message(s). "
-                    f"Call chat_read(chat_id='{resolved_chat_id}') first."
-                )
+                raise RuntimeError(f"You have {unread} unread message(s). Call chat_read(chat_id='{resolved_chat_id}') first.")
 
             # Append signal to content (for chat_read) + pass through chain (for notification)
             effective_signal = signal if signal in ("yield", "close") else None
             if effective_signal:
                 content = f"{content}\n[signal: {effective_signal}]"
 
-            self._chat_service.send_message(resolved_chat_id, eid, content, mentions,
-                                            signal=effective_signal)
+            self._chat_service.send_message(resolved_chat_id, eid, content, mentions, signal=effective_signal)
             return f"Message sent to {target_name}."
 
-        registry.register(ToolEntry(
-            name="chat_send",
-            mode=ToolMode.INLINE,
-            schema={
-                "name": "chat_send",
-                "description": (
-                    "Send a message. Use entity_id for 1:1 chats, chat_id for group chats.\n\n"
-                    "You MUST call chat_read() first if you have unread messages — sending will fail otherwise.\n\n"
-                    "Signal protocol — append to content:\n"
-                    "  (no tag) = I expect a reply from you\n"
-                    "  ::yield = I'm done with my turn; reply only if you want to\n"
-                    "  ::close = conversation over, do NOT reply\n\n"
-                    "For games/turns: do NOT append ::yield — just send the move and expect a reply."
-                ),
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "content": {"type": "string", "description": "Message content"},
-                        "entity_id": {"type": "string", "description": "Target entity_id (for 1:1 chat)"},
-                        "chat_id": {"type": "string", "description": "Target chat_id (for group chat)"},
-                        "signal": {"type": "string", "enum": ["open", "yield", "close"], "description": "Signal intent to recipient", "default": "open"},
-                        "mentions": {"type": "array", "items": {"type": "string"}, "description": "Entity IDs to @mention (overrides mute for these recipients)"},
+        registry.register(
+            ToolEntry(
+                name="chat_send",
+                mode=ToolMode.INLINE,
+                schema={
+                    "name": "chat_send",
+                    "description": (
+                        "Send a message. Use entity_id for 1:1 chats, chat_id for group chats.\n\n"
+                        "You MUST call chat_read() first if you have unread messages — sending will fail otherwise.\n\n"
+                        "Signal protocol — append to content:\n"
+                        "  (no tag) = I expect a reply from you\n"
+                        "  ::yield = I'm done with my turn; reply only if you want to\n"
+                        "  ::close = conversation over, do NOT reply\n\n"
+                        "For games/turns: do NOT append ::yield — just send the move and expect a reply."
+                    ),
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "content": {"type": "string", "description": "Message content"},
+                            "entity_id": {"type": "string", "description": "Target entity_id (for 1:1 chat)"},
+                            "chat_id": {"type": "string", "description": "Target chat_id (for group chat)"},
+                            "signal": {
+                                "type": "string",
+                                "enum": ["open", "yield", "close"],
+                                "description": "Signal intent to recipient",
+                                "default": "open",
+                            },
+                            "mentions": {
+                                "type": "array",
+                                "items": {"type": "string"},
+                                "description": "Entity IDs to @mention (overrides mute for these recipients)",
+                            },
+                        },
+                        "required": ["content"],
                     },
-                    "required": ["content"],
                 },
-            },
-            handler=handle,
-            source="chat",
-        ))
+                handler=handle,
+                source="chat",
+            )
+        )
 
     def _register_chat_search(self, registry: ToolRegistry) -> None:
         eid = self._entity_id
@@ -359,24 +385,29 @@ class ChatToolService:
                 lines.append(f"[{name}] {m.content[:100]}")
             return "\n".join(lines)
 
-        registry.register(ToolEntry(
-            name="chat_search",
-            mode=ToolMode.INLINE,
-            schema={
-                "name": "chat_search",
-                "description": "Search messages. Optionally filter by entity_id.",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "query": {"type": "string", "description": "Search query"},
-                        "entity_id": {"type": "string", "description": "Optional: only search in chat with this entity"},
+        registry.register(
+            ToolEntry(
+                name="chat_search",
+                mode=ToolMode.INLINE,
+                schema={
+                    "name": "chat_search",
+                    "description": "Search messages. Optionally filter by entity_id.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "query": {"type": "string", "description": "Search query"},
+                            "entity_id": {
+                                "type": "string",
+                                "description": "Optional: only search in chat with this entity",
+                            },
+                        },
+                        "required": ["query"],
                     },
-                    "required": ["query"],
                 },
-            },
-            handler=handle,
-            source="chat",
-        ))
+                handler=handle,
+                source="chat",
+            )
+        )
 
     def _register_directory(self, registry: ToolRegistry) -> None:
         eid = self._entity_id
@@ -402,22 +433,22 @@ class ChatToolService:
                 lines.append(f"- {e.name} [{e.type}] entity_id={e.id}{owner_info}")
             return "\n".join(lines)
 
-        registry.register(ToolEntry(
-            name="directory",
-            mode=ToolMode.INLINE,
-            schema={
-                "name": "directory",
-                "description": "Browse the entity directory. Returns entity_ids for use with chat_send, chat_read.",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "search": {"type": "string", "description": "Search by name"},
-                        "type": {"type": "string", "description": "Filter by type: 'human' or 'agent'"},
+        registry.register(
+            ToolEntry(
+                name="directory",
+                mode=ToolMode.INLINE,
+                schema={
+                    "name": "directory",
+                    "description": "Browse the entity directory. Returns entity_ids for use with chat_send, chat_read.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "search": {"type": "string", "description": "Search by name"},
+                            "type": {"type": "string", "description": "Filter by type: 'human' or 'agent'"},
+                        },
                     },
                 },
-            },
-            handler=handle,
-            source="chat",
-        ))
-
-
+                handler=handle,
+                source="chat",
+            )
+        )

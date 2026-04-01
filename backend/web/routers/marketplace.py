@@ -1,4 +1,5 @@
 """Marketplace API router — publish, install, upgrade, check updates."""
+
 import asyncio
 from typing import Annotated, Any
 
@@ -43,6 +44,7 @@ async def publish_to_marketplace(
     await _verify_member_ownership(req.member_id, user_id)
 
     from backend.web.services.profile_service import get_profile
+
     profile = await asyncio.to_thread(get_profile)
     username = profile.get("name", "anonymous")
 

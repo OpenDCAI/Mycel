@@ -1,4 +1,5 @@
 """Marketplace request/response models (Mycel client side)."""
+
 from typing import Literal
 
 from pydantic import BaseModel, Field
@@ -19,7 +20,7 @@ class InstallFromMarketplaceRequest(BaseModel):
 
 class UpgradeFromMarketplaceRequest(BaseModel):
     member_id: str  # local member id
-    item_id: str    # marketplace item id
+    item_id: str  # marketplace item id
 
 
 class InstalledItemInfo(BaseModel):

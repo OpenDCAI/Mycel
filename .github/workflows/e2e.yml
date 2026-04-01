@@ -1,0 +1,34 @@
+name: E2E Tests
+
+on:
+  workflow_dispatch:
+    inputs:
+      provider:
+        description: Provider to test
+        required: false
+        default: all
+        type: choice
+        options: [all, daytona, e2b, backend]
+  schedule:
+    - cron: '0 2 * * *'
+
+jobs:
+  e2e:
+    name: E2E (${{ github.event.inputs.provider || 'all' }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - name: Install dependencies
+        run: uv sync --dev
+      - name: Run e2e tests
+        env:
+          DAYTONA_API_KEY: ${{ secrets.DAYTONA_API_KEY }}
+          DAYTONA_SERVER_URL: ${{ secrets.DAYTONA_SERVER_URL }}
+          E2B_API_KEY: ${{ secrets.E2B_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          LEON_E2E_BACKEND: ${{ secrets.LEON_E2E_BACKEND }}
+        run: uv run pytest tests/ -v --timeout=300

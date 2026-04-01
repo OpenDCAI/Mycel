@@ -24,13 +24,14 @@ def _check_json_template(v: str | None) -> str | None:
 
 # ── Members ──
 
+
 class MemberConfigPayload(BaseModel):
     prompt: str | None = None
     rules: list[dict] | None = None
     tools: list[dict] | None = None
     mcps: list[dict] | None = None
     skills: list[dict] | None = None
-    subAgents: list[dict] | None = None
+    subAgents: list[dict] | None = None  # noqa: N815
 
 
 class CreateMemberRequest(BaseModel):
@@ -50,6 +51,7 @@ class PublishMemberRequest(BaseModel):
 
 
 # ── Tasks ──
+
 
 class CreateTaskRequest(BaseModel):
     title: str = "新任务"
@@ -82,6 +84,7 @@ class BulkDeleteTasksRequest(BaseModel):
 
 # ── Library ──
 
+
 class CreateResourceRequest(BaseModel):
     name: str
     desc: str = ""
@@ -101,6 +104,7 @@ class UpdateResourceContentRequest(BaseModel):
 
 # ── Profile ──
 
+
 class UpdateProfileRequest(BaseModel):
     name: str | None = None
     initials: str | None = None
@@ -108,6 +112,7 @@ class UpdateProfileRequest(BaseModel):
 
 
 # ── Cron Jobs ──
+
 
 class CreateCronJobRequest(BaseModel):
     name: str
