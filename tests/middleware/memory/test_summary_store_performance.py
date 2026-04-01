@@ -10,10 +10,8 @@ Test Cases:
 """
 
 import sys
-import tempfile
 import threading
 import time
-from pathlib import Path
 
 import pytest
 
@@ -22,22 +20,6 @@ _SKIP_WINDOWS = pytest.mark.skipif(
 )
 
 from core.runtime.middleware.memory.summary_store import SummaryStore
-
-
-@pytest.fixture
-def temp_db():
-    """Create a temporary database for testing."""
-    with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:
-        db_path = Path(f.name)
-    yield db_path
-    # Cleanup
-    if db_path.exists():
-        db_path.unlink()
-    # Also cleanup WAL files
-    for suffix in ["-wal", "-shm"]:
-        wal_file = Path(str(db_path) + suffix)
-        if wal_file.exists():
-            wal_file.unlink()
 
 
 @_SKIP_WINDOWS
