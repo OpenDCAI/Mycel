@@ -10,6 +10,8 @@ from core.tools.command.bash.executor import BashExecutor
 from core.tools.command.zsh.executor import ZshExecutor
 
 
+# TODO(windows-compat): BashExecutor/ZshExecutor require Unix shell semantics.
+# Tracked in: https://github.com/OpenDCAI/Mycel/issues — Windows shell support needed.
 @pytest.mark.skipif(
     sys.platform == "win32" or shutil.which("bash") is None, reason="bash not available or not Unix-compatible on this platform"
 )

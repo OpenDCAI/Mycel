@@ -89,6 +89,8 @@ def _wrap_remote_state_output(
     return "\n".join(lines) + "\n"
 
 
+# TODO(windows-compat): LocalPersistentShellRuntime uses Unix PTY + /tmp paths.
+# Tracked in: https://github.com/OpenDCAI/Mycel/issues — Windows shell support needed.
 @pytest.mark.skipif(sys.platform == "win32", reason="LocalPersistentShellRuntime requires a Unix shell")
 class TestLocalPersistentShellRuntime:
     """Test LocalPersistentShellRuntime."""

@@ -42,6 +42,8 @@ dependencies = [
     "PyJWT>=2.0.0",
     "langchain-mcp-adapters>=0.1.0",
     "croniter>=6.0.0",
+    "uvicorn>=0.30.0",
+    "sse-starlette>=1.6.0",
 ]
 
 [project.optional-dependencies]
@@ -111,6 +113,11 @@ py-modules = ["agent"]
 "config.defaults.agents" = ["*.md"]
 "eval.scenarios" = ["*.yaml"]
 "core.runtime.middleware.monitor" = ["models.json"]
+
+[tool.pytest.ini_options]
+markers = [
+    "e2e: marks tests as end-to-end (require provider secrets; skipped in unit CI)",
+]
 
 [tool.ruff]
 line-length = 140
