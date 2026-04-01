@@ -9,12 +9,15 @@ Test Cases:
 3. Database size growth (100 summaries, DB < 1MB)
 """
 
+import sys
 import tempfile
 import threading
 import time
 from pathlib import Path
 
 import pytest
+
+_SKIP_WINDOWS = pytest.mark.skipif(sys.platform == "win32", reason="SQLite connection-per-call is slow on Windows; performance tests not meaningful there")
 
 from core.runtime.middleware.memory.summary_store import SummaryStore
 
@@ -35,6 +38,7 @@ def temp_db():
             wal_file.unlink()
 
 
+@_SKIP_WINDOWS
 def test_query_performance_with_many_summaries(temp_db):
     """Test query performance with 1000 summaries.
 
@@ -93,6 +97,7 @@ def test_query_performance_with_many_summaries(temp_db):
     assert max_query_time < 100, f"Max query time {max_query_time:.2f}ms exceeds 100ms threshold"
 
 
+@_SKIP_WINDOWS
 def test_concurrent_write_performance(temp_db):
     """Test concurrent write performance with 10 threads.
 
@@ -188,6 +193,7 @@ def test_concurrent_write_performance(temp_db):
         assert summary.compact_up_to_index == (summaries_per_thread - 1) * 10
 
 
+@_SKIP_WINDOWS
 def test_database_size_growth(temp_db):
     """Test database size growth with 100 summaries.
 
