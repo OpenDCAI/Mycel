@@ -211,13 +211,32 @@ class QueryLoop:
             )
 
             async def innermost_tool_handler(req: ToolCallRequest) -> ToolMessage:
-                # ToolRunner middleware handles actual dispatch — if we reach here
-                # the tool was not handled by any middleware.
-                return ToolMessage(
-                    content=f"<tool_use_error>Tool '{req.tool_call.get('name')}' not found</tool_use_error>",
-                    tool_call_id=req.tool_call.get("id", ""),
-                    name=req.tool_call.get("name", ""),
-                )
+                # Fallback direct dispatch: ToolRunner middleware handles this in
+                # production, but without ToolRunner we dispatch from registry directly.
+                tc = req.tool_call
+                t_name = tc.get("name", "")
+                t_id = tc.get("id", "")
+                t_args = tc.get("args", {})
+                entry = self._registry.get(t_name)
+                if entry is None:
+                    return ToolMessage(
+                        content=f"<tool_use_error>Tool '{t_name}' not found</tool_use_error>",
+                        tool_call_id=t_id,
+                        name=t_name,
+                    )
+                try:
+                    import asyncio as _asyncio
+                    if _asyncio.iscoroutinefunction(entry.handler):
+                        result = await entry.handler(**t_args)
+                    else:
+                        result = await _asyncio.to_thread(entry.handler, **t_args)
+                    return ToolMessage(content=str(result), tool_call_id=t_id, name=t_name)
+                except Exception as e:
+                    return ToolMessage(
+                        content=f"<tool_use_error>{e}</tool_use_error>",
+                        tool_call_id=t_id,
+                        name=t_name,
+                    )
 
             # Build tool handler chain (outside-in)
             tool_handler = innermost_tool_handler

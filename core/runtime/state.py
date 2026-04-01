@@ -11,7 +11,7 @@ import uuid
 from pathlib import Path
 from typing import Any, Callable
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class BootstrapConfig(BaseModel):
@@ -47,8 +47,7 @@ class BootstrapConfig(BaseModel):
     base_url: str | None = None
     context_limit: int | None = None
 
-    class Config:
-        arbitrary_types_allowed = True
+    model_config = ConfigDict(arbitrary_types_allowed=True)
 
 
 class AppState(BaseModel):
@@ -71,7 +70,7 @@ class AppState(BaseModel):
     def set_state(self, updater: Callable[["AppState"], "AppState"]) -> "AppState":
         updated = updater(self)
         # Mutate in place (Python idiom — no immutable constraint needed here)
-        for field_name in self.model_fields:
+        for field_name in AppState.model_fields:
             setattr(self, field_name, getattr(updated, field_name))
         return self
 
@@ -88,5 +87,4 @@ class ToolUseContext(BaseModel):
     set_app_state: Any = Field(exclude=True)  # Callable[[AppState], None] | NO-OP
     turn_id: str = Field(default_factory=lambda: uuid.uuid4().hex[:8])
 
-    class Config:
-        arbitrary_types_allowed = True
+    model_config = ConfigDict(arbitrary_types_allowed=True)
