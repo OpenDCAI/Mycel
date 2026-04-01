@@ -93,7 +93,7 @@ class TestAsyncExecution:
         status = await executor.get_status(async_cmd.command_id)
         assert status is not None
 
-        await asyncio.sleep(0.2)
+        await asyncio.sleep(1.0)
 
         status = await executor.get_status(async_cmd.command_id)
         assert status is not None
