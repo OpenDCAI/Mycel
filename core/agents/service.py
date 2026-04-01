@@ -321,11 +321,32 @@ class AgentService:
             # gitStatus is injected into the prompt pipeline (core/runtime/prompts
             # has no such injection). Therefore explore/plan/bash sub-agents
             # already run lightweight — no extra trimming is needed.
-            agent = create_leon_agent(
-                model_name=self._model_name,
-                workspace_root=self._workspace_root,
-                verbose=False,
-            )
+            #
+            # Try to use context fork from parent agent's BootstrapConfig.
+            # Falls back to create_leon_agent when bootstrap is not available.
+            try:
+                from core.runtime.fork import fork_context
+
+                # Parent bootstrap is stored on the ToolUseContext or agent instance.
+                # AgentService stores workspace_root and model_name directly; use those
+                # to check if a richer bootstrap is available via a shared reference.
+                # _parent_bootstrap is injected by LeonAgent when building AgentService.
+                parent_bootstrap = getattr(self, "_parent_bootstrap", None)
+                if parent_bootstrap is not None:
+                    child_bootstrap = fork_context(parent_bootstrap)
+                    agent = create_leon_agent(
+                        model_name=child_bootstrap.model_name,
+                        workspace_root=child_bootstrap.workspace_root,
+                        verbose=False,
+                    )
+                else:
+                    raise AttributeError("no parent bootstrap")
+            except (AttributeError, ImportError):
+                agent = create_leon_agent(
+                    model_name=self._model_name,
+                    workspace_root=self._workspace_root,
+                    verbose=False,
+                )
             # In async context LeonAgent defers checkpointer init; call ainit() to
             # ensure state is persisted (and loadable via GET /api/threads/{thread_id}).
             await agent.ainit()
