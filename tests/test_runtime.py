@@ -3,9 +3,7 @@
 import asyncio
 import re
 import sqlite3
-import tempfile
 import time
-from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
@@ -26,18 +24,11 @@ from storage.providers.sqlite.terminal_repo import SQLiteTerminalRepo
 
 
 @pytest.fixture
-def temp_db():
-    """Create temporary database for testing."""
-    with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:
-        db_path = Path(f.name)
-    yield db_path
-    db_path.unlink(missing_ok=True)
-
-
-@pytest.fixture
 def terminal_store(temp_db):
     """Create SQLiteTerminalRepo with temp database."""
-    return SQLiteTerminalRepo(db_path=temp_db)
+    repo = SQLiteTerminalRepo(db_path=temp_db)
+    yield repo
+    repo.close()
 
 
 class _LeaseStoreCompat:
@@ -61,7 +52,10 @@ class _LeaseStoreCompat:
 @pytest.fixture
 def lease_store(temp_db):
     """Create SQLiteLeaseRepo with compat wrapper for tests."""
-    return _LeaseStoreCompat(SQLiteLeaseRepo(db_path=temp_db))
+    repo = SQLiteLeaseRepo(db_path=temp_db)
+    compat = _LeaseStoreCompat(repo)
+    yield compat
+    repo.close()
 
 
 @pytest.fixture
@@ -511,11 +505,14 @@ async def test_daytona_runtime_streams_running_output(terminal_store, lease_stor
     assert done is not None
     assert done.exit_code == 0
     assert "tick-2" in done.stdout
-    with sqlite3.connect(str(terminal_store.db_path), timeout=30) as conn:
+    conn = sqlite3.connect(str(terminal_store.db_path), timeout=30)
+    try:
         row = conn.execute(
             "SELECT COUNT(*) FROM terminal_command_chunks WHERE command_id = ?",
             (async_cmd.command_id,),
         ).fetchone()
+    finally:
+        conn.close()
     assert row is not None
     assert int(row[0]) >= 2
     await runtime.close()

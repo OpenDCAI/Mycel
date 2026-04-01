@@ -123,16 +123,12 @@ def test_list_sessions_shows_running_lease_without_chat_session() -> None:
         db.unlink(missing_ok=True)
 
 
-def test_list_sessions_includes_provider_orphan() -> None:
-    db = _temp_db()
-    try:
-        provider = FakeProvider()
-        mgr = SandboxManager(provider=provider, db_path=db)
-        orphan = provider.create_session()
-        rows = mgr.list_sessions()
-        assert any(r["instance_id"] == orphan.session_id and r["source"] == "provider_orphan" for r in rows)
-    finally:
-        db.unlink(missing_ok=True)
+def test_list_sessions_includes_provider_orphan(temp_db) -> None:
+    provider = FakeProvider()
+    mgr = SandboxManager(provider=provider, db_path=temp_db)
+    orphan = provider.create_session()
+    rows = mgr.list_sessions()
+    assert any(r["instance_id"] == orphan.session_id and r["source"] == "provider_orphan" for r in rows)
 
 
 @pytest.mark.skip(reason="pre-existing: get_sandbox requires lease.volume_id — FakeProvider needs update")
@@ -196,14 +192,10 @@ def test_enforce_idle_timeouts_continues_on_pause_failure() -> None:
         db.unlink(missing_ok=True)
 
 
-def test_storage_container_sqlite_strategy_is_non_regression() -> None:
-    db = _temp_db()
-    try:
-        container = StorageContainer(main_db_path=db, strategy="sqlite")
-        repo = container.checkpoint_repo()
-        assert isinstance(repo, SQLiteCheckpointRepo)
-    finally:
-        db.unlink(missing_ok=True)
+def test_storage_container_sqlite_strategy_is_non_regression(temp_db) -> None:
+    container = StorageContainer(main_db_path=temp_db, strategy="sqlite")
+    repo = container.checkpoint_repo()
+    assert isinstance(repo, SQLiteCheckpointRepo)
 
 
 def test_storage_container_supabase_repos_are_concrete() -> None:

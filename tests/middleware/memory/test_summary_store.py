@@ -2,31 +2,13 @@
 
 import sqlite3
 import sys
-import tempfile
 import threading
 from concurrent.futures import ThreadPoolExecutor
-from pathlib import Path
 from unittest.mock import patch
 
 import pytest
 
 from core.runtime.middleware.memory.summary_store import SummaryStore
-
-
-@pytest.fixture
-def temp_db():
-    """Create a temporary database for testing."""
-    with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:
-        db_path = Path(f.name)
-    yield db_path
-    # Cleanup
-    if db_path.exists():
-        db_path.unlink()
-    # Also cleanup WAL files
-    for suffix in ["-wal", "-shm"]:
-        wal_file = Path(str(db_path) + suffix)
-        if wal_file.exists():
-            wal_file.unlink()
 
 
 def test_save_and_get_summary(temp_db):
