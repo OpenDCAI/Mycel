@@ -28,7 +28,7 @@ export default function LineageTree({ ancestors, children, currentName, onNodeCl
             >
               {node.name}
             </button>
-            <span className="text-[10px] text-muted-foreground">by {node.publisher_username}</span>
+            <span className="text-2xs text-muted-foreground">by {node.publisher_username}</span>
           </div>
         ))}
 
@@ -36,7 +36,7 @@ export default function LineageTree({ ancestors, children, currentName, onNodeCl
         <div className="flex items-center gap-1.5" style={{ paddingLeft: `${ancestors.length * 16}px` }}>
           <ChevronRight className="w-3 h-3 text-foreground" />
           <span className="text-xs font-semibold text-foreground">{currentName}</span>
-          <span className="text-[10px] text-muted-foreground">(current)</span>
+          <span className="text-2xs text-muted-foreground">(current)</span>
         </div>
 
         {/* Children */}
@@ -49,7 +49,7 @@ export default function LineageTree({ ancestors, children, currentName, onNodeCl
             >
               {node.name}
             </button>
-            <span className="text-[10px] text-muted-foreground">by {node.publisher_username}</span>
+            <span className="text-2xs text-muted-foreground">by {node.publisher_username}</span>
           </div>
         ))}
       </div>

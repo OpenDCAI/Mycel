@@ -37,7 +37,7 @@ export default function InstallDialog({ open, onOpenChange, item }: Props) {
               <Download className="w-4 h-4 text-primary" />
             </div>
             <div>
-              <DialogTitle className="text-base">Download {item.name}</DialogTitle>
+              <DialogTitle className="text-base">下载 {item.name}</DialogTitle>
               <DialogDescription className="text-xs mt-0.5">
                 Version <span className="font-mono text-foreground">v{latestVersion}</span> by {item.publisher_username}
               </DialogDescription>
@@ -47,12 +47,12 @@ export default function InstallDialog({ open, onOpenChange, item }: Props) {
 
         <div className="py-3">
           <p className="text-sm text-muted-foreground">
-            This will save the {item.type} to your local library. You can then add it to any member from their config page.
+            这将把该 {item.type} 保存到本地库，之后可以在成员配置页中添加使用。
           </p>
           {item.tags.length > 0 && (
             <div className="flex flex-wrap gap-1.5 mt-3">
               {item.tags.map((tag) => (
-                <span key={tag} className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
+                <span key={tag} className="text-2xs px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
                   {tag}
                 </span>
               ))}
@@ -61,10 +61,10 @@ export default function InstallDialog({ open, onOpenChange, item }: Props) {
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>取消</Button>
           <Button onClick={handleDownload} disabled={downloading}>
             <Download className="w-3.5 h-3.5 mr-1.5" />
-            {downloading ? "Downloading..." : "Download to Library"}
+            {downloading ? "下载中..." : "下载到库"}
           </Button>
         </DialogFooter>
       </DialogContent>
