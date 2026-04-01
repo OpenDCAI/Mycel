@@ -228,9 +228,12 @@ def test_database_size_growth(temp_db):
     # Force WAL checkpoint to flush data to main database
     import sqlite3
 
-    with sqlite3.connect(str(temp_db)) as conn:
+    conn = sqlite3.connect(str(temp_db))
+    try:
         conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
         conn.commit()
+    finally:
+        conn.close()
 
     # Calculate total database size (main DB + WAL files)
     db_size = temp_db.stat().st_size
