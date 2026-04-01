@@ -78,7 +78,9 @@ def mock_provider():
 @pytest.fixture
 def session_manager(temp_db, mock_provider):
     """Create ChatSessionManager with temp database."""
-    return ChatSessionManager(provider=mock_provider, db_path=temp_db)
+    manager = ChatSessionManager(provider=mock_provider, db_path=temp_db)
+    yield manager
+    manager._repo.close()
 
 
 class TestChatSessionPolicy:
@@ -169,9 +171,8 @@ class TestChatSession:
 
         assert not session.is_expired()
 
-    def test_touch_updates_activity(self, terminal_store, lease_store, temp_db, mock_provider):
+    def test_touch_updates_activity(self, terminal_store, lease_store, session_manager, temp_db):
         """Test touch updates last_active_at."""
-        ChatSessionManager(provider=mock_provider, db_path=temp_db)
         terminal = terminal_from_row(terminal_store.create("term-1", "thread-1", "lease-1"), terminal_store.db_path)
         lease = lease_store.create("lease-1", "local")
         runtime = MagicMock()
@@ -198,9 +199,8 @@ class TestChatSession:
         assert session.last_active_at > old_time
 
     @pytest.mark.asyncio
-    async def test_close_calls_runtime_close(self, terminal_store, lease_store, temp_db, mock_provider):
+    async def test_close_calls_runtime_close(self, terminal_store, lease_store, session_manager, temp_db):
         """Test close calls runtime.close()."""
-        ChatSessionManager(provider=mock_provider, db_path=temp_db)
         terminal = terminal_from_row(terminal_store.create("term-1", "thread-1", "lease-1"), terminal_store.db_path)
         lease = lease_store.create("lease-1", "local")
         runtime = MagicMock()
@@ -230,9 +230,8 @@ class TestChatSession:
 class TestChatSessionManager:
     """Test ChatSessionManager CRUD operations."""
 
-    def test_ensure_tables(self, temp_db, mock_provider):
+    def test_ensure_tables(self, session_manager, temp_db):
         """Test table creation."""
-        _manager = ChatSessionManager(provider=mock_provider, db_path=temp_db)
 
         # Verify table exists
         import sqlite3
