@@ -109,7 +109,7 @@ class StateMonitor(BaseMonitor):
 
     def mark_error(self, error: Exception | None = None) -> bool:
         """标记为错误状态"""
-        self.flags.hasError = True
+        self.flags.has_error = True
         if error is not None:
             # @@@error-snapshot - Capture a small, inspectable error snapshot for debugging.
             self.last_error_type = type(error).__name__
@@ -147,11 +147,11 @@ class StateMonitor(BaseMonitor):
         return {
             "state": self.state.value,
             "flags": {
-                "streaming": self.flags.isStreaming,
-                "compacting": self.flags.isCompacting,
-                "waiting": self.flags.isWaiting,
-                "blocked": self.flags.isBlocked,
-                "error": self.flags.hasError,
+                "streaming": self.flags.is_streaming,
+                "compacting": self.flags.is_compacting,
+                "waiting": self.flags.is_waiting,
+                "blocked": self.flags.is_blocked,
+                "error": self.flags.has_error,
             },
             "error": {
                 "type": self.last_error_type,
