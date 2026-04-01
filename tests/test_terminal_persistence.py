@@ -9,6 +9,7 @@ from core.tools.command.bash.executor import BashExecutor
 from core.tools.command.zsh.executor import ZshExecutor
 
 
+@pytest.mark.skipif(shutil.which("bash") is None, reason="bash not available on this platform")
 def test_bash_env_persistence():
     """Test that environment variables persist across commands in bash."""
 
@@ -27,6 +28,7 @@ def test_bash_env_persistence():
     asyncio.run(run())
 
 
+@pytest.mark.skipif(shutil.which("bash") is None, reason="bash not available on this platform")
 def test_bash_cwd_persistence():
     """Test that working directory persists across commands in bash."""
 
