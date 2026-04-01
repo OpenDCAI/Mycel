@@ -23,6 +23,7 @@ class ToolEntry:
     search_hint: str = ""  # 3-10 word capability description for ToolSearch matching
     is_concurrency_safe: bool = False  # fail-closed: assume not safe
     is_read_only: bool = False  # fail-closed: assume write operation
+    context_schema: dict | None = None  # fields this tool needs from ToolUseContext
 
     def get_schema(self) -> dict:
         return self.schema() if callable(self.schema) else self.schema
@@ -31,6 +32,7 @@ class ToolEntry:
 TOOL_DEFAULTS: dict[str, object] = {
     "is_concurrency_safe": False,
     "is_read_only": False,
+    "context_schema": None,
 }
 
 
