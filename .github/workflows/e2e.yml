@@ -18,8 +18,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v5
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86  # v5
         with:
           enable-cache: true
       - name: Install dependencies
@@ -30,5 +30,14 @@ jobs:
           DAYTONA_SERVER_URL: ${{ secrets.DAYTONA_SERVER_URL }}
           E2B_API_KEY: ${{ secrets.E2B_API_KEY }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          LEON_E2E_BACKEND: ${{ secrets.LEON_E2E_BACKEND }}
-        run: uv run pytest tests/ -v --timeout=300
+          LEON_E2E_BACKEND: ${{ secrets.LEON_E2E_BACKEND }}  # base URL of staging backend for API-level e2e
+        run: |
+          uv run pytest \
+            tests/test_e2e_providers.py \
+            tests/test_sandbox_e2e.py \
+            tests/test_daytona_e2e.py \
+            tests/test_daytona_provider.py \
+            tests/test_e2e_backend_api.py \
+            tests/test_e2e_summary_persistence.py \
+            tests/test_p3_e2e.py \
+            -v --timeout=300
