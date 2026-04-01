@@ -44,7 +44,7 @@ export default function UpdateDialog({ open, onOpenChange, memberId, update, mem
               <RefreshCw className="w-4 h-4 text-primary" />
             </div>
             <div>
-              <DialogTitle className="text-base">Update {memberName}</DialogTitle>
+              <DialogTitle className="text-base">更新 {memberName}</DialogTitle>
               <DialogDescription className="text-xs mt-0.5">
                 <span className="font-mono text-foreground">v{update.installed_version}</span> → <span className="font-mono text-primary">v{update.latest_version}</span>
               </DialogDescription>
@@ -59,15 +59,15 @@ export default function UpdateDialog({ open, onOpenChange, memberId, update, mem
               <p className="text-sm text-muted-foreground whitespace-pre-wrap">{update.release_notes}</p>
             </div>
           )}
-          <div className="p-3 rounded-lg bg-amber-500/5 border border-amber-500/20">
-            <p className="text-xs text-amber-600">This will overwrite your local configuration. Any local modifications will be lost.</p>
+          <div className="p-3 rounded-lg bg-warning/5 border border-warning/20">
+            <p className="text-xs text-warning">This will overwrite your local configuration. Any local modifications will be lost.</p>
           </div>
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>取消</Button>
           <Button onClick={handleUpgrade} disabled={upgrading}>
-            {upgrading ? "Updating..." : "Update"}
+            {upgrading ? "更新中..." : "更新"}
           </Button>
         </DialogFooter>
       </DialogContent>

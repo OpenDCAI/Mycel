@@ -23,6 +23,7 @@ export default function MarketplaceDetailPage() {
   const clearSnapshot = useMarketplaceStore((s) => s.clearSnapshot);
   const [installOpen, setInstallOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<"overview" | "versions" | "files">("overview");
+  const tabLabels: Record<string, string> = { overview: "概览", versions: "版本", files: "文件" };
 
   useEffect(() => {
     if (id) {
@@ -56,7 +57,7 @@ export default function MarketplaceDetailPage() {
             <button onClick={() => id && fetchDetail(id)} className="text-xs underline">重试</button>
           </div>
         ) : (
-          <span className="text-sm text-muted-foreground">Item not found</span>
+          <span className="text-sm text-muted-foreground">未找到该内容</span>
         )}
       </div>
     );
@@ -68,10 +69,10 @@ export default function MarketplaceDetailPage() {
         {/* Back button */}
         <button
           onClick={() => navigate("/marketplace")}
-          className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors mb-6"
+          className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors duration-fast mb-6"
         >
           <ArrowLeft className="w-3.5 h-3.5" />
-          Back to Marketplace
+          返回 Marketplace
         </button>
 
         {/* Header */}
@@ -92,7 +93,7 @@ export default function MarketplaceDetailPage() {
           </div>
           <Button onClick={() => setInstallOpen(true)} className="shrink-0">
             <Download className="w-4 h-4 mr-2" />
-            Download
+            下载
           </Button>
         </div>
 
@@ -113,11 +114,11 @@ export default function MarketplaceDetailPage() {
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
-              className={`pb-2 text-sm font-medium capitalize transition-colors duration-fast border-b-2 ${
+              className={`pb-2 text-sm font-medium transition-colors duration-fast border-b-2 ${
                 activeTab === tab ? "border-primary text-foreground" : "border-transparent text-muted-foreground hover:text-foreground"
               }`}
             >
-              {tab === "files" ? "文件" : tab}
+              {tabLabels[tab] ?? tab}
             </button>
           ))}
         </div>
@@ -136,7 +137,7 @@ export default function MarketplaceDetailPage() {
             {/* Latest version info */}
             {detail.versions.length > 0 && (
               <div className="surface-card p-4 space-y-2">
-                <h3 className="text-sm font-medium text-foreground">Latest Version</h3>
+                <h3 className="text-sm font-medium text-foreground">最新版本</h3>
                 <p className="text-xs font-mono text-primary">v{detail.versions[0].version}</p>
                 {detail.versions[0].release_notes && (
                   <p className="text-sm text-muted-foreground whitespace-pre-wrap">{detail.versions[0].release_notes}</p>
@@ -152,7 +153,7 @@ export default function MarketplaceDetailPage() {
               <div key={v.id} className="surface-card p-4">
                 <div className="flex items-center justify-between mb-1">
                   <span className="text-sm font-mono font-medium text-foreground">v{v.version}</span>
-                  <span className="text-[11px] text-muted-foreground">{new Date(v.created_at).toLocaleDateString()}</span>
+                  <span className="text-2xs text-muted-foreground">{new Date(v.created_at).toLocaleDateString()}</span>
                 </div>
                 {v.release_notes && (
                   <p className="text-xs text-muted-foreground whitespace-pre-wrap">{v.release_notes}</p>
@@ -160,7 +161,7 @@ export default function MarketplaceDetailPage() {
               </div>
             ))}
             {detail.versions.length === 0 && (
-              <p className="text-sm text-muted-foreground text-center py-8">No versions published yet</p>
+              <p className="text-sm text-muted-foreground text-center py-8">暂无已发布的版本</p>
             )}
           </div>
         )}

@@ -107,7 +107,7 @@ export default function MarketplacePage() {
                 <button
                   key={t.id}
                   onClick={() => setTab(t.id)}
-                  className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm transition-all ${
+                  className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm transition-all duration-fast ${
                     isActive
                       ? "bg-primary/5 text-foreground border border-primary/15"
                       : "text-muted-foreground hover:bg-muted hover:text-foreground border border-transparent"
@@ -116,7 +116,7 @@ export default function MarketplacePage() {
                   <t.icon className={`w-4 h-4 ${isActive ? "text-primary" : ""}`} />
                   <span>{t.label}</span>
                   {t.id === "installed" && updates.length > 0 && (
-                    <span className="ml-auto text-[10px] px-1.5 py-0.5 rounded-full bg-primary text-primary-foreground font-medium">
+                    <span className="ml-auto text-2xs px-1.5 py-0.5 rounded-full bg-primary text-primary-foreground font-medium">
                       {updates.length}
                     </span>
                   )}
@@ -140,7 +140,7 @@ export default function MarketplacePage() {
                     <button
                       key={t.id}
                       onClick={() => setTab(t.id)}
-                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs whitespace-nowrap shrink-0 transition-colors ${
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs whitespace-nowrap shrink-0 transition-colors duration-fast ${
                         isActive ? "bg-primary/10 text-primary font-medium" : "text-muted-foreground hover:text-foreground hover:bg-muted"
                       }`}
                     >
@@ -159,10 +159,10 @@ export default function MarketplacePage() {
           {tab === "installed" && (
             <button
               onClick={handleCheckUpdates}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs text-muted-foreground hover:text-foreground hover:bg-muted transition-colors duration-fast"
             >
               <RefreshCw className="w-3.5 h-3.5" />
-              Check Updates
+              检查更新
             </button>
           )}
         </div>
@@ -177,8 +177,8 @@ export default function MarketplacePage() {
                   <input
                     value={searchInput}
                     onChange={(e) => setSearchInput(e.target.value)}
-                    placeholder="Search marketplace..."
-                    className="w-full pl-9 pr-3 py-2 rounded-lg bg-card border border-border text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary/40 transition-colors"
+                    placeholder="搜索 Marketplace..."
+                    className="w-full pl-9 pr-3 py-2 rounded-lg bg-card border border-border text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary/40 transition-colors duration-fast"
                   />
                 </div>
 
@@ -189,7 +189,7 @@ export default function MarketplacePage() {
                       <button
                         key={f.id}
                         onClick={() => handleTypeFilter(f.id)}
-                        className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                        className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors duration-fast ${
                           (f.id === "all" && !filters.type) || filters.type === f.id
                             ? "bg-primary/10 text-primary"
                             : "text-muted-foreground hover:text-foreground hover:bg-muted"
@@ -204,7 +204,7 @@ export default function MarketplacePage() {
                       <button
                         key={s.id}
                         onClick={() => setFilter("sort", s.id)}
-                        className={`p-1.5 rounded-md transition-colors ${
+                        className={`p-1.5 rounded-md transition-colors duration-fast ${
                           filters.sort === s.id
                             ? "text-primary bg-primary/10"
                             : "text-muted-foreground hover:text-foreground hover:bg-muted"
@@ -243,7 +243,7 @@ export default function MarketplacePage() {
                     </div>
                     {items.length === 0 && !loading && (
                       <div className="text-center py-12 text-sm text-muted-foreground">
-                        {filters.q ? "No results found" : "No items in marketplace yet"}
+                        {filters.q ? "未找到结果" : "Marketplace 暂无内容"}
                       </div>
                     )}
                     {/* Pagination */}
@@ -252,9 +252,9 @@ export default function MarketplacePage() {
                         <button
                           disabled={filters.page <= 1}
                           onClick={() => setFilter("page", filters.page - 1)}
-                          className="px-3 py-1.5 rounded-lg text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted disabled:opacity-50 transition-colors"
+                          className="px-3 py-1.5 rounded-lg text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted disabled:opacity-50 transition-colors duration-fast"
                         >
-                          Previous
+                          上一页
                         </button>
                         <span className="text-xs text-muted-foreground">
                           Page {filters.page} of {Math.ceil(total / 20)}
@@ -262,9 +262,9 @@ export default function MarketplacePage() {
                         <button
                           disabled={filters.page >= Math.ceil(total / 20)}
                           onClick={() => setFilter("page", filters.page + 1)}
-                          className="px-3 py-1.5 rounded-lg text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted disabled:opacity-50 transition-colors"
+                          className="px-3 py-1.5 rounded-lg text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted disabled:opacity-50 transition-colors duration-fast"
                         >
-                          Next
+                          下一页
                         </button>
                       </div>
                     )}
@@ -281,8 +281,8 @@ export default function MarketplacePage() {
                   <input
                     value={installedSearch}
                     onChange={(e) => setInstalledSearch(e.target.value)}
-                    placeholder="Search installed..."
-                    className="w-full pl-9 pr-3 py-2 rounded-lg bg-card border border-border text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary/40 transition-colors"
+                    placeholder="搜索已安装..."
+                    className="w-full pl-9 pr-3 py-2 rounded-lg bg-card border border-border text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary/40 transition-colors duration-fast"
                   />
                 </div>
 
@@ -293,13 +293,13 @@ export default function MarketplacePage() {
                     return (
                       <div key={member.id} className="surface-interactive p-4 cursor-pointer group relative" onClick={() => navigate(`/members/${member.id}`)}>
                         <div className="flex items-start gap-3">
-                          <div className="w-9 h-9 rounded-lg bg-primary/8 flex items-center justify-center shrink-0">
+                          <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
                             <Package className="w-4 h-4 text-primary" />
                           </div>
                           <div className="min-w-0 flex-1">
-                            <h4 className="text-sm font-medium text-foreground group-hover:text-primary transition-colors">{member.name}</h4>
+                            <h4 className="text-sm font-medium text-foreground group-hover:text-primary transition-colors duration-fast">{member.name}</h4>
                             <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{member.description}</p>
-                            <p className="text-[11px] text-muted-foreground mt-2 font-mono">v{member.version}</p>
+                            <p className="text-2xs text-muted-foreground mt-2 font-mono">v{member.version}</p>
                           </div>
                         </div>
                         {update && (
@@ -309,9 +309,9 @@ export default function MarketplacePage() {
                               setUpdateTarget({ member, update });
                               setUpdateDialogOpen(true);
                             }}
-                            className="absolute top-2 right-2 text-[10px] px-2 py-0.5 rounded-full bg-primary/10 text-primary font-medium hover:bg-primary/20 transition-colors"
+                            className="absolute top-2 right-2 text-2xs px-2 py-0.5 rounded-full bg-primary/10 text-primary font-medium hover:bg-primary/20 transition-colors duration-fast"
                           >
-                            Update to v{update.latest_version}
+                            更新到 v{update.latest_version}
                           </button>
                         )}
                       </div>
@@ -319,7 +319,7 @@ export default function MarketplacePage() {
                   })}
                 </div>
                 {filteredInstalled.length === 0 && (
-                  <div className="text-center py-12 text-sm text-muted-foreground">No installed members</div>
+                  <div className="text-center py-12 text-sm text-muted-foreground">暂无已安装的成员</div>
                 )}
               </>
             )}
