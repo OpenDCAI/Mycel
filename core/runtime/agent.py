@@ -18,6 +18,8 @@ Tools are registered via Services into ToolRegistry:
 All paths must be absolute. Full security mechanisms and audit logging.
 """
 
+import concurrent.futures
+import functools
 import os
 import threading
 from pathlib import Path
@@ -84,6 +86,20 @@ from storage.container import StorageContainer  # noqa: E402
 
 # @@@langchain-anthropic-streaming-usage-regression
 apply_usage_patches()
+
+
+def _lookup_wechat_conn(eid: str):
+    """Lazy WeChat connection lookup by owner entity ID.
+
+    Called at tool invocation time — app.state may not be populated at registration.
+    """
+    try:
+        from backend.web.main import app  # noqa: PLC0415
+
+        registry = getattr(app.state, "wechat_registry", None)
+        return registry.get(eid) if registry else None
+    except Exception:
+        return None
 
 
 class LeonAgent:
@@ -215,11 +231,8 @@ class LeonAgent:
         # Initialize checkpointer and MCP tools
         self._aiosqlite_conn, mcp_tools = self._init_async_components()
 
-        # If in async context, mark as needing async initialization
-        self._needs_async_init = self._aiosqlite_conn is None
-
-        # Set checkpointer to None if in async context (will be initialized later)
-        if self._needs_async_init:
+        # Set checkpointer to None if in async context (will be set by ainit())
+        if self._aiosqlite_conn is None:
             self.checkpointer = None
 
         # Initialize ToolRegistry and Services (new architecture)
@@ -266,7 +279,7 @@ class LeonAgent:
             tools=mcp_tools,
             system_prompt=SystemMessage(content=[{"type": "text", "text": self.system_prompt}]),
             middleware=middleware,
-            checkpointer=self.checkpointer if not self._needs_async_init else None,
+            checkpointer=self.checkpointer,
         )
 
         # Get runtime from MonitorMiddleware
@@ -283,11 +296,11 @@ class LeonAgent:
             print("[LeonAgent] Initialized successfully")
             print(f"[LeonAgent] Workspace: {self.workspace_root}")
             print(f"[LeonAgent] Audit log: {self.enable_audit_log}")
-            if self._needs_async_init:
+            if self.checkpointer is None:
                 print("[LeonAgent] Note: Async components need initialization via ainit()")
 
-        # Mark agent as ready (if not needing async init)
-        if not self._needs_async_init:
+        # Mark agent as ready (checkpointer is None when async init still pending)
+        if self.checkpointer is not None:
             self._monitor_middleware.mark_ready()
 
     async def ainit(self):
@@ -297,7 +310,7 @@ class LeonAgent:
             agent = LeonAgent(sandbox=sandbox)
             await agent.ainit()
         """
-        if not self._needs_async_init:
+        if self.checkpointer is not None:
             return  # Already initialized
 
         # Initialize async components
@@ -307,8 +320,6 @@ class LeonAgent:
         # Update agent with checkpointer
         self.agent.checkpointer = self.checkpointer
 
-        # Mark as initialized
-        self._needs_async_init = False
         self._monitor_middleware.mark_ready()
 
         if self.verbose:
@@ -712,11 +723,21 @@ class LeonAgent:
             print(f"[LeonAgent] Observation updated: active={self._observation_config.active}")
 
     def close(self):
-        """Clean up resources."""
-        self._cleanup_sandbox()
-        self._mark_terminated()
-        self._cleanup_mcp_client()
-        self._cleanup_sqlite_connection()
+        """Clean up resources.
+
+        Each step is independently try/except-ed so one failure does not
+        prevent the remaining resources from being released.
+        """
+        for step_name, step_fn in [
+            ("sandbox", self._cleanup_sandbox),
+            ("monitor", self._mark_terminated),
+            ("MCP client", self._cleanup_mcp_client),
+            ("SQLite connection", self._cleanup_sqlite_connection),
+        ]:
+            try:
+                step_fn()
+            except Exception as e:
+                print(f"[LeonAgent] {step_name} cleanup error: {e}")
 
     def _cleanup_sandbox(self) -> None:
         """Clean up sandbox resources."""
@@ -731,32 +752,29 @@ class LeonAgent:
         if hasattr(self, "_monitor_middleware"):
             self._monitor_middleware.mark_terminated()
 
+    _CLEANUP_TIMEOUT: float = 10.0  # seconds; prevents hanging on stuck I/O
+
     @staticmethod
     def _run_async_cleanup(coro_factory, label: str) -> None:
         import asyncio
 
         try:
-            running_loop = asyncio.get_running_loop()
+            asyncio.get_running_loop()
         except RuntimeError:
-            running_loop = None
-
-        if running_loop is None:
             asyncio.run(coro_factory())
             return
 
-        error: list[Exception] = []
-
-        def _runner() -> None:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+            future = pool.submit(asyncio.run, coro_factory())
             try:
-                asyncio.run(coro_factory())
+                future.result(timeout=LeonAgent._CLEANUP_TIMEOUT)
+            except concurrent.futures.TimeoutError:
+                raise RuntimeError(
+                    f"{label} cleanup timed out after {LeonAgent._CLEANUP_TIMEOUT}s — "
+                    f"possible stuck I/O; resource abandoned to prevent hang"
+                )
             except Exception as exc:
-                error.append(exc)
-
-        thread = threading.Thread(target=_runner, daemon=True)
-        thread.start()
-        thread.join()
-        if error:
-            raise RuntimeError(f"{label} cleanup failed: {error[0]}") from error[0]
+                raise RuntimeError(f"{label} cleanup failed: {exc}") from exc
 
     def _cleanup_mcp_client(self) -> None:
         """Clean up MCP client."""
@@ -770,29 +788,15 @@ class LeonAgent:
         self._mcp_client = None
 
     def _cleanup_sqlite_connection(self) -> None:
-        """Clean up SQLite connection.
-
-        Properly closes aiosqlite connection using asyncio.run() to avoid
-        hanging on process exit.
-        """
+        """Clean up SQLite connection."""
         if not hasattr(self, "_aiosqlite_conn") or not self._aiosqlite_conn:
             return
-
+        conn = self._aiosqlite_conn
+        self._aiosqlite_conn = None
         try:
-            import asyncio
-
-            # Close the connection asynchronously
-            async def _close():
-                if self._aiosqlite_conn:
-                    await self._aiosqlite_conn.close()
-
-            # Use asyncio.run() to properly close the connection
-            asyncio.run(_close())
+            self._run_async_cleanup(conn.close, "SQLite connection")
         except Exception:
-            # Ignore errors during cleanup
             pass
-        finally:
-            self._aiosqlite_conn = None
 
     def __del__(self):
         self.close()
@@ -1049,19 +1053,9 @@ class LeonAgent:
             try:
                 from core.tools.wechat.service import WeChatToolService
 
-                def _get_wechat_conn(eid=owner_eid):
-                    """Lazy lookup — returns None if registry not on app.state yet."""
-                    try:
-                        from backend.web.main import app
-
-                        registry = getattr(app.state, "wechat_registry", None)
-                        return registry.get(eid) if registry else None
-                    except Exception:
-                        return None
-
                 self._wechat_tool_service = WeChatToolService(
                     registry=self._tool_registry,
-                    connection_fn=_get_wechat_conn,
+                    connection_fn=functools.partial(_lookup_wechat_conn, owner_eid),
                 )
             except ImportError:
                 self._wechat_tool_service = None
@@ -1170,154 +1164,47 @@ class LeonAgent:
         return prompt
 
     def _build_context_section(self) -> str:
-        """Build the context section based on sandbox mode."""
-        if self._sandbox.name != "local":
-            env_label = self._sandbox.env_label
-            working_dir = self._sandbox.working_dir
-            if self._sandbox.name == "docker":
-                mode_label = "Sandbox (isolated local container)"
-            else:
-                mode_label = "Sandbox (isolated cloud environment)"
-            return f"""- Environment: {env_label}
-- Working Directory: {working_dir}
-- Mode: {mode_label}"""
-        else:
-            import platform
+        from core.runtime.prompts import build_context_section
 
-            os_name = platform.system()
-            if os_name == "Windows":
-                shell_name = "powershell"
-            else:
-                shell_name = os.environ.get("SHELL", "/bin/bash").split("/")[-1]
-            return f"""- Workspace: `{self.workspace_root}`
-- OS: {os_name}
-- Shell: {shell_name}
-- Mode: Local"""
-
-    def _build_rules_section(self) -> str:
-        """Build shared rules section for all modes."""
         is_sandbox = self._sandbox.name != "local"
-        working_dir = self._sandbox.working_dir if is_sandbox else self.workspace_root
-
-        rules = []
-
-        # Rule 1: Environment-specific
         if is_sandbox:
-            if self._sandbox.name == "docker":
-                location_rule = "All file and command operations run in a local Docker container, NOT on the user's host filesystem."
-            else:
-                location_rule = "All file and command operations run in a remote sandbox, NOT on the user's local machine."
-            rules.append(f"1. **Sandbox Environment**: {location_rule} The sandbox is an isolated Linux environment.")
-        else:
-            rules.append("1. **Workspace**: File operations are restricted to: " + str(self.workspace_root))
+            return build_context_section(
+                sandbox_name=self._sandbox.name,
+                sandbox_env_label=self._sandbox.env_label,
+                sandbox_working_dir=self._sandbox.working_dir,
+            )
+        import platform
 
-        # Rule 2: Absolute paths
-        rules.append(f"""2. **Absolute Paths**: All file paths must be absolute paths.
-   - ✅ Correct: `{working_dir}/project/test.py`
-   - ❌ Wrong: `test.py` or `./test.py`""")
-
-        # Rule 3: Security
-        if is_sandbox:
-            rules.append("3. **Security**: The sandbox is isolated. You can install packages, run any commands, and modify files freely.")
-        else:
-            rules.append("3. **Security**: Dangerous commands are blocked. All operations are logged.")
-
-        # Rule 4: Tool priority
-        rules.append(
-            """4. **Tool Priority**: When a built-in tool and an MCP tool (`mcp__*`) have the same functionality, use the built-in tool."""
+        os_name = platform.system()
+        shell_name = "powershell" if os_name == "Windows" else os.environ.get("SHELL", "/bin/bash").split("/")[-1]
+        return build_context_section(
+            sandbox_name="local",
+            workspace_root=str(self.workspace_root),
+            os_name=os_name,
+            shell_name=shell_name,
         )
 
-        # Rule 5: Dedicated tools over shell
-        rules.append("""5. **Use Dedicated Tools Instead of Shell Commands**: Do NOT use `Bash` for tasks that have dedicated tools:
-   - File search → use `Grep` (NOT `rg`, `grep`, or `find` via Bash)
-   - File listing → use `Glob` (NOT `find` or `ls` via Bash)
-   - File reading → use `Read` (NOT `cat`, `head`, `tail` via Bash)
-   - File editing → use `Edit` (NOT `sed` or `awk` via Bash)
-   - Reserve `Bash` for: git, package managers, build tools, tests, and other system operations.""")
+    def _build_rules_section(self) -> str:
+        from core.runtime.prompts import build_rules_section
 
-        # Rule 6: Background task description
-        rules.append("""6. **Background Task Description**: When using `Bash` or `Agent` with `run_in_background: true`, always include a clear `description` parameter.  # noqa: E501
-   - The description is shown to the user in the background task indicator.
-   - Keep it concise (5–10 words), action-oriented, e.g. "Run test suite", "Analyze API codebase".
-   - Without a description, the raw command or agent name is shown, which is hard to read.""")
-
-        return "\n\n".join(rules)
+        is_sandbox = self._sandbox.name != "local"
+        working_dir = self._sandbox.working_dir if is_sandbox else str(self.workspace_root)
+        return build_rules_section(
+            is_sandbox=is_sandbox,
+            sandbox_name=self._sandbox.name,
+            working_dir=working_dir,
+            workspace_root=str(self.workspace_root),
+        )
 
     def _build_base_prompt(self) -> str:
-        """Build the base system prompt (context + rules), shared by all modes."""
-        context = self._build_context_section()
-        rules = self._build_rules_section()
+        from core.runtime.prompts import build_base_prompt
 
-        return f"""You are a highly capable AI assistant with access to file and system tools.
-
-**Context:**
-{context}
-
-**Important Rules:**
-
-{rules}
-"""
+        return build_base_prompt(self._build_context_section(), self._build_rules_section())
 
     def _build_common_prompt_sections(self) -> str:
-        """Build common prompt sections for both sandbox and local modes."""
-        prompt = """
-**Agent Tool (Sub-agent Orchestration):**
+        from core.runtime.prompts import build_common_sections
 
-Use the Agent tool to launch specialized sub-agents for complex tasks:
-- `explore`: Read-only codebase exploration. Use for: finding files, searching code, understanding implementations.
-- `plan`: Design implementation plans. Use for: architecture decisions, multi-step planning.
-- `bash`: Execute shell commands. Use for: git operations, running tests, system commands.
-- `general`: Full tool access. Use for: independent multi-step tasks requiring file modifications.
-
-When to use Agent:
-- Open-ended searches that may require multiple rounds of exploration
-- Tasks that can run independently while you continue other work
-- Complex operations that benefit from specialized focus
-
-When NOT to use Agent:
-- Simple file reads (use Read directly)
-- Specific searches with known patterns (use Grep directly)
-- Quick operations that don't need isolation
-
-**Todo Tools (Task Management):**
-
-Use Todo tools to track progress on complex, multi-step tasks:
-- `TaskCreate`: Create a new task with subject, description, and activeForm (present continuous for spinner)
-- `TaskList`: View all tasks and their status
-- `TaskGet`: Get full details of a specific task
-- `TaskUpdate`: Update task status (pending → in_progress → completed) or details
-
-When to use Todo:
-- Complex tasks with 3+ distinct steps
-- When the user provides multiple tasks to complete
-- To show progress on non-trivial work
-
-When NOT to use Todo:
-- Single, straightforward tasks
-- Trivial operations that don't need tracking
-"""
-
-        # Add Skills section if skills are enabled
-        skills_enabled = self.config.skills.enabled and self.config.skills.paths
-
-        if skills_enabled:
-            prompt += """
-**Skills (Specialized Knowledge):**
-
-Use the `load_skill` tool to access specialized domain knowledge and workflows:
-- Skills provide focused instructions for specific tasks (e.g., TDD, debugging, git workflows)
-- Call `load_skill(skill_name)` to load a skill's content into context
-- Available skills are listed in the load_skill tool description
-
-When to use load_skill:
-- When you need specialized guidance for a specific workflow
-- To access domain-specific best practices
-- When the user mentions a skill by name (e.g., "use TDD skill")
-
-Progressive disclosure: Skills are loaded on-demand to save tokens.
-"""
-
-        return prompt
+        return build_common_sections(bool(self.config.skills.enabled and self.config.skills.paths))
 
     def invoke(self, message: str, thread_id: str = "default") -> dict:
         """Invoke agent with a message (sync version).

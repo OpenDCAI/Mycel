@@ -7,6 +7,7 @@ non-sender agent entity.
 
 from __future__ import annotations
 
+import functools
 import logging
 from typing import Any
 
@@ -41,16 +42,18 @@ def make_chat_delivery_fn(app: Any):
             loop,
         )
 
-        def _on_done(f):
-            exc = f.exception()
-            if exc:
-                logger.error("[delivery] async delivery failed for %s: %s", entity.id, exc, exc_info=exc)
-            else:
-                logger.info("[delivery] async delivery completed for %s", entity.id)
-
-        future.add_done_callback(_on_done)
+        future.add_done_callback(functools.partial(_log_delivery_result, entity.id))
 
     return _deliver
+
+
+def _log_delivery_result(entity_id: str, f: Any) -> None:
+    """Done-callback for async delivery futures."""
+    exc = f.exception()
+    if exc:
+        logger.error("[delivery] async delivery failed for %s: %s", entity_id, exc, exc_info=exc)
+    else:
+        logger.info("[delivery] async delivery completed for %s", entity_id)
 
 
 async def _async_deliver(

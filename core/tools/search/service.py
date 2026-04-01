@@ -111,6 +111,9 @@ class SearchService:
                 },
                 handler=self._grep,
                 source="SearchService",
+                search_hint="search file contents regex pattern matching ripgrep",
+                is_read_only=True,
+                is_concurrency_safe=True,
             )
         )
 
@@ -138,6 +141,9 @@ class SearchService:
                 },
                 handler=self._glob,
                 source="SearchService",
+                search_hint="find files by name glob pattern matching",
+                is_read_only=True,
+                is_concurrency_safe=True,
             )
         )
 

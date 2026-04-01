@@ -316,6 +316,11 @@ class AgentService:
 
         agent = None
         try:
+            # Sub-agent context trimming: each spawn creates a fresh LeonAgent
+            # with its own _build_system_prompt(). No CLAUDE.md content or
+            # gitStatus is injected into the prompt pipeline (core/runtime/prompts
+            # has no such injection). Therefore explore/plan/bash sub-agents
+            # already run lightweight — no extra trimming is needed.
             agent = create_leon_agent(
                 model_name=self._model_name,
                 workspace_root=self._workspace_root,

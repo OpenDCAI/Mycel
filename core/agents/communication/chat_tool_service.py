@@ -152,33 +152,158 @@ class ChatToolService:
                 before=parsed["before"],
             )
 
-    def _register_chats(self, registry: ToolRegistry) -> None:
+    def _handle_chats(self, unread_only: bool = False, limit: int = 20) -> str:
         eid = self._entity_id
+        chats = self._chat_service.list_chats_for_entity(eid)
+        if unread_only:
+            chats = [c for c in chats if c.get("unread_count", 0) > 0]
+        chats = chats[:limit]
+        if not chats:
+            return "No chats found."
+        lines = []
+        for c in chats:
+            others = [e for e in c.get("entities", []) if e["id"] != eid]
+            name = ", ".join(e["name"] for e in others) or "Unknown"
+            unread = c.get("unread_count", 0)
+            last = c.get("last_message")
+            last_preview = f' — last: "{last["content"][:50]}"' if last else ""
+            unread_str = f" ({unread} unread)" if unread > 0 else ""
+            is_group = len(others) >= 2
+            if is_group:
+                id_str = f" [chat_id: {c['id']}]"
+            else:
+                other_id = others[0]["id"] if others else ""
+                id_str = f" [entity_id: {other_id}]" if other_id else ""
+            lines.append(f"- {name}{id_str}{unread_str}{last_preview}")
+        return "\n".join(lines)
 
-        def handle(unread_only: bool = False, limit: int = 20) -> str:
-            chats = self._chat_service.list_chats_for_entity(eid)
-            if unread_only:
-                chats = [c for c in chats if c.get("unread_count", 0) > 0]
-            chats = chats[:limit]
-            if not chats:
-                return "No chats found."
-            lines = []
-            for c in chats:
-                others = [e for e in c.get("entities", []) if e["id"] != eid]
-                name = ", ".join(e["name"] for e in others) or "Unknown"
-                unread = c.get("unread_count", 0)
-                last = c.get("last_message")
-                last_preview = f' — last: "{last["content"][:50]}"' if last else ""
-                unread_str = f" ({unread} unread)" if unread > 0 else ""
-                is_group = len(others) >= 2
-                if is_group:
-                    id_str = f" [chat_id: {c['id']}]"
-                else:
-                    other_id = others[0]["id"] if others else ""
-                    id_str = f" [entity_id: {other_id}]" if other_id else ""
-                lines.append(f"- {name}{id_str}{unread_str}{last_preview}")
-            return "\n".join(lines)
+    def _handle_chat_read(self, entity_id: str | None = None, chat_id: str | None = None, range: str | None = None) -> str:
+        eid = self._entity_id
+        if chat_id:
+            pass  # use chat_id directly
+        elif entity_id:
+            chat_id = self._chat_entities.find_chat_between(eid, entity_id)
+            if not chat_id:
+                target = self._entities.get_by_id(entity_id)
+                name = target.name if target else entity_id
+                return f"No chat history with {name}."
+        else:
+            return "Provide entity_id or chat_id."
 
+        # @@@range-dispatch — if range is provided, use it regardless of unread state.
+        if range:
+            try:
+                parsed = _parse_range(range)
+            except ValueError as e:
+                return str(e)
+            msgs = self._fetch_by_range(chat_id, parsed)
+            if not msgs:
+                return "No messages in that range."
+            # @@@range-marks-read — WORKAROUND: unblock chat_send by pushing
+            # last_read_at to now. This marks ALL messages as read, not just
+            # the requested range. Proper fix needs per-message read tracking
+            # instead of the current single-timestamp waterline model.
+            self._chat_entities.update_last_read(chat_id, eid, time.time())
+            return self._format_msgs(msgs, eid)
+
+        # @@@read-unread-only — default to unread messages only.
+        msgs = self._messages.list_unread(chat_id, eid)
+        if msgs:
+            self._chat_entities.update_last_read(chat_id, eid, time.time())
+            return self._format_msgs(msgs, eid)
+
+        # Nothing unread — prompt agent to use range parameter
+        return (
+            "No unread messages. To read history, call again with range:\n"
+            "  range='-10:-1'  (last 10 messages)\n"
+            "  range='-5:'     (last 5 messages)\n"
+            "  range='-1h:'    (last hour)\n"
+            "  range='-2d:-1d' (yesterday)\n"
+            "  range='2026-03-20:2026-03-22' (date range)"
+        )
+
+    def _handle_chat_send(
+        self,
+        content: str,
+        entity_id: str | None = None,
+        chat_id: str | None = None,
+        signal: str = "open",
+        mentions: list[str] | None = None,
+    ) -> str:
+        eid = self._entity_id
+        # @@@read-before-write — resolve chat_id, then check unread
+        resolved_chat_id = chat_id
+        target_name = "chat"
+
+        if chat_id:
+            if not self._chat_entities.is_entity_in_chat(chat_id, eid):
+                raise RuntimeError(f"You are not a member of chat {chat_id}")
+        elif entity_id:
+            if entity_id == eid:
+                raise RuntimeError("Cannot send a message to yourself.")
+            target = self._entities.get_by_id(entity_id)
+            if not target:
+                raise RuntimeError(f"Entity not found: {entity_id}")
+            target_name = target.name
+            resolved_chat_id = self._chat_entities.find_chat_between(eid, entity_id)
+            if not resolved_chat_id:
+                # New chat — no unread possible, create and send
+                chat = self._chat_service.find_or_create_chat([eid, entity_id])
+                resolved_chat_id = chat.id
+        else:
+            raise RuntimeError("Provide entity_id (for 1:1) or chat_id (for group)")
+
+        # @@@read-before-write-gate — reject if unread messages exist
+        unread = self._messages.count_unread(resolved_chat_id, eid)
+        if unread > 0:
+            raise RuntimeError(f"You have {unread} unread message(s). Call chat_read(chat_id='{resolved_chat_id}') first.")
+
+        # Append signal to content (for chat_read) + pass through chain (for notification)
+        effective_signal = signal if signal in ("yield", "close") else None
+        if effective_signal:
+            content = f"{content}\n[signal: {effective_signal}]"
+
+        self._chat_service.send_message(resolved_chat_id, eid, content, mentions, signal=effective_signal)
+        return f"Message sent to {target_name}."
+
+    def _handle_chat_search(self, query: str, entity_id: str | None = None) -> str:
+        eid = self._entity_id
+        chat_id = None
+        if entity_id:
+            chat_id = self._chat_entities.find_chat_between(eid, entity_id)
+        results = self._messages.search(query, chat_id=chat_id, limit=20)
+        if not results:
+            return f"No messages matching '{query}'."
+        lines = []
+        for m in results:
+            sender = self._entities.get_by_id(m.sender_entity_id)
+            name = sender.name if sender else "unknown"
+            lines.append(f"[{name}] {m.content[:100]}")
+        return "\n".join(lines)
+
+    def _handle_directory(self, search: str | None = None, type: str | None = None) -> str:
+        eid = self._entity_id
+        all_entities = self._entities.list_all()
+        entities = [e for e in all_entities if e.id != eid]
+        if type:
+            entities = [e for e in entities if e.type == type]
+        if search:
+            q = search.lower()
+            entities = [e for e in entities if q in e.name.lower()]
+        if not entities:
+            return "No entities found."
+        lines = []
+        for e in entities:
+            member = self._members.get_by_id(e.member_id)
+            owner_info = ""
+            if e.type == "agent" and member and member.owner_id:
+                owner_member = self._members.get_by_id(member.owner_id)
+                if owner_member:
+                    owner_info = f" (owner: {owner_member.name})"
+            lines.append(f"- {e.name} [{e.type}] entity_id={e.id}{owner_info}")
+        return "\n".join(lines)
+
+    def _register_chats(self, registry: ToolRegistry) -> None:
         registry.register(
             ToolEntry(
                 name="chats",
@@ -198,58 +323,12 @@ class ChatToolService:
                         },
                     },
                 },
-                handler=handle,
+                handler=self._handle_chats,
                 source="chat",
             )
         )
 
     def _register_chat_read(self, registry: ToolRegistry) -> None:
-        eid = self._entity_id
-
-        def handle(entity_id: str | None = None, chat_id: str | None = None, range: str | None = None) -> str:
-            if chat_id:
-                pass  # use chat_id directly
-            elif entity_id:
-                chat_id = self._chat_entities.find_chat_between(eid, entity_id)
-                if not chat_id:
-                    target = self._entities.get_by_id(entity_id)
-                    name = target.name if target else entity_id
-                    return f"No chat history with {name}."
-            else:
-                return "Provide entity_id or chat_id."
-
-            # @@@range-dispatch — if range is provided, use it regardless of unread state.
-            if range:
-                try:
-                    parsed = _parse_range(range)
-                except ValueError as e:
-                    return str(e)
-                msgs = self._fetch_by_range(chat_id, parsed)
-                if not msgs:
-                    return "No messages in that range."
-                # @@@range-marks-read — WORKAROUND: unblock chat_send by pushing
-                # last_read_at to now. This marks ALL messages as read, not just
-                # the requested range. Proper fix needs per-message read tracking
-                # instead of the current single-timestamp waterline model.
-                self._chat_entities.update_last_read(chat_id, eid, time.time())
-                return self._format_msgs(msgs, eid)
-
-            # @@@read-unread-only — default to unread messages only.
-            msgs = self._messages.list_unread(chat_id, eid)
-            if msgs:
-                self._chat_entities.update_last_read(chat_id, eid, time.time())
-                return self._format_msgs(msgs, eid)
-
-            # Nothing unread — prompt agent to use range parameter
-            return (
-                "No unread messages. To read history, call again with range:\n"
-                "  range='-10:-1'  (last 10 messages)\n"
-                "  range='-5:'     (last 5 messages)\n"
-                "  range='-1h:'    (last hour)\n"
-                "  range='-2d:-1d' (yesterday)\n"
-                "  range='2026-03-20:2026-03-22' (date range)"
-            )
-
         registry.register(
             ToolEntry(
                 name="chat_read",
@@ -277,56 +356,12 @@ class ChatToolService:
                         },
                     },
                 },
-                handler=handle,
+                handler=self._handle_chat_read,
                 source="chat",
             )
         )
 
     def _register_chat_send(self, registry: ToolRegistry) -> None:
-        eid = self._entity_id
-
-        def handle(
-            content: str,
-            entity_id: str | None = None,
-            chat_id: str | None = None,
-            signal: str = "open",
-            mentions: list[str] | None = None,
-        ) -> str:
-            # @@@read-before-write — resolve chat_id, then check unread
-            resolved_chat_id = chat_id
-            target_name = "chat"
-
-            if chat_id:
-                if not self._chat_entities.is_entity_in_chat(chat_id, eid):
-                    raise RuntimeError(f"You are not a member of chat {chat_id}")
-            elif entity_id:
-                if entity_id == eid:
-                    raise RuntimeError("Cannot send a message to yourself.")
-                target = self._entities.get_by_id(entity_id)
-                if not target:
-                    raise RuntimeError(f"Entity not found: {entity_id}")
-                target_name = target.name
-                resolved_chat_id = self._chat_entities.find_chat_between(eid, entity_id)
-                if not resolved_chat_id:
-                    # New chat — no unread possible, create and send
-                    chat = self._chat_service.find_or_create_chat([eid, entity_id])
-                    resolved_chat_id = chat.id
-            else:
-                raise RuntimeError("Provide entity_id (for 1:1) or chat_id (for group)")
-
-            # @@@read-before-write-gate — reject if unread messages exist
-            unread = self._messages.count_unread(resolved_chat_id, eid)
-            if unread > 0:
-                raise RuntimeError(f"You have {unread} unread message(s). Call chat_read(chat_id='{resolved_chat_id}') first.")
-
-            # Append signal to content (for chat_read) + pass through chain (for notification)
-            effective_signal = signal if signal in ("yield", "close") else None
-            if effective_signal:
-                content = f"{content}\n[signal: {effective_signal}]"
-
-            self._chat_service.send_message(resolved_chat_id, eid, content, mentions, signal=effective_signal)
-            return f"Message sent to {target_name}."
-
         registry.register(
             ToolEntry(
                 name="chat_send",
@@ -363,28 +398,12 @@ class ChatToolService:
                         "required": ["content"],
                     },
                 },
-                handler=handle,
+                handler=self._handle_chat_send,
                 source="chat",
             )
         )
 
     def _register_chat_search(self, registry: ToolRegistry) -> None:
-        eid = self._entity_id
-
-        def handle(query: str, entity_id: str | None = None) -> str:
-            chat_id = None
-            if entity_id:
-                chat_id = self._chat_entities.find_chat_between(eid, entity_id)
-            results = self._messages.search(query, chat_id=chat_id, limit=20)
-            if not results:
-                return f"No messages matching '{query}'."
-            lines = []
-            for m in results:
-                sender = self._entities.get_by_id(m.sender_entity_id)
-                name = sender.name if sender else "unknown"
-                lines.append(f"[{name}] {m.content[:100]}")
-            return "\n".join(lines)
-
         registry.register(
             ToolEntry(
                 name="chat_search",
@@ -404,35 +423,12 @@ class ChatToolService:
                         "required": ["query"],
                     },
                 },
-                handler=handle,
+                handler=self._handle_chat_search,
                 source="chat",
             )
         )
 
     def _register_directory(self, registry: ToolRegistry) -> None:
-        eid = self._entity_id
-
-        def handle(search: str | None = None, type: str | None = None) -> str:
-            all_entities = self._entities.list_all()
-            entities = [e for e in all_entities if e.id != eid]
-            if type:
-                entities = [e for e in entities if e.type == type]
-            if search:
-                q = search.lower()
-                entities = [e for e in entities if q in e.name.lower()]
-            if not entities:
-                return "No entities found."
-            lines = []
-            for e in entities:
-                member = self._members.get_by_id(e.member_id)
-                owner_info = ""
-                if e.type == "agent" and member and member.owner_id:
-                    owner_member = self._members.get_by_id(member.owner_id)
-                    if owner_member:
-                        owner_info = f" (owner: {owner_member.name})"
-                lines.append(f"- {e.name} [{e.type}] entity_id={e.id}{owner_info}")
-            return "\n".join(lines)
-
         registry.register(
             ToolEntry(
                 name="directory",
@@ -448,7 +444,7 @@ class ChatToolService:
                         },
                     },
                 },
-                handler=handle,
+                handler=self._handle_directory,
                 source="chat",
             )
         )

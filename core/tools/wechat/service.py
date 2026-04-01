@@ -33,19 +33,27 @@ class WeChatToolService:
         self._register_wechat_send(registry)
         self._register_wechat_contacts(registry)
 
+    async def _handle_send(self, user_id: str, text: str) -> str:
+        conn = self._get_conn()
+        if not conn or not conn.connected:
+            return "Error: WeChat is not connected. Ask the owner to connect via the Connections page."
+        try:
+            await conn.send_message(user_id, text)
+            return f"Message sent to {user_id.split('@')[0]}"
+        except RuntimeError as e:
+            return f"Error: {e}"
+
+    def _handle_contacts(self) -> str:
+        conn = self._get_conn()
+        if not conn or not conn.connected:
+            return "WeChat is not connected."
+        contacts = conn.list_contacts()
+        if not contacts:
+            return "No WeChat contacts yet. Users need to message the bot first."
+        lines = [f"- {c['display_name']} [user_id: {c['user_id']}]" for c in contacts]
+        return "\n".join(lines)
+
     def _register_wechat_send(self, registry: ToolRegistry) -> None:
-        get_conn = self._get_conn
-
-        async def handle(user_id: str, text: str) -> str:
-            conn = get_conn()
-            if not conn or not conn.connected:
-                return "Error: WeChat is not connected. Ask the owner to connect via the Connections page."
-            try:
-                await conn.send_message(user_id, text)
-                return f"Message sent to {user_id.split('@')[0]}"
-            except RuntimeError as e:
-                return f"Error: {e}"
-
         registry.register(
             ToolEntry(
                 name="wechat_send",
@@ -73,24 +81,12 @@ class WeChatToolService:
                         "required": ["user_id", "text"],
                     },
                 },
-                handler=handle,
+                handler=self._handle_send,
                 source="wechat",
             )
         )
 
     def _register_wechat_contacts(self, registry: ToolRegistry) -> None:
-        get_conn = self._get_conn
-
-        def handle() -> str:
-            conn = get_conn()
-            if not conn or not conn.connected:
-                return "WeChat is not connected."
-            contacts = conn.list_contacts()
-            if not contacts:
-                return "No WeChat contacts yet. Users need to message the bot first."
-            lines = [f"- {c['display_name']} [user_id: {c['user_id']}]" for c in contacts]
-            return "\n".join(lines)
-
         registry.register(
             ToolEntry(
                 name="wechat_contacts",
@@ -103,7 +99,7 @@ class WeChatToolService:
                         "properties": {},
                     },
                 },
-                handler=handle,
+                handler=self._handle_contacts,
                 source="wechat",
             )
         )

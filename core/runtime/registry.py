@@ -20,9 +20,24 @@ class ToolEntry:
     schema: SchemaProvider
     handler: Handler
     source: str
+    search_hint: str = ""  # 3-10 word capability description for ToolSearch matching
+    is_concurrency_safe: bool = False  # fail-closed: assume not safe
+    is_read_only: bool = False  # fail-closed: assume write operation
 
     def get_schema(self) -> dict:
         return self.schema() if callable(self.schema) else self.schema
+
+
+TOOL_DEFAULTS: dict[str, object] = {
+    "is_concurrency_safe": False,
+    "is_read_only": False,
+}
+
+
+def build_tool(**kwargs: object) -> ToolEntry:
+    """Factory that fills in safety defaults. Fail-closed: assumes write + non-concurrent."""
+    merged = {**TOOL_DEFAULTS, **kwargs}
+    return ToolEntry(**merged)  # type: ignore[arg-type]
 
 
 class ToolRegistry:
@@ -59,19 +74,47 @@ class ToolRegistry:
         return [e.get_schema() for e in self._tools.values() if e.mode == ToolMode.INLINE]
 
     def search(self, query: str) -> list[ToolEntry]:
-        """Return all matching tools (including inline) for tool_search."""
-        q = query.lower()
-        results = []
+        """Return matching tools with ranked relevance.
+
+        Supports ``select:Name1,Name2`` for exact selection.
+        Otherwise ranks by: search_hint > name > description.
+        """
+        q = query.strip()
+
+        # --- select:<names> exact lookup ---
+        if q.lower().startswith("select:"):
+            names = [n.strip() for n in q[len("select:"):].split(",") if n.strip()]
+            results = [self._tools[n] for n in names if n in self._tools]
+            return results
+
+        # --- keyword search with ranking ---
+        keywords = q.lower().split()
+        if not keywords:
+            return list(self._tools.values())
+
+        scored: list[tuple[int, ToolEntry]] = []
         for entry in self._tools.values():
             schema = entry.get_schema()
-            name = schema.get("name", "")
-            desc = schema.get("description", "")
-            if q in name.lower() or q in desc.lower():
-                results.append(entry)
-        # If no match, return all
-        if not results:
-            results = list(self._tools.values())
-        return results
+            name_lower = entry.name.lower()
+            hint_lower = entry.search_hint.lower()
+            desc_lower = schema.get("description", "").lower()
+
+            score = 0
+            for kw in keywords:
+                if kw in hint_lower:
+                    score += 3
+                if kw in name_lower:
+                    score += 2
+                if kw in desc_lower:
+                    score += 1
+            if score > 0:
+                scored.append((score, entry))
+
+        if not scored:
+            return list(self._tools.values())
+
+        scored.sort(key=lambda x: x[0], reverse=True)
+        return [entry for _, entry in scored]
 
     def list_all(self) -> list[ToolEntry]:
         return list(self._tools.values())

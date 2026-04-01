@@ -91,6 +91,9 @@ class FileSystemService:
                 },
                 handler=self._read_file,
                 source="FileSystemService",
+                search_hint="read view file content text code image PDF notebook",
+                is_read_only=True,
+                is_concurrency_safe=True,
             )
         )
 
@@ -118,6 +121,7 @@ class FileSystemService:
                 },
                 handler=self._write_file,
                 source="FileSystemService",
+                search_hint="create new file write content to disk",
             )
         )
 
@@ -158,6 +162,7 @@ class FileSystemService:
                 },
                 handler=self._edit_file,
                 source="FileSystemService",
+                search_hint="edit modify replace string in existing file",
             )
         )
 
@@ -181,6 +186,9 @@ class FileSystemService:
                 },
                 handler=self._list_dir,
                 source="FileSystemService",
+                search_hint="list directory contents browse folder",
+                is_read_only=True,
+                is_concurrency_safe=True,
             )
         )
 
