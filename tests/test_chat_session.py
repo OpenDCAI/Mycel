@@ -32,7 +32,9 @@ def temp_db():
 @pytest.fixture
 def terminal_store(temp_db):
     """Create SQLiteTerminalRepo with temp database."""
-    return SQLiteTerminalRepo(db_path=temp_db)
+    store = SQLiteTerminalRepo(db_path=temp_db)
+    yield store
+    store.close()
 
 
 class _LeaseStoreCompat:
@@ -56,7 +58,10 @@ class _LeaseStoreCompat:
 @pytest.fixture
 def lease_store(temp_db):
     """Create SQLiteLeaseRepo with compat wrapper for tests."""
-    return _LeaseStoreCompat(SQLiteLeaseRepo(db_path=temp_db))
+    repo = SQLiteLeaseRepo(db_path=temp_db)
+    compat = _LeaseStoreCompat(repo)
+    yield compat
+    repo.close()
 
 
 @pytest.fixture
@@ -232,9 +237,12 @@ class TestChatSessionManager:
         # Verify table exists
         import sqlite3
 
-        with sqlite3.connect(str(temp_db)) as conn:
+        conn = sqlite3.connect(str(temp_db))
+        try:
             cursor = conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='chat_sessions'")
             assert cursor.fetchone() is not None
+        finally:
+            conn.close()
 
     def test_create_session(self, session_manager, terminal_store, lease_store):
         """Test creating a new session."""
