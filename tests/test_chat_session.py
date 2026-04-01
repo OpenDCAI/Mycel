@@ -15,8 +15,8 @@ from sandbox.chat_session import (
     ChatSessionPolicy,
 )
 from sandbox.lease import lease_from_row
-from storage.providers.sqlite.lease_repo import SQLiteLeaseRepo
 from sandbox.terminal import terminal_from_row
+from storage.providers.sqlite.lease_repo import SQLiteLeaseRepo
 from storage.providers.sqlite.terminal_repo import SQLiteTerminalRepo
 
 
@@ -37,14 +37,18 @@ def terminal_store(temp_db):
 
 class _LeaseStoreCompat:
     """Thin wrapper: repo returns dicts, tests expect domain objects from create/get."""
+
     def __init__(self, repo: SQLiteLeaseRepo):
         self._repo = repo
+
     def create(self, lease_id, provider_name, **kw):
         row = self._repo.create(lease_id, provider_name, **kw)
         return lease_from_row(row, self._repo.db_path)
+
     def get(self, lease_id):
         row = self._repo.get(lease_id)
         return lease_from_row(row, self._repo.db_path) if row else None
+
     def __getattr__(self, name):
         return getattr(self._repo, name)
 
@@ -59,6 +63,7 @@ def lease_store(temp_db):
 def mock_provider():
     """Create mock SandboxProvider."""
     from sandbox.providers.local import LocalPersistentShellRuntime
+
     provider = MagicMock()
     provider.name = "local"
     provider.create_runtime.side_effect = lambda terminal, lease: LocalPersistentShellRuntime(terminal, lease)
@@ -222,7 +227,7 @@ class TestChatSessionManager:
 
     def test_ensure_tables(self, temp_db, mock_provider):
         """Test table creation."""
-        manager = ChatSessionManager(provider=mock_provider, db_path=temp_db)
+        _manager = ChatSessionManager(provider=mock_provider, db_path=temp_db)
 
         # Verify table exists
         import sqlite3

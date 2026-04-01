@@ -8,9 +8,6 @@ Covers:
 
 from __future__ import annotations
 
-import json
-from pathlib import Path
-from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
@@ -19,7 +16,6 @@ from core.runtime.errors import InputValidationError
 from core.runtime.registry import ToolEntry, ToolMode, ToolRegistry
 from core.runtime.runner import ToolRunner
 from core.runtime.validator import ToolValidator
-
 
 # ---------------------------------------------------------------------------
 # ToolRegistry
@@ -297,7 +293,7 @@ class TestToolRunnerInlineInjection:
         # Should have called override with tools containing Read
         assert request.override.called
         call_kwargs = request.override.call_args
-        tools_arg = call_kwargs[1].get("tools") or (call_kwargs[0][0] if call_kwargs[0] else None)
+        _tools_arg = call_kwargs[1].get("tools") or (call_kwargs[0][0] if call_kwargs[0] else None)
         # override was called — inline tools were injected
 
     def test_deferred_schemas_not_injected(self):
@@ -325,24 +321,19 @@ class TestToolModeFromConfig:
         reg = ToolRegistry()
         from core.tools.task.service import TaskService
 
-        svc = TaskService(registry=reg, db_path=tmp_path / "test.db")
+        _svc = TaskService(registry=reg, db_path=tmp_path / "test.db")
         # TaskCreate/TaskUpdate/TaskList/TaskGet should be DEFERRED
         for tool_name in ["TaskCreate", "TaskGet", "TaskList", "TaskUpdate"]:
             entry = reg.get(tool_name)
             assert entry is not None, f"{tool_name} not registered"
-            assert entry.mode == ToolMode.DEFERRED, (
-                f"{tool_name} should be DEFERRED, got {entry.mode}"
-            )
+            assert entry.mode == ToolMode.DEFERRED, f"{tool_name} should be DEFERRED, got {entry.mode}"
 
     def test_search_service_registers_inline(self, tmp_path):
         reg = ToolRegistry()
-        from unittest.mock import MagicMock
         from core.tools.search.service import SearchService
 
-        svc = SearchService(registry=reg, workspace_root=tmp_path)
+        _svc = SearchService(registry=reg, workspace_root=tmp_path)
         for tool_name in ["Grep", "Glob"]:
             entry = reg.get(tool_name)
             assert entry is not None, f"{tool_name} not registered"
-            assert entry.mode == ToolMode.INLINE, (
-                f"{tool_name} should be INLINE, got {entry.mode}"
-            )
+            assert entry.mode == ToolMode.INLINE, f"{tool_name} should be INLINE, got {entry.mode}"

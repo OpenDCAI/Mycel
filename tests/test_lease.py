@@ -12,8 +12,8 @@ from sandbox.lease import (
     SandboxInstance,
     lease_from_row,
 )
-from storage.providers.sqlite.lease_repo import SQLiteLeaseRepo
 from sandbox.provider import SessionInfo
+from storage.providers.sqlite.lease_repo import SQLiteLeaseRepo
 
 
 @pytest.fixture
@@ -147,7 +147,7 @@ class TestLeaseRepo:
 
         e2b_leases = store.list_by_provider("e2b")
         assert len(e2b_leases) == 2
-        assert all(l["provider_name"] == "e2b" for l in e2b_leases)
+        assert all(lease["provider_name"] == "e2b" for lease in e2b_leases)
 
         agentbay_leases = store.list_by_provider("agentbay")
         assert len(agentbay_leases) == 1

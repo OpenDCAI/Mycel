@@ -11,7 +11,6 @@ from __future__ import annotations
 
 from typing import Any
 
-
 # ---------------------------------------------------------------------------
 # @@@langchain-anthropic-streaming-usage-regression
 # langchain-anthropic >= 1.0 dropped usage extraction from message_start,

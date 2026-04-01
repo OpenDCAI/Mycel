@@ -4,54 +4,57 @@ import asyncio
 import json
 import logging
 import uuid
+from datetime import UTC
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
 from sse_starlette.sse import EventSourceResponse
 
-from backend.web.core.dependencies import get_app, get_current_user_id, get_thread_agent, get_thread_lock, verify_thread_owner
+from backend.web.core.dependencies import (
+    get_app,
+    get_current_user_id,
+    get_thread_agent,
+    get_thread_lock,
+    verify_thread_owner,
+)
 from backend.web.models.requests import (
     CreateThreadRequest,
     ResolveMainThreadRequest,
-    RunRequest,
     SaveThreadLaunchConfigRequest,
     SendMessageRequest,
 )
+from backend.web.services import sandbox_service
 from backend.web.services.agent_pool import get_or_create_agent, resolve_thread_sandbox
 from backend.web.services.event_buffer import ThreadEventBuffer
 from backend.web.services.file_channel_service import get_file_channel_source
+from backend.web.services.resource_cache import clear_resource_overview_cache
 from backend.web.services.sandbox_service import destroy_thread_resources_sync, init_providers_and_managers
-from backend.web.services import sandbox_service
 from backend.web.services.streaming_service import (
     get_or_create_thread_buffer,
-    observe_run_events,
     observe_thread_events,
-    start_agent_run,
 )
+from backend.web.services.thread_launch_config_service import (
+    resolve_default_config,
+    save_last_confirmed_config,
+    save_last_successful_config,
+)
+from backend.web.services.thread_naming import canonical_entity_name, sidebar_label
 from backend.web.services.thread_state_service import (
     get_lease_status,
     get_sandbox_info,
     get_session_status,
     get_terminal_status,
 )
-from backend.web.services.thread_naming import canonical_entity_name, sidebar_label
-from backend.web.services.thread_launch_config_service import (
-    resolve_default_config,
-    save_last_confirmed_config,
-    save_last_successful_config,
-)
-from backend.web.services.resource_cache import clear_resource_overview_cache
 from backend.web.utils.helpers import delete_thread_in_db
-from backend.web.utils.serializers import serialize_message
-from storage.contracts import EntityRow
-
-logger = logging.getLogger(__name__)
+from backend.web.utils.serializers import avatar_url, serialize_message
 from core.runtime.middleware.monitor import AgentState
-from backend.web.utils.serializers import avatar_url
 from sandbox.config import MountSpec
 from sandbox.recipes import normalize_recipe_snapshot, provider_type_from_name
 from sandbox.thread_context import set_current_thread_id
+from storage.contracts import EntityRow
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/threads", tags=["threads"])
 
@@ -78,7 +81,7 @@ async def _prepare_attachment_message(
     from backend.web.services.streaming_service import prime_sandbox
 
     message_metadata: dict[str, Any] = {"attachments": attachments, "original_message": message}
-    if agent is not None and getattr(agent, '_sandbox', None):
+    if agent is not None and getattr(agent, "_sandbox", None):
         mgr = agent._sandbox.manager
     else:
         _, managers = init_providers_and_managers()
@@ -115,7 +118,10 @@ async def _prepare_attachment_message(
     if sync_ok:
         message = f"[User uploaded {len(attachments)} file(s) to {files_dir}/: {', '.join(attachments)}]\n\n{original_message}"
     else:
-        message = f"[User uploaded {len(attachments)} file(s) but sync to sandbox failed. Files may not be available in {files_dir}/.]\n\n{original_message}"
+        message = (
+            f"[User uploaded {len(attachments)} file(s) but sync to sandbox failed. "
+            f"Files may not be available in {files_dir}/.]\n\n{original_message}"
+        )
 
     return message, message_metadata
 
@@ -209,11 +215,11 @@ def _create_thread_sandbox_resources(thread_id: str, sandbox_type: str, recipe: 
     from datetime import datetime
 
     from backend.web.core.config import SANDBOX_VOLUME_ROOT
+    from backend.web.utils.helpers import _get_container
+    from sandbox.volume_source import HostVolume
     from storage.providers.sqlite.kernel import SQLiteDBRole, resolve_role_db_path
     from storage.providers.sqlite.lease_repo import SQLiteLeaseRepo
     from storage.providers.sqlite.terminal_repo import SQLiteTerminalRepo
-    from sandbox.volume_source import HostVolume
-    from backend.web.utils.helpers import _get_container
 
     sandbox_db = resolve_role_db_path(SQLiteDBRole.SANDBOX)
     now_str = datetime.now().isoformat()
@@ -246,11 +252,13 @@ def _create_thread_sandbox_resources(thread_id: str, sandbox_type: str, recipe: 
         terminal_id = f"term-{uuid.uuid4().hex[:12]}"
         # @@@initial-cwd - use project root for local, provider default for remote
         from backend.web.core.config import LOCAL_WORKSPACE_ROOT
+
         if sandbox_type == "local":
             initial_cwd = str(LOCAL_WORKSPACE_ROOT)
         else:
             from backend.web.services.sandbox_service import build_provider_from_config_name
             from sandbox.manager import resolve_provider_cwd
+
             provider = build_provider_from_config_name(sandbox_type)
             initial_cwd = resolve_provider_cwd(provider) if provider else "/home/user"
         terminal_repo.create(
@@ -267,6 +275,7 @@ def _resolve_existing_lease_cwd(lease_id: str, fallback_cwd: str | None) -> str:
     if fallback_cwd:
         return fallback_cwd
 
+    from backend.web.core.config import LOCAL_WORKSPACE_ROOT
     from storage.providers.sqlite.kernel import SQLiteDBRole, resolve_role_db_path
     from storage.providers.sqlite.terminal_repo import SQLiteTerminalRepo
 
@@ -318,10 +327,7 @@ def _create_owned_thread(
     owned_lease: dict[str, Any] | None = None
     if selected_lease_id:
         owned_lease = next(
-            (
-                lease for lease in sandbox_service.list_user_leases(owner_user_id)
-                if lease["lease_id"] == selected_lease_id
-            ),
+            (lease for lease in sandbox_service.list_user_leases(owner_user_id) if lease["lease_id"] == selected_lease_id),
             None,
         )
         if owned_lease is None:
@@ -348,13 +354,16 @@ def _create_owned_thread(
 
     # @@@entity-name-convention - entity display names derive from member + thread role, never sandbox strings.
     entity_name = canonical_entity_name(agent_member.name, is_main=resolved_is_main, branch_index=branch_index)
-    app.state.entity_repo.create(EntityRow(
-        id=thread_entity_id, type="agent",
-        member_id=agent_member_id,
-        name=entity_name,
-        thread_id=thread_entity_id,
-        created_at=time.time(),
-    ))
+    app.state.entity_repo.create(
+        EntityRow(
+            id=thread_entity_id,
+            type="agent",
+            member_id=agent_member_id,
+            name=entity_name,
+            thread_id=thread_entity_id,
+            created_at=time.time(),
+        )
+    )
 
     # Set thread state
     app.state.thread_sandbox[thread_entity_id] = sandbox_type
@@ -499,25 +508,28 @@ async def list_threads(
             running = agent.runtime.current_state == AgentState.ACTIVE
         # last_active from in-memory tracking (run start/done)
         last_active = app.state.thread_last_active.get(tid)
-        from datetime import datetime, timezone
-        updated_at = datetime.fromtimestamp(last_active, tz=timezone.utc).isoformat() if last_active else None
+        from datetime import datetime
 
-        threads.append({
-            "thread_id": tid,
-            "sandbox": t.get("sandbox_type", "local"),
-            "member_name": t.get("member_name"),
-            "member_id": t.get("member_id"),
-            "entity_name": t.get("entity_name"),
-            "branch_index": t.get("branch_index"),
-            "sidebar_label": sidebar_label(
-                is_main=bool(t.get("is_main", False)),
-                branch_index=int(t.get("branch_index", 0)),
-            ),
-            "avatar_url": avatar_url(t.get("member_id"), bool(t.get("member_avatar"))),
-            "is_main": t.get("is_main", False),
-            "running": running,
-            "updated_at": updated_at,
-        })
+        updated_at = datetime.fromtimestamp(last_active, tz=UTC).isoformat() if last_active else None
+
+        threads.append(
+            {
+                "thread_id": tid,
+                "sandbox": t.get("sandbox_type", "local"),
+                "member_name": t.get("member_name"),
+                "member_id": t.get("member_id"),
+                "entity_name": t.get("entity_name"),
+                "branch_index": t.get("branch_index"),
+                "sidebar_label": sidebar_label(
+                    is_main=bool(t.get("is_main", False)),
+                    branch_index=int(t.get("branch_index", 0)),
+                ),
+                "avatar_url": avatar_url(t.get("member_id"), bool(t.get("member_avatar"))),
+                "is_main": t.get("is_main", False),
+                "running": running,
+                "updated_at": updated_at,
+            }
+        )
     return {"threads": threads}
 
 
@@ -548,6 +560,7 @@ async def get_thread_messages(
         serialized = [serialize_message(msg) for msg in messages]
 
         from core.runtime.visibility import annotate_owner_visibility
+
         annotated, _ = annotate_owner_visibility(serialized)
         entries = display_builder.build_from_checkpoint(thread_id, annotated)
 
@@ -623,8 +636,8 @@ async def send_message(
     if not payload.message.strip():
         raise HTTPException(status_code=400, detail="message cannot be empty")
 
+    from backend.web.services.agent_pool import get_or_create_agent, resolve_thread_sandbox
     from backend.web.services.message_routing import route_message_to_brain
-    from backend.web.services.agent_pool import resolve_thread_sandbox, get_or_create_agent
 
     message = payload.message
     # @@@attachment-wire - sync files to sandbox and prepend paths
@@ -632,11 +645,14 @@ async def send_message(
         sandbox_type = resolve_thread_sandbox(app, thread_id)
         agent = await get_or_create_agent(app, sandbox_type, thread_id=thread_id)
         message, _ = await _prepare_attachment_message(
-            thread_id, sandbox_type, message, payload.attachments, agent=agent,
+            thread_id,
+            sandbox_type,
+            message,
+            payload.attachments,
+            agent=agent,
         )
 
-    return await route_message_to_brain(app, thread_id, message, source="owner",
-                                       attachments=payload.attachments or None)
+    return await route_message_to_brain(app, thread_id, message, source="owner", attachments=payload.attachments or None)
 
 
 @router.post("/{thread_id}/queue")
@@ -660,7 +676,6 @@ async def get_queue(
     """List pending followup messages in the queue."""
     messages = app.state.queue_manager.list_queue(thread_id)
     return {"messages": messages, "thread_id": thread_id}
-
 
 
 @router.get("/{thread_id}/history")
@@ -712,17 +727,25 @@ async def get_thread_history(
         if cls == "AIMessage":
             entries: list[dict] = []
             for c in getattr(msg, "tool_calls", []):
-                entries.append({
-                    "role": "tool_call",
-                    "tool": c["name"],
-                    "args": str(c.get("args", {}))[:200],
-                })
+                entries.append(
+                    {
+                        "role": "tool_call",
+                        "tool": c["name"],
+                        "args": str(c.get("args", {}))[:200],
+                    }
+                )
             text = extract_text_content(msg.content)
             if text:
                 entries.append({"role": "assistant", "text": _trunc(text)})
             return entries or [{"role": "assistant", "text": ""}]
         if cls == "ToolMessage":
-            return [{"role": "tool_result", "tool": getattr(msg, "name", "?"), "text": _trunc(extract_text_content(msg.content))}]
+            return [
+                {
+                    "role": "tool_result",
+                    "tool": getattr(msg, "name", "?"),
+                    "text": _trunc(extract_text_content(msg.content)),
+                }
+            ]
         return [{"role": "system", "text": _trunc(extract_text_content(msg.content))}]
 
     flat: list[dict] = []
@@ -886,7 +909,8 @@ async def stream_thread_events(
     app: Annotated[Any, Depends(get_app)] = None,
 ) -> EventSourceResponse:
     """Persistent SSE event stream — uses ?token= for auth (EventSource can't set headers)."""
-    from backend.web.core.dependencies import _DEV_SKIP_AUTH, _DEV_PAYLOAD
+    from backend.web.core.dependencies import _DEV_PAYLOAD, _DEV_SKIP_AUTH
+
     if _DEV_SKIP_AUTH:
         sse_user_id = _DEV_PAYLOAD["user_id"]
     else:
@@ -980,15 +1004,17 @@ async def list_tasks(
     result = []
     for task_id, run in runs.items():
         run_type = "bash" if run.__class__.__name__ == "_BashBackgroundRun" else "agent"
-        result.append({
-            "task_id": task_id,
-            "task_type": run_type,
-            "status": "completed" if run.is_done else "running",
-            "command_line": getattr(run, "command", None) if run_type == "bash" else None,
-            "description": getattr(run, "description", None),
-            "exit_code": getattr(getattr(run, "_cmd", None), "exit_code", None) if run_type == "bash" else None,
-            "error": None,
-        })
+        result.append(
+            {
+                "task_id": task_id,
+                "task_type": run_type,
+                "status": "completed" if run.is_done else "running",
+                "command_line": getattr(run, "command", None) if run_type == "bash" else None,
+                "description": getattr(run, "description", None),
+                "exit_code": getattr(getattr(run, "_cmd", None), "exit_code", None) if run_type == "bash" else None,
+                "error": None,
+            }
+        )
     return result
 
 
@@ -1057,17 +1083,26 @@ async def _notify_task_cancelled(app: Any, thread_id: str, task_id: str, run: An
     # Emit task_done so the frontend indicator updates
     try:
         from backend.web.event_bus import get_event_bus
+
         event_bus = get_event_bus()
         emit_fn = event_bus.make_emitter(
             thread_id=thread_id,
             agent_id=task_id,
             agent_name=f"cancel-{task_id[:8]}",
         )
-        await emit_fn({"event": "task_done", "data": json.dumps({
-            "task_id": task_id,
-            "background": True,
-            "cancelled": True,
-        }, ensure_ascii=False)})
+        await emit_fn(
+            {
+                "event": "task_done",
+                "data": json.dumps(
+                    {
+                        "task_id": task_id,
+                        "background": True,
+                        "cancelled": True,
+                    },
+                    ensure_ascii=False,
+                ),
+            }
+        )
     except Exception:
         logger.warning("Failed to emit task_done for cancelled task %s", task_id, exc_info=True)
 
@@ -1084,7 +1119,7 @@ async def _notify_task_cancelled(app: Any, thread_id: str, task_id: str, run: An
                 f"<Status>cancelled</Status>"
                 f"<Description>{label}</Description>"
                 + (f"<CommandLine>{command[:200]}</CommandLine>" if command else "")
-                + f"</CommandNotification>"
+                + "</CommandNotification>"
             )
             qm.enqueue(notification, thread_id, notification_type="command")
     except Exception:

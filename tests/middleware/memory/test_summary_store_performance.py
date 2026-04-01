@@ -174,9 +174,7 @@ def test_concurrent_write_performance(temp_db):
     min_write_time = min(all_times)
 
     print(f"[Performance Test] Concurrent writes completed in {total_time:.2f}s")
-    print(
-        f"[Performance Test] Write times: avg={avg_write_time:.2f}ms, min={min_write_time:.2f}ms, max={max_write_time:.2f}ms"
-    )
+    print(f"[Performance Test] Write times: avg={avg_write_time:.2f}ms, min={min_write_time:.2f}ms, max={max_write_time:.2f}ms")
 
     # Assert performance requirements
     assert avg_write_time < 100, f"Average write time {avg_write_time:.2f}ms exceeds 100ms threshold"

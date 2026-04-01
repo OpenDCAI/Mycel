@@ -16,11 +16,11 @@ import logging
 import os
 from pathlib import Path
 
-logger = logging.getLogger(__name__)
-
 from sandbox.base import LocalSandbox, RemoteSandbox, Sandbox
 from sandbox.config import SandboxConfig, resolve_sandbox_name
 from sandbox.thread_context import get_current_thread_id, set_current_thread_id
+
+logger = logging.getLogger(__name__)
 
 
 def create_sandbox(
@@ -38,7 +38,6 @@ def create_sandbox(
     p = config.provider
 
     if p == "local":
-
         return LocalSandbox(workspace_root=workspace_root or str(Path.cwd()), db_path=db_path)
 
     if p == "agentbay":
@@ -141,5 +140,3 @@ __all__ = [
     "RemoteSandbox",
     "LocalSandbox",
 ]
-
-

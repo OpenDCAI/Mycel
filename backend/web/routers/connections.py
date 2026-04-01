@@ -106,9 +106,7 @@ async def wechat_set_routing(
     entity_id: Annotated[str, Depends(get_current_entity_id)],
     app: Annotated[Any, Depends(get_app)],
 ) -> dict:
-    _get_registry(app).get(entity_id).set_routing(
-        RoutingConfig(type=body.type, id=body.id, label=body.label)
-    )
+    _get_registry(app).get(entity_id).set_routing(RoutingConfig(type=body.type, id=body.id, label=body.label))
     return {"ok": True}
 
 
@@ -136,6 +134,7 @@ async def wechat_routing_targets(
     entity_id: needed for chat lookup (chats the user's social identity participates in).
     """
     from backend.web.utils.serializers import avatar_url
+
     raw_threads = app.state.thread_repo.list_by_owner_user_id(user_id)
     threads = [
         {

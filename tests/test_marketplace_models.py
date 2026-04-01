@@ -5,12 +5,11 @@ from pydantic import ValidationError
 
 from backend.web.models.marketplace import (
     CheckUpdatesRequest,
-    InstallFromMarketplaceRequest,
     InstalledItemInfo,
+    InstallFromMarketplaceRequest,
     PublishToMarketplaceRequest,
     UpgradeFromMarketplaceRequest,
 )
-
 
 # ── PublishToMarketplaceRequest ──
 

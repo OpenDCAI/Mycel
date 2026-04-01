@@ -11,13 +11,12 @@ from backend.web.core.config import SANDBOXES_DIR
 from backend.web.services.config_loader import SandboxConfigLoader
 from backend.web.services.sandbox_service import available_sandbox_types, build_provider_from_config_name
 from backend.web.utils.serializers import avatar_url
-from storage.providers.sqlite.thread_repo import SQLiteThreadRepo
-from sandbox.providers.local import LocalSessionProvider
-from sandbox.providers.docker import DockerProvider
-from sandbox.providers.daytona import DaytonaProvider
-from sandbox.providers.e2b import E2BProvider
-from sandbox.providers.agentbay import AgentBayProvider
 from sandbox.provider import RESOURCE_CAPABILITY_KEYS
+from sandbox.providers.agentbay import AgentBayProvider
+from sandbox.providers.daytona import DaytonaProvider
+from sandbox.providers.docker import DockerProvider
+from sandbox.providers.e2b import E2BProvider
+from sandbox.providers.local import LocalSessionProvider
 from sandbox.resource_snapshot import (
     ensure_resource_snapshot_table,
     list_snapshots_by_lease_ids,
@@ -26,6 +25,7 @@ from sandbox.resource_snapshot import (
 )
 from storage.models import map_lease_to_session_status
 from storage.providers.sqlite.sandbox_monitor_repo import SQLiteSandboxMonitorRepo
+from storage.providers.sqlite.thread_repo import SQLiteThreadRepo
 
 _CONFIG_LOADER = SandboxConfigLoader(SANDBOXES_DIR)
 
@@ -221,6 +221,7 @@ def _member_meta_map() -> dict[str, dict[str, str | None]]:
     """Build member_id → display metadata map from DB."""
     try:
         from storage.providers.sqlite.member_repo import SQLiteMemberRepo
+
         return {
             m.id: {
                 "member_name": m.name,
@@ -278,10 +279,7 @@ def _aggregate_provider_telemetry(
     running_count: int,
     snapshot_by_lease: dict[str, dict[str, Any]],
 ) -> dict[str, Any]:
-    lease_ids = sorted({
-        str(s.get("lease_id") or "")
-        for s in provider_sessions if s.get("lease_id")
-    })
+    lease_ids = sorted({str(s.get("lease_id") or "") for s in provider_sessions if s.get("lease_id")})
     snapshots = [snapshot_by_lease[lid] for lid in lease_ids if lid in snapshot_by_lease]
 
     freshness = "stale"
@@ -291,18 +289,18 @@ def _aggregate_provider_telemetry(
 
     cpu_used = _sum_or_none([float(s["cpu_used"]) for s in snapshots if s.get("cpu_used") is not None])
     cpu_limit = _sum_or_none([float(s["cpu_limit"]) for s in snapshots if s.get("cpu_limit") is not None])
-    mem_used = _sum_or_none(
-        [float(s["memory_used_mb"]) / 1024.0 for s in snapshots if s.get("memory_used_mb") is not None]
-    )
+    mem_used = _sum_or_none([float(s["memory_used_mb"]) / 1024.0 for s in snapshots if s.get("memory_used_mb") is not None])
     mem_limit = _sum_or_none(
-        [float(s["memory_total_mb"]) / 1024.0 for s in snapshots
-         if s.get("memory_total_mb") is not None and float(s["memory_total_mb"]) > 0]
+        [
+            float(s["memory_total_mb"]) / 1024.0
+            for s in snapshots
+            if s.get("memory_total_mb") is not None and float(s["memory_total_mb"]) > 0
+        ]
     )
     disk_used = _sum_or_none([float(s["disk_used_gb"]) for s in snapshots if s.get("disk_used_gb") is not None])
     # @@@disk-total-zero-guard - disk_total=0 is physically impossible; treat as missing probe data.
     disk_limit = _sum_or_none(
-        [float(s["disk_total_gb"]) for s in snapshots
-         if s.get("disk_total_gb") is not None and float(s["disk_total_gb"]) > 0]
+        [float(s["disk_total_gb"]) for s in snapshots if s.get("disk_total_gb") is not None and float(s["disk_total_gb"]) > 0]
     )
 
     has_snapshots = len(snapshots) > 0
@@ -391,19 +389,21 @@ def list_resource_providers() -> dict[str, Any]:
                 seen_running_leases.add(lease_id)
             session_metrics = _to_session_metrics(snapshot_by_lease.get(lease_id))
             owner = owners.get(thread_id, {"member_id": None, "member_name": "未绑定Agent"})
-            normalized_sessions.append({
-                # @@@resource-session-identity - monitor rows can legitimately have empty chat session ids.
-                # Use stable lease+thread identity so React keys do not collapse when one lease has multiple threads.
-                "id": str(session.get("session_id") or f"{lease_id}:{thread_id or 'unbound'}"),
-                "leaseId": lease_id,
-                "threadId": thread_id,
-                "memberId": str(owner.get("member_id") or ""),
-                "memberName": str(owner.get("member_name") or "未绑定Agent"),
-                "avatarUrl": owner.get("avatar_url"),
-                "status": normalized,
-                "startedAt": str(session.get("created_at") or ""),
-                "metrics": session_metrics,
-            })
+            normalized_sessions.append(
+                {
+                    # @@@resource-session-identity - monitor rows can legitimately have empty chat session ids.
+                    # Use stable lease+thread identity so React keys do not collapse when one lease has multiple threads.
+                    "id": str(session.get("session_id") or f"{lease_id}:{thread_id or 'unbound'}"),
+                    "leaseId": lease_id,
+                    "threadId": thread_id,
+                    "memberId": str(owner.get("member_id") or ""),
+                    "memberName": str(owner.get("member_name") or "未绑定Agent"),
+                    "avatarUrl": owner.get("avatar_url"),
+                    "status": normalized,
+                    "startedAt": str(session.get("created_at") or ""),
+                    "metrics": session_metrics,
+                }
+            )
 
         provider_type = _resolve_provider_type(provider_name, config_name, sandboxes_dir=SANDBOXES_DIR)
         telemetry = _aggregate_provider_telemetry(
@@ -422,36 +422,36 @@ def list_resource_providers() -> dict[str, Any]:
                     "memory": _metric(
                         host_m.memory_used_mb / 1024.0 if host_m.memory_used_mb is not None else None,
                         host_m.memory_total_mb / 1024.0 if host_m.memory_total_mb is not None else None,
-                        "GB", "direct", "live",
+                        "GB",
+                        "direct",
+                        "live",
                     ),
                     "disk": _metric(host_m.disk_used_gb, host_m.disk_total_gb, "GB", "direct", "live"),
                 }
-        providers.append({
-            "id": config_name,
-            "name": config_name,
-            "description": catalog.description,
-            "vendor": catalog.vendor,
-            "type": provider_type,
-            "status": _to_resource_status(effective_available, running_count),
-            "unavailableReason": unavailable_reason,
-            "error": (
-                {"code": "PROVIDER_UNAVAILABLE", "message": unavailable_reason} if unavailable_reason else None
-            ),
-            "capabilities": capabilities,
-            "telemetry": telemetry,
-            "cardCpu": _resolve_card_cpu_metric(provider_type, telemetry),
-            "consoleUrl": _resolve_console_url(provider_name, config_name, sandboxes_dir=SANDBOXES_DIR),
-            "sessions": normalized_sessions,
-        })
+        providers.append(
+            {
+                "id": config_name,
+                "name": config_name,
+                "description": catalog.description,
+                "vendor": catalog.vendor,
+                "type": provider_type,
+                "status": _to_resource_status(effective_available, running_count),
+                "unavailableReason": unavailable_reason,
+                "error": ({"code": "PROVIDER_UNAVAILABLE", "message": unavailable_reason} if unavailable_reason else None),
+                "capabilities": capabilities,
+                "telemetry": telemetry,
+                "cardCpu": _resolve_card_cpu_metric(provider_type, telemetry),
+                "consoleUrl": _resolve_console_url(provider_name, config_name, sandboxes_dir=SANDBOXES_DIR),
+                "sessions": normalized_sessions,
+            }
+        )
 
     summary = {
         "snapshot_at": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
         "total_providers": len(providers),
         "active_providers": len([p for p in providers if p.get("status") == "active"]),
         "unavailable_providers": len([p for p in providers if p.get("status") == "unavailable"]),
-        "running_sessions": sum(
-            int((p.get("telemetry") or {}).get("running", {}).get("used") or 0) for p in providers
-        ),
+        "running_sessions": sum(int((p.get("telemetry") or {}).get("running", {}).get("used") or 0) for p in providers),
     }
     return {"summary": summary, "providers": providers}
 

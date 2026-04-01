@@ -10,7 +10,6 @@ from storage.providers.sqlite.kernel import SQLiteDBRole, connect_sqlite_role
 
 
 class SQLiteSandboxVolumeRepo:
-
     def __init__(self, db_path: str | Path | None = None) -> None:
         self._conn = connect_sqlite_role(
             SQLiteDBRole.SANDBOX,
@@ -47,9 +46,7 @@ class SQLiteSandboxVolumeRepo:
 
     def list_all(self) -> list[dict[str, Any]]:
         self._conn.row_factory = sqlite3.Row
-        rows = self._conn.execute(
-            "SELECT volume_id, source, name, created_at FROM sandbox_volumes ORDER BY created_at DESC"
-        ).fetchall()
+        rows = self._conn.execute("SELECT volume_id, source, name, created_at FROM sandbox_volumes ORDER BY created_at DESC").fetchall()
         self._conn.row_factory = None
         return [dict(r) for r in rows]
 

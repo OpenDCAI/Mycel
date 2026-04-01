@@ -1,6 +1,6 @@
-from storage.providers.sqlite.file_operation_repo import SQLiteFileOperationRepo
 import pytest
 
+from storage.providers.sqlite.file_operation_repo import SQLiteFileOperationRepo
 from storage.providers.supabase.file_operation_repo import SupabaseFileOperationRepo
 
 

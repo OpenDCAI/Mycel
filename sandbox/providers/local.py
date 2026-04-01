@@ -224,6 +224,7 @@ class LocalSessionProvider(SandboxProvider):
 
     def create_runtime(self, terminal: AbstractTerminal, lease: SandboxLease) -> PhysicalTerminalRuntime:
         from sandbox.providers.local import LocalPersistentShellRuntime
+
         return LocalPersistentShellRuntime(terminal, lease)
 
 
@@ -235,11 +236,11 @@ from collections.abc import Callable  # noqa: E402
 from sandbox.interfaces.executor import ExecuteResult  # noqa: E402
 from sandbox.runtime import (  # noqa: E402
     PhysicalTerminalRuntime,
-    _SubprocessPtySession,
     _build_export_block,
     _compute_env_delta,
     _extract_state_from_output,
     _parse_env_output,
+    _SubprocessPtySession,
 )
 
 

@@ -58,13 +58,15 @@ class SkillsService:
         if not self._skills_index:
             return
 
-        registry.register(ToolEntry(
-            name="load_skill",
-            mode=ToolMode.INLINE,
-            schema=self._get_schema,
-            handler=self._load_skill,
-            source="SkillsService",
-        ))
+        registry.register(
+            ToolEntry(
+                name="load_skill",
+                mode=ToolMode.INLINE,
+                schema=self._get_schema,
+                handler=self._load_skill,
+                source="SkillsService",
+            )
+        )
 
     def _get_schema(self) -> dict:
         available_skills = list(self._skills_index.keys())

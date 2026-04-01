@@ -50,6 +50,7 @@ def get_or_create_agent_id(
             return aid
 
     import time
+
     agent_id = uuid.uuid4().hex[:8]
     entry: dict[str, Any] = {
         "member": member,

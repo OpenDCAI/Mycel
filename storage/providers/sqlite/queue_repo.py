@@ -36,8 +36,15 @@ class SQLiteQueueRepo:
         if self._own_conn:
             self._conn.close()
 
-    def enqueue(self, thread_id: str, content: str, notification_type: str = "steer",
-                source: str | None = None, sender_entity_id: str | None = None, sender_name: str | None = None) -> None:
+    def enqueue(
+        self,
+        thread_id: str,
+        content: str,
+        notification_type: str = "steer",
+        source: str | None = None,
+        sender_entity_id: str | None = None,
+        sender_name: str | None = None,
+    ) -> None:
         with self._lock:
             self._conn.execute(
                 "INSERT INTO message_queue (thread_id, content, notification_type, source, sender_entity_id, sender_name)"
@@ -61,8 +68,11 @@ class SQLiteQueueRepo:
                 (thread_id,),
             ).fetchone()
             self._conn.commit()
-            return QueueItem(content=row[0], notification_type=row[1],
-                             source=row[2], sender_entity_id=row[3], sender_name=row[4]) if row else None
+            return (
+                QueueItem(content=row[0], notification_type=row[1], source=row[2], sender_entity_id=row[3], sender_name=row[4])
+                if row
+                else None
+            )
 
     def drain_all(self, thread_id: str) -> list[QueueItem]:
         with self._lock:
@@ -78,9 +88,10 @@ class SQLiteQueueRepo:
                 (thread_id,),
             ).fetchall()
             self._conn.commit()
-        return [QueueItem(content=r[0], notification_type=r[1],
-                          source=r[3], sender_entity_id=r[4], sender_name=r[5])
-                for r in sorted(rows, key=lambda r: r[2])]
+        return [
+            QueueItem(content=r[0], notification_type=r[1], source=r[3], sender_entity_id=r[4], sender_name=r[5])
+            for r in sorted(rows, key=lambda r: r[2])
+        ]
 
     def peek(self, thread_id: str) -> bool:
         with self._lock:
@@ -93,14 +104,10 @@ class SQLiteQueueRepo:
     def list_queue(self, thread_id: str) -> list[dict[str, Any]]:
         with self._lock:
             rows = self._conn.execute(
-                "SELECT id, content, notification_type, created_at FROM message_queue "
-                "WHERE thread_id = ? ORDER BY id",
+                "SELECT id, content, notification_type, created_at FROM message_queue WHERE thread_id = ? ORDER BY id",
                 (thread_id,),
             ).fetchall()
-            return [
-                {"id": r[0], "content": r[1], "notification_type": r[2], "created_at": r[3]}
-                for r in rows
-            ]
+            return [{"id": r[0], "content": r[1], "notification_type": r[2], "created_at": r[3]} for r in rows]
 
     def clear_queue(self, thread_id: str) -> None:
         with self._lock:
@@ -131,12 +138,14 @@ class SQLiteQueueRepo:
             "  created_at        TEXT DEFAULT (datetime('now'))"
             ")"
         )
-        self._conn.execute(
-            "CREATE INDEX IF NOT EXISTS idx_mq_thread ON message_queue (thread_id, id)"
-        )
+        self._conn.execute("CREATE INDEX IF NOT EXISTS idx_mq_thread ON message_queue (thread_id, id)")
         # Migration: add columns to existing tables
-        for col, col_type in [("notification_type", "TEXT NOT NULL DEFAULT 'steer'"),
-                               ("source", "TEXT"), ("sender_entity_id", "TEXT"), ("sender_name", "TEXT")]:
+        for col, col_type in [
+            ("notification_type", "TEXT NOT NULL DEFAULT 'steer'"),
+            ("source", "TEXT"),
+            ("sender_entity_id", "TEXT"),
+            ("sender_name", "TEXT"),
+        ]:
             try:
                 self._conn.execute(f"ALTER TABLE message_queue ADD COLUMN {col} {col_type}")
             except sqlite3.OperationalError:

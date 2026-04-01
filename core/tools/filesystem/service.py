@@ -13,10 +13,10 @@ import logging
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from core.tools.filesystem.backend import FileSystemBackend
-from core.tools.filesystem.read import ReadLimits, ReadResult
-from core.tools.filesystem.read import read_file as read_file_dispatch
 from core.runtime.registry import ToolEntry, ToolMode, ToolRegistry
+from core.tools.filesystem.backend import FileSystemBackend
+from core.tools.filesystem.read import ReadLimits
+from core.tools.filesystem.read import read_file as read_file_dispatch
 
 if TYPE_CHECKING:
     from core.operations import FileOperationRecorder
@@ -45,18 +45,13 @@ class FileSystemService:
             backend = LocalBackend()
 
         self.backend = backend
-        self.workspace_root = (
-            Path(workspace_root) if backend.is_remote else Path(workspace_root).resolve()
-        )
+        self.workspace_root = Path(workspace_root) if backend.is_remote else Path(workspace_root).resolve()
         self.max_file_size = max_file_size
         self.allowed_extensions = allowed_extensions
         self.hooks = hooks or []
         self._read_files: dict[Path, float | None] = {}
         self.operation_recorder = operation_recorder
-        self.extra_allowed_paths: list[Path] = [
-            Path(p) if backend.is_remote else Path(p).resolve()
-            for p in (extra_allowed_paths or [])
-        ]
+        self.extra_allowed_paths: list[Path] = [Path(p) if backend.is_remote else Path(p).resolve() for p in (extra_allowed_paths or [])]
 
         if not backend.is_remote:
             self.workspace_root.mkdir(parents=True, exist_ok=True)
@@ -68,121 +63,126 @@ class FileSystemService:
     # ------------------------------------------------------------------
 
     def _register(self, registry: ToolRegistry) -> None:
-        registry.register(ToolEntry(
-            name="Read",
-            mode=ToolMode.INLINE,
-            schema={
-                "name": "Read",
-                "description": (
-                    "Read file content (text/code/images/PDF/PPTX/Notebook). "
-                    "Path must be absolute."
-                ),
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "file_path": {
-                            "type": "string",
-                            "description": "Absolute file path",
+        registry.register(
+            ToolEntry(
+                name="Read",
+                mode=ToolMode.INLINE,
+                schema={
+                    "name": "Read",
+                    "description": ("Read file content (text/code/images/PDF/PPTX/Notebook). Path must be absolute."),
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "file_path": {
+                                "type": "string",
+                                "description": "Absolute file path",
+                            },
+                            "offset": {
+                                "type": "integer",
+                                "description": "Start line (1-indexed, optional)",
+                            },
+                            "limit": {
+                                "type": "integer",
+                                "description": "Number of lines to read (optional)",
+                            },
                         },
-                        "offset": {
-                            "type": "integer",
-                            "description": "Start line (1-indexed, optional)",
-                        },
-                        "limit": {
-                            "type": "integer",
-                            "description": "Number of lines to read (optional)",
-                        },
+                        "required": ["file_path"],
                     },
-                    "required": ["file_path"],
                 },
-            },
-            handler=self._read_file,
-            source="FileSystemService",
-        ))
+                handler=self._read_file,
+                source="FileSystemService",
+            )
+        )
 
-        registry.register(ToolEntry(
-            name="Write",
-            mode=ToolMode.INLINE,
-            schema={
-                "name": "Write",
-                "description": "Create new file. Path must be absolute. Fails if file exists.",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "file_path": {
-                            "type": "string",
-                            "description": "Absolute file path",
+        registry.register(
+            ToolEntry(
+                name="Write",
+                mode=ToolMode.INLINE,
+                schema={
+                    "name": "Write",
+                    "description": "Create new file. Path must be absolute. Fails if file exists.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "file_path": {
+                                "type": "string",
+                                "description": "Absolute file path",
+                            },
+                            "content": {
+                                "type": "string",
+                                "description": "File content",
+                            },
                         },
-                        "content": {
-                            "type": "string",
-                            "description": "File content",
-                        },
+                        "required": ["file_path", "content"],
                     },
-                    "required": ["file_path", "content"],
                 },
-            },
-            handler=self._write_file,
-            source="FileSystemService",
-        ))
+                handler=self._write_file,
+                source="FileSystemService",
+            )
+        )
 
-        registry.register(ToolEntry(
-            name="Edit",
-            mode=ToolMode.INLINE,
-            schema={
-                "name": "Edit",
-                "description": (
-                    "Edit existing file using exact string replacement. "
-                    "MUST read file before editing. "
-                    "old_string must be unique in file. "
-                    "Set replace_all=true to replace all occurrences."
-                ),
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "file_path": {
-                            "type": "string",
-                            "description": "Absolute file path",
+        registry.register(
+            ToolEntry(
+                name="Edit",
+                mode=ToolMode.INLINE,
+                schema={
+                    "name": "Edit",
+                    "description": (
+                        "Edit existing file using exact string replacement. "
+                        "MUST read file before editing. "
+                        "old_string must be unique in file. "
+                        "Set replace_all=true to replace all occurrences."
+                    ),
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "file_path": {
+                                "type": "string",
+                                "description": "Absolute file path",
+                            },
+                            "old_string": {
+                                "type": "string",
+                                "description": "Exact string to replace",
+                            },
+                            "new_string": {
+                                "type": "string",
+                                "description": "Replacement string",
+                            },
+                            "replace_all": {
+                                "type": "boolean",
+                                "description": "Replace all occurrences (default: false)",
+                            },
                         },
-                        "old_string": {
-                            "type": "string",
-                            "description": "Exact string to replace",
-                        },
-                        "new_string": {
-                            "type": "string",
-                            "description": "Replacement string",
-                        },
-                        "replace_all": {
-                            "type": "boolean",
-                            "description": "Replace all occurrences (default: false)",
-                        },
+                        "required": ["file_path", "old_string", "new_string"],
                     },
-                    "required": ["file_path", "old_string", "new_string"],
                 },
-            },
-            handler=self._edit_file,
-            source="FileSystemService",
-        ))
+                handler=self._edit_file,
+                source="FileSystemService",
+            )
+        )
 
-        registry.register(ToolEntry(
-            name="list_dir",
-            mode=ToolMode.INLINE,
-            schema={
-                "name": "list_dir",
-                "description": "List directory contents. Path must be absolute.",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "directory_path": {
-                            "type": "string",
-                            "description": "Absolute directory path",
+        registry.register(
+            ToolEntry(
+                name="list_dir",
+                mode=ToolMode.INLINE,
+                schema={
+                    "name": "list_dir",
+                    "description": "List directory contents. Path must be absolute.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "directory_path": {
+                                "type": "string",
+                                "description": "Absolute directory path",
+                            },
                         },
+                        "required": ["directory_path"],
                     },
-                    "required": ["directory_path"],
                 },
-            },
-            handler=self._list_dir,
-            source="FileSystemService",
-        ))
+                handler=self._list_dir,
+                source="FileSystemService",
+            )
+        )
 
     # ------------------------------------------------------------------
     # Path validation (reused from middleware)
@@ -362,9 +362,7 @@ class FileSystemService:
         except Exception as e:
             return f"Error writing file: {e}"
 
-    def _edit_file(
-        self, file_path: str, old_string: str, new_string: str, replace_all: bool = False
-    ) -> str:
+    def _edit_file(self, file_path: str, old_string: str, new_string: str, replace_all: bool = False) -> str:
         is_valid, error, resolved = self._validate_path(file_path, "edit")
         if not is_valid:
             return error
@@ -436,11 +434,7 @@ class FileSystemService:
             items = []
             for entry in result.entries:
                 if entry.is_dir:
-                    count_str = (
-                        f" ({entry.children_count} items)"
-                        if entry.children_count is not None
-                        else ""
-                    )
+                    count_str = f" ({entry.children_count} items)" if entry.children_count is not None else ""
                     items.append(f"\t{entry.name}/{count_str}")
                 else:
                     items.append(f"\t{entry.name} ({entry.size} bytes)")

@@ -1,7 +1,6 @@
 """Tests for TaskBoardMiddleware — agent tools for panel_tasks board."""
 
 import json
-import time
 
 import pytest
 
@@ -194,7 +193,7 @@ class TestListBoardTasks:
         assert result["total"] >= 2
 
     def test_filter_by_status(self, middleware):
-        t1 = task_service.create_task(title="pending task")
+        _t1 = task_service.create_task(title="pending task")
         t2 = task_service.create_task(title="running task")
         task_service.update_task(t2["id"], status="running")
 

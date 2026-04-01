@@ -81,13 +81,9 @@ class CronService:
 
         # Update last_run_at on the cron job
         now_ms = int(time.time() * 1000)
-        await asyncio.to_thread(
-            cron_job_service.update_cron_job, job_id, last_run_at=now_ms
-        )
+        await asyncio.to_thread(cron_job_service.update_cron_job, job_id, last_run_at=now_ms)
 
-        logger.info(
-            "[cron-service] triggered job %s → task %s", job_id, task.get("id")
-        )
+        logger.info("[cron-service] triggered job %s → task %s", job_id, task.get("id"))
         return task
 
     def is_due(self, job: dict[str, Any]) -> bool:
@@ -106,9 +102,7 @@ class CronService:
         try:
             cron = croniter(cron_expr, now)
         except (ValueError, KeyError):
-            logger.warning(
-                "[cron-service] invalid cron expression: %s", cron_expr
-            )
+            logger.warning("[cron-service] invalid cron expression: %s", cron_expr)
             return False
 
         # Get the previous fire time relative to now
@@ -141,6 +135,4 @@ class CronService:
                 try:
                     await self.trigger_job(job["id"])
                 except Exception:
-                    logger.exception(
-                        "[cron-service] failed to trigger job %s — skipping", job["id"]
-                    )
+                    logger.exception("[cron-service] failed to trigger job %s — skipping", job["id"])

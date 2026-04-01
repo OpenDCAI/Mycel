@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import sqlite3
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -17,7 +17,7 @@ def _connect(db_path: Path) -> sqlite3.Connection:
 
 
 def _now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+    return datetime.now(UTC).isoformat().replace("+00:00", "Z")
 
 
 def ensure_resource_snapshot_table(db_path: Path | None = None) -> None:
@@ -123,9 +123,7 @@ def list_snapshots_by_lease_ids(lease_ids: list[str], db_path: Path | None = Non
     placeholders = ",".join(["?"] * len(unique_lease_ids))
     with _connect(db_path) as conn:
         conn.row_factory = sqlite3.Row
-        table = conn.execute(
-            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='lease_resource_snapshots' LIMIT 1"
-        ).fetchone()
+        table = conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='lease_resource_snapshots' LIMIT 1").fetchone()
         if table is None:
             return {}
         rows = conn.execute(

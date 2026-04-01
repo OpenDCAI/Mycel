@@ -115,9 +115,7 @@ class SQLiteRecipeRepo:
                 )
                 """
             )
-            self._conn.execute(
-                "CREATE INDEX IF NOT EXISTS idx_library_recipes_owner_kind ON library_recipes(owner_user_id, kind)"
-            )
+            self._conn.execute("CREATE INDEX IF NOT EXISTS idx_library_recipes_owner_kind ON library_recipes(owner_user_id, kind)")
             self._conn.commit()
 
     def _hydrate(self, row: tuple[Any, ...]) -> dict[str, Any]:

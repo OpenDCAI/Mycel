@@ -73,8 +73,21 @@ async def get_chat(
         e = entity_repo.get_by_id(p.entity_id)
         if e:
             m = member_repo.get_by_id(e.member_id)
-            entities_info.append({"id": e.id, "name": e.name, "type": e.type, "avatar_url": avatar_url(e.member_id, bool(m.avatar if m else None))})
-    return {"id": chat.id, "title": chat.title, "status": chat.status, "created_at": chat.created_at, "entities": entities_info}
+            entities_info.append(
+                {
+                    "id": e.id,
+                    "name": e.name,
+                    "type": e.type,
+                    "avatar_url": avatar_url(e.member_id, bool(m.avatar if m else None)),
+                }
+            )
+    return {
+        "id": chat.id,
+        "title": chat.title,
+        "status": chat.status,
+        "created_at": chat.created_at,
+        "entities": entities_info,
+    }
 
 
 @router.get("/{chat_id}/messages")
@@ -97,7 +110,9 @@ async def list_messages(
             sender_map[sid] = e
     return [
         {
-            "id": m.id, "chat_id": m.chat_id, "sender_entity_id": m.sender_entity_id,
+            "id": m.id,
+            "chat_id": m.chat_id,
+            "sender_entity_id": m.sender_entity_id,
             "sender_name": sender_map[m.sender_entity_id].name if m.sender_entity_id in sender_map else "unknown",
             "content": m.content,
             "mentioned_entity_ids": m.mentioned_entity_ids,
@@ -115,6 +130,7 @@ async def mark_read(
 ):
     """Mark all messages in this chat as read for the current user's entity."""
     import time
+
     app.state.chat_entity_repo.update_last_read(chat_id, entity_id, time.time())
     return {"status": "ok"}
 
@@ -141,8 +157,12 @@ async def send_message(
     chat_service = app.state.chat_service
     msg = chat_service.send_message(chat_id, body.sender_entity_id, body.content, body.mentioned_entity_ids)
     return {
-        "id": msg.id, "chat_id": msg.chat_id, "sender_entity_id": msg.sender_entity_id,
-        "content": msg.content, "mentioned_entity_ids": msg.mentioned_entity_ids, "created_at": msg.created_at,
+        "id": msg.id,
+        "chat_id": msg.chat_id,
+        "sender_entity_id": msg.sender_entity_id,
+        "content": msg.content,
+        "mentioned_entity_ids": msg.mentioned_entity_ids,
+        "created_at": msg.created_at,
     }
 
 
@@ -154,6 +174,7 @@ async def stream_chat_events(
 ):
     """SSE stream for chat events. Uses ?token= for auth."""
     from backend.web.core.dependencies import _DEV_SKIP_AUTH
+
     if not _DEV_SKIP_AUTH:
         if not token:
             raise HTTPException(401, "Missing token")
@@ -174,7 +195,7 @@ async def stream_chat_events(
                     event_type = event.get("event", "message")
                     data = event.get("data", {})
                     yield f"event: {event_type}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     yield ": keepalive\n\n"
         finally:
             event_bus.unsubscribe(chat_id, queue)
@@ -220,15 +241,19 @@ async def set_contact(
     """Set a directional contact relationship (block/mute/normal)."""
     _verify_entity_ownership(app, body.owner_entity_id, user_id)
     import time
+
     from storage.contracts import ContactRow
+
     contact_repo = app.state.contact_repo
-    contact_repo.upsert(ContactRow(
-        owner_entity_id=body.owner_entity_id,
-        target_entity_id=body.target_entity_id,
-        relation=body.relation,
-        created_at=time.time(),
-        updated_at=time.time(),
-    ))
+    contact_repo.upsert(
+        ContactRow(
+            owner_entity_id=body.owner_entity_id,
+            target_entity_id=body.target_entity_id,
+            relation=body.relation,
+            created_at=time.time(),
+            updated_at=time.time(),
+        )
+    )
     return {"status": "ok", "relation": body.relation}
 
 

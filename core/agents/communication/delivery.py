@@ -26,21 +26,28 @@ def make_chat_delivery_fn(app: Any):
     loop = asyncio.get_running_loop()
     logger.info("[delivery] make_chat_delivery_fn: loop=%s", loop)
 
-    def _deliver(entity: EntityRow, content: str, sender_name: str, chat_id: str,
-                 sender_entity_id: str, sender_avatar_url: str | None = None,
-                 signal: str | None = None) -> None:
+    def _deliver(
+        entity: EntityRow,
+        content: str,
+        sender_name: str,
+        chat_id: str,
+        sender_entity_id: str,
+        sender_avatar_url: str | None = None,
+        signal: str | None = None,
+    ) -> None:
         logger.info("[delivery] _deliver called: entity=%s, thread=%s", entity.id, entity.thread_id)
         future = asyncio.run_coroutine_threadsafe(
-            _async_deliver(app, entity, sender_name, chat_id, sender_entity_id,
-                           sender_avatar_url, signal=signal),
+            _async_deliver(app, entity, sender_name, chat_id, sender_entity_id, sender_avatar_url, signal=signal),
             loop,
         )
+
         def _on_done(f):
             exc = f.exception()
             if exc:
                 logger.error("[delivery] async delivery failed for %s: %s", entity.id, exc, exc_info=exc)
             else:
                 logger.info("[delivery] async delivery completed for %s", entity.id)
+
         future.add_done_callback(_on_done)
 
     return _deliver
@@ -62,6 +69,7 @@ async def _async_deliver(
     # @@@context-isolation — clear inherited LangChain ContextVar so the recipient
     # agent's astream doesn't inherit the sender's StreamMessagesHandler callbacks.
     from langchain_core.runnables.config import var_child_runnable_config
+
     var_child_runnable_config.set(None)
 
     logger.info("[delivery] _async_deliver: entity=%s thread=%s from=%s", entity.id, entity.thread_id, sender_name)
@@ -77,6 +85,7 @@ async def _async_deliver(
     # Without this, enqueue on an unvisited thread has no handler to wake the agent.
     from backend.web.services.agent_pool import get_or_create_agent, resolve_thread_sandbox
     from backend.web.services.streaming_service import _ensure_thread_handlers
+
     sandbox_type = resolve_thread_sandbox(app, thread_id)
     agent = await get_or_create_agent(app, sandbox_type, thread_id=thread_id)
     _ensure_thread_handlers(agent, thread_id, app)
@@ -92,8 +101,12 @@ async def _async_deliver(
     formatted = format_chat_notification(sender_name, chat_id, unread_count, signal=signal)
 
     qm = app.state.queue_manager
-    qm.enqueue(formatted, thread_id, "chat",
-               source="external",
-               sender_entity_id=sender_entity_id,
-               sender_name=sender_name,
-               sender_avatar_url=sender_avatar_url)
+    qm.enqueue(
+        formatted,
+        thread_id,
+        "chat",
+        source="external",
+        sender_entity_id=sender_entity_id,
+        sender_name=sender_name,
+        sender_avatar_url=sender_avatar_url,
+    )

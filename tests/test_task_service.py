@@ -18,6 +18,7 @@ def _use_tmp_db(tmp_path, monkeypatch):
 # Table schema
 # ---------------------------------------------------------------------------
 
+
 class TestSchema:
     def test_new_columns_present_on_created_task(self):
         task = task_service.create_task(title="schema check")
@@ -37,6 +38,7 @@ class TestSchema:
 # ---------------------------------------------------------------------------
 # create_task
 # ---------------------------------------------------------------------------
+
 
 class TestCreateTask:
     def test_basic_fields(self):
@@ -62,6 +64,7 @@ class TestCreateTask:
 # ---------------------------------------------------------------------------
 # update_task
 # ---------------------------------------------------------------------------
+
 
 class TestUpdateTask:
     def test_update_title_and_status(self):
@@ -106,6 +109,7 @@ class TestUpdateTask:
 # list / delete / bulk_update
 # ---------------------------------------------------------------------------
 
+
 class TestListDeleteBulk:
     def test_list_returns_all(self):
         task_service.create_task(title="a")
@@ -135,6 +139,7 @@ class TestListDeleteBulk:
 # ---------------------------------------------------------------------------
 # Migration — existing DB without new columns
 # ---------------------------------------------------------------------------
+
 
 class TestMigration:
     def test_old_table_gets_new_columns(self, tmp_path, monkeypatch):

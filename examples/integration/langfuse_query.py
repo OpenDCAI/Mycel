@@ -142,7 +142,7 @@ def show_session(thread_id: str):
                     tc = o.output.get("tool_calls", [])
                     if tc:
                         calls = ", ".join(
-                            f"{c.get('name') or c.get('function',{}).get('name','?')}({_trunc(json.dumps(c.get('args') or c.get('function',{}).get('arguments',{}), ensure_ascii=False), 60)})"
+                            f"{c.get('name') or c.get('function', {}).get('name', '?')}({_trunc(json.dumps(c.get('args') or c.get('function', {}).get('arguments', {}), ensure_ascii=False), 60)})"  # noqa: E501
                             for c in tc
                         )
                         print(f"      → {calls}")

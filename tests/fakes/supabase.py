@@ -129,7 +129,7 @@ class FakeSupabaseQuery:
 
         # LIMIT
         if self._limit_value is not None:
-            matching = matching[:self._limit_value]
+            matching = matching[: self._limit_value]
 
         # UPDATE
         if self._update_payload is not None:

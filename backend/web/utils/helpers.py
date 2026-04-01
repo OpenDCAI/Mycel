@@ -1,16 +1,17 @@
 """General helper utilities."""
+
 from pathlib import Path
 from typing import Any
 
 from fastapi import HTTPException
 
 from backend.web.core.config import DB_PATH
+from sandbox.sync.state import SyncState
 from storage.container import StorageContainer
 from storage.providers.sqlite.chat_session_repo import SQLiteChatSessionRepo
 from storage.providers.sqlite.kernel import SQLiteDBRole, resolve_role_db_path
 from storage.providers.sqlite.terminal_repo import SQLiteTerminalRepo
 from storage.runtime import build_storage_container
-from sandbox.sync.state import SyncState
 
 SANDBOX_DB_PATH = resolve_role_db_path(SQLiteDBRole.SANDBOX)
 
@@ -80,12 +81,14 @@ def _get_container() -> StorageContainer:
 
 _cached_thread_repo = None
 
+
 def _get_thread_repo():
     """Get cached ThreadRepo instance."""
     global _cached_thread_repo
     if _cached_thread_repo is not None:
         return _cached_thread_repo
     from storage.providers.sqlite.thread_repo import SQLiteThreadRepo
+
     _cached_thread_repo = SQLiteThreadRepo(DB_PATH)
     return _cached_thread_repo
 

@@ -13,7 +13,7 @@ from pydantic import BaseModel
 
 from config.models_loader import ModelsLoader
 from config.models_schema import ModelsConfig
-from config.user_paths import first_existing_user_home_path, user_home_path, user_home_read_candidates
+from config.user_paths import user_home_path, user_home_read_candidates
 
 router = APIRouter(prefix="/api/settings", tags=["settings"])
 
@@ -169,7 +169,7 @@ async def browse_filesystem(path: str = Query(default="~"), include_files: bool 
 @router.get("/read")
 async def read_local_file(path: str = Query(...)) -> dict[str, Any]:
     """Read a local file's content (for SandboxBrowser in resources page)."""
-    _READ_MAX_BYTES = 100 * 1024
+    _read_max_bytes = 100 * 1024
     try:
         target = Path(path).expanduser().resolve()
         if not target.exists():
@@ -177,8 +177,8 @@ async def read_local_file(path: str = Query(...)) -> dict[str, Any]:
         if target.is_dir():
             raise HTTPException(status_code=400, detail="Path is a directory")
         raw = target.read_bytes()
-        truncated = len(raw) > _READ_MAX_BYTES
-        content = raw[:_READ_MAX_BYTES].decode(errors="replace")
+        truncated = len(raw) > _read_max_bytes
+        content = raw[:_read_max_bytes].decode(errors="replace")
         return {"path": str(target), "content": content, "truncated": truncated}
     except HTTPException:
         raise
@@ -302,7 +302,14 @@ async def get_available_models() -> dict[str, Any]:
                 continue
             seen.add(short_name)
             bundled_providers[short_name] = provider
-            models_list.append({"id": short_name, "name": m.get("name", short_name), "provider": provider, "context_length": m.get("context_length")})
+            models_list.append(
+                {
+                    "id": short_name,
+                    "name": m.get("name", short_name),
+                    "provider": provider,
+                    "context_length": m.get("context_length"),
+                }
+            )
         pricing_ids = seen
 
         # Merge custom + orphaned enabled models
@@ -311,7 +318,14 @@ async def get_available_models() -> dict[str, Any]:
         custom_providers = data.get("pool", {}).get("custom_providers", {})
         extra_ids = set(mc.pool.custom) | (set(mc.pool.enabled) - pricing_ids)
         for mid in sorted(extra_ids):
-            models_list.append({"id": mid, "name": mid, "custom": True, "provider": custom_providers.get(mid) or bundled_providers.get(mid)})
+            models_list.append(
+                {
+                    "id": mid,
+                    "name": mid,
+                    "custom": True,
+                    "provider": custom_providers.get(mid) or bundled_providers.get(mid),
+                }
+            )
 
         # Virtual models from system defaults
         virtual_models = [vm.model_dump() for vm in mc.virtual_models]
@@ -435,6 +449,7 @@ async def test_model(request: ModelTestRequest) -> dict[str, Any]:
     # Infer provider from model name if still unknown
     if not provider_name:
         from langchain.chat_models.base import _attempt_infer_model_provider
+
         provider_name = _attempt_infer_model_provider(resolved)
 
     # Get credentials from providers config
@@ -634,8 +649,7 @@ async def verify_observation() -> dict[str, Any]:
             )
             traces = client.trace.list(limit=5)
             trace_list = [
-                {"id": t.id, "name": t.name, "timestamp": str(t.timestamp)}
-                for t in (traces.data if hasattr(traces, "data") else [])
+                {"id": t.id, "name": t.name, "timestamp": str(t.timestamp)} for t in (traces.data if hasattr(traces, "data") else [])
             ]
             return {
                 "success": True,
@@ -658,14 +672,13 @@ async def verify_observation() -> dict[str, Any]:
                 api_key=cfg.api_key,
                 api_url=cfg.endpoint or "https://api.smith.langchain.com",
             )
-            runs = list(client.list_runs(
-                project_name=cfg.project or "default",
-                limit=5,
-            ))
-            run_list = [
-                {"id": str(r.id), "name": r.name, "start_time": str(r.start_time)}
-                for r in runs
-            ]
+            runs = list(
+                client.list_runs(
+                    project_name=cfg.project or "default",
+                    limit=5,
+                )
+            )
+            run_list = [{"id": str(r.id), "name": r.name, "start_time": str(r.start_time)} for r in runs]
             return {
                 "success": True,
                 "provider": "langsmith",

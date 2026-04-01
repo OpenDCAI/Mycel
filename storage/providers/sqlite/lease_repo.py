@@ -10,10 +10,9 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from sandbox.lifecycle import parse_lease_instance_state
 from storage.providers.sqlite.connection import create_connection
 from storage.providers.sqlite.kernel import SQLiteDBRole, resolve_role_db_path
-
-from sandbox.lifecycle import parse_lease_instance_state
 
 
 class SQLiteLeaseRepo:
@@ -109,10 +108,22 @@ class SQLiteLeaseRepo:
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
-                    lease_id, provider_name, recipe_id, recipe_json, "running", "detached",
-                    "detached", 0, now, None,
-                    0, None, "active", volume_id,
-                    now, now,
+                    lease_id,
+                    provider_name,
+                    recipe_id,
+                    recipe_json,
+                    "running",
+                    "detached",
+                    "detached",
+                    0,
+                    now,
+                    None,
+                    0,
+                    None,
+                    "active",
+                    volume_id,
+                    now,
+                    now,
                 ),
             )
             self._conn.commit()
@@ -148,9 +159,7 @@ class SQLiteLeaseRepo:
             self.create(lease_id=lease_id, provider_name=provider_name)
             existing = self.get(lease_id)
         if existing["provider_name"] != provider_name:
-            raise RuntimeError(
-                f"Lease provider mismatch during adopt: lease={existing['provider_name']}, requested={provider_name}"
-            )
+            raise RuntimeError(f"Lease provider mismatch during adopt: lease={existing['provider_name']}, requested={provider_name}")
 
         now = datetime.now().isoformat()
         normalized = parse_lease_instance_state(status).value
@@ -175,8 +184,17 @@ class SQLiteLeaseRepo:
                 WHERE lease_id = ?
                 """,
                 (
-                    instance_id, now, desired, normalized, normalized,
-                    now, None, 1, now, "active", now,
+                    instance_id,
+                    now,
+                    desired,
+                    normalized,
+                    normalized,
+                    now,
+                    None,
+                    1,
+                    now,
+                    "active",
+                    now,
                     lease_id,
                 ),
             )
@@ -246,6 +264,7 @@ class SQLiteLeaseRepo:
 
         # Clean up per-lease locks in SQLiteLease
         from sandbox.lease import SQLiteLease
+
         with SQLiteLease._lock_guard:
             SQLiteLease._lease_locks.pop(lease_id, None)
 
@@ -342,13 +361,11 @@ class SQLiteLeaseRepo:
         self._conn.commit()
 
         # Schema migration: add columns if missing
-        from sandbox.lease import REQUIRED_LEASE_COLUMNS, REQUIRED_INSTANCE_COLUMNS, REQUIRED_EVENT_COLUMNS
+        from sandbox.lease import REQUIRED_EVENT_COLUMNS, REQUIRED_INSTANCE_COLUMNS, REQUIRED_LEASE_COLUMNS
 
         lease_cols = {row[1] for row in self._conn.execute("PRAGMA table_info(sandbox_leases)").fetchall()}
         if "instance_status" not in lease_cols:
-            self._conn.execute(
-                "ALTER TABLE sandbox_leases ADD COLUMN instance_status TEXT NOT NULL DEFAULT 'detached'"
-            )
+            self._conn.execute("ALTER TABLE sandbox_leases ADD COLUMN instance_status TEXT NOT NULL DEFAULT 'detached'")
             self._conn.execute("UPDATE sandbox_leases SET instance_status = observed_state")
             self._conn.commit()
             lease_cols = {row[1] for row in self._conn.execute("PRAGMA table_info(sandbox_leases)").fetchall()}
@@ -370,9 +387,7 @@ class SQLiteLeaseRepo:
 
         missing_lease = REQUIRED_LEASE_COLUMNS - lease_cols
         if missing_lease:
-            raise RuntimeError(
-                f"sandbox_leases schema mismatch: missing {sorted(missing_lease)}. Purge ~/.leon/sandbox.db and retry."
-            )
+            raise RuntimeError(f"sandbox_leases schema mismatch: missing {sorted(missing_lease)}. Purge ~/.leon/sandbox.db and retry.")
         missing_instances = REQUIRED_INSTANCE_COLUMNS - instance_cols
         if missing_instances:
             raise RuntimeError(
@@ -380,6 +395,4 @@ class SQLiteLeaseRepo:
             )
         missing_events = REQUIRED_EVENT_COLUMNS - event_cols
         if missing_events:
-            raise RuntimeError(
-                f"lease_events schema mismatch: missing {sorted(missing_events)}. Purge ~/.leon/sandbox.db and retry."
-            )
+            raise RuntimeError(f"lease_events schema mismatch: missing {sorted(missing_events)}. Purge ~/.leon/sandbox.db and retry.")

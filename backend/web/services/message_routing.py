@@ -40,9 +40,15 @@ async def route_message_to_brain(
     run_content = content
 
     if hasattr(agent, "runtime") and agent.runtime.current_state == AgentState.ACTIVE:
-        qm.enqueue(steer_content, thread_id, "steer",
-                    source=source, sender_name=sender_name,
-                    sender_avatar_url=sender_avatar_url, is_steer=True)
+        qm.enqueue(
+            steer_content,
+            thread_id,
+            "steer",
+            source=source,
+            sender_name=sender_name,
+            sender_avatar_url=sender_avatar_url,
+            is_steer=True,
+        )
         logger.debug("[route] → ENQUEUED (agent active)")
         return {"status": "injected", "routing": "steer", "thread_id": thread_id}
 
@@ -52,16 +58,20 @@ async def route_message_to_brain(
         lock = locks.setdefault(thread_id, asyncio.Lock())
     async with lock:
         if hasattr(agent, "runtime") and not agent.runtime.transition(AgentState.ACTIVE):
-            qm.enqueue(steer_content, thread_id, "steer",
-                        source=source, sender_name=sender_name,
-                        sender_avatar_url=sender_avatar_url, is_steer=True)
+            qm.enqueue(
+                steer_content,
+                thread_id,
+                "steer",
+                source=source,
+                sender_name=sender_name,
+                sender_avatar_url=sender_avatar_url,
+                is_steer=True,
+            )
             logger.debug("[route] → ENQUEUED (transition failed)")
             return {"status": "injected", "routing": "steer", "thread_id": thread_id}
         logger.debug("[route] → START RUN (idle→active)")
-        meta = {"source": source, "sender_name": sender_name,
-                "sender_avatar_url": sender_avatar_url}
+        meta = {"source": source, "sender_name": sender_name, "sender_avatar_url": sender_avatar_url}
         if attachments:
             meta["attachments"] = attachments
-        run_id = start_agent_run(agent, thread_id, run_content, app,
-                                  message_metadata=meta)
+        run_id = start_agent_run(agent, thread_id, run_content, app, message_metadata=meta)
     return {"status": "started", "routing": "direct", "run_id": run_id, "thread_id": thread_id}

@@ -32,7 +32,6 @@ def process_and_save_avatar(source: Path | bytes, member_id: str) -> str:
         Relative avatar path (e.g. "avatars/{member_id}.png")
     """
     from PIL import Image, ImageOps
-    import io
 
     if isinstance(source, (bytes, bytearray)):
         img = Image.open(io.BytesIO(source))
@@ -45,6 +44,7 @@ def process_and_save_avatar(source: Path | bytes, member_id: str) -> str:
     AVATARS_DIR.mkdir(parents=True, exist_ok=True)
     img.save(AVATARS_DIR / f"{member_id}.png", format="PNG", optimize=True)
     return f"avatars/{member_id}.png"
+
 
 router = APIRouter(prefix="/api/entities", tags=["entities"])
 
@@ -69,16 +69,18 @@ async def list_members(
         if m.type != "mycel_agent":
             continue
         owner = member_repo.get_by_id(m.owner_user_id) if m.owner_user_id else None
-        result.append({
-            "id": m.id,
-            "name": m.name,
-            "type": m.type,
-            "avatar_url": avatar_url(m.id, bool(m.avatar)),
-            "description": m.description,
-            "owner_name": owner.name if owner else None,
-            "is_mine": m.owner_user_id == user_id,
-            "created_at": m.created_at,
-        })
+        result.append(
+            {
+                "id": m.id,
+                "name": m.name,
+                "type": m.type,
+                "avatar_url": avatar_url(m.id, bool(m.avatar)),
+                "description": m.description,
+                "owner_name": owner.name if owner else None,
+                "is_mine": m.owner_user_id == user_id,
+                "created_at": m.created_at,
+            }
+        )
     return result
 
 
@@ -151,6 +153,7 @@ async def delete_avatar(
 # Entities (social identities for chat discovery)
 # ---------------------------------------------------------------------------
 
+
 @router.get("")
 async def list_entities(
     user_id: Annotated[str, Depends(get_current_user_id)],
@@ -177,17 +180,19 @@ async def list_entities(
         member = member_map.get(entity.member_id)
         owner = member_map.get(member.owner_user_id) if member and member.owner_user_id else None
         thread = app.state.thread_repo.get_by_id(entity.thread_id) if entity.thread_id else None
-        items.append({
-            "id": entity.id,
-            "name": entity.name,
-            "type": entity.type,
-            "avatar_url": avatar_url(entity.member_id, member_avatars.get(entity.member_id, False)),
-            "owner_name": owner.name if owner else None,
-            "member_name": member.name if member else None,
-            "thread_id": entity.thread_id,
-            "is_main": thread["is_main"] if thread else None,
-            "branch_index": thread["branch_index"] if thread else None,
-        })
+        items.append(
+            {
+                "id": entity.id,
+                "name": entity.name,
+                "type": entity.type,
+                "avatar_url": avatar_url(entity.member_id, member_avatars.get(entity.member_id, False)),
+                "owner_name": owner.name if owner else None,
+                "member_name": member.name if member else None,
+                "thread_id": entity.thread_id,
+                "is_main": thread["is_main"] if thread else None,
+                "branch_index": thread["branch_index"] if thread else None,
+            }
+        )
     return items
 
 

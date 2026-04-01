@@ -117,11 +117,7 @@ def _read_archive_placeholder(path: Path) -> ReadResult:
     stat = path.stat()
 
     content = (
-        f"Archive file: {path.name}\n"
-        f"  Type: {ext.upper()}\n"
-        f"  Size: {stat.st_size:,} bytes\n"
-        f"\n"
-        f"Archive content listing not yet implemented."
+        f"Archive file: {path.name}\n  Type: {ext.upper()}\n  Size: {stat.st_size:,} bytes\n\nArchive content listing not yet implemented."
     )
 
     return ReadResult(

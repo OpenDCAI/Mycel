@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-
 FORBIDDEN = (
     "from core.runtime.middleware.memory.checkpoint_repo import",
     "from core.runtime.middleware.memory.thread_config_repo import",
@@ -25,4 +24,3 @@ def test_runtime_layers_do_not_import_memory_repo_modules_directly() -> None:
                     offenders.append(f"{path.relative_to(repo_root)} -> {pattern}")
 
     assert not offenders, "Found forbidden memory repo imports:\n" + "\n".join(offenders)
-

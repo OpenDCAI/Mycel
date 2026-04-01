@@ -22,10 +22,7 @@ DEFAULT_DB_PATH = Path.home() / ".leon" / "tasks.db"
 
 TASK_CREATE_SCHEMA = {
     "name": "TaskCreate",
-    "description": (
-        "Create a new task to track work progress. "
-        "Tasks are created with status 'pending'."
-    ),
+    "description": ("Create a new task to track work progress. Tasks are created with status 'pending'."),
     "parameters": {
         "type": "object",
         "properties": {
@@ -67,9 +64,7 @@ TASK_GET_SCHEMA = {
 
 TASK_LIST_SCHEMA = {
     "name": "TaskList",
-    "description": (
-        "List all tasks with summary info: id, subject, status, owner, blockedBy."
-    ),
+    "description": ("List all tasks with summary info: id, subject, status, owner, blockedBy."),
     "parameters": {
         "type": "object",
         "properties": {},
@@ -130,6 +125,7 @@ TASK_UPDATE_SCHEMA = {
     },
 }
 
+
 class TaskService:
     """Task management service providing DEFERRED tools.
 
@@ -156,6 +152,7 @@ class TaskService:
         if self._default_thread_id:
             return self._default_thread_id
         from sandbox.thread_context import get_current_thread_id
+
         tid = get_current_thread_id()
         return tid or "default"
 

@@ -98,7 +98,7 @@ class TestTerminalStore:
 
     def test_ensure_tables(self, temp_db):
         """Test table creation."""
-        store = SQLiteTerminalRepo(db_path=temp_db)
+        _store = SQLiteTerminalRepo(db_path=temp_db)
 
         # Verify table exists
         with sqlite3.connect(str(temp_db)) as conn:
@@ -107,12 +107,15 @@ class TestTerminalStore:
 
     def test_create_terminal(self, store):
         """Test creating a new terminal."""
-        terminal = _wrap(store, store.create(
-            terminal_id="term-123",
-            thread_id="thread-456",
-            lease_id="lease-789",
-            initial_cwd="/home/user",
-        ))
+        terminal = _wrap(
+            store,
+            store.create(
+                terminal_id="term-123",
+                thread_id="thread-456",
+                lease_id="lease-789",
+                initial_cwd="/home/user",
+            ),
+        )
 
         assert terminal.terminal_id == "term-123"
         assert terminal.thread_id == "thread-456"
@@ -244,6 +247,7 @@ class TestTerminalStore:
         assert terminals[1]["terminal_id"] == "term-2"
         assert terminals[2]["terminal_id"] == "term-1"
 
+
 class TestSQLiteTerminal:
     """Test SQLiteTerminal state persistence."""
 
@@ -365,7 +369,7 @@ class TestTerminalIntegration:
     def test_state_isolation_between_terminals(self, store):
         """Test that state updates are isolated between terminals."""
         term1 = _wrap(store, store.create("term-1", "thread-1", "lease-1", "/home/user1"))
-        term2 = _wrap(store, store.create("term-2", "thread-2", "lease-1", "/home/user2"))
+        _term2 = _wrap(store, store.create("term-2", "thread-2", "lease-1", "/home/user2"))
 
         # Update term1 state
         term1.update_state(TerminalState(cwd="/home/user1/project", env_delta={"FOO": "bar"}))

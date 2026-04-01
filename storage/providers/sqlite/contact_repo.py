@@ -8,11 +8,11 @@ from pathlib import Path
 
 from storage.contracts import ContactRow
 from storage.providers.sqlite.connection import create_connection
-from storage.providers.sqlite.kernel import SQLiteDBRole, resolve_role_db_path, retry_on_locked as _retry_on_locked
+from storage.providers.sqlite.kernel import SQLiteDBRole, resolve_role_db_path
+from storage.providers.sqlite.kernel import retry_on_locked as _retry_on_locked
 
 
 class SQLiteContactRepo:
-
     def __init__(self, db_path: str | Path | None = None, conn: sqlite3.Connection | None = None) -> None:
         self._own_conn = conn is None
         self._lock = threading.Lock()
@@ -39,6 +39,7 @@ class SQLiteContactRepo:
                     (row.owner_entity_id, row.target_entity_id, row.relation, row.created_at, row.updated_at),
                 )
                 self._conn.commit()
+
         _retry_on_locked(_do)
 
     def get(self, owner_entity_id: str, target_entity_id: str) -> ContactRow | None:
@@ -51,8 +52,11 @@ class SQLiteContactRepo:
         if not row:
             return None
         return ContactRow(
-            owner_entity_id=row[0], target_entity_id=row[1],
-            relation=row[2], created_at=row[3], updated_at=row[4],
+            owner_entity_id=row[0],
+            target_entity_id=row[1],
+            relation=row[2],
+            created_at=row[3],
+            updated_at=row[4],
         )
 
     def list_for_entity(self, owner_entity_id: str) -> list[ContactRow]:
@@ -64,8 +68,11 @@ class SQLiteContactRepo:
             ).fetchall()
         return [
             ContactRow(
-                owner_entity_id=r[0], target_entity_id=r[1],
-                relation=r[2], created_at=r[3], updated_at=r[4],
+                owner_entity_id=r[0],
+                target_entity_id=r[1],
+                relation=r[2],
+                created_at=r[3],
+                updated_at=r[4],
             )
             for r in rows
         ]
@@ -78,6 +85,7 @@ class SQLiteContactRepo:
                     (owner_entity_id, target_entity_id),
                 )
                 self._conn.commit()
+
         _retry_on_locked(_do)
 
     def _ensure_table(self) -> None:

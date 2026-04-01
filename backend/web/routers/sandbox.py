@@ -22,7 +22,10 @@ def _runtime_http_error(exc: RuntimeError) -> HTTPException:
 async def _mutate_session_action(session_id: str, action: str, provider: str | None) -> dict[str, Any]:
     try:
         return await asyncio.to_thread(
-            sandbox_service.mutate_sandbox_session, session_id=session_id, action=action, provider_hint=provider,
+            sandbox_service.mutate_sandbox_session,
+            session_id=session_id,
+            action=action,
+            provider_hint=provider,
         )
     except RuntimeError as e:
         raise _runtime_http_error(e) from e

@@ -6,7 +6,6 @@ import secrets
 import sqlite3
 import string
 import threading
-import uuid
 from pathlib import Path
 from typing import Any
 
@@ -23,7 +22,6 @@ def generate_member_id() -> str:
 
 
 class SQLiteMemberRepo:
-
     def __init__(self, db_path: str | Path | None = None, conn: sqlite3.Connection | None = None) -> None:
         self._own_conn = conn is None
         self._lock = threading.Lock()
@@ -44,7 +42,17 @@ class SQLiteMemberRepo:
             self._conn.execute(
                 "INSERT INTO members (id, name, type, avatar, description, config_dir, owner_user_id, created_at, updated_at)"
                 " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                (row.id, row.name, row.type.value, row.avatar, row.description, row.config_dir, row.owner_user_id, row.created_at, row.updated_at),
+                (
+                    row.id,
+                    row.name,
+                    row.type.value,
+                    row.avatar,
+                    row.description,
+                    row.config_dir,
+                    row.owner_user_id,
+                    row.created_at,
+                    row.updated_at,
+                ),
             )
             self._conn.commit()
 
@@ -92,7 +100,8 @@ class SQLiteMemberRepo:
                 (member_id,),
             )
             row = self._conn.execute(
-                "SELECT next_entity_seq FROM members WHERE id = ?", (member_id,),
+                "SELECT next_entity_seq FROM members WHERE id = ?",
+                (member_id,),
             ).fetchone()
             self._conn.commit()
             if not row:
@@ -106,9 +115,15 @@ class SQLiteMemberRepo:
 
     def _to_row(self, r: tuple) -> MemberRow:
         return MemberRow(
-            id=r[0], name=r[1], type=MemberType(r[2]),
-            avatar=r[3], description=r[4], config_dir=r[5],
-            owner_user_id=r[6], created_at=r[7], updated_at=r[8],
+            id=r[0],
+            name=r[1],
+            type=MemberType(r[2]),
+            avatar=r[3],
+            description=r[4],
+            config_dir=r[5],
+            owner_user_id=r[6],
+            created_at=r[7],
+            updated_at=r[8],
             next_entity_seq=r[9] if len(r) > 9 else 0,
         )
 
@@ -136,7 +151,6 @@ class SQLiteMemberRepo:
 
 
 class SQLiteAccountRepo:
-
     def __init__(self, db_path: str | Path | None = None, conn: sqlite3.Connection | None = None) -> None:
         self._own_conn = conn is None
         self._lock = threading.Lock()
@@ -155,8 +169,7 @@ class SQLiteAccountRepo:
     def create(self, row: AccountRow) -> None:
         with self._lock:
             self._conn.execute(
-                "INSERT INTO accounts (id, user_id, username, password_hash, api_key_hash, created_at)"
-                " VALUES (?, ?, ?, ?, ?, ?)",
+                "INSERT INTO accounts (id, user_id, username, password_hash, api_key_hash, created_at) VALUES (?, ?, ?, ?, ?, ?)",
                 (row.id, row.user_id, row.username, row.password_hash, row.api_key_hash, row.created_at),
             )
             self._conn.commit()
@@ -183,8 +196,12 @@ class SQLiteAccountRepo:
 
     def _to_row(self, r: tuple) -> AccountRow:
         return AccountRow(
-            id=r[0], user_id=r[1], username=r[2],
-            password_hash=r[3], api_key_hash=r[4], created_at=r[5],
+            id=r[0],
+            user_id=r[1],
+            username=r[2],
+            password_hash=r[3],
+            api_key_hash=r[4],
+            created_at=r[5],
         )
 
     def _ensure_table(self) -> None:
