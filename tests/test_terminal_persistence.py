@@ -68,6 +68,7 @@ def test_zsh_env_persistence():
     asyncio.run(run())
 
 
+@pytest.mark.skipif(shutil.which("zsh") is None, reason="zsh not available on this platform")
 def test_zsh_cwd_persistence():
     """Test that working directory persists across commands in zsh."""
 
