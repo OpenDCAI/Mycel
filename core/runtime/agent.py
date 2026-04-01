@@ -25,7 +25,6 @@ import threading
 from pathlib import Path
 from typing import Any
 
-from langchain.agents import create_agent
 from langchain.chat_models import init_chat_model
 from langchain_core.messages import SystemMessage
 from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
@@ -64,8 +63,11 @@ from core.runtime.middleware.queue import MessageQueueManager, SteeringMiddlewar
 from core.runtime.middleware.spill_buffer import SpillBufferMiddleware  # noqa: E402
 
 # New architecture: ToolRegistry + ToolRunner + Services
+from core.runtime.cleanup import CleanupRegistry  # noqa: E402
+from core.runtime.loop import QueryLoop  # noqa: E402
 from core.runtime.registry import ToolRegistry  # noqa: E402
 from core.runtime.runner import ToolRunner  # noqa: E402
+from core.runtime.state import BootstrapConfig  # noqa: E402
 from core.runtime.validator import ToolValidator  # noqa: E402
 
 # Hooks (used by Services)
@@ -273,13 +275,28 @@ class LeonAgent:
                     f"not to the chat — only chat_send() delivers to the other party.\n"
                 )
 
-        # Create agent
-        self.agent = create_agent(
+        # Build BootstrapConfig for sub-agent forking
+        self._bootstrap = BootstrapConfig(
+            workspace_root=self.workspace_root,
+            model_name=self.model_name,
+            api_key=self.api_key,
+            block_dangerous_commands=self.block_dangerous_commands,
+            block_network_commands=self.block_network_commands,
+            enable_audit_log=self.enable_audit_log,
+            enable_web_tools=self.enable_web_tools,
+            allowed_file_extensions=self.allowed_file_extensions,
+        )
+        # Inject bootstrap into AgentService so sub-agents can fork from it
+        if hasattr(self, "_agent_service"):
+            self._agent_service._parent_bootstrap = self._bootstrap
+
+        # Create agent via QueryLoop (replaces LangGraph create_agent)
+        self.agent = QueryLoop(
             model=self.model,
-            tools=mcp_tools,
             system_prompt=SystemMessage(content=[{"type": "text", "text": self.system_prompt}]),
             middleware=middleware,
             checkpointer=self.checkpointer,
+            registry=self._tool_registry,
         )
 
         # Get runtime from MonitorMiddleware
@@ -298,6 +315,13 @@ class LeonAgent:
             print(f"[LeonAgent] Audit log: {self.enable_audit_log}")
             if self.checkpointer is None:
                 print("[LeonAgent] Note: Async components need initialization via ainit()")
+
+        # Wire CleanupRegistry for priority-ordered resource teardown
+        self._cleanup_registry = CleanupRegistry()
+        self._cleanup_registry.register(self._cleanup_sandbox, priority=2)
+        self._cleanup_registry.register(self._mark_terminated, priority=3)
+        self._cleanup_registry.register(self._cleanup_mcp_client, priority=4)
+        self._cleanup_registry.register(self._cleanup_sqlite_connection, priority=5)
 
         # Mark agent as ready (checkpointer is None when async init still pending)
         if self.checkpointer is not None:
@@ -723,21 +747,24 @@ class LeonAgent:
             print(f"[LeonAgent] Observation updated: active={self._observation_config.active}")
 
     def close(self):
-        """Clean up resources.
+        """Clean up resources via CleanupRegistry (priority-ordered).
 
-        Each step is independently try/except-ed so one failure does not
-        prevent the remaining resources from being released.
+        Falls back to direct cleanup if CleanupRegistry is not initialized.
         """
-        for step_name, step_fn in [
-            ("sandbox", self._cleanup_sandbox),
-            ("monitor", self._mark_terminated),
-            ("MCP client", self._cleanup_mcp_client),
-            ("SQLite connection", self._cleanup_sqlite_connection),
-        ]:
-            try:
-                step_fn()
-            except Exception as e:
-                print(f"[LeonAgent] {step_name} cleanup error: {e}")
+        if hasattr(self, "_cleanup_registry"):
+            self._run_async_cleanup(self._cleanup_registry.run_cleanup, "CleanupRegistry")
+        else:
+            # Fallback for edge cases where __init__ did not complete fully
+            for step_name, step_fn in [
+                ("sandbox", self._cleanup_sandbox),
+                ("monitor", self._mark_terminated),
+                ("MCP client", self._cleanup_mcp_client),
+                ("SQLite connection", self._cleanup_sqlite_connection),
+            ]:
+                try:
+                    step_fn()
+                except Exception as e:
+                    print(f"[LeonAgent] {step_name} cleanup error: {e}")
 
     def _cleanup_sandbox(self) -> None:
         """Clean up sandbox resources."""
