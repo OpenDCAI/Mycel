@@ -166,19 +166,13 @@ class QueryLoop:
             tools=inline_schemas,
         )
 
-        # Walk middleware chain outside-in: each wraps the next
+        # Walk middleware chain outside-in: each wraps the next.
+        # Only include middleware that actually overrides awrap_model_call OR wrap_model_call
+        # (not just inherits the base-class NotImplementedError stub).
         handler = innermost_handler
         for mw in reversed(self.middleware):
-            if hasattr(mw, "awrap_model_call"):
-                # Capture current handler and middleware in closure
-                _mw = mw
-                _prev_handler = handler
-
-                async def make_handler(_mw=_mw, _prev=_prev_handler):
-                    pass  # placeholder for closure trick below
-
-                # Build wrapper function preserving closure correctly
-                handler = _make_model_wrapper(_mw, handler)
+            if _mw_overrides_model_call(mw):
+                handler = _make_model_wrapper(mw, handler)
 
         return await handler(request)
 
@@ -238,10 +232,11 @@ class QueryLoop:
                         name=t_name,
                     )
 
-            # Build tool handler chain (outside-in)
+            # Build tool handler chain (outside-in).
+            # Only include middleware that actually overrides awrap_tool_call.
             tool_handler = innermost_tool_handler
             for mw in reversed(self.middleware):
-                if hasattr(mw, "awrap_tool_call"):
+                if _mw_overrides_tool_call(mw):
                     tool_handler = _make_tool_wrapper(mw, tool_handler)
 
             return await tool_handler(tc_request)
@@ -377,3 +372,34 @@ def _make_tool_wrapper(mw: AgentMiddleware, next_handler):
     async def wrapper(request: ToolCallRequest) -> ToolMessage:
         return await mw.awrap_tool_call(request, next_handler)
     return wrapper
+
+
+# -------------------------------------------------------------------------
+# Middleware override detection helpers
+# -------------------------------------------------------------------------
+
+from langchain.agents.middleware.types import AgentMiddleware as _BaseMiddleware
+
+
+def _mw_overrides_model_call(mw: AgentMiddleware) -> bool:
+    """True if mw actually overrides awrap_model_call (not just inherits the base stub)."""
+    # Check if awrap_model_call is overridden in the concrete class
+    mw_type = type(mw)
+    base_fn = getattr(_BaseMiddleware, "awrap_model_call", None)
+    own_fn = mw_type.__dict__.get("awrap_model_call")
+    if own_fn is not None:
+        return True
+    # Fall back: check if wrap_model_call is overridden (sync version is acceptable)
+    base_sync = getattr(_BaseMiddleware, "wrap_model_call", None)
+    own_sync = mw_type.__dict__.get("wrap_model_call")
+    return own_sync is not None
+
+
+def _mw_overrides_tool_call(mw: AgentMiddleware) -> bool:
+    """True if mw actually overrides awrap_tool_call (not just inherits the base stub)."""
+    mw_type = type(mw)
+    own_fn = mw_type.__dict__.get("awrap_tool_call")
+    if own_fn is not None:
+        return True
+    own_sync = mw_type.__dict__.get("wrap_tool_call")
+    return own_sync is not None
