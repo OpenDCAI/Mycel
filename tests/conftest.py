@@ -5,7 +5,6 @@ Ensures the project root is in sys.path so imports work correctly.
 
 import gc
 import sys
-import tempfile
 import time
 from pathlib import Path
 
