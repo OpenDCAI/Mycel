@@ -3,6 +3,7 @@
 import asyncio
 import re
 import sqlite3
+import sys
 import time
 from unittest.mock import MagicMock
 
@@ -88,6 +89,7 @@ def _wrap_remote_state_output(
     return "\n".join(lines) + "\n"
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="LocalPersistentShellRuntime requires a Unix shell")
 class TestLocalPersistentShellRuntime:
     """Test LocalPersistentShellRuntime."""
 
@@ -396,6 +398,7 @@ class TestRemoteWrappedRuntime:
         assert mock_provider.execute.call_count == 2
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="LocalPersistentShellRuntime requires a Unix shell")
 class TestRuntimeIntegration:
     """Integration tests for runtime lifecycle."""
 
@@ -518,6 +521,7 @@ async def test_daytona_runtime_streams_running_output(terminal_store, lease_stor
     await runtime.close()
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="LocalPersistentShellRuntime requires a Unix shell")
 @pytest.mark.asyncio
 async def test_running_command_survives_runtime_reload_without_false_failure(terminal_store, lease_store):
     terminal = terminal_from_row(
