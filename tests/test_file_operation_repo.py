@@ -1,3 +1,5 @@
+import sys
+
 import pytest
 
 from storage.providers.sqlite.file_operation_repo import SQLiteFileOperationRepo
@@ -53,6 +55,9 @@ def test_delete_thread_operations(tmp_path):
 from tests.fakes.supabase import FakeSupabaseClient
 
 
+@pytest.mark.skipif(
+    sys.platform == "win32", reason="time.time() resolution on Windows can produce identical timestamps; ordering becomes non-deterministic"
+)
 def test_supabase_file_operation_repo_record_and_query():
     tables: dict[str, list[dict]] = {"file_operations": []}
     repo = SupabaseFileOperationRepo(client=FakeSupabaseClient(tables=tables))
