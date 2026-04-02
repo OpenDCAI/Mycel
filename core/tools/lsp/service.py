@@ -17,8 +17,11 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import subprocess
 from pathlib import Path
 from typing import Any
+
+_FILE_SIZE_LIMIT = 10 * 1024 * 1024  # 10 MB — matches CC LSP limit
 
 from core.runtime.registry import ToolEntry, ToolMode, ToolRegistry
 
@@ -111,7 +114,7 @@ class _LSPSession:
 
     async def _run(self) -> None:
         try:
-            from multilspy import LanguageServer
+            from multilspy import LanguageServer  # core dep — always available
             from multilspy.multilspy_config import MultilspyConfig
             from multilspy.multilspy_logger import MultilspyLogger
 
@@ -201,6 +204,47 @@ class LSPService:
         except ValueError:
             return file_path  # fallback: pass as-is
 
+    # ── pre-flight checks ─────────────────────────────────────────────
+
+    @staticmethod
+    def _check_file(file_path: str) -> str | None:
+        """Return error string if file exceeds 10 MB limit, else None."""
+        try:
+            size = Path(file_path).stat().st_size
+        except OSError:
+            return None  # let LSP handle missing file errors
+        if size > _FILE_SIZE_LIMIT:
+            mb = size / (1024 * 1024)
+            return f"File too large ({mb:.1f} MB). LSP file size limit is 10 MB."
+        return None
+
+    def _filter_gitignored(self, locations: list) -> list:
+        """Filter out locations inside gitignored paths (batches of 50, like CC)."""
+        if not locations:
+            return locations
+        abs_paths = [loc.get("absolutePath") or loc.get("uri", "").replace("file://", "") for loc in locations]
+        try:
+            # git check-ignore exits 0 if any path is ignored, 1 if none are
+            result = subprocess.run(
+                ["git", "check-ignore", "--stdin", "-z"],
+                input="\0".join(abs_paths),
+                capture_output=True,
+                text=True,
+                cwd=self._workspace_root,
+                timeout=5,
+            )
+            ignored = set(result.stdout.split("\0")) if result.stdout else set()
+        except Exception:
+            return locations  # on error, return all (fail-open)
+        return [loc for loc, p in zip(locations, abs_paths) if p not in ignored]
+
+    def _filter_gitignored_batched(self, locations: list) -> list:
+        """Run _filter_gitignored in batches of 50 (matches CC batch size)."""
+        out = []
+        for i in range(0, len(locations), 50):
+            out.extend(self._filter_gitignored(locations[i:i + 50]))
+        return out
+
     # ── output formatters ─────────────────────────────────────────────
 
     @staticmethod
@@ -246,14 +290,6 @@ class LSPService:
         query: str | None = None,
         language: str | None = None,
     ) -> str:
-        try:
-            import multilspy  # noqa: F401
-        except ImportError:
-            return (
-                "LSP unavailable: multilspy not installed.\n"
-                "Install with: pip install multilspy"
-            )
-
         # Resolve language
         lang = language
         if not lang and file_path:
@@ -261,6 +297,12 @@ class LSPService:
         if not lang:
             supported = ", ".join(sorted(set(_EXT_TO_LANG.values())))
             return f"Cannot detect language. Set 'language' parameter. Supported: {supported}"
+
+        # 10 MB file size guard (matches CC LSP limit)
+        if file_path:
+            err = self._check_file(file_path)
+            if err:
+                return err
 
         try:
             session = await self._get_session(lang)
@@ -274,6 +316,7 @@ class LSPService:
                 if not file_path or line is None or column is None:
                     return "goToDefinition requires: file_path, line, column"
                 results = await session.request_definition(rel, line, column)
+                results = self._filter_gitignored_batched(results)
                 if not results:
                     return "No definition found."
                 return json.dumps([self._fmt_location(r) for r in results], indent=2)
@@ -282,6 +325,7 @@ class LSPService:
                 if not file_path or line is None or column is None:
                     return "findReferences requires: file_path, line, column"
                 results = await session.request_references(rel, line, column)
+                results = self._filter_gitignored_batched(results)
                 if not results:
                     return "No references found."
                 return json.dumps([self._fmt_location(r) for r in results], indent=2)
@@ -291,7 +335,7 @@ class LSPService:
                     return "hover requires: file_path, line, column"
                 result = await session.request_hover(rel, line, column)
                 if not result:
-                    return "No hover info available."
+                    return "No hover info."
                 return self._fmt_hover(result)
 
             elif operation == "documentSymbol":
