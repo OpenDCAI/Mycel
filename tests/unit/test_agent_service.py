@@ -201,6 +201,106 @@ async def test_run_agent_applies_isolated_tool_context_to_child_agent_service(mo
 
 
 @pytest.mark.asyncio
+async def test_run_agent_rolls_child_bootstrap_costs_back_into_parent_bootstrap(monkeypatch, tmp_path):
+    created: list[_FakeChildAgent] = []
+
+    class _CostReportingChild(_FakeChildAgent):
+        async def _astream(self, *args, **kwargs):
+            self._bootstrap.total_cost_usd = 9.75
+            self._bootstrap.total_tool_duration_ms = 222
+            if False:
+                yield None
+            return
+
+    def fake_create_leon_agent(*, model_name, workspace_root, **kwargs):
+        child = _CostReportingChild(Path(workspace_root), model_name)
+        created.append(child)
+        return child
+
+    monkeypatch.setattr("core.runtime.agent.create_leon_agent", fake_create_leon_agent)
+
+    service = AgentService(
+        tool_registry=_FakeRegistry(),
+        agent_registry=_FakeAgentRegistry(),
+        workspace_root=tmp_path,
+        model_name="gpt-test",
+    )
+    service._parent_bootstrap = BootstrapConfig(
+        workspace_root=Path("/workspace"),
+        model_name="gpt-parent",
+        total_cost_usd=1.5,
+        total_tool_duration_ms=77,
+    )
+
+    result = await service._run_agent(
+        task_id="task-1",
+        agent_name="child",
+        thread_id="subagent-1",
+        prompt="do work",
+        subagent_type="general",
+        max_turns=None,
+        fork_context=False,
+    )
+
+    assert result == "(Agent completed with no text output)"
+    assert created[0]._bootstrap.total_cost_usd == 9.75
+    assert created[0]._bootstrap.total_tool_duration_ms == 222
+    assert service._parent_bootstrap.total_cost_usd == 9.75
+    assert service._parent_bootstrap.total_tool_duration_ms == 222
+
+
+@pytest.mark.asyncio
+async def test_run_agent_preserves_concurrent_parent_and_child_bootstrap_growth(monkeypatch, tmp_path):
+    created: list[_FakeChildAgent] = []
+
+    class _ConcurrentCostChild(_FakeChildAgent):
+        async def _astream(self, *args, **kwargs):
+            service._parent_bootstrap.total_cost_usd = 2.0
+            service._parent_bootstrap.total_tool_duration_ms = 20
+            self._bootstrap.total_cost_usd = 1.5
+            self._bootstrap.total_tool_duration_ms = 15
+            if False:
+                yield None
+            return
+
+    def fake_create_leon_agent(*, model_name, workspace_root, **kwargs):
+        child = _ConcurrentCostChild(Path(workspace_root), model_name)
+        created.append(child)
+        return child
+
+    monkeypatch.setattr("core.runtime.agent.create_leon_agent", fake_create_leon_agent)
+
+    service = AgentService(
+        tool_registry=_FakeRegistry(),
+        agent_registry=_FakeAgentRegistry(),
+        workspace_root=tmp_path,
+        model_name="gpt-test",
+    )
+    service._parent_bootstrap = BootstrapConfig(
+        workspace_root=Path("/workspace"),
+        model_name="gpt-parent",
+        total_cost_usd=1.0,
+        total_tool_duration_ms=10,
+    )
+
+    result = await service._run_agent(
+        task_id="task-1",
+        agent_name="child",
+        thread_id="subagent-1",
+        prompt="do work",
+        subagent_type="general",
+        max_turns=None,
+        fork_context=False,
+    )
+
+    assert result == "(Agent completed with no text output)"
+    assert created[0]._bootstrap.total_cost_usd == 1.5
+    assert created[0]._bootstrap.total_tool_duration_ms == 15
+    assert service._parent_bootstrap.total_cost_usd == 2.5
+    assert service._parent_bootstrap.total_tool_duration_ms == 25
+
+
+@pytest.mark.asyncio
 async def test_agent_tool_live_runner_path_passes_isolated_tool_context_to_child(monkeypatch, tmp_path):
     created: list[_FakeChildAgent] = []
 

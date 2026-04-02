@@ -475,6 +475,8 @@ class AgentService:
         agent = None
         progress_task: asyncio.Task | None = None
         progress_stop: asyncio.Event | None = None
+        child_bootstrap_start_cost = 0.0
+        child_bootstrap_start_tool_duration_ms = 0
         try:
             # Sub-agent context trimming: each spawn creates a fresh LeonAgent
             # with its own _build_system_prompt(). No CLAUDE.md content or
@@ -518,6 +520,8 @@ class AgentService:
                     )
                 else:
                     raise AttributeError("no parent bootstrap")
+                child_bootstrap_start_cost = float(getattr(child_bootstrap, "total_cost_usd", 0.0))
+                child_bootstrap_start_tool_duration_ms = int(getattr(child_bootstrap, "total_tool_duration_ms", 0))
                 if parent_tool_context is not None:
                     # @@@sa-05-subagent-policy-resolution
                     # Role-specific tool envelopes and model priority order must
@@ -722,11 +726,44 @@ class AgentService:
         finally:
             if agent is not None:
                 try:
+                    self._merge_child_bootstrap_accumulators(
+                        getattr(self, "_parent_bootstrap", None),
+                        getattr(agent, "_bootstrap", None),
+                        child_bootstrap_start_cost=child_bootstrap_start_cost,
+                        child_bootstrap_start_tool_duration_ms=child_bootstrap_start_tool_duration_ms,
+                    )
                     if hasattr(agent, "_agent_service") and hasattr(agent._agent_service, "cleanup_background_runs"):
                         await agent._agent_service.cleanup_background_runs()
                     agent.close()
                 except Exception:
                     pass
+
+    @staticmethod
+    def _merge_child_bootstrap_accumulators(
+        parent_bootstrap: Any,
+        child_bootstrap: Any,
+        *,
+        child_bootstrap_start_cost: float,
+        child_bootstrap_start_tool_duration_ms: int,
+    ) -> None:
+        if parent_bootstrap is None or child_bootstrap is None or parent_bootstrap is child_bootstrap:
+            return
+        # @@@sa-03-bootstrap-rollup
+        # Sub-agent loops start from a forked bootstrap snapshot. At join time we
+        # need to preserve both the parent's concurrent growth and the child's
+        # post-fork delta instead of letting one side overwrite the other.
+        child_cost_delta = max(
+            0.0,
+            float(getattr(child_bootstrap, "total_cost_usd", 0.0)) - child_bootstrap_start_cost,
+        )
+        child_tool_duration_delta = max(
+            0,
+            int(getattr(child_bootstrap, "total_tool_duration_ms", 0)) - child_bootstrap_start_tool_duration_ms,
+        )
+        parent_bootstrap.total_cost_usd = float(getattr(parent_bootstrap, "total_cost_usd", 0.0)) + child_cost_delta
+        parent_bootstrap.total_tool_duration_ms = (
+            int(getattr(parent_bootstrap, "total_tool_duration_ms", 0)) + child_tool_duration_delta
+        )
 
     @staticmethod
     def _summarize_progress(text: str, fallback: str) -> str:
