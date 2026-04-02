@@ -18,7 +18,11 @@ from typing import Any
 
 from config.loader import AgentLoader
 from core.agents.registry import AgentEntry, AgentRegistry
-from core.runtime.middleware.queue.formatters import format_background_notification
+from core.runtime.middleware.queue.formatters import (
+    format_agent_message,
+    format_background_notification,
+    format_progress_notification,
+)
 from core.runtime.registry import ToolEntry, ToolMode, ToolRegistry
 from core.runtime.state import ToolUseContext
 
@@ -133,7 +137,7 @@ AGENT_SCHEMA = {
             },
             "name": {
                 "type": "string",
-                "description": "Name for the agent (used for SendMessage routing)",
+                "description": "Optional display name for the spawned agent",
             },
             "description": {
                 "type": "string",
@@ -197,6 +201,29 @@ TASK_STOP_SCHEMA = {
             },
         },
         "required": ["task_id"],
+    },
+}
+
+SEND_MESSAGE_SCHEMA = {
+    "name": "SendMessage",
+    "description": "Send a queued message to another running agent by name. Delivered before that agent's next model turn.",
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "target_name": {
+                "type": "string",
+                "description": "Display name of the running target agent",
+            },
+            "message": {
+                "type": "string",
+                "description": "Message body to deliver",
+            },
+            "sender_name": {
+                "type": "string",
+                "description": "Optional sender label for the delivered message",
+            },
+        },
+        "required": ["target_name", "message"],
     },
 }
 
@@ -275,11 +302,13 @@ class AgentService:
         model_name: str,
         queue_manager: Any | None = None,
         shared_runs: dict[str, BackgroundRun] | None = None,
+        background_progress_interval_s: float = 30.0,
     ):
         self._agent_registry = agent_registry
         self._workspace_root = workspace_root
         self._model_name = model_name
         self._queue_manager = queue_manager
+        self._background_progress_interval_s = background_progress_interval_s
         # Shared with CommandService so TaskOutput covers both bash and agent runs.
         self._tasks: dict[str, BackgroundRun] = shared_runs if shared_runs is not None else {}
 
@@ -313,6 +342,16 @@ class AgentService:
                 handler=self._handle_task_stop,
                 source="AgentService",
                 search_hint="stop cancel background task agent",
+            )
+        )
+        tool_registry.register(
+            ToolEntry(
+                name="SendMessage",
+                mode=ToolMode.INLINE,
+                schema=SEND_MESSAGE_SCHEMA,
+                handler=self._handle_send_message,
+                source="AgentService",
+                search_hint="send message running agent mailbox queue",
             )
         )
 
@@ -434,6 +473,8 @@ class AgentService:
             pass  # backend not available in standalone core usage
 
         agent = None
+        progress_task: asyncio.Task | None = None
+        progress_stop: asyncio.Event | None = None
         try:
             # Sub-agent context trimming: each spawn creates a fresh LeonAgent
             # with its own _build_system_prompt(). No CLAUDE.md content or
@@ -553,6 +594,19 @@ class AgentService:
 
             config = {"configurable": {"thread_id": thread_id}}
             output_parts: list[str] = []
+            latest_progress = description or agent_name
+
+            if run_in_background and self._queue_manager and parent_thread_id and self._background_progress_interval_s > 0:
+                progress_stop = asyncio.Event()
+                progress_task = asyncio.create_task(
+                    self._emit_background_progress(
+                        task_id=task_id,
+                        agent_name=agent_name,
+                        parent_thread_id=parent_thread_id,
+                        latest_progress=lambda: latest_progress,
+                        stop_event=progress_stop,
+                    )
+                )
 
             # Build initial input — with or without forked parent context
             if fork_context:
@@ -586,15 +640,21 @@ class AgentService:
                             content = getattr(msg, "content", "")
                             if isinstance(content, str) and content:
                                 output_parts.append(content)
+                                latest_progress = self._summarize_progress(content, description or agent_name)
                             elif isinstance(content, list):
                                 for block in content:
                                     if isinstance(block, dict) and block.get("type") == "text":
                                         text = block.get("text", "")
                                         if text:
                                             output_parts.append(text)
+                                            latest_progress = self._summarize_progress(text, description or agent_name)
 
             await self._agent_registry.update_status(task_id, "completed")
             result = "\n".join(output_parts) or "(Agent completed with no text output)"
+            if progress_stop is not None:
+                progress_stop.set()
+            if progress_task is not None:
+                await progress_task
             # Notify frontend: task done
             if emit_fn is not None:
                 await emit_fn(
@@ -618,12 +678,17 @@ class AgentService:
                     task_id=task_id,
                     status="completed",
                     summary=label,
+                    result=result,
                     description=label,
                 )
                 self._queue_manager.enqueue(notification, parent_thread_id, notification_type="agent")
             return result
 
         except Exception:
+            if progress_stop is not None:
+                progress_stop.set()
+            if progress_task is not None:
+                await progress_task
             logger.exception("[AgentService] Agent %s failed", agent_name)
             await self._agent_registry.update_status(task_id, "error")
             # Notify frontend: task error
@@ -649,6 +714,7 @@ class AgentService:
                     task_id=task_id,
                     status="error",
                     summary=label,
+                    result="Agent failed",
                     description=label,
                 )
                 self._queue_manager.enqueue(notification, parent_thread_id, notification_type="agent")
@@ -656,9 +722,52 @@ class AgentService:
         finally:
             if agent is not None:
                 try:
+                    if hasattr(agent, "_agent_service") and hasattr(agent._agent_service, "cleanup_background_runs"):
+                        await agent._agent_service.cleanup_background_runs()
                     agent.close()
                 except Exception:
                     pass
+
+    @staticmethod
+    def _summarize_progress(text: str, fallback: str) -> str:
+        collapsed = " ".join(text.split()).strip()
+        if not collapsed:
+            return fallback
+        return collapsed[:120]
+
+    async def _emit_background_progress(
+        self,
+        *,
+        task_id: str,
+        agent_name: str,
+        parent_thread_id: str,
+        latest_progress: Any,
+        stop_event: asyncio.Event,
+    ) -> None:
+        # @@@sa-06-progress-loop - keep prompt-facing coordinator updates on the
+        # real queue path instead of inventing a detached mailbox abstraction.
+        while True:
+            try:
+                await asyncio.wait_for(stop_event.wait(), timeout=self._background_progress_interval_s)
+                return
+            except asyncio.TimeoutError:
+                pass
+
+            if self._queue_manager is None:
+                return
+
+            notification = format_progress_notification(
+                task_id,
+                latest_progress(),
+                step="running",
+            )
+            self._queue_manager.enqueue(
+                notification,
+                parent_thread_id,
+                notification_type="agent",
+                source="system",
+                sender_name=agent_name,
+            )
 
     async def _handle_task_output(self, task_id: str) -> str:
         """Get output of a background agent task."""
@@ -687,6 +796,70 @@ class AgentService:
             ensure_ascii=False,
         )
 
+    async def _handle_send_message(
+        self,
+        target_name: str,
+        message: str,
+        sender_name: str | None = None,
+    ) -> str:
+        if self._queue_manager is None:
+            return "<tool_use_error>SendMessage requires queue_manager</tool_use_error>"
+
+        matches = await self._agent_registry.list_running_by_name(target_name)
+        if not matches:
+            return f"<tool_use_error>Running agent '{target_name}' not found</tool_use_error>"
+        if len(matches) > 1:
+            return (
+                f"<tool_use_error>Running agent name '{target_name}' is ambiguous. "
+                "Use a unique name before calling SendMessage.</tool_use_error>"
+            )
+        target = matches[0]
+
+        delivered = format_agent_message(sender_name or "agent", message)
+        self._queue_manager.enqueue(
+            delivered,
+            target.thread_id,
+            notification_type="agent",
+            source="system",
+            sender_name=sender_name or "agent",
+        )
+        return f"Message sent to {target.name}."
+
+    async def _stop_background_run(self, task_id: str, running: BackgroundRun) -> None:
+        if isinstance(running, _RunningTask):
+            was_running = not running.task.done()
+            if was_running:
+                running.task.cancel()
+                try:
+                    await running.task
+                except asyncio.CancelledError:
+                    pass
+                await self._agent_registry.update_status(running.agent_id, "error")
+            self._tasks.pop(task_id, None)
+            return
+
+        if not running.is_done:
+            process = getattr(running._cmd, "process", None)
+            wait = getattr(process, "wait", None) if process is not None else None
+            terminate = getattr(process, "terminate", None) if process is not None else None
+            kill = getattr(process, "kill", None) if process is not None else None
+
+            if callable(terminate):
+                terminate()
+            if callable(wait):
+                try:
+                    await asyncio.wait_for(wait(), timeout=1.0)
+                except asyncio.TimeoutError:
+                    if callable(kill):
+                        kill()
+                    await wait()
+
+        self._tasks.pop(task_id, None)
+
+    async def cleanup_background_runs(self) -> None:
+        for task_id, running in list(self._tasks.items()):
+            await self._stop_background_run(task_id, running)
+
     async def _handle_task_stop(self, task_id: str) -> str:
         """Stop a running background agent task."""
         running = self._tasks.get(task_id)
@@ -696,6 +869,5 @@ class AgentService:
         if running.is_done:
             return f"Task {task_id} already completed"
 
-        running.task.cancel()
-        await self._agent_registry.update_status(running.agent_id, "error")
+        await self._stop_background_run(task_id, running)
         return f"Task {task_id} cancelled"

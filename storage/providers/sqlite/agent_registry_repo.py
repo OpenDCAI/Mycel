@@ -59,6 +59,14 @@ class SQLiteAgentRegistryRepo:
                 (agent_id,),
             ).fetchone()
 
+    def list_running_by_name(self, name: str) -> list[tuple]:
+        with self._conn() as conn:
+            return conn.execute(
+                "SELECT agent_id, name, thread_id, status, parent_agent_id, subagent_type "
+                "FROM agents WHERE name=? AND status='running' ORDER BY created_at DESC, agent_id DESC",
+                (name,),
+            ).fetchall()
+
     def update_status(self, agent_id: str, status: str) -> None:
         with self._conn() as conn:
             conn.execute("UPDATE agents SET status=? WHERE agent_id=?", (status, agent_id))

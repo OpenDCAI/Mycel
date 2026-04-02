@@ -440,7 +440,7 @@ The full tool catalog includes tools beyond the runtime.json config groups:
 | WebSearch | web | inline | Internet search |
 | WebFetch | web | inline | Fetch web page with AI extraction |
 | Agent | agent | inline | Spawn sub-agent |
-| SendMessage | agent | inline | Send message to another agent |
+| SendMessage | agent | inline | Queue a message for another running agent |
 | TaskOutput | agent | inline | Get background task output |
 | TaskStop | agent | inline | Stop background task |
 | TaskCreate | todo | deferred | Create todo task |

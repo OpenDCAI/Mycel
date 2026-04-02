@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
+import asyncio
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import pytest
 
-from core.agents.service import AGENT_DISALLOWED, EXPLORE_ALLOWED, AgentService
+from core.agents.service import AGENT_DISALLOWED, EXPLORE_ALLOWED, AgentService, _BashBackgroundRun, _RunningTask
 from core.runtime.registry import ToolRegistry
 from core.runtime.runner import ToolRunner
 from core.runtime.state import AppState, BootstrapConfig, ToolUseContext
@@ -32,7 +33,13 @@ class _FakeChildAgent:
         self.workspace_root = workspace_root
         self.model_name = model_name
         self._bootstrap = BootstrapConfig(workspace_root=workspace_root, model_name=model_name)
-        self._agent_service = SimpleNamespace(_parent_bootstrap=None, _parent_tool_context=None)
+        self.cleanup_calls = 0
+        self.closed = False
+        self._agent_service = SimpleNamespace(
+            _parent_bootstrap=None,
+            _parent_tool_context=None,
+            cleanup_background_runs=self._cleanup_background_runs,
+        )
         self.agent = SimpleNamespace(astream=self._astream)
 
     async def ainit(self):
@@ -43,8 +50,36 @@ class _FakeChildAgent:
             yield None
         return
 
+    async def _cleanup_background_runs(self):
+        self.cleanup_calls += 1
+
     def close(self):
+        self.closed = True
         return None
+
+
+class _FakeAsyncCommand:
+    def __init__(self):
+        self.done = False
+        self.stdout_buffer = []
+        self.stderr_buffer = []
+        self.exit_code = None
+        self.process = SimpleNamespace(terminate=self._terminate, kill=self._kill, wait=self._wait)
+        self.terminated = False
+        self.killed = False
+        self.wait_calls = 0
+
+    def _terminate(self):
+        self.terminated = True
+        self.done = True
+
+    def _kill(self):
+        self.killed = True
+        self.done = True
+
+    async def _wait(self):
+        self.wait_calls += 1
+        return 0
 
 
 def _make_parent_context(tmp_path: Path, model_name: str = "gpt-parent") -> ToolUseContext:
@@ -60,6 +95,11 @@ def _make_parent_context(tmp_path: Path, model_name: str = "gpt-parent") -> Tool
         nested_memory_attachment_triggers={"turn-a"},
         messages=["hello"],
     )
+
+
+async def _sleep_forever():
+    while True:
+        await asyncio.sleep(3600)
 
 
 @pytest.mark.asyncio
@@ -415,3 +455,89 @@ async def test_agent_tool_model_priority_inherits_parent_when_no_env_tool_or_fro
 
     assert captured["model_name"] == "parent-model"
     assert captured["kwargs"]["agent"] == "explore"
+
+
+@pytest.mark.asyncio
+async def test_cleanup_background_runs_cancels_pending_agent_and_shell_runs(tmp_path):
+    service = AgentService(
+        tool_registry=_FakeRegistry(),
+        agent_registry=_FakeAgentRegistry(),
+        workspace_root=tmp_path,
+        model_name="gpt-test",
+    )
+    agent_task = asyncio.create_task(_sleep_forever())
+    shell_cmd = _FakeAsyncCommand()
+    service._tasks["agent-task"] = _RunningTask(
+        task=agent_task,
+        agent_id="agent-task",
+        thread_id="subagent-agent-task",
+        description="agent task",
+    )
+    service._tasks["bash-task"] = _BashBackgroundRun(
+        async_cmd=shell_cmd,
+        command="sleep 999",
+        description="bash task",
+    )
+
+    await service.cleanup_background_runs()
+
+    assert agent_task.cancelled() is True
+    assert shell_cmd.terminated is True
+    assert shell_cmd.wait_calls == 1
+    assert service._tasks == {}
+
+
+@pytest.mark.asyncio
+async def test_cleanup_background_runs_does_not_relabel_completed_agent_run(tmp_path):
+    registry = _FakeAgentRegistry()
+    service = AgentService(
+        tool_registry=_FakeRegistry(),
+        agent_registry=registry,
+        workspace_root=tmp_path,
+        model_name="gpt-test",
+    )
+    completed_task = asyncio.create_task(asyncio.sleep(0, result="done"))
+    await completed_task
+    service._tasks["agent-task"] = _RunningTask(
+        task=completed_task,
+        agent_id="agent-task",
+        thread_id="subagent-agent-task",
+        description="agent task",
+    )
+
+    await service.cleanup_background_runs()
+
+    assert getattr(registry, "last_status", None) is None
+    assert service._tasks == {}
+
+
+@pytest.mark.asyncio
+async def test_run_agent_cleans_up_child_background_runs_before_close(monkeypatch, tmp_path):
+    created: list[_FakeChildAgent] = []
+
+    def fake_create_leon_agent(*, model_name, workspace_root, **kwargs):
+        child = _FakeChildAgent(Path(workspace_root), model_name)
+        created.append(child)
+        return child
+
+    monkeypatch.setattr("core.runtime.agent.create_leon_agent", fake_create_leon_agent)
+
+    service = AgentService(
+        tool_registry=_FakeRegistry(),
+        agent_registry=_FakeAgentRegistry(),
+        workspace_root=tmp_path,
+        model_name="gpt-test",
+    )
+
+    result = await service._run_agent(
+        task_id="task-1",
+        agent_name="child",
+        thread_id="subagent-task-1",
+        prompt="hello",
+        subagent_type="explore",
+        max_turns=None,
+    )
+
+    assert result == "(Agent completed with no text output)"
+    assert created[0].cleanup_calls == 1
+    assert created[0].closed is True

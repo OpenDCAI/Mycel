@@ -59,6 +59,20 @@ class AgentRegistry:
             subagent_type=row[5],
         )
 
+    async def list_running_by_name(self, name: str) -> list[AgentEntry]:
+        rows = self._repo.list_running_by_name(name)
+        return [
+            AgentEntry(
+                agent_id=row[0],
+                name=row[1],
+                thread_id=row[2],
+                status=row[3],
+                parent_agent_id=row[4],
+                subagent_type=row[5],
+            )
+            for row in rows
+        ]
+
     async def update_status(self, agent_id: str, status: str) -> None:
         async with self._lock:
             self._repo.update_status(agent_id, status)

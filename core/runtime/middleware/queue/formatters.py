@@ -20,6 +20,36 @@ def format_chat_notification(sender_name: str, chat_id: str, unread_count: int, 
     return f"<system-reminder>\nNew message from {sender_name} in chat {chat_id} ({unread_count} unread).{signal_hint}\n</system-reminder>"
 
 
+def format_agent_message(sender_name: str, message: str) -> str:
+    """Format inter-agent delivery for steering injection on the next turn."""
+    return (
+        "<system-reminder>\n"
+        "<agent-message>\n"
+        f"  <from>{escape(sender_name)}</from>\n"
+        f"  <content>{escape(message)}</content>\n"
+        "</agent-message>\n"
+        "</system-reminder>"
+    )
+
+
+def format_progress_notification(
+    agent_id: str,
+    description: str,
+    *,
+    step: str = "running",
+) -> str:
+    """Format background worker progress for coordinator-style prompt injection."""
+    return (
+        "<system-reminder>\n"
+        "<worker-progress>\n"
+        f"  <agent-id>{escape(agent_id)}</agent-id>\n"
+        f"  <step>{escape(step)}</step>\n"
+        f"  <description>{escape(description)}</description>\n"
+        "</worker-progress>\n"
+        "</system-reminder>"
+    )
+
+
 def format_background_notification(
     task_id: str,
     status: str,
@@ -31,7 +61,7 @@ def format_background_notification(
     """Format background task completion as system-reminder XML."""
     parts = [
         "<system-reminder>",
-        "<background-notification>",
+        "<task-notification>",
         f"  <run-id>{task_id}</run-id>",
         f"  <status>{status}</status>",
     ]
@@ -44,7 +74,7 @@ def format_background_notification(
         parts.append(f"  <result>{escape(truncated)}</result>")
     if usage:
         parts.append(f"  <usage>{json.dumps(usage)}</usage>")
-    parts.append("</background-notification>")
+    parts.append("</task-notification>")
     parts.append("</system-reminder>")
     return "\n".join(parts)
 

@@ -440,7 +440,7 @@ frontmatter 字段：
 | WebSearch | web | inline | 互联网搜索 |
 | WebFetch | web | inline | 获取网页并用 AI 提取内容 |
 | Agent | agent | inline | 派生子智能体 |
-| SendMessage | agent | inline | 向其他智能体发送消息 |
+| SendMessage | agent | inline | 向其他运行中智能体发送排队消息 |
 | TaskOutput | agent | inline | 获取后台任务输出 |
 | TaskStop | agent | inline | 停止后台任务 |
 | TaskCreate | todo | deferred | 创建待办任务 |
