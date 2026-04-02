@@ -45,6 +45,7 @@ dependencies = [
     "uvicorn>=0.30.0",
     "sse-starlette>=1.6.0",
     "multilspy>=0.0.15",
+    "pyright>=1.1.0",
 ]
 
 [project.optional-dependencies]
@@ -88,6 +89,7 @@ packages = [
     "core.tools.filesystem",
     "core.tools.filesystem.read",
     "core.tools.filesystem.read.readers",
+    "core.tools.lsp",
     "core.tools.search",
     "core.tools.skills",
     "core.tools.task",

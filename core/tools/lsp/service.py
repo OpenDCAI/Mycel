@@ -124,11 +124,6 @@ class _PyrightSession:
         self._next_id = 1
         self._reader_task: asyncio.Task | None = None
         self._open_files: set[str] = set()
-        # Progress tracking: wait for pyright to finish initial indexing
-        self._active_progress: set[Any] = set()
-        self._idle_event = asyncio.Event()
-        self._idle_event.set()   # starts idle; cleared when first progress begins
-        self._progress_started = asyncio.Event()  # set when first progress begin seen
 
     async def start(self) -> None:
         server = _find_pyright()
@@ -197,40 +192,11 @@ class _PyrightSession:
                             ))
                         else:
                             fut.set_result(msg.get("result"))
-                # Track $/progress to know when pyright finishes indexing
-                if msg.get("method") == "$/progress":
-                    val = (msg.get("params") or {}).get("value") or {}
-                    token = (msg.get("params") or {}).get("token")
-                    kind = val.get("kind")
-                    if kind == "begin":
-                        self._active_progress.add(token)
-                        self._idle_event.clear()
-                        self._progress_started.set()
-                    elif kind == "end":
-                        self._active_progress.discard(token)
-                        if not self._active_progress:
-                            self._idle_event.set()
-                # All other notifications are silently dropped
+                # All other notifications ($/progress, diagnostics, etc.) are silently dropped
         except Exception as exc:
             for fut in self._pending.values():
                 if not fut.done():
                     fut.set_exception(exc)
-
-    async def _wait_for_idle(self, timeout: float = 60.0) -> None:
-        """Wait until pyright's active progress tokens are all done.
-
-        Strategy: wait up to 5s for the first progress begin; if one arrives,
-        then wait up to `timeout` total for idle. If no progress comes, pyright
-        is likely already ready (small workspace).
-        """
-        try:
-            await asyncio.wait_for(self._progress_started.wait(), timeout=5.0)
-        except asyncio.TimeoutError:
-            return  # no progress at all — pyright ready immediately
-        try:
-            await asyncio.wait_for(self._idle_event.wait(), timeout=timeout)
-        except asyncio.TimeoutError:
-            logger.warning("[PyrightSession] timed out waiting for indexing to complete")
 
     def _write(self, msg: dict) -> None:
         """Encode and buffer one LSP message (call drain() to flush)."""
