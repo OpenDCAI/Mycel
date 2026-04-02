@@ -326,7 +326,6 @@ class LeonAgent:
 
         # Wire CleanupRegistry for priority-ordered resource teardown
         self._cleanup_registry = CleanupRegistry()
-        self._cleanup_registry.register(self._cleanup_lsp_service, priority=1)
         self._cleanup_registry.register(self._cleanup_sandbox, priority=2)
         self._cleanup_registry.register(self._mark_terminated, priority=3)
         self._cleanup_registry.register(self._cleanup_mcp_client, priority=4)
@@ -775,21 +774,6 @@ class LeonAgent:
                 except Exception as e:
                     print(f"[LeonAgent] {step_name} cleanup error: {e}")
 
-    def _cleanup_lsp_service(self) -> None:
-        """Stop all LSP language server processes."""
-        lsp = getattr(self, "_lsp_service", None)
-        if lsp is None:
-            return
-        try:
-            import asyncio
-
-            loop = asyncio.get_event_loop()
-            if loop.is_running():
-                loop.create_task(lsp.close())
-            else:
-                loop.run_until_complete(lsp.close())
-        except Exception as e:
-            logger.debug("[LeonAgent] LSP cleanup error: %s", e)
 
     def _cleanup_sandbox(self) -> None:
         """Clean up sandbox resources."""

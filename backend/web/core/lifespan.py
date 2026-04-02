@@ -273,3 +273,7 @@ async def lifespan(app: FastAPI):
                 agent.close()
             except Exception as e:
                 print(f"[web] Agent cleanup error: {e}")
+
+        # Cleanup: stop LSP language servers
+        from core.tools.lsp.service import lsp_pool
+        await lsp_pool.close_all()

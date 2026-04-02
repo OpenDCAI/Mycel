@@ -4,8 +4,9 @@ Registers a single DEFERRED `LSP` tool with 9 operations:
   goToDefinition, findReferences, hover, documentSymbol, workspaceSymbol,
   goToImplementation, prepareCallHierarchy, incomingCalls, outgoingCalls
 
-Language servers are auto-downloaded on first use per language. The server
-process is started lazily on the first LSP call and kept alive until close().
+Sessions are managed by the process-level _LSPSessionPool singleton — they
+start lazily on first use and persist for the lifetime of the process,
+surviving agent restarts. Call `await lsp_pool.close_all()` on process exit.
 
 Supported languages (via multilspy):
   python, typescript, javascript, go, rust, java, ruby, kotlin, csharp
@@ -443,11 +444,80 @@ class _LSPSession:
         return response or []
 
 
+class _LSPSessionPool:
+    """Process-level singleton managing LSP sessions across all agent instances.
+
+    Sessions are keyed by (language, workspace_root) and survive agent restarts.
+    Call close_all() once at process exit (e.g. from backend lifespan shutdown).
+    """
+
+    def __init__(self) -> None:
+        # (language, workspace_root) → _LSPSession
+        self._sessions: dict[tuple[str, str], _LSPSession] = {}
+        # workspace_root → _PyrightSession
+        self._pyright: dict[str, _PyrightSession] = {}
+        # In-flight start tasks to prevent duplicate starts under concurrent requests
+        self._starting: dict[tuple[str, str], asyncio.Task] = {}
+        self._starting_pyright: dict[str, asyncio.Task] = {}
+
+    async def get_session(self, language: str, workspace_root: str) -> _LSPSession:
+        key = (language, workspace_root)
+        if key in self._sessions:
+            return self._sessions[key]
+        if key not in self._starting:
+            async def _start() -> _LSPSession:
+                logger.info("[LSPPool] starting %s language server (workspace=%s)...", language, workspace_root)
+                s = _LSPSession(language, workspace_root)
+                await s.start()
+                self._sessions[key] = s
+                self._starting.pop(key, None)
+                logger.info("[LSPPool] %s language server ready", language)
+                return s
+            self._starting[key] = asyncio.create_task(_start(), name=f"lsp-start-{language}")
+        return await self._starting[key]
+
+    async def get_pyright(self, workspace_root: str) -> _PyrightSession:
+        if workspace_root in self._pyright:
+            return self._pyright[workspace_root]
+        if workspace_root not in self._starting_pyright:
+            async def _start() -> _PyrightSession:
+                logger.info("[LSPPool] starting pyright (workspace=%s)...", workspace_root)
+                s = _PyrightSession(workspace_root)
+                await s.start()
+                self._pyright[workspace_root] = s
+                self._starting_pyright.pop(workspace_root, None)
+                logger.info("[LSPPool] pyright ready")
+                return s
+            self._starting_pyright[workspace_root] = asyncio.create_task(_start(), name="lsp-start-pyright")
+        return await self._starting_pyright[workspace_root]
+
+    async def close_all(self) -> None:
+        """Stop all running language server processes. Call once at process exit."""
+        for (lang, ws), session in list(self._sessions.items()):
+            try:
+                await session.stop()
+                logger.debug("[LSPPool] stopped %s server (workspace=%s)", lang, ws)
+            except Exception as e:
+                logger.debug("[LSPPool] error stopping %s: %s", lang, e)
+        self._sessions.clear()
+        for ws, session in list(self._pyright.items()):
+            try:
+                await session.stop()
+                logger.debug("[LSPPool] stopped pyright (workspace=%s)", ws)
+            except Exception as e:
+                logger.debug("[LSPPool] error stopping pyright: %s", e)
+        self._pyright.clear()
+
+
+# Process-level singleton — import and use directly
+lsp_pool = _LSPSessionPool()
+
+
 class LSPService:
     """Registers the LSP tool (DEFERRED) into ToolRegistry.
 
-    The language server is started lazily on the first request per language
-    and kept alive until close() is called (typically at agent shutdown).
+    Delegates all session management to the process-level lsp_pool singleton.
+    Language servers start lazily on first use and persist across agent restarts.
     """
 
     # Operations that Jedi doesn't support — routed to pyright for Python,
@@ -458,8 +528,6 @@ class LSPService:
 
     def __init__(self, registry: ToolRegistry, workspace_root: str | Path) -> None:
         self._workspace_root = str(Path(workspace_root).resolve())
-        self._sessions: dict[str, _LSPSession] = {}
-        self._pyright: _PyrightSession | None = None  # Python advanced ops
         registry.register(
             ToolEntry(
                 name="LSP",
@@ -472,28 +540,15 @@ class LSPService:
                 is_concurrency_safe=True,
             )
         )
-        logger.info("LSPService initialized (workspace=%s)", self._workspace_root)
+        logger.debug("[LSPService] registered (workspace=%s)", self._workspace_root)
 
-    # ── session management ────────────────────────────────────────────
+    # ── session management (delegates to process-level pool) ──────────
 
     async def _get_session(self, language: str) -> _LSPSession:
-        if language not in self._sessions:
-            logger.info("[LSPService] starting %s language server...", language)
-            session = _LSPSession(language, self._workspace_root)
-            await session.start()
-            self._sessions[language] = session
-            logger.info("[LSPService] %s language server ready", language)
-        return self._sessions[language]
+        return await lsp_pool.get_session(language, self._workspace_root)
 
     async def _get_pyright(self) -> _PyrightSession:
-        """Return a started _PyrightSession, creating one on first call."""
-        if self._pyright is None:
-            logger.info("[LSPService] starting pyright language server...")
-            session = _PyrightSession(self._workspace_root)
-            await session.start()
-            self._pyright = session
-            logger.info("[LSPService] pyright language server ready")
-        return self._pyright
+        return await lsp_pool.get_pyright(self._workspace_root)
 
     def _detect_language(self, file_path: str) -> str | None:
         return _EXT_TO_LANG.get(Path(file_path).suffix.lower())
@@ -754,19 +809,3 @@ class LSPService:
             logger.exception("[LSPService] operation=%s failed", operation)
             return f"LSP error: {e}"
 
-    async def close(self) -> None:
-        """Stop all running language server sessions."""
-        for lang, session in list(self._sessions.items()):
-            try:
-                await session.stop()
-                logger.debug("[LSPService] stopped %s server", lang)
-            except Exception as e:
-                logger.debug("[LSPService] error stopping %s: %s", lang, e)
-        self._sessions.clear()
-        if self._pyright is not None:
-            try:
-                await self._pyright.stop()
-                logger.debug("[LSPService] stopped pyright server")
-            except Exception as e:
-                logger.debug("[LSPService] error stopping pyright: %s", e)
-            self._pyright = None
