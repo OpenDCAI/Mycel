@@ -1,5 +1,7 @@
 name: Deploy
 
+# Production: push a vX.Y.Z tag (no pre-release suffix)
+# Staging:    handled by deploy-staging.yml (PR label / workflow_dispatch)
 on:
   push:
     tags:
@@ -7,6 +9,8 @@ on:
 
 jobs:
   deploy-production:
+    # Only run for non-pre-release tags (v1.2.3, not v1.2.3-beta.1)
+    if: ${{ !contains(github.ref_name, '-') }}
     runs-on: ubuntu-latest
     steps:
       - name: Deploy backend to production
