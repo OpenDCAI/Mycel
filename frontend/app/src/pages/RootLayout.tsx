@@ -1,5 +1,5 @@
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
-import { MessageSquare, MessagesSquare, Users, ListTodo, Store, Layers, Plug, Settings, Plus, ChevronLeft, ChevronRight, LogOut, Camera } from "lucide-react";
+import { MessageSquare, MessagesSquare, Users, ListTodo, Store, Layers, Plug, Settings, Plus, ChevronLeft, ChevronRight, LogOut, Camera, Eye, EyeOff } from "lucide-react";
 import { useState, useEffect, useCallback, useRef } from "react";
 import { uploadMemberAvatar } from "@/api/client";
 import MemberAvatar from "@/components/MemberAvatar";
@@ -452,6 +452,7 @@ function LoginForm() {
   if (step.type === "reg_complete") {
     const { tempToken, email } = step;
     return <RegCompleteStep
+      email={email}
       onSubmit={async (password, inviteCode) => {
         if (!inviteCode.trim()) {
           setStep({ type: "closed_beta", email, tempToken });
@@ -596,25 +597,66 @@ function RegOtpStep({ email, onSubmit, onBack, error, setError, loading, setLoad
   );
 }
 
-function RegCompleteStep({ onSubmit, onBack, error, setError, loading, setLoading }: {
+function PasswordInput({ value, onChange, placeholder, autoFocus, autoComplete }: {
+  value: string;
+  onChange: (v: string) => void;
+  placeholder: string;
+  autoFocus?: boolean;
+  autoComplete?: string;
+}) {
+  const [visible, setVisible] = useState(false);
+  return (
+    <div className="relative">
+      <input
+        type={visible ? "text" : "password"}
+        placeholder={placeholder}
+        value={value}
+        onChange={e => onChange(e.target.value)}
+        className={`${inputCls} pr-10`}
+        required
+        autoComplete={autoComplete}
+        autoFocus={autoFocus}
+        minLength={6}
+      />
+      <button
+        type="button"
+        onClick={() => setVisible(v => !v)}
+        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors duration-fast"
+        tabIndex={-1}
+      >
+        {visible ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+      </button>
+    </div>
+  );
+}
+
+function RegCompleteStep({ email, onSubmit, onBack, error, setError, loading, setLoading }: {
+  email: string;
   onSubmit: (pw: string, code: string) => Promise<void>;
   onBack: () => void;
   error: string | null; setError: (e: string | null) => void;
   loading: boolean; setLoading: (v: boolean) => void;
 }) {
   const [password, setPassword] = useState("");
+  const [confirm, setConfirm] = useState("");
   const [inviteCode, setInviteCode] = useState("");
   async function handle(e: React.FormEvent) {
-    e.preventDefault(); setError(null); setLoading(true);
+    e.preventDefault();
+    if (password !== confirm) { setError("两次输入的密码不一致"); return; }
+    setError(null); setLoading(true);
     try { await onSubmit(password, inviteCode); }
     catch (err) { setError(err instanceof Error ? err.message : "注册失败"); }
     finally { setLoading(false); }
   }
   return (
     <AuthCard>
-      <AuthHeader title="设置账号" subtitle="填写邀请码和密码完成注册" />
+      <AuthHeader title="设置账号" subtitle="设置密码完成注册" />
+      <div className="mb-5 px-4 py-2.5 rounded-lg bg-muted text-sm text-muted-foreground text-center">
+        {email}
+      </div>
       <form onSubmit={handle} className="space-y-4">
-        <input type="password" placeholder="设置密码" value={password} onChange={e => setPassword(e.target.value)} className={inputCls} required autoComplete="new-password" autoFocus minLength={6} />
+        <PasswordInput value={password} onChange={setPassword} placeholder="设置密码" autoFocus autoComplete="new-password" />
+        <PasswordInput value={confirm} onChange={setConfirm} placeholder="确认密码" autoComplete="new-password" />
         <input type="text" placeholder="邀请码（没有可留空）" value={inviteCode} onChange={e => setInviteCode(e.target.value)} className={inputCls} autoComplete="off" />
         {error && <p className="text-xs text-destructive">{error}</p>}
         <button type="submit" disabled={loading} className={btnCls}>
