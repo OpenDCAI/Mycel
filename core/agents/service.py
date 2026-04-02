@@ -615,7 +615,16 @@ class AgentService:
             # Build initial input — with or without forked parent context
             if fork_context:
                 from sandbox.thread_context import get_current_messages
-                parent_msgs = get_current_messages()
+                # @@@pt-04-fork-context-source
+                # The Agent tool already has an explicit parent ToolUseContext on
+                # the live ToolRunner path. Forked sub-agents must prefer that
+                # concrete message snapshot over ambient ContextVar state, or the
+                # direct runner path silently drops parent context.
+                parent_msgs = (
+                    list(parent_tool_context.messages)
+                    if parent_tool_context is not None
+                    else get_current_messages()
+                )
                 _FORK_MARKER = (
                     "\n\n### ENTERING SUB-AGENT ROUTINE ###\n"
                     "Messages above are from the parent thread (read-only context).\n"

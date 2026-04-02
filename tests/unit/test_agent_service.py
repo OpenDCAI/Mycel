@@ -13,6 +13,7 @@ from core.agents.service import AGENT_DISALLOWED, EXPLORE_ALLOWED, AgentService,
 from core.runtime.registry import ToolRegistry
 from core.runtime.runner import ToolRunner
 from core.runtime.state import AppState, BootstrapConfig, ToolUseContext
+from sandbox.thread_context import set_current_messages
 
 
 class _FakeRegistry:
@@ -198,6 +199,100 @@ async def test_run_agent_applies_isolated_tool_context_to_child_agent_service(mo
     assert parent_context.get_app_state().turn_count == 1
     child_context.set_app_state_for_tasks(lambda prev: prev.model_copy(update={"turn_count": 9}))
     assert parent_context.get_app_state().turn_count == 9
+
+
+@pytest.mark.asyncio
+async def test_agent_tool_fork_context_uses_parent_tool_context_messages(monkeypatch, tmp_path):
+    captured: dict[str, object] = {}
+
+    class _CapturingChild(_FakeChildAgent):
+        async def _astream(self, payload, *args, **kwargs):
+            captured["messages"] = payload["messages"]
+            if False:
+                yield None
+            return
+
+    def fake_create_leon_agent(*, model_name, workspace_root, **kwargs):
+        return _CapturingChild(Path(workspace_root), model_name)
+
+    monkeypatch.setattr("core.runtime.agent.create_leon_agent", fake_create_leon_agent)
+
+    registry = ToolRegistry()
+    AgentService(
+        tool_registry=registry,
+        agent_registry=_FakeAgentRegistry(),
+        workspace_root=tmp_path,
+        model_name="gpt-test",
+    )
+    runner = ToolRunner(registry=registry)
+    request = SimpleNamespace(
+        tool_call={"name": "Agent", "args": {"prompt": "inspect", "fork_context": True}, "id": "tc-1"},
+        state=_make_parent_context(tmp_path),
+    )
+
+    result = await runner.awrap_tool_call(request, AsyncMock())
+
+    assert result.content == "(Agent completed with no text output)"
+    assert captured["messages"] == [
+        "hello",
+        {
+            "role": "user",
+            "content": (
+                "\n\n### ENTERING SUB-AGENT ROUTINE ###\n"
+                "Messages above are from the parent thread (read-only context).\n"
+                "Only complete the specific task assigned below.\n\n"
+                "inspect"
+            ),
+        },
+    ]
+
+
+@pytest.mark.asyncio
+async def test_agent_tool_fork_context_treats_empty_parent_messages_as_authoritative(monkeypatch, tmp_path):
+    captured: dict[str, object] = {}
+
+    class _CapturingChild(_FakeChildAgent):
+        async def _astream(self, payload, *args, **kwargs):
+            captured["messages"] = payload["messages"]
+            if False:
+                yield None
+            return
+
+    def fake_create_leon_agent(*, model_name, workspace_root, **kwargs):
+        return _CapturingChild(Path(workspace_root), model_name)
+
+    monkeypatch.setattr("core.runtime.agent.create_leon_agent", fake_create_leon_agent)
+    set_current_messages([{"role": "user", "content": "AMBIENT_LEAK"}])
+
+    registry = ToolRegistry()
+    AgentService(
+        tool_registry=registry,
+        agent_registry=_FakeAgentRegistry(),
+        workspace_root=tmp_path,
+        model_name="gpt-test",
+    )
+    runner = ToolRunner(registry=registry)
+    parent_context = _make_parent_context(tmp_path)
+    parent_context.messages = []
+    request = SimpleNamespace(
+        tool_call={"name": "Agent", "args": {"prompt": "inspect", "fork_context": True}, "id": "tc-1"},
+        state=parent_context,
+    )
+
+    result = await runner.awrap_tool_call(request, AsyncMock())
+
+    assert result.content == "(Agent completed with no text output)"
+    assert captured["messages"] == [
+        {
+            "role": "user",
+            "content": (
+                "\n\n### ENTERING SUB-AGENT ROUTINE ###\n"
+                "Messages above are from the parent thread (read-only context).\n"
+                "Only complete the specific task assigned below.\n\n"
+                "inspect"
+            ),
+        },
+    ]
 
 
 @pytest.mark.asyncio
