@@ -13,6 +13,7 @@ import AgentDetailPage from './pages/AgentDetailPage';
 import TasksPage from './pages/TasksPage';
 import MarketplacePage from './pages/MarketplacePage';
 import MarketplaceDetailPage from './pages/MarketplaceDetailPage';
+import LibraryItemDetailPage from './pages/LibraryItemDetailPage';
 import ResourcesPage from './pages/ResourcesPage';
 import ConnectionsPage from './pages/ConnectionsPage';
 
@@ -89,6 +90,10 @@ export const router = createBrowserRouter([
       {
         path: 'marketplace/:id',
         element: <MarketplaceDetailPage />,
+      },
+      {
+        path: 'library/:type/:id',
+        element: <LibraryItemDetailPage />,
       },
       {
         path: 'library',
