@@ -194,6 +194,7 @@ class LeonAgent:
         self.extra_allowed_paths = extra_allowed_paths
         self.queue_manager = queue_manager or MessageQueueManager()
         self._chat_repos: dict | None = chat_repos
+        self._explicit_model_name = model_name is not None
 
         # New config system mode
         self.config, self.models_config = self._load_config(
@@ -215,8 +216,14 @@ class LeonAgent:
             from config.schema import DEFAULT_MODEL  # noqa: E402
 
             active_model = DEFAULT_MODEL
-        # Member model override: agent.md's model field takes precedence over global config
-        if hasattr(self, "_agent_override") and self._agent_override and self._agent_override.model:
+        # Agent frontmatter model applies only when the caller did not explicitly
+        # request a model at construction time.
+        if (
+            not self._explicit_model_name
+            and hasattr(self, "_agent_override")
+            and self._agent_override
+            and self._agent_override.model
+        ):
             active_model = self._agent_override.model
         resolved_model, model_overrides = self.models_config.resolve_model(active_model)
         self.model_name = resolved_model
@@ -1432,7 +1439,7 @@ class LeonAgent:
 
 
 def create_leon_agent(
-    model_name: str = DEFAULT_MODEL,
+    model_name: str | None = None,
     api_key: str | None = None,
     workspace_root: str | Path | None = None,
     sandbox: Any = None,
@@ -1442,7 +1449,7 @@ def create_leon_agent(
     """Create Leon Agent.
 
     Args:
-        model_name: Model name
+        model_name: Model name. None means "let LeonAgent resolve defaults".
         api_key: API key
         workspace_root: Workspace directory
         sandbox: Sandbox instance, name string, or None for local

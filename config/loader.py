@@ -153,7 +153,7 @@ class AgentLoader:
                 continue
             config = self.parse_agent_file(agent_md)
             if config:
-                # source_dir is already set to member_dir by parse_agent_file
+                config.source_dir = member_dir.resolve()
                 self._agents[config.name] = config
 
     @staticmethod
@@ -184,7 +184,7 @@ class AgentLoader:
             tools=fm.get("tools", ["*"]),
             system_prompt=parts[2].strip(),
             model=fm.get("model"),
-            source_dir=path.resolve().parent,
+            source_dir=None,
         )
 
     def get_agent(self, name: str) -> AgentConfig | None:

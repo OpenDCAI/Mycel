@@ -11,10 +11,12 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
 import uuid
 from pathlib import Path
 from typing import Any
 
+from config.loader import AgentLoader
 from core.agents.registry import AgentEntry, AgentRegistry
 from core.runtime.middleware.queue.formatters import format_background_notification
 from core.runtime.registry import ToolEntry, ToolMode, ToolRegistry
@@ -50,6 +52,29 @@ def _get_tool_filters(subagent_type: str) -> tuple[set[str], set[str] | None]:
 
     # general: only block parent-controlling tools, no whitelist
     return AGENT_DISALLOWED, None
+
+
+def _get_subagent_agent_name(subagent_type: str) -> str:
+    return subagent_type.lower()
+
+
+def _resolve_subagent_model(
+    workspace_root: Path,
+    subagent_type: str,
+    requested_model: str | None,
+    inherited_model: str,
+) -> str:
+    env_model = os.getenv("CLAUDE_CODE_SUBAGENT_MODEL")
+    if env_model:
+        return env_model
+    if requested_model:
+        return requested_model
+
+    agent_def = AgentLoader(workspace_root=workspace_root).load_all_agents().get(_get_subagent_agent_name(subagent_type))
+    if agent_def and agent_def.model:
+        return agent_def.model
+
+    return inherited_model
 
 
 def _filter_fork_messages(messages: list) -> list:
@@ -121,6 +146,10 @@ AGENT_SCHEMA = {
                 "type": "boolean",
                 "default": False,
                 "description": "Fire-and-forget: return immediately with task_id instead of waiting for completion",
+            },
+            "model": {
+                "type": "string",
+                "description": "Optional sub-agent model override. Priority: env > this field > agent frontmatter > inherit.",
             },
             "max_turns": {
                 "type": "integer",
@@ -294,6 +323,7 @@ class AgentService:
         name: str | None = None,
         description: str | None = None,
         run_in_background: bool = False,
+        model: str | None = None,
         max_turns: int | None = None,
         fork_context: bool = False,
         tool_context: ToolUseContext | None = None,
@@ -326,6 +356,7 @@ class AgentService:
                 prompt,
                 subagent_type,
                 max_turns,
+                model=model,
                 description=description or "",
                 run_in_background=run_in_background,
                 fork_context=fork_context,
@@ -364,6 +395,7 @@ class AgentService:
         prompt: str,
         subagent_type: str,
         max_turns: int | None,
+        model: str | None = None,
         description: str = "",
         run_in_background: bool = False,
         fork_context: bool = False,
@@ -413,6 +445,7 @@ class AgentService:
             # Falls back to create_leon_agent when bootstrap is not available.
             # Compute tool filtering for this sub-agent type
             extra_blocked, allowed = _get_tool_filters(subagent_type)
+            agent_name_for_role = _get_subagent_agent_name(subagent_type)
 
             try:
                 from core.runtime.fork import create_subagent_context, fork_context
@@ -428,9 +461,16 @@ class AgentService:
                     child_bootstrap = child_tool_context.bootstrap
                 elif parent_bootstrap is not None:
                     child_bootstrap = fork_context(parent_bootstrap)
+                    selected_model = _resolve_subagent_model(
+                        self._workspace_root,
+                        subagent_type,
+                        model,
+                        child_bootstrap.model_name,
+                    )
                     agent = create_leon_agent(
-                        model_name=child_bootstrap.model_name,
+                        model_name=selected_model,
                         workspace_root=child_bootstrap.workspace_root,
+                        agent=agent_name_for_role,
                         extra_blocked_tools=extra_blocked,
                         allowed_tools=allowed,
                         verbose=False,
@@ -438,9 +478,20 @@ class AgentService:
                 else:
                     raise AttributeError("no parent bootstrap")
                 if parent_tool_context is not None:
+                    # @@@sa-05-subagent-policy-resolution
+                    # Role-specific tool envelopes and model priority order must
+                    # be resolved explicitly here instead of leaking through
+                    # prompt text or whichever defaults happen to win later.
+                    selected_model = _resolve_subagent_model(
+                        self._workspace_root,
+                        subagent_type,
+                        model,
+                        child_bootstrap.model_name,
+                    )
                     agent = create_leon_agent(
-                        model_name=child_bootstrap.model_name,
+                        model_name=selected_model,
                         workspace_root=child_bootstrap.workspace_root,
+                        agent=agent_name_for_role,
                         extra_blocked_tools=extra_blocked,
                         allowed_tools=allowed,
                         verbose=False,
@@ -455,9 +506,17 @@ class AgentService:
                     if child_tool_context is not None:
                         agent._agent_service._parent_tool_context = child_tool_context
             except (AttributeError, ImportError):
+                inherited_model = getattr(parent_tool_context.bootstrap, "model_name", None) if parent_tool_context else None
+                selected_model = _resolve_subagent_model(
+                    self._workspace_root,
+                    subagent_type,
+                    model,
+                    inherited_model or self._model_name,
+                )
                 agent = create_leon_agent(
-                    model_name=self._model_name,
+                    model_name=selected_model,
                     workspace_root=self._workspace_root,
+                    agent=agent_name_for_role,
                     extra_blocked_tools=extra_blocked,
                     allowed_tools=allowed,
                     verbose=False,

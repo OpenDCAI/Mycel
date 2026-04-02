@@ -1,4 +1,4 @@
-"""Unit tests for AgentService sub-agent fork boundaries."""
+"""Unit tests for AgentService sub-agent boundaries and policy."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from core.agents.service import AgentService
+from core.agents.service import AGENT_DISALLOWED, EXPLORE_ALLOWED, AgentService
 from core.runtime.registry import ToolRegistry
 from core.runtime.runner import ToolRunner
 from core.runtime.state import AppState, BootstrapConfig, ToolUseContext
@@ -45,6 +45,21 @@ class _FakeChildAgent:
 
     def close(self):
         return None
+
+
+def _make_parent_context(tmp_path: Path, model_name: str = "gpt-parent") -> ToolUseContext:
+    parent_state = AppState(turn_count=1)
+    return ToolUseContext(
+        bootstrap=BootstrapConfig(workspace_root=tmp_path, model_name=model_name),
+        get_app_state=parent_state.get_state,
+        set_app_state=parent_state.set_state,
+        set_app_state_for_tasks=parent_state.set_state,
+        read_file_state={"/tmp/readme.md": {"partial": False}},
+        loaded_nested_memory_paths={"/tmp/memory.md"},
+        discovered_skill_names={"skill-a"},
+        nested_memory_attachment_triggers={"turn-a"},
+        messages=["hello"],
+    )
 
 
 @pytest.mark.asyncio
@@ -121,18 +136,7 @@ async def test_run_agent_applies_isolated_tool_context_to_child_agent_service(mo
         workspace_root=tmp_path,
         model_name="gpt-test",
     )
-    parent_state = AppState(turn_count=1)
-    parent_context = ToolUseContext(
-        bootstrap=BootstrapConfig(workspace_root=tmp_path, model_name="gpt-parent"),
-        get_app_state=parent_state.get_state,
-        set_app_state=parent_state.set_state,
-        set_app_state_for_tasks=parent_state.set_state,
-        read_file_state={"/tmp/readme.md": {"partial": False}},
-        loaded_nested_memory_paths={"/tmp/memory.md"},
-        discovered_skill_names={"skill-a"},
-        nested_memory_attachment_triggers={"turn-a"},
-        messages=["hello"],
-    )
+    parent_context = _make_parent_context(tmp_path)
 
     result = await service._run_agent(
         task_id="task-1",
@@ -175,18 +179,7 @@ async def test_agent_tool_live_runner_path_passes_isolated_tool_context_to_child
         model_name="gpt-test",
     )
     runner = ToolRunner(registry=registry)
-    parent_state = AppState(turn_count=1)
-    parent_context = ToolUseContext(
-        bootstrap=BootstrapConfig(workspace_root=tmp_path, model_name="gpt-parent"),
-        get_app_state=parent_state.get_state,
-        set_app_state=parent_state.set_state,
-        set_app_state_for_tasks=parent_state.set_state,
-        read_file_state={"/tmp/readme.md": {"partial": False}},
-        loaded_nested_memory_paths={"/tmp/memory.md"},
-        discovered_skill_names={"skill-a"},
-        nested_memory_attachment_triggers={"turn-a"},
-        messages=["hello"],
-    )
+    parent_context = _make_parent_context(tmp_path)
     request = SimpleNamespace(
         tool_call={"name": "Agent", "args": {"prompt": "do work"}, "id": "tc-1"},
         state=parent_context,
@@ -219,18 +212,8 @@ async def test_run_agent_child_tool_context_deep_clones_read_file_state(monkeypa
         workspace_root=tmp_path,
         model_name="gpt-test",
     )
-    parent_state = AppState(turn_count=1)
-    parent_context = ToolUseContext(
-        bootstrap=BootstrapConfig(workspace_root=tmp_path, model_name="gpt-parent"),
-        get_app_state=parent_state.get_state,
-        set_app_state=parent_state.set_state,
-        set_app_state_for_tasks=parent_state.set_state,
-        read_file_state={"/tmp/readme.md": {"partial": False, "meta": {"seen": 1}}},
-        loaded_nested_memory_paths={"/tmp/memory.md"},
-        discovered_skill_names={"skill-a"},
-        nested_memory_attachment_triggers={"turn-a"},
-        messages=["hello"],
-    )
+    parent_context = _make_parent_context(tmp_path)
+    parent_context.read_file_state = {"/tmp/readme.md": {"partial": False, "meta": {"seen": 1}}}
 
     result = await service._run_agent(
         task_id="task-1",
@@ -251,3 +234,184 @@ async def test_run_agent_child_tool_context_deep_clones_read_file_state(monkeypa
         "partial": False,
         "meta": {"seen": 1},
     }
+
+
+@pytest.mark.asyncio
+async def test_agent_tool_live_runner_path_applies_role_specific_tool_filters(monkeypatch, tmp_path):
+    captured: dict[str, object] = {}
+
+    def fake_create_leon_agent(*, model_name, workspace_root, **kwargs):
+        captured["model_name"] = model_name
+        captured["workspace_root"] = Path(workspace_root)
+        captured["kwargs"] = kwargs
+        return _FakeChildAgent(Path(workspace_root), model_name)
+
+    monkeypatch.setattr("core.runtime.agent.create_leon_agent", fake_create_leon_agent)
+
+    registry = ToolRegistry()
+    AgentService(
+        tool_registry=registry,
+        agent_registry=_FakeAgentRegistry(),
+        workspace_root=tmp_path,
+        model_name="gpt-parent",
+    )
+    runner = ToolRunner(registry=registry)
+    request = SimpleNamespace(
+        tool_call={"name": "Agent", "args": {"prompt": "inspect", "subagent_type": "explore"}, "id": "tc-1"},
+        state=_make_parent_context(tmp_path, model_name="gpt-parent"),
+    )
+
+    result = await runner.awrap_tool_call(request, AsyncMock())
+
+    assert result.content == "(Agent completed with no text output)"
+    assert captured["model_name"] == "gpt-parent"
+    assert captured["kwargs"]["agent"] == "explore"
+    assert captured["kwargs"]["allowed_tools"] == EXPLORE_ALLOWED
+    assert captured["kwargs"]["extra_blocked_tools"] == AGENT_DISALLOWED
+
+
+@pytest.mark.asyncio
+async def test_agent_tool_model_priority_prefers_env_over_tool_frontmatter_and_parent(monkeypatch, tmp_path):
+    agent_dir = tmp_path / ".leon" / "agents"
+    agent_dir.mkdir(parents=True)
+    (agent_dir / "explore.md").write_text(
+        "---\nname: explore\nmodel: frontmatter-model\ntools:\n  - Read\n---\nfrontmatter prompt\n",
+        encoding="utf-8",
+    )
+    captured: dict[str, object] = {}
+
+    def fake_create_leon_agent(*, model_name, workspace_root, **kwargs):
+        captured["model_name"] = model_name
+        captured["kwargs"] = kwargs
+        return _FakeChildAgent(Path(workspace_root), model_name)
+
+    monkeypatch.setattr("core.runtime.agent.create_leon_agent", fake_create_leon_agent)
+    monkeypatch.setenv("CLAUDE_CODE_SUBAGENT_MODEL", "env-model")
+
+    registry = ToolRegistry()
+    AgentService(
+        tool_registry=registry,
+        agent_registry=_FakeAgentRegistry(),
+        workspace_root=tmp_path,
+        model_name="parent-model",
+    )
+    runner = ToolRunner(registry=registry)
+    request = SimpleNamespace(
+        tool_call={
+            "name": "Agent",
+            "args": {"prompt": "inspect", "subagent_type": "explore", "model": "tool-model"},
+            "id": "tc-1",
+        },
+        state=_make_parent_context(tmp_path, model_name="parent-model"),
+    )
+
+    await runner.awrap_tool_call(request, AsyncMock())
+
+    assert captured["model_name"] == "env-model"
+    assert captured["kwargs"]["agent"] == "explore"
+
+
+@pytest.mark.asyncio
+async def test_agent_tool_model_priority_prefers_tool_over_frontmatter_and_parent(monkeypatch, tmp_path):
+    agent_dir = tmp_path / ".leon" / "agents"
+    agent_dir.mkdir(parents=True)
+    (agent_dir / "explore.md").write_text(
+        "---\nname: explore\nmodel: frontmatter-model\ntools:\n  - Read\n---\nfrontmatter prompt\n",
+        encoding="utf-8",
+    )
+    captured: dict[str, object] = {}
+
+    def fake_create_leon_agent(*, model_name, workspace_root, **kwargs):
+        captured["model_name"] = model_name
+        captured["kwargs"] = kwargs
+        return _FakeChildAgent(Path(workspace_root), model_name)
+
+    monkeypatch.setattr("core.runtime.agent.create_leon_agent", fake_create_leon_agent)
+
+    registry = ToolRegistry()
+    AgentService(
+        tool_registry=registry,
+        agent_registry=_FakeAgentRegistry(),
+        workspace_root=tmp_path,
+        model_name="parent-model",
+    )
+    runner = ToolRunner(registry=registry)
+    request = SimpleNamespace(
+        tool_call={
+            "name": "Agent",
+            "args": {"prompt": "inspect", "subagent_type": "explore", "model": "tool-model"},
+            "id": "tc-1",
+        },
+        state=_make_parent_context(tmp_path, model_name="parent-model"),
+    )
+
+    await runner.awrap_tool_call(request, AsyncMock())
+
+    assert captured["model_name"] == "tool-model"
+    assert captured["kwargs"]["agent"] == "explore"
+
+
+@pytest.mark.asyncio
+async def test_agent_tool_model_priority_prefers_frontmatter_over_parent(monkeypatch, tmp_path):
+    agent_dir = tmp_path / ".leon" / "agents"
+    agent_dir.mkdir(parents=True)
+    (agent_dir / "explore.md").write_text(
+        "---\nname: explore\nmodel: frontmatter-model\ntools:\n  - Read\n---\nfrontmatter prompt\n",
+        encoding="utf-8",
+    )
+    captured: dict[str, object] = {}
+
+    def fake_create_leon_agent(*, model_name, workspace_root, **kwargs):
+        captured["model_name"] = model_name
+        captured["kwargs"] = kwargs
+        return _FakeChildAgent(Path(workspace_root), model_name)
+
+    monkeypatch.setattr("core.runtime.agent.create_leon_agent", fake_create_leon_agent)
+
+    registry = ToolRegistry()
+    AgentService(
+        tool_registry=registry,
+        agent_registry=_FakeAgentRegistry(),
+        workspace_root=tmp_path,
+        model_name="parent-model",
+    )
+    runner = ToolRunner(registry=registry)
+    request = SimpleNamespace(
+        tool_call={"name": "Agent", "args": {"prompt": "inspect", "subagent_type": "explore"}, "id": "tc-1"},
+        state=_make_parent_context(tmp_path, model_name="parent-model"),
+    )
+
+    await runner.awrap_tool_call(request, AsyncMock())
+
+    assert captured["model_name"] == "frontmatter-model"
+    assert captured["kwargs"]["agent"] == "explore"
+
+
+@pytest.mark.asyncio
+async def test_agent_tool_model_priority_inherits_parent_when_no_env_tool_or_frontmatter(monkeypatch, tmp_path):
+    captured: dict[str, object] = {}
+
+    def fake_create_leon_agent(*, model_name, workspace_root, **kwargs):
+        captured["model_name"] = model_name
+        captured["kwargs"] = kwargs
+        return _FakeChildAgent(Path(workspace_root), model_name)
+
+    monkeypatch.setattr("core.runtime.agent.create_leon_agent", fake_create_leon_agent)
+
+    registry = ToolRegistry()
+    AgentService(
+        tool_registry=registry,
+        agent_registry=_FakeAgentRegistry(),
+        workspace_root=tmp_path,
+        model_name="service-model",
+    )
+    runner = ToolRunner(registry=registry)
+    request = SimpleNamespace(
+        tool_call={"name": "Agent", "args": {"prompt": "inspect", "subagent_type": "explore"}, "id": "tc-1"},
+        state=_make_parent_context(tmp_path, model_name="parent-model"),
+    )
+
+    await runner.awrap_tool_call(request, AsyncMock())
+
+    assert captured["model_name"] == "parent-model"
+    assert captured["kwargs"]["agent"] == "explore"
