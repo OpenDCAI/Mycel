@@ -10,6 +10,11 @@ import { persist } from "zustand/middleware";
 
 const DEV_SKIP_AUTH = import.meta.env.VITE_DEV_SKIP_AUTH === "true";
 
+// Allow overriding the API origin for deployments where the frontend and backend
+// are on different domains (e.g. VITE_API_BASE=https://api.mycel.nextmind.space).
+// Relative URLs are used when this is not set (same-origin or nginx-proxied).
+const API_BASE = (import.meta.env.VITE_API_BASE ?? "").replace(/\/$/, "");
+
 export interface AuthIdentity {
   id: string;
   name: string;
@@ -31,7 +36,7 @@ interface AuthState {
 }
 
 async function apiPost(endpoint: string, body: Record<string, string>) {
-  const res = await fetch(`/api/auth/${endpoint}`, {
+  const res = await fetch(`${API_BASE}/api/auth/${endpoint}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
@@ -120,7 +125,9 @@ export async function authFetch(url: string, init?: RequestInit): Promise<Respon
   };
   if (token) headers["Authorization"] = `Bearer ${token}`;
 
-  const res = await fetch(url, { ...init, headers });
+  // Prepend API_BASE for relative URLs when configured
+  const resolvedUrl = API_BASE && url.startsWith("/") ? `${API_BASE}${url}` : url;
+  const res = await fetch(resolvedUrl, { ...init, headers });
   if (res.status === 401 && !DEV_SKIP_AUTH) {
     useAuthStore.getState().logout();
   }
