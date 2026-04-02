@@ -14,7 +14,7 @@ from langchain_core.messages import HumanMessage, ToolMessage
 from langchain_core.runnables import RunnableConfig
 
 try:
-    from langchain.agents.middleware.types import (
+    from core.runtime.middleware import (
         AgentMiddleware,
         ModelCallResult,
         ModelRequest,

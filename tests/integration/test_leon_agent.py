@@ -5,10 +5,11 @@ Uses mock model to verify the full astream pipeline without real API calls.
 
 import os
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from langchain_core.messages import AIMessage, SystemMessage
+from langchain_core.messages import AIMessage, AIMessageChunk, SystemMessage
 
 
 # ---------------------------------------------------------------------------
@@ -30,6 +31,17 @@ def _mock_model(text="Integration test response"):
 def _patch_env_api_key():
     """Ensure ANTHROPIC_API_KEY is set for LeonAgent init (uses a fake value)."""
     return patch.dict(os.environ, {"ANTHROPIC_API_KEY": "sk-test-integration"})
+
+
+class _MemoryCheckpointer:
+    def __init__(self):
+        self.store = {}
+
+    async def aget(self, cfg):
+        return self.store.get(cfg["configurable"]["thread_id"])
+
+    async def aput(self, cfg, checkpoint, metadata, new_versions):
+        self.store[cfg["configurable"]["thread_id"]] = checkpoint
 
 
 # ---------------------------------------------------------------------------
@@ -104,6 +116,46 @@ async def test_leon_agent_astream_interface_compatible(tmp_path):
 
 @pytest.mark.asyncio
 @_patch_env_api_key()
+async def test_leon_agent_astream_messages_updates_mode_yields_langgraph_tuples(tmp_path):
+    """messages+updates mode must yield LangGraph-style (mode, data) tuples for SSE consumers."""
+    from core.runtime.agent import LeonAgent
+
+    mock_model = _mock_model("Tuple compatible response")
+
+    with patch("core.runtime.agent.LeonAgent._create_model", return_value=mock_model), \
+         patch("core.runtime.agent.LeonAgent._init_async_components", return_value=(None, [])), \
+         patch("core.runtime.agent.LeonAgent._init_checkpointer", new_callable=AsyncMock, return_value=None):
+
+        agent = LeonAgent(workspace_root=str(tmp_path), api_key="sk-test-integration")
+        await agent.ainit()
+
+        chunks = []
+        async for chunk in agent.agent.astream(
+            {"messages": [{"role": "user", "content": "tuple"}]},
+            config={"configurable": {"thread_id": "test-integration-tuples"}},
+            stream_mode=["messages", "updates"],
+        ):
+            chunks.append(chunk)
+
+        assert chunks
+        assert all(isinstance(chunk, tuple) and len(chunk) == 2 for chunk in chunks)
+        assert any(mode == "messages" for mode, _ in chunks)
+        assert any(mode == "updates" for mode, _ in chunks)
+
+        message_chunks = [data for mode, data in chunks if mode == "messages"]
+        first_msg_chunk, first_metadata = message_chunks[0]
+        assert isinstance(first_msg_chunk, AIMessageChunk)
+        assert "Tuple compatible response" in str(first_msg_chunk.content)
+        assert isinstance(first_metadata, dict)
+
+        update_chunks = [data for mode, data in chunks if mode == "updates"]
+        assert any("agent" in update for update in update_chunks)
+
+        agent.close()
+
+
+@pytest.mark.asyncio
+@_patch_env_api_key()
 async def test_leon_agent_multiple_thread_ids(tmp_path):
     """Different thread_ids produce independent sessions (no cross-contamination)."""
     from core.runtime.agent import LeonAgent
@@ -144,5 +196,111 @@ async def test_leon_agent_multiple_thread_ids(tmp_path):
         # Both sessions produced chunks
         assert len(chunks_a) > 0
         assert len(chunks_b) > 0
+
+        agent.close()
+
+
+@pytest.mark.asyncio
+@_patch_env_api_key()
+async def test_leon_agent_astream_wrapper_exposes_caller_surface(tmp_path):
+    """LeonAgent should expose a caller-owned astream surface instead of forcing callers onto agent.agent.astream."""
+    from core.runtime.agent import LeonAgent
+
+    mock_model = _mock_model("Caller surface response")
+
+    with patch("core.runtime.agent.LeonAgent._create_model", return_value=mock_model), \
+         patch("core.runtime.agent.LeonAgent._init_async_components", return_value=(None, [])), \
+         patch("core.runtime.agent.LeonAgent._init_checkpointer", new_callable=AsyncMock, return_value=None):
+
+        agent = LeonAgent(workspace_root=str(tmp_path), api_key="sk-test-integration")
+        await agent.ainit()
+
+        chunks = []
+        async for chunk in agent.astream(
+            "caller stream",
+            thread_id="test-astream-wrapper",
+            stream_mode=["messages", "updates"],
+        ):
+            chunks.append(chunk)
+
+        assert chunks
+        assert all(isinstance(chunk, tuple) and len(chunk) == 2 for chunk in chunks)
+
+        agent.close()
+
+
+@pytest.mark.asyncio
+@_patch_env_api_key()
+async def test_leon_agent_astream_can_enforce_max_budget_per_event(tmp_path):
+    """Caller-owned astream surface should be able to stop once runtime cost exceeds a caller budget."""
+    from core.runtime.agent import LeonAgent
+
+    mock_model = _mock_model("Caller surface response")
+
+    with patch("core.runtime.agent.LeonAgent._create_model", return_value=mock_model), \
+         patch("core.runtime.agent.LeonAgent._init_async_components", return_value=(None, [])), \
+         patch("core.runtime.agent.LeonAgent._init_checkpointer", new_callable=AsyncMock, return_value=None):
+
+        agent = LeonAgent(workspace_root=str(tmp_path), api_key="sk-test-integration")
+        await agent.ainit()
+
+        async def fake_stream(*args, **kwargs):
+            yield ("messages", ("first", {"langgraph_node": "agent"}))
+            yield ("updates", {"agent": {"messages": [AIMessage(content="done")]}})
+
+        agent.agent.astream = fake_stream
+        agent.runtime = SimpleNamespace(cost=0.75)
+
+        chunks = []
+        with pytest.raises(RuntimeError, match="max_budget_usd exceeded"):
+            async for chunk in agent.astream(
+                "caller stream",
+                thread_id="test-astream-budget",
+                stream_mode=["messages", "updates"],
+                max_budget_usd=0.5,
+            ):
+                chunks.append(chunk)
+
+        assert chunks == [("messages", ("first", {"langgraph_node": "agent"}))]
+
+        agent.close()
+
+
+@pytest.mark.asyncio
+@_patch_env_api_key()
+async def test_leon_agent_aclear_thread_resets_thread_history(tmp_path):
+    """aclear_thread should clear replayable thread history while preserving accumulators."""
+    from core.runtime.agent import LeonAgent
+
+    mock_model = _mock_model("clearable response")
+    checkpointer = _MemoryCheckpointer()
+
+    with patch("core.runtime.agent.LeonAgent._create_model", return_value=mock_model), \
+         patch("core.runtime.agent.LeonAgent._init_async_components", return_value=(None, [])), \
+         patch("core.runtime.agent.LeonAgent._init_checkpointer", new_callable=AsyncMock, return_value=None):
+
+        agent = LeonAgent(workspace_root=str(tmp_path), api_key="sk-test-integration")
+        await agent.ainit()
+        agent.checkpointer = checkpointer
+        agent.agent.checkpointer = checkpointer
+        agent.app_state.total_cost = 1.25
+
+        await agent.ainvoke("hello", thread_id="clear-agent-thread")
+        assert checkpointer.store["clear-agent-thread"]["channel_values"]["messages"]
+
+        agent.agent._tool_read_file_state["/tmp/file.py"] = {"partial": False}
+        agent.agent._tool_loaded_nested_memory_paths.add("/tmp/memory.md")
+        agent.agent._tool_discovered_skill_names.add("skill-a")
+        old_session_id = agent._bootstrap.session_id
+
+        await agent.aclear_thread("clear-agent-thread")
+
+        assert checkpointer.store["clear-agent-thread"]["channel_values"]["messages"] == []
+        assert agent.app_state.messages == []
+        assert agent.app_state.turn_count == 0
+        assert agent.app_state.compact_boundary_index == 0
+        assert agent.app_state.total_cost == 1.25
+        assert agent._bootstrap.session_id != old_session_id
+        assert agent._bootstrap.parent_session_id == old_session_id
 
         agent.close()

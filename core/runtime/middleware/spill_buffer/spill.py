@@ -10,6 +10,14 @@ from core.tools.filesystem.backend import FileSystemBackend
 PREVIEW_BYTES = 2048
 
 
+def _format_preview(content: str) -> str:
+    preview = content[:PREVIEW_BYTES]
+    cutoff = preview.rfind("\n")
+    if cutoff >= PREVIEW_BYTES // 2:
+        return preview[:cutoff]
+    return preview
+
+
 def spill_if_needed(
     content: Any,
     threshold_bytes: int,
@@ -50,10 +58,15 @@ def spill_if_needed(
         write_note = f"\n\n(Warning: failed to save full output to disk: {exc})"
         spill_path = "<write failed>"
 
-    preview = content[:PREVIEW_BYTES]
+    # @@@persisted-output-wrapper - te-03 is about durable handoff semantics,
+    # not "shorter string". The model must see an explicit persisted artifact
+    # boundary plus the re-read path, otherwise we silently amputate context.
+    preview = _format_preview(content)
     return (
-        f"Output too large ({size} bytes). Full output saved to: {spill_path}"
-        f"\n\nUse read_file to view specific sections with offset and limit parameters."
-        f"\n\nPreview (first {PREVIEW_BYTES} bytes):\n{preview}\n..."
-        f"{write_note}"
+        f'<persisted-output path="{spill_path}" bytes="{size}">'
+        f"\nSize: {size} bytes"
+        f"\nUse read_file to inspect the full persisted output."
+        f"\nPreview (first {PREVIEW_BYTES} bytes):\n{preview}\n..."
+        f"{write_note}\n"
+        f"</persisted-output>"
     )

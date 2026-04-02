@@ -11,6 +11,8 @@ class TestBootstrapConfig:
     def test_minimal_creation(self):
         bc = BootstrapConfig(workspace_root=Path("/tmp"), model_name="claude-3-5-sonnet-20241022")
         assert bc.workspace_root == Path("/tmp")
+        assert bc.project_root == Path("/tmp")
+        assert bc.cwd == Path("/tmp")
         assert bc.model_name == "claude-3-5-sonnet-20241022"
         assert bc.api_key is None
 
@@ -40,6 +42,29 @@ class TestBootstrapConfig:
         bc2 = BootstrapConfig(workspace_root=Path("/tmp"), model_name="test")
         assert bc1.session_id != bc2.session_id
         assert len(bc1.session_id) == 32  # uuid4().hex
+
+    def test_directory_lifetimes_can_be_distinct(self):
+        bc = BootstrapConfig(
+            workspace_root=Path("/workspace"),
+            original_cwd=Path("/launcher"),
+            project_root=Path("/workspace/project"),
+            cwd=Path("/workspace/project/src"),
+            model_name="test",
+        )
+        assert bc.original_cwd == Path("/launcher")
+        assert bc.project_root == Path("/workspace/project")
+        assert bc.cwd == Path("/workspace/project/src")
+        assert bc.workspace_root == Path("/workspace")
+
+    def test_session_accumulators_live_in_bootstrap(self):
+        bc = BootstrapConfig(
+            workspace_root=Path("/tmp"),
+            model_name="test",
+            total_cost_usd=1.5,
+            total_tool_duration_ms=250,
+        )
+        assert bc.total_cost_usd == 1.5
+        assert bc.total_tool_duration_ms == 250
 
 
 class TestAppState:

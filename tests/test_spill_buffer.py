@@ -66,7 +66,7 @@ class TestSpillIfNeeded:
 
         # Result must mention the file path and include a preview.
         assert expected_path in result
-        assert "Output too large" in result
+        assert result.startswith("<persisted-output")
         assert f"{len(large.encode('utf-8'))} bytes" in result
         assert f"Preview (first {PREVIEW_BYTES} bytes)" in result
         # Preview text is the first PREVIEW_BYTES chars of the original.
@@ -101,7 +101,7 @@ class TestSpillIfNeeded:
             workspace_root="/w",
         )
         assert result != content
-        assert "Output too large" in result
+        assert result.startswith("<persisted-output")
         fs.write_file.assert_called_once()
 
     def test_unicode_byte_counting(self):
@@ -120,7 +120,7 @@ class TestSpillIfNeeded:
             fs_backend=fs,
             workspace_root="/w",
         )
-        assert "Output too large" in result
+        assert result.startswith("<persisted-output")
         assert "30 bytes" in result
         fs.write_file.assert_called_once()
 
@@ -167,7 +167,7 @@ class TestSpillIfNeeded:
         )
 
         # Should still return a preview, not raise.
-        assert "Output too large" in result
+        assert result.startswith("<persisted-output")
         assert "Preview" in result
         # Must include the warning note about write failure.
         assert "Warning: failed to save full output to disk" in result
@@ -191,6 +191,43 @@ class TestSpillIfNeeded:
         assert ("X" * PREVIEW_BYTES) in result
         # But not the full content.
         assert large not in result
+
+    def test_large_output_uses_persisted_output_wrapper(self):
+        """Large spilled output is wrapped as persisted-output, not plain prose."""
+        fs = _make_fs_backend()
+        large = "A" * 60_000
+
+        result = spill_if_needed(
+            content=large,
+            threshold_bytes=50_000,
+            tool_call_id="call_wrapped",
+            fs_backend=fs,
+            workspace_root="/workspace",
+        )
+
+        assert result.startswith("<persisted-output")
+        assert "</persisted-output>" in result
+        assert 'path="/workspace/.leon/tool-results/call_wrapped.txt"' in result
+        assert f"bytes=\"{len(large.encode('utf-8'))}\"" in result
+
+    def test_image_block_content_bypasses_spill(self):
+        """Image-containing blocks should bypass persistence logic."""
+        fs = _make_fs_backend()
+        content = [
+            {"type": "text", "text": "caption"},
+            {"type": "image_url", "image_url": {"url": "https://example.com/a.png"}},
+        ]
+
+        result = spill_if_needed(
+            content=content,
+            threshold_bytes=1,
+            tool_call_id="call_image",
+            fs_backend=fs,
+            workspace_root="/workspace",
+        )
+
+        assert result is content
+        fs.write_file.assert_not_called()
 
 
 # ===========================================================================
@@ -236,7 +273,7 @@ class TestSpillBufferMiddleware:
 
         handler.assert_called_once_with(request)
         assert result.content != large_content
-        assert "Output too large" in result.content
+        assert result.content.startswith("<persisted-output")
         assert result.tool_call_id == "call_2"
         fs.write_file.assert_called_once()
 
@@ -253,7 +290,7 @@ class TestSpillBufferMiddleware:
 
         result = mw.wrap_tool_call(request, handler)
 
-        assert "Output too large" in result.content
+        assert result.content.startswith("<persisted-output")
         fs.write_file.assert_called_once()
 
     def test_per_tool_threshold_not_triggered(self):
@@ -285,7 +322,7 @@ class TestSpillBufferMiddleware:
 
         result = mw.wrap_tool_call(request, handler)
 
-        assert "Output too large" in result.content
+        assert result.content.startswith("<persisted-output")
 
     def test_read_file_is_skipped(self):
         """read_file is in SKIP_TOOLS and must never be spilled."""
@@ -346,7 +383,7 @@ class TestSpillBufferMiddleware:
         finally:
             loop.close()
 
-        assert "Output too large" in result.content
+        assert result.content.startswith("<persisted-output")
         assert result.tool_call_id == "call_async"
         fs.write_file.assert_called_once()
 
@@ -381,3 +418,32 @@ class TestSpillBufferMiddleware:
         expected_path = os.path.join("/workspace", ".leon", "tool-results", f"{unique_id}.txt")
         fs.write_file.assert_called_once_with(expected_path, content)
         assert expected_path in result.content
+
+    def test_whitespace_output_is_normalized(self):
+        """Whitespace-only tool output becomes an explicit no-output marker."""
+        mw, fs = self._make_middleware(default_threshold=10)
+        request = _make_request("run_command", "call_empty")
+        original_msg = ToolMessage(content="   \n\t", tool_call_id="call_empty", name="run_command")
+        handler = MagicMock(return_value=original_msg)
+
+        result = mw.wrap_tool_call(request, handler)
+
+        assert result.content == "(run_command completed with no output)"
+        fs.write_file.assert_not_called()
+
+    def test_spilled_tool_message_preserves_name_and_metadata(self):
+        """Spill replacement must not discard tool name or additional metadata."""
+        mw, _fs = self._make_middleware(default_threshold=10)
+        request = _make_request("run_command", "call_meta")
+        original_msg = ToolMessage(
+            content="M" * 100,
+            tool_call_id="call_meta",
+            name="run_command",
+            additional_kwargs={"tool_result_meta": {"kind": "success", "source": "local"}},
+        )
+        handler = MagicMock(return_value=original_msg)
+
+        result = mw.wrap_tool_call(request, handler)
+
+        assert result.name == "run_command"
+        assert result.additional_kwargs == original_msg.additional_kwargs

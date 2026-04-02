@@ -18,6 +18,7 @@ from typing import Any
 from core.agents.registry import AgentEntry, AgentRegistry
 from core.runtime.middleware.queue.formatters import format_background_notification
 from core.runtime.registry import ToolEntry, ToolMode, ToolRegistry
+from core.runtime.state import ToolUseContext
 
 logger = logging.getLogger(__name__)
 
@@ -295,6 +296,7 @@ class AgentService:
         run_in_background: bool = False,
         max_turns: int | None = None,
         fork_context: bool = False,
+        tool_context: ToolUseContext | None = None,
     ) -> str:
         """Spawn an independent LeonAgent and run it with the given prompt."""
         from sandbox.thread_context import get_current_thread_id
@@ -327,6 +329,7 @@ class AgentService:
                 description=description or "",
                 run_in_background=run_in_background,
                 fork_context=fork_context,
+                parent_tool_context=tool_context,
             )
         )
         if run_in_background:
@@ -364,6 +367,7 @@ class AgentService:
         description: str = "",
         run_in_background: bool = False,
         fork_context: bool = False,
+        parent_tool_context: ToolUseContext | None = None,
     ) -> str:
         """Create and run an independent LeonAgent, collect its text output."""
         # Isolate this sub-agent from the parent's LangChain callback chain.
@@ -411,14 +415,18 @@ class AgentService:
             extra_blocked, allowed = _get_tool_filters(subagent_type)
 
             try:
-                from core.runtime.fork import fork_context
+                from core.runtime.fork import create_subagent_context, fork_context
 
                 # Parent bootstrap is stored on the ToolUseContext or agent instance.
                 # AgentService stores workspace_root and model_name directly; use those
                 # to check if a richer bootstrap is available via a shared reference.
                 # _parent_bootstrap is injected by LeonAgent when building AgentService.
                 parent_bootstrap = getattr(self, "_parent_bootstrap", None)
-                if parent_bootstrap is not None:
+                child_tool_context = None
+                if parent_tool_context is not None:
+                    child_tool_context = create_subagent_context(parent_tool_context)
+                    child_bootstrap = child_tool_context.bootstrap
+                elif parent_bootstrap is not None:
                     child_bootstrap = fork_context(parent_bootstrap)
                     agent = create_leon_agent(
                         model_name=child_bootstrap.model_name,
@@ -429,6 +437,23 @@ class AgentService:
                     )
                 else:
                     raise AttributeError("no parent bootstrap")
+                if parent_tool_context is not None:
+                    agent = create_leon_agent(
+                        model_name=child_bootstrap.model_name,
+                        workspace_root=child_bootstrap.workspace_root,
+                        extra_blocked_tools=extra_blocked,
+                        allowed_tools=allowed,
+                        verbose=False,
+                    )
+                # @@@sa-04-child-bootstrap-wiring
+                # The fork only becomes real once the spawned child agent and its
+                # nested AgentService both receive the forked bootstrap/context.
+                agent._bootstrap = child_bootstrap
+                agent.agent._bootstrap = child_bootstrap
+                if hasattr(agent, "_agent_service"):
+                    agent._agent_service._parent_bootstrap = child_bootstrap
+                    if child_tool_context is not None:
+                        agent._agent_service._parent_tool_context = child_tool_context
             except (AttributeError, ImportError):
                 agent = create_leon_agent(
                     model_name=self._model_name,

@@ -13,7 +13,7 @@ from langchain_anthropic.chat_models import ChatAnthropic
 from langchain_core.messages import SystemMessage
 
 try:
-    from langchain.agents.middleware.types import (
+    from core.runtime.middleware import (
         AgentMiddleware,
         ModelCallResult,
         ModelRequest,

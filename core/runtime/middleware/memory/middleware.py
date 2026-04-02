@@ -12,7 +12,7 @@ from collections.abc import Awaitable, Callable
 from pathlib import Path
 from typing import Any
 
-from langchain.agents.middleware.types import (
+from core.runtime.middleware import (
     AgentMiddleware,
     ModelCallResult,
     ModelRequest,
@@ -125,6 +125,10 @@ class MemoryMiddleware(AgentMiddleware):
         """Inject AgentRuntime reference (called by agent.py)."""
         self._runtime = runtime
 
+    @property
+    def compact_boundary_index(self) -> int:
+        return self._compact_up_to_index
+
     # ========== AgentMiddleware interface ==========
 
     async def awrap_model_call(
@@ -190,7 +194,14 @@ class MemoryMiddleware(AgentMiddleware):
             final_tokens = self._estimate_tokens(messages) + sys_tokens
             print(f"[Memory] Final: {len(messages)} msgs (~{final_tokens} tokens) sent to LLM (original: {original_count} msgs)")
 
-        return await handler(request.override(messages=messages))
+        response = await handler(request.override(messages=messages))
+        if response.request_messages is None:
+            return ModelResponse(
+                result=response.result,
+                request_messages=list(messages),
+                prepared_request=response.prepared_request,
+            )
+        return response
 
     async def _do_compact(self, messages: list[Any], thread_id: str | None = None) -> list[Any]:
         """Execute compaction: summarize old messages, return compacted list."""
@@ -266,6 +277,18 @@ class MemoryMiddleware(AgentMiddleware):
         finally:
             if self._runtime:
                 self._runtime.set_flag("is_compacting", False)
+
+    async def compact_messages_for_recovery(self, messages: list[Any]) -> list[Any] | None:
+        """Force a compaction pass and return the compacted message list."""
+        if not self._model:
+            return None
+
+        pruned = self.pruner.prune(messages)
+        to_summarize, to_keep = self.compactor.split_messages(pruned)
+        if len(to_summarize) < 2:
+            return None
+
+        return await self._do_compact(pruned)
 
     def _estimate_tokens(self, messages: list[Any]) -> int:
         """Estimate total tokens for messages (chars // 2)."""

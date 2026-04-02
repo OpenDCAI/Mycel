@@ -22,6 +22,9 @@ class BootstrapConfig(BaseModel):
     """
 
     workspace_root: Path
+    original_cwd: Path | None = None
+    project_root: Path | None = None
+    cwd: Path | None = None
     model_name: str
     api_key: str | None = None
 
@@ -42,12 +45,22 @@ class BootstrapConfig(BaseModel):
     session_id: str = Field(default_factory=lambda: uuid.uuid4().hex)
     parent_session_id: str | None = None
 
+    # Session accumulators that survive turn-level resets
+    total_cost_usd: float = 0.0
+    total_tool_duration_ms: int = 0
+
     # Model settings
     model_provider: str | None = None
     base_url: str | None = None
     context_limit: int | None = None
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
+
+    def model_post_init(self, __context: Any) -> None:
+        self.workspace_root = Path(self.workspace_root)
+        self.original_cwd = Path(self.original_cwd) if self.original_cwd is not None else self.workspace_root
+        self.project_root = Path(self.project_root) if self.project_root is not None else self.workspace_root
+        self.cwd = Path(self.cwd) if self.cwd is not None else self.project_root
 
 
 class AppState(BaseModel):
@@ -85,6 +98,13 @@ class ToolUseContext(BaseModel):
     bootstrap: BootstrapConfig
     get_app_state: Any = Field(exclude=True)  # Callable[[], AppState]
     set_app_state: Any = Field(exclude=True)  # Callable[[AppState], None] | NO-OP
+    set_app_state_for_tasks: Any = Field(default=None, exclude=True)
+    refresh_tools: Any = Field(default=None, exclude=True)  # Callable[[], Awaitable[None] | None]
+    read_file_state: Any = Field(default_factory=dict, exclude=True)
+    loaded_nested_memory_paths: Any = Field(default_factory=set, exclude=True)
+    discovered_skill_names: Any = Field(default_factory=set, exclude=True)
+    nested_memory_attachment_triggers: Any = Field(default_factory=set, exclude=True)
+    messages: list = Field(default_factory=list)
     turn_id: str = Field(default_factory=lambda: uuid.uuid4().hex[:8])
 
     model_config = ConfigDict(arbitrary_types_allowed=True)

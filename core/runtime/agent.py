@@ -65,9 +65,9 @@ from core.runtime.middleware.spill_buffer import SpillBufferMiddleware  # noqa: 
 # New architecture: ToolRegistry + ToolRunner + Services
 from core.runtime.cleanup import CleanupRegistry  # noqa: E402
 from core.runtime.loop import QueryLoop  # noqa: E402
-from core.runtime.registry import ToolRegistry  # noqa: E402
+from core.runtime.registry import ToolEntry, ToolMode, ToolRegistry  # noqa: E402
 from core.runtime.runner import ToolRunner  # noqa: E402
-from core.runtime.state import BootstrapConfig  # noqa: E402
+from core.runtime.state import AppState, BootstrapConfig  # noqa: E402
 from core.runtime.validator import ToolValidator  # noqa: E402
 
 # Hooks (used by Services)
@@ -102,6 +102,34 @@ def _lookup_wechat_conn(eid: str):
         return registry.get(eid) if registry else None
     except Exception:
         return None
+
+
+def _make_mcp_tool_entry(tool) -> ToolEntry:
+    schema_model = getattr(tool, "tool_call_schema", None)
+    if schema_model is not None and hasattr(schema_model, "model_json_schema"):
+        parameters = schema_model.model_json_schema()
+    else:
+        parameters = {
+            "type": "object",
+            "properties": getattr(tool, "args", {}) or {},
+        }
+
+    async def mcp_handler(**kwargs):
+        if hasattr(tool, "ainvoke"):
+            return await tool.ainvoke(kwargs)
+        return await asyncio.to_thread(tool.invoke, kwargs)
+
+    return ToolEntry(
+        name=tool.name,
+        mode=ToolMode.INLINE,
+        schema={
+            "name": tool.name,
+            "description": getattr(tool, "description", "") or tool.name,
+            "parameters": parameters,
+        },
+        handler=mcp_handler,
+        source="mcp",
+    )
 
 
 class LeonAgent:
@@ -197,6 +225,7 @@ class LeonAgent:
         # Resolve API key (prefer resolved provider from mapping)
         provider_name = self._resolve_provider_name(resolved_model, model_overrides)
         p = self.models_config.get_provider(provider_name) if provider_name else None
+        self._explicit_api_key = api_key is not None
         self.api_key = api_key or (p.api_key if p else None) or self.models_config.get_api_key()
 
         if not self.api_key:
@@ -248,6 +277,7 @@ class LeonAgent:
             allowed_tools=allowed_tools,
         )
         self._init_services()
+        self._register_mcp_tools(mcp_tools)
 
         # Build middleware stack
         middleware = self._build_middleware_stack()
@@ -286,6 +316,9 @@ class LeonAgent:
         # Build BootstrapConfig for sub-agent forking
         self._bootstrap = BootstrapConfig(
             workspace_root=self.workspace_root,
+            original_cwd=Path.cwd(),
+            project_root=self.workspace_root,
+            cwd=self.workspace_root,
             model_name=self.model_name,
             api_key=self.api_key,
             block_dangerous_commands=self.block_dangerous_commands,
@@ -293,7 +326,12 @@ class LeonAgent:
             enable_audit_log=self.enable_audit_log,
             enable_web_tools=self.enable_web_tools,
             allowed_file_extensions=self.allowed_file_extensions,
+            extra_allowed_paths=self.extra_allowed_paths,
+            model_provider=self._current_model_config.get("model_provider"),
+            base_url=self._current_model_config.get("base_url"),
         )
+        self._app_state = AppState()
+        self.app_state = self._app_state
         # Inject bootstrap into AgentService so sub-agents can fork from it
         if hasattr(self, "_agent_service"):
             self._agent_service._parent_bootstrap = self._bootstrap
@@ -305,6 +343,9 @@ class LeonAgent:
             middleware=middleware,
             checkpointer=self.checkpointer,
             registry=self._tool_registry,
+            app_state=self._app_state,
+            runtime=self._monitor_middleware.runtime,
+            bootstrap=self._bootstrap,
         )
 
         # Get runtime from MonitorMiddleware
@@ -348,6 +389,7 @@ class LeonAgent:
         # Initialize async components
         self._aiosqlite_conn = await self._init_checkpointer()
         _mcp_tools = await self._init_mcp_tools()
+        self._register_mcp_tools(_mcp_tools)
 
         # Update agent with checkpointer
         self.agent.checkpointer = self.checkpointer
@@ -389,6 +431,15 @@ class LeonAgent:
     def _has_middleware_tools(self, middleware: list) -> bool:
         """Check if any middleware has BaseTool instances."""
         return any(getattr(m, "tools", None) for m in middleware)
+
+    def _register_mcp_tools(self, mcp_tools: list) -> None:
+        if not mcp_tools:
+            return
+        for tool in mcp_tools:
+            try:
+                self._tool_registry.register(_make_mcp_tool_entry(tool))
+            except Exception as exc:
+                logger.warning("[LeonAgent] Failed to register MCP tool %s: %s", getattr(tool, "name", "<unknown>"), exc)
 
     def _create_placeholder_tool(self):
         """Create placeholder tool to ensure ToolNode is created."""
@@ -649,7 +700,16 @@ class LeonAgent:
 
         # Get credentials from the resolved provider
         p = self.models_config.get_provider(provider) if provider else None
-        base_url = (p.base_url if p else None) or self.models_config.get_base_url()
+        env_base_url = os.getenv("ANTHROPIC_BASE_URL") or os.getenv("OPENAI_BASE_URL")
+
+        # @@@explicit-api-key-base-url
+        # Real-model verification must not be silently redirected to a provider
+        # config endpoint when the caller explicitly injected credentials for a
+        # different OpenAI-compatible endpoint.
+        if self._explicit_api_key and env_base_url:
+            base_url = env_base_url
+        else:
+            base_url = (p.base_url if p else None) or self.models_config.get_base_url()
         if base_url:
             kwargs["base_url"] = self._normalize_base_url(base_url, provider)
 
@@ -1298,6 +1358,53 @@ class LeonAgent:
                 {"messages": [{"role": "user", "content": message}]},
                 config={"configurable": {"thread_id": thread_id}},
             )
+        except Exception as e:
+            self._monitor_middleware.mark_error(e)
+            raise
+
+    async def astream(
+        self,
+        message: str,
+        thread_id: str = "default",
+        stream_mode: str | list[str] = "updates",
+        max_budget_usd: float | None = None,
+    ):
+        """Stream agent output through a caller-owned LeonAgent surface."""
+        try:
+            async for chunk in self.agent.astream(
+                {"messages": [{"role": "user", "content": message}]},
+                config={"configurable": {"thread_id": thread_id}},
+                stream_mode=stream_mode,
+            ):
+                yield chunk
+                if max_budget_usd is not None and self.runtime.cost > max_budget_usd:
+                    raise RuntimeError(
+                        f"max_budget_usd exceeded: cost={self.runtime.cost:.6f} budget={max_budget_usd:.6f}"
+                    )
+        except Exception as e:
+            self._monitor_middleware.mark_error(e)
+            raise
+
+    async def aclear_thread(self, thread_id: str = "default") -> None:
+        """Clear turn-scoped state for a thread while preserving session accumulators."""
+        try:
+            await self.agent.aclear(thread_id)
+        except Exception as e:
+            self._monitor_middleware.mark_error(e)
+            raise
+
+    def clear_thread(self, thread_id: str = "default") -> None:
+        """Sync wrapper for aclear_thread()."""
+        import asyncio
+
+        async def _aclear():
+            await self.aclear_thread(thread_id)
+
+        try:
+            if hasattr(self, "_event_loop") and self._event_loop:
+                self._event_loop.run_until_complete(_aclear())
+            else:
+                asyncio.run(_aclear())
         except Exception as e:
             self._monitor_middleware.mark_error(e)
             raise

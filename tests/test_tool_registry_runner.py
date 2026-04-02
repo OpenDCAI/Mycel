@@ -8,14 +8,21 @@ Covers:
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from langchain_core.tools import tool
 
 from core.runtime.errors import InputValidationError
+from core.runtime.agent import _make_mcp_tool_entry
+from core.runtime.permissions import ToolPermissionContext, can_auto_approve
 from core.runtime.registry import ToolEntry, ToolMode, ToolRegistry
 from core.runtime.runner import ToolRunner
+from core.runtime.state import AppState, BootstrapConfig, ToolUseContext
+from core.runtime.tool_result import ToolResultEnvelope, tool_permission_denied
 from core.runtime.validator import ToolValidator
+from core.tools.command.hooks.dangerous_commands import DangerousCommandsHook
+from core.tools.command.service import CommandService
 
 # ---------------------------------------------------------------------------
 # ToolRegistry
@@ -263,6 +270,475 @@ class TestToolRunnerErrorNormalization:
         assert upstream_called
         assert result.content == "mcp result"
 
+    @pytest.mark.asyncio
+    async def test_non_mcp_post_tool_use_hook_sees_materialized_tool_message(self):
+        events = []
+
+        def local_handler(**kwargs):
+            return "plain success"
+
+        entry = ToolEntry(
+            name="Write",
+            mode=ToolMode.INLINE,
+            schema={"name": "Write", "parameters": {"type": "object", "required": [], "properties": {}}},
+            handler=local_handler,
+            source="test",
+        )
+        runner = _make_runner([entry])
+        req = _make_tool_call_request("Write", {})
+        req.state = MagicMock()
+
+        def post_tool_use(message, request):
+            events.append((type(message).__name__, message.content, message.additional_kwargs["tool_result_meta"]["source"]))
+            return message
+
+        req.state.post_tool_use = post_tool_use
+        result = await runner.awrap_tool_call(req, AsyncMock())
+
+        assert result.content == "plain success"
+        assert events == [("ToolMessage", "plain success", "local")]
+
+    @pytest.mark.asyncio
+    async def test_post_tool_use_failure_hook_runs_on_materialized_error_message(self):
+        seen = []
+
+        def bad_handler(**kwargs):
+            raise ValueError("disk full")
+
+        entry = ToolEntry(
+            name="Write",
+            mode=ToolMode.INLINE,
+            schema={"name": "Write", "parameters": {"type": "object", "required": [], "properties": {}}},
+            handler=bad_handler,
+            source="test",
+        )
+        runner = _make_runner([entry])
+        req = _make_tool_call_request("Write", {})
+        req.state = MagicMock()
+
+        def post_tool_use_failure(message, request):
+            seen.append((type(message).__name__, message.additional_kwargs["tool_result_meta"]["kind"]))
+            return message
+
+        req.state.post_tool_use_failure = post_tool_use_failure
+        result = await runner.awrap_tool_call(req, AsyncMock())
+
+        assert "<tool_use_error>" in result.content
+        assert seen == [("ToolMessage", "error")]
+
+    @pytest.mark.asyncio
+    async def test_permission_denied_result_keeps_distinct_metadata(self):
+        def denied_handler(**kwargs):
+            return tool_permission_denied(
+                "permission denied",
+                top_level_blocks=[{"type": "text", "text": "extra-block"}],
+                metadata={"policy": "workspace"},
+            )
+
+        entry = ToolEntry(
+            name="Write",
+            mode=ToolMode.INLINE,
+            schema={"name": "Write", "parameters": {"type": "object", "required": [], "properties": {}}},
+            handler=denied_handler,
+            source="test",
+        )
+        runner = _make_runner([entry])
+        req = _make_tool_call_request("Write", {})
+        req.state = MagicMock()
+
+        result = await runner.awrap_tool_call(req, AsyncMock())
+
+        meta = result.additional_kwargs["tool_result_meta"]
+        assert result.content == "permission denied"
+        assert meta["kind"] == "permission_denied"
+        assert meta["source"] == "local"
+        assert meta["top_level_blocks"] == [{"type": "text", "text": "extra-block"}]
+        assert meta["policy"] == "workspace"
+
+    @pytest.mark.asyncio
+    async def test_mcp_post_tool_use_hook_can_modify_result_before_materialization(self):
+        runner = _make_runner([])  # unknown tool => upstream/MCP path
+        req = _make_tool_call_request("mcp__server__tool", {})
+        req.state = MagicMock()
+        seen = []
+
+        def post_tool_use(payload, request):
+            seen.append(type(payload).__name__)
+            assert isinstance(payload, ToolResultEnvelope)
+            return ToolResultEnvelope(
+                kind=payload.kind,
+                content="hooked mcp result",
+                is_error=payload.is_error,
+                top_level_blocks=payload.top_level_blocks,
+                metadata={**payload.metadata, "hooked": True},
+            )
+
+        req.state.post_tool_use = post_tool_use
+
+        async def upstream(_request):
+            return ToolResultEnvelope(kind="success", content="raw mcp result")
+
+        result = await runner.awrap_tool_call(req, upstream)
+
+        assert seen == ["ToolResultEnvelope"]
+        assert result.content == "hooked mcp result"
+        assert result.additional_kwargs["tool_result_meta"]["source"] == "mcp"
+        assert result.additional_kwargs["tool_result_meta"]["hooked"] is True
+
+    @pytest.mark.asyncio
+    async def test_command_hook_denial_uses_permission_denied_result_path(self, tmp_path):
+        registry = ToolRegistry()
+        CommandService(
+            registry=registry,
+            workspace_root=tmp_path,
+            hooks=[DangerousCommandsHook()],
+        )
+        runner = ToolRunner(registry=registry)
+        req = _make_tool_call_request("Bash", {"command": "rm -rf /"})
+        req.state = MagicMock()
+
+        result = await runner.awrap_tool_call(req, AsyncMock())
+
+        meta = result.additional_kwargs["tool_result_meta"]
+        assert "SECURITY" in result.content
+        assert meta["kind"] == "permission_denied"
+        assert meta["source"] == "local"
+        assert meta["policy"] == "command_hook"
+
+    @pytest.mark.asyncio
+    async def test_registered_mcp_tool_executes_through_runner_with_mcp_source(self):
+        @tool
+        async def sample_mcp_tool(x: int) -> str:
+            """sample mcp"""
+            return f"mcp:{x}"
+
+        registry = ToolRegistry()
+        registry.register(_make_mcp_tool_entry(sample_mcp_tool))
+        runner = ToolRunner(registry=registry)
+        req = _make_tool_call_request("sample_mcp_tool", {"x": 3})
+        req.state = MagicMock()
+
+        result = await runner.awrap_tool_call(req, AsyncMock())
+
+        meta = result.additional_kwargs["tool_result_meta"]
+        assert result.content == "mcp:3"
+        assert meta["source"] == "mcp"
+        assert meta["kind"] == "success"
+
+    @pytest.mark.asyncio
+    async def test_registered_mcp_tool_post_hook_sees_envelope_before_materialization(self):
+        @tool
+        async def sample_mcp_tool(x: int) -> str:
+            """sample mcp"""
+            return f"mcp:{x}"
+
+        registry = ToolRegistry()
+        registry.register(_make_mcp_tool_entry(sample_mcp_tool))
+        runner = ToolRunner(registry=registry)
+        req = _make_tool_call_request("sample_mcp_tool", {"x": 3})
+        req.state = MagicMock()
+        seen = []
+
+        def post_tool_use(payload, request):
+            seen.append(type(payload).__name__)
+            assert isinstance(payload, ToolResultEnvelope)
+            return payload
+
+        req.state.post_tool_use = post_tool_use
+
+        result = await runner.awrap_tool_call(req, AsyncMock())
+
+        assert seen == ["ToolResultEnvelope"]
+        assert result.content == "mcp:3"
+        assert result.additional_kwargs["tool_result_meta"]["source"] == "mcp"
+
+    @pytest.mark.asyncio
+    async def test_registered_mcp_hook_rematerialization_keeps_mcp_source(self):
+        @tool
+        async def sample_mcp_tool(x: int) -> str:
+            """sample mcp"""
+            return f"mcp:{x}"
+
+        registry = ToolRegistry()
+        registry.register(_make_mcp_tool_entry(sample_mcp_tool))
+        runner = ToolRunner(registry=registry)
+        req = _make_tool_call_request("sample_mcp_tool", {"x": 3})
+        req.state = MagicMock()
+
+        def post_tool_use(payload, request):
+            return ToolResultEnvelope(
+                kind="success",
+                content="hooked-remat",
+                metadata={"hooked": True},
+            )
+
+        req.state.post_tool_use = post_tool_use
+
+        result = await runner.awrap_tool_call(req, AsyncMock())
+
+        meta = result.additional_kwargs["tool_result_meta"]
+        assert result.content == "hooked-remat"
+        assert meta["source"] == "mcp"
+        assert meta["hooked"] is True
+
+    @pytest.mark.asyncio
+    async def test_pre_tool_use_does_not_run_before_schema_validation(self):
+        events = []
+
+        entry = ToolEntry(
+            name="Write",
+            mode=ToolMode.INLINE,
+            schema={
+                "name": "Write",
+                "parameters": {
+                    "type": "object",
+                    "required": ["path"],
+                    "properties": {"path": {"type": "string"}},
+                },
+            },
+            handler=lambda path: f"ok:{path}",
+            source="test",
+        )
+        runner = _make_runner([entry])
+        req = _make_tool_call_request("Write", {})
+        req.state = MagicMock()
+
+        def pre_tool_use(payload, request):
+            events.append("pre")
+            return payload
+
+        req.state.pre_tool_use = pre_tool_use
+        result = await runner.awrap_tool_call(req, AsyncMock())
+
+        assert "InputValidationError" in result.content
+        assert events == []
+
+    @pytest.mark.asyncio
+    async def test_tool_specific_validation_runs_before_pre_tool_use_and_handler(self):
+        events = []
+
+        def validate_input(args, request):
+            events.append("tool-validate")
+            return {"path": args["path"], "normalized": True}
+
+        def handler(path, normalized=False):
+            events.append(("handler", path, normalized))
+            return "ok"
+
+        entry = ToolEntry(
+            name="Write",
+            mode=ToolMode.INLINE,
+            schema={
+                "name": "Write",
+                "parameters": {
+                    "type": "object",
+                    "required": ["path"],
+                    "properties": {"path": {"type": "string"}},
+                },
+            },
+            handler=handler,
+            source="test",
+            validate_input=validate_input,
+        )
+        runner = _make_runner([entry])
+        req = _make_tool_call_request("Write", {"path": "/tmp/a"})
+        req.state = MagicMock()
+
+        def pre_tool_use(payload, request):
+            events.append(("pre", dict(payload["args"])))
+            return payload
+
+        req.state.pre_tool_use = pre_tool_use
+        result = await runner.awrap_tool_call(req, AsyncMock())
+
+        assert result.content == "ok"
+        assert events == [
+            "tool-validate",
+            ("pre", {"path": "/tmp/a", "normalized": True}),
+            ("handler", "/tmp/a", True),
+        ]
+
+    @pytest.mark.asyncio
+    async def test_tool_specific_validation_failure_object_stops_before_handler(self):
+        events = []
+
+        def validate_input(args, request):
+            events.append("tool-validate")
+            return {"result": False, "message": "tool says no", "errorCode": "E_NO"}
+
+        def handler(**kwargs):
+            events.append(("handler", kwargs))
+            return "should-not-run"
+
+        entry = ToolEntry(
+            name="Write",
+            mode=ToolMode.INLINE,
+            schema={
+                "name": "Write",
+                "parameters": {
+                    "type": "object",
+                    "required": [],
+                    "properties": {},
+                },
+            },
+            handler=handler,
+            source="test",
+            validate_input=validate_input,
+        )
+        runner = _make_runner([entry])
+        req = _make_tool_call_request("Write", {})
+        req.state = MagicMock()
+
+        result = await runner.awrap_tool_call(req, AsyncMock())
+
+        assert "ToolValidationError" in result.content
+        assert "tool says no" in result.content
+        assert result.additional_kwargs["tool_result_meta"]["error_type"] == "tool_input_validation"
+        assert result.additional_kwargs["tool_result_meta"]["error_code"] == "E_NO"
+        assert events == ["tool-validate"]
+
+    @pytest.mark.asyncio
+    async def test_hook_allow_cannot_bypass_permission_deny_rule(self):
+        def handler(**kwargs):
+            raise AssertionError("handler should not run when permission denies")
+
+        entry = ToolEntry(
+            name="Write",
+            mode=ToolMode.INLINE,
+            schema={"name": "Write", "parameters": {"type": "object", "required": [], "properties": {}}},
+            handler=handler,
+            source="test",
+        )
+        runner = _make_runner([entry])
+        req = _make_tool_call_request("Write", {})
+        req.state = MagicMock()
+
+        def pre_tool_use(payload, request):
+            return {"permission": "allow"}
+
+        def can_use_tool(name, args, context, request):
+            return {"decision": "deny", "message": "settings deny"}
+
+        req.state.pre_tool_use = pre_tool_use
+        req.state.can_use_tool = can_use_tool
+
+        result = await runner.awrap_tool_call(req, AsyncMock())
+
+        meta = result.additional_kwargs["tool_result_meta"]
+        assert result.content == "settings deny"
+        assert meta["kind"] == "permission_denied"
+        assert meta["decision"] == "deny"
+
+    @pytest.mark.asyncio
+    async def test_pre_tool_use_can_update_args_before_permission_and_handler(self):
+        seen = []
+
+        def handler(path):
+            seen.append(("handler", path))
+            return f"ok:{path}"
+
+        entry = ToolEntry(
+            name="Write",
+            mode=ToolMode.INLINE,
+            schema={
+                "name": "Write",
+                "parameters": {
+                    "type": "object",
+                    "required": ["path"],
+                    "properties": {"path": {"type": "string"}},
+                },
+            },
+            handler=handler,
+            source="test",
+        )
+        runner = _make_runner([entry])
+        req = _make_tool_call_request("Write", {"path": "raw"})
+        req.state = MagicMock()
+
+        def pre_tool_use(payload, request):
+            return {"args": {"path": "mutated"}}
+
+        def can_use_tool(name, args, context, request):
+            seen.append(("permission", args["path"]))
+            return {"decision": "allow"}
+
+        req.state.pre_tool_use = pre_tool_use
+        req.state.can_use_tool = can_use_tool
+
+        result = await runner.awrap_tool_call(req, AsyncMock())
+
+        assert result.content == "ok:mutated"
+        assert seen == [("permission", "mutated"), ("handler", "mutated")]
+
+    @pytest.mark.asyncio
+    async def test_permission_checker_receives_permission_context_not_scheduler_flag(self):
+        seen = []
+
+        entry = ToolEntry(
+            name="Read",
+            mode=ToolMode.INLINE,
+            schema={"name": "Read", "parameters": {"type": "object", "required": [], "properties": {}}},
+            handler=lambda: "ok",
+            source="test",
+            is_read_only=True,
+            is_concurrency_safe=True,
+            is_destructive=True,
+        )
+        runner = _make_runner([entry])
+        req = _make_tool_call_request("Read", {})
+        req.state = MagicMock()
+
+        def can_use_tool(name, args, context, request):
+            seen.append((context.is_read_only, context.is_destructive, hasattr(context, "is_concurrency_safe")))
+            return {"decision": "allow"}
+
+        req.state.can_use_tool = can_use_tool
+
+        result = await runner.awrap_tool_call(req, AsyncMock())
+
+        assert result.content == "ok"
+        assert seen == [(True, True, False)]
+
+    @pytest.mark.asyncio
+    async def test_destructive_metadata_is_advisory_not_runtime_deny(self):
+        entry = ToolEntry(
+            name="Write",
+            mode=ToolMode.INLINE,
+            schema={"name": "Write", "parameters": {"type": "object", "required": [], "properties": {}}},
+            handler=lambda: "ok",
+            source="test",
+            is_destructive=True,
+        )
+        runner = _make_runner([entry])
+        req = _make_tool_call_request("Write", {})
+        req.state = MagicMock()
+
+        result = await runner.awrap_tool_call(req, AsyncMock())
+
+        assert result.content == "ok"
+
+    @pytest.mark.asyncio
+    async def test_runner_injects_tool_context_into_handler_when_requested(self):
+        entry = ToolEntry(
+            name="Agent",
+            mode=ToolMode.INLINE,
+            schema={"name": "Agent", "parameters": {"type": "object", "required": [], "properties": {}}},
+            handler=lambda tool_context: f"context:{tool_context.turn_id}",
+            source="test",
+        )
+        runner = _make_runner([entry])
+        req = _make_tool_call_request("Agent", {})
+        app_state = AppState()
+        req.state = ToolUseContext(
+            bootstrap=BootstrapConfig(workspace_root="/tmp/workspace", model_name="gpt-test"),
+            get_app_state=app_state.get_state,
+            set_app_state=app_state.set_state,
+        )
+
+        result = await runner.awrap_tool_call(req, AsyncMock())
+
+        assert result.content == f"context:{req.state.turn_id}"
+
 
 class TestToolRunnerInlineInjection:
     """P1: ToolRunner injects inline schemas into model call."""
@@ -337,3 +813,20 @@ class TestToolModeFromConfig:
             entry = reg.get(tool_name)
             assert entry is not None, f"{tool_name} not registered"
             assert entry.mode == ToolMode.INLINE, f"{tool_name} should be INLINE, got {entry.mode}"
+
+    def test_task_service_read_only_does_not_imply_concurrency_safe(self, tmp_path):
+        reg = ToolRegistry()
+        from core.tools.task.service import TaskService
+
+        _svc = TaskService(registry=reg, db_path=tmp_path / "test.db")
+
+        for tool_name in ["TaskGet", "TaskList"]:
+            entry = reg.get(tool_name)
+            assert entry is not None, f"{tool_name} not registered"
+            assert entry.is_read_only is True
+            assert entry.is_concurrency_safe is False
+
+    def test_can_auto_approve_only_for_read_only_non_destructive_tools(self):
+        assert can_auto_approve(ToolPermissionContext(is_read_only=True, is_destructive=False)) is True
+        assert can_auto_approve(ToolPermissionContext(is_read_only=False, is_destructive=False)) is False
+        assert can_auto_approve(ToolPermissionContext(is_read_only=True, is_destructive=True)) is False

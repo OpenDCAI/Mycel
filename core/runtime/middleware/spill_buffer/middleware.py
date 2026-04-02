@@ -8,21 +8,7 @@ from typing import Any
 
 from langchain_core.messages import ToolMessage
 
-try:
-    from langchain.agents.middleware.types import (
-        AgentMiddleware,
-        ModelRequest,
-        ModelResponse,
-        ToolCallRequest,
-    )
-except ImportError:
-
-    class AgentMiddleware:  # type: ignore[no-redef]
-        pass
-
-    ModelRequest = Any
-    ModelResponse = Any
-    ToolCallRequest = Any
+from core.runtime.middleware import AgentMiddleware, ModelRequest, ModelResponse, ToolCallRequest
 
 from core.tools.filesystem.backend import FileSystemBackend
 
@@ -81,6 +67,9 @@ class SpillBufferMiddleware(AgentMiddleware):
         if tool_name in SKIP_TOOLS:
             return result
 
+        if isinstance(result.content, str) and not result.content.strip():
+            return result.model_copy(update={"content": f"({tool_name} completed with no output)"})
+
         threshold = self.thresholds.get(tool_name, self.default_threshold)
         tool_call_id = request.tool_call.get("id", "unknown")
 
@@ -93,10 +82,10 @@ class SpillBufferMiddleware(AgentMiddleware):
         )
 
         if spilled is not result.content:
-            return ToolMessage(
-                content=spilled,
-                tool_call_id=result.tool_call_id,
-            )
+            # @@@spill-message-preservation - replacing content must not discard
+            # metadata/name/id; te-03 is about persisted handoff, not rebuilding
+            # a thinner ToolMessage shell.
+            return result.model_copy(update={"content": spilled})
         return result
 
     def wrap_tool_call(

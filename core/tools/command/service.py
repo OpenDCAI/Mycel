@@ -19,6 +19,7 @@ from pathlib import Path
 from typing import Any
 
 from core.runtime.registry import ToolEntry, ToolMode, ToolRegistry
+from core.runtime.tool_result import tool_permission_denied
 from core.tools.command.base import BaseExecutor
 from core.tools.command.dispatcher import get_executor
 
@@ -120,7 +121,10 @@ class CommandService:
     ) -> str:
         allowed, error_msg = self._check_hooks(command)
         if not allowed:
-            return error_msg
+            return tool_permission_denied(
+                error_msg,
+                metadata={"policy": "command_hook"},
+            )
 
         work_dir = None if self._executor.runtime_owns_cwd else str(self.workspace_root)
         timeout_secs = timeout / 1000.0

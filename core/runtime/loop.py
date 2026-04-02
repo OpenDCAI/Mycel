@@ -14,22 +14,73 @@ Design:
 from __future__ import annotations
 
 import asyncio
+import inspect
 import logging
+import uuid
+from dataclasses import dataclass
+from enum import Enum
 from typing import Any, AsyncGenerator
 
-from langchain.agents.middleware.types import (
+from core.runtime.middleware import (
     AgentMiddleware,
     ModelRequest,
     ModelResponse,
     ToolCallRequest,
 )
-from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
+from langchain_core.messages import AIMessage, AIMessageChunk, HumanMessage, SystemMessage, ToolMessage
 
 from .registry import ToolRegistry
+from .state import AppState, BootstrapConfig, ToolUseContext
 
 logger = logging.getLogger(__name__)
 
 _NOOP_HANDLER: Any = None  # placeholder for innermost "handler" in middleware chain
+_ESCALATED_MAX_OUTPUT_TOKENS = 64000
+
+
+class TerminalReason(str, Enum):
+    completed = "completed"
+    aborted_streaming = "aborted_streaming"
+    aborted_tools = "aborted_tools"
+    model_error = "model_error"
+    max_turns = "max_turns"
+    prompt_too_long = "prompt_too_long"
+    blocking_limit = "blocking_limit"
+    image_error = "image_error"
+    hook_stopped = "hook_stopped"
+    stop_hook_prevented = "stop_hook_prevented"
+
+
+class ContinueReason(str, Enum):
+    next_turn = "next_turn"
+    collapse_drain_retry = "collapse_drain_retry"
+    reactive_compact_retry = "reactive_compact_retry"
+    max_output_tokens_escalate = "max_output_tokens_escalate"
+    max_output_tokens_recovery = "max_output_tokens_recovery"
+    stop_hook_blocking = "stop_hook_blocking"
+    token_budget_continuation = "token_budget_continuation"
+
+
+@dataclass(frozen=True)
+class TerminalState:
+    reason: TerminalReason
+    turn_count: int
+    error: str | None = None
+
+
+@dataclass(frozen=True)
+class ContinueState:
+    reason: ContinueReason
+
+
+@dataclass
+class _TrackedTool:
+    order: int
+    tool_call: dict[str, Any]
+    is_concurrency_safe: bool
+    status: str = "queued"
+    task: asyncio.Task[ToolMessage] | None = None
+    result: ToolMessage | None = None
 
 
 class QueryLoop:
@@ -50,6 +101,10 @@ class QueryLoop:
         middleware: list[AgentMiddleware],
         checkpointer: Any,
         registry: ToolRegistry,
+        app_state: AppState | None = None,
+        runtime: Any = None,
+        bootstrap: BootstrapConfig | None = None,
+        refresh_tools: Any = None,
         max_turns: int = 100,
     ):
         self.model = model
@@ -57,19 +112,34 @@ class QueryLoop:
         self.middleware = middleware
         self.checkpointer = checkpointer
         self._registry = registry
+        self._app_state = app_state
+        self._runtime = runtime
+        self._bootstrap = bootstrap
+        self._refresh_tools = refresh_tools
+        self._memory_middleware = next(
+            (mw for mw in middleware if hasattr(mw, "compact_boundary_index")),
+            None,
+        )
+        # @@@sa-02-session-tool-refs
+        # These refs must survive across turns within the same loop/session,
+        # while turn-local attachment triggers stay ephemeral per ToolUseContext.
+        self._tool_read_file_state: dict[str, Any] = {}
+        self._tool_loaded_nested_memory_paths: set[str] = set()
+        self._tool_discovered_skill_names: set[str] = set()
         self.max_turns = max_turns
+        self.last_terminal: TerminalState | None = None
+        self.last_continue: ContinueState | None = None
 
     # -------------------------------------------------------------------------
     # Public streaming interface (LangGraph-compatible)
     # -------------------------------------------------------------------------
 
-    async def astream(
+    async def query(
         self,
         input: dict,
         config: dict | None = None,
-        stream_mode: str = "updates",
-    ) -> AsyncGenerator[dict, None]:
-        """Stream agent execution chunks compatible with LangGraph stream_mode='updates'."""
+    ) -> AsyncGenerator[dict[str, Any], None]:
+        """Raw loop generator with an explicit final terminal event."""
         config = config or {}
         thread_id = config.get("configurable", {}).get("thread_id", "default")
 
@@ -83,26 +153,127 @@ class QueryLoop:
         # Parse and append new input messages
         new_msgs = self._parse_input(input)
         messages.extend(new_msgs)
+        self._sync_app_state(messages=messages, turn_count=0)
+
+        terminal: TerminalState | None = None
+        transition: ContinueState | None = None
+        max_output_tokens_recovery_count = 0
+        has_attempted_reactive_compact = False
+        max_output_tokens_override: int | None = None
 
         turn = 0
         while turn < self.max_turns:
             turn += 1
+            tool_context = self._build_tool_use_context(messages)
+
+            messages_for_query = await self._build_query_messages(messages, config)
+            self._sync_tool_context_messages(tool_context, messages_for_query)
 
             # --- Call model through middleware chain ---
-            response = await self._invoke_model(messages, config)
-
-            # Extract AI message from response
-            ai_messages = [m for m in response.result if isinstance(m, AIMessage)]
-            if not ai_messages:
-                # No AI message — unexpected; treat as terminal
+            streamed_tool_results: list[ToolMessage] = []
+            pending_tool_results: list[ToolMessage] = []
+            used_streaming_overlap = False
+            response: ModelResponse | None = None
+            ai_msg: AIMessage | None = None
+            tool_calls: list[dict[str, Any]] = []
+            try:
+                if self._can_stream_tools():
+                    used_streaming_overlap = True
+                    async for stream_event in self._stream_model_with_tool_overlap(
+                        messages_for_query,
+                        config,
+                        tool_context=tool_context,
+                        max_output_tokens_override=max_output_tokens_override,
+                    ):
+                        if stream_event["type"] == "message_chunk":
+                            yield {"message_chunk": stream_event["chunk"]}
+                            continue
+                        if stream_event["type"] == "tools":
+                            chunk_messages = stream_event["messages"]
+                            streamed_tool_results.extend(chunk_messages)
+                            yield {"tools": {"messages": chunk_messages}}
+                            continue
+                        response = stream_event["response"]
+                        ai_msg = stream_event["ai_message"]
+                        tool_calls = stream_event["tool_calls"]
+                        pending_tool_results = stream_event["remaining_tool_results"]
+                else:
+                    response = await self._invoke_model(
+                        messages_for_query,
+                        config,
+                        max_output_tokens_override=max_output_tokens_override,
+                    )
+            except Exception as exc:
+                handled = await self._handle_model_error_recovery(
+                    exc=exc,
+                    messages=messages,
+                    turn=turn,
+                    transition=transition,
+                    max_output_tokens_recovery_count=max_output_tokens_recovery_count,
+                    has_attempted_reactive_compact=has_attempted_reactive_compact,
+                    max_output_tokens_override=max_output_tokens_override,
+                )
+                if handled is not None:
+                    messages = handled["messages"]
+                    transition = handled["transition"]
+                    max_output_tokens_recovery_count = handled["max_output_tokens_recovery_count"]
+                    has_attempted_reactive_compact = handled["has_attempted_reactive_compact"]
+                    max_output_tokens_override = handled["max_output_tokens_override"]
+                    if handled["terminal"] is not None:
+                        terminal = handled["terminal"]
+                        break
+                    self._sync_app_state(messages=messages, turn_count=turn)
+                    continue
+                terminal = TerminalState(
+                    reason=TerminalReason.model_error,
+                    turn_count=turn,
+                    error=str(exc),
+                )
                 break
-            ai_msg = ai_messages[0]
+
+            if response is None or ai_msg is None:
+                ai_messages = [m for m in (response.result if response else []) if isinstance(m, AIMessage)]
+                if not ai_messages:
+                    # No AI message — unexpected; treat as terminal
+                    terminal = TerminalState(
+                        reason=TerminalReason.model_error,
+                        turn_count=turn,
+                        error="model returned no AIMessage",
+                    )
+                    break
+                ai_msg = ai_messages[0]
+            self._sync_tool_context_messages(
+                tool_context,
+                response.request_messages or messages_for_query,
+            )
+
+            truncated = self._handle_truncated_response_recovery(
+                ai_msg=ai_msg,
+                messages=messages,
+                turn=turn,
+                max_output_tokens_recovery_count=max_output_tokens_recovery_count,
+                max_output_tokens_override=max_output_tokens_override,
+            )
+            if truncated is not None:
+                messages = truncated["messages"]
+                transition = truncated["transition"]
+                max_output_tokens_recovery_count = truncated["max_output_tokens_recovery_count"]
+                max_output_tokens_override = truncated["max_output_tokens_override"]
+                self._sync_app_state(messages=messages, turn_count=turn)
+                if truncated["yield_ai"]:
+                    yield {"agent": {"messages": [ai_msg]}}
+                if truncated["terminal"] is not None:
+                    terminal = truncated["terminal"]
+                    break
+                continue
+
+            self._sync_app_state(messages=messages, turn_count=turn)
 
             # Yield agent update (stream_mode="updates" format)
             yield {"agent": {"messages": [ai_msg]}}
 
-            # Check for tool calls
-            tool_calls = getattr(ai_msg, "tool_calls", None) or []
+            if not tool_calls:
+                tool_calls = getattr(ai_msg, "tool_calls", None) or []
             if not tool_calls:
                 # Also check additional_kwargs for older message formats
                 tool_calls = ai_msg.additional_kwargs.get("tool_calls", [])
@@ -110,30 +281,146 @@ class QueryLoop:
             if not tool_calls:
                 # No tool calls → agent is done
                 messages.append(ai_msg)
+                terminal = TerminalState(
+                    reason=TerminalReason.completed,
+                    turn_count=turn,
+                )
                 break
 
             # Expose current messages for forkContext sub-agent spawning
             from sandbox.thread_context import set_current_messages
             set_current_messages(messages + [ai_msg])
 
-            # --- Execute tools through middleware chain ---
-            tool_results = await self._execute_tools(tool_calls, response)
+            if used_streaming_overlap:
+                if pending_tool_results:
+                    yield {"tools": {"messages": pending_tool_results}}
+                tool_results = streamed_tool_results + pending_tool_results
+            else:
+                # --- Execute tools through middleware chain ---
+                try:
+                    tool_results = await self._execute_tools(tool_calls, response, tool_context)
+                except Exception as exc:
+                    terminal = TerminalState(
+                        reason=TerminalReason.aborted_tools,
+                        turn_count=turn,
+                        error=str(exc),
+                    )
+                    break
 
-            # Yield tools update
-            yield {"tools": {"messages": tool_results}}
+                # Yield tools update
+                yield {"tools": {"messages": tool_results}}
 
             # Advance message history for next turn
             messages.append(ai_msg)
             messages.extend(tool_results)
+            await self._refresh_tools_between_turns(tool_context)
+            transition = ContinueState(reason=ContinueReason.next_turn)
+            max_output_tokens_recovery_count = 0
+            has_attempted_reactive_compact = False
+            max_output_tokens_override = None
+            self._sync_app_state(messages=messages, turn_count=turn)
+
+        if terminal is None:
+            terminal = TerminalState(
+                reason=TerminalReason.max_turns,
+                turn_count=turn,
+            )
 
         # Persist message history
         await self._save_messages(thread_id, messages)
+        self._sync_app_state(messages=messages, turn_count=turn)
+        self.last_terminal = terminal
+        self.last_continue = transition
+        yield {"terminal": terminal, "transition": transition}
+
+    async def astream(
+        self,
+        input: dict,
+        config: dict | None = None,
+        stream_mode: str | list[str] = "updates",
+    ) -> AsyncGenerator[Any, None]:
+        """Stream agent execution chunks compatible with LangGraph stream modes."""
+        requested_modes = [stream_mode] if isinstance(stream_mode, str) else list(stream_mode)
+        emitted_live_agent_chunks = False
+        async for event in self.query(input, config=config):
+            if "terminal" in event:
+                continue
+            if isinstance(stream_mode, str):
+                if "message_chunk" in event:
+                    continue
+                yield event
+                continue
+
+            if "message_chunk" in event:
+                if "messages" in requested_modes:
+                    yield (
+                        "messages",
+                        (
+                            event["message_chunk"],
+                            {"langgraph_node": "agent"},
+                        ),
+                    )
+                    emitted_live_agent_chunks = True
+                continue
+
+            if "messages" in requested_modes and "agent" in event:
+                if not emitted_live_agent_chunks:
+                    for msg in event["agent"].get("messages", []):
+                        if not isinstance(msg, AIMessage):
+                            continue
+                        yield (
+                            "messages",
+                            (
+                                AIMessageChunk(**msg.model_dump(exclude={"type"})),
+                                {"langgraph_node": "agent"},
+                            ),
+                        )
+                emitted_live_agent_chunks = False
+
+            if "updates" in requested_modes:
+                yield ("updates", event)
+
+    async def ainvoke(
+        self,
+        input: dict,
+        config: dict | None = None,
+        stream_mode: str = "updates",
+    ) -> dict[str, Any]:
+        """Drain query and return messages plus explicit terminal state."""
+        drained_messages: list[Any] = []
+        terminal: TerminalState | None = None
+        transition: ContinueState | None = None
+
+        # @@@ainvoke-drains-astream
+        # QueryLoop is generator-first. ainvoke exists only as a compatibility
+        # adapter for callers like LeonAgent.invoke/ainvoke and must not invent
+        # a separate execution path.
+        async for event in self.query(input, config=config):
+            if "terminal" in event:
+                terminal = event["terminal"]
+                transition = event.get("transition")
+                continue
+            for section in ("agent", "tools"):
+                drained_messages.extend(event.get(section, {}).get("messages", []))
+
+        return {
+            "messages": drained_messages,
+            "reason": terminal.reason.value if terminal else TerminalReason.completed.value,
+            "terminal": terminal,
+            "transition": transition,
+        }
 
     # -------------------------------------------------------------------------
     # Model invocation through middleware chain
     # -------------------------------------------------------------------------
 
-    async def _invoke_model(self, messages: list, config: dict) -> ModelResponse:
+    async def _invoke_model(
+        self,
+        messages: list,
+        config: dict,
+        *,
+        max_output_tokens_override: int | None = None,
+    ) -> ModelResponse:
         """Call model through the full middleware chain (awrap_model_call)."""
 
         async def innermost_handler(request: ModelRequest) -> ModelResponse:
@@ -150,6 +437,12 @@ class QueryLoop:
             else:
                 bound = model
 
+            if max_output_tokens_override is not None and hasattr(bound, "bind"):
+                try:
+                    bound = bound.bind(max_tokens=max_output_tokens_override)
+                except Exception:
+                    pass
+
             # Build message list: system + conversation
             call_messages = []
             if request.system_message:
@@ -159,7 +452,7 @@ class QueryLoop:
             result = await bound.ainvoke(call_messages)
             if not isinstance(result, list):
                 result = [result]
-            return ModelResponse(result=result)
+            return ModelResponse(result=result, request_messages=list(request.messages))
 
         # Build ModelRequest
         inline_schemas = self._registry.get_inline_schemas()
@@ -180,113 +473,651 @@ class QueryLoop:
 
         return await handler(request)
 
+    def _bind_model(
+        self,
+        model: Any,
+        tools: list | None,
+        *,
+        max_output_tokens_override: int | None = None,
+    ) -> Any:
+        if tools:
+            try:
+                bound = model.bind_tools(tools)
+            except Exception:
+                bound = model
+        else:
+            bound = model
+
+        if max_output_tokens_override is not None and hasattr(bound, "bind"):
+            try:
+                bound = bound.bind(max_tokens=max_output_tokens_override)
+            except Exception:
+                pass
+        return bound
+
+    def _can_stream_tools(self) -> bool:
+        stream_fn = getattr(self.model, "astream", None)
+        if not callable(stream_fn):
+            return False
+        return type(self.model).__module__ != "unittest.mock"
+
+    async def _prepare_streaming_request(
+        self,
+        messages: list,
+    ) -> ModelRequest:
+        inline_schemas = self._registry.get_inline_schemas()
+        request = ModelRequest(
+            model=self.model,
+            messages=messages,
+            system_message=self.system_prompt,
+            tools=inline_schemas,
+        )
+
+        async def prepare_handler(request: ModelRequest) -> ModelResponse:
+            return ModelResponse(
+                result=[],
+                request_messages=list(request.messages),
+                prepared_request=request,
+            )
+
+        handler = prepare_handler
+        for mw in reversed(self.middleware):
+            if _mw_overrides_model_call(mw):
+                handler = _make_model_wrapper(mw, handler)
+
+        response = await handler(request)
+        return response.prepared_request or request
+
+    async def _stream_model_with_tool_overlap(
+        self,
+        messages: list,
+        config: dict,
+        *,
+        tool_context: ToolUseContext | None,
+        max_output_tokens_override: int | None,
+    ) -> AsyncGenerator[dict[str, Any], None]:
+        prepared_request = await self._prepare_streaming_request(messages)
+        bound = self._bind_model(
+            prepared_request.model,
+            prepared_request.tools,
+            max_output_tokens_override=max_output_tokens_override,
+        )
+
+        call_messages = []
+        if prepared_request.system_message:
+            call_messages.append(prepared_request.system_message)
+        call_messages.extend(prepared_request.messages)
+
+        executor = _StreamingToolExecutor(loop=self, tool_context=tool_context)
+        aggregate: AIMessageChunk | None = None
+        seen_tool_ids: set[str] = set()
+        streamed_tool_calls: list[dict[str, Any]] = []
+
+        try:
+            async for chunk in bound.astream(call_messages):
+                if isinstance(chunk, AIMessage):
+                    chunk = AIMessageChunk(**chunk.model_dump(exclude={"type"}))
+                elif not isinstance(chunk, AIMessageChunk):
+                    continue
+
+                # @@@stream-chunk-snapshot
+                # Some providers reuse and mutate the same chunk object across
+                # yields. Snapshot before yielding/aggregating so the final
+                # AIMessage cannot collapse to the last empty chunk.
+                chunk = AIMessageChunk(**chunk.model_dump(exclude={"type"}))
+                if (
+                    aggregate is not None
+                    and getattr(chunk, "chunk_position", None) == "last"
+                    and not chunk.content
+                    and not getattr(chunk, "tool_calls", None)
+                    and not getattr(chunk, "invalid_tool_calls", None)
+                    and not getattr(chunk, "tool_call_chunks", None)
+                    and getattr(chunk, "usage_metadata", None) == getattr(aggregate, "usage_metadata", None)
+                ):
+                    chunk = chunk.model_copy(update={"usage_metadata": None})
+                aggregate = chunk if aggregate is None else aggregate + chunk
+
+                yield {"type": "message_chunk", "chunk": chunk}
+
+                tool_call_chunks = getattr(aggregate, "tool_call_chunks", None) or []
+                for tool_call in getattr(aggregate, "tool_calls", None) or []:
+                    ready_tool_call = self._normalize_stream_tool_call(tool_call, tool_call_chunks)
+                    if ready_tool_call is None:
+                        continue
+                    call_id = ready_tool_call.get("id")
+                    if not call_id or call_id in seen_tool_ids:
+                        continue
+                    seen_tool_ids.add(call_id)
+                    streamed_tool_calls.append(ready_tool_call)
+                    await executor.add_tool(ready_tool_call)
+
+                completed = await executor.get_completed_results()
+                if completed:
+                    yield {"type": "tools", "messages": completed}
+        except Exception:
+            discarded = await executor.discard(reason="streaming_error")
+            if discarded:
+                yield {"type": "tools", "messages": discarded}
+            raise
+
+        if aggregate is None:
+            raise RuntimeError("streaming model returned no AIMessageChunk")
+
+        ai_message = AIMessage(**aggregate.model_dump(exclude={"type"}))
+        self._notify_stream_response(prepared_request, ai_message)
+        remaining = await executor.drain_remaining()
+        yield {
+            "type": "done",
+            "response": ModelResponse(result=[ai_message], request_messages=list(prepared_request.messages)),
+            "ai_message": ai_message,
+            "tool_calls": list(streamed_tool_calls),
+            "remaining_tool_results": remaining,
+        }
+
+    def _notify_stream_response(self, request: ModelRequest, ai_message: AIMessage) -> None:
+        req_dict = {"messages": request.messages}
+        resp_dict = {"messages": [ai_message]}
+        for mw in self.middleware:
+            dispatch = getattr(mw, "_dispatch_monitors", None)
+            if callable(dispatch):
+                dispatch("on_response", req_dict, resp_dict)
+
+    async def _build_query_messages(self, messages: list, config: dict) -> list:
+        return await self._apply_before_model(list(messages), config)
+
+    async def _apply_before_model(self, messages: list, config: dict) -> list:
+        """Run middleware before_model/abefore_model hooks on the live path."""
+        current_messages = list(messages)
+        state = {"messages": current_messages}
+
+        for mw in self.middleware:
+            update: dict[str, Any] | None = None
+            abefore = getattr(mw, "abefore_model", None)
+            before = getattr(mw, "before_model", None)
+
+            if callable(abefore):
+                update = await abefore(state=state, runtime=None, config=config)
+            elif callable(before):
+                update = before(state=state, runtime=None, config=config)
+
+            if not update:
+                continue
+
+            new_messages = update.get("messages")
+            if new_messages:
+                if not isinstance(new_messages, list):
+                    new_messages = [new_messages]
+                current_messages.extend(new_messages)
+                state["messages"] = current_messages
+
+        return current_messages
+
+    def _sync_app_state(self, messages: list, turn_count: int) -> None:
+        """Keep runtime AppState aligned with the loop's live state."""
+        if self._app_state is None:
+            return
+
+        snapshot = list(messages)
+        current_cost = self._read_runtime_cost()
+        bootstrap_cost = self._bootstrap.total_cost_usd if self._bootstrap is not None else 0.0
+        cumulative_cost = max(current_cost, self._app_state.total_cost, bootstrap_cost)
+        compact_boundary_index = self._read_compact_boundary_index()
+
+        # @@@sa-03-cost-accumulator-monotonic
+        # /clear must preserve session accumulators, so loop sync cannot let a
+        # lower per-run observation overwrite the accumulated session total.
+        if self._bootstrap is not None:
+            self._bootstrap.total_cost_usd = cumulative_cost
+
+        # @@@app-state-sync
+        # ql-02 needs the loop's local lifecycle to write back into AppState,
+        # but we still do not have compaction yet. Clamp the boundary so the
+        # store stays coherent without pretending compaction exists.
+        def _update(state: AppState) -> AppState:
+            return state.model_copy(
+                update={
+                    "messages": snapshot,
+                    "turn_count": turn_count,
+                    "total_cost": cumulative_cost,
+                    "compact_boundary_index": compact_boundary_index,
+                }
+            )
+
+        self._app_state.set_state(_update)
+
+    def _read_runtime_cost(self) -> float:
+        if self._runtime is None:
+            return self._app_state.total_cost if self._app_state is not None else 0.0
+        try:
+            return float(self._runtime.cost)
+        except Exception:
+            return self._app_state.total_cost if self._app_state is not None else 0.0
+
+    def _read_compact_boundary_index(self) -> int:
+        if self._memory_middleware is None:
+            return 0
+        try:
+            boundary = int(self._memory_middleware.compact_boundary_index)
+        except Exception:
+            return 0
+        return max(boundary, 0)
+
+    def _build_tool_use_context(self, messages: list) -> ToolUseContext | None:
+        if self._bootstrap is None or self._app_state is None:
+            return None
+        return ToolUseContext(
+            bootstrap=self._bootstrap,
+            get_app_state=self._app_state.get_state,
+            set_app_state=self._app_state.set_state,
+            refresh_tools=self._refresh_tools,
+            read_file_state=self._tool_read_file_state,
+            loaded_nested_memory_paths=self._tool_loaded_nested_memory_paths,
+            discovered_skill_names=self._tool_discovered_skill_names,
+            nested_memory_attachment_triggers=set(),
+            messages=list(messages),
+        )
+
+    def _sync_tool_context_messages(
+        self,
+        tool_context: ToolUseContext | None,
+        messages: list,
+    ) -> None:
+        if tool_context is None:
+            return
+        tool_context.messages = list(messages)
+
+    async def _refresh_tools_between_turns(self, tool_context: ToolUseContext | None) -> None:
+        refresh = self._refresh_tools
+        if refresh is None and tool_context is not None:
+            refresh = tool_context.refresh_tools
+        if refresh is None:
+            return
+        result = refresh()
+        if inspect.isawaitable(result):
+            await result
+
+    async def _handle_model_error_recovery(
+        self,
+        *,
+        exc: Exception,
+        messages: list,
+        turn: int,
+        transition: ContinueState | None,
+        max_output_tokens_recovery_count: int,
+        has_attempted_reactive_compact: bool,
+        max_output_tokens_override: int | None,
+    ) -> dict[str, Any] | None:
+        error_text = str(exc).lower()
+
+        if "max_output_tokens" in error_text:
+            if max_output_tokens_override is None:
+                return {
+                    "messages": messages,
+                    "transition": ContinueState(reason=ContinueReason.max_output_tokens_escalate),
+                    "max_output_tokens_recovery_count": max_output_tokens_recovery_count,
+                    "has_attempted_reactive_compact": has_attempted_reactive_compact,
+                    "max_output_tokens_override": _ESCALATED_MAX_OUTPUT_TOKENS,
+                    "terminal": None,
+                }
+            if max_output_tokens_recovery_count < 3:
+                recovered_messages = list(messages)
+                recovered_messages.append(
+                    HumanMessage(
+                        content="Output token limit hit. Resume directly with no apology or recap.",
+                    )
+                )
+                return {
+                    "messages": recovered_messages,
+                    "transition": ContinueState(reason=ContinueReason.max_output_tokens_recovery),
+                    "max_output_tokens_recovery_count": max_output_tokens_recovery_count + 1,
+                    "has_attempted_reactive_compact": has_attempted_reactive_compact,
+                    "max_output_tokens_override": max_output_tokens_override,
+                    "terminal": None,
+                }
+            return {
+                "messages": messages,
+                "transition": ContinueState(reason=ContinueReason.max_output_tokens_recovery),
+                "max_output_tokens_recovery_count": max_output_tokens_recovery_count,
+                "has_attempted_reactive_compact": has_attempted_reactive_compact,
+                "max_output_tokens_override": max_output_tokens_override,
+                "terminal": TerminalState(
+                    reason=TerminalReason.model_error,
+                    turn_count=turn,
+                    error=str(exc),
+                ),
+            }
+
+        if self._is_prompt_too_long_error(error_text):
+            if transition is None or transition.reason is not ContinueReason.collapse_drain_retry:
+                drained = await self._recover_from_overflow(messages)
+                if drained is not None and drained["committed"] > 0:
+                    return {
+                        "messages": drained["messages"],
+                        "transition": ContinueState(reason=ContinueReason.collapse_drain_retry),
+                        "max_output_tokens_recovery_count": max_output_tokens_recovery_count,
+                        "has_attempted_reactive_compact": has_attempted_reactive_compact,
+                        "max_output_tokens_override": max_output_tokens_override,
+                        "terminal": None,
+                    }
+            if not has_attempted_reactive_compact:
+                compacted = await self._force_reactive_compact(messages)
+                if compacted is not None:
+                    return {
+                        "messages": compacted,
+                        "transition": ContinueState(reason=ContinueReason.reactive_compact_retry),
+                        "max_output_tokens_recovery_count": max_output_tokens_recovery_count,
+                        "has_attempted_reactive_compact": True,
+                        "max_output_tokens_override": max_output_tokens_override,
+                        "terminal": None,
+                    }
+            return {
+                "messages": messages,
+                "transition": transition,
+                "max_output_tokens_recovery_count": max_output_tokens_recovery_count,
+                "has_attempted_reactive_compact": has_attempted_reactive_compact,
+                "max_output_tokens_override": max_output_tokens_override,
+                "terminal": TerminalState(
+                    reason=TerminalReason.prompt_too_long,
+                    turn_count=turn,
+                    error=str(exc),
+                ),
+            }
+
+        return None
+
+    def _handle_truncated_response_recovery(
+        self,
+        *,
+        ai_msg: AIMessage,
+        messages: list,
+        turn: int,
+        max_output_tokens_recovery_count: int,
+        max_output_tokens_override: int | None,
+    ) -> dict[str, Any] | None:
+        if not self._is_max_output_truncated(ai_msg):
+            return None
+
+        if max_output_tokens_override is None:
+            return {
+                "messages": messages,
+                "transition": ContinueState(reason=ContinueReason.max_output_tokens_escalate),
+                "max_output_tokens_recovery_count": max_output_tokens_recovery_count,
+                "max_output_tokens_override": _ESCALATED_MAX_OUTPUT_TOKENS,
+                "yield_ai": False,
+                "terminal": None,
+            }
+
+        if max_output_tokens_recovery_count < 3:
+            recovered_messages = list(messages)
+            recovered_messages.append(ai_msg)
+            recovered_messages.append(
+                HumanMessage(
+                    content="Output token limit hit. Resume directly with no apology or recap.",
+                )
+            )
+            return {
+                "messages": recovered_messages,
+                "transition": ContinueState(reason=ContinueReason.max_output_tokens_recovery),
+                "max_output_tokens_recovery_count": max_output_tokens_recovery_count + 1,
+                "max_output_tokens_override": max_output_tokens_override,
+                "yield_ai": False,
+                "terminal": None,
+            }
+
+        surfaced_messages = list(messages)
+        surfaced_messages.append(ai_msg)
+        return {
+            "messages": surfaced_messages,
+            "transition": ContinueState(reason=ContinueReason.max_output_tokens_recovery),
+            "max_output_tokens_recovery_count": max_output_tokens_recovery_count,
+            "max_output_tokens_override": max_output_tokens_override,
+            "yield_ai": True,
+            "terminal": TerminalState(
+                reason=TerminalReason.model_error,
+                turn_count=turn,
+                error="max_output_tokens",
+            ),
+        }
+
+    async def _force_reactive_compact(self, messages: list) -> list | None:
+        if self._memory_middleware is None:
+            return None
+        compact = getattr(self._memory_middleware, "compact_messages_for_recovery", None)
+        if not callable(compact):
+            return None
+        return await compact(messages)
+
+    async def _recover_from_overflow(self, messages: list) -> dict[str, Any] | None:
+        # @@@collapse-drain-single-shot
+        # ql-04 needs collapse-drain and reactive-compact to stay as separate
+        # phases. The drain hook is optional, but if present it only gets one
+        # chance before prompt-too-long falls through to reactive compaction.
+        for middleware in self.middleware:
+            recover = getattr(middleware, "recover_from_overflow", None)
+            if not callable(recover):
+                continue
+            drained = recover(messages)
+            if inspect.isawaitable(drained):
+                drained = await drained
+            if drained is None:
+                return None
+            committed = int(getattr(drained, "get", lambda *_: 0)("committed", 0))
+            updated_messages = getattr(drained, "get", lambda *_: None)("messages")
+            if committed <= 0 or not isinstance(updated_messages, list):
+                return None
+            return {"committed": committed, "messages": list(updated_messages)}
+        return None
+
+    @staticmethod
+    def _is_prompt_too_long_error(error_text: str) -> bool:
+        return (
+            "prompt is too long" in error_text
+            or "prompt too long" in error_text
+            or "context length" in error_text
+            or "maximum context length" in error_text
+        )
+
+    @staticmethod
+    def _is_max_output_truncated(message: AIMessage) -> bool:
+        response_metadata = getattr(message, "response_metadata", None) or {}
+        additional_kwargs = getattr(message, "additional_kwargs", None) or {}
+        finish_reason = (
+            response_metadata.get("finish_reason")
+            or response_metadata.get("stop_reason")
+            or additional_kwargs.get("finish_reason")
+            or additional_kwargs.get("stop_reason")
+        )
+        return finish_reason in {"length", "max_tokens", "max_output_tokens"}
+
     # -------------------------------------------------------------------------
     # Tool execution through middleware chain
     # -------------------------------------------------------------------------
 
-    async def _execute_tools(self, tool_calls: list, model_response: ModelResponse) -> list[ToolMessage]:
+    async def _execute_tools(
+        self,
+        tool_calls: list,
+        model_response: ModelResponse,
+        tool_context: ToolUseContext | None,
+    ) -> list[ToolMessage]:
         """Execute tool calls respecting concurrency safety, via middleware chain."""
-
-        async def _exec_one(tool_call: dict) -> ToolMessage:
-            name = tool_call.get("name") or tool_call.get("function", {}).get("name", "")
-            call_id = tool_call.get("id", "")
-            args = tool_call.get("args", {}) or tool_call.get("function", {}).get("arguments", {})
-
-            # Normalise args: might be JSON string
-            if isinstance(args, str):
-                import json
-                try:
-                    args = json.loads(args)
-                except Exception:
-                    args = {}
-
-            normalized_call = {"name": name, "args": args, "id": call_id}
-            tc_request = ToolCallRequest(
-                tool_call=normalized_call,
-                tool=None,
-                state={},
-                runtime=None,  # type: ignore[arg-type]
-            )
-
-            async def innermost_tool_handler(req: ToolCallRequest) -> ToolMessage:
-                # Fallback direct dispatch: ToolRunner middleware handles this in
-                # production, but without ToolRunner we dispatch from registry directly.
-                tc = req.tool_call
-                t_name = tc.get("name", "")
-                t_id = tc.get("id", "")
-                t_args = tc.get("args", {})
-                entry = self._registry.get(t_name)
-                if entry is None:
-                    return ToolMessage(
-                        content=f"<tool_use_error>Tool '{t_name}' not found</tool_use_error>",
-                        tool_call_id=t_id,
-                        name=t_name,
-                    )
-                try:
-                    import asyncio as _asyncio
-                    if _asyncio.iscoroutinefunction(entry.handler):
-                        result = await entry.handler(**t_args)
-                    else:
-                        result = await _asyncio.to_thread(entry.handler, **t_args)
-                    return ToolMessage(content=str(result), tool_call_id=t_id, name=t_name)
-                except Exception as e:
-                    return ToolMessage(
-                        content=f"<tool_use_error>{e}</tool_use_error>",
-                        tool_call_id=t_id,
-                        name=t_name,
-                    )
-
-            # Build tool handler chain (outside-in).
-            # Only include middleware that actually overrides awrap_tool_call.
-            tool_handler = innermost_tool_handler
-            for mw in reversed(self.middleware):
-                if _mw_overrides_tool_call(mw):
-                    tool_handler = _make_tool_wrapper(mw, tool_handler)
-
-            return await tool_handler(tc_request)
-
-        # Partition tool calls by concurrency safety
-        safe_calls: list[dict] = []
-        unsafe_calls: list[dict] = []
-        for tc in tool_calls:
-            name = tc.get("name") or tc.get("function", {}).get("name", "")
-            entry = self._registry.get(name)
-            if entry and entry.is_concurrency_safe:
-                safe_calls.append(tc)
-            else:
-                unsafe_calls.append(tc)
-
         results: dict[int, ToolMessage] = {}
 
-        # Execute safe (read-only) tools concurrently
-        if safe_calls:
-            safe_indices = [i for i, tc in enumerate(tool_calls) if tc in safe_calls]
-            safe_results = await asyncio.gather(*[_exec_one(tc) for tc in safe_calls], return_exceptions=True)
-            for idx, res in zip(safe_indices, safe_results):
-                if isinstance(res, Exception):
-                    tc = tool_calls[idx]
+        async def execute_batch(batch: list[tuple[int, dict]]) -> None:
+            if not batch:
+                return
+            batch_results = await asyncio.gather(
+                *[self._execute_single_tool(tool_call, tool_context) for _, tool_call in batch],
+                return_exceptions=True,
+            )
+            for (idx, tool_call), result in zip(batch, batch_results):
+                if isinstance(result, Exception):
                     results[idx] = ToolMessage(
-                        content=f"<tool_use_error>{res}</tool_use_error>",
-                        tool_call_id=tc.get("id", ""),
-                        name=tc.get("name", ""),
+                        content=f"<tool_use_error>{result}</tool_use_error>",
+                        tool_call_id=tool_call.get("id", ""),
+                        name=tool_call.get("name", ""),
                     )
-                else:
-                    results[idx] = res
+                    continue
+                results[idx] = result
 
-        # Execute unsafe tools serially
-        for i, tc in enumerate(tool_calls):
-            if tc in unsafe_calls:
-                try:
-                    results[i] = await _exec_one(tc)
-                except Exception as e:
-                    results[i] = ToolMessage(
-                        content=f"<tool_use_error>{e}</tool_use_error>",
-                        tool_call_id=tc.get("id", ""),
-                        name=tc.get("name", ""),
-                    )
+        safe_batch: list[tuple[int, dict]] = []
+        for idx, tool_call in enumerate(tool_calls):
+            # @@@tool-order-boundary
+            # te-01 needs the non-streaming path to keep the same queue barrier
+            # semantics as the streaming executor: contiguous safe tools may fan
+            # out together, but any unsafe tool flushes the batch and blocks the
+            # next safe tool until it finishes.
+            if self._tool_is_concurrency_safe(tool_call):
+                safe_batch.append((idx, tool_call))
+                continue
 
-        # Return results in original order
+            await execute_batch(safe_batch)
+            safe_batch = []
+            try:
+                results[idx] = await self._execute_single_tool(tool_call, tool_context)
+            except Exception as exc:
+                results[idx] = ToolMessage(
+                    content=f"<tool_use_error>{exc}</tool_use_error>",
+                    tool_call_id=tool_call.get("id", ""),
+                    name=tool_call.get("name", ""),
+                )
+
+        await execute_batch(safe_batch)
         return [results[i] for i in range(len(tool_calls))]
+
+    async def _execute_single_tool(
+        self,
+        tool_call: dict,
+        tool_context: ToolUseContext | None,
+    ) -> ToolMessage:
+        name = tool_call.get("name") or tool_call.get("function", {}).get("name", "")
+        call_id = tool_call.get("id", "")
+        args = tool_call.get("args", {}) or tool_call.get("function", {}).get("arguments", {})
+
+        if isinstance(args, str):
+            import json
+            try:
+                args = json.loads(args)
+            except Exception:
+                args = {}
+
+        normalized_call = {"name": name, "args": args, "id": call_id}
+        tc_request = ToolCallRequest(
+            tool_call=normalized_call,
+            tool=None,
+            state=tool_context,
+            runtime=self._runtime,  # type: ignore[arg-type]
+        )
+
+        async def innermost_tool_handler(req: ToolCallRequest) -> ToolMessage:
+            tc = req.tool_call
+            t_name = tc.get("name", "")
+            t_id = tc.get("id", "")
+            t_args = tc.get("args", {})
+            entry = self._registry.get(t_name)
+            if entry is None:
+                return ToolMessage(
+                    content=f"<tool_use_error>Tool '{t_name}' not found</tool_use_error>",
+                    tool_call_id=t_id,
+                    name=t_name,
+                )
+            try:
+                import asyncio as _asyncio
+                if _asyncio.iscoroutinefunction(entry.handler):
+                    result = await entry.handler(**t_args)
+                else:
+                    result = await _asyncio.to_thread(entry.handler, **t_args)
+                return ToolMessage(content=str(result), tool_call_id=t_id, name=t_name)
+            except Exception as e:
+                return ToolMessage(
+                    content=f"<tool_use_error>{e}</tool_use_error>",
+                    tool_call_id=t_id,
+                    name=t_name,
+                )
+
+        tool_handler = innermost_tool_handler
+        for mw in reversed(self.middleware):
+            if _mw_overrides_tool_call(mw):
+                tool_handler = _make_tool_wrapper(mw, tool_handler)
+
+        return await tool_handler(tc_request)
+
+    def _tool_is_concurrency_safe(self, tool_call: dict) -> bool:
+        name = tool_call.get("name") or tool_call.get("function", {}).get("name", "")
+        entry = self._registry.get(name)
+        if entry is None:
+            return False
+        safety = entry.is_concurrency_safe
+        if callable(safety):
+            args = tool_call.get("args", {})
+            if isinstance(args, str):
+                try:
+                    import json as _json
+                    args = _json.loads(args)
+                except Exception:
+                    args = {}
+            try:
+                return bool(safety(args if isinstance(args, dict) else {}))
+            except Exception:
+                return False
+        return bool(safety)
+
+    def _tool_call_is_ready(self, tool_call: dict) -> bool:
+        name = tool_call.get("name") or tool_call.get("function", {}).get("name", "")
+        entry = self._registry.get(name)
+        if entry is None:
+            return True
+
+        args = tool_call.get("args", {})
+        if isinstance(args, str):
+            try:
+                import json as _json
+
+                args = _json.loads(args)
+            except Exception:
+                return False
+        if not isinstance(args, dict):
+            return False
+
+        schema = entry.get_schema() or {}
+        parameters = schema.get("parameters", {}) if isinstance(schema, dict) else {}
+        required = parameters.get("required", []) if isinstance(parameters, dict) else []
+        return all(key in args for key in required)
+
+    def _normalize_stream_tool_call(
+        self,
+        tool_call: dict,
+        tool_call_chunks: list[dict[str, Any]],
+    ) -> dict[str, Any] | None:
+        call_id = tool_call.get("id")
+        name = tool_call.get("name") or tool_call.get("function", {}).get("name", "")
+        raw_args = None
+
+        for chunk in tool_call_chunks:
+            if chunk.get("id") != call_id:
+                continue
+            if chunk.get("name"):
+                name = chunk["name"]
+            raw_args = chunk.get("args")
+            break
+
+        args: Any = tool_call.get("args", {})
+        if isinstance(raw_args, str):
+            if raw_args == "":
+                args = {}
+            else:
+                try:
+                    import json as _json
+
+                    args = _json.loads(raw_args)
+                except Exception:
+                    return None
+        elif raw_args is not None:
+            args = raw_args
+
+        normalized = {"name": name, "args": args, "id": call_id}
+        if not self._tool_call_is_ready(normalized):
+            return None
+        return normalized
 
     # -------------------------------------------------------------------------
     # Checkpointer persistence
@@ -297,7 +1128,7 @@ class QueryLoop:
         if self.checkpointer is None:
             return []
         try:
-            cfg = {"configurable": {"thread_id": thread_id}}
+            cfg = self._checkpoint_config(thread_id)
             checkpoint = await self.checkpointer.aget(cfg)
             if checkpoint is None:
                 return []
@@ -311,21 +1142,11 @@ class QueryLoop:
         if self.checkpointer is None:
             return
         try:
-            from langgraph.checkpoint.base import Checkpoint, CheckpointMetadata
+            from langgraph.checkpoint.base import CheckpointMetadata, empty_checkpoint
 
-            cfg = {"configurable": {"thread_id": thread_id}}
-            existing = await self.checkpointer.aget(cfg)
-            checkpoint_id = existing["id"] if existing else "1"
-
-            checkpoint: Checkpoint = {
-                "v": 1,
-                "id": checkpoint_id,
-                "ts": "",
-                "channel_values": {"messages": messages},
-                "channel_versions": {},
-                "versions_seen": {},
-                "pending_sends": [],
-            }
+            cfg = self._checkpoint_config(thread_id)
+            checkpoint = empty_checkpoint()
+            checkpoint["channel_values"] = {"messages": messages}
             metadata: CheckpointMetadata = {
                 "source": "loop",
                 "step": len(messages),
@@ -335,6 +1156,51 @@ class QueryLoop:
             await self.checkpointer.aput(cfg, checkpoint, metadata, {})
         except Exception:
             logger.debug("QueryLoop: could not save checkpoint for thread %s", thread_id, exc_info=True)
+
+    @staticmethod
+    def _checkpoint_config(thread_id: str) -> dict[str, Any]:
+        # @@@sa-03-real-checkpointer-config
+        # AsyncSqliteSaver requires checkpoint_ns even when we only use a
+        # single logical namespace; without it, aput() raises and replay dies.
+        return {"configurable": {"thread_id": thread_id, "checkpoint_ns": ""}}
+
+    async def aclear(self, thread_id: str) -> None:
+        """Clear turn-scoped state for a thread while preserving session accumulators."""
+        await self._save_messages(thread_id, [])
+
+        self._tool_read_file_state.clear()
+        self._tool_loaded_nested_memory_paths.clear()
+        self._tool_discovered_skill_names.clear()
+
+        if self._memory_middleware is not None:
+            if hasattr(self._memory_middleware, "_cached_summary"):
+                self._memory_middleware._cached_summary = None
+            if hasattr(self._memory_middleware, "_summary_restored"):
+                self._memory_middleware._summary_restored = False
+            if hasattr(self._memory_middleware, "_compact_up_to_index"):
+                self._memory_middleware._compact_up_to_index = 0
+
+        if self._app_state is not None:
+            preserved_total_cost = self._app_state.total_cost
+            preserved_tool_overrides = dict(self._app_state.tool_overrides)
+
+            def _reset(state: AppState) -> AppState:
+                return state.model_copy(
+                    update={
+                        "messages": [],
+                        "turn_count": 0,
+                        "total_cost": preserved_total_cost,
+                        "compact_boundary_index": 0,
+                        "tool_overrides": preserved_tool_overrides,
+                    }
+                )
+
+            self._app_state.set_state(_reset)
+
+        if self._bootstrap is not None:
+            old_session_id = self._bootstrap.session_id
+            self._bootstrap.parent_session_id = old_session_id
+            self._bootstrap.session_id = uuid.uuid4().hex
 
     # -------------------------------------------------------------------------
     # Input parsing
@@ -360,6 +1226,178 @@ class QueryLoop:
         return result
 
 
+class _StreamingToolExecutor:
+    def __init__(self, loop: QueryLoop, tool_context: ToolUseContext | None):
+        self._loop = loop
+        self._tool_context = tool_context
+        self._tracked: list[_TrackedTool] = []
+        self._discarded = False
+
+    async def add_tool(self, tool_call: dict[str, Any]) -> None:
+        if self._discarded:
+            return
+        name = tool_call.get("name") or tool_call.get("function", {}).get("name", "")
+        if self._loop._registry.get(name) is None:
+            self._tracked.append(
+                _TrackedTool(
+                    order=len(self._tracked),
+                    tool_call=tool_call,
+                    is_concurrency_safe=False,
+                    status="completed",
+                    result=self._tool_error(tool_call, f"Tool '{name}' not found"),
+                )
+            )
+            return
+        tracked = _TrackedTool(
+            order=len(self._tracked),
+            tool_call=tool_call,
+            is_concurrency_safe=self._loop._tool_is_concurrency_safe(tool_call),
+        )
+        self._tracked.append(tracked)
+        self._process_queue()
+
+    async def get_completed_results(self) -> list[ToolMessage]:
+        await asyncio.sleep(0)
+        self._process_queue()
+        ready: list[ToolMessage] = []
+        for tracked in self._tracked:
+            if tracked.status == "yielded":
+                continue
+            if tracked.status == "completed" and tracked.result is not None:
+                tracked.status = "yielded"
+                ready.append(tracked.result)
+                continue
+            break
+        return ready
+
+    async def drain_remaining(self) -> list[ToolMessage]:
+        while True:
+            self._process_queue()
+            running = [tracked.task for tracked in self._tracked if tracked.status == "executing" and tracked.task is not None]
+            if not running:
+                break
+            await asyncio.wait(running, return_when=asyncio.FIRST_COMPLETED)
+        self._process_queue()
+        remaining: list[ToolMessage] = []
+        for tracked in self._tracked:
+            if tracked.status == "yielded":
+                continue
+            if tracked.status == "completed" and tracked.result is not None:
+                tracked.status = "yielded"
+                remaining.append(tracked.result)
+        return remaining
+
+    async def discard(self, reason: str) -> list[ToolMessage]:
+        # @@@streaming-tool-discard
+        # ql-05 must not leave orphaned tool tasks behind when streaming exits
+        # early. Synthetic error emission is still a later hardening pass, but
+        # task cleanup itself must happen now.
+        self._discarded = True
+        running: list[asyncio.Task[ToolMessage]] = []
+        for tracked in self._tracked:
+            if tracked.status == "queued":
+                tracked.status = "completed"
+                tracked.result = self._synthetic_error(tracked.tool_call, reason)
+                continue
+            if tracked.status == "executing" and tracked.task is not None:
+                tracked.task.cancel()
+                running.append(tracked.task)
+        if running:
+            await asyncio.gather(*running, return_exceptions=True)
+        for tracked in self._tracked:
+            if tracked.status == "executing":
+                tracked.status = "completed"
+                tracked.result = self._synthetic_error(tracked.tool_call, reason)
+        return await self.drain_remaining()
+
+    def _process_queue(self) -> None:
+        if self._discarded:
+            return
+        for tracked in self._tracked:
+            if tracked.status != "queued":
+                continue
+            if not self._can_execute(tracked):
+                break
+            tracked.status = "executing"
+            tracked.task = asyncio.create_task(self._run_tool(tracked))
+
+    def _can_execute(self, tracked: _TrackedTool) -> bool:
+        executing = [item for item in self._tracked if item.status == "executing"]
+        if not executing:
+            return True
+        if not tracked.is_concurrency_safe:
+            return False
+        return all(item.is_concurrency_safe for item in executing)
+
+    async def _run_tool(self, tracked: _TrackedTool) -> None:
+        # @@@streaming-tool-task-exit
+        # ql-05 cannot let middleware-level exceptions disappear into a dead
+        # task. Every tool_use must resolve to a ToolMessage, and queue
+        # progression must re-run immediately when a task exits.
+        try:
+            tracked.result = await self._loop._execute_single_tool(tracked.tool_call, self._tool_context)
+            tracked.status = "completed"
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            tracked.result = self._tool_error(tracked.tool_call, str(exc))
+            tracked.status = "completed"
+        finally:
+            if self._should_abort_siblings(tracked):
+                await self._abort_siblings(
+                    excluding=tracked,
+                    reason="sibling aborted after bash error",
+                )
+            if not self._discarded:
+                self._process_queue()
+
+    def _should_abort_siblings(self, tracked: _TrackedTool) -> bool:
+        if tracked.result is None:
+            return False
+        name = tracked.tool_call.get("name") or tracked.tool_call.get("function", {}).get("name", "")
+        return name.lower() == "bash" and "<tool_use_error>" in tracked.result.content
+
+    async def _abort_siblings(self, *, excluding: _TrackedTool, reason: str) -> None:
+        # @@@bash-sibling-abort
+        # Claude Code only fan-outs this abort for bash failures. Keep it
+        # local to the current executor iteration so the parent loop survives
+        # and later turns can continue with explicit tool errors.
+        self._discarded = True
+        running: list[asyncio.Task[ToolMessage]] = []
+        for tracked in self._tracked:
+            if tracked is excluding or tracked.status in {"completed", "yielded"}:
+                continue
+            if tracked.status == "queued":
+                tracked.status = "completed"
+                tracked.result = self._tool_error(tracked.tool_call, reason)
+                continue
+            if tracked.status == "executing" and tracked.task is not None:
+                tracked.task.cancel()
+                running.append(tracked.task)
+        if running:
+            await asyncio.gather(*running, return_exceptions=True)
+        for tracked in self._tracked:
+            if tracked is excluding or tracked.status != "executing":
+                continue
+            tracked.status = "completed"
+            tracked.result = self._tool_error(tracked.tool_call, reason)
+
+    def _synthetic_error(self, tool_call: dict[str, Any], reason: str) -> ToolMessage:
+        return self._tool_error(
+            tool_call,
+            f"streaming discarded: {reason}",
+        )
+
+    def _tool_error(self, tool_call: dict[str, Any], error_text: str) -> ToolMessage:
+        name = tool_call.get("name") or tool_call.get("function", {}).get("name", "")
+        call_id = tool_call.get("id", "")
+        return ToolMessage(
+            content=f"<tool_use_error>{error_text}</tool_use_error>",
+            tool_call_id=call_id,
+            name=name,
+        )
+
+
 # -------------------------------------------------------------------------
 # Closure helpers (avoid late-binding bugs in loop-built lambdas)
 # -------------------------------------------------------------------------
@@ -382,7 +1420,7 @@ def _make_tool_wrapper(mw: AgentMiddleware, next_handler):
 # Middleware override detection helpers
 # -------------------------------------------------------------------------
 
-from langchain.agents.middleware.types import AgentMiddleware as _BaseMiddleware
+from core.runtime.middleware import AgentMiddleware as _BaseMiddleware
 
 
 def _mw_overrides_model_call(mw: AgentMiddleware) -> bool:

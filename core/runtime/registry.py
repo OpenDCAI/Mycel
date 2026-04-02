@@ -3,9 +3,12 @@ from __future__ import annotations
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from enum import Enum
+from typing import Any
 
 Handler = Callable[..., str] | Callable[..., Awaitable[str]]
 SchemaProvider = dict | Callable[[], dict]
+ConcurrencySafety = bool | Callable[[dict], bool]
+ToolInputValidator = Callable[[dict, Any], dict | None] | Callable[[dict, Any], Awaitable[dict | None]]
 
 
 class ToolMode(Enum):
@@ -21,9 +24,11 @@ class ToolEntry:
     handler: Handler
     source: str
     search_hint: str = ""  # 3-10 word capability description for ToolSearch matching
-    is_concurrency_safe: bool = False  # fail-closed: assume not safe
+    is_concurrency_safe: ConcurrencySafety = False  # fail-closed: assume not safe
     is_read_only: bool = False  # fail-closed: assume write operation
+    is_destructive: bool = False  # advisory metadata for permission/UI layers
     context_schema: dict | None = None  # fields this tool needs from ToolUseContext
+    validate_input: ToolInputValidator | None = None
 
     def get_schema(self) -> dict:
         return self.schema() if callable(self.schema) else self.schema
@@ -32,7 +37,9 @@ class ToolEntry:
 TOOL_DEFAULTS: dict[str, object] = {
     "is_concurrency_safe": False,
     "is_read_only": False,
+    "is_destructive": False,
     "context_schema": None,
+    "validate_input": None,
 }
 
 

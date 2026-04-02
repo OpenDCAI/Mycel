@@ -9,6 +9,8 @@ Tools:
 
 from __future__ import annotations
 
+from collections import OrderedDict
+from dataclasses import dataclass
 import logging
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -17,11 +19,68 @@ from core.runtime.registry import ToolEntry, ToolMode, ToolRegistry
 from core.tools.filesystem.backend import FileSystemBackend
 from core.tools.filesystem.read import ReadLimits
 from core.tools.filesystem.read import read_file as read_file_dispatch
+from core.tools.filesystem.read.types import FileType, detect_file_type
 
 if TYPE_CHECKING:
     from core.operations import FileOperationRecorder
 
 logger = logging.getLogger(__name__)
+DEFAULT_READ_STATE_CACHE_SIZE = 100
+DEFAULT_MAX_EDIT_FILE_SIZE = 1024 * 1024 * 1024
+
+
+@dataclass
+class _ReadFileState:
+    timestamp: float | None
+    is_partial: bool
+
+
+class _ReadFileStateCache:
+    def __init__(self, max_entries: int = DEFAULT_READ_STATE_CACHE_SIZE):
+        self._max_entries = max_entries
+        self._entries: OrderedDict[Path, _ReadFileState] = OrderedDict()
+
+    @staticmethod
+    def make_state(*, timestamp: float | None, is_partial: bool) -> _ReadFileState:
+        return _ReadFileState(timestamp=timestamp, is_partial=is_partial)
+
+    def get(self, path: Path) -> _ReadFileState | None:
+        state = self._entries.get(path)
+        if state is None:
+            return None
+        self._entries.move_to_end(path)
+        return state
+
+    def set(self, path: Path, state: _ReadFileState) -> None:
+        self._entries[path] = state
+        self._entries.move_to_end(path)
+        while len(self._entries) > self._max_entries:
+            self._entries.popitem(last=False)
+
+    def clone(self) -> "_ReadFileStateCache":
+        clone = _ReadFileStateCache(max_entries=self._max_entries)
+        clone._entries = OrderedDict(
+            (path, _ReadFileState(timestamp=state.timestamp, is_partial=state.is_partial))
+            for path, state in self._entries.items()
+        )
+        return clone
+
+    def merge(self, other: "_ReadFileStateCache") -> None:
+        for path, incoming in other._entries.items():
+            existing = self._entries.get(path)
+            if existing is None or self._is_newer(incoming, existing):
+                self.set(
+                    path,
+                    _ReadFileState(timestamp=incoming.timestamp, is_partial=incoming.is_partial),
+                )
+
+    @staticmethod
+    def _is_newer(incoming: _ReadFileState, existing: _ReadFileState) -> bool:
+        if incoming.timestamp is None:
+            return False
+        if existing.timestamp is None:
+            return True
+        return incoming.timestamp >= existing.timestamp
 
 
 class FileSystemService:
@@ -38,6 +97,8 @@ class FileSystemService:
         operation_recorder: FileOperationRecorder | None = None,
         backend: FileSystemBackend | None = None,
         extra_allowed_paths: list[str | Path] | None = None,
+        max_read_cache_entries: int = DEFAULT_READ_STATE_CACHE_SIZE,
+        max_edit_file_size: int = DEFAULT_MAX_EDIT_FILE_SIZE,
     ):
         if backend is None:
             from core.tools.filesystem.local_backend import LocalBackend
@@ -49,7 +110,8 @@ class FileSystemService:
         self.max_file_size = max_file_size
         self.allowed_extensions = allowed_extensions
         self.hooks = hooks or []
-        self._read_files: dict[Path, float | None] = {}
+        self._read_files = _ReadFileStateCache(max_entries=max_read_cache_entries)
+        self.max_edit_file_size = max_edit_file_size
         self.operation_recorder = operation_recorder
         self.extra_allowed_paths: list[Path] = [Path(p) if backend.is_remote else Path(p).resolve() for p in (extra_allowed_paths or [])]
 
@@ -114,7 +176,7 @@ class FileSystemService:
                     "name": "Write",
                     "description": (
                         "Create or overwrite a file with full content. Forces LF line endings. "
-                        "Fails if file already exists — use Edit for modifications. Path must be absolute."
+                        "Path must be absolute."
                     ),
                     "parameters": {
                         "type": "object",
@@ -244,9 +306,12 @@ class FileSystemService:
         return True, "", resolved
 
     def _check_file_staleness(self, resolved: Path) -> str | None:
-        if resolved not in self._read_files:
-            return "File has not been read yet. Read it first before writing to it."
-        stored_mtime = self._read_files[resolved]
+        state = self._read_files.get(resolved)
+        if state is None:
+            return "File has not been read yet. Read the full file first before editing."
+        if state.is_partial:
+            return "File has only been read partially. Read the full file before editing."
+        stored_mtime = state.timestamp
         if stored_mtime is None:
             return None
         current_mtime = self.backend.file_mtime(str(resolved))
@@ -254,8 +319,32 @@ class FileSystemService:
             return "File has been modified since last read. Read it again before editing."
         return None
 
-    def _update_file_tracking(self, resolved: Path) -> None:
-        self._read_files[resolved] = self.backend.file_mtime(str(resolved))
+    def _update_file_tracking(self, resolved: Path, *, is_partial: bool, file_type: FileType | None = None) -> None:
+        if file_type is None:
+            file_type = detect_file_type(resolved)
+        if file_type not in {FileType.TEXT, FileType.NOTEBOOK}:
+            return
+        self._read_files.set(
+            resolved,
+            _ReadFileState(
+                timestamp=self.backend.file_mtime(str(resolved)),
+                is_partial=is_partial,
+            ),
+        )
+
+    def _normalize_write_content(self, content: str) -> str:
+        return content.replace("\r\n", "\n").replace("\r", "\n")
+
+    def _read_result_is_partial(self, result) -> bool:
+        if getattr(result, "truncated", False):
+            return True
+        if getattr(result, "file_type", None) == FileType.TEXT:
+            start_line = getattr(result, "start_line", None) or 1
+            total_lines = getattr(result, "total_lines", None)
+            end_line = getattr(result, "end_line", None) or total_lines or start_line
+            if total_lines is not None:
+                return start_line > 1 or end_line < total_lines
+        return False
 
     def _record_operation(
         self,
@@ -337,7 +426,11 @@ class FileSystemService:
                 limit=limit,
             )
             if not result.error:
-                self._update_file_tracking(resolved)
+                self._update_file_tracking(
+                    resolved,
+                    is_partial=self._read_result_is_partial(result),
+                    file_type=result.file_type,
+                )
             return result.format_output()
 
         try:
@@ -350,7 +443,10 @@ class FileSystemService:
             selected = lines[start:end]
             numbered = [f"{start + i + 1:>6}\t{line}" for i, line in enumerate(selected)]
             content = "\n".join(numbered)
-            self._update_file_tracking(resolved)
+            self._update_file_tracking(
+                resolved,
+                is_partial=start > 0 or end < total_lines,
+            )
             return content
         except Exception as e:
             return f"Error reading file: {e}"
@@ -360,23 +456,21 @@ class FileSystemService:
         if not is_valid:
             return error
 
-        if self.backend.file_exists(str(resolved)):
-            return f"File already exists: {file_path}\nUse Edit to modify existing files"
-
         try:
-            result = self.backend.write_file(str(resolved), content)
+            normalized = self._normalize_write_content(content)
+            result = self.backend.write_file(str(resolved), normalized)
             if not result.success:
                 return f"Error writing file: {result.error}"
 
-            self._update_file_tracking(resolved)
+            self._update_file_tracking(resolved, is_partial=False)
             self._record_operation(
                 operation_type="write",
                 file_path=file_path,
                 before_content=None,
-                after_content=content,
+                after_content=normalized,
             )
 
-            lines = content.count("\n") + 1
+            lines = normalized.count("\n") + 1
             return f"File created: {file_path}\n   Lines: {lines}\n   Size: {len(content)} bytes"
         except Exception as e:
             return f"Error writing file: {e}"
@@ -387,7 +481,19 @@ class FileSystemService:
             return error
 
         if not self.backend.file_exists(str(resolved)):
+            if old_string == "":
+                return self._write_file(file_path, new_string)
             return f"File not found: {file_path}"
+
+        if resolved.suffix.lower() == ".ipynb":
+            return "Notebook files (.ipynb) are not supported by Edit. Use Write to overwrite the full JSON."
+
+        if old_string == "":
+            return "Cannot use empty old_string on an existing file. Use Write to replace the full file content."
+
+        file_size = self.backend.file_size(str(resolved))
+        if file_size is not None and file_size > self.max_edit_file_size:
+            return f"File too large for Edit: {file_size:,} bytes (max: {self.max_edit_file_size:,} bytes)"
 
         staleness_error = self._check_file_staleness(resolved)
         if staleness_error:
@@ -399,6 +505,14 @@ class FileSystemService:
         try:
             raw = self.backend.read_file(str(resolved))
             content = raw.content
+
+            # @@@edit-critical-staleness
+            # te-06 needs a second stale-read check inside the read->write
+            # critical section so an external write that lands after the
+            # preflight check cannot be silently overwritten.
+            staleness_error = self._check_file_staleness(resolved)
+            if staleness_error:
+                return staleness_error
 
             if old_string not in content:
                 return f"String not found in file\n   Looking for: {old_string[:100]}..."
@@ -420,7 +534,7 @@ class FileSystemService:
             if not result.success:
                 return f"Error editing file: {result.error}"
 
-            self._update_file_tracking(resolved)
+            self._update_file_tracking(resolved, is_partial=False)
             self._record_operation(
                 operation_type="edit",
                 file_path=file_path,
