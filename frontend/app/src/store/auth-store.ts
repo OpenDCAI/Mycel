@@ -10,10 +10,14 @@ import { persist } from "zustand/middleware";
 
 const DEV_SKIP_AUTH = import.meta.env.VITE_DEV_SKIP_AUTH === "true";
 
-// Allow overriding the API origin for deployments where the frontend and backend
-// are on different domains (e.g. VITE_API_BASE=https://api.mycel.nextmind.space).
-// Relative URLs are used when this is not set (same-origin or nginx-proxied).
-const API_BASE = (import.meta.env.VITE_API_BASE ?? "").replace(/\/$/, "");
+// Allow overriding the API origin at runtime via window.__MYCEL_CONFIG__.apiBase
+// (injected by docker-entrypoint.sh), falling back to the Vite build-time variable.
+// Relative URLs are used when neither is set (same-origin / local dev).
+const API_BASE = (
+  (window as { __MYCEL_CONFIG__?: { apiBase?: string } }).__MYCEL_CONFIG__?.apiBase
+  ?? import.meta.env.VITE_API_BASE
+  ?? ""
+).replace(/\/$/, "");
 
 export interface AuthIdentity {
   id: string;
