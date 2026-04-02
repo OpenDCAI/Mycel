@@ -66,6 +66,16 @@ class SQLiteMemberRepo:
             row = self._conn.execute("SELECT * FROM members WHERE name = ?", (name,)).fetchone()
             return self._to_row(row) if row else None
 
+    def get_by_email(self, email: str) -> MemberRow | None:
+        with self._lock:
+            row = self._conn.execute("SELECT * FROM members WHERE email = ?", (email,)).fetchone()
+            return self._to_row(row) if row else None
+
+    def get_by_mycel_id(self, mycel_id: int) -> MemberRow | None:
+        with self._lock:
+            row = self._conn.execute("SELECT * FROM members WHERE mycel_id = ?", (mycel_id,)).fetchone()
+            return self._to_row(row) if row else None
+
     def list_all(self) -> list[MemberRow]:
         with self._lock:
             rows = self._conn.execute("SELECT * FROM members ORDER BY created_at").fetchall()

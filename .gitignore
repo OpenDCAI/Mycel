@@ -46,6 +46,8 @@ frontend/app/.env.development
 .claude/.stfolder/
 .claude/.vscode/
 .claude/settings.local.json
+.claude/mcp.json
+.mcp.json
 teams
 
 # User-level Leon config and skills

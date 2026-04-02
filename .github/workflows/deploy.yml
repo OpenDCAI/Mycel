@@ -1,0 +1,20 @@
+name: Deploy
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  deploy-production:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy backend to production
+        run: |
+          curl -sX GET "${{ secrets.COOLIFY_URL }}/api/v1/deploy?uuid=${{ secrets.COOLIFY_BACKEND_PROD_UUID }}&force=false" \
+            -H "Authorization: Bearer ${{ secrets.COOLIFY_TOKEN }}"
+
+      - name: Deploy frontend to production
+        run: |
+          curl -sX GET "${{ secrets.COOLIFY_URL }}/api/v1/deploy?uuid=${{ secrets.COOLIFY_FRONTEND_PROD_UUID }}&force=false" \
+            -H "Authorization: Bearer ${{ secrets.COOLIFY_TOKEN }}"
