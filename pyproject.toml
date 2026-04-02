@@ -44,6 +44,8 @@ dependencies = [
     "croniter>=6.0.0",
     "uvicorn>=0.30.0",
     "sse-starlette>=1.6.0",
+    "supabase>=2.28.3",
+    "fastapi>=0.118.0",
 ]
 
 [project.optional-dependencies]
@@ -140,7 +142,6 @@ ignore = []
 
 [dependency-groups]
 dev = [
-    "fastapi>=0.118.0",
     "pytest>=9.0.2",
     "pytest-asyncio>=1.2.0",
     "pytest-timeout>=2.0.0",
