@@ -289,7 +289,7 @@ class LeonAgent:
         # Build middleware stack
         middleware = self._build_middleware_stack()
 
-        # Ensure ToolNode is created (middleware tools need at least one BaseTool)
+        # Ensure the bound model still sees at least one BaseTool-compatible entry.
         if not mcp_tools and not self._has_middleware_tools(middleware):
             mcp_tools = [self._create_placeholder_tool()]
 
@@ -425,12 +425,12 @@ class LeonAgent:
                 logger.warning("[LeonAgent] Failed to register MCP tool %s: %s", getattr(tool, "name", "<unknown>"), exc)
 
     def _create_placeholder_tool(self):
-        """Create placeholder tool to ensure ToolNode is created."""
+        """Create placeholder tool so the bound model still has a BaseTool."""
         from langchain_core.tools import tool
 
         @tool
         def _placeholder() -> str:
-            """Internal placeholder - ensures ToolNode is created for middleware tools."""
+            """Internal placeholder for the empty-tool edge."""
             return ""
 
         return _placeholder
@@ -923,7 +923,7 @@ class LeonAgent:
 
         # 0. SpillBuffer (outermost — catches oversized tool outputs)
         # Must be inserted at index 0 AFTER building the list:
-        # LangChain wraps middlewares as "first = outermost".
+        # QueryLoop composes middleware so the first entry remains outermost.
         if self.config.tools.spill_buffer.enabled:
             spill_cfg = self.config.tools.spill_buffer
             middleware.insert(

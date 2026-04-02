@@ -1,8 +1,8 @@
 """Anthropic prompt caching middleware.
 
 Requires:
-    - `langchain`: For agent middleware framework
-    - `langchain-anthropic`: For `ChatAnthropic` model (already a dependency)
+    - local `core.runtime.middleware` protocol types
+    - `langchain-anthropic`: For `ChatAnthropic` model
 """
 
 from collections.abc import Awaitable, Callable
@@ -21,9 +21,9 @@ try:
     )
 except ImportError as e:
     msg = (
-        "AnthropicPromptCachingMiddleware requires 'langchain' to be installed. "
-        "This middleware is designed for use with LangChain agents. "
-        "Install it with: pip install langchain"
+        "AnthropicPromptCachingMiddleware requires the local "
+        "'core.runtime.middleware' protocol definitions and "
+        "'langchain-anthropic' to be importable."
     )
     raise ImportError(msg) from e
 
@@ -33,7 +33,7 @@ class PromptCachingMiddleware(AgentMiddleware):
 
     Optimizes API usage by caching conversation prefixes for Anthropic models.
 
-    Requires both `langchain` and `langchain-anthropic` packages to be installed.
+    Requires the local runtime middleware protocol plus `langchain-anthropic`.
 
     Learn more about Anthropic prompt caching
     [here](https://platform.claude.com/docs/en/build-with-claude/prompt-caching).
