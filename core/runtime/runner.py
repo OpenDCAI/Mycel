@@ -131,20 +131,50 @@ class ToolRunner(AgentMiddleware):
         return tool_success(result)
 
     @staticmethod
+    def _resolve_context_path(state: Any, path: str) -> Any:
+        current = state
+        for segment in path.split("."):
+            if segment == "app_state":
+                current = current.get_app_state()
+                continue
+            if isinstance(current, dict):
+                current = current[segment]
+            else:
+                current = getattr(current, segment)
+        return current
+
+    @staticmethod
     def _inject_handler_context(entry, args: dict, request: ToolCallRequest) -> dict:
         state = getattr(request, "state", None)
-        if state is None or "tool_context" in args:
+        if state is None:
             return args
         try:
             signature = inspect.signature(entry.handler)
         except (TypeError, ValueError):
             return args
-        if "tool_context" not in signature.parameters:
-            return args
-        # @@@sa-04-tool-context-injection
-        # The sub-agent boundary only becomes real once the live ToolUseContext
-        # can cross the tool runner into handlers that explicitly opt in.
-        return {**args, "tool_context": state}
+        accepts_kwargs = any(param.kind == inspect.Parameter.VAR_KEYWORD for param in signature.parameters.values())
+        injected = dict(args)
+
+        context_schema = getattr(entry, "context_schema", None) or {}
+        if isinstance(context_schema, dict):
+            # @@@pt-02-context-schema-mapping
+            # Pattern 2 only becomes real once declared ToolUseContext field
+            # mappings are injected into handler kwargs on the live path.
+            for param_name, context_path in context_schema.items():
+                if param_name in injected:
+                    continue
+                if not accepts_kwargs and param_name not in signature.parameters:
+                    continue
+                injected[param_name] = ToolRunner._resolve_context_path(state, context_path)
+
+        if "tool_context" in injected:
+            return injected
+        if accepts_kwargs or "tool_context" in signature.parameters:
+            # @@@sa-04-tool-context-injection
+            # The sub-agent boundary only becomes real once the live ToolUseContext
+            # can cross the tool runner into handlers that explicitly opt in.
+            injected["tool_context"] = state
+        return injected
 
     @staticmethod
     def _coerce_permission_response(result) -> tuple[str | None, str | None]:

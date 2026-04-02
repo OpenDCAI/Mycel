@@ -79,8 +79,13 @@ class ToolRegistry:
     def get(self, name: str) -> ToolEntry | None:
         return self._tools.get(name)
 
-    def get_inline_schemas(self) -> list[dict]:
-        return [e.get_schema() for e in self._tools.values() if e.mode == ToolMode.INLINE]
+    def get_inline_schemas(self, discovered_tool_names: set[str] | None = None) -> list[dict]:
+        discovered_tool_names = discovered_tool_names or set()
+        return [
+            e.get_schema()
+            for e in self._tools.values()
+            if e.mode == ToolMode.INLINE or e.name in discovered_tool_names
+        ]
 
     def search(self, query: str) -> list[ToolEntry]:
         """Return matching tools with ranked relevance.

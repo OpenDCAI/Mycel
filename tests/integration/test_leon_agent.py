@@ -9,7 +9,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from langchain_core.messages import AIMessage, AIMessageChunk, SystemMessage
+from langchain_core.messages import AIMessage, AIMessageChunk, SystemMessage, ToolMessage
 
 
 # ---------------------------------------------------------------------------
@@ -150,6 +150,134 @@ async def test_leon_agent_astream_messages_updates_mode_yields_langgraph_tuples(
 
         update_chunks = [data for mode, data in chunks if mode == "updates"]
         assert any("agent" in update for update in update_chunks)
+
+        agent.close()
+
+
+class _DeferredDiscoveryProbeModel:
+    def __init__(self):
+        self.turn_tool_names: list[list[str]] = []
+        self._tools: list[dict] = []
+        self._turn = 0
+
+    def bind_tools(self, tools):
+        self._tools = list(tools or [])
+        self.turn_tool_names.append([tool.get("name") for tool in self._tools if isinstance(tool, dict)])
+        return self
+
+    def configurable_fields(self, **kwargs):
+        return self
+
+    def with_config(self, *args, **kwargs):
+        return self
+
+    async def ainvoke(self, messages):
+        if self._turn == 0:
+            self._turn += 1
+            return AIMessage(
+                content="",
+                tool_calls=[{"name": "tool_search", "args": {"query": "select:TaskCreate"}, "id": "tc-search"}],
+            )
+        self._turn += 1
+        return AIMessage(content="done")
+
+
+class _DeferredExecutionProbeModel:
+    def __init__(self):
+        self.turn_tool_names: list[list[str]] = []
+        self._tools: list[dict] = []
+        self._turn = 0
+
+    def bind_tools(self, tools):
+        self._tools = list(tools or [])
+        self.turn_tool_names.append([tool.get("name") for tool in self._tools if isinstance(tool, dict)])
+        return self
+
+    def configurable_fields(self, **kwargs):
+        return self
+
+    def with_config(self, *args, **kwargs):
+        return self
+
+    async def ainvoke(self, messages):
+        if self._turn == 0:
+            self._turn += 1
+            return AIMessage(
+                content="",
+                tool_calls=[{"name": "tool_search", "args": {"query": "select:TaskCreate"}, "id": "tc-search"}],
+            )
+        if self._turn == 1:
+            self._turn += 1
+            return AIMessage(
+                content="",
+                tool_calls=[
+                    {
+                        "name": "TaskCreate",
+                        "args": {"subject": "PT02_EXEC", "description": "created after discovery"},
+                        "id": "tc-task-create",
+                    }
+                ],
+            )
+        self._turn += 1
+        return AIMessage(content="PT02_EXEC_DONE")
+
+
+@pytest.mark.asyncio
+@_patch_env_api_key()
+async def test_leon_agent_reinjects_discovered_deferred_tool_schemas_on_following_turn(tmp_path):
+    """Deferred tools discovered via tool_search must become real schemas on the next turn."""
+    from core.runtime.agent import LeonAgent
+
+    probe_model = _DeferredDiscoveryProbeModel()
+
+    with patch("core.runtime.agent.LeonAgent._create_model", return_value=probe_model), \
+         patch("core.runtime.agent.LeonAgent._init_async_components", return_value=(None, [])), \
+         patch("core.runtime.agent.LeonAgent._init_checkpointer", new_callable=AsyncMock, return_value=None):
+
+        agent = LeonAgent(workspace_root=str(tmp_path), api_key="sk-test-integration")
+        await agent.ainit()
+
+        result = await agent.ainvoke("discover task tools", thread_id="test-deferred-discovery")
+
+        assert result["reason"] == "completed"
+        assert len(probe_model.turn_tool_names) >= 2
+        first_turn, second_turn = probe_model.turn_tool_names[:2]
+        assert "TaskCreate" not in first_turn
+        assert "tool_search" in first_turn
+        assert "TaskCreate" in second_turn
+
+        agent.close()
+
+
+@pytest.mark.asyncio
+@_patch_env_api_key()
+async def test_leon_agent_can_execute_discovered_deferred_tool_on_following_turn(tmp_path):
+    """A deferred tool discovered via tool_search should become callable on the next turn."""
+    from core.runtime.agent import LeonAgent
+
+    probe_model = _DeferredExecutionProbeModel()
+
+    with patch("core.runtime.agent.LeonAgent._create_model", return_value=probe_model), \
+         patch("core.runtime.agent.LeonAgent._init_async_components", return_value=(None, [])), \
+         patch("core.runtime.agent.LeonAgent._init_checkpointer", new_callable=AsyncMock, return_value=None):
+
+        agent = LeonAgent(workspace_root=str(tmp_path), api_key="sk-test-integration")
+        await agent.ainit()
+
+        result = await agent.ainvoke("discover then run deferred task tool", thread_id="test-deferred-execution")
+
+        assert result["reason"] == "completed"
+        assert len(probe_model.turn_tool_names) >= 2
+        assert "TaskCreate" not in probe_model.turn_tool_names[0]
+        assert "TaskCreate" in probe_model.turn_tool_names[1]
+
+        task_tool_messages = [
+            msg for msg in result["messages"]
+            if isinstance(msg, ToolMessage) and msg.tool_call_id == "tc-task-create"
+        ]
+        assert len(task_tool_messages) == 1
+        assert "PT02_EXEC" in str(task_tool_messages[0].content)
+        assert any(isinstance(msg, AIMessage) and msg.content == "PT02_EXEC_DONE" for msg in result["messages"])
 
         agent.close()
 

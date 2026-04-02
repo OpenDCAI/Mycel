@@ -126,6 +126,7 @@ class QueryLoop:
         self._tool_read_file_state: dict[str, Any] = {}
         self._tool_loaded_nested_memory_paths: set[str] = set()
         self._tool_discovered_skill_names: set[str] = set()
+        self._tool_discovered_tool_names: set[str] = set()
         self.max_turns = max_turns
         self.last_terminal: TerminalState | None = None
         self.last_continue: ContinueState | None = None
@@ -455,7 +456,7 @@ class QueryLoop:
             return ModelResponse(result=result, request_messages=list(request.messages))
 
         # Build ModelRequest
-        inline_schemas = self._registry.get_inline_schemas()
+        inline_schemas = self._registry.get_inline_schemas(self._tool_discovered_tool_names)
         request = ModelRequest(
             model=self.model,
             messages=messages,
@@ -505,7 +506,7 @@ class QueryLoop:
         self,
         messages: list,
     ) -> ModelRequest:
-        inline_schemas = self._registry.get_inline_schemas()
+        inline_schemas = self._registry.get_inline_schemas(self._tool_discovered_tool_names)
         request = ModelRequest(
             model=self.model,
             messages=messages,
@@ -713,6 +714,7 @@ class QueryLoop:
             read_file_state=self._tool_read_file_state,
             loaded_nested_memory_paths=self._tool_loaded_nested_memory_paths,
             discovered_skill_names=self._tool_discovered_skill_names,
+            discovered_tool_names=self._tool_discovered_tool_names,
             nested_memory_attachment_triggers=set(),
             messages=list(messages),
         )
@@ -1171,6 +1173,7 @@ class QueryLoop:
         self._tool_read_file_state.clear()
         self._tool_loaded_nested_memory_paths.clear()
         self._tool_discovered_skill_names.clear()
+        self._tool_discovered_tool_names.clear()
 
         if self._memory_middleware is not None:
             if hasattr(self._memory_middleware, "_cached_summary"):

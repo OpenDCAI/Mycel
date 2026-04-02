@@ -52,7 +52,9 @@ class ToolSearchService:
         )
         logger.info("ToolSearchService initialized")
 
-    def _search(self, query: str = "", **kwargs) -> str:
+    def _search(self, query: str = "", tool_context=None, **kwargs) -> str:
         results = self._registry.search(query)
+        if tool_context is not None and hasattr(tool_context, "discovered_tool_names"):
+            tool_context.discovered_tool_names.update(entry.name for entry in results)
         schemas = [e.get_schema() for e in results]
         return json.dumps(schemas, indent=2, ensure_ascii=False)

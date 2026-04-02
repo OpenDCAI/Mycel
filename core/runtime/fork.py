@@ -78,6 +78,7 @@ def create_subagent_context(
         read_file_state=cloned_read_file_state,
         loaded_nested_memory_paths=set(),
         discovered_skill_names=set(),
+        discovered_tool_names=set(),
         nested_memory_attachment_triggers=set(),
         messages=list(parent.messages),
     )

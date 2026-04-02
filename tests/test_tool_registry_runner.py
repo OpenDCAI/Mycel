@@ -739,6 +739,36 @@ class TestToolRunnerErrorNormalization:
 
         assert result.content == f"context:{req.state.turn_id}"
 
+    @pytest.mark.asyncio
+    async def test_runner_maps_context_schema_fields_into_handler_kwargs(self):
+        seen = {}
+
+        def needs_ctx(*, boot):
+            seen["boot"] = boot
+            return f"boot:{boot}"
+
+        entry = ToolEntry(
+            name="NeedsCtx",
+            mode=ToolMode.INLINE,
+            schema={"name": "NeedsCtx", "parameters": {"type": "object", "required": [], "properties": {}}},
+            handler=needs_ctx,
+            source="test",
+            context_schema={"boot": "bootstrap.model_name"},
+        )
+        runner = _make_runner([entry])
+        req = _make_tool_call_request("NeedsCtx", {})
+        app_state = AppState()
+        req.state = ToolUseContext(
+            bootstrap=BootstrapConfig(workspace_root="/tmp/workspace", model_name="MODEL_X"),
+            get_app_state=app_state.get_state,
+            set_app_state=app_state.set_state,
+        )
+
+        result = await runner.awrap_tool_call(req, AsyncMock())
+
+        assert seen == {"boot": "MODEL_X"}
+        assert result.content == "boot:MODEL_X"
+
 
 class TestToolRunnerInlineInjection:
     """P1: ToolRunner injects inline schemas into model call."""

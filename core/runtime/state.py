@@ -103,6 +103,7 @@ class ToolUseContext(BaseModel):
     read_file_state: Any = Field(default_factory=dict, exclude=True)
     loaded_nested_memory_paths: Any = Field(default_factory=set, exclude=True)
     discovered_skill_names: Any = Field(default_factory=set, exclude=True)
+    discovered_tool_names: Any = Field(default_factory=set, exclude=True)
     nested_memory_attachment_triggers: Any = Field(default_factory=set, exclude=True)
     messages: list = Field(default_factory=list)
     turn_id: str = Field(default_factory=lambda: uuid.uuid4().hex[:8])
