@@ -1,15 +1,14 @@
 """LSP Service - Language Server Protocol code intelligence via multilspy.
 
-Registers a single DEFERRED `LSP` tool with 5 operations:
-  goToDefinition, findReferences, hover, documentSymbol, workspaceSymbol
+Registers a single DEFERRED `LSP` tool with 9 operations:
+  goToDefinition, findReferences, hover, documentSymbol, workspaceSymbol,
+  goToImplementation, prepareCallHierarchy, incomingCalls, outgoingCalls
 
 Language servers are auto-downloaded on first use per language. The server
 process is started lazily on the first LSP call and kept alive until close().
 
 Supported languages (via multilspy):
   python, typescript, javascript, go, rust, java, ruby, kotlin, csharp
-
-Requires: pip install multilspy  (optional dependency)
 """
 
 from __future__ import annotations
@@ -31,17 +30,22 @@ LSP_SCHEMA = {
     "name": "LSP",
     "description": (
         "Language Server Protocol code intelligence. "
-        "Operations: goToDefinition, findReferences, hover, documentSymbol, workspaceSymbol. "
+        "Operations: goToDefinition, findReferences, hover, documentSymbol, workspaceSymbol, "
+        "goToImplementation, prepareCallHierarchy, incomingCalls, outgoingCalls. "
         "Language servers are auto-downloaded on first use. "
         "Supports python, typescript, javascript, go, rust, java, ruby, kotlin. "
-        "file_path must be absolute. line/column are zero-based."
+        "file_path must be absolute. line/column are zero-based. "
+        "incomingCalls/outgoingCalls require 'item' from prepareCallHierarchy output."
     ),
     "parameters": {
         "type": "object",
         "properties": {
             "operation": {
                 "type": "string",
-                "enum": ["goToDefinition", "findReferences", "hover", "documentSymbol", "workspaceSymbol"],
+                "enum": [
+                    "goToDefinition", "findReferences", "hover", "documentSymbol", "workspaceSymbol",
+                    "goToImplementation", "prepareCallHierarchy", "incomingCalls", "outgoingCalls",
+                ],
                 "description": "LSP operation to perform",
             },
             "file_path": {
@@ -63,6 +67,10 @@ LSP_SCHEMA = {
             "language": {
                 "type": "string",
                 "description": "Language override. Auto-detected from file extension if omitted.",
+            },
+            "item": {
+                "type": "object",
+                "description": "CallHierarchyItem from prepareCallHierarchy (required for incomingCalls/outgoingCalls).",
             },
         },
         "required": ["operation"],
@@ -158,6 +166,47 @@ class _LSPSession:
 
     async def request_workspace_symbol(self, query: str) -> list:
         return await self._lsp.request_workspace_symbol(query) or []
+
+    async def request_implementation(self, rel_path: str, line: int, col: int) -> list:
+        import pathlib as _pathlib
+        abs_uri = _pathlib.Path(self._workspace_root, rel_path).as_uri()
+        with self._lsp.open_file(rel_path):
+            response = await self._lsp.server.send.implementation(
+                {"textDocument": {"uri": abs_uri}, "position": {"line": line, "character": col}}
+            )
+        if not response:
+            return []
+        if isinstance(response, dict):
+            response = [response]
+        out = []
+        for item in response:
+            if "uri" in item and "range" in item:
+                item.setdefault("absolutePath", item["uri"].replace("file://", ""))
+                out.append(item)
+            elif "targetUri" in item:
+                out.append({
+                    "uri": item["targetUri"],
+                    "absolutePath": item["targetUri"].replace("file://", ""),
+                    "range": item.get("targetSelectionRange", item.get("targetRange", {})),
+                })
+        return out
+
+    async def request_prepare_call_hierarchy(self, rel_path: str, line: int, col: int) -> list:
+        import pathlib as _pathlib
+        abs_uri = _pathlib.Path(self._workspace_root, rel_path).as_uri()
+        with self._lsp.open_file(rel_path):
+            response = await self._lsp.server.send.prepare_call_hierarchy(
+                {"textDocument": {"uri": abs_uri}, "position": {"line": line, "character": col}}
+            )
+        return response or []
+
+    async def request_incoming_calls(self, item: dict) -> list:
+        response = await self._lsp.server.send.incoming_calls({"item": item})
+        return response or []
+
+    async def request_outgoing_calls(self, item: dict) -> list:
+        response = await self._lsp.server.send.outgoing_calls({"item": item})
+        return response or []
 
 
 class LSPService:
@@ -279,6 +328,34 @@ class LSPService:
             "line": start.get("line"),
         }
 
+    @staticmethod
+    def _fmt_call_hierarchy_item(item: Any) -> dict:
+        uri = item.get("uri", "")
+        start = item.get("range", {}).get("start", {})
+        return {
+            "name": item.get("name", ""),
+            "kind": item.get("kind"),
+            "file": uri.replace("file://", "") if uri.startswith("file://") else uri,
+            "line": start.get("line"),
+            "item": item,  # pass-through for incomingCalls/outgoingCalls
+        }
+
+    @staticmethod
+    def _fmt_call_hierarchy_call(call: Any, direction: str) -> dict:
+        item_key = "from" if direction == "incoming" else "to"
+        caller = call.get(item_key, {})
+        uri = caller.get("uri", "")
+        start = caller.get("range", {}).get("start", {})
+        ranges = [r.get("start", {}) for r in call.get(f"{item_key}Ranges", [])]
+        return {
+            "name": caller.get("name", ""),
+            "kind": caller.get("kind"),
+            "file": uri.replace("file://", "") if uri.startswith("file://") else uri,
+            "line": start.get("line"),
+            "call_sites": [{"line": r.get("line"), "column": r.get("character")} for r in ranges],
+            "item": caller,  # pass-through for chaining
+        }
+
     # ── tool handler ──────────────────────────────────────────────────
 
     async def _handle(
@@ -289,11 +366,15 @@ class LSPService:
         column: int | None = None,
         query: str | None = None,
         language: str | None = None,
+        item: dict | None = None,
     ) -> str:
-        # Resolve language
+        # Resolve language (incomingCalls/outgoingCalls carry language in item["uri"])
         lang = language
         if not lang and file_path:
             lang = self._detect_language(file_path)
+        if not lang and operation in ("incomingCalls", "outgoingCalls") and item:
+            uri = item.get("uri", "")
+            lang = self._detect_language(uri)
         if not lang:
             supported = ", ".join(sorted(set(_EXT_TO_LANG.values())))
             return f"Cannot detect language. Set 'language' parameter. Supported: {supported}"
@@ -354,10 +435,44 @@ class LSPService:
                     return f"No symbols matching '{query}'."
                 return json.dumps([self._fmt_symbol(s) for s in symbols], indent=2)
 
+            elif operation == "goToImplementation":
+                if not file_path or line is None or column is None:
+                    return "goToImplementation requires: file_path, line, column"
+                results = await session.request_implementation(rel, line, column)
+                results = self._filter_gitignored_batched(results)
+                if not results:
+                    return "No implementation found."
+                return json.dumps([self._fmt_location(r) for r in results], indent=2)
+
+            elif operation == "prepareCallHierarchy":
+                if not file_path or line is None or column is None:
+                    return "prepareCallHierarchy requires: file_path, line, column"
+                items = await session.request_prepare_call_hierarchy(rel, line, column)
+                if not items:
+                    return "No call hierarchy items found."
+                return json.dumps([self._fmt_call_hierarchy_item(i) for i in items], indent=2)
+
+            elif operation == "incomingCalls":
+                if not item:
+                    return "incomingCalls requires: item (CallHierarchyItem from prepareCallHierarchy)"
+                calls = await session.request_incoming_calls(item)
+                if not calls:
+                    return "No incoming calls found."
+                return json.dumps([self._fmt_call_hierarchy_call(c, "incoming") for c in calls], indent=2)
+
+            elif operation == "outgoingCalls":
+                if not item:
+                    return "outgoingCalls requires: item (CallHierarchyItem from prepareCallHierarchy)"
+                calls = await session.request_outgoing_calls(item)
+                if not calls:
+                    return "No outgoing calls found."
+                return json.dumps([self._fmt_call_hierarchy_call(c, "outgoing") for c in calls], indent=2)
+
             else:
                 return (
                     f"Unknown operation '{operation}'. "
-                    "Valid: goToDefinition, findReferences, hover, documentSymbol, workspaceSymbol"
+                    "Valid: goToDefinition, findReferences, hover, documentSymbol, workspaceSymbol, "
+                    "goToImplementation, prepareCallHierarchy, incomingCalls, outgoingCalls"
                 )
 
         except Exception as e:
