@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import copy
 import inspect
 import json
 import logging
@@ -117,10 +118,14 @@ class ToolRunner(AgentMiddleware):
             return payload
         hooks = hook_or_hooks if isinstance(hook_or_hooks, list) else [hook_or_hooks]
         current = payload
-        for hook in hooks:
-            updated = hook(current, request)
+
+        async def _invoke(hook):
+            updated = hook(copy.deepcopy(payload), request)
             if asyncio.iscoroutine(updated):
                 updated = await updated
+            return updated
+
+        for updated in await asyncio.gather(*(_invoke(hook) for hook in hooks)):
             if updated is not None:
                 current = updated
         return current
@@ -268,21 +273,39 @@ class ToolRunner(AgentMiddleware):
         permission: str | None = None
         message: str | None = None
         hook_list = hooks if isinstance(hooks, list) else [hooks]
-        for hook in hook_list:
-            updated = hook(payload, request)
+
+        async def _invoke(hook):
+            updated = hook({"name": name, "args": dict(args), "entry": entry}, request)
             if asyncio.iscoroutine(updated):
                 updated = await updated
+            return updated
+
+        # @@@pt-06-hook-fanout
+        # Pattern 6 requires hooks to fan out instead of impersonating a
+        # middleware chain. We still fold results back in hook-list order so
+        # the aggregation stays deterministic.
+        for updated in await asyncio.gather(*(_invoke(hook) for hook in hook_list)):
             if updated is None:
                 continue
             if isinstance(updated, dict):
                 if "args" in updated:
-                    payload["args"] = updated["args"]
+                    next_args = updated["args"]
+                    if isinstance(next_args, dict):
+                        payload["args"] = {**payload["args"], **next_args}
+                    else:
+                        payload["args"] = next_args
                 if "name" in updated:
                     payload["name"] = updated["name"]
                 if "entry" in updated:
                     payload["entry"] = updated["entry"]
                 new_permission, new_message = self._coerce_permission_response(updated)
-                if new_permission is not None:
+                if new_permission == "deny" and permission != "deny":
+                    permission = new_permission
+                    message = new_message
+                elif new_permission == "ask" and permission not in {"deny", "ask"}:
+                    permission = new_permission
+                    message = new_message
+                elif new_permission == "allow" and permission is None:
                     permission = new_permission
                     message = new_message
         return payload["args"], permission, message

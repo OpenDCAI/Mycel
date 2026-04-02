@@ -154,6 +154,83 @@ async def test_leon_agent_astream_messages_updates_mode_yields_langgraph_tuples(
         agent.close()
 
 
+@pytest.mark.asyncio
+@_patch_env_api_key()
+async def test_leon_agent_memoizes_prompt_sections_between_builds(tmp_path):
+    """Pattern 6: prompt sections should be cached across repeated prompt assembly."""
+    from core.runtime.agent import LeonAgent
+    from core.runtime import prompts as prompt_builders
+
+    mock_model = _mock_model("Prompt cache response")
+    original_context = prompt_builders.build_context_section
+    original_rules = prompt_builders.build_rules_section
+    counts = {"context": 0, "rules": 0}
+
+    def counted_context(*args, **kwargs):
+        counts["context"] += 1
+        return original_context(*args, **kwargs)
+
+    def counted_rules(*args, **kwargs):
+        counts["rules"] += 1
+        return original_rules(*args, **kwargs)
+
+    with patch("core.runtime.prompts.build_context_section", side_effect=counted_context), \
+         patch("core.runtime.prompts.build_rules_section", side_effect=counted_rules), \
+         patch("core.runtime.agent.LeonAgent._create_model", return_value=mock_model), \
+         patch("core.runtime.agent.LeonAgent._init_async_components", return_value=(None, [])), \
+         patch("core.runtime.agent.LeonAgent._init_checkpointer", new_callable=AsyncMock, return_value=None):
+
+        agent = LeonAgent(workspace_root=str(tmp_path), api_key="sk-test-integration")
+        await agent.ainit()
+
+        first = agent._compose_system_prompt()
+        second = agent._compose_system_prompt()
+
+        assert first == second
+        assert counts == {"context": 1, "rules": 1}
+
+        agent.close()
+
+
+@pytest.mark.asyncio
+@_patch_env_api_key()
+async def test_leon_agent_clear_thread_invalidates_prompt_section_cache(tmp_path):
+    """Pattern 6: clear should invalidate cached prompt sections before rebuilding."""
+    from core.runtime.agent import LeonAgent
+    from core.runtime import prompts as prompt_builders
+
+    mock_model = _mock_model("Prompt clear response")
+    original_context = prompt_builders.build_context_section
+    original_rules = prompt_builders.build_rules_section
+    counts = {"context": 0, "rules": 0}
+
+    def counted_context(*args, **kwargs):
+        counts["context"] += 1
+        return original_context(*args, **kwargs)
+
+    def counted_rules(*args, **kwargs):
+        counts["rules"] += 1
+        return original_rules(*args, **kwargs)
+
+    with patch("core.runtime.prompts.build_context_section", side_effect=counted_context), \
+         patch("core.runtime.prompts.build_rules_section", side_effect=counted_rules), \
+         patch("core.runtime.agent.LeonAgent._create_model", return_value=mock_model), \
+         patch("core.runtime.agent.LeonAgent._init_async_components", return_value=(None, [])), \
+         patch("core.runtime.agent.LeonAgent._init_checkpointer", new_callable=AsyncMock, return_value=None):
+
+        agent = LeonAgent(workspace_root=str(tmp_path), api_key="sk-test-integration")
+        await agent.ainit()
+        agent.agent.aclear = AsyncMock()
+
+        assert counts == {"context": 1, "rules": 1}
+
+        await agent.aclear_thread("prompt-clear-thread")
+
+        assert counts == {"context": 2, "rules": 2}
+
+        agent.close()
+
+
 class _DeferredDiscoveryProbeModel:
     def __init__(self):
         self.turn_tool_names: list[list[str]] = []

@@ -8,6 +8,8 @@ Covers:
 
 from __future__ import annotations
 
+import asyncio
+import time
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -297,6 +299,39 @@ class TestToolRunnerErrorNormalization:
 
         assert result.content == "plain success"
         assert events == [("ToolMessage", "plain success", "local")]
+
+    @pytest.mark.asyncio
+    async def test_async_post_tool_use_hooks_run_in_parallel(self):
+        def local_handler(**kwargs):
+            return "plain success"
+
+        entry = ToolEntry(
+            name="Write",
+            mode=ToolMode.INLINE,
+            schema={"name": "Write", "parameters": {"type": "object", "required": [], "properties": {}}},
+            handler=local_handler,
+            source="test",
+        )
+        runner = _make_runner([entry])
+        req = _make_tool_call_request("Write", {})
+        req.state = MagicMock()
+
+        async def post_hook_one(message, request):
+            await asyncio.sleep(0.05)
+            return None
+
+        async def post_hook_two(message, request):
+            await asyncio.sleep(0.05)
+            return None
+
+        req.state.post_tool_use = [post_hook_one, post_hook_two]
+
+        started = time.perf_counter()
+        result = await runner.awrap_tool_call(req, AsyncMock())
+        elapsed = time.perf_counter() - started
+
+        assert result.content == "plain success"
+        assert elapsed < 0.09
 
     @pytest.mark.asyncio
     async def test_post_tool_use_failure_hook_runs_on_materialized_error_message(self):
@@ -630,6 +665,39 @@ class TestToolRunnerErrorNormalization:
         assert meta["decision"] == "deny"
 
     @pytest.mark.asyncio
+    async def test_parallel_pre_tool_use_hooks_keep_deny_precedence(self):
+        def handler(**kwargs):
+            raise AssertionError("handler should not run when a hook denies")
+
+        entry = ToolEntry(
+            name="Write",
+            mode=ToolMode.INLINE,
+            schema={"name": "Write", "parameters": {"type": "object", "required": [], "properties": {}}},
+            handler=handler,
+            source="test",
+        )
+        runner = _make_runner([entry])
+        req = _make_tool_call_request("Write", {})
+        req.state = MagicMock()
+
+        async def allow_hook(payload, request):
+            await asyncio.sleep(0.01)
+            return {"permission": "allow", "message": "hook allow"}
+
+        async def deny_hook(payload, request):
+            await asyncio.sleep(0.01)
+            return {"decision": "deny", "message": "hook deny"}
+
+        req.state.pre_tool_use = [allow_hook, deny_hook]
+
+        result = await runner.awrap_tool_call(req, AsyncMock())
+
+        meta = result.additional_kwargs["tool_result_meta"]
+        assert result.content == "hook deny"
+        assert meta["kind"] == "permission_denied"
+        assert meta["decision"] == "deny"
+
+    @pytest.mark.asyncio
     async def test_pre_tool_use_can_update_args_before_permission_and_handler(self):
         seen = []
 
@@ -669,6 +737,36 @@ class TestToolRunnerErrorNormalization:
 
         assert result.content == "ok:mutated"
         assert seen == [("permission", "mutated"), ("handler", "mutated")]
+
+    @pytest.mark.asyncio
+    async def test_async_pre_tool_use_hooks_run_in_parallel(self):
+        entry = ToolEntry(
+            name="Write",
+            mode=ToolMode.INLINE,
+            schema={"name": "Write", "parameters": {"type": "object", "required": [], "properties": {}}},
+            handler=lambda: "ok",
+            source="test",
+        )
+        runner = _make_runner([entry])
+        req = _make_tool_call_request("Write", {})
+        req.state = MagicMock()
+
+        async def hook_one(payload, request):
+            await asyncio.sleep(0.05)
+            return None
+
+        async def hook_two(payload, request):
+            await asyncio.sleep(0.05)
+            return None
+
+        req.state.pre_tool_use = [hook_one, hook_two]
+
+        started = time.perf_counter()
+        result = await runner.awrap_tool_call(req, AsyncMock())
+        elapsed = time.perf_counter() - started
+
+        assert result.content == "ok"
+        assert elapsed < 0.09
 
     @pytest.mark.asyncio
     async def test_permission_checker_receives_permission_context_not_scheduler_flag(self):

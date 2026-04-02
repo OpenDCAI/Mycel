@@ -293,32 +293,8 @@ class LeonAgent:
         if not mcp_tools and not self._has_middleware_tools(middleware):
             mcp_tools = [self._create_placeholder_tool()]
 
-        # Build system prompt
-        self.system_prompt = self._build_system_prompt()
-        custom_prompt = self.config.system_prompt
-        if custom_prompt:
-            self.system_prompt += f"\n\n**Custom Instructions:**\n{custom_prompt}"
-
-        # @@@entity-identity — inject chat identity so agent knows who it is in the social layer
-        if self._chat_repos:
-            repos = self._chat_repos
-            eid = repos.get("entity_id")
-            owner_eid = repos.get("owner_entity_id", "")
-            if eid:
-                entity_repo = repos.get("entity_repo")
-                entity = entity_repo.get_by_id(eid) if entity_repo else None
-                owner_entity = entity_repo.get_by_id(owner_eid) if entity_repo and owner_eid else None
-                name = entity.name if entity else eid
-                owner_name = owner_entity.name if owner_entity else "unknown"
-                self.system_prompt += (
-                    f"\n\n**Chat Identity:**\n"
-                    f"- Your name: {name}\n"
-                    f"- Your entity_id: {eid}\n"
-                    f"- Your owner: {owner_name} (entity_id: {owner_eid})\n"
-                    f"- When you receive a chat notification, READ the message with chat_read(), "
-                    f"then REPLY with chat_send(). Your text output goes to your owner's thread, "
-                    f"not to the chat — only chat_send() delivers to the other party.\n"
-                )
+        self._system_prompt_section_cache: dict[str, str] = {}
+        self.system_prompt = self._compose_system_prompt()
 
         # Build BootstrapConfig for sub-agent forking
         self._bootstrap = BootstrapConfig(
@@ -1278,48 +1254,100 @@ class LeonAgent:
 
         return prompt
 
+    def _compose_system_prompt(self) -> str:
+        prompt = self._build_system_prompt()
+
+        custom_prompt = self.config.system_prompt
+        if custom_prompt:
+            prompt += f"\n\n**Custom Instructions:**\n{custom_prompt}"
+
+        # @@@entity-identity — inject chat identity so agent knows who it is in the social layer
+        if self._chat_repos:
+            repos = self._chat_repos
+            eid = repos.get("entity_id")
+            owner_eid = repos.get("owner_entity_id", "")
+            if eid:
+                entity_repo = repos.get("entity_repo")
+                entity = entity_repo.get_by_id(eid) if entity_repo else None
+                owner_entity = entity_repo.get_by_id(owner_eid) if entity_repo and owner_eid else None
+                name = entity.name if entity else eid
+                owner_name = owner_entity.name if owner_entity else "unknown"
+                prompt += (
+                    f"\n\n**Chat Identity:**\n"
+                    f"- Your name: {name}\n"
+                    f"- Your entity_id: {eid}\n"
+                    f"- Your owner: {owner_name} (entity_id: {owner_eid})\n"
+                    f"- When you receive a chat notification, READ the message with chat_read(), "
+                    f"then REPLY with chat_send(). Your text output goes to your owner's thread, "
+                    f"not to the chat — only chat_send() delivers to the other party.\n"
+                )
+        return prompt
+
+    def _invalidate_system_prompt_cache(self) -> None:
+        self._system_prompt_section_cache.clear()
+
+    def _get_cached_prompt_section(self, key: str, builder) -> str:
+        cached = self._system_prompt_section_cache.get(key)
+        if cached is not None:
+            return cached
+        value = builder()
+        self._system_prompt_section_cache[key] = value
+        return value
+
     def _build_context_section(self) -> str:
         from core.runtime.prompts import build_context_section
 
-        is_sandbox = self._sandbox.name != "local"
-        if is_sandbox:
-            return build_context_section(
-                sandbox_name=self._sandbox.name,
-                sandbox_env_label=self._sandbox.env_label,
-                sandbox_working_dir=self._sandbox.working_dir,
-            )
-        import platform
+        def _build() -> str:
+            is_sandbox = self._sandbox.name != "local"
+            if is_sandbox:
+                return build_context_section(
+                    sandbox_name=self._sandbox.name,
+                    sandbox_env_label=self._sandbox.env_label,
+                    sandbox_working_dir=self._sandbox.working_dir,
+                )
+            import platform
 
-        os_name = platform.system()
-        shell_name = "powershell" if os_name == "Windows" else os.environ.get("SHELL", "/bin/bash").split("/")[-1]
-        return build_context_section(
-            sandbox_name="local",
-            workspace_root=str(self.workspace_root),
-            os_name=os_name,
-            shell_name=shell_name,
-        )
+            os_name = platform.system()
+            shell_name = "powershell" if os_name == "Windows" else os.environ.get("SHELL", "/bin/bash").split("/")[-1]
+            return build_context_section(
+                sandbox_name="local",
+                workspace_root=str(self.workspace_root),
+                os_name=os_name,
+                shell_name=shell_name,
+            )
+
+        return self._get_cached_prompt_section("context", _build)
 
     def _build_rules_section(self) -> str:
         from core.runtime.prompts import build_rules_section
 
-        is_sandbox = self._sandbox.name != "local"
-        working_dir = self._sandbox.working_dir if is_sandbox else str(self.workspace_root)
-        return build_rules_section(
-            is_sandbox=is_sandbox,
-            sandbox_name=self._sandbox.name,
-            working_dir=working_dir,
-            workspace_root=str(self.workspace_root),
-        )
+        def _build() -> str:
+            is_sandbox = self._sandbox.name != "local"
+            working_dir = self._sandbox.working_dir if is_sandbox else str(self.workspace_root)
+            return build_rules_section(
+                is_sandbox=is_sandbox,
+                sandbox_name=self._sandbox.name,
+                working_dir=working_dir,
+                workspace_root=str(self.workspace_root),
+            )
+
+        return self._get_cached_prompt_section("rules", _build)
 
     def _build_base_prompt(self) -> str:
         from core.runtime.prompts import build_base_prompt
 
-        return build_base_prompt(self._build_context_section(), self._build_rules_section())
+        return self._get_cached_prompt_section(
+            "base_prompt",
+            lambda: build_base_prompt(self._build_context_section(), self._build_rules_section()),
+        )
 
     def _build_common_prompt_sections(self) -> str:
         from core.runtime.prompts import build_common_sections
 
-        return build_common_sections(bool(self.config.skills.enabled and self.config.skills.paths))
+        return self._get_cached_prompt_section(
+            "common_sections",
+            lambda: build_common_sections(bool(self.config.skills.enabled and self.config.skills.paths)),
+        )
 
     def invoke(self, message: str, thread_id: str = "default") -> dict:
         """Invoke agent with a message (sync version).
@@ -1396,6 +1424,9 @@ class LeonAgent:
         """Clear turn-scoped state for a thread while preserving session accumulators."""
         try:
             await self.agent.aclear(thread_id)
+            self._invalidate_system_prompt_cache()
+            self.system_prompt = self._compose_system_prompt()
+            self.agent.system_prompt = SystemMessage(content=[{"type": "text", "text": self.system_prompt}])
         except Exception as e:
             self._monitor_middleware.mark_error(e)
             raise
