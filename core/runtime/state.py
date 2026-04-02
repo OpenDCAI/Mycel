@@ -13,6 +13,8 @@ from typing import Any, Callable
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from .abort import AbortController
+
 
 class BootstrapConfig(BaseModel):
     """Process-level configuration that survives /clear.
@@ -105,6 +107,7 @@ class ToolUseContext(BaseModel):
     discovered_skill_names: Any = Field(default_factory=set, exclude=True)
     discovered_tool_names: Any = Field(default_factory=set, exclude=True)
     nested_memory_attachment_triggers: Any = Field(default_factory=set, exclude=True)
+    abort_controller: Any = Field(default_factory=AbortController, exclude=True)
     messages: list = Field(default_factory=list)
     turn_id: str = Field(default_factory=lambda: uuid.uuid4().hex[:8])
 

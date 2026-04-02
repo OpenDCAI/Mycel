@@ -550,6 +550,11 @@ class AgentService:
                     agent._agent_service._parent_bootstrap = child_bootstrap
                     if child_tool_context is not None:
                         agent._agent_service._parent_tool_context = child_tool_context
+                        # @@@pt-05-child-abort-link
+                        # Pattern 5 only becomes live once the child QueryLoop
+                        # itself shares the forked abort controller, not just
+                        # the nested AgentService escape-hatch context.
+                        agent.agent._tool_abort_controller = child_tool_context.abort_controller
             except (AttributeError, ImportError):
                 inherited_model = getattr(parent_tool_context.bootstrap, "model_name", None) if parent_tool_context else None
                 selected_model = _resolve_subagent_model(

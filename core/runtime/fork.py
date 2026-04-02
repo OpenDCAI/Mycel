@@ -11,6 +11,7 @@ from __future__ import annotations
 import copy
 import uuid
 
+from .abort import create_child_abort_controller
 from .state import BootstrapConfig, ToolUseContext
 
 
@@ -80,5 +81,6 @@ def create_subagent_context(
         discovered_skill_names=set(),
         discovered_tool_names=set(),
         nested_memory_attachment_triggers=set(),
+        abort_controller=create_child_abort_controller(getattr(parent, "abort_controller", None)),
         messages=list(parent.messages),
     )

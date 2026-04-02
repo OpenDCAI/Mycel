@@ -29,6 +29,7 @@ from core.runtime.middleware import (
 )
 from langchain_core.messages import AIMessage, AIMessageChunk, HumanMessage, SystemMessage, ToolMessage
 
+from .abort import AbortController
 from .registry import ToolRegistry
 from .state import AppState, BootstrapConfig, ToolUseContext
 
@@ -127,6 +128,7 @@ class QueryLoop:
         self._tool_loaded_nested_memory_paths: set[str] = set()
         self._tool_discovered_skill_names: set[str] = set()
         self._tool_discovered_tool_names: set[str] = set()
+        self._tool_abort_controller = AbortController()
         self.max_turns = max_turns
         self.last_terminal: TerminalState | None = None
         self.last_continue: ContinueState | None = None
@@ -716,6 +718,7 @@ class QueryLoop:
             discovered_skill_names=self._tool_discovered_skill_names,
             discovered_tool_names=self._tool_discovered_tool_names,
             nested_memory_attachment_triggers=set(),
+            abort_controller=self._tool_abort_controller,
             messages=list(messages),
         )
 

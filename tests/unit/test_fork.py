@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pytest
 
+from core.runtime.abort import AbortController
 from core.runtime.fork import create_subagent_context, fork_context
 from core.runtime.state import AppState, BootstrapConfig, ToolUseContext
 
@@ -145,3 +146,21 @@ def test_create_subagent_context_deep_clones_read_file_state(parent_tool_context
         "partial": False,
         "meta": {"seen": 1},
     }
+
+
+def test_create_subagent_context_parent_abort_propagates_to_child(parent_tool_context):
+    parent_tool_context.abort_controller = AbortController()
+
+    child = create_subagent_context(parent_tool_context)
+    parent_tool_context.abort_controller.abort()
+
+    assert child.abort_controller.is_aborted() is True
+
+
+def test_create_subagent_context_child_abort_does_not_abort_parent(parent_tool_context):
+    parent_tool_context.abort_controller = AbortController()
+
+    child = create_subagent_context(parent_tool_context)
+    child.abort_controller.abort()
+
+    assert parent_tool_context.abort_controller.is_aborted() is False

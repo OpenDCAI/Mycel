@@ -736,3 +736,43 @@ async def test_run_agent_cleans_up_child_background_runs_before_close(monkeypatc
     assert result == "(Agent completed with no text output)"
     assert created[0].cleanup_calls == 1
     assert created[0].closed is True
+
+
+@pytest.mark.asyncio
+async def test_run_agent_links_child_abort_controller_to_parent_tool_context(monkeypatch, tmp_path):
+    created: list[_FakeChildAgent] = []
+
+    def fake_create_leon_agent(*, model_name, workspace_root, **kwargs):
+        child = _FakeChildAgent(Path(workspace_root), model_name)
+        created.append(child)
+        return child
+
+    monkeypatch.setattr("core.runtime.agent.create_leon_agent", fake_create_leon_agent)
+
+    service = AgentService(
+        tool_registry=_FakeRegistry(),
+        agent_registry=_FakeAgentRegistry(),
+        workspace_root=tmp_path,
+        model_name="gpt-test",
+    )
+    parent_context = _make_parent_context(tmp_path)
+
+    result = await service._run_agent(
+        task_id="task-1",
+        agent_name="child",
+        thread_id="subagent-task-1",
+        prompt="hello",
+        subagent_type="explore",
+        max_turns=None,
+        parent_tool_context=parent_context,
+    )
+
+    assert result == "(Agent completed with no text output)"
+
+    child_context = created[0]._agent_service._parent_tool_context
+    assert child_context is not None
+    assert getattr(created[0].agent, "_tool_abort_controller", None) is child_context.abort_controller
+
+    parent_context.abort_controller.abort()
+
+    assert child_context.abort_controller.is_aborted() is True
