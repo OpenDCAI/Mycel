@@ -152,17 +152,29 @@ class _LSPSession:
     # ── request methods ───────────────────────────────────────────────
 
     async def request_definition(self, rel_path: str, line: int, col: int) -> list:
-        return await self._lsp.request_definition(rel_path, line, col) or []
+        try:
+            return await self._lsp.request_definition(rel_path, line, col) or []
+        except AssertionError:
+            return []  # multilspy asserts on None response (no definition found)
 
     async def request_references(self, rel_path: str, line: int, col: int) -> list:
-        return await self._lsp.request_references(rel_path, line, col) or []
+        try:
+            return await self._lsp.request_references(rel_path, line, col) or []
+        except AssertionError:
+            return []
 
     async def request_hover(self, rel_path: str, line: int, col: int) -> Any:
-        return await self._lsp.request_hover(rel_path, line, col)
+        try:
+            return await self._lsp.request_hover(rel_path, line, col)
+        except AssertionError:
+            return None
 
     async def request_document_symbols(self, rel_path: str) -> list:
-        symbols, _ = await self._lsp.request_document_symbols(rel_path)
-        return symbols or []
+        try:
+            symbols, _ = await self._lsp.request_document_symbols(rel_path)
+            return symbols or []
+        except AssertionError:
+            return []
 
     async def request_workspace_symbol(self, query: str) -> list:
         return await self._lsp.request_workspace_symbol(query) or []
@@ -320,11 +332,19 @@ class LSPService:
     @staticmethod
     def _fmt_symbol(sym: Any) -> dict:
         loc = sym.get("location") or {}
-        start = loc.get("range", {}).get("start", {}) if loc else {}
+        if loc:
+            # SymbolInformation (workspaceSymbol) — location.uri + location.range
+            start = loc.get("range", {}).get("start", {})
+            uri = loc.get("uri", "")
+            file = loc.get("absolutePath") or (uri.replace("file://", "") if uri.startswith("file://") else uri)
+        else:
+            # DocumentSymbol (documentSymbol) — range/selectionRange at top level, no file
+            start = sym.get("selectionRange", sym.get("range", {})).get("start", {})
+            file = ""
         return {
             "name": sym.get("name", ""),
             "kind": sym.get("kind"),
-            "file": loc.get("absolutePath", ""),
+            "file": file,
             "line": start.get("line"),
         }
 
