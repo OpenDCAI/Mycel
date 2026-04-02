@@ -17,6 +17,11 @@ from core.runtime.registry import ToolEntry, ToolMode, ToolRegistry
 DEFAULT_EXCLUDES: list[str] = [
     "node_modules",
     ".git",
+    ".svn",
+    ".hg",
+    ".bzr",
+    ".jj",
+    ".sl",
     "__pycache__",
     ".venv",
     "venv",
@@ -202,7 +207,7 @@ class SearchService:
         before_context: int | None = None,
         context: int | None = None,
         output_mode: str = "files_with_matches",
-        head_limit: int | None = None,
+        head_limit: int | None = 250,
         offset: int | None = None,
         multiline: bool = False,
         line_numbers: bool = True,
@@ -261,7 +266,7 @@ class SearchService:
         multiline: bool,
         line_numbers: bool = True,
     ) -> str:
-        cmd: list[str] = ["rg", pattern, str(path)]
+        cmd: list[str] = ["rg", pattern, str(path), "--max-columns", "500"]
 
         for excl in DEFAULT_EXCLUDES:
             cmd.extend(["--glob", f"!{excl}"])
