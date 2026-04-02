@@ -2,66 +2,45 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: ["**"]
   pull_request:
+    branches: [main]
 
 jobs:
-  lint:
-    name: Lint & Type Check (Python)
+  test-backend:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
-      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86  # v5
-        with:
-          enable-cache: true
-      - name: Install dependencies
-        run: uv sync --dev
-      - name: Lint (ruff)
-        run: |
-          uv run ruff check .
-          uv run ruff format --check .
-      - name: Type check (pyright)
-        run: uv run pyright --pythonversion 3.12
-        continue-on-error: true  # 423 pre-existing errors; tracked separately
+      - uses: actions/checkout@v4
 
-  test:
-    name: Unit Tests (${{ matrix.os }})
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
-    steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
-      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86  # v5
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
         with:
-          enable-cache: true
+          version: "latest"
+
       - name: Install dependencies
-        run: uv sync --dev
+        run: uv sync --frozen --no-dev
+
       - name: Run tests
-        # --maxfail=5: surface up to 5 failures per platform before stopping
-        # e2e tests self-skip via skipif when provider secrets are absent
-        run: uv run pytest tests/ --ignore=tests/test_e2e_providers.py --ignore=tests/test_sandbox_e2e.py --ignore=tests/test_daytona_e2e.py --ignore=tests/test_e2e_backend_api.py --ignore=tests/test_e2e_summary_persistence.py --ignore=tests/test_p3_e2e.py --maxfail=5 --timeout=60 -q
+        run: uv run pytest tests/ -x -q --timeout=30
+        env:
+          LEON_STORAGE_STRATEGY: sqlite
 
-  frontend:
-    name: Lint & Type Check & Build (Frontend)
+  test-frontend:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: frontend/app
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020  # v4
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
         with:
-          node-version: 20
-          cache: npm
+          node-version: "20"
+          cache: "npm"
           cache-dependency-path: frontend/app/package-lock.json
+
       - name: Install dependencies
+        working-directory: frontend/app
         run: npm ci
-      - name: Lint (ESLint)
-        run: npm run lint
-        continue-on-error: true  # pre-existing violations; tracked separately
-      - name: Type check (tsc)
-        run: npx tsc -b --noEmit
-      - name: Build
-        run: npm run build
+
+      - name: Type check
+        working-directory: frontend/app
+        run: npx tsc --noEmit

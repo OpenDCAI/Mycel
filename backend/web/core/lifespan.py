@@ -1,6 +1,7 @@
 """Application lifespan management."""
 
 import asyncio
+import os
 from contextlib import asynccontextmanager
 from typing import Any
 
@@ -124,34 +125,74 @@ async def lifespan(app: FastAPI):
     ensure_library_dir()
 
     # ---- Entity-Chat repos + services ----
-    from storage.providers.sqlite.chat_repo import SQLiteChatEntityRepo, SQLiteChatMessageRepo, SQLiteChatRepo
-    from storage.providers.sqlite.entity_repo import SQLiteEntityRepo
-    from storage.providers.sqlite.kernel import SQLiteDBRole, resolve_role_db_path
-    from storage.providers.sqlite.member_repo import SQLiteAccountRepo, SQLiteMemberRepo
-    from storage.providers.sqlite.recipe_repo import SQLiteRecipeRepo
-    from storage.providers.sqlite.thread_launch_pref_repo import SQLiteThreadLaunchPrefRepo
-    from storage.providers.sqlite.thread_repo import SQLiteThreadRepo
+    _storage_strategy = os.getenv("LEON_STORAGE_STRATEGY", "sqlite")
 
-    db = resolve_role_db_path(SQLiteDBRole.MAIN)
-    chat_db = resolve_role_db_path(SQLiteDBRole.CHAT)
+    if _storage_strategy == "supabase":
+        from backend.web.core.supabase_factory import create_supabase_client
+        from storage.container import StorageContainer
+        from storage.providers.supabase import (
+            SupabaseAccountRepo,
+            SupabaseChatEntityRepo,
+            SupabaseChatMessageRepo,
+            SupabaseChatRepo,
+            SupabaseContactRepo,
+            SupabaseEntityRepo,
+            SupabaseMemberRepo,
+            SupabaseRecipeRepo,
+            SupabaseThreadLaunchPrefRepo,
+            SupabaseThreadRepo,
+        )
 
-    app.state.member_repo = SQLiteMemberRepo(db)
-    app.state.account_repo = SQLiteAccountRepo(db)
-    app.state.entity_repo = SQLiteEntityRepo(db)
-    app.state.thread_repo = SQLiteThreadRepo(db)
-    app.state.thread_launch_pref_repo = SQLiteThreadLaunchPrefRepo(db)
-    app.state.recipe_repo = SQLiteRecipeRepo(db)
-    app.state.chat_repo = SQLiteChatRepo(chat_db)
-    app.state.chat_entity_repo = SQLiteChatEntityRepo(chat_db)
-    app.state.chat_message_repo = SQLiteChatMessageRepo(chat_db)
+        _supabase_client = create_supabase_client()
+        app.state.member_repo = SupabaseMemberRepo(_supabase_client)
+        app.state.account_repo = SupabaseAccountRepo(_supabase_client)
+        app.state.entity_repo = SupabaseEntityRepo(_supabase_client)
+        app.state.thread_repo = SupabaseThreadRepo(_supabase_client)
+        app.state.thread_launch_pref_repo = SupabaseThreadLaunchPrefRepo(_supabase_client)
+        app.state.recipe_repo = SupabaseRecipeRepo(_supabase_client)
+        app.state.chat_repo = SupabaseChatRepo(_supabase_client)
+        app.state.chat_entity_repo = SupabaseChatEntityRepo(_supabase_client)
+        app.state.chat_message_repo = SupabaseChatMessageRepo(_supabase_client)
+        app.state._supabase_client = _supabase_client
+        app.state._storage_container = StorageContainer(strategy="supabase", supabase_client=_supabase_client)
+    else:
+        from storage.providers.sqlite.chat_repo import SQLiteChatEntityRepo, SQLiteChatMessageRepo, SQLiteChatRepo
+        from storage.providers.sqlite.entity_repo import SQLiteEntityRepo
+        from storage.providers.sqlite.kernel import SQLiteDBRole, resolve_role_db_path
+        from storage.providers.sqlite.member_repo import SQLiteAccountRepo, SQLiteMemberRepo
+        from storage.providers.sqlite.recipe_repo import SQLiteRecipeRepo
+        from storage.providers.sqlite.thread_launch_pref_repo import SQLiteThreadLaunchPrefRepo
+        from storage.providers.sqlite.thread_repo import SQLiteThreadRepo
+
+        db = resolve_role_db_path(SQLiteDBRole.MAIN)
+        chat_db = resolve_role_db_path(SQLiteDBRole.CHAT)
+
+        app.state.member_repo = SQLiteMemberRepo(db)
+        app.state.account_repo = SQLiteAccountRepo(db)
+        app.state.entity_repo = SQLiteEntityRepo(db)
+        app.state.thread_repo = SQLiteThreadRepo(db)
+        app.state.thread_launch_pref_repo = SQLiteThreadLaunchPrefRepo(db)
+        app.state.recipe_repo = SQLiteRecipeRepo(db)
+        app.state.chat_repo = SQLiteChatRepo(chat_db)
+        app.state.chat_entity_repo = SQLiteChatEntityRepo(chat_db)
+        app.state.chat_message_repo = SQLiteChatMessageRepo(chat_db)
 
     from backend.web.services.auth_service import AuthService
 
-    app.state.auth_service = AuthService(
-        members=app.state.member_repo,
-        accounts=app.state.account_repo,
-        entities=app.state.entity_repo,
-    )
+    if _storage_strategy == "supabase":
+        app.state.auth_service = AuthService(
+            members=app.state.member_repo,
+            accounts=app.state.account_repo,
+            entities=app.state.entity_repo,
+            supabase_client=_supabase_client,
+        )
+    else:
+        app.state.auth_service = AuthService(
+            members=app.state.member_repo,
+            accounts=app.state.account_repo,
+            entities=app.state.entity_repo,
+            supabase_client=None,
+        )
 
     # Dev bypass: seed dev-user + initial agents on first startup
     from backend.web.core.dependencies import _DEV_SKIP_AUTH
@@ -166,9 +207,14 @@ async def lifespan(app: FastAPI):
     app.state.typing_tracker = TypingTracker(app.state.chat_event_bus)
 
     from backend.web.services.delivery_resolver import DefaultDeliveryResolver
-    from storage.providers.sqlite.contact_repo import SQLiteContactRepo
 
-    app.state.contact_repo = SQLiteContactRepo(chat_db)
+    if _storage_strategy == "supabase":
+        app.state.contact_repo = SupabaseContactRepo(_supabase_client)
+    else:
+        from storage.providers.sqlite.contact_repo import SQLiteContactRepo
+
+        app.state.contact_repo = SQLiteContactRepo(chat_db)
+
     delivery_resolver = DefaultDeliveryResolver(app.state.contact_repo, app.state.chat_entity_repo)
 
     from backend.web.services.chat_service import ChatService

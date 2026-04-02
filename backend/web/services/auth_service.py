@@ -1,31 +1,18 @@
-"""Authentication service — register, login, JWT."""
+"""Authentication service — Supabase Auth backed register, login, JWT verify."""
 
 from __future__ import annotations
 
 import logging
+import os
 import time
-import uuid
 
-import bcrypt
 import jwt
 
-from storage.contracts import (
-    AccountRepo,
-    AccountRow,
-    EntityRepo,
-    EntityRow,
-    MemberRepo,
-    MemberRow,
-    MemberType,
-)
-from storage.providers.sqlite.member_repo import generate_member_id
+from storage.contracts import AccountRepo, EntityRepo, EntityRow, MemberRepo, MemberRow, MemberType
 
 logger = logging.getLogger(__name__)
 
-# @@@jwt-secret - hardcoded for MVP. Move to config/env before production.
-JWT_SECRET = "leon-dev-secret-change-me"
-JWT_ALGORITHM = "HS256"
-JWT_EXPIRE_SECONDS = 86400 * 7  # 7 days
+SUPABASE_JWT_ALGORITHM = "HS256"
 
 
 class AuthService:
@@ -34,180 +21,265 @@ class AuthService:
         members: MemberRepo,
         accounts: AccountRepo,
         entities: EntityRepo,
+        supabase_client=None,
     ) -> None:
         self._members = members
         self._accounts = accounts
         self._entities = entities
+        self._sb = supabase_client  # None in sqlite-only mode
 
-    def register(self, username: str, password: str) -> dict:
-        """Register a new human user.
+    # ------------------------------------------------------------------
+    # Public API
+    # ------------------------------------------------------------------
 
-        Returns: {token, user, agent, entity_id}
-        Creates: human member, account, human entity, agent members.
-        """
-        if self._accounts.get_by_username(username) is not None:
-            raise ValueError(f"Username '{username}' already taken")
+    # ------------------------------------------------------------------
+    # New 3-step registration flow
+    # Step 1: send_otp(email)          → Supabase sends OTP to email
+    # Step 2: verify_register_otp(...) → verifies OTP, returns temp_token
+    # Step 3: complete_register(...)   → sets password, creates records
+    # ------------------------------------------------------------------
 
-        now = time.time()
+    def send_otp(self, email: str) -> None:
+        """Send a 6-digit OTP to the email for registration verification."""
+        if self._sb is None:
+            raise RuntimeError("Supabase client required.")
+        from supabase_auth.errors import AuthApiError
+        try:
+            self._sb.auth.sign_in_with_otp({"email": email, "options": {"should_create_user": True}})
+        except AuthApiError as e:
+            raise ValueError(f"发送验证码失败: {e.message}") from e
 
-        # @@@non-atomic-register - steps 1-7 are not atomic. Acceptable for dev.
-        # Wrap in DB transaction when migrating to Supabase.
-        # 1. Human member
-        user_id = generate_member_id()
-        self._members.create(
-            MemberRow(
-                id=user_id,
-                name=username,
-                type=MemberType.HUMAN,
-                created_at=now,
-            )
-        )
+    def verify_register_otp(self, email: str, token: str) -> dict:
+        """Verify OTP from email. Returns temp_token to be used in complete_register."""
+        if self._sb is None:
+            raise RuntimeError("Supabase client required.")
+        from supabase_auth.errors import AuthApiError
+        try:
+            resp = self._sb.auth.verify_otp({"email": email, "token": token, "type": "email"})
+        except AuthApiError as e:
+            raise ValueError(f"验证码错误: {e.message}") from e
+        if resp.user is None or resp.session is None:
+            raise ValueError("验证码无效或已过期")
+        return {"temp_token": resp.session.access_token}
 
-        # 2. Account (bcrypt hash)
-        password_hash = bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
-        account_id = str(uuid.uuid4())
-        self._accounts.create(
-            AccountRow(
-                id=account_id,
-                user_id=user_id,
-                username=username,
-                password_hash=password_hash,
-                created_at=now,
-            )
-        )
+    def complete_register(self, temp_token: str, password: str, invite_code: str) -> dict:
+        """Complete registration: set password, validate invite code, create member records."""
+        if self._sb is None:
+            raise RuntimeError("Supabase client required.")
 
-        # 3. Human entity (entity_id = {member_id}-{seq}, hyphen separator per decision #24)
-        human_seq = self._members.increment_entity_seq(user_id)
-        human_entity_id = f"{user_id}-{human_seq}"
-        self._entities.create(
-            EntityRow(
-                id=human_entity_id,
-                type="human",
-                member_id=user_id,
-                name=username,
-                thread_id=None,
-                created_at=now,
-            )
-        )
+        # 1. Decode temp_token to get user_id
+        jwt_secret = os.getenv("SUPABASE_JWT_SECRET")
+        if not jwt_secret:
+            raise RuntimeError("SUPABASE_JWT_SECRET not set.")
+        try:
+            payload = jwt.decode(temp_token, jwt_secret, algorithms=[SUPABASE_JWT_ALGORITHM], options={"verify_aud": False})
+        except jwt.InvalidTokenError as e:
+            raise ValueError(f"会话已过期，请重新验证邮箱") from e
+        auth_user_id = payload["sub"]
 
-        # 4. Create two initial agent members: Toad and Morel
-        from pathlib import Path
+        # 2. Validate invite code
+        self._validate_invite_code(invite_code)
 
-        from backend.web.services.member_service import MEMBERS_DIR, _write_agent_md, _write_json
+        # 3. Set password via admin API
+        from supabase_auth.errors import AuthApiError
+        try:
+            self._sb.auth.admin.update_user_by_id(auth_user_id, {"password": password})
+        except AuthApiError as e:
+            raise ValueError(f"设置密码失败: {e.message}") from e
 
-        # @@@initial-agent-names - keep template names plain; owner disambiguation belongs in discovery UI metadata.
-        initial_agents = [
-            {"name": "Toad", "description": "Curious and energetic assistant", "avatar": "toad.jpeg"},
-            {"name": "Morel", "description": "Thoughtful senior analyst", "avatar": "morel.jpeg"},
-        ]
+        # 4. Check if member already created (idempotent guard)
+        email_from_payload = payload.get("email", "")
+        existing = self._members.get_by_id(auth_user_id)
+        if existing is None:
+            # 5. Assign mycel_id
+            mycel_id = self._sb.rpc("next_mycel_id").execute().data
+            now = time.time()
+            display_name = email_from_payload.split("@")[0]
 
-        assets_dir = Path(__file__).resolve().parents[3] / "assets"
-
-        first_agent_info = None
-        for i, agent_def in enumerate(initial_agents):
-            agent_member_id = generate_member_id()
-            agent_dir = MEMBERS_DIR / agent_member_id
-            agent_dir.mkdir(parents=True, exist_ok=True)
-            _write_agent_md(agent_dir / "agent.md", name=agent_def["name"], description=agent_def["description"])
-            _write_json(
-                agent_dir / "meta.json",
-                {
-                    "status": "active",
-                    "version": "1.0.0",
-                    "created_at": int(now * 1000),
-                    "updated_at": int(now * 1000),
-                },
-            )
+            # 6. Create member row
             self._members.create(
                 MemberRow(
-                    id=agent_member_id,
-                    name=agent_def["name"],
-                    type=MemberType.MYCEL_AGENT,
-                    description=agent_def["description"],
-                    config_dir=str(agent_dir),
-                    owner_user_id=user_id,
+                    id=auth_user_id,
+                    name=display_name,
+                    type=MemberType.HUMAN,
+                    email=email_from_payload,
+                    mycel_id=mycel_id,
                     created_at=now,
                 )
             )
 
-            # @@@avatar-same-pipeline — reuse shared PIL pipeline from entities.py
-            src_avatar = assets_dir / agent_def["avatar"]
-            if src_avatar.exists():
-                try:
-                    from backend.web.routers.entities import process_and_save_avatar
+            # 7. Human entity
+            entity_id = f"{auth_user_id}-1"
+            self._entities.create(
+                EntityRow(
+                    id=entity_id,
+                    type="human",
+                    member_id=auth_user_id,
+                    name=display_name,
+                    thread_id=None,
+                    created_at=now,
+                )
+            )
 
-                    avatar_path = process_and_save_avatar(src_avatar, agent_member_id)
-                    self._members.update(agent_member_id, avatar=avatar_path, updated_at=now)
-                except Exception as e:
-                    logger.warning("Failed to process default avatar for %s: %s", agent_def["name"], e)
+            # 8. Initial agents
+            first_agent_info = self._create_initial_agents(auth_user_id, now)
+        else:
+            entity_id = f"{auth_user_id}-1"
+            display_name = existing.name
+            mycel_id = existing.mycel_id
+            owned_agents = self._members.list_by_owner_user_id(auth_user_id)
+            first_agent_info = {"id": owned_agents[0].id, "name": owned_agents[0].name, "type": "mycel_agent", "avatar": None} if owned_agents else None
 
-            if i == 0:
-                first_agent_info = {
-                    "id": agent_member_id,
-                    "name": agent_def["name"],
-                    "type": "mycel_agent",
-                    "avatar": None,
-                }
+        # 9. Mark invite code used
+        from datetime import datetime, timezone
+        self._sb.table("invite_codes").update(
+            {"used_by": auth_user_id, "used_at": datetime.now(timezone.utc).isoformat()}
+        ).eq("code", invite_code).execute()
 
-            logger.info("Created agent '%s' (member=%s) for user '%s'", agent_def["name"], agent_member_id[:8], username)
-
-        # JWT — carries both user_id and entity_id
-        token = self._make_token(user_id, human_entity_id)
-
-        logger.info("Registered user '%s' (user=%s)", username, user_id[:8])
-
+        logger.info("Registered user %s (mycel_id=%s)", email_from_payload, mycel_id)
         return {
-            "token": token,
-            "user": {"id": user_id, "name": username, "type": "human", "avatar": None},
+            "token": temp_token,
+            "user": {"id": auth_user_id, "name": display_name, "mycel_id": mycel_id, "email": email_from_payload, "avatar": None},
             "agent": first_agent_info,
-            "entity_id": human_entity_id,
+            "entity_id": entity_id,
         }
 
-    def login(self, username: str, password: str) -> dict:
-        """Login and return JWT + member info."""
-        account = self._accounts.get_by_username(username)
-        if account is None or account.password_hash is None:
-            raise ValueError("Invalid username or password")
+    def login(self, identifier: str, password: str) -> dict:
+        """Login with email or mycel_id + password."""
+        if self._sb is None:
+            raise RuntimeError("Supabase client required for login. Set LEON_STORAGE_STRATEGY=supabase.")
 
-        if not bcrypt.checkpw(password.encode(), account.password_hash.encode()):
-            raise ValueError("Invalid username or password")
+        # Resolve email
+        email = self._resolve_email(identifier)
 
-        user = self._members.get_by_id(account.user_id)
-        if user is None:
-            raise ValueError("Account has no associated user")
+        from supabase_auth.errors import AuthApiError
+        # Sign in via Supabase
+        try:
+            resp = self._sb.auth.sign_in_with_password({"email": email, "password": password})
+        except AuthApiError:
+            raise ValueError("邮箱或密码错误")
+        if resp.user is None or resp.session is None:
+            raise ValueError("邮箱或密码错误")
 
-        # Find the user's agent
-        owned_agents = self._members.list_by_owner_user_id(user.id)
+        auth_user_id = str(resp.user.id)
+        token = resp.session.access_token
+
+        # Load member info
+        member = self._members.get_by_id(auth_user_id)
+        if member is None:
+            raise ValueError("账号数据异常，请联系支持")
+
+        # Load entities + agents
+        entities = self._entities.get_by_member_id(auth_user_id)
+        human_entity = next((e for e in entities if e.type == "human"), None)
+        owned_agents = self._members.list_by_owner_user_id(auth_user_id)
         agent_info = None
         if owned_agents:
             a = owned_agents[0]
             agent_info = {"id": a.id, "name": a.name, "type": a.type.value, "avatar": a.avatar}
 
-        # Look up human entity
-        entities = self._entities.get_by_member_id(user.id)
-        human_entity = next((e for e in entities if e.type == "human"), None)
-
-        token = self._make_token(user.id, human_entity.id if human_entity else None)
-
+        logger.info("Login: %s (mycel_id=%s)", email, member.mycel_id)
         return {
             "token": token,
-            "user": {"id": user.id, "name": user.name, "type": user.type.value, "avatar": user.avatar},
+            "user": {
+                "id": auth_user_id,
+                "name": member.name,
+                "mycel_id": member.mycel_id,
+                "email": member.email,
+                "avatar": member.avatar,
+            },
             "agent": agent_info,
             "entity_id": human_entity.id if human_entity else None,
         }
 
     def verify_token(self, token: str) -> dict:
-        """Verify JWT and return payload dict with user_id + entity_id. Raises ValueError on failure."""
+        """Verify Supabase JWT. Returns {user_id, entity_id}."""
+        jwt_secret = os.getenv("SUPABASE_JWT_SECRET")
+        if not jwt_secret:
+            raise RuntimeError("SUPABASE_JWT_SECRET env var required for token verification.")
         try:
-            payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
-            return {"user_id": payload["user_id"], "entity_id": payload.get("entity_id")}
+            payload = jwt.decode(
+                token,
+                jwt_secret,
+                algorithms=[SUPABASE_JWT_ALGORITHM],
+                options={"verify_aud": False},
+            )
+            return {"user_id": payload["sub"], "entity_id": payload.get("entity_id")}
         except jwt.ExpiredSignatureError:
-            raise ValueError("Token expired")
-        except jwt.InvalidTokenError:
-            raise ValueError("Invalid token")
+            raise ValueError("Token 已过期，请重新登录")
+        except jwt.InvalidTokenError as e:
+            raise ValueError(f"Token 无效: {e}")
 
-    def _make_token(self, user_id: str, entity_id: str | None = None) -> str:
-        payload = {"user_id": user_id, "exp": time.time() + JWT_EXPIRE_SECONDS}
-        if entity_id:
-            payload["entity_id"] = entity_id
-        return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
+    # ------------------------------------------------------------------
+    # Internal helpers
+    # ------------------------------------------------------------------
+
+    def _validate_invite_code(self, code: str) -> None:
+        resp = self._sb.table("invite_codes").select("code, used_by, expires_at").eq("code", code).execute()
+        rows = resp.data if resp.data else []
+        if not rows:
+            raise ValueError("邀请码无效")
+        row = rows[0]
+        if row.get("used_by") is not None:
+            raise ValueError("邀请码已被使用")
+        expires_at = row.get("expires_at")
+        if expires_at is not None:
+            from datetime import datetime, timezone
+            exp = datetime.fromisoformat(expires_at.replace("Z", "+00:00"))
+            if exp < datetime.now(timezone.utc):
+                raise ValueError("邀请码已过期")
+
+    def _resolve_email(self, identifier: str) -> str:
+        """Turn mycel_id (numeric string) or email into email address."""
+        if identifier.strip().lstrip("0123456789") == "" and identifier.strip().isdigit():
+            member = self._members.get_by_mycel_id(int(identifier.strip()))
+            if member is None or member.email is None:
+                raise ValueError("用户不存在")
+            return member.email
+        return identifier.strip()
+
+    def _create_initial_agents(self, owner_user_id: str, now: float) -> dict | None:
+        """Create Toad and Morel agents for a new user. Returns first agent info."""
+        from pathlib import Path
+        from storage.providers.sqlite.member_repo import generate_member_id
+        from backend.web.services.member_service import MEMBERS_DIR, _write_agent_md, _write_json
+
+        initial_agents = [
+            {"name": "Toad", "description": "Curious and energetic assistant", "avatar": "toad.jpeg"},
+            {"name": "Morel", "description": "Thoughtful senior analyst", "avatar": "morel.jpeg"},
+        ]
+        assets_dir = Path(__file__).resolve().parents[3] / "assets"
+        first_agent_info = None
+
+        for i, agent_def in enumerate(initial_agents):
+            agent_id = generate_member_id()
+            agent_dir = MEMBERS_DIR / agent_id
+            agent_dir.mkdir(parents=True, exist_ok=True)
+            _write_agent_md(agent_dir / "agent.md", name=agent_def["name"], description=agent_def["description"])
+            _write_json(
+                agent_dir / "meta.json",
+                {"status": "active", "version": "1.0.0", "created_at": int(now * 1000), "updated_at": int(now * 1000)},
+            )
+            self._members.create(
+                MemberRow(
+                    id=agent_id,
+                    name=agent_def["name"],
+                    type=MemberType.MYCEL_AGENT,
+                    description=agent_def["description"],
+                    config_dir=str(agent_dir),
+                    owner_user_id=owner_user_id,
+                    created_at=now,
+                )
+            )
+            src_avatar = assets_dir / agent_def["avatar"]
+            if src_avatar.exists():
+                try:
+                    from backend.web.routers.entities import process_and_save_avatar
+                    avatar_path = process_and_save_avatar(src_avatar, agent_id)
+                    self._members.update(agent_id, avatar=avatar_path, updated_at=now)
+                except Exception as e:
+                    logger.warning("Avatar copy failed for %s: %s", agent_def["name"], e)
+            if i == 0:
+                first_agent_info = {"id": agent_id, "name": agent_def["name"], "type": "mycel_agent", "avatar": None}
+
+        return first_agent_info

@@ -23,26 +23,27 @@ interface AuthState {
   agent: AuthIdentity | null;
   entityId: string | null;
 
-  login: (username: string, password: string) => Promise<void>;
-  register: (username: string, password: string) => Promise<void>;
+  login: (identifier: string, password: string) => Promise<void>;
+  sendOtp: (email: string) => Promise<void>;
+  verifyOtp: (email: string, token: string) => Promise<{ tempToken: string }>;
+  completeRegister: (tempToken: string, password: string, inviteCode: string) => Promise<{ userId: string; defaultName: string }>;
   logout: () => void;
 }
 
-async function authCall(endpoint: string, username: string, password: string) {
+async function apiPost(endpoint: string, body: Record<string, string>) {
   const res = await fetch(`/api/auth/${endpoint}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ username, password }),
+    body: JSON.stringify(body),
   });
   if (!res.ok) {
-    const body = await res.text();
-    // Parse FastAPI {"detail": "..."} error format
+    const text = await res.text();
     try {
-      const parsed = JSON.parse(body);
-      throw new Error(parsed.detail || body);
+      const parsed = JSON.parse(text);
+      throw new Error(parsed.detail || text);
     } catch (e) {
-      if (e instanceof Error && e.message !== body) throw e;
-      throw new Error(body || res.statusText);
+      if (e instanceof Error && e.message !== text) throw e;
+      throw new Error(text || res.statusText);
     }
   }
   return res.json();
@@ -58,28 +59,39 @@ export const useAuthStore = create<AuthState>()(
       agent: null,
       entityId: DEV_SKIP_AUTH ? "dev-user" : null,
 
-      login: async (username, password) => {
-        const data = await authCall("login", username, password);
+      login: async (identifier, password) => {
+        const data = await apiPost("login", { identifier, password });
         set({
           token: data.token,
           user: data.user,
           agent: data.agent,
           entityId: data.entity_id ?? null,
         });
-        // Full reload so all components initialize from fresh auth state
         window.location.href = "/threads";
       },
 
-      register: async (username, password) => {
-        const data = await authCall("register", username, password);
+      sendOtp: async (email) => {
+        await apiPost("send-otp", { email });
+      },
+
+      verifyOtp: async (email, token) => {
+        const data = await apiPost("verify-otp", { email, token });
+        return { tempToken: data.temp_token };
+      },
+
+      completeRegister: async (tempToken, password, inviteCode) => {
+        const data = await apiPost("complete-register", {
+          temp_token: tempToken,
+          password,
+          invite_code: inviteCode,
+        });
         set({
           token: data.token,
           user: data.user,
-          agent: data.agent,
+          agent: data.agent ?? null,
           entityId: data.entity_id ?? null,
         });
-        // Full reload so all components initialize from fresh auth state
-        window.location.href = "/threads";
+        return { userId: data.user.id, defaultName: data.user.name };
       },
 
       logout: () => {
