@@ -69,7 +69,12 @@ class FileSystemService:
                 mode=ToolMode.INLINE,
                 schema={
                     "name": "Read",
-                    "description": ("Read file content (text/code/images/PDF/PPTX/Notebook). Path must be absolute."),
+                    "description": (
+                        "Read file content. Output uses cat -n format (line numbers starting at 1). "
+                        "Default reads up to 2000 lines from start; use offset/limit for long files. "
+                        "Supports images (PNG/JPG), PDF (use pages param for large PDFs), and Jupyter notebooks. "
+                        "Path must be absolute."
+                    ),
                     "parameters": {
                         "type": "object",
                         "properties": {
@@ -84,6 +89,10 @@ class FileSystemService:
                             "limit": {
                                 "type": "integer",
                                 "description": "Number of lines to read (optional)",
+                            },
+                            "pages": {
+                                "type": "string",
+                                "description": "Page range for PDF files (e.g. '1-5'). Max 20 pages per request.",
                             },
                         },
                         "required": ["file_path"],
@@ -103,7 +112,10 @@ class FileSystemService:
                 mode=ToolMode.INLINE,
                 schema={
                     "name": "Write",
-                    "description": "Create new file. Path must be absolute. Fails if file exists.",
+                    "description": (
+                        "Create or overwrite a file with full content. Forces LF line endings. "
+                        "Fails if file already exists — use Edit for modifications. Path must be absolute."
+                    ),
                     "parameters": {
                         "type": "object",
                         "properties": {
@@ -132,10 +144,9 @@ class FileSystemService:
                 schema={
                     "name": "Edit",
                     "description": (
-                        "Edit existing file using exact string replacement. "
-                        "MUST read file before editing. "
-                        "old_string must be unique in file. "
-                        "Set replace_all=true to replace all occurrences."
+                        "Edit file via exact string replacement. You MUST Read the file first. "
+                        "old_string must match exactly one location (or use replace_all=true). "
+                        "Does not support .ipynb files (use Write to overwrite full JSON). Path must be absolute."
                     ),
                     "parameters": {
                         "type": "object",
@@ -172,7 +183,7 @@ class FileSystemService:
                 mode=ToolMode.INLINE,
                 schema={
                     "name": "list_dir",
-                    "description": "List directory contents. Path must be absolute.",
+                    "description": "List directory contents (files and subdirectories, non-recursive). Path must be absolute.",
                     "parameters": {
                         "type": "object",
                         "properties": {

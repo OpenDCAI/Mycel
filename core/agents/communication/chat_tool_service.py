@@ -325,6 +325,9 @@ class ChatToolService:
                 },
                 handler=self._handle_chats,
                 source="chat",
+                search_hint="list chats conversations unread messages",
+                is_read_only=True,
+                is_concurrency_safe=True,
             )
         )
 
@@ -358,6 +361,9 @@ class ChatToolService:
                 },
                 handler=self._handle_chat_read,
                 source="chat",
+                search_hint="read chat messages history conversation",
+                is_read_only=True,
+                is_concurrency_safe=True,
             )
         )
 
@@ -400,6 +406,7 @@ class ChatToolService:
                 },
                 handler=self._handle_chat_send,
                 source="chat",
+                search_hint="send message reply chat entity",
             )
         )
 
@@ -425,6 +432,9 @@ class ChatToolService:
                 },
                 handler=self._handle_chat_search,
                 source="chat",
+                search_hint="search messages query chat history",
+                is_read_only=True,
+                is_concurrency_safe=True,
             )
         )
 
@@ -446,5 +456,8 @@ class ChatToolService:
                 },
                 handler=self._handle_directory,
                 source="chat",
+                search_hint="browse entity directory find agent human",
+                is_read_only=True,
+                is_concurrency_safe=True,
             )
         )

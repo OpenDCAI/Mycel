@@ -83,6 +83,7 @@ class WeChatToolService:
                 },
                 handler=self._handle_send,
                 source="wechat",
+                search_hint="send wechat message to contact",
             )
         )
 
@@ -101,5 +102,7 @@ class WeChatToolService:
                 },
                 handler=self._handle_contacts,
                 source="wechat",
+                is_concurrency_safe=True,
+                is_read_only=True,
             )
         )

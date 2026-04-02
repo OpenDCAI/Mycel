@@ -81,10 +81,13 @@ def build_rules_section(
    - Reserve `Bash` for: git, package managers, build tools, tests, and other system operations.""")
 
     # Rule 6: Background task description
-    rules.append("""6. **Background Task Description**: When using `Bash` or `Agent` with `run_in_background: true`, always include a clear `description` parameter.  # noqa: E501
+    rules.append("""6. **Background Task Description**: When using `Bash` or `Agent` with `run_in_background: true`, always include a clear `description` parameter.
    - The description is shown to the user in the background task indicator.
    - Keep it concise (5–10 words), action-oriented, e.g. "Run test suite", "Analyze API codebase".
    - Without a description, the raw command or agent name is shown, which is hard to read.""")
+
+    # Rule 7: Deferred tools
+    rules.append("7. **Deferred Tools**: Some tools are available but not shown by default. Use `tool_search` to discover them by name or keyword.")
 
     return "\n\n".join(rules)
 
@@ -102,61 +105,13 @@ def build_base_prompt(context: str, rules: str) -> str:
 
 
 _AGENT_TOOL_SECTION = """
-**Agent Tool (Sub-agent Orchestration):**
-
-Use the Agent tool to launch specialized sub-agents for complex tasks:
-- `explore`: Read-only codebase exploration. Use for: finding files, searching code, understanding implementations.
-- `plan`: Design implementation plans. Use for: architecture decisions, multi-step planning.
-- `bash`: Execute shell commands. Use for: git operations, running tests, system commands.
-- `general`: Full tool access. Use for: independent multi-step tasks requiring file modifications.
-
-When to use Agent:
-- Open-ended searches that may require multiple rounds of exploration
-- Tasks that can run independently while you continue other work
-- Complex operations that benefit from specialized focus
-
-When NOT to use Agent:
-- Simple file reads (use Read directly)
-- Specific searches with known patterns (use Grep directly)
-- Quick operations that don't need isolation
-
-**Todo Tools (Task Management):**
-
-Use Todo tools to track progress on complex, multi-step tasks:
-- `TaskCreate`: Create a new task with subject, description, and activeForm (present continuous for spinner)
-- `TaskList`: View all tasks and their status
-- `TaskGet`: Get full details of a specific task
-- `TaskUpdate`: Update task status (pending → in_progress → completed) or details
-
-When to use Todo:
-- Complex tasks with 3+ distinct steps
-- When the user provides multiple tasks to complete
-- To show progress on non-trivial work
-
-When NOT to use Todo:
-- Single, straightforward tasks
-- Trivial operations that don't need tracking
-"""
-
-_SKILLS_SECTION = """
-**Skills (Specialized Knowledge):**
-
-Use the `load_skill` tool to access specialized domain knowledge and workflows:
-- Skills provide focused instructions for specific tasks (e.g., TDD, debugging, git workflows)
-- Call `load_skill(skill_name)` to load a skill's content into context
-- Available skills are listed in the load_skill tool description
-
-When to use load_skill:
-- When you need specialized guidance for a specific workflow
-- To access domain-specific best practices
-- When the user mentions a skill by name (e.g., "use TDD skill")
-
-Progressive disclosure: Skills are loaded on-demand to save tokens.
+**Sub-agent Types:**
+- `explore`: Read-only codebase exploration (Grep, Glob, Read only)
+- `plan`: Architecture design and planning (read-only tools)
+- `bash`: Shell command execution (Bash + read tools)
+- `general`: Full tool access for independent multi-step tasks
 """
 
 
 def build_common_sections(skills_enabled: bool) -> str:
-    prompt = _AGENT_TOOL_SECTION
-    if skills_enabled:
-        prompt += _SKILLS_SECTION
-    return prompt
+    return _AGENT_TOOL_SECTION

@@ -65,6 +65,8 @@ class SkillsService:
                 schema=self._get_schema,
                 handler=self._load_skill,
                 source="SkillsService",
+                is_concurrency_safe=True,
+                is_read_only=True,
             )
         )
 
@@ -75,9 +77,10 @@ class SkillsService:
         return {
             "name": "load_skill",
             "description": (
-                f"Load a specialized skill to access domain-specific knowledge and workflows.\n\n"
-                f"Available skills:\n{skills_list}\n\n"
-                f"Returns the skill's instructions and context."
+                f"Load a skill for domain-specific guidance. "
+                f"Use when you need specialized workflows (TDD, debugging, git). "
+                f"Skills are loaded on-demand to save context.\n\n"
+                f"Available skills:\n{skills_list}"
             ),
             "parameters": {
                 "type": "object",

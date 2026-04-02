@@ -21,20 +21,85 @@ from core.runtime.registry import ToolEntry, ToolMode, ToolRegistry
 
 logger = logging.getLogger(__name__)
 
+# ── Sub-agent tool filtering (CC alignment) ──────────────────────────────────
+# Tools that sub-agents must never access (prevents controlling parent).
+AGENT_DISALLOWED: set[str] = {"TaskOutput", "TaskStop", "Agent"}
+
+# Per-type allowed tool sets. Tools not in the set are blocked.
+EXPLORE_ALLOWED: set[str] = {"Read", "Grep", "Glob", "list_dir", "WebSearch", "WebFetch", "tool_search"}
+PLAN_ALLOWED: set[str] = EXPLORE_ALLOWED  # plan agents are also read-only
+BASH_ALLOWED: set[str] = {"Bash", "Read", "Grep", "Glob", "list_dir", "tool_search"}
+
+
+def _get_tool_filters(subagent_type: str) -> tuple[set[str], set[str] | None]:
+    """Return (extra_blocked_tools, allowed_tools) for a sub-agent type.
+
+    For explore/plan/bash: use allowed_tools whitelist (ToolRegistry skips unmatched).
+    For general: only block AGENT_DISALLOWED, no whitelist.
+    """
+    agent_type = subagent_type.lower()
+    allowed_map: dict[str, set[str]] = {
+        "explore": EXPLORE_ALLOWED,
+        "plan": PLAN_ALLOWED,
+        "bash": BASH_ALLOWED,
+    }
+
+    if agent_type in allowed_map:
+        return AGENT_DISALLOWED, allowed_map[agent_type]
+
+    # general: only block parent-controlling tools, no whitelist
+    return AGENT_DISALLOWED, None
+
+
+def _filter_fork_messages(messages: list) -> list:
+    """Filter parent messages for forkContext sub-agent spawning.
+
+    Equivalent to CC's yF0: removes assistant messages whose tool_use blocks
+    have no matching tool_result in a subsequent user message (orphan tool_use).
+    Orphan tool_use blocks cause Anthropic API validation errors.
+    """
+    # Collect all tool_use_ids that have a corresponding tool_result
+    answered: set[str] = set()
+    for msg in messages:
+        # ToolMessage or user message with tool_result content
+        tool_call_id = getattr(msg, "tool_call_id", None)
+        if tool_call_id:
+            answered.add(tool_call_id)
+        content = getattr(msg, "content", None)
+        if isinstance(content, list):
+            for block in content:
+                if isinstance(block, dict) and block.get("type") == "tool_result":
+                    tid = block.get("tool_use_id") or block.get("tool_call_id")
+                    if tid:
+                        answered.add(tid)
+
+    result = []
+    for msg in messages:
+        content = getattr(msg, "content", None)
+        if isinstance(content, list):
+            tool_uses = [b for b in content if isinstance(b, dict) and b.get("type") == "tool_use"]
+            if tool_uses and any(b.get("id") not in answered for b in tool_uses):
+                continue  # skip assistant message with unanswered tool_use
+        result.append(msg)
+    return result
+
 
 AGENT_SCHEMA = {
     "name": "Agent",
     "description": (
-        "Launch a new agent to handle complex tasks autonomously. "
-        "Use subagent_type to select a specialized agent, or omit for default. "
-        "Agents run independently with their own tool stack."
+        "Launch a sub-agent for independent task execution. "
+        "Types: explore (read-only codebase search), plan (architecture design, read-only), "
+        "bash (shell commands only), general (full tool access). "
+        "Use for: multi-step tasks, parallel work, tasks needing isolation. "
+        "Do NOT use for simple file reads or single grep searches — use the tools directly."
     ),
     "parameters": {
         "type": "object",
         "properties": {
             "subagent_type": {
                 "type": "string",
-                "description": "Type of agent to spawn (e.g. 'Explore', 'Coder'). Omit for general-purpose.",
+                "enum": ["explore", "plan", "general", "bash"],
+                "description": "Type of agent to spawn. Omit for general-purpose.",
             },
             "prompt": {
                 "type": "string",
@@ -60,6 +125,16 @@ AGENT_SCHEMA = {
                 "type": "integer",
                 "description": "Maximum turns the agent can take",
             },
+            "fork_context": {
+                "type": "boolean",
+                "default": False,
+                "description": (
+                    "Inherit parent conversation history as read-only context. "
+                    "Use when the sub-agent needs background from the parent's work. "
+                    "Adds a ### ENTERING SUB-AGENT ROUTINE ### marker so the sub-agent "
+                    "knows which messages are context vs its actual task."
+                ),
+            },
         },
         "required": ["prompt"],
     },
@@ -67,7 +142,7 @@ AGENT_SCHEMA = {
 
 TASK_OUTPUT_SCHEMA = {
     "name": "TaskOutput",
-    "description": "Get the output of a background agent task by its task_id.",
+    "description": "Get output of a background task (agent or bash). Blocks until task completes by default. Returns full text output or error.",
     "parameters": {
         "type": "object",
         "properties": {
@@ -82,7 +157,7 @@ TASK_OUTPUT_SCHEMA = {
 
 TASK_STOP_SCHEMA = {
     "name": "TaskStop",
-    "description": "Stop a running background agent task.",
+    "description": "Cancel a running background task. Sends cancellation signal; task may take a moment to stop.",
     "parameters": {
         "type": "object",
         "properties": {
@@ -185,6 +260,7 @@ class AgentService:
                 schema=AGENT_SCHEMA,
                 handler=self._handle_agent,
                 source="AgentService",
+                search_hint="launch sub-agent spawn parallel task independent",
             )
         )
         tool_registry.register(
@@ -194,6 +270,9 @@ class AgentService:
                 schema=TASK_OUTPUT_SCHEMA,
                 handler=self._handle_task_output,
                 source="AgentService",
+                search_hint="get background task output result poll",
+                is_read_only=True,
+                is_concurrency_safe=True,
             )
         )
         tool_registry.register(
@@ -203,6 +282,7 @@ class AgentService:
                 schema=TASK_STOP_SCHEMA,
                 handler=self._handle_task_stop,
                 source="AgentService",
+                search_hint="stop cancel background task agent",
             )
         )
 
@@ -214,6 +294,7 @@ class AgentService:
         description: str | None = None,
         run_in_background: bool = False,
         max_turns: int | None = None,
+        fork_context: bool = False,
     ) -> str:
         """Spawn an independent LeonAgent and run it with the given prompt."""
         from sandbox.thread_context import get_current_thread_id
@@ -245,6 +326,7 @@ class AgentService:
                 max_turns,
                 description=description or "",
                 run_in_background=run_in_background,
+                fork_context=fork_context,
             )
         )
         if run_in_background:
@@ -281,6 +363,7 @@ class AgentService:
         max_turns: int | None,
         description: str = "",
         run_in_background: bool = False,
+        fork_context: bool = False,
     ) -> str:
         """Create and run an independent LeonAgent, collect its text output."""
         # Isolate this sub-agent from the parent's LangChain callback chain.
@@ -324,6 +407,9 @@ class AgentService:
             #
             # Try to use context fork from parent agent's BootstrapConfig.
             # Falls back to create_leon_agent when bootstrap is not available.
+            # Compute tool filtering for this sub-agent type
+            extra_blocked, allowed = _get_tool_filters(subagent_type)
+
             try:
                 from core.runtime.fork import fork_context
 
@@ -337,6 +423,8 @@ class AgentService:
                     agent = create_leon_agent(
                         model_name=child_bootstrap.model_name,
                         workspace_root=child_bootstrap.workspace_root,
+                        extra_blocked_tools=extra_blocked,
+                        allowed_tools=allowed,
                         verbose=False,
                     )
                 else:
@@ -345,6 +433,8 @@ class AgentService:
                 agent = create_leon_agent(
                     model_name=self._model_name,
                     workspace_root=self._workspace_root,
+                    extra_blocked_tools=extra_blocked,
+                    allowed_tools=allowed,
                     verbose=False,
                 )
             # In async context LeonAgent defers checkpointer init; call ainit() to
@@ -380,8 +470,24 @@ class AgentService:
             config = {"configurable": {"thread_id": thread_id}}
             output_parts: list[str] = []
 
+            # Build initial input — with or without forked parent context
+            if fork_context:
+                from sandbox.thread_context import get_current_messages
+                parent_msgs = get_current_messages()
+                _FORK_MARKER = (
+                    "\n\n### ENTERING SUB-AGENT ROUTINE ###\n"
+                    "Messages above are from the parent thread (read-only context).\n"
+                    "Only complete the specific task assigned below.\n\n"
+                )
+                initial_messages: list = [
+                    *_filter_fork_messages(parent_msgs),
+                    {"role": "user", "content": _FORK_MARKER + prompt},
+                ]
+            else:
+                initial_messages = [{"role": "user", "content": prompt}]
+
             async for chunk in agent.agent.astream(
-                {"messages": [{"role": "user", "content": prompt}]},
+                {"messages": initial_messages},
                 config=config,
                 stream_mode="updates",
             ):

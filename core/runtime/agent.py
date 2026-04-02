@@ -140,6 +140,8 @@ class LeonAgent:
         queue_manager: MessageQueueManager | None = None,
         chat_repos: dict | None = None,
         extra_allowed_paths: list[str] | None = None,
+        extra_blocked_tools: set[str] | None = None,
+        allowed_tools: set[str] | None = None,
         verbose: bool = False,
     ):
         """
@@ -238,7 +240,13 @@ class LeonAgent:
             self.checkpointer = None
 
         # Initialize ToolRegistry and Services (new architecture)
-        self._tool_registry = ToolRegistry(blocked_tools=self._get_member_blocked_tools())
+        blocked = self._get_member_blocked_tools()
+        if extra_blocked_tools:
+            blocked = blocked | extra_blocked_tools
+        self._tool_registry = ToolRegistry(
+            blocked_tools=blocked,
+            allowed_tools=allowed_tools,
+        )
         self._init_services()
 
         # Build middleware stack

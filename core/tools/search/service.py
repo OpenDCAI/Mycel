@@ -52,7 +52,12 @@ class SearchService:
                 mode=ToolMode.INLINE,
                 schema={
                     "name": "Grep",
-                    "description": "Search file contents using regex patterns.",
+                    "description": (
+                        "Regex search across files (ripgrep-based). "
+                        "Default output_mode: files_with_matches (sorted by mtime). Default head_limit: 250 entries. "
+                        "Auto-excludes .git/.svn/.hg dirs. Max column width 500 chars (suppresses minified/base64). "
+                        "Use output_mode='content' with after_context/before_context/context for context lines."
+                    ),
                     "parameters": {
                         "type": "object",
                         "properties": {
@@ -105,6 +110,10 @@ class SearchService:
                                 "type": "boolean",
                                 "description": "Allow pattern to span multiple lines",
                             },
+                            "line_numbers": {
+                                "type": "boolean",
+                                "description": "Show line numbers (default true). Only applies with output_mode='content'.",
+                            },
                         },
                         "required": ["pattern"],
                     },
@@ -123,7 +132,11 @@ class SearchService:
                 mode=ToolMode.INLINE,
                 schema={
                     "name": "Glob",
-                    "description": "Find files by glob pattern. Returns paths sorted by modification time.",
+                    "description": (
+                        "Fast file pattern matching (ripgrep-based). Returns paths sorted by modification time. "
+                        "Includes hidden files, ignores .gitignore. Default limit 100 results. "
+                        "Use '**/*.py' for recursive search. Path must be absolute."
+                    ),
                     "parameters": {
                         "type": "object",
                         "properties": {
@@ -192,6 +205,7 @@ class SearchService:
         head_limit: int | None = None,
         offset: int | None = None,
         multiline: bool = False,
+        line_numbers: bool = True,
     ) -> str:
         ok, error, resolved = self._validate_path(path)
         if not ok:
@@ -215,6 +229,7 @@ class SearchService:
                     head_limit=head_limit,
                     offset=offset,
                     multiline=multiline,
+                    line_numbers=line_numbers,
                 )
             except Exception:
                 pass  # fallback to Python
@@ -244,6 +259,7 @@ class SearchService:
         head_limit: int | None,
         offset: int | None,
         multiline: bool,
+        line_numbers: bool = True,
     ) -> str:
         cmd: list[str] = ["rg", pattern, str(path)]
 
@@ -264,7 +280,8 @@ class SearchService:
         elif output_mode == "count":
             cmd.append("--count")
         elif output_mode == "content":
-            cmd.extend(["--line-number", "--no-heading"])
+            ln_flag = "--line-number" if line_numbers else "--no-line-number"
+            cmd.extend([ln_flag, "--no-heading"])
             if context is not None:
                 cmd.extend(["-C", str(context)])
             else:

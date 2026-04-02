@@ -112,6 +112,10 @@ class QueryLoop:
                 messages.append(ai_msg)
                 break
 
+            # Expose current messages for forkContext sub-agent spawning
+            from sandbox.thread_context import set_current_messages
+            set_current_messages(messages + [ai_msg])
+
             # --- Execute tools through middleware chain ---
             tool_results = await self._execute_tools(tool_calls, response)
 

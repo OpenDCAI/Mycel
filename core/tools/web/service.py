@@ -62,7 +62,10 @@ class WebService:
                 mode=ToolMode.INLINE,
                 schema={
                     "name": "WebSearch",
-                    "description": "Search the web for current information. Returns titles, URLs, and snippets.",
+                    "description": (
+                        "Search the web. Returns titles, URLs, and text snippets. "
+                        "Use for current events, documentation lookups, or fact-checking. Max 10 results per query."
+                    ),
                     "parameters": {
                         "type": "object",
                         "properties": {
@@ -90,6 +93,8 @@ class WebService:
                 },
                 handler=self._web_search,
                 source="WebService",
+                is_concurrency_safe=True,
+                is_read_only=True,
             )
         )
 
@@ -99,7 +104,11 @@ class WebService:
                 mode=ToolMode.INLINE,
                 schema={
                     "name": "WebFetch",
-                    "description": "Fetch a URL and extract specific information using AI. Returns processed content, not raw HTML.",
+                    "description": (
+                        "Fetch a URL and extract specific information via AI. Returns processed text, not raw HTML. "
+                        "Provide a focused prompt describing what to extract. "
+                        "Useful for reading documentation pages, API references, or articles."
+                    ),
                     "parameters": {
                         "type": "object",
                         "properties": {
@@ -117,6 +126,8 @@ class WebService:
                 },
                 handler=self._web_fetch,
                 source="WebService",
+                is_concurrency_safe=True,
+                is_read_only=True,
             )
         )
 

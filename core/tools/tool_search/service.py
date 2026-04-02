@@ -15,13 +15,18 @@ logger = logging.getLogger(__name__)
 
 TOOL_SEARCH_SCHEMA = {
     "name": "tool_search",
-    "description": ("Search for available tools. Use this to discover tools that might help with your task."),
+    "description": (
+        "Search for available tools by name or keyword. "
+        "Use 'select:ToolA,ToolB' for exact lookup (returns full schema). "
+        "Use keywords for fuzzy search (up to 5 results). "
+        "Deferred tools are only usable after discovery via this tool."
+    ),
     "parameters": {
         "type": "object",
         "properties": {
             "query": {
                 "type": "string",
-                "description": "Search query - tool name or description of what you want to do",
+                "description": "Search query. Use 'select:ToolA,ToolB' for exact name lookup, or keywords for fuzzy search.",
             },
         },
         "required": ["query"],
@@ -41,6 +46,8 @@ class ToolSearchService:
                 schema=TOOL_SEARCH_SCHEMA,
                 handler=self._search,
                 source="ToolSearchService",
+                is_concurrency_safe=True,
+                is_read_only=True,
             )
         )
         logger.info("ToolSearchService initialized")

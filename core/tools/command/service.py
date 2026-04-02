@@ -63,7 +63,11 @@ class CommandService:
                 mode=ToolMode.INLINE,
                 schema={
                     "name": "Bash",
-                    "description": ("Execute shell command. OS auto-detects shell (mac->zsh, linux->bash, win->powershell)."),
+                    "description": (
+                        "Execute shell command (zsh on macOS, bash on Linux, PowerShell on Windows). "
+                        "Default timeout 120s (max 600s). Dangerous commands are blocked. "
+                        "Prefer dedicated tools over Bash: Read over cat, Grep over grep/rg, Glob over find/ls, Edit over sed/awk."
+                    ),
                     "parameters": {
                         "type": "object",
                         "properties": {

@@ -72,6 +72,7 @@ TOOLS: list[ToolDef] = [
     ToolDef(name="load_skill", desc="加载 Skill", group=ToolGroup.SKILLS),
     # system
     ToolDef(name="tool_search", desc="搜索可用工具", group=ToolGroup.SYSTEM),
+    ToolDef(name="LSP", desc="Language Server Protocol 操作", group=ToolGroup.SYSTEM, mode=ToolMode.DEFERRED, default=False),
     # taskboard — all off by default; enable on dedicated scheduler members
     ToolDef(name="ListBoardTasks", desc="列出任务板上的任务", group=ToolGroup.TASKBOARD, default=False),
     ToolDef(name="ClaimTask", desc="认领一个任务板任务", group=ToolGroup.TASKBOARD, default=False),
