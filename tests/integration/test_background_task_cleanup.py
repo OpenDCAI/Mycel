@@ -351,3 +351,25 @@ async def test_background_agent_completion_notification_reaches_parent_next_turn
         assert "Finished indexing" in text
     finally:
         set_current_thread_id("")
+
+
+def test_terminal_background_notification_waits_for_followup_run_during_owner_turn(tmp_path):
+    queue_manager = MessageQueueManager(db_path=str(tmp_path / "queue.db"))
+    queue_manager.enqueue(
+        "<system-reminder><task-notification><status>error</status><result>Agent failed</result></task-notification></system-reminder>",
+        "parent-thread",
+        notification_type="agent",
+        source="system",
+    )
+
+    runtime = type("_Runtime", (), {"current_run_source": "owner"})()
+    injected = SteeringMiddleware(queue_manager=queue_manager, agent_runtime=runtime).before_model(
+        state={},
+        runtime=None,
+        config={"configurable": {"thread_id": "parent-thread"}},
+    )
+
+    assert injected is None
+    queued = queue_manager.list_queue("parent-thread")
+    assert len(queued) == 1
+    assert "<task-notification>" in queued[0]["content"]

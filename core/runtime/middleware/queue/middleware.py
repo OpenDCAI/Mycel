@@ -36,6 +36,14 @@ from .manager import MessageQueueManager
 logger = logging.getLogger(__name__)
 
 
+def _is_terminal_background_notification(item: Any) -> bool:
+    content = getattr(item, "content", "") or ""
+    notification_type = getattr(item, "notification_type", None)
+    if notification_type not in {"agent", "command"}:
+        return False
+    return "<task-notification>" in content or "<CommandNotification>" in content
+
+
 class SteeringMiddleware(AgentMiddleware):
     """Non-preemptive steering: let all tool calls finish, inject before next LLM call.
 
@@ -78,8 +86,29 @@ class SteeringMiddleware(AgentMiddleware):
             logger.debug("SteeringMiddleware: no thread_id in config, skipping steer injection")
             return None
 
-        items = self._queue_manager.drain_all(thread_id)
         rt = self._agent_runtime
+        items = self._queue_manager.drain_all(thread_id)
+        if rt and getattr(rt, "current_run_source", None) in {"owner", "external"}:
+            inject_now = []
+            deferred = []
+            for item in items:
+                if _is_terminal_background_notification(item):
+                    deferred.append(item)
+                else:
+                    inject_now.append(item)
+            # @@@followup-defer - terminal background notifications must survive the
+            # current owner/external run. If we inject them inline and that run
+            # fails, the durable followup notification is lost with it.
+            for item in deferred:
+                self._queue_manager.enqueue(
+                    item.content,
+                    thread_id,
+                    notification_type=item.notification_type,
+                    source=item.source,
+                    sender_entity_id=item.sender_entity_id,
+                    sender_name=item.sender_name,
+                )
+            items = inject_now
         if not items:
             return None
 

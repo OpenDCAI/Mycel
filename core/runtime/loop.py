@@ -299,7 +299,8 @@ class QueryLoop:
 
             if not tool_calls:
                 # No tool calls → agent is done
-                messages.append(ai_msg)
+                if self._ai_message_has_visible_content(ai_msg):
+                    messages.append(ai_msg)
                 terminal = TerminalState(
                     reason=TerminalReason.completed,
                     turn_count=turn,
@@ -1544,6 +1545,20 @@ class QueryLoop:
                 else:
                     result.append(HumanMessage(content=content))
         return result
+
+    @staticmethod
+    def _ai_message_has_visible_content(message: AIMessage) -> bool:
+        content = getattr(message, "content", None)
+        if isinstance(content, str):
+            return content.strip() != ""
+        if isinstance(content, list):
+            for item in content:
+                if isinstance(item, str) and item.strip():
+                    return True
+                if isinstance(item, dict) and str(item.get("text", "")).strip():
+                    return True
+            return False
+        return bool(content)
 
 
 class _StreamingToolExecutor:

@@ -166,6 +166,74 @@ async def test_get_thread_history_reads_messages_via_query_loop_state_bridge():
 
 
 @pytest.mark.asyncio
+async def test_get_thread_history_skips_empty_ai_messages_after_notifications():
+    checkpointer = _MemoryCheckpointer()
+    loop = _make_loop(checkpointer=checkpointer)
+    system_notice = HumanMessage(
+        content="<system-reminder><task-notification><status>error</status><result>Agent failed</result></task-notification></system-reminder>"
+    )
+    system_notice.metadata = {"source": "system"}
+    checkpointer.store["history-empty-ai-thread"] = {
+        "channel_values": {
+            "messages": [
+                HumanMessage(content="launch background task"),
+                system_notice,
+                AIMessage(content=""),
+            ]
+        }
+    }
+
+    fake_agent = SimpleNamespace(agent=loop)
+    fake_app = SimpleNamespace(state=SimpleNamespace())
+    with (
+        patch("backend.web.routers.threads.get_or_create_agent", return_value=fake_agent),
+        patch("backend.web.routers.threads.resolve_thread_sandbox", return_value="local"),
+    ):
+        history = await get_thread_history(
+            "history-empty-ai-thread",
+            limit=20,
+            truncate=300,
+            user_id="u",
+            app=fake_app,
+        )
+
+    assert [item["role"] for item in history["messages"]] == ["human", "notification"]
+    assert history["messages"][-1]["text"].startswith("<system-reminder><task-notification>")
+
+
+@pytest.mark.asyncio
+async def test_query_loop_does_not_persist_terminal_empty_ai_after_system_notification_resume():
+    checkpointer = _MemoryCheckpointer()
+    loop = _make_loop(text="", checkpointer=checkpointer)
+    system_notice = HumanMessage(
+        content="<system-reminder><task-notification><status>error</status><result>Agent failed</result></task-notification></system-reminder>"
+    )
+    system_notice.metadata = {"source": "system", "notification_type": "agent"}
+    checkpointer.store["resume-empty-ai-thread"] = {
+        "channel_values": {
+            "messages": [
+                HumanMessage(content="launch background task"),
+                system_notice,
+            ]
+        }
+    }
+
+    async for _ in loop.query(
+        None,
+        config={"configurable": {"thread_id": "resume-empty-ai-thread"}},
+    ):
+        pass
+
+    state = await loop.aget_state({"configurable": {"thread_id": "resume-empty-ai-thread"}})
+
+    assert [msg.__class__.__name__ for msg in state.values["messages"]] == [
+        "HumanMessage",
+        "HumanMessage",
+    ]
+    assert state.values["messages"][-1].content.startswith("<system-reminder><task-notification>")
+
+
+@pytest.mark.asyncio
 async def test_get_thread_messages_rebuilds_idle_thread_when_cached_entries_are_stale():
     checkpointer = _MemoryCheckpointer()
     loop = _make_loop(text="history reply", checkpointer=checkpointer)

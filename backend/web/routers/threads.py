@@ -743,7 +743,7 @@ async def get_thread_history(
             text = extract_text_content(msg.content)
             if text:
                 entries.append({"role": "assistant", "text": _trunc(text)})
-            return entries or [{"role": "assistant", "text": ""}]
+            return entries
         if cls == "ToolMessage":
             return [
                 {
