@@ -5,6 +5,7 @@ User preferences (workspace, default model) are stored in ~/.leon/preferences.js
 """
 
 import json
+import os
 from pathlib import Path
 from typing import Any
 
@@ -54,6 +55,26 @@ def save_settings(settings: WorkspaceSettings) -> None:
     SETTINGS_FILE.parent.mkdir(parents=True, exist_ok=True)
     with open(SETTINGS_FILE, "w", encoding="utf-8") as f:
         json.dump(settings.model_dump(), f, indent=2, ensure_ascii=False)
+
+
+def _get_settings_repo():
+    """Return a SupabaseUserSettingsRepo when LEON_STORAGE_STRATEGY=supabase, else None."""
+    if os.getenv("LEON_STORAGE_STRATEGY") == "supabase":
+        from backend.web.core.supabase_factory import create_supabase_client
+        from storage.providers.supabase.user_settings_repo import SupabaseUserSettingsRepo
+
+        return SupabaseUserSettingsRepo(create_supabase_client())
+    return None
+
+
+def _try_get_user_id(request: Request) -> str | None:
+    """Extract user_id from JWT without raising; returns None if unavailable."""
+    try:
+        from backend.web.core.dependencies import _extract_jwt_payload
+
+        return _extract_jwt_payload(request)["user_id"]
+    except Exception:
+        return None
 
 
 # ============================================================================
@@ -114,9 +135,21 @@ class UserSettings(BaseModel):
 
 
 @router.get("")
-async def get_settings() -> UserSettings:
-    """Get combined settings (workspace + default_model from preferences.json, models from models.json)."""
-    ws = load_settings()
+async def get_settings(request: Request) -> UserSettings:
+    """Get combined settings (workspace + default_model from Supabase or preferences.json, models from models.json)."""
+    repo = _get_settings_repo()
+    user_id = _try_get_user_id(request) if repo else None
+
+    if repo and user_id:
+        row = repo.get(user_id)
+        ws = WorkspaceSettings(
+            default_workspace=row.get("default_workspace"),
+            recent_workspaces=row.get("recent_workspaces") or [],
+            default_model=row.get("default_model") or "leon:large",
+        )
+    else:
+        ws = load_settings()
+
     models = load_merged_models()
 
     # Build compat view
@@ -187,7 +220,7 @@ async def read_local_file(path: str = Query(...)) -> dict[str, Any]:
 
 
 @router.post("/workspace")
-async def set_default_workspace(request: WorkspaceRequest) -> dict[str, Any]:
+async def set_default_workspace(request: WorkspaceRequest, req: Request) -> dict[str, Any]:
     """Set default workspace path."""
     workspace_path = Path(request.workspace).expanduser().resolve()
     if not workspace_path.exists():
@@ -195,35 +228,45 @@ async def set_default_workspace(request: WorkspaceRequest) -> dict[str, Any]:
     if not workspace_path.is_dir():
         raise HTTPException(status_code=400, detail="Workspace path is not a directory")
 
-    settings = load_settings()
-    settings.default_workspace = str(workspace_path)
-
     workspace_str = str(workspace_path)
-    if workspace_str in settings.recent_workspaces:
-        settings.recent_workspaces.remove(workspace_str)
-    settings.recent_workspaces.insert(0, workspace_str)
-    settings.recent_workspaces = settings.recent_workspaces[:5]
 
-    save_settings(settings)
+    repo = _get_settings_repo()
+    user_id = _try_get_user_id(req) if repo else None
+    if repo and user_id:
+        repo.set_default_workspace(user_id, workspace_str)
+    else:
+        settings = load_settings()
+        settings.default_workspace = workspace_str
+        if workspace_str in settings.recent_workspaces:
+            settings.recent_workspaces.remove(workspace_str)
+        settings.recent_workspaces.insert(0, workspace_str)
+        settings.recent_workspaces = settings.recent_workspaces[:5]
+        save_settings(settings)
+
     return {"success": True, "workspace": workspace_str}
 
 
 @router.post("/workspace/recent")
-async def add_recent_workspace(request: WorkspaceRequest) -> dict[str, Any]:
+async def add_recent_workspace(request: WorkspaceRequest, req: Request) -> dict[str, Any]:
     """Add a workspace to recent list."""
     workspace_path = Path(request.workspace).expanduser().resolve()
     if not workspace_path.exists() or not workspace_path.is_dir():
         raise HTTPException(status_code=400, detail="Invalid workspace path")
 
-    settings = load_settings()
     workspace_str = str(workspace_path)
 
-    if workspace_str in settings.recent_workspaces:
-        settings.recent_workspaces.remove(workspace_str)
-    settings.recent_workspaces.insert(0, workspace_str)
-    settings.recent_workspaces = settings.recent_workspaces[:5]
+    repo = _get_settings_repo()
+    user_id = _try_get_user_id(req) if repo else None
+    if repo and user_id:
+        repo.add_recent_workspace(user_id, workspace_str)
+    else:
+        settings = load_settings()
+        if workspace_str in settings.recent_workspaces:
+            settings.recent_workspaces.remove(workspace_str)
+        settings.recent_workspaces.insert(0, workspace_str)
+        settings.recent_workspaces = settings.recent_workspaces[:5]
+        save_settings(settings)
 
-    save_settings(settings)
     return {"success": True}
 
 
@@ -232,11 +275,16 @@ class DefaultModelRequest(BaseModel):
 
 
 @router.post("/default-model")
-async def set_default_model(request: DefaultModelRequest) -> dict[str, Any]:
+async def set_default_model(request: DefaultModelRequest, req: Request) -> dict[str, Any]:
     """Set default virtual model preference."""
-    settings = load_settings()
-    settings.default_model = request.model
-    save_settings(settings)
+    repo = _get_settings_repo()
+    user_id = _try_get_user_id(req) if repo else None
+    if repo and user_id:
+        repo.set_default_model(user_id, request.model)
+    else:
+        settings = load_settings()
+        settings.default_model = request.model
+        save_settings(settings)
     return {"success": True, "default_model": request.model}
 
 
