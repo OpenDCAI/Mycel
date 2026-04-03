@@ -1,5 +1,5 @@
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
-import { MessageSquare, MessagesSquare, Users, ListTodo, Store, Layers, Plug, Settings, Plus, ChevronLeft, ChevronRight, LogOut, Camera, Eye, EyeOff, Ticket } from "lucide-react";
+import { MessageSquare, MessagesSquare, Users, ListTodo, Store, Layers, Plug, Settings, Plus, ChevronLeft, ChevronRight, LogOut, Camera, Eye, EyeOff } from "lucide-react";
 import { useState, useEffect, useCallback, useRef } from "react";
 import { uploadMemberAvatar } from "@/api/client";
 import MemberAvatar from "@/components/MemberAvatar";
@@ -19,7 +19,6 @@ const navItems = [
   { to: "/resources", icon: Layers, label: "Resources" },
   { to: "/marketplace", icon: Store, label: "Marketplace" },
   { to: "/connections", icon: Plug, label: "Connections" },
-  { to: "/invite-codes", icon: Ticket, label: "邀请码" },
 ];
 
 const mobileNavItems = [
@@ -30,7 +29,9 @@ const mobileNavItems = [
 // @@@auth-guard — wrapper that shows LoginForm when not authenticated
 export default function RootLayout() {
   const token = useAuthStore(s => s.token);
+  const setupInfo = useAuthStore(s => s.setupInfo);
   if (!token) return <LoginForm />;
+  if (setupInfo) return <SetupNameStep userId={setupInfo.userId} defaultName={setupInfo.defaultName} />;
   return <AuthenticatedLayout />;
 }
 
@@ -367,8 +368,7 @@ function CreateDropdown({
 type AuthStep =
   | { type: "login" }
   | { type: "reg_email" }
-  | { type: "reg_otp"; email: string; password: string; inviteCode: string }
-  | { type: "setup_name"; userId: string; defaultName: string };
+  | { type: "reg_otp"; email: string; password: string; inviteCode: string };
 
 function AuthCard({ children }: { children: React.ReactNode }) {
   return (
@@ -426,27 +426,21 @@ function LoginForm() {
   }
 
   // ── Step: Enter OTP ──
-  if (step.type === "reg_otp") {
-    const { email, password, inviteCode } = step;
-    return <RegOtpStep
-      email={email}
-      onSubmit={async (token) => {
-        const { tempToken } = await verifyOtp(email, token);
-        const { userId, defaultName } = await completeRegister(tempToken, inviteCode);
-        setStep({ type: "setup_name", userId, defaultName });
-      }}
-      onResend={async () => {
-        await sendOtp(email, password, inviteCode);
-      }}
-      onBack={() => reset({ type: "reg_email" })}
-      error={error} setError={setError}
-      loading={loading} setLoading={setLoading}
-    />;
-  }
-
-  // ── Step: Setup name (post-registration onboarding) ──
-  const { userId, defaultName } = step as Extract<AuthStep, { type: "setup_name" }>;
-  return <SetupNameStep userId={userId} defaultName={defaultName} />;
+  const { email, password, inviteCode } = step;
+  return <RegOtpStep
+    email={email}
+    onSubmit={async (token) => {
+      const { tempToken } = await verifyOtp(email, token);
+      await completeRegister(tempToken, inviteCode);
+      // RootLayout will detect setupInfo and render SetupNameStep automatically
+    }}
+    onResend={async () => {
+      await sendOtp(email, password, inviteCode);
+    }}
+    onBack={() => reset({ type: "reg_email" })}
+    error={error} setError={setError}
+    loading={loading} setLoading={setLoading}
+  />;
 }
 
 // ── Sub-steps ────────────────────────────────────────────────────────────
@@ -607,6 +601,12 @@ function SetupNameStep({ userId, defaultName }: { userId: string; defaultName: s
   const [name, setName] = useState(defaultName);
   const [loading, setLoading] = useState(false);
   const token = useAuthStore(s => s.token);
+  const clearSetupInfo = useAuthStore(s => s.clearSetupInfo);
+
+  function done() {
+    clearSetupInfo();
+    window.location.href = "/threads";
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -618,11 +618,10 @@ function SetupNameStep({ userId, defaultName }: { userId: string; defaultName: s
           headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
           body: JSON.stringify({ name: name.trim() }),
         });
-        // Update local auth store
         useAuthStore.setState(s => ({ user: s.user ? { ...s.user, name: name.trim() } : s.user }));
       }
     } finally {
-      window.location.href = "/threads";
+      done();
     }
   }
 
@@ -644,7 +643,7 @@ function SetupNameStep({ userId, defaultName }: { userId: string; defaultName: s
       </form>
       <p className="text-center text-xs text-muted-foreground mt-4">
         <button
-          onClick={() => { window.location.href = "/threads"; }}
+          onClick={done}
           className="text-muted-foreground hover:text-foreground hover:underline"
         >
           跳过
