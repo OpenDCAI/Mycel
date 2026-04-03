@@ -5,7 +5,7 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
-from backend.web.core.dependencies import _get_auth_service, get_app
+from backend.web.core.dependencies import _get_auth_service, get_app, is_dev_skip_auth_enabled
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
@@ -17,6 +17,11 @@ class AuthRequest(BaseModel):
 
 @router.post("/register")
 async def register(payload: AuthRequest, app: Annotated[Any, Depends(get_app)]) -> dict:
+    if is_dev_skip_auth_enabled():
+        raise HTTPException(
+            409,
+            "Backend auth bypass is active via LEON_DEV_SKIP_AUTH; register/login are disabled in this mode.",
+        )
     try:
         return _get_auth_service(app).register(payload.username, payload.password)
     except ValueError as e:
@@ -25,6 +30,11 @@ async def register(payload: AuthRequest, app: Annotated[Any, Depends(get_app)]) 
 
 @router.post("/login")
 async def login(payload: AuthRequest, app: Annotated[Any, Depends(get_app)]) -> dict:
+    if is_dev_skip_auth_enabled():
+        raise HTTPException(
+            409,
+            "Backend auth bypass is active via LEON_DEV_SKIP_AUTH; register/login are disabled in this mode.",
+        )
     try:
         return _get_auth_service(app).login(payload.username, payload.password)
     except ValueError as e:

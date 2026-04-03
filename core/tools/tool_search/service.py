@@ -16,8 +16,8 @@ logger = logging.getLogger(__name__)
 TOOL_SEARCH_SCHEMA = {
     "name": "tool_search",
     "description": (
-        "Search for available tools by name or keyword. "
-        "Use 'select:ToolA,ToolB' for exact lookup (returns full schema). "
+        "Search for available deferred tools by name or keyword. "
+        "Use 'select:ToolA,ToolB' for exact deferred-tool lookup (returns full schema). "
         "Use keywords for fuzzy search (up to 5 results). "
         "Deferred tools are only usable after discovery via this tool."
     ),
@@ -26,7 +26,7 @@ TOOL_SEARCH_SCHEMA = {
         "properties": {
             "query": {
                 "type": "string",
-                "description": "Search query. Use 'select:ToolA,ToolB' for exact name lookup, or keywords for fuzzy search.",
+                "description": "Search query. Use 'select:ToolA,ToolB' for exact deferred-tool lookup, or keywords for fuzzy search.",
             },
         },
         "required": ["query"],
@@ -53,8 +53,28 @@ class ToolSearchService:
         logger.info("ToolSearchService initialized")
 
     def _search(self, query: str = "", tool_context=None, **kwargs) -> str:
+        select_names: list[str] = []
+        normalized = query.strip()
+        if normalized.lower().startswith("select:"):
+            select_names = [name.strip() for name in normalized[len("select:"):].split(",") if name.strip()]
+
         results = self._registry.search(query, modes={ToolMode.DEFERRED})
-        if not query.strip().lower().startswith("select:"):
+        if select_names:
+            found_names = {entry.name for entry in results}
+            missing = [name for name in select_names if name not in found_names]
+            inline = [name for name in missing if (entry := self._registry.get(name)) is not None and entry.mode == ToolMode.INLINE]
+            unknown = [name for name in missing if self._registry.get(name) is None]
+            if inline or unknown:
+                parts: list[str] = []
+                if inline:
+                    parts.append(f"inline/already-available tools: {', '.join(inline)}")
+                if unknown:
+                    parts.append(f"unknown tools: {', '.join(unknown)}")
+                raise ValueError(
+                    "tool_search select: only supports deferred tools; "
+                    + "; ".join(parts)
+                )
+        else:
             results = results[:5]
         if tool_context is not None and hasattr(tool_context, "discovered_tool_names"):
             tool_context.discovered_tool_names.update(entry.name for entry in results)

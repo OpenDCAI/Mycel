@@ -1778,6 +1778,15 @@ class TestToolModeFromConfig:
 
 
 class TestToolSearchService:
+    def test_tool_search_schema_says_exact_lookup_is_for_deferred_tools(self):
+        reg = ToolRegistry()
+        ToolSearchService(reg)
+
+        schema = reg.get("tool_search").get_schema()
+
+        assert "deferred" in schema["description"].lower()
+        assert "deferred" in schema["parameters"]["properties"]["query"]["description"].lower()
+
     def _make_ctx(self) -> ToolUseContext:
         app = AppState()
         return ToolUseContext(
@@ -1842,6 +1851,40 @@ class TestToolSearchService:
 
         assert json.loads(result.content) == []
         assert ctx.discovered_tool_names == set()
+
+    def test_tool_search_exact_select_fails_loudly_for_inline_tools(self):
+        reg = ToolRegistry()
+        reg.register(
+            ToolEntry(
+                name="Read",
+                mode=ToolMode.INLINE,
+                schema={"name": "Read", "description": "read file content"},
+                handler=lambda: "read",
+                source="test",
+            )
+        )
+        reg.register(
+            ToolEntry(
+                name="TaskCreate",
+                mode=ToolMode.DEFERRED,
+                schema={"name": "TaskCreate", "description": "create task"},
+                handler=lambda: "task",
+                source="test",
+            )
+        )
+        ToolSearchService(reg)
+        runner = _make_runner(reg.list_all())
+        req = ToolCallRequest(
+            tool_call={"name": "tool_search", "args": {"query": "select:Read,TaskCreate"}, "id": "tc-search"},
+            state=self._make_ctx(),
+        )
+
+        result = runner.wrap_tool_call(req, lambda r: MagicMock())
+
+        assert "<tool_use_error>" in result.content
+        assert "Read" in result.content
+        assert "inline" in result.content.lower()
+        assert "TaskCreate" not in result.content
 
 
 class TestWebToolRegistration:

@@ -22,6 +22,10 @@ if _DEV_SKIP_AUTH:
     )
 
 
+def is_dev_skip_auth_enabled() -> bool:
+    return _DEV_SKIP_AUTH
+
+
 async def get_app(request: Request) -> FastAPI:
     """Get FastAPI app instance from request."""
     return request.app

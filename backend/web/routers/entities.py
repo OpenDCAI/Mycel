@@ -180,6 +180,9 @@ async def list_entities(
         member = member_map.get(entity.member_id)
         owner = member_map.get(member.owner_user_id) if member and member.owner_user_id else None
         thread = app.state.thread_repo.get_by_id(entity.thread_id) if entity.thread_id else None
+        # @@@chat-discovery-surface - branch/subagent entities are runtime artifacts, not top-level chat picker entries.
+        if entity.type == "agent" and thread and not thread["is_main"]:
+            continue
         items.append(
             {
                 "id": entity.id,
