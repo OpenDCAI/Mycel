@@ -104,3 +104,7 @@ docs/plans/
 frontend/.vite/
 .playwright-cli/
 ops
+
+# Auto-generated
+.playwright-mcp/
+supabase/
