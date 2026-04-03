@@ -12,6 +12,7 @@ from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from backend.web.routers.threads import get_thread_history, get_thread_messages
 from backend.web.services.display_builder import DisplayBuilder
 from backend.web.services.event_buffer import ThreadEventBuffer
+from core.runtime.middleware.queue.manager import MessageQueueManager
 from backend.web.services.streaming_service import _repair_incomplete_tool_calls, _run_agent_to_buffer
 from core.runtime.middleware.monitor.state_monitor import AgentState
 from core.runtime.loop import QueryLoop
@@ -286,7 +287,7 @@ async def test_get_thread_messages_rebuilds_idle_thread_when_cached_entries_are_
 
 
 @pytest.mark.asyncio
-async def test_run_agent_to_buffer_emits_notice_for_system_agent_notifications(monkeypatch):
+async def test_run_agent_to_buffer_emits_notice_for_system_agent_notifications(monkeypatch, tmp_path):
     seq = 0
 
     async def fake_append_event(thread_id, run_id, event, message_id=None, run_event_repo=None):
@@ -312,7 +313,7 @@ async def test_run_agent_to_buffer_emits_notice_for_system_agent_notifications(m
             thread_tasks={},
             thread_event_buffers={},
             subagent_buffers={},
-            queue_manager=SimpleNamespace(peek=lambda *_: None),
+            queue_manager=MessageQueueManager(db_path=str(tmp_path / "queue.db")),
             thread_last_active={},
             typing_tracker=None,
         )
@@ -342,7 +343,72 @@ async def test_run_agent_to_buffer_emits_notice_for_system_agent_notifications(m
 
 
 @pytest.mark.asyncio
-async def test_run_agent_to_buffer_skips_graph_resume_for_terminal_background_notifications(monkeypatch):
+async def test_run_agent_to_buffer_persists_terminal_notifications_for_history(monkeypatch, tmp_path):
+    seq = 0
+
+    async def fake_append_event(thread_id, run_id, event, message_id=None, run_event_repo=None):
+        nonlocal seq
+        seq += 1
+        return seq
+
+    async def fake_cleanup_old_runs(thread_id, keep_latest=1, run_event_repo=None):
+        return 0
+
+    monkeypatch.setattr("backend.web.services.event_store.append_event", fake_append_event)
+    monkeypatch.setattr("backend.web.services.streaming_service.cleanup_old_runs", fake_cleanup_old_runs)
+    monkeypatch.setattr("backend.web.services.streaming_service._ensure_thread_handlers", lambda *args, **kwargs: None)
+
+    checkpointer = _MemoryCheckpointer()
+    loop = _make_loop(checkpointer=checkpointer)
+    queue_manager = MessageQueueManager(db_path=str(tmp_path / "queue.db"))
+    queue_manager.enqueue(
+        "<system-reminder><task-notification><status>error</status><result>Agent failed</result></task-notification></system-reminder>",
+        "thread-terminal-history",
+        notification_type="agent",
+        source="system",
+    )
+
+    agent = SimpleNamespace(
+        agent=loop,
+        runtime=_StreamingRuntime(),
+        storage_container=None,
+    )
+    app = SimpleNamespace(
+        state=SimpleNamespace(
+            display_builder=DisplayBuilder(),
+            thread_tasks={},
+            thread_event_buffers={},
+            subagent_buffers={},
+            queue_manager=queue_manager,
+            thread_last_active={},
+            typing_tracker=None,
+        )
+    )
+    thread_buf = ThreadEventBuffer()
+
+    await _run_agent_to_buffer(
+        agent,
+        "thread-terminal-history",
+        "<system-reminder><task-notification><status>completed</status><result>BG_OK</result></task-notification></system-reminder>",
+        app,
+        False,
+        thread_buf,
+        "run-terminal-history",
+        message_metadata={"source": "system", "notification_type": "agent"},
+    )
+
+    state = await loop.aget_state({"configurable": {"thread_id": "thread-terminal-history"}})
+
+    assert [msg.__class__.__name__ for msg in state.values["messages"]] == [
+        "HumanMessage",
+        "HumanMessage",
+    ]
+    assert "BG_OK" in state.values["messages"][0].content
+    assert "Agent failed" in state.values["messages"][1].content
+
+
+@pytest.mark.asyncio
+async def test_run_agent_to_buffer_skips_graph_resume_for_terminal_background_notifications(monkeypatch, tmp_path):
     seq = 0
 
     async def fake_append_event(thread_id, run_id, event, message_id=None, run_event_repo=None):
@@ -369,7 +435,7 @@ async def test_run_agent_to_buffer_skips_graph_resume_for_terminal_background_no
             thread_tasks={},
             thread_event_buffers={},
             subagent_buffers={},
-            queue_manager=SimpleNamespace(peek=lambda *_: None),
+            queue_manager=MessageQueueManager(db_path=str(tmp_path / "queue.db")),
             thread_last_active={},
             typing_tracker=None,
         )
@@ -388,4 +454,80 @@ async def test_run_agent_to_buffer_skips_graph_resume_for_terminal_background_no
     )
 
     assert graph.astream_calls == 0
-    assert graph.aupdate_calls == 0
+    assert graph.aupdate_calls == 1
+
+
+@pytest.mark.asyncio
+async def test_run_agent_to_buffer_batches_additional_terminal_notifications(monkeypatch, tmp_path):
+    seq = 0
+
+    async def fake_append_event(thread_id, run_id, event, message_id=None, run_event_repo=None):
+        nonlocal seq
+        seq += 1
+        return seq
+
+    async def fake_cleanup_old_runs(thread_id, keep_latest=1, run_event_repo=None):
+        return 0
+
+    monkeypatch.setattr("backend.web.services.event_store.append_event", fake_append_event)
+    monkeypatch.setattr("backend.web.services.streaming_service.cleanup_old_runs", fake_cleanup_old_runs)
+    monkeypatch.setattr("backend.web.services.streaming_service._ensure_thread_handlers", lambda *args, **kwargs: None)
+
+    start_calls: list[tuple[str, str, dict | None]] = []
+
+    def fake_start_agent_run(agent, thread_id, message, app, enable_trajectory=False, message_metadata=None):
+        start_calls.append((thread_id, message, message_metadata))
+        return "run-next"
+
+    monkeypatch.setattr("backend.web.services.streaming_service.start_agent_run", fake_start_agent_run)
+
+    queue_manager = MessageQueueManager(db_path=str(tmp_path / "queue.db"))
+    queue_manager.enqueue(
+        "<system-reminder><task-notification><status>error</status><result>Agent failed</result></task-notification></system-reminder>",
+        "thread-batch-notice",
+        notification_type="agent",
+    )
+    queue_manager.enqueue(
+        "<system-reminder><CommandNotification><Status>completed</Status><Output>42</Output></CommandNotification></system-reminder>",
+        "thread-batch-notice",
+        notification_type="command",
+    )
+
+    agent = SimpleNamespace(
+        agent=_StreamingGraphAgent(),
+        runtime=_StreamingRuntime(),
+        storage_container=None,
+    )
+    app = SimpleNamespace(
+        state=SimpleNamespace(
+            display_builder=DisplayBuilder(),
+            thread_tasks={},
+            thread_event_buffers={},
+            subagent_buffers={},
+            queue_manager=queue_manager,
+            thread_last_active={},
+            typing_tracker=None,
+        )
+    )
+    thread_buf = ThreadEventBuffer()
+
+    await _run_agent_to_buffer(
+        agent,
+        "thread-batch-notice",
+        "<system-reminder><task-notification><status>completed</status><result>BG_OK</result></task-notification></system-reminder>",
+        app,
+        False,
+        thread_buf,
+        "run-batch-notice",
+        message_metadata={"source": "system", "notification_type": "agent"},
+    )
+
+    entries = app.state.display_builder.get_entries("thread-batch-notice")
+    assert entries is not None
+    notice_segments = [segment for segment in entries[0]["segments"] if segment.get("type") == "notice"]
+    assert len(notice_segments) == 3
+    assert "BG_OK" in notice_segments[0]["content"]
+    assert "Agent failed" in notice_segments[1]["content"]
+    assert "CommandNotification" in notice_segments[2]["content"]
+    assert start_calls == []
+    assert queue_manager.list_queue("thread-batch-notice") == []

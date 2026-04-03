@@ -81,6 +81,14 @@ class _CompleteChildAgent:
         return None
 
 
+class _FailingInitChildAgent:
+    def __init__(self, error: Exception):
+        self._error = error
+
+    async def ainit(self):
+        raise self._error
+
+
 @pytest.mark.skipif(
     sys.platform == "win32" or shutil.which("bash") is None,
     reason="bash background cleanup integration requires Unix-compatible bash",
@@ -351,6 +359,58 @@ async def test_background_agent_completion_notification_waits_for_followthrough_
         assert f"<run-id>{task_id}</run-id>" in text
         assert "<status>completed</status>" in text
         assert "Finished indexing" in text
+    finally:
+        set_current_thread_id("")
+
+
+@pytest.mark.asyncio
+async def test_mixed_success_and_init_failure_background_agents_queue_both_terminal_notifications(tmp_path, monkeypatch):
+    created = 0
+
+    def fake_create_leon_agent(*, model_name, workspace_root, **kwargs):
+        nonlocal created
+        created += 1
+        if created == 1:
+            return _CompleteChildAgent("GOOD:BASE:2")
+        return _FailingInitChildAgent(RuntimeError("bad child init"))
+
+    monkeypatch.setattr("core.runtime.agent.create_leon_agent", fake_create_leon_agent)
+
+    registry = ToolRegistry()
+    queue_manager = MessageQueueManager(db_path=str(tmp_path / "queue.db"))
+    service = AgentService(
+        tool_registry=registry,
+        agent_registry=_FakeAgentRegistry(),
+        workspace_root=Path(tmp_path),
+        model_name="gpt-test",
+        queue_manager=queue_manager,
+    )
+
+    set_current_thread_id("parent-thread")
+    try:
+        raw_good = await service._handle_agent(
+            prompt="good child",
+            name="good-child",
+            description="good child",
+            run_in_background=True,
+        )
+        raw_bad = await service._handle_agent(
+            prompt="bad child",
+            name="bad-child",
+            description="bad child",
+            run_in_background=True,
+        )
+
+        await asyncio.wait_for(service._tasks[json.loads(raw_good)["task_id"]].task, timeout=1)
+        with pytest.raises(RuntimeError, match="bad child init"):
+            await asyncio.wait_for(service._tasks[json.loads(raw_bad)["task_id"]].task, timeout=1)
+
+        queued = queue_manager.list_queue("parent-thread")
+
+        assert len(queued) == 2
+        contents = [item["content"] for item in queued]
+        assert any("<status>completed</status>" in content and "GOOD:BASE:2" in content for content in contents)
+        assert any("<status>error</status>" in content and "Agent failed" in content for content in contents)
     finally:
         set_current_thread_id("")
 

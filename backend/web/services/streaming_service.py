@@ -396,6 +396,107 @@ def _is_terminal_background_notification_message(
     return "<task-notification>" in message or "<CommandNotification>" in message
 
 
+def _partition_terminal_followups(items: list[Any]) -> tuple[list[Any], list[Any]]:
+    terminal = []
+    passthrough = []
+    for item in items:
+        if _is_terminal_background_notification_message(
+            item.content,
+            source=item.source or "system",
+            notification_type=item.notification_type,
+        ):
+            terminal.append(item)
+        else:
+            passthrough.append(item)
+    return terminal, passthrough
+
+
+async def _persist_terminal_followups(
+    *,
+    agent: Any,
+    config: dict[str, Any],
+    items: list[dict[str, str | None]],
+) -> None:
+    graph = getattr(agent, "agent", None)
+    if graph is None or not hasattr(graph, "aupdate_state") or not items:
+        return
+
+    from langchain_core.messages import HumanMessage
+
+    # @@@terminal-followup-persistence - notice-only followthrough runs skip the
+    # model, so history/detail must get the system message via the state bridge.
+    await graph.aupdate_state(
+        config,
+        {
+            "messages": [
+                HumanMessage(
+                    content=str(item["content"] or ""),
+                    metadata={
+                        "source": item["source"] or "system",
+                        "notification_type": item["notification_type"],
+                    },
+                )
+                for item in items
+            ]
+        },
+    )
+
+
+async def _emit_queued_terminal_followups(
+    *,
+    app: Any,
+    thread_id: str,
+    emit: Any,
+) -> list[dict[str, str | None]]:
+    emitted_terminal: list[dict[str, str | None]] = []
+
+    async def _drain_once() -> bool:
+        queued_items = app.state.queue_manager.drain_all(thread_id)
+        extra_terminal, passthrough = _partition_terminal_followups(queued_items)
+        for item in passthrough:
+            app.state.queue_manager.enqueue(
+                item.content,
+                thread_id,
+                notification_type=item.notification_type,
+                source=item.source,
+                sender_entity_id=item.sender_entity_id,
+                sender_name=item.sender_name,
+                sender_avatar_url=item.sender_avatar_url,
+                is_steer=item.is_steer,
+            )
+        for item in extra_terminal:
+            await emit(
+                {
+                    "event": "notice",
+                    "data": json.dumps(
+                        {
+                            "content": item.content,
+                            "source": item.source or "system",
+                            "notification_type": item.notification_type,
+                        },
+                        ensure_ascii=False,
+                    ),
+                }
+            )
+            emitted_terminal.append(
+                {
+                    "content": item.content,
+                    "source": item.source or "system",
+                    "notification_type": item.notification_type,
+                }
+            )
+        return bool(extra_terminal)
+
+    # @@@terminal-followup-race-window - multiple background tasks can finish
+    # while the first notice-only followthrough run is being emitted. Drain once
+    # for already-persisted notices, yield one loop tick, then drain again so
+    # same-turn terminal completions are folded into the same stable followthrough.
+    await _drain_once()
+    await asyncio.sleep(0)
+    await _drain_once()
+    return emitted_terminal
+
+
 # ---------------------------------------------------------------------------
 # Producer: runs agent, writes events to ThreadEventBuffer
 # ---------------------------------------------------------------------------
@@ -662,6 +763,17 @@ async def _run_agent_to_buffer(
             source=src,
             notification_type=ntype,
         ):
+            persisted_items = [
+                {
+                    "content": message,
+                    "source": src or "system",
+                    "notification_type": ntype,
+                }
+            ]
+            persisted_items.extend(
+                await _emit_queued_terminal_followups(app=app, thread_id=thread_id, emit=emit)
+            )
+            await _persist_terminal_followups(agent=agent, config=config, items=persisted_items)
             await emit({"event": "run_done", "data": json.dumps({"thread_id": thread_id, "run_id": run_id})})
             return
 
