@@ -79,6 +79,7 @@ from backend.web.routers import (  # noqa: E402
     connections,
     debug,
     entities,
+    invite_codes,
     marketplace,
     monitor,
     panel,
@@ -103,6 +104,7 @@ app.add_middleware(
 
 # Include routers
 app.include_router(auth.router)
+app.include_router(invite_codes.router)
 app.include_router(threads.router)
 app.include_router(chats.router)
 app.include_router(entities.router)

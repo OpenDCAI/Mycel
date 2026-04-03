@@ -143,6 +143,11 @@ async def lifespan(app: FastAPI):
             SupabaseThreadRepo,
         )
 
+        from storage.providers.supabase import (
+            SupabaseInviteCodeRepo,
+            SupabaseUserSettingsRepo,
+        )
+
         _supabase_client = create_supabase_client()
         app.state.member_repo = SupabaseMemberRepo(_supabase_client)
         app.state.account_repo = SupabaseAccountRepo(_supabase_client)
@@ -153,6 +158,8 @@ async def lifespan(app: FastAPI):
         app.state.chat_repo = SupabaseChatRepo(_supabase_client)
         app.state.chat_entity_repo = SupabaseChatEntityRepo(_supabase_client)
         app.state.chat_message_repo = SupabaseChatMessageRepo(_supabase_client)
+        app.state.invite_code_repo = SupabaseInviteCodeRepo(_supabase_client)
+        app.state.user_settings_repo = SupabaseUserSettingsRepo(_supabase_client)
         app.state._supabase_client = _supabase_client
         app.state._storage_container = StorageContainer(strategy="supabase", supabase_client=_supabase_client)
     else:
