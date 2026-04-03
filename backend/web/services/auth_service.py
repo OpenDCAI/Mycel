@@ -81,6 +81,11 @@ class AuthService:
         self._validate_invite_code(invite_code)
 
         # 3. Set password via admin API
+        # verify_otp triggers SIGNED_IN which overwrites auth._headers["Authorization"]
+        # with the user JWT; reset to service_role before calling admin API.
+        service_role_key = os.getenv("LEON_SUPABASE_SERVICE_ROLE_KEY")
+        if service_role_key:
+            self._sb.auth._headers["Authorization"] = f"Bearer {service_role_key}"
         from supabase_auth.errors import AuthApiError
         try:
             self._sb.auth.admin.update_user_by_id(auth_user_id, {"password": password})
