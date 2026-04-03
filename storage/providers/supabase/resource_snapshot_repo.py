@@ -30,23 +30,25 @@ def upsert_lease_resource_snapshot(
     if client is None:
         return
     now = _now_iso()
-    client.table("lease_resource_snapshots").upsert({
-        "lease_id": lease_id,
-        "provider_name": provider_name,
-        "observed_state": observed_state,
-        "probe_mode": probe_mode,
-        "cpu_used": cpu_used,
-        "cpu_limit": cpu_limit,
-        "memory_used_mb": memory_used_mb,
-        "memory_total_mb": memory_total_mb,
-        "disk_used_gb": disk_used_gb,
-        "disk_total_gb": disk_total_gb,
-        "network_rx_kbps": network_rx_kbps,
-        "network_tx_kbps": network_tx_kbps,
-        "probe_error": probe_error,
-        "collected_at": now,
-        "updated_at": now,
-    }).execute()
+    client.table("lease_resource_snapshots").upsert(
+        {
+            "lease_id": lease_id,
+            "provider_name": provider_name,
+            "observed_state": observed_state,
+            "probe_mode": probe_mode,
+            "cpu_used": cpu_used,
+            "cpu_limit": cpu_limit,
+            "memory_used_mb": memory_used_mb,
+            "memory_total_mb": memory_total_mb,
+            "disk_used_gb": disk_used_gb,
+            "disk_total_gb": disk_total_gb,
+            "network_rx_kbps": network_rx_kbps,
+            "network_tx_kbps": network_tx_kbps,
+            "probe_error": probe_error,
+            "collected_at": now,
+            "updated_at": now,
+        }
+    ).execute()
 
 
 def list_snapshots_by_lease_ids(
@@ -59,11 +61,16 @@ def list_snapshots_by_lease_ids(
     if not unique_ids:
         return {}
     from storage.providers.supabase import _query as q
+
     rows = q.rows(
         q.in_(
             client.table("lease_resource_snapshots").select("*"),
-            "lease_id", unique_ids, "resource_snapshot", "list_by_ids",
+            "lease_id",
+            unique_ids,
+            "resource_snapshot",
+            "list_by_ids",
         ).execute(),
-        "resource_snapshot", "list_by_ids",
+        "resource_snapshot",
+        "list_by_ids",
     )
     return {str(r["lease_id"]): dict(r) for r in rows}

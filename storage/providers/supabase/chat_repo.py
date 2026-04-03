@@ -90,13 +90,7 @@ class SupabaseChatEntityRepo:
         return [r["chat_id"] for r in raw]
 
     def is_entity_in_chat(self, chat_id: str, entity_id: str) -> bool:
-        response = (
-            self._t()
-            .select("chat_id")
-            .eq("chat_id", chat_id)
-            .eq("entity_id", entity_id)
-            .execute()
-        )
+        response = self._t().select("chat_id").eq("chat_id", chat_id).eq("entity_id", entity_id).execute()
         raw = q.rows(response, _REPO_ENTITY, "is_entity_in_chat")
         return len(raw) > 0
 
@@ -184,11 +178,7 @@ class SupabaseChatMessageRepo:
         """Return unread messages (after last_read_at, excluding own) in chronological order."""
         # Fetch last_read_at for this entity in this chat.
         resp_ce = (
-            self._client.table(_TABLE_CHAT_ENTITIES)
-            .select("last_read_at")
-            .eq("chat_id", chat_id)
-            .eq("entity_id", entity_id)
-            .execute()
+            self._client.table(_TABLE_CHAT_ENTITIES).select("last_read_at").eq("chat_id", chat_id).eq("entity_id", entity_id).execute()
         )
         ce_rows = q.rows(resp_ce, _REPO_MSG, "list_unread(last_read_at)")
         last_read: float | None = None
@@ -206,11 +196,7 @@ class SupabaseChatMessageRepo:
     def count_unread(self, chat_id: str, entity_id: str) -> int:
         # Fetch last_read_at for this entity in this chat.
         resp_ce = (
-            self._client.table(_TABLE_CHAT_ENTITIES)
-            .select("last_read_at")
-            .eq("chat_id", chat_id)
-            .eq("entity_id", entity_id)
-            .execute()
+            self._client.table(_TABLE_CHAT_ENTITIES).select("last_read_at").eq("chat_id", chat_id).eq("entity_id", entity_id).execute()
         )
         ce_rows = q.rows(resp_ce, _REPO_MSG, "count_unread(last_read_at)")
         if not ce_rows:

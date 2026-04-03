@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from storage.contracts import AccountRow, MemberRow, MemberType
+from storage.contracts import AccountRow, MemberRow
 from storage.providers.supabase import _query as q
 
 _MEMBER_REPO = "member repo"

@@ -24,13 +24,15 @@ class SupabaseUserSettingsRepo:
     def get(self, user_id: str) -> dict[str, Any]:
         rows = q.rows(
             self._table().select("*").eq("user_id", user_id).execute(),
-            _REPO, "get",
+            _REPO,
+            "get",
         )
         if not rows:
             return {"user_id": user_id, "default_workspace": None, "recent_workspaces": [], "default_model": "leon:large"}
         row = dict(rows[0])
         if isinstance(row.get("recent_workspaces"), str):
             import json
+
             try:
                 row["recent_workspaces"] = json.loads(row["recent_workspaces"])
             except Exception:

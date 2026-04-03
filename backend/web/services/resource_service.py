@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from backend.web.core.config import SANDBOXES_DIR
+from backend.web.core.storage_factory import list_resource_snapshots, make_sandbox_monitor_repo, upsert_resource_snapshot
 from backend.web.services.config_loader import SandboxConfigLoader
 from backend.web.services.sandbox_service import available_sandbox_types, build_provider_from_config_name
 from backend.web.utils.serializers import avatar_url
@@ -19,12 +20,9 @@ from sandbox.providers.e2b import E2BProvider
 from sandbox.providers.local import LocalSessionProvider
 from sandbox.resource_snapshot import (
     ensure_resource_snapshot_table,
-
     probe_and_upsert_for_instance,
-
 )
 from storage.models import map_lease_to_session_status
-from backend.web.core.storage_factory import make_sandbox_monitor_repo, list_resource_snapshots, upsert_resource_snapshot
 from storage.providers.sqlite.thread_repo import SQLiteThreadRepo
 
 _CONFIG_LOADER = SandboxConfigLoader(SANDBOXES_DIR)
