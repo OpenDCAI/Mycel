@@ -52,7 +52,7 @@ async function apiPost(endpoint: string, body: Record<string, string>) {
       const parsed = JSON.parse(text);
       const detail = parsed.detail;
       if (typeof detail === "string") message = detail;
-      else if (Array.isArray(detail)) message = detail.map((d: { msg: string }) => d.msg).join("; ");
+      else if (Array.isArray(detail)) message = detail.map((d: { msg: string; loc?: string[] }) => `${d.loc?.at(-1) ?? "?"}: ${d.msg}`).join("; ");
       else if (detail != null) message = JSON.stringify(detail);
     } catch { /* not JSON, use raw text */ }
     throw new Error(message);
