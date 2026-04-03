@@ -33,9 +33,9 @@ interface AuthState {
   entityId: string | null;
 
   login: (identifier: string, password: string) => Promise<void>;
-  sendOtp: (email: string) => Promise<void>;
+  sendOtp: (email: string, password: string) => Promise<void>;
   verifyOtp: (email: string, token: string) => Promise<{ tempToken: string }>;
-  completeRegister: (tempToken: string, password: string, inviteCode: string) => Promise<{ userId: string; defaultName: string }>;
+  completeRegister: (tempToken: string, inviteCode: string) => Promise<{ userId: string; defaultName: string }>;
   logout: () => void;
 }
 
@@ -79,8 +79,8 @@ export const useAuthStore = create<AuthState>()(
         window.location.href = "/threads";
       },
 
-      sendOtp: async (email) => {
-        await apiPost("send-otp", { email });
+      sendOtp: async (email, password) => {
+        await apiPost("send-otp", { email, password });
       },
 
       verifyOtp: async (email, token) => {
@@ -88,10 +88,9 @@ export const useAuthStore = create<AuthState>()(
         return { tempToken: data.temp_token };
       },
 
-      completeRegister: async (tempToken, password, inviteCode) => {
+      completeRegister: async (tempToken, inviteCode) => {
         const data = await apiPost("complete-register", {
           temp_token: tempToken,
-          password,
           invite_code: inviteCode,
         });
         set({

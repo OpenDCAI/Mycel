@@ -29,41 +29,37 @@ class AuthService:
         self._sb = supabase_client  # None in sqlite-only mode
 
     # ------------------------------------------------------------------
-    # Public API
+    # Registration flow (standard Supabase signUp)
+    # Step 1: send_otp(email, password) → signUp creates user, GoTrue sends OTP
+    # Step 2: verify_register_otp(...)  → verifyOtp(type:signup), returns temp_token
+    # Step 3: complete_register(...)    → validate invite, create member records
     # ------------------------------------------------------------------
 
-    # ------------------------------------------------------------------
-    # New 3-step registration flow
-    # Step 1: send_otp(email)          → Supabase sends OTP to email
-    # Step 2: verify_register_otp(...) → verifies OTP, returns temp_token
-    # Step 3: complete_register(...)   → sets password, creates records
-    # ------------------------------------------------------------------
-
-    def send_otp(self, email: str) -> None:
-        """Send a 6-digit OTP to the email for registration verification."""
+    def send_otp(self, email: str, password: str) -> None:
+        """Create user via signUp (sends confirmation OTP to email)."""
         if self._sb is None:
             raise RuntimeError("Supabase client required.")
         from supabase_auth.errors import AuthApiError
         try:
-            self._sb.auth.sign_in_with_otp({"email": email, "options": {"should_create_user": True}})
+            self._sb.auth.sign_up({"email": email, "password": password})
         except AuthApiError as e:
             raise ValueError(f"发送验证码失败: {e.message}") from e
 
     def verify_register_otp(self, email: str, token: str) -> dict:
-        """Verify OTP from email. Returns temp_token to be used in complete_register."""
+        """Verify signup OTP. Returns temp_token to be used in complete_register."""
         if self._sb is None:
             raise RuntimeError("Supabase client required.")
         from supabase_auth.errors import AuthApiError
         try:
-            resp = self._sb.auth.verify_otp({"email": email, "token": token, "type": "email"})
+            resp = self._sb.auth.verify_otp({"email": email, "token": token, "type": "signup"})
         except AuthApiError as e:
             raise ValueError(f"验证码错误: {e.message}") from e
         if resp.user is None or resp.session is None:
             raise ValueError("验证码无效或已过期")
         return {"temp_token": resp.session.access_token}
 
-    def complete_register(self, temp_token: str, password: str, invite_code: str) -> dict:
-        """Complete registration: set password, validate invite code, create member records."""
+    def complete_register(self, temp_token: str, invite_code: str) -> dict:
+        """Complete registration: validate invite code, create member records."""
         if self._sb is None:
             raise RuntimeError("Supabase client required.")
 
@@ -74,34 +70,21 @@ class AuthService:
         try:
             payload = jwt.decode(temp_token, jwt_secret, algorithms=[SUPABASE_JWT_ALGORITHM], options={"verify_aud": False})
         except jwt.InvalidTokenError as e:
-            raise ValueError(f"会话已过期，请重新验证邮箱") from e
+            raise ValueError("会话已过期，请重新验证邮箱") from e
         auth_user_id = payload["sub"]
 
         # 2. Validate invite code
         self._validate_invite_code(invite_code)
 
-        # 3. Set password via admin API
-        # verify_otp triggers SIGNED_IN which overwrites auth._headers["Authorization"]
-        # with the user JWT; reset to service_role before calling admin API.
-        service_role_key = os.getenv("LEON_SUPABASE_SERVICE_ROLE_KEY")
-        if service_role_key:
-            self._sb.auth._headers["Authorization"] = f"Bearer {service_role_key}"
-        from supabase_auth.errors import AuthApiError
-        try:
-            self._sb.auth.admin.update_user_by_id(auth_user_id, {"password": password})
-        except AuthApiError as e:
-            raise ValueError(f"设置密码失败: {e.message}") from e
-
-        # 4. Check if member already created (idempotent guard)
+        # 3. Create member records (idempotent guard)
         email_from_payload = payload.get("email", "")
         existing = self._members.get_by_id(auth_user_id)
         if existing is None:
-            # 5. Assign mycel_id
             mycel_id = self._sb.rpc("next_mycel_id").execute().data
             now = time.time()
             display_name = email_from_payload.split("@")[0]
 
-            # 6. Create member row
+            # Create member row
             self._members.create(
                 MemberRow(
                     id=auth_user_id,
@@ -113,7 +96,7 @@ class AuthService:
                 )
             )
 
-            # 7. Human entity
+            # Human entity
             entity_id = f"{auth_user_id}-1"
             self._entities.create(
                 EntityRow(
@@ -126,7 +109,7 @@ class AuthService:
                 )
             )
 
-            # 8. Initial agents
+            # Initial agents
             first_agent_info = self._create_initial_agents(auth_user_id, now)
         else:
             entity_id = f"{auth_user_id}-1"
@@ -135,7 +118,7 @@ class AuthService:
             owned_agents = self._members.list_by_owner_user_id(auth_user_id)
             first_agent_info = {"id": owned_agents[0].id, "name": owned_agents[0].name, "type": "mycel_agent", "avatar": None} if owned_agents else None
 
-        # 9. Mark invite code used
+        # 4. Mark invite code used
         from datetime import datetime, timezone
         self._sb.table("invite_codes").update(
             {"used_by": auth_user_id, "used_at": datetime.now(timezone.utc).isoformat()}

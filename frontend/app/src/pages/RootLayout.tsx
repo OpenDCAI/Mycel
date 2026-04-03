@@ -421,11 +421,11 @@ function LoginForm() {
     />;
   }
 
-  // ── Step: Enter email + send OTP ──
+  // ── Step: Enter email + password, send OTP ──
   if (step.type === "reg_email") {
     return <RegEmailStep
-      onSubmit={async (email) => {
-        await sendOtp(email);
+      onSubmit={async (email, password) => {
+        await sendOtp(email, password);
         setStep({ type: "reg_otp", email });
       }}
       onBack={() => reset({ type: "login" })}
@@ -449,17 +449,17 @@ function LoginForm() {
     />;
   }
 
-  // ── Step: Set password + invite code ──
+  // ── Step: Enter invite code ──
   if (step.type === "reg_complete") {
     const { tempToken, email } = step;
     return <RegCompleteStep
       email={email}
-      onSubmit={async (password, inviteCode) => {
+      onSubmit={async (inviteCode) => {
         if (!inviteCode.trim()) {
           setStep({ type: "closed_beta", email, tempToken });
           return;
         }
-        const { userId, defaultName } = await completeRegister(tempToken, password, inviteCode);
+        const { userId, defaultName } = await completeRegister(tempToken, inviteCode);
         setStep({ type: "setup_name", userId, defaultName });
       }}
       onBack={() => reset({ type: "reg_email" })}
@@ -534,23 +534,29 @@ function LoginStep({ onSubmit, onSwitch, error, setError, loading, setLoading }:
 }
 
 function RegEmailStep({ onSubmit, onBack, error, setError, loading, setLoading }: {
-  onSubmit: (email: string) => Promise<void>;
+  onSubmit: (email: string, password: string) => Promise<void>;
   onBack: () => void;
   error: string | null; setError: (e: string | null) => void;
   loading: boolean; setLoading: (v: boolean) => void;
 }) {
   const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirm, setConfirm] = useState("");
   async function handle(e: React.FormEvent) {
-    e.preventDefault(); setError(null); setLoading(true);
-    try { await onSubmit(email); }
+    e.preventDefault();
+    if (password !== confirm) { setError("两次输入的密码不一致"); return; }
+    setError(null); setLoading(true);
+    try { await onSubmit(email, password); }
     catch (err) { setError(err instanceof Error ? err.message : "发送失败"); }
     finally { setLoading(false); }
   }
   return (
     <AuthCard>
-      <AuthHeader title="注册账号" subtitle="输入邮箱，获取验证码" />
+      <AuthHeader title="注册账号" subtitle="输入邮箱和密码，获取验证码" />
       <form onSubmit={handle} className="space-y-4">
         <input type="email" placeholder="邮箱" value={email} onChange={e => setEmail(e.target.value)} className={inputCls} required autoComplete="email" autoFocus />
+        <PasswordInput value={password} onChange={setPassword} placeholder="设置密码" autoComplete="new-password" />
+        <PasswordInput value={confirm} onChange={setConfirm} placeholder="确认密码" autoComplete="new-password" />
         {error && <p className="text-xs text-destructive">{error}</p>}
         <button type="submit" disabled={loading} className={btnCls}>{loading ? "发送中..." : "发送验证码"}</button>
       </form>
@@ -633,32 +639,27 @@ function PasswordInput({ value, onChange, placeholder, autoFocus, autoComplete }
 
 function RegCompleteStep({ email, onSubmit, onBack, error, setError, loading, setLoading }: {
   email: string;
-  onSubmit: (pw: string, code: string) => Promise<void>;
+  onSubmit: (code: string) => Promise<void>;
   onBack: () => void;
   error: string | null; setError: (e: string | null) => void;
   loading: boolean; setLoading: (v: boolean) => void;
 }) {
-  const [password, setPassword] = useState("");
-  const [confirm, setConfirm] = useState("");
   const [inviteCode, setInviteCode] = useState("");
   async function handle(e: React.FormEvent) {
     e.preventDefault();
-    if (password !== confirm) { setError("两次输入的密码不一致"); return; }
     setError(null); setLoading(true);
-    try { await onSubmit(password, inviteCode); }
+    try { await onSubmit(inviteCode); }
     catch (err) { setError(err instanceof Error ? err.message : "注册失败"); }
     finally { setLoading(false); }
   }
   return (
     <AuthCard>
-      <AuthHeader title="设置账号" subtitle="设置密码完成注册" />
+      <AuthHeader title="完成注册" subtitle="输入邀请码激活账号" />
       <div className="mb-5 px-4 py-2.5 rounded-lg bg-muted text-sm text-muted-foreground text-center">
         {email}
       </div>
       <form onSubmit={handle} className="space-y-4">
-        <PasswordInput value={password} onChange={setPassword} placeholder="设置密码" autoFocus autoComplete="new-password" />
-        <PasswordInput value={confirm} onChange={setConfirm} placeholder="确认密码" autoComplete="new-password" />
-        <input type="text" placeholder="邀请码（没有可留空）" value={inviteCode} onChange={e => setInviteCode(e.target.value)} className={inputCls} autoComplete="off" />
+        <input type="text" placeholder="邀请码（没有可留空）" value={inviteCode} onChange={e => setInviteCode(e.target.value)} className={inputCls} autoComplete="off" autoFocus />
         {error && <p className="text-xs text-destructive">{error}</p>}
         <button type="submit" disabled={loading} className={btnCls}>
           {loading ? "注册中..." : "完成注册"}

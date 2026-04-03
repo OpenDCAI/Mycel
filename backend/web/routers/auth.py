@@ -15,12 +15,13 @@ router = APIRouter(prefix="/api/auth", tags=["auth"])
 
 class SendOtpRequest(BaseModel):
     email: str
+    password: str
 
 
 @router.post("/send-otp")
 async def send_otp(payload: SendOtpRequest, app: Annotated[Any, Depends(get_app)]) -> dict:
     try:
-        await asyncio.to_thread(_get_auth_service(app).send_otp, payload.email)
+        await asyncio.to_thread(_get_auth_service(app).send_otp, payload.email, payload.password)
         return {"ok": True}
     except ValueError as e:
         raise HTTPException(400, str(e))
@@ -45,14 +46,13 @@ async def verify_otp(payload: VerifyOtpRequest, app: Annotated[Any, Depends(get_
 
 class CompleteRegisterRequest(BaseModel):
     temp_token: str
-    password: str
     invite_code: str
 
 
 @router.post("/complete-register")
 async def complete_register(payload: CompleteRegisterRequest, app: Annotated[Any, Depends(get_app)]) -> dict:
     try:
-        return await asyncio.to_thread(_get_auth_service(app).complete_register, payload.temp_token, payload.password, payload.invite_code)
+        return await asyncio.to_thread(_get_auth_service(app).complete_register, payload.temp_token, payload.invite_code)
     except ValueError as e:
         raise HTTPException(400, str(e))
 
