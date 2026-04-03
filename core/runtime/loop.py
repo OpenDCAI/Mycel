@@ -22,6 +22,7 @@ import re
 import uuid
 from dataclasses import dataclass
 from enum import Enum
+from types import SimpleNamespace
 from typing import Any, AsyncGenerator
 
 from core.runtime.middleware import (
@@ -30,7 +31,7 @@ from core.runtime.middleware import (
     ModelResponse,
     ToolCallRequest,
 )
-from langchain_core.messages import AIMessage, AIMessageChunk, HumanMessage, SystemMessage, ToolMessage
+from langchain_core.messages import AIMessage, AIMessageChunk, HumanMessage, RemoveMessage, SystemMessage, ToolMessage
 
 from .abort import AbortController
 from .registry import ToolMode, ToolRegistry
@@ -435,6 +436,57 @@ class QueryLoop:
             "terminal": terminal,
             "transition": transition,
         }
+
+    async def aget_state(self, config: dict | None = None) -> Any:
+        """Minimal graph-state bridge for backend/web callers."""
+        config = config or {}
+        thread_id = config.get("configurable", {}).get("thread_id", "default")
+        messages = await self._load_messages(thread_id)
+        return SimpleNamespace(values={"messages": messages})
+
+    async def aupdate_state(
+        self,
+        config: dict | None,
+        input_data: dict[str, Any] | None,
+        as_node: str | None = None,
+    ) -> Any:
+        """Minimal graph-state update bridge for resumed-thread callers."""
+        config = config or {}
+        input_data = input_data or {}
+        thread_id = config.get("configurable", {}).get("thread_id", "default")
+        messages = await self._load_messages(thread_id)
+        raw_updates = input_data.get("messages", [])
+
+        # @@@ql-06-state-bridge - backend/web still speaks the old graph-state
+        # contract. Only the live caller shapes are supported here: append
+        # resumed start messages, or apply RemoveMessage-based repairs before
+        # appending replacement messages.
+        if as_node == "__start__":
+            messages.extend(self._parse_input({"messages": raw_updates}))
+        else:
+            updates = raw_updates if isinstance(raw_updates, list) else [raw_updates]
+            remove_ids = {
+                update.id
+                for update in updates
+                if isinstance(update, RemoveMessage) and getattr(update, "id", None)
+            }
+            if remove_ids:
+                messages = [
+                    message
+                    for message in messages
+                    if getattr(message, "id", None) not in remove_ids
+                ]
+            messages.extend(
+                update
+                for update in updates
+                if not isinstance(update, RemoveMessage)
+            )
+
+        await self._save_messages(thread_id, messages)
+        current_turn_count = self._app_state.turn_count if self._app_state is not None else 0
+        self._sync_app_state(messages=messages, turn_count=current_turn_count)
+        self._restore_discovered_tool_names_from_messages(thread_id, messages)
+        return await self.aget_state(config)
 
     # -------------------------------------------------------------------------
     # Model invocation through middleware chain

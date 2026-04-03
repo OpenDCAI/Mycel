@@ -7,7 +7,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from langchain_core.messages import AIMessage, AIMessageChunk, HumanMessage, SystemMessage, ToolMessage
+from langchain_core.messages import AIMessage, AIMessageChunk, HumanMessage, RemoveMessage, SystemMessage, ToolMessage
 from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 
 from core.runtime.middleware.memory import MemoryMiddleware
@@ -381,6 +381,113 @@ async def test_query_loop_aclear_wipes_real_async_sqlite_saver_history():
         assert loop._app_state.total_cost == 1.25
     finally:
         await conn.close()
+
+
+@pytest.mark.asyncio
+async def test_query_loop_aget_state_exposes_messages_for_backend_callers():
+    model = mock_model_no_tools("state me")
+    checkpointer = _MemoryCheckpointer()
+    loop = QueryLoop(
+        model=model,
+        system_prompt=SystemMessage(content="You are a test assistant."),
+        middleware=[],
+        checkpointer=checkpointer,
+        registry=make_registry(),
+        app_state=AppState(),
+        runtime=None,
+        bootstrap=BootstrapConfig(workspace_root=Path("/tmp"), model_name="test-model"),
+        max_turns=10,
+    )
+    config = {"configurable": {"thread_id": "state-thread"}}
+
+    async for _ in loop.query(
+        {"messages": [{"role": "user", "content": "hello"}]},
+        config=config,
+    ):
+        pass
+
+    state = await loop.aget_state(config)
+
+    assert state.values is not None
+    assert [msg.content for msg in state.values["messages"]] == ["hello", "state me"]
+
+
+@pytest.mark.asyncio
+async def test_query_loop_aupdate_state_appends_start_messages_for_resume():
+    model = mock_model_no_tools("after resume")
+    checkpointer = _MemoryCheckpointer()
+    loop = QueryLoop(
+        model=model,
+        system_prompt=SystemMessage(content="You are a test assistant."),
+        middleware=[],
+        checkpointer=checkpointer,
+        registry=make_registry(),
+        app_state=AppState(),
+        runtime=None,
+        bootstrap=BootstrapConfig(workspace_root=Path("/tmp"), model_name="test-model"),
+        max_turns=10,
+    )
+    config = {"configurable": {"thread_id": "resume-thread"}}
+
+    async for _ in loop.query(
+        {"messages": [{"role": "user", "content": "first"}]},
+        config=config,
+    ):
+        pass
+
+    await loop.aupdate_state(
+        config,
+        {"messages": [HumanMessage(content="second")]},
+        as_node="__start__",
+    )
+
+    state = await loop.aget_state(config)
+    assert [msg.content for msg in state.values["messages"]] == ["first", "after resume", "second"]
+
+
+@pytest.mark.asyncio
+async def test_query_loop_aupdate_state_applies_remove_and_insert_message_repairs():
+    checkpointer = _MemoryCheckpointer()
+    broken_ai = AIMessage(
+        content="",
+        tool_calls=[{"name": "Read", "args": {"file_path": "/tmp/a.txt"}, "id": "tc-1"}],
+    )
+    tool_reply = ToolMessage(content="old", tool_call_id="tc-1", name="Read")
+    trailing = HumanMessage(content="after tool")
+    tool_reply.id = "tool-old"
+    trailing.id = "human-after"
+    checkpointer.store["repair-thread"] = {
+        "channel_values": {"messages": [broken_ai, tool_reply, trailing]}
+    }
+
+    loop = QueryLoop(
+        model=mock_model_no_tools("unused"),
+        system_prompt=SystemMessage(content="You are a test assistant."),
+        middleware=[],
+        checkpointer=checkpointer,
+        registry=make_registry(),
+        app_state=AppState(),
+        runtime=None,
+        bootstrap=BootstrapConfig(workspace_root=Path("/tmp"), model_name="test-model"),
+        max_turns=10,
+    )
+    config = {"configurable": {"thread_id": "repair-thread"}}
+
+    await loop.aupdate_state(
+        config,
+        {
+            "messages": [
+                RemoveMessage(id="tool-old"),
+                RemoveMessage(id="human-after"),
+                ToolMessage(content="repaired", tool_call_id="tc-1", name="Read"),
+                HumanMessage(content="after tool"),
+            ]
+        },
+    )
+
+    state = await loop.aget_state(config)
+    contents = [getattr(msg, "content", None) for msg in state.values["messages"]]
+    assert contents == ["", "repaired", "after tool"]
 
 
 @pytest.mark.asyncio
