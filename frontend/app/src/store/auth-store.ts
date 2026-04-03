@@ -31,11 +31,13 @@ interface AuthState {
   user: AuthIdentity | null;
   agent: AuthIdentity | null;
   entityId: string | null;
+  setupInfo: { userId: string; defaultName: string } | null;
 
   login: (identifier: string, password: string) => Promise<void>;
   sendOtp: (email: string, password: string, inviteCode: string) => Promise<void>;
   verifyOtp: (email: string, token: string) => Promise<{ tempToken: string }>;
-  completeRegister: (tempToken: string, inviteCode: string) => Promise<{ userId: string; defaultName: string }>;
+  completeRegister: (tempToken: string, inviteCode: string) => Promise<void>;
+  clearSetupInfo: () => void;
   logout: () => void;
 }
 
@@ -69,6 +71,7 @@ export const useAuthStore = create<AuthState>()(
       user: DEV_SKIP_AUTH ? DEV_MOCK_USER : null,
       agent: null,
       entityId: DEV_SKIP_AUTH ? "dev-user" : null,
+      setupInfo: null,
 
       login: async (identifier, password) => {
         const data = await apiPost("login", { identifier, password });
@@ -100,12 +103,16 @@ export const useAuthStore = create<AuthState>()(
           user: data.user,
           agent: data.agent ?? null,
           entityId: data.entity_id ?? null,
+          setupInfo: { userId: data.user.id, defaultName: data.user.name },
         });
-        return { userId: data.user.id, defaultName: data.user.name };
+      },
+
+      clearSetupInfo: () => {
+        set({ setupInfo: null });
       },
 
       logout: () => {
-        set({ token: null, user: null, agent: null, entityId: null });
+        set({ token: null, user: null, agent: null, entityId: null, setupInfo: null });
       },
     }),
     {
