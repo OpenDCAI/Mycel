@@ -765,6 +765,15 @@ class _RetryOnceModel:
         return AIMessage(content=f"after retry {self.status}")
 
 
+class _EmptyStreamModel:
+    def bind_tools(self, tools):
+        return self
+
+    async def astream(self, messages):
+        if False:
+            yield AIMessageChunk(content="")
+
+
 class _TruncatedResponseModel:
     def __init__(self, responses):
         self.responses = list(responses)
@@ -1210,6 +1219,15 @@ async def test_query_loop_retries_once_after_429_rate_limit_error():
     assert result["reason"] == "completed"
     assert result["messages"][-1].content == "after retry 429"
     assert model.calls == 2
+
+
+@pytest.mark.asyncio
+async def test_query_loop_astream_raises_loudly_on_empty_stream():
+    loop = make_loop(_EmptyStreamModel(), app_state=AppState(), runtime=SimpleNamespace(cost=0.0))
+
+    with pytest.raises(RuntimeError, match="streaming model returned no AIMessageChunk"):
+        async for _ in loop.astream({"messages": [{"role": "user", "content": "hi"}]}, stream_mode=["messages", "updates"]):
+            pass
 
 
 @pytest.mark.asyncio

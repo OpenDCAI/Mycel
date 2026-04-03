@@ -357,6 +357,13 @@ class QueryLoop:
         emitted_live_agent_chunks = False
         async for event in self.query(input, config=config):
             if "terminal" in event:
+                terminal = event["terminal"]
+                if terminal is not None and terminal.reason is not TerminalReason.completed:
+                    # @@@astream-terminal-loud-fail
+                    # query() always emits a terminal event, but caller-facing
+                    # astream() must not turn runtime failures into a silent empty
+                    # iterator. Propagate non-completed terminals back to the caller.
+                    raise RuntimeError(terminal.error or terminal.reason.value)
                 continue
             if isinstance(stream_mode, str):
                 if "message_chunk" in event:

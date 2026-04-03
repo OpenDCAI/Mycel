@@ -28,6 +28,24 @@ def _mock_model(text="Integration test response"):
     return model
 
 
+def _empty_stream_model():
+    class _EmptyStreamModel:
+        def bind_tools(self, tools):
+            return self
+
+        def configurable_fields(self, **kwargs):
+            return self
+
+        def with_config(self, **kwargs):
+            return self
+
+        async def astream(self, messages):
+            if False:
+                yield AIMessageChunk(content="")
+
+    return _EmptyStreamModel()
+
+
 def _patch_env_api_key():
     """Ensure ANTHROPIC_API_KEY is set for LeonAgent init (uses a fake value)."""
     return patch.dict(os.environ, {"ANTHROPIC_API_KEY": "sk-test-integration"})
@@ -150,6 +168,30 @@ async def test_leon_agent_astream_messages_updates_mode_yields_langgraph_tuples(
 
         update_chunks = [data for mode, data in chunks if mode == "updates"]
         assert any("agent" in update for update in update_chunks)
+
+        agent.close()
+
+
+@pytest.mark.asyncio
+@_patch_env_api_key()
+async def test_leon_agent_astream_raises_loudly_on_empty_stream(tmp_path):
+    """Empty streaming responses should surface as errors, not silent empty iterators."""
+    from core.runtime.agent import LeonAgent
+
+    with patch("core.runtime.agent.LeonAgent._create_model", return_value=_empty_stream_model()), \
+         patch("core.runtime.agent.LeonAgent._init_async_components", return_value=(None, [])), \
+         patch("core.runtime.agent.LeonAgent._init_checkpointer", new_callable=AsyncMock, return_value=None):
+
+        agent = LeonAgent(workspace_root=str(tmp_path), api_key="sk-test-integration")
+        await agent.ainit()
+
+        with pytest.raises(RuntimeError, match="streaming model returned no AIMessageChunk"):
+            async for _ in agent.astream(
+                "test",
+                thread_id="test-empty-stream",
+                stream_mode=["messages", "updates"],
+            ):
+                pass
 
         agent.close()
 
