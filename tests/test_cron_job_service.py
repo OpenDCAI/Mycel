@@ -8,7 +8,10 @@ from backend.web.services import cron_job_service
 @pytest.fixture(autouse=True)
 def _use_tmp_db(tmp_path, monkeypatch):
     """Redirect cron_job_service to a temporary SQLite database."""
-    monkeypatch.setattr(cron_job_service, "DB_PATH", tmp_path / "test.db")
+    from storage.providers.sqlite.cron_job_repo import SQLiteCronJobRepo
+
+    db_path = tmp_path / "test.db"
+    monkeypatch.setattr(cron_job_service, "make_cron_job_repo", lambda: SQLiteCronJobRepo(db_path=db_path))
 
 
 # ---------------------------------------------------------------------------
