@@ -536,6 +536,8 @@ function RegOtpStep({ email, onSubmit, onResend, onBack, error, setError, loadin
   loading: boolean; setLoading: (v: boolean) => void;
 }) {
   const [otp, setOtp] = useState("");
+  const [resending, setResending] = useState(false);
+  const [resendDone, setResendDone] = useState(false);
   async function handle(e: React.FormEvent) {
     e.preventDefault(); setError(null); setLoading(true);
     try { await onSubmit(otp.trim()); }
@@ -543,10 +545,10 @@ function RegOtpStep({ email, onSubmit, onResend, onBack, error, setError, loadin
     finally { setLoading(false); }
   }
   async function handleResend() {
-    setError(null); setLoading(true);
-    try { await onResend(); }
+    setError(null); setResending(true); setResendDone(false);
+    try { await onResend(); setResendDone(true); }
     catch (err) { setError(err instanceof Error ? err.message : "发送失败"); }
-    finally { setLoading(false); }
+    finally { setResending(false); }
   }
   return (
     <AuthCard>
@@ -560,12 +562,13 @@ function RegOtpStep({ email, onSubmit, onResend, onBack, error, setError, loadin
           required
         />
         {error && <p className="text-xs text-destructive">{error}</p>}
+        {resendDone && !error && <p className="text-xs text-success">验证码已重新发送</p>}
         <button type="submit" disabled={loading || otp.length < 6} className={btnCls}>
           {loading ? "验证中..." : "确认"}
         </button>
       </form>
       <p className="text-center text-xs text-muted-foreground mt-4">
-        没收到？<button onClick={handleResend} disabled={loading} className="text-primary hover:underline">重新发送</button>
+        没收到？<button onClick={handleResend} disabled={resending || loading} className="text-primary hover:underline">{resending ? "发送中..." : "重新发送"}</button>
         <span className="mx-2 text-border">·</span>
         <button onClick={onBack} className="text-primary hover:underline">修改信息</button>
       </p>
