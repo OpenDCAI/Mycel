@@ -13,6 +13,7 @@ from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 
 from core.runtime.middleware.memory import MemoryMiddleware
 from core.runtime.middleware import AgentMiddleware
+from core.runtime.middleware.monitor import AgentState
 from core.runtime.loop import QueryLoop, _StreamingToolExecutor
 from core.runtime.registry import ToolEntry, ToolMode, ToolRegistry
 from core.runtime.state import AppState, BootstrapConfig, ToolPermissionState
@@ -525,6 +526,55 @@ async def test_query_loop_aget_state_exposes_persisted_permission_state_for_back
         "alwaysAllowRules": {"session": ["Write"]},
         "alwaysDenyRules": {"session": ["Bash"]},
         "alwaysAskRules": {"session": ["Edit"]},
+        "allowManagedPermissionRulesOnly": False,
+    }
+
+
+@pytest.mark.asyncio
+async def test_query_loop_aget_state_uses_live_permission_state_while_active():
+    checkpointer = _MemoryCheckpointer()
+    app_state = AppState(
+        messages=[HumanMessage(content="live human")],
+        tool_permission_context=ToolPermissionState(alwaysAskRules={"session": ["Bash"]}),
+        pending_permission_requests={
+            "perm-live": {
+                "request_id": "perm-live",
+                "thread_id": "perm-thread",
+                "tool_name": "Bash",
+                "args": {"command": "echo hi"},
+                "message": "Permission required by rule: Bash",
+            }
+        },
+    )
+    loop = QueryLoop(
+        model=mock_model_no_tools("unused"),
+        system_prompt=SystemMessage(content="You are a test assistant."),
+        middleware=[],
+        checkpointer=checkpointer,
+        registry=make_registry(),
+        app_state=app_state,
+        runtime=SimpleNamespace(current_state=AgentState.ACTIVE),
+        bootstrap=BootstrapConfig(workspace_root=Path("/tmp"), model_name="test-model"),
+        max_turns=10,
+    )
+    config = {"configurable": {"thread_id": "perm-thread"}}
+
+    state = await loop.aget_state(config)
+
+    assert [msg.content for msg in state.values["messages"]] == ["live human"]
+    assert state.values["pending_permission_requests"] == {
+        "perm-live": {
+            "request_id": "perm-live",
+            "thread_id": "perm-thread",
+            "tool_name": "Bash",
+            "args": {"command": "echo hi"},
+            "message": "Permission required by rule: Bash",
+        }
+    }
+    assert state.values["tool_permission_context"] == {
+        "alwaysAllowRules": {},
+        "alwaysDenyRules": {},
+        "alwaysAskRules": {"session": ["Bash"]},
         "allowManagedPermissionRulesOnly": False,
     }
 

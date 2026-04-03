@@ -471,6 +471,12 @@ class QueryLoop:
         """Minimal graph-state bridge for backend/web callers."""
         config = config or {}
         thread_id = config.get("configurable", {}).get("thread_id", "default")
+        if self._is_runtime_active():
+            # @@@active-state-no-clobber - caller surfaces like /permissions and
+            # /history can poll during an active run. Rehydrating from stale
+            # checkpoint here would erase live thread-scoped permission state.
+            values = self._snapshot_live_thread_state(thread_id)
+            return SimpleNamespace(values=values)
         values = await self._hydrate_thread_state_from_checkpoint(thread_id)
         return SimpleNamespace(values=values)
 
@@ -1527,6 +1533,22 @@ class QueryLoop:
         if not callable(snapshot):
             return {}
         return dict(snapshot(thread_id) or {})
+
+    def _is_runtime_active(self) -> bool:
+        current_state = getattr(self._runtime, "current_state", None)
+        return getattr(current_state, "value", current_state) == "active"
+
+    def _snapshot_live_thread_state(self, thread_id: str) -> dict[str, Any]:
+        messages = list(self._app_state.messages) if self._app_state is not None else []
+        permission_context, pending, resolved = self._thread_permission_state_snapshot(thread_id)
+        memory_state = self._thread_memory_state_snapshot(thread_id)
+        return {
+            "messages": messages,
+            "tool_permission_context": permission_context,
+            "pending_permission_requests": pending,
+            "resolved_permission_requests": resolved,
+            "memory_compaction_state": memory_state,
+        }
 
     def _restore_thread_permission_state(
         self,

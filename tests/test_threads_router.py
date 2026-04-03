@@ -1,13 +1,18 @@
 from __future__ import annotations
 
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from langchain_core.messages import HumanMessage, SystemMessage, ToolMessage
 
 from backend.web.models.requests import CreateThreadRequest
 from backend.web.routers import threads as threads_router
 from core.runtime.middleware.monitor import AgentState
+from core.runtime.loop import QueryLoop
+from core.runtime.registry import ToolRegistry
+from core.runtime.state import AppState, BootstrapConfig, ToolPermissionState
 from storage.contracts import MemberRow, MemberType
 
 
@@ -138,6 +143,64 @@ class _FakePermissionAgent:
         return True
 
 
+class _MemoryCheckpointer:
+    def __init__(self, channel_values: dict | None = None) -> None:
+        self._checkpoint = {"channel_values": dict(channel_values or {})}
+
+    async def aget(self, _cfg):
+        return self._checkpoint
+
+
+class _LivePendingPermissionAgent:
+    def __init__(self) -> None:
+        app_state = AppState(
+            tool_permission_context=ToolPermissionState(alwaysAskRules={"session": ["Bash"]}),
+            pending_permission_requests={
+                "perm-live": {
+                    "request_id": "perm-live",
+                    "thread_id": "thread-1",
+                    "tool_name": "Bash",
+                    "args": {"command": "echo hi"},
+                    "message": "Permission required by rule: Bash",
+                }
+            },
+        )
+        self.agent = QueryLoop(
+            model=MagicMock(),
+            system_prompt=SystemMessage(content="sys"),
+            middleware=[],
+            checkpointer=_MemoryCheckpointer(channel_values={"messages": []}),
+            registry=ToolRegistry(),
+            app_state=app_state,
+            runtime=SimpleNamespace(current_state=AgentState.ACTIVE),
+            bootstrap=BootstrapConfig(
+                workspace_root=Path("/tmp"),
+                model_name="test-model",
+                permission_resolver_scope="thread",
+            ),
+            max_turns=1,
+        )
+
+    def get_pending_permission_requests(self, thread_id: str | None = None):
+        requests = list(self.agent._app_state.pending_permission_requests.values())
+        if thread_id is None:
+            return requests
+        return [item for item in requests if item["thread_id"] == thread_id]
+
+    def get_thread_permission_rules(self, thread_id: str) -> dict[str, object]:
+        state = self.agent._app_state.tool_permission_context
+        return {
+            "thread_id": thread_id,
+            "scope": "session",
+            "managed_only": state.allowManagedPermissionRulesOnly,
+            "rules": {
+                "allow": list(state.alwaysAllowRules.get("session", [])),
+                "deny": list(state.alwaysDenyRules.get("session", [])),
+                "ask": list(state.alwaysAskRules.get("session", [])),
+            },
+        }
+
+
 class _NullLock:
     async def __aenter__(self):
         return self
@@ -258,6 +321,81 @@ async def test_get_thread_permissions_returns_thread_scoped_pending_requests():
             "ask": ["Edit"],
         },
         "managed_only": False,
+    }
+
+
+@pytest.mark.asyncio
+async def test_get_thread_permissions_does_not_clear_live_pending_requests_during_active_run():
+    agent = _LivePendingPermissionAgent()
+
+    result = await threads_router.get_thread_permissions(
+        "thread-1",
+        user_id="owner-1",
+        agent=agent,
+    )
+
+    assert result == {
+        "thread_id": "thread-1",
+        "requests": [
+            {
+                "request_id": "perm-live",
+                "thread_id": "thread-1",
+                "tool_name": "Bash",
+                "args": {"command": "echo hi"},
+                "message": "Permission required by rule: Bash",
+            }
+        ],
+        "session_rules": {
+            "allow": [],
+            "deny": [],
+            "ask": ["Bash"],
+        },
+        "managed_only": False,
+    }
+    assert agent.agent._app_state.pending_permission_requests == {
+        "perm-live": {
+            "request_id": "perm-live",
+            "thread_id": "thread-1",
+            "tool_name": "Bash",
+            "args": {"command": "echo hi"},
+            "message": "Permission required by rule: Bash",
+        }
+    }
+
+
+@pytest.mark.asyncio
+async def test_get_thread_history_does_not_clear_live_pending_requests_during_active_run():
+    agent = _LivePendingPermissionAgent()
+    agent.agent._app_state.messages = [
+        HumanMessage(content="please run bash"),
+        ToolMessage(content="Permission required by rule: Bash", tool_call_id="call-1", name="Bash"),
+    ]
+
+    with patch.object(threads_router, "resolve_thread_sandbox", return_value="local"), patch.object(
+        threads_router,
+        "get_or_create_agent",
+        AsyncMock(return_value=agent),
+    ):
+        result = await threads_router.get_thread_history(
+            "thread-1",
+            limit=20,
+            truncate=0,
+            user_id="owner-1",
+            app=SimpleNamespace(state=SimpleNamespace()),
+        )
+
+    assert result["messages"] == [
+        {"role": "human", "text": "please run bash"},
+        {"role": "tool_result", "tool": "Bash", "text": "Permission required by rule: Bash"},
+    ]
+    assert agent.agent._app_state.pending_permission_requests == {
+        "perm-live": {
+            "request_id": "perm-live",
+            "thread_id": "thread-1",
+            "tool_name": "Bash",
+            "args": {"command": "echo hi"},
+            "message": "Permission required by rule: Bash",
+        }
     }
 
 
