@@ -6,6 +6,13 @@ import subprocess
 import sys
 from pathlib import Path
 
+# Load .env file if ENV_FILE is specified (e.g. ENV_FILE=.env for local dev)
+_env_file = os.getenv("ENV_FILE")
+if _env_file:
+    from dotenv import load_dotenv
+
+    load_dotenv(_env_file, override=False)
+
 import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
