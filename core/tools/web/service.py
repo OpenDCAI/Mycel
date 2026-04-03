@@ -59,7 +59,7 @@ class WebService:
         registry.register(
             ToolEntry(
                 name="WebSearch",
-                mode=ToolMode.INLINE,
+                mode=ToolMode.DEFERRED,
                 schema={
                     "name": "WebSearch",
                     "description": (
@@ -101,7 +101,7 @@ class WebService:
         registry.register(
             ToolEntry(
                 name="WebFetch",
-                mode=ToolMode.INLINE,
+                mode=ToolMode.DEFERRED,
                 schema={
                     "name": "WebFetch",
                     "description": (

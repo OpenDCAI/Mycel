@@ -32,6 +32,7 @@ from core.tools.filesystem.read import read_file as read_file_dispatch
 from core.tools.filesystem.read.readers.pdf import read_pdf
 from core.tools.filesystem.service import FileSystemService
 from core.tools.tool_search.service import ToolSearchService
+from core.tools.web.service import WebService
 from sandbox.interfaces.filesystem import DirListResult, FileReadResult, FileSystemBackend, FileWriteResult
 
 # ---------------------------------------------------------------------------
@@ -1197,6 +1198,16 @@ class TestToolSearchService:
 
         assert json.loads(result.content) == []
         assert ctx.discovered_tool_names == set()
+
+
+class TestWebToolRegistration:
+    def test_web_tools_are_deferred_not_inline(self):
+        reg = ToolRegistry()
+        WebService(registry=reg)
+
+        assert reg.get("WebSearch").mode == ToolMode.DEFERRED
+        assert reg.get("WebFetch").mode == ToolMode.DEFERRED
+        assert [schema["name"] for schema in reg.get_inline_schemas()] == []
 
     def test_can_auto_approve_only_for_read_only_non_destructive_tools(self):
         assert can_auto_approve(ToolPermissionContext(is_read_only=True, is_destructive=False)) is True

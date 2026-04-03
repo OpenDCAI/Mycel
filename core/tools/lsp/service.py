@@ -31,15 +31,15 @@ logger = logging.getLogger(__name__)
 
 LSP_SCHEMA = {
     "name": "LSP",
-    "description": (
-        "Language Server Protocol code intelligence. "
-        "Operations: goToDefinition, findReferences, hover, documentSymbol, workspaceSymbol, "
-        "goToImplementation, prepareCallHierarchy, incomingCalls, outgoingCalls. "
-        "Language servers are auto-downloaded on first use. "
-        "Supports python, typescript, javascript, go, rust, java, ruby, kotlin. "
-        "file_path must be absolute. line/column are zero-based. "
-        "incomingCalls/outgoingCalls require 'item' from prepareCallHierarchy output."
-    ),
+        "description": (
+            "Language Server Protocol code intelligence. "
+            "Operations: goToDefinition, findReferences, hover, documentSymbol, workspaceSymbol, "
+            "goToImplementation, prepareCallHierarchy, incomingCalls, outgoingCalls. "
+            "Language servers are auto-downloaded on first use. "
+            "Supports python, typescript, javascript, go, rust, java, ruby, kotlin. "
+            "file_path must be absolute. line/character are 1-based. "
+            "incomingCalls/outgoingCalls require 'item' from prepareCallHierarchy output."
+        ),
     "parameters": {
         "type": "object",
         "properties": {
@@ -57,11 +57,11 @@ LSP_SCHEMA = {
             },
             "line": {
                 "type": "integer",
-                "description": "Zero-based line number (required for goToDefinition, findReferences, hover)",
+                "description": "1-based line number (required for goToDefinition, findReferences, hover)",
             },
-            "column": {
+            "character": {
                 "type": "integer",
-                "description": "Zero-based column number (required for goToDefinition, findReferences, hover)",
+                "description": "1-based character offset (required for goToDefinition, findReferences, hover)",
             },
             "query": {
                 "type": "string",
@@ -677,7 +677,7 @@ class LSPService:
         operation: str,
         file_path: str | None = None,
         line: int | None = None,
-        column: int | None = None,
+        character: int | None = None,
         query: str | None = None,
         language: str | None = None,
         item: dict | None = None,
@@ -717,30 +717,35 @@ class LSPService:
                 return f"Failed to start {lang} language server: {e}"
 
         rel = self._to_relative(file_path) if file_path else ""
+        # @@@dt-04-lsp-position-contract - CC exposes editor-facing 1-based
+        # positions and converts at the tool boundary. Leon must do the same
+        # or every position-aware operation silently lands one symbol off.
+        zero_line = line - 1 if line is not None else None
+        zero_character = character - 1 if character is not None else None
 
         try:
             if operation == "goToDefinition":
-                if not file_path or line is None or column is None:
-                    return "goToDefinition requires: file_path, line, column"
-                results = await session.request_definition(rel, line, column)
+                if not file_path or zero_line is None or zero_character is None:
+                    return "goToDefinition requires: file_path, line, character"
+                results = await session.request_definition(rel, zero_line, zero_character)
                 results = self._filter_gitignored_batched(results)
                 if not results:
                     return "No definition found."
                 return json.dumps([self._fmt_location(r) for r in results], indent=2)
 
             elif operation == "findReferences":
-                if not file_path or line is None or column is None:
-                    return "findReferences requires: file_path, line, column"
-                results = await session.request_references(rel, line, column)
+                if not file_path or zero_line is None or zero_character is None:
+                    return "findReferences requires: file_path, line, character"
+                results = await session.request_references(rel, zero_line, zero_character)
                 results = self._filter_gitignored_batched(results)
                 if not results:
                     return "No references found."
                 return json.dumps([self._fmt_location(r) for r in results], indent=2)
 
             elif operation == "hover":
-                if not file_path or line is None or column is None:
-                    return "hover requires: file_path, line, column"
-                result = await session.request_hover(rel, line, column)
+                if not file_path or zero_line is None or zero_character is None:
+                    return "hover requires: file_path, line, character"
+                result = await session.request_hover(rel, zero_line, zero_character)
                 if not result:
                     return "No hover info."
                 return self._fmt_hover(result)
@@ -762,20 +767,20 @@ class LSPService:
                 return json.dumps([self._fmt_symbol(s) for s in symbols], indent=2)
 
             elif operation == "goToImplementation":
-                if not file_path or line is None or column is None:
-                    return "goToImplementation requires: file_path, line, column"
+                if not file_path or zero_line is None or zero_character is None:
+                    return "goToImplementation requires: file_path, line, character"
                 src = pyright if use_pyright else session
-                results = await src.request_implementation(rel, line, column)
+                results = await src.request_implementation(rel, zero_line, zero_character)
                 results = self._filter_gitignored_batched(results)
                 if not results:
                     return "No implementation found."
                 return json.dumps([self._fmt_location(r) for r in results], indent=2)
 
             elif operation == "prepareCallHierarchy":
-                if not file_path or line is None or column is None:
-                    return "prepareCallHierarchy requires: file_path, line, column"
+                if not file_path or zero_line is None or zero_character is None:
+                    return "prepareCallHierarchy requires: file_path, line, character"
                 src = pyright if use_pyright else session
-                items = await src.request_prepare_call_hierarchy(rel, line, column)
+                items = await src.request_prepare_call_hierarchy(rel, zero_line, zero_character)
                 if not items:
                     return "No call hierarchy items found."
                 return json.dumps([self._fmt_call_hierarchy_item(i) for i in items], indent=2)
@@ -808,4 +813,3 @@ class LSPService:
         except Exception as e:
             logger.exception("[LSPService] operation=%s failed", operation)
             return f"LSP error: {e}"
-
