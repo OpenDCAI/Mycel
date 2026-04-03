@@ -10,7 +10,7 @@ import asyncio
 from dataclasses import dataclass
 from pathlib import Path
 
-from storage.providers.sqlite.agent_registry_repo import SQLiteAgentRegistryRepo
+from backend.web.core.storage_factory import make_agent_registry_repo
 
 
 @dataclass
@@ -29,11 +29,11 @@ class AgentRegistry:
     Persisted at ~/.leon/agent_registry.db
     """
 
-    DEFAULT_DB_PATH = SQLiteAgentRegistryRepo.DEFAULT_DB_PATH
+    DEFAULT_DB_PATH = None  # resolved by storage_factory
 
     def __init__(self, db_path: Path | None = None):
         self._lock = asyncio.Lock()
-        self._repo = SQLiteAgentRegistryRepo(db_path or self.DEFAULT_DB_PATH)
+        self._repo = make_agent_registry_repo()
 
     async def register(self, entry: AgentEntry) -> None:
         async with self._lock:

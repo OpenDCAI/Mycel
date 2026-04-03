@@ -2,12 +2,11 @@
 
 from typing import Any
 
-from backend.web.core.config import DB_PATH
-from storage.providers.sqlite.panel_task_repo import SQLitePanelTaskRepo
+from backend.web.core.storage_factory import make_panel_task_repo
 
 
-def _repo() -> SQLitePanelTaskRepo:
-    return SQLitePanelTaskRepo(db_path=DB_PATH)
+def _repo() -> Any:
+    return make_panel_task_repo()
 
 
 def list_tasks() -> list[dict[str, Any]]:
@@ -27,7 +26,6 @@ def get_task(task_id: str) -> dict[str, Any] | None:
 
 
 def get_highest_priority_pending_task() -> dict[str, Any] | None:
-    """Return the highest-priority pending task (high > medium > low, oldest first)."""
     repo = _repo()
     try:
         return repo.get_highest_priority_pending()

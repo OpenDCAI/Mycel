@@ -14,7 +14,7 @@ from typing import Any
 
 from core.runtime.registry import ToolEntry, ToolMode, ToolRegistry
 from core.tools.task.types import Task, TaskStatus
-from storage.providers.sqlite.tool_task_repo import SQLiteToolTaskRepo
+from backend.web.core.storage_factory import make_tool_task_repo
 
 logger = logging.getLogger(__name__)
 
@@ -143,7 +143,7 @@ class TaskService:
         db_path: Path | None = None,
         thread_id: str | None = None,
     ):
-        self._repo = SQLiteToolTaskRepo(db_path or DEFAULT_DB_PATH)
+        self._repo = make_tool_task_repo(db_path or DEFAULT_DB_PATH)
         self._default_thread_id = thread_id  # override for tests / single-agent TUI
         self._register(registry)
         logger.info("TaskService initialized (db=%s)", db_path or DEFAULT_DB_PATH)

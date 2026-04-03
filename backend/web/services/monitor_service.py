@@ -8,7 +8,7 @@ from typing import Any
 
 from backend.web.services.sandbox_service import init_providers_and_managers, load_all_sessions
 from storage.providers.sqlite.kernel import SQLiteDBRole, resolve_role_db_path
-from storage.providers.sqlite.sandbox_monitor_repo import SQLiteSandboxMonitorRepo
+from backend.web.core.storage_factory import make_sandbox_monitor_repo
 
 # ---------------------------------------------------------------------------
 # Mapping helpers (private)
@@ -271,7 +271,7 @@ def _map_event_detail(event_id: str, event: dict[str, Any]) -> dict[str, Any]:
 
 
 def list_threads() -> dict[str, Any]:
-    repo = SQLiteSandboxMonitorRepo()
+    repo = make_sandbox_monitor_repo()
     try:
         return _map_threads(repo.query_threads())
     finally:
@@ -279,7 +279,7 @@ def list_threads() -> dict[str, Any]:
 
 
 def get_thread(thread_id: str) -> dict[str, Any]:
-    repo = SQLiteSandboxMonitorRepo()
+    repo = make_sandbox_monitor_repo()
     try:
         summary = repo.query_thread_summary(thread_id)
         if not summary:
@@ -290,7 +290,7 @@ def get_thread(thread_id: str) -> dict[str, Any]:
 
 
 def list_leases() -> dict[str, Any]:
-    repo = SQLiteSandboxMonitorRepo()
+    repo = make_sandbox_monitor_repo()
     try:
         return _map_leases(repo.query_leases())
     finally:
@@ -298,7 +298,7 @@ def list_leases() -> dict[str, Any]:
 
 
 def get_lease(lease_id: str) -> dict[str, Any]:
-    repo = SQLiteSandboxMonitorRepo()
+    repo = make_sandbox_monitor_repo()
     try:
         lease = repo.query_lease(lease_id)
         if not lease:
@@ -311,7 +311,7 @@ def get_lease(lease_id: str) -> dict[str, Any]:
 
 
 def list_diverged() -> dict[str, Any]:
-    repo = SQLiteSandboxMonitorRepo()
+    repo = make_sandbox_monitor_repo()
     try:
         return _map_diverged(repo.query_diverged())
     finally:
@@ -319,7 +319,7 @@ def list_diverged() -> dict[str, Any]:
 
 
 def list_events(limit: int = 100) -> dict[str, Any]:
-    repo = SQLiteSandboxMonitorRepo()
+    repo = make_sandbox_monitor_repo()
     try:
         return _map_events(repo.query_events(limit))
     finally:
@@ -327,7 +327,7 @@ def list_events(limit: int = 100) -> dict[str, Any]:
 
 
 def get_event(event_id: str) -> dict[str, Any]:
-    repo = SQLiteSandboxMonitorRepo()
+    repo = make_sandbox_monitor_repo()
     try:
         event = repo.query_event(event_id)
     finally:
@@ -349,7 +349,7 @@ def runtime_health_snapshot() -> dict[str, Any]:
     tables: dict[str, int] = {"chat_sessions": 0, "sandbox_leases": 0, "lease_events": 0}
 
     if db_exists:
-        repo = SQLiteSandboxMonitorRepo()
+        repo = make_sandbox_monitor_repo()
         try:
             tables = repo.count_rows(list(tables))
         finally:
