@@ -9,7 +9,7 @@ from langchain_core.messages import ToolMessage
 @dataclass
 class ToolResultEnvelope:
     kind: str
-    content: str
+    content: Any
     is_error: bool = False
     top_level_blocks: list[Any] = field(default_factory=list)
     metadata: dict[str, Any] = field(default_factory=dict)
@@ -18,7 +18,7 @@ class ToolResultEnvelope:
 def tool_success(content: Any, *, metadata: dict[str, Any] | None = None) -> ToolResultEnvelope:
     return ToolResultEnvelope(
         kind="success",
-        content=str(content),
+        content=content,
         metadata=dict(metadata or {}),
     )
 

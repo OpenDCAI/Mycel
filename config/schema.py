@@ -215,6 +215,10 @@ class ToolsConfig(BaseModel):
 class MCPServerConfig(BaseModel):
     """Configuration for a single MCP server."""
 
+    transport: str | None = Field(
+        None,
+        description="MCP transport type: stdio | streamable_http | sse | websocket",
+    )
     command: str | None = Field(None, description="Command to run the MCP server")
     args: list[str] = Field(default_factory=list, description="Command arguments")
     env: dict[str, str] = Field(default_factory=dict, description="Environment variables")

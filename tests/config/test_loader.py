@@ -1,5 +1,6 @@
 """Comprehensive tests for config.loader module."""
 
+import json
 import os
 import sys
 
@@ -156,6 +157,27 @@ class TestConfigLoader:
         result = loader._expand_env_vars(obj)
         assert result["paths"] == ["/base/path1", "/base/path2"]
         assert result["config"]["root"] == "/base"
+
+    def test_discover_mcp_preserves_explicit_transport(self, tmp_path):
+        path = tmp_path / ".mcp.json"
+        path.write_text(
+            json.dumps(
+                {
+                    "mcpServers": {
+                        "wsdemo": {
+                            "transport": "websocket",
+                            "url": "ws://example.test/mcp",
+                        }
+                    }
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        result = ConfigLoader._discover_mcp(tmp_path)
+
+        assert result["wsdemo"].transport == "websocket"
+        assert result["wsdemo"].url == "ws://example.test/mcp"
 
 
 class TestLoadConfigFunction:

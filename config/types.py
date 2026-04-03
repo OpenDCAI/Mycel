@@ -20,6 +20,7 @@ class AgentConfig(BaseModel):
 class McpServerConfig(BaseModel):
     """Single MCP server entry from .mcp.json."""
 
+    transport: str | None = None
     command: str | None = None
     args: list[str] = Field(default_factory=list)
     env: dict[str, str] = Field(default_factory=dict)

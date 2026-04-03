@@ -229,6 +229,37 @@ class TestSpillIfNeeded:
         assert result is content
         fs.write_file.assert_not_called()
 
+    def test_mcp_binary_blocks_are_saved_and_rewritten(self):
+        fs = _make_fs_backend()
+        mw = SpillBufferMiddleware(
+            fs_backend=fs,
+            workspace_root="/workspace",
+            default_threshold=50_000,
+        )
+        request = _make_request("mcp__server__image_tool", "call_mcp")
+        original_msg = ToolMessage(
+            content=[
+                {"type": "text", "text": "caption"},
+                {"type": "image", "base64": "QUJD", "mime_type": "image/png"},
+            ],
+            tool_call_id="call_mcp",
+            additional_kwargs={"tool_result_meta": {"source": "mcp"}},
+        )
+
+        result = mw._maybe_spill(request, original_msg)
+
+        expected_path = os.path.join(
+            "/workspace",
+            ".leon",
+            "tool-results",
+            "call_mcp-1.png.base64",
+        )
+        fs.write_file.assert_called_once_with(expected_path, "QUJD")
+        assert isinstance(result.content, str)
+        assert "caption" in result.content
+        assert expected_path in result.content
+        assert "QUJD" not in result.content
+
 
 # ===========================================================================
 # SpillBufferMiddleware

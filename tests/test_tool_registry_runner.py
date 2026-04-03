@@ -488,6 +488,30 @@ class TestToolRunnerErrorNormalization:
         assert result.additional_kwargs["tool_result_meta"]["source"] == "mcp"
 
     @pytest.mark.asyncio
+    async def test_registered_mcp_tool_preserves_content_blocks_before_spill(self):
+        @tool
+        async def sample_mcp_tool(x: int) -> list[dict[str, str]]:
+            """sample mcp"""
+            return [
+                {"type": "text", "text": f"mcp:{x}"},
+                {"type": "image", "base64": "QUJD", "mime_type": "image/png"},
+            ]
+
+        registry = ToolRegistry()
+        registry.register(_make_mcp_tool_entry(sample_mcp_tool))
+        runner = ToolRunner(registry=registry)
+        req = _make_tool_call_request("sample_mcp_tool", {"x": 3})
+        req.state = MagicMock()
+
+        result = await runner.awrap_tool_call(req, AsyncMock())
+
+        assert result.content == [
+            {"type": "text", "text": "mcp:3"},
+            {"type": "image", "base64": "QUJD", "mime_type": "image/png"},
+        ]
+        assert result.additional_kwargs["tool_result_meta"]["source"] == "mcp"
+
+    @pytest.mark.asyncio
     async def test_registered_mcp_hook_rematerialization_keeps_mcp_source(self):
         @tool
         async def sample_mcp_tool(x: int) -> str:

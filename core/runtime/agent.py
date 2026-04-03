@@ -1173,10 +1173,21 @@ class LeonAgent:
 
         configs = {}
         for name, cfg in mcp_servers.items():
+            transport = getattr(cfg, "transport", None)
             if cfg.url:
-                config = {"transport": "streamable_http", "url": cfg.url}
+                # @@@mcp-transport-honesty - api-04 requires explicit transport
+                # config to survive loader -> runtime. URL-based MCP is not
+                # always streamable_http; websocket/sse must stay explicit.
+                config = {
+                    "transport": transport or "streamable_http",
+                    "url": cfg.url,
+                }
             else:
-                config = {"transport": "stdio", "command": cfg.command, "args": cfg.args}
+                config = {
+                    "transport": transport or "stdio",
+                    "command": cfg.command,
+                    "args": cfg.args,
+                }
             if cfg.env:
                 config["env"] = cfg.env
             configs[name] = config
