@@ -564,7 +564,7 @@ class AgentService:
             agent_name_for_role = _get_subagent_agent_name(subagent_type)
 
             try:
-                from core.runtime.fork import create_subagent_context, fork_context
+                from core.runtime.fork import create_subagent_context, fork_context as fork_bootstrap
 
                 # Parent bootstrap is stored on the ToolUseContext or agent instance.
                 # AgentService stores workspace_root and model_name directly; use those
@@ -576,7 +576,7 @@ class AgentService:
                     child_tool_context = create_subagent_context(parent_tool_context)
                     child_bootstrap = child_tool_context.bootstrap
                 elif parent_bootstrap is not None:
-                    child_bootstrap = fork_context(parent_bootstrap)
+                    child_bootstrap = fork_bootstrap(parent_bootstrap)
                     selected_model = _resolve_subagent_model(
                         self._workspace_root,
                         subagent_type,

@@ -625,9 +625,10 @@ async def _run_agent_to_buffer(
         )
 
         # @@@run-notice — emit notice right after run_start so frontend folds it
-        # into the (re)opened turn.  Only for external notifications (not owner steer).
+        # into the (re)opened turn. Mirror the cold-path DisplayBuilder rule:
+        # any source=system message is a notice; external notices stay chat-only.
         ntype = meta.get("notification_type")
-        if src and src != "owner" and ntype == "chat":
+        if src == "system" or (src == "external" and ntype == "chat"):
             await emit(
                 {
                     "event": "notice",
@@ -792,14 +793,13 @@ async def _run_agent_to_buffer(
                             msg_class = msg.__class__.__name__
 
                             if msg_class == "HumanMessage":
-                                # @@@mid-turn-chat-notice — emit notice for chat
-                                # notifications injected by before_model. display_builder
-                                # folds it into the current turn as a segment (same as
-                                # cold-path checkpoint rebuild behavior).
+                                # @@@mid-turn-notice-parity — hot streaming must use the
+                                # same notice contract as cold checkpoint rebuild:
+                                # source=system always folds as notice; external stays
+                                # limited to chat notifications.
                                 meta = getattr(msg, "metadata", None) or {}
-                                if meta.get("notification_type") == "chat" and meta.get("source") in (
-                                    "external",
-                                    "system",
+                                if meta.get("source") == "system" or (
+                                    meta.get("source") == "external" and meta.get("notification_type") == "chat"
                                 ):
                                     await emit(
                                         {
@@ -808,7 +808,7 @@ async def _run_agent_to_buffer(
                                                 {
                                                     "content": msg.content if isinstance(msg.content, str) else str(msg.content),
                                                     "source": meta.get("source", "external"),
-                                                    "notification_type": "chat",
+                                                    "notification_type": meta.get("notification_type"),
                                                 },
                                                 ensure_ascii=False,
                                             ),

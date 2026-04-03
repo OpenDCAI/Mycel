@@ -548,10 +548,16 @@ async def get_thread_messages(
     sandbox_type = resolve_thread_sandbox(app, thread_id)
     agent = await get_or_create_agent(app, sandbox_type, thread_id=thread_id)
 
-    # Hot path: return cached display entries
+    runtime_active = bool(hasattr(agent, "runtime") and agent.runtime.current_state == AgentState.ACTIVE)
+
+    # @@@detail-cache-honesty
+    # Thread detail must not trust a stale in-memory display cache after the
+    # run has gone idle. Follow-up notifications are checkpoint-persisted, and
+    # history already rebuilds from checkpoint, so detail must do the same when
+    # no live stream is in flight.
     entries = display_builder.get_entries(thread_id)
-    if entries is None:
-        # Cold path: rebuild from checkpoint
+    if entries is None or not runtime_active:
+        # Cold path or idle refresh: rebuild from checkpoint
         set_current_thread_id(thread_id)
         config = {"configurable": {"thread_id": thread_id}}
         state = await agent.agent.aget_state(config)

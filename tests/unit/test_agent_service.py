@@ -483,6 +483,51 @@ async def test_agent_tool_live_runner_path_passes_isolated_tool_context_to_child
 
 
 @pytest.mark.asyncio
+async def test_run_agent_without_fork_context_does_not_inject_parent_messages(monkeypatch, tmp_path):
+    captured: dict[str, object] = {}
+
+    class _CapturingChild(_FakeChildAgent):
+        async def _astream(self, payload, *args, **kwargs):
+            captured["messages"] = payload["messages"]
+            if False:
+                yield None
+            return
+
+    def fake_create_leon_agent(*, model_name, workspace_root, **kwargs):
+        return _CapturingChild(Path(workspace_root), model_name)
+
+    monkeypatch.setattr("core.runtime.agent.create_leon_agent", fake_create_leon_agent)
+
+    service = AgentService(
+        tool_registry=_FakeRegistry(),
+        agent_registry=_FakeAgentRegistry(),
+        workspace_root=tmp_path,
+        model_name="gpt-test",
+    )
+    parent_context = _make_parent_context(tmp_path)
+    parent_context.messages = [
+        {
+            "role": "user",
+            "content": "PARENT_CONTROL_PROMPT",
+        }
+    ]
+
+    result = await service._run_agent(
+        task_id="task-1",
+        agent_name="child",
+        thread_id="subagent-1",
+        prompt="child task only",
+        subagent_type="general",
+        max_turns=None,
+        fork_context=False,
+        parent_tool_context=parent_context,
+    )
+
+    assert result == "(Agent completed with no text output)"
+    assert captured["messages"] == [{"role": "user", "content": "child task only"}]
+
+
+@pytest.mark.asyncio
 async def test_run_agent_child_tool_context_deep_clones_read_file_state(monkeypatch, tmp_path):
     created: list[_FakeChildAgent] = []
 
