@@ -5,7 +5,6 @@ User preferences (workspace, default model) are stored in ~/.leon/preferences.js
 """
 
 import json
-import os
 from pathlib import Path
 from typing import Any
 
@@ -57,14 +56,9 @@ def save_settings(settings: WorkspaceSettings) -> None:
         json.dump(settings.model_dump(), f, indent=2, ensure_ascii=False)
 
 
-def _get_settings_repo():
-    """Return a SupabaseUserSettingsRepo when LEON_STORAGE_STRATEGY=supabase, else None."""
-    if os.getenv("LEON_STORAGE_STRATEGY") == "supabase":
-        from backend.web.core.supabase_factory import create_supabase_client
-        from storage.providers.supabase.user_settings_repo import SupabaseUserSettingsRepo
-
-        return SupabaseUserSettingsRepo(create_supabase_client())
-    return None
+def _get_settings_repo(request: Request):
+    """Return the user_settings_repo wired by lifespan, or None in sqlite mode."""
+    return getattr(request.app.state, "user_settings_repo", None)
 
 
 def _try_get_user_id(request: Request) -> str | None:
@@ -137,7 +131,7 @@ class UserSettings(BaseModel):
 @router.get("")
 async def get_settings(request: Request) -> UserSettings:
     """Get combined settings (workspace + default_model from Supabase or preferences.json, models from models.json)."""
-    repo = _get_settings_repo()
+    repo = _get_settings_repo(request)
     user_id = _try_get_user_id(request) if repo else None
 
     if repo and user_id:
@@ -230,7 +224,7 @@ async def set_default_workspace(request: WorkspaceRequest, req: Request) -> dict
 
     workspace_str = str(workspace_path)
 
-    repo = _get_settings_repo()
+    repo = _get_settings_repo(req)
     user_id = _try_get_user_id(req) if repo else None
     if repo and user_id:
         repo.set_default_workspace(user_id, workspace_str)
@@ -255,7 +249,7 @@ async def add_recent_workspace(request: WorkspaceRequest, req: Request) -> dict[
 
     workspace_str = str(workspace_path)
 
-    repo = _get_settings_repo()
+    repo = _get_settings_repo(req)
     user_id = _try_get_user_id(req) if repo else None
     if repo and user_id:
         repo.add_recent_workspace(user_id, workspace_str)
@@ -277,7 +271,7 @@ class DefaultModelRequest(BaseModel):
 @router.post("/default-model")
 async def set_default_model(request: DefaultModelRequest, req: Request) -> dict[str, Any]:
     """Set default virtual model preference."""
-    repo = _get_settings_repo()
+    repo = _get_settings_repo(req)
     user_id = _try_get_user_id(req) if repo else None
     if repo and user_id:
         repo.set_default_model(user_id, request.model)
