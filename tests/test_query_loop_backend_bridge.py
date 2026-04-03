@@ -57,6 +57,22 @@ class _PromptTooLongTwiceModel:
         raise RuntimeError("prompt is too long")
 
 
+class _PromptTooLongWithFailingCompactorModel:
+    def bind_tools(self, tools):
+        return self
+
+    def bind(self, **kwargs):
+        return self
+
+    async def ainvoke(self, messages):
+        system_text = ""
+        if messages and messages[0].__class__.__name__ == "SystemMessage":
+            system_text = getattr(messages[0], "content", "") or ""
+        if "tasked with summarizing conversations" in system_text or "split turn" in system_text.lower():
+            raise RuntimeError("compaction failed")
+        raise RuntimeError("prompt is too long")
+
+
 class _BridgeReactiveCompactMiddleware:
     compact_boundary_index = 1
 
@@ -957,6 +973,71 @@ async def test_compaction_clear_then_recovery_notice_rebuilds_honestly(tmp_path)
         entry.get("role") == "notice"
         and "Prompt is too long. Automatic recovery exhausted." in entry.get("content", "")
         for entry in recovery_detail["entries"]
+    )
+
+
+@pytest.mark.asyncio
+async def test_cold_rebuild_surfaces_compaction_breaker_notice_after_repeated_failures(tmp_path):
+    checkpointer = _MemoryCheckpointer()
+    model = _PromptTooLongWithFailingCompactorModel()
+    memory = MemoryMiddleware(
+        db_path=tmp_path / "compaction-breaker.db",
+        compaction_config=SimpleNamespace(reserve_tokens=0, keep_recent_tokens=10),
+    )
+    memory.set_model(model)
+    loop = _make_loop(
+        model=model,
+        checkpointer=checkpointer,
+        middleware=[memory],
+    )
+    config = {"configurable": {"thread_id": "compaction-breaker-thread"}}
+
+    for attempt in range(3):
+        async for _ in loop.query(
+            {
+                "messages": [
+                    {"role": "user", "content": "A" * 80},
+                    {"role": "assistant", "content": "B" * 80},
+                    {"role": "user", "content": f"start {attempt} " + ("C" * 80)},
+                ]
+            },
+            config=config,
+        ):
+            pass
+
+    fake_agent = SimpleNamespace(
+        agent=loop,
+        runtime=SimpleNamespace(current_state=AgentState.IDLE),
+    )
+    fake_app = SimpleNamespace(state=SimpleNamespace(display_builder=DisplayBuilder()))
+
+    with (
+        patch("backend.web.routers.threads.get_or_create_agent", return_value=fake_agent),
+        patch("backend.web.routers.threads.resolve_thread_sandbox", return_value="local"),
+        patch("backend.web.routers.threads.get_sandbox_info", return_value={"type": "local"}),
+    ):
+        detail = await get_thread_messages(
+            "compaction-breaker-thread",
+            user_id="u",
+            app=fake_app,
+        )
+        rebuilt_history = await get_thread_history(
+            "compaction-breaker-thread",
+            limit=50,
+            truncate=300,
+            user_id="u",
+            app=fake_app,
+        )
+
+    assert any(
+        entry.get("role") == "notice"
+        and "Automatic compaction disabled for this thread after repeated failures." in entry.get("content", "")
+        for entry in detail["entries"]
+    )
+    assert any(
+        item.get("role") == "notification"
+        and "Automatic compaction disabled for this thread after repeated failures." in item.get("text", "")
+        for item in rebuilt_history["messages"]
     )
 
 

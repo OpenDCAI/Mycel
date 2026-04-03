@@ -28,6 +28,7 @@ from .pruner import SessionPruner
 from .summary_store import SummaryStore
 
 logger = logging.getLogger(__name__)
+_COMPACTION_BREAKER_THRESHOLD = 3
 
 
 class MemoryMiddleware(AgentMiddleware):
@@ -88,7 +89,9 @@ class MemoryMiddleware(AgentMiddleware):
         self._compact_up_to_index: int = 0
         self._summary_restored: bool = False
         self._summary_thread_id: str | None = None
-        self._latest_compaction_notice: dict[str, Any] | None = None
+        self._pending_owner_notices: list[dict[str, Any]] = []
+        self._compaction_failure_counts_by_thread: dict[str, int] = {}
+        self._compaction_breaker_open_by_thread: dict[str, bool] = {}
 
         if verbose:
             print("[MemoryMiddleware] Initialized")
@@ -185,7 +188,9 @@ class MemoryMiddleware(AgentMiddleware):
             )
 
         if self.compactor.should_compact(estimated, self._context_limit, self._compaction_threshold) and self._model:
-            messages = await self._do_compact(messages, thread_id)
+            compacted = await self._attempt_compaction(messages, thread_id=thread_id)
+            if compacted is not None:
+                messages = compacted
         elif self._cached_summary and self._compact_up_to_index > 0:
             if self._compact_up_to_index <= len(messages):
                 summary_msg = SystemMessage(content=f"[Conversation Summary]\n{self._cached_summary}")
@@ -289,7 +294,7 @@ class MemoryMiddleware(AgentMiddleware):
             if self._runtime:
                 self._runtime.set_flag("is_compacting", False)
 
-    async def compact_messages_for_recovery(self, messages: list[Any]) -> list[Any] | None:
+    async def compact_messages_for_recovery(self, messages: list[Any], thread_id: str | None = None) -> list[Any] | None:
         """Force a compaction pass and return the compacted message list."""
         if not self._model:
             return None
@@ -299,7 +304,7 @@ class MemoryMiddleware(AgentMiddleware):
         if len(to_summarize) < 2:
             return None
 
-        return await self._do_compact(pruned)
+        return await self._attempt_compaction(pruned, thread_id=thread_id or self._current_thread_id())
 
     def _estimate_tokens(self, messages: list[Any]) -> int:
         """Estimate total tokens for messages (chars // 2)."""
@@ -340,26 +345,97 @@ class MemoryMiddleware(AgentMiddleware):
             return configurable.get("thread_id")
         return getattr(configurable, "thread_id", None) if configurable else None
 
-    def consume_latest_compaction_notice(self) -> dict[str, Any] | None:
-        notice = self._latest_compaction_notice
-        self._latest_compaction_notice = None
-        return notice
+    def consume_pending_notices(self) -> list[dict[str, Any]]:
+        notices = list(self._pending_owner_notices)
+        self._pending_owner_notices.clear()
+        return notices
+
+    def snapshot_thread_state(self, thread_id: str) -> dict[str, Any]:
+        return {
+            "failure_count": int(self._compaction_failure_counts_by_thread.get(thread_id, 0)),
+            "breaker_open": bool(self._compaction_breaker_open_by_thread.get(thread_id, False)),
+        }
+
+    def restore_thread_state(self, thread_id: str, state: dict[str, Any] | None) -> None:
+        payload = dict(state or {})
+        failure_count = int(payload.get("failure_count") or 0)
+        breaker_open = bool(payload.get("breaker_open", False))
+        if failure_count > 0:
+            self._compaction_failure_counts_by_thread[thread_id] = failure_count
+        else:
+            self._compaction_failure_counts_by_thread.pop(thread_id, None)
+        if breaker_open:
+            self._compaction_breaker_open_by_thread[thread_id] = True
+        else:
+            self._compaction_breaker_open_by_thread.pop(thread_id, None)
+
+    def clear_thread_state(self, thread_id: str) -> None:
+        self._compaction_failure_counts_by_thread.pop(thread_id, None)
+        self._compaction_breaker_open_by_thread.pop(thread_id, None)
 
     def _record_compaction_notice(self) -> None:
         content = (
             f"Conversation compacted. Earlier {self._compact_up_to_index} message(s) "
             "are now represented by a summary."
         )
-        notice = {
-            "content": content,
-            "notification_type": "compact",
-            "compact_boundary_index": self._compact_up_to_index,
-        }
-        self._latest_compaction_notice = notice
+        self._queue_owner_notice(
+            {
+                "content": content,
+                "notification_type": "compact",
+                "compact_boundary_index": self._compact_up_to_index,
+            }
+        )
+
+    def _current_thread_id(self) -> str | None:
+        from sandbox.thread_context import get_current_thread_id
+
+        return get_current_thread_id()
+
+    async def _attempt_compaction(
+        self,
+        messages: list[Any],
+        *,
+        thread_id: str | None,
+    ) -> list[Any] | None:
+        if thread_id and self._compaction_breaker_open_by_thread.get(thread_id, False):
+            return None
+        try:
+            compacted = await self._do_compact(messages, thread_id)
+        except Exception as exc:
+            logger.error("[Memory] Compaction failed for thread %s: %s", thread_id or "<unknown>", exc)
+            self._record_compaction_failure(thread_id, exc)
+            return None
+        self._record_compaction_success(thread_id)
+        return compacted
+
+    def _record_compaction_success(self, thread_id: str | None) -> None:
+        if not thread_id or self._compaction_breaker_open_by_thread.get(thread_id, False):
+            return
+        self._compaction_failure_counts_by_thread.pop(thread_id, None)
+
+    def _record_compaction_failure(self, thread_id: str | None, exc: Exception) -> None:
+        if not thread_id:
+            return
+        failures = int(self._compaction_failure_counts_by_thread.get(thread_id, 0)) + 1
+        self._compaction_failure_counts_by_thread[thread_id] = failures
+        if failures < _COMPACTION_BREAKER_THRESHOLD or self._compaction_breaker_open_by_thread.get(thread_id, False):
+            return
+        self._compaction_breaker_open_by_thread[thread_id] = True
+        self._queue_owner_notice(
+            {
+                "content": "Automatic compaction disabled for this thread after repeated failures. Clear the thread or start a new one.",
+                "notification_type": "compact_breaker",
+                "failure_count": failures,
+                "error": str(exc),
+            }
+        )
+
+    def _queue_owner_notice(self, notice: dict[str, Any]) -> None:
+        self._pending_owner_notices.append(dict(notice))
         if self._runtime and hasattr(self._runtime, "emit_activity_event"):
-            # @@@compact-boundary-notice - compaction changes the model-visible
-            # conversation boundary. Emit one durable caller-facing notice so the
-            # hot stream and later cold rebuild can describe the same boundary shift.
+            # @@@memory-owner-notices - compaction boundary and breaker state are
+            # owner-facing runtime facts, so stream and cold rebuild must share
+            # the same notice payload instead of inventing separate surfaces.
             self._runtime.emit_activity_event(
                 {
                     "event": "notice",

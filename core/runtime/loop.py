@@ -237,6 +237,7 @@ class QueryLoop:
                     self._collect_memory_system_notices(pending_system_notices)
                     handled = await self._handle_model_error_recovery(
                         exc=exc,
+                        thread_id=thread_id,
                         messages=messages,
                         turn=turn,
                         transition=transition,
@@ -371,6 +372,7 @@ class QueryLoop:
             )
 
         # Persist message history
+        self._collect_memory_system_notices(pending_system_notices)
         terminal_notice = self._build_terminal_notice(terminal)
         if terminal_notice is not None:
             pending_system_notices.append(terminal_notice)
@@ -1018,6 +1020,7 @@ class QueryLoop:
         self,
         *,
         exc: Exception,
+        thread_id: str,
         messages: list,
         turn: int,
         transition: ContinueState | None,
@@ -1112,7 +1115,7 @@ class QueryLoop:
                         "terminal": None,
                     }
             if not has_attempted_reactive_compact:
-                compacted = await self._force_reactive_compact(messages)
+                compacted = await self._force_reactive_compact(messages, thread_id=thread_id)
                 if compacted is not None:
                     return {
                         "messages": compacted,
@@ -1231,12 +1234,15 @@ class QueryLoop:
             ),
         }
 
-    async def _force_reactive_compact(self, messages: list) -> list | None:
+    async def _force_reactive_compact(self, messages: list, *, thread_id: str) -> list | None:
         if self._memory_middleware is None:
             return None
         compact = getattr(self._memory_middleware, "compact_messages_for_recovery", None)
         if not callable(compact):
             return None
+        signature = inspect.signature(compact)
+        if "thread_id" in signature.parameters:
+            return await compact(messages, thread_id=thread_id)
         return await compact(messages)
 
     async def _recover_from_overflow(self, messages: list) -> dict[str, Any] | None:
@@ -1514,6 +1520,14 @@ class QueryLoop:
         }
         return permission_context, pending, resolved
 
+    def _thread_memory_state_snapshot(self, thread_id: str) -> dict[str, Any]:
+        if self._memory_middleware is None:
+            return {}
+        snapshot = getattr(self._memory_middleware, "snapshot_thread_state", None)
+        if not callable(snapshot):
+            return {}
+        return dict(snapshot(thread_id) or {})
+
     def _restore_thread_permission_state(
         self,
         thread_id: str,
@@ -1552,12 +1566,25 @@ class QueryLoop:
 
         self._app_state.set_state(_update)
 
+    def _restore_thread_memory_state(
+        self,
+        thread_id: str,
+        *,
+        memory_state: dict[str, Any],
+    ) -> None:
+        if self._memory_middleware is None:
+            return
+        restore = getattr(self._memory_middleware, "restore_thread_state", None)
+        if callable(restore):
+            restore(thread_id, memory_state)
+
     async def _hydrate_thread_state_from_checkpoint(self, thread_id: str) -> dict[str, Any]:
         channel_values = await self._load_checkpoint_channel_values(thread_id)
         messages = list(channel_values.get("messages", []))
         permission_context = dict(channel_values.get("tool_permission_context", {}) or {})
         pending = dict(channel_values.get("pending_permission_requests", {}) or {})
         resolved = dict(channel_values.get("resolved_permission_requests", {}) or {})
+        memory_state = dict(channel_values.get("memory_compaction_state", {}) or {})
         turn_count = self._app_state.turn_count if self._app_state is not None else 0
         self._sync_app_state(messages=messages, turn_count=turn_count)
         self._restore_thread_permission_state(
@@ -1566,11 +1593,16 @@ class QueryLoop:
             pending=pending,
             resolved=resolved,
         )
+        self._restore_thread_memory_state(
+            thread_id,
+            memory_state=memory_state,
+        )
         return {
             "messages": messages,
             "tool_permission_context": permission_context,
             "pending_permission_requests": pending,
             "resolved_permission_requests": resolved,
+            "memory_compaction_state": memory_state,
         }
 
     async def _save_messages(self, thread_id: str, messages: list) -> None:
@@ -1583,11 +1615,13 @@ class QueryLoop:
             cfg = self._checkpoint_config(thread_id)
             checkpoint = empty_checkpoint()
             permission_context, pending_requests, resolved_requests = self._thread_permission_state_snapshot(thread_id)
+            memory_state = self._thread_memory_state_snapshot(thread_id)
             checkpoint["channel_values"] = {
                 "messages": messages,
                 "tool_permission_context": permission_context,
                 "pending_permission_requests": pending_requests,
                 "resolved_permission_requests": resolved_requests,
+                "memory_compaction_state": memory_state,
             }
             metadata: CheckpointMetadata = {
                 "source": "loop",
@@ -1602,22 +1636,27 @@ class QueryLoop:
     def _collect_memory_system_notices(self, pending_notices: list[HumanMessage]) -> None:
         if self._memory_middleware is None:
             return
-        consume = getattr(self._memory_middleware, "consume_latest_compaction_notice", None)
-        if not callable(consume):
-            return
-        notice = consume()
-        if not notice:
-            return
-        pending_notices.append(
-            HumanMessage(
-                content=str(notice.get("content") or ""),
-                metadata={
-                    "source": "system",
-                    "notification_type": str(notice.get("notification_type") or "compact"),
-                    "compact_boundary_index": int(notice.get("compact_boundary_index") or 0),
-                },
+        consume_many = getattr(self._memory_middleware, "consume_pending_notices", None)
+        notices: list[dict[str, Any]] = []
+        if callable(consume_many):
+            notices = list(consume_many() or [])
+        else:
+            consume_one = getattr(self._memory_middleware, "consume_latest_compaction_notice", None)
+            if callable(consume_one):
+                notice = consume_one()
+                if notice:
+                    notices = [notice]
+        for notice in notices:
+            pending_notices.append(
+                HumanMessage(
+                    content=str(notice.get("content") or ""),
+                    metadata={
+                        "source": "system",
+                        "notification_type": str(notice.get("notification_type") or "compact"),
+                        "compact_boundary_index": int(notice.get("compact_boundary_index") or 0),
+                    },
+                )
             )
-        )
 
     def _append_system_notices(self, messages: list, notices: list[HumanMessage]) -> list:
         if not notices:
@@ -1674,6 +1713,9 @@ class QueryLoop:
                 self._memory_middleware._summary_thread_id = None
             if hasattr(self._memory_middleware, "_compact_up_to_index"):
                 self._memory_middleware._compact_up_to_index = 0
+            clear_thread_state = getattr(self._memory_middleware, "clear_thread_state", None)
+            if callable(clear_thread_state):
+                clear_thread_state(thread_id)
 
         if self._app_state is not None:
             preserved_total_cost = self._app_state.total_cost
@@ -1703,6 +1745,8 @@ class QueryLoop:
                 )
 
             self._app_state.set_state(_reset)
+
+        await self._save_messages(thread_id, [])
 
         if self._bootstrap is not None:
             old_session_id = self._bootstrap.session_id

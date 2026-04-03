@@ -1219,6 +1219,28 @@ class _TruncatedResponseModel:
         return response
 
 
+class _PromptTooLongWithFailingCompactorModel:
+    def __init__(self):
+        self.query_calls = 0
+        self.compact_calls = 0
+
+    def bind_tools(self, tools):
+        return self
+
+    def bind(self, **kwargs):
+        return self
+
+    async def ainvoke(self, messages):
+        system_text = ""
+        if messages and messages[0].__class__.__name__ == "SystemMessage":
+            system_text = getattr(messages[0], "content", "") or ""
+        if "tasked with summarizing conversations" in system_text or "split turn" in system_text.lower():
+            self.compact_calls += 1
+            raise RuntimeError("compaction failed")
+        self.query_calls += 1
+        raise RuntimeError("prompt is too long")
+
+
 class _StreamingToolModel:
     def __init__(self):
         self.calls = 0
@@ -1944,6 +1966,88 @@ async def test_query_loop_astream_raises_prompt_too_long_notice_text_after_recov
     ):
         async for _ in loop.astream({"messages": [{"role": "user", "content": "start"}]}, stream_mode=["updates"]):
             pass
+
+
+@pytest.mark.asyncio
+async def test_query_loop_opens_and_clears_thread_scoped_compaction_breaker(tmp_path):
+    thread_id = "compact-breaker-thread"
+    checkpointer = _MemoryCheckpointer()
+    model = _PromptTooLongWithFailingCompactorModel()
+
+    def make_breaker_loop():
+        memory = MemoryMiddleware(
+            db_path=tmp_path / "compact-breaker.db",
+            compaction_config=SimpleNamespace(reserve_tokens=0, keep_recent_tokens=10),
+        )
+        memory.set_model(model)
+        return QueryLoop(
+            model=model,
+            system_prompt=SystemMessage(content="You are a test assistant."),
+            middleware=[memory],
+            checkpointer=checkpointer,
+            registry=make_registry(),
+            app_state=AppState(),
+            runtime=SimpleNamespace(cost=0.0),
+            bootstrap=BootstrapConfig(workspace_root=Path("/tmp"), model_name="test-model"),
+            max_turns=10,
+        )
+
+    loop = make_breaker_loop()
+    config = {"configurable": {"thread_id": thread_id}}
+
+    for attempt in range(1, 4):
+        result = await loop.ainvoke(
+            {
+                "messages": [
+                    {"role": "user", "content": "A" * 80},
+                    {"role": "assistant", "content": "B" * 80},
+                    {"role": "user", "content": f"start {attempt} " + ("C" * 80)},
+                ]
+            },
+            config=config,
+        )
+        assert result["reason"] == "prompt_too_long"
+        assert model.compact_calls == attempt
+
+    state = await loop.aget_state(config)
+    breaker_notices = [
+        msg
+        for msg in state.values["messages"]
+        if msg.__class__.__name__ == "HumanMessage"
+        and ((getattr(msg, "metadata", None) or {}).get("notification_type") == "compact_breaker")
+    ]
+    assert len(breaker_notices) == 1
+    assert "Automatic compaction disabled for this thread after repeated failures." in breaker_notices[0].content
+
+    reloaded = make_breaker_loop()
+    result = await reloaded.ainvoke(
+        {
+            "messages": [
+                {"role": "user", "content": "A" * 80},
+                {"role": "assistant", "content": "B" * 80},
+                {"role": "user", "content": "after breaker " + ("C" * 80)},
+            ]
+        },
+        config=config,
+    )
+    assert result["reason"] == "prompt_too_long"
+    assert model.compact_calls == 3
+
+    await reloaded.aclear(thread_id)
+
+    post_clear = make_breaker_loop()
+    result = await post_clear.ainvoke(
+        {
+            "messages": [
+                {"role": "user", "content": "A" * 80},
+                {"role": "assistant", "content": "B" * 80},
+                {"role": "user", "content": "after clear " + ("C" * 80)},
+            ]
+        },
+        config=config,
+    )
+    assert result["reason"] == "prompt_too_long"
+    assert model.compact_calls == 4
 
 
 @pytest.mark.asyncio
