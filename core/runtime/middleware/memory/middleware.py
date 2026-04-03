@@ -304,7 +304,13 @@ class MemoryMiddleware(AgentMiddleware):
         if len(to_summarize) < 2:
             return None
 
-        return await self._attempt_compaction(pruned, thread_id=thread_id or self._current_thread_id())
+        return await self._attempt_compaction(
+            pruned,
+            thread_id=thread_id or self._current_thread_id(),
+            respect_breaker=False,
+            record_failures=False,
+            clear_breaker_on_success=True,
+        )
 
     def _estimate_tokens(self, messages: list[Any]) -> int:
         """Estimate total tokens for messages (chars // 2)."""
@@ -396,22 +402,31 @@ class MemoryMiddleware(AgentMiddleware):
         messages: list[Any],
         *,
         thread_id: str | None,
+        respect_breaker: bool = True,
+        record_failures: bool = True,
+        clear_breaker_on_success: bool = False,
     ) -> list[Any] | None:
-        if thread_id and self._compaction_breaker_open_by_thread.get(thread_id, False):
+        # @@@compaction-breaker-scope - match cc-src's narrower boundary:
+        # the breaker blocks later automatic compaction attempts, but reactive
+        # recovery may still try once and clear the breaker on success.
+        if respect_breaker and thread_id and self._compaction_breaker_open_by_thread.get(thread_id, False):
             return None
         try:
             compacted = await self._do_compact(messages, thread_id)
         except Exception as exc:
             logger.error("[Memory] Compaction failed for thread %s: %s", thread_id or "<unknown>", exc)
-            self._record_compaction_failure(thread_id, exc)
+            if record_failures:
+                self._record_compaction_failure(thread_id, exc)
             return None
-        self._record_compaction_success(thread_id)
+        self._record_compaction_success(thread_id, clear_breaker=clear_breaker_on_success)
         return compacted
 
-    def _record_compaction_success(self, thread_id: str | None) -> None:
-        if not thread_id or self._compaction_breaker_open_by_thread.get(thread_id, False):
+    def _record_compaction_success(self, thread_id: str | None, *, clear_breaker: bool = False) -> None:
+        if not thread_id:
             return
         self._compaction_failure_counts_by_thread.pop(thread_id, None)
+        if clear_breaker:
+            self._compaction_breaker_open_by_thread.pop(thread_id, None)
 
     def _record_compaction_failure(self, thread_id: str | None, exc: Exception) -> None:
         if not thread_id:

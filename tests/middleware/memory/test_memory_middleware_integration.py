@@ -44,7 +44,7 @@ def mock_checkpointer():
 @pytest.fixture
 def mock_model():
     """Create mock LLM model for testing."""
-    model = AsyncMock()
+    model = MagicMock()
 
     async def mock_ainvoke(messages):
         # Return a mock summary response
@@ -53,6 +53,7 @@ def mock_model():
         return response
 
     model.ainvoke = mock_ainvoke
+    model.bind.return_value = model
     return model
 
 
@@ -379,6 +380,59 @@ class TestMultipleThreadsIsolated:
         assert summary1.thread_id == "thread-1"
         assert summary2.thread_id == "thread-2"
         assert summary1.summary_id != summary2.summary_id
+
+
+class TestCompactionBreakerScope:
+    """Breaker should gate proactive compaction without poisoning reactive recovery."""
+
+    @pytest.mark.asyncio
+    async def test_reactive_recovery_can_bypass_and_clear_thread_breaker(self, temp_db, mock_request):
+        class _EventuallyRecoveringModel:
+            def __init__(self):
+                self.compact_calls = 0
+
+            async def ainvoke(self, messages):
+                self.compact_calls += 1
+                if self.compact_calls <= 3:
+                    raise RuntimeError("compaction failed")
+                response = MagicMock()
+                response.content = "Recovered summary"
+                return response
+
+        model = _EventuallyRecoveringModel()
+        middleware = MemoryMiddleware(
+            context_limit=10000,
+            compaction_threshold=0.5,
+            db_path=temp_db,
+            verbose=True,
+        )
+        middleware.set_model(model)
+
+        messages = create_large_message_list(30)
+        mock_request.messages = messages
+
+        async def mock_handler(req):
+            return ModelResponse(result=[], request_messages=req.messages)
+
+        for _ in range(3):
+            await middleware.awrap_model_call(mock_request, mock_handler)
+
+        snapshot = middleware.snapshot_thread_state("test-thread-1")
+        assert snapshot == {"failure_count": 3, "breaker_open": True}
+
+        recovered = await middleware.compact_messages_for_recovery(
+            messages,
+            thread_id="test-thread-1",
+        )
+        assert recovered is not None
+        assert getattr(recovered[0], "content", "").startswith("[Conversation Summary]\nRecovered summary")
+
+        snapshot = middleware.snapshot_thread_state("test-thread-1")
+        assert snapshot == {"failure_count": 0, "breaker_open": False}
+
+        result = await middleware.awrap_model_call(mock_request, mock_handler)
+        assert getattr(result.request_messages[0], "content", "").startswith("[Conversation Summary]\nRecovered summary")
+        assert model.compact_calls >= 5
 
 
 class TestMissingThreadIdRaisesError:

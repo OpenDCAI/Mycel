@@ -1241,6 +1241,28 @@ class _PromptTooLongWithFailingCompactorModel:
         raise RuntimeError("prompt is too long")
 
 
+class _QueryOkWithFailingCompactorModel:
+    def __init__(self):
+        self.query_calls = 0
+        self.compact_calls = 0
+
+    def bind_tools(self, tools):
+        return self
+
+    def bind(self, **kwargs):
+        return self
+
+    async def ainvoke(self, messages):
+        system_text = ""
+        if messages and messages[0].__class__.__name__ == "SystemMessage":
+            system_text = getattr(messages[0], "content", "") or ""
+        if "tasked with summarizing conversations" in system_text or "split turn" in system_text.lower():
+            self.compact_calls += 1
+            raise RuntimeError("compaction failed")
+        self.query_calls += 1
+        return AIMessage(content="OK")
+
+
 class _StreamingToolModel:
     def __init__(self):
         self.calls = 0
@@ -1972,10 +1994,12 @@ async def test_query_loop_astream_raises_prompt_too_long_notice_text_after_recov
 async def test_query_loop_opens_and_clears_thread_scoped_compaction_breaker(tmp_path):
     thread_id = "compact-breaker-thread"
     checkpointer = _MemoryCheckpointer()
-    model = _PromptTooLongWithFailingCompactorModel()
+    model = _QueryOkWithFailingCompactorModel()
 
     def make_breaker_loop():
         memory = MemoryMiddleware(
+            context_limit=10000,
+            compaction_threshold=0.5,
             db_path=tmp_path / "compact-breaker.db",
             compaction_config=SimpleNamespace(reserve_tokens=0, keep_recent_tokens=10),
         )
@@ -1999,14 +2023,14 @@ async def test_query_loop_opens_and_clears_thread_scoped_compaction_breaker(tmp_
         result = await loop.ainvoke(
             {
                 "messages": [
-                    {"role": "user", "content": "A" * 80},
-                    {"role": "assistant", "content": "B" * 80},
-                    {"role": "user", "content": f"start {attempt} " + ("C" * 80)},
+                    {"role": "user", "content": "A" * 8000},
+                    {"role": "assistant", "content": "B" * 8000},
+                    {"role": "user", "content": f"start {attempt} " + ("C" * 8000)},
                 ]
             },
             config=config,
         )
-        assert result["reason"] == "prompt_too_long"
+        assert result["reason"] == "completed"
         assert model.compact_calls == attempt
 
     state = await loop.aget_state(config)
@@ -2023,14 +2047,14 @@ async def test_query_loop_opens_and_clears_thread_scoped_compaction_breaker(tmp_
     result = await reloaded.ainvoke(
         {
             "messages": [
-                {"role": "user", "content": "A" * 80},
-                {"role": "assistant", "content": "B" * 80},
-                {"role": "user", "content": "after breaker " + ("C" * 80)},
+                {"role": "user", "content": "A" * 8000},
+                {"role": "assistant", "content": "B" * 8000},
+                {"role": "user", "content": "after breaker " + ("C" * 8000)},
             ]
         },
         config=config,
     )
-    assert result["reason"] == "prompt_too_long"
+    assert result["reason"] == "completed"
     assert model.compact_calls == 3
 
     await reloaded.aclear(thread_id)
@@ -2039,14 +2063,14 @@ async def test_query_loop_opens_and_clears_thread_scoped_compaction_breaker(tmp_
     result = await post_clear.ainvoke(
         {
             "messages": [
-                {"role": "user", "content": "A" * 80},
-                {"role": "assistant", "content": "B" * 80},
-                {"role": "user", "content": "after clear " + ("C" * 80)},
+                {"role": "user", "content": "A" * 8000},
+                {"role": "assistant", "content": "B" * 8000},
+                {"role": "user", "content": "after clear " + ("C" * 8000)},
             ]
         },
         config=config,
     )
-    assert result["reason"] == "prompt_too_long"
+    assert result["reason"] == "completed"
     assert model.compact_calls == 4
 
 

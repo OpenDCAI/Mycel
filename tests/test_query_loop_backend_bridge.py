@@ -73,6 +73,22 @@ class _PromptTooLongWithFailingCompactorModel:
         raise RuntimeError("prompt is too long")
 
 
+class _QueryOkWithFailingCompactorModel:
+    def bind_tools(self, tools):
+        return self
+
+    def bind(self, **kwargs):
+        return self
+
+    async def ainvoke(self, messages):
+        system_text = ""
+        if messages and messages[0].__class__.__name__ == "SystemMessage":
+            system_text = getattr(messages[0], "content", "") or ""
+        if "tasked with summarizing conversations" in system_text or "split turn" in system_text.lower():
+            raise RuntimeError("compaction failed")
+        return AIMessage(content="OK")
+
+
 class _BridgeReactiveCompactMiddleware:
     compact_boundary_index = 1
 
@@ -979,8 +995,10 @@ async def test_compaction_clear_then_recovery_notice_rebuilds_honestly(tmp_path)
 @pytest.mark.asyncio
 async def test_cold_rebuild_surfaces_compaction_breaker_notice_after_repeated_failures(tmp_path):
     checkpointer = _MemoryCheckpointer()
-    model = _PromptTooLongWithFailingCompactorModel()
+    model = _QueryOkWithFailingCompactorModel()
     memory = MemoryMiddleware(
+        context_limit=10000,
+        compaction_threshold=0.5,
         db_path=tmp_path / "compaction-breaker.db",
         compaction_config=SimpleNamespace(reserve_tokens=0, keep_recent_tokens=10),
     )
@@ -994,15 +1012,15 @@ async def test_cold_rebuild_surfaces_compaction_breaker_notice_after_repeated_fa
 
     for attempt in range(3):
         async for _ in loop.query(
-            {
-                "messages": [
-                    {"role": "user", "content": "A" * 80},
-                    {"role": "assistant", "content": "B" * 80},
-                    {"role": "user", "content": f"start {attempt} " + ("C" * 80)},
-                ]
-            },
-            config=config,
-        ):
+                {
+                    "messages": [
+                        {"role": "user", "content": "A" * 8000},
+                        {"role": "assistant", "content": "B" * 8000},
+                        {"role": "user", "content": f"start {attempt} " + ("C" * 8000)},
+                    ]
+                },
+                config=config,
+            ):
             pass
 
     fake_agent = SimpleNamespace(
@@ -1030,8 +1048,12 @@ async def test_cold_rebuild_surfaces_compaction_breaker_notice_after_repeated_fa
         )
 
     assert any(
-        entry.get("role") == "notice"
-        and "Automatic compaction disabled for this thread after repeated failures." in entry.get("content", "")
+        entry.get("role") == "assistant"
+        and any(
+            seg.get("type") == "notice"
+            and "Automatic compaction disabled for this thread after repeated failures." in seg.get("content", "")
+            for seg in entry.get("segments", [])
+        )
         for entry in detail["entries"]
     )
     assert any(
