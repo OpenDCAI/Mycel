@@ -44,19 +44,21 @@ class AuthService:
         if self._invite_codes is None or not self._invite_codes.is_valid(invite_code):
             raise ValueError("邀请码无效或已过期")
         from supabase_auth.errors import AuthApiError
+
         try:
             self._sb.auth.sign_up({"email": email, "password": password})
         except AuthApiError as e:
             msg = e.message or ""
             if "already registered" in msg or "already exists" in msg:
                 raise ValueError("该邮箱已注册，请直接登录") from e
-            raise ValueError(f"发送验证码失败，请稍后重试") from e
+            raise ValueError("发送验证码失败，请稍后重试") from e
 
     def verify_register_otp(self, email: str, token: str) -> dict:
         """Verify signup OTP. Returns temp_token to be used in complete_register."""
         if self._sb is None:
             raise RuntimeError("Supabase client required.")
         from supabase_auth.errors import AuthApiError
+
         try:
             resp = self._sb.auth.verify_otp({"email": email, "token": token, "type": "signup"})
         except AuthApiError as e:
@@ -124,7 +126,9 @@ class AuthService:
             display_name = existing.name
             mycel_id = existing.mycel_id
             owned_agents = self._members.list_by_owner_user_id(auth_user_id)
-            first_agent_info = {"id": owned_agents[0].id, "name": owned_agents[0].name, "type": "mycel_agent", "avatar": None} if owned_agents else None
+            first_agent_info = (
+                {"id": owned_agents[0].id, "name": owned_agents[0].name, "type": "mycel_agent", "avatar": None} if owned_agents else None
+            )
 
         # 4. Mark invite code used (atomic via repo)
         if self._invite_codes is not None:
@@ -147,6 +151,7 @@ class AuthService:
         email = self._resolve_email(identifier)
 
         from supabase_auth.errors import AuthApiError
+
         # Sign in via Supabase
         try:
             resp = self._sb.auth.sign_in_with_password({"email": email, "password": password})
@@ -220,8 +225,9 @@ class AuthService:
     def _create_initial_agents(self, owner_user_id: str, now: float) -> dict | None:
         """Create Toad and Morel agents for a new user. Returns first agent info."""
         from pathlib import Path
-        from storage.providers.sqlite.member_repo import generate_member_id
+
         from backend.web.services.member_service import MEMBERS_DIR, _write_agent_md, _write_json
+        from storage.providers.sqlite.member_repo import generate_member_id
 
         initial_agents = [
             {"name": "Toad", "description": "Curious and energetic assistant", "avatar": "toad.jpeg"},
@@ -254,6 +260,7 @@ class AuthService:
             if src_avatar.exists():
                 try:
                     from backend.web.routers.entities import process_and_save_avatar
+
                     avatar_path = process_and_save_avatar(src_avatar, agent_id)
                     self._members.update(agent_id, avatar=avatar_path, updated_at=now)
                 except Exception as e:

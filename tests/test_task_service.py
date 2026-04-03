@@ -11,7 +11,10 @@ from backend.web.services import task_service
 @pytest.fixture(autouse=True)
 def _use_tmp_db(tmp_path, monkeypatch):
     """Redirect task_service to a temporary SQLite database."""
-    monkeypatch.setattr(task_service, "DB_PATH", tmp_path / "test.db")
+    from storage.providers.sqlite.panel_task_repo import SQLitePanelTaskRepo
+
+    db_path = tmp_path / "test.db"
+    monkeypatch.setattr(task_service, "make_panel_task_repo", lambda: SQLitePanelTaskRepo(db_path=db_path))
 
 
 # ---------------------------------------------------------------------------
@@ -144,8 +147,10 @@ class TestListDeleteBulk:
 class TestMigration:
     def test_old_table_gets_new_columns(self, tmp_path, monkeypatch):
         """Simulate an old DB that lacks the new columns."""
+        from storage.providers.sqlite.panel_task_repo import SQLitePanelTaskRepo
+
         db_path = tmp_path / "legacy.db"
-        monkeypatch.setattr(task_service, "DB_PATH", db_path)
+        monkeypatch.setattr(task_service, "make_panel_task_repo", lambda: SQLitePanelTaskRepo(db_path=db_path))
 
         # Create the old schema directly
         conn = sqlite3.connect(str(db_path))

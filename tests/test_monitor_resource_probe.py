@@ -19,7 +19,7 @@ def test_refresh_resource_snapshots_probes_running_leases_only(monkeypatch):
     monkeypatch.setattr(resource_service, "ensure_resource_snapshot_table", lambda: None)
     monkeypatch.setattr(
         resource_service,
-        "SQLiteSandboxMonitorRepo",
+        "make_sandbox_monitor_repo",
         lambda: _make_probe_repo(
             [
                 {"provider_name": "p1", "instance_id": "s-1", "lease_id": "l-1", "observed_state": "detached"},
@@ -52,7 +52,7 @@ def test_refresh_resource_snapshots_counts_provider_build_error(monkeypatch):
     monkeypatch.setattr(resource_service, "ensure_resource_snapshot_table", lambda: None)
     monkeypatch.setattr(
         resource_service,
-        "SQLiteSandboxMonitorRepo",
+        "make_sandbox_monitor_repo",
         lambda: _make_probe_repo(
             [
                 {"provider_name": "p-missing", "instance_id": "s-1", "lease_id": "l-1", "observed_state": "detached"},
@@ -63,7 +63,7 @@ def test_refresh_resource_snapshots_counts_provider_build_error(monkeypatch):
     upserts: list[dict] = []
     monkeypatch.setattr(
         resource_service,
-        "upsert_lease_resource_snapshot",
+        "upsert_resource_snapshot",
         lambda **kwargs: upserts.append(kwargs),
     )
 

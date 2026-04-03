@@ -12,9 +12,12 @@ from backend.web.services.cron_service import CronService
 @pytest.fixture(autouse=True)
 def _use_tmp_db(tmp_path, monkeypatch):
     """Redirect both cron_job_service and task_service to a temp DB."""
+    from storage.providers.sqlite.cron_job_repo import SQLiteCronJobRepo
+    from storage.providers.sqlite.panel_task_repo import SQLitePanelTaskRepo
+
     db_path = tmp_path / "test.db"
-    monkeypatch.setattr(cron_job_service, "DB_PATH", db_path)
-    monkeypatch.setattr(task_service, "DB_PATH", db_path)
+    monkeypatch.setattr(cron_job_service, "make_cron_job_repo", lambda: SQLiteCronJobRepo(db_path=db_path))
+    monkeypatch.setattr(task_service, "make_panel_task_repo", lambda: SQLitePanelTaskRepo(db_path=db_path))
 
 
 @pytest.fixture

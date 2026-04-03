@@ -22,7 +22,9 @@ class SupabaseRecipeRepo:
     def list_by_owner(self, owner_user_id: str) -> list[dict[str, Any]]:
         query = q.order(
             q.order(
-                self._t().select("owner_user_id, recipe_id, kind, provider_type, data_json, created_at, updated_at").eq("owner_user_id", owner_user_id),
+                self._t()
+                .select("owner_user_id, recipe_id, kind, provider_type, data_json, created_at, updated_at")
+                .eq("owner_user_id", owner_user_id),
                 "created_at",
                 desc=False,
                 repo=_REPO,
