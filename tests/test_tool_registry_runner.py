@@ -25,6 +25,11 @@ from core.runtime.tool_result import ToolResultEnvelope, tool_permission_denied
 from core.runtime.validator import ToolValidator
 from core.tools.command.hooks.dangerous_commands import DangerousCommandsHook
 from core.tools.command.service import CommandService
+from core.tools.filesystem.read import ReadLimits
+from core.tools.filesystem.read import read_file as read_file_dispatch
+from core.tools.filesystem.read.readers.pdf import read_pdf
+from core.tools.filesystem.service import FileSystemService
+from sandbox.interfaces.filesystem import DirListResult, FileReadResult, FileSystemBackend, FileWriteResult
 
 # ---------------------------------------------------------------------------
 # ToolRegistry
@@ -230,6 +235,145 @@ class TestToolRunnerErrorNormalization:
         # Layer 2 error format: <tool_use_error>...</tool_use_error>
         assert "<tool_use_error>" in result.content
         assert "disk full" in result.content
+
+    @pytest.mark.asyncio
+    async def test_filesystem_service_read_preserves_image_blocks_on_local_path(self, tmp_path):
+        registry = ToolRegistry()
+        FileSystemService(
+            registry=registry,
+            workspace_root=tmp_path,
+        )
+        image = tmp_path / "tiny.png"
+        image.write_bytes(b"fake-png-payload")
+
+        runner = _make_runner(registry.list_all())
+        req = _make_tool_call_request("Read", {"file_path": str(image)})
+        req.state = MagicMock()
+
+        result = await runner.awrap_tool_call(req, AsyncMock())
+
+        assert isinstance(result.content, list)
+        assert any(block.get("type") == "image" for block in result.content)
+        assert result.additional_kwargs["tool_result_meta"]["source"] == "local"
+
+    @pytest.mark.asyncio
+    async def test_filesystem_service_read_preserves_image_blocks_on_remote_path(self, tmp_path):
+        class RemoteImageBackend(FileSystemBackend):
+            is_remote = True
+
+            def __init__(self):
+                self._raw = b"remote-png-payload"
+
+            def read_file(self, path: str) -> FileReadResult:
+                return FileReadResult(content="opaque-binary-placeholder", size=len(self._raw))
+
+            def write_file(self, path: str, content: str) -> FileWriteResult:
+                return FileWriteResult(success=True)
+
+            def file_exists(self, path: str) -> bool:
+                return True
+
+            def file_mtime(self, path: str) -> float | None:
+                return None
+
+            def file_size(self, path: str) -> int | None:
+                return len(self._raw)
+
+            def is_dir(self, path: str) -> bool:
+                return False
+
+            def list_dir(self, path: str) -> DirListResult:
+                return DirListResult(entries=[])
+
+            def download_bytes(self, path: str) -> bytes:
+                return self._raw
+
+        registry = ToolRegistry()
+        FileSystemService(
+            registry=registry,
+            workspace_root="/workspace",
+            backend=RemoteImageBackend(),
+        )
+
+        runner = _make_runner(registry.list_all())
+        req = _make_tool_call_request("Read", {"file_path": "/workspace/tiny.png"})
+        req.state = MagicMock()
+
+        result = await runner.awrap_tool_call(req, AsyncMock())
+
+        assert isinstance(result.content, list)
+        assert any(block.get("type") == "image" for block in result.content)
+        assert result.additional_kwargs["tool_result_meta"]["source"] == "local"
+
+    @pytest.mark.asyncio
+    async def test_filesystem_service_read_remote_pdf_uses_special_reader_path(self, tmp_path):
+        pdf_bytes = b"%PDF-1.4\nnot-a-real-pdf\n"
+        local_pdf = tmp_path / "sample.pdf"
+        local_pdf.write_bytes(pdf_bytes)
+        expected = read_file_dispatch(path=local_pdf, limits=ReadLimits()).format_output()
+        expected = expected.replace(str(local_pdf), "/workspace/sample.pdf")
+
+        class RemotePdfBackend(FileSystemBackend):
+            is_remote = True
+
+            def read_file(self, path: str) -> FileReadResult:
+                return FileReadResult(content="opaque-pdf-placeholder", size=len(pdf_bytes))
+
+            def write_file(self, path: str, content: str) -> FileWriteResult:
+                return FileWriteResult(success=True)
+
+            def file_exists(self, path: str) -> bool:
+                return True
+
+            def file_mtime(self, path: str) -> float | None:
+                return None
+
+            def file_size(self, path: str) -> int | None:
+                return len(pdf_bytes)
+
+            def is_dir(self, path: str) -> bool:
+                return False
+
+            def list_dir(self, path: str) -> DirListResult:
+                return DirListResult(entries=[])
+
+            def download_bytes(self, path: str) -> bytes:
+                return pdf_bytes
+
+        registry = ToolRegistry()
+        FileSystemService(
+            registry=registry,
+            workspace_root="/workspace",
+            backend=RemotePdfBackend(),
+        )
+
+        runner = _make_runner(registry.list_all())
+        req = _make_tool_call_request("Read", {"file_path": "/workspace/sample.pdf"})
+        req.state = MagicMock()
+
+        result = await runner.awrap_tool_call(req, AsyncMock())
+
+        assert result.content == expected
+
+    @pytest.mark.asyncio
+    async def test_filesystem_service_read_accepts_pdf_pages_argument(self, tmp_path):
+        pdf_bytes = b"%PDF-1.4\nnot-a-real-pdf\n"
+        local_pdf = tmp_path / "paged.pdf"
+        local_pdf.write_bytes(pdf_bytes)
+        expected = read_pdf(local_pdf, ReadLimits(), start_page=1, limit_pages=1).format_output()
+
+        registry = ToolRegistry()
+        FileSystemService(
+            registry=registry,
+            workspace_root=tmp_path,
+        )
+        runner = _make_runner(registry.list_all())
+        req = _make_tool_call_request("Read", {"file_path": str(local_pdf), "pages": "1"})
+        req.state = MagicMock()
+
+        result = await runner.awrap_tool_call(req, AsyncMock())
+
+        assert result.content == expected
 
     def test_layer3_handler_returns_soft_failure_text(self):
         def soft_fail(**kwargs):

@@ -13,13 +13,16 @@ from collections import OrderedDict
 from dataclasses import dataclass
 import logging
 from pathlib import Path
+import tempfile
 import threading
 from typing import TYPE_CHECKING, Any
 
 from core.runtime.registry import ToolEntry, ToolMode, ToolRegistry
+from core.runtime.tool_result import tool_success
 from core.tools.filesystem.backend import FileSystemBackend
 from core.tools.filesystem.read import ReadLimits
 from core.tools.filesystem.read import read_file as read_file_dispatch
+from core.tools.filesystem.read.readers.binary import IMAGE_EXTENSIONS, MAX_IMAGE_SIZE
 from core.tools.filesystem.read.types import FileType, detect_file_type
 
 if TYPE_CHECKING:
@@ -348,6 +351,41 @@ class FileSystemService:
                 return start_line > 1 or end_line < total_lines
         return False
 
+    def _structured_media_success(
+        self,
+        *,
+        resolved: Path,
+        file_type: FileType,
+        content_blocks: list[dict[str, str]],
+    ):
+        return tool_success(
+            [
+                {
+                    "type": "text",
+                    "text": (
+                        f"Read file: {resolved.name}\n"
+                        f"Special content is attached below as structured blocks."
+                    ),
+                },
+                *content_blocks,
+            ],
+            metadata={"file_type": file_type.value},
+        )
+
+    def _restore_special_result_identity(
+        self,
+        *,
+        result,
+        resolved: Path,
+        temp_path: Path,
+    ) -> None:
+        result.file_path = str(resolved)
+        if isinstance(getattr(result, "content", None), str):
+            result.content = (
+                result.content.replace(str(temp_path), str(resolved))
+                .replace(temp_path.name, resolved.name)
+            )
+
     def _record_operation(
         self,
         operation_type: str,
@@ -388,7 +426,7 @@ class FileSystemService:
     # Tool handlers
     # ------------------------------------------------------------------
 
-    def _read_file(self, file_path: str, offset: int = 0, limit: int | None = None) -> str:
+    def _read_file(self, file_path: str, offset: int = 0, limit: int | None = None, pages: str | None = None) -> str:
         is_valid, error, resolved = self._validate_path(file_path, "read")
         if not is_valid:
             return error
@@ -426,6 +464,7 @@ class FileSystemService:
                 limits=limits,
                 offset=offset if offset > 0 else None,
                 limit=limit,
+                pages=pages,
             )
             if not result.error:
                 self._update_file_tracking(
@@ -433,9 +472,50 @@ class FileSystemService:
                     is_partial=self._read_result_is_partial(result),
                     file_type=result.file_type,
                 )
+            if result.content_blocks:
+                return self._structured_media_success(
+                    resolved=resolved,
+                    file_type=result.file_type,
+                    content_blocks=result.content_blocks,
+                )
             return result.format_output()
 
         try:
+            file_type = detect_file_type(resolved)
+            download_bytes = getattr(self.backend, "download_bytes", None)
+            if callable(download_bytes) and file_type in {FileType.BINARY, FileType.DOCUMENT}:
+                # @@@dt-02-remote-special-file-bridge
+                # Remote providers expose raw-byte download hooks. Reuse the
+                # same local dispatcher for binary/document reads instead of
+                # degrading special files into placeholder text.
+                raw_bytes = download_bytes(str(resolved))
+                if file_type == FileType.BINARY and resolved.suffix.lstrip(".").lower() in IMAGE_EXTENSIONS and len(raw_bytes) > MAX_IMAGE_SIZE:
+                    return f"Image exceeds size limit: {len(raw_bytes)} bytes"
+                with tempfile.NamedTemporaryFile(suffix=resolved.suffix, delete=False) as tmp:
+                    tmp.write(raw_bytes)
+                    tmp_path = Path(tmp.name)
+                try:
+                    result = read_file_dispatch(
+                        path=tmp_path,
+                        limits=ReadLimits(),
+                        offset=offset if offset > 0 else None,
+                        limit=limit,
+                        pages=pages,
+                    )
+                finally:
+                    tmp_path.unlink(missing_ok=True)
+                self._restore_special_result_identity(
+                    result=result,
+                    resolved=resolved,
+                    temp_path=tmp_path,
+                )
+                if result.content_blocks:
+                    return self._structured_media_success(
+                        resolved=resolved,
+                        file_type=result.file_type,
+                        content_blocks=result.content_blocks,
+                    )
+                return result.format_output()
             raw = self.backend.read_file(str(resolved))
             lines = raw.content.split("\n")
             total_lines = len(lines)

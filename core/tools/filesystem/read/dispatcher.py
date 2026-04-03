@@ -22,6 +22,7 @@ def read_file(
     limits: ReadLimits | None = None,
     offset: int | None = None,
     limit: int | None = None,
+    pages: str | None = None,
 ) -> ReadResult:
     """
     Read file with type-specific handling.
@@ -38,6 +39,7 @@ def read_file(
         limits: ReadLimits configuration (uses defaults if None)
         offset: Start line for text files (1-indexed)
         limit: Number of lines for text files
+        pages: Optional page range for document files, e.g. "1" or "3-5"
 
     Returns:
         ReadResult with content and metadata
@@ -68,7 +70,8 @@ def read_file(
         return read_binary(path)
 
     if file_type == FileType.DOCUMENT:
-        return _read_document(path, limits, offset, limit)
+        start_page, limit_pages = _parse_pages_arg(pages, offset, limit)
+        return _read_document(path, limits, start_page, limit_pages)
 
     if file_type == FileType.NOTEBOOK:
         return read_notebook(path, limits, start_cell=offset, limit_cells=limit)
@@ -77,6 +80,32 @@ def read_file(
         return _read_archive_placeholder(path)
 
     return read_text(path, limits, offset, limit)
+
+
+def _parse_pages_arg(
+    pages: str | None,
+    offset: int | None,
+    limit: int | None,
+) -> tuple[int | None, int | None]:
+    if pages is None:
+        return offset, limit
+
+    raw = pages.strip()
+    if not raw:
+        raise ValueError("pages must not be empty")
+
+    if "-" in raw:
+        start_raw, end_raw = raw.split("-", 1)
+        start_page = int(start_raw)
+        end_page = int(end_raw)
+        if start_page <= 0 or end_page < start_page:
+            raise ValueError(f"Invalid pages range: {pages}")
+        return start_page, end_page - start_page + 1
+
+    start_page = int(raw)
+    if start_page <= 0:
+        raise ValueError(f"Invalid page number: {pages}")
+    return start_page, 1
 
 
 def _read_document(
