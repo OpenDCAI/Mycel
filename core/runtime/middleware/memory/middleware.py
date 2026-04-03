@@ -7,6 +7,7 @@ does NOT modify LangGraph state. TUI sees full history, agent sees compressed.
 
 from __future__ import annotations
 
+import json
 import logging
 from collections.abc import Awaitable, Callable
 from pathlib import Path
@@ -87,6 +88,7 @@ class MemoryMiddleware(AgentMiddleware):
         self._compact_up_to_index: int = 0
         self._summary_restored: bool = False
         self._summary_thread_id: str | None = None
+        self._latest_compaction_notice: dict[str, Any] | None = None
 
         if verbose:
             print("[MemoryMiddleware] Initialized")
@@ -237,6 +239,7 @@ class MemoryMiddleware(AgentMiddleware):
             self._compact_up_to_index = len(messages) - len(to_keep)
             self._summary_restored = True
             self._summary_thread_id = thread_id
+            self._record_compaction_notice()
 
             if self.summary_store and thread_id:
                 try:
@@ -275,6 +278,7 @@ class MemoryMiddleware(AgentMiddleware):
             summary_text = await self.compactor.compact(to_summarize, self._resolved_model)
             self._cached_summary = summary_text
             self._compact_up_to_index = len(messages) - len(to_keep)
+            self._record_compaction_notice()
             return {
                 "stats": {
                     "summarized": len(to_summarize),
@@ -335,6 +339,33 @@ class MemoryMiddleware(AgentMiddleware):
         if isinstance(configurable, dict):
             return configurable.get("thread_id")
         return getattr(configurable, "thread_id", None) if configurable else None
+
+    def consume_latest_compaction_notice(self) -> dict[str, Any] | None:
+        notice = self._latest_compaction_notice
+        self._latest_compaction_notice = None
+        return notice
+
+    def _record_compaction_notice(self) -> None:
+        content = (
+            f"Conversation compacted. Earlier {self._compact_up_to_index} message(s) "
+            "are now represented by a summary."
+        )
+        notice = {
+            "content": content,
+            "notification_type": "compact",
+            "compact_boundary_index": self._compact_up_to_index,
+        }
+        self._latest_compaction_notice = notice
+        if self._runtime and hasattr(self._runtime, "emit_activity_event"):
+            # @@@compact-boundary-notice - compaction changes the model-visible
+            # conversation boundary. Emit one durable caller-facing notice so the
+            # hot stream and later cold rebuild can describe the same boundary shift.
+            self._runtime.emit_activity_event(
+                {
+                    "event": "notice",
+                    "data": json.dumps(notice, ensure_ascii=False),
+                }
+            )
 
     async def _restore_summary_from_store(self, thread_id: str) -> None:
         """Restore summary from SummaryStore."""

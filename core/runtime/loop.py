@@ -172,6 +172,7 @@ class QueryLoop:
 
         terminal: TerminalState | None = None
         transition: ContinueState | None = None
+        pending_system_notices: list[HumanMessage] = []
         max_output_tokens_recovery_count = 0
         has_attempted_reactive_compact = False
         max_output_tokens_override: int | None = None
@@ -230,6 +231,7 @@ class QueryLoop:
                             max_output_tokens_override=max_output_tokens_override,
                         )
                 except Exception as exc:
+                    self._collect_memory_system_notices(pending_system_notices)
                     handled = await self._handle_model_error_recovery(
                         exc=exc,
                         messages=messages,
@@ -270,6 +272,7 @@ class QueryLoop:
                         )
                         break
                     ai_msg = ai_messages[0]
+                self._collect_memory_system_notices(pending_system_notices)
                 self._sync_tool_context_messages(
                     tool_context,
                     response.request_messages or messages_for_query,
@@ -353,6 +356,7 @@ class QueryLoop:
             # @@@cancel-persists-live-state - accepted user input from the
             # current run must not evaporate just because the run is cancelled
             # before the next terminal save.
+            messages = self._append_system_notices(messages, pending_system_notices)
             await self._save_messages(thread_id, messages)
             self._sync_app_state(messages=messages, turn_count=turn)
             raise
@@ -364,6 +368,7 @@ class QueryLoop:
             )
 
         # Persist message history
+        messages = self._append_system_notices(messages, pending_system_notices)
         await self._save_messages(thread_id, messages)
         self._sync_app_state(messages=messages, turn_count=turn)
         self.last_terminal = terminal
@@ -1561,6 +1566,35 @@ class QueryLoop:
             await self.checkpointer.aput(cfg, checkpoint, metadata, {})
         except Exception:
             logger.debug("QueryLoop: could not save checkpoint for thread %s", thread_id, exc_info=True)
+
+    def _collect_memory_system_notices(self, pending_notices: list[HumanMessage]) -> None:
+        if self._memory_middleware is None:
+            return
+        consume = getattr(self._memory_middleware, "consume_latest_compaction_notice", None)
+        if not callable(consume):
+            return
+        notice = consume()
+        if not notice:
+            return
+        pending_notices.append(
+            HumanMessage(
+                content=str(notice.get("content") or ""),
+                metadata={
+                    "source": "system",
+                    "notification_type": str(notice.get("notification_type") or "compact"),
+                    "compact_boundary_index": int(notice.get("compact_boundary_index") or 0),
+                },
+            )
+        )
+
+    def _append_system_notices(self, messages: list, notices: list[HumanMessage]) -> list:
+        if not notices:
+            return messages
+        # @@@compact-notice-persist - compaction changes the model-visible
+        # boundary, but the notice is for the owner surface only. Persist it
+        # after the run settles so replay stays honest without perturbing the
+        # same run's next model call.
+        return list(messages) + list(notices)
 
     @staticmethod
     def _checkpoint_config(thread_id: str) -> dict[str, Any]:

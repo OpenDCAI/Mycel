@@ -1,6 +1,7 @@
 """Unit tests for core.runtime.loop QueryLoop."""
 
 import asyncio
+import json
 import tempfile
 from pathlib import Path
 from types import SimpleNamespace
@@ -1508,6 +1509,92 @@ async def test_query_loop_syncs_compact_boundary_before_tool_execution():
     assert capture.messages is not None
     assert capture.boundary == app_state.compact_boundary_index
     assert capture.boundary > 0
+
+
+@pytest.mark.asyncio
+async def test_query_loop_persists_compaction_notice_when_boundary_advances():
+    summary_model = MagicMock()
+    summary_model.bind.return_value = summary_model
+    summary_model.ainvoke = AsyncMock(return_value=AIMessage(content="SUMMARY"))
+
+    memory = MemoryMiddleware(
+        context_limit=40,
+        compaction_config=SimpleNamespace(reserve_tokens=0, keep_recent_tokens=10),
+        compaction_threshold=0.1,
+    )
+    memory.set_model(summary_model)
+
+    app_state = AppState()
+    loop = make_loop(
+        mock_model_no_tools("after compact"),
+        middleware=[memory],
+        app_state=app_state,
+        runtime=SimpleNamespace(cost=0.0),
+    )
+
+    history = [
+        HumanMessage(content="A" * 80),
+        AIMessage(content="B" * 80),
+        HumanMessage(content="C" * 80),
+        HumanMessage(content="hello after compact"),
+    ]
+
+    async for _ in loop.query({"messages": history}):
+        pass
+
+    compact_notices = [
+        msg
+        for msg in app_state.messages
+        if msg.__class__.__name__ == "HumanMessage"
+        and ((getattr(msg, "metadata", None) or {}).get("notification_type") == "compact")
+    ]
+
+    assert len(compact_notices) == 1
+    assert "Conversation compacted" in compact_notices[0].content
+    assert compact_notices[0].metadata["source"] == "system"
+    assert compact_notices[0].metadata["compact_boundary_index"] == app_state.compact_boundary_index
+    assert app_state.compact_boundary_index > 0
+
+
+@pytest.mark.asyncio
+async def test_memory_middleware_emits_runtime_compaction_notice():
+    summary_model = MagicMock()
+    summary_model.bind.return_value = summary_model
+    summary_model.ainvoke = AsyncMock(return_value=AIMessage(content="SUMMARY"))
+
+    memory = MemoryMiddleware(
+        context_limit=40,
+        compaction_config=SimpleNamespace(reserve_tokens=0, keep_recent_tokens=10),
+        compaction_threshold=0.1,
+    )
+    memory.set_model(summary_model)
+    runtime = SimpleNamespace(cost=0.0, events=[], set_flag=lambda *_args, **_kwargs: None)
+    runtime.emit_activity_event = lambda event: runtime.events.append(event)
+    memory.set_runtime(runtime)
+
+    loop = make_loop(
+        mock_model_no_tools("after compact"),
+        middleware=[memory],
+        app_state=AppState(),
+        runtime=runtime,
+    )
+
+    history = [
+        HumanMessage(content="A" * 80),
+        AIMessage(content="B" * 80),
+        HumanMessage(content="C" * 80),
+        HumanMessage(content="hello after compact"),
+    ]
+
+    async for _ in loop.query({"messages": history}):
+        pass
+
+    compact_events = [event for event in runtime.events if event.get("event") == "notice"]
+
+    assert len(compact_events) == 1
+    payload = json.loads(compact_events[0]["data"])
+    assert payload["notification_type"] == "compact"
+    assert "Conversation compacted" in payload["content"]
 
 
 @pytest.mark.asyncio

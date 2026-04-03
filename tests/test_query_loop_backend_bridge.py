@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
@@ -15,6 +15,7 @@ from backend.web.services.display_builder import DisplayBuilder
 from backend.web.services.event_buffer import ThreadEventBuffer
 from core.runtime.middleware.queue.manager import MessageQueueManager
 from core.runtime.middleware.queue.middleware import SteeringMiddleware
+from core.runtime.middleware.memory.middleware import MemoryMiddleware
 from backend.web.services.streaming_service import _repair_incomplete_tool_calls, _run_agent_to_buffer, start_agent_run
 from core.runtime.middleware.monitor.state_monitor import AgentState
 from core.runtime.loop import QueryLoop
@@ -678,6 +679,73 @@ async def test_get_thread_messages_rebuilds_idle_thread_when_cached_entries_are_
     rebuilt_thread_id, rebuilt_messages = display_builder.rebuilt_with
     assert rebuilt_thread_id == "detail-thread"
     assert [msg["type"] for msg in rebuilt_messages] == ["HumanMessage", "AIMessage"]
+
+
+@pytest.mark.asyncio
+async def test_cold_rebuild_surfaces_persisted_compaction_notice_in_detail_and_history():
+    checkpointer = _MemoryCheckpointer()
+    summary_model = MagicMock()
+    summary_model.bind.return_value = summary_model
+    summary_model.ainvoke = AsyncMock(return_value=AIMessage(content="SUMMARY"))
+    memory = MemoryMiddleware(
+        context_limit=40,
+        compaction_config=SimpleNamespace(reserve_tokens=0, keep_recent_tokens=10),
+        compaction_threshold=0.1,
+    )
+    memory.set_model(summary_model)
+    loop = _make_loop(
+        text="after compact",
+        checkpointer=checkpointer,
+        middleware=[memory],
+    )
+    config = {"configurable": {"thread_id": "compact-thread"}}
+
+    history = [
+        HumanMessage(content="A" * 80),
+        AIMessage(content="B" * 80),
+        HumanMessage(content="C" * 80),
+        HumanMessage(content="hello after compact"),
+    ]
+
+    async for _ in loop.query({"messages": history}, config=config):
+        pass
+
+    fake_agent = SimpleNamespace(
+        agent=loop,
+        runtime=SimpleNamespace(current_state=AgentState.IDLE),
+    )
+    fake_app = SimpleNamespace(state=SimpleNamespace(display_builder=DisplayBuilder()))
+
+    with (
+        patch("backend.web.routers.threads.get_or_create_agent", return_value=fake_agent),
+        patch("backend.web.routers.threads.resolve_thread_sandbox", return_value="local"),
+        patch("backend.web.routers.threads.get_sandbox_info", return_value={"type": "local"}),
+    ):
+        detail = await get_thread_messages(
+            "compact-thread",
+            user_id="u",
+            app=fake_app,
+        )
+        rebuilt_history = await get_thread_history(
+            "compact-thread",
+            limit=20,
+            truncate=300,
+            user_id="u",
+            app=fake_app,
+        )
+
+    assert any(
+        any(
+            segment.get("type") == "notice" and segment.get("notification_type") == "compact"
+            for segment in entry.get("segments", [])
+        )
+        for entry in detail["entries"]
+        if entry.get("role") == "assistant"
+    )
+    assert any(
+        item.get("role") == "notification" and "Conversation compacted" in item.get("text", "")
+        for item in rebuilt_history["messages"]
+    )
 
 
 @pytest.mark.asyncio
