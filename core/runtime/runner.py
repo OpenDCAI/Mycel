@@ -231,6 +231,18 @@ class ToolRunner(AgentMiddleware):
         )
 
     @staticmethod
+    def _materialize_permission_ask(
+        request_id: str | None,
+        message: str | None,
+    ) -> ToolResultEnvelope:
+        # @@@permission-ask-materialization
+        # Ask is only honest when a concrete request surface exists. Otherwise
+        # fail loudly as a deny so caller metadata matches the actual runtime.
+        if request_id is not None:
+            return ToolRunner._permission_request_result(request_id, message)
+        return ToolRunner._permission_denied_result("deny", message)
+
+    @staticmethod
     def _run_awaitable_sync(awaitable):
         try:
             asyncio.get_running_loop()
@@ -638,8 +650,7 @@ class ToolRunner(AgentMiddleware):
                         entry=entry,
                         message=rule_message,
                     )
-                    if request_id is not None:
-                        return self._permission_request_result(request_id, rule_message)
+                    return self._materialize_permission_ask(request_id, rule_message)
                 return self._permission_denied_result(rule_permission, rule_message)
             return None
 
@@ -652,8 +663,7 @@ class ToolRunner(AgentMiddleware):
                     entry=entry,
                     message=rule_message,
                 )
-                if request_id is not None:
-                    return self._permission_request_result(request_id, rule_message)
+                return self._materialize_permission_ask(request_id, rule_message)
             return self._permission_denied_result(rule_permission, rule_message)
         return None
 
@@ -708,8 +718,7 @@ class ToolRunner(AgentMiddleware):
                         entry=entry,
                         message=rule_message,
                     )
-                    if request_id is not None:
-                        return self._permission_request_result(request_id, rule_message)
+                    return self._materialize_permission_ask(request_id, rule_message)
                 return self._permission_denied_result(rule_permission, rule_message)
             return None
 
@@ -722,8 +731,7 @@ class ToolRunner(AgentMiddleware):
                     entry=entry,
                     message=rule_message,
                 )
-                if request_id is not None:
-                    return self._permission_request_result(request_id, rule_message)
+                return self._materialize_permission_ask(request_id, rule_message)
             return self._permission_denied_result(rule_permission, rule_message)
         return None
 

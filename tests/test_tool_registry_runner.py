@@ -1507,6 +1507,65 @@ class TestToolRunnerErrorNormalization:
         assert requests["perm-1"]["message"] == "needs approval"
 
     @pytest.mark.asyncio
+    async def test_ask_permission_fails_loud_when_request_surface_is_missing(self):
+        entry = ToolEntry(
+            name="Write",
+            mode=ToolMode.INLINE,
+            schema={"name": "Write", "parameters": {"type": "object", "required": [], "properties": {}}},
+            handler=lambda: "ok",
+            source="test",
+        )
+        runner = _make_runner([entry])
+        req = _make_tool_call_request("Write", {})
+        req.state = MagicMock()
+
+        def can_use_tool(name, args, context, request):
+            return {
+                "decision": "ask",
+                "message": "Permission required by rule: Write. No interactive permission resolver is available for this run.",
+            }
+
+        req.state.can_use_tool = can_use_tool
+        req.state.request_permission = None
+        req.state.consume_permission_resolution = lambda *args, **kwargs: None
+
+        result = await runner.awrap_tool_call(req, AsyncMock())
+
+        meta = result.additional_kwargs["tool_result_meta"]
+        assert result.content == "Permission required by rule: Write. No interactive permission resolver is available for this run."
+        assert meta["kind"] == "permission_denied"
+        assert meta["decision"] == "deny"
+
+    def test_sync_ask_permission_fails_loud_when_request_surface_is_missing(self):
+        entry = ToolEntry(
+            name="Write",
+            mode=ToolMode.INLINE,
+            schema={"name": "Write", "parameters": {"type": "object", "required": [], "properties": {}}},
+            handler=lambda: "ok",
+            source="test",
+        )
+        runner = _make_runner([entry])
+        req = _make_tool_call_request("Write", {})
+        req.state = MagicMock()
+
+        def can_use_tool(name, args, context, request):
+            return {
+                "decision": "ask",
+                "message": "Permission required by rule: Write. No interactive permission resolver is available for this run.",
+            }
+
+        req.state.can_use_tool = can_use_tool
+        req.state.request_permission = None
+        req.state.consume_permission_resolution = lambda *args, **kwargs: None
+
+        result = runner.wrap_tool_call(req, lambda _req: None)
+
+        meta = result.additional_kwargs["tool_result_meta"]
+        assert result.content == "Permission required by rule: Write. No interactive permission resolver is available for this run."
+        assert meta["kind"] == "permission_denied"
+        assert meta["decision"] == "deny"
+
+    @pytest.mark.asyncio
     async def test_consumed_permission_resolution_allows_single_retry_without_reprompt(self):
         seen = []
         resolution = {"decision": "allow", "message": "approved"}
