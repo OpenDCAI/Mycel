@@ -457,3 +457,32 @@ def test_terminal_background_notification_waits_for_followup_run_during_system_t
     queued = queue_manager.list_queue("parent-thread")
     assert len(queued) == 1
     assert "<task-notification>" in queued[0]["content"]
+
+
+def test_steer_injection_emits_phase_boundary_events(tmp_path):
+    queue_manager = MessageQueueManager(db_path=str(tmp_path / "queue.db"))
+    queue_manager.enqueue(
+        "Stop the current plan and summarize status.",
+        "parent-thread",
+        notification_type="steer",
+        source="owner",
+        is_steer=True,
+    )
+
+    class _Runtime:
+        def __init__(self) -> None:
+            self.events: list[dict[str, str]] = []
+
+        def emit_activity_event(self, event: dict[str, str]) -> None:
+            self.events.append(event)
+
+    runtime = _Runtime()
+    injected = SteeringMiddleware(queue_manager=queue_manager, agent_runtime=runtime).before_model(
+        state={},
+        runtime=None,
+        config={"configurable": {"thread_id": "parent-thread"}},
+    )
+
+    assert injected is not None
+    assert str(injected["messages"][0].content) == "Stop the current plan and summarize status."
+    assert [event["event"] for event in runtime.events] == ["run_done", "run_start"]

@@ -137,14 +137,15 @@ class SteeringMiddleware(AgentMiddleware):
         # breaks the turn at the steer injection point.
         # user_message is NOT emitted here — wake_handler already did it
         # at enqueue time (@@@steer-instant-feedback).
-        if has_steer and rt and hasattr(rt, "emit_activity_event"):
-            rt.emit_activity_event(
+        agent_runtime = self._agent_runtime
+        if has_steer and agent_runtime and hasattr(agent_runtime, "emit_activity_event"):
+            agent_runtime.emit_activity_event(
                 {
                     "event": "run_done",
                     "data": json.dumps({"thread_id": thread_id}),
                 }
             )
-            rt.emit_activity_event(
+            agent_runtime.emit_activity_event(
                 {
                     "event": "run_start",
                     "data": json.dumps({"thread_id": thread_id, "showing": True}),
