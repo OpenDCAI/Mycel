@@ -24,6 +24,7 @@ def _get_invite_code_repo(app: Any):
 
 # ── List all invite codes ────────────────────────────────────────────────────
 
+
 @router.get("")
 async def list_invite_codes(
     request: Request,
@@ -40,6 +41,7 @@ async def list_invite_codes(
 
 
 # ── Generate a new invite code ───────────────────────────────────────────────
+
 
 class GenerateInviteCodeRequest(BaseModel):
     expires_days: int | None = 7
@@ -67,6 +69,7 @@ async def generate_invite_code(
 
 # ── Revoke (delete) an invite code ──────────────────────────────────────────
 
+
 @router.delete("/{code}")
 async def revoke_invite_code(
     code: str,
@@ -86,6 +89,7 @@ async def revoke_invite_code(
 
 
 # ── Validate an invite code (no auth required) ───────────────────────────────
+
 
 @router.get("/validate/{code}")
 async def validate_invite_code(code: str, request: Request) -> dict:

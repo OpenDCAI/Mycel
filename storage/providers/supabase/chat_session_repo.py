@@ -92,10 +92,7 @@ class SupabaseChatSessionRepo:
 
     def get_session_policy(self, session_id: str) -> dict[str, Any] | None:
         raw = q.rows(
-            self._sessions()
-            .select("idle_ttl_sec,max_duration_sec")
-            .eq("chat_session_id", session_id)
-            .execute(),
+            self._sessions().select("idle_ttl_sec,max_duration_sec").eq("chat_session_id", session_id).execute(),
             _REPO,
             "get_session_policy",
         )
@@ -169,9 +166,9 @@ class SupabaseChatSessionRepo:
         last_active = last_active_at or now_iso
 
         # Supersede any existing active sessions for this terminal
-        self._sessions().update(
-            {"status": "closed", "ended_at": now_iso, "close_reason": "superseded"}
-        ).eq("terminal_id", terminal_id).in_("status", ["active", "idle", "paused"]).execute()
+        self._sessions().update({"status": "closed", "ended_at": now_iso, "close_reason": "superseded"}).eq("terminal_id", terminal_id).in_(
+            "status", ["active", "idle", "paused"]
+        ).execute()
 
         self._sessions().insert(
             {
@@ -219,19 +216,19 @@ class SupabaseChatSessionRepo:
         self._sessions().update({"last_active_at": now}).eq("thread_id", thread_id).neq("status", "closed").execute()
 
     def pause(self, session_id: str) -> None:
-        self._sessions().update(
-            {"status": "paused", "close_reason": "paused"}
-        ).eq("chat_session_id", session_id).in_("status", ["active", "idle"]).execute()
+        self._sessions().update({"status": "paused", "close_reason": "paused"}).eq("chat_session_id", session_id).in_(
+            "status", ["active", "idle"]
+        ).execute()
 
     def resume(self, session_id: str) -> None:
-        self._sessions().update(
-            {"status": "active", "close_reason": None}
-        ).eq("chat_session_id", session_id).eq("status", "paused").execute()
+        self._sessions().update({"status": "active", "close_reason": None}).eq("chat_session_id", session_id).eq(
+            "status", "paused"
+        ).execute()
 
     def delete_session(self, session_id: str, *, reason: str = "closed") -> None:
-        self._sessions().update(
-            {"status": "closed", "ended_at": datetime.now().isoformat(), "close_reason": reason}
-        ).eq("chat_session_id", session_id).in_("status", ["active", "idle", "paused"]).execute()
+        self._sessions().update({"status": "closed", "ended_at": datetime.now().isoformat(), "close_reason": reason}).eq(
+            "chat_session_id", session_id
+        ).in_("status", ["active", "idle", "paused"]).execute()
 
     def delete_by_thread(self, thread_id: str) -> None:
         # Find terminal_ids for this thread
@@ -258,13 +255,9 @@ class SupabaseChatSessionRepo:
             command_ids = [str(r["command_id"]) for r in command_rows]
 
             if command_ids:
-                q.in_(
-                    self._chunks().delete(), "command_id", command_ids, _REPO, "delete_by_thread chunks"
-                ).execute()
+                q.in_(self._chunks().delete(), "command_id", command_ids, _REPO, "delete_by_thread chunks").execute()
 
-            q.in_(
-                self._commands().delete(), "terminal_id", terminal_ids, _REPO, "delete_by_thread commands"
-            ).execute()
+            q.in_(self._commands().delete(), "terminal_id", terminal_ids, _REPO, "delete_by_thread commands").execute()
 
         self._sessions().delete().eq("thread_id", thread_id).execute()
 

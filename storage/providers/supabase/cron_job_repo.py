@@ -26,6 +26,7 @@ class SupabaseCronJobRepo:
         row = dict(row)
         if isinstance(row.get("task_template"), str):
             import json
+
             try:
                 row["task_template"] = json.loads(row["task_template"])
             except Exception:
@@ -35,14 +36,16 @@ class SupabaseCronJobRepo:
     def list_all(self) -> list[dict[str, Any]]:
         rows = q.rows(
             q.order(self._table().select("*"), "created_at", desc=True, repo=_REPO, operation="list_all").execute(),
-            _REPO, "list_all",
+            _REPO,
+            "list_all",
         )
         return [self._deserialize(r) for r in rows]
 
     def get(self, job_id: str) -> dict[str, Any] | None:
         rows = q.rows(
             self._table().select("*").eq("id", job_id).execute(),
-            _REPO, "get",
+            _REPO,
+            "get",
         )
         return self._deserialize(rows[0]) if rows else None
 
@@ -52,21 +55,24 @@ class SupabaseCronJobRepo:
         task_template = fields.get("task_template", {})
         if isinstance(task_template, str):
             import json
+
             try:
                 task_template = json.loads(task_template)
             except Exception:
                 task_template = {}
-        self._table().insert({
-            "id": job_id,
-            "name": name,
-            "description": fields.get("description", ""),
-            "cron_expression": cron_expression,
-            "task_template": task_template,
-            "enabled": fields.get("enabled", True),
-            "last_run_at": fields.get("last_run_at", 0),
-            "next_run_at": fields.get("next_run_at", 0),
-            "created_at": now,
-        }).execute()
+        self._table().insert(
+            {
+                "id": job_id,
+                "name": name,
+                "description": fields.get("description", ""),
+                "cron_expression": cron_expression,
+                "task_template": task_template,
+                "enabled": fields.get("enabled", True),
+                "last_run_at": fields.get("last_run_at", 0),
+                "next_run_at": fields.get("next_run_at", 0),
+                "created_at": now,
+            }
+        ).execute()
         return self.get(job_id) or {}
 
     def update(self, job_id: str, **fields: Any) -> dict[str, Any] | None:
@@ -74,6 +80,7 @@ class SupabaseCronJobRepo:
         updates = {k: v for k, v in fields.items() if k in allowed and v is not None}
         if "task_template" in updates and isinstance(updates["task_template"], str):
             import json
+
             try:
                 updates["task_template"] = json.loads(updates["task_template"])
             except Exception:
@@ -86,6 +93,7 @@ class SupabaseCronJobRepo:
     def delete(self, job_id: str) -> bool:
         rows = q.rows(
             self._table().delete().eq("id", job_id).execute(),
-            _REPO, "delete",
+            _REPO,
+            "delete",
         )
         return len(rows) > 0

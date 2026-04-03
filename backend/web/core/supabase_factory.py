@@ -5,7 +5,8 @@ from __future__ import annotations
 import os
 
 import httpx
-from supabase import Client, ClientOptions, create_client
+
+from supabase import ClientOptions, create_client
 
 
 def create_supabase_client():

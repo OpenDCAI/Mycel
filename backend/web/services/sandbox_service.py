@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from backend.web.core.config import LOCAL_WORKSPACE_ROOT, SANDBOXES_DIR
+from backend.web.core.storage_factory import make_sandbox_monitor_repo
 from backend.web.utils.helpers import is_virtual_thread_id
 from backend.web.utils.serializers import avatar_url
 from sandbox.config import SandboxConfig
@@ -17,7 +18,6 @@ from sandbox.provider import ProviderCapability
 from sandbox.recipes import default_recipe_id, list_builtin_recipes, normalize_recipe_snapshot, provider_type_from_name
 from storage.providers.sqlite.kernel import SQLiteDBRole, resolve_role_db_path
 from storage.providers.sqlite.member_repo import SQLiteMemberRepo
-from backend.web.core.storage_factory import make_sandbox_monitor_repo
 from storage.providers.sqlite.thread_repo import SQLiteThreadRepo
 
 logger = logging.getLogger(__name__)

@@ -13,6 +13,7 @@ router = APIRouter(prefix="/api/auth", tags=["auth"])
 
 # ── Registration step 1: send OTP ──────────────────────────────────────────
 
+
 class SendOtpRequest(BaseModel):
     email: str
     password: str
@@ -30,6 +31,7 @@ async def send_otp(payload: SendOtpRequest, app: Annotated[Any, Depends(get_app)
 
 # ── Registration step 2: verify OTP ────────────────────────────────────────
 
+
 class VerifyOtpRequest(BaseModel):
     email: str
     token: str
@@ -44,6 +46,7 @@ async def verify_otp(payload: VerifyOtpRequest, app: Annotated[Any, Depends(get_
 
 
 # ── Registration step 3: set password + invite code ────────────────────────
+
 
 class CompleteRegisterRequest(BaseModel):
     temp_token: str
@@ -60,8 +63,9 @@ async def complete_register(payload: CompleteRegisterRequest, app: Annotated[Any
 
 # ── Login ───────────────────────────────────────────────────────────────────
 
+
 class LoginRequest(BaseModel):
-    identifier: str   # email 或 mycel_id（纯数字字符串）
+    identifier: str  # email 或 mycel_id（纯数字字符串）
     password: str
 
 

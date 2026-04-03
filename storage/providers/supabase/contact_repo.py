@@ -33,13 +33,7 @@ class SupabaseContactRepo:
         ).execute()
 
     def get(self, owner_entity_id: str, target_entity_id: str) -> ContactRow | None:
-        response = (
-            self._t()
-            .select("*")
-            .eq("owner_entity_id", owner_entity_id)
-            .eq("target_entity_id", target_entity_id)
-            .execute()
-        )
+        response = self._t().select("*").eq("owner_entity_id", owner_entity_id).eq("target_entity_id", target_entity_id).execute()
         rows = q.rows(response, _REPO, "get")
         if not rows:
             return None

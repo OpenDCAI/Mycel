@@ -48,9 +48,7 @@ class SupabaseQueueRepo:
         head = q.rows(
             q.limit(
                 q.order(
-                    self._t()
-                    .select("id,content,notification_type,source,sender_entity_id,sender_name")
-                    .eq("thread_id", thread_id),
+                    self._t().select("id,content,notification_type,source,sender_entity_id,sender_name").eq("thread_id", thread_id),
                     "id",
                     desc=False,
                     repo=_REPO,
@@ -83,9 +81,7 @@ class SupabaseQueueRepo:
         # Fetch all rows ordered by id, then delete them all
         raw = q.rows(
             q.order(
-                self._t()
-                .select("id,content,notification_type,source,sender_entity_id,sender_name")
-                .eq("thread_id", thread_id),
+                self._t().select("id,content,notification_type,source,sender_entity_id,sender_name").eq("thread_id", thread_id),
                 "id",
                 desc=False,
                 repo=_REPO,
@@ -124,9 +120,7 @@ class SupabaseQueueRepo:
     def list_queue(self, thread_id: str) -> list[dict[str, Any]]:
         raw = q.rows(
             q.order(
-                self._t()
-                .select("id,content,notification_type,created_at")
-                .eq("thread_id", thread_id),
+                self._t().select("id,content,notification_type,created_at").eq("thread_id", thread_id),
                 "id",
                 desc=False,
                 repo=_REPO,

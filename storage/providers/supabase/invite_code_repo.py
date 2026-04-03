@@ -50,27 +50,31 @@ class SupabaseInviteCodeRepo:
         expires_at = None
         if expires_days is not None:
             expires_at = (datetime.now(UTC) + timedelta(days=expires_days)).isoformat()
-        self._table().insert({
-            "code": code,
-            "created_by": created_by,
-            "used_by": None,
-            "used_at": None,
-            "expires_at": expires_at,
-            "created_at": now,
-        }).execute()
+        self._table().insert(
+            {
+                "code": code,
+                "created_by": created_by,
+                "used_by": None,
+                "used_at": None,
+                "expires_at": expires_at,
+                "created_at": now,
+            }
+        ).execute()
         return self.get(code) or {}
 
     def get(self, code: str) -> dict[str, Any] | None:
         rows = q.rows(
             self._table().select("*").eq("code", code).execute(),
-            _REPO, "get",
+            _REPO,
+            "get",
         )
         return dict(rows[0]) if rows else None
 
     def list_all(self) -> list[dict[str, Any]]:
         rows = q.rows(
             q.order(self._table().select("*"), "created_at", desc=True, repo=_REPO, operation="list_all").execute(),
-            _REPO, "list_all",
+            _REPO,
+            "list_all",
         )
         return [dict(r) for r in rows]
 
