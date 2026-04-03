@@ -595,6 +595,74 @@ class TestToolRunnerErrorNormalization:
         assert meta["policy"] == "command_hook"
 
     @pytest.mark.asyncio
+    async def test_command_hook_does_not_block_quoted_dangerous_text(self, tmp_path):
+        registry = ToolRegistry()
+        CommandService(
+            registry=registry,
+            workspace_root=tmp_path,
+            hooks=[DangerousCommandsHook(verbose=False)],
+        )
+        runner = ToolRunner(registry=registry)
+        req = _make_tool_call_request("Bash", {"command": 'echo "rm -rf /"'})
+        req.state = MagicMock()
+
+        result = await runner.awrap_tool_call(req, AsyncMock())
+
+        assert "SECURITY ERROR" not in result.content
+        assert "rm -rf /" in result.content
+
+    @pytest.mark.asyncio
+    async def test_command_hook_does_not_block_commented_dangerous_text(self, tmp_path):
+        registry = ToolRegistry()
+        CommandService(
+            registry=registry,
+            workspace_root=tmp_path,
+            hooks=[DangerousCommandsHook(verbose=False)],
+        )
+        runner = ToolRunner(registry=registry)
+        req = _make_tool_call_request("Bash", {"command": "echo hi # rm -rf /"})
+        req.state = MagicMock()
+
+        result = await runner.awrap_tool_call(req, AsyncMock())
+
+        assert "SECURITY ERROR" not in result.content
+        assert "hi" in result.content
+
+    @pytest.mark.asyncio
+    async def test_command_hook_blocks_obfuscated_dangerous_command_name_with_inline_quotes(self, tmp_path):
+        registry = ToolRegistry()
+        CommandService(
+            registry=registry,
+            workspace_root=tmp_path,
+            hooks=[DangerousCommandsHook(verbose=False)],
+        )
+        runner = ToolRunner(registry=registry)
+        req = _make_tool_call_request("Bash", {"command": 's"u"do echo hi'})
+        req.state = MagicMock()
+
+        result = await runner.awrap_tool_call(req, AsyncMock())
+
+        assert "SECURITY ERROR" in result.content
+        assert result.additional_kwargs["tool_result_meta"]["kind"] == "permission_denied"
+
+    @pytest.mark.asyncio
+    async def test_command_hook_blocks_ansi_c_quoted_obfuscation(self, tmp_path):
+        registry = ToolRegistry()
+        CommandService(
+            registry=registry,
+            workspace_root=tmp_path,
+            hooks=[DangerousCommandsHook(verbose=False)],
+        )
+        runner = ToolRunner(registry=registry)
+        req = _make_tool_call_request("Bash", {"command": "s$'udo' echo hi"})
+        req.state = MagicMock()
+
+        result = await runner.awrap_tool_call(req, AsyncMock())
+
+        assert "SECURITY ERROR" in result.content
+        assert result.additional_kwargs["tool_result_meta"]["kind"] == "permission_denied"
+
+    @pytest.mark.asyncio
     async def test_registered_mcp_tool_executes_through_runner_with_mcp_source(self):
         @tool
         async def sample_mcp_tool(x: int) -> str:

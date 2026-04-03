@@ -107,6 +107,36 @@ class TestDangerousCommandsHook:
         assert not result.allow
         assert "SECURITY" in result.error_message
 
+    def test_allow_dangerous_text_inside_quotes(self):
+        hook = DangerousCommandsHook(verbose=False)
+        result = hook.check_command('echo "rm -rf /"', {})
+        assert result.allow
+
+    def test_allow_dangerous_text_inside_comment(self):
+        hook = DangerousCommandsHook(verbose=False)
+        result = hook.check_command("echo hi # rm -rf /", {})
+        assert result.allow
+
+    def test_block_obfuscated_dangerous_command_name_with_inline_quotes(self):
+        hook = DangerousCommandsHook(verbose=False)
+        result = hook.check_command('s"u"do echo hi', {})
+        assert not result.allow
+
+    def test_block_obfuscated_file_mutation_command_name_with_inline_quotes(self):
+        hook = DangerousCommandsHook(verbose=False)
+        result = hook.check_command('ch"mo"d 777 /tmp/x', {})
+        assert not result.allow
+
+    def test_block_ansi_c_quoted_obfuscation(self):
+        hook = DangerousCommandsHook(verbose=False)
+        result = hook.check_command("s$'udo' echo hi", {})
+        assert not result.allow
+
+    def test_block_locale_quoted_obfuscation(self):
+        hook = DangerousCommandsHook(verbose=False)
+        result = hook.check_command('$"chmod" 777 /tmp/x', {})
+        assert not result.allow
+
     def test_block_sudo(self):
         hook = DangerousCommandsHook()
         result = hook.check_command("sudo apt install", {})
