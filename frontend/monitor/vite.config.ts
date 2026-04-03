@@ -11,11 +11,14 @@ function getWorktreePort(key: string, fallback: string): string {
 }
 
 const backendPort = process.env.LEON_BACKEND_PORT || getWorktreePort("worktree.ports.backend", "8001");
+const monitorPort = parseInt(process.env.LEON_MONITOR_PORT || "5174", 10);
+const monitorPreviewPort = parseInt(process.env.LEON_MONITOR_PREVIEW_PORT || "4174", 10);
 
 export default defineConfig({
   plugins: [react()],
   server: {
-    port: 5174,
+    host: "0.0.0.0",
+    port: monitorPort,
     strictPort: true,
     proxy: {
       "/api": {
@@ -25,7 +28,8 @@ export default defineConfig({
     },
   },
   preview: {
-    port: 4174,
+    host: "0.0.0.0",
+    port: monitorPreviewPort,
     strictPort: true,
   },
 });

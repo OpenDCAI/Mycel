@@ -16,6 +16,7 @@ from datetime import datetime
 from pathlib import Path
 from subprocess import PIPE
 
+from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 
@@ -969,6 +970,101 @@ def load_run_candidates(thread_id: str, limit: int = 20) -> list[dict]:
         ]
 
 
+def list_trace_runs(offset: int = 0, limit: int = 50) -> dict[str, Any]:
+    """List recent trace-backed runs across all threads."""
+    if not RUN_EVENT_DB_PATH.exists():
+        return {
+            "title": "Recent Traces",
+            "count": 0,
+            "items": [],
+            "pagination": {
+                "offset": offset,
+                "limit": limit,
+                "total": 0,
+                "page": 1,
+                "has_prev": False,
+                "has_next": False,
+                "prev_offset": None,
+                "next_offset": None,
+            },
+        }
+
+    with sqlite3.connect(str(RUN_EVENT_DB_PATH)) as conn:
+        conn.row_factory = sqlite3.Row
+        total_row = conn.execute(
+            """
+            SELECT COUNT(*) AS total
+            FROM (
+                SELECT 1
+                FROM run_events
+                WHERE run_id NOT LIKE 'activity_%'
+                GROUP BY thread_id, run_id
+            )
+            """
+        ).fetchone()
+        total = int(total_row["total"] if total_row else 0)
+        rows = conn.execute(
+            """
+            SELECT
+                thread_id,
+                run_id,
+                COUNT(*) AS event_count,
+                SUM(CASE WHEN event_type = 'tool_call' THEN 1 ELSE 0 END) AS tool_call_count,
+                SUM(CASE WHEN event_type = 'tool_result' THEN 1 ELSE 0 END) AS tool_result_count,
+                MIN(created_at) AS started_at,
+                MAX(created_at) AS last_event_at,
+                MAX(CASE WHEN event_type = 'run_done' THEN 1 ELSE 0 END) AS has_run_done
+            FROM run_events
+            WHERE run_id NOT LIKE 'activity_%'
+            GROUP BY thread_id, run_id
+            ORDER BY MAX(created_at) DESC
+            LIMIT ? OFFSET ?
+            """,
+            (limit, offset),
+        ).fetchall()
+
+    mode_map = load_thread_mode_map([str(row["thread_id"]) for row in rows if row["thread_id"]])
+    items = []
+    for row in rows:
+        thread_id = str(row["thread_id"])
+        run_id = str(row["run_id"])
+        mode_info = mode_map.get(thread_id, {"thread_mode": "normal", "keep_full_trace": False})
+        items.append(
+            {
+                "thread_id": thread_id,
+                "thread_url": f"/thread/{thread_id}?run={run_id}",
+                "run_id": run_id,
+                "event_count": int(row["event_count"] or 0),
+                "tool_call_count": int(row["tool_call_count"] or 0),
+                "tool_result_count": int(row["tool_result_count"] or 0),
+                "started_at": row["started_at"],
+                "started_ago": format_time_ago(row["started_at"]) if row["started_at"] else None,
+                "last_event_at": row["last_event_at"],
+                "last_event_ago": format_time_ago(row["last_event_at"]) if row["last_event_at"] else None,
+                "status": "completed" if int(row["has_run_done"] or 0) > 0 else "running",
+                "thread_mode": mode_info["thread_mode"],
+                "keep_full_trace": mode_info["keep_full_trace"],
+            }
+        )
+
+    page = (offset // limit) + 1
+    return {
+        "title": "Recent Traces",
+        "count": len(items),
+        "items": items,
+        "pagination": {
+            "offset": offset,
+            "limit": limit,
+            "total": total,
+            "page": page,
+            "has_prev": offset > 0,
+            "has_next": (offset + len(items)) < total,
+            "prev_offset": max(offset - limit, 0) if offset > 0 else None,
+            "next_offset": (offset + limit) if (offset + len(items)) < total else None,
+        },
+    }
+
+
 def _msg_text(content: object) -> str:
     if isinstance(content, str):
         return content
@@ -1322,6 +1418,14 @@ def get_thread(thread_id: str, db: sqlite3.Connection = Depends(get_db)):
             "items": [{"lease_id": lid, "lease_url": f"/lease/{lid}"} for lid in lease_ids],
         },
     }
+
+
+@router.get("/traces")
+def get_traces(
+    offset: int = Query(default=0, ge=0),
+    limit: int = Query(default=50, ge=1, le=200),
+):
+    return list_trace_runs(offset=offset, limit=limit)
 
 
 @router.get("/thread/{thread_id}/conversation")

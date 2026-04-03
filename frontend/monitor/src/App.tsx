@@ -167,10 +167,114 @@ function ThreadsPage() {
   );
 }
 
+function TracesPage() {
+  const [data, setData] = React.useState<any>(null);
+  const [loading, setLoading] = React.useState<boolean>(false);
+  const [offset, setOffset] = React.useState<number>(0);
+  const [limit, setLimit] = React.useState<number>(50);
+
+  const loadTraces = React.useCallback(async () => {
+    setLoading(true);
+    try {
+      const payload = await fetchAPI(`/traces?offset=${offset}&limit=${limit}`);
+      setData(payload);
+    } finally {
+      setLoading(false);
+    }
+  }, [offset, limit]);
+
+  React.useEffect(() => {
+    void loadTraces();
+  }, [loadTraces]);
+
+  if (!data) return <div>Loading...</div>;
+  const pagination = data.pagination || {};
+  const total = Number(pagination.total || data.count || 0);
+  const currentCount = Number(data.count || 0);
+  const from = total > 0 ? offset + 1 : 0;
+  const to = offset + currentCount;
+  const page = Number(pagination.page || 1);
+
+  return (
+    <div className="page">
+      <h1>{data.title}</h1>
+      <p className="count">Showing {from}-{to} of {total} | page {page}</p>
+      <section>
+        <div className="pagination-bar">
+          <div className="pagination-controls">
+            <button
+              className="ghost-btn"
+              onClick={() => setOffset(Number(pagination.prev_offset))}
+              disabled={loading || !pagination.has_prev}
+            >
+              Prev
+            </button>
+            <button
+              className="ghost-btn"
+              onClick={() => setOffset(Number(pagination.next_offset))}
+              disabled={loading || !pagination.has_next}
+            >
+              Next
+            </button>
+            <button className="ghost-btn" onClick={() => void loadTraces()} disabled={loading}>
+              {loading ? 'Refreshing...' : 'Refresh'}
+            </button>
+          </div>
+          <div className="pagination-size">
+            <span>Rows:</span>
+            <select
+              value={limit}
+              onChange={(e) => {
+                setLimit(Number(e.target.value));
+                setOffset(0);
+              }}
+              disabled={loading}
+            >
+              <option value={25}>25</option>
+              <option value={50}>50</option>
+              <option value={100}>100</option>
+            </select>
+          </div>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>Thread</th>
+              <th>Run</th>
+              <th>Mode</th>
+              <th>Events</th>
+              <th>Tool Calls</th>
+              <th>Started</th>
+              <th>Last Event</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {data.items.map((item: any) => (
+              <tr key={`${item.thread_id}-${item.run_id}`}>
+                <td><Link to={item.thread_url}>{item.thread_id.slice(0, 18)}</Link></td>
+                <td className="mono">{shortId(item.run_id, 12)}</td>
+                <td>{item.thread_mode || 'normal'} / trace={item.keep_full_trace ? 'full' : 'latest'}</td>
+                <td>{item.event_count}</td>
+                <td>{item.tool_call_count} / {item.tool_result_count}</td>
+                <td>{item.started_ago || '-'}</td>
+                <td>{item.last_event_ago || '-'}</td>
+                <td>{item.status}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </section>
+    </div>
+  );
+}
+
 // Page: Thread Detail
 function ThreadDetailPage() {
   const { threadId } = useParams();
+  const location = useLocation();
   const [data, setData] = React.useState<any>(null);
+  const initialRunId = React.useMemo(() => new URLSearchParams(location.search).get('run') || '', [location.search]);
 
   React.useEffect(() => {
     fetchAPI(`/thread/${threadId}`).then(setData);
@@ -232,7 +336,7 @@ function ThreadDetailPage() {
         </ul>
       </section>
 
-      <ThreadTraceSection threadId={data.thread_id} autoRefreshEnabled={threadIsActive} />
+      <ThreadTraceSection threadId={data.thread_id} autoRefreshEnabled={threadIsActive} initialRunId={initialRunId} />
     </div>
   );
 }
@@ -757,7 +861,7 @@ function TraceStepCard({ step }: { step: TraceStep }) {
   );
 }
 
-function ThreadTraceSection({ threadId, autoRefreshEnabled }: { threadId: string; autoRefreshEnabled: boolean }) {
+function ThreadTraceSection({ threadId, autoRefreshEnabled, initialRunId = '' }: { threadId: string; autoRefreshEnabled: boolean; initialRunId?: string }) {
   const [traceEvents, setTraceEvents] = React.useState<TraceItem[]>([]);
   const [traceError, setTraceError] = React.useState<string | null>(null);
   const [traceLoading, setTraceLoading] = React.useState<boolean>(false);
@@ -816,10 +920,10 @@ function ThreadTraceSection({ threadId, autoRefreshEnabled }: { threadId: string
     if (!threadId) return;
     setTraceEvents([]);
     setRunCandidates([]);
-    setSelectedRunId('');
-    loadTrace('');
+    setSelectedRunId(initialRunId);
+    loadTrace(initialRunId);
     loadConversation();
-  }, [threadId, loadTrace, loadConversation]);
+  }, [threadId, initialRunId, loadTrace, loadConversation]);
 
   React.useEffect(() => {
     if (!selectedRunId) return;
@@ -1937,6 +2041,7 @@ function Layout({ children }: { children: React.ReactNode }) {
         <h1 className="logo">Mycel Sandbox Monitor</h1>
         <div className="nav-links">
           <NavLink to="/threads">Threads</NavLink>
+          <NavLink to="/traces">Trace</NavLink>
           <NavLink to="/leases">Leases</NavLink>
           <NavLink to="/diverged">Diverged</NavLink>
           <NavLink to="/events">Events</NavLink>
@@ -1959,6 +2064,7 @@ export default function App() {
         <Routes>
           <Route path="/" element={<DivergedPage />} />
           <Route path="/threads" element={<ThreadsPage />} />
+          <Route path="/traces" element={<TracesPage />} />
           <Route path="/thread/:threadId" element={<ThreadDetailPage />} />
           <Route path="/session/:sessionId" element={<SessionDetailPage />} />
           <Route path="/leases" element={<LeasesPage />} />
