@@ -62,6 +62,45 @@ class _MemoryCheckpointer:
         self.store[cfg["configurable"]["thread_id"]] = checkpoint
 
 
+class _DirectCompactionProbeModel:
+    def __init__(self):
+        self.summary_calls = 0
+        self.turn_calls = 0
+
+    def bind_tools(self, tools):
+        return self
+
+    def configurable_fields(self, **kwargs):
+        return self
+
+    def with_config(self, **kwargs):
+        return self
+
+    def bind(self, **kwargs):
+        return self
+
+    async def ainvoke(self, messages):
+        first_content = getattr(messages[0], "content", "") if messages else ""
+        if isinstance(first_content, str) and "summarizing conversations" in first_content:
+            self.summary_calls += 1
+            return AIMessage(
+                content=(
+                    "1. Request/Intent — summarize\n"
+                    "2. Technical Concepts — compaction\n"
+                    "3. Files/Code — none\n"
+                    "4. Errors — none\n"
+                    "5. Problem Solving — keep going\n"
+                    "6. User Messages — large payloads\n"
+                    "7. Pending Tasks — continue\n"
+                    "8. Current Work — compacting\n"
+                    "9. Next Step — answer user"
+                )
+            )
+
+        self.turn_calls += 1
+        return AIMessage(content=f"OK_{self.turn_calls}")
+
+
 def test_leon_agent_destructor_does_not_reenable_skipped_sandbox_cleanup():
     """Explicit child close(cleanup_sandbox=False) must stay final under __del__."""
     from core.runtime.agent import LeonAgent
@@ -898,5 +937,46 @@ async def test_leon_agent_aclear_thread_does_not_restore_stale_summary(tmp_path)
         result = await agent._memory_middleware.awrap_model_call(request, _handler)
 
         assert [msg.content for msg in result.request_messages] == ["fresh-1", "fresh-2"]
+
+        agent.close()
+
+
+@pytest.mark.asyncio
+@_patch_env_api_key()
+async def test_leon_agent_persists_summary_store_after_second_turn_compaction(tmp_path):
+    from core.runtime.agent import LeonAgent
+    from core.runtime.middleware.memory.summary_store import SummaryStore
+
+    checkpointer = _MemoryCheckpointer()
+    probe_model = _DirectCompactionProbeModel()
+
+    with patch("core.runtime.agent.LeonAgent._create_model", return_value=probe_model), \
+         patch("core.runtime.agent.LeonAgent._init_async_components", return_value=(None, [])), \
+         patch("core.runtime.agent.LeonAgent._init_checkpointer", new_callable=AsyncMock, return_value=None):
+
+        agent = LeonAgent(workspace_root=str(tmp_path), api_key="sk-test-integration")
+        await agent.ainit()
+        agent.checkpointer = checkpointer
+        agent.agent.checkpointer = checkpointer
+
+        store = SummaryStore(tmp_path / "summary.db")
+        agent._memory_middleware.summary_store = store
+        agent._memory_middleware._compaction_threshold = 0.01
+        agent._memory_middleware.compactor.keep_recent_tokens = 10
+
+        turn1 = await agent.ainvoke("A" * 12000, thread_id="agent-compaction-thread")
+        assert turn1["reason"] == "completed"
+        assert store.get_latest_summary("agent-compaction-thread") is None
+
+        turn2 = await agent.ainvoke("B" * 12000, thread_id="agent-compaction-thread")
+        assert turn2["reason"] == "completed"
+        assert probe_model.summary_calls == 1
+        assert agent._memory_middleware._cached_summary is not None
+        assert agent._memory_middleware._compact_up_to_index > 0
+
+        summary = store.get_latest_summary("agent-compaction-thread")
+        assert summary is not None
+        assert summary.compact_up_to_index == agent._memory_middleware._compact_up_to_index
+        assert "Request/Intent" in summary.summary_text
 
         agent.close()
