@@ -9,7 +9,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from langchain_core.messages import AIMessage, AIMessageChunk, SystemMessage, ToolMessage
+from langchain_core.messages import AIMessage, AIMessageChunk, HumanMessage, SystemMessage, ToolMessage
 
 
 # ---------------------------------------------------------------------------
@@ -549,5 +549,54 @@ async def test_leon_agent_aclear_thread_resets_thread_history(tmp_path):
         assert agent.app_state.total_cost == 1.25
         assert agent._bootstrap.session_id != old_session_id
         assert agent._bootstrap.parent_session_id == old_session_id
+
+        agent.close()
+
+
+@pytest.mark.asyncio
+@_patch_env_api_key()
+async def test_leon_agent_aclear_thread_does_not_restore_stale_summary(tmp_path):
+    from core.runtime.agent import LeonAgent
+    from core.runtime.middleware import ModelRequest, ModelResponse
+    from core.runtime.middleware.memory.summary_store import SummaryStore
+    from sandbox.thread_context import set_current_thread_id
+
+    async def _handler(req: ModelRequest) -> ModelResponse:
+        return ModelResponse(result=[AIMessage(content="final")], request_messages=req.messages)
+
+    mock_model = _mock_model("clearable response")
+    checkpointer = _MemoryCheckpointer()
+
+    with patch("core.runtime.agent.LeonAgent._create_model", return_value=mock_model), \
+         patch("core.runtime.agent.LeonAgent._init_async_components", return_value=(None, [])), \
+         patch("core.runtime.agent.LeonAgent._init_checkpointer", new_callable=AsyncMock, return_value=None):
+
+        agent = LeonAgent(workspace_root=str(tmp_path), api_key="sk-test-integration")
+        await agent.ainit()
+        agent.checkpointer = checkpointer
+        agent.agent.checkpointer = checkpointer
+
+        store = SummaryStore(tmp_path / "summary.db")
+        agent._memory_middleware.summary_store = store
+        store.save_summary(
+            thread_id="clear-summary-thread",
+            summary_text="STALE SUMMARY",
+            compact_up_to_index=2,
+            compacted_at=2,
+        )
+
+        await agent.aclear_thread("clear-summary-thread")
+
+        assert store.get_latest_summary("clear-summary-thread") is None
+
+        set_current_thread_id("clear-summary-thread")
+        request = ModelRequest(
+            model=mock_model,
+            messages=[HumanMessage(content="fresh-1"), HumanMessage(content="fresh-2")],
+            system_message=SystemMessage(content="sys"),
+        )
+        result = await agent._memory_middleware.awrap_model_call(request, _handler)
+
+        assert [msg.content for msg in result.request_messages] == ["fresh-1", "fresh-2"]
 
         agent.close()

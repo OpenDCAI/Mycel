@@ -7,9 +7,12 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from langchain_core.messages import AIMessage, HumanMessage
+from langchain_core.runnables import RunnableLambda
 
+from core.runtime.middleware import ModelRequest, ModelResponse
 from core.runtime.middleware.memory.middleware import MemoryMiddleware
 from core.runtime.middleware.memory.summary_store import SummaryStore
+from sandbox.thread_context import set_current_thread_id
 
 
 @pytest.fixture
@@ -164,6 +167,59 @@ class TestSummaryRestoreOnStartup:
         assert middleware2._cached_summary == original_summary
         assert middleware2._compact_up_to_index == original_index
         assert middleware2._summary_restored is True
+
+    @pytest.mark.asyncio
+    async def test_summary_restore_is_isolated_per_thread_on_shared_middleware(self, temp_db, mock_model):
+        middleware = MemoryMiddleware(
+            context_limit=10000,
+            compaction_threshold=0.5,
+            db_path=temp_db,
+            verbose=True,
+        )
+        middleware.set_model(mock_model)
+
+        store = SummaryStore(temp_db)
+        store.save_summary(
+            thread_id="t1",
+            summary_text="SUMMARY ONE",
+            compact_up_to_index=1,
+            compacted_at=2,
+        )
+        store.save_summary(
+            thread_id="t2",
+            summary_text="SUMMARY TWO",
+            compact_up_to_index=1,
+            compacted_at=2,
+        )
+
+        async def handler(req: ModelRequest) -> ModelResponse:
+            return ModelResponse(result=[], request_messages=req.messages)
+
+        request_t1 = ModelRequest(
+            model=RunnableLambda(lambda x: x),
+            messages=[HumanMessage(content="a1"), HumanMessage(content="a2")],
+            system_message=None,
+        )
+
+        request_t2 = ModelRequest(
+            model=RunnableLambda(lambda x: x),
+            messages=[HumanMessage(content="b1"), HumanMessage(content="b2")],
+            system_message=None,
+        )
+
+        set_current_thread_id("t1")
+        result_t1 = await middleware.awrap_model_call(request_t1, handler)
+        set_current_thread_id("t2")
+        result_t2 = await middleware.awrap_model_call(request_t2, handler)
+
+        assert [getattr(msg, "content", "") for msg in result_t1.request_messages] == [
+            "[Conversation Summary]\nSUMMARY ONE",
+            "a2",
+        ]
+        assert [getattr(msg, "content", "") for msg in result_t2.request_messages] == [
+            "[Conversation Summary]\nSUMMARY TWO",
+            "b2",
+        ]
 
 
 class TestSplitTurnSaveAndRestore:

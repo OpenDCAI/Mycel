@@ -86,6 +86,7 @@ class MemoryMiddleware(AgentMiddleware):
         self._cached_summary: str | None = None
         self._compact_up_to_index: int = 0
         self._summary_restored: bool = False
+        self._summary_thread_id: str | None = None
 
         if verbose:
             print("[MemoryMiddleware] Initialized")
@@ -138,13 +139,18 @@ class MemoryMiddleware(AgentMiddleware):
     ) -> ModelCallResult:
         messages = list(request.messages)
         original_count = len(messages)
+        thread_id = self._extract_thread_id(request)
 
         # Restore summary from store if not already done
         if not self._summary_restored and self.summary_store:
-            thread_id = self._extract_thread_id(request)
             if thread_id:
                 await self._restore_summary_from_store(thread_id)
                 self._summary_restored = True
+                self._summary_thread_id = thread_id
+        elif self.summary_store and thread_id and self._summary_thread_id != thread_id:
+            await self._restore_summary_from_store(thread_id)
+            self._summary_restored = True
+            self._summary_thread_id = thread_id
 
         sys_tokens = self._estimate_system_tokens(request)
 
@@ -177,7 +183,6 @@ class MemoryMiddleware(AgentMiddleware):
             )
 
         if self.compactor.should_compact(estimated, self._context_limit, self._compaction_threshold) and self._model:
-            thread_id = self._extract_thread_id(request)
             messages = await self._do_compact(messages, thread_id)
         elif self._cached_summary and self._compact_up_to_index > 0:
             if self._compact_up_to_index <= len(messages):
@@ -230,6 +235,8 @@ class MemoryMiddleware(AgentMiddleware):
 
             self._cached_summary = summary_text
             self._compact_up_to_index = len(messages) - len(to_keep)
+            self._summary_restored = True
+            self._summary_thread_id = thread_id
 
             if self.summary_store and thread_id:
                 try:
@@ -337,6 +344,8 @@ class MemoryMiddleware(AgentMiddleware):
             )
 
         try:
+            self._cached_summary = None
+            self._compact_up_to_index = 0
             summary_data = self.summary_store.get_latest_summary(thread_id)
 
             if not summary_data:
@@ -355,6 +364,7 @@ class MemoryMiddleware(AgentMiddleware):
 
             self._cached_summary = summary_data.summary_text
             self._compact_up_to_index = summary_data.compact_up_to_index
+            self._summary_thread_id = thread_id
 
             if self.verbose:
                 print(
@@ -365,6 +375,8 @@ class MemoryMiddleware(AgentMiddleware):
                 )
 
         except Exception as e:
+            self._cached_summary = None
+            self._compact_up_to_index = 0
             logger.error(f"[Memory] Failed to restore summary: {e}")
 
     async def _rebuild_summary_from_checkpointer(self, thread_id: str) -> None:

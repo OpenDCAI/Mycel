@@ -1270,10 +1270,17 @@ class QueryLoop:
         self._tool_discovered_tool_names.clear()
 
         if self._memory_middleware is not None:
+            summary_store = getattr(self._memory_middleware, "summary_store", None)
+            if summary_store is not None:
+                # @@@clear-thread-clears-summary-store - api-05 requires /clear
+                # to wipe replayable compaction state, not just in-memory cache.
+                summary_store.delete_thread_summaries(thread_id)
             if hasattr(self._memory_middleware, "_cached_summary"):
                 self._memory_middleware._cached_summary = None
             if hasattr(self._memory_middleware, "_summary_restored"):
                 self._memory_middleware._summary_restored = False
+            if hasattr(self._memory_middleware, "_summary_thread_id"):
+                self._memory_middleware._summary_thread_id = None
             if hasattr(self._memory_middleware, "_compact_up_to_index"):
                 self._memory_middleware._compact_up_to_index = 0
 

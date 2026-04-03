@@ -323,6 +323,34 @@ async def test_query_loop_aclear_wipes_real_async_sqlite_saver_history():
         await conn.close()
 
 
+@pytest.mark.asyncio
+async def test_query_loop_aclear_deletes_persisted_summary_for_thread():
+    db_path = Path(tempfile.mkdtemp()) / "memory.db"
+    mm = MemoryMiddleware(db_path=db_path)
+    mm.summary_store.save_summary(
+        thread_id="clear-summary-thread",
+        summary_text="STALE SUMMARY",
+        compact_up_to_index=2,
+        compacted_at=2,
+    )
+
+    loop = QueryLoop(
+        model=mock_model_no_tools("done"),
+        system_prompt=SystemMessage(content="You are a test assistant."),
+        middleware=[mm],
+        checkpointer=None,
+        registry=make_registry(),
+        app_state=AppState(total_cost=1.25),
+        runtime=None,
+        bootstrap=BootstrapConfig(workspace_root=Path("/tmp"), model_name="test-model", total_cost_usd=1.25),
+        max_turns=10,
+    )
+
+    await loop.aclear("clear-summary-thread")
+
+    assert mm.summary_store.get_latest_summary("clear-summary-thread") is None
+
+
 # ---------------------------------------------------------------------------
 # Tests: with tool calls → agent chunk + tools chunk
 # ---------------------------------------------------------------------------
