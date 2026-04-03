@@ -16,8 +16,9 @@ from core.runtime.middleware.queue.manager import MessageQueueManager
 from backend.web.services.streaming_service import _repair_incomplete_tool_calls, _run_agent_to_buffer
 from core.runtime.middleware.monitor.state_monitor import AgentState
 from core.runtime.loop import QueryLoop
-from core.runtime.registry import ToolRegistry
+from core.runtime.registry import ToolEntry, ToolMode, ToolRegistry
 from core.runtime.state import AppState, BootstrapConfig
+from core.tools.tool_search.service import ToolSearchService
 
 
 class _MemoryCheckpointer:
@@ -40,6 +41,23 @@ class _NoToolModel:
 
     async def ainvoke(self, messages):
         return AIMessage(content=self._text)
+
+
+class _ToolSearchInlineSelectModel:
+    def __init__(self) -> None:
+        self._turn = 0
+
+    def bind_tools(self, tools):
+        return self
+
+    async def ainvoke(self, messages):
+        if self._turn == 0:
+            self._turn += 1
+            return AIMessage(
+                content="",
+                tool_calls=[{"name": "tool_search", "args": {"query": "select:Read,TaskCreate"}, "id": "tc-search"}],
+            )
+        return AIMessage(content="after-inline-select")
 
 
 class _FakeDisplayBuilder:
@@ -102,13 +120,19 @@ class _StreamingRuntime:
         return True
 
 
-def _make_loop(*, text: str = "done", checkpointer: _MemoryCheckpointer | None = None) -> QueryLoop:
+def _make_loop(
+    *,
+    text: str = "done",
+    model=None,
+    registry: ToolRegistry | None = None,
+    checkpointer: _MemoryCheckpointer | None = None,
+) -> QueryLoop:
     return QueryLoop(
-        model=_NoToolModel(text=text),
+        model=model or _NoToolModel(text=text),
         system_prompt=SystemMessage(content="sys"),
         middleware=[],
         checkpointer=checkpointer,
-        registry=ToolRegistry(),
+        registry=registry or ToolRegistry(),
         app_state=AppState(),
         runtime=None,
         bootstrap=BootstrapConfig(workspace_root=Path("/tmp"), model_name="test-model"),
@@ -215,6 +239,63 @@ async def test_get_thread_history_skips_empty_ai_messages_after_notifications():
 
     assert [item["role"] for item in history["messages"]] == ["human", "notification"]
     assert history["messages"][-1]["text"].startswith("<system-reminder><task-notification>")
+
+
+@pytest.mark.asyncio
+async def test_get_thread_history_retains_tool_search_inline_select_error():
+    checkpointer = _MemoryCheckpointer()
+    registry = ToolRegistry()
+    registry.register(
+        ToolEntry(
+            name="Read",
+            mode=ToolMode.INLINE,
+            schema={"name": "Read", "description": "read file"},
+            handler=lambda **_: "read",
+            source="test",
+        )
+    )
+    registry.register(
+        ToolEntry(
+            name="TaskCreate",
+            mode=ToolMode.DEFERRED,
+            schema={"name": "TaskCreate", "description": "create task"},
+            handler=lambda **_: "task",
+            source="test",
+        )
+    )
+    ToolSearchService(registry)
+    loop = _make_loop(
+        model=_ToolSearchInlineSelectModel(),
+        registry=registry,
+        checkpointer=checkpointer,
+    )
+    config = {"configurable": {"thread_id": "history-tool-search-inline-select"}}
+
+    async for _ in loop.query(
+        {"messages": [{"role": "user", "content": "probe inline select"}]},
+        config=config,
+    ):
+        pass
+
+    fake_agent = SimpleNamespace(agent=loop)
+    fake_app = SimpleNamespace(state=SimpleNamespace())
+    with (
+        patch("backend.web.routers.threads.get_or_create_agent", return_value=fake_agent),
+        patch("backend.web.routers.threads.resolve_thread_sandbox", return_value="local"),
+    ):
+        history = await get_thread_history(
+            "history-tool-search-inline-select",
+            limit=20,
+            truncate=300,
+            user_id="u",
+            app=fake_app,
+        )
+
+    assert [item["role"] for item in history["messages"]] == ["human", "tool_call", "tool_result", "assistant"]
+    assert history["messages"][1]["tool"] == "tool_search"
+    assert "<tool_use_error>" in history["messages"][2]["text"]
+    assert "inline/already-available tools: Read" in history["messages"][2]["text"]
+    assert history["messages"][3]["text"] == "after-inline-select"
 
 
 @pytest.mark.asyncio
