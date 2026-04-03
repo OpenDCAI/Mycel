@@ -30,7 +30,7 @@ def make_registry(*entries):
     return reg
 
 
-def make_loop(model, registry=None, middleware=None, max_turns=10, app_state=None, runtime=None):
+def make_loop(model, registry=None, middleware=None, max_turns=10, app_state=None, runtime=None, bootstrap=None):
     return QueryLoop(
         model=model,
         system_prompt=SystemMessage(content="You are a test assistant."),
@@ -39,7 +39,7 @@ def make_loop(model, registry=None, middleware=None, max_turns=10, app_state=Non
         registry=registry or make_registry(),
         app_state=app_state,
         runtime=runtime,
-        bootstrap=BootstrapConfig(workspace_root=Path("/tmp"), model_name="test-model"),
+        bootstrap=bootstrap or BootstrapConfig(workspace_root=Path("/tmp"), model_name="test-model"),
         max_turns=max_turns,
     )
 
@@ -141,7 +141,15 @@ def test_tool_use_context_turn_refs_are_fresh_per_turn():
 
 def test_tool_use_context_permission_request_surface_tracks_thread_pending_state():
     app_state = AppState()
-    loop = make_loop(mock_model_no_tools(), app_state=app_state)
+    loop = make_loop(
+        mock_model_no_tools(),
+        app_state=app_state,
+        bootstrap=BootstrapConfig(
+            workspace_root=Path("/tmp"),
+            model_name="test-model",
+            permission_resolver_scope="thread",
+        ),
+    )
 
     ctx = loop._build_tool_use_context([], thread_id="thread-a")
     assert ctx is not None
@@ -181,7 +189,15 @@ def test_tool_use_context_consumes_resolved_permission_once():
 def test_tool_use_context_can_use_tool_reads_app_state_permission_rules():
     app_state = AppState()
     app_state.tool_permission_context.alwaysAskRules["session"] = ["Write"]
-    loop = make_loop(mock_model_no_tools(), app_state=app_state)
+    loop = make_loop(
+        mock_model_no_tools(),
+        app_state=app_state,
+        bootstrap=BootstrapConfig(
+            workspace_root=Path("/tmp"),
+            model_name="test-model",
+            permission_resolver_scope="thread",
+        ),
+    )
 
     ctx = loop._build_tool_use_context([], thread_id="thread-a")
     assert ctx is not None
@@ -196,6 +212,37 @@ def test_tool_use_context_can_use_tool_reads_app_state_permission_rules():
     assert decision == {
         "decision": "ask",
         "message": "Permission required by rule: Write",
+    }
+
+
+def test_tool_use_context_omits_permission_request_surface_without_interactive_resolver():
+    app_state = AppState()
+    loop = make_loop(mock_model_no_tools(), app_state=app_state)
+
+    ctx = loop._build_tool_use_context([], thread_id="thread-a")
+    assert ctx is not None
+
+    assert ctx.request_permission is None
+
+
+def test_tool_use_context_fails_loud_when_ask_has_no_interactive_resolver():
+    app_state = AppState()
+    app_state.tool_permission_context.alwaysAskRules["session"] = ["Write"]
+    loop = make_loop(mock_model_no_tools(), app_state=app_state)
+
+    ctx = loop._build_tool_use_context([], thread_id="thread-a")
+    assert ctx is not None
+
+    decision = ctx.can_use_tool(
+        "Write",
+        {},
+        SimpleNamespace(is_read_only=False, is_destructive=False),
+        None,
+    )
+
+    assert decision == {
+        "decision": "deny",
+        "message": "Permission required by rule: Write. No interactive permission resolver is available for this run.",
     }
 
 

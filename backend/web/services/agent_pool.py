@@ -44,6 +44,7 @@ def create_agent_sync(
         workspace_root=workspace_root or Path.cwd(),
         sandbox=sandbox_name if sandbox_name != "local" else None,
         storage_container=storage_container,
+        permission_resolver_scope="thread",
         thread_repo=thread_repo,
         entity_repo=entity_repo,
         member_repo=member_repo,

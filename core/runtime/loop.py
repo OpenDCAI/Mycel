@@ -855,6 +855,7 @@ class QueryLoop:
     def _build_tool_use_context(self, messages: list, *, thread_id: str = "default") -> ToolUseContext | None:
         if self._bootstrap is None or self._app_state is None:
             return None
+        has_permission_resolver = self._bootstrap.permission_resolver_scope != "none"
         return ToolUseContext(
             bootstrap=self._bootstrap,
             get_app_state=self._app_state.get_state,
@@ -864,12 +865,16 @@ class QueryLoop:
                 name=name,
                 permission_context=permission_context,
             ),
-            request_permission=lambda name, args, context, request, message: self._request_permission(
-                thread_id=thread_id,
-                name=name,
-                args=args,
-                message=message,
-            ),
+            request_permission=(
+                lambda name, args, context, request, message: self._request_permission(
+                    thread_id=thread_id,
+                    name=name,
+                    args=args,
+                    message=message,
+                )
+            )
+            if has_permission_resolver
+            else None,
             consume_permission_resolution=lambda name, args, context, request: self._consume_permission_resolution(
                 thread_id=thread_id,
                 name=name,
@@ -902,7 +907,21 @@ class QueryLoop:
             alwaysAskRules=permission_state.alwaysAskRules,
             allowManagedPermissionRulesOnly=permission_state.allowManagedPermissionRulesOnly,
         )
-        return evaluate_permission_rules(name, merged_context)
+        decision = evaluate_permission_rules(name, merged_context)
+        if (
+            decision is not None
+            and decision.get("decision") == "ask"
+            and self._bootstrap is not None
+            and self._bootstrap.permission_resolver_scope == "none"
+        ):
+            # @@@permission-headless-fail-loud - ask is only a real product mode
+            # when this run has an owner-facing resolver. Otherwise fail loudly
+            # instead of creating a dead-end pending request in hidden state.
+            return {
+                "decision": "deny",
+                "message": f"{decision.get('message')}. No interactive permission resolver is available for this run.",
+            }
+        return decision
 
     def _request_permission(
         self,

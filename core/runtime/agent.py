@@ -174,6 +174,7 @@ class LeonAgent:
         extra_allowed_paths: list[str] | None = None,
         extra_blocked_tools: set[str] | None = None,
         allowed_tools: set[str] | None = None,
+        permission_resolver_scope: str = "none",
         verbose: bool = False,
     ):
         """
@@ -194,6 +195,7 @@ class LeonAgent:
             entity_repo: Optional entity repo for backend-integrated subagent registration
             member_repo: Optional member repo for backend-integrated subagent registration
             queue_manager: Shared MessageQueueManager instance (created if not provided)
+            permission_resolver_scope: Permission request surface for this agent ("none" or "thread")
             verbose: Whether to output detailed logs (default False)
         """
         self.agent_id: str | None = None
@@ -321,6 +323,7 @@ class LeonAgent:
             model_name=self.model_name,
             api_key=self.api_key,
             sandbox_type=self._sandbox.name,
+            permission_resolver_scope=permission_resolver_scope,
             block_dangerous_commands=self.block_dangerous_commands,
             block_network_commands=self.block_network_commands,
             enable_audit_log=self.enable_audit_log,

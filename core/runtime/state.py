@@ -37,6 +37,7 @@ class BootstrapConfig(BaseModel):
     model_name: str
     api_key: str | None = None
     sandbox_type: str = "local"
+    permission_resolver_scope: str = "none"
 
     # Security flags (fail-closed defaults)
     block_dangerous_commands: bool = True

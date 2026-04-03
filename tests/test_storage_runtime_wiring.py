@@ -100,6 +100,20 @@ def test_create_agent_sync_defaults_to_sqlite_storage_container(
     assert isinstance(container.checkpoint_repo(), SQLiteCheckpointRepo)
 
 
+def test_create_agent_sync_enables_thread_permission_resolver_scope(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.delenv("LEON_STORAGE_STRATEGY", raising=False)
+    monkeypatch.delenv("LEON_SUPABASE_CLIENT_FACTORY", raising=False)
+    monkeypatch.setenv("LEON_DB_PATH", str(tmp_path / "leon.db"))
+
+    captured = _capture_create_leon_agent(monkeypatch)
+    agent_pool.create_agent_sync("local", workspace_root=tmp_path, model_name="leon:test")
+
+    assert captured["permission_resolver_scope"] == "thread"
+
+
 def test_create_agent_sync_repo_override_supabase_with_sqlite_default(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
