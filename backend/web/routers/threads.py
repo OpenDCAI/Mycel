@@ -21,6 +21,7 @@ from backend.web.core.dependencies import (
 from backend.web.models.requests import (
     CreateThreadRequest,
     ResolveMainThreadRequest,
+    ResolvePermissionRequest,
     SaveThreadLaunchConfigRequest,
     SendMessageRequest,
 )
@@ -764,6 +765,39 @@ async def get_thread_history(
         "showing": len(messages),
         "messages": flat,
     }
+
+
+@router.get("/{thread_id}/permissions")
+async def get_thread_permissions(
+    thread_id: str,
+    user_id: Annotated[str, Depends(verify_thread_owner)] = None,
+    agent: Annotated[Any, Depends(get_thread_agent)] = None,
+) -> dict[str, Any]:
+    await agent.agent.aget_state({"configurable": {"thread_id": thread_id}})
+    return {
+        "thread_id": thread_id,
+        "requests": agent.get_pending_permission_requests(thread_id),
+    }
+
+
+@router.post("/{thread_id}/permissions/{request_id}/resolve")
+async def resolve_thread_permission_request(
+    thread_id: str,
+    request_id: str,
+    payload: ResolvePermissionRequest,
+    user_id: Annotated[str, Depends(verify_thread_owner)] = None,
+    agent: Annotated[Any, Depends(get_thread_agent)] = None,
+) -> dict[str, Any]:
+    await agent.agent.aget_state({"configurable": {"thread_id": thread_id}})
+    ok = agent.resolve_permission_request(
+        request_id,
+        decision=payload.decision,
+        message=payload.message,
+    )
+    if not ok:
+        raise HTTPException(status_code=404, detail="Permission request not found")
+    await agent.agent.apersist_state(thread_id)
+    return {"ok": True, "thread_id": thread_id, "request_id": request_id}
 
 
 @router.get("/{thread_id}/runtime")

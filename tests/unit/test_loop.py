@@ -413,6 +413,125 @@ async def test_query_loop_aget_state_exposes_messages_for_backend_callers():
 
 
 @pytest.mark.asyncio
+async def test_query_loop_aget_state_exposes_persisted_permission_state_for_backend_callers():
+    checkpointer = _MemoryCheckpointer()
+    pending = {
+        "perm-1": {
+            "request_id": "perm-1",
+            "thread_id": "perm-thread",
+            "tool_name": "Write",
+            "args": {"path": "/tmp/a.txt"},
+            "message": "needs approval",
+        }
+    }
+    resolved = {
+        "perm-2": {
+            "request_id": "perm-2",
+            "thread_id": "perm-thread",
+            "tool_name": "Edit",
+            "args": {"path": "/tmp/b.txt"},
+            "decision": "allow",
+            "message": "approved",
+        }
+    }
+    loop = QueryLoop(
+        model=mock_model_no_tools("persist permissions"),
+        system_prompt=SystemMessage(content="You are a test assistant."),
+        middleware=[],
+        checkpointer=checkpointer,
+        registry=make_registry(),
+        app_state=AppState(
+            pending_permission_requests=pending,
+            resolved_permission_requests=resolved,
+        ),
+        runtime=None,
+        bootstrap=BootstrapConfig(workspace_root=Path("/tmp"), model_name="test-model"),
+        max_turns=10,
+    )
+    config = {"configurable": {"thread_id": "perm-thread"}}
+
+    await loop._save_messages("perm-thread", [HumanMessage(content="hello")])
+
+    reloaded = QueryLoop(
+        model=mock_model_no_tools("unused"),
+        system_prompt=SystemMessage(content="You are a test assistant."),
+        middleware=[],
+        checkpointer=checkpointer,
+        registry=make_registry(),
+        app_state=AppState(),
+        runtime=None,
+        bootstrap=BootstrapConfig(workspace_root=Path("/tmp"), model_name="test-model"),
+        max_turns=10,
+    )
+
+    state = await reloaded.aget_state(config)
+
+    assert state.values["pending_permission_requests"] == pending
+    assert state.values["resolved_permission_requests"] == resolved
+
+
+@pytest.mark.asyncio
+async def test_query_loop_restores_persisted_permission_state_into_live_app_state():
+    checkpointer = _MemoryCheckpointer()
+    pending = {
+        "perm-1": {
+            "request_id": "perm-1",
+            "thread_id": "perm-thread",
+            "tool_name": "Write",
+            "args": {"path": "/tmp/a.txt"},
+            "message": "needs approval",
+        }
+    }
+    resolved = {
+        "perm-2": {
+            "request_id": "perm-2",
+            "thread_id": "perm-thread",
+            "tool_name": "Edit",
+            "args": {"path": "/tmp/b.txt"},
+            "decision": "allow",
+            "message": "approved",
+        }
+    }
+    seed_loop = QueryLoop(
+        model=mock_model_no_tools("seed"),
+        system_prompt=SystemMessage(content="You are a test assistant."),
+        middleware=[],
+        checkpointer=checkpointer,
+        registry=make_registry(),
+        app_state=AppState(
+            pending_permission_requests=pending,
+            resolved_permission_requests=resolved,
+        ),
+        runtime=None,
+        bootstrap=BootstrapConfig(workspace_root=Path("/tmp"), model_name="test-model"),
+        max_turns=10,
+    )
+    await seed_loop._save_messages("perm-thread", [HumanMessage(content="existing")])
+
+    app_state = AppState()
+    reloaded = QueryLoop(
+        model=mock_model_no_tools("after restore"),
+        system_prompt=SystemMessage(content="You are a test assistant."),
+        middleware=[],
+        checkpointer=checkpointer,
+        registry=make_registry(),
+        app_state=app_state,
+        runtime=None,
+        bootstrap=BootstrapConfig(workspace_root=Path("/tmp"), model_name="test-model"),
+        max_turns=10,
+    )
+
+    async for _ in reloaded.query(
+        {"messages": [{"role": "user", "content": "continue"}]},
+        config={"configurable": {"thread_id": "perm-thread"}},
+    ):
+        pass
+
+    assert app_state.pending_permission_requests == pending
+    assert app_state.resolved_permission_requests == resolved
+
+
+@pytest.mark.asyncio
 async def test_query_loop_aupdate_state_appends_start_messages_for_resume():
     model = mock_model_no_tools("after resume")
     checkpointer = _MemoryCheckpointer()

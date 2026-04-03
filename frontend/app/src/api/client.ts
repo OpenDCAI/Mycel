@@ -11,6 +11,7 @@ import type {
   LeaseStatus,
   ThreadDetail,
   ThreadSummary,
+  ThreadPermissions,
   SandboxChannelFilesResult,
   SandboxFileResult,
   SandboxFilesListResult,
@@ -97,6 +98,22 @@ export async function deleteThread(threadId: string): Promise<void> {
 
 export async function getThread(threadId: string): Promise<ThreadDetail> {
   return request(`/api/threads/${encodeURIComponent(threadId)}`);
+}
+
+export async function getThreadPermissions(threadId: string): Promise<ThreadPermissions> {
+  return request(`/api/threads/${encodeURIComponent(threadId)}/permissions`);
+}
+
+export async function resolveThreadPermission(
+  threadId: string,
+  requestId: string,
+  decision: "allow" | "deny",
+  message?: string,
+): Promise<{ ok: boolean; thread_id: string; request_id: string }> {
+  return request(`/api/threads/${encodeURIComponent(threadId)}/permissions/${encodeURIComponent(requestId)}/resolve`, {
+    method: "POST",
+    body: JSON.stringify({ decision, message }),
+  });
 }
 
 export async function getThreadRuntime(threadId: string): Promise<StreamStatus> {

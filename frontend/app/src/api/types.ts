@@ -45,6 +45,19 @@ export interface ThreadDetail {
   sandbox: SandboxInfo | null;
 }
 
+export interface PermissionRequest {
+  request_id: string;
+  thread_id: string;
+  tool_name: string;
+  args: Record<string, unknown>;
+  message?: string | null;
+}
+
+export interface ThreadPermissions {
+  thread_id: string;
+  requests: PermissionRequest[];
+}
+
 export interface SandboxType {
   name: string;
   provider?: string;

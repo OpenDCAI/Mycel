@@ -53,3 +53,8 @@ class RunRequest(BaseModel):
 class SendMessageRequest(BaseModel):
     message: str
     attachments: list[str] = Field(default_factory=list)
+
+
+class ResolvePermissionRequest(BaseModel):
+    decision: Literal["allow", "deny"]
+    message: str | None = None

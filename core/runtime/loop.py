@@ -160,8 +160,9 @@ class QueryLoop:
         from sandbox.thread_context import set_current_thread_id
         set_current_thread_id(thread_id)
 
-        # Load message history from checkpointer
-        messages = await self._load_messages(thread_id)
+        # Load message history and thread-scoped runtime state from checkpointer
+        persisted = await self._hydrate_thread_state_from_checkpoint(thread_id)
+        messages = list(persisted["messages"])
         self._restore_discovered_tool_names_from_messages(thread_id, messages)
 
         # Parse and append new input messages
@@ -457,8 +458,8 @@ class QueryLoop:
         """Minimal graph-state bridge for backend/web callers."""
         config = config or {}
         thread_id = config.get("configurable", {}).get("thread_id", "default")
-        messages = await self._load_messages(thread_id)
-        return SimpleNamespace(values={"messages": messages})
+        values = await self._hydrate_thread_state_from_checkpoint(thread_id)
+        return SimpleNamespace(values=values)
 
     async def aupdate_state(
         self,
@@ -503,6 +504,11 @@ class QueryLoop:
         self._sync_app_state(messages=messages, turn_count=current_turn_count)
         self._restore_discovered_tool_names_from_messages(thread_id, messages)
         return await self.aget_state(config)
+
+    async def apersist_state(self, thread_id: str) -> None:
+        """Persist the current thread-scoped loop/app state to the checkpointer."""
+        messages = list(self._app_state.messages) if self._app_state is not None else await self._load_messages(thread_id)
+        await self._save_messages(thread_id, messages)
 
     # -------------------------------------------------------------------------
     # Model invocation through middleware chain
@@ -1441,17 +1447,95 @@ class QueryLoop:
 
     async def _load_messages(self, thread_id: str) -> list:
         """Load message history from checkpointer (if available)."""
+        channel_values = await self._load_checkpoint_channel_values(thread_id)
+        return list(channel_values.get("messages", []))
+
+    async def _load_checkpoint_channel_values(self, thread_id: str) -> dict[str, Any]:
+        """Load raw channel values for one thread checkpoint."""
         if self.checkpointer is None:
-            return []
+            return {}
         try:
             cfg = self._checkpoint_config(thread_id)
             checkpoint = await self.checkpointer.aget(cfg)
             if checkpoint is None:
-                return []
-            return list(checkpoint.get("channel_values", {}).get("messages", []))
+                return {}
+            return dict(checkpoint.get("channel_values", {}) or {})
         except Exception:
             logger.debug("QueryLoop: could not load checkpoint for thread %s", thread_id)
-            return []
+            return {}
+
+    def _thread_permission_state_snapshot(
+        self,
+        thread_id: str,
+    ) -> tuple[dict[str, dict[str, Any]], dict[str, dict[str, Any]]]:
+        if self._app_state is None:
+            return {}, {}
+
+        pending = {
+            key: copy.deepcopy(value)
+            for key, value in self._app_state.pending_permission_requests.items()
+            if value.get("thread_id") == thread_id
+        }
+        resolved = {
+            key: copy.deepcopy(value)
+            for key, value in self._app_state.resolved_permission_requests.items()
+            if value.get("thread_id") == thread_id
+        }
+        return pending, resolved
+
+    def _restore_thread_permission_state(
+        self,
+        thread_id: str,
+        *,
+        pending: dict[str, dict[str, Any]],
+        resolved: dict[str, dict[str, Any]],
+    ) -> None:
+        if self._app_state is None:
+            return
+
+        # @@@permission-checkpoint-bridge - pending/resolved permission requests
+        # are thread-scoped runtime state, not display-only metadata. They must
+        # survive checkpoint replay so backend/UI surfaces stay honest after an
+        # idle reload or agent recreation.
+        def _update(state: AppState) -> AppState:
+            kept_pending = {
+                key: value
+                for key, value in state.pending_permission_requests.items()
+                if value.get("thread_id") != thread_id
+            }
+            kept_pending.update(copy.deepcopy(pending))
+            kept_resolved = {
+                key: value
+                for key, value in state.resolved_permission_requests.items()
+                if value.get("thread_id") != thread_id
+            }
+            kept_resolved.update(copy.deepcopy(resolved))
+            return state.model_copy(
+                update={
+                    "pending_permission_requests": kept_pending,
+                    "resolved_permission_requests": kept_resolved,
+                }
+            )
+
+        self._app_state.set_state(_update)
+
+    async def _hydrate_thread_state_from_checkpoint(self, thread_id: str) -> dict[str, Any]:
+        channel_values = await self._load_checkpoint_channel_values(thread_id)
+        messages = list(channel_values.get("messages", []))
+        pending = dict(channel_values.get("pending_permission_requests", {}) or {})
+        resolved = dict(channel_values.get("resolved_permission_requests", {}) or {})
+        turn_count = self._app_state.turn_count if self._app_state is not None else 0
+        self._sync_app_state(messages=messages, turn_count=turn_count)
+        self._restore_thread_permission_state(
+            thread_id,
+            pending=pending,
+            resolved=resolved,
+        )
+        return {
+            "messages": messages,
+            "pending_permission_requests": pending,
+            "resolved_permission_requests": resolved,
+        }
 
     async def _save_messages(self, thread_id: str, messages: list) -> None:
         """Persist message history to checkpointer."""
@@ -1462,7 +1546,12 @@ class QueryLoop:
 
             cfg = self._checkpoint_config(thread_id)
             checkpoint = empty_checkpoint()
-            checkpoint["channel_values"] = {"messages": messages}
+            pending_requests, resolved_requests = self._thread_permission_state_snapshot(thread_id)
+            checkpoint["channel_values"] = {
+                "messages": messages,
+                "pending_permission_requests": pending_requests,
+                "resolved_permission_requests": resolved_requests,
+            }
             metadata: CheckpointMetadata = {
                 "source": "loop",
                 "step": len(messages),

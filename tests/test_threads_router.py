@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -69,6 +69,36 @@ class _FakeAuthService:
 class _FakeRequest:
     def __init__(self, headers: dict[str, str] | None = None) -> None:
         self.headers = headers or {}
+
+
+class _FakePermissionAgent:
+    def __init__(self) -> None:
+        self.pending = [
+            {
+                "request_id": "perm-1",
+                "thread_id": "thread-1",
+                "tool_name": "Write",
+                "args": {"path": "/tmp/demo.txt"},
+                "message": "needs approval",
+            }
+        ]
+        self.resolve_calls: list[tuple[str, str, str | None]] = []
+        self.agent = SimpleNamespace(
+            aget_state=AsyncMock(return_value=SimpleNamespace(values={})),
+            apersist_state=AsyncMock(),
+        )
+
+    def get_pending_permission_requests(self, thread_id: str | None = None):
+        if thread_id is None:
+            return list(self.pending)
+        return [item for item in self.pending if item["thread_id"] == thread_id]
+
+    def resolve_permission_request(self, request_id: str, *, decision: str, message: str | None = None) -> bool:
+        self.resolve_calls.append((request_id, decision, message))
+        if request_id != "perm-1":
+            return False
+        self.pending = []
+        return True
 
 
 @pytest.mark.asyncio
@@ -148,3 +178,62 @@ async def test_stream_thread_events_verifies_token_before_owner_check():
 
     assert auth_service.tokens == ["tok-thread"]
     assert response is not None
+
+
+@pytest.mark.asyncio
+async def test_get_thread_permissions_returns_thread_scoped_pending_requests():
+    agent = _FakePermissionAgent()
+
+    result = await threads_router.get_thread_permissions(
+        "thread-1",
+        user_id="owner-1",
+        agent=agent,
+    )
+
+    assert result == {
+        "thread_id": "thread-1",
+        "requests": [
+            {
+                "request_id": "perm-1",
+                "thread_id": "thread-1",
+                "tool_name": "Write",
+                "args": {"path": "/tmp/demo.txt"},
+                "message": "needs approval",
+            }
+        ],
+    }
+
+
+@pytest.mark.asyncio
+async def test_resolve_thread_permission_request_persists_resolution():
+    agent = _FakePermissionAgent()
+
+    result = await threads_router.resolve_thread_permission_request(
+        "thread-1",
+        "perm-1",
+        SimpleNamespace(decision="allow", message="go ahead"),
+        user_id="owner-1",
+        agent=agent,
+    )
+
+    assert result == {"ok": True, "thread_id": "thread-1", "request_id": "perm-1"}
+    assert agent.resolve_calls == [("perm-1", "allow", "go ahead")]
+    agent.agent.apersist_state.assert_awaited_once_with("thread-1")
+
+
+@pytest.mark.asyncio
+async def test_resolve_thread_permission_request_404s_missing_request():
+    agent = _FakePermissionAgent()
+
+    with pytest.raises(threads_router.HTTPException) as exc_info:
+        await threads_router.resolve_thread_permission_request(
+            "thread-1",
+            "missing",
+            SimpleNamespace(decision="deny", message="no"),
+            user_id="owner-1",
+            agent=agent,
+        )
+
+    assert exc_info.value.status_code == 404
+    assert exc_info.value.detail == "Permission request not found"
+    agent.agent.apersist_state.assert_not_awaited()

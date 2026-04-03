@@ -1,9 +1,12 @@
 import { useCallback, useEffect, useState } from "react";
 import { useParams, useOutletContext, useLocation } from "react-router-dom";
+import { Check, ShieldAlert, X } from "lucide-react";
 import { toast } from "sonner";
 import ChatArea from "../components/ChatArea";
 import type { AssistantTurn } from "../api";
 import { uploadSandboxFile } from "../api";
+import { Alert, AlertDescription, AlertTitle } from "../components/ui/alert";
+import { Button } from "../components/ui/button";
 import ComputerPanel from "../components/ComputerPanel";
 import { DragHandle } from "../components/DragHandle";
 import Header from "../components/Header";
@@ -18,6 +21,7 @@ import { useResizableX } from "../hooks/use-resizable-x";
 import { useSandboxManager } from "../hooks/use-sandbox-manager";
 import { useDisplayDeltas } from "../hooks/use-display-deltas";
 import { useThreadData } from "../hooks/use-thread-data";
+import { useThreadPermissions } from "../hooks/use-thread-permissions";
 import type { ThreadManagerState, ThreadManagerActions } from "../hooks/use-thread-manager";
 
 interface OutletContext {
@@ -77,6 +81,11 @@ function ChatPageInner({ threadId }: { threadId: string }) {
   }, [state?.selectedModel, threadId]);
 
   const { entries, activeSandbox, loading, displaySeq, setEntries, setActiveSandbox, refreshThread } = useThreadData(threadId, runStarted, initialEntries);
+  const {
+    requests: pendingPermissionRequests,
+    resolvingId,
+    resolvePermission,
+  } = useThreadPermissions(threadId);
 
   const { runtimeStatus, isRunning, handleSendMessage, handleStopStreaming } =
     useDisplayDeltas({
@@ -148,6 +157,22 @@ function ChatPageInner({ threadId }: { threadId: string }) {
   );
 
   const computerResize = useResizableX(600, 360, 1200, true);
+  const currentPermissionRequest = pendingPermissionRequests[0] ?? null;
+
+  const handleResolvePermission = useCallback(
+    async (decision: "allow" | "deny") => {
+      if (!currentPermissionRequest) return;
+      try {
+        await resolvePermission(currentPermissionRequest.request_id, decision);
+        await refreshThread();
+        toast.success(decision === "allow" ? "已批准该权限请求" : "已拒绝该权限请求");
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        toast.error(`权限处理失败: ${message}`);
+      }
+    },
+    [currentPermissionRequest, refreshThread, resolvePermission],
+  );
 
   // @@@workspace-upload — upload attached files then send message with attachment filenames
   async function handleSendWithAttachments(message: string): Promise<void> {
@@ -187,6 +212,49 @@ function ChatPageInner({ threadId }: { threadId: string }) {
           {sandboxActionError && (
             <div className="px-3 py-2 text-xs bg-destructive/10 text-destructive border-b border-destructive/20">
               {sandboxActionError}
+            </div>
+          )}
+          {currentPermissionRequest && (
+            <div className="px-3 py-2 border-b border-warning/20 bg-warning/5">
+              <div className="max-w-3xl mx-auto">
+                <Alert className="border-warning/20 bg-transparent px-0 py-0">
+                  <ShieldAlert className="text-warning" />
+                  <AlertTitle>权限确认：{currentPermissionRequest.tool_name}</AlertTitle>
+                  <AlertDescription>
+                    <p>{currentPermissionRequest.message || "该工具需要你明确批准后才能继续。"}</p>
+                    <p className="text-xs text-muted-foreground">
+                      处理后不会自动重跑；Leon 需要在下一次相同操作时继续执行。
+                    </p>
+                    <code className="block w-full overflow-x-auto rounded-md bg-background/80 px-2 py-1 text-xs text-foreground border border-border/60">
+                      {JSON.stringify(currentPermissionRequest.args)}
+                    </code>
+                    {pendingPermissionRequests.length > 1 && (
+                      <p className="text-xs text-muted-foreground">
+                        还有 {pendingPermissionRequests.length - 1} 条待处理请求。
+                      </p>
+                    )}
+                    <div className="flex items-center gap-2 pt-1">
+                      <Button
+                        size="sm"
+                        onClick={() => void handleResolvePermission("allow")}
+                        disabled={resolvingId === currentPermissionRequest.request_id}
+                      >
+                        <Check className="w-4 h-4" />
+                        批准
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => void handleResolvePermission("deny")}
+                        disabled={resolvingId === currentPermissionRequest.request_id}
+                      >
+                        <X className="w-4 h-4" />
+                        拒绝
+                      </Button>
+                    </div>
+                  </AlertDescription>
+                </Alert>
+              </div>
             </div>
           )}
           <div className="relative flex-1 flex flex-col min-h-0">
