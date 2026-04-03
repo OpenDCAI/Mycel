@@ -53,6 +53,76 @@ def lookup_sandbox_for_thread(thread_id: str, db_path: Path | None = None) -> st
         lease_repo.close()
 
 
+def resolve_existing_lease_cwd(
+    lease_id: str,
+    fallback_cwd: str | None = None,
+    db_path: Path | None = None,
+) -> str:
+    if fallback_cwd:
+        return fallback_cwd
+
+    target_db = db_path or resolve_role_db_path(SQLiteDBRole.SANDBOX)
+    terminal_repo = SQLiteTerminalRepo(db_path=target_db)
+    try:
+        row = terminal_repo.get_latest_by_lease(lease_id)
+    finally:
+        terminal_repo.close()
+    if row and row.get("cwd"):
+        return str(row["cwd"])
+    return str(Path.home())
+
+
+def bind_thread_to_existing_lease(
+    thread_id: str,
+    lease_id: str,
+    *,
+    cwd: str | None = None,
+    db_path: Path | None = None,
+) -> str:
+    target_db = db_path or resolve_role_db_path(SQLiteDBRole.SANDBOX)
+    terminal_repo = SQLiteTerminalRepo(db_path=target_db)
+    try:
+        existing = terminal_repo.get_active(thread_id)
+        if existing is not None:
+            return str(existing["cwd"])
+        initial_cwd = resolve_existing_lease_cwd(lease_id, cwd, db_path=target_db)
+        terminal_repo.create(
+            terminal_id=f"term-{uuid.uuid4().hex[:12]}",
+            thread_id=thread_id,
+            lease_id=lease_id,
+            initial_cwd=initial_cwd,
+        )
+        return initial_cwd
+    finally:
+        terminal_repo.close()
+
+
+def bind_thread_to_existing_thread_lease(
+    thread_id: str,
+    source_thread_id: str,
+    *,
+    cwd: str | None = None,
+    db_path: Path | None = None,
+) -> str | None:
+    target_db = db_path or resolve_role_db_path(SQLiteDBRole.SANDBOX)
+    terminal_repo = SQLiteTerminalRepo(db_path=target_db)
+    try:
+        source_terminal = terminal_repo.get_active(source_thread_id)
+    finally:
+        terminal_repo.close()
+    if source_terminal is None:
+        return None
+    # @@@subagent-lease-reuse
+    # Child threads need their own terminal/session state, but must attach
+    # to the parent's existing lease instead of silently provisioning a new one.
+    return bind_thread_to_existing_lease(
+        thread_id,
+        str(source_terminal["lease_id"]),
+        cwd=cwd,
+        db_path=target_db,
+    )
+
+
 class SandboxManager:
     def __init__(
         self,

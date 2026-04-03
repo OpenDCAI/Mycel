@@ -575,6 +575,11 @@ class AgentService:
             # ensure state is persisted (and loadable via GET /api/threads/{thread_id}).
             await agent.ainit()
 
+            if parent_thread_id and parent_thread_id != thread_id:
+                from sandbox.manager import bind_thread_to_existing_thread_lease
+
+                bind_thread_to_existing_thread_lease(thread_id, parent_thread_id)
+
             # Wire child agent events to the parent's EventBus subscription
             # so the parent SSE stream shows sub-agent activity.
             if emit_fn is not None:

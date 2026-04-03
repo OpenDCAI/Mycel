@@ -13,7 +13,9 @@ from core.agents.service import AGENT_DISALLOWED, EXPLORE_ALLOWED, AgentService,
 from core.runtime.registry import ToolRegistry
 from core.runtime.runner import ToolRunner
 from core.runtime.state import AppState, BootstrapConfig, ToolUseContext
-from sandbox.thread_context import set_current_messages
+from sandbox.manager import SandboxManager
+from sandbox.providers.local import LocalSessionProvider
+from sandbox.thread_context import get_current_thread_id, set_current_messages, set_current_thread_id
 
 
 class _FakeRegistry:
@@ -776,3 +778,61 @@ async def test_run_agent_links_child_abort_controller_to_parent_tool_context(mon
     parent_context.abort_controller.abort()
 
     assert child_context.abort_controller.is_aborted() is True
+
+
+@pytest.mark.asyncio
+async def test_run_agent_reuses_parent_lease_for_child_thread_terminal(monkeypatch, tmp_path, temp_db):
+    created: list[_FakeChildAgent] = []
+    observed: dict[str, str] = {}
+    parent_thread_id = "parent-thread"
+    child_thread_id = "subagent-child"
+
+    manager = SandboxManager(
+        provider=LocalSessionProvider(default_cwd=str(tmp_path)),
+        db_path=temp_db,
+    )
+    monkeypatch.setenv("LEON_SANDBOX_DB_PATH", str(temp_db))
+    monkeypatch.setattr(manager, "_setup_mounts", lambda thread_id: {"source": object(), "remote_path": str(tmp_path)})
+    monkeypatch.setattr(manager, "_sync_to_sandbox", lambda *args, **kwargs: None)
+
+    parent_capability = manager.get_sandbox(parent_thread_id)
+    parent_terminal_id = parent_capability._session.terminal.terminal_id
+    parent_lease_id = parent_capability._session.lease.lease_id
+
+    class _LeaseCapturingChild(_FakeChildAgent):
+        async def _astream(self, *args, **kwargs):
+            child_capability = manager.get_sandbox(get_current_thread_id())
+            observed["child_terminal_id"] = child_capability._session.terminal.terminal_id
+            observed["child_lease_id"] = child_capability._session.lease.lease_id
+            if False:
+                yield None
+            return
+
+    def fake_create_leon_agent(*, model_name, workspace_root, **kwargs):
+        child = _LeaseCapturingChild(Path(workspace_root), model_name)
+        created.append(child)
+        return child
+
+    monkeypatch.setattr("core.runtime.agent.create_leon_agent", fake_create_leon_agent)
+    set_current_thread_id(parent_thread_id)
+
+    service = AgentService(
+        tool_registry=_FakeRegistry(),
+        agent_registry=_FakeAgentRegistry(),
+        workspace_root=tmp_path,
+        model_name="gpt-test",
+    )
+
+    result = await service._run_agent(
+        task_id="task-1",
+        agent_name="child",
+        thread_id=child_thread_id,
+        prompt="hello",
+        subagent_type="explore",
+        max_turns=None,
+    )
+
+    assert result == "(Agent completed with no text output)"
+    assert created
+    assert observed["child_terminal_id"] != parent_terminal_id
+    assert observed["child_lease_id"] == parent_lease_id
