@@ -1458,6 +1458,41 @@ class LeonAgent:
             self._monitor_middleware.mark_error(e)
             raise
 
+    def get_pending_permission_requests(self, thread_id: str | None = None) -> list[dict]:
+        requests = list(self._app_state.pending_permission_requests.values())
+        if thread_id is not None:
+            requests = [item for item in requests if item.get("thread_id") == thread_id]
+        return requests
+
+    def resolve_permission_request(
+        self,
+        request_id: str,
+        *,
+        decision: str,
+        message: str | None = None,
+    ) -> bool:
+        pending = self._app_state.pending_permission_requests.get(request_id)
+        if pending is None:
+            return False
+
+        resolved = dict(self._app_state.resolved_permission_requests)
+        resolved[request_id] = {
+            **pending,
+            "decision": decision,
+            "message": message or pending.get("message"),
+        }
+        still_pending = dict(self._app_state.pending_permission_requests)
+        still_pending.pop(request_id, None)
+        self._app_state.set_state(
+            lambda prev: prev.model_copy(
+                update={
+                    "pending_permission_requests": still_pending,
+                    "resolved_permission_requests": resolved,
+                }
+            )
+        )
+        return True
+
     def get_response(self, message: str, thread_id: str = "default", **kwargs) -> str:
         """Get agent's text response.
 

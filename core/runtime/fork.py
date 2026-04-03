@@ -76,6 +76,9 @@ def create_subagent_context(
         set_app_state=parent.set_app_state if share_set_app_state else (lambda updater: None),
         set_app_state_for_tasks=parent.set_app_state_for_tasks or parent.set_app_state,
         refresh_tools=parent.refresh_tools,
+        can_use_tool=parent.can_use_tool,
+        request_permission=parent.request_permission,
+        consume_permission_resolution=parent.consume_permission_resolution,
         read_file_state=cloned_read_file_state,
         loaded_nested_memory_paths=set(),
         discovered_skill_names=set(),
@@ -83,4 +86,5 @@ def create_subagent_context(
         nested_memory_attachment_triggers=set(),
         abort_controller=create_child_abort_controller(getattr(parent, "abort_controller", None)),
         messages=list(parent.messages),
+        thread_id=parent.thread_id,
     )

@@ -74,6 +74,11 @@ class TestAppState:
         assert s.turn_count == 0
         assert s.total_cost == 0.0
         assert s.compact_boundary_index == 0
+        assert s.tool_permission_context.alwaysAllowRules == {}
+        assert s.tool_permission_context.alwaysDenyRules == {}
+        assert s.tool_permission_context.alwaysAskRules == {}
+        assert s.pending_permission_requests == {}
+        assert s.resolved_permission_requests == {}
 
     def test_get_state_returns_self(self):
         s = AppState()

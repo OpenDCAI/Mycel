@@ -14,6 +14,7 @@ Design:
 from __future__ import annotations
 
 import asyncio
+import copy
 import json
 import inspect
 import logging
@@ -33,6 +34,7 @@ from langchain_core.messages import AIMessage, AIMessageChunk, HumanMessage, Sys
 
 from .abort import AbortController
 from .registry import ToolMode, ToolRegistry
+from .permissions import ToolPermissionContext, evaluate_permission_rules
 from .state import AppState, BootstrapConfig, ToolUseContext
 
 logger = logging.getLogger(__name__)
@@ -777,6 +779,21 @@ class QueryLoop:
             get_app_state=self._app_state.get_state,
             set_app_state=self._app_state.set_state,
             refresh_tools=self._refresh_tools,
+            can_use_tool=lambda name, args, permission_context, request: self._default_can_use_tool(
+                name=name,
+                permission_context=permission_context,
+            ),
+            request_permission=lambda name, args, context, request, message: self._request_permission(
+                thread_id=thread_id,
+                name=name,
+                args=args,
+                message=message,
+            ),
+            consume_permission_resolution=lambda name, args, context, request: self._consume_permission_resolution(
+                thread_id=thread_id,
+                name=name,
+                args=args,
+            ),
             read_file_state=self._tool_read_file_state,
             loaded_nested_memory_paths=self._tool_loaded_nested_memory_paths,
             discovered_skill_names=self._tool_discovered_skill_names,
@@ -784,7 +801,93 @@ class QueryLoop:
             nested_memory_attachment_triggers=set(),
             abort_controller=self._tool_abort_controller,
             messages=list(messages),
+            thread_id=thread_id,
         )
+
+    def _default_can_use_tool(
+        self,
+        *,
+        name: str,
+        permission_context: ToolPermissionContext,
+    ) -> dict[str, Any] | None:
+        if self._app_state is None:
+            return None
+        permission_state = self._app_state.tool_permission_context
+        merged_context = ToolPermissionContext(
+            is_read_only=permission_context.is_read_only,
+            is_destructive=permission_context.is_destructive,
+            alwaysAllowRules=permission_state.alwaysAllowRules,
+            alwaysDenyRules=permission_state.alwaysDenyRules,
+            alwaysAskRules=permission_state.alwaysAskRules,
+            allowManagedPermissionRulesOnly=permission_state.allowManagedPermissionRulesOnly,
+        )
+        return evaluate_permission_rules(name, merged_context)
+
+    def _request_permission(
+        self,
+        *,
+        thread_id: str,
+        name: str,
+        args: dict[str, Any],
+        message: str | None,
+    ) -> str | None:
+        if self._app_state is None:
+            return None
+
+        request_id = uuid.uuid4().hex[:8]
+        payload = {
+            "request_id": request_id,
+            "thread_id": thread_id,
+            "tool_name": name,
+            "args": copy.deepcopy(args),
+            "message": message,
+        }
+
+        def _store(state: AppState) -> AppState:
+            pending = dict(state.pending_permission_requests)
+            pending[request_id] = payload
+            return state.model_copy(update={"pending_permission_requests": pending})
+
+        self._app_state.set_state(_store)
+        return request_id
+
+    def _consume_permission_resolution(
+        self,
+        *,
+        thread_id: str,
+        name: str,
+        args: dict[str, Any],
+    ) -> dict[str, Any] | None:
+        if self._app_state is None:
+            return None
+
+        resolved_items = list(self._app_state.resolved_permission_requests.items())
+        matched_id: str | None = None
+        matched_payload: dict[str, Any] | None = None
+        for request_id, payload in resolved_items:
+            if payload.get("thread_id") != thread_id:
+                continue
+            if payload.get("tool_name") != name:
+                continue
+            if payload.get("args") != args:
+                continue
+            matched_id = request_id
+            matched_payload = payload
+            break
+
+        if matched_id is None or matched_payload is None:
+            return None
+
+        def _consume(state: AppState) -> AppState:
+            resolved = dict(state.resolved_permission_requests)
+            resolved.pop(matched_id, None)
+            return state.model_copy(update={"resolved_permission_requests": resolved})
+
+        self._app_state.set_state(_consume)
+        return {
+            "decision": matched_payload.get("decision"),
+            "message": matched_payload.get("message"),
+        }
 
     def _sync_tool_context_messages(
         self,
@@ -1334,6 +1437,16 @@ class QueryLoop:
         if self._app_state is not None:
             preserved_total_cost = self._app_state.total_cost
             preserved_tool_overrides = dict(self._app_state.tool_overrides)
+            pending_requests = {
+                key: value
+                for key, value in self._app_state.pending_permission_requests.items()
+                if value.get("thread_id") != thread_id
+            }
+            resolved_requests = {
+                key: value
+                for key, value in self._app_state.resolved_permission_requests.items()
+                if value.get("thread_id") != thread_id
+            }
 
             def _reset(state: AppState) -> AppState:
                 return state.model_copy(
@@ -1343,6 +1456,8 @@ class QueryLoop:
                         "total_cost": preserved_total_cost,
                         "compact_boundary_index": 0,
                         "tool_overrides": preserved_tool_overrides,
+                        "pending_permission_requests": pending_requests,
+                        "resolved_permission_requests": resolved_requests,
                     }
                 )
 

@@ -25,6 +25,7 @@ from .tool_result import (
     materialize_tool_message,
     tool_error,
     tool_permission_denied,
+    tool_permission_request,
     tool_success,
 )
 from .validator import ToolValidator
@@ -208,6 +209,17 @@ class ToolRunner(AgentMiddleware):
         )
 
     @staticmethod
+    def _permission_request_result(request_id: str, message: str | None) -> ToolResultEnvelope:
+        return tool_permission_request(
+            message or "Permission required",
+            metadata={
+                "decision": "ask",
+                "request_id": request_id,
+                "error_type": "permission_resolution",
+            },
+        )
+
+    @staticmethod
     def _run_awaitable_sync(awaitable):
         try:
             asyncio.get_running_loop()
@@ -232,6 +244,101 @@ class ToolRunner(AgentMiddleware):
         if error_box:
             raise error_box[0]
         return result_box[0] if result_box else None
+
+    @staticmethod
+    def _get_state_callable(request: ToolCallRequest, name: str):
+        state = getattr(request, "state", None)
+        if state is None:
+            return None
+        return state.get(name) if isinstance(state, dict) else getattr(state, name, None)
+
+    def _consume_permission_resolution_sync(
+        self,
+        request: ToolCallRequest,
+        *,
+        name: str,
+        args: dict,
+        entry,
+    ) -> tuple[str | None, str | None]:
+        consumer = self._get_state_callable(request, "consume_permission_resolution")
+        if not callable(consumer):
+            return None, None
+        permission_context = ToolPermissionContext(
+            is_read_only=bool(getattr(entry, "is_read_only", False)),
+            is_destructive=bool(getattr(entry, "is_destructive", False)),
+        )
+        result = consumer(name, args, permission_context, request)
+        if asyncio.iscoroutine(result):
+            result = self._run_awaitable_sync(result)
+        return self._coerce_permission_response(result)
+
+    async def _consume_permission_resolution_async(
+        self,
+        request: ToolCallRequest,
+        *,
+        name: str,
+        args: dict,
+        entry,
+    ) -> tuple[str | None, str | None]:
+        consumer = self._get_state_callable(request, "consume_permission_resolution")
+        if not callable(consumer):
+            return None, None
+        permission_context = ToolPermissionContext(
+            is_read_only=bool(getattr(entry, "is_read_only", False)),
+            is_destructive=bool(getattr(entry, "is_destructive", False)),
+        )
+        result = consumer(name, args, permission_context, request)
+        if asyncio.iscoroutine(result):
+            result = await result
+        return self._coerce_permission_response(result)
+
+    def _request_permission_sync(
+        self,
+        request: ToolCallRequest,
+        *,
+        name: str,
+        args: dict,
+        entry,
+        message: str | None,
+    ) -> str | None:
+        requester = self._get_state_callable(request, "request_permission")
+        if not callable(requester):
+            return None
+        permission_context = ToolPermissionContext(
+            is_read_only=bool(getattr(entry, "is_read_only", False)),
+            is_destructive=bool(getattr(entry, "is_destructive", False)),
+        )
+        result = requester(name, args, permission_context, request, message)
+        if asyncio.iscoroutine(result):
+            result = self._run_awaitable_sync(result)
+        if isinstance(result, dict):
+            request_id = result.get("request_id")
+            return request_id if isinstance(request_id, str) else None
+        return result if isinstance(result, str) else None
+
+    async def _request_permission_async(
+        self,
+        request: ToolCallRequest,
+        *,
+        name: str,
+        args: dict,
+        entry,
+        message: str | None,
+    ) -> str | None:
+        requester = self._get_state_callable(request, "request_permission")
+        if not callable(requester):
+            return None
+        permission_context = ToolPermissionContext(
+            is_read_only=bool(getattr(entry, "is_read_only", False)),
+            is_destructive=bool(getattr(entry, "is_destructive", False)),
+        )
+        result = requester(name, args, permission_context, request, message)
+        if asyncio.iscoroutine(result):
+            result = await result
+        if isinstance(result, dict):
+            request_id = result.get("request_id")
+            return request_id if isinstance(request_id, str) else None
+        return result if isinstance(result, str) else None
 
     def _run_tool_specific_validation_sync(self, entry, args: dict, request: ToolCallRequest) -> dict:
         validator = getattr(entry, "validate_input", None)
@@ -341,10 +448,7 @@ class ToolRunner(AgentMiddleware):
         if hook_permission == "deny":
             return self._permission_denied_result("deny", hook_message)
 
-        state = getattr(request, "state", None)
-        checker = None
-        if state is not None:
-            checker = state.get("can_use_tool") if isinstance(state, dict) else getattr(state, "can_use_tool", None)
+        checker = self._get_state_callable(request, "can_use_tool")
         rule_permission: str | None = None
         rule_message: str | None = None
         permission_context = ToolPermissionContext(
@@ -357,12 +461,45 @@ class ToolRunner(AgentMiddleware):
                 result = self._run_awaitable_sync(result)
             rule_permission, rule_message = self._coerce_permission_response(result)
 
+        # @@@permission-resolution-precedence - only consume one-shot approvals when current state still asks.
+        if rule_permission == "ask":
+            resolved_permission, resolved_message = self._consume_permission_resolution_sync(
+                request,
+                name=name,
+                args=args,
+                entry=entry,
+            )
+            if resolved_permission == "allow":
+                return None
+            if resolved_permission in {"deny", "ask"}:
+                return self._permission_denied_result(resolved_permission, resolved_message)
+
         if hook_permission == "allow":
             if rule_permission in {"deny", "ask"}:
+                if rule_permission == "ask":
+                    request_id = self._request_permission_sync(
+                        request,
+                        name=name,
+                        args=args,
+                        entry=entry,
+                        message=rule_message,
+                    )
+                    if request_id is not None:
+                        return self._permission_request_result(request_id, rule_message)
                 return self._permission_denied_result(rule_permission, rule_message)
             return None
 
         if rule_permission in {"deny", "ask"}:
+            if rule_permission == "ask":
+                request_id = self._request_permission_sync(
+                    request,
+                    name=name,
+                    args=args,
+                    entry=entry,
+                    message=rule_message,
+                )
+                if request_id is not None:
+                    return self._permission_request_result(request_id, rule_message)
             return self._permission_denied_result(rule_permission, rule_message)
         return None
 
@@ -370,10 +507,7 @@ class ToolRunner(AgentMiddleware):
         if hook_permission == "deny":
             return self._permission_denied_result("deny", hook_message)
 
-        state = getattr(request, "state", None)
-        checker = None
-        if state is not None:
-            checker = state.get("can_use_tool") if isinstance(state, dict) else getattr(state, "can_use_tool", None)
+        checker = self._get_state_callable(request, "can_use_tool")
         rule_permission: str | None = None
         rule_message: str | None = None
         permission_context = ToolPermissionContext(
@@ -386,12 +520,45 @@ class ToolRunner(AgentMiddleware):
                 result = await result
             rule_permission, rule_message = self._coerce_permission_response(result)
 
+        # @@@permission-resolution-precedence - only consume one-shot approvals when current state still asks.
+        if rule_permission == "ask":
+            resolved_permission, resolved_message = await self._consume_permission_resolution_async(
+                request,
+                name=name,
+                args=args,
+                entry=entry,
+            )
+            if resolved_permission == "allow":
+                return None
+            if resolved_permission in {"deny", "ask"}:
+                return self._permission_denied_result(resolved_permission, resolved_message)
+
         if hook_permission == "allow":
             if rule_permission in {"deny", "ask"}:
+                if rule_permission == "ask":
+                    request_id = await self._request_permission_async(
+                        request,
+                        name=name,
+                        args=args,
+                        entry=entry,
+                        message=rule_message,
+                    )
+                    if request_id is not None:
+                        return self._permission_request_result(request_id, rule_message)
                 return self._permission_denied_result(rule_permission, rule_message)
             return None
 
         if rule_permission in {"deny", "ask"}:
+            if rule_permission == "ask":
+                request_id = await self._request_permission_async(
+                    request,
+                    name=name,
+                    args=args,
+                    entry=entry,
+                    message=rule_message,
+                )
+                if request_id is not None:
+                    return self._permission_request_result(request_id, rule_message)
             return self._permission_denied_result(rule_permission, rule_message)
         return None
 

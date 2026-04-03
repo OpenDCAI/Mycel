@@ -138,6 +138,66 @@ def test_tool_use_context_turn_refs_are_fresh_per_turn():
     assert ctx2.nested_memory_attachment_triggers is not ctx1.nested_memory_attachment_triggers
 
 
+def test_tool_use_context_permission_request_surface_tracks_thread_pending_state():
+    app_state = AppState()
+    loop = make_loop(mock_model_no_tools(), app_state=app_state)
+
+    ctx = loop._build_tool_use_context([], thread_id="thread-a")
+    assert ctx is not None
+
+    request_id = ctx.request_permission("Write", {"path": "x"}, None, None, "needs approval")
+
+    assert isinstance(request_id, str)
+    assert app_state.pending_permission_requests[request_id]["thread_id"] == "thread-a"
+    assert app_state.pending_permission_requests[request_id]["tool_name"] == "Write"
+
+
+def test_tool_use_context_consumes_resolved_permission_once():
+    app_state = AppState(
+        resolved_permission_requests={
+            "perm-1": {
+                "thread_id": "thread-a",
+                "tool_name": "Write",
+                "args": {"path": "x"},
+                "decision": "allow",
+                "message": "approved",
+            }
+        }
+    )
+    loop = make_loop(mock_model_no_tools(), app_state=app_state)
+
+    ctx = loop._build_tool_use_context([], thread_id="thread-a")
+    assert ctx is not None
+
+    first = ctx.consume_permission_resolution("Write", {"path": "x"}, None, None)
+    second = ctx.consume_permission_resolution("Write", {"path": "x"}, None, None)
+
+    assert first == {"decision": "allow", "message": "approved"}
+    assert second is None
+    assert app_state.resolved_permission_requests == {}
+
+
+def test_tool_use_context_can_use_tool_reads_app_state_permission_rules():
+    app_state = AppState()
+    app_state.tool_permission_context.alwaysAskRules["session"] = ["Write"]
+    loop = make_loop(mock_model_no_tools(), app_state=app_state)
+
+    ctx = loop._build_tool_use_context([], thread_id="thread-a")
+    assert ctx is not None
+
+    decision = ctx.can_use_tool(
+        "Write",
+        {},
+        SimpleNamespace(is_read_only=False, is_destructive=False),
+        None,
+    )
+
+    assert decision == {
+        "decision": "ask",
+        "message": "Permission required by rule: Write",
+    }
+
+
 class _CaptureTurnLocalStateMiddleware(AgentMiddleware):
     def __init__(self):
         self.turn_ids = []

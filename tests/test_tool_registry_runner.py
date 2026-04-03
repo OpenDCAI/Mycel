@@ -1142,6 +1142,159 @@ class TestToolRunnerErrorNormalization:
         assert seen == ["checker"]
 
     @pytest.mark.asyncio
+    async def test_ask_permission_returns_permission_request_when_request_surface_exists(self):
+        requests = {}
+
+        entry = ToolEntry(
+            name="Write",
+            mode=ToolMode.INLINE,
+            schema={"name": "Write", "parameters": {"type": "object", "required": [], "properties": {}}},
+            handler=lambda: "ok",
+            source="test",
+        )
+        runner = _make_runner([entry])
+        req = _make_tool_call_request("Write", {})
+        req.state = MagicMock()
+
+        def can_use_tool(name, args, context, request):
+            return {"decision": "ask", "message": "needs approval"}
+
+        def request_permission(name, args, context, request, message):
+            requests["perm-1"] = {
+                "thread_id": "thread-a",
+                "tool_name": name,
+                "args": dict(args),
+                "message": message,
+            }
+            return {"request_id": "perm-1"}
+
+        req.state.can_use_tool = can_use_tool
+        req.state.request_permission = request_permission
+        req.state.consume_permission_resolution = lambda *args, **kwargs: None
+
+        result = await runner.awrap_tool_call(req, AsyncMock())
+
+        meta = result.additional_kwargs["tool_result_meta"]
+        assert result.content == "needs approval"
+        assert meta["kind"] == "permission_request"
+        assert meta["decision"] == "ask"
+        assert meta["request_id"] == "perm-1"
+        assert requests["perm-1"]["message"] == "needs approval"
+
+    @pytest.mark.asyncio
+    async def test_consumed_permission_resolution_allows_single_retry_without_reprompt(self):
+        seen = []
+        resolution = {"decision": "allow", "message": "approved"}
+
+        def handler():
+            seen.append("handler")
+            return "ok"
+
+        entry = ToolEntry(
+            name="Write",
+            mode=ToolMode.INLINE,
+            schema={"name": "Write", "parameters": {"type": "object", "required": [], "properties": {}}},
+            handler=handler,
+            source="test",
+        )
+        runner = _make_runner([entry])
+        req = _make_tool_call_request("Write", {})
+        req.state = MagicMock()
+
+        def consume_permission_resolution(name, args, context, request):
+            nonlocal resolution
+            current = resolution
+            resolution = None
+            return current
+
+        def can_use_tool(name, args, context, request):
+            seen.append("checker")
+            return {"decision": "ask", "message": "needs approval"}
+
+        req.state.consume_permission_resolution = consume_permission_resolution
+        req.state.can_use_tool = can_use_tool
+
+        result = await runner.awrap_tool_call(req, AsyncMock())
+
+        assert result.content == "ok"
+        assert seen == ["checker", "handler"]
+
+    @pytest.mark.asyncio
+    async def test_stale_resolved_allow_does_not_override_current_async_deny(self):
+        seen = []
+
+        def handler():
+            seen.append("handler")
+            raise AssertionError("handler should not run when current deny overrides stale approval")
+
+        entry = ToolEntry(
+            name="Write",
+            mode=ToolMode.INLINE,
+            schema={"name": "Write", "parameters": {"type": "object", "required": [], "properties": {}}},
+            handler=handler,
+            source="test",
+        )
+        runner = _make_runner([entry])
+        req = _make_tool_call_request("Write", {})
+        req.state = MagicMock()
+
+        def consume_permission_resolution(name, args, context, request):
+            seen.append("resolution")
+            return {"decision": "allow", "message": "approved earlier"}
+
+        def can_use_tool(name, args, context, request):
+            seen.append("checker")
+            return {"decision": "deny", "message": "deny now"}
+
+        req.state.consume_permission_resolution = consume_permission_resolution
+        req.state.can_use_tool = can_use_tool
+
+        result = await runner.awrap_tool_call(req, AsyncMock())
+
+        meta = result.additional_kwargs["tool_result_meta"]
+        assert result.content == "deny now"
+        assert meta["kind"] == "permission_denied"
+        assert meta["decision"] == "deny"
+        assert seen == ["checker"]
+
+    def test_stale_resolved_allow_does_not_override_current_sync_deny(self):
+        seen = []
+
+        def handler():
+            seen.append("handler")
+            raise AssertionError("handler should not run when current deny overrides stale approval")
+
+        entry = ToolEntry(
+            name="Write",
+            mode=ToolMode.INLINE,
+            schema={"name": "Write", "parameters": {"type": "object", "required": [], "properties": {}}},
+            handler=handler,
+            source="test",
+        )
+        runner = _make_runner([entry])
+        req = _make_tool_call_request("Write", {})
+        req.state = MagicMock()
+
+        def consume_permission_resolution(name, args, context, request):
+            seen.append("resolution")
+            return {"decision": "allow", "message": "approved earlier"}
+
+        def can_use_tool(name, args, context, request):
+            seen.append("checker")
+            return {"decision": "deny", "message": "deny now"}
+
+        req.state.consume_permission_resolution = consume_permission_resolution
+        req.state.can_use_tool = can_use_tool
+
+        result = runner.wrap_tool_call(req, lambda _req: None)
+
+        meta = result.additional_kwargs["tool_result_meta"]
+        assert result.content == "deny now"
+        assert meta["kind"] == "permission_denied"
+        assert meta["decision"] == "deny"
+        assert seen == ["checker"]
+
+    @pytest.mark.asyncio
     async def test_destructive_metadata_is_advisory_not_runtime_deny(self):
         entry = ToolEntry(
             name="Write",

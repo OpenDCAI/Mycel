@@ -47,6 +47,20 @@ def tool_permission_denied(
     )
 
 
+def tool_permission_request(
+    content: str,
+    *,
+    top_level_blocks: list[Any] | None = None,
+    metadata: dict[str, Any] | None = None,
+) -> ToolResultEnvelope:
+    return ToolResultEnvelope(
+        kind="permission_request",
+        content=content,
+        top_level_blocks=list(top_level_blocks or []),
+        metadata=dict(metadata or {}),
+    )
+
+
 def materialize_tool_message(
     envelope: ToolResultEnvelope,
     *,
