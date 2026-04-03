@@ -8,7 +8,7 @@ import time
 
 import jwt
 
-from storage.contracts import AccountRepo, EntityRepo, EntityRow, MemberRepo, MemberRow, MemberType
+from storage.contracts import AccountRepo, EntityRepo, EntityRow, InviteCodeRepo, MemberRepo, MemberRow, MemberType
 
 logger = logging.getLogger(__name__)
 
@@ -22,11 +22,13 @@ class AuthService:
         accounts: AccountRepo,
         entities: EntityRepo,
         supabase_client=None,
+        invite_codes: InviteCodeRepo | None = None,
     ) -> None:
         self._members = members
         self._accounts = accounts
         self._entities = entities
         self._sb = supabase_client  # None in sqlite-only mode
+        self._invite_codes = invite_codes
 
     # ------------------------------------------------------------------
     # Registration flow (standard Supabase signUp)
@@ -39,7 +41,8 @@ class AuthService:
         """Validate invite code, create user via signUp (sends confirmation OTP to email)."""
         if self._sb is None:
             raise RuntimeError("Supabase client required.")
-        self._validate_invite_code(invite_code)
+        if self._invite_codes is None or not self._invite_codes.is_valid(invite_code):
+            raise ValueError("邀请码无效或已过期")
         from supabase_auth.errors import AuthApiError
         try:
             self._sb.auth.sign_up({"email": email, "password": password})
@@ -77,8 +80,9 @@ class AuthService:
             raise ValueError("会话已过期，请重新验证邮箱") from e
         auth_user_id = payload["sub"]
 
-        # 2. Validate invite code
-        self._validate_invite_code(invite_code)
+        # 2. Validate invite code (re-check; repo handles expired/used)
+        if self._invite_codes is None or not self._invite_codes.is_valid(invite_code):
+            raise ValueError("邀请码无效或已过期")
 
         # 3. Create member records (idempotent guard)
         email_from_payload = payload.get("email", "")
@@ -122,11 +126,9 @@ class AuthService:
             owned_agents = self._members.list_by_owner_user_id(auth_user_id)
             first_agent_info = {"id": owned_agents[0].id, "name": owned_agents[0].name, "type": "mycel_agent", "avatar": None} if owned_agents else None
 
-        # 4. Mark invite code used
-        from datetime import datetime, timezone
-        self._sb.table("invite_codes").update(
-            {"used_by": auth_user_id, "used_at": datetime.now(timezone.utc).isoformat()}
-        ).eq("code", invite_code).execute()
+        # 4. Mark invite code used (atomic via repo)
+        if self._invite_codes is not None:
+            self._invite_codes.use(invite_code, auth_user_id)
 
         logger.info("Registered user %s (mycel_id=%s)", email_from_payload, mycel_id)
         return {
@@ -205,21 +207,6 @@ class AuthService:
     # ------------------------------------------------------------------
     # Internal helpers
     # ------------------------------------------------------------------
-
-    def _validate_invite_code(self, code: str) -> None:
-        resp = self._sb.table("invite_codes").select("code, used_by, expires_at").eq("code", code).execute()
-        rows = resp.data if resp.data else []
-        if not rows:
-            raise ValueError("邀请码无效")
-        row = rows[0]
-        if row.get("used_by") is not None:
-            raise ValueError("邀请码已被使用")
-        expires_at = row.get("expires_at")
-        if expires_at is not None:
-            from datetime import datetime, timezone
-            exp = datetime.fromisoformat(expires_at.replace("Z", "+00:00"))
-            if exp < datetime.now(timezone.utc):
-                raise ValueError("邀请码已过期")
 
     def _resolve_email(self, identifier: str) -> str:
         """Turn mycel_id (numeric string) or email into email address."""

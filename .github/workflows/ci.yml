@@ -7,19 +7,33 @@ on:
     branches: [main]
 
 jobs:
+  lint:
+    name: Lint & Type Check (Python)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86  # v5
+        with:
+          enable-cache: true
+      - name: Install dependencies
+        run: uv sync --dev
+      - name: Lint (ruff)
+        run: |
+          uv run ruff check .
+          uv run ruff format --check .
+      - name: Type check (pyright)
+        run: uv run pyright --pythonversion 3.12
+        continue-on-error: true  # pre-existing errors; tracked separately
+
   test-backend:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86  # v5
         with:
-          version: "latest"
-
+          enable-cache: true
       - name: Install dependencies
         run: uv sync --frozen --no-dev
-
       - name: Run tests
         run: uv run pytest tests/ -x -q --timeout=30
         env:
@@ -28,19 +42,16 @@ jobs:
   test-frontend:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020  # v4
         with:
           node-version: "20"
           cache: "npm"
           cache-dependency-path: frontend/app/package-lock.json
-
       - name: Install dependencies
         working-directory: frontend/app
         run: npm ci
-
       - name: Type check
         working-directory: frontend/app
         run: npx tsc --noEmit
