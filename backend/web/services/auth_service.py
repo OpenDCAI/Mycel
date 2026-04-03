@@ -44,7 +44,10 @@ class AuthService:
         try:
             self._sb.auth.sign_up({"email": email, "password": password})
         except AuthApiError as e:
-            raise ValueError(f"发送验证码失败: {e.message}") from e
+            msg = e.message or ""
+            if "already registered" in msg or "already exists" in msg:
+                raise ValueError("该邮箱已注册，请直接登录") from e
+            raise ValueError(f"发送验证码失败，请稍后重试") from e
 
     def verify_register_otp(self, email: str, token: str) -> dict:
         """Verify signup OTP. Returns temp_token to be used in complete_register."""
