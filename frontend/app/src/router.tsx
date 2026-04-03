@@ -16,6 +16,7 @@ import MarketplaceDetailPage from './pages/MarketplaceDetailPage';
 import LibraryItemDetailPage from './pages/LibraryItemDetailPage';
 import ResourcesPage from './pages/ResourcesPage';
 import ConnectionsPage from './pages/ConnectionsPage';
+import InviteCodesPage from './pages/InviteCodesPage';
 
 export const router = createBrowserRouter([
   // Old /chat/* URLs → redirect to /threads
@@ -102,6 +103,10 @@ export const router = createBrowserRouter([
       {
         path: 'connections',
         element: <ConnectionsPage />,
+      },
+      {
+        path: 'invite-codes',
+        element: <InviteCodesPage />,
       },
       {
         path: 'settings',

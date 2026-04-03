@@ -298,6 +298,33 @@ export async function verifyObservation(): Promise<{
   return request("/api/settings/observation/verify");
 }
 
+// --- Invite Code API ---
+
+export interface InviteCode {
+  code: string;
+  used: boolean;
+  used_by?: string | null;
+  expires_at?: string | null;
+  created_at: string;
+}
+
+export async function fetchInviteCodes(): Promise<InviteCode[]> {
+  const payload = await request<{ codes: InviteCode[] } | InviteCode[]>("/api/invite-codes");
+  if (Array.isArray(payload)) return payload;
+  return (payload as { codes: InviteCode[] }).codes;
+}
+
+export async function generateInviteCode(expiresDays = 7): Promise<InviteCode> {
+  return request<InviteCode>("/api/invite-codes", {
+    method: "POST",
+    body: JSON.stringify({ expires_days: expiresDays }),
+  });
+}
+
+export async function revokeInviteCode(code: string): Promise<void> {
+  await request(`/api/invite-codes/${encodeURIComponent(code)}`, { method: "DELETE" });
+}
+
 // --- Member API ---
 
 export async function uploadMemberAvatar(memberId: string, file: File): Promise<void> {
