@@ -107,4 +107,4 @@ ops
 
 # Auto-generated
 .playwright-mcp/
-supabase/
+/supabase/

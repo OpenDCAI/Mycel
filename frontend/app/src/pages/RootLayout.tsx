@@ -78,18 +78,11 @@ function AuthenticatedLayout() {
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape" && showCreate) setShowCreate(false);
-    };
-    document.addEventListener("keydown", handleKeyDown);
-    return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [showCreate]);
-
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === "b") { e.preventDefault(); setExpanded((prev) => !prev); }
     };
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
-  }, []);
+  }, [showCreate]);
 
   const handleCreateAction = useCallback(async (action: string) => {
     setShowCreate(false);

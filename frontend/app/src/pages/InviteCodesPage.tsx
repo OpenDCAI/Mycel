@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { Ticket, Plus, Trash2, Copy, Check, AlertTriangle, RefreshCw, TicketX } from "lucide-react";
 import { fetchInviteCodes, generateInviteCode, revokeInviteCode } from "@/api/client";
 import type { InviteCode } from "@/api/client";
@@ -37,13 +37,15 @@ function StatusBadge({ code }: { code: InviteCode }) {
 
 function CopyButton({ text }: { text: string }) {
   const [copied, setCopied] = useState(false);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const handleCopy = useCallback(async () => {
     try {
       await navigator.clipboard.writeText(text);
       setCopied(true);
       toast.success("已复制到剪贴板");
-      setTimeout(() => setCopied(false), 2000);
+      if (timerRef.current) clearTimeout(timerRef.current);
+      timerRef.current = setTimeout(() => setCopied(false), 2000);
     } catch {
       toast.error("复制失败");
     }

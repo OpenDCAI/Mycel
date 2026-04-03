@@ -18,13 +18,17 @@ class SupabaseSandboxMonitorRepo:
     def close(self) -> None:
         return None
 
-    def query_threads(self) -> list[dict]:
+    def query_threads(self, *, thread_id: str | None = None) -> list[dict]:
         # Fetch active chat_sessions joined with sandbox_leases via lease_id
-        sessions = q.rows(
+        q_sessions = (
             self._client.table("chat_sessions")
             .select("thread_id,chat_session_id,last_active_at,lease_id")
             .neq("status", "closed")
-            .execute(),
+        )
+        if thread_id is not None:
+            q_sessions = q_sessions.eq("thread_id", thread_id)
+        sessions = q.rows(
+            q_sessions.execute(),
             _REPO, "query_threads sessions",
         )
         if not sessions:
@@ -68,11 +72,8 @@ class SupabaseSandboxMonitorRepo:
         return sorted(by_thread.values(), key=lambda x: x.get("last_active") or "", reverse=True)
 
     def query_thread_summary(self, thread_id: str) -> dict | None:
-        results = self.query_threads()
-        for r in results:
-            if r["thread_id"] == thread_id:
-                return r
-        return None
+        results = self.query_threads(thread_id=thread_id)
+        return results[0] if results else None
 
     def query_thread_sessions(self, thread_id: str) -> list[dict]:
         sessions = q.rows(
