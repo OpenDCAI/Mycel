@@ -81,6 +81,29 @@ class _SteerAwareTerminalModel:
         return AIMessage(content="STEER_DONE" if last_human == "Stop and just say STEER_DONE." else "UNKNOWN")
 
 
+class _StopHonestyAwareModel:
+    def bind_tools(self, tools):
+        return self
+
+    async def ainvoke(self, messages):
+        system_text = ""
+        if messages and messages[0].__class__.__name__ == "SystemMessage":
+            system_text = getattr(messages[0], "content", "") or ""
+        last_human = next(
+            (
+                msg.content
+                for msg in reversed(messages)
+                if msg.__class__.__name__ == "HumanMessage"
+            ),
+            "",
+        )
+        if last_human != "Stop immediately. Do not continue the old task. Reply exactly STOPPED_NOW and do not write any file.":
+            return AIMessage(content="UNKNOWN")
+        if "Steer requests accepted during an active run are non-preemptive." in system_text:
+            return AIMessage(content="STOP_ACK_AFTER_COMPLETED_WORK")
+        return AIMessage(content="STOPPED_NOW")
+
+
 class _SteerCancelPoisonModel:
     def __init__(self) -> None:
         self._turn = 0
@@ -483,6 +506,53 @@ async def test_get_thread_history_rebuilds_persisted_midrun_steer_message(tmp_pa
     ]
     assert history["messages"][3]["text"] == "Stop and just say STEER_DONE."
     assert history["messages"][4]["text"] == "STEER_DONE"
+
+
+@pytest.mark.asyncio
+async def test_query_loop_adds_non_preemptive_steer_contract_before_terminal_reply(tmp_path):
+    checkpointer = _MemoryCheckpointer()
+    queue_manager = MessageQueueManager(db_path=str(tmp_path / "queue.db"))
+    queue_manager.enqueue(
+        "Stop immediately. Do not continue the old task. Reply exactly STOPPED_NOW and do not write any file.",
+        "steer-stop-honesty-thread",
+        notification_type="steer",
+        source="owner",
+        is_steer=True,
+    )
+    runtime = SimpleNamespace(events=[], emit_activity_event=lambda event: runtime.events.append(event))
+    loop = _make_loop(
+        model=_StopHonestyAwareModel(),
+        checkpointer=checkpointer,
+        middleware=[SteeringMiddleware(queue_manager=queue_manager, agent_runtime=runtime)],
+    )
+    checkpointer.store["steer-stop-honesty-thread"] = {
+        "channel_values": {
+            "messages": [
+                HumanMessage(content="Run the long bash."),
+                AIMessage(
+                    content="",
+                    tool_calls=[{"name": "Bash", "args": {"command": "sleep 15; echo LONG_PHASE_DONE"}, "id": "tc-bash"}],
+                ),
+                ToolMessage(content="LONG_PHASE_DONE", name="Bash", tool_call_id="tc-bash"),
+            ]
+        }
+    }
+
+    async for _ in loop.query(None, config={"configurable": {"thread_id": "steer-stop-honesty-thread"}}):
+        pass
+
+    state = await loop.aget_state({"configurable": {"thread_id": "steer-stop-honesty-thread"}})
+    persisted = state.values["messages"]
+
+    assert [msg.__class__.__name__ for msg in persisted] == [
+        "HumanMessage",
+        "AIMessage",
+        "ToolMessage",
+        "HumanMessage",
+        "AIMessage",
+    ]
+    assert persisted[3].content == "Stop immediately. Do not continue the old task. Reply exactly STOPPED_NOW and do not write any file."
+    assert persisted[4].content == "STOP_ACK_AFTER_COMPLETED_WORK"
 
 
 @pytest.mark.asyncio

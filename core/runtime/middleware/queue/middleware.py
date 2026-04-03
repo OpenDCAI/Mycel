@@ -10,7 +10,7 @@ import logging
 from collections.abc import Awaitable, Callable
 from typing import Any
 
-from langchain_core.messages import HumanMessage, ToolMessage
+from langchain_core.messages import HumanMessage, SystemMessage, ToolMessage
 from langchain_core.runnables import RunnableConfig
 
 try:
@@ -35,6 +35,14 @@ from .manager import MessageQueueManager
 
 logger = logging.getLogger(__name__)
 
+_STEER_NON_PREEMPTIVE_SYSTEM_NOTE = (
+    "Steer requests accepted during an active run are non-preemptive. "
+    "If any tool call from the interrupted run already started, it was allowed to finish and its side effects may "
+    "already have happened. Do not claim that prior work was interrupted, prevented, cancelled, or rolled back. "
+    "Treat the steer as instructions for what to do next after that completed work, and answer honestly about any "
+    "side effects that may already exist."
+)
+
 
 def _is_terminal_background_notification(item: Any) -> bool:
     content = getattr(item, "content", "") or ""
@@ -42,6 +50,39 @@ def _is_terminal_background_notification(item: Any) -> bool:
     if notification_type not in {"agent", "command"}:
         return False
     return "<task-notification>" in content or "<CommandNotification>" in content
+
+
+def _is_owner_steer_message(message: Any) -> bool:
+    if message.__class__.__name__ != "HumanMessage":
+        return False
+    metadata = getattr(message, "metadata", {}) or {}
+    return bool(
+        metadata.get("is_steer")
+        or (metadata.get("source") == "owner" and metadata.get("notification_type") == "steer")
+    )
+
+
+def _apply_steer_contract(request: ModelRequest) -> ModelRequest:
+    if not any(_is_owner_steer_message(message) for message in request.messages):
+        return request
+
+    system_message = request.system_message
+    if system_message is None:
+        return request.override(system_message=SystemMessage(content=_STEER_NON_PREEMPTIVE_SYSTEM_NOTE))
+
+    content = getattr(system_message, "content", None)
+    if isinstance(content, str):
+        if _STEER_NON_PREEMPTIVE_SYSTEM_NOTE in content:
+            return request
+        # @@@steer-honesty-contract - mid-run steer stays a real user message in
+        # durable history, but the live model call also needs an explicit
+        # non-preemptive contract so it cannot overclaim that already-started
+        # tool work was stopped or never produced side effects.
+        return request.override(
+            system_message=SystemMessage(content=f"{content}\n\n{_STEER_NON_PREEMPTIVE_SYSTEM_NOTE}")
+        )
+
+    return request.override(messages=[SystemMessage(content=_STEER_NON_PREEMPTIVE_SYSTEM_NOTE), *request.messages])
 
 
 class SteeringMiddleware(AgentMiddleware):
@@ -73,6 +114,20 @@ class SteeringMiddleware(AgentMiddleware):
     ) -> ToolMessage:
         """Async pure passthrough — never skip tool calls."""
         return await handler(request)
+
+    def wrap_model_call(
+        self,
+        request: ModelRequest,
+        handler: Callable[[ModelRequest], ModelResponse],
+    ) -> ModelCallResult:
+        return handler(_apply_steer_contract(request))
+
+    async def awrap_model_call(
+        self,
+        request: ModelRequest,
+        handler: Callable[[ModelRequest], Awaitable[ModelResponse]],
+    ) -> ModelCallResult:
+        return await handler(_apply_steer_contract(request))
 
     def before_model(
         self,
