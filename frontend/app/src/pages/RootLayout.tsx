@@ -374,9 +374,7 @@ function CreateDropdown({
 type AuthStep =
   | { type: "login" }
   | { type: "reg_email" }
-  | { type: "reg_otp"; email: string }
-  | { type: "reg_complete"; email: string; tempToken: string }
-  | { type: "closed_beta"; email: string; tempToken: string }
+  | { type: "reg_otp"; email: string; password: string; inviteCode: string }
   | { type: "setup_name"; userId: string; defaultName: string };
 
 function AuthCard({ children }: { children: React.ReactNode }) {
@@ -421,12 +419,12 @@ function LoginForm() {
     />;
   }
 
-  // ── Step: Enter email + password, send OTP ──
+  // ── Step: Enter email + password + invite code ──
   if (step.type === "reg_email") {
     return <RegEmailStep
-      onSubmit={async (email, password) => {
-        await sendOtp(email, password);
-        setStep({ type: "reg_otp", email });
+      onSubmit={async (email, password, inviteCode) => {
+        await sendOtp(email, password, inviteCode);
+        setStep({ type: "reg_otp", email, password, inviteCode });
       }}
       onBack={() => reset({ type: "login" })}
       error={error} setError={setError}
@@ -436,61 +434,21 @@ function LoginForm() {
 
   // ── Step: Enter OTP ──
   if (step.type === "reg_otp") {
-    const { email } = step;
+    const { email, password, inviteCode } = step;
     return <RegOtpStep
       email={email}
       onSubmit={async (token) => {
         const { tempToken } = await verifyOtp(email, token);
-        setStep({ type: "reg_complete", email, tempToken });
-      }}
-      onBack={() => reset({ type: "reg_email" })}
-      error={error} setError={setError}
-      loading={loading} setLoading={setLoading}
-    />;
-  }
-
-  // ── Step: Enter invite code ──
-  if (step.type === "reg_complete") {
-    const { tempToken, email } = step;
-    return <RegCompleteStep
-      email={email}
-      onSubmit={async (inviteCode) => {
-        if (!inviteCode.trim()) {
-          setStep({ type: "closed_beta", email, tempToken });
-          return;
-        }
         const { userId, defaultName } = await completeRegister(tempToken, inviteCode);
         setStep({ type: "setup_name", userId, defaultName });
       }}
+      onResend={async () => {
+        await sendOtp(email, password, inviteCode);
+      }}
       onBack={() => reset({ type: "reg_email" })}
       error={error} setError={setError}
       loading={loading} setLoading={setLoading}
     />;
-  }
-
-  // ── Step: Closed beta notice ──
-  if (step.type === "closed_beta") {
-    const { email, tempToken } = step;
-    return (
-      <AuthCard>
-        <AuthHeader title="即将开放" />
-        <div className="text-center space-y-3">
-          <p className="text-sm text-muted-foreground leading-relaxed">
-            Mycel 目前处于内测阶段，暂未向公众开放注册。
-            <br />我们正在精心打磨产品，敬请期待。
-          </p>
-          <button
-            onClick={() => reset({ type: "reg_complete", email, tempToken })}
-            className="text-sm text-primary hover:underline"
-          >
-            我有邀请码
-          </button>
-        </div>
-        <p className="text-center text-xs text-muted-foreground mt-6">
-          已有账号？<button onClick={() => reset({ type: "login" })} className="text-primary hover:underline">登录</button>
-        </p>
-      </AuthCard>
-    );
   }
 
   // ── Step: Setup name (post-registration onboarding) ──
@@ -534,7 +492,7 @@ function LoginStep({ onSubmit, onSwitch, error, setError, loading, setLoading }:
 }
 
 function RegEmailStep({ onSubmit, onBack, error, setError, loading, setLoading }: {
-  onSubmit: (email: string, password: string) => Promise<void>;
+  onSubmit: (email: string, password: string, inviteCode: string) => Promise<void>;
   onBack: () => void;
   error: string | null; setError: (e: string | null) => void;
   loading: boolean; setLoading: (v: boolean) => void;
@@ -542,21 +500,23 @@ function RegEmailStep({ onSubmit, onBack, error, setError, loading, setLoading }
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
+  const [inviteCode, setInviteCode] = useState("");
   async function handle(e: React.FormEvent) {
     e.preventDefault();
     if (password !== confirm) { setError("两次输入的密码不一致"); return; }
     setError(null); setLoading(true);
-    try { await onSubmit(email, password); }
+    try { await onSubmit(email, password, inviteCode); }
     catch (err) { setError(err instanceof Error ? err.message : "发送失败"); }
     finally { setLoading(false); }
   }
   return (
     <AuthCard>
-      <AuthHeader title="注册账号" subtitle="输入邮箱和密码，获取验证码" />
+      <AuthHeader title="注册账号" subtitle="填写信息，发送验证码" />
       <form onSubmit={handle} className="space-y-4">
         <input type="email" placeholder="邮箱" value={email} onChange={e => setEmail(e.target.value)} className={inputCls} required autoComplete="email" autoFocus />
         <PasswordInput value={password} onChange={setPassword} placeholder="设置密码" autoComplete="new-password" />
         <PasswordInput value={confirm} onChange={setConfirm} placeholder="确认密码" autoComplete="new-password" />
+        <input type="text" placeholder="邀请码" value={inviteCode} onChange={e => setInviteCode(e.target.value)} className={inputCls} autoComplete="off" required />
         {error && <p className="text-xs text-destructive">{error}</p>}
         <button type="submit" disabled={loading} className={btnCls}>{loading ? "发送中..." : "发送验证码"}</button>
       </form>
@@ -567,9 +527,10 @@ function RegEmailStep({ onSubmit, onBack, error, setError, loading, setLoading }
   );
 }
 
-function RegOtpStep({ email, onSubmit, onBack, error, setError, loading, setLoading }: {
+function RegOtpStep({ email, onSubmit, onResend, onBack, error, setError, loading, setLoading }: {
   email: string;
   onSubmit: (token: string) => Promise<void>;
+  onResend: () => Promise<void>;
   onBack: () => void;
   error: string | null; setError: (e: string | null) => void;
   loading: boolean; setLoading: (v: boolean) => void;
@@ -579,6 +540,12 @@ function RegOtpStep({ email, onSubmit, onBack, error, setError, loading, setLoad
     e.preventDefault(); setError(null); setLoading(true);
     try { await onSubmit(otp.trim()); }
     catch (err) { setError(err instanceof Error ? err.message : "验证失败"); }
+    finally { setLoading(false); }
+  }
+  async function handleResend() {
+    setError(null); setLoading(true);
+    try { await onResend(); }
+    catch (err) { setError(err instanceof Error ? err.message : "发送失败"); }
     finally { setLoading(false); }
   }
   return (
@@ -598,7 +565,9 @@ function RegOtpStep({ email, onSubmit, onBack, error, setError, loading, setLoad
         </button>
       </form>
       <p className="text-center text-xs text-muted-foreground mt-4">
-        <button onClick={onBack} className="text-primary hover:underline">重新发送</button>
+        没收到？<button onClick={handleResend} disabled={loading} className="text-primary hover:underline">重新发送</button>
+        <span className="mx-2 text-border">·</span>
+        <button onClick={onBack} className="text-primary hover:underline">修改信息</button>
       </p>
     </AuthCard>
   );
@@ -637,40 +606,6 @@ function PasswordInput({ value, onChange, placeholder, autoFocus, autoComplete }
   );
 }
 
-function RegCompleteStep({ email, onSubmit, onBack, error, setError, loading, setLoading }: {
-  email: string;
-  onSubmit: (code: string) => Promise<void>;
-  onBack: () => void;
-  error: string | null; setError: (e: string | null) => void;
-  loading: boolean; setLoading: (v: boolean) => void;
-}) {
-  const [inviteCode, setInviteCode] = useState("");
-  async function handle(e: React.FormEvent) {
-    e.preventDefault();
-    setError(null); setLoading(true);
-    try { await onSubmit(inviteCode); }
-    catch (err) { setError(err instanceof Error ? err.message : "注册失败"); }
-    finally { setLoading(false); }
-  }
-  return (
-    <AuthCard>
-      <AuthHeader title="完成注册" subtitle="输入邀请码激活账号" />
-      <div className="mb-5 px-4 py-2.5 rounded-lg bg-muted text-sm text-muted-foreground text-center">
-        {email}
-      </div>
-      <form onSubmit={handle} className="space-y-4">
-        <input type="text" placeholder="邀请码（没有可留空）" value={inviteCode} onChange={e => setInviteCode(e.target.value)} className={inputCls} autoComplete="off" autoFocus />
-        {error && <p className="text-xs text-destructive">{error}</p>}
-        <button type="submit" disabled={loading} className={btnCls}>
-          {loading ? "注册中..." : "完成注册"}
-        </button>
-      </form>
-      <p className="text-center text-xs text-muted-foreground mt-4">
-        <button onClick={onBack} className="text-primary hover:underline">返回</button>
-      </p>
-    </AuthCard>
-  );
-}
 
 function SetupNameStep({ userId, defaultName }: { userId: string; defaultName: string }) {
   const [name, setName] = useState(defaultName);

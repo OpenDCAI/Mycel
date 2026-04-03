@@ -33,7 +33,7 @@ interface AuthState {
   entityId: string | null;
 
   login: (identifier: string, password: string) => Promise<void>;
-  sendOtp: (email: string, password: string) => Promise<void>;
+  sendOtp: (email: string, password: string, inviteCode: string) => Promise<void>;
   verifyOtp: (email: string, token: string) => Promise<{ tempToken: string }>;
   completeRegister: (tempToken: string, inviteCode: string) => Promise<{ userId: string; defaultName: string }>;
   logout: () => void;
@@ -79,8 +79,8 @@ export const useAuthStore = create<AuthState>()(
         window.location.href = "/threads";
       },
 
-      sendOtp: async (email, password) => {
-        await apiPost("send-otp", { email, password });
+      sendOtp: async (email, password, inviteCode) => {
+        await apiPost("send-otp", { email, password, invite_code: inviteCode });
       },
 
       verifyOtp: async (email, token) => {

@@ -35,10 +35,11 @@ class AuthService:
     # Step 3: complete_register(...)    → validate invite, create member records
     # ------------------------------------------------------------------
 
-    def send_otp(self, email: str, password: str) -> None:
-        """Create user via signUp (sends confirmation OTP to email)."""
+    def send_otp(self, email: str, password: str, invite_code: str) -> None:
+        """Validate invite code, create user via signUp (sends confirmation OTP to email)."""
         if self._sb is None:
             raise RuntimeError("Supabase client required.")
+        self._validate_invite_code(invite_code)
         from supabase_auth.errors import AuthApiError
         try:
             self._sb.auth.sign_up({"email": email, "password": password})
