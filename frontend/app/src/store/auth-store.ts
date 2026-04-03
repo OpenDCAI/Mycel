@@ -1,14 +1,10 @@
 /**
  * Auth store — JWT token, user identity, login/register/logout.
  * Persisted to localStorage via Zustand persist middleware.
- *
- * Set VITE_DEV_SKIP_AUTH=true in .env.development to bypass login during dev.
  */
 
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-
-const DEV_SKIP_AUTH = import.meta.env.VITE_DEV_SKIP_AUTH === "true";
 
 export interface AuthIdentity {
   id: string;
@@ -48,15 +44,13 @@ async function authCall(endpoint: string, username: string, password: string) {
   return res.json();
 }
 
-const DEV_MOCK_USER: AuthIdentity = { id: "dev-user", name: "Dev", type: "human" };
-
 export const useAuthStore = create<AuthState>()(
   persist(
     (set) => ({
-      token: DEV_SKIP_AUTH ? "dev-skip-auth" : null,
-      user: DEV_SKIP_AUTH ? DEV_MOCK_USER : null,
+      token: null,
+      user: null,
       agent: null,
-      entityId: DEV_SKIP_AUTH ? "dev-user" : null,
+      entityId: null,
 
       login: async (username, password) => {
         const data = await authCall("login", username, password);
@@ -88,10 +82,6 @@ export const useAuthStore = create<AuthState>()(
     }),
     {
       name: "leon-auth",
-      ...(DEV_SKIP_AUTH && {
-        // In skip-auth mode, never let persisted null overwrite the mock identity
-        merge: (_persisted: unknown, current: AuthState) => current,
-      }),
     },
   ),
 );
@@ -109,7 +99,7 @@ export async function authFetch(url: string, init?: RequestInit): Promise<Respon
   if (token) headers["Authorization"] = `Bearer ${token}`;
 
   const res = await fetch(url, { ...init, headers });
-  if (res.status === 401 && !DEV_SKIP_AUTH) {
+  if (res.status === 401) {
     useAuthStore.getState().logout();
   }
   return res;

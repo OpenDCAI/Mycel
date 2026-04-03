@@ -57,6 +57,20 @@ class _FakeEntityRepo:
         self.rows.append(row)
 
 
+class _FakeAuthService:
+    def __init__(self) -> None:
+        self.tokens: list[str] = []
+
+    def verify_token(self, token: str) -> dict:
+        self.tokens.append(token)
+        return {"user_id": "owner-1"}
+
+
+class _FakeRequest:
+    def __init__(self, headers: dict[str, str] | None = None) -> None:
+        self.headers = headers or {}
+
+
 @pytest.mark.asyncio
 async def test_create_thread_route_preserves_legacy_sandbox_type_alias():
     app = SimpleNamespace(
@@ -87,3 +101,50 @@ async def test_create_thread_route_preserves_legacy_sandbox_type_alias():
     assert result["sandbox"] == "daytona_selfhost"
     assert app.state.thread_sandbox[result["thread_id"]] == "daytona_selfhost"
     assert app.state.thread_repo.rows[result["thread_id"]]["sandbox_type"] == "daytona_selfhost"
+
+
+@pytest.mark.asyncio
+async def test_stream_thread_events_requires_token():
+    app = SimpleNamespace(
+        state=SimpleNamespace(
+            auth_service=_FakeAuthService(),
+            thread_repo=SimpleNamespace(get_by_id=lambda _thread_id: None),
+            member_repo=_FakeMemberRepo(),
+            thread_event_buffers={},
+        )
+    )
+
+    with pytest.raises(threads_router.HTTPException) as exc_info:
+        await threads_router.stream_thread_events(
+            "thread-1",
+            request=_FakeRequest(),
+            token=None,
+            app=app,
+        )
+
+    assert exc_info.value.status_code == 401
+    assert exc_info.value.detail == "Missing token"
+
+
+@pytest.mark.asyncio
+async def test_stream_thread_events_verifies_token_before_owner_check():
+    auth_service = _FakeAuthService()
+    thread_repo = SimpleNamespace(get_by_id=lambda _thread_id: {"member_id": "member-1"})
+    app = SimpleNamespace(
+        state=SimpleNamespace(
+            auth_service=auth_service,
+            thread_repo=thread_repo,
+            member_repo=_FakeMemberRepo(),
+            thread_event_buffers={},
+        )
+    )
+
+    response = await threads_router.stream_thread_events(
+        "thread-1",
+        request=_FakeRequest(),
+        token="tok-thread",
+        app=app,
+    )
+
+    assert auth_service.tokens == ["tok-thread"]
+    assert response is not None

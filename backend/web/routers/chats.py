@@ -173,15 +173,12 @@ async def stream_chat_events(
     app: Annotated[Any, Depends(get_app)] = None,
 ):
     """SSE stream for chat events. Uses ?token= for auth."""
-    from backend.web.core.dependencies import _DEV_SKIP_AUTH
-
-    if not _DEV_SKIP_AUTH:
-        if not token:
-            raise HTTPException(401, "Missing token")
-        try:
-            app.state.auth_service.verify_token(token)
-        except ValueError as e:
-            raise HTTPException(401, str(e))
+    if not token:
+        raise HTTPException(401, "Missing token")
+    try:
+        app.state.auth_service.verify_token(token)
+    except ValueError as e:
+        raise HTTPException(401, str(e))
 
     event_bus = app.state.chat_event_bus
     queue = event_bus.subscribe(chat_id)

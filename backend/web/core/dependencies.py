@@ -1,29 +1,12 @@
 """FastAPI dependency injection functions."""
 
 import asyncio
-import os
 from typing import Annotated, Any
 
 from fastapi import Depends, FastAPI, HTTPException, Request
 
 from backend.web.services.agent_pool import get_or_create_agent, resolve_thread_sandbox
 from sandbox.thread_context import set_current_thread_id
-
-# Dev bypass: set LEON_DEV_SKIP_AUTH=1 to skip JWT verification and inject a mock identity.
-# WARNING: this bypasses ALL auth — never set in production.
-_DEV_SKIP_AUTH = os.environ.get("LEON_DEV_SKIP_AUTH", "").lower() in ("1", "true", "yes")
-_DEV_PAYLOAD = {"user_id": "dev-user", "entity_id": "dev-user"}
-
-if _DEV_SKIP_AUTH:
-    import logging as _logging
-
-    _logging.getLogger(__name__).warning(
-        "LEON_DEV_SKIP_AUTH is active — JWT auth is BYPASSED for all requests. This must never be enabled in production."
-    )
-
-
-def is_dev_skip_auth_enabled() -> bool:
-    return _DEV_SKIP_AUTH
 
 
 async def get_app(request: Request) -> FastAPI:
@@ -41,8 +24,6 @@ def _get_auth_service(app: FastAPI):
 
 def _extract_jwt_payload(request: Request) -> dict:
     """Extract and verify JWT payload from Bearer token. Returns {user_id, entity_id}."""
-    if _DEV_SKIP_AUTH:
-        return _DEV_PAYLOAD
     auth_header = request.headers.get("Authorization", "")
     if not auth_header.startswith("Bearer "):
         raise HTTPException(401, "Missing or invalid Authorization header")
@@ -56,8 +37,6 @@ def _extract_jwt_payload(request: Request) -> dict:
 async def get_current_user_id(request: Request) -> str:
     """Extract user_id from JWT and verify user exists. Returns 401 if user was deleted (e.g. DB reset)."""
     user_id = _extract_jwt_payload(request)["user_id"]
-    if _DEV_SKIP_AUTH:
-        return user_id
     member_repo = getattr(request.app.state, "member_repo", None)
     if member_repo and member_repo.get_by_id(user_id) is None:
         raise HTTPException(401, "User no longer exists — please re-login")
