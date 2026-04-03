@@ -181,7 +181,14 @@ class QueryLoop:
             turn += 1
             tool_context = self._build_tool_use_context(messages, thread_id=thread_id)
 
-            messages_for_query = await self._build_query_messages(messages, config)
+            messages_for_query, injected_messages = await self._build_query_messages(messages, config)
+            if injected_messages:
+                # @@@steer-persist - queue/steer messages accepted before the
+                # next model call must become durable conversation state, not
+                # request-only hints, or later replay/history lies about what
+                # the user actually said mid-run.
+                messages.extend(injected_messages)
+                self._sync_app_state(messages=messages, turn_count=turn)
             self._sync_tool_context_messages(tool_context, messages_for_query)
 
             # --- Call model through middleware chain ---
@@ -709,12 +716,13 @@ class QueryLoop:
             if callable(dispatch):
                 dispatch("on_response", req_dict, resp_dict)
 
-    async def _build_query_messages(self, messages: list, config: dict) -> list:
+    async def _build_query_messages(self, messages: list, config: dict) -> tuple[list, list]:
         return await self._apply_before_model(list(messages), config)
 
-    async def _apply_before_model(self, messages: list, config: dict) -> list:
+    async def _apply_before_model(self, messages: list, config: dict) -> tuple[list, list]:
         """Run middleware before_model/abefore_model hooks on the live path."""
         current_messages = list(messages)
+        injected_messages: list[Any] = []
         state = {"messages": current_messages}
 
         for mw in self.middleware:
@@ -735,9 +743,10 @@ class QueryLoop:
                 if not isinstance(new_messages, list):
                     new_messages = [new_messages]
                 current_messages.extend(new_messages)
+                injected_messages.extend(new_messages)
                 state["messages"] = current_messages
 
-        return current_messages
+        return current_messages, injected_messages
 
     def _sync_app_state(self, messages: list, turn_count: int) -> None:
         """Keep runtime AppState aligned with the loop's live state."""

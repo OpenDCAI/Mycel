@@ -7,12 +7,13 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 import pytest
-from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 
 from backend.web.routers.threads import get_thread_history, get_thread_messages
 from backend.web.services.display_builder import DisplayBuilder
 from backend.web.services.event_buffer import ThreadEventBuffer
 from core.runtime.middleware.queue.manager import MessageQueueManager
+from core.runtime.middleware.queue.middleware import SteeringMiddleware
 from backend.web.services.streaming_service import _repair_incomplete_tool_calls, _run_agent_to_buffer
 from core.runtime.middleware.monitor.state_monitor import AgentState
 from core.runtime.loop import QueryLoop
@@ -58,6 +59,22 @@ class _ToolSearchInlineSelectModel:
                 tool_calls=[{"name": "tool_search", "args": {"query": "select:Read,TaskCreate"}, "id": "tc-search"}],
             )
         return AIMessage(content="after-inline-select")
+
+
+class _SteerAwareTerminalModel:
+    def bind_tools(self, tools):
+        return self
+
+    async def ainvoke(self, messages):
+        last_human = next(
+            (
+                msg.content
+                for msg in reversed(messages)
+                if msg.__class__.__name__ == "HumanMessage"
+            ),
+            "",
+        )
+        return AIMessage(content="STEER_DONE" if last_human == "Stop and just say STEER_DONE." else "UNKNOWN")
 
 
 class _FakeDisplayBuilder:
@@ -126,11 +143,12 @@ def _make_loop(
     model=None,
     registry: ToolRegistry | None = None,
     checkpointer: _MemoryCheckpointer | None = None,
+    middleware: list | None = None,
 ) -> QueryLoop:
     return QueryLoop(
         model=model or _NoToolModel(text=text),
         system_prompt=SystemMessage(content="sys"),
-        middleware=[],
+        middleware=middleware or [],
         checkpointer=checkpointer,
         registry=registry or ToolRegistry(),
         app_state=AppState(),
@@ -328,6 +346,113 @@ async def test_query_loop_does_not_persist_terminal_empty_ai_after_system_notifi
         "HumanMessage",
     ]
     assert state.values["messages"][-1].content.startswith("<system-reminder><task-notification>")
+
+
+@pytest.mark.asyncio
+async def test_query_loop_persists_midrun_steer_message_into_checkpoint_state(tmp_path):
+    checkpointer = _MemoryCheckpointer()
+    queue_manager = MessageQueueManager(db_path=str(tmp_path / "queue.db"))
+    queue_manager.enqueue(
+        "Stop and just say STEER_DONE.",
+        "steer-persist-thread",
+        notification_type="steer",
+        source="owner",
+        is_steer=True,
+    )
+    runtime = SimpleNamespace(events=[], emit_activity_event=lambda event: runtime.events.append(event))
+    loop = _make_loop(
+        model=_SteerAwareTerminalModel(),
+        checkpointer=checkpointer,
+        middleware=[SteeringMiddleware(queue_manager=queue_manager, agent_runtime=runtime)],
+    )
+    checkpointer.store["steer-persist-thread"] = {
+        "channel_values": {
+            "messages": [
+                HumanMessage(content="Use Bash to run `sleep 20; echo LONG_PHASE_DONE`, then reply exactly ORIGINAL_DONE."),
+                AIMessage(
+                    content="",
+                    tool_calls=[{"name": "Bash", "args": {"command": "sleep 20; echo LONG_PHASE_DONE"}, "id": "tc-bash"}],
+                ),
+                ToolMessage(content="LONG_PHASE_DONE", name="Bash", tool_call_id="tc-bash"),
+            ]
+        }
+    }
+
+    async for _ in loop.query(None, config={"configurable": {"thread_id": "steer-persist-thread"}}):
+        pass
+
+    state = await loop.aget_state({"configurable": {"thread_id": "steer-persist-thread"}})
+    persisted = state.values["messages"]
+
+    assert [msg.__class__.__name__ for msg in persisted] == [
+        "HumanMessage",
+        "AIMessage",
+        "ToolMessage",
+        "HumanMessage",
+        "AIMessage",
+    ]
+    assert persisted[3].content == "Stop and just say STEER_DONE."
+    assert persisted[3].metadata["source"] == "owner"
+    assert persisted[3].metadata["is_steer"] is True
+    assert persisted[4].content == "STEER_DONE"
+
+
+@pytest.mark.asyncio
+async def test_get_thread_history_rebuilds_persisted_midrun_steer_message(tmp_path):
+    checkpointer = _MemoryCheckpointer()
+    queue_manager = MessageQueueManager(db_path=str(tmp_path / "queue.db"))
+    queue_manager.enqueue(
+        "Stop and just say STEER_DONE.",
+        "steer-history-thread",
+        notification_type="steer",
+        source="owner",
+        is_steer=True,
+    )
+    runtime = SimpleNamespace(events=[], emit_activity_event=lambda event: runtime.events.append(event))
+    loop = _make_loop(
+        model=_SteerAwareTerminalModel(),
+        checkpointer=checkpointer,
+        middleware=[SteeringMiddleware(queue_manager=queue_manager, agent_runtime=runtime)],
+    )
+    checkpointer.store["steer-history-thread"] = {
+        "channel_values": {
+            "messages": [
+                HumanMessage(content="Use Bash to run `sleep 20; echo LONG_PHASE_DONE`, then reply exactly ORIGINAL_DONE."),
+                AIMessage(
+                    content="",
+                    tool_calls=[{"name": "Bash", "args": {"command": "sleep 20; echo LONG_PHASE_DONE"}, "id": "tc-bash"}],
+                ),
+                ToolMessage(content="LONG_PHASE_DONE", name="Bash", tool_call_id="tc-bash"),
+            ]
+        }
+    }
+
+    async for _ in loop.query(None, config={"configurable": {"thread_id": "steer-history-thread"}}):
+        pass
+
+    fake_agent = SimpleNamespace(agent=loop)
+    fake_app = SimpleNamespace(state=SimpleNamespace())
+    with (
+        patch("backend.web.routers.threads.get_or_create_agent", return_value=fake_agent),
+        patch("backend.web.routers.threads.resolve_thread_sandbox", return_value="local"),
+    ):
+        history = await get_thread_history(
+            "steer-history-thread",
+            limit=20,
+            truncate=300,
+            user_id="u",
+            app=fake_app,
+        )
+
+    assert [item["role"] for item in history["messages"]] == [
+        "human",
+        "tool_call",
+        "tool_result",
+        "human",
+        "assistant",
+    ]
+    assert history["messages"][3]["text"] == "Stop and just say STEER_DONE."
+    assert history["messages"][4]["text"] == "STEER_DONE"
 
 
 @pytest.mark.asyncio
