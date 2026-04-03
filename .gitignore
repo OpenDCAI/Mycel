@@ -94,6 +94,7 @@ worktrees/
 /*.png
 /*.yml
 /*.yaml
+!docker-compose.yml
 /dogfood-output/
 /current-chat.yaml
 /.claude/skills/
