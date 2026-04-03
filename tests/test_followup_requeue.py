@@ -192,7 +192,7 @@ class TestConsumeFollowupQueue:
         asyncio.run(_run())
 
     def test_transition_failure_skips_start(self, mock_agent, mock_app, queue_manager):
-        """When runtime.transition returns False, start_agent_run is not called."""
+        """When runtime.transition returns False, followup stays queued."""
         queue_manager.enqueue("wont run", "thread-1")
         mock_agent.runtime.transition.return_value = False
 
@@ -203,7 +203,8 @@ class TestConsumeFollowupQueue:
                 await _consume_followup_queue(mock_agent, "thread-1", mock_app)
                 mock_start.assert_not_called()
 
-            # Message was consumed (dequeued) but not re-enqueued since no exception
-            assert queue_manager.dequeue("thread-1") is None
+            item = queue_manager.dequeue("thread-1")
+            assert item is not None
+            assert item.content == "wont run"
 
         asyncio.run(_run())
