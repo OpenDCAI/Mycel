@@ -308,7 +308,7 @@ async def test_background_agent_progress_notification_reaches_parent_next_turn(t
 
 
 @pytest.mark.asyncio
-async def test_background_agent_completion_notification_reaches_parent_next_turn(tmp_path, monkeypatch):
+async def test_background_agent_completion_notification_waits_for_followthrough_run(tmp_path, monkeypatch):
     def fake_create_leon_agent(*, model_name, workspace_root, **kwargs):
         return _CompleteChildAgent("Finished indexing")
 
@@ -343,8 +343,10 @@ async def test_background_agent_completion_notification_reaches_parent_next_turn
             config={"configurable": {"thread_id": "parent-thread"}},
         )
 
-        assert injected is not None
-        text = str(injected["messages"][0].content)
+        assert injected is None
+        queued = queue_manager.list_queue("parent-thread")
+        assert len(queued) == 1
+        text = queued[0]["content"]
         assert "<task-notification>" in text
         assert f"<run-id>{task_id}</run-id>" in text
         assert "<status>completed</status>" in text
@@ -363,6 +365,28 @@ def test_terminal_background_notification_waits_for_followup_run_during_owner_tu
     )
 
     runtime = type("_Runtime", (), {"current_run_source": "owner"})()
+    injected = SteeringMiddleware(queue_manager=queue_manager, agent_runtime=runtime).before_model(
+        state={},
+        runtime=None,
+        config={"configurable": {"thread_id": "parent-thread"}},
+    )
+
+    assert injected is None
+    queued = queue_manager.list_queue("parent-thread")
+    assert len(queued) == 1
+    assert "<task-notification>" in queued[0]["content"]
+
+
+def test_terminal_background_notification_waits_for_followup_run_during_system_turn(tmp_path):
+    queue_manager = MessageQueueManager(db_path=str(tmp_path / "queue.db"))
+    queue_manager.enqueue(
+        "<system-reminder><task-notification><status>completed</status><result>BG1:STEP1:2</result></task-notification></system-reminder>",
+        "parent-thread",
+        notification_type="agent",
+        source="system",
+    )
+
+    runtime = type("_Runtime", (), {"current_run_source": "system"})()
     injected = SteeringMiddleware(queue_manager=queue_manager, agent_runtime=runtime).before_model(
         state={},
         runtime=None,
