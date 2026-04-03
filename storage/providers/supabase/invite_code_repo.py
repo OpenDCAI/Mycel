@@ -18,6 +18,17 @@ def _generate_code(length: int = 10) -> str:
     return "".join(secrets.choice(alphabet) for _ in range(length))
 
 
+def _is_expired(row: dict) -> bool:
+    expires_at = row.get("expires_at")
+    if not expires_at:
+        return False
+    try:
+        exp = datetime.fromisoformat(expires_at.replace("Z", "+00:00"))
+        return datetime.now(UTC) > exp
+    except Exception:
+        return False
+
+
 class SupabaseInviteCodeRepo:
     def __init__(self, client: Any) -> None:
         self._client = q.validate_client(client, _REPO)
@@ -64,23 +75,23 @@ class SupabaseInviteCodeRepo:
         return [dict(r) for r in rows]
 
     def use(self, code: str, user_id: str) -> dict[str, Any] | None:
-        """Mark a code as used. Returns the row if successful, None if not valid."""
-        existing = self.get(code)
-        if not existing:
-            return None
-        if existing.get("used_by"):
-            return None  # already used
-        expires_at = existing.get("expires_at")
-        if expires_at:
-            try:
-                exp = datetime.fromisoformat(expires_at.replace("Z", "+00:00"))
-                if datetime.now(UTC) > exp:
-                    return None  # expired
-            except Exception:
-                pass
+        """Atomically mark a code as used. Returns the row if successful, None if not valid."""
         now = datetime.now(UTC).isoformat()
-        self._table().update({"used_by": user_id, "used_at": now}).eq("code", code).execute()
-        return self.get(code)
+        resp = (
+            self._table()
+            .update({"used_by": user_id, "used_at": now})
+            .eq("code", code)
+            .is_("used_by", None)  # atomic: only update if not already used
+            .execute()
+        )
+        updated = resp.data if resp.data else []
+        if not updated:
+            # Either code doesn't exist, already used, or expired — check which
+            existing = self.get(code)
+            if existing is None or existing.get("used_by") or _is_expired(existing):
+                return None
+            return None
+        return dict(updated[0])
 
     def is_valid(self, code: str) -> bool:
         existing = self.get(code)
@@ -88,20 +99,9 @@ class SupabaseInviteCodeRepo:
             return False
         if existing.get("used_by"):
             return False
-        expires_at = existing.get("expires_at")
-        if expires_at:
-            try:
-                exp = datetime.fromisoformat(expires_at.replace("Z", "+00:00"))
-                if datetime.now(UTC) > exp:
-                    return False
-            except Exception:
-                pass
-        return True
+        return not _is_expired(existing)
 
     def revoke(self, code: str) -> bool:
         """Delete (revoke) a code. Returns True if it existed."""
-        existing = self.get(code)
-        if not existing:
-            return False
-        self._table().delete().eq("code", code).execute()
-        return True
+        resp = self._table().delete().eq("code", code).execute()
+        return bool(resp.data)

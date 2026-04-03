@@ -137,14 +137,11 @@ async def lifespan(app: FastAPI):
             SupabaseChatRepo,
             SupabaseContactRepo,
             SupabaseEntityRepo,
+            SupabaseInviteCodeRepo,
             SupabaseMemberRepo,
             SupabaseRecipeRepo,
             SupabaseThreadLaunchPrefRepo,
             SupabaseThreadRepo,
-        )
-
-        from storage.providers.supabase import (
-            SupabaseInviteCodeRepo,
             SupabaseUserSettingsRepo,
         )
 
@@ -192,6 +189,7 @@ async def lifespan(app: FastAPI):
             accounts=app.state.account_repo,
             entities=app.state.entity_repo,
             supabase_client=_supabase_client,
+            invite_codes=app.state.invite_code_repo,
         )
     else:
         app.state.auth_service = AuthService(
