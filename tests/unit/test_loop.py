@@ -723,6 +723,48 @@ class _EscalationThenRecoveryModel:
         return AIMessage(content="after recovery")
 
 
+class _ContextOverflowModel:
+    def __init__(self):
+        self.calls = 0
+        self.max_tokens_values = []
+
+    def bind_tools(self, tools):
+        return self
+
+    def bind(self, **kwargs):
+        self.max_tokens_values.append(kwargs.get("max_tokens"))
+        return self
+
+    async def ainvoke(self, messages):
+        self.calls += 1
+        if self.calls == 1:
+            raise RuntimeError("input length and `max_tokens` exceed context limit: 188059 + 20000 > 200000")
+        return AIMessage(content="after parsed overflow")
+
+
+class _TransientAPIError(Exception):
+    def __init__(self, status: int, message: str, headers: dict[str, str] | None = None):
+        super().__init__(message)
+        self.status = status
+        self.headers = headers or {}
+
+
+class _RetryOnceModel:
+    def __init__(self, status: int, headers: dict[str, str] | None = None):
+        self.calls = 0
+        self.status = status
+        self.headers = headers or {}
+
+    def bind_tools(self, tools):
+        return self
+
+    async def ainvoke(self, messages):
+        self.calls += 1
+        if self.calls == 1:
+            raise _TransientAPIError(self.status, f"transient {self.status}", self.headers)
+        return AIMessage(content=f"after retry {self.status}")
+
+
 class _TruncatedResponseModel:
     def __init__(self, responses):
         self.responses = list(responses)
@@ -1129,6 +1171,45 @@ async def test_query_loop_escalates_max_output_tokens_before_continuation_recove
     assert result["reason"] == "completed"
     assert result["transition"].reason.value == "max_output_tokens_escalate"
     assert model.max_tokens_values == [64000]
+
+
+@pytest.mark.asyncio
+async def test_query_loop_parses_context_overflow_error_into_targeted_max_tokens_override():
+    model = _ContextOverflowModel()
+    app_state = AppState()
+    loop = make_loop(model, app_state=app_state, runtime=SimpleNamespace(cost=0.0))
+
+    result = await loop.ainvoke({"messages": [{"role": "user", "content": "start"}]})
+
+    assert result["reason"] == "completed"
+    assert result["messages"][-1].content == "after parsed overflow"
+    assert model.max_tokens_values == [10941]
+
+
+@pytest.mark.asyncio
+async def test_query_loop_retries_once_after_529_capacity_error():
+    model = _RetryOnceModel(529)
+    app_state = AppState()
+    loop = make_loop(model, app_state=app_state, runtime=SimpleNamespace(cost=0.0))
+
+    result = await loop.ainvoke({"messages": [{"role": "user", "content": "start"}]})
+
+    assert result["reason"] == "completed"
+    assert result["messages"][-1].content == "after retry 529"
+    assert model.calls == 2
+
+
+@pytest.mark.asyncio
+async def test_query_loop_retries_once_after_429_rate_limit_error():
+    model = _RetryOnceModel(429, headers={"retry-after": "0"})
+    app_state = AppState()
+    loop = make_loop(model, app_state=app_state, runtime=SimpleNamespace(cost=0.0))
+
+    result = await loop.ainvoke({"messages": [{"role": "user", "content": "start"}]})
+
+    assert result["reason"] == "completed"
+    assert result["messages"][-1].content == "after retry 429"
+    assert model.calls == 2
 
 
 @pytest.mark.asyncio

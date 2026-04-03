@@ -16,6 +16,7 @@ from __future__ import annotations
 import asyncio
 import inspect
 import logging
+import re
 import uuid
 from dataclasses import dataclass
 from enum import Enum
@@ -37,6 +38,10 @@ logger = logging.getLogger(__name__)
 
 _NOOP_HANDLER: Any = None  # placeholder for innermost "handler" in middleware chain
 _ESCALATED_MAX_OUTPUT_TOKENS = 64000
+_FLOOR_OUTPUT_TOKENS = 3000
+_CONTEXT_OVERFLOW_SAFETY_BUFFER = 1000
+_TRANSIENT_API_MAX_RETRIES = 3
+_TRANSIENT_API_BASE_DELAY_SECONDS = 0.5
 
 
 class TerminalReason(str, Enum):
@@ -54,6 +59,7 @@ class TerminalReason(str, Enum):
 
 class ContinueReason(str, Enum):
     next_turn = "next_turn"
+    api_retry = "api_retry"
     collapse_drain_retry = "collapse_drain_retry"
     reactive_compact_retry = "reactive_compact_retry"
     max_output_tokens_escalate = "max_output_tokens_escalate"
@@ -163,6 +169,7 @@ class QueryLoop:
         max_output_tokens_recovery_count = 0
         has_attempted_reactive_compact = False
         max_output_tokens_override: int | None = None
+        transient_api_retry_count = 0
 
         turn = 0
         while turn < self.max_turns:
@@ -215,6 +222,7 @@ class QueryLoop:
                     max_output_tokens_recovery_count=max_output_tokens_recovery_count,
                     has_attempted_reactive_compact=has_attempted_reactive_compact,
                     max_output_tokens_override=max_output_tokens_override,
+                    transient_api_retry_count=transient_api_retry_count,
                 )
                 if handled is not None:
                     messages = handled["messages"]
@@ -222,6 +230,7 @@ class QueryLoop:
                     max_output_tokens_recovery_count = handled["max_output_tokens_recovery_count"]
                     has_attempted_reactive_compact = handled["has_attempted_reactive_compact"]
                     max_output_tokens_override = handled["max_output_tokens_override"]
+                    transient_api_retry_count = handled["transient_api_retry_count"]
                     if handled["terminal"] is not None:
                         terminal = handled["terminal"]
                         break
@@ -321,6 +330,7 @@ class QueryLoop:
             max_output_tokens_recovery_count = 0
             has_attempted_reactive_compact = False
             max_output_tokens_override = None
+            transient_api_retry_count = 0
             self._sync_app_state(messages=messages, turn_count=turn)
 
         if terminal is None:
@@ -751,8 +761,38 @@ class QueryLoop:
         max_output_tokens_recovery_count: int,
         has_attempted_reactive_compact: bool,
         max_output_tokens_override: int | None,
+        transient_api_retry_count: int,
     ) -> dict[str, Any] | None:
-        error_text = str(exc).lower()
+        error_message = str(exc)
+        error_text = error_message.lower()
+
+        parsed_overflow = self._parse_context_overflow_override(error_message)
+        if parsed_overflow is not None:
+            return {
+                "messages": messages,
+                "transition": ContinueState(reason=ContinueReason.max_output_tokens_escalate),
+                "max_output_tokens_recovery_count": max_output_tokens_recovery_count,
+                "has_attempted_reactive_compact": has_attempted_reactive_compact,
+                "max_output_tokens_override": parsed_overflow,
+                "transient_api_retry_count": transient_api_retry_count,
+                "terminal": None,
+            }
+
+        if self._is_transient_api_error(exc, error_text):
+            if transient_api_retry_count >= _TRANSIENT_API_MAX_RETRIES:
+                return None
+            delay_seconds = self._retry_delay_seconds(exc, transient_api_retry_count)
+            if delay_seconds > 0:
+                await asyncio.sleep(delay_seconds)
+            return {
+                "messages": messages,
+                "transition": ContinueState(reason=ContinueReason.api_retry),
+                "max_output_tokens_recovery_count": max_output_tokens_recovery_count,
+                "has_attempted_reactive_compact": has_attempted_reactive_compact,
+                "max_output_tokens_override": max_output_tokens_override,
+                "transient_api_retry_count": transient_api_retry_count + 1,
+                "terminal": None,
+            }
 
         if "max_output_tokens" in error_text:
             if max_output_tokens_override is None:
@@ -762,6 +802,7 @@ class QueryLoop:
                     "max_output_tokens_recovery_count": max_output_tokens_recovery_count,
                     "has_attempted_reactive_compact": has_attempted_reactive_compact,
                     "max_output_tokens_override": _ESCALATED_MAX_OUTPUT_TOKENS,
+                    "transient_api_retry_count": transient_api_retry_count,
                     "terminal": None,
                 }
             if max_output_tokens_recovery_count < 3:
@@ -777,6 +818,7 @@ class QueryLoop:
                     "max_output_tokens_recovery_count": max_output_tokens_recovery_count + 1,
                     "has_attempted_reactive_compact": has_attempted_reactive_compact,
                     "max_output_tokens_override": max_output_tokens_override,
+                    "transient_api_retry_count": transient_api_retry_count,
                     "terminal": None,
                 }
             return {
@@ -785,6 +827,7 @@ class QueryLoop:
                 "max_output_tokens_recovery_count": max_output_tokens_recovery_count,
                 "has_attempted_reactive_compact": has_attempted_reactive_compact,
                 "max_output_tokens_override": max_output_tokens_override,
+                "transient_api_retry_count": transient_api_retry_count,
                 "terminal": TerminalState(
                     reason=TerminalReason.model_error,
                     turn_count=turn,
@@ -802,6 +845,7 @@ class QueryLoop:
                         "max_output_tokens_recovery_count": max_output_tokens_recovery_count,
                         "has_attempted_reactive_compact": has_attempted_reactive_compact,
                         "max_output_tokens_override": max_output_tokens_override,
+                        "transient_api_retry_count": transient_api_retry_count,
                         "terminal": None,
                     }
             if not has_attempted_reactive_compact:
@@ -813,6 +857,7 @@ class QueryLoop:
                         "max_output_tokens_recovery_count": max_output_tokens_recovery_count,
                         "has_attempted_reactive_compact": True,
                         "max_output_tokens_override": max_output_tokens_override,
+                        "transient_api_retry_count": transient_api_retry_count,
                         "terminal": None,
                     }
             return {
@@ -821,6 +866,7 @@ class QueryLoop:
                 "max_output_tokens_recovery_count": max_output_tokens_recovery_count,
                 "has_attempted_reactive_compact": has_attempted_reactive_compact,
                 "max_output_tokens_override": max_output_tokens_override,
+                "transient_api_retry_count": transient_api_retry_count,
                 "terminal": TerminalState(
                     reason=TerminalReason.prompt_too_long,
                     turn_count=turn,
@@ -829,6 +875,44 @@ class QueryLoop:
             }
 
         return None
+
+    @staticmethod
+    def _parse_context_overflow_override(error_message: str) -> int | None:
+        match = re.search(
+            r"input length and `max_tokens` exceed context limit: (\d+) \+ (\d+) > (\d+)",
+            error_message,
+        )
+        if match is None:
+            return None
+        input_tokens = int(match.group(1))
+        context_limit = int(match.group(3))
+        available_context = max(0, context_limit - input_tokens - _CONTEXT_OVERFLOW_SAFETY_BUFFER)
+        if available_context < _FLOOR_OUTPUT_TOKENS:
+            return None
+        return max(_FLOOR_OUTPUT_TOKENS, available_context)
+
+    @staticmethod
+    def _is_transient_api_error(exc: Exception, error_text: str) -> bool:
+        status = getattr(exc, "status", None)
+        return status in {429, 529} or '"type":"overloaded_error"' in error_text
+
+    @staticmethod
+    def _retry_delay_seconds(exc: Exception, transient_api_retry_count: int) -> float:
+        headers = getattr(exc, "headers", None) or {}
+        # @@@retry-after-shape
+        # Test doubles use plain dict headers while SDK errors expose a Headers-like
+        # object. Keep this probe shape-tolerant so the loop can honor retry-after
+        # without forcing a specific exception class.
+        if hasattr(headers, "get"):
+            retry_after = headers.get("retry-after")
+        else:
+            retry_after = None
+        try:
+            if retry_after is not None:
+                return max(0.0, float(retry_after))
+        except (TypeError, ValueError):
+            pass
+        return _TRANSIENT_API_BASE_DELAY_SECONDS * (2**transient_api_retry_count)
 
     def _handle_truncated_response_recovery(
         self,
