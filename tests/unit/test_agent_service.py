@@ -16,6 +16,7 @@ from core.runtime.state import AppState, BootstrapConfig, ToolUseContext
 from sandbox.manager import SandboxManager
 from sandbox.providers.local import LocalSessionProvider
 from sandbox.thread_context import get_current_thread_id, set_current_messages, set_current_thread_id
+from storage.contracts import EntityRow
 
 
 class _FakeRegistry:
@@ -29,6 +30,55 @@ class _FakeAgentRegistry:
 
     async def update_status(self, agent_id: str, status: str):
         self.last_status = (agent_id, status)
+
+
+class _FakeThreadRepo:
+    def __init__(self, rows: dict[str, dict] | None = None):
+        self.rows = rows or {}
+        self.created: list[dict] = []
+
+    def get_by_id(self, thread_id: str):
+        return self.rows.get(thread_id)
+
+    def get_next_branch_index(self, member_id: str) -> int:
+        branch_indexes = [int(row["branch_index"]) for row in self.rows.values() if row["member_id"] == member_id]
+        return (max(branch_indexes) if branch_indexes else 0) + 1
+
+    def create(self, thread_id: str, member_id: str, sandbox_type: str, cwd: str | None, created_at: float, **extra):
+        row = {
+            "id": thread_id,
+            "member_id": member_id,
+            "sandbox_type": sandbox_type,
+            "cwd": cwd,
+            "model": extra.get("model"),
+            "is_main": bool(extra.get("is_main", False)),
+            "branch_index": int(extra["branch_index"]),
+            "created_at": created_at,
+        }
+        self.rows[thread_id] = row
+        self.created.append(row)
+
+
+class _FakeEntityRepo:
+    def __init__(self):
+        self.rows_by_thread: dict[str, EntityRow] = {}
+
+    def create(self, row: EntityRow):
+        self.rows_by_thread[row.thread_id] = row
+
+    def get_by_thread_id(self, thread_id: str):
+        return self.rows_by_thread.get(thread_id)
+
+
+class _FakeMemberRepo:
+    def __init__(self, names: dict[str, str]):
+        self._names = names
+
+    def get_by_id(self, member_id: str):
+        name = self._names.get(member_id)
+        if name is None:
+            return None
+        return SimpleNamespace(id=member_id, name=name, avatar=None)
 
 
 class _FakeChildAgent:
@@ -836,3 +886,106 @@ async def test_run_agent_reuses_parent_lease_for_child_thread_terminal(monkeypat
     assert created
     assert observed["child_terminal_id"] != parent_terminal_id
     assert observed["child_lease_id"] == parent_lease_id
+
+
+@pytest.mark.asyncio
+async def test_run_agent_inherits_parent_sandbox_when_forking_child(monkeypatch, tmp_path):
+    captured: dict[str, object] = {}
+
+    def fake_create_leon_agent(*, model_name, workspace_root, **kwargs):
+        captured["model_name"] = model_name
+        captured["workspace_root"] = Path(workspace_root)
+        captured["sandbox"] = kwargs.get("sandbox")
+        return _FakeChildAgent(Path(workspace_root), model_name)
+
+    monkeypatch.setattr("core.runtime.agent.create_leon_agent", fake_create_leon_agent)
+
+    service = AgentService(
+        tool_registry=_FakeRegistry(),
+        agent_registry=_FakeAgentRegistry(),
+        workspace_root=tmp_path,
+        model_name="gpt-test",
+    )
+    service._parent_bootstrap = BootstrapConfig(
+        workspace_root=Path("/home/daytona"),
+        original_cwd=Path("/home/daytona"),
+        project_root=Path("/home/daytona"),
+        cwd=Path("/home/daytona"),
+        model_name="gpt-parent",
+        sandbox_type="daytona_selfhost",
+    )
+
+    result = await service._run_agent(
+        task_id="task-1",
+        agent_name="child",
+        thread_id="subagent-1",
+        prompt="do work",
+        subagent_type="general",
+        max_turns=None,
+        fork_context=False,
+    )
+
+    assert result == "(Agent completed with no text output)"
+    assert captured["workspace_root"] == Path("/home/daytona")
+    assert captured["sandbox"] == "daytona_selfhost"
+
+
+@pytest.mark.asyncio
+async def test_handle_agent_registers_subagent_thread_metadata_before_return(monkeypatch, tmp_path):
+    def fake_create_leon_agent(*, model_name, workspace_root, **kwargs):
+        return _FakeChildAgent(Path(workspace_root), model_name)
+
+    monkeypatch.setattr("core.runtime.agent.create_leon_agent", fake_create_leon_agent)
+
+    thread_repo = _FakeThreadRepo(
+        rows={
+            "parent-thread": {
+                "id": "parent-thread",
+                "member_id": "member-1",
+                "sandbox_type": "daytona_selfhost",
+                "cwd": "/home/daytona",
+                "model": "gpt-parent",
+                "is_main": True,
+                "branch_index": 0,
+                "created_at": 1.0,
+            }
+        }
+    )
+    entity_repo = _FakeEntityRepo()
+    member_repo = _FakeMemberRepo({"member-1": "Toad"})
+    service = AgentService(
+        tool_registry=_FakeRegistry(),
+        agent_registry=_FakeAgentRegistry(),
+        workspace_root=tmp_path,
+        model_name="gpt-test",
+        thread_repo=thread_repo,
+        entity_repo=entity_repo,
+        member_repo=member_repo,
+    )
+
+    set_current_thread_id("parent-thread")
+    try:
+        raw = await service._handle_agent(
+            prompt="do work",
+            name="worker-1",
+            run_in_background=True,
+        )
+        payload = __import__("json").loads(raw)
+        child_thread_id = payload["thread_id"]
+
+        child_thread = thread_repo.get_by_id(child_thread_id)
+        child_entity = entity_repo.get_by_thread_id(child_thread_id)
+
+        assert child_thread is not None
+        assert child_thread["member_id"] == "member-1"
+        assert child_thread["sandbox_type"] == "daytona_selfhost"
+        assert child_thread["cwd"] == "/home/daytona"
+        assert child_thread["is_main"] is False
+        assert child_thread["branch_index"] == 1
+        assert child_entity is not None
+        assert child_entity.id == child_thread_id
+        assert child_entity.member_id == "member-1"
+        assert child_entity.name == "worker-1"
+    finally:
+        await service.cleanup_background_runs()
+        set_current_thread_id("")

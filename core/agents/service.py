@@ -12,6 +12,7 @@ import asyncio
 import json
 import logging
 import os
+import time
 import uuid
 from pathlib import Path
 from typing import Any
@@ -25,6 +26,7 @@ from core.runtime.middleware.queue.formatters import (
 )
 from core.runtime.registry import ToolEntry, ToolMode, ToolRegistry
 from core.runtime.state import ToolUseContext
+from storage.contracts import EntityRow
 
 logger = logging.getLogger(__name__)
 
@@ -303,12 +305,18 @@ class AgentService:
         queue_manager: Any | None = None,
         shared_runs: dict[str, BackgroundRun] | None = None,
         background_progress_interval_s: float = 30.0,
+        thread_repo: Any = None,
+        entity_repo: Any = None,
+        member_repo: Any = None,
     ):
         self._agent_registry = agent_registry
         self._workspace_root = workspace_root
         self._model_name = model_name
         self._queue_manager = queue_manager
         self._background_progress_interval_s = background_progress_interval_s
+        self._thread_repo = thread_repo
+        self._entity_repo = entity_repo
+        self._member_repo = member_repo
         # Shared with CommandService so TaskOutput covers both bash and agent runs.
         self._tasks: dict[str, BackgroundRun] = shared_runs if shared_runs is not None else {}
 
@@ -355,6 +363,59 @@ class AgentService:
             )
         )
 
+    @staticmethod
+    def _normalize_child_sandbox(sandbox_type: str | None) -> str | None:
+        return None if not sandbox_type or sandbox_type == "local" else sandbox_type
+
+    def _ensure_subagent_thread_metadata(
+        self,
+        *,
+        thread_id: str,
+        parent_thread_id: str | None,
+        agent_name: str,
+        model_name: str,
+    ) -> None:
+        if self._thread_repo is None or self._entity_repo is None or self._member_repo is None or not parent_thread_id:
+            return
+        if self._thread_repo.get_by_id(thread_id) is not None:
+            return
+
+        parent_thread = self._thread_repo.get_by_id(parent_thread_id)
+        if parent_thread is None:
+            return
+
+        member_id = parent_thread["member_id"]
+        member = self._member_repo.get_by_id(member_id)
+        if member is None:
+            return
+
+        created_at = time.time()
+        branch_index = self._thread_repo.get_next_branch_index(member_id)
+        sandbox_type = parent_thread.get("sandbox_type") or "local"
+        cwd = parent_thread.get("cwd")
+        self._thread_repo.create(
+            thread_id=thread_id,
+            member_id=member_id,
+            sandbox_type=sandbox_type,
+            cwd=cwd,
+            created_at=created_at,
+            model=model_name or parent_thread.get("model"),
+            is_main=False,
+            branch_index=branch_index,
+        )
+
+        if self._entity_repo.get_by_thread_id(thread_id) is None:
+            self._entity_repo.create(
+                EntityRow(
+                    id=thread_id,
+                    type="agent",
+                    member_id=member_id,
+                    name=agent_name,
+                    thread_id=thread_id,
+                    created_at=created_at,
+                )
+            )
+
     async def _handle_agent(
         self,
         prompt: str,
@@ -385,6 +446,12 @@ class AgentService:
             subagent_type=subagent_type,
         )
         await self._agent_registry.register(entry)
+        self._ensure_subagent_thread_metadata(
+            thread_id=thread_id,
+            parent_thread_id=parent_thread_id,
+            agent_name=agent_name,
+            model_name=model or self._model_name,
+        )
 
         # Create async task (independent LeonAgent runs inside)
         task = asyncio.create_task(
@@ -457,6 +524,12 @@ class AgentService:
         from sandbox.thread_context import get_current_thread_id, set_current_thread_id
 
         parent_thread_id = get_current_thread_id()
+        self._ensure_subagent_thread_metadata(
+            thread_id=thread_id,
+            parent_thread_id=parent_thread_id,
+            agent_name=agent_name,
+            model_name=model or self._model_name,
+        )
 
         # emit_fn is set if EventBus is available; used for task lifecycle SSE events
         emit_fn = None
@@ -513,6 +586,7 @@ class AgentService:
                     agent = create_leon_agent(
                         model_name=selected_model,
                         workspace_root=child_bootstrap.workspace_root,
+                        sandbox=self._normalize_child_sandbox(getattr(child_bootstrap, "sandbox_type", None)),
                         agent=agent_name_for_role,
                         extra_blocked_tools=extra_blocked,
                         allowed_tools=allowed,
@@ -536,6 +610,7 @@ class AgentService:
                     agent = create_leon_agent(
                         model_name=selected_model,
                         workspace_root=child_bootstrap.workspace_root,
+                        sandbox=self._normalize_child_sandbox(getattr(child_bootstrap, "sandbox_type", None)),
                         agent=agent_name_for_role,
                         extra_blocked_tools=extra_blocked,
                         allowed_tools=allowed,
@@ -566,6 +641,9 @@ class AgentService:
                 agent = create_leon_agent(
                     model_name=selected_model,
                     workspace_root=self._workspace_root,
+                    sandbox=self._normalize_child_sandbox(
+                        getattr(parent_tool_context.bootstrap, "sandbox_type", None) if parent_tool_context else None
+                    ),
                     agent=agent_name_for_role,
                     extra_blocked_tools=extra_blocked,
                     allowed_tools=allowed,

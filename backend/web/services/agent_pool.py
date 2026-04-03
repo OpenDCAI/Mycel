@@ -23,6 +23,9 @@ def create_agent_sync(
     workspace_root: Path | None = None,
     model_name: str | None = None,
     agent: str | None = None,
+    thread_repo: Any = None,
+    entity_repo: Any = None,
+    member_repo: Any = None,
     queue_manager: Any = None,
     chat_repos: dict | None = None,
     extra_allowed_paths: list[str] | None = None,
@@ -41,6 +44,9 @@ def create_agent_sync(
         workspace_root=workspace_root or Path.cwd(),
         sandbox=sandbox_name if sandbox_name != "local" else None,
         storage_container=storage_container,
+        thread_repo=thread_repo,
+        entity_repo=entity_repo,
+        member_repo=member_repo,
         queue_manager=queue_manager,
         chat_repos=chat_repos,
         verbose=True,
@@ -145,7 +151,17 @@ async def get_or_create_agent(app_obj: FastAPI, sandbox_type: str, thread_id: st
         # @@@ agent-init-thread - LeonAgent.__init__ uses run_until_complete, must run in thread
         qm = getattr(app_obj.state, "queue_manager", None)
         agent_obj = await asyncio.to_thread(
-            create_agent_sync, sandbox_type, workspace_root, model_name, agent_name, qm, chat_repos, extra_allowed_paths
+            create_agent_sync,
+            sandbox_type,
+            workspace_root,
+            model_name,
+            agent_name,
+            getattr(app_obj.state, "thread_repo", None),
+            getattr(app_obj.state, "entity_repo", None),
+            getattr(app_obj.state, "member_repo", None),
+            qm,
+            chat_repos,
+            extra_allowed_paths,
         )
         member = agent_name or "leon"
         agent_id = get_or_create_agent_id(

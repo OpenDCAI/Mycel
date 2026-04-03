@@ -29,6 +29,7 @@ def fork_context(parent: BootstrapConfig) -> BootstrapConfig:
         cwd=parent.cwd,
         model_name=parent.model_name,
         api_key=parent.api_key,
+        sandbox_type=parent.sandbox_type,
         block_dangerous_commands=parent.block_dangerous_commands,
         block_network_commands=parent.block_network_commands,
         enable_audit_log=parent.enable_audit_log,

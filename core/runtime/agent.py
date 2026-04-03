@@ -165,6 +165,9 @@ class LeonAgent:
         jina_api_key: str | None = None,
         sandbox: Any = None,
         storage_container: StorageContainer | None = None,
+        thread_repo: Any = None,
+        entity_repo: Any = None,
+        member_repo: Any = None,
         queue_manager: MessageQueueManager | None = None,
         chat_repos: dict | None = None,
         extra_allowed_paths: list[str] | None = None,
@@ -186,6 +189,9 @@ class LeonAgent:
             enable_audit_log: Whether to enable audit logging
             enable_web_tools: Whether to enable web search and content fetching tools
             sandbox: Sandbox instance, name string, or None for local
+            thread_repo: Optional thread metadata repo for backend-integrated subagent registration
+            entity_repo: Optional entity repo for backend-integrated subagent registration
+            member_repo: Optional member repo for backend-integrated subagent registration
             queue_manager: Shared MessageQueueManager instance (created if not provided)
             verbose: Whether to output detailed logs (default False)
         """
@@ -194,12 +200,17 @@ class LeonAgent:
         self.extra_allowed_paths = extra_allowed_paths
         self.queue_manager = queue_manager or MessageQueueManager()
         self._chat_repos: dict | None = chat_repos
+        self._thread_repo = thread_repo
+        self._entity_repo = entity_repo
+        self._member_repo = member_repo
+        requested_sandbox_name = sandbox if isinstance(sandbox, str) else getattr(sandbox, "name", None)
         self._explicit_model_name = model_name is not None
 
         # New config system mode
         self.config, self.models_config = self._load_config(
             agent_name=agent,
             workspace_root=workspace_root,
+            sandbox_name=requested_sandbox_name,
             model_name=model_name,
             api_key=api_key,
             allowed_file_extensions=allowed_file_extensions,
@@ -304,6 +315,7 @@ class LeonAgent:
             cwd=self.workspace_root,
             model_name=self.model_name,
             api_key=self.api_key,
+            sandbox_type=self._sandbox.name,
             block_dangerous_commands=self.block_dangerous_commands,
             block_network_commands=self.block_network_commands,
             enable_audit_log=self.enable_audit_log,
@@ -469,6 +481,7 @@ class LeonAgent:
         self,
         agent_name: str | None,
         workspace_root: str | Path | None,
+        sandbox_name: str | None,
         model_name: str | None,
         api_key: str | None,
         allowed_file_extensions: list[str] | None,
@@ -484,8 +497,14 @@ class LeonAgent:
         """
         # Build CLI overrides for runtime config
         cli_overrides: dict = {}
+        use_workspace_override = sandbox_name in (None, "", "local")
 
-        if workspace_root is not None:
+        if workspace_root is not None and use_workspace_override:
+            # @@@remote-sandbox-config-root
+            # Remote child agents may inherit a sandbox cwd like /home/daytona,
+            # which is valid inside the sandbox but not on the host. Feeding that
+            # path into LeonSettings makes config validation fail before sandbox
+            # init ever runs, so only local sandboxes pin workspace_root here.
             cli_overrides["workspace_root"] = str(workspace_root)
 
         # Runtime overrides go into "runtime" section
@@ -1085,6 +1104,9 @@ class LeonAgent:
             agent_registry=self._agent_registry,
             workspace_root=self.workspace_root,
             model_name=self.model_name,
+            thread_repo=self._thread_repo,
+            entity_repo=self._entity_repo,
+            member_repo=self._member_repo,
             queue_manager=self.queue_manager,
             shared_runs=self._background_runs,
         )
