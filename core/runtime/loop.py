@@ -1525,8 +1525,10 @@ class QueryLoop:
     # -------------------------------------------------------------------------
 
     @staticmethod
-    def _parse_input(input: dict) -> list:
+    def _parse_input(input: dict | None) -> list:
         """Convert input dict to list of LangChain message objects."""
+        if input is None:
+            return []
         raw_messages = input.get("messages", [])
         result = []
         for msg in raw_messages:

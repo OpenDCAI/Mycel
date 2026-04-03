@@ -491,6 +491,53 @@ async def test_query_loop_aupdate_state_applies_remove_and_insert_message_repair
 
 
 @pytest.mark.asyncio
+async def test_query_loop_astream_none_resumes_after_state_injection():
+    model = MagicMock()
+    model.bind_tools.return_value = model
+    model.ainvoke = AsyncMock(
+        side_effect=[
+            AIMessage(content="first answer"),
+            AIMessage(content="resumed answer"),
+        ]
+    )
+    checkpointer = _MemoryCheckpointer()
+    loop = QueryLoop(
+        model=model,
+        system_prompt=SystemMessage(content="You are a test assistant."),
+        middleware=[],
+        checkpointer=checkpointer,
+        registry=make_registry(),
+        app_state=AppState(),
+        runtime=None,
+        bootstrap=BootstrapConfig(workspace_root=Path("/tmp"), model_name="test-model"),
+        max_turns=10,
+    )
+    config = {"configurable": {"thread_id": "resume-stream-thread"}}
+
+    async for _ in loop.query(
+        {"messages": [{"role": "user", "content": "first"}]},
+        config=config,
+    ):
+        pass
+
+    await loop.aupdate_state(
+        config,
+        {"messages": [HumanMessage(content="followup")]},
+        as_node="__start__",
+    )
+
+    events = []
+    async for event in loop.astream(None, config=config):
+        events.append(event)
+
+    assert any(
+        msg.content == "resumed answer"
+        for event in events
+        for msg in event.get("agent", {}).get("messages", [])
+    )
+
+
+@pytest.mark.asyncio
 async def test_query_loop_aclear_deletes_persisted_summary_for_thread():
     db_path = Path(tempfile.mkdtemp()) / "memory.db"
     mm = MemoryMiddleware(db_path=db_path)
