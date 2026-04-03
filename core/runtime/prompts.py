@@ -72,23 +72,6 @@ def build_rules_section(
         """4. **Tool Priority**: When a built-in tool and an MCP tool (`mcp__*`) have the same functionality, use the built-in tool."""
     )
 
-    # Rule 5: Dedicated tools over shell
-    rules.append("""5. **Use Dedicated Tools Instead of Shell Commands**: Do NOT use `Bash` for tasks that have dedicated tools:
-   - File search → use `Grep` (NOT `rg`, `grep`, or `find` via Bash)
-   - File listing → use `Glob` (NOT `find` or `ls` via Bash)
-   - File reading → use `Read` (NOT `cat`, `head`, `tail` via Bash)
-   - File editing → use `Edit` (NOT `sed` or `awk` via Bash)
-   - Reserve `Bash` for: git, package managers, build tools, tests, and other system operations.""")
-
-    # Rule 6: Background task description
-    rules.append("""6. **Background Task Description**: When using `Bash` or `Agent` with `run_in_background: true`, always include a clear `description` parameter.
-   - The description is shown to the user in the background task indicator.
-   - Keep it concise (5–10 words), action-oriented, e.g. "Run test suite", "Analyze API codebase".
-   - Without a description, the raw command or agent name is shown, which is hard to read.""")
-
-    # Rule 7: Deferred tools
-    rules.append("7. **Deferred Tools**: Some tools are available but not shown by default. Use `tool_search` to discover them by name or keyword.")
-
     return "\n\n".join(rules)
 
 

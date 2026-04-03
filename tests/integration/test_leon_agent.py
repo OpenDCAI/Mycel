@@ -273,6 +273,24 @@ async def test_leon_agent_clear_thread_invalidates_prompt_section_cache(tmp_path
         agent.close()
 
 
+def test_build_rules_section_omits_tool_specific_usage_lore():
+    from core.runtime.prompts import build_rules_section
+
+    rules = build_rules_section(
+        is_sandbox=False,
+        working_dir="/repo",
+        workspace_root="/repo",
+    )
+
+    assert "**Workspace**" in rules
+    assert "**Absolute Paths**" in rules
+    assert "**Security**" in rules
+    assert "**Tool Priority**" in rules
+    assert "Use Dedicated Tools Instead of Shell Commands" not in rules
+    assert "Background Task Description" not in rules
+    assert "**Deferred Tools**" not in rules
+
+
 @pytest.mark.asyncio
 @_patch_env_api_key()
 async def test_leon_agent_session_start_hook_runs_on_ainit(tmp_path):
