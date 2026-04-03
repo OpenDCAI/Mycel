@@ -359,7 +359,7 @@ class AgentService:
                 schema=SEND_MESSAGE_SCHEMA,
                 handler=self._handle_send_message,
                 source="AgentService",
-                search_hint="send message running agent mailbox queue",
+                search_hint="send message running agent delivery queue",
             )
         )
 
@@ -879,7 +879,7 @@ class AgentService:
         stop_event: asyncio.Event,
     ) -> None:
         # @@@sa-06-progress-loop - keep prompt-facing coordinator updates on the
-        # real queue path instead of inventing a detached mailbox abstraction.
+        # real thread delivery queue instead of inventing a detached parallel channel.
         while True:
             try:
                 await asyncio.wait_for(stop_event.wait(), timeout=self._background_progress_interval_s)

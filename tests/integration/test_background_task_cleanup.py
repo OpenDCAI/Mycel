@@ -125,6 +125,22 @@ def test_taskstop_terminates_real_background_bash_run(tmp_path):
     asyncio.run(run())
 
 
+def test_sendmessage_search_hint_uses_queue_naming(tmp_path):
+    registry = ToolRegistry()
+    service = AgentService(
+        tool_registry=registry,
+        agent_registry=_FakeAgentRegistry(),
+        workspace_root=Path(tmp_path),
+        model_name="gpt-test",
+    )
+
+    entry = registry.get("SendMessage")
+
+    assert entry is not None
+    assert "queue" in entry.search_hint
+    assert "mailbox" not in entry.search_hint
+
+
 @pytest.mark.asyncio
 async def test_sendmessage_enqueues_real_agent_notification_for_target_thread(tmp_path):
     registry = ToolRegistry()
@@ -183,7 +199,7 @@ async def test_sendmessage_reaches_target_next_turn_via_steering_middleware(tmp_
 
     await service._handle_send_message(
         target_name="worker-1",
-        message="mailbox payload",
+        message="queue payload",
         sender_name="coordinator",
     )
 
@@ -196,7 +212,7 @@ async def test_sendmessage_reaches_target_next_turn_via_steering_middleware(tmp_
     assert injected is not None
     messages = injected["messages"]
     assert len(messages) == 1
-    assert "mailbox payload" in str(messages[0].content)
+    assert "queue payload" in str(messages[0].content)
     assert messages[0].metadata["notification_type"] == "agent"
     assert messages[0].metadata["sender_name"] == "coordinator"
 
