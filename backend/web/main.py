@@ -13,9 +13,9 @@ if _env_file:
 
     load_dotenv(_env_file, override=False)
 
-import uvicorn
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
+import uvicorn  # noqa: E402
+from fastapi import FastAPI  # noqa: E402
+from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
 
 
 def _ensure_windows_db_env_defaults() -> None:
