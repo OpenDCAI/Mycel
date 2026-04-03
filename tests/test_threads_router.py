@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from backend.web.models.requests import CreateThreadRequest
 from backend.web.routers import threads as threads_router
+from core.runtime.middleware.monitor import AgentState
 from storage.contracts import MemberRow, MemberType
 
 
@@ -99,6 +100,20 @@ class _FakePermissionAgent:
             return False
         self.pending = []
         return True
+
+
+class _NullLock:
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, exc_type, exc, tb):
+        return False
+
+
+class _FakeClearAgent:
+    def __init__(self, state: AgentState = AgentState.IDLE) -> None:
+        self.runtime = SimpleNamespace(current_state=state)
+        self.aclear_thread = AsyncMock()
 
 
 @pytest.mark.asyncio
@@ -237,3 +252,69 @@ async def test_resolve_thread_permission_request_404s_missing_request():
     assert exc_info.value.status_code == 404
     assert exc_info.value.detail == "Permission request not found"
     agent.agent.apersist_state.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_clear_thread_route_clears_agent_state_and_thread_buffers():
+    agent = _FakeClearAgent()
+    display_builder = SimpleNamespace(clear=MagicMock())
+    queue_manager = SimpleNamespace(clear_all=MagicMock())
+    app = SimpleNamespace(
+        state=SimpleNamespace(
+            agent_pool={},
+            display_builder=display_builder,
+            queue_manager=queue_manager,
+            thread_event_buffers={"thread-1": object()},
+        )
+    )
+
+    with (
+        patch.object(threads_router, "resolve_thread_sandbox", return_value="local"),
+        patch.object(threads_router, "get_or_create_agent", AsyncMock(return_value=agent)),
+        patch.object(threads_router, "get_thread_lock", AsyncMock(return_value=_NullLock())),
+    ):
+        result = await threads_router.clear_thread_history(
+            "thread-1",
+            user_id="owner-1",
+            app=app,
+        )
+
+    assert result == {"ok": True, "thread_id": "thread-1"}
+    agent.aclear_thread.assert_awaited_once_with("thread-1")
+    display_builder.clear.assert_called_once_with("thread-1")
+    queue_manager.clear_all.assert_called_once_with("thread-1")
+    assert app.state.thread_event_buffers == {}
+
+
+@pytest.mark.asyncio
+async def test_clear_thread_route_rejects_active_run():
+    agent = _FakeClearAgent(state=AgentState.ACTIVE)
+    display_builder = SimpleNamespace(clear=MagicMock())
+    queue_manager = SimpleNamespace(clear_all=MagicMock())
+    app = SimpleNamespace(
+        state=SimpleNamespace(
+            agent_pool={},
+            display_builder=display_builder,
+            queue_manager=queue_manager,
+            thread_event_buffers={"thread-1": object()},
+        )
+    )
+
+    with (
+        patch.object(threads_router, "resolve_thread_sandbox", return_value="local"),
+        patch.object(threads_router, "get_or_create_agent", AsyncMock(return_value=agent)),
+        patch.object(threads_router, "get_thread_lock", AsyncMock(return_value=_NullLock())),
+    ):
+        with pytest.raises(threads_router.HTTPException) as exc_info:
+            await threads_router.clear_thread_history(
+                "thread-1",
+                user_id="owner-1",
+                app=app,
+            )
+
+    assert exc_info.value.status_code == 409
+    assert exc_info.value.detail == "Cannot clear thread while run is in progress"
+    agent.aclear_thread.assert_not_awaited()
+    display_builder.clear.assert_not_called()
+    queue_manager.clear_all.assert_not_called()
+    assert "thread-1" in app.state.thread_event_buffers

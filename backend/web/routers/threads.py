@@ -632,6 +632,28 @@ async def delete_thread(
     return {"ok": True, "thread_id": thread_id}
 
 
+@router.post("/{thread_id}/clear")
+async def clear_thread_history(
+    thread_id: str,
+    user_id: Annotated[str, Depends(verify_thread_owner)],
+    app: Annotated[Any, Depends(get_app)] = None,
+) -> dict[str, Any]:
+    """Clear replayable thread history while preserving the thread itself."""
+    sandbox_type = resolve_thread_sandbox(app, thread_id)
+
+    lock = await get_thread_lock(app, thread_id)
+    async with lock:
+        agent = await get_or_create_agent(app, sandbox_type, thread_id=thread_id)
+        if hasattr(agent, "runtime") and agent.runtime.current_state == AgentState.ACTIVE:
+            raise HTTPException(status_code=409, detail="Cannot clear thread while run is in progress")
+        await agent.aclear_thread(thread_id)
+
+    app.state.display_builder.clear(thread_id)
+    app.state.thread_event_buffers.pop(thread_id, None)
+    app.state.queue_manager.clear_all(thread_id)
+    return {"ok": True, "thread_id": thread_id}
+
+
 @router.post("/{thread_id}/messages")
 async def send_message(
     thread_id: str,

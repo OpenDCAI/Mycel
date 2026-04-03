@@ -1,4 +1,4 @@
-import { ChevronLeft, PanelLeft, Pause, Play } from "lucide-react";
+import { ChevronLeft, Eraser, PanelLeft, Pause, Play } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import type { SandboxInfo } from "../api";
 import { useIsMobile } from "../hooks/use-mobile";
@@ -24,6 +24,8 @@ interface HeaderProps {
   onToggleSidebar: () => void;
   onPauseSandbox: () => void;
   onResumeSandbox: () => void;
+  onClearThread?: () => void;
+  clearDisabled?: boolean;
   onModelChange?: (model: string) => void;
 }
 
@@ -35,6 +37,8 @@ export default function Header({
   onToggleSidebar,
   onPauseSandbox,
   onResumeSandbox,
+  onClearThread,
+  clearDisabled = false,
   onModelChange,
 }: HeaderProps) {
   const isMobile = useIsMobile();
@@ -90,6 +94,18 @@ export default function Header({
           threadId={activeThreadId}
           onModelChange={onModelChange}
         />
+
+        {activeThreadId && (
+          <button
+            className="px-3 py-1.5 rounded-lg text-xs flex items-center gap-2 border border-border text-foreground-secondary hover:bg-muted hover:text-foreground disabled:opacity-50 disabled:pointer-events-none"
+            onClick={onClearThread}
+            disabled={clearDisabled}
+            title="清空当前线程历史"
+          >
+            <Eraser className="w-3.5 h-3.5" />
+            清空
+          </button>
+        )}
 
         {hasRemote && sandboxInfo?.status === "running" && (
           <button
