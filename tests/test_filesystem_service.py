@@ -333,3 +333,56 @@ def test_concurrent_edits_do_not_both_commit_from_same_stale_read(tmp_path: Path
     assert success_count == 1
     assert failure_count == 1
     assert len(backend.writes) == 1
+
+
+def test_remote_edit_does_not_trust_false_negative_exists_probe(tmp_path: Path):
+    class FlakyRemoteBackend(FileSystemBackend):
+        is_remote = True
+
+        def __init__(self):
+            self._content = "result = 3\n"
+            self.writes: list[str] = []
+
+        def read_file(self, path: str) -> FileReadResult:
+            return FileReadResult(content=self._content, size=len(self._content))
+
+        def write_file(self, path: str, content: str) -> FileWriteResult:
+            self.writes.append(content)
+            self._content = content
+            return FileWriteResult(success=True)
+
+        def file_exists(self, path: str) -> bool:
+            return False
+
+        def file_mtime(self, path: str) -> float | None:
+            return None
+
+        def file_size(self, path: str) -> int | None:
+            return len(self._content.encode("utf-8"))
+
+        def is_dir(self, path: str) -> bool:
+            return False
+
+        def list_dir(self, path: str) -> DirListResult:
+            return DirListResult(entries=[])
+
+    backend = FlakyRemoteBackend()
+    service = FileSystemService(
+        registry=ToolRegistry(),
+        workspace_root=Path("/home/daytona"),
+        backend=backend,
+    )
+    target = Path("/home/daytona/interleave.py")
+    service._read_files.set(
+        target,
+        state=service._read_files.make_state(timestamp=None, is_partial=False),
+    )
+
+    edit_result = service._edit_file(
+        str(target),
+        old_string="result = 3",
+        new_string="result = 5",
+    )
+
+    assert "File edited" in edit_result
+    assert backend.writes == ["result = 5\n"]

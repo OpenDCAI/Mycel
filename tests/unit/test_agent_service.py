@@ -88,6 +88,7 @@ class _FakeChildAgent:
         self._bootstrap = BootstrapConfig(workspace_root=workspace_root, model_name=model_name)
         self.cleanup_calls = 0
         self.closed = False
+        self.close_kwargs: dict[str, object] = {}
         self._agent_service = SimpleNamespace(
             _parent_bootstrap=None,
             _parent_tool_context=None,
@@ -106,8 +107,9 @@ class _FakeChildAgent:
     async def _cleanup_background_runs(self):
         self.cleanup_calls += 1
 
-    def close(self):
+    def close(self, **kwargs):
         self.closed = True
+        self.close_kwargs = kwargs
         return None
 
 
@@ -973,6 +975,39 @@ async def test_run_agent_inherits_parent_sandbox_when_forking_child(monkeypatch,
     assert result == "(Agent completed with no text output)"
     assert captured["workspace_root"] == Path("/home/daytona")
     assert captured["sandbox"] == "daytona_selfhost"
+
+
+@pytest.mark.asyncio
+async def test_run_agent_child_cleanup_skips_sandbox_close(monkeypatch, tmp_path):
+    created: list[_FakeChildAgent] = []
+
+    def fake_create_leon_agent(*, model_name, workspace_root, **kwargs):
+        child = _FakeChildAgent(Path(workspace_root), model_name)
+        created.append(child)
+        return child
+
+    monkeypatch.setattr("core.runtime.agent.create_leon_agent", fake_create_leon_agent)
+
+    service = AgentService(
+        tool_registry=_FakeRegistry(),
+        agent_registry=_FakeAgentRegistry(),
+        workspace_root=tmp_path,
+        model_name="gpt-test",
+    )
+
+    result = await service._run_agent(
+        task_id="task-1",
+        agent_name="child",
+        thread_id="subagent-1",
+        prompt="do work",
+        subagent_type="general",
+        max_turns=None,
+        fork_context=False,
+    )
+
+    assert result == "(Agent completed with no text output)"
+    assert created[0].closed is True
+    assert created[0].close_kwargs == {"cleanup_sandbox": False}
 
 
 @pytest.mark.asyncio

@@ -385,6 +385,17 @@ def _ensure_thread_handlers(agent: Any, thread_id: str, app: Any) -> None:
         pass
 
 
+def _is_terminal_background_notification_message(
+    message: str,
+    *,
+    source: str | None,
+    notification_type: str | None,
+) -> bool:
+    if source != "system" or notification_type not in {"agent", "command"}:
+        return False
+    return "<task-notification>" in message or "<CommandNotification>" in message
+
+
 # ---------------------------------------------------------------------------
 # Producer: runs agent, writes events to ThreadEventBuffer
 # ---------------------------------------------------------------------------
@@ -642,6 +653,17 @@ async def _run_agent_to_buffer(
                     ),
                 }
             )
+
+        # @@@terminal-followup-notice-only - completed background agent/command
+        # notifications should surface as durable notices, not re-enter the model
+        # and append a second assistant message with the same result.
+        if _is_terminal_background_notification_message(
+            message,
+            source=src,
+            notification_type=ntype,
+        ):
+            await emit({"event": "run_done", "data": json.dumps({"thread_id": thread_id, "run_id": run_id})})
+            return
 
         if message_metadata:
             from langchain_core.messages import HumanMessage

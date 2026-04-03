@@ -821,7 +821,7 @@ class LeonAgent:
         if self.verbose:
             print(f"[LeonAgent] Observation updated: active={self._observation_config.active}")
 
-    def close(self):
+    def close(self, *, cleanup_sandbox: bool = True):
         """Clean up resources via CleanupRegistry (priority-ordered).
 
         Falls back to direct cleanup if CleanupRegistry is not initialized.
@@ -835,16 +835,19 @@ class LeonAgent:
             finally:
                 self._session_ended = True
 
-        if hasattr(self, "_cleanup_registry"):
+        if hasattr(self, "_cleanup_registry") and cleanup_sandbox:
             self._run_async_cleanup(self._cleanup_registry.run_cleanup, "CleanupRegistry")
         else:
             # Fallback for edge cases where __init__ did not complete fully
-            for step_name, step_fn in [
-                ("sandbox", self._cleanup_sandbox),
+            cleanup_steps = [
                 ("monitor", self._mark_terminated),
                 ("MCP client", self._cleanup_mcp_client),
                 ("SQLite connection", self._cleanup_sqlite_connection),
-            ]:
+            ]
+            if cleanup_sandbox:
+                cleanup_steps.insert(0, ("sandbox", self._cleanup_sandbox))
+
+            for step_name, step_fn in cleanup_steps:
                 try:
                     step_fn()
                 except Exception as e:

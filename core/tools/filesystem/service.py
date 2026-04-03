@@ -562,27 +562,8 @@ class FileSystemService:
         if not is_valid:
             return error
 
-        if not self.backend.file_exists(str(resolved)):
-            if old_string == "":
-                return self._write_file(file_path, new_string)
-            return f"File not found: {file_path}"
-
         if resolved.suffix.lower() == ".ipynb":
             return "Notebook files (.ipynb) are not supported by Edit. Use Write to overwrite the full JSON."
-
-        if old_string == "":
-            return "Cannot use empty old_string on an existing file. Use Write to replace the full file content."
-
-        file_size = self.backend.file_size(str(resolved))
-        if file_size is not None and file_size > self.max_edit_file_size:
-            return f"File too large for Edit: {file_size:,} bytes (max: {self.max_edit_file_size:,} bytes)"
-
-        staleness_error = self._check_file_staleness(resolved)
-        if staleness_error:
-            return staleness_error
-
-        if old_string == new_string:
-            return "Error: old_string and new_string are identical (no-op edit)"
 
         try:
             # @@@edit-critical-lock
@@ -590,8 +571,27 @@ class FileSystemService:
             # synchronous critical section so two stale concurrent edits cannot
             # both commit from the same prior read snapshot.
             with self._edit_critical_section:
-                raw = self.backend.read_file(str(resolved))
+                try:
+                    raw = self.backend.read_file(str(resolved))
+                except FileNotFoundError:
+                    if old_string == "":
+                        return self._write_file(file_path, new_string)
+                    return f"File not found: {file_path}"
                 content = raw.content
+
+                if old_string == "":
+                    return "Cannot use empty old_string on an existing file. Use Write to replace the full file content."
+
+                file_size = self.backend.file_size(str(resolved))
+                if file_size is not None and file_size > self.max_edit_file_size:
+                    return f"File too large for Edit: {file_size:,} bytes (max: {self.max_edit_file_size:,} bytes)"
+
+                staleness_error = self._check_file_staleness(resolved)
+                if staleness_error:
+                    return staleness_error
+
+                if old_string == new_string:
+                    return "Error: old_string and new_string are identical (no-op edit)"
 
                 # @@@edit-critical-staleness
                 # te-06 needs a second stale-read check inside the read->write

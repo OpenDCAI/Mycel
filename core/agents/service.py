@@ -831,7 +831,10 @@ class AgentService:
                     )
                     if hasattr(agent, "_agent_service") and hasattr(agent._agent_service, "cleanup_background_runs"):
                         await agent._agent_service.cleanup_background_runs()
-                    agent.close()
+                    # @@@subagent-sandbox-close-skip - Child agents can share the
+                    # parent's lease; closing the child sandbox here can pause the
+                    # shared lease mid-owner-turn.
+                    agent.close(cleanup_sandbox=False)
                 except Exception:
                     pass
 

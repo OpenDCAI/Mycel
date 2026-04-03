@@ -68,6 +68,21 @@ class _StreamingGraphAgent:
             yield None
 
 
+class _NoResumeGraphAgent(_StreamingGraphAgent):
+    def __init__(self) -> None:
+        self.astream_calls = 0
+        self.aupdate_calls = 0
+
+    async def aupdate_state(self, *_args, **_kwargs):
+        self.aupdate_calls += 1
+
+    async def astream(self, *_args, **_kwargs):
+        self.astream_calls += 1
+        if False:
+            yield None
+        return
+
+
 class _StreamingRuntime:
     current_state = AgentState.IDLE
 
@@ -324,3 +339,53 @@ async def test_run_agent_to_buffer_emits_notice_for_system_agent_notifications(m
             "notification_type": "agent",
         }
     ]
+
+
+@pytest.mark.asyncio
+async def test_run_agent_to_buffer_skips_graph_resume_for_terminal_background_notifications(monkeypatch):
+    seq = 0
+
+    async def fake_append_event(thread_id, run_id, event, message_id=None, run_event_repo=None):
+        nonlocal seq
+        seq += 1
+        return seq
+
+    async def fake_cleanup_old_runs(thread_id, keep_latest=1, run_event_repo=None):
+        return 0
+
+    monkeypatch.setattr("backend.web.services.event_store.append_event", fake_append_event)
+    monkeypatch.setattr("backend.web.services.streaming_service.cleanup_old_runs", fake_cleanup_old_runs)
+    monkeypatch.setattr("backend.web.services.streaming_service._ensure_thread_handlers", lambda *args, **kwargs: None)
+
+    graph = _NoResumeGraphAgent()
+    agent = SimpleNamespace(
+        agent=graph,
+        runtime=_StreamingRuntime(),
+        storage_container=None,
+    )
+    app = SimpleNamespace(
+        state=SimpleNamespace(
+            display_builder=DisplayBuilder(),
+            thread_tasks={},
+            thread_event_buffers={},
+            subagent_buffers={},
+            queue_manager=SimpleNamespace(peek=lambda *_: None),
+            thread_last_active={},
+            typing_tracker=None,
+        )
+    )
+    thread_buf = ThreadEventBuffer()
+
+    await _run_agent_to_buffer(
+        agent,
+        "thread-terminal-notice",
+        "<system-reminder><task-notification><status>completed</status><result>BG_SEEN:RESULT:3</result></task-notification></system-reminder>",
+        app,
+        False,
+        thread_buf,
+        "run-terminal-notice",
+        message_metadata={"source": "system", "notification_type": "agent"},
+    )
+
+    assert graph.astream_calls == 0
+    assert graph.aupdate_calls == 0
