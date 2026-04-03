@@ -5,6 +5,7 @@ import copy
 import inspect
 import json
 import logging
+import threading
 from collections.abc import Awaitable, Callable
 from typing import Any
 
@@ -206,6 +207,32 @@ class ToolRunner(AgentMiddleware):
             metadata={"decision": decision, "error_type": "permission_resolution"},
         )
 
+    @staticmethod
+    def _run_awaitable_sync(awaitable):
+        try:
+            asyncio.get_running_loop()
+        except RuntimeError:
+            return asyncio.run(awaitable)
+
+        result_box: list[Any] = []
+        error_box: list[BaseException] = []
+
+        # @@@sync-awaitable-bridge - sync tool entrypoints still need to consume
+        # async permission checkers even when called from a live event loop.
+        def _runner() -> None:
+            try:
+                result_box.append(asyncio.run(awaitable))
+            except BaseException as exc:  # pragma: no cover - re-raised below
+                error_box.append(exc)
+
+        thread = threading.Thread(target=_runner, daemon=True)
+        thread.start()
+        thread.join()
+
+        if error_box:
+            raise error_box[0]
+        return result_box[0] if result_box else None
+
     def _run_tool_specific_validation_sync(self, entry, args: dict, request: ToolCallRequest) -> dict:
         validator = getattr(entry, "validate_input", None)
         if validator is None:
@@ -325,9 +352,39 @@ class ToolRunner(AgentMiddleware):
             is_destructive=bool(getattr(entry, "is_destructive", False)),
         )
         if callable(checker):
-            rule_permission, rule_message = self._coerce_permission_response(
-                checker(name, args, permission_context, request)
-            )
+            result = checker(name, args, permission_context, request)
+            if asyncio.iscoroutine(result):
+                result = self._run_awaitable_sync(result)
+            rule_permission, rule_message = self._coerce_permission_response(result)
+
+        if hook_permission == "allow":
+            if rule_permission in {"deny", "ask"}:
+                return self._permission_denied_result(rule_permission, rule_message)
+            return None
+
+        if rule_permission in {"deny", "ask"}:
+            return self._permission_denied_result(rule_permission, rule_message)
+        return None
+
+    async def _resolve_permission_async(self, request: ToolCallRequest, *, name: str, args: dict, entry, hook_permission: str | None, hook_message: str | None) -> ToolResultEnvelope | None:
+        if hook_permission == "deny":
+            return self._permission_denied_result("deny", hook_message)
+
+        state = getattr(request, "state", None)
+        checker = None
+        if state is not None:
+            checker = state.get("can_use_tool") if isinstance(state, dict) else getattr(state, "can_use_tool", None)
+        rule_permission: str | None = None
+        rule_message: str | None = None
+        permission_context = ToolPermissionContext(
+            is_read_only=bool(getattr(entry, "is_read_only", False)),
+            is_destructive=bool(getattr(entry, "is_destructive", False)),
+        )
+        if callable(checker):
+            result = checker(name, args, permission_context, request)
+            if asyncio.iscoroutine(result):
+                result = await result
+            rule_permission, rule_message = self._coerce_permission_response(result)
 
         if hook_permission == "allow":
             if rule_permission in {"deny", "ask"}:
@@ -516,7 +573,7 @@ class ToolRunner(AgentMiddleware):
             args=args,
             entry=entry,
         )
-        permission_result = self._resolve_permission(
+        permission_result = await self._resolve_permission_async(
             request,
             name=name,
             args=args,

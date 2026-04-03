@@ -1044,6 +1044,104 @@ class TestToolRunnerErrorNormalization:
         assert seen == [(True, True, False)]
 
     @pytest.mark.asyncio
+    async def test_async_permission_checker_is_awaited_before_handler(self):
+        seen = []
+
+        def handler():
+            seen.append("handler")
+            raise AssertionError("handler should not run when async permission denies")
+
+        entry = ToolEntry(
+            name="Write",
+            mode=ToolMode.INLINE,
+            schema={"name": "Write", "parameters": {"type": "object", "required": [], "properties": {}}},
+            handler=handler,
+            source="test",
+        )
+        runner = _make_runner([entry])
+        req = _make_tool_call_request("Write", {})
+        req.state = MagicMock()
+
+        async def can_use_tool(name, args, context, request):
+            seen.append("checker")
+            return {"decision": "deny", "message": "async deny"}
+
+        req.state.can_use_tool = can_use_tool
+
+        result = await runner.awrap_tool_call(req, AsyncMock())
+
+        meta = result.additional_kwargs["tool_result_meta"]
+        assert result.content == "async deny"
+        assert meta["kind"] == "permission_denied"
+        assert meta["decision"] == "deny"
+        assert seen == ["checker"]
+
+    def test_sync_wrap_tool_call_awaits_async_permission_checker(self):
+        seen = []
+
+        def handler():
+            seen.append("handler")
+            raise AssertionError("handler should not run when async permission denies on sync path")
+
+        entry = ToolEntry(
+            name="Write",
+            mode=ToolMode.INLINE,
+            schema={"name": "Write", "parameters": {"type": "object", "required": [], "properties": {}}},
+            handler=handler,
+            source="test",
+        )
+        runner = _make_runner([entry])
+        req = _make_tool_call_request("Write", {})
+        req.state = MagicMock()
+
+        async def can_use_tool(name, args, context, request):
+            seen.append("checker")
+            return {"decision": "deny", "message": "async deny sync-path"}
+
+        req.state.can_use_tool = can_use_tool
+
+        result = runner.wrap_tool_call(req, lambda _req: None)
+
+        meta = result.additional_kwargs["tool_result_meta"]
+        assert result.content == "async deny sync-path"
+        assert meta["kind"] == "permission_denied"
+        assert meta["decision"] == "deny"
+        assert seen == ["checker"]
+
+    @pytest.mark.asyncio
+    async def test_sync_wrap_tool_call_awaits_async_permission_checker_inside_running_loop(self):
+        seen = []
+
+        def handler():
+            seen.append("handler")
+            raise AssertionError("handler should not run when async permission denies on nested-loop sync path")
+
+        entry = ToolEntry(
+            name="Write",
+            mode=ToolMode.INLINE,
+            schema={"name": "Write", "parameters": {"type": "object", "required": [], "properties": {}}},
+            handler=handler,
+            source="test",
+        )
+        runner = _make_runner([entry])
+        req = _make_tool_call_request("Write", {})
+        req.state = MagicMock()
+
+        async def can_use_tool(name, args, context, request):
+            seen.append("checker")
+            return {"decision": "deny", "message": "async deny nested-loop"}
+
+        req.state.can_use_tool = can_use_tool
+
+        result = runner.wrap_tool_call(req, lambda _req: None)
+
+        meta = result.additional_kwargs["tool_result_meta"]
+        assert result.content == "async deny nested-loop"
+        assert meta["kind"] == "permission_denied"
+        assert meta["decision"] == "deny"
+        assert seen == ["checker"]
+
+    @pytest.mark.asyncio
     async def test_destructive_metadata_is_advisory_not_runtime_deny(self):
         entry = ToolEntry(
             name="Write",
