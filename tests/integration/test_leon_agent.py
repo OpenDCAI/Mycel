@@ -273,6 +273,89 @@ async def test_leon_agent_clear_thread_invalidates_prompt_section_cache(tmp_path
         agent.close()
 
 
+@pytest.mark.asyncio
+@_patch_env_api_key()
+async def test_leon_agent_session_start_hook_runs_on_ainit(tmp_path):
+    from core.runtime.agent import LeonAgent
+
+    mock_model = _mock_model("Session start response")
+    seen = []
+
+    def on_start(payload):
+        seen.append(payload)
+
+    with patch("core.runtime.agent.LeonAgent._create_model", return_value=mock_model), \
+         patch("core.runtime.agent.LeonAgent._init_async_components", return_value=(None, [])), \
+         patch("core.runtime.agent.LeonAgent._init_checkpointer", new_callable=AsyncMock, return_value=None):
+
+        agent = LeonAgent(workspace_root=str(tmp_path), api_key="sk-test-integration")
+        agent.app_state.add_session_hook("SessionStart", on_start)
+
+        await agent.ainit()
+
+        assert len(seen) == 1
+        assert seen[0]["event"] == "SessionStart"
+        assert seen[0]["sandbox"] == "local"
+
+        agent.close()
+
+
+@pytest.mark.asyncio
+@_patch_env_api_key()
+async def test_leon_agent_session_end_hook_runs_on_close(tmp_path):
+    from core.runtime.agent import LeonAgent
+
+    mock_model = _mock_model("Session end response")
+    seen = []
+
+    def on_end(payload):
+        seen.append(payload)
+
+    with patch("core.runtime.agent.LeonAgent._create_model", return_value=mock_model), \
+         patch("core.runtime.agent.LeonAgent._init_async_components", return_value=(None, [])), \
+         patch("core.runtime.agent.LeonAgent._init_checkpointer", new_callable=AsyncMock, return_value=None):
+
+        agent = LeonAgent(workspace_root=str(tmp_path), api_key="sk-test-integration")
+        await agent.ainit()
+        agent.app_state.add_session_hook("SessionEnd", on_end)
+
+        agent.close()
+
+        assert len(seen) == 1
+        assert seen[0]["event"] == "SessionEnd"
+        assert seen[0]["sandbox"] == "local"
+
+
+@pytest.mark.asyncio
+@_patch_env_api_key()
+async def test_leon_agent_session_hooks_support_async_callbacks_and_fire_once(tmp_path):
+    from core.runtime.agent import LeonAgent
+
+    mock_model = _mock_model("Session once response")
+    seen = []
+
+    async def on_start(payload):
+        seen.append(("start", payload["event"]))
+
+    async def on_end(payload):
+        seen.append(("end", payload["event"]))
+
+    with patch("core.runtime.agent.LeonAgent._create_model", return_value=mock_model), \
+         patch("core.runtime.agent.LeonAgent._init_async_components", return_value=(None, [])), \
+         patch("core.runtime.agent.LeonAgent._init_checkpointer", new_callable=AsyncMock, return_value=None):
+
+        agent = LeonAgent(workspace_root=str(tmp_path), api_key="sk-test-integration")
+        agent.app_state.add_session_hook("SessionStart", on_start)
+        agent.app_state.add_session_hook("SessionEnd", on_end)
+
+        await agent.ainit()
+        await agent.ainit()
+        agent.close()
+        agent.close()
+
+        assert seen == [("start", "SessionStart"), ("end", "SessionEnd")]
+
+
 class _DeferredDiscoveryProbeModel:
     def __init__(self):
         self.turn_tool_names: list[list[str]] = []

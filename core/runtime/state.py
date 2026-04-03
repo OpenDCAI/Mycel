@@ -89,6 +89,10 @@ class AppState(BaseModel):
     tool_permission_context: ToolPermissionState = Field(default_factory=ToolPermissionState)
     pending_permission_requests: dict[str, dict[str, Any]] = Field(default_factory=dict)
     resolved_permission_requests: dict[str, dict[str, Any]] = Field(default_factory=dict)
+    # @@@session-hooks-not-watchers - keep this surface local and lifecycle-scoped.
+    # File watching remains a later outer-layer concern so Leon keeps the
+    # filesystem + terminal core decoupled.
+    session_hooks: dict[str, list[Any]] = Field(default_factory=dict)
 
     def get_state(self) -> "AppState":
         return self
@@ -99,6 +103,21 @@ class AppState(BaseModel):
         for field_name in AppState.model_fields:
             setattr(self, field_name, getattr(updated, field_name))
         return self
+
+    def add_session_hook(self, event: str, hook: Any) -> None:
+        hooks = list(self.session_hooks.get(event, []))
+        hooks.append(hook)
+        self.session_hooks[event] = hooks
+
+    def remove_session_hook(self, event: str, hook: Any) -> None:
+        hooks = [candidate for candidate in self.session_hooks.get(event, []) if candidate != hook]
+        if hooks:
+            self.session_hooks[event] = hooks
+        else:
+            self.session_hooks.pop(event, None)
+
+    def get_session_hooks(self, event: str) -> list[Any]:
+        return list(self.session_hooks.get(event, []))
 
 
 class ToolUseContext(BaseModel):

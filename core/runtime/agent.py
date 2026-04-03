@@ -20,6 +20,7 @@ All paths must be absolute. Full security mechanisms and audit logging.
 
 import concurrent.futures
 import functools
+import inspect
 import os
 import threading
 from pathlib import Path
@@ -203,6 +204,8 @@ class LeonAgent:
         self._thread_repo = thread_repo
         self._entity_repo = entity_repo
         self._member_repo = member_repo
+        self._session_started = False
+        self._session_ended = False
         requested_sandbox_name = sandbox if isinstance(sandbox, str) else getattr(sandbox, "name", None)
         self._explicit_model_name = model_name is not None
 
@@ -378,21 +381,23 @@ class LeonAgent:
             agent = LeonAgent(sandbox=sandbox)
             await agent.ainit()
         """
-        if self.checkpointer is not None:
-            return  # Already initialized
+        if self.checkpointer is None:
+            # Initialize async components
+            self._aiosqlite_conn = await self._init_checkpointer()
+            _mcp_tools = await self._init_mcp_tools()
+            self._register_mcp_tools(_mcp_tools)
 
-        # Initialize async components
-        self._aiosqlite_conn = await self._init_checkpointer()
-        _mcp_tools = await self._init_mcp_tools()
-        self._register_mcp_tools(_mcp_tools)
+            # Update agent with checkpointer
+            self.agent.checkpointer = self.checkpointer
 
-        # Update agent with checkpointer
-        self.agent.checkpointer = self.checkpointer
+            self._monitor_middleware.mark_ready()
 
-        self._monitor_middleware.mark_ready()
+            if self.verbose:
+                print("[LeonAgent] Async initialization completed")
 
-        if self.verbose:
-            print("[LeonAgent] Async initialization completed")
+        if not self._session_started:
+            await self._run_session_hooks("SessionStart")
+            self._session_started = True
 
     def _init_async_components(self) -> tuple[Any, list]:
         """Initialize async components (checkpointer and MCP tools).
@@ -821,6 +826,15 @@ class LeonAgent:
 
         Falls back to direct cleanup if CleanupRegistry is not initialized.
         """
+        session_end_error: Exception | None = None
+        if getattr(self, "_session_started", False) and not getattr(self, "_session_ended", False):
+            try:
+                self._run_async_cleanup(lambda: self._run_session_hooks("SessionEnd"), "SessionEnd hooks")
+            except Exception as exc:
+                session_end_error = exc
+            finally:
+                self._session_ended = True
+
         if hasattr(self, "_cleanup_registry"):
             self._run_async_cleanup(self._cleanup_registry.run_cleanup, "CleanupRegistry")
         else:
@@ -835,6 +849,29 @@ class LeonAgent:
                     step_fn()
                 except Exception as e:
                     print(f"[LeonAgent] {step_name} cleanup error: {e}")
+
+        if session_end_error is not None:
+            raise session_end_error
+
+    def _build_session_hook_payload(self, event: str) -> dict[str, Any]:
+        return {
+            "event": event,
+            "session_id": self._bootstrap.session_id,
+            "workspace_root": str(self.workspace_root),
+            "cwd": str(self._bootstrap.cwd or self.workspace_root),
+            "sandbox": self._sandbox.name,
+        }
+
+    async def _run_session_hooks(self, event: str) -> None:
+        hooks = self._app_state.get_session_hooks(event)
+        if not hooks:
+            return
+
+        payload = self._build_session_hook_payload(event)
+        for hook in hooks:
+            result = hook(payload)
+            if inspect.isawaitable(result):
+                await result
 
 
     def _cleanup_sandbox(self) -> None:

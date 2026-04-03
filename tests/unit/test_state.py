@@ -99,6 +99,24 @@ class TestAppState:
         s = AppState(tool_overrides={"Bash": False})
         assert s.tool_overrides["Bash"] is False
 
+    def test_session_hooks_can_be_added_and_removed_per_event(self):
+        seen = []
+
+        def start_hook(payload):
+            seen.append(payload["event"])
+
+        s = AppState()
+        s.add_session_hook("SessionStart", start_hook)
+
+        hooks = s.get_session_hooks("SessionStart")
+        assert hooks == [start_hook]
+
+        hooks[0]({"event": "SessionStart"})
+        assert seen == ["SessionStart"]
+
+        s.remove_session_hook("SessionStart", start_hook)
+        assert s.get_session_hooks("SessionStart") == []
+
 
 class TestToolUseContext:
     def test_creation(self):
