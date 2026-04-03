@@ -31,6 +31,7 @@ from .tool_result import (
 from .validator import ToolValidator
 
 logger = logging.getLogger(__name__)
+DEFAULT_ASYNC_HOOK_TIMEOUT_S = 15.0
 
 
 class _ToolSpecificValidationError(Exception):
@@ -106,6 +107,12 @@ class ToolRunner(AgentMiddleware):
         current = payload
         for hook in hooks:
             updated = hook(current, request)
+            if asyncio.iscoroutine(updated):
+                updated = ToolRunner._await_async_hook_with_timeout_sync(
+                    request,
+                    updated,
+                    hook_name=getattr(hook, "__name__", type(hook).__name__),
+                )
             if updated is not None:
                 current = updated
         return current
@@ -124,7 +131,11 @@ class ToolRunner(AgentMiddleware):
         async def _invoke(hook):
             updated = hook(copy.deepcopy(payload), request)
             if asyncio.iscoroutine(updated):
-                updated = await updated
+                updated = await ToolRunner._await_async_hook_with_timeout(
+                    request,
+                    updated,
+                    hook_name=getattr(hook, "__name__", type(hook).__name__),
+                )
             return updated
 
         for updated in await asyncio.gather(*(_invoke(hook) for hook in hooks)):
@@ -244,6 +255,54 @@ class ToolRunner(AgentMiddleware):
         if error_box:
             raise error_box[0]
         return result_box[0] if result_box else None
+
+    @staticmethod
+    def _get_async_hook_timeout_s(request: ToolCallRequest) -> float:
+        state = getattr(request, "state", None)
+        if state is None:
+            return DEFAULT_ASYNC_HOOK_TIMEOUT_S
+        hook_timeout_ms = state.get("hook_timeout_ms") if isinstance(state, dict) else getattr(state, "hook_timeout_ms", None)
+        if isinstance(hook_timeout_ms, (int, float)) and hook_timeout_ms > 0:
+            return float(hook_timeout_ms) / 1000.0
+        hook_timeout_s = state.get("hook_timeout_s") if isinstance(state, dict) else getattr(state, "hook_timeout_s", None)
+        if isinstance(hook_timeout_s, (int, float)) and hook_timeout_s > 0:
+            return float(hook_timeout_s)
+        return DEFAULT_ASYNC_HOOK_TIMEOUT_S
+
+    @staticmethod
+    async def _await_async_hook_with_timeout(
+        request: ToolCallRequest,
+        awaitable,
+        *,
+        hook_name: str,
+    ):
+        timeout_s = ToolRunner._get_async_hook_timeout_s(request)
+        task = asyncio.create_task(awaitable)
+        try:
+            return await asyncio.wait_for(task, timeout=timeout_s)
+        except asyncio.TimeoutError:
+            logger.warning("Async hook %s timed out after %.3fs; ignoring hook result", hook_name, timeout_s)
+            task.cancel()
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass
+            return None
+
+    @staticmethod
+    def _await_async_hook_with_timeout_sync(
+        request: ToolCallRequest,
+        awaitable,
+        *,
+        hook_name: str,
+    ):
+        return ToolRunner._run_awaitable_sync(
+            ToolRunner._await_async_hook_with_timeout(
+                request,
+                awaitable,
+                hook_name=hook_name,
+            )
+        )
 
     @staticmethod
     def _get_state_callable(request: ToolCallRequest, name: str):
@@ -384,6 +443,12 @@ class ToolRunner(AgentMiddleware):
         hook_list = hooks if isinstance(hooks, list) else [hooks]
         for hook in hook_list:
             updated = hook(payload, request)
+            if asyncio.iscoroutine(updated):
+                updated = self._await_async_hook_with_timeout_sync(
+                    request,
+                    updated,
+                    hook_name=getattr(hook, "__name__", type(hook).__name__),
+                )
             if updated is None:
                 continue
             if isinstance(updated, dict):
@@ -411,7 +476,11 @@ class ToolRunner(AgentMiddleware):
         async def _invoke(hook):
             updated = hook({"name": name, "args": dict(args), "entry": entry}, request)
             if asyncio.iscoroutine(updated):
-                updated = await updated
+                updated = await self._await_async_hook_with_timeout(
+                    request,
+                    updated,
+                    hook_name=getattr(hook, "__name__", type(hook).__name__),
+                )
             return updated
 
         # @@@pt-06-hook-fanout
@@ -444,6 +513,80 @@ class ToolRunner(AgentMiddleware):
                     message = new_message
         return payload["args"], permission, message
 
+    def _run_permission_request_hooks_sync(
+        self,
+        request: ToolCallRequest,
+        *,
+        name: str,
+        entry,
+        message: str | None,
+    ) -> tuple[str | None, str | None]:
+        hooks = self._get_request_hook(request, "permission_request_hooks")
+        if hooks is None:
+            return None, message
+        payload = {"name": name, "entry": entry, "message": message}
+        permission: str | None = None
+        hook_message = message
+        hook_list = hooks if isinstance(hooks, list) else [hooks]
+        for hook in hook_list:
+            updated = hook(payload, request)
+            if asyncio.iscoroutine(updated):
+                updated = self._await_async_hook_with_timeout_sync(
+                    request,
+                    updated,
+                    hook_name=getattr(hook, "__name__", type(hook).__name__),
+                )
+            if updated is None:
+                continue
+            if isinstance(updated, dict):
+                new_permission, new_message = self._coerce_permission_response(updated)
+                if new_permission is not None:
+                    permission = new_permission
+                if new_message is not None:
+                    hook_message = new_message
+        return permission, hook_message
+
+    async def _run_permission_request_hooks_async(
+        self,
+        request: ToolCallRequest,
+        *,
+        name: str,
+        entry,
+        message: str | None,
+    ) -> tuple[str | None, str | None]:
+        hooks = self._get_request_hook(request, "permission_request_hooks")
+        if hooks is None:
+            return None, message
+        payload = {"name": name, "entry": entry, "message": message}
+        permission: str | None = None
+        hook_message = message
+        hook_list = hooks if isinstance(hooks, list) else [hooks]
+
+        async def _invoke(hook):
+            updated = hook({"name": name, "entry": entry, "message": message}, request)
+            if asyncio.iscoroutine(updated):
+                updated = await self._await_async_hook_with_timeout(
+                    request,
+                    updated,
+                    hook_name=getattr(hook, "__name__", type(hook).__name__),
+                )
+            return updated
+
+        for updated in await asyncio.gather(*(_invoke(hook) for hook in hook_list)):
+            if updated is None:
+                continue
+            if isinstance(updated, dict):
+                new_permission, new_message = self._coerce_permission_response(updated)
+                if new_permission == "deny" and permission != "deny":
+                    permission = new_permission
+                elif new_permission == "ask" and permission not in {"deny", "ask"}:
+                    permission = new_permission
+                elif new_permission == "allow" and permission is None:
+                    permission = new_permission
+                if new_message is not None:
+                    hook_message = new_message
+        return permission, hook_message
+
     def _resolve_permission(self, request: ToolCallRequest, *, name: str, args: dict, entry, hook_permission: str | None, hook_message: str | None) -> ToolResultEnvelope | None:
         if hook_permission == "deny":
             return self._permission_denied_result("deny", hook_message)
@@ -473,6 +616,17 @@ class ToolRunner(AgentMiddleware):
                 return None
             if resolved_permission in {"deny", "ask"}:
                 return self._permission_denied_result(resolved_permission, resolved_message)
+            request_hook_permission, request_hook_message = self._run_permission_request_hooks_sync(
+                request,
+                name=name,
+                entry=entry,
+                message=rule_message,
+            )
+            if request_hook_permission == "allow":
+                return None
+            if request_hook_permission in {"deny", "ask"}:
+                return self._permission_denied_result(request_hook_permission, request_hook_message)
+            rule_message = request_hook_message
 
         if hook_permission == "allow":
             if rule_permission in {"deny", "ask"}:
@@ -532,6 +686,17 @@ class ToolRunner(AgentMiddleware):
                 return None
             if resolved_permission in {"deny", "ask"}:
                 return self._permission_denied_result(resolved_permission, resolved_message)
+            request_hook_permission, request_hook_message = await self._run_permission_request_hooks_async(
+                request,
+                name=name,
+                entry=entry,
+                message=rule_message,
+            )
+            if request_hook_permission == "allow":
+                return None
+            if request_hook_permission in {"deny", "ask"}:
+                return self._permission_denied_result(request_hook_permission, request_hook_message)
+            rule_message = request_hook_message
 
         if hook_permission == "allow":
             if rule_permission in {"deny", "ask"}:

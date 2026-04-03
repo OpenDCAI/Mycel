@@ -488,6 +488,79 @@ class TestToolRunnerErrorNormalization:
         assert elapsed < 0.09
 
     @pytest.mark.asyncio
+    async def test_async_post_tool_use_hook_timeout_cancels_hook_and_preserves_result(self):
+        events = []
+
+        def local_handler(**kwargs):
+            return "plain success"
+
+        entry = ToolEntry(
+            name="Write",
+            mode=ToolMode.INLINE,
+            schema={"name": "Write", "parameters": {"type": "object", "required": [], "properties": {}}},
+            handler=local_handler,
+            source="test",
+        )
+        runner = _make_runner([entry])
+        req = _make_tool_call_request("Write", {})
+        req.state = MagicMock()
+        req.state.hook_timeout_ms = 50
+
+        async def stuck_hook(message, request):
+            try:
+                await asyncio.Future()
+            except asyncio.CancelledError:
+                events.append("post-cancelled")
+                raise
+
+        req.state.post_tool_use = stuck_hook
+
+        started = time.perf_counter()
+        result = await runner.awrap_tool_call(req, AsyncMock())
+        elapsed = time.perf_counter() - started
+
+        assert result.content == "plain success"
+        assert elapsed < 0.2
+        assert events == ["post-cancelled"]
+
+    @pytest.mark.asyncio
+    async def test_async_pre_tool_use_hook_timeout_cancels_hook_and_preserves_execution(self):
+        events = []
+
+        def local_handler(**kwargs):
+            events.append("handler")
+            return "plain success"
+
+        entry = ToolEntry(
+            name="Write",
+            mode=ToolMode.INLINE,
+            schema={"name": "Write", "parameters": {"type": "object", "required": [], "properties": {}}},
+            handler=local_handler,
+            source="test",
+        )
+        runner = _make_runner([entry])
+        req = _make_tool_call_request("Write", {})
+        req.state = MagicMock()
+        req.state.hook_timeout_ms = 50
+
+        async def stuck_hook(payload, request):
+            try:
+                await asyncio.Future()
+            except asyncio.CancelledError:
+                events.append("pre-cancelled")
+                raise
+
+        req.state.pre_tool_use = stuck_hook
+
+        started = time.perf_counter()
+        result = await runner.awrap_tool_call(req, AsyncMock())
+        elapsed = time.perf_counter() - started
+
+        assert result.content == "plain success"
+        assert elapsed < 0.2
+        assert events == ["pre-cancelled", "handler"]
+
+    @pytest.mark.asyncio
     async def test_post_tool_use_failure_hook_runs_on_materialized_error_message(self):
         seen = []
 
@@ -1140,6 +1213,258 @@ class TestToolRunnerErrorNormalization:
         assert meta["kind"] == "permission_denied"
         assert meta["decision"] == "deny"
         assert seen == ["checker"]
+
+    def test_sync_wrap_tool_call_awaits_async_post_tool_use_hook(self):
+        seen = []
+
+        def handler():
+            seen.append("handler")
+            return "plain success"
+
+        entry = ToolEntry(
+            name="Write",
+            mode=ToolMode.INLINE,
+            schema={"name": "Write", "parameters": {"type": "object", "required": [], "properties": {}}},
+            handler=handler,
+            source="test",
+        )
+        runner = _make_runner([entry])
+        req = _make_tool_call_request("Write", {})
+        req.state = MagicMock()
+
+        async def post_hook(result, request):
+            seen.append("post-start")
+            await asyncio.sleep(0)
+            seen.append("post-end")
+            return result
+
+        req.state.post_tool_use = post_hook
+
+        result = runner.wrap_tool_call(req, lambda _req: None)
+
+        assert result.content == "plain success"
+        assert seen == ["handler", "post-start", "post-end"]
+
+    def test_sync_wrap_tool_call_awaits_async_pre_tool_use_hook(self):
+        seen = []
+
+        def handler():
+            seen.append("handler")
+            return "plain success"
+
+        entry = ToolEntry(
+            name="Write",
+            mode=ToolMode.INLINE,
+            schema={"name": "Write", "parameters": {"type": "object", "required": [], "properties": {}}},
+            handler=handler,
+            source="test",
+        )
+        runner = _make_runner([entry])
+        req = _make_tool_call_request("Write", {})
+        req.state = MagicMock()
+
+        async def pre_hook(payload, request):
+            seen.append("pre-start")
+            await asyncio.sleep(0)
+            seen.append("pre-end")
+            return payload
+
+        req.state.pre_tool_use = pre_hook
+
+        result = runner.wrap_tool_call(req, lambda _req: None)
+
+        assert result.content == "plain success"
+        assert seen == ["pre-start", "pre-end", "handler"]
+
+    def test_sync_wrap_tool_call_times_out_async_post_tool_use_hook(self):
+        events = []
+
+        def handler():
+            return "plain success"
+
+        entry = ToolEntry(
+            name="Write",
+            mode=ToolMode.INLINE,
+            schema={"name": "Write", "parameters": {"type": "object", "required": [], "properties": {}}},
+            handler=handler,
+            source="test",
+        )
+        runner = _make_runner([entry])
+        req = _make_tool_call_request("Write", {})
+        req.state = MagicMock()
+        req.state.hook_timeout_ms = 50
+
+        async def stuck_hook(result, request):
+            try:
+                await asyncio.Future()
+            except asyncio.CancelledError:
+                events.append("post-cancelled")
+                raise
+
+        req.state.post_tool_use = stuck_hook
+
+        started = time.perf_counter()
+        result = runner.wrap_tool_call(req, lambda _req: MagicMock())
+        elapsed = time.perf_counter() - started
+
+        assert result.content == "plain success"
+        assert elapsed < 0.2
+        assert events == ["post-cancelled"]
+
+    @pytest.mark.asyncio
+    async def test_sync_wrap_tool_call_awaits_async_post_tool_use_hook_inside_running_loop(self):
+        seen = []
+
+        def handler():
+            seen.append("handler")
+            return "plain success"
+
+        entry = ToolEntry(
+            name="Write",
+            mode=ToolMode.INLINE,
+            schema={"name": "Write", "parameters": {"type": "object", "required": [], "properties": {}}},
+            handler=handler,
+            source="test",
+        )
+        runner = _make_runner([entry])
+        req = _make_tool_call_request("Write", {})
+        req.state = MagicMock()
+
+        async def post_hook(result, request):
+            seen.append("post-start")
+            await asyncio.sleep(0)
+            seen.append("post-end")
+            return result
+
+        req.state.post_tool_use = post_hook
+
+        result = runner.wrap_tool_call(req, lambda _req: None)
+
+        assert result.content == "plain success"
+        assert seen == ["handler", "post-start", "post-end"]
+
+    @pytest.mark.asyncio
+    async def test_permission_request_hook_can_allow_without_creating_request(self):
+        seen = []
+
+        def handler():
+            seen.append("handler")
+            return "ok"
+
+        entry = ToolEntry(
+            name="Write",
+            mode=ToolMode.INLINE,
+            schema={"name": "Write", "parameters": {"type": "object", "required": [], "properties": {}}},
+            handler=handler,
+            source="test",
+        )
+        runner = _make_runner([entry])
+        req = _make_tool_call_request("Write", {})
+        req.state = MagicMock()
+
+        def can_use_tool(name, args, context, request):
+            seen.append("checker")
+            return {"decision": "ask", "message": "needs approval"}
+
+        def request_permission(*args, **kwargs):
+            raise AssertionError("request surface should not run when permission_request hook allows")
+
+        async def permission_request_hook(payload, request):
+            seen.append("permission-request-hook")
+            return {"decision": "allow"}
+
+        req.state.can_use_tool = can_use_tool
+        req.state.request_permission = request_permission
+        req.state.consume_permission_resolution = lambda *args, **kwargs: None
+        req.state.permission_request_hooks = permission_request_hook
+
+        result = await runner.awrap_tool_call(req, AsyncMock())
+
+        assert result.content == "ok"
+        assert seen == ["checker", "permission-request-hook", "handler"]
+
+    def test_sync_wrap_tool_call_runs_permission_request_hook_before_prompt(self):
+        seen = []
+
+        def handler():
+            seen.append("handler")
+            return "ok"
+
+        entry = ToolEntry(
+            name="Write",
+            mode=ToolMode.INLINE,
+            schema={"name": "Write", "parameters": {"type": "object", "required": [], "properties": {}}},
+            handler=handler,
+            source="test",
+        )
+        runner = _make_runner([entry])
+        req = _make_tool_call_request("Write", {})
+        req.state = MagicMock()
+
+        def can_use_tool(name, args, context, request):
+            seen.append("checker")
+            return {"decision": "ask", "message": "needs approval"}
+
+        def request_permission(*args, **kwargs):
+            raise AssertionError("request surface should not run when permission_request hook denies")
+
+        async def permission_request_hook(payload, request):
+            seen.append("permission-request-hook")
+            return {"decision": "deny", "message": "hook blocked"}
+
+        req.state.can_use_tool = can_use_tool
+        req.state.request_permission = request_permission
+        req.state.consume_permission_resolution = lambda *args, **kwargs: None
+        req.state.permission_request_hooks = permission_request_hook
+
+        result = runner.wrap_tool_call(req, lambda _req: None)
+
+        meta = result.additional_kwargs["tool_result_meta"]
+        assert result.content == "hook blocked"
+        assert meta["kind"] == "permission_denied"
+        assert meta["decision"] == "deny"
+        assert seen == ["checker", "permission-request-hook"]
+
+    @pytest.mark.asyncio
+    async def test_sync_wrap_tool_call_runs_permission_request_hook_inside_running_loop(self):
+        seen = []
+
+        def handler():
+            seen.append("handler")
+            return "ok"
+
+        entry = ToolEntry(
+            name="Write",
+            mode=ToolMode.INLINE,
+            schema={"name": "Write", "parameters": {"type": "object", "required": [], "properties": {}}},
+            handler=handler,
+            source="test",
+        )
+        runner = _make_runner([entry])
+        req = _make_tool_call_request("Write", {})
+        req.state = MagicMock()
+
+        def can_use_tool(name, args, context, request):
+            seen.append("checker")
+            return {"decision": "ask", "message": "needs approval"}
+
+        def request_permission(*args, **kwargs):
+            raise AssertionError("request surface should not run when permission_request hook allows")
+
+        async def permission_request_hook(payload, request):
+            seen.append("permission-request-hook")
+            await asyncio.sleep(0)
+            return {"decision": "allow"}
+
+        req.state.can_use_tool = can_use_tool
+        req.state.request_permission = request_permission
+        req.state.consume_permission_resolution = lambda *args, **kwargs: None
+        req.state.permission_request_hooks = permission_request_hook
+
+        result = runner.wrap_tool_call(req, lambda _req: None)
+
+        assert result.content == "ok"
+        assert seen == ["checker", "permission-request-hook", "handler"]
 
     @pytest.mark.asyncio
     async def test_ask_permission_returns_permission_request_when_request_surface_exists(self):
