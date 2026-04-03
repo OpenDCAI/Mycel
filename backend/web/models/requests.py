@@ -2,7 +2,7 @@
 
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import AliasChoices, BaseModel, Field
 
 from sandbox.config import MountSpec
 
@@ -20,7 +20,7 @@ class RecipeSnapshotRequest(BaseModel):
 
 class CreateThreadRequest(BaseModel):
     member_id: str  # which agent template to create thread from
-    sandbox: str = "local"
+    sandbox: str = Field(default="local", validation_alias=AliasChoices("sandbox", "sandbox_type"))
     recipe: RecipeSnapshotRequest | None = None
     lease_id: str | None = None
     cwd: str | None = None
