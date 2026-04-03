@@ -47,13 +47,15 @@ async function apiPost(endpoint: string, body: Record<string, string>) {
   });
   if (!res.ok) {
     const text = await res.text();
+    let message = text || res.statusText;
     try {
       const parsed = JSON.parse(text);
-      throw new Error(parsed.detail || text);
-    } catch (e) {
-      if (e instanceof Error && e.message !== text) throw e;
-      throw new Error(text || res.statusText);
-    }
+      const detail = parsed.detail;
+      if (typeof detail === "string") message = detail;
+      else if (Array.isArray(detail)) message = detail.map((d: { msg: string }) => d.msg).join("; ");
+      else if (detail != null) message = JSON.stringify(detail);
+    } catch { /* not JSON, use raw text */ }
+    throw new Error(message);
   }
   return res.json();
 }
