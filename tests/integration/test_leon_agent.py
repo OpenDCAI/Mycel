@@ -491,6 +491,34 @@ class _DeferredCrossThreadProbeModel:
         return AIMessage(content="plain-done")
 
 
+class _DeferredInlineSelectProbeModel:
+    def __init__(self):
+        self.turn_tool_names: list[list[str]] = []
+        self._tools: list[dict] = []
+        self._turn = 0
+
+    def bind_tools(self, tools):
+        self._tools = list(tools or [])
+        self.turn_tool_names.append([tool.get("name") for tool in self._tools if isinstance(tool, dict)])
+        return self
+
+    def configurable_fields(self, **kwargs):
+        return self
+
+    def with_config(self, *args, **kwargs):
+        return self
+
+    async def ainvoke(self, messages):
+        if self._turn == 0:
+            self._turn += 1
+            return AIMessage(
+                content="",
+                tool_calls=[{"name": "tool_search", "args": {"query": "select:Read,TaskCreate"}, "id": "tc-search"}],
+            )
+        self._turn += 1
+        return AIMessage(content="after-inline-select")
+
+
 class _DeferredResumeProbeModel:
     def __init__(self):
         self.turn_tool_names: list[list[str]] = []
@@ -597,6 +625,36 @@ async def test_leon_agent_deferred_discovery_does_not_leak_across_threads(tmp_pa
         assert "TaskCreate" not in first_thread_a
         assert "TaskCreate" in second_thread_a
         assert "TaskCreate" not in first_thread_b
+
+        agent.close()
+
+
+@pytest.mark.asyncio
+@_patch_env_api_key()
+async def test_leon_agent_tool_search_exact_select_fails_loudly_for_inline_tools(tmp_path):
+    """Exact select should surface inline-tool misuse as a tool_use_error in the live loop."""
+    from core.runtime.agent import LeonAgent
+
+    probe_model = _DeferredInlineSelectProbeModel()
+
+    with patch("core.runtime.agent.LeonAgent._create_model", return_value=probe_model), \
+         patch("core.runtime.agent.LeonAgent._init_async_components", return_value=(None, [])), \
+         patch("core.runtime.agent.LeonAgent._init_checkpointer", new_callable=AsyncMock, return_value=None):
+
+        agent = LeonAgent(workspace_root=str(tmp_path), api_key="sk-test-integration")
+        await agent.ainit()
+
+        result = await agent.ainvoke("probe inline select", thread_id="test-inline-select")
+
+        assert result["reason"] == "completed"
+        tool_messages = [
+            msg for msg in result["messages"]
+            if isinstance(msg, ToolMessage) and msg.tool_call_id == "tc-search"
+        ]
+        assert len(tool_messages) == 1
+        assert "<tool_use_error>" in str(tool_messages[0].content)
+        assert "inline/already-available tools: Read" in str(tool_messages[0].content)
+        assert any(isinstance(msg, AIMessage) and msg.content == "after-inline-select" for msg in result["messages"])
 
         agent.close()
 
