@@ -816,6 +816,151 @@ async def test_cold_rebuild_surfaces_persisted_prompt_too_long_notice_after_reco
 
 
 @pytest.mark.asyncio
+async def test_compaction_clear_then_recovery_notice_rebuilds_honestly(tmp_path):
+    checkpointer = _MemoryCheckpointer()
+    summary_model = MagicMock()
+    summary_model.bind.return_value = summary_model
+    summary_model.ainvoke = AsyncMock(return_value=AIMessage(content="SUMMARY"))
+
+    memory = MemoryMiddleware(
+        context_limit=40,
+        compaction_config=SimpleNamespace(reserve_tokens=0, keep_recent_tokens=10),
+        compaction_threshold=0.1,
+        db_path=tmp_path / "compaction-lifecycle.db",
+    )
+    memory.set_model(summary_model)
+    config = {"configurable": {"thread_id": "compaction-lifecycle-thread"}}
+    compact_loop = _make_loop(
+        text="after compact",
+        checkpointer=checkpointer,
+        middleware=[memory],
+    )
+
+    history = [
+        HumanMessage(content="A" * 80),
+        AIMessage(content="B" * 80),
+        HumanMessage(content="C" * 80),
+        HumanMessage(content="hello after compact"),
+    ]
+
+    async for _ in compact_loop.query({"messages": history}, config=config):
+        pass
+
+    assert memory.summary_store is not None
+    assert memory.summary_store.get_latest_summary("compaction-lifecycle-thread") is not None
+
+    fake_app = SimpleNamespace(state=SimpleNamespace(display_builder=DisplayBuilder()))
+    fake_agent = SimpleNamespace(
+        agent=compact_loop,
+        runtime=SimpleNamespace(current_state=AgentState.IDLE),
+    )
+
+    with (
+        patch("backend.web.routers.threads.get_or_create_agent", return_value=fake_agent),
+        patch("backend.web.routers.threads.resolve_thread_sandbox", return_value="local"),
+        patch("backend.web.routers.threads.get_sandbox_info", return_value={"type": "local"}),
+    ):
+        compact_detail = await get_thread_messages(
+            "compaction-lifecycle-thread",
+            user_id="u",
+            app=fake_app,
+        )
+        compact_history = await get_thread_history(
+            "compaction-lifecycle-thread",
+            limit=20,
+            truncate=300,
+            user_id="u",
+            app=fake_app,
+        )
+
+    assert any(
+        item.get("role") == "notification" and "Conversation compacted" in item.get("text", "")
+        for item in compact_history["messages"]
+    )
+    assert any(
+        any(
+            segment.get("type") == "notice" and "Conversation compacted" in segment.get("content", "")
+            for segment in entry.get("segments", [])
+        )
+        for entry in compact_detail["entries"]
+        if entry.get("role") == "assistant"
+    )
+
+    await compact_loop.aclear("compaction-lifecycle-thread")
+
+    assert memory.summary_store.get_latest_summary("compaction-lifecycle-thread") is None
+
+    with (
+        patch("backend.web.routers.threads.get_or_create_agent", return_value=fake_agent),
+        patch("backend.web.routers.threads.resolve_thread_sandbox", return_value="local"),
+        patch("backend.web.routers.threads.get_sandbox_info", return_value={"type": "local"}),
+    ):
+        cleared_detail = await get_thread_messages(
+            "compaction-lifecycle-thread",
+            user_id="u",
+            app=fake_app,
+        )
+        cleared_history = await get_thread_history(
+            "compaction-lifecycle-thread",
+            limit=20,
+            truncate=300,
+            user_id="u",
+            app=fake_app,
+        )
+
+    assert cleared_detail["entries"] == []
+    assert cleared_history["messages"] == []
+
+    recovery_loop = _make_loop(
+        model=_PromptTooLongTwiceModel(),
+        checkpointer=checkpointer,
+        middleware=[_BridgeReactiveCompactMiddleware()],
+    )
+    recovery_agent = SimpleNamespace(
+        agent=recovery_loop,
+        runtime=SimpleNamespace(current_state=AgentState.IDLE),
+    )
+
+    async for _ in recovery_loop.query(
+        {"messages": [{"role": "user", "content": "start"}]},
+        config=config,
+    ):
+        pass
+
+    with (
+        patch("backend.web.routers.threads.get_or_create_agent", return_value=recovery_agent),
+        patch("backend.web.routers.threads.resolve_thread_sandbox", return_value="local"),
+        patch("backend.web.routers.threads.get_sandbox_info", return_value={"type": "local"}),
+    ):
+        recovery_detail = await get_thread_messages(
+            "compaction-lifecycle-thread",
+            user_id="u",
+            app=fake_app,
+        )
+        recovery_history = await get_thread_history(
+            "compaction-lifecycle-thread",
+            limit=20,
+            truncate=300,
+            user_id="u",
+            app=fake_app,
+        )
+
+    notices = [item for item in recovery_history["messages"] if item.get("role") == "notification"]
+    assert notices == [
+        {
+            "role": "notification",
+            "text": "Prompt is too long. Automatic recovery exhausted. Clear the thread or start a new one.",
+        }
+    ]
+    assert not any("Conversation compacted" in item.get("text", "") for item in recovery_history["messages"])
+    assert any(
+        entry.get("role") == "notice"
+        and "Prompt is too long. Automatic recovery exhausted." in entry.get("content", "")
+        for entry in recovery_detail["entries"]
+    )
+
+
+@pytest.mark.asyncio
 async def test_run_agent_to_buffer_emits_notice_for_system_agent_notifications(monkeypatch, tmp_path):
     seq = 0
 
