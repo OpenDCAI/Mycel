@@ -19,12 +19,12 @@ from sandbox.providers.e2b import E2BProvider
 from sandbox.providers.local import LocalSessionProvider
 from sandbox.resource_snapshot import (
     ensure_resource_snapshot_table,
-    list_snapshots_by_lease_ids,
+
     probe_and_upsert_for_instance,
-    upsert_lease_resource_snapshot,
+
 )
 from storage.models import map_lease_to_session_status
-from storage.providers.sqlite.sandbox_monitor_repo import SQLiteSandboxMonitorRepo
+from backend.web.core.storage_factory import make_sandbox_monitor_repo, list_resource_snapshots, upsert_resource_snapshot
 from storage.providers.sqlite.thread_repo import SQLiteThreadRepo
 
 _CONFIG_LOADER = SandboxConfigLoader(SANDBOXES_DIR)
@@ -344,7 +344,7 @@ def _resolve_card_cpu_metric(provider_type: str, telemetry: dict[str, Any]) -> d
 
 def list_resource_providers() -> dict[str, Any]:
     # @@@overview-fast-path - avoid provider-network calls; overview uses DB session snapshot.
-    repo = SQLiteSandboxMonitorRepo()
+    repo = make_sandbox_monitor_repo()
     try:
         sessions = repo.list_sessions_with_leases()
     finally:
@@ -357,7 +357,7 @@ def list_resource_providers() -> dict[str, Any]:
         grouped.setdefault(provider_instance, []).append(session)
 
     owners = _thread_owners([str(s["thread_id"]) for s in sessions if s.get("thread_id")])
-    snapshot_by_lease = list_snapshots_by_lease_ids([str(s.get("lease_id") or "") for s in sessions])
+    snapshot_by_lease = list_resource_snapshots([str(s.get("lease_id") or "") for s in sessions])
 
     providers: list[dict[str, Any]] = []
     for item in available_sandbox_types():
@@ -465,7 +465,7 @@ def sandbox_browse(lease_id: str, path: str) -> dict[str, Any]:
     """Browse the filesystem of a sandbox lease via its provider."""
     from pathlib import PurePosixPath
 
-    repo = SQLiteSandboxMonitorRepo()
+    repo = make_sandbox_monitor_repo()
     try:
         lease = repo.query_lease(lease_id)
         instance_id = repo.query_lease_instance_id(lease_id)
@@ -516,7 +516,7 @@ _READ_MAX_BYTES = 100 * 1024  # 100 KB
 
 def sandbox_read(lease_id: str, path: str) -> dict[str, Any]:
     """Read a file from a sandbox lease via its provider."""
-    repo = SQLiteSandboxMonitorRepo()
+    repo = make_sandbox_monitor_repo()
     try:
         lease = repo.query_lease(lease_id)
         instance_id = repo.query_lease_instance_id(lease_id)
@@ -558,7 +558,7 @@ def sandbox_read(lease_id: str, path: str) -> dict[str, Any]:
 def refresh_resource_snapshots() -> dict[str, Any]:
     """Probe active lease instances and upsert resource snapshots."""
     ensure_resource_snapshot_table()
-    repo = SQLiteSandboxMonitorRepo()
+    repo = make_sandbox_monitor_repo()
     try:
         probe_targets = repo.list_probe_targets()
     finally:
@@ -587,7 +587,7 @@ def refresh_resource_snapshots() -> dict[str, Any]:
             provider = build_provider_from_config_name(provider_key)
             provider_cache[provider_key] = provider
         if provider is None:
-            upsert_lease_resource_snapshot(
+            upsert_resource_snapshot(
                 lease_id=lease_id,
                 provider_name=provider_key,
                 observed_state=status,

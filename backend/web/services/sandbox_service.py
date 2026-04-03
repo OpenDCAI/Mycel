@@ -17,7 +17,7 @@ from sandbox.provider import ProviderCapability
 from sandbox.recipes import default_recipe_id, list_builtin_recipes, normalize_recipe_snapshot, provider_type_from_name
 from storage.providers.sqlite.kernel import SQLiteDBRole, resolve_role_db_path
 from storage.providers.sqlite.member_repo import SQLiteMemberRepo
-from storage.providers.sqlite.sandbox_monitor_repo import SQLiteSandboxMonitorRepo
+from backend.web.core.storage_factory import make_sandbox_monitor_repo
 from storage.providers.sqlite.thread_repo import SQLiteThreadRepo
 
 logger = logging.getLogger(__name__)
@@ -52,7 +52,7 @@ def list_user_leases(
     main_db_path: str | Path | None = None,
     sandbox_db_path: str | Path | None = None,
 ) -> list[dict[str, Any]]:
-    monitor_repo = SQLiteSandboxMonitorRepo(db_path=sandbox_db_path)
+    monitor_repo = make_sandbox_monitor_repo()
     thread_repo = SQLiteThreadRepo(db_path=main_db_path)
     member_repo = SQLiteMemberRepo(db_path=main_db_path)
     try:

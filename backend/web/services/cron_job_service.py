@@ -2,12 +2,11 @@
 
 from typing import Any
 
-from backend.web.core.config import DB_PATH
-from storage.providers.sqlite.cron_job_repo import SQLiteCronJobRepo
+from backend.web.core.storage_factory import make_cron_job_repo
 
 
-def _repo() -> SQLiteCronJobRepo:
-    return SQLiteCronJobRepo(db_path=DB_PATH)
+def _repo() -> Any:
+    return make_cron_job_repo()
 
 
 def list_cron_jobs() -> list[dict[str, Any]]:
@@ -31,7 +30,6 @@ def create_cron_job(*, name: str, cron_expression: str, **fields: Any) -> dict[s
         raise ValueError("name must not be empty")
     if not cron_expression or not cron_expression.strip():
         raise ValueError("cron_expression must not be empty")
-
     repo = _repo()
     try:
         return repo.create(name=name, cron_expression=cron_expression, **fields)
@@ -53,7 +51,3 @@ def delete_cron_job(job_id: str) -> bool:
         return repo.delete(job_id)
     finally:
         repo.close()
-
-
-# Allow tests to override DB_PATH via monkeypatch
-__all__ = ["DB_PATH", "list_cron_jobs", "get_cron_job", "create_cron_job", "update_cron_job", "delete_cron_job"]
