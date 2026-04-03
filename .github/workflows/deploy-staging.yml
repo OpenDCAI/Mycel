@@ -16,6 +16,9 @@ on:
         required: true
         default: "main"
 
+permissions:
+  pull-requests: write
+
 jobs:
   deploy-staging:
     # For label trigger: only run when the label is exactly "deploy-staging"
