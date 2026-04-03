@@ -46,6 +46,9 @@ _FLOOR_OUTPUT_TOKENS = 3000
 _CONTEXT_OVERFLOW_SAFETY_BUFFER = 1000
 _TRANSIENT_API_MAX_RETRIES = 3
 _TRANSIENT_API_BASE_DELAY_SECONDS = 0.5
+_PROMPT_TOO_LONG_NOTICE_TEXT = (
+    "Prompt is too long. Automatic recovery exhausted. Clear the thread or start a new one."
+)
 
 
 class TerminalReason(str, Enum):
@@ -368,6 +371,9 @@ class QueryLoop:
             )
 
         # Persist message history
+        terminal_notice = self._build_terminal_notice(terminal)
+        if terminal_notice is not None:
+            pending_system_notices.append(terminal_notice)
         messages = self._append_system_notices(messages, pending_system_notices)
         await self._save_messages(thread_id, messages)
         self._sync_app_state(messages=messages, turn_count=turn)
@@ -392,7 +398,7 @@ class QueryLoop:
                     # query() always emits a terminal event, but caller-facing
                     # astream() must not turn runtime failures into a silent empty
                     # iterator. Propagate non-completed terminals back to the caller.
-                    raise RuntimeError(terminal.error or terminal.reason.value)
+                    raise RuntimeError(self._terminal_error_text(terminal))
                 continue
             if isinstance(stream_mode, str):
                 if "message_chunk" in event:
@@ -1614,6 +1620,22 @@ class QueryLoop:
         # after the run settles so replay stays honest without perturbing the
         # same run's next model call.
         return list(messages) + list(notices)
+
+    def _build_terminal_notice(self, terminal: TerminalState | None) -> HumanMessage | None:
+        # @@@terminal-recovery-notice - recovery exhaustion must survive cold
+        # rebuilds. Persist one owner-visible system notice instead of leaving
+        # prompt-too-long as a hot-stream-only error.
+        if terminal is None or terminal.reason is not TerminalReason.prompt_too_long:
+            return None
+        return HumanMessage(
+            content=_PROMPT_TOO_LONG_NOTICE_TEXT,
+            metadata={"source": "system"},
+        )
+
+    def _terminal_error_text(self, terminal: TerminalState) -> str:
+        if terminal.reason is TerminalReason.prompt_too_long:
+            return _PROMPT_TOO_LONG_NOTICE_TEXT
+        return terminal.error or terminal.reason.value
 
     @staticmethod
     def _checkpoint_config(thread_id: str) -> dict[str, Any]:

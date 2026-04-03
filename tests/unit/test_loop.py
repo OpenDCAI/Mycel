@@ -1872,6 +1872,62 @@ async def test_query_loop_collapse_drain_is_single_shot_before_reactive_compact(
 
 
 @pytest.mark.asyncio
+async def test_query_loop_persists_prompt_too_long_notice_after_recovery_exhausts():
+    model = MagicMock()
+    model.bind_tools.return_value = model
+    model.ainvoke = AsyncMock(
+        side_effect=[
+            RuntimeError("prompt is too long"),
+            RuntimeError("prompt is too long"),
+        ]
+    )
+    app_state = AppState()
+    loop = make_loop(
+        model,
+        middleware=[_ReactiveCompactMiddleware()],
+        app_state=app_state,
+        runtime=SimpleNamespace(cost=0.0),
+    )
+
+    result = await loop.ainvoke({"messages": [{"role": "user", "content": "start"}]})
+
+    assert result["reason"] == "prompt_too_long"
+    notices = [
+        msg
+        for msg in app_state.messages
+        if msg.__class__.__name__ == "HumanMessage"
+        and ((getattr(msg, "metadata", None) or {}).get("source") == "system")
+    ]
+    assert notices
+    assert notices[-1].content == "Prompt is too long. Automatic recovery exhausted. Clear the thread or start a new one."
+
+
+@pytest.mark.asyncio
+async def test_query_loop_astream_raises_prompt_too_long_notice_text_after_recovery_exhausts():
+    model = MagicMock()
+    model.bind_tools.return_value = model
+    model.ainvoke = AsyncMock(
+        side_effect=[
+            RuntimeError("prompt is too long"),
+            RuntimeError("prompt is too long"),
+        ]
+    )
+    loop = make_loop(
+        model,
+        middleware=[_ReactiveCompactMiddleware()],
+        app_state=AppState(),
+        runtime=SimpleNamespace(cost=0.0),
+    )
+
+    with pytest.raises(
+        RuntimeError,
+        match="Prompt is too long. Automatic recovery exhausted. Clear the thread or start a new one.",
+    ):
+        async for _ in loop.astream({"messages": [{"role": "user", "content": "start"}]}, stream_mode=["updates"]):
+            pass
+
+
+@pytest.mark.asyncio
 async def test_query_loop_can_emit_tool_results_before_final_agent_message():
     model = _StreamingToolModel()
 

@@ -49,6 +49,21 @@ class _NoToolModel:
         return AIMessage(content=self._text)
 
 
+class _PromptTooLongTwiceModel:
+    def bind_tools(self, tools):
+        return self
+
+    async def ainvoke(self, messages):
+        raise RuntimeError("prompt is too long")
+
+
+class _BridgeReactiveCompactMiddleware:
+    compact_boundary_index = 1
+
+    async def compact_messages_for_recovery(self, messages):
+        return [SystemMessage(content="[Conversation Summary]\nSUMMARY")] + list(messages[-1:])
+
+
 class _ToolSearchInlineSelectModel:
     def __init__(self) -> None:
         self._turn = 0
@@ -744,6 +759,58 @@ async def test_cold_rebuild_surfaces_persisted_compaction_notice_in_detail_and_h
     )
     assert any(
         item.get("role") == "notification" and "Conversation compacted" in item.get("text", "")
+        for item in rebuilt_history["messages"]
+    )
+
+
+@pytest.mark.asyncio
+async def test_cold_rebuild_surfaces_persisted_prompt_too_long_notice_after_recovery_exhausts():
+    checkpointer = _MemoryCheckpointer()
+    loop = _make_loop(
+        model=_PromptTooLongTwiceModel(),
+        checkpointer=checkpointer,
+        middleware=[_BridgeReactiveCompactMiddleware()],
+    )
+    config = {"configurable": {"thread_id": "prompt-too-long-thread"}}
+
+    async for _ in loop.query(
+        {"messages": [{"role": "user", "content": "start"}]},
+        config=config,
+    ):
+        pass
+
+    fake_agent = SimpleNamespace(
+        agent=loop,
+        runtime=SimpleNamespace(current_state=AgentState.IDLE),
+    )
+    fake_app = SimpleNamespace(state=SimpleNamespace(display_builder=DisplayBuilder()))
+
+    with (
+        patch("backend.web.routers.threads.get_or_create_agent", return_value=fake_agent),
+        patch("backend.web.routers.threads.resolve_thread_sandbox", return_value="local"),
+        patch("backend.web.routers.threads.get_sandbox_info", return_value={"type": "local"}),
+    ):
+        detail = await get_thread_messages(
+            "prompt-too-long-thread",
+            user_id="u",
+            app=fake_app,
+        )
+        rebuilt_history = await get_thread_history(
+            "prompt-too-long-thread",
+            limit=20,
+            truncate=300,
+            user_id="u",
+            app=fake_app,
+        )
+
+    assert any(
+        entry.get("role") == "notice"
+        and "Prompt is too long. Automatic recovery exhausted." in entry.get("content", "")
+        for entry in detail["entries"]
+    )
+    assert any(
+        item.get("role") == "notification"
+        and "Prompt is too long. Automatic recovery exhausted." in item.get("text", "")
         for item in rebuilt_history["messages"]
     )
 
