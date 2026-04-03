@@ -177,176 +177,184 @@ class QueryLoop:
         transient_api_retry_count = 0
 
         turn = 0
-        while turn < self.max_turns:
-            turn += 1
-            tool_context = self._build_tool_use_context(messages, thread_id=thread_id)
+        try:
+            while turn < self.max_turns:
+                turn += 1
+                tool_context = self._build_tool_use_context(messages, thread_id=thread_id)
 
-            messages_for_query, injected_messages = await self._build_query_messages(messages, config)
-            if injected_messages:
-                # @@@steer-persist - queue/steer messages accepted before the
-                # next model call must become durable conversation state, not
-                # request-only hints, or later replay/history lies about what
-                # the user actually said mid-run.
-                messages.extend(injected_messages)
-                self._sync_app_state(messages=messages, turn_count=turn)
-            self._sync_tool_context_messages(tool_context, messages_for_query)
-
-            # --- Call model through middleware chain ---
-            streamed_tool_results: list[ToolMessage] = []
-            pending_tool_results: list[ToolMessage] = []
-            used_streaming_overlap = False
-            response: ModelResponse | None = None
-            ai_msg: AIMessage | None = None
-            tool_calls: list[dict[str, Any]] = []
-            try:
-                if self._can_stream_tools():
-                    used_streaming_overlap = True
-                    async for stream_event in self._stream_model_with_tool_overlap(
-                        messages_for_query,
-                        config,
-                        thread_id=thread_id,
-                        tool_context=tool_context,
-                        max_output_tokens_override=max_output_tokens_override,
-                    ):
-                        if stream_event["type"] == "message_chunk":
-                            yield {"message_chunk": stream_event["chunk"]}
-                            continue
-                        if stream_event["type"] == "tools":
-                            chunk_messages = stream_event["messages"]
-                            streamed_tool_results.extend(chunk_messages)
-                            yield {"tools": {"messages": chunk_messages}}
-                            continue
-                        response = stream_event["response"]
-                        ai_msg = stream_event["ai_message"]
-                        tool_calls = stream_event["tool_calls"]
-                        pending_tool_results = stream_event["remaining_tool_results"]
-                else:
-                    response = await self._invoke_model(
-                        messages_for_query,
-                        config,
-                        thread_id=thread_id,
-                        max_output_tokens_override=max_output_tokens_override,
-                    )
-            except Exception as exc:
-                handled = await self._handle_model_error_recovery(
-                    exc=exc,
-                    messages=messages,
-                    turn=turn,
-                    transition=transition,
-                    max_output_tokens_recovery_count=max_output_tokens_recovery_count,
-                    has_attempted_reactive_compact=has_attempted_reactive_compact,
-                    max_output_tokens_override=max_output_tokens_override,
-                    transient_api_retry_count=transient_api_retry_count,
-                )
-                if handled is not None:
-                    messages = handled["messages"]
-                    transition = handled["transition"]
-                    max_output_tokens_recovery_count = handled["max_output_tokens_recovery_count"]
-                    has_attempted_reactive_compact = handled["has_attempted_reactive_compact"]
-                    max_output_tokens_override = handled["max_output_tokens_override"]
-                    transient_api_retry_count = handled["transient_api_retry_count"]
-                    if handled["terminal"] is not None:
-                        terminal = handled["terminal"]
-                        break
+                messages_for_query, injected_messages = await self._build_query_messages(messages, config)
+                if injected_messages:
+                    # @@@steer-persist - queue/steer messages accepted before the
+                    # next model call must become durable conversation state, not
+                    # request-only hints, or later replay/history lies about what
+                    # the user actually said mid-run.
+                    messages.extend(injected_messages)
                     self._sync_app_state(messages=messages, turn_count=turn)
-                    continue
-                terminal = TerminalState(
-                    reason=TerminalReason.model_error,
-                    turn_count=turn,
-                    error=str(exc),
-                )
-                break
+                self._sync_tool_context_messages(tool_context, messages_for_query)
 
-            if response is None or ai_msg is None:
-                ai_messages = [m for m in (response.result if response else []) if isinstance(m, AIMessage)]
-                if not ai_messages:
-                    # No AI message — unexpected; treat as terminal
+                # --- Call model through middleware chain ---
+                streamed_tool_results: list[ToolMessage] = []
+                pending_tool_results: list[ToolMessage] = []
+                used_streaming_overlap = False
+                response: ModelResponse | None = None
+                ai_msg: AIMessage | None = None
+                tool_calls: list[dict[str, Any]] = []
+                try:
+                    if self._can_stream_tools():
+                        used_streaming_overlap = True
+                        async for stream_event in self._stream_model_with_tool_overlap(
+                            messages_for_query,
+                            config,
+                            thread_id=thread_id,
+                            tool_context=tool_context,
+                            max_output_tokens_override=max_output_tokens_override,
+                        ):
+                            if stream_event["type"] == "message_chunk":
+                                yield {"message_chunk": stream_event["chunk"]}
+                                continue
+                            if stream_event["type"] == "tools":
+                                chunk_messages = stream_event["messages"]
+                                streamed_tool_results.extend(chunk_messages)
+                                yield {"tools": {"messages": chunk_messages}}
+                                continue
+                            response = stream_event["response"]
+                            ai_msg = stream_event["ai_message"]
+                            tool_calls = stream_event["tool_calls"]
+                            pending_tool_results = stream_event["remaining_tool_results"]
+                    else:
+                        response = await self._invoke_model(
+                            messages_for_query,
+                            config,
+                            thread_id=thread_id,
+                            max_output_tokens_override=max_output_tokens_override,
+                        )
+                except Exception as exc:
+                    handled = await self._handle_model_error_recovery(
+                        exc=exc,
+                        messages=messages,
+                        turn=turn,
+                        transition=transition,
+                        max_output_tokens_recovery_count=max_output_tokens_recovery_count,
+                        has_attempted_reactive_compact=has_attempted_reactive_compact,
+                        max_output_tokens_override=max_output_tokens_override,
+                        transient_api_retry_count=transient_api_retry_count,
+                    )
+                    if handled is not None:
+                        messages = handled["messages"]
+                        transition = handled["transition"]
+                        max_output_tokens_recovery_count = handled["max_output_tokens_recovery_count"]
+                        has_attempted_reactive_compact = handled["has_attempted_reactive_compact"]
+                        max_output_tokens_override = handled["max_output_tokens_override"]
+                        transient_api_retry_count = handled["transient_api_retry_count"]
+                        if handled["terminal"] is not None:
+                            terminal = handled["terminal"]
+                            break
+                        self._sync_app_state(messages=messages, turn_count=turn)
+                        continue
                     terminal = TerminalState(
                         reason=TerminalReason.model_error,
-                        turn_count=turn,
-                        error="model returned no AIMessage",
-                    )
-                    break
-                ai_msg = ai_messages[0]
-            self._sync_tool_context_messages(
-                tool_context,
-                response.request_messages or messages_for_query,
-            )
-
-            truncated = self._handle_truncated_response_recovery(
-                ai_msg=ai_msg,
-                messages=messages,
-                turn=turn,
-                max_output_tokens_recovery_count=max_output_tokens_recovery_count,
-                max_output_tokens_override=max_output_tokens_override,
-            )
-            if truncated is not None:
-                messages = truncated["messages"]
-                transition = truncated["transition"]
-                max_output_tokens_recovery_count = truncated["max_output_tokens_recovery_count"]
-                max_output_tokens_override = truncated["max_output_tokens_override"]
-                self._sync_app_state(messages=messages, turn_count=turn)
-                if truncated["yield_ai"]:
-                    yield {"agent": {"messages": [ai_msg]}}
-                if truncated["terminal"] is not None:
-                    terminal = truncated["terminal"]
-                    break
-                continue
-
-            self._sync_app_state(messages=messages, turn_count=turn)
-
-            # Yield agent update (stream_mode="updates" format)
-            yield {"agent": {"messages": [ai_msg]}}
-
-            if not tool_calls:
-                tool_calls = getattr(ai_msg, "tool_calls", None) or []
-            if not tool_calls:
-                # Also check additional_kwargs for older message formats
-                tool_calls = ai_msg.additional_kwargs.get("tool_calls", [])
-
-            if not tool_calls:
-                # No tool calls → agent is done
-                if self._ai_message_has_visible_content(ai_msg):
-                    messages.append(ai_msg)
-                terminal = TerminalState(
-                    reason=TerminalReason.completed,
-                    turn_count=turn,
-                )
-                break
-
-            # Expose current messages for forkContext sub-agent spawning
-            from sandbox.thread_context import set_current_messages
-            set_current_messages(messages + [ai_msg])
-
-            if used_streaming_overlap:
-                if pending_tool_results:
-                    yield {"tools": {"messages": pending_tool_results}}
-                tool_results = streamed_tool_results + pending_tool_results
-            else:
-                # --- Execute tools through middleware chain ---
-                try:
-                    tool_results = await self._execute_tools(tool_calls, response, tool_context)
-                except Exception as exc:
-                    terminal = TerminalState(
-                        reason=TerminalReason.aborted_tools,
                         turn_count=turn,
                         error=str(exc),
                     )
                     break
 
-                # Yield tools update
-                yield {"tools": {"messages": tool_results}}
+                if response is None or ai_msg is None:
+                    ai_messages = [m for m in (response.result if response else []) if isinstance(m, AIMessage)]
+                    if not ai_messages:
+                        # No AI message — unexpected; treat as terminal
+                        terminal = TerminalState(
+                            reason=TerminalReason.model_error,
+                            turn_count=turn,
+                            error="model returned no AIMessage",
+                        )
+                        break
+                    ai_msg = ai_messages[0]
+                self._sync_tool_context_messages(
+                    tool_context,
+                    response.request_messages or messages_for_query,
+                )
 
-            # Advance message history for next turn
-            messages.append(ai_msg)
-            messages.extend(tool_results)
-            await self._refresh_tools_between_turns(tool_context)
-            transition = ContinueState(reason=ContinueReason.next_turn)
-            max_output_tokens_recovery_count = 0
-            has_attempted_reactive_compact = False
-            max_output_tokens_override = None
-            transient_api_retry_count = 0
+                truncated = self._handle_truncated_response_recovery(
+                    ai_msg=ai_msg,
+                    messages=messages,
+                    turn=turn,
+                    max_output_tokens_recovery_count=max_output_tokens_recovery_count,
+                    max_output_tokens_override=max_output_tokens_override,
+                )
+                if truncated is not None:
+                    messages = truncated["messages"]
+                    transition = truncated["transition"]
+                    max_output_tokens_recovery_count = truncated["max_output_tokens_recovery_count"]
+                    max_output_tokens_override = truncated["max_output_tokens_override"]
+                    self._sync_app_state(messages=messages, turn_count=turn)
+                    if truncated["yield_ai"]:
+                        yield {"agent": {"messages": [ai_msg]}}
+                    if truncated["terminal"] is not None:
+                        terminal = truncated["terminal"]
+                        break
+                    continue
+
+                self._sync_app_state(messages=messages, turn_count=turn)
+
+                # Yield agent update (stream_mode="updates" format)
+                yield {"agent": {"messages": [ai_msg]}}
+
+                if not tool_calls:
+                    tool_calls = getattr(ai_msg, "tool_calls", None) or []
+                if not tool_calls:
+                    # Also check additional_kwargs for older message formats
+                    tool_calls = ai_msg.additional_kwargs.get("tool_calls", [])
+
+                if not tool_calls:
+                    # No tool calls → agent is done
+                    if self._ai_message_has_visible_content(ai_msg):
+                        messages.append(ai_msg)
+                    terminal = TerminalState(
+                        reason=TerminalReason.completed,
+                        turn_count=turn,
+                    )
+                    break
+
+                # Expose current messages for forkContext sub-agent spawning
+                from sandbox.thread_context import set_current_messages
+                set_current_messages(messages + [ai_msg])
+
+                if used_streaming_overlap:
+                    if pending_tool_results:
+                        yield {"tools": {"messages": pending_tool_results}}
+                    tool_results = streamed_tool_results + pending_tool_results
+                else:
+                    # --- Execute tools through middleware chain ---
+                    try:
+                        tool_results = await self._execute_tools(tool_calls, response, tool_context)
+                    except Exception as exc:
+                        terminal = TerminalState(
+                            reason=TerminalReason.aborted_tools,
+                            turn_count=turn,
+                            error=str(exc),
+                        )
+                        break
+
+                    # Yield tools update
+                    yield {"tools": {"messages": tool_results}}
+
+                # Advance message history for next turn
+                messages.append(ai_msg)
+                messages.extend(tool_results)
+                await self._refresh_tools_between_turns(tool_context)
+                transition = ContinueState(reason=ContinueReason.next_turn)
+                max_output_tokens_recovery_count = 0
+                has_attempted_reactive_compact = False
+                max_output_tokens_override = None
+                transient_api_retry_count = 0
+                self._sync_app_state(messages=messages, turn_count=turn)
+        except asyncio.CancelledError:
+            # @@@cancel-persists-live-state - accepted user input from the
+            # current run must not evaporate just because the run is cancelled
+            # before the next terminal save.
+            await self._save_messages(thread_id, messages)
             self._sync_app_state(messages=messages, turn_count=turn)
+            raise
 
         if terminal is None:
             terminal = TerminalState(

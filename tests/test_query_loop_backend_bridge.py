@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -14,7 +15,7 @@ from backend.web.services.display_builder import DisplayBuilder
 from backend.web.services.event_buffer import ThreadEventBuffer
 from core.runtime.middleware.queue.manager import MessageQueueManager
 from core.runtime.middleware.queue.middleware import SteeringMiddleware
-from backend.web.services.streaming_service import _repair_incomplete_tool_calls, _run_agent_to_buffer
+from backend.web.services.streaming_service import _repair_incomplete_tool_calls, _run_agent_to_buffer, start_agent_run
 from core.runtime.middleware.monitor.state_monitor import AgentState
 from core.runtime.loop import QueryLoop
 from core.runtime.registry import ToolEntry, ToolMode, ToolRegistry
@@ -28,6 +29,9 @@ class _MemoryCheckpointer:
 
     async def aget(self, cfg):
         return self.store.get(cfg["configurable"]["thread_id"])
+
+    async def aget_tuple(self, cfg):
+        return None
 
     async def aput(self, cfg, checkpoint, metadata, new_versions):
         self.store[cfg["configurable"]["thread_id"]] = checkpoint
@@ -75,6 +79,31 @@ class _SteerAwareTerminalModel:
             "",
         )
         return AIMessage(content="STEER_DONE" if last_human == "Stop and just say STEER_DONE." else "UNKNOWN")
+
+
+class _SteerCancelPoisonModel:
+    def __init__(self) -> None:
+        self._turn = 0
+
+    def bind_tools(self, tools):
+        return self
+
+    async def ainvoke(self, messages):
+        if self._turn == 0:
+            self._turn += 1
+            return AIMessage(
+                content="",
+                tool_calls=[{"name": "SleepTool", "args": {}, "id": "tc-sleep"}],
+            )
+        last_human = next(
+            (
+                msg.content
+                for msg in reversed(messages)
+                if msg.__class__.__name__ == "HumanMessage"
+            ),
+            "",
+        )
+        return AIMessage(content=f"LAST_HUMAN:{last_human}")
 
 
 class _FakeDisplayBuilder:
@@ -125,6 +154,7 @@ class _StreamingRuntime:
     def __init__(self) -> None:
         self.current_run_source = None
         self._event_callback = None
+        self.state = SimpleNamespace(flags=SimpleNamespace(is_compacting=False))
 
     def set_event_callback(self, cb) -> None:
         self._event_callback = cb
@@ -453,6 +483,94 @@ async def test_get_thread_history_rebuilds_persisted_midrun_steer_message(tmp_pa
     ]
     assert history["messages"][3]["text"] == "Stop and just say STEER_DONE."
     assert history["messages"][4]["text"] == "STEER_DONE"
+
+
+@pytest.mark.asyncio
+async def test_cancelled_midrun_steer_persists_and_does_not_poison_next_turn(tmp_path):
+    checkpointer = _MemoryCheckpointer()
+    queue_manager = MessageQueueManager(db_path=str(tmp_path / "queue.db"))
+    runtime = _StreamingRuntime()
+    tool_started = asyncio.Event()
+    async def sleep_tool() -> str:
+        tool_started.set()
+        try:
+            await asyncio.sleep(60)
+        except asyncio.CancelledError:
+            raise
+        return "SLEPT"
+
+    registry = ToolRegistry()
+    registry.register(
+        ToolEntry(
+            name="SleepTool",
+            mode=ToolMode.INLINE,
+            schema={"name": "SleepTool", "description": "sleep", "parameters": {}},
+            handler=sleep_tool,
+            source="test",
+        )
+    )
+    loop = _make_loop(
+        model=_SteerCancelPoisonModel(),
+        registry=registry,
+        checkpointer=checkpointer,
+        middleware=[SteeringMiddleware(queue_manager=queue_manager, agent_runtime=runtime)],
+    )
+    agent = SimpleNamespace(
+        agent=loop,
+        runtime=runtime,
+        storage_container=None,
+    )
+    app = SimpleNamespace(
+        state=SimpleNamespace(
+            display_builder=DisplayBuilder(),
+            thread_tasks={},
+            thread_event_buffers={},
+            subagent_buffers={},
+            queue_manager=queue_manager,
+            thread_last_active={},
+            typing_tracker=None,
+        )
+    )
+    thread_id = "steer-cancel-poison-thread"
+    config = {"configurable": {"thread_id": thread_id}}
+
+    start_agent_run(agent, thread_id, "start", app)
+    task = app.state.thread_tasks[thread_id]
+
+    await asyncio.wait_for(tool_started.wait(), timeout=2)
+    queue_manager.enqueue(
+        "Stop and just say STEER_DONE.",
+        thread_id,
+        notification_type="steer",
+        source="owner",
+        is_steer=True,
+    )
+
+    task.cancel()
+    await asyncio.gather(task, return_exceptions=True)
+
+    assert queue_manager.list_queue(thread_id) == []
+    assert app.state.thread_tasks.get(thread_id) is None
+    assert runtime.current_state == AgentState.IDLE
+
+    state_after_cancel = await loop.aget_state(config)
+    cancelled_contents = [getattr(msg, "content", "") for msg in state_after_cancel.values["messages"]]
+    assert cancelled_contents[:2] == ["start", "Stop and just say STEER_DONE."]
+
+    async for _ in loop.query(
+        {"messages": [{"role": "user", "content": "fresh user message"}]},
+        config=config,
+    ):
+        pass
+
+    final_state = await loop.aget_state(config)
+    final_contents = [getattr(msg, "content", "") for msg in final_state.values["messages"]]
+    assert final_contents == [
+        "start",
+        "Stop and just say STEER_DONE.",
+        "fresh user message",
+        "LAST_HUMAN:fresh user message",
+    ]
 
 
 @pytest.mark.asyncio

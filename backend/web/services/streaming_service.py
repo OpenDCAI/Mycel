@@ -442,6 +442,130 @@ async def _persist_terminal_followups(
     )
 
 
+def _message_metadata_dict(message_metadata: dict[str, Any] | None) -> dict[str, Any]:
+    return dict(message_metadata or {})
+
+
+def _message_already_persisted(message: Any, *, content: str, metadata: dict[str, Any]) -> bool:
+    if message.__class__.__name__ != "HumanMessage":
+        return False
+    if getattr(message, "content", None) != content:
+        return False
+    return (getattr(message, "metadata", None) or {}) == metadata
+
+
+async def _persist_cancelled_run_input_if_missing(
+    *,
+    agent: Any,
+    config: dict[str, Any],
+    message: str,
+    message_metadata: dict[str, Any] | None,
+) -> None:
+    graph = getattr(agent, "agent", None)
+    if graph is None or not hasattr(graph, "aget_state") or not hasattr(graph, "aupdate_state"):
+        return
+
+    from langchain_core.messages import HumanMessage
+
+    metadata = _message_metadata_dict(message_metadata)
+    state = await graph.aget_state(config)
+    persisted = list((getattr(state, "values", None) or {}).get("messages", []))
+    if persisted and _message_already_persisted(persisted[-1], content=message, metadata=metadata):
+        return
+
+    # @@@cancelled-run-input-persist - a started run has already accepted this
+    # input at the caller boundary. If cancellation lands before the next loop
+    # checkpoint save, persist the input here so later turns do not pretend it
+    # never happened.
+    candidate = HumanMessage(content=message, metadata=metadata) if metadata else HumanMessage(content=message)
+    await graph.aupdate_state(config, {"messages": [candidate]})
+
+
+def _is_owner_steer_followup_message(
+    *,
+    source: str | None,
+    notification_type: str | None,
+) -> bool:
+    return source == "owner" and notification_type == "steer"
+
+
+async def _persist_cancelled_owner_steers(
+    *,
+    agent: Any,
+    config: dict[str, Any],
+    items: list[dict[str, str | None]],
+) -> None:
+    graph = getattr(agent, "agent", None)
+    if graph is None or not hasattr(graph, "aupdate_state") or not items:
+        return
+
+    from langchain_core.messages import HumanMessage
+
+    # @@@cancelled-steer-persist - accepted steer is a real user turn. If the
+    # active run is cancelled before the next model call, we must checkpoint it
+    # now instead of letting it silently relaunch as a ghost instruction.
+    await graph.aupdate_state(
+        config,
+        {
+            "messages": [
+                HumanMessage(
+                    content=str(item["content"] or ""),
+                    metadata={
+                        "source": "owner",
+                        "notification_type": "steer",
+                        "is_steer": True,
+                    },
+                )
+                for item in items
+            ]
+        },
+    )
+
+
+async def _flush_cancelled_owner_steers(
+    *,
+    agent: Any,
+    config: dict[str, Any],
+    thread_id: str,
+    app: Any,
+) -> None:
+    qm = app.state.queue_manager
+    queued_items = qm.drain_all(thread_id)
+    if not queued_items:
+        return
+
+    owner_steers: list[dict[str, str | None]] = []
+    passthrough: list[Any] = []
+    for item in queued_items:
+        if _is_owner_steer_followup_message(
+            source=item.source,
+            notification_type=item.notification_type,
+        ):
+            owner_steers.append(
+                {
+                    "content": item.content,
+                    "source": item.source or "owner",
+                    "notification_type": item.notification_type,
+                }
+            )
+        else:
+            passthrough.append(item)
+
+    await _persist_cancelled_owner_steers(agent=agent, config=config, items=owner_steers)
+
+    for item in passthrough:
+        qm.enqueue(
+            item.content,
+            thread_id,
+            notification_type=item.notification_type,
+            source=item.source,
+            sender_entity_id=item.sender_entity_id,
+            sender_name=item.sender_name,
+            sender_avatar_url=item.sender_avatar_url,
+            is_steer=item.is_steer,
+        )
+
+
 async def _emit_queued_terminal_followups(
     *,
     app: Any,
@@ -1090,6 +1214,18 @@ async def _run_agent_to_buffer(
         await emit({"event": "run_done", "data": json.dumps({"thread_id": thread_id, "run_id": run_id})})
     except asyncio.CancelledError:
         cancelled_tool_call_ids = await write_cancellation_markers(agent, config, pending_tool_calls)
+        await _persist_cancelled_run_input_if_missing(
+            agent=agent,
+            config=config,
+            message=message,
+            message_metadata=message_metadata,
+        )
+        await _flush_cancelled_owner_steers(
+            agent=agent,
+            config=config,
+            thread_id=thread_id,
+            app=app,
+        )
         await emit(
             {
                 "event": "cancelled",
