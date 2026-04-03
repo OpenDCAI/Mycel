@@ -1764,7 +1764,7 @@ class TestToolModeFromConfig:
             assert entry is not None, f"{tool_name} not registered"
             assert entry.mode == ToolMode.INLINE, f"{tool_name} should be INLINE, got {entry.mode}"
 
-    def test_task_service_read_only_does_not_imply_concurrency_safe(self, tmp_path):
+    def test_task_service_read_only_queries_are_concurrency_safe(self, tmp_path):
         reg = ToolRegistry()
         from core.tools.task.service import TaskService
 
@@ -1774,7 +1774,7 @@ class TestToolModeFromConfig:
             entry = reg.get(tool_name)
             assert entry is not None, f"{tool_name} not registered"
             assert entry.is_read_only is True
-            assert entry.is_concurrency_safe is False
+            assert entry.is_concurrency_safe is True
 
 
 class TestToolSearchService:

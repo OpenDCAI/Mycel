@@ -121,7 +121,7 @@ AGENT_SCHEMA = {
     "description": (
         "Launch a sub-agent for independent task execution. "
         "Types: explore (read-only codebase search), plan (architecture design, read-only), "
-        "bash (shell commands only), general (full tool access). "
+        "bash (shell commands only), general (broad tool access except Agent, TaskOutput, and TaskStop). "
         "Use for: multi-step tasks, parallel work, tasks needing isolation. "
         "Do NOT use for simple file reads or single grep searches — use the tools directly."
     ),

@@ -176,7 +176,7 @@ class TaskService:
                     schema=schema,
                     handler=handler,
                     source="TaskService",
-                    is_concurrency_safe=False,
+                    is_concurrency_safe=ro,
                     is_read_only=ro,
                 )
             )

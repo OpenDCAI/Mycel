@@ -9,7 +9,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from core.agents.service import AGENT_DISALLOWED, EXPLORE_ALLOWED, AgentService, _BashBackgroundRun, _RunningTask
+from core.agents.service import AGENT_DISALLOWED, AGENT_SCHEMA, EXPLORE_ALLOWED, AgentService, _BashBackgroundRun, _RunningTask
 from core.runtime.registry import ToolRegistry
 from core.runtime.runner import ToolRunner
 from core.runtime.state import AppState, BootstrapConfig, ToolUseContext
@@ -1034,3 +1034,10 @@ async def test_handle_agent_registers_subagent_thread_metadata_before_return(mon
     finally:
         await service.cleanup_background_runs()
         set_current_thread_id("")
+
+
+def test_agent_schema_does_not_claim_general_has_full_tool_access():
+    description = AGENT_SCHEMA["description"]
+
+    assert "general (full tool access)" not in description
+    assert "general (broad tool access except Agent, TaskOutput, and TaskStop)" in description
