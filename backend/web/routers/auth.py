@@ -16,12 +16,13 @@ router = APIRouter(prefix="/api/auth", tags=["auth"])
 class SendOtpRequest(BaseModel):
     email: str
     password: str
+    invite_code: str
 
 
 @router.post("/send-otp")
 async def send_otp(payload: SendOtpRequest, app: Annotated[Any, Depends(get_app)]) -> dict:
     try:
-        await asyncio.to_thread(_get_auth_service(app).send_otp, payload.email, payload.password)
+        await asyncio.to_thread(_get_auth_service(app).send_otp, payload.email, payload.password, payload.invite_code)
         return {"ok": True}
     except ValueError as e:
         raise HTTPException(400, str(e))
