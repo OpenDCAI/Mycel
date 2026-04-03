@@ -9,6 +9,7 @@ Covers:
 from __future__ import annotations
 
 import asyncio
+import json
 import time
 from unittest.mock import AsyncMock, MagicMock
 
@@ -17,6 +18,7 @@ from langchain_core.tools import tool
 
 from core.runtime.errors import InputValidationError
 from core.runtime.agent import _make_mcp_tool_entry
+from core.runtime.middleware import ToolCallRequest
 from core.runtime.permissions import ToolPermissionContext, can_auto_approve
 from core.runtime.registry import ToolEntry, ToolMode, ToolRegistry
 from core.runtime.runner import ToolRunner
@@ -29,6 +31,7 @@ from core.tools.filesystem.read import ReadLimits
 from core.tools.filesystem.read import read_file as read_file_dispatch
 from core.tools.filesystem.read.readers.pdf import read_pdf
 from core.tools.filesystem.service import FileSystemService
+from core.tools.tool_search.service import ToolSearchService
 from sandbox.interfaces.filesystem import DirListResult, FileReadResult, FileSystemBackend, FileWriteResult
 
 # ---------------------------------------------------------------------------
@@ -85,6 +88,12 @@ class TestToolRegistry:
         reg.register(self._make_entry("TaskCreate", ToolMode.DEFERRED))
         results = reg.search("TaskCreate")
         assert any(e.name == "TaskCreate" for e in results)
+
+    def test_search_no_match_returns_empty_results(self):
+        reg = ToolRegistry()
+        reg.register(self._make_entry("Read", ToolMode.INLINE))
+        reg.register(self._make_entry("TaskCreate", ToolMode.DEFERRED))
+        assert reg.search("nonesuch") == []
 
     def test_allowed_tools_filter(self):
         reg = ToolRegistry(allowed_tools={"Read", "Grep"})
@@ -1121,6 +1130,73 @@ class TestToolModeFromConfig:
             assert entry is not None, f"{tool_name} not registered"
             assert entry.is_read_only is True
             assert entry.is_concurrency_safe is False
+
+
+class TestToolSearchService:
+    def _make_ctx(self) -> ToolUseContext:
+        app = AppState()
+        return ToolUseContext(
+            bootstrap=BootstrapConfig(workspace_root="/tmp", model_name="test-model"),
+            get_app_state=lambda: app,
+            set_app_state=lambda fn: None,
+        )
+
+    def test_tool_search_keyword_results_are_capped_to_five(self):
+        reg = ToolRegistry()
+        for index in range(7):
+            reg.register(
+                ToolEntry(
+                    name=f"Deferred{index}",
+                    mode=ToolMode.DEFERRED,
+                    schema={"name": f"Deferred{index}", "description": "alpha helper"},
+                    handler=lambda: "ok",
+                    source="test",
+                )
+            )
+        ToolSearchService(reg)
+        runner = _make_runner(reg.list_all())
+        req = ToolCallRequest(
+            tool_call={"name": "tool_search", "args": {"query": "alpha"}, "id": "tc-search"},
+            state=self._make_ctx(),
+        )
+
+        result = runner.wrap_tool_call(req, lambda r: MagicMock())
+
+        payload = json.loads(result.content)
+        assert len(payload) == 5
+
+    def test_tool_search_excludes_inline_tools(self):
+        reg = ToolRegistry()
+        reg.register(
+            ToolEntry(
+                name="Read",
+                mode=ToolMode.INLINE,
+                schema={"name": "Read", "description": "read file content"},
+                handler=lambda: "read",
+                source="test",
+            )
+        )
+        reg.register(
+            ToolEntry(
+                name="TaskCreate",
+                mode=ToolMode.DEFERRED,
+                schema={"name": "TaskCreate", "description": "create task"},
+                handler=lambda: "task",
+                source="test",
+            )
+        )
+        ToolSearchService(reg)
+        ctx = self._make_ctx()
+        runner = _make_runner(reg.list_all())
+        req = ToolCallRequest(
+            tool_call={"name": "tool_search", "args": {"query": "read"}, "id": "tc-search"},
+            state=ctx,
+        )
+
+        result = runner.wrap_tool_call(req, lambda r: MagicMock())
+
+        assert json.loads(result.content) == []
+        assert ctx.discovered_tool_names == set()
 
     def test_can_auto_approve_only_for_read_only_non_destructive_tools(self):
         assert can_auto_approve(ToolPermissionContext(is_read_only=True, is_destructive=False)) is True

@@ -87,27 +87,36 @@ class ToolRegistry:
             if e.mode == ToolMode.INLINE or e.name in discovered_tool_names
         ]
 
-    def search(self, query: str) -> list[ToolEntry]:
+    def search(self, query: str, *, modes: set[ToolMode] | None = None) -> list[ToolEntry]:
         """Return matching tools with ranked relevance.
 
         Supports ``select:Name1,Name2`` for exact selection.
         Otherwise ranks by: search_hint > name > description.
         """
         q = query.strip()
+        entries = [
+            entry
+            for entry in self._tools.values()
+            if modes is None or entry.mode in modes
+        ]
 
         # --- select:<names> exact lookup ---
         if q.lower().startswith("select:"):
             names = [n.strip() for n in q[len("select:"):].split(",") if n.strip()]
-            results = [self._tools[n] for n in names if n in self._tools]
+            results = [
+                self._tools[n]
+                for n in names
+                if n in self._tools and (modes is None or self._tools[n].mode in modes)
+            ]
             return results
 
         # --- keyword search with ranking ---
         keywords = q.lower().split()
         if not keywords:
-            return list(self._tools.values())
+            return list(entries)
 
         scored: list[tuple[int, ToolEntry]] = []
-        for entry in self._tools.values():
+        for entry in entries:
             schema = entry.get_schema()
             name_lower = entry.name.lower()
             hint_lower = entry.search_hint.lower()
@@ -125,7 +134,7 @@ class ToolRegistry:
                 scored.append((score, entry))
 
         if not scored:
-            return list(self._tools.values())
+            return []
 
         scored.sort(key=lambda x: x[0], reverse=True)
         return [entry for _, entry in scored]

@@ -53,7 +53,9 @@ class ToolSearchService:
         logger.info("ToolSearchService initialized")
 
     def _search(self, query: str = "", tool_context=None, **kwargs) -> str:
-        results = self._registry.search(query)
+        results = self._registry.search(query, modes={ToolMode.DEFERRED})
+        if not query.strip().lower().startswith("select:"):
+            results = results[:5]
         if tool_context is not None and hasattr(tool_context, "discovered_tool_names"):
             tool_context.discovered_tool_names.update(entry.name for entry in results)
         schemas = [e.get_schema() for e in results]

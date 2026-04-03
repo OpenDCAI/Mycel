@@ -440,7 +440,7 @@ def test_tool_concurrency_safety_does_not_infer_from_read_only():
 
 @pytest.mark.asyncio
 async def test_max_turns_stops_loop():
-    """Agent that always calls a tool should stop at max_turns."""
+    """Agent that hits max_turns should fail loudly on the caller-facing astream surface."""
 
     def noop_handler() -> str:
         return "ok"
@@ -465,12 +465,10 @@ async def test_max_turns_stops_loop():
 
     loop = make_loop(model, registry=make_registry(entry), max_turns=3)
 
-    chunks = []
-    async for chunk in loop.astream({"messages": [{"role": "user", "content": "go"}]}):
-        chunks.append(chunk)
+    with pytest.raises(RuntimeError, match="max_turns"):
+        async for _ in loop.astream({"messages": [{"role": "user", "content": "go"}]}):
+            pass
 
-    # Should stop after 3 turns (3 agent + 3 tool chunks = 6 total)
-    assert len(chunks) <= 6
     assert model.ainvoke.call_count == 3
 
 

@@ -436,7 +436,7 @@ class FileSystemService:
         if file_size is not None and file_size > self.max_file_size:
             return f"File too large: {file_size:,} bytes (max: {self.max_file_size:,} bytes)"
 
-        has_pagination = offset > 0 or limit is not None
+        has_pagination = offset > 0 or limit is not None or pages is not None
         if not has_pagination and file_size is not None:
             limits = ReadLimits()
             if file_size > limits.max_size_bytes:

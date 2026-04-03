@@ -341,6 +341,58 @@ class _DeferredExecutionProbeModel:
         return AIMessage(content="PT02_EXEC_DONE")
 
 
+class _DeferredCrossThreadProbeModel:
+    def __init__(self):
+        self.turn_tool_names: list[list[str]] = []
+        self._tools: list[dict] = []
+
+    def bind_tools(self, tools):
+        self._tools = list(tools or [])
+        self.turn_tool_names.append([tool.get("name") for tool in self._tools if isinstance(tool, dict)])
+        return self
+
+    def configurable_fields(self, **kwargs):
+        return self
+
+    def with_config(self, *args, **kwargs):
+        return self
+
+    async def ainvoke(self, messages):
+        joined = " ".join(str(getattr(msg, "content", "")) for msg in messages)
+        current_tool_names = {tool.get("name") for tool in self._tools if isinstance(tool, dict)}
+
+        if "discover task tools" in joined and "TaskCreate" not in current_tool_names:
+            return AIMessage(
+                content="",
+                tool_calls=[{"name": "tool_search", "args": {"query": "select:TaskCreate"}, "id": "tc-search"}],
+            )
+
+        if "discover task tools" in joined:
+            return AIMessage(content="discover-done")
+
+        return AIMessage(content="plain-done")
+
+
+class _DeferredResumeProbeModel:
+    def __init__(self):
+        self.turn_tool_names: list[list[str]] = []
+        self._tools: list[dict] = []
+
+    def bind_tools(self, tools):
+        self._tools = list(tools or [])
+        self.turn_tool_names.append([tool.get("name") for tool in self._tools if isinstance(tool, dict)])
+        return self
+
+    def configurable_fields(self, **kwargs):
+        return self
+
+    def with_config(self, *args, **kwargs):
+        return self
+
+    async def ainvoke(self, messages):
+        return AIMessage(content="resume-done")
+
+
 @pytest.mark.asyncio
 @_patch_env_api_key()
 async def test_leon_agent_reinjects_discovered_deferred_tool_schemas_on_following_turn(tmp_path):
@@ -397,6 +449,78 @@ async def test_leon_agent_can_execute_discovered_deferred_tool_on_following_turn
         assert len(task_tool_messages) == 1
         assert "PT02_EXEC" in str(task_tool_messages[0].content)
         assert any(isinstance(msg, AIMessage) and msg.content == "PT02_EXEC_DONE" for msg in result["messages"])
+
+        agent.close()
+
+
+@pytest.mark.asyncio
+@_patch_env_api_key()
+async def test_leon_agent_deferred_discovery_does_not_leak_across_threads(tmp_path):
+    """Deferred tools discovered on one thread must not become inline on another thread."""
+    from core.runtime.agent import LeonAgent
+
+    probe_model = _DeferredCrossThreadProbeModel()
+
+    with patch("core.runtime.agent.LeonAgent._create_model", return_value=probe_model), \
+         patch("core.runtime.agent.LeonAgent._init_async_components", return_value=(None, [])), \
+         patch("core.runtime.agent.LeonAgent._init_checkpointer", new_callable=AsyncMock, return_value=None):
+
+        agent = LeonAgent(workspace_root=str(tmp_path), api_key="sk-test-integration")
+        await agent.ainit()
+
+        result_a = await agent.ainvoke("discover task tools", thread_id="thread-A")
+        result_b = await agent.ainvoke("plain request", thread_id="thread-B")
+
+        assert result_a["reason"] == "completed"
+        assert result_b["reason"] == "completed"
+        assert len(probe_model.turn_tool_names) >= 3
+
+        first_thread_a, second_thread_a, first_thread_b = probe_model.turn_tool_names[:3]
+        assert "TaskCreate" not in first_thread_a
+        assert "TaskCreate" in second_thread_a
+        assert "TaskCreate" not in first_thread_b
+
+        agent.close()
+
+
+@pytest.mark.asyncio
+@_patch_env_api_key()
+async def test_leon_agent_restores_discovered_deferred_tools_after_restart(tmp_path):
+    """Restarting the loop on the same thread should restore prior deferred discoveries from history."""
+    from core.runtime.agent import LeonAgent
+
+    checkpointer = _MemoryCheckpointer()
+    discovery_model = _DeferredDiscoveryProbeModel()
+
+    with patch("core.runtime.agent.LeonAgent._create_model", return_value=discovery_model), \
+         patch("core.runtime.agent.LeonAgent._init_async_components", return_value=(None, [])), \
+         patch("core.runtime.agent.LeonAgent._init_checkpointer", new_callable=AsyncMock, return_value=None):
+
+        agent = LeonAgent(workspace_root=str(tmp_path), api_key="sk-test-integration")
+        await agent.ainit()
+        agent.checkpointer = checkpointer
+        agent.agent.checkpointer = checkpointer
+
+        result = await agent.ainvoke("discover task tools", thread_id="resume-thread")
+        assert result["reason"] == "completed"
+        agent.close()
+
+    resume_model = _DeferredResumeProbeModel()
+
+    with patch("core.runtime.agent.LeonAgent._create_model", return_value=resume_model), \
+         patch("core.runtime.agent.LeonAgent._init_async_components", return_value=(None, [])), \
+         patch("core.runtime.agent.LeonAgent._init_checkpointer", new_callable=AsyncMock, return_value=None):
+
+        agent = LeonAgent(workspace_root=str(tmp_path), api_key="sk-test-integration")
+        await agent.ainit()
+        agent.checkpointer = checkpointer
+        agent.agent.checkpointer = checkpointer
+
+        result = await agent.ainvoke("after restart", thread_id="resume-thread")
+
+        assert result["reason"] == "completed"
+        assert resume_model.turn_tool_names
+        assert "TaskCreate" in resume_model.turn_tool_names[0]
 
         agent.close()
 

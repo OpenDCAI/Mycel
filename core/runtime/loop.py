@@ -14,6 +14,7 @@ Design:
 from __future__ import annotations
 
 import asyncio
+import json
 import inspect
 import logging
 import re
@@ -31,7 +32,7 @@ from core.runtime.middleware import (
 from langchain_core.messages import AIMessage, AIMessageChunk, HumanMessage, SystemMessage, ToolMessage
 
 from .abort import AbortController
-from .registry import ToolRegistry
+from .registry import ToolMode, ToolRegistry
 from .state import AppState, BootstrapConfig, ToolUseContext
 
 logger = logging.getLogger(__name__)
@@ -133,7 +134,7 @@ class QueryLoop:
         self._tool_read_file_state: dict[str, Any] = {}
         self._tool_loaded_nested_memory_paths: set[str] = set()
         self._tool_discovered_skill_names: set[str] = set()
-        self._tool_discovered_tool_names: set[str] = set()
+        self._tool_discovered_tool_names_by_thread: dict[str, set[str]] = {}
         self._tool_abort_controller = AbortController()
         self.max_turns = max_turns
         self.last_terminal: TerminalState | None = None
@@ -158,6 +159,7 @@ class QueryLoop:
 
         # Load message history from checkpointer
         messages = await self._load_messages(thread_id)
+        self._restore_discovered_tool_names_from_messages(thread_id, messages)
 
         # Parse and append new input messages
         new_msgs = self._parse_input(input)
@@ -174,7 +176,7 @@ class QueryLoop:
         turn = 0
         while turn < self.max_turns:
             turn += 1
-            tool_context = self._build_tool_use_context(messages)
+            tool_context = self._build_tool_use_context(messages, thread_id=thread_id)
 
             messages_for_query = await self._build_query_messages(messages, config)
             self._sync_tool_context_messages(tool_context, messages_for_query)
@@ -192,6 +194,7 @@ class QueryLoop:
                     async for stream_event in self._stream_model_with_tool_overlap(
                         messages_for_query,
                         config,
+                        thread_id=thread_id,
                         tool_context=tool_context,
                         max_output_tokens_override=max_output_tokens_override,
                     ):
@@ -211,6 +214,7 @@ class QueryLoop:
                     response = await self._invoke_model(
                         messages_for_query,
                         config,
+                        thread_id=thread_id,
                         max_output_tokens_override=max_output_tokens_override,
                     )
             except Exception as exc:
@@ -439,6 +443,7 @@ class QueryLoop:
         messages: list,
         config: dict,
         *,
+        thread_id: str = "default",
         max_output_tokens_override: int | None = None,
     ) -> ModelResponse:
         """Call model through the full middleware chain (awrap_model_call)."""
@@ -475,7 +480,9 @@ class QueryLoop:
             return ModelResponse(result=result, request_messages=list(request.messages))
 
         # Build ModelRequest
-        inline_schemas = self._registry.get_inline_schemas(self._tool_discovered_tool_names)
+        inline_schemas = self._registry.get_inline_schemas(
+            self._get_discovered_tool_names(thread_id)
+        )
         request = ModelRequest(
             model=self.model,
             messages=messages,
@@ -524,8 +531,12 @@ class QueryLoop:
     async def _prepare_streaming_request(
         self,
         messages: list,
+        *,
+        thread_id: str,
     ) -> ModelRequest:
-        inline_schemas = self._registry.get_inline_schemas(self._tool_discovered_tool_names)
+        inline_schemas = self._registry.get_inline_schemas(
+            self._get_discovered_tool_names(thread_id)
+        )
         request = ModelRequest(
             model=self.model,
             messages=messages,
@@ -553,10 +564,11 @@ class QueryLoop:
         messages: list,
         config: dict,
         *,
+        thread_id: str,
         tool_context: ToolUseContext | None,
         max_output_tokens_override: int | None,
     ) -> AsyncGenerator[dict[str, Any], None]:
-        prepared_request = await self._prepare_streaming_request(messages)
+        prepared_request = await self._prepare_streaming_request(messages, thread_id=thread_id)
         bound = self._bind_model(
             prepared_request.model,
             prepared_request.tools,
@@ -722,7 +734,42 @@ class QueryLoop:
             return 0
         return max(boundary, 0)
 
-    def _build_tool_use_context(self, messages: list) -> ToolUseContext | None:
+    def _get_discovered_tool_names(self, thread_id: str) -> set[str]:
+        # @@@dt-03-thread-scoped-deferred-tools - deferred discovery must stay
+        # isolated per thread_id, or one thread's tool_search silently changes
+        # another thread's inline schema surface on the next turn.
+        return self._tool_discovered_tool_names_by_thread.setdefault(thread_id, set())
+
+    def _restore_discovered_tool_names_from_messages(
+        self,
+        thread_id: str,
+        messages: list,
+    ) -> None:
+        discovered: set[str] = set()
+        for message in messages:
+            if not isinstance(message, ToolMessage) or getattr(message, "name", None) != "tool_search":
+                continue
+            content = getattr(message, "content", None)
+            if not isinstance(content, str):
+                continue
+            try:
+                payload = json.loads(content)
+            except Exception:
+                continue
+            if not isinstance(payload, list):
+                continue
+            for item in payload:
+                if not isinstance(item, dict):
+                    continue
+                name = item.get("name")
+                if not isinstance(name, str):
+                    continue
+                entry = self._registry.get(name)
+                if entry is not None and entry.mode == ToolMode.DEFERRED:
+                    discovered.add(name)
+        self._tool_discovered_tool_names_by_thread[thread_id] = discovered
+
+    def _build_tool_use_context(self, messages: list, *, thread_id: str = "default") -> ToolUseContext | None:
         if self._bootstrap is None or self._app_state is None:
             return None
         return ToolUseContext(
@@ -733,7 +780,7 @@ class QueryLoop:
             read_file_state=self._tool_read_file_state,
             loaded_nested_memory_paths=self._tool_loaded_nested_memory_paths,
             discovered_skill_names=self._tool_discovered_skill_names,
-            discovered_tool_names=self._tool_discovered_tool_names,
+            discovered_tool_names=self._get_discovered_tool_names(thread_id),
             nested_memory_attachment_triggers=set(),
             abort_controller=self._tool_abort_controller,
             messages=list(messages),
@@ -1267,7 +1314,7 @@ class QueryLoop:
         self._tool_read_file_state.clear()
         self._tool_loaded_nested_memory_paths.clear()
         self._tool_discovered_skill_names.clear()
-        self._tool_discovered_tool_names.clear()
+        self._tool_discovered_tool_names_by_thread.pop(thread_id, None)
 
         if self._memory_middleware is not None:
             summary_store = getattr(self._memory_middleware, "summary_store", None)
