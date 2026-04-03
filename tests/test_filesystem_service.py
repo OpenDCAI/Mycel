@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from pathlib import Path
+import threading
+import time
 
 from core.runtime.registry import ToolRegistry
 from core.tools.filesystem.service import FileSystemService, _ReadFileStateCache
@@ -255,3 +257,79 @@ def test_edit_rechecks_staleness_inside_critical_section(tmp_path: Path):
     assert "modified since last read" in edit_result
     assert backend.writes == []
     assert backend._content == "alpha\nEXTERNAL\n"
+
+def test_concurrent_edits_do_not_both_commit_from_same_stale_read(tmp_path: Path):
+    class ConcurrentBackend(FileSystemBackend):
+        is_remote = False
+
+        def __init__(self):
+            self._mtime = 1.0
+            self._content = "alpha\nbeta\n"
+            self._write_lock = threading.Lock()
+            self.writes: list[str] = []
+
+        def read_file(self, path: str) -> FileReadResult:
+            return FileReadResult(content=self._content, size=len(self._content))
+
+        def write_file(self, path: str, content: str) -> FileWriteResult:
+            time.sleep(0.05)
+            with self._write_lock:
+                self.writes.append(content)
+                self._content = content
+                self._mtime += 1.0
+            return FileWriteResult(success=True)
+
+        def file_exists(self, path: str) -> bool:
+            return True
+
+        def file_mtime(self, path: str) -> float | None:
+            return self._mtime
+
+        def file_size(self, path: str) -> int | None:
+            return len(self._content.encode("utf-8"))
+
+        def is_dir(self, path: str) -> bool:
+            return False
+
+        def list_dir(self, path: str) -> DirListResult:
+            return DirListResult(entries=[])
+
+    backend = ConcurrentBackend()
+    service = FileSystemService(
+        registry=ToolRegistry(),
+        workspace_root=tmp_path,
+        backend=backend,
+    )
+    target = (tmp_path / "race.txt").resolve()
+    service._read_files.set(
+        target,
+        state=service._read_files.make_state(timestamp=1.0, is_partial=False),
+    )
+
+    results: list[str] = []
+
+    def run_edit(new_string: str) -> None:
+        results.append(
+            service._edit_file(
+                str(target),
+                old_string="beta",
+                new_string=new_string,
+            )
+        )
+
+    t1 = threading.Thread(target=run_edit, args=("BETA-ONE",))
+    t2 = threading.Thread(target=run_edit, args=("BETA-TWO",))
+    t1.start()
+    t2.start()
+    t1.join()
+    t2.join()
+
+    success_count = sum("File edited" in result for result in results)
+    failure_count = sum(
+        ("modified since last read" in result) or ("String not found in file" in result)
+        for result in results
+    )
+
+    assert success_count == 1
+    assert failure_count == 1
+    assert len(backend.writes) == 1

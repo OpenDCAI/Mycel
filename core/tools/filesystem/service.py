@@ -13,6 +13,7 @@ from collections import OrderedDict
 from dataclasses import dataclass
 import logging
 from pathlib import Path
+import threading
 from typing import TYPE_CHECKING, Any
 
 from core.runtime.registry import ToolEntry, ToolMode, ToolRegistry
@@ -114,6 +115,7 @@ class FileSystemService:
         self.max_edit_file_size = max_edit_file_size
         self.operation_recorder = operation_recorder
         self.extra_allowed_paths: list[Path] = [Path(p) if backend.is_remote else Path(p).resolve() for p in (extra_allowed_paths or [])]
+        self._edit_critical_section = threading.Lock()
 
         if not backend.is_remote:
             self.workspace_root.mkdir(parents=True, exist_ok=True)
@@ -503,46 +505,51 @@ class FileSystemService:
             return "Error: old_string and new_string are identical (no-op edit)"
 
         try:
-            raw = self.backend.read_file(str(resolved))
-            content = raw.content
+            # @@@edit-critical-lock
+            # dt-01 requires the reread -> stale check -> write path to be one
+            # synchronous critical section so two stale concurrent edits cannot
+            # both commit from the same prior read snapshot.
+            with self._edit_critical_section:
+                raw = self.backend.read_file(str(resolved))
+                content = raw.content
 
-            # @@@edit-critical-staleness
-            # te-06 needs a second stale-read check inside the read->write
-            # critical section so an external write that lands after the
-            # preflight check cannot be silently overwritten.
-            staleness_error = self._check_file_staleness(resolved)
-            if staleness_error:
-                return staleness_error
+                # @@@edit-critical-staleness
+                # te-06 needs a second stale-read check inside the read->write
+                # critical section so an external write that lands after the
+                # preflight check cannot be silently overwritten.
+                staleness_error = self._check_file_staleness(resolved)
+                if staleness_error:
+                    return staleness_error
 
-            if old_string not in content:
-                return f"String not found in file\n   Looking for: {old_string[:100]}..."
+                if old_string not in content:
+                    return f"String not found in file\n   Looking for: {old_string[:100]}..."
 
-            if replace_all:
-                count = content.count(old_string)
-                new_content = content.replace(old_string, new_string)
-            else:
-                count = content.count(old_string)
-                if count > 1:
-                    return (
-                        f"String appears {count} times in file (not unique)\n"
-                        f"   Use replace_all=true or provide more context to make it unique"
-                    )
-                new_content = content.replace(old_string, new_string, 1)
-                count = 1
+                if replace_all:
+                    count = content.count(old_string)
+                    new_content = content.replace(old_string, new_string)
+                else:
+                    count = content.count(old_string)
+                    if count > 1:
+                        return (
+                            f"String appears {count} times in file (not unique)\n"
+                            f"   Use replace_all=true or provide more context to make it unique"
+                        )
+                    new_content = content.replace(old_string, new_string, 1)
+                    count = 1
 
-            result = self.backend.write_file(str(resolved), new_content)
-            if not result.success:
-                return f"Error editing file: {result.error}"
+                result = self.backend.write_file(str(resolved), new_content)
+                if not result.success:
+                    return f"Error editing file: {result.error}"
 
-            self._update_file_tracking(resolved, is_partial=False)
-            self._record_operation(
-                operation_type="edit",
-                file_path=file_path,
-                before_content=content,
-                after_content=new_content,
-                changes=[{"old_string": old_string, "new_string": new_string}],
-            )
-            return f"File edited: {file_path}\n   Replaced {count} occurrence(s)"
+                self._update_file_tracking(resolved, is_partial=False)
+                self._record_operation(
+                    operation_type="edit",
+                    file_path=file_path,
+                    before_content=content,
+                    after_content=new_content,
+                    changes=[{"old_string": old_string, "new_string": new_string}],
+                )
+                return f"File edited: {file_path}\n   Replaced {count} occurrence(s)"
         except Exception as e:
             return f"Error editing file: {e}"
 
