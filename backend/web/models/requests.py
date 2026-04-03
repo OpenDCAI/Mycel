@@ -58,3 +58,8 @@ class SendMessageRequest(BaseModel):
 class ResolvePermissionRequest(BaseModel):
     decision: Literal["allow", "deny"]
     message: str | None = None
+
+
+class ThreadPermissionRuleRequest(BaseModel):
+    behavior: Literal["allow", "deny", "ask"]
+    tool_name: str

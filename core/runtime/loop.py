@@ -36,7 +36,7 @@ from langchain_core.messages import AIMessage, AIMessageChunk, HumanMessage, Rem
 from .abort import AbortController
 from .registry import ToolMode, ToolRegistry
 from .permissions import ToolPermissionContext, evaluate_permission_rules
-from .state import AppState, BootstrapConfig, ToolUseContext
+from .state import AppState, BootstrapConfig, ToolPermissionState, ToolUseContext
 
 logger = logging.getLogger(__name__)
 
@@ -1497,10 +1497,11 @@ class QueryLoop:
     def _thread_permission_state_snapshot(
         self,
         thread_id: str,
-    ) -> tuple[dict[str, dict[str, Any]], dict[str, dict[str, Any]]]:
+    ) -> tuple[dict[str, Any], dict[str, dict[str, Any]], dict[str, dict[str, Any]]]:
         if self._app_state is None:
-            return {}, {}
+            return {}, {}, {}
 
+        permission_context = copy.deepcopy(self._app_state.tool_permission_context.model_dump())
         pending = {
             key: copy.deepcopy(value)
             for key, value in self._app_state.pending_permission_requests.items()
@@ -1511,12 +1512,13 @@ class QueryLoop:
             for key, value in self._app_state.resolved_permission_requests.items()
             if value.get("thread_id") == thread_id
         }
-        return pending, resolved
+        return permission_context, pending, resolved
 
     def _restore_thread_permission_state(
         self,
         thread_id: str,
         *,
+        permission_context: dict[str, Any],
         pending: dict[str, dict[str, Any]],
         resolved: dict[str, dict[str, Any]],
     ) -> None:
@@ -1542,6 +1544,7 @@ class QueryLoop:
             kept_resolved.update(copy.deepcopy(resolved))
             return state.model_copy(
                 update={
+                    "tool_permission_context": ToolPermissionState.model_validate(copy.deepcopy(permission_context)),
                     "pending_permission_requests": kept_pending,
                     "resolved_permission_requests": kept_resolved,
                 }
@@ -1552,17 +1555,20 @@ class QueryLoop:
     async def _hydrate_thread_state_from_checkpoint(self, thread_id: str) -> dict[str, Any]:
         channel_values = await self._load_checkpoint_channel_values(thread_id)
         messages = list(channel_values.get("messages", []))
+        permission_context = dict(channel_values.get("tool_permission_context", {}) or {})
         pending = dict(channel_values.get("pending_permission_requests", {}) or {})
         resolved = dict(channel_values.get("resolved_permission_requests", {}) or {})
         turn_count = self._app_state.turn_count if self._app_state is not None else 0
         self._sync_app_state(messages=messages, turn_count=turn_count)
         self._restore_thread_permission_state(
             thread_id,
+            permission_context=permission_context,
             pending=pending,
             resolved=resolved,
         )
         return {
             "messages": messages,
+            "tool_permission_context": permission_context,
             "pending_permission_requests": pending,
             "resolved_permission_requests": resolved,
         }
@@ -1576,9 +1582,10 @@ class QueryLoop:
 
             cfg = self._checkpoint_config(thread_id)
             checkpoint = empty_checkpoint()
-            pending_requests, resolved_requests = self._thread_permission_state_snapshot(thread_id)
+            permission_context, pending_requests, resolved_requests = self._thread_permission_state_snapshot(thread_id)
             checkpoint["channel_values"] = {
                 "messages": messages,
+                "tool_permission_context": permission_context,
                 "pending_permission_requests": pending_requests,
                 "resolved_permission_requests": resolved_requests,
             }

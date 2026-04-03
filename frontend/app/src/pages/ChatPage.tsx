@@ -32,6 +32,7 @@ import { useSandboxManager } from "../hooks/use-sandbox-manager";
 import { useDisplayDeltas } from "../hooks/use-display-deltas";
 import { useThreadData } from "../hooks/use-thread-data";
 import { useThreadPermissions } from "../hooks/use-thread-permissions";
+import type { PermissionRuleBehavior } from "../api";
 import type { ThreadManagerState, ThreadManagerActions } from "../hooks/use-thread-manager";
 
 interface OutletContext {
@@ -95,7 +96,11 @@ function ChatPageInner({ threadId }: { threadId: string }) {
   const { entries, activeSandbox, loading, displaySeq, setEntries, setActiveSandbox, refreshThread } = useThreadData(threadId, runStarted, initialEntries);
   const {
     requests: pendingPermissionRequests,
+    sessionRules,
+    managedOnly,
     resolvingId,
+    addSessionRule,
+    removeSessionRule,
     resolvePermission,
   } = useThreadPermissions(threadId);
 
@@ -184,6 +189,43 @@ function ChatPageInner({ threadId }: { threadId: string }) {
       }
     },
     [currentPermissionRequest, refreshThread, resolvePermission],
+  );
+
+  const handlePersistedPermissionDecision = useCallback(
+    async (decision: "allow" | "deny") => {
+      if (!currentPermissionRequest) return;
+      try {
+        await addSessionRule(decision, currentPermissionRequest.tool_name);
+        await resolvePermission(currentPermissionRequest.request_id, decision);
+        await refreshThread();
+        toast.success(decision === "allow" ? "已为当前线程保存长期批准" : "已为当前线程保存长期拒绝");
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        toast.error(`线程权限规则保存失败: ${message}`);
+      }
+    },
+    [addSessionRule, currentPermissionRequest, refreshThread, resolvePermission],
+  );
+
+  const activeSessionRules = ([
+    ["allow", sessionRules.allow],
+    ["deny", sessionRules.deny],
+    ["ask", sessionRules.ask],
+  ] as const).flatMap(([behavior, tools]) =>
+    tools.map((toolName) => ({ behavior, toolName })),
+  );
+
+  const handleRemoveSessionRule = useCallback(
+    async (behavior: PermissionRuleBehavior, toolName: string) => {
+      try {
+        await removeSessionRule(behavior, toolName);
+        toast.success("已移除当前线程权限规则");
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        toast.error(`移除线程权限规则失败: ${message}`);
+      }
+    },
+    [removeSessionRule],
   );
 
   // @@@workspace-upload — upload attached files then send message with attachment filenames
@@ -288,9 +330,54 @@ function ChatPageInner({ threadId }: { threadId: string }) {
                         <X className="w-4 h-4" />
                         拒绝
                       </Button>
+                      {!managedOnly && (
+                        <>
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            onClick={() => void handlePersistedPermissionDecision("allow")}
+                            disabled={resolvingId === currentPermissionRequest.request_id}
+                          >
+                            本线程始终批准
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            onClick={() => void handlePersistedPermissionDecision("deny")}
+                            disabled={resolvingId === currentPermissionRequest.request_id}
+                          >
+                            本线程始终拒绝
+                          </Button>
+                        </>
+                      )}
                     </div>
+                    {managedOnly && (
+                      <p className="pt-1 text-xs text-muted-foreground">
+                        当前为 managed-only 模式，不能写入线程级权限覆盖规则。
+                      </p>
+                    )}
                   </AlertDescription>
                 </Alert>
+              </div>
+            </div>
+          )}
+          {activeSessionRules.length > 0 && (
+            <div className="px-3 py-2 border-b border-border/60 bg-muted/20">
+              <div className="max-w-3xl mx-auto flex flex-wrap items-center gap-2">
+                <span className="text-xs font-medium text-muted-foreground">本线程权限规则</span>
+                {activeSessionRules.map(({ behavior, toolName }) => (
+                  <Button
+                    key={`${behavior}:${toolName}`}
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="h-7 gap-2 text-xs"
+                    onClick={() => void handleRemoveSessionRule(behavior, toolName)}
+                  >
+                    <span>{behavior}:{toolName}</span>
+                    <X className="w-3 h-3" />
+                  </Button>
+                ))}
               </div>
             </div>
           )}

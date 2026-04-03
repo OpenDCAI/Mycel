@@ -53,9 +53,19 @@ export interface PermissionRequest {
   message?: string | null;
 }
 
+export type PermissionRuleBehavior = "allow" | "deny" | "ask";
+
+export interface ThreadPermissionRules {
+  allow: string[];
+  deny: string[];
+  ask: string[];
+}
+
 export interface ThreadPermissions {
   thread_id: string;
   requests: PermissionRequest[];
+  session_rules: ThreadPermissionRules;
+  managed_only: boolean;
 }
 
 export interface SandboxType {

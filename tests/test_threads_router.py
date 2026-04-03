@@ -83,7 +83,15 @@ class _FakePermissionAgent:
                 "message": "needs approval",
             }
         ]
+        self.session_rules = {
+            "allow": ["Read"],
+            "deny": ["Bash"],
+            "ask": ["Edit"],
+        }
+        self.managed_only = False
         self.resolve_calls: list[tuple[str, str, str | None]] = []
+        self.rule_add_calls: list[tuple[str, str]] = []
+        self.rule_remove_calls: list[tuple[str, str]] = []
         self.agent = SimpleNamespace(
             aget_state=AsyncMock(return_value=SimpleNamespace(values={})),
             apersist_state=AsyncMock(),
@@ -99,6 +107,34 @@ class _FakePermissionAgent:
         if request_id != "perm-1":
             return False
         self.pending = []
+        return True
+
+    def get_thread_permission_rules(self, thread_id: str) -> dict[str, object]:
+        return {
+            "thread_id": thread_id,
+            "scope": "session",
+            "managed_only": self.managed_only,
+            "rules": dict(self.session_rules),
+        }
+
+    def add_thread_permission_rule(self, thread_id: str, *, behavior: str, tool_name: str) -> bool:
+        self.rule_add_calls.append((behavior, tool_name))
+        if self.managed_only:
+            return False
+        for bucket in self.session_rules.values():
+            if tool_name in bucket:
+                bucket.remove(tool_name)
+        bucket = self.session_rules.setdefault(behavior, [])
+        if tool_name not in bucket:
+            bucket.append(tool_name)
+        return True
+
+    def remove_thread_permission_rule(self, thread_id: str, *, behavior: str, tool_name: str) -> bool:
+        self.rule_remove_calls.append((behavior, tool_name))
+        bucket = self.session_rules.get(behavior, [])
+        if tool_name not in bucket:
+            return False
+        bucket.remove(tool_name)
         return True
 
 
@@ -216,6 +252,12 @@ async def test_get_thread_permissions_returns_thread_scoped_pending_requests():
                 "message": "needs approval",
             }
         ],
+        "session_rules": {
+            "allow": ["Read"],
+            "deny": ["Bash"],
+            "ask": ["Edit"],
+        },
+        "managed_only": False,
     }
 
 
@@ -252,6 +294,77 @@ async def test_resolve_thread_permission_request_404s_missing_request():
     assert exc_info.value.status_code == 404
     assert exc_info.value.detail == "Permission request not found"
     agent.agent.apersist_state.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_add_thread_permission_rule_persists_session_rule():
+    agent = _FakePermissionAgent()
+
+    result = await threads_router.add_thread_permission_rule(
+        "thread-1",
+        SimpleNamespace(behavior="allow", tool_name="Write"),
+        user_id="owner-1",
+        agent=agent,
+    )
+
+    assert result == {
+        "ok": True,
+        "thread_id": "thread-1",
+        "scope": "session",
+        "rules": {
+            "allow": ["Read", "Write"],
+            "deny": ["Bash"],
+            "ask": ["Edit"],
+        },
+        "managed_only": False,
+    }
+    assert agent.rule_add_calls == [("allow", "Write")]
+    agent.agent.apersist_state.assert_awaited_once_with("thread-1")
+
+
+@pytest.mark.asyncio
+async def test_add_thread_permission_rule_fails_loud_when_managed_only():
+    agent = _FakePermissionAgent()
+    agent.managed_only = True
+
+    with pytest.raises(threads_router.HTTPException) as exc_info:
+        await threads_router.add_thread_permission_rule(
+            "thread-1",
+            SimpleNamespace(behavior="allow", tool_name="Write"),
+            user_id="owner-1",
+            agent=agent,
+        )
+
+    assert exc_info.value.status_code == 409
+    assert exc_info.value.detail == "Managed permission rules only; session overrides are disabled"
+    agent.agent.apersist_state.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_remove_thread_permission_rule_persists_session_rule_change():
+    agent = _FakePermissionAgent()
+
+    result = await threads_router.delete_thread_permission_rule(
+        "thread-1",
+        "deny",
+        "Bash",
+        user_id="owner-1",
+        agent=agent,
+    )
+
+    assert result == {
+        "ok": True,
+        "thread_id": "thread-1",
+        "scope": "session",
+        "rules": {
+            "allow": ["Read"],
+            "deny": [],
+            "ask": ["Edit"],
+        },
+        "managed_only": False,
+    }
+    assert agent.rule_remove_calls == [("deny", "Bash")]
+    agent.agent.apersist_state.assert_awaited_once_with("thread-1")
 
 
 @pytest.mark.asyncio

@@ -15,7 +15,7 @@ from core.runtime.middleware.memory import MemoryMiddleware
 from core.runtime.middleware import AgentMiddleware
 from core.runtime.loop import QueryLoop, _StreamingToolExecutor
 from core.runtime.registry import ToolEntry, ToolMode, ToolRegistry
-from core.runtime.state import AppState, BootstrapConfig
+from core.runtime.state import AppState, BootstrapConfig, ToolPermissionState
 from storage.providers.sqlite.kernel import connect_sqlite_async
 
 
@@ -489,6 +489,11 @@ async def test_query_loop_aget_state_exposes_persisted_permission_state_for_back
         checkpointer=checkpointer,
         registry=make_registry(),
         app_state=AppState(
+            tool_permission_context=ToolPermissionState(
+                alwaysAllowRules={"session": ["Write"]},
+                alwaysDenyRules={"session": ["Bash"]},
+                alwaysAskRules={"session": ["Edit"]},
+            ),
             pending_permission_requests=pending,
             resolved_permission_requests=resolved,
         ),
@@ -516,6 +521,12 @@ async def test_query_loop_aget_state_exposes_persisted_permission_state_for_back
 
     assert state.values["pending_permission_requests"] == pending
     assert state.values["resolved_permission_requests"] == resolved
+    assert state.values["tool_permission_context"] == {
+        "alwaysAllowRules": {"session": ["Write"]},
+        "alwaysDenyRules": {"session": ["Bash"]},
+        "alwaysAskRules": {"session": ["Edit"]},
+        "allowManagedPermissionRulesOnly": False,
+    }
 
 
 @pytest.mark.asyncio
@@ -547,6 +558,11 @@ async def test_query_loop_restores_persisted_permission_state_into_live_app_stat
         checkpointer=checkpointer,
         registry=make_registry(),
         app_state=AppState(
+            tool_permission_context=ToolPermissionState(
+                alwaysAllowRules={"session": ["Write"]},
+                alwaysDenyRules={"session": ["Bash"]},
+                alwaysAskRules={"session": ["Edit"]},
+            ),
             pending_permission_requests=pending,
             resolved_permission_requests=resolved,
         ),
@@ -577,6 +593,9 @@ async def test_query_loop_restores_persisted_permission_state_into_live_app_stat
 
     assert app_state.pending_permission_requests == pending
     assert app_state.resolved_permission_requests == resolved
+    assert app_state.tool_permission_context.alwaysAllowRules == {"session": ["Write"]}
+    assert app_state.tool_permission_context.alwaysDenyRules == {"session": ["Bash"]}
+    assert app_state.tool_permission_context.alwaysAskRules == {"session": ["Edit"]}
 
 
 @pytest.mark.asyncio

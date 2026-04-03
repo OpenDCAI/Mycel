@@ -24,6 +24,7 @@ from backend.web.models.requests import (
     ResolvePermissionRequest,
     SaveThreadLaunchConfigRequest,
     SendMessageRequest,
+    ThreadPermissionRuleRequest,
 )
 from backend.web.services import sandbox_service
 from backend.web.services.agent_pool import get_or_create_agent, resolve_thread_sandbox
@@ -796,9 +797,12 @@ async def get_thread_permissions(
     agent: Annotated[Any, Depends(get_thread_agent)] = None,
 ) -> dict[str, Any]:
     await agent.agent.aget_state({"configurable": {"thread_id": thread_id}})
+    rule_state = agent.get_thread_permission_rules(thread_id)
     return {
         "thread_id": thread_id,
         "requests": agent.get_pending_permission_requests(thread_id),
+        "session_rules": rule_state["rules"],
+        "managed_only": rule_state["managed_only"],
     }
 
 
@@ -820,6 +824,62 @@ async def resolve_thread_permission_request(
         raise HTTPException(status_code=404, detail="Permission request not found")
     await agent.agent.apersist_state(thread_id)
     return {"ok": True, "thread_id": thread_id, "request_id": request_id}
+
+
+@router.post("/{thread_id}/permissions/rules")
+async def add_thread_permission_rule(
+    thread_id: str,
+    payload: ThreadPermissionRuleRequest,
+    user_id: Annotated[str, Depends(verify_thread_owner)] = None,
+    agent: Annotated[Any, Depends(get_thread_agent)] = None,
+) -> dict[str, Any]:
+    await agent.agent.aget_state({"configurable": {"thread_id": thread_id}})
+    rule_state = agent.get_thread_permission_rules(thread_id)
+    if rule_state["managed_only"]:
+        raise HTTPException(status_code=409, detail="Managed permission rules only; session overrides are disabled")
+    ok = agent.add_thread_permission_rule(
+        thread_id,
+        behavior=payload.behavior,
+        tool_name=payload.tool_name,
+    )
+    if not ok:
+        raise HTTPException(status_code=400, detail="Could not add thread permission rule")
+    await agent.agent.apersist_state(thread_id)
+    updated = agent.get_thread_permission_rules(thread_id)
+    return {
+        "ok": True,
+        "thread_id": thread_id,
+        "scope": "session",
+        "rules": updated["rules"],
+        "managed_only": updated["managed_only"],
+    }
+
+
+@router.delete("/{thread_id}/permissions/rules/{behavior}/{tool_name}")
+async def delete_thread_permission_rule(
+    thread_id: str,
+    behavior: str,
+    tool_name: str,
+    user_id: Annotated[str, Depends(verify_thread_owner)] = None,
+    agent: Annotated[Any, Depends(get_thread_agent)] = None,
+) -> dict[str, Any]:
+    await agent.agent.aget_state({"configurable": {"thread_id": thread_id}})
+    ok = agent.remove_thread_permission_rule(
+        thread_id,
+        behavior=behavior,
+        tool_name=tool_name,
+    )
+    if not ok:
+        raise HTTPException(status_code=404, detail="Thread permission rule not found")
+    await agent.agent.apersist_state(thread_id)
+    updated = agent.get_thread_permission_rules(thread_id)
+    return {
+        "ok": True,
+        "thread_id": thread_id,
+        "scope": "session",
+        "rules": updated["rules"],
+        "managed_only": updated["managed_only"],
+    }
 
 
 @router.get("/{thread_id}/runtime")

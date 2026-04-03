@@ -1542,6 +1542,63 @@ class LeonAgent:
             requests = [item for item in requests if item.get("thread_id") == thread_id]
         return requests
 
+    def get_thread_permission_rules(self, thread_id: str | None = None) -> dict[str, Any]:
+        state = self._app_state.tool_permission_context
+        return {
+            "thread_id": thread_id,
+            "scope": "session",
+            "managed_only": state.allowManagedPermissionRulesOnly,
+            "rules": {
+                "allow": list(state.alwaysAllowRules.get("session", [])),
+                "deny": list(state.alwaysDenyRules.get("session", [])),
+                "ask": list(state.alwaysAskRules.get("session", [])),
+            },
+        }
+
+    def add_thread_permission_rule(self, thread_id: str, *, behavior: str, tool_name: str) -> bool:
+        if self._app_state.tool_permission_context.allowManagedPermissionRulesOnly:
+            return False
+
+        def _update(state: AppState) -> AppState:
+            permission_state = state.tool_permission_context.model_copy(deep=True)
+            for bucket in (
+                permission_state.alwaysAllowRules.setdefault("session", []),
+                permission_state.alwaysDenyRules.setdefault("session", []),
+                permission_state.alwaysAskRules.setdefault("session", []),
+            ):
+                while tool_name in bucket:
+                    bucket.remove(tool_name)
+            target_bucket = {
+                "allow": permission_state.alwaysAllowRules.setdefault("session", []),
+                "deny": permission_state.alwaysDenyRules.setdefault("session", []),
+                "ask": permission_state.alwaysAskRules.setdefault("session", []),
+            }[behavior]
+            if tool_name not in target_bucket:
+                target_bucket.append(tool_name)
+            return state.model_copy(update={"tool_permission_context": permission_state})
+
+        self._app_state.set_state(_update)
+        return True
+
+    def remove_thread_permission_rule(self, thread_id: str, *, behavior: str, tool_name: str) -> bool:
+        removed = False
+
+        def _update(state: AppState) -> AppState:
+            nonlocal removed
+            permission_state = state.tool_permission_context.model_copy(deep=True)
+            bucket = {
+                "allow": permission_state.alwaysAllowRules.setdefault("session", []),
+                "deny": permission_state.alwaysDenyRules.setdefault("session", []),
+                "ask": permission_state.alwaysAskRules.setdefault("session", []),
+            }[behavior]
+            if tool_name in bucket:
+                bucket.remove(tool_name)
+                removed = True
+            return state.model_copy(update={"tool_permission_context": permission_state})
+
+        self._app_state.set_state(_update)
+        return removed
+
     def resolve_permission_request(
         self,
         request_id: str,

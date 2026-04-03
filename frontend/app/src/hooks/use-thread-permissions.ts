@@ -1,12 +1,18 @@
 import { useCallback, useEffect, useState } from "react";
 import {
+  addThreadPermissionRule,
   getThreadPermissions,
+  removeThreadPermissionRule,
   resolveThreadPermission,
   type PermissionRequest,
+  type ThreadPermissionRules,
+  type PermissionRuleBehavior,
 } from "../api";
 
 export interface ThreadPermissionsState {
   requests: PermissionRequest[];
+  sessionRules: ThreadPermissionRules;
+  managedOnly: boolean;
   loading: boolean;
   resolvingId: string | null;
 }
@@ -18,22 +24,30 @@ export interface ThreadPermissionsActions {
     decision: "allow" | "deny",
     message?: string,
   ) => Promise<void>;
+  addSessionRule: (behavior: PermissionRuleBehavior, toolName: string) => Promise<void>;
+  removeSessionRule: (behavior: PermissionRuleBehavior, toolName: string) => Promise<void>;
 }
 
 export function useThreadPermissions(threadId: string | undefined): ThreadPermissionsState & ThreadPermissionsActions {
   const [requests, setRequests] = useState<PermissionRequest[]>([]);
+  const [sessionRules, setSessionRules] = useState<ThreadPermissionRules>({ allow: [], deny: [], ask: [] });
+  const [managedOnly, setManagedOnly] = useState(false);
   const [loading, setLoading] = useState(false);
   const [resolvingId, setResolvingId] = useState<string | null>(null);
 
   const refreshPermissions = useCallback(async () => {
     if (!threadId) {
       setRequests([]);
+      setSessionRules({ allow: [], deny: [], ask: [] });
+      setManagedOnly(false);
       return;
     }
     setLoading(true);
     try {
       const payload = await getThreadPermissions(threadId);
       setRequests(payload.requests ?? []);
+      setSessionRules(payload.session_rules ?? { allow: [], deny: [], ask: [] });
+      setManagedOnly(payload.managed_only ?? false);
     } catch (err) {
       console.error("[useThreadPermissions] Failed to load permissions:", err);
     } finally {
@@ -47,18 +61,37 @@ export function useThreadPermissions(threadId: string | undefined): ThreadPermis
       setResolvingId(requestId);
       try {
         await resolveThreadPermission(threadId, requestId, decision, message);
-        const payload = await getThreadPermissions(threadId);
-        setRequests(payload.requests ?? []);
+        await refreshPermissions();
       } finally {
         setResolvingId(null);
       }
     },
-    [threadId],
+    [refreshPermissions, threadId],
+  );
+
+  const addSessionRule = useCallback(
+    async (behavior: PermissionRuleBehavior, toolName: string) => {
+      if (!threadId) return;
+      await addThreadPermissionRule(threadId, behavior, toolName);
+      await refreshPermissions();
+    },
+    [refreshPermissions, threadId],
+  );
+
+  const removeSessionRule = useCallback(
+    async (behavior: PermissionRuleBehavior, toolName: string) => {
+      if (!threadId) return;
+      await removeThreadPermissionRule(threadId, behavior, toolName);
+      await refreshPermissions();
+    },
+    [refreshPermissions, threadId],
   );
 
   useEffect(() => {
     if (!threadId) {
       setRequests([]);
+      setSessionRules({ allow: [], deny: [], ask: [] });
+      setManagedOnly(false);
       setLoading(false);
       return;
     }
@@ -76,9 +109,13 @@ export function useThreadPermissions(threadId: string | undefined): ThreadPermis
 
   return {
     requests,
+    sessionRules,
+    managedOnly,
     loading,
     resolvingId,
     refreshPermissions,
     resolvePermission: resolvePermissionRequest,
+    addSessionRule,
+    removeSessionRule,
   };
 }

@@ -12,6 +12,8 @@ import type {
   ThreadDetail,
   ThreadSummary,
   ThreadPermissions,
+  ThreadPermissionRules,
+  PermissionRuleBehavior,
   SandboxChannelFilesResult,
   SandboxFileResult,
   SandboxFilesListResult,
@@ -114,6 +116,28 @@ export async function resolveThreadPermission(
     method: "POST",
     body: JSON.stringify({ decision, message }),
   });
+}
+
+export async function addThreadPermissionRule(
+  threadId: string,
+  behavior: PermissionRuleBehavior,
+  toolName: string,
+): Promise<{ ok: boolean; thread_id: string; scope: string; rules: ThreadPermissionRules; managed_only: boolean }> {
+  return request(`/api/threads/${encodeURIComponent(threadId)}/permissions/rules`, {
+    method: "POST",
+    body: JSON.stringify({ behavior, tool_name: toolName }),
+  });
+}
+
+export async function removeThreadPermissionRule(
+  threadId: string,
+  behavior: PermissionRuleBehavior,
+  toolName: string,
+): Promise<{ ok: boolean; thread_id: string; scope: string; rules: ThreadPermissionRules; managed_only: boolean }> {
+  return request(
+    `/api/threads/${encodeURIComponent(threadId)}/permissions/rules/${encodeURIComponent(behavior)}/${encodeURIComponent(toolName)}`,
+    { method: "DELETE" },
+  );
 }
 
 export async function getThreadRuntime(threadId: string): Promise<StreamStatus> {
