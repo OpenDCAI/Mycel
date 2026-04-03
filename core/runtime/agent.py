@@ -206,6 +206,8 @@ class LeonAgent:
         self._member_repo = member_repo
         self._session_started = False
         self._session_ended = False
+        self._closing = False
+        self._closed = False
         requested_sandbox_name = sandbox if isinstance(sandbox, str) else getattr(sandbox, "name", None)
         self._explicit_model_name = model_name is not None
 
@@ -826,35 +828,46 @@ class LeonAgent:
 
         Falls back to direct cleanup if CleanupRegistry is not initialized.
         """
+        # @@@close-idempotent - child agents may explicitly skip sandbox cleanup
+        # and later still hit __del__ on GC; never let a second close silently
+        # re-enable default sandbox teardown on a shared lease.
+        if getattr(self, "_closed", False) or getattr(self, "_closing", False):
+            return
+
+        self._closing = True
         session_end_error: Exception | None = None
-        if getattr(self, "_session_started", False) and not getattr(self, "_session_ended", False):
-            try:
-                self._run_async_cleanup(lambda: self._run_session_hooks("SessionEnd"), "SessionEnd hooks")
-            except Exception as exc:
-                session_end_error = exc
-            finally:
-                self._session_ended = True
-
-        if hasattr(self, "_cleanup_registry") and cleanup_sandbox:
-            self._run_async_cleanup(self._cleanup_registry.run_cleanup, "CleanupRegistry")
-        else:
-            # Fallback for edge cases where __init__ did not complete fully
-            cleanup_steps = [
-                ("monitor", self._mark_terminated),
-                ("MCP client", self._cleanup_mcp_client),
-                ("SQLite connection", self._cleanup_sqlite_connection),
-            ]
-            if cleanup_sandbox:
-                cleanup_steps.insert(0, ("sandbox", self._cleanup_sandbox))
-
-            for step_name, step_fn in cleanup_steps:
+        try:
+            if getattr(self, "_session_started", False) and not getattr(self, "_session_ended", False):
                 try:
-                    step_fn()
-                except Exception as e:
-                    print(f"[LeonAgent] {step_name} cleanup error: {e}")
+                    self._run_async_cleanup(lambda: self._run_session_hooks("SessionEnd"), "SessionEnd hooks")
+                except Exception as exc:
+                    session_end_error = exc
+                finally:
+                    self._session_ended = True
 
-        if session_end_error is not None:
-            raise session_end_error
+            if hasattr(self, "_cleanup_registry") and cleanup_sandbox:
+                self._run_async_cleanup(self._cleanup_registry.run_cleanup, "CleanupRegistry")
+            else:
+                # Fallback for edge cases where __init__ did not complete fully
+                cleanup_steps = [
+                    ("monitor", self._mark_terminated),
+                    ("MCP client", self._cleanup_mcp_client),
+                    ("SQLite connection", self._cleanup_sqlite_connection),
+                ]
+                if cleanup_sandbox:
+                    cleanup_steps.insert(0, ("sandbox", self._cleanup_sandbox))
+
+                for step_name, step_fn in cleanup_steps:
+                    try:
+                        step_fn()
+                    except Exception as e:
+                        print(f"[LeonAgent] {step_name} cleanup error: {e}")
+
+            if session_end_error is not None:
+                raise session_end_error
+        finally:
+            self._closed = True
+            self._closing = False
 
     def _build_session_hook_payload(self, event: str) -> dict[str, Any]:
         return {
