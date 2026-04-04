@@ -11,8 +11,10 @@ import pytest
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 
 from backend.web.routers.threads import get_thread_history, get_thread_messages
+from backend.web.routers import threads as threads_router
 from backend.web.services.display_builder import DisplayBuilder
 from backend.web.services.event_buffer import ThreadEventBuffer
+from backend.web.services.streaming_service import _ensure_thread_handlers
 from core.runtime.middleware.queue.manager import MessageQueueManager
 from core.runtime.middleware.queue.middleware import SteeringMiddleware
 from core.runtime.middleware.memory.middleware import MemoryMiddleware
@@ -230,12 +232,31 @@ class _StreamingRuntime:
     def set_event_callback(self, cb) -> None:
         self._event_callback = cb
 
+    def bind_thread(self, *, activity_sink=None) -> None:
+        self._activity_sink = activity_sink
+
     def get_status_dict(self) -> dict[str, object]:
         return {"state": {"state": "idle", "flags": {}}}
 
     def transition(self, new_state) -> bool:
+        valid = {
+            AgentState.IDLE: {AgentState.ACTIVE},
+            AgentState.ACTIVE: {AgentState.IDLE},
+        }
+        if new_state not in valid.get(self.current_state, set()):
+            return False
         self.current_state = new_state
         return True
+
+
+async def _wait_for_followthrough_text(loop: QueryLoop, thread_id: str, expected: str) -> None:
+    for _ in range(100):
+        state = await loop.aget_state({"configurable": {"thread_id": thread_id}})
+        messages = state.values.get("messages", []) if state and state.values else []
+        if any(msg.__class__.__name__ == "AIMessage" and getattr(msg, "content", None) == expected for msg in messages):
+            return
+        await asyncio.sleep(0.01)
+    raise AssertionError(f"followthrough text not observed: {expected}")
 
 
 def _make_loop(
@@ -604,7 +625,8 @@ async def test_query_loop_adds_non_preemptive_steer_contract_before_terminal_rep
 
 
 @pytest.mark.asyncio
-async def test_cancelled_midrun_steer_persists_and_does_not_poison_next_turn(tmp_path):
+async def test_cancelled_midrun_steer_persists_and_does_not_poison_next_turn(monkeypatch, tmp_path):
+    monkeypatch.setattr("backend.web.services.streaming_service._ensure_thread_handlers", lambda *args, **kwargs: None)
     checkpointer = _MemoryCheckpointer()
     queue_manager = MessageQueueManager(db_path=str(tmp_path / "queue.db"))
     runtime = _StreamingRuntime()
@@ -1395,6 +1417,259 @@ async def test_run_agent_to_buffer_surfaces_command_cancellation_then_assistant_
     assert entries[0]["segments"][0]["type"] == "notice"
     assert "cancelled" in entries[0]["segments"][0]["content"]
     assert entries[0]["segments"][1] == {"type": "text", "content": "AFTER_COMMAND_CANCELLED"}
+
+
+@pytest.mark.asyncio
+async def test_queue_wake_handler_starts_terminal_command_followthrough_run(monkeypatch, tmp_path):
+    seq = 0
+
+    async def fake_append_event(thread_id, run_id, event, message_id=None, run_event_repo=None):
+        nonlocal seq
+        seq += 1
+        return seq
+
+    async def fake_cleanup_old_runs(thread_id, keep_latest=1, run_event_repo=None):
+        return 0
+
+    monkeypatch.setattr("backend.web.services.event_store.append_event", fake_append_event)
+    monkeypatch.setattr("backend.web.services.streaming_service.cleanup_old_runs", fake_cleanup_old_runs)
+
+    thread_id = "thread-route-followthrough"
+    checkpointer = _MemoryCheckpointer()
+    loop = _make_loop(text="AFTER_QUEUE_WAKE", checkpointer=checkpointer)
+    queue_manager = MessageQueueManager(db_path=str(tmp_path / "queue.db"))
+    agent = SimpleNamespace(
+        agent=loop,
+        runtime=_StreamingRuntime(),
+        storage_container=None,
+        queue_manager=queue_manager,
+    )
+    app = SimpleNamespace(
+        state=SimpleNamespace(
+            display_builder=DisplayBuilder(),
+            thread_tasks={},
+            thread_event_buffers={},
+            subagent_buffers={},
+            queue_manager=queue_manager,
+            thread_last_active={},
+            typing_tracker=None,
+            agent_pool={f"{thread_id}:local": agent},
+            thread_sandbox={thread_id: "local"},
+            _event_loop=asyncio.get_running_loop(),
+        )
+    )
+
+    _ensure_thread_handlers(agent, thread_id, app)
+    queue_manager.enqueue(
+        "<system-reminder><CommandNotification><Status>completed</Status><Output>42</Output></CommandNotification></system-reminder>",
+        thread_id,
+        notification_type="command",
+        source="system",
+    )
+
+    await _wait_for_followthrough_text(loop, thread_id, "AFTER_QUEUE_WAKE")
+
+    with (
+        patch.object(threads_router, "get_or_create_agent", return_value=agent),
+        patch.object(threads_router, "resolve_thread_sandbox", return_value="local"),
+    ):
+        history = await get_thread_history(thread_id, limit=20, truncate=400, user_id="u", app=app)
+
+    assert [item["role"] for item in history["messages"]] == ["notification", "assistant"]
+    assert "CommandNotification" in history["messages"][0]["text"]
+    assert history["messages"][1]["text"] == "AFTER_QUEUE_WAKE"
+
+
+@pytest.mark.asyncio
+async def test_queue_wake_handler_starts_terminal_agent_followthrough_run(monkeypatch, tmp_path):
+    seq = 0
+
+    async def fake_append_event(thread_id, run_id, event, message_id=None, run_event_repo=None):
+        nonlocal seq
+        seq += 1
+        return seq
+
+    async def fake_cleanup_old_runs(thread_id, keep_latest=1, run_event_repo=None):
+        return 0
+
+    monkeypatch.setattr("backend.web.services.event_store.append_event", fake_append_event)
+    monkeypatch.setattr("backend.web.services.streaming_service.cleanup_old_runs", fake_cleanup_old_runs)
+
+    thread_id = "thread-route-agent-followthrough"
+    checkpointer = _MemoryCheckpointer()
+    loop = _make_loop(text="AFTER_AGENT_WAKE", checkpointer=checkpointer)
+    queue_manager = MessageQueueManager(db_path=str(tmp_path / "queue.db"))
+    agent = SimpleNamespace(
+        agent=loop,
+        runtime=_StreamingRuntime(),
+        storage_container=None,
+        queue_manager=queue_manager,
+    )
+    app = SimpleNamespace(
+        state=SimpleNamespace(
+            display_builder=DisplayBuilder(),
+            thread_tasks={},
+            thread_event_buffers={},
+            subagent_buffers={},
+            queue_manager=queue_manager,
+            thread_last_active={},
+            typing_tracker=None,
+            agent_pool={f"{thread_id}:local": agent},
+            thread_sandbox={thread_id: "local"},
+            _event_loop=asyncio.get_running_loop(),
+        )
+    )
+
+    _ensure_thread_handlers(agent, thread_id, app)
+    queue_manager.enqueue(
+        "<system-reminder><task-notification><status>completed</status><summary>Simple background tool test</summary><result>Simple Background Tool Test Done</result></task-notification></system-reminder>",
+        thread_id,
+        notification_type="agent",
+        source="system",
+    )
+
+    await _wait_for_followthrough_text(loop, thread_id, "AFTER_AGENT_WAKE")
+
+    with (
+        patch.object(threads_router, "get_or_create_agent", return_value=agent),
+        patch.object(threads_router, "resolve_thread_sandbox", return_value="local"),
+    ):
+        history = await get_thread_history(thread_id, limit=20, truncate=400, user_id="u", app=app)
+
+    assert [item["role"] for item in history["messages"]] == ["notification", "assistant"]
+    assert "task-notification" in history["messages"][0]["text"]
+    assert "Simple Background Tool Test Done" in history["messages"][0]["text"]
+    assert history["messages"][1]["text"] == "AFTER_AGENT_WAKE"
+
+
+@pytest.mark.asyncio
+async def test_queue_wake_handler_starts_terminal_agent_error_followthrough_run(monkeypatch, tmp_path):
+    seq = 0
+
+    async def fake_append_event(thread_id, run_id, event, message_id=None, run_event_repo=None):
+        nonlocal seq
+        seq += 1
+        return seq
+
+    async def fake_cleanup_old_runs(thread_id, keep_latest=1, run_event_repo=None):
+        return 0
+
+    monkeypatch.setattr("backend.web.services.event_store.append_event", fake_append_event)
+    monkeypatch.setattr("backend.web.services.streaming_service.cleanup_old_runs", fake_cleanup_old_runs)
+
+    thread_id = "thread-route-agent-error-followthrough"
+    checkpointer = _MemoryCheckpointer()
+    loop = _make_loop(text="AFTER_AGENT_ERROR_WAKE", checkpointer=checkpointer)
+    queue_manager = MessageQueueManager(db_path=str(tmp_path / "queue.db"))
+    agent = SimpleNamespace(
+        agent=loop,
+        runtime=_StreamingRuntime(),
+        storage_container=None,
+        queue_manager=queue_manager,
+    )
+    app = SimpleNamespace(
+        state=SimpleNamespace(
+            display_builder=DisplayBuilder(),
+            thread_tasks={},
+            thread_event_buffers={},
+            subagent_buffers={},
+            queue_manager=queue_manager,
+            thread_last_active={},
+            typing_tracker=None,
+            agent_pool={f"{thread_id}:local": agent},
+            thread_sandbox={thread_id: "local"},
+            _event_loop=asyncio.get_running_loop(),
+        )
+    )
+
+    _ensure_thread_handlers(agent, thread_id, app)
+    queue_manager.enqueue(
+        "<system-reminder><task-notification><status>error</status><summary>Simple background tool test</summary><result>Agent failed</result></task-notification></system-reminder>",
+        thread_id,
+        notification_type="agent",
+        source="system",
+    )
+
+    await _wait_for_followthrough_text(loop, thread_id, "AFTER_AGENT_ERROR_WAKE")
+
+    with (
+        patch.object(threads_router, "get_or_create_agent", return_value=agent),
+        patch.object(threads_router, "resolve_thread_sandbox", return_value="local"),
+    ):
+        history = await get_thread_history(thread_id, limit=20, truncate=400, user_id="u", app=app)
+
+    assert [item["role"] for item in history["messages"]] == ["notification", "assistant"]
+    assert "task-notification" in history["messages"][0]["text"]
+    assert "Agent failed" in history["messages"][0]["text"]
+    assert history["messages"][1]["text"] == "AFTER_AGENT_ERROR_WAKE"
+
+
+@pytest.mark.asyncio
+async def test_cancelled_task_notification_wakes_followthrough_run(monkeypatch, tmp_path):
+    seq = 0
+
+    async def fake_append_event(thread_id, run_id, event, message_id=None, run_event_repo=None):
+        nonlocal seq
+        seq += 1
+        return seq
+
+    async def fake_cleanup_old_runs(thread_id, keep_latest=1, run_event_repo=None):
+        return 0
+
+    class _FakeEventBus:
+        def subscribe(self, *_args, **_kwargs):
+            return None
+
+        def make_emitter(self, **_kwargs):
+            async def _emit(_event):
+                return None
+
+            return _emit
+
+    monkeypatch.setattr("backend.web.services.event_store.append_event", fake_append_event)
+    monkeypatch.setattr("backend.web.services.streaming_service.cleanup_old_runs", fake_cleanup_old_runs)
+    monkeypatch.setattr("backend.web.event_bus.get_event_bus", lambda: _FakeEventBus())
+
+    thread_id = "thread-route-cancel-followthrough"
+    checkpointer = _MemoryCheckpointer()
+    loop = _make_loop(text="AFTER_CANCEL_WAKE", checkpointer=checkpointer)
+    queue_manager = MessageQueueManager(db_path=str(tmp_path / "queue.db"))
+    agent = SimpleNamespace(
+        agent=loop,
+        runtime=_StreamingRuntime(),
+        storage_container=None,
+        queue_manager=queue_manager,
+    )
+    app = SimpleNamespace(
+        state=SimpleNamespace(
+            display_builder=DisplayBuilder(),
+            thread_tasks={},
+            thread_event_buffers={},
+            subagent_buffers={},
+            queue_manager=queue_manager,
+            thread_last_active={},
+            typing_tracker=None,
+            agent_pool={f"{thread_id}:local": agent},
+            thread_sandbox={thread_id: "local"},
+            _event_loop=asyncio.get_running_loop(),
+        )
+    )
+
+    _ensure_thread_handlers(agent, thread_id, app)
+    run = SimpleNamespace(is_done=True, description="cancelled task", command="echo hi")
+    await threads_router._notify_task_cancelled(app, thread_id, "cmd-cancel", run)
+
+    await _wait_for_followthrough_text(loop, thread_id, "AFTER_CANCEL_WAKE")
+
+    with (
+        patch.object(threads_router, "get_or_create_agent", return_value=agent),
+        patch.object(threads_router, "resolve_thread_sandbox", return_value="local"),
+    ):
+        history = await get_thread_history(thread_id, limit=20, truncate=400, user_id="u", app=app)
+
+    assert [item["role"] for item in history["messages"]] == ["notification", "assistant"]
+    assert "cancelled" in history["messages"][0]["text"]
+    assert history["messages"][1]["text"] == "AFTER_CANCEL_WAKE"
 
 
 @pytest.mark.asyncio
