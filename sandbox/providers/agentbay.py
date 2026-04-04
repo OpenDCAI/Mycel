@@ -282,7 +282,10 @@ class AgentBayProvider(SandboxProvider):
         for resolver_name in ("_get_mcp_server_for_tool", "_find_server_for_tool"):
             resolver = getattr(session, resolver_name, None)
             if callable(resolver):
-                server_name = resolver("shell")
+                try:
+                    server_name = resolver("shell")
+                except Exception:
+                    continue
                 if server_name:
                     return str(server_name)
         for tools_attr in ("mcpTools", "mcp_tools"):

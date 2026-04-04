@@ -172,3 +172,12 @@ def test_execute_prefers_link_url_shell_path_for_sdk_shape_session():
             },
         )
     ]
+
+
+def test_resolve_shell_server_falls_back_to_mcp_tools_when_sdk_resolver_raises():
+    session = SimpleNamespace(
+        mcp_tools=[SimpleNamespace(name="shell", server="wuying_shell")],
+        _find_server_for_tool=lambda tool_name: (_ for _ in ()).throw(StopIteration()),
+    )
+
+    assert AgentBayProvider._resolve_shell_server(session) == "wuying_shell"
