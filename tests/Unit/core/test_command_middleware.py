@@ -5,10 +5,12 @@ from dataclasses import dataclass
 
 import pytest
 
+from core.runtime.registry import ToolRegistry
 from core.tools.command.base import AsyncCommand, BaseExecutor, ExecuteResult
 from core.tools.command.dispatcher import get_executor, get_shell_info
 from core.tools.command.hooks.dangerous_commands import DangerousCommandsHook
 from core.tools.command.middleware import CommandMiddleware
+from core.tools.command.service import CommandService
 
 
 class TestExecuteResult:
@@ -215,6 +217,29 @@ class _StatusOnlyExecutor(BaseExecutor):
         return None
 
 
+class _BlankErrorExecutor(BaseExecutor):
+    runtime_owns_cwd = True
+    shell_name = "bash"
+
+    class BlankCommandError(Exception):
+        pass
+
+    async def execute(self, command: str, cwd: str | None = None, timeout: float | None = None, env=None):
+        raise self.BlankCommandError()
+
+    async def execute_async(self, command: str, cwd: str | None = None, env=None):
+        raise self.BlankCommandError()
+
+    async def get_status(self, command_id: str):
+        return None
+
+    async def wait_for(self, command_id: str, timeout: float | None = None):
+        return None
+
+    def store_completed_result(self, command_id: str, command_line: str, cwd: str, result: ExecuteResult) -> None:
+        return None
+
+
 class TestCommandStatusFormatting:
     @pytest.mark.asyncio
     async def test_running_status_strips_pty_prompt_echo_noise(self, tmp_path):
@@ -254,3 +279,25 @@ class TestCommandStatusFormatting:
         output_block = out.split("Output so far:\n", 1)[1]
         assert "out" in output_block
         assert "err" in output_block
+
+
+class TestFailLoudBlankExceptions:
+    @pytest.mark.asyncio
+    async def test_command_middleware_surfaces_exception_type_when_message_is_blank(self, tmp_path):
+        middleware = CommandMiddleware(workspace_root=tmp_path, executor=_BlankErrorExecutor(), verbose=False)
+
+        out = await middleware._execute_blocking("pwd", str(tmp_path), timeout=1)
+
+        assert out == "Error executing command: BlankCommandError"
+
+    @pytest.mark.asyncio
+    async def test_command_service_surfaces_exception_type_when_message_is_blank(self, tmp_path):
+        service = CommandService(
+            registry=ToolRegistry(),
+            workspace_root=tmp_path,
+            executor=_BlankErrorExecutor(),
+        )
+
+        out = await service._bash("pwd")
+
+        assert out == "Error executing command: BlankCommandError"

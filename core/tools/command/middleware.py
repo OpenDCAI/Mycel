@@ -18,7 +18,7 @@ from langgraph.runtime import Runtime
 
 from sandbox.shell_output import normalize_pty_result
 
-from .base import AsyncCommand, BaseExecutor
+from .base import AsyncCommand, BaseExecutor, describe_execution_exception
 from .dispatcher import get_executor, get_shell_info
 
 logger = logging.getLogger(__name__)
@@ -203,7 +203,7 @@ class CommandMiddleware(AgentMiddleware[CommandState]):
                 env=self.env,
             )
         except Exception as e:
-            return f"Error executing command: {e}"
+            return f"Error executing command: {describe_execution_exception(e)}"
         return result.to_tool_result()
 
     def set_agent(self, agent: Any) -> None:
@@ -219,7 +219,7 @@ class CommandMiddleware(AgentMiddleware[CommandState]):
                 env=self.env,
             )
         except Exception as e:
-            return f"Error starting async command: {e}"
+            return f"Error starting async command: {describe_execution_exception(e)}"
 
         # Emit task_start event
         runtime = getattr(self._agent, "runtime", None) if self._agent else None

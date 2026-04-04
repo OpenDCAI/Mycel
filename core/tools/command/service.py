@@ -20,7 +20,7 @@ from typing import Any
 
 from core.runtime.registry import ToolEntry, ToolMode, ToolRegistry
 from core.runtime.tool_result import tool_permission_denied
-from core.tools.command.base import BaseExecutor
+from core.tools.command.base import BaseExecutor, describe_execution_exception
 from core.tools.command.dispatcher import get_executor
 
 logger = logging.getLogger(__name__)
@@ -143,7 +143,7 @@ class CommandService:
                 env=self.env,
             )
         except Exception as e:
-            return f"Error executing command: {e}"
+            return f"Error executing command: {describe_execution_exception(e)}"
         return result.to_tool_result()
 
     async def _execute_async(self, command: str, work_dir: str | None, timeout_secs: float, description: str = "") -> str:
@@ -154,7 +154,7 @@ class CommandService:
                 env=self.env,
             )
         except Exception as e:
-            return f"Error starting async command: {e}"
+            return f"Error starting async command: {describe_execution_exception(e)}"
 
         task_id = async_cmd.command_id
 
