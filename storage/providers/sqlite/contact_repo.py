@@ -32,44 +32,44 @@ class SQLiteContactRepo:
         def _do():
             with self._lock:
                 self._conn.execute(
-                    "INSERT INTO contacts (owner_entity_id, target_entity_id, relation, created_at, updated_at)"
+                    "INSERT INTO contacts (owner_id, target_id, relation, created_at, updated_at)"
                     " VALUES (?, ?, ?, ?, ?)"
-                    " ON CONFLICT(owner_entity_id, target_entity_id)"
+                    " ON CONFLICT(owner_id, target_id)"
                     " DO UPDATE SET relation=excluded.relation, updated_at=excluded.updated_at",
-                    (row.owner_entity_id, row.target_entity_id, row.relation, row.created_at, row.updated_at),
+                    (row.owner_id, row.target_id, row.relation, row.created_at, row.updated_at),
                 )
                 self._conn.commit()
 
         _retry_on_locked(_do)
 
-    def get(self, owner_entity_id: str, target_entity_id: str) -> ContactRow | None:
+    def get(self, owner_id: str, target_id: str) -> ContactRow | None:
         with self._lock:
             row = self._conn.execute(
-                "SELECT owner_entity_id, target_entity_id, relation, created_at, updated_at"
-                " FROM contacts WHERE owner_entity_id = ? AND target_entity_id = ?",
-                (owner_entity_id, target_entity_id),
+                "SELECT owner_id, target_id, relation, created_at, updated_at"
+                " FROM contacts WHERE owner_id = ? AND target_id = ?",
+                (owner_id, target_id),
             ).fetchone()
         if not row:
             return None
         return ContactRow(
-            owner_entity_id=row[0],
-            target_entity_id=row[1],
+            owner_id=row[0],
+            target_id=row[1],
             relation=row[2],
             created_at=row[3],
             updated_at=row[4],
         )
 
-    def list_for_entity(self, owner_entity_id: str) -> list[ContactRow]:
+    def list_for_user(self, owner_id: str) -> list[ContactRow]:
         with self._lock:
             rows = self._conn.execute(
-                "SELECT owner_entity_id, target_entity_id, relation, created_at, updated_at"
-                " FROM contacts WHERE owner_entity_id = ? ORDER BY created_at",
-                (owner_entity_id,),
+                "SELECT owner_id, target_id, relation, created_at, updated_at"
+                " FROM contacts WHERE owner_id = ? ORDER BY created_at",
+                (owner_id,),
             ).fetchall()
         return [
             ContactRow(
-                owner_entity_id=r[0],
-                target_entity_id=r[1],
+                owner_id=r[0],
+                target_id=r[1],
                 relation=r[2],
                 created_at=r[3],
                 updated_at=r[4],
@@ -77,12 +77,12 @@ class SQLiteContactRepo:
             for r in rows
         ]
 
-    def delete(self, owner_entity_id: str, target_entity_id: str) -> None:
+    def delete(self, owner_id: str, target_id: str) -> None:
         def _do():
             with self._lock:
                 self._conn.execute(
-                    "DELETE FROM contacts WHERE owner_entity_id = ? AND target_entity_id = ?",
-                    (owner_entity_id, target_entity_id),
+                    "DELETE FROM contacts WHERE owner_id = ? AND target_id = ?",
+                    (owner_id, target_id),
                 )
                 self._conn.commit()
 
@@ -92,12 +92,12 @@ class SQLiteContactRepo:
         with self._lock:
             self._conn.execute("""
                 CREATE TABLE IF NOT EXISTS contacts (
-                    owner_entity_id   TEXT NOT NULL,
-                    target_entity_id  TEXT NOT NULL,
+                    owner_id   TEXT NOT NULL,
+                    target_id  TEXT NOT NULL,
                     relation          TEXT NOT NULL DEFAULT 'normal',
                     created_at        REAL NOT NULL,
                     updated_at        REAL,
-                    PRIMARY KEY (owner_entity_id, target_entity_id)
+                    PRIMARY KEY (owner_id, target_id)
                 )
             """)
             self._conn.commit()

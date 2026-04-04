@@ -12,7 +12,7 @@ from sandbox.thread_context import set_current_thread_id
 # Dev bypass: set LEON_DEV_SKIP_AUTH=1 to skip JWT verification and inject a mock identity.
 # WARNING: this bypasses ALL auth — never set in production.
 _DEV_SKIP_AUTH = os.environ.get("LEON_DEV_SKIP_AUTH", "").lower() in ("1", "true", "yes")
-_DEV_PAYLOAD = {"user_id": "dev-user", "entity_id": "dev-user"}
+_DEV_PAYLOAD = {"user_id": "dev-user"}
 
 if _DEV_SKIP_AUTH:
     import logging as _logging
@@ -36,7 +36,7 @@ def _get_auth_service(app: FastAPI):
 
 
 def _extract_jwt_payload(request: Request) -> dict:
-    """Extract and verify JWT payload from Bearer token. Returns {user_id, entity_id}."""
+    """Extract and verify JWT payload from Bearer token. Returns {user_id}."""
     if _DEV_SKIP_AUTH:
         return _DEV_PAYLOAD
     auth_header = request.headers.get("Authorization", "")
@@ -58,18 +58,6 @@ async def get_current_user_id(request: Request) -> str:
     if member_repo and member_repo.get_by_id(user_id) is None:
         raise HTTPException(401, "User no longer exists — please re-login")
     return user_id
-
-
-async def get_current_entity_id(request: Request) -> str:
-    """Derive entity_id for the authenticated human user.
-
-    Supabase JWTs do not carry custom claims, so entity_id is derived
-    from user_id using the stable convention: human entity = f"{user_id}-1".
-    """
-    user_id = await get_current_user_id(request)
-    if _DEV_SKIP_AUTH:
-        return _DEV_PAYLOAD.get("entity_id", user_id)
-    return f"{user_id}-1"
 
 
 async def verify_thread_owner(

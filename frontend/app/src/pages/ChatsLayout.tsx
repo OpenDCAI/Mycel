@@ -59,7 +59,7 @@ function NewChatDialog({ onClose, onCreated }: { onClose: () => void; onCreated:
     if (!myEntityId || selected.size === 0 || creating) return;
     setCreating(true);
     try {
-      const body: Record<string, unknown> = { entity_ids: [myEntityId, ...selected] };
+      const body: Record<string, unknown> = { user_ids: [myEntityId, ...selected] };
       if (isGroup && title.trim()) body.title = title.trim();
       const res = await authFetch("/api/chats", {
         method: "POST",

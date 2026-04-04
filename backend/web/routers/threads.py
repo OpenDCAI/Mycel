@@ -354,16 +354,25 @@ def _create_owned_thread(
 
     # @@@entity-name-convention - entity display names derive from member + thread role, never sandbox strings.
     entity_name = canonical_entity_name(agent_member.name, is_main=resolved_is_main, branch_index=branch_index)
-    app.state.entity_repo.create(
-        EntityRow(
-            id=thread_entity_id,
-            type="agent",
-            member_id=agent_member_id,
-            name=entity_name,
-            thread_id=thread_entity_id,
-            created_at=time.time(),
+
+    # @@@entity-id-is-member-id - agent entity id = member_id (per-agent, not per-thread).
+    # thread_id field on the entity points to the current main thread.
+    # If entity already exists, update thread_id (main thread changed); otherwise create.
+    existing_entity = app.state.entity_repo.get_by_id(agent_member_id)
+    if existing_entity is not None:
+        if resolved_is_main:
+            app.state.entity_repo.update(agent_member_id, thread_id=thread_entity_id, name=entity_name)
+    else:
+        app.state.entity_repo.create(
+            EntityRow(
+                id=agent_member_id,
+                type="agent",
+                member_id=agent_member_id,
+                name=entity_name,
+                thread_id=thread_entity_id if resolved_is_main else None,
+                created_at=time.time(),
+            )
         )
-    )
 
     # Set thread state
     app.state.thread_sandbox[thread_entity_id] = sandbox_type
