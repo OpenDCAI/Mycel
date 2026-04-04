@@ -1003,19 +1003,22 @@ async def test_run_agent_reuses_parent_lease_for_child_thread_terminal(monkeypat
         model_name="gpt-test",
     )
 
-    result = await service._run_agent(
-        task_id="task-1",
-        agent_name="child",
-        thread_id=child_thread_id,
-        prompt="hello",
-        subagent_type="explore",
-        max_turns=None,
-    )
+    try:
+        result = await service._run_agent(
+            task_id="task-1",
+            agent_name="child",
+            thread_id=child_thread_id,
+            prompt="hello",
+            subagent_type="explore",
+            max_turns=None,
+        )
 
-    assert result == "(Agent completed with no text output)"
-    assert created
-    assert observed["child_terminal_id"] != parent_terminal_id
-    assert observed["child_lease_id"] == parent_lease_id
+        assert result == "(Agent completed with no text output)"
+        assert created
+        assert observed["child_terminal_id"] != parent_terminal_id
+        assert observed["child_lease_id"] == parent_lease_id
+    finally:
+        manager.close()
 
 
 @pytest.mark.asyncio

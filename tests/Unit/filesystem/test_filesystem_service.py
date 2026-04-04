@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import threading
 import time
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 from core.runtime.registry import ToolRegistry
 from core.tools.filesystem.service import FileSystemService, _ReadFileStateCache
@@ -379,7 +379,7 @@ def test_remote_edit_does_not_trust_false_negative_exists_probe(tmp_path: Path):
         workspace_root=Path("/home/daytona"),
         backend=backend,
     )
-    target = Path("/home/daytona/interleave.py")
+    target = PurePosixPath("/home/daytona/interleave.py")
     service._read_files.set(
         target,
         state=service._read_files.make_state(timestamp=None, is_partial=False),

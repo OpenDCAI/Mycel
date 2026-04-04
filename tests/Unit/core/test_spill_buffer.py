@@ -1,6 +1,6 @@
 """Tests for core.spill_buffer: spill_if_needed() and SpillBufferMiddleware."""
 
-import os
+import posixpath
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
@@ -61,7 +61,7 @@ class TestSpillIfNeeded:
         )
 
         # Verify write_file was called with the correct spill path.
-        expected_path = os.path.join("/workspace", ".leon", "tool-results", "call_big.txt")
+        expected_path = posixpath.join("/workspace", ".leon", "tool-results", "call_big.txt")
         fs.write_file.assert_called_once_with(expected_path, large)
 
         # Result must mention the file path and include a preview.
@@ -248,7 +248,7 @@ class TestSpillIfNeeded:
 
         result = mw._maybe_spill(request, original_msg)
 
-        expected_path = os.path.join(
+        expected_path = posixpath.join(
             "/workspace",
             ".leon",
             "tool-results",
@@ -446,7 +446,7 @@ class TestSpillBufferMiddleware:
 
         result = mw.wrap_tool_call(request, handler)
 
-        expected_path = os.path.join("/workspace", ".leon", "tool-results", f"{unique_id}.txt")
+        expected_path = posixpath.join("/workspace", ".leon", "tool-results", f"{unique_id}.txt")
         fs.write_file.assert_called_once_with(expected_path, content)
         assert expected_path in result.content
 

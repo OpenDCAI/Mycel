@@ -14,7 +14,7 @@ All paths must be absolute. Workspace restrictions via hooks.
 from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import TYPE_CHECKING, Any
 
 from langchain.agents.middleware.types import (
@@ -31,6 +31,13 @@ from core.tools.filesystem.read import read_file as read_file_dispatch
 
 if TYPE_CHECKING:
     from core.operations import FileOperationRecorder
+
+
+def _remote_path(path: str | Path) -> PurePosixPath:
+    # @@@remote-posix-path-contract - Middleware callers still hand us sandbox
+    # POSIX paths even when tests run on Windows, so keep validation and
+    # workspace comparisons in POSIX space instead of host-native path rules.
+    return PurePosixPath(str(path).replace("\\", "/"))
 
 
 class FileSystemMiddleware(AgentMiddleware):
@@ -80,7 +87,7 @@ class FileSystemMiddleware(AgentMiddleware):
             backend = LocalBackend()
 
         self.backend = backend
-        self.workspace_root = Path(workspace_root) if backend.is_remote else Path(workspace_root).resolve()
+        self.workspace_root = _remote_path(workspace_root) if backend.is_remote else Path(workspace_root).resolve()
         self.max_file_size = max_file_size
         self.allowed_extensions = allowed_extensions
         self.hooks = hooks or []
@@ -91,10 +98,12 @@ class FileSystemMiddleware(AgentMiddleware):
             "multi_edit": True,
             "list_dir": True,
         }
-        self._read_files: dict[Path, float | None] = {}
+        self._read_files: dict[Path | PurePosixPath, float | None] = {}
         self.operation_recorder = operation_recorder
         self.verbose = verbose
-        self.extra_allowed_paths: list[Path] = [Path(p) if backend.is_remote else Path(p).resolve() for p in (extra_allowed_paths or [])]
+        self.extra_allowed_paths = [
+            _remote_path(p) if backend.is_remote else Path(p).resolve() for p in (extra_allowed_paths or [])
+        ]
 
         if not backend.is_remote:
             self.workspace_root.mkdir(parents=True, exist_ok=True)
@@ -105,17 +114,20 @@ class FileSystemMiddleware(AgentMiddleware):
             if self.hooks:
                 print(f"[FileSystemMiddleware] Loaded {len(self.hooks)} hooks")
 
-    def _validate_path(self, path: str, operation: str) -> tuple[bool, str, Path | None]:
+    def _validate_path(self, path: str, operation: str) -> tuple[bool, str, Path | PurePosixPath | None]:
         """Validate path for file operations.
 
         Returns:
             (is_valid, error_message, resolved_path)
         """
-        if not Path(path).is_absolute():
+        if self.backend.is_remote:
+            if not _remote_path(path).is_absolute():
+                return False, f"Path must be absolute: {path}", None
+        elif not Path(path).is_absolute():
             return False, f"Path must be absolute: {path}", None
 
         try:
-            resolved = Path(path) if self.backend.is_remote else Path(path).resolve()
+            resolved = _remote_path(path) if self.backend.is_remote else Path(path).resolve()
         except Exception as e:
             return False, f"Invalid path: {path} ({e})", None
 
@@ -146,7 +158,7 @@ class FileSystemMiddleware(AgentMiddleware):
 
         return True, "", resolved
 
-    def _check_file_staleness(self, resolved: Path) -> str | None:
+    def _check_file_staleness(self, resolved: Path | PurePosixPath) -> str | None:
         """Check if file has been modified since last read.
 
         Returns:
@@ -165,7 +177,7 @@ class FileSystemMiddleware(AgentMiddleware):
 
         return None
 
-    def _update_file_tracking(self, resolved: Path) -> None:
+    def _update_file_tracking(self, resolved: Path | PurePosixPath) -> None:
         """Update mtime tracking after successful file operation."""
         self._read_files[resolved] = self.backend.file_mtime(str(resolved))
 
@@ -203,7 +215,7 @@ class FileSystemMiddleware(AgentMiddleware):
         except Exception as e:
             raise RuntimeError(f"[FileSystemMiddleware] Failed to record operation: {e}") from e
 
-    def _count_lines(self, resolved: Path) -> int:
+    def _count_lines(self, resolved: Path | PurePosixPath) -> int:
         """Count total lines in a file (for error messages)."""
         try:
             raw = self.backend.read_file(str(resolved))

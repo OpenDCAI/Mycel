@@ -14,7 +14,7 @@ import tempfile
 import threading
 from collections import OrderedDict
 from dataclasses import dataclass
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import TYPE_CHECKING, Any
 
 from core.runtime.registry import ToolEntry, ToolMode, ToolRegistry
@@ -30,6 +30,13 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 DEFAULT_READ_STATE_CACHE_SIZE = 100
+
+
+def _remote_path(path: str | Path) -> PurePosixPath:
+    # @@@remote-posix-path-contract - Remote filesystem tools operate on sandbox
+    # POSIX paths, not host-native paths. Preserve forward-slash semantics even
+    # when the host process is running on Windows.
+    return PurePosixPath(str(path).replace("\\", "/"))
 
 
 @dataclass
@@ -108,14 +115,16 @@ class FileSystemService:
             backend = LocalBackend()
 
         self.backend = backend
-        self.workspace_root = Path(workspace_root) if backend.is_remote else Path(workspace_root).resolve()
+        self.workspace_root = _remote_path(workspace_root) if backend.is_remote else Path(workspace_root).resolve()
         self.max_file_size = max_file_size
         self.allowed_extensions = allowed_extensions
         self.hooks = hooks or []
         self._read_files = _ReadFileStateCache(max_entries=max_read_cache_entries)
         self.max_edit_file_size = max_file_size if max_edit_file_size is None else max_edit_file_size
         self.operation_recorder = operation_recorder
-        self.extra_allowed_paths: list[Path] = [Path(p) if backend.is_remote else Path(p).resolve() for p in (extra_allowed_paths or [])]
+        self.extra_allowed_paths = [
+            _remote_path(p) if backend.is_remote else Path(p).resolve() for p in (extra_allowed_paths or [])
+        ]
         self._edit_critical_section = threading.Lock()
 
         if not backend.is_remote:
@@ -269,12 +278,15 @@ class FileSystemService:
     # Path validation (reused from middleware)
     # ------------------------------------------------------------------
 
-    def _validate_path(self, path: str, operation: str) -> tuple[bool, str, Path | None]:
-        if not Path(path).is_absolute():
+    def _validate_path(self, path: str, operation: str) -> tuple[bool, str, Path | PurePosixPath | None]:
+        if self.backend.is_remote:
+            if not _remote_path(path).is_absolute():
+                return False, f"Path must be absolute: {path}", None
+        elif not Path(path).is_absolute():
             return False, f"Path must be absolute: {path}", None
 
         try:
-            resolved = Path(path) if self.backend.is_remote else Path(path).resolve()
+            resolved = _remote_path(path) if self.backend.is_remote else Path(path).resolve()
         except Exception as e:
             return False, f"Invalid path: {path} ({e})", None
 
@@ -305,7 +317,7 @@ class FileSystemService:
 
         return True, "", resolved
 
-    def _check_file_staleness(self, resolved: Path) -> str | None:
+    def _check_file_staleness(self, resolved: Path | PurePosixPath) -> str | None:
         state = self._read_files.get(resolved)
         if state is None:
             return "File has not been read yet. Read the full file first before editing."
@@ -319,7 +331,13 @@ class FileSystemService:
             return "File has been modified since last read. Read it again before editing."
         return None
 
-    def _update_file_tracking(self, resolved: Path, *, is_partial: bool, file_type: FileType | None = None) -> None:
+    def _update_file_tracking(
+        self,
+        resolved: Path | PurePosixPath,
+        *,
+        is_partial: bool,
+        file_type: FileType | None = None,
+    ) -> None:
         if file_type is None:
             file_type = detect_file_type(resolved)
         if file_type not in {FileType.TEXT, FileType.NOTEBOOK}:
@@ -368,7 +386,7 @@ class FileSystemService:
         self,
         *,
         result,
-        resolved: Path,
+        resolved: Path | PurePosixPath,
         temp_path: Path,
     ) -> None:
         result.file_path = str(resolved)
@@ -404,7 +422,7 @@ class FileSystemService:
         except Exception as e:
             raise RuntimeError(f"[FileSystemService] Failed to record operation: {e}") from e
 
-    def _count_lines(self, resolved: Path) -> int:
+    def _count_lines(self, resolved: Path | PurePosixPath) -> int:
         try:
             raw = self.backend.read_file(str(resolved))
             return raw.content.count("\n") + 1

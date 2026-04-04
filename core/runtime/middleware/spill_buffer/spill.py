@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import os
+import posixpath
 from typing import Any
 
 from core.tools.filesystem.backend import FileSystemBackend
@@ -44,8 +44,8 @@ def spill_if_needed(
     if size <= threshold_bytes:
         return content
 
-    spill_dir = os.path.join(workspace_root, ".leon", "tool-results")
-    spill_path = os.path.join(spill_dir, f"{tool_call_id}.txt")
+    spill_dir = posixpath.join(workspace_root, ".leon", "tool-results")
+    spill_path = posixpath.join(spill_dir, f"{tool_call_id}.txt")
 
     write_note = ""
     try:

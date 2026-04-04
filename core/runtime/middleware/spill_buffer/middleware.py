@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import mimetypes
-import os
+import posixpath
 from collections.abc import Awaitable, Callable
 from pathlib import Path
 from typing import Any
@@ -66,7 +66,7 @@ class SpillBufferMiddleware(AgentMiddleware):
             guessed_ext = mimetypes.guess_extension(mime_type.split(";", 1)[0].strip()) or ".bin"
 
             if isinstance(block.get("base64"), str):
-                payload_path = os.path.join(
+                payload_path = posixpath.join(
                     self.workspace_root,
                     ".leon",
                     "tool-results",
