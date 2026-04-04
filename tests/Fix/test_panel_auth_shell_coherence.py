@@ -61,3 +61,13 @@ def test_profile_service_prefers_authenticated_member_over_config_defaults():
     profile = profile_service.get_profile(member=member)
 
     assert profile == {"name": "codex", "initials": "CO", "email": "codex@example.com"}
+
+
+def test_builtin_member_surface_exposes_chat_tools():
+    member = member_service._leon_builtin()
+    tools = {item["name"]: item for item in member["config"]["tools"]}
+
+    for tool_name in ("chats", "chat_read", "chat_send", "chat_search", "directory"):
+        assert tool_name in tools
+        assert tools[tool_name]["enabled"] is True
+        assert tools[tool_name]["group"] == "chat"

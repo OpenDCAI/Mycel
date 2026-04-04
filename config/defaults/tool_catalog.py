@@ -21,6 +21,7 @@ class ToolGroup(StrEnum):
     COMMAND = "command"
     WEB = "web"
     AGENT = "agent"
+    CHAT = "chat"
     TODO = "todo"
     SKILLS = "skills"
     SYSTEM = "system"
@@ -63,6 +64,12 @@ TOOLS: list[ToolDef] = [
     ToolDef(name="TaskStop", desc="停止后台任务", group=ToolGroup.AGENT),
     ToolDef(name="Agent", desc="启动子 Agent 执行任务", group=ToolGroup.AGENT),
     ToolDef(name="SendMessage", desc="向运行中的 Agent 发送排队消息", group=ToolGroup.AGENT),
+    # chat
+    ToolDef(name="chats", desc="列出当前实体可访问的聊天会话", group=ToolGroup.CHAT),
+    ToolDef(name="chat_read", desc="读取聊天消息并标记为已读", group=ToolGroup.CHAT),
+    ToolDef(name="chat_send", desc="向聊天对象发送消息", group=ToolGroup.CHAT),
+    ToolDef(name="chat_search", desc="搜索历史聊天消息", group=ToolGroup.CHAT),
+    ToolDef(name="directory", desc="浏览实体目录并查找可聊天对象", group=ToolGroup.CHAT),
     # todo
     ToolDef(name="TaskCreate", desc="创建待办任务", group=ToolGroup.TODO, mode=ToolMode.DEFERRED),
     ToolDef(name="TaskGet", desc="获取任务详情", group=ToolGroup.TODO, mode=ToolMode.DEFERRED),
