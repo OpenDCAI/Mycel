@@ -23,7 +23,6 @@ from sandbox.resource_snapshot import (
     probe_and_upsert_for_instance,
 )
 from storage.models import map_lease_to_session_status
-from storage.providers.sqlite.thread_repo import SQLiteThreadRepo
 
 _CONFIG_LOADER = SandboxConfigLoader(SANDBOXES_DIR)
 
@@ -215,29 +214,42 @@ def _to_session_metrics(snapshot: dict[str, Any] | None) -> dict[str, Any] | Non
 # ---------------------------------------------------------------------------
 
 
-def _member_meta_map() -> dict[str, dict[str, str | None]]:
+def _member_meta_map(member_repo: Any = None) -> dict[str, dict[str, str | None]]:
     """Build member_id → display metadata map from DB."""
     try:
-        from storage.providers.sqlite.member_repo import SQLiteMemberRepo
+        if member_repo is not None:
+            members = member_repo.list_all()
+        else:
+            from storage.providers.sqlite.member_repo import SQLiteMemberRepo
 
+            repo = SQLiteMemberRepo()
+            try:
+                members = repo.list_all()
+            finally:
+                repo.close()
         return {
             m.id: {
                 "member_name": m.name,
                 "avatar_url": avatar_url(m.id, bool(m.avatar)),
             }
-            for m in SQLiteMemberRepo().list_all()
+            for m in members
             if m.id and m.name
         }
     except Exception:
         return {}
 
 
-def _thread_agent_refs(thread_ids: list[str]) -> dict[str, str]:
+def _thread_agent_refs(thread_ids: list[str], thread_repo: Any = None) -> dict[str, str]:
     """Batch lookup agent refs from threads table."""
     unique = sorted({tid for tid in thread_ids if tid})
     if not unique:
         return {}
-    repo = SQLiteThreadRepo()
+    if thread_repo is None:
+        repo = SQLiteThreadRepo()
+        own_repo = True
+    else:
+        repo = thread_repo
+        own_repo = False
     try:
         refs: dict[str, str] = {}
         for tid in unique:
@@ -249,12 +261,13 @@ def _thread_agent_refs(thread_ids: list[str]) -> dict[str, str]:
     except Exception:
         return {}
     finally:
-        repo.close()
+        if own_repo:
+            repo.close()
 
 
-def _thread_owners(thread_ids: list[str]) -> dict[str, dict[str, str | None]]:
-    refs = _thread_agent_refs(thread_ids)
-    member_meta = _member_meta_map()
+def _thread_owners(thread_ids: list[str], member_repo: Any = None, thread_repo: Any = None) -> dict[str, dict[str, str | None]]:
+    refs = _thread_agent_refs(thread_ids, thread_repo=thread_repo)
+    member_meta = _member_meta_map(member_repo=member_repo)
     owners: dict[str, dict[str, str | None]] = {}
     for thread_id in thread_ids:
         agent_ref = refs.get(thread_id)
