@@ -44,7 +44,12 @@ async def get_current_user_id(request: Request) -> str:
 
 
 async def get_current_entity_id(request: Request) -> str:
-    """Extract entity_id from JWT. Used for chat/social scoping (Entity = Thread's identity)."""
+    """Derive entity_id for the authenticated human user.
+
+    Supabase JWTs may omit custom entity claims, so keep the older
+    direct-claim path when present and otherwise derive the stable
+    human entity convention: f"{user_id}-1".
+    """
     payload = _extract_jwt_payload(request)
     entity_id = payload.get("entity_id")
     if entity_id:
