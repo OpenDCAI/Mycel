@@ -276,8 +276,10 @@ def _ensure_thread_handlers(agent: Any, thread_id: str, app: Any) -> None:
     runtime = getattr(agent, "runtime", None)
     if not runtime:
         return
-    # Already bound? Skip.
-    if getattr(runtime, "_activity_sink", None) is not None:
+    if (
+        getattr(runtime, "_bound_thread_id", None) == thread_id
+        and getattr(runtime, "_bound_thread_app", None) is app
+    ):
         return
     # Runtime must support bind_thread (AgentRuntime does, test fakes may not)
     if not hasattr(runtime, "bind_thread"):
@@ -393,6 +395,8 @@ def _ensure_thread_handlers(agent: Any, thread_id: str, app: Any) -> None:
                 agent.runtime.transition(AgentState.IDLE)
 
     runtime.bind_thread(activity_sink=activity_sink)
+    runtime._bound_thread_id = thread_id
+    runtime._bound_thread_app = app
     qm.register_wake(thread_id, wake_handler)
 
     # Subscribe to EventBus so sub-agent events (spawned via AgentService)
@@ -400,7 +404,10 @@ def _ensure_thread_handlers(agent: Any, thread_id: str, app: Any) -> None:
     try:
         from backend.web.event_bus import get_event_bus
 
-        get_event_bus().subscribe(thread_id, activity_sink)
+        unsubscribe = getattr(runtime, "_thread_event_unsubscribe", None)
+        if callable(unsubscribe):
+            unsubscribe()
+        runtime._thread_event_unsubscribe = get_event_bus().subscribe(thread_id, activity_sink)
     except ImportError:
         pass
 

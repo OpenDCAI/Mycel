@@ -83,9 +83,15 @@ class _BlockingChildAgent:
 
 
 @pytest.mark.asyncio
-async def test_run_child_thread_live_surfaces_runtime_and_detail_before_completion():
+async def test_run_child_thread_live_rebinds_from_parent_sink_and_surfaces_runtime_and_detail_before_completion():
     child_thread_id = "subagent-live-1"
     agent = _BlockingChildAgent()
+    parent_events: list[dict] = []
+
+    async def _parent_sink(event: dict) -> None:
+        parent_events.append(event)
+
+    agent.runtime.bind_thread(_parent_sink)
     app = SimpleNamespace(
         state=SimpleNamespace(
             display_builder=DisplayBuilder(),
@@ -122,6 +128,8 @@ async def test_run_child_thread_live_surfaces_runtime_and_detail_before_completi
     assert detail["entries"][0]["content"] == "child prompt"
     assert isinstance(app.state.thread_event_buffers[child_thread_id], ThreadEventBuffer)
     assert app.state.agent_pool[f"{child_thread_id}:local"] is agent
+    assert agent.runtime._activity_sink is not _parent_sink
+    assert parent_events == []
 
     agent.agent.release.set()
     result = await task
