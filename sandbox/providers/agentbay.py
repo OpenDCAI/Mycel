@@ -180,7 +180,8 @@ class AgentBayProvider(SandboxProvider):
             f"has_token={bool(getattr(session, 'token', ''))} "
             f"shell_server={shell_server!r} "
             f"tool_count={len(session_tools)} "
-            f"timeout_ms={timeout_ms}"
+            f"timeout_ms={timeout_ms}",
+            flush=True,
         )
 
         if getattr(session, "link_url", "") and getattr(session, "token", "") and shell_server:
@@ -190,17 +191,19 @@ class AgentBayProvider(SandboxProvider):
             print(
                 "[AgentBay.execute] "
                 f"session_id={session_id} path=link_url exit_code={result.exit_code} "
-                f"error={result.error!r} output_len={len(result.output or '')}"
+                f"error={result.error!r} output_len={len(result.output or '')}",
+                flush=True,
             )
             return result
 
-        print(f"[AgentBay.execute] session_id={session_id} path=sdk_command_execute")
+        print(f"[AgentBay.execute] session_id={session_id} path=sdk_command_execute", flush=True)
         try:
             result = session.command.execute_command(**exec_args)
         except Exception as exc:
             print(
                 "[AgentBay.execute] "
-                f"session_id={session_id} path=sdk_command_execute raised={exc.__class__.__name__}: {exc}"
+                f"session_id={session_id} path=sdk_command_execute raised={exc.__class__.__name__}: {exc}",
+                flush=True,
             )
             raise
 
@@ -210,7 +213,8 @@ class AgentBayProvider(SandboxProvider):
                 f"session_id={session_id} path=sdk_command_execute success=False "
                 f"exit_code={getattr(result, 'exit_code', None)} "
                 f"error={getattr(result, 'error_message', None)!r} "
-                f"output_len={len(getattr(result, 'output', '') or '')}"
+                f"output_len={len(getattr(result, 'output', '') or '')}",
+                flush=True,
             )
             return ProviderExecResult(output=result.output or "", exit_code=result.exit_code or 1, error=result.error_message)
 
@@ -218,7 +222,8 @@ class AgentBayProvider(SandboxProvider):
             "[AgentBay.execute] "
             f"session_id={session_id} path=sdk_command_execute success=True "
             f"exit_code={getattr(result, 'exit_code', None)} "
-            f"output_len={len(getattr(result, 'output', '') or '')}"
+            f"output_len={len(getattr(result, 'output', '') or '')}",
+            flush=True,
         )
         return ProviderExecResult(output=result.output or "", exit_code=result.exit_code or 0)
 

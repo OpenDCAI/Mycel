@@ -814,7 +814,8 @@ class RemoteWrappedRuntime(_RemoteRuntimeBase):
             f"provider={getattr(self.provider, 'name', '?')} "
             f"cwd={state.cwd!r} "
             f"timeout_ms={timeout_ms} "
-            f"command={command[:200]!r}"
+            f"command={command[:200]!r}",
+            flush=True,
         )
         # @@@ _build_state_snapshot_cmd returns (start, end, cmd) but RemoteWrappedRuntime
         # builds its own inline block to interleave cd/exports/command, so the pre-built cmd is unused.
@@ -847,7 +848,8 @@ class RemoteWrappedRuntime(_RemoteRuntimeBase):
             f"thread_id={self.terminal.thread_id} "
             f"provider_exit={result.exit_code} "
             f"provider_error={result.error!r} "
-            f"output_len={len(raw_output)}"
+            f"output_len={len(raw_output)}",
+            flush=True,
         )
 
         try:
@@ -863,7 +865,8 @@ class RemoteWrappedRuntime(_RemoteRuntimeBase):
                 "[RemoteWrappedRuntime._execute_once] "
                 f"thread_id={self.terminal.thread_id} "
                 f"state_parse_failed={exc.__class__.__name__}: {exc} "
-                f"raw_output_preview={raw_output[:400]!r}"
+                f"raw_output_preview={raw_output[:400]!r}",
+                flush=True,
             )
             raise
         from sandbox.terminal import TerminalState

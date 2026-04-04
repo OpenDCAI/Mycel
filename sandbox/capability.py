@@ -100,7 +100,8 @@ class _CommandWrapper(BaseExecutor):
             f"thread_id={self._session.thread_id} "
             f"terminal_id={self._session.terminal.terminal_id} "
             f"command={command[:200]!r} "
-            f"cwd={cwd!r} timeout={timeout}"
+            f"cwd={cwd!r} timeout={timeout}",
+            flush=True,
         )
         return await self._session.runtime.execute(wrapped, timeout)
 
