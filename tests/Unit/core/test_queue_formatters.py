@@ -2,7 +2,20 @@
 
 import xml.etree.ElementTree as ET
 
-from core.runtime.middleware.queue.formatters import format_command_notification
+from core.runtime.middleware.queue.formatters import format_chat_notification, format_command_notification
+
+
+class TestFormatChatNotification:
+    def test_includes_explicit_chat_read_and_chat_send_instructions(self):
+        result = format_chat_notification(
+            sender_name="alice",
+            chat_id="chat-123",
+            unread_count=2,
+        )
+
+        assert 'chat_read(chat_id="chat-123")' in result
+        assert 'chat_send(chat_id="chat-123", content="...")' in result
+        assert "Do not treat your normal assistant text as a chat reply." in result
 
 
 class TestFormatCommandNotification:

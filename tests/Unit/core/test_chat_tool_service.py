@@ -1,5 +1,6 @@
 from types import SimpleNamespace
 
+from core.runtime.agent import LeonAgent
 from core.agents.communication.chat_tool_service import ChatToolService
 from core.runtime.registry import ToolRegistry
 from storage.contracts import EntityRow, MemberRow, MemberType
@@ -58,3 +59,23 @@ def test_directory_uses_owner_user_id_for_agent_owner_lookup() -> None:
 
     assert "Helper" in result
     assert "(owner: Owner)" in result
+
+
+def test_compose_system_prompt_hardens_chat_reply_contract() -> None:
+    owner_entity = EntityRow(id="e_owner", type="human", member_id="u_owner", name="Owner", created_at=1.0)
+    agent_entity = EntityRow(id="e_agent", type="agent", member_id="m_agent", name="Helper", created_at=2.0)
+
+    agent = LeonAgent.__new__(LeonAgent)
+    agent._chat_repos = {
+        "entity_id": "e_agent",
+        "owner_entity_id": "e_owner",
+        "entity_repo": _EntityRepo([owner_entity, agent_entity]),
+    }
+    agent._build_system_prompt = lambda: "BASE"
+    agent.config = SimpleNamespace(system_prompt=None)
+
+    prompt = agent._compose_system_prompt()
+
+    assert "you MUST read it with chat_read()" in prompt
+    assert "you MUST call chat_send()" in prompt
+    assert "Never claim you replied unless chat_send() succeeded." in prompt

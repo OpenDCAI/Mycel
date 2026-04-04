@@ -17,7 +17,14 @@ def format_chat_notification(sender_name: str, chat_id: str, unread_count: int, 
     chat_read(chat_id=...) to read, then chat_send() to reply.
     """
     signal_hint = f" [signal: {signal}]" if signal and signal != "open" else ""
-    return f"<system-reminder>\nNew message from {sender_name} in chat {chat_id} ({unread_count} unread).{signal_hint}\n</system-reminder>"
+    return (
+        "<system-reminder>\n"
+        f"New message from {sender_name} in chat {chat_id} ({unread_count} unread).{signal_hint}\n"
+        f'Read it with chat_read(chat_id="{chat_id}").\n'
+        f'Reply with chat_send(chat_id="{chat_id}", content="...").\n'
+        "Do not treat your normal assistant text as a chat reply.\n"
+        "</system-reminder>"
+    )
 
 
 def format_agent_message(sender_name: str, message: str) -> str:
