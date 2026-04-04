@@ -1,0 +1,355 @@
+---
+title: Configuration
+sidebarTitle: Configuration
+description: runtime.json, models.json, MCP, Skills, and environment variables
+icon: sliders
+keywords: [runtime.json, models.json, MCP, skills, configuration, environment variables, memory]
+---
+
+Mycel uses a split configuration system with three-tier merge: system defaults → user config (`~/.leon/`) → project config (`.leon/` in workspace root). CLI arguments override everything.
+
+## Config file overview
+
+<Columns>
+  <div>
+    **JSON config files** (three-tier merge):
+
+    | File | Purpose |
+    |------|---------|
+    | `runtime.json` | Tools, memory, MCP, skills, security |
+    | `models.json` | Providers, API keys, model mapping |
+    | `observation.json` | Langfuse / LangSmith tracing |
+  </div>
+  <div>
+    **Other config files:**
+
+    | File | Purpose |
+    |------|---------|
+    | `config.env` | Quick API key setup |
+    | `sandboxes/<name>.json` | Per-provider sandbox config |
+    | `.mcp.json` (member) | Per-member MCP servers |
+  </div>
+</Columns>
+
+**Priority** (highest to lowest): `.leon/<file>` in workspace → `~/.leon/<file>` → built-in defaults → CLI flags win over all.
+
+**Merge strategy per domain:**
+
+| Domain | Strategy |
+|--------|----------|
+| `runtime`, `memory`, `tools` | Deep merge — higher-priority tiers override individual fields |
+| `mcp`, `skills` | Lookup — first tier that defines a key wins; no merging |
+| `system_prompt` | Lookup — project → user → system |
+| `providers`, `mapping` (models.json) | Deep merge per-key |
+| `pool` (models.json) | Last wins — no list merging |
+| `catalog`, `virtual_models` (models.json) | System-only — never overridden |
+
+## First run
+
+Create `~/.leon/config.env`:
+
+```env
+OPENAI_API_KEY=sk-xxx
+OPENAI_BASE_URL=https://api.openai.com/v1
+MODEL_NAME=claude-sonnet-4-5-20250929
+```
+
+## runtime.json
+
+<AccordionGroup>
+  <Accordion title="Runtime fields" icon="settings">
+    | Field | Default | Description |
+    |-------|---------|-------------|
+    | `temperature` | null | Sampling temperature (0–2). null = model default |
+    | `max_tokens` | null | Max output tokens. null = model default |
+    | `context_limit` | 0 | Context window in tokens. 0 = auto-detect |
+    | `enable_audit_log` | true | Audit logging for file operations |
+    | `allowed_extensions` | null | Restrict file access by extension. null = all |
+    | `block_dangerous_commands` | true | Block `rm -rf`, `sudo`, etc. |
+    | `block_network_commands` | false | Block network commands |
+  </Accordion>
+
+  <Accordion title="Memory — pruning and compaction" icon="database">
+    **Pruning** trims large tool results:
+
+    | Field | Default | Description |
+    |-------|---------|-------------|
+    | `soft_trim_chars` | 3,000 | Trim results longer than this |
+    | `hard_clear_threshold` | 10,000 | Clear results longer than this |
+    | `protect_recent` | 3 | Keep last N tool messages untrimmed |
+
+    **Compaction** summarizes old history via LLM when context fills:
+
+    | Field | Default | Description |
+    |-------|---------|-------------|
+    | `reserve_tokens` | 16,384 | Reserve for new messages |
+    | `keep_recent_tokens` | 20,000 | Keep recent tokens verbatim |
+    | `min_messages` | 20 | Minimum messages before trigger |
+
+    See [Memory](/en/memory) for full details.
+  </Accordion>
+
+  <Accordion title="Tool configuration" icon="wrench">
+    Each tool group has an `enabled` flag. Both the group and individual tool must be enabled.
+
+    ```json
+    {
+      "tools": {
+        "filesystem": { "enabled": true },
+        "search": { "enabled": true },
+        "web": {
+          "enabled": true,
+          "tools": {
+            "web_search": { "enabled": true, "tavily_api_key": null },
+            "fetch": { "enabled": true }
+          }
+        },
+        "command": {
+          "enabled": true,
+          "tools": {
+            "run_command": { "default_timeout": 120 }
+          }
+        }
+      }
+    }
+    ```
+
+    **Complete tool catalog:**
+
+    | Tool | Group | Mode |
+    |------|-------|------|
+    | Read, Write, Edit, list_dir | filesystem | inline |
+    | Grep, Glob | search | inline |
+    | Bash | command | inline |
+    | WebSearch, WebFetch | web | inline |
+    | Agent, SendMessage, TaskOutput, TaskStop | agent | inline |
+    | TaskCreate, TaskGet, TaskList, TaskUpdate | todo | **deferred** |
+    | load_skill | skills | inline |
+    | tool_search | system | inline |
+
+    <Note>
+      `deferred` tools are not injected into every request. The agent discovers them via `tool_search` when needed — saving tokens in conversations that don't require task management.
+    </Note>
+  </Accordion>
+
+  <Accordion title="Project-level example" icon="file-code">
+    `.leon/runtime.json` in your workspace root:
+
+    ```json
+    {
+      "allowed_extensions": ["py", "js", "ts", "json", "yaml", "md"],
+      "block_dangerous_commands": true,
+      "tools": {
+        "web": { "enabled": false },
+        "command": {
+          "tools": {
+            "run_command": { "default_timeout": 300 }
+          }
+        }
+      },
+      "system_prompt": "You are a Python expert working on a FastAPI project."
+    }
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## models.json
+
+<AccordionGroup>
+  <Accordion title="Virtual model aliases" icon="tag">
+    Mycel provides four `leon:*` aliases:
+
+    | Alias | Model | Use case |
+    |-------|-------|----------|
+    | `leon:mini` | claude-haiku-4-5-20250929 | Fast, simple tasks |
+    | `leon:medium` | claude-sonnet-4-5-20250929 | Balanced, daily work |
+    | `leon:large` | claude-opus-4-6 | Complex reasoning |
+    | `leon:max` | claude-opus-4-6 + temp=0 | Maximum precision |
+
+    Set via **Settings → Models** in the Web UI, or in `~/.leon/models.json`:
+
+    ```json
+    { "active": { "model": "leon:large" } }
+    ```
+
+    Override a mapping in `~/.leon/models.json`:
+
+    ```json
+    {
+      "mapping": {
+        "leon:medium": { "model": "gpt-4o", "provider": "openai" }
+      }
+    }
+    ```
+  </Accordion>
+
+  <Accordion title="Provider setup" icon="key">
+    ```json
+    {
+      "active": {
+        "model": "claude-sonnet-4-5-20250929",
+        "provider": null
+      },
+      "providers": {
+        "anthropic": {
+          "api_key": "${ANTHROPIC_API_KEY}",
+          "base_url": "https://api.anthropic.com"
+        },
+        "openai": {
+          "api_key": "${OPENAI_API_KEY}",
+          "base_url": "https://api.openai.com/v1"
+        }
+      }
+    }
+    ```
+
+    **Provider auto-detection** (when no explicit provider is set):
+    - `ANTHROPIC_API_KEY` set → provider = `anthropic`
+    - `OPENAI_API_KEY` set → provider = `openai`
+    - `OPENROUTER_API_KEY` set → provider = `openai` (OpenRouter-compatible)
+  </Accordion>
+
+  <Accordion title="Custom models" icon="plus">
+    ```json
+    {
+      "pool": {
+        "custom": ["deepseek-chat"],
+        "custom_config": {
+          "deepseek-chat": {
+            "based_on": "gpt-4o",
+            "context_limit": 65536
+          }
+        }
+      }
+    }
+    ```
+
+    `based_on` tells Mycel which tokenizer to use. `context_limit` overrides auto-detection.
+  </Accordion>
+</AccordionGroup>
+
+## MCP servers
+
+Connect external services via the Model Context Protocol. MCP tools appear as `mcp__{server_name}__{tool_name}`.
+
+<Tabs>
+  <Tab title="stdio (local process)">
+    ```json
+    {
+      "mcp": {
+        "enabled": true,
+        "servers": {
+          "github": {
+            "command": "npx",
+            "args": ["-y", "@modelcontextprotocol/server-github"],
+            "env": {
+              "GITHUB_TOKEN": "${GITHUB_TOKEN}"
+            }
+          }
+        }
+      }
+    }
+    ```
+  </Tab>
+  <Tab title="HTTP (remote server)">
+    ```json
+    {
+      "mcp": {
+        "enabled": true,
+        "servers": {
+          "remote-service": {
+            "url": "https://mcp.example.com/sse",
+            "allowed_tools": ["search", "fetch"]
+          }
+        }
+      }
+    }
+    ```
+  </Tab>
+  <Tab title="Member-level (.mcp.json)">
+    Each Member can have its own `~/.leon/members/<id>/.mcp.json`:
+
+    ```json
+    {
+      "mcpServers": {
+        "supabase": {
+          "command": "npx",
+          "args": ["-y", "@supabase/mcp-server"],
+          "env": { "SUPABASE_URL": "..." }
+        }
+      }
+    }
+    ```
+  </Tab>
+</Tabs>
+
+## Skills
+
+```json
+{
+  "skills": {
+    "enabled": true,
+    "paths": ["~/.leon/skills"],
+    "skills": {
+      "code-review": true,
+      "debugging": false
+    }
+  }
+}
+```
+
+<Warning>
+  Skill paths must exist on disk — Mycel does not create them automatically. Run `mkdir -p ~/.leon/skills` if needed.
+</Warning>
+
+## Observation (tracing)
+
+<Tabs>
+  <Tab title="Langfuse">
+    ```json
+    {
+      "active": "langfuse",
+      "langfuse": {
+        "secret_key": "${LANGFUSE_SECRET_KEY}",
+        "public_key": "${LANGFUSE_PUBLIC_KEY}",
+        "host": "https://cloud.langfuse.com"
+      }
+    }
+    ```
+  </Tab>
+  <Tab title="LangSmith">
+    ```json
+    {
+      "active": "langsmith",
+      "langsmith": {
+        "api_key": "${LANGSMITH_API_KEY}",
+        "project": "mycel"
+      }
+    }
+    ```
+  </Tab>
+  <Tab title="Disabled">
+    ```json
+    { "active": null }
+    ```
+  </Tab>
+</Tabs>
+
+## Environment variables
+
+All string values in JSON config files support `${VAR}` expansion and `~` for home directory.
+
+| Variable | Purpose |
+|----------|---------|
+| `ANTHROPIC_API_KEY` | Anthropic API key |
+| `OPENAI_API_KEY` | OpenAI-compatible API key |
+| `OPENAI_BASE_URL` | API base URL |
+| `OPENROUTER_API_KEY` | OpenRouter API key |
+| `MODEL_NAME` | Override active model |
+| `LEON_SANDBOX` | Default sandbox name |
+| `TAVILY_API_KEY` | Tavily web search |
+| `EXA_API_KEY` | Exa search |
+| `JINA_API_KEY` | Jina AI fetch |
+| `E2B_API_KEY` | E2B sandbox |
+| `DAYTONA_API_KEY` | Daytona sandbox |
+| `AGENTBAY_API_KEY` | AgentBay sandbox |

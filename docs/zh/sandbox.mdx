@@ -1,0 +1,203 @@
+---
+title: 沙箱
+sidebarTitle: 沙箱（身体）
+description: 在隔离环境中运行 Agent — Local、Docker、E2B、Daytona、AgentBay
+icon: box
+keywords: [沙箱, docker, e2b, daytona, agentbay, 隔离, 生命周期]
+---
+
+沙箱系统让 Agent 的操作（文件读写、Shell 命令）在隔离环境中执行，而不是直接在宿主机上运行。每个 Thread 在其生命周期内绑定到同一个沙箱。
+
+## 提供商对比
+
+| 提供商 | 隔离方式 | 费用 | 适用场景 |
+|--------|----------|------|----------|
+| **Local** | 无（直接在宿主机） | 免费 | 开发、可信代码 |
+| **Docker** | 容器 | 免费 | 测试、可复现环境 |
+| **Daytona** | 云端或自建 | 免费（自建） | 生产、团队环境 |
+| **E2B** | 云端 | $0.15/小时 | 临时任务、CI |
+| **AgentBay** | 阿里云 | ¥1/小时 | 中国区域 |
+
+## 快速开始
+
+<Steps>
+  <Step title="配置提供商">
+    在 Web UI 进入**设置 → 沙箱**，展开对应提供商的卡片，填写必填字段：
+
+    | 提供商 | 必填字段 |
+    |--------|---------|
+    | Docker | 镜像名称、挂载路径 |
+    | E2B | API Key |
+    | Daytona | API Key、API URL |
+    | AgentBay | API Key |
+
+    点击**保存**，配置存储到 `~/.leon/sandboxes/<provider>.json`。
+  </Step>
+
+  <Step title="启动沙箱 Thread">
+    在新建会话页面，从输入框的**沙箱下拉菜单**中选择提供商，发送第一条消息。该 Thread 之后所有运行均在同一个隔离环境中进行。
+  </Step>
+
+  <Step title="监控资源">
+    进入**资源**页面（侧边栏），查看各沙箱的 CPU/RAM/磁盘实时指标和文件浏览器。
+  </Step>
+</Steps>
+
+## 提供商配置
+
+### Docker
+
+需要宿主机安装 Docker，无需 API Key。
+
+```json
+{
+  "provider": "docker",
+  "docker": {
+    "image": "python:3.12-slim",
+    "mount_path": "/workspace"
+  },
+  "on_exit": "pause"
+}
+```
+
+| 字段 | 默认值 | 说明 |
+|------|--------|------|
+| `docker.image` | `python:3.12-slim` | 使用的 Docker 镜像 |
+| `docker.mount_path` | `/workspace` | 容器内的工作目录 |
+| `on_exit` | `pause` | `pause`（保留状态）或 `destroy`（清空） |
+
+### E2B
+
+云端沙箱，需要 [E2B](https://e2b.dev) API Key。
+
+```json
+{
+  "provider": "e2b",
+  "e2b": {
+    "api_key": "${E2B_API_KEY}",
+    "template": "base",
+    "cwd": "/home/user",
+    "timeout": 300
+  },
+  "on_exit": "pause"
+}
+```
+
+安装 E2B 扩展：`uv sync --extra e2b`
+
+### Daytona
+
+支持 [Daytona](https://daytona.io) SaaS 和自建实例。
+
+<Tabs>
+  <Tab title="SaaS">
+    ```json
+    {
+      "provider": "daytona",
+      "daytona": {
+        "api_key": "${DAYTONA_API_KEY}",
+        "api_url": "https://app.daytona.io/api",
+        "cwd": "/home/daytona"
+      },
+      "on_exit": "pause"
+    }
+    ```
+  </Tab>
+  <Tab title="自建">
+    ```json
+    {
+      "provider": "daytona",
+      "daytona": {
+        "api_key": "${DAYTONA_API_KEY}",
+        "api_url": "http://localhost:3986/api",
+        "target": "us",
+        "cwd": "/workspace"
+      },
+      "on_exit": "pause"
+    }
+    ```
+
+    自建环境要求：
+    - Runner 容器中 bash 路径为 `/usr/bin/bash`
+    - 工作区镜像中 bash 路径为 `/usr/bin/bash`
+    - Runner 在 bridge 网络上（用于访问工作区容器）
+    - Daytona Proxy 在端口 4000 可访问
+  </Tab>
+</Tabs>
+
+安装 Daytona 扩展：`uv sync --extra daytona`
+
+### AgentBay
+
+阿里云沙箱，适用于中国区域。
+
+```json
+{
+  "provider": "agentbay",
+  "agentbay": {
+    "api_key": "${AGENTBAY_API_KEY}",
+    "region_id": "ap-southeast-1",
+    "context_path": "/home/wuying"
+  },
+  "on_exit": "pause"
+}
+```
+
+安装 AgentBay 扩展：`uv sync --extra sandbox`
+
+## API Key 解析顺序
+
+1. 配置文件字段（`e2b.api_key`、`daytona.api_key` 等）
+2. 环境变量（`E2B_API_KEY`、`DAYTONA_API_KEY`、`AGENTBAY_API_KEY`）
+3. `~/.leon/config.env`
+
+## 会话生命周期
+
+```
+空闲 → 激活 → 暂停 → 销毁
+```
+
+| `on_exit` 值 | 行为 |
+|-------------|------|
+| `pause` | 退出时暂停，下次使用时恢复。文件、包、进程全部保留。 |
+| `destroy` | 退出时销毁，下次使用时全新创建。 |
+
+默认为 `pause` — 跨重启保留所有状态。
+
+### 通过 Web UI 管理会话
+
+在**资源**页面：
+- 统一网格展示所有提供商的所有会话
+- 点击会话卡片 → 详情面板（指标 + 文件浏览器）
+- 通过 UI 或 API 暂停 / 恢复 / 销毁
+
+### API 接口
+
+| 操作 | 接口 |
+|------|------|
+| 列出会话 | `GET /api/sandbox/sessions` |
+| 暂停 | `POST /api/sandbox/sessions/{id}/pause?provider={type}` |
+| 恢复 | `POST /api/sandbox/sessions/{id}/resume?provider={type}` |
+| 销毁 | `DELETE /api/sandbox/sessions/{id}?provider={type}` |
+| 获取指标 | `GET /api/sandbox/sessions/{id}/metrics` |
+
+## 架构
+
+沙箱是中间件栈之下的基础设施层：
+
+```
+Agent
+  ├── sandbox.fs()    → 文件系统后端（供文件系统中间件使用）
+  └── sandbox.shell() → 命令执行后端（供命令中间件使用）
+```
+
+中间件负责**策略**（校验、路径规则、安全钩子）。沙箱后端负责**I/O**（操作真正在哪里执行）。切换后端只会改变执行位置，不影响任何中间件逻辑。
+
+会话跟踪存储在 SQLite（`~/.leon/sandbox.db`）：
+
+| 表 | 用途 |
+|----|------|
+| `sandbox_leases` | 租约生命周期 — 提供商、期望状态/实际状态 |
+| `sandbox_instances` | 提供商侧的会话 ID |
+| `abstract_terminals` | 绑定到 Thread + 租约的虚拟终端 |
+| `lease_resource_snapshots` | CPU、内存、磁盘指标 |

@@ -1,0 +1,315 @@
+---
+title: 配置参考
+sidebarTitle: 配置
+description: runtime.json、models.json、MCP、Skills 和环境变量
+icon: sliders
+keywords: [runtime.json, models.json, MCP, skills, 配置, 环境变量, 记忆]
+---
+
+Mycel 使用分层配置系统，三级合并：系统默认值 → 用户配置（`~/.leon/`）→ 项目配置（工作区根目录下的 `.leon/`）。CLI 参数优先级最高，覆盖一切。
+
+## 配置文件概览
+
+| 文件 | 用途 |
+|------|------|
+| `runtime.json` | 工具、记忆、MCP、Skills、安全 |
+| `models.json` | 模型身份、提供商、API Key、虚拟模型映射 |
+| `observation.json` | Langfuse / LangSmith 追踪 |
+| `config.env` | 快速 API Key 配置（加载为环境变量） |
+| `sandboxes/<name>.json` | 各提供商的沙箱配置 |
+
+每个 JSON 文件从三个层级加载（优先级从高到低）：
+1. 工作区根目录下的 `.leon/<file>`（项目配置）
+2. `~/.leon/<file>`（用户配置）
+3. `config/defaults/` 中的内置默认值
+
+**各域合并策略：**
+
+| 域 | 策略 |
+|----|------|
+| `runtime`、`memory`、`tools` | 深度合并 — 高优先级层的字段覆盖低优先级层 |
+| `mcp`、`skills` | 查找优先 — 首个定义某 key 的层级获胜，不合并 |
+| `system_prompt` | 查找 — 项目 → 用户 → 系统 |
+| `providers`、`mapping`（models.json） | 按 key 深度合并 |
+| `pool`（models.json） | 最后者胜 — 不合并列表 |
+| `catalog`、`virtual_models`（models.json） | 仅系统层 — 用户不可覆盖 |
+
+## 首次运行
+
+创建 `~/.leon/config.env`：
+
+```env
+OPENAI_API_KEY=sk-xxx
+OPENAI_BASE_URL=https://api.openai.com/v1
+MODEL_NAME=claude-sonnet-4-5-20250929
+```
+
+## runtime.json
+
+控制 Agent 行为、工具、记忆、MCP 和 Skills。
+
+```json
+{
+  "context_limit": 0,
+  "enable_audit_log": true,
+  "allowed_extensions": null,
+  "block_dangerous_commands": true,
+  "block_network_commands": false,
+  "temperature": null,
+  "max_tokens": null,
+  "memory": {
+    "pruning": {
+      "enabled": true,
+      "soft_trim_chars": 3000,
+      "hard_clear_threshold": 10000,
+      "protect_recent": 3
+    },
+    "compaction": {
+      "enabled": true,
+      "reserve_tokens": 16384,
+      "keep_recent_tokens": 20000,
+      "min_messages": 20
+    }
+  },
+  "system_prompt": null,
+  "tools": { ... },
+  "mcp": { "enabled": true, "servers": {} },
+  "skills": { "enabled": true, "paths": ["~/.leon/skills"], "skills": {} }
+}
+```
+
+### 运行时字段
+
+| 字段 | 默认值 | 说明 |
+|------|--------|------|
+| `temperature` | null | 采样温度（0–2），null 表示使用模型默认值 |
+| `max_tokens` | null | 最大输出 token 数，null 表示使用模型默认值 |
+| `context_limit` | 0 | 上下文窗口 token 数，0 表示自动检测 |
+| `enable_audit_log` | true | 启用文件操作审计日志 |
+| `allowed_extensions` | null | 限制文件访问的扩展名，null 表示不限 |
+| `block_dangerous_commands` | true | 屏蔽 `rm -rf`、`sudo` 等危险命令 |
+| `block_network_commands` | false | 屏蔽网络命令 |
+
+### 工具
+
+每个工具组有 `enabled` 标志和 `tools` 子对象，两者均需启用工具才可用。
+
+**完整工具目录：**
+
+| 工具 | 分组 | 模式 | 说明 |
+|------|------|------|------|
+| Read | filesystem | inline | 读取文件内容 |
+| Write | filesystem | inline | 写入文件 |
+| Edit | filesystem | inline | 编辑文件（精确替换） |
+| list_dir | filesystem | inline | 列出目录 |
+| Grep | search | inline | 正则搜索（基于 ripgrep） |
+| Glob | search | inline | Glob 模式文件搜索 |
+| Bash | command | inline | 执行 Shell 命令 |
+| WebSearch | web | inline | 互联网搜索 |
+| WebFetch | web | inline | 抓取并提取网页内容 |
+| Agent | agent | inline | 派发子 Agent |
+| SendMessage | agent | inline | 给另一个 Agent 发消息 |
+| TaskOutput | agent | inline | 获取后台任务输出 |
+| TaskStop | agent | inline | 停止后台任务 |
+| TaskCreate | todo | deferred | 创建任务 |
+| TaskGet | todo | deferred | 获取任务详情 |
+| TaskList | todo | deferred | 列出任务 |
+| TaskUpdate | todo | deferred | 更新任务状态 |
+| load_skill | skills | inline | 加载 Skill |
+| tool_search | system | inline | 发现 deferred 工具 |
+
+`deferred` 工具不注入每次请求，Agent 在需要时通过 `tool_search` 发现。
+
+### 项目级示例
+
+工作区根目录下的 `.leon/runtime.json`：
+
+```json
+{
+  "allowed_extensions": ["py", "js", "ts", "json", "yaml", "md"],
+  "block_dangerous_commands": true,
+  "tools": {
+    "web": { "enabled": false },
+    "command": {
+      "tools": {
+        "run_command": { "default_timeout": 300 }
+      }
+    }
+  },
+  "system_prompt": "你是一个 Python 专家，正在开发一个 FastAPI 项目。"
+}
+```
+
+## models.json
+
+控制使用哪个模型、提供商凭证和虚拟模型映射。
+
+```json
+{
+  "active": {
+    "model": "claude-sonnet-4-5-20250929",
+    "provider": null
+  },
+  "providers": {
+    "anthropic": {
+      "api_key": "${ANTHROPIC_API_KEY}",
+      "base_url": "https://api.anthropic.com"
+    },
+    "openai": {
+      "api_key": "${OPENAI_API_KEY}",
+      "base_url": "https://api.openai.com/v1"
+    }
+  }
+}
+```
+
+### 虚拟模型别名
+
+Mycel 提供四个 `leon:*` 别名：
+
+| 别名 | 对应模型 | 适用场景 |
+|------|----------|----------|
+| `leon:mini` | claude-haiku-4-5-20250929 | 快速、简单任务 |
+| `leon:medium` | claude-sonnet-4-5-20250929 | 均衡、日常工作 |
+| `leon:large` | claude-opus-4-6 | 复杂推理 |
+| `leon:max` | claude-opus-4-6 + temp=0 | 最高精度 |
+
+通过 **Settings → Models** 在 Web UI 中设置，或在 `~/.leon/models.json` 中：
+
+```json
+{ "active": { "model": "leon:large" } }
+```
+
+可在 `models.json` 中重新映射这些别名：
+
+```json
+{
+  "mapping": {
+    "leon:medium": {
+      "model": "gpt-4o",
+      "provider": "openai"
+    }
+  }
+}
+```
+
+### 提供商自动检测
+
+未明确设置 provider 时，Mycel 从环境变量自动检测：
+- 设置了 `ANTHROPIC_API_KEY` → 使用 `anthropic`
+- 设置了 `OPENAI_API_KEY` → 使用 `openai`
+- 设置了 `OPENROUTER_API_KEY` → 使用 `openai`（OpenRouter 兼容）
+
+### 添加自定义模型
+
+```json
+{
+  "pool": {
+    "custom": ["deepseek-chat"],
+    "custom_config": {
+      "deepseek-chat": {
+        "based_on": "gpt-4o",
+        "context_limit": 65536
+      }
+    }
+  }
+}
+```
+
+## MCP 服务器
+
+通过 Model Context Protocol 连接外部服务（GitHub、数据库、API 等）。
+
+```json
+{
+  "mcp": {
+    "enabled": true,
+    "servers": {
+      "github": {
+        "command": "npx",
+        "args": ["-y", "@modelcontextprotocol/server-github"],
+        "env": {
+          "GITHUB_TOKEN": "${GITHUB_TOKEN}"
+        }
+      },
+      "remote-service": {
+        "url": "https://mcp.example.com/sse",
+        "allowed_tools": ["search", "fetch"]
+      }
+    }
+  }
+}
+```
+
+| 字段 | 说明 |
+|------|------|
+| `command` | 启动的可执行文件（stdio 传输） |
+| `args` | 命令参数 |
+| `env` | 传给服务器进程的环境变量 |
+| `url` | HTTP 传输的 URL（替代 command） |
+| `allowed_tools` | 工具白名单，null 表示暴露所有工具 |
+
+MCP 工具在 Agent 工具列表中显示为 `mcp__{server_name}__{tool_name}`。
+
+每个 Member 也可以有自己的 `.mcp.json`，路径为 `~/.leon/members/<id>/.mcp.json`。
+
+## Skills
+
+Skills 是可加载的专业能力模块 — 按需注入专业指令的 Markdown 文件。
+
+```json
+{
+  "skills": {
+    "enabled": true,
+    "paths": ["~/.leon/skills"],
+    "skills": {
+      "code-review": true,
+      "debugging": false
+    }
+  }
+}
+```
+
+Skill 目录必须在磁盘上存在，Mycel 不会自动创建。
+
+Agent 在运行时加载：`load_skill("code-review")`。
+
+## 可观测性（追踪）
+
+配置 Langfuse 或 LangSmith 用于 Agent 运行追踪：
+
+```json
+{
+  "active": "langfuse",
+  "langfuse": {
+    "secret_key": "${LANGFUSE_SECRET_KEY}",
+    "public_key": "${LANGFUSE_PUBLIC_KEY}",
+    "host": "https://cloud.langfuse.com"
+  },
+  "langsmith": {
+    "api_key": "${LANGSMITH_API_KEY}",
+    "project": "mycel"
+  }
+}
+```
+
+将 `active` 设为 `"langfuse"`、`"langsmith"` 或 `null`（禁用）。
+
+## 环境变量
+
+所有 JSON 配置文件中的字符串值都支持 `${VAR}` 展开和 `~` 表示家目录。
+
+| 变量 | 用途 |
+|------|------|
+| `ANTHROPIC_API_KEY` | Anthropic API Key |
+| `OPENAI_API_KEY` | OpenAI 兼容 API Key |
+| `OPENAI_BASE_URL` | API Base URL |
+| `OPENROUTER_API_KEY` | OpenRouter API Key |
+| `MODEL_NAME` | 覆盖活跃模型 |
+| `LEON_SANDBOX` | 默认沙箱名称 |
+| `TAVILY_API_KEY` | Tavily 网络搜索 |
+| `EXA_API_KEY` | Exa 搜索 |
+| `JINA_API_KEY` | Jina AI 抓取 |
+| `E2B_API_KEY` | E2B 沙箱 |
+| `DAYTONA_API_KEY` | Daytona 沙箱 |
+| `AGENTBAY_API_KEY` | AgentBay 沙箱 |

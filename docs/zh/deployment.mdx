@@ -1,0 +1,284 @@
+---
+title: 部署
+sidebarTitle: 部署
+description: 安装并在生产环境运行 Mycel
+icon: cloud
+keywords: [部署, 安装, 生产, Docker, 配置, 故障排查]
+---
+
+## 前置条件
+
+**必须：**
+- Python 3.11+
+- `uv` 包管理器 — [安装指南](https://docs.astral.sh/uv/getting-started/installation/)
+- Node.js 18+（Web UI 需要）
+- Git
+
+**可选（按沙箱提供商）：**
+- Docker daemon — 用于 Docker 沙箱提供商
+- E2B API Key — [e2b.dev](https://e2b.dev)
+- Daytona API Key — [daytona.io](https://daytona.io) 或自建实例
+- AgentBay API Key 和区域访问权限
+
+## 安装
+
+<Steps>
+  <Step title="克隆仓库">
+    ```bash
+    git clone https://github.com/OpenDCAI/Mycel.git
+    cd Mycel
+    ```
+  </Step>
+
+  <Step title="安装 Python 依赖">
+    ```bash
+    # 核心依赖
+    uv sync
+
+    # 按需安装沙箱提供商
+    uv sync --extra e2b        # E2B
+    uv sync --extra daytona    # Daytona
+    uv sync --extra sandbox    # AgentBay
+    uv sync --extra all        # 全部
+    ```
+
+    Docker 开箱即用，只需安装 Docker 本体。
+  </Step>
+
+  <Step title="安装前端依赖">
+    ```bash
+    cd frontend/app && npm install && cd ../..
+    ```
+  </Step>
+</Steps>
+
+## 配置
+
+### 用户配置目录
+
+Mycel 配置存储在 `~/.leon/`：
+
+```
+~/.leon/
+├── config.env          # API Key 和 Base URL
+├── runtime.json        # 运行时行为
+├── models.json         # LLM 提供商和模型映射
+├── observation.json    # 追踪配置（Langfuse / LangSmith）
+├── sandboxes/          # 沙箱提供商配置
+│   ├── docker.json
+│   ├── e2b.json
+│   └── daytona.json
+├── members/            # Agent Member 文件包
+├── skills/             # Skill 目录
+├── leon.db             # Thread 历史和 Agent 状态
+├── chat.db             # 社交层（聊天、Entity）
+└── sandbox.db          # 沙箱会话追踪
+```
+
+### 快速配置
+
+手动创建 `~/.leon/config.env`：
+
+```env
+ANTHROPIC_API_KEY=sk-ant-xxx
+# 或使用 OpenAI 兼容格式：
+# OPENAI_API_KEY=your-key
+# OPENAI_BASE_URL=https://api.openai.com/v1
+# MODEL_NAME=gpt-4o
+```
+
+## 启动服务
+
+```bash
+# 终端 1：后端
+uv run python -m backend.web.main
+# → http://localhost:8001
+
+# 终端 2：前端
+cd frontend/app && npm run dev
+# → http://localhost:5173
+```
+
+覆盖后端端口：
+
+```bash
+PORT=9000 uv run python -m backend.web.main
+# 或
+LEON_BACKEND_PORT=9000 uv run python -m backend.web.main
+```
+
+## 沙箱提供商配置
+
+完整配置参见[沙箱](/zh/sandbox)文档，以下为快速参考：
+
+### Docker
+
+创建 `~/.leon/sandboxes/docker.json`：
+
+```json
+{
+  "provider": "docker",
+  "on_exit": "pause",
+  "docker": {
+    "image": "python:3.12-slim",
+    "mount_path": "/workspace"
+  }
+}
+```
+
+### E2B
+
+```json
+{
+  "provider": "e2b",
+  "on_exit": "pause",
+  "e2b": {
+    "api_key": "${E2B_API_KEY}",
+    "template": "base",
+    "cwd": "/home/user",
+    "timeout": 300
+  }
+}
+```
+
+### Daytona（SaaS）
+
+```json
+{
+  "provider": "daytona",
+  "on_exit": "pause",
+  "daytona": {
+    "api_key": "${DAYTONA_API_KEY}",
+    "api_url": "https://app.daytona.io/api",
+    "cwd": "/home/daytona"
+  }
+}
+```
+
+### Daytona（自建）
+
+```json
+{
+  "provider": "daytona",
+  "on_exit": "pause",
+  "daytona": {
+    "api_key": "${DAYTONA_API_KEY}",
+    "api_url": "http://localhost:3986/api",
+    "target": "us",
+    "cwd": "/workspace"
+  }
+}
+```
+
+自建环境要求：
+1. Runner 容器镜像中 bash 路径为 `/usr/bin/bash`
+2. 工作区镜像中 bash 路径为 `/usr/bin/bash`
+3. Runner 必须同时在 compose 网络和 Docker bridge 网络上
+
+**Docker Compose 网络配置：**
+
+```yaml
+services:
+  daytona-runner:
+    image: your-runner-image-with-bash
+    environment:
+      - RUNNER_DOMAIN=runner  # 不能是 localhost
+    networks:
+      - default
+      - bridge
+
+networks:
+  bridge:
+    external: true
+```
+
+在 Runner 的 `/etc/hosts` 中添加：
+
+```
+127.0.0.1 proxy.localhost
+```
+
+Daytona Proxy（端口 4000）必须从 Runner 可访问，文件操作依赖它。
+
+### AgentBay
+
+```json
+{
+  "provider": "agentbay",
+  "on_exit": "pause",
+  "agentbay": {
+    "api_key": "${AGENTBAY_API_KEY}",
+    "region_id": "ap-southeast-1",
+    "context_path": "/home/wuying"
+  }
+}
+```
+
+## 验证
+
+打开 Web UI `http://localhost:5173`，注册账号，确认 Agent 正常响应。
+
+## 生产注意事项
+
+### 数据库
+
+Mycel 默认使用 SQLite。生产环境建议：
+
+```bash
+# 定期备份
+cp ~/.leon/leon.db ~/.leon/leon.db.backup
+```
+
+多用户部署可能需要 PostgreSQL — 需要对存储层进行代码改动。
+
+### 安全
+
+- API Key 存储在 `~/.leon/config.env`，不要写入代码或版本控制
+- 在 JSON 配置文件中使用 `${VAR}` 引用而不是硬编码 Key
+- 限制文件权限：`chmod 600 ~/.leon/config.env`
+- `block_dangerous_commands` 配置项（默认 `true`）可屏蔽 `rm -rf` 等危险命令
+
+### 代理环境
+
+若环境中有 HTTP 代理：
+
+```bash
+# 防止代理影响 LLM 客户端或 Docker CLI
+env -u ALL_PROXY -u all_proxy uv run python -m backend.web.main
+```
+
+## 故障排查
+
+<AccordionGroup>
+  <Accordion title="后端启动时「Could not import module」">
+    - 确认当前在正确目录
+    - 确认虚拟环境已激活：`source .venv/bin/activate`
+    - 尝试使用完整路径：`.venv/bin/python -m backend.web.main`
+  </Accordion>
+
+  <Accordion title="LLM 客户端报「SOCKS proxy error」">
+    Shell 中设置了 `all_proxy=socks5://...`，启动前取消设置：
+    ```bash
+    env -u ALL_PROXY -u all_proxy uv run python -m backend.web.main
+    ```
+  </Accordion>
+
+  <Accordion title="Docker 提供商卡住">
+    Docker CLI 继承了代理环境变量。Mycel 会自动清理这些变量，若问题仍然存在，检查 `~/.leon/sandboxes/docker.json` 中的 `docker_host` 配置。
+  </Accordion>
+
+  <Accordion title="Daytona PTY bootstrap 失败">
+    按顺序逐项检查：
+
+    1. 工作区镜像中 bash 路径为 `/usr/bin/bash` — 用 `docker run <image> /usr/bin/bash -c "echo ok"` 验证
+    2. Runner 中 bash 路径为 `/usr/bin/bash`
+    3. Runner 在 Docker bridge 网络上（参见上方 Docker Compose 配置）
+    4. Daytona Proxy（端口 4000）从 Runner 可访问 — 用 `curl http://proxy.localhost:4000` 验证
+
+    常见错误信息：
+    - `fork/exec /usr/bin/bash: no such file or directory` → 工作区镜像缺少 bash
+    - `Failed to create sandbox within 60s` → 网络隔离问题，检查 Runner 网络配置
+    - 文件操作静默失败 → Daytona Proxy 不可达
+  </Accordion>
+  </Accordion>
+</AccordionGroup>
