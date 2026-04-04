@@ -172,17 +172,54 @@ class AgentBayProvider(SandboxProvider):
             "cwd": cwd or self.default_context_path,
         }
         shell_server = self._resolve_shell_server(session)
+        session_tools = getattr(session, "mcpTools", None) or getattr(session, "mcp_tools", None) or []
+        print(
+            "[AgentBay.execute] "
+            f"session_id={session_id} "
+            f"has_link_url={bool(getattr(session, 'link_url', ''))} "
+            f"has_token={bool(getattr(session, 'token', ''))} "
+            f"shell_server={shell_server!r} "
+            f"tool_count={len(session_tools)} "
+            f"timeout_ms={timeout_ms}"
+        )
 
         if getattr(session, "link_url", "") and getattr(session, "token", "") and shell_server:
             # @@@agentbay-shell-link-route - shared staging proved shell can degrade into the API path
             # despite hydrated direct-call metadata; take the explicit LinkUrl route when shell server is known.
-            return self._call_link_url_tool(session, "shell", exec_args, shell_server)
+            result = self._call_link_url_tool(session, "shell", exec_args, shell_server)
+            print(
+                "[AgentBay.execute] "
+                f"session_id={session_id} path=link_url exit_code={result.exit_code} "
+                f"error={result.error!r} output_len={len(result.output or '')}"
+            )
+            return result
 
-        result = session.command.execute_command(**exec_args)
+        print(f"[AgentBay.execute] session_id={session_id} path=sdk_command_execute")
+        try:
+            result = session.command.execute_command(**exec_args)
+        except Exception as exc:
+            print(
+                "[AgentBay.execute] "
+                f"session_id={session_id} path=sdk_command_execute raised={exc.__class__.__name__}: {exc}"
+            )
+            raise
 
         if not result.success:
+            print(
+                "[AgentBay.execute] "
+                f"session_id={session_id} path=sdk_command_execute success=False "
+                f"exit_code={getattr(result, 'exit_code', None)} "
+                f"error={getattr(result, 'error_message', None)!r} "
+                f"output_len={len(getattr(result, 'output', '') or '')}"
+            )
             return ProviderExecResult(output=result.output or "", exit_code=result.exit_code or 1, error=result.error_message)
 
+        print(
+            "[AgentBay.execute] "
+            f"session_id={session_id} path=sdk_command_execute success=True "
+            f"exit_code={getattr(result, 'exit_code', None)} "
+            f"output_len={len(getattr(result, 'output', '') or '')}"
+        )
         return ProviderExecResult(output=result.output or "", exit_code=result.exit_code or 0)
 
     def read_file(self, session_id: str, path: str) -> str:

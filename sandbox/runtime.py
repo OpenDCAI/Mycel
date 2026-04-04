@@ -806,6 +806,16 @@ class RemoteWrappedRuntime(_RemoteRuntimeBase):
         instance = self.lease.ensure_active_instance(self.provider)
         state = self.terminal.get_state()
         timeout_ms = int(timeout * 1000) if timeout else 30000
+        print(
+            "[RemoteWrappedRuntime._execute_once] "
+            f"thread_id={self.terminal.thread_id} "
+            f"lease_id={self.lease.lease_id} "
+            f"instance_id={instance.instance_id} "
+            f"provider={getattr(self.provider, 'name', '?')} "
+            f"cwd={state.cwd!r} "
+            f"timeout_ms={timeout_ms} "
+            f"command={command[:200]!r}"
+        )
         # @@@ _build_state_snapshot_cmd returns (start, end, cmd) but RemoteWrappedRuntime
         # builds its own inline block to interleave cd/exports/command, so the pre-built cmd is unused.
         start_marker, end_marker, _ = _build_state_snapshot_cmd()
@@ -832,14 +842,30 @@ class RemoteWrappedRuntime(_RemoteRuntimeBase):
             cwd=state.cwd,
         )
         raw_output = result.output or ""
-
-        new_cwd, env_map, raw_output = _extract_state_from_output(
-            raw_output,
-            start_marker,
-            end_marker,
-            cwd_fallback=state.cwd,
-            env_fallback=state.env_delta,
+        print(
+            "[RemoteWrappedRuntime._execute_once] "
+            f"thread_id={self.terminal.thread_id} "
+            f"provider_exit={result.exit_code} "
+            f"provider_error={result.error!r} "
+            f"output_len={len(raw_output)}"
         )
+
+        try:
+            new_cwd, env_map, raw_output = _extract_state_from_output(
+                raw_output,
+                start_marker,
+                end_marker,
+                cwd_fallback=state.cwd,
+                env_fallback=state.env_delta,
+            )
+        except Exception as exc:
+            print(
+                "[RemoteWrappedRuntime._execute_once] "
+                f"thread_id={self.terminal.thread_id} "
+                f"state_parse_failed={exc.__class__.__name__}: {exc} "
+                f"raw_output_preview={raw_output[:400]!r}"
+            )
+            raise
         from sandbox.terminal import TerminalState
 
         self.update_terminal_state(TerminalState(cwd=new_cwd, env_delta=env_map))
