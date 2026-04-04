@@ -82,7 +82,6 @@ async def get_chat(
                 }
             )
         else:
-            # Human participant — no entity row, resolve from member_repo
             m = member_repo.get_by_id(p.user_id)
             if m:
                 entities_info.append(
@@ -112,7 +111,6 @@ async def list_messages(
 ):
     """List messages in a chat."""
     msgs = app.state.chat_message_repo.list_by_chat(chat_id, limit=limit, before=before)
-    # Batch sender name lookup: entity_repo (agents) → member_repo (humans)
     entity_repo = app.state.entity_repo
     member_repo = app.state.member_repo
     sender_ids = {m.sender_id for m in msgs}
