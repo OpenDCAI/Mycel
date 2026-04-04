@@ -67,6 +67,7 @@ export interface Task {
   created_at: number;
   // New fields
   thread_id: string;
+  member_id?: string;
   source: TaskSource;
   cron_job_id: string;
   result: string;

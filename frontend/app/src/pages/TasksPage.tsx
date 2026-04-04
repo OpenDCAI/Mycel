@@ -748,14 +748,16 @@ export default function Tasks() {
                                 <span className="text-xs text-muted-foreground font-mono">
                                   Thread: {task.thread_id.slice(0, 8)}…
                                 </span>
-                                <a
-                                  href={`/chat/${task.thread_id}`}
-                                  className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
-                                  onClick={(e) => e.stopPropagation()}
-                                >
-                                  <ExternalLink className="w-3 h-3" />
-                                  查看对话
-                                </a>
+                                {task.member_id && (
+                                  <a
+                                    href={`/threads/${encodeURIComponent(task.member_id)}/${task.thread_id}`}
+                                    className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
+                                    onClick={(e) => e.stopPropagation()}
+                                  >
+                                    <ExternalLink className="w-3 h-3" />
+                                    查看线程
+                                  </a>
+                                )}
                               </div>
                               {cache?.loading ? (
                                 <div className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -914,7 +916,6 @@ export default function Tasks() {
     </div>
   );
 }
-
 
 
 

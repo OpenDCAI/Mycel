@@ -3,6 +3,7 @@
 from typing import Any
 
 from backend.web.core.storage_factory import make_panel_task_repo
+from storage.runtime import build_thread_repo
 
 
 def _repo() -> Any:
@@ -12,9 +13,36 @@ def _repo() -> Any:
 def list_tasks() -> list[dict[str, Any]]:
     repo = _repo()
     try:
-        return repo.list_all()
+        return _enrich_task_thread_members(repo.list_all())
     finally:
         repo.close()
+
+
+def _enrich_task_thread_members(tasks: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    thread_ids = [str(task.get("thread_id") or "").strip() for task in tasks]
+    thread_ids = [thread_id for thread_id in dict.fromkeys(thread_ids) if thread_id]
+    if not thread_ids:
+        return tasks
+
+    # @@@task-thread-member-enrichment - panel tasks persist thread_id only, so enrich member_id
+    # from canonical thread metadata before frontend deep-links are rendered.
+    thread_repo = build_thread_repo()
+    try:
+        member_ids = {
+            thread_id: (thread_repo.get_by_id(thread_id) or {}).get("member_id")
+            for thread_id in thread_ids
+        }
+    finally:
+        thread_repo.close()
+
+    enriched: list[dict[str, Any]] = []
+    for task in tasks:
+        thread_id = str(task.get("thread_id") or "").strip()
+        if thread_id and member_ids.get(thread_id):
+            enriched.append({**task, "member_id": member_ids[thread_id]})
+        else:
+            enriched.append(task)
+    return enriched
 
 
 def get_task(task_id: str) -> dict[str, Any] | None:

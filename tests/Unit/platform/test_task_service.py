@@ -2,6 +2,7 @@
 
 import sqlite3
 import time
+from types import SimpleNamespace
 
 import pytest
 
@@ -119,6 +120,19 @@ class TestListDeleteBulk:
         task_service.create_task(title="b")
         tasks = task_service.list_tasks()
         assert len(tasks) >= 2
+
+    def test_list_enriches_member_id_from_thread_repo(self, monkeypatch):
+        task_service.create_task(title="task with thread", thread_id="thread-1")
+
+        thread_repo = SimpleNamespace(
+            get_by_id=lambda thread_id: {"member_id": "member-1"} if thread_id == "thread-1" else None,
+            close=lambda: None,
+        )
+        monkeypatch.setattr(task_service, "build_thread_repo", lambda **_: thread_repo)
+
+        tasks = task_service.list_tasks()
+
+        assert tasks[0]["member_id"] == "member-1"
 
     def test_delete_existing(self):
         task = task_service.create_task(title="to delete")
