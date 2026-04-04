@@ -4,12 +4,13 @@ import asyncio
 from types import SimpleNamespace
 
 import pytest
-from langchain_core.messages import AIMessage, HumanMessage
+from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
 from backend.web.routers import threads as threads_router
 from backend.web.services.display_builder import DisplayBuilder
 from backend.web.services.event_buffer import ThreadEventBuffer
 from backend.web.services.streaming_service import run_child_thread_live
+from backend.web.utils.serializers import serialize_message
 from core.runtime.middleware.monitor import AgentState
 from core.runtime.middleware.queue.manager import MessageQueueManager
 
@@ -227,3 +228,46 @@ def test_task_start_can_patch_background_agent_after_tool_result_race():
     assert seg["step"]["subagent_stream"]["task_id"] == "task-race"
     assert seg["step"]["subagent_stream"]["thread_id"] == "subagent-task-race"
     assert seg["step"]["subagent_stream"]["status"] == "running"
+
+
+def test_checkpoint_rebuild_reconciles_subagent_stream_status_from_terminal_notification():
+    builder = DisplayBuilder()
+    thread_id = "parent-thread"
+
+    ai = AIMessage(
+        content="",
+        tool_calls=[{"name": "Agent", "args": {"prompt": "do work", "run_in_background": True}, "id": "tc-agent-1"}],
+    )
+    tool = ToolMessage(
+        content=(
+            '{"task_id":"task-123","agent_name":"agent-task-123",'
+            '"thread_id":"subagent-task-123","status":"running",'
+            '"message":"Agent started in background. Use TaskOutput to get result."}'
+        ),
+        name="Agent",
+        tool_call_id="tc-agent-1",
+    )
+    notice = HumanMessage(
+        content=(
+            "<system-reminder>\n"
+            "<task-notification>\n"
+            "  <run-id>task-123</run-id>\n"
+            "  <status>completed</status>\n"
+            "  <description>child task</description>\n"
+            "  <summary>child task</summary>\n"
+            "  <result>CHILD_DONE</result>\n"
+            "</task-notification>\n"
+            "</system-reminder>"
+        )
+    )
+    notice.metadata = {"source": "system", "notification_type": "agent"}
+
+    entries = builder.build_from_checkpoint(
+        thread_id,
+        [serialize_message(ai), serialize_message(tool), serialize_message(notice)],
+    )
+
+    seg = entries[0]["segments"][0]
+    assert seg["step"]["subagent_stream"]["task_id"] == "task-123"
+    assert seg["step"]["subagent_stream"]["thread_id"] == "subagent-task-123"
+    assert seg["step"]["subagent_stream"]["status"] == "completed"

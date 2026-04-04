@@ -39,6 +39,8 @@ DeltaType = Literal[
 # ---------------------------------------------------------------------------
 
 _CHAT_MESSAGE_RE = re.compile(r"<chat-message[^>]*>([\s\S]*?)</chat-message>")
+_TASK_NOTIFICATION_RUN_ID_RE = re.compile(r"<run-id>(.*?)</run-id>", re.IGNORECASE | re.DOTALL)
+_TASK_NOTIFICATION_STATUS_RE = re.compile(r"<status>(.*?)</status>", re.IGNORECASE | re.DOTALL)
 
 
 def _extract_chat_message(text: str) -> str | None:
@@ -48,6 +50,42 @@ def _extract_chat_message(text: str) -> str | None:
 
 def _make_id(prefix: str = "db") -> str:
     return f"{prefix}-{uuid.uuid4().hex[:12]}"
+
+
+def _extract_terminal_task_status(notification_type: str | None, text: str) -> tuple[str | None, str | None]:
+    if notification_type != "agent" or "<task-notification>" not in text:
+        return None, None
+    task_match = _TASK_NOTIFICATION_RUN_ID_RE.search(text)
+    status_match = _TASK_NOTIFICATION_STATUS_RE.search(text)
+    task_id = task_match.group(1).strip() if task_match else None
+    status = status_match.group(1).strip().lower() if status_match else None
+    return task_id, status
+
+
+def _reconcile_subagent_stream_status(
+    entries: list[dict],
+    current_turn: dict | None,
+    task_id: str,
+    status: str,
+) -> None:
+    # @@@checkpoint-status-reconcile - idle detail rebuild only sees persisted
+    # checkpoint messages, not live task_done events. If a later persisted
+    # terminal notification names the child task, reconcile the earlier Agent
+    # subagent_stream status so cold rebuild does not regress it back to running.
+    turns: list[dict] = []
+    if current_turn is not None:
+        turns.append(current_turn)
+    turns.extend(
+        entry
+        for entry in reversed(entries)
+        if entry.get("role") == "assistant" and entry is not current_turn
+    )
+    for turn in turns:
+        for seg in turn.get("segments", []):
+            stream = seg.get("step", {}).get("subagent_stream")
+            if seg.get("type") == "tool" and stream and stream.get("task_id") == task_id:
+                stream["status"] = status
+                return
 
 
 # ---------------------------------------------------------------------------
@@ -242,6 +280,9 @@ class DisplayBuilder:
         if source == "system" or (source == "external" and ntype == "chat"):
             content = _extract_text_content(msg.get("content"))
             msg_run_id = meta.get("run_id") or None
+            task_id, task_status = _extract_terminal_task_status(ntype, content)
+            if task_id and task_status:
+                _reconcile_subagent_stream_status(entries, current_turn, task_id, task_status)
 
             # Fold into current turn if same run
             if current_turn and (not msg_run_id or msg_run_id == current_run_id):
