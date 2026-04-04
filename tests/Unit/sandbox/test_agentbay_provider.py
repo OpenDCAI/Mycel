@@ -53,14 +53,6 @@ def test_execute_prefers_link_url_shell_path_when_session_has_direct_call_metada
         name = "shell"
         server = "wuying_shell"
 
-    def _link(tool_name: str, args: dict, server_name: str):
-        calls.append(("link", {"tool": tool_name, "args": args, "server": server_name}))
-        return SimpleNamespace(
-            success=True,
-            data=json.dumps({"stdout": "/home/wuying\n", "stderr": "", "exit_code": 0}),
-            error_message="",
-        )
-
     def _command_execute(**kwargs):
         calls.append(("command", kwargs))
         return SimpleNamespace(success=False, output="", error_message="should not be used")
@@ -71,11 +63,20 @@ def test_execute_prefers_link_url_shell_path_when_session_has_direct_call_metada
         link_url="https://link",
         mcpTools=[_Tool()],
         _get_mcp_server_for_tool=lambda tool_name: "wuying_shell" if tool_name == "shell" else None,
-        _call_mcp_tool_link_url=_link,
         command=SimpleNamespace(execute_command=_command_execute),
     )
     provider = _provider_with_fake_client(SimpleNamespace())
     provider._sessions["sess-123"] = session
+    provider._call_link_url_tool = lambda session, tool_name, args, server_name: (
+        calls.append(("link", {"tool": tool_name, "args": args, "server": server_name}))
+        or AgentBayProvider._provider_exec_result_from_tool_result(
+            SimpleNamespace(
+                success=True,
+                data=json.dumps({"stdout": "/home/wuying\n", "stderr": "", "exit_code": 0}),
+                error_message="",
+            )
+        )
+    )
 
     result = provider.execute("sess-123", "pwd", timeout_ms=5000, cwd="/home/wuying")
 
@@ -133,14 +134,6 @@ def test_get_session_hydrates_sdk_shape_session_from_raw_get_session_metadata():
 def test_execute_prefers_link_url_shell_path_for_sdk_shape_session():
     calls: list[tuple[str, object]] = []
 
-    def _link(tool_name: str, args: dict, server_name: str):
-        calls.append(("link", {"tool": tool_name, "args": args, "server": server_name}))
-        return SimpleNamespace(
-            success=True,
-            data=json.dumps({"stdout": "/home/wuying\n", "stderr": "", "exit_code": 0}),
-            error_message="",
-        )
-
     def _command_execute(**kwargs):
         calls.append(("command", kwargs))
         return SimpleNamespace(success=False, output="", error_message="should not be used")
@@ -151,11 +144,20 @@ def test_execute_prefers_link_url_shell_path_for_sdk_shape_session():
         link_url="https://link",
         mcp_tools=[SimpleNamespace(name="shell", server="wuying_shell")],
         _find_server_for_tool=lambda tool_name: "wuying_shell" if tool_name == "shell" else "",
-        _call_mcp_tool_link_url=_link,
         command=SimpleNamespace(execute_command=_command_execute),
     )
     provider = _provider_with_fake_client(SimpleNamespace())
     provider._sessions["sess-123"] = session
+    provider._call_link_url_tool = lambda session, tool_name, args, server_name: (
+        calls.append(("link", {"tool": tool_name, "args": args, "server": server_name}))
+        or AgentBayProvider._provider_exec_result_from_tool_result(
+            SimpleNamespace(
+                success=True,
+                data=json.dumps({"stdout": "/home/wuying\n", "stderr": "", "exit_code": 0}),
+                error_message="",
+            )
+        )
+    )
 
     result = provider.execute("sess-123", "pwd", timeout_ms=5000, cwd="/home/wuying")
 
@@ -181,3 +183,49 @@ def test_resolve_shell_server_falls_back_to_mcp_tools_when_sdk_resolver_raises()
     )
 
     assert AgentBayProvider._resolve_shell_server(session) == "wuying_shell"
+
+
+def test_execute_uses_provider_owned_link_call_instead_of_sdk_private_method():
+    calls: list[tuple[str, object]] = []
+
+    def _sdk_link(*args, **kwargs):
+        raise StopIteration()
+
+    def _provider_link(session: object, tool_name: str, args: dict, server_name: str):
+        calls.append(("provider-link", {"tool": tool_name, "args": args, "server": server_name}))
+        return AgentBayProvider._provider_exec_result_from_tool_result(
+            SimpleNamespace(
+                success=True,
+                data=json.dumps({"stdout": "/home/wuying\n", "stderr": "", "exit_code": 0}),
+                error_message="",
+            )
+        )
+
+    session = SimpleNamespace(
+        session_id="sess-123",
+        token="tok",
+        link_url="https://link",
+        mcp_tools=[SimpleNamespace(name="shell", server="wuying_shell")],
+        _find_server_for_tool=lambda tool_name: "wuying_shell",
+        _call_mcp_tool_link_url=_sdk_link,
+        command=SimpleNamespace(execute_command=lambda **kwargs: None),
+    )
+    provider = _provider_with_fake_client(SimpleNamespace())
+    provider._sessions["sess-123"] = session
+    provider._call_link_url_tool = _provider_link
+
+    result = provider.execute("sess-123", "pwd", timeout_ms=5000, cwd="/home/wuying")
+
+    assert result.output == "/home/wuying\n"
+    assert result.exit_code == 0
+    assert result.error is None
+    assert calls == [
+        (
+            "provider-link",
+            {
+                "tool": "shell",
+                "args": {"command": "pwd", "timeout_ms": 5000, "cwd": "/home/wuying"},
+                "server": "wuying_shell",
+            },
+        )
+    ]

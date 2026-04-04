@@ -7,9 +7,12 @@ Implements SandboxProvider using Alibaba Cloud's AgentBay SDK.
 from __future__ import annotations
 
 import json
+import time
 from dataclasses import replace
 from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any
+
+import requests
 
 from sandbox.provider import (
     Metrics,
@@ -173,8 +176,7 @@ class AgentBayProvider(SandboxProvider):
         if getattr(session, "link_url", "") and getattr(session, "token", "") and shell_server:
             # @@@agentbay-shell-link-route - shared staging proved shell can degrade into the API path
             # despite hydrated direct-call metadata; take the explicit LinkUrl route when shell server is known.
-            tool_result = session._call_mcp_tool_link_url("shell", exec_args, shell_server)
-            return self._provider_exec_result_from_tool_result(tool_result)
+            return self._call_link_url_tool(session, "shell", exec_args, shell_server)
 
         result = session.command.execute_command(**exec_args)
 
@@ -314,6 +316,70 @@ class AgentBayProvider(SandboxProvider):
             error = stderr or None
             return ProviderExecResult(output=stdout + stderr, exit_code=exit_code, error=error)
         return ProviderExecResult(output=str(data or ""), exit_code=0)
+
+    def _call_link_url_tool(
+        self,
+        session: Any,
+        tool_name: str,
+        args: dict[str, Any],
+        server_name: str,
+    ) -> ProviderExecResult:
+        link_url = str(getattr(session, "link_url", "") or "")
+        token = str(getattr(session, "token", "") or "")
+        if not link_url or not token:
+            return ProviderExecResult(output="", exit_code=1, error="LinkUrl/token not available")
+
+        try:
+            response = requests.post(
+                link_url.rstrip("/") + "/callTool",
+                json={
+                    "args": args,
+                    "server": server_name,
+                    "requestId": f"link-{int(time.time() * 1000)}",
+                    "tool": tool_name,
+                    "token": token,
+                },
+                headers={
+                    "Content-Type": "application/json",
+                    "X-Access-Token": token,
+                },
+                timeout=max(int(args.get("timeout_ms", 30000) or 30000) / 1000.0, 30.0),
+            )
+        except requests.RequestException as exc:
+            return ProviderExecResult(output="", exit_code=1, error=f"HTTP request failed: {exc}")
+        if response.status_code < 200 or response.status_code >= 300:
+            return ProviderExecResult(output="", exit_code=1, error=f"HTTP request failed with code: {response.status_code}")
+
+        outer = response.json()
+        data_field = outer.get("data")
+        if data_field is None:
+            return ProviderExecResult(output="", exit_code=1, error="No data field in LinkUrl response")
+        parsed_data = json.loads(data_field) if isinstance(data_field, str) else data_field
+        if not isinstance(parsed_data, dict):
+            return ProviderExecResult(output="", exit_code=1, error="Invalid data field type in LinkUrl response")
+
+        result_field = parsed_data.get("result", {})
+        if not isinstance(result_field, dict):
+            return ProviderExecResult(output="", exit_code=1, error="No result field in LinkUrl response data")
+
+        content = result_field.get("content", [])
+        text_content = ""
+        if isinstance(content, list) and content:
+            first = content[0]
+            if isinstance(first, str):
+                text_content = first
+            elif isinstance(first, dict):
+                text_content = str(first.get("text") or first.get("blob") or first.get("data") or "")
+        elif isinstance(content, str):
+            text_content = content
+
+        if result_field.get("isError", False):
+            error_message = text_content or json.dumps(result_field, ensure_ascii=False)
+            return ProviderExecResult(output="", exit_code=1, error=error_message)
+
+        return self._provider_exec_result_from_tool_result(
+            SimpleNamespace(success=True, data=text_content, error_message="")
+        )
 
     @staticmethod
     def _session_needs_direct_call_refresh(session: Any) -> bool:
