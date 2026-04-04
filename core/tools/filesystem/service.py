@@ -122,9 +122,7 @@ class FileSystemService:
         self._read_files = _ReadFileStateCache(max_entries=max_read_cache_entries)
         self.max_edit_file_size = max_file_size if max_edit_file_size is None else max_edit_file_size
         self.operation_recorder = operation_recorder
-        self.extra_allowed_paths = [
-            _remote_path(p) if backend.is_remote else Path(p).resolve() for p in (extra_allowed_paths or [])
-        ]
+        self.extra_allowed_paths = [_remote_path(p) if backend.is_remote else Path(p).resolve() for p in (extra_allowed_paths or [])]
         self._edit_critical_section = threading.Lock()
 
         if not backend.is_remote:

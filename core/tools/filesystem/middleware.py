@@ -101,9 +101,7 @@ class FileSystemMiddleware(AgentMiddleware):
         self._read_files: dict[Path | PurePosixPath, float | None] = {}
         self.operation_recorder = operation_recorder
         self.verbose = verbose
-        self.extra_allowed_paths = [
-            _remote_path(p) if backend.is_remote else Path(p).resolve() for p in (extra_allowed_paths or [])
-        ]
+        self.extra_allowed_paths = [_remote_path(p) if backend.is_remote else Path(p).resolve() for p in (extra_allowed_paths or [])]
 
         if not backend.is_remote:
             self.workspace_root.mkdir(parents=True, exist_ok=True)
