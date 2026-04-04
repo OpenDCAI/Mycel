@@ -16,10 +16,17 @@ class _FakeVolumeRepo:
         self._source = source
         self.closed = False
         self.requested_ids: list[str] = []
+        self.created: list[tuple[str, str | None]] = []
 
     def get(self, volume_id: str):
         self.requested_ids.append(volume_id)
+        if self.created and volume_id == self.created[-1][0]:
+            return {"source": json.dumps(self._source)}
         return {"source": json.dumps(self._source)}
+
+    def create(self, volume_id: str, source_json: str, name: str | None, created_at: str) -> None:
+        self.created.append((volume_id, name))
+        self._source = json.loads(source_json)
 
     def close(self) -> None:
         self.closed = True
@@ -63,6 +70,14 @@ class _FakeUpdateRepo:
         self.closed = True
 
 
+class _FakeLeaseStore:
+    def __init__(self) -> None:
+        self.volume_updates: list[tuple[str, str]] = []
+
+    def set_volume_id(self, lease_id: str, volume_id: str) -> None:
+        self.volume_updates.append((lease_id, volume_id))
+
+
 class _FakeDaytonaProvider:
     def __init__(self) -> None:
         self.calls: list[tuple[str, str]] = []
@@ -95,6 +110,7 @@ def test_setup_mounts_reads_volume_from_active_storage_repo(tmp_path):
 
 def test_resolve_volume_source_reads_volume_from_active_storage_repo(tmp_path):
     manager = object.__new__(SandboxManager)
+    manager.provider_capability = SimpleNamespace(runtime_kind="agentbay")
     manager._get_active_terminal = lambda _thread_id: SimpleNamespace(lease_id="lease-1")
     manager._get_lease = lambda _lease_id: SimpleNamespace(volume_id="volume-1")
     repo = _FakeVolumeRepo(HostVolume(Path(tmp_path) / "vol").serialize())
@@ -105,6 +121,27 @@ def test_resolve_volume_source_reads_volume_from_active_storage_repo(tmp_path):
     assert repo.requested_ids == ["volume-1"]
     assert repo.closed is True
     assert isinstance(source, HostVolume)
+
+
+def test_setup_mounts_provisions_missing_remote_volume_metadata(monkeypatch, tmp_path):
+    manager = object.__new__(SandboxManager)
+    manager.provider_capability = SimpleNamespace(runtime_kind="agentbay")
+    manager.volume = _FakeVolume()
+    manager._get_active_terminal = lambda _thread_id: SimpleNamespace(lease_id="lease-1")
+    lease = SimpleNamespace(lease_id="lease-1", volume_id=None)
+    manager._get_lease = lambda _lease_id: lease
+    manager.lease_store = _FakeLeaseStore()
+    repo = _FakeVolumeRepo(HostVolume(Path(tmp_path) / "vol").serialize())
+    manager._sandbox_volume_repo = lambda: repo
+    monkeypatch.setenv("LEON_SANDBOX_VOLUME_ROOT", str(tmp_path / "volumes"))
+
+    result = manager._setup_mounts("thread-1")
+
+    assert lease.volume_id is not None
+    assert repo.created == [(lease.volume_id, "vol-thread-1")]
+    assert manager.lease_store.volume_updates == [("lease-1", lease.volume_id)]
+    assert repo.requested_ids == [lease.volume_id]
+    assert isinstance(result["source"], HostVolume)
 
 
 def test_get_sandbox_local_provider_does_not_require_volume_bootstrap(tmp_path):

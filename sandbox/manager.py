@@ -10,6 +10,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from config.user_paths import user_home_path
 from sandbox.capability import SandboxCapability
 from sandbox.chat_session import ChatSessionManager, ChatSessionPolicy
 from sandbox.lease import lease_from_row
@@ -188,6 +189,32 @@ class SandboxManager:
         # metadata is absent or stored in a different backend.
         return self.provider_capability.runtime_kind != "local"
 
+    def _ensure_thread_volume(self, thread_id: str, lease) -> None:
+        if not self._requires_volume_bootstrap() or lease.volume_id:
+            return
+
+        import json
+        import os
+
+        from sandbox.volume_source import HostVolume
+
+        volume_id = str(uuid.uuid4())
+        now_str = datetime.now().isoformat()
+        volume_root = Path(os.environ.get("LEON_SANDBOX_VOLUME_ROOT", str(user_home_path("volumes")))).expanduser().resolve()
+        volume_root.mkdir(parents=True, exist_ok=True)
+        source = HostVolume(volume_root / volume_id)
+
+        repo = self._sandbox_volume_repo()
+        try:
+            repo.create(volume_id, json.dumps(source.serialize()), f"vol-{thread_id}", now_str)
+        finally:
+            repo.close()
+
+        # @@@remote-volume-self-heal - legacy threads can lose their eager-created lease row
+        # and get rebound through manager recovery; persist a replacement volume_id before mount/sync.
+        self.lease_store.set_volume_id(lease.lease_id, volume_id)
+        lease.volume_id = volume_id
+
     def _setup_mounts(self, thread_id: str) -> dict:
         """Mount the lease's volume into the sandbox. Pure sandbox-layer operation."""
         import json
@@ -198,8 +225,9 @@ class SandboxManager:
         if not terminal:
             raise ValueError(f"No active terminal for thread {thread_id}")
         lease = self._get_lease(terminal.lease_id)
-        if not lease or not lease.volume_id:
+        if not lease:
             raise ValueError(f"No volume for thread {thread_id}")
+        self._ensure_thread_volume(thread_id, lease)
 
         repo = self._sandbox_volume_repo()
         try:
@@ -338,8 +366,9 @@ class SandboxManager:
         if not terminal:
             raise ValueError(f"No active terminal for thread {thread_id}")
         lease = self._get_lease(terminal.lease_id)
-        if not lease or not lease.volume_id:
+        if not lease:
             raise ValueError(f"No volume for thread {thread_id}")
+        self._ensure_thread_volume(thread_id, lease)
         repo = self._sandbox_volume_repo()
         try:
             entry = repo.get(lease.volume_id)
