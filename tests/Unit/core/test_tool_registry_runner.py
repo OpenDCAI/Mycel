@@ -18,6 +18,7 @@ from langchain_core.tools import tool
 
 from core.runtime.errors import InputValidationError
 from core.runtime.agent import _make_mcp_tool_entry
+from core.runtime.middleware import AgentMiddleware
 from core.runtime.middleware import ToolCallRequest
 from core.runtime.permissions import ToolPermissionContext, can_auto_approve
 from core.runtime.registry import ToolEntry, ToolMode, ToolRegistry
@@ -125,6 +126,15 @@ class TestToolRegistry:
         schemas = reg.get_inline_schemas()
         assert call_count >= 1
         assert any(s["name"] == "DynTool" for s in schemas)
+
+
+def test_agent_middleware_tools_are_not_shared_mutable_state():
+    first = AgentMiddleware()
+    second = AgentMiddleware()
+
+    first.tools = ["x"]
+
+    assert second.tools == ()
 
     def test_inline_schemas_strip_runtime_only_schema_metadata(self):
         reg = ToolRegistry()

@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, replace
-from typing import Any
+from typing import Any, ClassVar
 
 from langchain_core.messages import ToolMessage
 
@@ -48,7 +48,7 @@ class ToolCallRequest:
 class AgentMiddleware:
     """Minimal chain-of-responsibility middleware base for the runtime stack."""
 
-    tools: list[Any] = []
+    tools: ClassVar[tuple[Any, ...]] = ()
 
     def wrap_model_call(
         self,
