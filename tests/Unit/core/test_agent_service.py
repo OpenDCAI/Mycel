@@ -308,6 +308,37 @@ async def test_run_agent_uses_explicit_child_fork_wiring_api(monkeypatch, tmp_pa
 
 
 @pytest.mark.asyncio
+async def test_run_agent_uses_injected_child_agent_factory(tmp_path):
+    created: list[_FakeChildAgent] = []
+
+    def fake_child_agent_factory(*, model_name, workspace_root, **kwargs):
+        child = _FakeChildAgent(Path(workspace_root), model_name)
+        created.append(child)
+        return child
+
+    service = AgentService(
+        tool_registry=_FakeRegistry(),
+        agent_registry=_FakeAgentRegistry(),
+        workspace_root=tmp_path,
+        model_name="gpt-test",
+        child_agent_factory=fake_child_agent_factory,
+    )
+
+    result = await service._run_agent(
+        task_id="task-1",
+        agent_name="child",
+        thread_id="subagent-1",
+        prompt="do work",
+        subagent_type="general",
+        max_turns=None,
+        fork_context=False,
+    )
+
+    assert result == "(Agent completed with no text output)"
+    assert len(created) == 1
+
+
+@pytest.mark.asyncio
 async def test_agent_tool_fork_context_uses_parent_tool_context_messages(monkeypatch, tmp_path):
     captured: dict[str, object] = {}
 

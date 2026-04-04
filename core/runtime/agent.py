@@ -1187,6 +1187,7 @@ class LeonAgent:
             queue_manager=self.queue_manager,
             shared_runs=self._background_runs,
             web_app=self._web_app,
+            child_agent_factory=create_leon_agent,
         )
 
         # Team coordination (TeamCreate/TeamDelete — deferred mode)

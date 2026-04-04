@@ -30,6 +30,12 @@ from storage.contracts import EntityRow
 
 logger = logging.getLogger(__name__)
 
+
+def _resolve_default_child_agent_factory():
+    from core.runtime.agent import create_leon_agent
+
+    return create_leon_agent
+
 # ── Sub-agent tool filtering (CC alignment) ──────────────────────────────────
 # Tools that sub-agents must never access (prevents controlling parent).
 AGENT_DISALLOWED: set[str] = {"TaskOutput", "TaskStop", "Agent"}
@@ -309,6 +315,7 @@ class AgentService:
         entity_repo: Any = None,
         member_repo: Any = None,
         web_app: Any = None,
+        child_agent_factory: Any = None,
     ):
         self._agent_registry = agent_registry
         self._workspace_root = workspace_root
@@ -319,6 +326,7 @@ class AgentService:
         self._entity_repo = entity_repo
         self._member_repo = member_repo
         self._web_app = web_app
+        self._child_agent_factory = child_agent_factory or _resolve_default_child_agent_factory()
         # Shared with CommandService so TaskOutput covers both bash and agent runs.
         self._tasks: dict[str, BackgroundRun] = shared_runs if shared_runs is not None else {}
 
@@ -521,8 +529,6 @@ class AgentService:
 
         var_child_runnable_config.set(None)
 
-        # Lazy import avoids circular dependency (agent.py imports AgentService)
-        from core.runtime.agent import create_leon_agent
         from sandbox.thread_context import get_current_thread_id, set_current_thread_id
 
         parent_thread_id = get_current_thread_id()
@@ -585,7 +591,7 @@ class AgentService:
                         model,
                         child_bootstrap.model_name,
                     )
-                    agent = create_leon_agent(
+                    agent = self._child_agent_factory(
                         model_name=selected_model,
                         workspace_root=child_bootstrap.workspace_root,
                         sandbox=self._normalize_child_sandbox(getattr(child_bootstrap, "sandbox_type", None)),
@@ -610,7 +616,7 @@ class AgentService:
                         model,
                         child_bootstrap.model_name,
                     )
-                    agent = create_leon_agent(
+                    agent = self._child_agent_factory(
                         model_name=selected_model,
                         workspace_root=child_bootstrap.workspace_root,
                         sandbox=self._normalize_child_sandbox(getattr(child_bootstrap, "sandbox_type", None)),
@@ -636,7 +642,7 @@ class AgentService:
                     model,
                     inherited_model or self._model_name,
                 )
-                agent = create_leon_agent(
+                agent = self._child_agent_factory(
                     model_name=selected_model,
                     workspace_root=self._workspace_root,
                     sandbox=self._normalize_child_sandbox(
