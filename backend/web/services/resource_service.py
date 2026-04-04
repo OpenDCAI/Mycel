@@ -23,7 +23,8 @@ from sandbox.resource_snapshot import (
     probe_and_upsert_for_instance,
 )
 from storage.models import map_lease_to_session_status
-from storage.providers.sqlite.thread_repo import SQLiteThreadRepo
+from storage.providers.sqlite.kernel import SQLiteDBRole, resolve_role_db_path
+from storage.runtime import build_member_repo, build_thread_repo
 
 _CONFIG_LOADER = SandboxConfigLoader(SANDBOXES_DIR)
 
@@ -217,19 +218,20 @@ def _to_session_metrics(snapshot: dict[str, Any] | None) -> dict[str, Any] | Non
 
 def _member_meta_map() -> dict[str, dict[str, str | None]]:
     """Build member_id → display metadata map from DB."""
+    repo = build_member_repo(main_db_path=resolve_role_db_path(SQLiteDBRole.MAIN))
     try:
-        from storage.providers.sqlite.member_repo import SQLiteMemberRepo
-
         return {
             m.id: {
                 "member_name": m.name,
                 "avatar_url": avatar_url(m.id, bool(m.avatar)),
             }
-            for m in SQLiteMemberRepo().list_all()
+            for m in repo.list_all()
             if m.id and m.name
         }
     except Exception:
         return {}
+    finally:
+        repo.close()
 
 
 def _thread_agent_refs(thread_ids: list[str]) -> dict[str, str]:
@@ -237,7 +239,7 @@ def _thread_agent_refs(thread_ids: list[str]) -> dict[str, str]:
     unique = sorted({tid for tid in thread_ids if tid})
     if not unique:
         return {}
-    repo = SQLiteThreadRepo()
+    repo = build_thread_repo(main_db_path=resolve_role_db_path(SQLiteDBRole.MAIN))
     try:
         refs: dict[str, str] = {}
         for tid in unique:

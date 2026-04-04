@@ -12,6 +12,35 @@ class _FakeRepo:
         pass
 
 
+class _FakeThreadRepo:
+    def __init__(self, rows):
+        self._rows = rows
+
+    def get_by_id(self, thread_id: str):
+        return self._rows.get(thread_id)
+
+    def close(self):
+        pass
+
+
+class _FakeMember:
+    def __init__(self, member_id: str, name: str, avatar: str | None = None):
+        self.id = member_id
+        self.name = name
+        self.avatar = avatar
+
+
+class _FakeMemberRepo:
+    def __init__(self, members):
+        self._members = members
+
+    def list_all(self):
+        return list(self._members)
+
+    def close(self):
+        pass
+
+
 def test_list_resource_providers_deduplicates_terminal_fallback_rows(monkeypatch):
     rows = [
         {
@@ -61,6 +90,59 @@ def test_list_resource_providers_deduplicates_terminal_fallback_rows(monkeypatch
             "id": "lease-1:thread-1",
             "leaseId": "lease-1",
             "threadId": "thread-1",
+            "memberId": "member-1",
+            "memberName": "Toad",
+            "avatarUrl": None,
+            "status": "running",
+            "startedAt": "2026-04-04T00:00:00",
+            "metrics": None,
+        }
+    ]
+
+
+def test_list_resource_providers_resolves_owner_metadata_from_runtime_storage(monkeypatch):
+    rows = [
+        {
+            "provider": "daytona",
+            "session_id": "sess-1",
+            "thread_id": "thread-supabase",
+            "lease_id": "lease-1",
+            "observed_state": "running",
+            "desired_state": "running",
+            "created_at": "2026-04-04T00:00:00",
+        },
+    ]
+
+    monkeypatch.setattr(resource_service, "make_sandbox_monitor_repo", lambda: _FakeRepo(rows))
+    monkeypatch.setattr(
+        resource_service,
+        "available_sandbox_types",
+        lambda: [{"name": "daytona", "available": True}],
+    )
+    monkeypatch.setattr(
+        resource_service,
+        "_resolve_instance_capabilities",
+        lambda _config_name: (resource_service._empty_capabilities(), None),
+    )
+    monkeypatch.setattr(
+        resource_service,
+        "build_thread_repo",
+        lambda **_kwargs: _FakeThreadRepo({"thread-supabase": {"member_id": "member-1"}}),
+    )
+    monkeypatch.setattr(
+        resource_service,
+        "build_member_repo",
+        lambda **_kwargs: _FakeMemberRepo([_FakeMember("member-1", "Toad")]),
+    )
+    monkeypatch.setattr(resource_service, "list_resource_snapshots", lambda _lease_ids: {})
+
+    payload = resource_service.list_resource_providers()
+
+    assert payload["providers"][0]["sessions"] == [
+        {
+            "id": "sess-1",
+            "leaseId": "lease-1",
+            "threadId": "thread-supabase",
             "memberId": "member-1",
             "memberName": "Toad",
             "avatarUrl": None,
