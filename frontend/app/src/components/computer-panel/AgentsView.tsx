@@ -239,4 +239,3 @@ function AgentPromptSection({ args }: { args: unknown }) {
     </div>
   );
 }
-

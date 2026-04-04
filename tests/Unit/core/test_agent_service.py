@@ -1071,6 +1071,54 @@ async def test_handle_agent_registers_subagent_thread_metadata_before_return(mon
         set_current_thread_id("")
 
 
+@pytest.mark.asyncio
+async def test_run_agent_uses_live_child_thread_bridge_when_web_app_present(monkeypatch, tmp_path):
+    captured: dict[str, object] = {}
+
+    async def fake_run_child_thread_live(agent, thread_id, prompt, app, *, input_messages):
+        captured["agent"] = agent
+        captured["thread_id"] = thread_id
+        captured["prompt"] = prompt
+        captured["app"] = app
+        captured["input_messages"] = input_messages
+        return "LIVE_CHILD_DONE"
+
+    def fake_create_leon_agent(*, model_name, workspace_root, **kwargs):
+        captured["child_web_app"] = kwargs.get("web_app")
+        return _FakeChildAgent(Path(workspace_root), model_name)
+
+    monkeypatch.setattr("core.runtime.agent.create_leon_agent", fake_create_leon_agent)
+    monkeypatch.setattr("backend.web.services.streaming_service.run_child_thread_live", fake_run_child_thread_live)
+
+    web_app = SimpleNamespace()
+    service = AgentService(
+        tool_registry=_FakeRegistry(),
+        agent_registry=_FakeAgentRegistry(),
+        workspace_root=tmp_path,
+        model_name="gpt-test",
+        web_app=web_app,
+    )
+
+    result = await service._run_agent(
+        task_id="task-1",
+        agent_name="child",
+        thread_id="subagent-1",
+        prompt="do work",
+        subagent_type="general",
+        max_turns=None,
+        fork_context=False,
+    )
+
+    assert result == "LIVE_CHILD_DONE"
+    assert captured["thread_id"] == "subagent-1"
+    assert captured["prompt"] == "do work"
+    assert captured["app"] is web_app
+    assert captured["child_web_app"] is web_app
+    assert len(captured["input_messages"]) == 1
+    assert captured["input_messages"][0]["role"] == "user"
+    assert captured["input_messages"][0]["content"] == "do work"
+
+
 def test_agent_schema_does_not_claim_general_has_full_tool_access():
     description = AGENT_SCHEMA["description"]
 

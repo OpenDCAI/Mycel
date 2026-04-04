@@ -29,6 +29,7 @@ def create_agent_sync(
     queue_manager: Any = None,
     chat_repos: dict | None = None,
     extra_allowed_paths: list[str] | None = None,
+    web_app: Any = None,
 ) -> Any:
     """Create a LeonAgent with the given sandbox. Runs in a thread."""
     storage_container = build_storage_container(
@@ -50,6 +51,7 @@ def create_agent_sync(
         member_repo=member_repo,
         queue_manager=queue_manager,
         chat_repos=chat_repos,
+        web_app=web_app,
         verbose=True,
         agent=agent,
         extra_allowed_paths=extra_allowed_paths,
@@ -163,6 +165,7 @@ async def get_or_create_agent(app_obj: FastAPI, sandbox_type: str, thread_id: st
             qm,
             chat_repos,
             extra_allowed_paths,
+            app_obj,
         )
         member = agent_name or "leon"
         agent_id = get_or_create_agent_id(

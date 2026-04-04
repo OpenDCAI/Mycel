@@ -308,6 +308,7 @@ class AgentService:
         thread_repo: Any = None,
         entity_repo: Any = None,
         member_repo: Any = None,
+        web_app: Any = None,
     ):
         self._agent_registry = agent_registry
         self._workspace_root = workspace_root
@@ -317,6 +318,7 @@ class AgentService:
         self._thread_repo = thread_repo
         self._entity_repo = entity_repo
         self._member_repo = member_repo
+        self._web_app = web_app
         # Shared with CommandService so TaskOutput covers both bash and agent runs.
         self._tasks: dict[str, BackgroundRun] = shared_runs if shared_runs is not None else {}
 
@@ -588,6 +590,7 @@ class AgentService:
                         workspace_root=child_bootstrap.workspace_root,
                         sandbox=self._normalize_child_sandbox(getattr(child_bootstrap, "sandbox_type", None)),
                         agent=agent_name_for_role,
+                        web_app=self._web_app,
                         extra_blocked_tools=extra_blocked,
                         allowed_tools=allowed,
                         verbose=False,
@@ -612,6 +615,7 @@ class AgentService:
                         workspace_root=child_bootstrap.workspace_root,
                         sandbox=self._normalize_child_sandbox(getattr(child_bootstrap, "sandbox_type", None)),
                         agent=agent_name_for_role,
+                        web_app=self._web_app,
                         extra_blocked_tools=extra_blocked,
                         allowed_tools=allowed,
                         verbose=False,
@@ -645,6 +649,7 @@ class AgentService:
                         getattr(parent_tool_context.bootstrap, "sandbox_type", None) if parent_tool_context else None
                     ),
                     agent=agent_name_for_role,
+                    web_app=self._web_app,
                     extra_blocked_tools=extra_blocked,
                     allowed_tools=allowed,
                     verbose=False,
@@ -725,30 +730,44 @@ class AgentService:
             else:
                 initial_messages = [{"role": "user", "content": prompt}]
 
-            async for chunk in agent.agent.astream(
-                {"messages": initial_messages},
-                config=config,
-                stream_mode="updates",
-            ):
-                for _, node_update in chunk.items():
-                    if not isinstance(node_update, dict):
-                        continue
-                    msgs = node_update.get("messages", [])
-                    if not isinstance(msgs, list):
-                        msgs = [msgs]
-                    for msg in msgs:
-                        if msg.__class__.__name__ == "AIMessage":
-                            content = getattr(msg, "content", "")
-                            if isinstance(content, str) and content:
-                                output_parts.append(content)
-                                latest_progress = self._summarize_progress(content, description or agent_name)
-                            elif isinstance(content, list):
-                                for block in content:
-                                    if isinstance(block, dict) and block.get("type") == "text":
-                                        text = block.get("text", "")
-                                        if text:
-                                            output_parts.append(text)
-                                            latest_progress = self._summarize_progress(text, description or agent_name)
+            if self._web_app is not None:
+                from backend.web.services.streaming_service import run_child_thread_live
+
+                result = await run_child_thread_live(
+                    agent,
+                    thread_id,
+                    prompt,
+                    self._web_app,
+                    input_messages=initial_messages,
+                )
+                if result:
+                    output_parts.append(result)
+                    latest_progress = self._summarize_progress(result, description or agent_name)
+            else:
+                async for chunk in agent.agent.astream(
+                    {"messages": initial_messages},
+                    config=config,
+                    stream_mode="updates",
+                ):
+                    for _, node_update in chunk.items():
+                        if not isinstance(node_update, dict):
+                            continue
+                        msgs = node_update.get("messages", [])
+                        if not isinstance(msgs, list):
+                            msgs = [msgs]
+                        for msg in msgs:
+                            if msg.__class__.__name__ == "AIMessage":
+                                content = getattr(msg, "content", "")
+                                if isinstance(content, str) and content:
+                                    output_parts.append(content)
+                                    latest_progress = self._summarize_progress(content, description or agent_name)
+                                elif isinstance(content, list):
+                                    for block in content:
+                                        if isinstance(block, dict) and block.get("type") == "text":
+                                            text = block.get("text", "")
+                                            if text:
+                                                output_parts.append(text)
+                                                latest_progress = self._summarize_progress(text, description or agent_name)
 
             await self._agent_registry.update_status(task_id, "completed")
             result = "\n".join(output_parts) or "(Agent completed with no text output)"

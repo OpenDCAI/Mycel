@@ -624,7 +624,8 @@ async def _run_agent_to_buffer(
     thread_buf: ThreadEventBuffer,
     run_id: str,
     message_metadata: dict[str, Any] | None = None,
-) -> None:
+    input_messages: list[Any] | None = None,
+) -> str:
     """Run agent execution and write all SSE events into *thread_buf*."""
     from backend.web.services.event_store import append_event
 
@@ -669,6 +670,7 @@ async def _run_agent_to_buffer(
     task = None
     stream_gen = None
     pending_tool_calls: dict[str, dict] = {}
+    output_parts: list[str] = []
     try:
         config = {"configurable": {"thread_id": thread_id, "run_id": run_id}}
         if hasattr(agent, "_current_model_config"):
@@ -907,6 +909,8 @@ async def _run_agent_to_buffer(
                     for item in terminal_followthrough_items
                 ]
             }
+        elif input_messages is not None:
+            _initial_input = {"messages": input_messages}
         elif message_metadata:
             from langchain_core.messages import HumanMessage
 
@@ -1000,6 +1004,7 @@ async def _run_agent_to_buffer(
                         content = extract_text_content(getattr(msg_chunk, "content", ""))
                         chunk_msg_id = getattr(msg_chunk, "id", None)
                         if content:
+                            output_parts.append(content)
                             await emit(
                                 {
                                     "event": "text",
@@ -1218,6 +1223,7 @@ async def _run_agent_to_buffer(
 
         # A5: emit run_done instead of done (persistent buffer — no mark_done)
         await emit({"event": "run_done", "data": json.dumps({"thread_id": thread_id, "run_id": run_id})})
+        return "".join(output_parts).strip()
     except asyncio.CancelledError:
         cancelled_tool_call_ids = await write_cancellation_markers(agent, config, pending_tool_calls)
         await _persist_cancelled_run_input_if_missing(
@@ -1245,10 +1251,12 @@ async def _run_agent_to_buffer(
         )
         # Also emit run_done so frontend knows the run ended
         await emit({"event": "run_done", "data": json.dumps({"thread_id": thread_id, "run_id": run_id})})
+        return ""
     except Exception as e:
         traceback.print_exc()
         await emit({"event": "error", "data": json.dumps({"error": str(e)}, ensure_ascii=False)})
         await emit({"event": "run_done", "data": json.dumps({"thread_id": thread_id, "run_id": run_id})})
+        return ""
     finally:
         if original_system_prompt is not None and hasattr(agent, "agent") and hasattr(agent.agent, "system_prompt"):
             agent.agent.system_prompt = original_system_prompt
@@ -1359,16 +1367,68 @@ def start_agent_run(
     app: Any,
     enable_trajectory: bool = False,
     message_metadata: dict[str, Any] | None = None,
+    input_messages: list[Any] | None = None,
 ) -> str:
     """Launch agent producer on the persistent ThreadEventBuffer. Returns run_id."""
     thread_buf = get_or_create_thread_buffer(app, thread_id)
     run_id = str(_uuid.uuid4())
     bg_task = asyncio.create_task(
-        _run_agent_to_buffer(agent, thread_id, message, app, enable_trajectory, thread_buf, run_id, message_metadata)
+        _run_agent_to_buffer(
+            agent,
+            thread_id,
+            message,
+            app,
+            enable_trajectory,
+            thread_buf,
+            run_id,
+            message_metadata,
+            input_messages,
+        )
     )
     # Store the background task so cancel_run can still cancel it
     app.state.thread_tasks[thread_id] = bg_task
     return run_id
+
+
+async def run_child_thread_live(
+    agent: Any,
+    thread_id: str,
+    message: str,
+    app: Any,
+    *,
+    input_messages: list[Any],
+) -> str:
+    """Run a spawned child agent through the normal web thread bridge."""
+    from backend.web.services.agent_pool import resolve_thread_sandbox
+    from backend.web.utils.serializers import extract_text_content
+
+    sandbox_type = resolve_thread_sandbox(app, thread_id)
+    app.state.agent_pool[f"{thread_id}:{sandbox_type}"] = agent
+    _ensure_thread_handlers(agent, thread_id, app)
+    if not (hasattr(agent, "runtime") and agent.runtime.transition(AgentState.ACTIVE)):
+        raise RuntimeError(f"Child thread {thread_id} could not transition to active")
+
+    start_agent_run(
+        agent,
+        thread_id,
+        message,
+        app,
+        input_messages=input_messages,
+    )
+    task = app.state.thread_tasks[thread_id]
+    result = await task
+    if isinstance(result, str) and result.strip():
+        return result.strip()
+
+    state = await agent.agent.aget_state({"configurable": {"thread_id": thread_id}})
+    values = getattr(state, "values", {}) if state else {}
+    messages = values.get("messages", []) if isinstance(values, dict) else []
+    visible_ai = [
+        extract_text_content(getattr(msg, "content", "")).strip()
+        for msg in messages
+        if msg.__class__.__name__ == "AIMessage" and extract_text_content(getattr(msg, "content", "")).strip()
+    ]
+    return "\n".join(visible_ai) if visible_ai else "(Agent completed with no text output)"
 
 
 # ---------------------------------------------------------------------------

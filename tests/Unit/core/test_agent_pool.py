@@ -27,6 +27,7 @@ async def test_get_or_create_agent_creates_once_per_thread(monkeypatch: pytest.M
         queue_manager=None,
         chat_repos=None,
         extra_allowed_paths=None,
+        web_app=None,
     ) -> object:
         time.sleep(0.05)
         obj = SimpleNamespace()

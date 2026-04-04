@@ -171,6 +171,7 @@ class LeonAgent:
         member_repo: Any = None,
         queue_manager: MessageQueueManager | None = None,
         chat_repos: dict | None = None,
+        web_app: Any = None,
         extra_allowed_paths: list[str] | None = None,
         extra_blocked_tools: set[str] | None = None,
         allowed_tools: set[str] | None = None,
@@ -206,6 +207,7 @@ class LeonAgent:
         self._thread_repo = thread_repo
         self._entity_repo = entity_repo
         self._member_repo = member_repo
+        self._web_app = web_app
         self._session_started = False
         self._session_ended = False
         self._closing = False
@@ -1165,6 +1167,7 @@ class LeonAgent:
             member_repo=self._member_repo,
             queue_manager=self.queue_manager,
             shared_runs=self._background_runs,
+            web_app=self._web_app,
         )
 
         # Team coordination (TeamCreate/TeamDelete — deferred mode)
