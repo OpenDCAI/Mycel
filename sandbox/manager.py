@@ -16,6 +16,7 @@ from sandbox.lease import lease_from_row
 from sandbox.provider import SandboxProvider
 from sandbox.recipes import bootstrap_recipe
 from sandbox.terminal import TerminalState, terminal_from_row
+from storage.runtime import build_storage_container
 from storage.providers.sqlite.chat_session_repo import SQLiteChatSessionRepo
 from storage.providers.sqlite.kernel import SQLiteDBRole, resolve_role_db_path
 from storage.providers.sqlite.lease_repo import SQLiteLeaseRepo
@@ -175,12 +176,24 @@ class SandboxManager:
     def _default_terminal_cwd(self) -> str:
         return resolve_provider_cwd(self.provider)
 
+    def _sandbox_volume_repo(self):
+        # @@@volume-repo-align - thread creation persists volume metadata through the
+        # active storage container; sandbox startup must read the same repo instead
+        # of hardcoding SQLite or Supabase-backed threads lose their volume row.
+        container = build_storage_container(main_db_path=resolve_role_db_path(SQLiteDBRole.MAIN))
+        return container.sandbox_volume_repo()
+
+    def _requires_volume_bootstrap(self) -> bool:
+        # @@@local-shell-no-volume-gate - local runtimes execute directly on the host
+        # and should not fail to start a shell just because file-channel volume
+        # metadata is absent or stored in a different backend.
+        return self.provider_capability.runtime_kind != "local"
+
     def _setup_mounts(self, thread_id: str) -> dict:
         """Mount the lease's volume into the sandbox. Pure sandbox-layer operation."""
         import json
 
         from sandbox.volume_source import DaytonaVolume, deserialize_volume_source
-        from storage.providers.sqlite.sandbox_volume_repo import SQLiteSandboxVolumeRepo
 
         terminal = self._get_active_terminal(thread_id)
         if not terminal:
@@ -189,7 +202,7 @@ class SandboxManager:
         if not lease or not lease.volume_id:
             raise ValueError(f"No volume for thread {thread_id}")
 
-        repo = SQLiteSandboxVolumeRepo()
+        repo = self._sandbox_volume_repo()
         try:
             entry = repo.get(lease.volume_id)
         finally:
@@ -222,7 +235,6 @@ class SandboxManager:
         import json
 
         from sandbox.volume_source import DaytonaVolume
-        from storage.providers.sqlite.sandbox_volume_repo import SQLiteSandboxVolumeRepo
 
         # @@@member-id-for-volume-naming - read from thread config in leon.db
         member_id = "unknown"
@@ -250,7 +262,7 @@ class SandboxManager:
             volume_name=volume_name,
         )
 
-        repo = SQLiteSandboxVolumeRepo()
+        repo = self._sandbox_volume_repo()
         try:
             repo.update_source(volume_id, json.dumps(new_source.serialize()))
         finally:
@@ -321,7 +333,6 @@ class SandboxManager:
         import json
 
         from sandbox.volume_source import deserialize_volume_source
-        from storage.providers.sqlite.sandbox_volume_repo import SQLiteSandboxVolumeRepo
 
         terminal = self._get_active_terminal(thread_id)
         if not terminal:
@@ -329,7 +340,7 @@ class SandboxManager:
         lease = self._get_lease(terminal.lease_id)
         if not lease or not lease.volume_id:
             raise ValueError(f"No volume for thread {thread_id}")
-        repo = SQLiteSandboxVolumeRepo()
+        repo = self._sandbox_volume_repo()
         try:
             entry = repo.get(lease.volume_id)
         finally:
@@ -414,8 +425,10 @@ class SandboxManager:
         if bind_mounts:
             lease.bind_mounts = bind_mounts
 
-        # @@@volume-strategy-gate - mount volume into sandbox
-        storage = self._setup_mounts(thread_id)
+        storage = None
+        if self._requires_volume_bootstrap():
+            # @@@volume-strategy-gate - remote runtimes need volume mount/sync before first command.
+            storage = self._setup_mounts(thread_id)
 
         self._ensure_bound_instance(lease)
 
@@ -445,7 +458,7 @@ class SandboxManager:
             lease=lease,
         )
 
-        if instance:
+        if instance and storage is not None:
             # @@@workspace-upload - sync files to sandbox after creation
             self._sync_to_sandbox(thread_id, instance.instance_id, source=storage["source"])
             self._fire_session_ready(instance.instance_id, "create")

@@ -6,16 +6,6 @@ import ChatArea from "../components/ChatArea";
 import type { AssistantTurn } from "../api";
 import { uploadSandboxFile } from "../api";
 import { Alert, AlertDescription, AlertTitle } from "../components/ui/alert";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "../components/ui/alert-dialog";
 import { Button } from "../components/ui/button";
 import ComputerPanel from "../components/ComputerPanel";
 import { DragHandle } from "../components/DragHandle";
@@ -63,8 +53,6 @@ function ChatPageInner({ threadId }: { threadId: string }) {
   const agentAvatarUrl = currentThread?.avatar_url;
   const userAvatarUrl = userHasAvatar && userId ? `/api/members/${userId}/avatar` : undefined;
   const [attachedFiles, setAttachedFiles] = useState<File[]>([]);
-  const [clearDialogOpen, setClearDialogOpen] = useState(false);
-  const [clearingThread, setClearingThread] = useState(false);
 
   const state = location.state as { selectedModel?: string; runStarted?: boolean; message?: string } | null;
   const [currentModel, setCurrentModel] = useState<string>(state?.selectedModel ?? "");
@@ -249,29 +237,6 @@ function ChatPageInner({ threadId }: { threadId: string }) {
     await handleSendMessage(message, filenames.length > 0 ? filenames : undefined);
   }
 
-  async function handleClearThread(): Promise<void> {
-    setClearingThread(true);
-    try {
-      const response = await authFetch(`/api/threads/${threadId}/clear`, {
-        method: "POST",
-      });
-      if (!response.ok) {
-        const payload = await response.json().catch(() => ({}));
-        throw new Error(payload.detail || response.statusText || "clear failed");
-      }
-      setEntries([]);
-      await refreshThread();
-      await refreshTasks();
-      toast.success("当前线程历史已清空");
-      setClearDialogOpen(false);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      toast.error(`清空线程失败: ${message}`);
-    } finally {
-      setClearingThread(false);
-    }
-  }
-
   return (
     <>
       <Header
@@ -282,8 +247,6 @@ function ChatPageInner({ threadId }: { threadId: string }) {
         onToggleSidebar={() => setSidebarCollapsed(v => !v)}
         onPauseSandbox={() => void handlePauseSandbox()}
         onResumeSandbox={() => void handleResumeSandbox()}
-        onClearThread={() => setClearDialogOpen(true)}
-        clearDisabled={isStreaming || clearingThread}
         onModelChange={setCurrentModel}
       />
 
@@ -435,23 +398,6 @@ function ChatPageInner({ threadId }: { threadId: string }) {
           </>
         )}
       </div>
-
-      <AlertDialog open={clearDialogOpen} onOpenChange={setClearDialogOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>清空当前线程历史？</AlertDialogTitle>
-            <AlertDialogDescription>
-              这会清空当前线程的可重放历史、待处理 followups 和显示缓存，但不会删除线程本身或 sandbox。
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={clearingThread}>取消</AlertDialogCancel>
-            <AlertDialogAction onClick={() => void handleClearThread()} disabled={clearingThread}>
-              {clearingThread ? "清空中..." : "确认清空"}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </>
   );
 }
