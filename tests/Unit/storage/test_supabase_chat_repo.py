@@ -78,3 +78,23 @@ def test_supabase_chat_message_repo_has_unread_mention_false_without_matching_un
     repo = SupabaseChatMessageRepo(FakeSupabaseClient(tables))
 
     assert repo.has_unread_mention("chat-1", "entity-target") is False
+
+
+def test_supabase_chat_message_repo_has_unread_mention_false_without_membership_row():
+    tables = {
+        "chat_entities": [],
+        "chat_messages": [
+            {
+                "id": "msg-unread",
+                "chat_id": "chat-1",
+                "sender_entity_id": "entity-other",
+                "content": "new mention",
+                "mentions": "[\"entity-target\"]",
+                "created_at": 7.0,
+            }
+        ],
+    }
+    repo = SupabaseChatMessageRepo(FakeSupabaseClient(tables))
+
+    assert repo.count_unread("chat-1", "entity-target") == 0
+    assert repo.has_unread_mention("chat-1", "entity-target") is False

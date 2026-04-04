@@ -217,6 +217,12 @@ class SupabaseChatMessageRepo:
         return len(raw)
 
     def has_unread_mention(self, chat_id: str, entity_id: str) -> bool:
+        resp_ce = (
+            self._client.table(_TABLE_CHAT_ENTITIES).select("last_read_at").eq("chat_id", chat_id).eq("entity_id", entity_id).execute()
+        )
+        ce_rows = q.rows(resp_ce, _REPO_MSG, "has_unread_mention(last_read_at)")
+        if not ce_rows:
+            return False
         for message in self.list_unread(chat_id, entity_id):
             if entity_id in message.mentioned_entity_ids:
                 return True
