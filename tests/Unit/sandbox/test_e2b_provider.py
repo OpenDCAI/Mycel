@@ -1,11 +1,28 @@
 """Smoke test for E2B provider and sandbox."""
 
+import builtins
 import os
 import sys
+
+import pytest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from sandbox.providers.e2b import E2BProvider
+
+
+def test_e2b_provider_requires_sdk(monkeypatch):
+    real_import = builtins.__import__
+
+    def fake_import(name, globals=None, locals=None, fromlist=(), level=0):
+        if name == "e2b":
+            raise ModuleNotFoundError("No module named 'e2b'")
+        return real_import(name, globals, locals, fromlist, level)
+
+    monkeypatch.setattr(builtins, "__import__", fake_import)
+
+    with pytest.raises(ModuleNotFoundError, match="No module named 'e2b'"):
+        E2BProvider(api_key="test-key", timeout=60)
 
 
 def test_e2b_provider():
