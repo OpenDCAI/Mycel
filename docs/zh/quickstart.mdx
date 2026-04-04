@@ -1,0 +1,122 @@
+---
+title: 快速开始
+sidebarTitle: 快速开始
+description: 5 分钟跑通一个 Mycel Agent
+icon: rocket
+keywords: [快速开始, 安装, 配置, 第一个 Agent]
+---
+
+## 前置条件
+
+- Python 3.11+
+- Node.js 18+
+- 一个 OpenAI 兼容的 API Key（Anthropic、OpenAI、OpenRouter 等均可）
+
+## 安装与启动
+
+<Steps>
+  <Step title="克隆仓库">
+    ```bash
+    git clone https://github.com/OpenDCAI/Mycel.git
+    cd Mycel
+    ```
+  </Step>
+
+  <Step title="安装依赖">
+    ```bash
+    # 后端
+    uv sync
+
+    # 前端
+    cd frontend/app && npm install && cd ../..
+    ```
+  </Step>
+
+  <Step title="启动服务">
+    打开两个终端：
+
+    ```bash
+    # 终端 1 — 后端
+    uv run python -m backend.web.main
+    # 监听 http://localhost:8001
+    ```
+
+    ```bash
+    # 终端 2 — 前端
+    cd frontend/app && npm run dev
+    # 监听 http://localhost:5173
+    ```
+  </Step>
+
+  <Step title="配置 LLM 提供商">
+    1. 打开 **http://localhost:5173** 并注册账号
+    2. 进入**设置 → 模型**
+    3. 输入 API Key 并选择模型
+
+    <Tip>
+      Mycel 支持所有 OpenAI 兼容的接口。使用 Anthropic 直连时设置 `ANTHROPIC_API_KEY`；使用 OpenRouter 时，将 API Key 填入 `OPENAI_API_KEY`，Base URL 填 `https://openrouter.ai/api/v1`。
+    </Tip>
+  </Step>
+
+  <Step title="与第一个 Agent 对话">
+    进入聊天页面，开始新会话。内置的 **Mycel** Agent 已就绪。
+
+    试试让它：
+    - 读取工作区中的某个文件
+    - 搜索代码库
+    - 执行一条 Shell 命令
+  </Step>
+</Steps>
+
+## 添加沙箱（可选）
+
+默认情况下，Agent 在本机运行。如果需要隔离执行环境：
+
+<Steps>
+  <Step title="安装 Docker">
+    确保 Docker 在本机正常运行。
+  </Step>
+
+  <Step title="在设置中启用 Docker">
+    进入**设置 → 沙箱**，展开 Docker 卡片，填写镜像名（默认：`python:3.12-slim`），点击保存。
+  </Step>
+
+  <Step title="启动一个沙箱 Thread">
+    在新建会话页面，从输入框的**沙箱下拉菜单**中选择 `docker`，再发送第一条消息。该 Thread 之后所有运行均在同一个隔离容器中进行。
+  </Step>
+</Steps>
+
+## 体验多 Agent 通讯
+
+Mycel 的社交层让 Agent 之间可以像群聊一样互相发消息。
+
+<Steps>
+  <Step title="创建第二个 Agent">
+    进入**设置 → Members → 创建**，输入名称和系统提示词（例如："你是一个代码审查专家"）。
+  </Step>
+
+  <Step title="与它开启对话">
+    进入**聊天**页面，在目录中找到新 Agent，发起对话。
+  </Step>
+
+  <Step title="让两个 Agent 互相协作">
+    在第一个 Agent 的 Thread 中，告诉它去联系代码审查员：「帮我把这个函数发给代码审查员看看。」Agent 会调用 `chat_send` 工具，审查员会自主回复。
+  </Step>
+</Steps>
+
+## 下一步
+
+<CardGroup cols={2}>
+  <Card title="核心概念" icon="book" href="/zh/concepts">
+    理解 Thread、Member、Entity、Task、Resource 和 Skill
+  </Card>
+  <Card title="沙箱提供商" icon="box" href="/zh/sandbox">
+    Docker、E2B、Daytona、AgentBay — 隔离执行环境
+  </Card>
+  <Card title="配置指南" icon="gear" href="/zh/configuration">
+    模型、工具、MCP 服务器、记忆调优
+  </Card>
+  <Card title="部署" icon="cloud" href="/zh/deployment">
+    在生产环境运行 Mycel
+  </Card>
+</CardGroup>

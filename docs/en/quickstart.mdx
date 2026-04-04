@@ -1,0 +1,122 @@
+---
+title: Quickstart
+sidebarTitle: Quickstart
+description: Get a working Mycel agent in 5 minutes
+icon: rocket
+keywords: [quickstart, install, setup, first agent]
+---
+
+## Prerequisites
+
+- Python 3.11+
+- Node.js 18+
+- An OpenAI-compatible API key (Anthropic, OpenAI, OpenRouter, etc.)
+
+## Install and run
+
+<Steps>
+  <Step title="Clone the repository">
+    ```bash
+    git clone https://github.com/OpenDCAI/Mycel.git
+    cd Mycel
+    ```
+  </Step>
+
+  <Step title="Install dependencies">
+    ```bash
+    # Backend
+    uv sync
+
+    # Frontend
+    cd frontend/app && npm install && cd ../..
+    ```
+  </Step>
+
+  <Step title="Start services">
+    Open two terminals:
+
+    ```bash
+    # Terminal 1 — backend
+    uv run python -m backend.web.main
+    # Listening at http://localhost:8001
+    ```
+
+    ```bash
+    # Terminal 2 — frontend
+    cd frontend/app && npm run dev
+    # Listening at http://localhost:5173
+    ```
+  </Step>
+
+  <Step title="Configure your LLM provider">
+    1. Open **http://localhost:5173** and register an account
+    2. Go to **Settings → Models**
+    3. Enter your API key and choose a model
+
+    <Tip>
+      Mycel supports any OpenAI-compatible endpoint. If you use Anthropic directly, set your `ANTHROPIC_API_KEY`. For OpenRouter, set `OPENAI_API_KEY` with your OpenRouter key and `https://openrouter.ai/api/v1` as the base URL.
+    </Tip>
+  </Step>
+
+  <Step title="Chat with your first agent">
+    Navigate to the chat view and start a new conversation. The built-in **Mycel** agent is ready to use immediately.
+
+    Try asking it to:
+    - Read a file from your workspace
+    - Search the codebase
+    - Run a shell command
+  </Step>
+</Steps>
+
+## Add a sandbox (optional)
+
+By default, agents run on your local machine. To isolate execution in a container:
+
+<Steps>
+  <Step title="Install Docker">
+    Make sure Docker is running on your machine.
+  </Step>
+
+  <Step title="Enable Docker in settings">
+    Go to **Settings → Sandbox**. Expand the Docker card, set the image (default: `python:3.12-slim`), and click Save.
+  </Step>
+
+  <Step title="Start a sandboxed thread">
+    In the new conversation view, select **docker** from the sandbox dropdown before sending your first message. All subsequent agent runs in this thread use the same isolated container.
+  </Step>
+</Steps>
+
+## Try multi-agent chat
+
+Mycel's social layer lets agents message each other — and you — like a group chat.
+
+<Steps>
+  <Step title="Create a second agent">
+    Go to **Members → Create**. Give it a name and a system prompt (e.g., "You are a code reviewer").
+  </Step>
+
+  <Step title="Open a chat with it">
+    Go to the **Chat** view, find your new agent in the directory, and start a conversation.
+  </Step>
+
+  <Step title="Let agents talk to each other">
+    In the first agent's thread, tell it to message your code reviewer: "Ask the code reviewer to look at this function." The agent will call `chat_send` and the reviewer will respond autonomously.
+  </Step>
+</Steps>
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Core concepts" icon="book" href="/en/concepts">
+    Understand Threads, Members, Entities, Tasks, Resources, and Skills
+  </Card>
+  <Card title="Sandbox providers" icon="box" href="/en/sandbox">
+    Docker, E2B, Daytona, AgentBay — isolated execution environments
+  </Card>
+  <Card title="Configuration" icon="gear" href="/en/configuration">
+    Models, tools, MCP servers, memory tuning
+  </Card>
+  <Card title="Deployment" icon="cloud" href="/en/deployment">
+    Run Mycel in production
+  </Card>
+</CardGroup>
