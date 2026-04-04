@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -1920,6 +1921,59 @@ async def test_run_agent_to_buffer_turns_silent_terminal_reentry_into_visible_fo
         "type": "text",
         "content": "Background command completed, but the followthrough assistant reply was empty.",
     }
+
+
+@pytest.mark.asyncio
+async def test_run_agent_to_buffer_tags_display_delta_with_source_seq(monkeypatch, tmp_path):
+    seq = 0
+
+    async def fake_append_event(thread_id, run_id, event, message_id=None, run_event_repo=None):
+        nonlocal seq
+        seq += 1
+        return seq
+
+    async def fake_cleanup_old_runs(thread_id, keep_latest=1, run_event_repo=None):
+        return 0
+
+    monkeypatch.setattr("backend.web.services.event_store.append_event", fake_append_event)
+    monkeypatch.setattr("backend.web.services.streaming_service.cleanup_old_runs", fake_cleanup_old_runs)
+    monkeypatch.setattr("backend.web.services.streaming_service._ensure_thread_handlers", lambda *args, **kwargs: None)
+
+    checkpointer = _MemoryCheckpointer()
+    loop = _make_loop(model=_NoToolModel("SEQ_OK"), checkpointer=checkpointer)
+    agent = SimpleNamespace(
+        agent=loop,
+        runtime=_StreamingRuntime(),
+        storage_container=None,
+    )
+    app = SimpleNamespace(
+        state=SimpleNamespace(
+            display_builder=DisplayBuilder(),
+            thread_tasks={},
+            thread_event_buffers={},
+            subagent_buffers={},
+            queue_manager=MessageQueueManager(db_path=str(tmp_path / "queue.db")),
+            thread_last_active={},
+            typing_tracker=None,
+        )
+    )
+    thread_buf = ThreadEventBuffer()
+
+    await _run_agent_to_buffer(
+        agent,
+        "thread-display-delta-seq",
+        "hello",
+        app,
+        False,
+        thread_buf,
+        "run-display-delta-seq",
+    )
+
+    events, _ = await thread_buf.read_with_timeout(0, timeout=0.01)
+    assert events is not None
+    display_deltas = [json.loads(event["data"]) for event in events if event.get("event") == "display_delta"]
+    assert display_deltas
+    assert all(isinstance(delta.get("_seq"), int) for delta in display_deltas)
 
 
 @pytest.mark.asyncio

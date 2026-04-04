@@ -310,6 +310,7 @@ def _ensure_thread_handlers(agent: Any, thread_id: str, app: Any) -> None:
         if event_type and isinstance(data, dict):
             delta = display_builder_ref.apply_event(thread_id, event_type, data)
             if delta:
+                delta["_seq"] = seq
                 await thread_buf.put(
                     {
                         "event": "display_delta",
@@ -661,12 +662,16 @@ async def _run_agent_to_buffer(
             event = {**event, "data": json.dumps(data, ensure_ascii=False)}
         await thread_buf.put(event)
 
-        # Compute display delta and emit it (no _seq — avoids dedup conflict
-        # with the raw event that shares the same seq)
+        # Compute display delta and emit it alongside the raw event.
         event_type = event.get("event", "")
         if event_type and isinstance(data, dict):
             delta = display_builder.apply_event(thread_id, event_type, data)
             if delta:
+                # @@@display-delta-source-seq - replay after-filter only knows raw
+                # event seqs. Carry the source seq onto the derived delta so a
+                # reconnect after GET /thread can skip stale display_delta
+                # replays instead of rebuilding the same thread a second time.
+                delta["_seq"] = seq
                 await thread_buf.put(
                     {
                         "event": "display_delta",
@@ -1476,8 +1481,8 @@ async def observe_thread_events(
                 pass
 
             # @@@after-filter — skip events already seen on reconnect.
-            # Events without _seq (e.g. display_delta) are never filtered —
-            # they are ephemeral derivatives of persisted events.
+            # display_delta now carries the source raw-event seq too, so stale
+            # derived deltas are filtered together with their persisted source.
             if after > 0 and isinstance(parsed_data, dict) and "_seq" in parsed_data:
                 if parsed_data["_seq"] <= after:
                     continue
