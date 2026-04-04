@@ -30,7 +30,6 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 DEFAULT_READ_STATE_CACHE_SIZE = 100
-DEFAULT_MAX_EDIT_FILE_SIZE = 1024 * 1024 * 1024
 
 
 @dataclass
@@ -102,7 +101,7 @@ class FileSystemService:
         backend: FileSystemBackend | None = None,
         extra_allowed_paths: list[str | Path] | None = None,
         max_read_cache_entries: int = DEFAULT_READ_STATE_CACHE_SIZE,
-        max_edit_file_size: int = DEFAULT_MAX_EDIT_FILE_SIZE,
+        max_edit_file_size: int | None = None,
     ):
         if backend is None:
             from core.tools.filesystem.local_backend import LocalBackend
@@ -115,7 +114,7 @@ class FileSystemService:
         self.allowed_extensions = allowed_extensions
         self.hooks = hooks or []
         self._read_files = _ReadFileStateCache(max_entries=max_read_cache_entries)
-        self.max_edit_file_size = max_edit_file_size
+        self.max_edit_file_size = max_file_size if max_edit_file_size is None else max_edit_file_size
         self.operation_recorder = operation_recorder
         self.extra_allowed_paths: list[Path] = [Path(p) if backend.is_remote else Path(p).resolve() for p in (extra_allowed_paths or [])]
         self._edit_critical_section = threading.Lock()

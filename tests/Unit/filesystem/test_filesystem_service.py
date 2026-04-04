@@ -13,7 +13,7 @@ def _make_service(
     workspace: Path,
     *,
     max_read_cache_entries: int = 100,
-    max_edit_file_size: int = 1024 * 1024 * 1024,
+    max_edit_file_size: int | None = None,
 ) -> FileSystemService:
     return FileSystemService(
         registry=ToolRegistry(),
@@ -169,6 +169,15 @@ def test_edit_rejects_file_larger_than_edit_cap(tmp_path: Path):
 
     assert "too large" in edit_result.lower()
     assert "8" in edit_result
+
+
+def test_default_edit_size_cap_matches_default_read_size_cap(tmp_path: Path):
+    service = FileSystemService(
+        registry=ToolRegistry(),
+        workspace_root=tmp_path,
+    )
+
+    assert service.max_edit_file_size == service.max_file_size
 
 
 def test_read_state_cache_clone_is_independent(tmp_path: Path):
