@@ -1950,6 +1950,28 @@ async def test_query_loop_retries_prompt_too_long_via_reactive_compact():
 
 
 @pytest.mark.asyncio
+async def test_handle_model_error_recovery_returns_typed_result_object():
+    loop = make_loop(mock_model_no_tools(), app_state=AppState(), runtime=SimpleNamespace(cost=0.0))
+
+    result = await loop._handle_model_error_recovery(
+        exc=RuntimeError("max_output_tokens exceeded"),
+        thread_id="thread-a",
+        messages=[HumanMessage(content="start")],
+        turn=1,
+        transition=None,
+        max_output_tokens_recovery_count=0,
+        has_attempted_reactive_compact=False,
+        max_output_tokens_override=None,
+        transient_api_retry_count=0,
+    )
+
+    assert result is not None
+    assert not isinstance(result, dict)
+    assert result.transition.reason.value == "max_output_tokens_escalate"
+    assert result.max_output_tokens_override == 64000
+
+
+@pytest.mark.asyncio
 async def test_query_loop_retries_prompt_too_long_via_collapse_drain_before_compact():
     collapse = _CollapseDrainMiddleware()
     model = MagicMock()

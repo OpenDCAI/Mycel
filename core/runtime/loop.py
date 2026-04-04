@@ -88,6 +88,17 @@ class ContinueState:
     reason: ContinueReason
 
 
+@dataclass(frozen=True)
+class _ModelErrorRecoveryResult:
+    messages: list
+    transition: ContinueState | None
+    max_output_tokens_recovery_count: int
+    has_attempted_reactive_compact: bool
+    max_output_tokens_override: int | None
+    transient_api_retry_count: int
+    terminal: TerminalState | None
+
+
 @dataclass
 class _TrackedTool:
     order: int
@@ -248,14 +259,14 @@ class QueryLoop:
                         transient_api_retry_count=transient_api_retry_count,
                     )
                     if handled is not None:
-                        messages = handled["messages"]
-                        transition = handled["transition"]
-                        max_output_tokens_recovery_count = handled["max_output_tokens_recovery_count"]
-                        has_attempted_reactive_compact = handled["has_attempted_reactive_compact"]
-                        max_output_tokens_override = handled["max_output_tokens_override"]
-                        transient_api_retry_count = handled["transient_api_retry_count"]
-                        if handled["terminal"] is not None:
-                            terminal = handled["terminal"]
+                        messages = handled.messages
+                        transition = handled.transition
+                        max_output_tokens_recovery_count = handled.max_output_tokens_recovery_count
+                        has_attempted_reactive_compact = handled.has_attempted_reactive_compact
+                        max_output_tokens_override = handled.max_output_tokens_override
+                        transient_api_retry_count = handled.transient_api_retry_count
+                        if handled.terminal is not None:
+                            terminal = handled.terminal
                             break
                         self._sync_app_state(messages=messages, turn_count=turn)
                         continue
@@ -1044,21 +1055,21 @@ class QueryLoop:
         has_attempted_reactive_compact: bool,
         max_output_tokens_override: int | None,
         transient_api_retry_count: int,
-    ) -> dict[str, Any] | None:
+    ) -> _ModelErrorRecoveryResult | None:
         error_message = str(exc)
         error_text = error_message.lower()
 
         parsed_overflow = self._parse_context_overflow_override(error_message)
         if parsed_overflow is not None:
-            return {
-                "messages": messages,
-                "transition": ContinueState(reason=ContinueReason.max_output_tokens_escalate),
-                "max_output_tokens_recovery_count": max_output_tokens_recovery_count,
-                "has_attempted_reactive_compact": has_attempted_reactive_compact,
-                "max_output_tokens_override": parsed_overflow,
-                "transient_api_retry_count": transient_api_retry_count,
-                "terminal": None,
-            }
+            return _ModelErrorRecoveryResult(
+                messages=messages,
+                transition=ContinueState(reason=ContinueReason.max_output_tokens_escalate),
+                max_output_tokens_recovery_count=max_output_tokens_recovery_count,
+                has_attempted_reactive_compact=has_attempted_reactive_compact,
+                max_output_tokens_override=parsed_overflow,
+                transient_api_retry_count=transient_api_retry_count,
+                terminal=None,
+            )
 
         if self._is_transient_api_error(exc, error_text):
             if transient_api_retry_count >= _TRANSIENT_API_MAX_RETRIES:
@@ -1066,27 +1077,27 @@ class QueryLoop:
             delay_seconds = self._retry_delay_seconds(exc, transient_api_retry_count)
             if delay_seconds > 0:
                 await asyncio.sleep(delay_seconds)
-            return {
-                "messages": messages,
-                "transition": ContinueState(reason=ContinueReason.api_retry),
-                "max_output_tokens_recovery_count": max_output_tokens_recovery_count,
-                "has_attempted_reactive_compact": has_attempted_reactive_compact,
-                "max_output_tokens_override": max_output_tokens_override,
-                "transient_api_retry_count": transient_api_retry_count + 1,
-                "terminal": None,
-            }
+            return _ModelErrorRecoveryResult(
+                messages=messages,
+                transition=ContinueState(reason=ContinueReason.api_retry),
+                max_output_tokens_recovery_count=max_output_tokens_recovery_count,
+                has_attempted_reactive_compact=has_attempted_reactive_compact,
+                max_output_tokens_override=max_output_tokens_override,
+                transient_api_retry_count=transient_api_retry_count + 1,
+                terminal=None,
+            )
 
         if "max_output_tokens" in error_text:
             if max_output_tokens_override is None:
-                return {
-                    "messages": messages,
-                    "transition": ContinueState(reason=ContinueReason.max_output_tokens_escalate),
-                    "max_output_tokens_recovery_count": max_output_tokens_recovery_count,
-                    "has_attempted_reactive_compact": has_attempted_reactive_compact,
-                    "max_output_tokens_override": _ESCALATED_MAX_OUTPUT_TOKENS,
-                    "transient_api_retry_count": transient_api_retry_count,
-                    "terminal": None,
-                }
+                return _ModelErrorRecoveryResult(
+                    messages=messages,
+                    transition=ContinueState(reason=ContinueReason.max_output_tokens_escalate),
+                    max_output_tokens_recovery_count=max_output_tokens_recovery_count,
+                    has_attempted_reactive_compact=has_attempted_reactive_compact,
+                    max_output_tokens_override=_ESCALATED_MAX_OUTPUT_TOKENS,
+                    transient_api_retry_count=transient_api_retry_count,
+                    terminal=None,
+                )
             if max_output_tokens_recovery_count < 3:
                 recovered_messages = list(messages)
                 recovered_messages.append(
@@ -1094,67 +1105,67 @@ class QueryLoop:
                         content="Output token limit hit. Resume directly with no apology or recap.",
                     )
                 )
-                return {
-                    "messages": recovered_messages,
-                    "transition": ContinueState(reason=ContinueReason.max_output_tokens_recovery),
-                    "max_output_tokens_recovery_count": max_output_tokens_recovery_count + 1,
-                    "has_attempted_reactive_compact": has_attempted_reactive_compact,
-                    "max_output_tokens_override": max_output_tokens_override,
-                    "transient_api_retry_count": transient_api_retry_count,
-                    "terminal": None,
-                }
-            return {
-                "messages": messages,
-                "transition": ContinueState(reason=ContinueReason.max_output_tokens_recovery),
-                "max_output_tokens_recovery_count": max_output_tokens_recovery_count,
-                "has_attempted_reactive_compact": has_attempted_reactive_compact,
-                "max_output_tokens_override": max_output_tokens_override,
-                "transient_api_retry_count": transient_api_retry_count,
-                "terminal": TerminalState(
+                return _ModelErrorRecoveryResult(
+                    messages=recovered_messages,
+                    transition=ContinueState(reason=ContinueReason.max_output_tokens_recovery),
+                    max_output_tokens_recovery_count=max_output_tokens_recovery_count + 1,
+                    has_attempted_reactive_compact=has_attempted_reactive_compact,
+                    max_output_tokens_override=max_output_tokens_override,
+                    transient_api_retry_count=transient_api_retry_count,
+                    terminal=None,
+                )
+            return _ModelErrorRecoveryResult(
+                messages=messages,
+                transition=ContinueState(reason=ContinueReason.max_output_tokens_recovery),
+                max_output_tokens_recovery_count=max_output_tokens_recovery_count,
+                has_attempted_reactive_compact=has_attempted_reactive_compact,
+                max_output_tokens_override=max_output_tokens_override,
+                transient_api_retry_count=transient_api_retry_count,
+                terminal=TerminalState(
                     reason=TerminalReason.model_error,
                     turn_count=turn,
                     error=str(exc),
                 ),
-            }
+            )
 
         if self._is_prompt_too_long_error(error_text):
             if transition is None or transition.reason is not ContinueReason.collapse_drain_retry:
                 drained = await self._recover_from_overflow(messages)
                 if drained is not None and drained["committed"] > 0:
-                    return {
-                        "messages": drained["messages"],
-                        "transition": ContinueState(reason=ContinueReason.collapse_drain_retry),
-                        "max_output_tokens_recovery_count": max_output_tokens_recovery_count,
-                        "has_attempted_reactive_compact": has_attempted_reactive_compact,
-                        "max_output_tokens_override": max_output_tokens_override,
-                        "transient_api_retry_count": transient_api_retry_count,
-                        "terminal": None,
-                    }
+                    return _ModelErrorRecoveryResult(
+                        messages=drained["messages"],
+                        transition=ContinueState(reason=ContinueReason.collapse_drain_retry),
+                        max_output_tokens_recovery_count=max_output_tokens_recovery_count,
+                        has_attempted_reactive_compact=has_attempted_reactive_compact,
+                        max_output_tokens_override=max_output_tokens_override,
+                        transient_api_retry_count=transient_api_retry_count,
+                        terminal=None,
+                    )
             if not has_attempted_reactive_compact:
                 compacted = await self._force_reactive_compact(messages, thread_id=thread_id)
                 if compacted is not None:
-                    return {
-                        "messages": compacted,
-                        "transition": ContinueState(reason=ContinueReason.reactive_compact_retry),
-                        "max_output_tokens_recovery_count": max_output_tokens_recovery_count,
-                        "has_attempted_reactive_compact": True,
-                        "max_output_tokens_override": max_output_tokens_override,
-                        "transient_api_retry_count": transient_api_retry_count,
-                        "terminal": None,
-                    }
-            return {
-                "messages": messages,
-                "transition": transition,
-                "max_output_tokens_recovery_count": max_output_tokens_recovery_count,
-                "has_attempted_reactive_compact": has_attempted_reactive_compact,
-                "max_output_tokens_override": max_output_tokens_override,
-                "transient_api_retry_count": transient_api_retry_count,
-                "terminal": TerminalState(
+                    return _ModelErrorRecoveryResult(
+                        messages=compacted,
+                        transition=ContinueState(reason=ContinueReason.reactive_compact_retry),
+                        max_output_tokens_recovery_count=max_output_tokens_recovery_count,
+                        has_attempted_reactive_compact=True,
+                        max_output_tokens_override=max_output_tokens_override,
+                        transient_api_retry_count=transient_api_retry_count,
+                        terminal=None,
+                    )
+            return _ModelErrorRecoveryResult(
+                messages=messages,
+                transition=transition,
+                max_output_tokens_recovery_count=max_output_tokens_recovery_count,
+                has_attempted_reactive_compact=has_attempted_reactive_compact,
+                max_output_tokens_override=max_output_tokens_override,
+                transient_api_retry_count=transient_api_retry_count,
+                terminal=TerminalState(
                     reason=TerminalReason.prompt_too_long,
                     turn_count=turn,
                     error=str(exc),
                 ),
-            }
+            )
 
         return None
 
@@ -1472,6 +1483,7 @@ class QueryLoop:
             except Exception:
                 args = {}
 
+        raw_arg_chunks: list[str] = []
         for chunk in tool_call_chunks:
             if chunk.get("id") != call_id:
                 continue
@@ -1481,14 +1493,17 @@ class QueryLoop:
             if raw_args in (None, ""):
                 continue
             if isinstance(raw_args, str):
-                try:
-                    import json as _json
-
-                    args = _json.loads(raw_args)
-                except Exception:
-                    continue
+                raw_arg_chunks.append(raw_args)
             else:
                 args = raw_args
+
+        if raw_arg_chunks:
+            try:
+                import json as _json
+
+                args = _json.loads("".join(raw_arg_chunks))
+            except Exception:
+                return None
 
         normalized = {"name": name, "args": args, "id": call_id}
         if not self._tool_call_is_ready(normalized):
