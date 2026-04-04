@@ -624,12 +624,14 @@ def _handle_task_start(td: ThreadDisplay, data: dict) -> dict | None:
     task_id = data["task_id"]
     sub_thread = data.get("thread_id") or f"subagent-{task_id}"
 
-    # Find most recent Agent tool call without subagent_stream
+    # @@@late-task-start-race - background Agent tools can return their
+    # immediate "started" ToolMessage before the async task_start activity
+    # reaches the parent thread. Still patch the newest Agent step that
+    # has no child stream, even if its tool_result already marked it done.
     for seg in reversed(turn["segments"]):
         if (
             seg.get("type") == "tool"
             and seg.get("step", {}).get("name") == "Agent"
-            and seg.get("step", {}).get("status") == "calling"
             and not seg.get("step", {}).get("subagent_stream")
         ):
             seg["step"]["subagent_stream"] = {

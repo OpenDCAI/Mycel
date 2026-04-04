@@ -178,3 +178,52 @@ def test_live_tool_result_restores_subagent_stream_from_agent_background_json():
     assert seg["step"]["subagent_stream"]["task_id"] == "task-123"
     assert seg["step"]["subagent_stream"]["thread_id"] == "subagent-task-123"
     assert seg["step"]["subagent_stream"]["status"] == "running"
+
+
+def test_task_start_can_patch_background_agent_after_tool_result_race():
+    builder = DisplayBuilder()
+    thread_id = "parent-thread"
+
+    builder.apply_event(
+        thread_id,
+        "run_start",
+        {"run_id": "run-1", "source": "owner", "showing": True},
+    )
+    builder.apply_event(
+        thread_id,
+        "tool_call",
+        {
+            "id": "tc-agent-race",
+            "name": "Agent",
+            "args": {"prompt": "do work", "run_in_background": True},
+            "showing": True,
+        },
+    )
+    builder.apply_event(
+        thread_id,
+        "tool_result",
+        {
+            "tool_call_id": "tc-agent-race",
+            "name": "Agent",
+            "content": "Agent started in background.",
+            "metadata": {},
+            "showing": True,
+        },
+    )
+
+    delta = builder.apply_event(
+        thread_id,
+        "task_start",
+        {
+            "task_id": "task-race",
+            "thread_id": "subagent-task-race",
+            "description": "late task start",
+        },
+    )
+
+    seg = builder.get_entries(thread_id)[0]["segments"][0]
+    assert delta is not None
+    assert seg["step"]["status"] == "done"
+    assert seg["step"]["subagent_stream"]["task_id"] == "task-race"
+    assert seg["step"]["subagent_stream"]["thread_id"] == "subagent-task-race"
+    assert seg["step"]["subagent_stream"]["status"] == "running"
