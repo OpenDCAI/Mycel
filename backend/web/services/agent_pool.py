@@ -1,6 +1,7 @@
 """Agent pool management service."""
 
 import asyncio
+import logging
 import os
 from pathlib import Path
 from typing import Any
@@ -12,6 +13,8 @@ from core.runtime.agent import create_leon_agent
 from sandbox.manager import lookup_sandbox_for_thread
 from sandbox.thread_context import set_current_thread_id
 from storage.runtime import build_storage_container
+
+logger = logging.getLogger(__name__)
 
 # Thread lock for config updates
 _config_update_locks: dict[str, asyncio.Lock] = {}
@@ -87,9 +90,17 @@ async def get_or_create_agent(app_obj: FastAPI, sandbox_type: str, thread_id: st
             cwd = app_obj.state.thread_cwd.get(thread_id)
             if not cwd and thread_data and thread_data.get("cwd"):
                 cwd = thread_data["cwd"]
-                app_obj.state.thread_cwd[thread_id] = cwd
             if cwd:
-                workspace_root = Path(cwd).resolve()
+                # @@@host-local-cwd-is-advisory - persisted local thread cwd can come from another
+                # host (for example a macOS path stored in shared Supabase but replayed inside a
+                # Linux staging container). Only pin workspace_root when that path exists here.
+                path = Path(cwd).expanduser()
+                if path.exists() and path.is_dir():
+                    workspace_root = path.resolve()
+                    app_obj.state.thread_cwd[thread_id] = str(workspace_root)
+                else:
+                    app_obj.state.thread_cwd.pop(thread_id, None)
+                    logger.warning("Ignoring unavailable local cwd for thread %s: %s", thread_id, cwd)
 
         # Look up model for this thread (threads table → preferences default)
         model_name = thread_data.get("model") if thread_data else None
