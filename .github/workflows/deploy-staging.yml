@@ -26,6 +26,8 @@ jobs:
       github.event_name == 'workflow_dispatch' ||
       (github.event_name == 'pull_request' && github.event.label.name == 'deploy-staging')
     runs-on: ubuntu-latest
+    env:
+      STAGING_STACK_UUID: fasbsube26s75ag6qus5bpi2
 
     steps:
       - name: Resolve target ref
@@ -37,29 +39,23 @@ jobs:
             echo "ref=${{ inputs.ref }}" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Update staging backend branch
+      - name: Update staging stack branch
         run: |
-          curl -s -X PATCH "${{ secrets.COOLIFY_URL }}/api/v1/applications/${{ secrets.COOLIFY_BACKEND_STAGING_UUID }}" \
+          set -euo pipefail
+          body="$(curl -sS --fail-with-body -X PATCH "${{ secrets.COOLIFY_URL }}/api/v1/applications/${STAGING_STACK_UUID}" \
             -H "Authorization: Bearer ${{ secrets.COOLIFY_TOKEN }}" \
             -H "Content-Type: application/json" \
-            -d '{"git_branch": "${{ steps.ref.outputs.ref }}"}'
+            -d "{\"git_branch\": \"${{ steps.ref.outputs.ref }}\"}")"
+          echo "$body"
+          printf '%s' "$body" | jq -e --arg uuid "$STAGING_STACK_UUID" '.uuid == $uuid' >/dev/null
 
-      - name: Update staging frontend branch
+      - name: Deploy staging stack
         run: |
-          curl -s -X PATCH "${{ secrets.COOLIFY_URL }}/api/v1/applications/${{ secrets.COOLIFY_FRONTEND_STAGING_UUID }}" \
-            -H "Authorization: Bearer ${{ secrets.COOLIFY_TOKEN }}" \
-            -H "Content-Type: application/json" \
-            -d '{"git_branch": "${{ steps.ref.outputs.ref }}"}'
-
-      - name: Deploy backend to staging
-        run: |
-          curl -sX GET "${{ secrets.COOLIFY_URL }}/api/v1/deploy?uuid=${{ secrets.COOLIFY_BACKEND_STAGING_UUID }}&force=false" \
-            -H "Authorization: Bearer ${{ secrets.COOLIFY_TOKEN }}"
-
-      - name: Deploy frontend to staging
-        run: |
-          curl -sX GET "${{ secrets.COOLIFY_URL }}/api/v1/deploy?uuid=${{ secrets.COOLIFY_FRONTEND_STAGING_UUID }}&force=false" \
-            -H "Authorization: Bearer ${{ secrets.COOLIFY_TOKEN }}"
+          set -euo pipefail
+          body="$(curl -sS --fail-with-body "${{ secrets.COOLIFY_URL }}/api/v1/deploy?uuid=${STAGING_STACK_UUID}&force=false" \
+            -H "Authorization: Bearer ${{ secrets.COOLIFY_TOKEN }}")"
+          echo "$body"
+          printf '%s' "$body" | jq -e --arg uuid "$STAGING_STACK_UUID" '.deployments[0].resource_uuid == $uuid' >/dev/null
 
       - name: Comment on PR with staging URL
         if: github.event_name == 'pull_request'
@@ -70,5 +66,5 @@ jobs:
               issue_number: context.issue.number,
               owner: context.repo.owner,
               repo: context.repo.repo,
-              body: `🚀 **预发部署已触发**\n\n- 前端: https://app.staging.mycel.nextmind.space\n- 后端: https://api.staging.mycel.nextmind.space\n\n分支: \`${{ steps.ref.outputs.ref }}\``
+              body: `🚀 **预发部署已触发**\n\n- 共享 Staging: https://app.staging.mycel.nextmind.space\n- API（同域反代）: https://app.staging.mycel.nextmind.space/api\n\n分支: \`${{ steps.ref.outputs.ref }}\``
             })
