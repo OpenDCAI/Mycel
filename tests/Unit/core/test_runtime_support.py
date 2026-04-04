@@ -3,12 +3,14 @@
 import asyncio
 import signal
 from pathlib import Path
+from typing import Any, get_type_hints
 
 import pytest
 
 from core.runtime.abort import AbortController
 from core.runtime.cleanup import CleanupRegistry
 from core.runtime.fork import create_subagent_context, fork_context
+import core.runtime.state as runtime_state
 from core.runtime.state import AppState, BootstrapConfig, ToolUseContext
 
 
@@ -121,6 +123,19 @@ def test_tool_use_context_subagent_noop_set_state():
     ctx.set_app_state(AppState(turn_count=99))
     assert len(calls) == 1
     assert app_state.turn_count == 5
+
+
+def test_tool_use_context_core_callable_fields_are_not_typed_as_any():
+    hints = get_type_hints(ToolUseContext, globalns=vars(runtime_state))
+
+    assert hints["get_app_state"] is not Any
+    assert hints["set_app_state"] is not Any
+    assert hints["set_app_state_for_tasks"] is not Any
+    assert hints["refresh_tools"] is not Any
+    assert hints["can_use_tool"] is not Any
+    assert hints["request_permission"] is not Any
+    assert hints["consume_permission_resolution"] is not Any
+    assert hints["abort_controller"] is not Any
 
 
 def test_fork_context_copies_bootstrap_and_generates_new_session_id(runtime_parent_bootstrap):

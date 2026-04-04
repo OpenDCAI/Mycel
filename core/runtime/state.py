@@ -9,11 +9,12 @@ from __future__ import annotations
 
 import uuid
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any, Awaitable, Callable
 
 from pydantic import BaseModel, ConfigDict, Field
 
 from .abort import AbortController
+from .permissions import ToolPermissionContext
 
 
 class ToolPermissionState(BaseModel):
@@ -121,6 +122,25 @@ class AppState(BaseModel):
         return list(self.session_hooks.get(event, []))
 
 
+AppStateUpdater = Callable[[AppState], AppState]
+AppStateGetter = Callable[[], AppState]
+AppStateSetter = Callable[[AppStateUpdater], AppState | None]
+RefreshToolsHook = Callable[[], Awaitable[None] | None]
+PermissionDecision = dict[str, Any] | None
+PermissionChecker = Callable[
+    [str, dict[str, Any], ToolPermissionContext, object],
+    PermissionDecision | Awaitable[PermissionDecision],
+]
+PermissionRequester = Callable[
+    [str, dict[str, Any], ToolPermissionContext, object, str | None],
+    str | dict[str, Any] | None | Awaitable[str | dict[str, Any] | None],
+]
+PermissionResolutionConsumer = Callable[
+    [str, dict[str, Any], ToolPermissionContext, object],
+    PermissionDecision | Awaitable[PermissionDecision],
+]
+
+
 class ToolUseContext(BaseModel):
     """Per-turn context bag. Analogous to CC ToolUseContext.
 
@@ -129,19 +149,19 @@ class ToolUseContext(BaseModel):
     """
 
     bootstrap: BootstrapConfig
-    get_app_state: Any = Field(exclude=True)  # Callable[[], AppState]
-    set_app_state: Any = Field(exclude=True)  # Callable[[AppState], None] | NO-OP
-    set_app_state_for_tasks: Any = Field(default=None, exclude=True)
-    refresh_tools: Any = Field(default=None, exclude=True)  # Callable[[], Awaitable[None] | None]
-    can_use_tool: Any = Field(default=None, exclude=True)
-    request_permission: Any = Field(default=None, exclude=True)
-    consume_permission_resolution: Any = Field(default=None, exclude=True)
+    get_app_state: AppStateGetter = Field(exclude=True)
+    set_app_state: AppStateSetter = Field(exclude=True)
+    set_app_state_for_tasks: AppStateSetter | None = Field(default=None, exclude=True)
+    refresh_tools: RefreshToolsHook | None = Field(default=None, exclude=True)
+    can_use_tool: PermissionChecker | None = Field(default=None, exclude=True)
+    request_permission: PermissionRequester | None = Field(default=None, exclude=True)
+    consume_permission_resolution: PermissionResolutionConsumer | None = Field(default=None, exclude=True)
     read_file_state: Any = Field(default_factory=dict, exclude=True)
     loaded_nested_memory_paths: Any = Field(default_factory=set, exclude=True)
     discovered_skill_names: Any = Field(default_factory=set, exclude=True)
     discovered_tool_names: Any = Field(default_factory=set, exclude=True)
     nested_memory_attachment_triggers: Any = Field(default_factory=set, exclude=True)
-    abort_controller: Any = Field(default_factory=AbortController, exclude=True)
+    abort_controller: AbortController = Field(default_factory=AbortController, exclude=True)
     messages: list = Field(default_factory=list)
     thread_id: str = "default"
     turn_id: str = Field(default_factory=lambda: uuid.uuid4().hex[:8])
