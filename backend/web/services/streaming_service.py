@@ -411,37 +411,6 @@ def _partition_terminal_followups(items: list[Any]) -> tuple[list[Any], list[Any
     return terminal, passthrough
 
 
-async def _persist_terminal_followups(
-    *,
-    agent: Any,
-    config: dict[str, Any],
-    items: list[dict[str, str | None]],
-) -> None:
-    graph = getattr(agent, "agent", None)
-    if graph is None or not hasattr(graph, "aupdate_state") or not items:
-        return
-
-    from langchain_core.messages import HumanMessage
-
-    # @@@terminal-followup-persistence - notice-only followthrough runs skip the
-    # model, so history/detail must get the system message via the state bridge.
-    await graph.aupdate_state(
-        config,
-        {
-            "messages": [
-                HumanMessage(
-                    content=str(item["content"] or ""),
-                    metadata={
-                        "source": item["source"] or "system",
-                        "notification_type": item["notification_type"],
-                    },
-                )
-                for item in items
-            ]
-        },
-    )
-
-
 def _message_metadata_dict(message_metadata: dict[str, Any] | None) -> dict[str, Any]:
     return dict(message_metadata or {})
 
@@ -879,29 +848,42 @@ async def _run_agent_to_buffer(
                 }
             )
 
-        # @@@terminal-followup-notice-only - completed background agent/command
-        # notifications should surface as durable notices, not re-enter the model
-        # and append a second assistant message with the same result.
+        terminal_followthrough_items: list[dict[str, str | None]] | None = None
+        # @@@terminal-followthrough-reentry - terminal background completions
+        # still surface as durable notices first, but they must then re-enter the
+        # model as a real followthrough turn instead of terminating at notice-only.
         if _is_terminal_background_notification_message(
             message,
             source=src,
             notification_type=ntype,
         ):
-            persisted_items = [
+            terminal_followthrough_items = [
                 {
                     "content": message,
                     "source": src or "system",
                     "notification_type": ntype,
                 }
             ]
-            persisted_items.extend(
+            terminal_followthrough_items.extend(
                 await _emit_queued_terminal_followups(app=app, thread_id=thread_id, emit=emit)
             )
-            await _persist_terminal_followups(agent=agent, config=config, items=persisted_items)
-            await emit({"event": "run_done", "data": json.dumps({"thread_id": thread_id, "run_id": run_id})})
-            return
 
-        if message_metadata:
+        if terminal_followthrough_items:
+            from langchain_core.messages import HumanMessage
+
+            _initial_input = {
+                "messages": [
+                    HumanMessage(
+                        content=str(item["content"] or ""),
+                        metadata={
+                            "source": item["source"] or "system",
+                            "notification_type": item["notification_type"],
+                        },
+                    )
+                    for item in terminal_followthrough_items
+                ]
+            }
+        elif message_metadata:
             from langchain_core.messages import HumanMessage
 
             _initial_input: dict | None = {"messages": [HumanMessage(content=message, metadata=message_metadata)]}

@@ -1120,7 +1120,7 @@ async def test_run_agent_to_buffer_emits_notice_for_system_agent_notifications(m
 
 
 @pytest.mark.asyncio
-async def test_run_agent_to_buffer_persists_terminal_notifications_for_history(monkeypatch, tmp_path):
+async def test_run_agent_to_buffer_persists_terminal_notifications_before_assistant_followthrough(monkeypatch, tmp_path):
     seq = 0
 
     async def fake_append_event(thread_id, run_id, event, message_id=None, run_event_repo=None):
@@ -1179,13 +1179,15 @@ async def test_run_agent_to_buffer_persists_terminal_notifications_for_history(m
     assert [msg.__class__.__name__ for msg in state.values["messages"]] == [
         "HumanMessage",
         "HumanMessage",
+        "AIMessage",
     ]
     assert "BG_OK" in state.values["messages"][0].content
     assert "Agent failed" in state.values["messages"][1].content
+    assert state.values["messages"][2].content == "done"
 
 
 @pytest.mark.asyncio
-async def test_run_agent_to_buffer_skips_graph_resume_for_terminal_background_notifications(monkeypatch, tmp_path):
+async def test_run_agent_to_buffer_resumes_graph_for_terminal_background_notifications(monkeypatch, tmp_path):
     seq = 0
 
     async def fake_append_event(thread_id, run_id, event, message_id=None, run_event_repo=None):
@@ -1230,8 +1232,169 @@ async def test_run_agent_to_buffer_skips_graph_resume_for_terminal_background_no
         message_metadata={"source": "system", "notification_type": "agent"},
     )
 
-    assert graph.astream_calls == 0
-    assert graph.aupdate_calls == 1
+    assert graph.astream_calls == 1
+
+
+@pytest.mark.asyncio
+async def test_run_agent_to_buffer_surfaces_terminal_notice_then_assistant_followthrough(monkeypatch, tmp_path):
+    seq = 0
+
+    async def fake_append_event(thread_id, run_id, event, message_id=None, run_event_repo=None):
+        nonlocal seq
+        seq += 1
+        return seq
+
+    async def fake_cleanup_old_runs(thread_id, keep_latest=1, run_event_repo=None):
+        return 0
+
+    monkeypatch.setattr("backend.web.services.event_store.append_event", fake_append_event)
+    monkeypatch.setattr("backend.web.services.streaming_service.cleanup_old_runs", fake_cleanup_old_runs)
+    monkeypatch.setattr("backend.web.services.streaming_service._ensure_thread_handlers", lambda *args, **kwargs: None)
+
+    checkpointer = _MemoryCheckpointer()
+    loop = _make_loop(text="AFTER_BG_DONE", checkpointer=checkpointer)
+    agent = SimpleNamespace(
+        agent=loop,
+        runtime=_StreamingRuntime(),
+        storage_container=None,
+    )
+    app = SimpleNamespace(
+        state=SimpleNamespace(
+            display_builder=DisplayBuilder(),
+            thread_tasks={},
+            thread_event_buffers={},
+            subagent_buffers={},
+            queue_manager=MessageQueueManager(db_path=str(tmp_path / "queue.db")),
+            thread_last_active={},
+            typing_tracker=None,
+        )
+    )
+    thread_buf = ThreadEventBuffer()
+
+    await _run_agent_to_buffer(
+        agent,
+        "thread-terminal-followthrough",
+        "<system-reminder><task-notification><status>completed</status><result>BG_OK</result></task-notification></system-reminder>",
+        app,
+        False,
+        thread_buf,
+        "run-terminal-followthrough",
+        message_metadata={"source": "system", "notification_type": "agent"},
+    )
+
+    entries = app.state.display_builder.get_entries("thread-terminal-followthrough")
+    assert entries is not None
+    assert entries[0]["segments"][0]["type"] == "notice"
+    assert "BG_OK" in entries[0]["segments"][0]["content"]
+    assert entries[0]["segments"][1] == {"type": "text", "content": "AFTER_BG_DONE"}
+
+
+@pytest.mark.asyncio
+async def test_run_agent_to_buffer_surfaces_command_completion_then_assistant_followthrough(monkeypatch, tmp_path):
+    seq = 0
+
+    async def fake_append_event(thread_id, run_id, event, message_id=None, run_event_repo=None):
+        nonlocal seq
+        seq += 1
+        return seq
+
+    async def fake_cleanup_old_runs(thread_id, keep_latest=1, run_event_repo=None):
+        return 0
+
+    monkeypatch.setattr("backend.web.services.event_store.append_event", fake_append_event)
+    monkeypatch.setattr("backend.web.services.streaming_service.cleanup_old_runs", fake_cleanup_old_runs)
+    monkeypatch.setattr("backend.web.services.streaming_service._ensure_thread_handlers", lambda *args, **kwargs: None)
+
+    checkpointer = _MemoryCheckpointer()
+    loop = _make_loop(text="AFTER_COMMAND_DONE", checkpointer=checkpointer)
+    agent = SimpleNamespace(
+        agent=loop,
+        runtime=_StreamingRuntime(),
+        storage_container=None,
+    )
+    app = SimpleNamespace(
+        state=SimpleNamespace(
+            display_builder=DisplayBuilder(),
+            thread_tasks={},
+            thread_event_buffers={},
+            subagent_buffers={},
+            queue_manager=MessageQueueManager(db_path=str(tmp_path / "queue.db")),
+            thread_last_active={},
+            typing_tracker=None,
+        )
+    )
+    thread_buf = ThreadEventBuffer()
+
+    await _run_agent_to_buffer(
+        agent,
+        "thread-command-followthrough",
+        "<system-reminder><CommandNotification><Status>completed</Status><Output>42</Output></CommandNotification></system-reminder>",
+        app,
+        False,
+        thread_buf,
+        "run-command-followthrough",
+        message_metadata={"source": "system", "notification_type": "command"},
+    )
+
+    entries = app.state.display_builder.get_entries("thread-command-followthrough")
+    assert entries is not None
+    assert entries[0]["segments"][0]["type"] == "notice"
+    assert "CommandNotification" in entries[0]["segments"][0]["content"]
+    assert entries[0]["segments"][1] == {"type": "text", "content": "AFTER_COMMAND_DONE"}
+
+
+@pytest.mark.asyncio
+async def test_run_agent_to_buffer_surfaces_command_cancellation_then_assistant_followthrough(monkeypatch, tmp_path):
+    seq = 0
+
+    async def fake_append_event(thread_id, run_id, event, message_id=None, run_event_repo=None):
+        nonlocal seq
+        seq += 1
+        return seq
+
+    async def fake_cleanup_old_runs(thread_id, keep_latest=1, run_event_repo=None):
+        return 0
+
+    monkeypatch.setattr("backend.web.services.event_store.append_event", fake_append_event)
+    monkeypatch.setattr("backend.web.services.streaming_service.cleanup_old_runs", fake_cleanup_old_runs)
+    monkeypatch.setattr("backend.web.services.streaming_service._ensure_thread_handlers", lambda *args, **kwargs: None)
+
+    checkpointer = _MemoryCheckpointer()
+    loop = _make_loop(text="AFTER_COMMAND_CANCELLED", checkpointer=checkpointer)
+    agent = SimpleNamespace(
+        agent=loop,
+        runtime=_StreamingRuntime(),
+        storage_container=None,
+    )
+    app = SimpleNamespace(
+        state=SimpleNamespace(
+            display_builder=DisplayBuilder(),
+            thread_tasks={},
+            thread_event_buffers={},
+            subagent_buffers={},
+            queue_manager=MessageQueueManager(db_path=str(tmp_path / "queue.db")),
+            thread_last_active={},
+            typing_tracker=None,
+        )
+    )
+    thread_buf = ThreadEventBuffer()
+
+    await _run_agent_to_buffer(
+        agent,
+        "thread-command-cancel-followthrough",
+        '<CommandNotification task_id="cmd-x" status="cancelled"><Status>cancelled</Status><Description>cancelled task</Description></CommandNotification>',
+        app,
+        False,
+        thread_buf,
+        "run-command-cancel-followthrough",
+        message_metadata={"source": "system", "notification_type": "command"},
+    )
+
+    entries = app.state.display_builder.get_entries("thread-command-cancel-followthrough")
+    assert entries is not None
+    assert entries[0]["segments"][0]["type"] == "notice"
+    assert "cancelled" in entries[0]["segments"][0]["content"]
+    assert entries[0]["segments"][1] == {"type": "text", "content": "AFTER_COMMAND_CANCELLED"}
 
 
 @pytest.mark.asyncio
