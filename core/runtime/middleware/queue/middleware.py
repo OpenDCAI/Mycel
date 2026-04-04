@@ -13,6 +13,8 @@ from typing import Any
 from langchain_core.messages import HumanMessage, SystemMessage, ToolMessage
 from langchain_core.runnables import RunnableConfig
 
+from core.runtime.notifications import is_terminal_background_notification
+
 try:
     from core.runtime.middleware import (
         AgentMiddleware,
@@ -45,11 +47,11 @@ _STEER_NON_PREEMPTIVE_SYSTEM_NOTE = (
 
 
 def _is_terminal_background_notification(item: Any) -> bool:
-    content = getattr(item, "content", "") or ""
-    notification_type = getattr(item, "notification_type", None)
-    if notification_type not in {"agent", "command"}:
-        return False
-    return "<task-notification>" in content or "<CommandNotification>" in content
+    return is_terminal_background_notification(
+        getattr(item, "content", None),
+        source="system",
+        notification_type=getattr(item, "notification_type", None),
+    )
 
 
 def _is_owner_steer_message(message: Any) -> bool:

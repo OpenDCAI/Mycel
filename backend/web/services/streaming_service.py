@@ -12,6 +12,7 @@ from typing import Any
 from backend.web.services.event_buffer import RunEventBuffer, ThreadEventBuffer
 from backend.web.services.event_store import cleanup_old_runs
 from backend.web.utils.serializers import extract_text_content
+from core.runtime.notifications import is_terminal_background_notification
 from core.runtime.middleware.monitor import AgentState
 from sandbox.thread_context import set_current_run_id, set_current_thread_id
 from storage.contracts import RunEventRepo
@@ -419,9 +420,11 @@ def _is_terminal_background_notification_message(
     source: str | None,
     notification_type: str | None,
 ) -> bool:
-    if source != "system" or notification_type not in {"agent", "command"}:
-        return False
-    return "<task-notification>" in message or "<CommandNotification>" in message
+    return is_terminal_background_notification(
+        message,
+        source=source,
+        notification_type=notification_type,
+    )
 
 
 def _partition_terminal_followups(items: list[Any]) -> tuple[list[Any], list[Any]]:
