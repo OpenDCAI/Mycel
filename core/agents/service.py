@@ -621,19 +621,13 @@ class AgentService:
                         verbose=False,
                     )
                 # @@@sa-04-child-bootstrap-wiring
-                # The fork only becomes real once the spawned child agent and its
-                # nested AgentService both receive the forked bootstrap/context.
-                agent._bootstrap = child_bootstrap
-                agent.agent._bootstrap = child_bootstrap
-                if hasattr(agent, "_agent_service"):
-                    agent._agent_service._parent_bootstrap = child_bootstrap
-                    if child_tool_context is not None:
-                        agent._agent_service._parent_tool_context = child_tool_context
-                        # @@@pt-05-child-abort-link
-                        # Pattern 5 only becomes live once the child QueryLoop
-                        # itself shares the forked abort controller, not just
-                        # the nested AgentService escape-hatch context.
-                        agent.agent._tool_abort_controller = child_tool_context.abort_controller
+                # Keep the forked bootstrap/context handoff behind an explicit
+                # LeonAgent API so AgentService stops reaching into QueryLoop
+                # internals directly.
+                agent.apply_forked_child_context(
+                    child_bootstrap,
+                    tool_context=child_tool_context,
+                )
             except (AttributeError, ImportError):
                 inherited_model = getattr(parent_tool_context.bootstrap, "model_name", None) if parent_tool_context else None
                 selected_model = _resolve_subagent_model(

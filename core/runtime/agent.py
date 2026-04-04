@@ -381,6 +381,25 @@ class LeonAgent:
         if self.checkpointer is not None:
             self._monitor_middleware.mark_ready()
 
+    def apply_forked_child_context(
+        self,
+        bootstrap: BootstrapConfig,
+        *,
+        tool_context: Any | None = None,
+    ) -> None:
+        # @@@subagent-fork-wiring
+        # AgentService should not reach through LeonAgent and mutate QueryLoop
+        # internals directly. Keep the child bootstrap + abort-controller wiring
+        # behind one explicit LeonAgent seam.
+        self._bootstrap = bootstrap
+        self.agent._bootstrap = bootstrap
+        if hasattr(self, "_agent_service"):
+            self._agent_service._parent_bootstrap = bootstrap
+            if tool_context is not None:
+                self._agent_service._parent_tool_context = tool_context
+        if tool_context is not None:
+            self.agent._tool_abort_controller = tool_context.abort_controller
+
     async def ainit(self):
         """Complete async initialization (call this if initialized in async context).
 

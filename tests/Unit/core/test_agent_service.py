@@ -86,6 +86,7 @@ class _FakeChildAgent:
         self.workspace_root = workspace_root
         self.model_name = model_name
         self._bootstrap = BootstrapConfig(workspace_root=workspace_root, model_name=model_name)
+        self.apply_fork_calls: list[tuple[BootstrapConfig, ToolUseContext | None]] = []
         self.cleanup_calls = 0
         self.closed = False
         self.close_kwargs: dict[str, object] = {}
@@ -111,6 +112,20 @@ class _FakeChildAgent:
         self.closed = True
         self.close_kwargs = kwargs
         return None
+
+    def apply_forked_child_context(
+        self,
+        bootstrap: BootstrapConfig,
+        *,
+        tool_context: ToolUseContext | None = None,
+    ) -> None:
+        self.apply_fork_calls.append((bootstrap, tool_context))
+        self._bootstrap = bootstrap
+        self.agent._bootstrap = bootstrap
+        self._agent_service._parent_bootstrap = bootstrap
+        if tool_context is not None:
+            self._agent_service._parent_tool_context = tool_context
+            self.agent._tool_abort_controller = tool_context.abort_controller
 
 
 class _FakeAsyncCommand:
@@ -253,6 +268,43 @@ async def test_run_agent_applies_isolated_tool_context_to_child_agent_service(mo
     assert parent_context.get_app_state().turn_count == 1
     child_context.set_app_state_for_tasks(lambda prev: prev.model_copy(update={"turn_count": 9}))
     assert parent_context.get_app_state().turn_count == 9
+
+
+@pytest.mark.asyncio
+async def test_run_agent_uses_explicit_child_fork_wiring_api(monkeypatch, tmp_path):
+    created: list[_FakeChildAgent] = []
+
+    def fake_create_leon_agent(*, model_name, workspace_root, **kwargs):
+        child = _FakeChildAgent(Path(workspace_root), model_name)
+        created.append(child)
+        return child
+
+    monkeypatch.setattr("core.runtime.agent.create_leon_agent", fake_create_leon_agent)
+
+    service = AgentService(
+        tool_registry=_FakeRegistry(),
+        agent_registry=_FakeAgentRegistry(),
+        workspace_root=tmp_path,
+        model_name="gpt-test",
+    )
+    parent_context = _make_parent_context(tmp_path)
+
+    result = await service._run_agent(
+        task_id="task-1",
+        agent_name="child",
+        thread_id="subagent-1",
+        prompt="do work",
+        subagent_type="general",
+        max_turns=None,
+        fork_context=False,
+        parent_tool_context=parent_context,
+    )
+
+    assert result == "(Agent completed with no text output)"
+    assert len(created[0].apply_fork_calls) == 1
+    applied_bootstrap, applied_context = created[0].apply_fork_calls[0]
+    assert applied_bootstrap is created[0]._bootstrap
+    assert applied_context is created[0]._agent_service._parent_tool_context
 
 
 @pytest.mark.asyncio
