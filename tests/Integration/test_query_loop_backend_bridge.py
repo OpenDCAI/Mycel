@@ -934,7 +934,18 @@ async def test_cold_rebuild_surfaces_persisted_prompt_too_long_notice_after_reco
 
 
 @pytest.mark.asyncio
-async def test_get_thread_messages_idle_rebuild_keeps_completed_subagent_stream_status():
+@pytest.mark.parametrize(
+    ("task_status", "result_text"),
+    [
+        ("completed", "CHILD_DONE"),
+        ("error", "Agent failed"),
+        ("cancelled", "Agent cancelled"),
+    ],
+)
+async def test_get_thread_messages_idle_rebuild_keeps_terminal_subagent_stream_status(
+    task_status: str,
+    result_text: str,
+):
     ai = AIMessage(
         content="",
         tool_calls=[{"name": "Agent", "args": {"prompt": "do work", "run_in_background": True}, "id": "tc-agent-1"}],
@@ -953,10 +964,10 @@ async def test_get_thread_messages_idle_rebuild_keeps_completed_subagent_stream_
             "<system-reminder>\n"
             "<task-notification>\n"
             "  <run-id>task-123</run-id>\n"
-            "  <status>completed</status>\n"
+            f"  <status>{task_status}</status>\n"
             "  <description>child task</description>\n"
             "  <summary>child task</summary>\n"
-            "  <result>CHILD_DONE</result>\n"
+            f"  <result>{result_text}</result>\n"
             "</task-notification>\n"
             "</system-reminder>"
         )
@@ -985,7 +996,7 @@ async def test_get_thread_messages_idle_rebuild_keeps_completed_subagent_stream_
     seg = detail["entries"][0]["segments"][0]
     assert seg["step"]["subagent_stream"]["task_id"] == "task-123"
     assert seg["step"]["subagent_stream"]["thread_id"] == "subagent-task-123"
-    assert seg["step"]["subagent_stream"]["status"] == "completed"
+    assert seg["step"]["subagent_stream"]["status"] == task_status
 
 
 @pytest.mark.asyncio
