@@ -630,15 +630,32 @@ class SandboxManager:
                     if self._lease_is_busy(lease.lease_id):
                         continue
                     status = lease.refresh_instance_status(self.provider)
-                    # Only pause remote providers (local sandbox doesn't need pause)
+                    capability = self.provider.get_capability()
+                    # @@@idle-reaper-reclaim-contract - idle timeout must reclaim remote resources; providers
+                    # that cannot pause should destroy instead of repeatedly throwing unsupported-operation noise.
                     if status == "running" and self.provider.name != "local":
                         try:
-                            paused = lease.pause_instance(self.provider, source="idle_reaper")
+                            if capability.can_pause:
+                                reclaimed = lease.pause_instance(self.provider, source="idle_reaper")
+                            elif capability.can_destroy:
+                                reclaimed = lease.destroy_instance(self.provider, source="idle_reaper") is None
+                            else:
+                                print(
+                                    f"[idle-reaper] provider {self.provider.name} cannot reclaim expired lease "
+                                    f"{lease.lease_id} for thread {thread_id}"
+                                )
+                                continue
                         except Exception as exc:
-                            print(f"[idle-reaper] failed to pause expired lease {lease.lease_id} for thread {thread_id}: {exc}")
+                            print(
+                                f"[idle-reaper] failed to reclaim expired lease {lease.lease_id} "
+                                f"for thread {thread_id}: {exc}"
+                            )
                             continue
-                        if not paused:
-                            print(f"[idle-reaper] failed to pause expired lease {lease.lease_id} for thread {thread_id}")
+                        if not reclaimed:
+                            print(
+                                f"[idle-reaper] failed to reclaim expired lease {lease.lease_id} "
+                                f"for thread {thread_id}"
+                            )
                             continue
 
             self.session_manager.delete(session_id, reason="idle_timeout")

@@ -78,6 +78,18 @@ class _FakeLeaseStore:
         self.volume_updates.append((lease_id, volume_id))
 
 
+class _FakeSessionManager:
+    def __init__(self, active_rows) -> None:
+        self._active_rows = active_rows
+        self.deleted: list[tuple[str, str]] = []
+
+    def list_active(self):
+        return list(self._active_rows)
+
+    def delete(self, session_id: str, reason: str) -> None:
+        self.deleted.append((session_id, reason))
+
+
 class _FakeDaytonaProvider:
     def __init__(self) -> None:
         self.calls: list[tuple[str, str]] = []
@@ -142,6 +154,54 @@ def test_setup_mounts_provisions_missing_remote_volume_metadata(monkeypatch, tmp
     assert manager.lease_store.volume_updates == [("lease-1", lease.volume_id)]
     assert repo.requested_ids == [lease.volume_id]
     assert isinstance(result["source"], HostVolume)
+
+
+def test_enforce_idle_timeouts_destroys_when_provider_cannot_pause(monkeypatch):
+    manager = object.__new__(SandboxManager)
+    manager.provider = SimpleNamespace(
+        name="agentbay",
+        get_capability=lambda: SimpleNamespace(can_pause=False, can_destroy=True),
+    )
+    manager.terminal_store = SimpleNamespace(
+        db_path=Path("/tmp/fake-sandbox.db"),
+        get_by_id=lambda _terminal_id: {"terminal_id": "term-1", "lease_id": "lease-1"},
+    )
+    active_rows = [
+        {
+            "session_id": "sess-1",
+            "thread_id": "thread-1",
+            "terminal_id": "term-1",
+            "lease_id": "lease-1",
+            "started_at": "2026-04-04T00:00:00",
+            "last_active_at": "2026-04-04T00:00:00",
+            "idle_ttl_sec": 1,
+            "max_duration_sec": 3600,
+            "status": "active",
+        }
+    ]
+    manager.session_manager = _FakeSessionManager(active_rows)
+    fake_lease = SimpleNamespace(
+        lease_id="lease-1",
+        provider_name="agentbay",
+        refresh_instance_status=lambda _provider: "running",
+        pause_instance=lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("pause should not be used")),
+        destroy_instance=lambda *_args, **_kwargs: destroy_calls.append(True),
+    )
+    destroy_calls: list[bool] = []
+    manager._get_lease = lambda _lease_id: fake_lease
+    manager._terminal_is_busy = lambda _terminal_id: False
+    manager._lease_is_busy = lambda _lease_id: False
+    monkeypatch.setattr(
+        sandbox_manager_module,
+        "terminal_from_row",
+        lambda _row, _db_path: SimpleNamespace(terminal_id="term-1", lease_id="lease-1"),
+    )
+
+    count = manager.enforce_idle_timeouts()
+
+    assert destroy_calls == [True]
+    assert manager.session_manager.deleted == [("sess-1", "idle_timeout")]
+    assert count == 1
 
 
 def test_get_sandbox_local_provider_does_not_require_volume_bootstrap(tmp_path):
