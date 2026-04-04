@@ -31,8 +31,8 @@ class SupabaseEntityRepo:
             }
         ).execute()
 
-    def get_by_id(self, entity_id: str) -> EntityRow | None:
-        response = self._t().select("*").eq("id", entity_id).execute()
+    def get_by_id(self, id: str) -> EntityRow | None:
+        response = self._t().select("*").eq("id", id).execute()
         rows = q.rows(response, _REPO, "get_by_id")
         if not rows:
             return None
@@ -42,13 +42,6 @@ class SupabaseEntityRepo:
         response = self._t().select("*").eq("member_id", member_id).execute()
         rows = q.rows(response, _REPO, "get_by_member_id")
         return [EntityRow.model_validate(r) for r in rows]
-
-    def get_by_thread_id(self, thread_id: str) -> EntityRow | None:
-        response = self._t().select("*").eq("thread_id", thread_id).execute()
-        rows = q.rows(response, _REPO, "get_by_thread_id")
-        if not rows:
-            return None
-        return EntityRow.model_validate(rows[0])
 
     def list_all(self) -> list[EntityRow]:
         query = q.order(self._t().select("*"), "created_at", desc=False, repo=_REPO, operation="list_all")
@@ -66,15 +59,15 @@ class SupabaseEntityRepo:
         rows = q.rows(query.execute(), _REPO, "list_by_type")
         return [EntityRow.model_validate(r) for r in rows]
 
-    def update(self, entity_id: str, **fields: Any) -> None:
+    def update(self, id: str, **fields: Any) -> None:
         allowed = {"name", "avatar", "thread_id"}
         updates = {k: v for k, v in fields.items() if k in allowed}
         if not updates:
             return
-        self._t().update(updates).eq("id", entity_id).execute()
+        self._t().update(updates).eq("id", id).execute()
 
-    def delete(self, entity_id: str) -> None:
-        self._t().delete().eq("id", entity_id).execute()
+    def delete(self, id: str) -> None:
+        self._t().delete().eq("id", id).execute()
 
     def _t(self) -> Any:
         return self._client.table(_TABLE)
