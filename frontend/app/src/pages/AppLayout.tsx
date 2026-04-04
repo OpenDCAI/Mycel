@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Link, Outlet, useParams } from "react-router-dom";
 import { DragHandle } from "../components/DragHandle";
 import NewChatDialog from "../components/NewChatDialog";
@@ -10,7 +10,6 @@ import type { ThreadSummary } from "../api";
 import { useIsMobile } from "../hooks/use-mobile";
 import { useResizableX } from "../hooks/use-resizable-x";
 import { useThreadManager } from "../hooks/use-thread-manager";
-import { useAppStore } from "../store/app-store";
 import MemberAvatar from "../components/MemberAvatar";
 import { Plus, Trash2 } from "lucide-react";
 
@@ -28,8 +27,6 @@ export default function AppLayout() {
     threads, sandboxTypes, loading,
     refreshThreads, handleCreateThread, handleDeleteThread,
   } = tm;
-  const fetchMembers = useAppStore(s => s.fetchMembers);
-  useEffect(() => { void fetchMembers(); }, [fetchMembers]);
 
   const isMobile = useIsMobile();
   const { threadId } = useParams<{ memberId?: string; threadId?: string }>();

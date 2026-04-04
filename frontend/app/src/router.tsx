@@ -34,23 +34,27 @@ export const router = createBrowserRouter([
       },
       {
         path: 'threads',
-        element: <AppLayout />,
         children: [
           {
             index: true,
             element: <ThreadsIndexRedirect />,
           },
           {
-            path: ':memberId',
-            element: <NewChatPage />,
-          },
-          {
-            path: ':memberId/new',
-            element: <NewChatPage mode="new" />,
-          },
-          {
-            path: ':memberId/:threadId',
-            element: <ChatPage />,
+            element: <AppLayout />,
+            children: [
+              {
+                path: ':memberId',
+                element: <NewChatPage />,
+              },
+              {
+                path: ':memberId/new',
+                element: <NewChatPage mode="new" />,
+              },
+              {
+                path: ':memberId/:threadId',
+                element: <ChatPage />,
+              },
+            ],
           },
         ],
       },

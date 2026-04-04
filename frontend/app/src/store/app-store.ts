@@ -6,6 +6,7 @@ import type {
 import { useAuthStore } from "./auth-store";
 
 const API = "/api/panel";
+let loadAllInflight: Promise<void> | null = null;
 
 interface AppState {
   // ── Data ──
@@ -94,22 +95,38 @@ export const useAppStore = create<AppState>()((set, get) => ({
 
   loadAll: async () => {
     if (get().loaded) return;
-    set({ error: null });
+    if (loadAllInflight) return loadAllInflight;
+
+    const pending = (async () => {
+      set({ error: null });
+      try {
+        // @@@load-all-singleflight - RootLayout can mount twice in dev StrictMode and /threads
+        // index redirect now avoids AppLayout, so keep the global panel bootstrap idempotent
+        // instead of firing duplicate members/tasks/library/profile bursts.
+        await Promise.all([
+          get().fetchMembers(),
+          get().fetchTasks(),
+          get().fetchCronJobs(),
+          get().fetchLibrary("skill"),
+          get().fetchLibrary("mcp"),
+          get().fetchLibrary("agent"),
+          get().fetchLibrary("recipe"),
+          get().fetchProfile(),
+        ]);
+        set({ loaded: true });
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        set({ error: `数据加载失败: ${msg}`, loaded: true });
+      }
+    })();
+
+    loadAllInflight = pending;
     try {
-      await Promise.all([
-        get().fetchMembers(),
-        get().fetchTasks(),
-        get().fetchCronJobs(),
-        get().fetchLibrary("skill"),
-        get().fetchLibrary("mcp"),
-        get().fetchLibrary("agent"),
-        get().fetchLibrary("recipe"),
-        get().fetchProfile(),
-      ]);
-      set({ loaded: true });
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      set({ error: `数据加载失败: ${msg}`, loaded: true });
+      await pending;
+    } finally {
+      if (loadAllInflight === pending) {
+        loadAllInflight = null;
+      }
     }
   },
 

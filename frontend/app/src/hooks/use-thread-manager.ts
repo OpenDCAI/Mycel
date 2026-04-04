@@ -10,6 +10,11 @@ import {
   type ThreadSummary,
 } from "../api";
 
+let bootstrapInflight: Promise<{
+  sandboxTypes: SandboxType[];
+  threads: ThreadSummary[];
+}> | null = null;
+
 export interface ThreadManagerState {
   threads: ThreadSummary[];
   sandboxTypes: SandboxType[];
@@ -38,6 +43,16 @@ function upsertThread(prev: ThreadSummary[], thread: ThreadSummary): ThreadSumma
   return [thread, ...next];
 }
 
+function loadThreadBootstrap() {
+  if (bootstrapInflight) return bootstrapInflight;
+  bootstrapInflight = Promise.all([listSandboxTypes(), listThreads()])
+    .then(([sandboxTypes, threads]) => ({ sandboxTypes, threads }))
+    .finally(() => {
+      bootstrapInflight = null;
+    });
+  return bootstrapInflight;
+}
+
 export function useThreadManager(): ThreadManagerState & ThreadManagerActions {
   const [threads, setThreads] = useState<ThreadSummary[]>([]);
   const [sandboxTypes, setSandboxTypes] = useState<SandboxType[]>([{ name: "local", available: true }]);
@@ -51,19 +66,31 @@ export function useThreadManager(): ThreadManagerState & ThreadManagerActions {
 
   // Bootstrap: load sandbox types + threads on mount
   useEffect(() => {
+    let cancelled = false;
+
     void (async () => {
       try {
-        const [types] = await Promise.all([listSandboxTypes(), refreshThreads()]);
+        // @@@thread-bootstrap-singleflight - /threads now redirects before AppLayout mounts,
+        // but dev StrictMode still double-mounts the thread shell. Reuse the first
+        // bootstrap request so sidebar threads/provider inventory do not refetch twice.
+        const { sandboxTypes: types, threads: rows } = await loadThreadBootstrap();
+        if (cancelled) return;
+        setThreads(rows);
         setSandboxTypes(types);
         const preferred = types.find((t) => t.available)?.name ?? "local";
         setSelectedSandbox(preferred);
       } catch {
         // ignore bootstrap errors in UI; user can retry by action
       } finally {
+        if (cancelled) return;
         setLoading(false);
       }
     })();
-  }, [refreshThreads]);
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const handleCreateThread = useCallback(async (
     sandbox?: string,
