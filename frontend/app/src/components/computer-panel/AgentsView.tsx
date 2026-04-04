@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Loader2 } from "lucide-react";
 import type { AssistantTurn, ToolStep } from "../../api";
 import { useThreadData } from "../../hooks/use-thread-data";
+import { useDisplayDeltas } from "../../hooks/use-display-deltas";
+import { useThreadStream } from "../../hooks/use-thread-stream";
 import { parseAgentArgs } from "./utils";
 import type { FlowItem } from "./utils";
 import { FlowList } from "./flow-items";
@@ -25,9 +27,23 @@ export function AgentsView({ steps }: AgentsViewProps) {
   const focused = steps.find((s) => s.id === selectedAgentId) ?? null;
   const stream = focused?.subagent_stream;
   const threadId = stream?.thread_id || undefined;
-  const isRunning = stream?.status === "running" || focused?.status === "calling";
-
-  const { entries, loading, refreshThread } = useThreadData(threadId);
+  const { entries, loading, refreshThread, setEntries, displaySeq } = useThreadData(threadId);
+  const refreshThreads = useCallback(async () => {}, []);
+  // @@@child-thread-live-bridge - the Agent pane must subscribe to the child
+  // thread's own SSE stream. Polling child detail alone misses the running
+  // window and makes the pane look empty until a later refresh.
+  const childStream = useThreadStream(threadId ?? "", {
+    loading: loading || !threadId,
+    refreshThreads,
+  });
+  useDisplayDeltas({
+    threadId: threadId ?? "",
+    onUpdate: setEntries,
+    displaySeq,
+    stream: childStream,
+  });
+  const isRunning =
+    childStream.isRunning || stream?.status === "running" || focused?.status === "calling";
 
   // Poll every second while sub-agent is running
   useEffect(() => {
@@ -73,7 +89,7 @@ export function AgentsView({ steps }: AgentsViewProps) {
     }
 
     return items;
-  }, [entries]);
+  }, [entries, stream]);
 
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     e.preventDefault();

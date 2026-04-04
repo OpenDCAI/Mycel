@@ -217,7 +217,7 @@ export function useThreadStream(
 
   // Connection lifecycle — driven by threadId/loading/runStarted
   useEffect(() => {
-    if (loading) return;
+    if (loading || !threadId) return;
     if (runStarted) {
       mgr.initForNewRun(threadId);
     } else {
