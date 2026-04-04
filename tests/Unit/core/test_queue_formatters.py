@@ -15,6 +15,7 @@ class TestFormatChatNotification:
 
         assert 'chat_read(chat_id="chat-123")' in result
         assert 'chat_send(chat_id="chat-123", content="...")' in result
+        assert "Prefer using this exact chat_id directly" in result
         assert "Do not treat your normal assistant text as a chat reply." in result
 
 

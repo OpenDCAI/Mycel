@@ -79,6 +79,7 @@ def test_compose_system_prompt_hardens_chat_reply_contract() -> None:
     prompt = agent._compose_system_prompt()
 
     assert "you MUST read it with chat_read()" in prompt
+    assert "prefer using that exact chat_id directly" in prompt
     assert "you MUST call chat_send()" in prompt
     assert "Never claim you replied unless chat_send() succeeded." in prompt
 
