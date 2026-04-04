@@ -68,46 +68,46 @@ class SupabaseChatEntityRepo:
     def close(self) -> None:
         return None
 
-    def add_entity(self, chat_id: str, entity_id: str, joined_at: float) -> None:
+    def add_participant(self, chat_id: str, user_id: str, joined_at: float) -> None:
         self._t().upsert(
             {
                 "chat_id": chat_id,
-                "entity_id": entity_id,
+                "user_id": user_id,
                 "joined_at": joined_at,
             },
-            on_conflict="chat_id,entity_id",
+            on_conflict="chat_id,user_id",
             ignore_duplicates=True,
         ).execute()
 
-    def list_entities(self, chat_id: str) -> list[ChatEntityRow]:
+    def list_participants(self, chat_id: str) -> list[ChatEntityRow]:
         response = self._t().select("*").eq("chat_id", chat_id).execute()
-        raw = q.rows(response, _REPO_ENTITY, "list_entities")
+        raw = q.rows(response, _REPO_ENTITY, "list_participants")
         return [self._to_entity_row(r) for r in raw]
 
-    def list_chats_for_entity(self, entity_id: str) -> list[str]:
-        response = self._t().select("chat_id").eq("entity_id", entity_id).execute()
-        raw = q.rows(response, _REPO_ENTITY, "list_chats_for_entity")
+    def list_chats_for_user(self, user_id: str) -> list[str]:
+        response = self._t().select("chat_id").eq("user_id", user_id).execute()
+        raw = q.rows(response, _REPO_ENTITY, "list_chats_for_user")
         return [r["chat_id"] for r in raw]
 
-    def is_entity_in_chat(self, chat_id: str, entity_id: str) -> bool:
-        response = self._t().select("chat_id").eq("chat_id", chat_id).eq("entity_id", entity_id).execute()
-        raw = q.rows(response, _REPO_ENTITY, "is_entity_in_chat")
+    def is_participant_in_chat(self, chat_id: str, user_id: str) -> bool:
+        response = self._t().select("chat_id").eq("chat_id", chat_id).eq("user_id", user_id).execute()
+        raw = q.rows(response, _REPO_ENTITY, "is_participant_in_chat")
         return len(raw) > 0
 
-    def update_last_read(self, chat_id: str, entity_id: str, last_read_at: float) -> None:
-        self._t().update({"last_read_at": last_read_at}).eq("chat_id", chat_id).eq("entity_id", entity_id).execute()
+    def update_last_read(self, chat_id: str, user_id: str, last_read_at: float) -> None:
+        self._t().update({"last_read_at": last_read_at}).eq("chat_id", chat_id).eq("user_id", user_id).execute()
 
-    def update_mute(self, chat_id: str, entity_id: str, muted: bool, mute_until: float | None = None) -> None:
-        self._t().update({"muted": muted, "mute_until": mute_until}).eq("chat_id", chat_id).eq("entity_id", entity_id).execute()
+    def update_mute(self, chat_id: str, user_id: str, muted: bool, mute_until: float | None = None) -> None:
+        self._t().update({"muted": muted, "mute_until": mute_until}).eq("chat_id", chat_id).eq("user_id", user_id).execute()
 
-    def find_chat_between(self, entity_a: str, entity_b: str) -> str | None:
+    def find_chat_between(self, user_a: str, user_b: str) -> str | None:
         # Two queries, intersect the chat_id sets, then verify exactly 2 members.
-        resp_a = self._t().select("chat_id").eq("entity_id", entity_a).execute()
+        resp_a = self._t().select("chat_id").eq("user_id", user_a).execute()
         chats_a = {r["chat_id"] for r in q.rows(resp_a, _REPO_ENTITY, "find_chat_between(a)")}
         if not chats_a:
             return None
 
-        resp_b = self._t().select("chat_id").eq("entity_id", entity_b).execute()
+        resp_b = self._t().select("chat_id").eq("user_id", user_b).execute()
         chats_b = {r["chat_id"] for r in q.rows(resp_b, _REPO_ENTITY, "find_chat_between(b)")}
 
         shared = chats_a & chats_b
@@ -116,7 +116,7 @@ class SupabaseChatEntityRepo:
 
         # Among shared chats, find one that has exactly 2 members.
         for chat_id in shared:
-            resp_count = self._t().select("entity_id").eq("chat_id", chat_id).execute()
+            resp_count = self._t().select("user_id").eq("chat_id", chat_id).execute()
             members = q.rows(resp_count, _REPO_ENTITY, "find_chat_between(count)")
             if len(members) == 2:
                 return chat_id
@@ -125,7 +125,7 @@ class SupabaseChatEntityRepo:
     def _to_entity_row(self, r: dict[str, Any]) -> ChatEntityRow:
         return ChatEntityRow(
             chat_id=r["chat_id"],
-            entity_id=r["entity_id"],
+            user_id=r["user_id"],
             joined_at=float(r["joined_at"]),
             last_read_at=float(r["last_read_at"]) if r.get("last_read_at") is not None else None,
             muted=bool(r.get("muted", False)),
@@ -146,12 +146,12 @@ class SupabaseChatMessageRepo:
         return None
 
     def create(self, row: ChatMessageRow) -> None:
-        mentions_json = json.dumps(row.mentioned_entity_ids) if row.mentioned_entity_ids else json.dumps([])
+        mentions_json = json.dumps(row.mentioned_ids) if row.mentioned_ids else json.dumps([])
         self._t().insert(
             {
                 "id": row.id,
                 "chat_id": row.chat_id,
-                "sender_entity_id": row.sender_entity_id,
+                "sender_id": row.sender_id,
                 "content": row.content,
                 "mentions": mentions_json,
                 "created_at": row.created_at,
@@ -174,11 +174,11 @@ class SupabaseChatMessageRepo:
         raw.reverse()
         return [self._to_msg(r) for r in raw]
 
-    def list_unread(self, chat_id: str, entity_id: str) -> list[ChatMessageRow]:
+    def list_unread(self, chat_id: str, user_id: str) -> list[ChatMessageRow]:
         """Return unread messages (after last_read_at, excluding own) in chronological order."""
-        # Fetch last_read_at for this entity in this chat.
+        # Fetch last_read_at for this user in this chat.
         resp_ce = (
-            self._client.table(_TABLE_CHAT_ENTITIES).select("last_read_at").eq("chat_id", chat_id).eq("entity_id", entity_id).execute()
+            self._client.table(_TABLE_CHAT_ENTITIES).select("last_read_at").eq("chat_id", chat_id).eq("user_id", user_id).execute()
         )
         ce_rows = q.rows(resp_ce, _REPO_MSG, "list_unread(last_read_at)")
         last_read: float | None = None
@@ -186,17 +186,17 @@ class SupabaseChatMessageRepo:
             val = ce_rows[0].get("last_read_at")
             last_read = float(val) if val is not None else None
 
-        query = self._t().select("*").eq("chat_id", chat_id).neq("sender_entity_id", entity_id)
+        query = self._t().select("*").eq("chat_id", chat_id).neq("sender_id", user_id)
         if last_read is not None:
             query = q.gt(query, "created_at", last_read, _REPO_MSG, "list_unread")
         query = q.order(query, "created_at", desc=False, repo=_REPO_MSG, operation="list_unread")
         raw = q.rows(query.execute(), _REPO_MSG, "list_unread")
         return [self._to_msg(r) for r in raw]
 
-    def count_unread(self, chat_id: str, entity_id: str) -> int:
-        # Fetch last_read_at for this entity in this chat.
+    def count_unread(self, chat_id: str, user_id: str) -> int:
+        # Fetch last_read_at for this user in this chat.
         resp_ce = (
-            self._client.table(_TABLE_CHAT_ENTITIES).select("last_read_at").eq("chat_id", chat_id).eq("entity_id", entity_id).execute()
+            self._client.table(_TABLE_CHAT_ENTITIES).select("last_read_at").eq("chat_id", chat_id).eq("user_id", user_id).execute()
         )
         ce_rows = q.rows(resp_ce, _REPO_MSG, "count_unread(last_read_at)")
         if not ce_rows:
@@ -204,7 +204,7 @@ class SupabaseChatMessageRepo:
         val = ce_rows[0].get("last_read_at")
         last_read: float | None = float(val) if val is not None else None
 
-        query = self._t().select("id", count="exact").eq("chat_id", chat_id).neq("sender_entity_id", entity_id)
+        query = self._t().select("id", count="exact").eq("chat_id", chat_id).neq("sender_id", user_id)
         if last_read is not None:
             query = q.gt(query, "created_at", last_read, _REPO_MSG, "count_unread")
         response = query.execute()
@@ -259,9 +259,9 @@ class SupabaseChatMessageRepo:
         return ChatMessageRow(
             id=r["id"],
             chat_id=r["chat_id"],
-            sender_entity_id=r["sender_entity_id"],
+            sender_id=r["sender_id"],
             content=r["content"],
-            mentioned_entity_ids=mentioned,
+            mentioned_ids=mentioned,
             created_at=float(r["created_at"]),
         )
 

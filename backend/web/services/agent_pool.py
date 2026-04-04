@@ -98,27 +98,21 @@ async def get_or_create_agent(app_obj: FastAPI, sandbox_type: str, thread_id: st
         chat_repos = None
         if hasattr(app_obj.state, "entity_repo") and thread_data:
             entity_repo = app_obj.state.entity_repo
+            member_repo = getattr(app_obj.state, "member_repo", None)
             agent_entity = entity_repo.get_by_thread_id(thread_id)
             if agent_entity:
-                # @@@admin-chain — find owner's human entity via Member domain (template ownership).
-                # This is NOT Entity→Member ownership; it's Thread→Entity→Member(template)→Owner→Entity(human).
-                agent_member = (
-                    app_obj.state.member_repo.get_by_id(agent_entity.member_id) if hasattr(app_obj.state, "member_repo") else None
-                )
-                owner_entity_id = ""
-                if agent_member and agent_member.owner_user_id:
-                    owner_entities = entity_repo.get_by_member_id(agent_member.owner_user_id)
-                    human_entity = next((e for e in owner_entities if e.type == "human"), None)
-                    if human_entity:
-                        owner_entity_id = human_entity.id
+                # agent social identity = member_id
+                agent_member = member_repo.get_by_id(agent_entity.member_id) if member_repo else None
+                # owner social identity = owner's user_id (same as their member_id for humans)
+                owner_user_id = agent_member.owner_user_id if agent_member else ""
                 chat_repos = {
-                    "entity_id": agent_entity.id,
-                    "owner_entity_id": owner_entity_id,
+                    "user_id": agent_entity.member_id,  # agent's social identity = member_id
+                    "owner_user_id": owner_user_id,
                     "entity_repo": entity_repo,
                     "chat_service": getattr(app_obj.state, "chat_service", None),
                     "chat_entity_repo": getattr(app_obj.state, "chat_entity_repo", None),
                     "chat_message_repo": getattr(app_obj.state, "chat_message_repo", None),
-                    "member_repo": getattr(app_obj.state, "member_repo", None),
+                    "member_repo": member_repo,
                     "chat_event_bus": getattr(app_obj.state, "chat_event_bus", None),
                 }
 

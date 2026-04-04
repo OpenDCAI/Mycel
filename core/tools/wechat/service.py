@@ -1,7 +1,7 @@
 """WeChat tool service — registers wechat_send and wechat_contacts into ToolRegistry.
 
 Thin wrapper: actual API calls go through WeChatConnection (backend).
-Tools are scoped to the agent's owner's entity_id (the human who connected WeChat).
+Tools are scoped to the agent's owner's user_id (the human who connected WeChat).
 """
 
 from __future__ import annotations

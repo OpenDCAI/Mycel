@@ -25,15 +25,13 @@ def _seed_dev_user(app: FastAPI) -> None:
     from pathlib import Path
 
     from backend.web.services.member_service import MEMBERS_DIR, _write_agent_md, _write_json
-    from storage.contracts import EntityRow, MemberRow, MemberType
+    from storage.contracts import MemberRow, MemberType
     from storage.providers.sqlite.member_repo import generate_member_id
 
     log = logging.getLogger(__name__)
     member_repo = app.state.member_repo
-    entity_repo = app.state.entity_repo
 
     dev_user_id = "dev-user"
-    dev_entity_id = "dev-user-1"
 
     if member_repo.get_by_id(dev_user_id) is not None:
         return  # already seeded
@@ -47,18 +45,6 @@ def _seed_dev_user(app: FastAPI) -> None:
             id=dev_user_id,
             name="Dev",
             type=MemberType.HUMAN,
-            created_at=now,
-        )
-    )
-
-    # Human entity
-    entity_repo.create(
-        EntityRow(
-            id=dev_entity_id,
-            type="human",
-            member_id=dev_user_id,
-            name="Dev",
-            thread_id=None,
             created_at=now,
         )
     )
@@ -274,8 +260,10 @@ async def lifespan(app: FastAPI):
         app.state.cron_service = cron_svc
 
         # @@@wechat-registry — create registry with delivery callback, auto-start all
-        from backend.web.services.wechat_service import WeChatConnectionRegistry
+        from backend.web.services.wechat_service import WeChatConnectionRegistry, migrate_entity_id_dirs
         from core.runtime.middleware.queue.formatters import format_wechat_message
+
+        migrate_entity_id_dirs()
 
         async def _wechat_deliver(conn, msg):
             """Delivery callback — routes WeChat messages to configured thread/chat."""
@@ -290,7 +278,7 @@ async def lifespan(app: FastAPI):
                 await route_message_to_brain(app, routing.id, content, source="owner", sender_name=sender_name)
             elif routing.type == "chat":
                 content = format_wechat_message(sender_name, msg.from_user_id, msg.text)
-                app.state.chat_service.send_message(routing.id, conn.entity_id, content)
+                app.state.chat_service.send_message(routing.id, conn.user_id, content)
 
         app.state.wechat_registry = WeChatConnectionRegistry(delivery_fn=_wechat_deliver)
         app.state.wechat_registry.auto_start_all()

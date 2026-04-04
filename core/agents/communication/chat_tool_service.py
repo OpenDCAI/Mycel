@@ -1,7 +1,7 @@
 """Chat tool service — 7 tools for entity-to-entity communication.
 
-Tools use entity_ids as parameters.
-Two entities share at most one chat; the system auto-resolves entity_id -> chat.
+Tools use user_ids as parameters (human = Supabase auth UUID, agent = member_id).
+Two users share at most one chat; the system auto-resolves user_id → chat.
 """
 
 from __future__ import annotations
@@ -91,14 +91,14 @@ def _parse_time_endpoint(s: str, now: float) -> float | None:
 class ChatToolService:
     """Registers 5 chat tools into ToolRegistry.
 
-    Each tool closure captures entity_id (the calling agent's identity).
+    Each tool closure captures user_id (the calling agent's social identity = member_id).
     """
 
     def __init__(
         self,
         registry: ToolRegistry,
-        entity_id: str,
-        owner_entity_id: str,
+        user_id: str,
+        owner_user_id: str,
         *,
         entity_repo: Any = None,
         chat_service: Any = None,
@@ -108,8 +108,8 @@ class ChatToolService:
         chat_event_bus: Any = None,
         runtime_fn: Any = None,
     ) -> None:
-        self._entity_id = entity_id
-        self._owner_entity_id = owner_entity_id
+        self._user_id = user_id
+        self._owner_user_id = owner_user_id
         self._entities = entity_repo
         self._chat_service = chat_service
         self._chat_entities = chat_entity_repo
@@ -129,9 +129,9 @@ class ChatToolService:
     def _format_msgs(self, msgs: list, eid: str) -> str:
         lines = []
         for m in msgs:
-            sender = self._entities.get_by_id(m.sender_entity_id)
+            sender = self._entities.get_by_id(m.sender_id)
             name = sender.name if sender else "unknown"
-            tag = "you" if m.sender_entity_id == eid else name
+            tag = "you" if m.sender_id == eid else name
             lines.append(f"[{tag}]: {m.content}")
         return "\n".join(lines)
 
@@ -153,10 +153,10 @@ class ChatToolService:
             )
 
     def _register_chats(self, registry: ToolRegistry) -> None:
-        eid = self._entity_id
+        eid = self._user_id
 
         def handle(unread_only: bool = False, limit: int = 20) -> str:
-            chats = self._chat_service.list_chats_for_entity(eid)
+            chats = self._chat_service.list_chats_for_user(eid)
             if unread_only:
                 chats = [c for c in chats if c.get("unread_count", 0) > 0]
             chats = chats[:limit]
@@ -175,7 +175,7 @@ class ChatToolService:
                     id_str = f" [chat_id: {c['id']}]"
                 else:
                     other_id = others[0]["id"] if others else ""
-                    id_str = f" [entity_id: {other_id}]" if other_id else ""
+                    id_str = f" [user_id: {other_id}]" if other_id else ""
                 lines.append(f"- {name}{id_str}{unread_str}{last_preview}")
             return "\n".join(lines)
 
@@ -185,7 +185,7 @@ class ChatToolService:
                 mode=ToolMode.INLINE,
                 schema={
                     "name": "chats",
-                    "description": "List your chats. Returns chat summaries with entity_ids of participants.",
+                    "description": "List your chats. Returns chat summaries with user_ids of participants.",
                     "parameters": {
                         "type": "object",
                         "properties": {
@@ -204,7 +204,7 @@ class ChatToolService:
         )
 
     def _register_chat_read(self, registry: ToolRegistry) -> None:
-        eid = self._entity_id
+        eid = self._user_id
 
         def handle(entity_id: str | None = None, chat_id: str | None = None, range: str | None = None) -> str:
             if chat_id:
@@ -266,7 +266,7 @@ class ChatToolService:
                     "parameters": {
                         "type": "object",
                         "properties": {
-                            "entity_id": {"type": "string", "description": "Entity_id for 1:1 chat history"},
+                            "entity_id": {"type": "string", "description": "user_id for 1:1 chat history"},
                             "chat_id": {"type": "string", "description": "Chat_id for group chat history"},
                             "range": {
                                 "type": "string",
@@ -283,7 +283,7 @@ class ChatToolService:
         )
 
     def _register_chat_send(self, registry: ToolRegistry) -> None:
-        eid = self._entity_id
+        eid = self._user_id
 
         def handle(
             content: str,
@@ -297,7 +297,7 @@ class ChatToolService:
             target_name = "chat"
 
             if chat_id:
-                if not self._chat_entities.is_entity_in_chat(chat_id, eid):
+                if not self._chat_entities.is_participant_in_chat(chat_id, eid):
                     raise RuntimeError(f"You are not a member of chat {chat_id}")
             elif entity_id:
                 if entity_id == eid:
@@ -346,7 +346,7 @@ class ChatToolService:
                         "type": "object",
                         "properties": {
                             "content": {"type": "string", "description": "Message content"},
-                            "entity_id": {"type": "string", "description": "Target entity_id (for 1:1 chat)"},
+                            "entity_id": {"type": "string", "description": "Target user_id (for 1:1 chat)"},
                             "chat_id": {"type": "string", "description": "Target chat_id (for group chat)"},
                             "signal": {
                                 "type": "string",
@@ -369,7 +369,7 @@ class ChatToolService:
         )
 
     def _register_chat_search(self, registry: ToolRegistry) -> None:
-        eid = self._entity_id
+        eid = self._user_id
 
         def handle(query: str, entity_id: str | None = None) -> str:
             chat_id = None
@@ -380,7 +380,7 @@ class ChatToolService:
                 return f"No messages matching '{query}'."
             lines = []
             for m in results:
-                sender = self._entities.get_by_id(m.sender_entity_id)
+                sender = self._entities.get_by_id(m.sender_id)
                 name = sender.name if sender else "unknown"
                 lines.append(f"[{name}] {m.content[:100]}")
             return "\n".join(lines)
@@ -391,14 +391,14 @@ class ChatToolService:
                 mode=ToolMode.INLINE,
                 schema={
                     "name": "chat_search",
-                    "description": "Search messages. Optionally filter by entity_id.",
+                    "description": "Search messages. Optionally filter by user_id.",
                     "parameters": {
                         "type": "object",
                         "properties": {
                             "query": {"type": "string", "description": "Search query"},
                             "entity_id": {
                                 "type": "string",
-                                "description": "Optional: only search in chat with this entity",
+                                "description": "Optional: only search in chat with this user",
                             },
                         },
                         "required": ["query"],
@@ -410,7 +410,7 @@ class ChatToolService:
         )
 
     def _register_directory(self, registry: ToolRegistry) -> None:
-        eid = self._entity_id
+        eid = self._user_id
 
         def handle(search: str | None = None, type: str | None = None) -> str:
             all_entities = self._entities.list_all()
@@ -430,7 +430,7 @@ class ChatToolService:
                     owner_member = self._members.get_by_id(member.owner_id)
                     if owner_member:
                         owner_info = f" (owner: {owner_member.name})"
-                lines.append(f"- {e.name} [{e.type}] entity_id={e.id}{owner_info}")
+                lines.append(f"- {e.name} [{e.type}] user_id={e.id}{owner_info}")
             return "\n".join(lines)
 
         registry.register(
@@ -439,7 +439,7 @@ class ChatToolService:
                 mode=ToolMode.INLINE,
                 schema={
                     "name": "directory",
-                    "description": "Browse the entity directory. Returns entity_ids for use with chat_send, chat_read.",
+                    "description": "Browse the user directory. Returns user_ids for use with chat_send, chat_read.",
                     "parameters": {
                         "type": "object",
                         "properties": {

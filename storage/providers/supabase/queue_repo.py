@@ -29,7 +29,7 @@ class SupabaseQueueRepo:
         content: str,
         notification_type: str = "steer",
         source: str | None = None,
-        sender_entity_id: str | None = None,
+        sender_id: str | None = None,
         sender_name: str | None = None,
     ) -> None:
         self._t().insert(
@@ -38,7 +38,7 @@ class SupabaseQueueRepo:
                 "content": content,
                 "notification_type": notification_type,
                 "source": source,
-                "sender_entity_id": sender_entity_id,
+                "sender_id": sender_id,
                 "sender_name": sender_name,
             }
         ).execute()
@@ -48,7 +48,7 @@ class SupabaseQueueRepo:
         head = q.rows(
             q.limit(
                 q.order(
-                    self._t().select("id,content,notification_type,source,sender_entity_id,sender_name").eq("thread_id", thread_id),
+                    self._t().select("id,content,notification_type,source,sender_id,sender_name").eq("thread_id", thread_id),
                     "id",
                     desc=False,
                     repo=_REPO,
@@ -73,7 +73,7 @@ class SupabaseQueueRepo:
             content=str(row.get("content") or ""),
             notification_type=row.get("notification_type") or "steer",
             source=row.get("source"),
-            sender_entity_id=row.get("sender_entity_id"),
+            sender_id=row.get("sender_id"),
             sender_name=row.get("sender_name"),
         )
 
@@ -81,7 +81,7 @@ class SupabaseQueueRepo:
         # Fetch all rows ordered by id, then delete them all
         raw = q.rows(
             q.order(
-                self._t().select("id,content,notification_type,source,sender_entity_id,sender_name").eq("thread_id", thread_id),
+                self._t().select("id,content,notification_type,source,sender_id,sender_name").eq("thread_id", thread_id),
                 "id",
                 desc=False,
                 repo=_REPO,
@@ -98,7 +98,7 @@ class SupabaseQueueRepo:
                 content=str(r.get("content") or ""),
                 notification_type=r.get("notification_type") or "steer",
                 source=r.get("source"),
-                sender_entity_id=r.get("sender_entity_id"),
+                sender_id=r.get("sender_id"),
                 sender_name=r.get("sender_name"),
             )
             for r in raw

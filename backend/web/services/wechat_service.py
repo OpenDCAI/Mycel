@@ -4,8 +4,8 @@ Uses the official WeChat ClawBot ilink API at ilinkai.weixin.qq.com.
 Protocol: HTTP/JSON long-polling, modeled after Telegram Bot API.
 Auth: Bearer token obtained via QR code scan.
 
-@@@per-user — each human entity_id gets its own WeChatConnection.
-entity_id is the social identity in Leon's network, not member_id (which is the template).
+@@@per-user — each human user_id gets its own WeChatConnection.
+user_id is the social identity in Leon's network (Supabase auth UUID for humans).
 Polling auto-starts at backend boot via lifespan.py for all users with saved credentials.
 
 @@@no-globals — WeChatConnectionRegistry lives on app.state, not module-level.
@@ -129,19 +129,19 @@ def _extract_text(msg: dict) -> str:
     return ""
 
 
-# --- Per-user persistence (keyed by entity_id) ---
+# --- Per-user persistence (keyed by user_id) ---
 
 
-def _user_dir(entity_id: str) -> Path:
-    return CONNECTIONS_BASE / entity_id
+def _user_dir(user_id: str) -> Path:
+    return CONNECTIONS_BASE / user_id
 
 
-def _user_dir_candidates(entity_id: str) -> tuple[Path, ...]:
-    return tuple(path / entity_id for path in user_home_read_candidates("connections", "wechat"))
+def _user_dir_candidates(user_id: str) -> tuple[Path, ...]:
+    return tuple(path / user_id for path in user_home_read_candidates("connections", "wechat"))
 
 
-def _save_json(entity_id: str, filename: str, data: dict) -> None:
-    d = _user_dir(entity_id)
+def _save_json(user_id: str, filename: str, data: dict) -> None:
+    d = _user_dir(user_id)
     d.mkdir(parents=True, exist_ok=True)
     path = d / filename
     path.write_text(json.dumps(data, indent=2))
@@ -149,21 +149,21 @@ def _save_json(entity_id: str, filename: str, data: dict) -> None:
         path.chmod(0o600)
 
 
-def _load_json(entity_id: str, filename: str) -> dict | None:
-    for path in reversed(_user_dir_candidates(entity_id)):
+def _load_json(user_id: str, filename: str) -> dict | None:
+    for path in reversed(_user_dir_candidates(user_id)):
         candidate = path / filename
         if not candidate.exists():
             continue
         try:
             return json.loads(candidate.read_text())
         except (json.JSONDecodeError, KeyError) as e:
-            logger.error("Failed to load %s for %s: %s", filename, entity_id[:12], e)
+            logger.error("Failed to load %s for %s: %s", filename, user_id[:12], e)
     return None
 
 
-def _delete_file(entity_id: str, filename: str) -> None:
+def _delete_file(user_id: str, filename: str) -> None:
     seen: set[Path] = set()
-    for user_dir in _user_dir_candidates(entity_id):
+    for user_dir in _user_dir_candidates(user_id):
         path = user_dir / filename
         if path in seen:
             continue
@@ -172,14 +172,34 @@ def _delete_file(entity_id: str, filename: str) -> None:
             path.unlink()
 
 
-# --- WeChatConnection (one per human entity) ---
+def migrate_entity_id_dirs() -> None:
+    """Startup migration: rename {user_id}-1/ → {user_id}/ for existing connections."""
+    if not CONNECTIONS_BASE.exists():
+        return
+    for user_dir in list(CONNECTIONS_BASE.iterdir()):
+        if not user_dir.is_dir():
+            continue
+        name = user_dir.name
+        # Old entity_id format was "{user_id}-1" — strip the suffix
+        if name.endswith("-1"):
+            new_name = name[:-2]
+            new_dir = CONNECTIONS_BASE / new_name
+            if not new_dir.exists():
+                try:
+                    user_dir.rename(new_dir)
+                    logger.info("Migrated WeChat dir: %s → %s", name, new_name)
+                except Exception as e:
+                    logger.error("Failed to migrate WeChat dir %s: %s", name, e)
+
+
+# --- WeChatConnection (one per human user) ---
 
 
 class WeChatConnection:
-    """A single user's WeChat connection. Keyed by entity_id."""
+    """A single user's WeChat connection. Keyed by user_id."""
 
-    def __init__(self, entity_id: str, delivery_fn: DeliveryFn | None = None) -> None:
-        self.entity_id = entity_id
+    def __init__(self, user_id: str, delivery_fn: DeliveryFn | None = None) -> None:
+        self.user_id = user_id
         self._delivery_fn = delivery_fn
         self._credentials: WeChatCredentials | None = None
         self._context_tokens: dict[str, str] = {}
@@ -194,24 +214,24 @@ class WeChatConnection:
         )
 
         # Load persisted state
-        routing_data = _load_json(entity_id, "routing.json")
+        routing_data = _load_json(user_id, "routing.json")
         if routing_data:
             try:
                 self._routing = RoutingConfig(**routing_data)
             except Exception:
                 pass
 
-        ctx = _load_json(entity_id, "context_tokens.json")
+        ctx = _load_json(user_id, "context_tokens.json")
         if ctx:
             self._context_tokens = ctx
 
-        creds_data = _load_json(entity_id, "credentials.json")
+        creds_data = _load_json(user_id, "credentials.json")
         if creds_data:
             try:
                 self._credentials = WeChatCredentials(**creds_data)
-                logger.info("Loaded WeChat credentials for entity=%s", entity_id[:12])
+                logger.info("Loaded WeChat credentials for user=%s", user_id[:12])
             except Exception as e:
-                logger.error("Invalid WeChat credentials for %s: %s", entity_id[:12], e)
+                logger.error("Invalid WeChat credentials for %s: %s", user_id[:12], e)
 
     @property
     def connected(self) -> bool:
@@ -227,7 +247,7 @@ class WeChatConnection:
 
     def set_routing(self, config: RoutingConfig) -> None:
         self._routing = config
-        _save_json(self.entity_id, "routing.json", config.model_dump())
+        _save_json(self.user_id, "routing.json", config.model_dump())
 
     def get_state(self) -> dict:
         if not self._credentials:
@@ -281,8 +301,8 @@ class WeChatConnection:
                 saved_at=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
             )
             self._credentials = creds
-            _save_json(self.entity_id, "credentials.json", creds.model_dump())
-            logger.info("WeChat connected for entity=%s account=%s", self.entity_id[:12], creds.account_id)
+            _save_json(self.user_id, "credentials.json", creds.model_dump())
+            logger.info("WeChat connected for user=%s account=%s", self.user_id[:12], creds.account_id)
             self.start_polling()
             return {"status": "confirmed", "account_id": creds.account_id}
         return {"status": status}
@@ -294,9 +314,9 @@ class WeChatConnection:
         self._credentials = None
         self._context_tokens.clear()
         self._sync_buf = ""
-        _delete_file(self.entity_id, "credentials.json")
-        _delete_file(self.entity_id, "context_tokens.json")
-        logger.info("WeChat disconnected for entity=%s", self.entity_id[:12])
+        _delete_file(self.user_id, "credentials.json")
+        _delete_file(self.user_id, "context_tokens.json")
+        logger.info("WeChat disconnected for user=%s", self.user_id[:12])
 
     async def close(self) -> None:
         """Shutdown: stop polling + close HTTP client."""
@@ -311,7 +331,7 @@ class WeChatConnection:
         if not self._credentials:
             raise RuntimeError("Cannot start polling: not connected")
         self._poll_task = asyncio.create_task(self._poll_loop())
-        logger.info("WeChat polling started for entity=%s", self.entity_id[:12])
+        logger.info("WeChat polling started for user=%s", self.user_id[:12])
 
     def stop_polling(self) -> None:
         if self._poll_task and not self._poll_task.done():
@@ -321,7 +341,7 @@ class WeChatConnection:
     async def _deliver_message(self, msg: WeChatMessage) -> None:
         """Deliver via injected callback. No circular imports."""
         if not self._delivery_fn:
-            logger.warning("No delivery function configured for entity=%s", self.entity_id[:12])
+            logger.warning("No delivery function configured for user=%s", self.user_id[:12])
             return
         if not self._routing.type or not self._routing.id:
             logger.debug("WeChat message not delivered — no routing configured")
@@ -338,18 +358,18 @@ class WeChatConnection:
                 messages = await self._get_updates()
                 consecutive_failures = 0
                 for msg in messages:
-                    logger.info("WeChat[%s] from=%s: %s", self.entity_id[:8], msg.from_user_id[:20], msg.text[:60])
+                    logger.info("WeChat[%s] from=%s: %s", self.user_id[:8], msg.from_user_id[:20], msg.text[:60])
                     asyncio.create_task(self._deliver_message(msg))
             except asyncio.CancelledError:
                 return
             except SessionExpiredError:
-                logger.error("WeChat session expired for entity=%s", self.entity_id[:12])
+                logger.error("WeChat session expired for user=%s", self.user_id[:12])
                 self._credentials = None
-                _delete_file(self.entity_id, "credentials.json")
+                _delete_file(self.user_id, "credentials.json")
                 return
             except Exception:
                 consecutive_failures += 1
-                logger.exception("WeChat poll error #%d entity=%s", consecutive_failures, self.entity_id[:12])
+                logger.exception("WeChat poll error #%d user=%s", consecutive_failures, self.user_id[:12])
                 if consecutive_failures >= 3:
                     consecutive_failures = 0
                     await asyncio.sleep(30)
@@ -409,7 +429,7 @@ class WeChatConnection:
                 )
             )
         if tokens_changed:
-            await asyncio.to_thread(_save_json, self.entity_id, "context_tokens.json", self._context_tokens)
+            await asyncio.to_thread(_save_json, self.user_id, "context_tokens.json", self._context_tokens)
         return messages
 
     # --- Send ---
@@ -456,10 +476,10 @@ class WeChatConnectionRegistry:
         self._connections: dict[str, WeChatConnection] = {}
         self._delivery_fn = delivery_fn
 
-    def get(self, entity_id: str) -> WeChatConnection:
-        if entity_id not in self._connections:
-            self._connections[entity_id] = WeChatConnection(entity_id, self._delivery_fn)
-        return self._connections[entity_id]
+    def get(self, user_id: str) -> WeChatConnection:
+        if user_id not in self._connections:
+            self._connections[user_id] = WeChatConnection(user_id, self._delivery_fn)
+        return self._connections[user_id]
 
     def auto_start_all(self) -> None:
         """Resume polling for all users with saved credentials on disk."""
@@ -471,22 +491,22 @@ class WeChatConnectionRegistry:
                 if conn.connected and not conn.polling:
                     conn.start_polling()
 
-    def evict_duplicates(self, account_id: str, keep_entity_id: str) -> None:
-        """@@@unique-wechat — one WeChat account → one Leon entity. Last one wins."""
-        for eid, conn in list(self._connections.items()):
-            if eid == keep_entity_id:
+    def evict_duplicates(self, account_id: str, keep_user_id: str) -> None:
+        """@@@unique-wechat — one WeChat account → one Leon user. Last one wins."""
+        for uid, conn in list(self._connections.items()):
+            if uid == keep_user_id:
                 continue
             if conn._credentials and conn._credentials.account_id == account_id:
-                logger.info("Evicting WeChat: entity=%s (same account=%s)", eid[:12], account_id[:12])
+                logger.info("Evicting WeChat: user=%s (same account=%s)", uid[:12], account_id[:12])
                 conn.disconnect()
 
         if CONNECTIONS_BASE.exists():
             for user_dir in CONNECTIONS_BASE.iterdir():
-                if not user_dir.is_dir() or user_dir.name == keep_entity_id:
+                if not user_dir.is_dir() or user_dir.name == keep_user_id:
                     continue
                 data = _load_json(user_dir.name, "credentials.json")
                 if data and data.get("account_id") == account_id:
-                    logger.info("Evicting persisted WeChat: entity=%s", user_dir.name[:12])
+                    logger.info("Evicting persisted WeChat: user=%s", user_dir.name[:12])
                     _delete_file(user_dir.name, "credentials.json")
                     _delete_file(user_dir.name, "context_tokens.json")
 

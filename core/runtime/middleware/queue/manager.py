@@ -42,7 +42,7 @@ class MessageQueueManager:
         thread_id: str,
         notification_type: str = "steer",
         source: str | None = None,
-        sender_entity_id: str | None = None,
+        sender_id: str | None = None,
         sender_name: str | None = None,
         sender_avatar_url: str | None = None,
         is_steer: bool = False,
@@ -53,7 +53,7 @@ class MessageQueueManager:
             content,
             notification_type,
             source=source,
-            sender_entity_id=sender_entity_id,
+            sender_id=sender_id,
             sender_name=sender_name,
         )
         with self._wake_lock:
@@ -65,7 +65,7 @@ class MessageQueueManager:
                         content=content,
                         notification_type=notification_type,
                         source=source,
-                        sender_entity_id=sender_entity_id,
+                        sender_id=sender_id,
                         sender_name=sender_name,
                         sender_avatar_url=sender_avatar_url,
                         is_steer=is_steer,

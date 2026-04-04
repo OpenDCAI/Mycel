@@ -242,19 +242,20 @@ class LeonAgent:
         # @@@entity-identity — inject chat identity so agent knows who it is in the social layer
         if self._chat_repos:
             repos = self._chat_repos
-            eid = repos.get("entity_id")
-            owner_eid = repos.get("owner_entity_id", "")
-            if eid:
+            uid = repos.get("user_id")
+            owner_uid = repos.get("owner_user_id", "")
+            if uid:
                 entity_repo = repos.get("entity_repo")
-                entity = entity_repo.get_by_id(eid) if entity_repo else None
-                owner_entity = entity_repo.get_by_id(owner_eid) if entity_repo and owner_eid else None
-                name = entity.name if entity else eid
-                owner_name = owner_entity.name if owner_entity else "unknown"
+                entity = entity_repo.get_by_id(uid) if entity_repo else None
+                owner_member = repos.get("member_repo")
+                owner_member_row = owner_member.get_by_id(owner_uid) if owner_member and owner_uid else None
+                name = entity.name if entity else uid
+                owner_name = owner_member_row.name if owner_member_row else "unknown"
                 self.system_prompt += (
                     f"\n\n**Chat Identity:**\n"
                     f"- Your name: {name}\n"
-                    f"- Your entity_id: {eid}\n"
-                    f"- Your owner: {owner_name} (entity_id: {owner_eid})\n"
+                    f"- Your user_id: {uid}\n"
+                    f"- Your owner: {owner_name} (user_id: {owner_uid})\n"
                     f"- When you receive a chat notification, READ the message with chat_read(), "
                     f"then REPLY with chat_send(). Your text output goes to your owner's thread, "
                     f"not to the chat — only chat_send() delivers to the other party.\n"
@@ -1020,20 +1021,20 @@ class LeonAgent:
         except ImportError:
             self._taskboard_service = None
 
-        # @@@chat-tools - register chat tools for agents with entity identity
+        # @@@chat-tools - register chat tools for agents with user identity
         if self._chat_repos:
             repos = self._chat_repos
-            entity_id = repos.get("entity_id")
-            owner_entity_id = repos.get("owner_entity_id", "")
-            if entity_id:
+            user_id = repos.get("user_id")
+            owner_user_id = repos.get("owner_user_id", "")
+            if user_id:
                 from core.agents.communication.chat_tool_service import ChatToolService
 
                 # @@@lazy-runtime — runtime isn't set yet at _init_services() time.
                 # Pass a callable that resolves runtime lazily at tool call time.
                 self._chat_tool_service = ChatToolService(
                     registry=self._tool_registry,
-                    entity_id=entity_id,
-                    owner_entity_id=owner_entity_id,
+                    user_id=user_id,
+                    owner_user_id=owner_user_id,
                     entity_repo=repos.get("entity_repo"),
                     chat_service=repos.get("chat_service"),
                     chat_entity_repo=repos.get("chat_entity_repo"),
@@ -1044,18 +1045,18 @@ class LeonAgent:
                 )
 
         # @@@wechat-tools — register WeChat tools via lazy connection lookup
-        owner_eid = self._chat_repos.get("owner_entity_id", "") if self._chat_repos else ""
-        if owner_eid:
+        owner_uid = self._chat_repos.get("owner_user_id", "") if self._chat_repos else ""
+        if owner_uid:
             try:
                 from core.tools.wechat.service import WeChatToolService
 
-                def _get_wechat_conn(eid=owner_eid):
+                def _get_wechat_conn(uid=owner_uid):
                     """Lazy lookup — returns None if registry not on app.state yet."""
                     try:
                         from backend.web.main import app
 
                         registry = getattr(app.state, "wechat_registry", None)
-                        return registry.get(eid) if registry else None
+                        return registry.get(uid) if registry else None
                     except Exception:
                         return None
 
