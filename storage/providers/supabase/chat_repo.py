@@ -216,6 +216,12 @@ class SupabaseChatMessageRepo:
         raw = q.rows(response, _REPO_MSG, "count_unread")
         return len(raw)
 
+    def has_unread_mention(self, chat_id: str, entity_id: str) -> bool:
+        for message in self.list_unread(chat_id, entity_id):
+            if entity_id in message.mentioned_entity_ids:
+                return True
+        return False
+
     def list_by_time_range(
         self,
         chat_id: str,
