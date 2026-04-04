@@ -74,7 +74,6 @@ export const useAuthStore = create<AuthState>()(
           agent: data.agent,
           entityId: data.entity_id ?? null,
         });
-        window.location.href = "/threads";
       },
 
       sendOtp: async (email, password, inviteCode) => {

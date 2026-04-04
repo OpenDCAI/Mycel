@@ -603,12 +603,13 @@ function PasswordInput({ value, onChange, placeholder, autoFocus, autoComplete }
 function SetupNameStep({ userId, defaultName }: { userId: string; defaultName: string }) {
   const [name, setName] = useState(defaultName);
   const [loading, setLoading] = useState(false);
+  const navigate = useNavigate();
   const token = useAuthStore(s => s.token);
   const clearSetupInfo = useAuthStore(s => s.clearSetupInfo);
 
   function done() {
     clearSetupInfo();
-    window.location.href = "/threads";
+    navigate("/threads", { replace: true });
   }
 
   async function handleSubmit(e: React.FormEvent) {
