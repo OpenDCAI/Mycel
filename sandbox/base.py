@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import threading
 from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -84,6 +85,35 @@ def _cached_capability_is_stale(manager, thread_id: str, capability) -> bool:
     return current.session_id != session.session_id
 
 
+def _run_coroutine_blocking(coro, *, timeout: float | None = None):
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        return asyncio.run(coro)
+
+    result: dict[str, object] = {}
+    error: dict[str, BaseException] = {}
+    done = threading.Event()
+
+    # @@@same-loop-init-bridge - init commands can run while the web request event loop is already active;
+    # running run_coroutine_threadsafe(...).result() on that same loop deadlocks, so bridge through a helper thread.
+    def _runner() -> None:
+        try:
+            result["value"] = asyncio.run(coro)
+        except BaseException as exc:  # pragma: no cover - defensive relay
+            error["value"] = exc
+        finally:
+            done.set()
+
+    thread = threading.Thread(target=_runner, daemon=True)
+    thread.start()
+    if not done.wait(timeout):
+        raise TimeoutError(f"Coroutine timed out after {timeout}s")
+    if "value" in error:
+        raise error["value"]
+    return result.get("value")
+
+
 class RemoteSandbox(Sandbox):
     """Concrete sandbox for all provider-backed environments (AgentBay, Docker, E2B, Daytona)."""
 
@@ -140,16 +170,7 @@ class RemoteSandbox(Sandbox):
 
     def _run_init_commands(self, capability: SandboxCapability) -> None:
         for i, cmd in enumerate(self._config.init_commands, 1):
-            try:
-                loop = asyncio.get_running_loop()
-            except RuntimeError:
-                loop = None
-
-            if loop:
-                future = asyncio.run_coroutine_threadsafe(capability.command.execute(cmd), loop)
-                result = future.result(timeout=30)
-            else:
-                result = asyncio.run(capability.command.execute(cmd))
+            result = _run_coroutine_blocking(capability.command.execute(cmd), timeout=30)
 
             if result.exit_code != 0:
                 raise RuntimeError(
