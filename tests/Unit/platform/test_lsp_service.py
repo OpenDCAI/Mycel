@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -72,6 +72,46 @@ async def test_lsp_handle_converts_one_based_positions_to_zero_based_for_definit
     payload = json.loads(result)
     assert payload[0]["line"] == 4
     assert payload[0]["column"] == 2
+
+
+@pytest.mark.asyncio
+async def test_lsp_handle_offloads_gitignored_filtering_from_event_loop(tmp_path, monkeypatch):
+    reg = ToolRegistry()
+    service = LSPService(registry=reg, workspace_root=tmp_path)
+    fake = _FakeSession()
+    service._get_session = AsyncMock(return_value=fake)
+
+    file_path = tmp_path / "example.py"
+    file_path.write_text("x = 1\n", encoding="utf-8")
+
+    filter_results = [
+        {
+            "absolutePath": "/tmp/example.py",
+            "range": {"start": {"line": 0, "character": 0}},
+        }
+    ]
+    filter_mock = MagicMock(return_value=filter_results)
+    service._filter_gitignored_batched = filter_mock
+
+    calls: list[tuple[object, tuple[object, ...]]] = []
+
+    async def fake_to_thread(func, *args, **kwargs):
+        calls.append((func, args))
+        return func(*args, **kwargs)
+
+    monkeypatch.setattr("core.tools.lsp.service.asyncio.to_thread", fake_to_thread)
+
+    result = await service._handle(
+        operation="goToDefinition",
+        file_path=str(file_path),
+        line=1,
+        character=1,
+    )
+
+    assert calls == [(filter_mock, (filter_mock.call_args.args[0],))]
+    assert filter_mock.call_count == 1
+    payload = json.loads(result)
+    assert payload[0]["file"] == "/tmp/example.py"
 
 
 @pytest.mark.asyncio

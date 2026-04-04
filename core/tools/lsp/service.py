@@ -600,6 +600,9 @@ class LSPService:
             out.extend(self._filter_gitignored(locations[i:i + 50]))
         return out
 
+    async def _filter_gitignored_batched_async(self, locations: list) -> list:
+        return await asyncio.to_thread(self._filter_gitignored_batched, locations)
+
     # ── output formatters ─────────────────────────────────────────────
 
     @staticmethod
@@ -728,7 +731,7 @@ class LSPService:
                 if not file_path or zero_line is None or zero_character is None:
                     return "goToDefinition requires: file_path, line, character"
                 results = await session.request_definition(rel, zero_line, zero_character)
-                results = self._filter_gitignored_batched(results)
+                results = await self._filter_gitignored_batched_async(results)
                 if not results:
                     return "No definition found."
                 return json.dumps([self._fmt_location(r) for r in results], indent=2)
@@ -737,7 +740,7 @@ class LSPService:
                 if not file_path or zero_line is None or zero_character is None:
                     return "findReferences requires: file_path, line, character"
                 results = await session.request_references(rel, zero_line, zero_character)
-                results = self._filter_gitignored_batched(results)
+                results = await self._filter_gitignored_batched_async(results)
                 if not results:
                     return "No references found."
                 return json.dumps([self._fmt_location(r) for r in results], indent=2)
@@ -771,7 +774,7 @@ class LSPService:
                     return "goToImplementation requires: file_path, line, character"
                 src = pyright if use_pyright else session
                 results = await src.request_implementation(rel, zero_line, zero_character)
-                results = self._filter_gitignored_batched(results)
+                results = await self._filter_gitignored_batched_async(results)
                 if not results:
                     return "No implementation found."
                 return json.dumps([self._fmt_location(r) for r in results], indent=2)
