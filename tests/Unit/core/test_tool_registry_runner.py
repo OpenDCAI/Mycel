@@ -169,6 +169,51 @@ class TestToolValidator:
         result = v.validate(schema, {"a": "hello", "extra": "ok"})
         assert result.ok
 
+    def test_anyof_requires_one_alternative(self):
+        v = ToolValidator()
+        schema = {
+            "name": "ChatRead",
+            "parameters": {
+                "type": "object",
+                "required": [],
+                "properties": {
+                    "entity_id": {"type": "string"},
+                    "chat_id": {"type": "string"},
+                },
+                "anyOf": [
+                    {"required": ["entity_id"]},
+                    {"required": ["chat_id"]},
+                ],
+            },
+        }
+
+        with pytest.raises(InputValidationError) as exc_info:
+            v.validate(schema, {})
+
+        assert "entity_id" in str(exc_info.value)
+        assert "chat_id" in str(exc_info.value)
+
+    def test_anyof_accepts_present_alternative(self):
+        v = ToolValidator()
+        schema = {
+            "name": "ChatRead",
+            "parameters": {
+                "type": "object",
+                "required": [],
+                "properties": {
+                    "entity_id": {"type": "string"},
+                    "chat_id": {"type": "string"},
+                },
+                "anyOf": [
+                    {"required": ["entity_id"]},
+                    {"required": ["chat_id"]},
+                ],
+            },
+        }
+
+        result = v.validate(schema, {"chat_id": "chat-1"})
+        assert result.ok
+
 
 # ---------------------------------------------------------------------------
 # ToolRunner — P0 error normalization

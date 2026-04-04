@@ -357,6 +357,10 @@ class ChatToolService:
                                 ),
                             },
                         },
+                        "anyOf": [
+                            {"required": ["entity_id"]},
+                            {"required": ["chat_id"]},
+                        ],
                     },
                 },
                 handler=self._handle_chat_read,
@@ -402,6 +406,10 @@ class ChatToolService:
                             },
                         },
                         "required": ["content"],
+                        "anyOf": [
+                            {"required": ["content", "entity_id"]},
+                            {"required": ["content", "chat_id"]},
+                        ],
                     },
                 },
                 handler=self._handle_chat_send,

@@ -1382,6 +1382,30 @@ class _SplitStringValueStreamingToolModel:
         yield AIMessageChunk(content="final answer")
 
 
+class _SplitAnyOfStreamingToolModel:
+    def __init__(self):
+        self.calls = 0
+
+    def bind_tools(self, tools):
+        return self
+
+    async def astream(self, messages):
+        self.calls += 1
+        if self.calls == 1:
+            yield AIMessageChunk(
+                content="",
+                tool_call_chunks=[{"name": "chat_read", "args": "", "id": "tc-chat-read", "index": 0}],
+            )
+            yield AIMessageChunk(
+                content="",
+                tool_call_chunks=[{"name": None, "args": '{"chat_id":"chat-1"}', "id": "tc-chat-read", "index": 0}],
+            )
+            await asyncio.sleep(0.01)
+            yield AIMessageChunk(content="done")
+            return
+        yield AIMessageChunk(content="final answer")
+
+
 class _TwoToolStreamingModel:
     def __init__(self):
         self.calls = 0
@@ -2842,3 +2866,97 @@ async def test_streaming_overlap_waits_for_split_string_value_before_execution()
     assert seen_args == ["/tmp/a.txt"]
     assert any(msg.tool_call_id == "tc-read" and msg.content == "read:/tmp/a.txt" for msg in tool_messages)
     assert not any("InputValidationError" in msg.content for msg in tool_messages)
+
+
+@pytest.mark.asyncio
+async def test_streaming_overlap_waits_for_anyof_tool_args_before_execution():
+    model = _SplitAnyOfStreamingToolModel()
+    seen_calls = []
+
+    def chat_read_handler(entity_id: str | None = None, chat_id: str | None = None) -> str:
+        seen_calls.append({"entity_id": entity_id, "chat_id": chat_id})
+        if chat_id:
+            return f"chat:{chat_id}"
+        if entity_id:
+            return f"entity:{entity_id}"
+        return "Provide entity_id or chat_id."
+
+    entry = ToolEntry(
+        name="chat_read",
+        mode=ToolMode.INLINE,
+        schema={
+            "name": "chat_read",
+            "description": "read chat",
+            "parameters": {
+                "type": "object",
+                "required": [],
+                "properties": {
+                    "entity_id": {"type": "string"},
+                    "chat_id": {"type": "string"},
+                },
+                "anyOf": [
+                    {"required": ["entity_id"]},
+                    {"required": ["chat_id"]},
+                ],
+            },
+        },
+        handler=chat_read_handler,
+        source="test",
+        is_concurrency_safe=True,
+    )
+    loop = make_loop(
+        model,
+        registry=make_registry(entry),
+        app_state=AppState(),
+        runtime=SimpleNamespace(cost=0.0),
+    )
+
+    result = await loop.ainvoke({"messages": [{"role": "user", "content": "read chat"}]})
+
+    tool_messages = [msg for msg in result["messages"] if isinstance(msg, ToolMessage)]
+    assert seen_calls == [{"entity_id": None, "chat_id": "chat-1"}]
+    assert any(msg.tool_call_id == "tc-chat-read" and msg.content == "chat:chat-1" for msg in tool_messages)
+    assert not any(msg.content == "Provide entity_id or chat_id." for msg in tool_messages)
+
+
+def test_normalize_stream_tool_call_keeps_aggregate_args_when_chunk_args_are_empty():
+    entry = ToolEntry(
+        name="chat_read",
+        mode=ToolMode.INLINE,
+        schema={
+            "name": "chat_read",
+            "description": "read chat",
+            "parameters": {
+                "type": "object",
+                "required": [],
+                "properties": {
+                    "entity_id": {"type": "string"},
+                    "chat_id": {"type": "string"},
+                },
+                "anyOf": [
+                    {"required": ["entity_id"]},
+                    {"required": ["chat_id"]},
+                ],
+            },
+        },
+        handler=lambda **_kwargs: "ok",
+        source="test",
+        is_concurrency_safe=True,
+    )
+    loop = make_loop(
+        mock_model_no_tools(),
+        registry=make_registry(entry),
+        app_state=AppState(),
+        runtime=SimpleNamespace(cost=0.0),
+    )
+
+    normalized = loop._normalize_stream_tool_call(
+        {"name": "chat_read", "args": {"chat_id": "chat-1"}, "id": "tc-chat-read"},
+        [{"name": "chat_read", "args": "", "id": "tc-chat-read", "index": 0}],
+    )
+
+    assert normalized == {
+        "name": "chat_read",
+        "args": {"chat_id": "chat-1"},
+        "id": "tc-chat-read",
+    }

@@ -37,6 +37,7 @@ from .abort import AbortController
 from .registry import ToolMode, ToolRegistry
 from .permissions import ToolPermissionContext, evaluate_permission_rules
 from .state import AppState, BootstrapConfig, ToolPermissionState, ToolUseContext
+from .validator import _required_sets_match
 
 logger = logging.getLogger(__name__)
 
@@ -1449,8 +1450,7 @@ class QueryLoop:
 
         schema = entry.get_schema() or {}
         parameters = schema.get("parameters", {}) if isinstance(schema, dict) else {}
-        required = parameters.get("required", []) if isinstance(parameters, dict) else []
-        return all(key in args for key in required)
+        return _required_sets_match(parameters, args) if isinstance(parameters, dict) else True
 
     def _normalize_stream_tool_call(
         self,
@@ -1459,7 +1459,14 @@ class QueryLoop:
     ) -> dict[str, Any] | None:
         call_id = tool_call.get("id")
         name = tool_call.get("name") or tool_call.get("function", {}).get("name", "")
-        raw_args = None
+        args: Any = tool_call.get("args", {})
+        if isinstance(args, str):
+            try:
+                import json as _json
+
+                args = _json.loads(args)
+            except Exception:
+                args = {}
 
         for chunk in tool_call_chunks:
             if chunk.get("id") != call_id:
@@ -1467,21 +1474,17 @@ class QueryLoop:
             if chunk.get("name"):
                 name = chunk["name"]
             raw_args = chunk.get("args")
-            break
-
-        args: Any = tool_call.get("args", {})
-        if isinstance(raw_args, str):
-            if raw_args == "":
-                args = {}
-            else:
+            if raw_args in (None, ""):
+                continue
+            if isinstance(raw_args, str):
                 try:
                     import json as _json
 
                     args = _json.loads(raw_args)
                 except Exception:
-                    return None
-        elif raw_args is not None:
-            args = raw_args
+                    continue
+            else:
+                args = raw_args
 
         normalized = {"name": name, "args": args, "id": call_id}
         if not self._tool_call_is_ready(normalized):
