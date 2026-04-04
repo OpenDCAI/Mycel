@@ -123,13 +123,17 @@ class DaytonaProvider(SandboxProvider):
         logger.info("Creating managed volume: %s", volume_name)
         # @@@volume-ready - volume transitions pending_create → ready (~6s)
         self.client.volume.create(volume_name)
+        self.wait_managed_volume_ready(volume_name)
+        return volume_name
+
+    def wait_managed_volume_ready(self, backend_ref: str) -> None:
         for _ in range(30):
-            vol = self.client.volume.get(volume_name)
+            vol = self.client.volume.get(backend_ref)
             if vol.state == "ready":
-                logger.info("Managed volume ready: %s (id=%s)", volume_name, vol.id)
-                return volume_name
+                logger.info("Managed volume ready: %s (id=%s)", backend_ref, vol.id)
+                return
             time.sleep(1)
-        raise RuntimeError(f"Volume {volume_name} did not become ready within 30s")
+        raise RuntimeError(f"Volume {backend_ref} did not become ready within 30s")
 
     def set_managed_volume_mount(self, thread_id: str, backend_ref: str, mount_path: str) -> None:
         self._volume_mounts[thread_id] = (backend_ref, mount_path)

@@ -66,10 +66,14 @@ class _FakeUpdateRepo:
 class _FakeDaytonaProvider:
     def __init__(self) -> None:
         self.calls: list[tuple[str, str]] = []
+        self.ready_waits: list[str] = []
 
     def create_managed_volume(self, member_id: str, mount_path: str) -> str:
         self.calls.append((member_id, mount_path))
         return f"leon-volume-{member_id}"
+
+    def wait_managed_volume_ready(self, volume_name: str) -> None:
+        self.ready_waits.append(volume_name)
 
 
 def test_setup_mounts_reads_volume_from_active_storage_repo(tmp_path):
@@ -144,6 +148,38 @@ def test_upgrade_to_daytona_volume_uses_runtime_thread_repo_for_member_lookup(mo
     assert isinstance(new_source, DaytonaVolume)
     assert update_repo.closed is True
     assert update_repo.updated
+
+
+def test_upgrade_to_daytona_volume_waits_when_reusing_existing_daytona_volume(monkeypatch, tmp_path):
+    manager = object.__new__(SandboxManager)
+    provider = _FakeDaytonaProvider()
+    update_repo = _FakeUpdateRepo()
+    manager.provider = provider
+    manager._sandbox_volume_repo = lambda: update_repo
+
+    thread_repo = _FakeThreadRepo({"member_id": "member-supabase"})
+    monkeypatch.setattr(
+        sandbox_manager_module,
+        "build_thread_repo",
+        lambda **_kwargs: thread_repo,
+        raising=False,
+    )
+
+    def _already_exists(member_id: str, mount_path: str) -> str:
+        provider.calls.append((member_id, mount_path))
+        raise RuntimeError("volume already exists")
+
+    provider.create_managed_volume = _already_exists
+
+    new_source = manager._upgrade_to_daytona_volume(
+        "thread-supabase",
+        HostVolume(tmp_path / "staging"),
+        "volume-1",
+        "/workspace",
+    )
+
+    assert isinstance(new_source, DaytonaVolume)
+    assert provider.ready_waits == ["leon-volume-member-supabase"]
 
 
 @pytest.mark.parametrize(

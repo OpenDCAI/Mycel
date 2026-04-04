@@ -253,6 +253,7 @@ class SandboxManager:
             if "already exists" in str(e):
                 volume_name = f"leon-volume-{member_id}"
                 logger.info("Daytona volume already exists: %s, reusing", volume_name)
+                self.provider.wait_managed_volume_ready(volume_name)
             else:
                 raise
 

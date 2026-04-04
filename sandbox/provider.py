@@ -260,6 +260,10 @@ class SandboxProvider(ABC):
         """Delete provider-managed persistent volume."""
         raise NotImplementedError(f"{self.name} does not support managed volumes")
 
+    def wait_managed_volume_ready(self, backend_ref: str) -> None:
+        """Block until a previously created managed volume is reusable."""
+        return None
+
     def set_thread_bind_mounts(self, thread_id: str, mounts: list) -> None:
         """Set per-thread bind mounts for next create_session(). No-op for providers without mount support."""
         pass
