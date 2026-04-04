@@ -8,6 +8,7 @@ import uuid
 from collections.abc import Callable
 from typing import Any
 
+from backend.web.utils.serializers import avatar_url
 from storage.contracts import (
     ChatEntityRepo,
     ChatMessageRepo,
@@ -42,6 +43,14 @@ class ChatService:
         self._event_bus = event_bus
         self._delivery_fn = delivery_fn
         self._delivery_resolver = delivery_resolver
+
+    def _resolve_name(self, user_id: str) -> str:
+        """Resolve display name: entity_repo (agents) → member_repo (humans)."""
+        e = self._entities.get_by_id(user_id)
+        if e:
+            return e.name
+        m = self._members.get_by_id(user_id) if self._members else None
+        return m.name if m else "unknown"
 
     def find_or_create_chat(self, user_ids: list[str], title: str | None = None) -> ChatRow:
         """Find existing 1:1 chat between two social identities, or create one."""
@@ -99,12 +108,7 @@ class ChatService:
         )
         self._messages.create(msg)
 
-        sender = self._entities.get_by_id(sender_id)
-        if not sender:
-            sender_member = self._members.get_by_id(sender_id) if self._members else None
-            sender_name = sender_member.name if sender_member else "unknown"
-        else:
-            sender_name = sender.name
+        sender_name = self._resolve_name(sender_id)
 
         if self._event_bus:
             self._event_bus.publish(
@@ -123,13 +127,14 @@ class ChatService:
                 },
             )
 
-        self._deliver_to_agents(chat_id, sender_id, content, mentions, signal=signal)
+        self._deliver_to_agents(chat_id, sender_id, sender_name, content, mentions, signal=signal)
         return msg
 
     def _deliver_to_agents(
         self,
         chat_id: str,
         sender_id: str,
+        sender_name: str,
         content: str,
         mentioned_ids: list[str] | None = None,
         signal: str | None = None,
@@ -137,22 +142,13 @@ class ChatService:
         """For each non-sender agent participant in the chat, deliver to their brain thread."""
         mentions = set(mentioned_ids or [])
         participants = self._chat_entities.list_participants(chat_id)
-        sender_entity = self._entities.get_by_id(sender_id)
-        # Resolve sender name + avatar — entity_repo for agents, member_repo for humans
-        if sender_entity:
-            sender_name = sender_entity.name
-            sender_mid = sender_entity.member_id
-        else:
-            sender_member = self._members.get_by_id(sender_id) if self._members else None
-            sender_name = sender_member.name if sender_member else "unknown"
-            sender_mid = sender_id
-        # @@@sender-avatar — compute once for all recipients
         sender_avatar_url = None
-        if sender_mid:
-            from backend.web.utils.serializers import avatar_url
-
-            m = self._members.get_by_id(sender_mid) if self._members else None
-            sender_avatar_url = avatar_url(sender_mid, bool(m.avatar if m else None))
+        sender_mid = sender_id
+        sender_entity = self._entities.get_by_id(sender_id)
+        if sender_entity:
+            sender_mid = sender_entity.member_id
+        m = self._members.get_by_id(sender_mid) if self._members else None
+        sender_avatar_url = avatar_url(sender_mid, bool(m.avatar if m else None))
 
         for ce in participants:
             if ce.user_id == sender_id:
@@ -213,8 +209,6 @@ class ChatService:
             for p in participants:
                 e = self._entities.get_by_id(p.user_id)
                 if e:
-                    from backend.web.utils.serializers import avatar_url
-
                     m = self._members.get_by_id(e.member_id) if self._members else None
                     entities_info.append(
                         {
@@ -225,9 +219,6 @@ class ChatService:
                         }
                     )
                 else:
-                    # Human participant — no entity row
-                    from backend.web.utils.serializers import avatar_url
-
                     m = self._members.get_by_id(p.user_id) if self._members else None
                     if m:
                         entities_info.append(
@@ -242,15 +233,9 @@ class ChatService:
             last_msg = None
             if msgs:
                 m = msgs[0]
-                sender = self._entities.get_by_id(m.sender_id)
-                if not sender:
-                    sender_member = self._members.get_by_id(m.sender_id) if self._members else None
-                    sender_name = sender_member.name if sender_member else "unknown"
-                else:
-                    sender_name = sender.name
                 last_msg = {
                     "content": m.content,
-                    "sender_name": sender_name,
+                    "sender_name": self._resolve_name(m.sender_id),
                     "created_at": m.created_at,
                 }
             unread = self._messages.count_unread(cid, user_id)

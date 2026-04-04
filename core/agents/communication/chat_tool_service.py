@@ -416,18 +416,17 @@ class ChatToolService:
 
         def handle(search: str | None = None, type: str | None = None) -> str:
             lines = []
+            all_members = self._members.list_all() if self._members else []
+            member_map = {m.id: m for m in all_members}
 
-            # Humans — from member_repo (no entity rows for humans)
             if type is None or type == "human":
-                all_members = self._members.list_all() if self._members else []
                 for m in all_members:
-                    if m.id == eid or str(m.type) != "human":
+                    if m.id == eid or m.type != "human":
                         continue
                     if search and search.lower() not in m.name.lower():
                         continue
                     lines.append(f"- {m.name} [human] user_id={m.id}")
 
-            # Agents — from entity_repo
             if type is None or type == "agent":
                 all_entities = self._entities.list_all()
                 for e in all_entities:
@@ -435,12 +434,12 @@ class ChatToolService:
                         continue
                     if search and search.lower() not in e.name.lower():
                         continue
-                    member = self._members.get_by_id(e.member_id) if self._members else None
+                    member = member_map.get(e.member_id)
                     owner_info = ""
                     if member and member.owner_user_id:
-                        owner_member = self._members.get_by_id(member.owner_user_id)
-                        if owner_member:
-                            owner_info = f" (owner: {owner_member.name})"
+                        owner = member_map.get(member.owner_user_id)
+                        if owner:
+                            owner_info = f" (owner: {owner.name})"
                     lines.append(f"- {e.name} [{e.type}] user_id={e.id}{owner_info}")
 
             if not lines:
