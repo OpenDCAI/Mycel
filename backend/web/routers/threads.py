@@ -336,13 +336,13 @@ def _create_owned_thread(
 
     # @@@non-atomic-create - these 3 steps (seq++, thread, entity) are not atomic.
     seq = app.state.member_repo.increment_entity_seq(agent_member_id)
-    thread_entity_id = f"{agent_member_id}-{seq}"
+    new_thread_id = f"{agent_member_id}-{seq}"
     has_main = app.state.thread_repo.get_main_thread(agent_member_id) is not None
     resolved_is_main = is_main or not has_main
     branch_index = 0 if resolved_is_main else app.state.thread_repo.get_next_branch_index(agent_member_id)
 
     app.state.thread_repo.create(
-        thread_id=thread_entity_id,
+        thread_id=new_thread_id,
         member_id=agent_member_id,
         sandbox_type=sandbox_type,
         cwd=payload.cwd,
@@ -361,7 +361,7 @@ def _create_owned_thread(
     existing_entity = app.state.entity_repo.get_by_id(agent_member_id)
     if existing_entity is not None:
         if resolved_is_main:
-            app.state.entity_repo.update(agent_member_id, thread_id=thread_entity_id, name=entity_name)
+            app.state.entity_repo.update(agent_member_id, thread_id=new_thread_id, name=entity_name)
         # Branch threads don't update the entity — it represents the main identity
     else:
         app.state.entity_repo.create(
@@ -370,29 +370,29 @@ def _create_owned_thread(
                 type="agent",
                 member_id=agent_member_id,
                 name=entity_name,
-                thread_id=thread_entity_id if resolved_is_main else None,
+                thread_id=new_thread_id if resolved_is_main else None,
                 created_at=time.time(),
             )
         )
 
     # Set thread state
-    app.state.thread_sandbox[thread_entity_id] = sandbox_type
+    app.state.thread_sandbox[new_thread_id] = sandbox_type
     if payload.cwd:
-        app.state.thread_cwd[thread_entity_id] = payload.cwd
+        app.state.thread_cwd[new_thread_id] = payload.cwd
 
     if selected_lease_id:
         # @@@reuse-lease-binding - Reuse an existing lease by attaching a fresh terminal for the new thread.
         bound_cwd = _bind_thread_to_existing_lease(
-            thread_entity_id,
+            new_thread_id,
             selected_lease_id,
             cwd=payload.cwd,
         )
-        app.state.thread_cwd[thread_entity_id] = bound_cwd
+        app.state.thread_cwd[new_thread_id] = bound_cwd
     else:
         # @@@lease-early-creation - Create volume + lease + terminal at thread creation
         # so volume exists BEFORE any file uploads.
         _create_thread_sandbox_resources(
-            thread_entity_id,
+            new_thread_id,
             sandbox_type,
             payload.recipe.model_dump() if payload.recipe else None,
         )
@@ -404,7 +404,7 @@ def _create_owned_thread(
             "recipe": owned_lease.get("recipe"),
             "lease_id": owned_lease["lease_id"],
             "model": payload.model,
-            "workspace": app.state.thread_cwd.get(thread_entity_id),
+            "workspace": app.state.thread_cwd.get(new_thread_id),
         }
     else:
         successful_config = {
@@ -416,12 +416,12 @@ def _create_owned_thread(
             ),
             "lease_id": None,
             "model": payload.model,
-            "workspace": app.state.thread_cwd.get(thread_entity_id) or payload.cwd,
+            "workspace": app.state.thread_cwd.get(new_thread_id) or payload.cwd,
         }
     save_last_successful_config(app, owner_user_id, agent_member_id, successful_config)
 
     return {
-        "thread_id": thread_entity_id,
+        "thread_id": new_thread_id,
         "sandbox": sandbox_type,
         "member_id": agent_member_id,
         "member_name": agent_member.name,
