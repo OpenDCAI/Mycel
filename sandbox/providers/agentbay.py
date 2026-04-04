@@ -100,7 +100,7 @@ class AgentBayProvider(SandboxProvider):
         if not result.success:
             raise RuntimeError(f"Failed to create session: {result.error_message}")
 
-        session = result.session
+        session = self._hydrate_direct_call_session(result.session)
         self._sessions[session.session_id] = session
 
         return SessionInfo(
@@ -246,7 +246,33 @@ class AgentBayProvider(SandboxProvider):
             if not result.success:
                 raise RuntimeError(f"Session not found: {session_id}")
             self._sessions[session_id] = result.session
-        return self._sessions[session_id]
+        cached = self._sessions[session_id]
+        hydrated = self._hydrate_direct_call_session(cached)
+        self._sessions[session_id] = hydrated
+        return hydrated
+
+    def _hydrate_direct_call_session(self, session: Any):
+        """Ensure cached session carries LinkUrl/token/tool metadata for direct shell calls."""
+        if not self._session_needs_direct_call_refresh(session):
+            return session
+        session_id = str(getattr(session, "session_id", "") or "")
+        if not session_id:
+            raise RuntimeError("AgentBay session missing session_id")
+        refreshed = self.client.get(session_id)
+        if not refreshed.success:
+            raise RuntimeError(f"Failed to hydrate AgentBay session {session_id}: {refreshed.error_message}")
+        return refreshed.session
+
+    @staticmethod
+    def _session_needs_direct_call_refresh(session: Any) -> bool:
+        # @@@agentbay-direct-call-hydration - shared staging may return a create-session object
+        # without token/link_url/mcpTools; refresh once so shell execution stays on the richer LinkUrl path.
+        if not getattr(session, "token", ""):
+            return True
+        if not getattr(session, "link_url", ""):
+            return True
+        tools = getattr(session, "mcpTools", None)
+        return not bool(tools)
 
     def create_runtime(self, terminal: AbstractTerminal, lease: SandboxLease) -> PhysicalTerminalRuntime:
         from sandbox.runtime import RemoteWrappedRuntime
