@@ -92,6 +92,16 @@ class E2BProvider(SandboxProvider):
             api_key=self.api_key,
         )
         self._sandboxes[sandbox.sandbox_id] = sandbox
+        # @@@e2b-workspace-bootstrap - fresh E2B sandboxes do not guarantee our sync root exists.
+        # Create it eagerly so upload/download and file hints target a real path contract.
+        bootstrap = sandbox.commands.run(
+            f"mkdir -p {self.WORKSPACE_ROOT}/files",
+            cwd=self.default_cwd,
+            timeout=10,
+        )
+        if getattr(bootstrap, "exit_code", 0) != 0:
+            error = getattr(bootstrap, "stderr", "") or getattr(bootstrap, "stdout", "") or "unknown error"
+            raise RuntimeError(f"Failed to bootstrap E2B workspace root: {error}")
 
         return SessionInfo(
             session_id=sandbox.sandbox_id,

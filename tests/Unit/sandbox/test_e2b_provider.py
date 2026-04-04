@@ -3,6 +3,7 @@
 import builtins
 import os
 import sys
+from types import SimpleNamespace
 
 import pytest
 
@@ -25,9 +26,35 @@ def test_e2b_provider_requires_sdk(monkeypatch):
         E2BProvider(api_key="test-key", timeout=60)
 
 
+def test_e2b_create_session_bootstraps_workspace_files_dir(monkeypatch):
+    calls: list[tuple[str, str | None, float | None]] = []
+
+    class _FakeCommands:
+        def run(self, command, cwd=None, timeout=None):
+            calls.append((command, cwd, timeout))
+            return SimpleNamespace(stdout="", stderr="", exit_code=0)
+
+    class _FakeSandbox:
+        def __init__(self):
+            self.sandbox_id = "sbx-123"
+            self.commands = _FakeCommands()
+
+        @classmethod
+        def beta_create(cls, template, timeout, auto_pause, api_key):
+            return cls()
+
+    monkeypatch.setitem(sys.modules, "e2b", SimpleNamespace(Sandbox=_FakeSandbox))
+
+    provider = E2BProvider(api_key="test-key", timeout=60)
+    info = provider.create_session()
+
+    assert info.session_id == "sbx-123"
+    assert calls == [("mkdir -p /home/user/workspace/files", "/home/user", 10.0)]
+
+
 def test_e2b_provider():
     api_key = os.getenv("E2B_API_KEY")
-    if not api_key:
+    if not api_key or not api_key.startswith("e2b_"):
         print("E2B_API_KEY not set, skipping")
         return
 
