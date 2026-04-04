@@ -18,6 +18,14 @@ from storage.contracts import RunEventRepo
 
 logger = logging.getLogger(__name__)
 
+_TERMINAL_FOLLOWTHROUGH_SYSTEM_NOTE = (
+    "Terminal background completion notifications require an explicit assistant followthrough. "
+    "Treat these notifications as fresh inputs that need a visible assistant reply. "
+    "You must produce at least one visible assistant message for them; do not stay silent and do not end the run after only surfacing a notice. "
+    "Do not call TaskOutput or TaskStop for a terminal notification. "
+    "If no further tool is truly needed, answer directly in natural language and briefly acknowledge the completion, failure, or cancellation honestly."
+)
+
 
 def _resolve_run_event_repo(agent: Any) -> RunEventRepo | None:
     storage_container = getattr(agent, "storage_container", None)
@@ -26,6 +34,18 @@ def _resolve_run_event_repo(agent: Any) -> RunEventRepo | None:
 
     # @@@runtime-storage-consumer - runtime run lifecycle must consume injected storage container, not assignment-only wiring.
     return storage_container.run_event_repo()
+
+
+def _augment_system_prompt_for_terminal_followthrough(system_prompt: Any) -> Any:
+    content = getattr(system_prompt, "content", None)
+    if not isinstance(content, str):
+        return system_prompt
+    if _TERMINAL_FOLLOWTHROUGH_SYSTEM_NOTE in content:
+        return system_prompt
+    # @@@terminal-followthrough-system-note - live models can otherwise treat
+    # terminal background notifications as internal reminders and emit no
+    # assistant text, leaving caller surfaces notice-only.
+    return system_prompt.__class__(content=f"{content}\n\n{_TERMINAL_FOLLOWTHROUGH_SYSTEM_NOTE}")
 
 
 async def prime_sandbox(agent: Any, thread_id: str) -> None:
@@ -849,6 +869,7 @@ async def _run_agent_to_buffer(
             )
 
         terminal_followthrough_items: list[dict[str, str | None]] | None = None
+        original_system_prompt = None
         # @@@terminal-followthrough-reentry - terminal background completions
         # still surface as durable notices first, but they must then re-enter the
         # model as a real followthrough turn instead of terminating at notice-only.
@@ -867,6 +888,9 @@ async def _run_agent_to_buffer(
             terminal_followthrough_items.extend(
                 await _emit_queued_terminal_followups(app=app, thread_id=thread_id, emit=emit)
             )
+            if hasattr(agent, "agent") and hasattr(agent.agent, "system_prompt"):
+                original_system_prompt = agent.agent.system_prompt
+                agent.agent.system_prompt = _augment_system_prompt_for_terminal_followthrough(original_system_prompt)
 
         if terminal_followthrough_items:
             from langchain_core.messages import HumanMessage
@@ -1226,6 +1250,8 @@ async def _run_agent_to_buffer(
         await emit({"event": "error", "data": json.dumps({"error": str(e)}, ensure_ascii=False)})
         await emit({"event": "run_done", "data": json.dumps({"thread_id": thread_id, "run_id": run_id})})
     finally:
+        if original_system_prompt is not None and hasattr(agent, "agent") and hasattr(agent.agent, "system_prompt"):
+            agent.agent.system_prompt = original_system_prompt
         # @@@typing-lifecycle-stop — guaranteed cleanup even on crash/cancel
         typing_tracker = getattr(app.state, "typing_tracker", None)
         if typing_tracker is not None:

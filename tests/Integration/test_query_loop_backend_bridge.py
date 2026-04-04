@@ -12,6 +12,7 @@ from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, Tool
 
 from backend.web.routers.threads import get_thread_history, get_thread_messages
 from backend.web.routers import threads as threads_router
+from backend.web.models.requests import SendMessageRequest
 from backend.web.services.display_builder import DisplayBuilder
 from backend.web.services.event_buffer import ThreadEventBuffer
 from backend.web.services.streaming_service import _ensure_thread_handlers
@@ -49,6 +50,63 @@ class _NoToolModel:
 
     async def ainvoke(self, messages):
         return AIMessage(content=self._text)
+
+
+class _TurnTextModel:
+    def __init__(self, *texts: str) -> None:
+        self._texts = list(texts)
+        self._index = 0
+
+    def bind_tools(self, tools):
+        return self
+
+    async def ainvoke(self, messages):
+        if self._index < len(self._texts):
+            text = self._texts[self._index]
+            self._index += 1
+            return AIMessage(content=text)
+        return AIMessage(content=self._texts[-1] if self._texts else "done")
+
+
+class _TerminalFollowthroughPromptAwareModel:
+    def bind_tools(self, tools):
+        return self
+
+    async def ainvoke(self, messages):
+        system_text = ""
+        if messages and messages[0].__class__.__name__ == "SystemMessage":
+            system_text = getattr(messages[0], "content", "") or ""
+        last_human = next(
+            (
+                msg.content
+                for msg in reversed(messages)
+                if msg.__class__.__name__ == "HumanMessage"
+            ),
+            "",
+        )
+        if "CommandNotification" not in last_human and "task-notification" not in last_human:
+            return AIMessage(content="UNRELATED")
+        if "Terminal background completion notifications require an explicit assistant followthrough." in system_text:
+            return AIMessage(content="FOLLOWTHROUGH_ACK")
+        return AIMessage(content="")
+
+
+class _TerminalFollowthroughSilentModel:
+    def bind_tools(self, tools):
+        return self
+
+    async def ainvoke(self, messages):
+        last_human = next(
+            (
+                msg.content
+                for msg in reversed(messages)
+                if msg.__class__.__name__ == "HumanMessage"
+            ),
+            "",
+        )
+        if "CommandNotification" in last_human or "task-notification" in last_human:
+            return AIMessage(content="")
+        return AIMessage(content="UNRELATED")
 
 
 class _PromptTooLongTwiceModel:
@@ -439,7 +497,7 @@ async def test_get_thread_history_retains_tool_search_inline_select_error():
 
 
 @pytest.mark.asyncio
-async def test_query_loop_does_not_persist_terminal_empty_ai_after_system_notification_resume():
+async def test_query_loop_persists_visible_terminal_followthrough_when_system_notification_resume_is_silent():
     checkpointer = _MemoryCheckpointer()
     loop = _make_loop(text="", checkpointer=checkpointer)
     system_notice = HumanMessage(
@@ -466,8 +524,13 @@ async def test_query_loop_does_not_persist_terminal_empty_ai_after_system_notifi
     assert [msg.__class__.__name__ for msg in state.values["messages"]] == [
         "HumanMessage",
         "HumanMessage",
+        "AIMessage",
     ]
-    assert state.values["messages"][-1].content.startswith("<system-reminder><task-notification>")
+    assert state.values["messages"][-2].content.startswith("<system-reminder><task-notification>")
+    assert (
+        state.values["messages"][-1].content
+        == "Background agent failed, but the followthrough assistant reply was empty."
+    )
 
 
 @pytest.mark.asyncio
@@ -1670,6 +1733,193 @@ async def test_cancelled_task_notification_wakes_followthrough_run(monkeypatch, 
     assert [item["role"] for item in history["messages"]] == ["notification", "assistant"]
     assert "cancelled" in history["messages"][0]["text"]
     assert history["messages"][1]["text"] == "AFTER_CANCEL_WAKE"
+
+
+@pytest.mark.asyncio
+async def test_send_message_route_then_agent_terminal_notification_reenters_followthrough(monkeypatch, tmp_path):
+    seq = 0
+
+    async def fake_append_event(thread_id, run_id, event, message_id=None, run_event_repo=None):
+        nonlocal seq
+        seq += 1
+        return seq
+
+    async def fake_cleanup_old_runs(thread_id, keep_latest=1, run_event_repo=None):
+        return 0
+
+    monkeypatch.setattr("backend.web.services.event_store.append_event", fake_append_event)
+    monkeypatch.setattr("backend.web.services.streaming_service.cleanup_old_runs", fake_cleanup_old_runs)
+
+    thread_id = "thread-route-send-message-followthrough"
+    checkpointer = _MemoryCheckpointer()
+    loop = _make_loop(model=_TurnTextModel("OWNER_OK", "AFTER_AGENT_ROUTE_WAKE"), checkpointer=checkpointer)
+    queue_manager = MessageQueueManager(db_path=str(tmp_path / "queue.db"))
+    agent = SimpleNamespace(
+        agent=loop,
+        runtime=_StreamingRuntime(),
+        storage_container=None,
+        queue_manager=queue_manager,
+    )
+    app = SimpleNamespace(
+        state=SimpleNamespace(
+            display_builder=DisplayBuilder(),
+            thread_tasks={},
+            thread_event_buffers={},
+            subagent_buffers={},
+            queue_manager=queue_manager,
+            thread_last_active={},
+            typing_tracker=None,
+            thread_locks={},
+            thread_locks_guard=asyncio.Lock(),
+            agent_pool={f"{thread_id}:local": agent},
+            thread_sandbox={thread_id: "local"},
+            _event_loop=asyncio.get_running_loop(),
+        )
+    )
+
+    with (
+        patch("backend.web.services.agent_pool.get_or_create_agent", AsyncMock(return_value=agent)),
+        patch("backend.web.services.agent_pool.resolve_thread_sandbox", return_value="local"),
+    ):
+        result = await threads_router.send_message(
+            thread_id,
+            SendMessageRequest(message="start owner turn"),
+            user_id="u",
+            app=app,
+        )
+
+    assert result["status"] == "started"
+    await _wait_for_followthrough_text(loop, thread_id, "OWNER_OK")
+
+    queue_manager.enqueue(
+        "<system-reminder><task-notification><status>completed</status><summary>Simple background tool test</summary><result>Simple Background Tool Test Done</result></task-notification></system-reminder>",
+        thread_id,
+        notification_type="agent",
+        source="system",
+    )
+
+    await _wait_for_followthrough_text(loop, thread_id, "AFTER_AGENT_ROUTE_WAKE")
+
+    with (
+        patch.object(threads_router, "get_or_create_agent", return_value=agent),
+        patch.object(threads_router, "resolve_thread_sandbox", return_value="local"),
+    ):
+        history = await get_thread_history(thread_id, limit=20, truncate=400, user_id="u", app=app)
+
+    assert [item["role"] for item in history["messages"]] == ["human", "assistant", "notification", "assistant"]
+    assert history["messages"][0]["text"] == "start owner turn"
+    assert history["messages"][1]["text"] == "OWNER_OK"
+    assert "Simple Background Tool Test Done" in history["messages"][2]["text"]
+    assert history["messages"][3]["text"] == "AFTER_AGENT_ROUTE_WAKE"
+
+
+@pytest.mark.asyncio
+async def test_run_agent_to_buffer_adds_terminal_followthrough_system_note_to_prevent_silent_completion(monkeypatch, tmp_path):
+    seq = 0
+
+    async def fake_append_event(thread_id, run_id, event, message_id=None, run_event_repo=None):
+        nonlocal seq
+        seq += 1
+        return seq
+
+    async def fake_cleanup_old_runs(thread_id, keep_latest=1, run_event_repo=None):
+        return 0
+
+    monkeypatch.setattr("backend.web.services.event_store.append_event", fake_append_event)
+    monkeypatch.setattr("backend.web.services.streaming_service.cleanup_old_runs", fake_cleanup_old_runs)
+    monkeypatch.setattr("backend.web.services.streaming_service._ensure_thread_handlers", lambda *args, **kwargs: None)
+
+    checkpointer = _MemoryCheckpointer()
+    loop = _make_loop(model=_TerminalFollowthroughPromptAwareModel(), checkpointer=checkpointer)
+    agent = SimpleNamespace(
+        agent=loop,
+        runtime=_StreamingRuntime(),
+        storage_container=None,
+    )
+    app = SimpleNamespace(
+        state=SimpleNamespace(
+            display_builder=DisplayBuilder(),
+            thread_tasks={},
+            thread_event_buffers={},
+            subagent_buffers={},
+            queue_manager=MessageQueueManager(db_path=str(tmp_path / "queue.db")),
+            thread_last_active={},
+            typing_tracker=None,
+        )
+    )
+    thread_buf = ThreadEventBuffer()
+
+    await _run_agent_to_buffer(
+        agent,
+        "thread-terminal-followthrough-note",
+        "<system-reminder><CommandNotification><Status>completed</Status><Output>42</Output></CommandNotification></system-reminder>",
+        app,
+        False,
+        thread_buf,
+        "run-terminal-followthrough-note",
+        message_metadata={"source": "system", "notification_type": "command"},
+    )
+
+    entries = app.state.display_builder.get_entries("thread-terminal-followthrough-note")
+    assert entries is not None
+    assert entries[0]["segments"][0]["type"] == "notice"
+    assert entries[0]["segments"][1] == {"type": "text", "content": "FOLLOWTHROUGH_ACK"}
+
+
+@pytest.mark.asyncio
+async def test_run_agent_to_buffer_turns_silent_terminal_reentry_into_visible_followthrough(monkeypatch, tmp_path):
+    seq = 0
+
+    async def fake_append_event(thread_id, run_id, event, message_id=None, run_event_repo=None):
+        nonlocal seq
+        seq += 1
+        return seq
+
+    async def fake_cleanup_old_runs(thread_id, keep_latest=1, run_event_repo=None):
+        return 0
+
+    monkeypatch.setattr("backend.web.services.event_store.append_event", fake_append_event)
+    monkeypatch.setattr("backend.web.services.streaming_service.cleanup_old_runs", fake_cleanup_old_runs)
+    monkeypatch.setattr("backend.web.services.streaming_service._ensure_thread_handlers", lambda *args, **kwargs: None)
+
+    checkpointer = _MemoryCheckpointer()
+    loop = _make_loop(model=_TerminalFollowthroughSilentModel(), checkpointer=checkpointer)
+    agent = SimpleNamespace(
+        agent=loop,
+        runtime=_StreamingRuntime(),
+        storage_container=None,
+    )
+    app = SimpleNamespace(
+        state=SimpleNamespace(
+            display_builder=DisplayBuilder(),
+            thread_tasks={},
+            thread_event_buffers={},
+            subagent_buffers={},
+            queue_manager=MessageQueueManager(db_path=str(tmp_path / "queue.db")),
+            thread_last_active={},
+            typing_tracker=None,
+        )
+    )
+    thread_buf = ThreadEventBuffer()
+
+    await _run_agent_to_buffer(
+        agent,
+        "thread-terminal-followthrough-silent",
+        "<system-reminder><CommandNotification><Status>completed</Status><Output>42</Output></CommandNotification></system-reminder>",
+        app,
+        False,
+        thread_buf,
+        "run-terminal-followthrough-silent",
+        message_metadata={"source": "system", "notification_type": "command"},
+    )
+
+    entries = app.state.display_builder.get_entries("thread-terminal-followthrough-silent")
+    assert entries is not None
+    assert entries[0]["segments"][0]["type"] == "notice"
+    assert entries[0]["segments"][1] == {
+        "type": "text",
+        "content": "Background command completed, but the followthrough assistant reply was empty.",
+    }
 
 
 @pytest.mark.asyncio

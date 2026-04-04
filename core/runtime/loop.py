@@ -304,14 +304,19 @@ class QueryLoop:
 
                 self._sync_app_state(messages=messages, turn_count=turn)
 
-                # Yield agent update (stream_mode="updates" format)
-                yield {"agent": {"messages": [ai_msg]}}
-
                 if not tool_calls:
                     tool_calls = getattr(ai_msg, "tool_calls", None) or []
                 if not tool_calls:
                     # Also check additional_kwargs for older message formats
                     tool_calls = ai_msg.additional_kwargs.get("tool_calls", [])
+
+                if not tool_calls and not self._ai_message_has_visible_content(ai_msg):
+                    terminal_followthrough_notice = self._get_terminal_followthrough_notice(messages)
+                    if terminal_followthrough_notice is not None:
+                        ai_msg = self._build_terminal_followthrough_fallback(terminal_followthrough_notice)
+
+                # Yield agent update (stream_mode="updates" format)
+                yield {"agent": {"messages": [ai_msg]}}
 
                 if not tool_calls:
                     # No tool calls → agent is done
@@ -1813,6 +1818,46 @@ class QueryLoop:
                     return True
             return False
         return bool(content)
+
+    @staticmethod
+    def _get_terminal_followthrough_notice(messages: list[Any]) -> HumanMessage | None:
+        if not messages:
+            return None
+        last_message = messages[-1]
+        if last_message.__class__.__name__ != "HumanMessage":
+            return None
+        metadata = getattr(last_message, "metadata", None) or {}
+        if metadata.get("source") != "system":
+            return None
+        if metadata.get("notification_type") not in {"agent", "command"}:
+            return None
+        content = getattr(last_message, "content", "")
+        text = content if isinstance(content, str) else str(content)
+        if "CommandNotification" not in text and "task-notification" not in text:
+            return None
+        return last_message
+
+    @classmethod
+    def _build_terminal_followthrough_fallback(cls, notice: HumanMessage) -> AIMessage:
+        metadata = getattr(notice, "metadata", None) or {}
+        notification_type = str(metadata.get("notification_type") or "task")
+        content = getattr(notice, "content", "")
+        text = content if isinstance(content, str) else str(content)
+        status_match = re.search(r"<status>(.*?)</status>", text, flags=re.IGNORECASE | re.DOTALL)
+        status = (status_match.group(1).strip().lower() if status_match else "")
+        subject = "command" if notification_type == "command" else "agent"
+        # @@@terminal-followthrough-fallback - terminal background notifications
+        # must never collapse into notice-only durable history when the model
+        # reentry stays silent; surface the silence explicitly instead.
+        if status == "completed":
+            reply = f"Background {subject} completed, but the followthrough assistant reply was empty."
+        elif status == "cancelled":
+            reply = f"Background {subject} was cancelled, but the followthrough assistant reply was empty."
+        elif status == "error":
+            reply = f"Background {subject} failed, but the followthrough assistant reply was empty."
+        else:
+            reply = f"Background {subject} update arrived, but the followthrough assistant reply was empty."
+        return AIMessage(content=reply)
 
 
 class _StreamingToolExecutor:
