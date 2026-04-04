@@ -1,4 +1,5 @@
 import json
+from dataclasses import replace
 from types import SimpleNamespace
 
 from sandbox.providers.agentbay import AgentBayProvider
@@ -44,6 +45,31 @@ def test_get_session_refreshes_stale_cached_agentbay_session():
 
     assert session is hydrated_session
     assert provider._sessions["sess-123"] is hydrated_session
+
+
+def test_destroy_session_skips_sync_when_pause_capability_is_disabled():
+    calls: list[bool] = []
+
+    class _DeleteResult:
+        success = True
+
+    class _Session:
+        session_id = "sess-123"
+        token = "tok"
+        link_url = "https://link"
+        mcpTools = [object()]
+
+        def delete(self, *, sync_context: bool):
+            calls.append(sync_context)
+            return _DeleteResult()
+
+    provider = _provider_with_fake_client(SimpleNamespace())
+    provider._capability = replace(AgentBayProvider.CAPABILITY, can_pause=False, can_resume=False)
+    provider._sessions["sess-123"] = _Session()
+
+    assert provider.destroy_session("sess-123") is True
+    assert calls == [False]
+    assert "sess-123" not in provider._sessions
 
 
 def test_execute_prefers_link_url_shell_path_when_session_has_direct_call_metadata():

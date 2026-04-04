@@ -116,7 +116,10 @@ class AgentBayProvider(SandboxProvider):
 
     def destroy_session(self, session_id: str, sync: bool = True) -> bool:
         session = self._get_session(session_id)
-        result = session.delete(sync_context=sync)
+        # @@@agentbay-destroy-without-pause - some AgentBay account tiers wire delete(sync_context=True)
+        # through pause/sync first; when pause is unsupported, destroy must skip sync_context entirely.
+        effective_sync = sync and self.get_capability().can_pause
+        result = session.delete(sync_context=effective_sync)
         if result.success:
             self._sessions.pop(session_id, None)
         return result.success
