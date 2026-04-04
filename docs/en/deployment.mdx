@@ -160,6 +160,51 @@ Create `~/.leon/sandboxes/docker.json`:
 }
 ```
 
+### Daytona (self-hosted)
+
+```json
+{
+  "provider": "daytona",
+  "on_exit": "pause",
+  "daytona": {
+    "api_key": "${DAYTONA_API_KEY}",
+    "api_url": "http://localhost:3986/api",
+    "target": "us",
+    "cwd": "/workspace"
+  }
+}
+```
+
+Self-hosted requirements:
+1. Runner container image must have bash at `/usr/bin/bash`
+2. Workspace image must have bash at `/usr/bin/bash`
+3. Runner must be on both the compose network **and** the default Docker bridge network
+
+**Docker Compose network configuration:**
+
+```yaml
+services:
+  daytona-runner:
+    image: your-runner-image-with-bash
+    environment:
+      - RUNNER_DOMAIN=runner  # NOT localhost
+    networks:
+      - default
+      - bridge
+
+networks:
+  bridge:
+    external: true
+```
+
+Add to `/etc/hosts` on the runner:
+
+```
+127.0.0.1 proxy.localhost
+```
+
+Daytona Proxy (port 4000) must be accessible from the runner for file operations.
+
 ### AgentBay
 
 ```json
@@ -239,10 +284,16 @@ env -u ALL_PROXY -u all_proxy uv run python -m backend.web.main
   </Accordion>
 
   <Accordion title="Daytona PTY bootstrap fails">
-    Check:
-    1. Workspace image has bash at `/usr/bin/bash`
+    Check each of these in order:
+
+    1. Workspace image has bash at `/usr/bin/bash` — test with `docker run <image> /usr/bin/bash -c "echo ok"`
     2. Runner has bash at `/usr/bin/bash`
-    3. Runner is on the bridge network
-    4. Daytona Proxy (port 4000) is accessible from the runner
+    3. Runner is on the Docker bridge network (see Docker Compose config above)
+    4. Daytona Proxy (port 4000) is accessible from the runner — test with `curl http://proxy.localhost:4000`
+
+    Common error messages:
+    - `fork/exec /usr/bin/bash: no such file or directory` → workspace image missing bash
+    - `Failed to create sandbox within 60s` → network isolation, check runner networks
+    - File operations fail silently → Daytona Proxy unreachable
   </Accordion>
 </AccordionGroup>
