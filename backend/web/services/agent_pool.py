@@ -99,7 +99,9 @@ async def get_or_create_agent(app_obj: FastAPI, sandbox_type: str, thread_id: st
         if hasattr(app_obj.state, "entity_repo") and thread_data:
             entity_repo = app_obj.state.entity_repo
             member_repo = getattr(app_obj.state, "member_repo", None)
-            agent_entity = entity_repo.get_by_thread_id(thread_id)
+            # Entity id = member_id in the new model; look up by member_id, not thread_id
+            agent_member_id = thread_data.get("member_id")
+            agent_entity = entity_repo.get_by_id(agent_member_id) if agent_member_id else None
             if agent_entity:
                 # agent social identity = member_id
                 agent_member = member_repo.get_by_id(agent_entity.member_id) if member_repo else None

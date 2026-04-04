@@ -415,24 +415,38 @@ class ChatToolService:
         eid = self._user_id
 
         def handle(search: str | None = None, type: str | None = None) -> str:
-            all_entities = self._entities.list_all()
-            entities = [e for e in all_entities if e.id != eid]
-            if type:
-                entities = [e for e in entities if e.type == type]
-            if search:
-                q = search.lower()
-                entities = [e for e in entities if q in e.name.lower()]
-            if not entities:
-                return "No entities found."
             lines = []
-            for e in entities:
-                member = self._members.get_by_id(e.member_id)
-                owner_info = ""
-                if e.type == "agent" and member and member.owner_user_id:
-                    owner_member = self._members.get_by_id(member.owner_user_id)
-                    if owner_member:
-                        owner_info = f" (owner: {owner_member.name})"
-                lines.append(f"- {e.name} [{e.type}] user_id={e.id}{owner_info}")
+
+            # Humans — from member_repo (no entity rows for humans)
+            if type is None or type == "human":
+                all_members = self._members.list_all() if self._members else []
+                for m in all_members:
+                    if m.id == eid or (hasattr(m, "type") and str(m.type) not in ("human", "MemberType.HUMAN")):
+                        continue
+                    if hasattr(m.type, "value") and m.type.value != "human":
+                        continue
+                    if search and search.lower() not in m.name.lower():
+                        continue
+                    lines.append(f"- {m.name} [human] user_id={m.id}")
+
+            # Agents — from entity_repo
+            if type is None or type == "agent":
+                all_entities = self._entities.list_all()
+                for e in all_entities:
+                    if e.id == eid or e.type != "agent":
+                        continue
+                    if search and search.lower() not in e.name.lower():
+                        continue
+                    member = self._members.get_by_id(e.member_id) if self._members else None
+                    owner_info = ""
+                    if member and member.owner_user_id:
+                        owner_member = self._members.get_by_id(member.owner_user_id)
+                        if owner_member:
+                            owner_info = f" (owner: {owner_member.name})"
+                    lines.append(f"- {e.name} [{e.type}] user_id={e.id}{owner_info}")
+
+            if not lines:
+                return "No users found."
             return "\n".join(lines)
 
         registry.register(
