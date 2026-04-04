@@ -8,22 +8,24 @@
     "dark": "#0284C7"
   },
   "navigation": {
-    "anchors": [
-      {
-        "anchor": "GitHub",
-        "icon": "github",
-        "href": "https://github.com/OpenDCAI/Mycel"
-      },
-      {
-        "anchor": "Community",
-        "icon": "wechat",
-        "href": "https://github.com/OpenDCAI/Mycel/issues/165"
-      }
-    ],
+    "global": {
+      "anchors": [
+        {
+          "anchor": "GitHub",
+          "icon": "github",
+          "href": "https://github.com/OpenDCAI/Mycel"
+        },
+        {
+          "anchor": "Community",
+          "icon": "wechat",
+          "href": "https://github.com/OpenDCAI/Mycel/issues/165"
+        }
+      ]
+    },
     "tabs": [
       {
         "tab": "English",
-        "icon": "earth",
+        "icon": "globe",
         "groups": [
           {
             "group": "Get started",
@@ -35,7 +37,7 @@
           },
           {
             "group": "Core concepts",
-            "icon": "layers",
+            "icon": "book-open",
             "pages": [
               "en/concepts",
               "en/multi-agent-chat",
@@ -45,7 +47,7 @@
           },
           {
             "group": "Configuration",
-            "icon": "sliders",
+            "icon": "gear",
             "pages": [
               "en/configuration"
             ]
@@ -61,7 +63,7 @@
       },
       {
         "tab": "中文",
-        "icon": "languages",
+        "icon": "globe",
         "groups": [
           {
             "group": "快速开始",
@@ -73,7 +75,7 @@
           },
           {
             "group": "核心概念",
-            "icon": "layers",
+            "icon": "book-open",
             "pages": [
               "zh/concepts",
               "zh/multi-agent-chat",
@@ -83,7 +85,7 @@
           },
           {
             "group": "配置参考",
-            "icon": "sliders",
+            "icon": "gear",
             "pages": [
               "zh/configuration"
             ]
