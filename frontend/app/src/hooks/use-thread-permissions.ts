@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   addThreadPermissionRule,
   getThreadPermissions,
@@ -46,6 +46,7 @@ export function useThreadPermissions(threadId: string | undefined): ThreadPermis
   const [managedOnly, setManagedOnly] = useState(false);
   const [loading, setLoading] = useState(false);
   const [resolvingId, setResolvingId] = useState<string | null>(null);
+  const refreshGenerationRef = useRef(0);
 
   const refreshPermissions = useCallback(async () => {
     if (!threadId) {
@@ -54,15 +55,22 @@ export function useThreadPermissions(threadId: string | undefined): ThreadPermis
       setManagedOnly(false);
       return;
     }
+    // @@@permission-refresh-generation - route switches can leave an old
+    // permissions fetch resolving after the chat page has already unmounted.
+    // Only the latest in-scope refresh is allowed to touch state or logs.
+    const generation = ++refreshGenerationRef.current;
     setLoading(true);
     try {
       const payload = await loadThreadPermissions(threadId);
+      if (refreshGenerationRef.current !== generation) return;
       setRequests(payload.requests ?? []);
       setSessionRules(payload.session_rules ?? { allow: [], deny: [], ask: [] });
       setManagedOnly(payload.managed_only ?? false);
     } catch (err) {
+      if (refreshGenerationRef.current !== generation) return;
       console.error("[useThreadPermissions] Failed to load permissions:", err);
     } finally {
+      if (refreshGenerationRef.current !== generation) return;
       setLoading(false);
     }
   }, [threadId]);
@@ -101,6 +109,7 @@ export function useThreadPermissions(threadId: string | undefined): ThreadPermis
 
   useEffect(() => {
     if (!threadId) {
+      refreshGenerationRef.current += 1;
       setRequests([]);
       setSessionRules({ allow: [], deny: [], ask: [] });
       setManagedOnly(false);
@@ -116,7 +125,10 @@ export function useThreadPermissions(threadId: string | undefined): ThreadPermis
     const timer = window.setInterval(() => {
       void refreshPermissions();
     }, 2000);
-    return () => window.clearInterval(timer);
+    return () => {
+      refreshGenerationRef.current += 1;
+      window.clearInterval(timer);
+    };
   }, [threadId, refreshPermissions]);
 
   return {
