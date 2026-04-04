@@ -242,6 +242,7 @@ export interface StreamStatus {
   state: { state: string; flags: Record<string, boolean> };
   tokens: { total_tokens: number; input_tokens: number; output_tokens: number; cost: number };
   context: { message_count: number; estimated_tokens: number; usage_percent: number; near_limit: boolean };
+  model?: string;
   current_tool?: string;
   last_seq?: number;
   run_start_seq?: number;

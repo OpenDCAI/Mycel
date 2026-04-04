@@ -16,7 +16,7 @@ import {
   type ChatEntry,
   type StreamStatus,
 } from "../api";
-import { useThreadStream } from "./use-thread-stream";
+import type { UseThreadStreamResult } from "./use-thread-stream";
 import { makeId } from "./utils";
 
 // --- Delta types from backend ---
@@ -153,12 +153,10 @@ function applyDelta(entries: ChatEntry[], delta: DisplayDelta): ChatEntry[] {
 
 interface DisplayDeltaDeps {
   threadId: string;
-  refreshThreads: () => Promise<void>;
   onUpdate: (updater: (prev: ChatEntry[]) => ChatEntry[]) => void;
-  loading: boolean;
-  runStarted?: boolean;
   /** display_seq from GET response — skip deltas with _display_seq <= this */
   displaySeq: number;
+  stream: Pick<UseThreadStreamResult, "runtimeStatus" | "isRunning" | "subscribe">;
 }
 
 export interface DisplayDeltaState {
@@ -174,12 +172,10 @@ export interface DisplayDeltaActions {
 export function useDisplayDeltas(
   deps: DisplayDeltaDeps,
 ): DisplayDeltaState & DisplayDeltaActions {
-  const { threadId, refreshThreads, onUpdate, loading, runStarted, displaySeq } = deps;
+  const { threadId, onUpdate, displaySeq, stream } = deps;
 
   const [sendPending, setSendPending] = useState(false);
-
-  const { isRunning: streamIsRunning, runtimeStatus, subscribe } =
-    useThreadStream(threadId, { loading, refreshThreads, runStarted });
+  const { isRunning: streamIsRunning, runtimeStatus, subscribe } = stream;
 
   const isRunning = streamIsRunning || sendPending;
 

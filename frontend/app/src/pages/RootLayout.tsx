@@ -192,7 +192,10 @@ function AuthenticatedLayout() {
       <div className="flex flex-col h-full overflow-hidden bg-background">
         {/* Main content - no top bar, pages have their own headers */}
         <main className="flex-1 overflow-hidden">
-          <div key={location.pathname} className="h-full animate-page-in"><Outlet /></div>
+          {/* @@@outlet-no-route-key - thread switches should not remount the entire
+              outlet tree; RootLayout route keys were re-triggering AppLayout
+              bootstrap fetches on every /threads/:memberId/:threadId hop. */}
+          <div className="h-full animate-page-in"><Outlet /></div>
         </main>
 
         {/* Bottom tab bar */}
@@ -316,7 +319,7 @@ function AuthenticatedLayout() {
       </div>
 
       <main className="flex-1 overflow-hidden">
-        <div key={location.pathname} className="h-full animate-page-in"><Outlet /></div>
+        <div className="h-full animate-page-in"><Outlet /></div>
       </main>
       <CreateMemberDialog open={createMemberOpen} onOpenChange={setCreateMemberOpen} />
       <NewChatDialog open={newChatOpen} onOpenChange={setNewChatOpen} />

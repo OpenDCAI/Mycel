@@ -32,6 +32,7 @@ import { useSandboxManager } from "../hooks/use-sandbox-manager";
 import { useDisplayDeltas } from "../hooks/use-display-deltas";
 import { useThreadData } from "../hooks/use-thread-data";
 import { useThreadPermissions } from "../hooks/use-thread-permissions";
+import { useThreadStream } from "../hooks/use-thread-stream";
 import type { PermissionRuleBehavior } from "../api";
 import type { ThreadManagerState, ThreadManagerActions } from "../hooks/use-thread-manager";
 
@@ -77,23 +78,12 @@ function ChatPageInner({ threadId }: { threadId: string }) {
   // Backend sends user_message + run_start via display_delta.
   const initialEntries = undefined;
 
-  useEffect(() => {
-    if (state?.selectedModel) return;
-    authFetch(`/api/threads/${threadId}/runtime`)
-      .then((r) => r.json())
-      .then((d) => {
-        if (d.model) {
-          setCurrentModel(d.model);
-          return;
-        }
-        return fetch("/api/settings")
-          .then((r) => r.json())
-          .then((settings) => setCurrentModel(settings.default_model || "leon:large"));
-      })
-      .catch(() => setCurrentModel("leon:large"));
-  }, [state?.selectedModel, threadId]);
-
   const { entries, activeSandbox, loading, displaySeq, setEntries, setActiveSandbox, refreshThread } = useThreadData(threadId, runStarted, initialEntries);
+  const threadStream = useThreadStream(threadId, {
+    loading,
+    refreshThreads: tm.refreshThreads,
+    runStarted,
+  });
   const {
     requests: pendingPermissionRequests,
     sessionRules,
@@ -107,12 +97,23 @@ function ChatPageInner({ threadId }: { threadId: string }) {
   const { runtimeStatus, isRunning, handleSendMessage, handleStopStreaming } =
     useDisplayDeltas({
       threadId,
-      refreshThreads: tm.refreshThreads,
       onUpdate: (updater) => setEntries(updater),
-      loading,
-      runStarted,
       displaySeq,
+      stream: threadStream,
     });
+
+  useEffect(() => {
+    if (state?.selectedModel) return;
+    if (runtimeStatus?.model) {
+      setCurrentModel(runtimeStatus.model);
+      return;
+    }
+    if (currentModel || threadStream.phase === "connecting" || threadStream.phase === "idle") return;
+    fetch("/api/settings")
+      .then((r) => r.json())
+      .then((settings) => setCurrentModel(settings.default_model || "leon:large"))
+      .catch(() => setCurrentModel("leon:large"));
+  }, [currentModel, runtimeStatus?.model, state?.selectedModel, threadStream.phase]);
 
   // @@@debug-entries — expose current entries for backend comparison
   useEffect(() => {
@@ -120,7 +121,7 @@ function ChatPageInner({ threadId }: { threadId: string }) {
       () => JSON.parse(JSON.stringify(entries)) as unknown[];
   }, [entries]);
 
-  const { tasks, refresh: refreshTasks } = useBackgroundTasks({ threadId, loading, refreshThreads: tm.refreshThreads });
+  const { tasks, refresh: refreshTasks } = useBackgroundTasks({ threadId, subscribe: threadStream.subscribe });
 
   const isStreaming = isRunning;
 

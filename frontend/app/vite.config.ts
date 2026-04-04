@@ -17,7 +17,7 @@ const frontendPort = parseInt(process.env.LEON_FRONTEND_PORT || getWorktreePort(
 
 // https://vite.dev/config/
 export default defineConfig({
-  base: './',
+  base: '/',
   plugins: [inspectAttr(), react()],
   server: {
     host: "0.0.0.0",

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useThreadStream } from './use-thread-stream';
+import type { UseThreadStreamResult } from './use-thread-stream';
 import type { StreamEvent } from '../api/types';
 
 export interface BackgroundTask {
@@ -14,13 +14,11 @@ export interface BackgroundTask {
 
 interface UseBackgroundTasksProps {
   threadId: string;
-  loading: boolean;
-  refreshThreads: () => Promise<void>;
+  subscribe: UseThreadStreamResult["subscribe"];
 }
 
-export function useBackgroundTasks({ threadId, loading, refreshThreads }: UseBackgroundTasksProps) {
+export function useBackgroundTasks({ threadId, subscribe }: UseBackgroundTasksProps) {
   const [tasks, setTasks] = useState<BackgroundTask[]>([]);
-  const { subscribe } = useThreadStream(threadId, { loading, refreshThreads });
 
   // 从 API 获取任务列表
   const fetchTasks = useCallback(async () => {
