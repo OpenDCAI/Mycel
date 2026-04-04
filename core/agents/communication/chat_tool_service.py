@@ -296,8 +296,8 @@ class ChatToolService:
         for e in entities:
             member = self._members.get_by_id(e.member_id)
             owner_info = ""
-            if e.type == "agent" and member and member.owner_id:
-                owner_member = self._members.get_by_id(member.owner_id)
+            if e.type == "agent" and member and member.owner_user_id:
+                owner_member = self._members.get_by_id(member.owner_user_id)
                 if owner_member:
                     owner_info = f" (owner: {owner_member.name})"
             lines.append(f"- {e.name} [{e.type}] entity_id={e.id}{owner_info}")
