@@ -38,7 +38,7 @@ flowchart TD
     Thread 也是沙箱分配的单位。用 Docker 启动一个 Thread 后，该 Thread 生命周期内所有命令都在同一个容器中执行 — 即使跨重启也是如此。
   </Accordion>
   <Accordion title="回退 Thread" icon="rotate-left">
-    使用 `leonai thread rewind <thread-id> <checkpoint-id>` 回退到更早的状态。历史不会被删除，只是移动活跃的 checkpoint 指针。
+    Thread 支持通过 API 基于 checkpoint 回退。回退会移动活跃 checkpoint 指针，不会删除中间历史。
   </Accordion>
 </AccordionGroup>
 

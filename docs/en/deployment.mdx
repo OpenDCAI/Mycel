@@ -77,12 +77,7 @@ Mycel stores configuration in `~/.leon/`:
 
 ### Quick setup
 
-```bash
-# Creates ~/.leon/config.env
-leonai config
-```
-
-Or create `~/.leon/config.env` manually:
+Create `~/.leon/config.env` manually:
 
 ```env
 ANTHROPIC_API_KEY=sk-ant-xxx
@@ -220,17 +215,6 @@ Daytona Proxy (port 4000) must be accessible from the runner for file operations
 ```
 
 ## Verification
-
-```bash
-# Check installation
-leonai --version
-
-# List sandbox sessions
-leonai sandbox ls
-
-# Test a sandbox provider
-leonai --sandbox docker "echo hello from sandbox"
-```
 
 Open the Web UI at `http://localhost:5173`, register an account, and confirm the agent responds.
 

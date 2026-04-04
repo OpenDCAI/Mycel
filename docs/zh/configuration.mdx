@@ -36,14 +36,7 @@ Mycel 使用分层配置系统，三级合并：系统默认值 → 用户配置
 
 ## 首次运行
 
-首次启动时若未检测到 API Key，Mycel 会自动打开配置向导：
-
-```bash
-leonai config        # 交互式向导
-leonai config show   # 查看当前 config.env
-```
-
-向导会写入 `~/.leon/config.env`：
+创建 `~/.leon/config.env`：
 
 ```env
 OPENAI_API_KEY=sk-xxx
@@ -181,8 +174,10 @@ Mycel 提供四个 `leon:*` 别名：
 | `leon:large` | claude-opus-4-6 | 复杂推理 |
 | `leon:max` | claude-opus-4-6 + temp=0 | 最高精度 |
 
-```bash
-leonai --model leon:large
+通过 **Settings → Models** 在 Web UI 中设置，或在 `~/.leon/models.json` 中：
+
+```json
+{ "active": { "model": "leon:large" } }
 ```
 
 可在 `models.json` 中重新映射这些别名：

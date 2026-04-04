@@ -107,7 +107,7 @@ Mycel 的记忆分为两层：
 | 聊天消息 | `~/.leon/chat.db` | Entity-Chat 社交层消息 |
 
 <Note>
-  Thread 历史是追加式的。通过 `leonai thread rewind` 回退 Thread 时，不会删除中间历史，只是移动活跃的 checkpoint 指针。
+  Thread 历史是追加式的。回退 Thread 时移动的是活跃 checkpoint 指针，不会删除中间历史。
 </Note>
 
 ## 禁用压缩

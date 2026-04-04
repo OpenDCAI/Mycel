@@ -120,7 +120,7 @@ For tools that produce very large outputs (e.g., `Grep` on a large codebase), th
 | Chat messages | `~/.leon/chat.db` | Entity-Chat social layer messages |
 
 <Note>
-  Thread history is append-only. `leonai thread rewind` rolls back to an earlier checkpoint by moving the active pointer — it doesn't delete intermediate history.
+  Thread history is append-only. Rolling back a Thread moves the active checkpoint pointer — it doesn't delete intermediate history.
 </Note>
 
 ## Disable compaction or pruning

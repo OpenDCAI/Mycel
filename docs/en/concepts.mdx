@@ -38,7 +38,7 @@ A **Thread** is an agent's running brain — its conversation history, memory, a
     Threads are also the unit of sandbox assignment. When you start a Thread with Docker, every command the agent runs for the lifetime of that Thread executes in the same container — even across restarts.
   </Accordion>
   <Accordion title="Rewinding a thread" icon="rotate-left">
-    Use `leonai thread rewind <thread-id> <checkpoint-id>` to roll back to an earlier state. The history isn't deleted — only the active checkpoint pointer moves.
+    Threads support checkpoint-based rollback via the API. Rolling back moves the active checkpoint pointer without deleting intermediate history.
   </Accordion>
 </AccordionGroup>
 
