@@ -1,5 +1,5 @@
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
-import { MessageSquare, MessagesSquare, Users, ListTodo, Store, Layers, Plug, Settings, Plus, ChevronLeft, ChevronRight, LogOut, Camera } from "lucide-react";
+import { MessageSquare, MessagesSquare, Users, ListTodo, Store, Layers, Plug, Settings, Plus, ChevronLeft, ChevronRight, LogOut, Camera, Eye, EyeOff } from "lucide-react";
 import { useState, useEffect, useCallback, useRef } from "react";
 import { uploadMemberAvatar } from "@/api/client";
 import MemberAvatar from "@/components/MemberAvatar";
@@ -29,7 +29,9 @@ const mobileNavItems = [
 // @@@auth-guard — wrapper that shows LoginForm when not authenticated
 export default function RootLayout() {
   const token = useAuthStore(s => s.token);
+  const setupInfo = useAuthStore(s => s.setupInfo);
   if (!token) return <LoginForm />;
+  if (setupInfo) return <SetupNameStep userId={setupInfo.userId} defaultName={setupInfo.defaultName} />;
   return <AuthenticatedLayout />;
 }
 
@@ -77,18 +79,11 @@ function AuthenticatedLayout() {
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape" && showCreate) setShowCreate(false);
-    };
-    document.addEventListener("keydown", handleKeyDown);
-    return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [showCreate]);
-
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === "b") { e.preventDefault(); setExpanded((prev) => !prev); }
     };
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
-  }, []);
+  }, [showCreate]);
 
   const handleCreateAction = useCallback(async (action: string) => {
     setShowCreate(false);
@@ -372,73 +367,291 @@ function CreateDropdown({
   );
 }
 
+// ── Auth form states ──────────────────────────────────────────────────────
+type AuthStep =
+  | { type: "login" }
+  | { type: "reg_email" }
+  | { type: "reg_otp"; email: string; password: string; inviteCode: string };
+
+function AuthCard({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="h-screen flex items-center justify-center bg-background">
+      <div className="w-full max-w-sm px-6">{children}</div>
+    </div>
+  );
+}
+
+function AuthHeader({ title, subtitle }: { title: string; subtitle?: string }) {
+  return (
+    <div className="text-center mb-8">
+      <img src="/logo.png" alt="Mycel" className="w-16 mx-auto mb-4" />
+      <h1 className="text-xl font-semibold text-foreground">{title}</h1>
+      {subtitle && <p className="text-sm text-muted-foreground mt-1">{subtitle}</p>}
+    </div>
+  );
+}
+
 function LoginForm() {
-  const [mode, setMode] = useState<"login" | "register">("login");
-  const [username, setUsername] = useState("");
-  const [password, setPassword] = useState("");
+  const [step, setStep] = useState<AuthStep>({ type: "login" });
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+
   const login = useAuthStore(s => s.login);
-  const register = useAuthStore(s => s.register);
+  const sendOtp = useAuthStore(s => s.sendOtp);
+  const verifyOtp = useAuthStore(s => s.verifyOtp);
+  const completeRegister = useAuthStore(s => s.completeRegister);
+
+  function reset(t: AuthStep) { setStep(t); setError(null); }
+
+  // ── Step: Login ──
+  if (step.type === "login") {
+    return <LoginStep
+      onSubmit={async (identifier, password) => {
+        await login(identifier, password);
+      }}
+      onSwitch={() => reset({ type: "reg_email" })}
+      error={error} setError={setError}
+      loading={loading} setLoading={setLoading}
+    />;
+  }
+
+  // ── Step: Enter email + password + invite code ──
+  if (step.type === "reg_email") {
+    return <RegEmailStep
+      onSubmit={async (email, password, inviteCode) => {
+        await sendOtp(email, password, inviteCode);
+        setStep({ type: "reg_otp", email, password, inviteCode });
+      }}
+      onBack={() => reset({ type: "login" })}
+      error={error} setError={setError}
+      loading={loading} setLoading={setLoading}
+    />;
+  }
+
+  // ── Step: Enter OTP ──
+  const { email, password, inviteCode } = step;
+  return <RegOtpStep
+    email={email}
+    onSubmit={async (token) => {
+      const { tempToken } = await verifyOtp(email, token);
+      await completeRegister(tempToken, inviteCode);
+      // RootLayout will detect setupInfo and render SetupNameStep automatically
+    }}
+    onResend={async () => {
+      await sendOtp(email, password, inviteCode);
+    }}
+    onBack={() => reset({ type: "reg_email" })}
+    error={error} setError={setError}
+    loading={loading} setLoading={setLoading}
+  />;
+}
+
+// ── Sub-steps ────────────────────────────────────────────────────────────
+
+const inputCls = "w-full px-4 py-2.5 rounded-lg border border-border bg-card text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50";
+const btnCls = "w-full py-2.5 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 disabled:opacity-50";
+
+function LoginStep({ onSubmit, onSwitch, error, setError, loading, setLoading }: {
+  onSubmit: (id: string, pw: string) => Promise<void>;
+  onSwitch: () => void;
+  error: string | null; setError: (e: string | null) => void;
+  loading: boolean; setLoading: (v: boolean) => void;
+}) {
+  const [identifier, setIdentifier] = useState("");
+  const [password, setPassword] = useState("");
+  async function handle(e: React.FormEvent) {
+    e.preventDefault(); setError(null); setLoading(true);
+    try { await onSubmit(identifier, password); }
+    catch (err) { setError(err instanceof Error ? err.message : "登录失败"); }
+    finally { setLoading(false); }
+  }
+  return (
+    <AuthCard>
+      <AuthHeader title="Mycel" subtitle="登录你的账号" />
+      <form onSubmit={handle} className="space-y-4">
+        <input type="text" placeholder="邮箱或 Mycel ID" value={identifier} onChange={e => setIdentifier(e.target.value)} className={inputCls} required autoComplete="username" />
+        <input type="password" placeholder="密码" value={password} onChange={e => setPassword(e.target.value)} className={inputCls} required autoComplete="current-password" />
+        {error && <p className="text-xs text-destructive">{error}</p>}
+        <button type="submit" disabled={loading} className={btnCls}>{loading ? "请稍候..." : "登录"}</button>
+      </form>
+      <p className="text-center text-xs text-muted-foreground mt-4">
+        没有账号？<button onClick={onSwitch} className="text-primary hover:underline">注册</button>
+      </p>
+    </AuthCard>
+  );
+}
+
+function RegEmailStep({ onSubmit, onBack, error, setError, loading, setLoading }: {
+  onSubmit: (email: string, password: string, inviteCode: string) => Promise<void>;
+  onBack: () => void;
+  error: string | null; setError: (e: string | null) => void;
+  loading: boolean; setLoading: (v: boolean) => void;
+}) {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirm, setConfirm] = useState("");
+  const [inviteCode, setInviteCode] = useState("");
+  async function handle(e: React.FormEvent) {
+    e.preventDefault();
+    if (password !== confirm) { setError("两次输入的密码不一致"); return; }
+    setError(null); setLoading(true);
+    try { await onSubmit(email, password, inviteCode); }
+    catch (err) { setError(err instanceof Error ? err.message : "发送失败"); }
+    finally { setLoading(false); }
+  }
+  return (
+    <AuthCard>
+      <AuthHeader title="注册账号" subtitle="填写信息，发送验证码" />
+      <form onSubmit={handle} className="space-y-4">
+        <input type="email" placeholder="邮箱" value={email} onChange={e => setEmail(e.target.value)} className={inputCls} required autoComplete="email" autoFocus />
+        <PasswordInput value={password} onChange={setPassword} placeholder="设置密码" autoComplete="new-password" />
+        <PasswordInput value={confirm} onChange={setConfirm} placeholder="确认密码" autoComplete="new-password" />
+        <input type="text" placeholder="邀请码" value={inviteCode} onChange={e => setInviteCode(e.target.value)} className={inputCls} autoComplete="off" required />
+        {error && <p className="text-xs text-destructive">{error}</p>}
+        <button type="submit" disabled={loading} className={btnCls}>{loading ? "发送中..." : "发送验证码"}</button>
+      </form>
+      <p className="text-center text-xs text-muted-foreground mt-4">
+        已有账号？<button onClick={onBack} className="text-primary hover:underline">去登录</button>
+      </p>
+    </AuthCard>
+  );
+}
+
+function RegOtpStep({ email, onSubmit, onResend, onBack, error, setError, loading, setLoading }: {
+  email: string;
+  onSubmit: (token: string) => Promise<void>;
+  onResend: () => Promise<void>;
+  onBack: () => void;
+  error: string | null; setError: (e: string | null) => void;
+  loading: boolean; setLoading: (v: boolean) => void;
+}) {
+  const [otp, setOtp] = useState("");
+  const [resending, setResending] = useState(false);
+  const [resendDone, setResendDone] = useState(false);
+  async function handle(e: React.FormEvent) {
+    e.preventDefault(); setError(null); setLoading(true);
+    try { await onSubmit(otp.trim()); }
+    catch (err) { setError(err instanceof Error ? err.message : "验证失败"); }
+    finally { setLoading(false); }
+  }
+  async function handleResend() {
+    setError(null); setResending(true); setResendDone(false);
+    try { await onResend(); setResendDone(true); }
+    catch (err) { setError(err instanceof Error ? err.message : "发送失败"); }
+    finally { setResending(false); }
+  }
+  return (
+    <AuthCard>
+      <AuthHeader title="验证邮箱" subtitle={`验证码已发送至 ${email}`} />
+      <form onSubmit={handle} className="space-y-4">
+        <input
+          type="text" inputMode="numeric" placeholder="6 位验证码"
+          value={otp} onChange={e => setOtp(e.target.value.replace(/\D/g, ""))}
+          maxLength={6} autoComplete="one-time-code" autoFocus
+          className={`${inputCls} text-center tracking-widest text-lg font-mono`}
+          required
+        />
+        {error && <p className="text-xs text-destructive">{error}</p>}
+        {resendDone && !error && <p className="text-xs text-success">验证码已重新发送</p>}
+        <button type="submit" disabled={loading || otp.length < 6} className={btnCls}>
+          {loading ? "验证中..." : "确认"}
+        </button>
+      </form>
+      <p className="text-center text-xs text-muted-foreground mt-4">
+        没收到？<button onClick={handleResend} disabled={resending || loading} className="text-primary hover:underline">{resending ? "发送中..." : "重新发送"}</button>
+        <span className="mx-2 text-border">·</span>
+        <button onClick={onBack} className="text-primary hover:underline">修改信息</button>
+      </p>
+    </AuthCard>
+  );
+}
+
+function PasswordInput({ value, onChange, placeholder, autoFocus, autoComplete }: {
+  value: string;
+  onChange: (v: string) => void;
+  placeholder: string;
+  autoFocus?: boolean;
+  autoComplete?: string;
+}) {
+  const [visible, setVisible] = useState(false);
+  return (
+    <div className="relative">
+      <input
+        type={visible ? "text" : "password"}
+        placeholder={placeholder}
+        value={value}
+        onChange={e => onChange(e.target.value)}
+        className={`${inputCls} pr-10`}
+        required
+        autoComplete={autoComplete}
+        autoFocus={autoFocus}
+        minLength={6}
+      />
+      <button
+        type="button"
+        onClick={() => setVisible(v => !v)}
+        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors duration-fast"
+        tabIndex={-1}
+      >
+        {visible ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+      </button>
+    </div>
+  );
+}
+
+
+function SetupNameStep({ userId, defaultName }: { userId: string; defaultName: string }) {
+  const [name, setName] = useState(defaultName);
+  const [loading, setLoading] = useState(false);
+  const token = useAuthStore(s => s.token);
+  const clearSetupInfo = useAuthStore(s => s.clearSetupInfo);
+
+  function done() {
+    clearSetupInfo();
+    window.location.href = "/threads";
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    setError(null);
     setLoading(true);
     try {
-      if (mode === "login") await login(username, password);
-      else await register(username, password);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Authentication failed");
+      if (name.trim() && name.trim() !== defaultName) {
+        await fetch(`/api/panel/members/${userId}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+          body: JSON.stringify({ name: name.trim() }),
+        });
+        useAuthStore.setState(s => ({ user: s.user ? { ...s.user, name: name.trim() } : s.user }));
+      }
     } finally {
-      setLoading(false);
+      done();
     }
   }
 
   return (
-    <div className="h-screen flex items-center justify-center bg-background">
-      <div className="w-full max-w-sm px-6">
-        <div className="text-center mb-8">
-          <img src="/logo.png" alt="Mycel" className="w-24 mx-auto mb-4" />
-          <h1 className="text-xl font-semibold text-foreground">Mycel</h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            {mode === "login" ? "登录你的账号" : "创建新账号"}
-          </p>
-        </div>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <input
-            type="text"
-            placeholder="用户名"
-            value={username}
-            onChange={e => setUsername(e.target.value)}
-            className="w-full px-4 py-2.5 rounded-lg border border-border bg-card text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
-            required
-          />
-          <input
-            type="password"
-            placeholder="密码"
-            value={password}
-            onChange={e => setPassword(e.target.value)}
-            className="w-full px-4 py-2.5 rounded-lg border border-border bg-card text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
-            required
-          />
-          {error && <p className="text-xs text-destructive">{error}</p>}
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full py-2.5 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 disabled:opacity-50"
-          >
-            {loading ? "..." : mode === "login" ? "登录" : "注册"}
-          </button>
-        </form>
-        <p className="text-center text-xs text-muted-foreground mt-4">
-          {mode === "login" ? (
-            <>没有账号？<button onClick={() => { setMode("register"); setError(null); }} className="text-primary hover:underline">注册</button></>
-          ) : (
-            <>已有账号？<button onClick={() => { setMode("login"); setError(null); }} className="text-primary hover:underline">登录</button></>
-          )}
-        </p>
-      </div>
-    </div>
+    <AuthCard>
+      <AuthHeader title="你好！" subtitle="你希望大家怎么称呼你？" />
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <input
+          type="text"
+          value={name}
+          onChange={e => setName(e.target.value)}
+          className={inputCls}
+          autoFocus
+          maxLength={32}
+        />
+        <button type="submit" disabled={loading} className={btnCls}>
+          {loading ? "请稍候..." : "开始使用"}
+        </button>
+      </form>
+      <p className="text-center text-xs text-muted-foreground mt-4">
+        <button
+          onClick={done}
+          className="text-muted-foreground hover:text-foreground hover:underline"
+        >
+          跳过
+        </button>
+      </p>
+    </AuthCard>
   );
 }

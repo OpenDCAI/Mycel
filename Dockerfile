@@ -15,6 +15,6 @@ RUN uv sync --frozen --no-dev
 
 ENV PATH="/app/.venv/bin:$PATH"
 
-EXPOSE 8001
+EXPOSE 8900
 
-CMD ["uvicorn", "backend.web.main:app", "--host", "0.0.0.0", "--port", "8001"]
+CMD ["uvicorn", "backend.web.main:app", "--host", "0.0.0.0", "--port", "8900"]

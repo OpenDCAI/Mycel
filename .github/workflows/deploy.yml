@@ -1,0 +1,24 @@
+name: Deploy
+
+# Production: push a vX.Y.Z tag (no pre-release suffix)
+# Staging:    handled by deploy-staging.yml (PR label / workflow_dispatch)
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  deploy-production:
+    # Only run for non-pre-release tags (v1.2.3, not v1.2.3-beta.1)
+    if: ${{ !contains(github.ref_name, '-') }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy backend to production
+        run: |
+          curl -sX GET "${{ secrets.COOLIFY_URL }}/api/v1/deploy?uuid=${{ secrets.COOLIFY_BACKEND_PROD_UUID }}&force=false" \
+            -H "Authorization: Bearer ${{ secrets.COOLIFY_TOKEN }}"
+
+      - name: Deploy frontend to production
+        run: |
+          curl -sX GET "${{ secrets.COOLIFY_URL }}/api/v1/deploy?uuid=${{ secrets.COOLIFY_FRONTEND_PROD_UUID }}&force=false" \
+            -H "Authorization: Bearer ${{ secrets.COOLIFY_TOKEN }}"

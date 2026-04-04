@@ -13,8 +13,10 @@ import AgentDetailPage from './pages/AgentDetailPage';
 import TasksPage from './pages/TasksPage';
 import MarketplacePage from './pages/MarketplacePage';
 import MarketplaceDetailPage from './pages/MarketplaceDetailPage';
+import LibraryItemDetailPage from './pages/LibraryItemDetailPage';
 import ResourcesPage from './pages/ResourcesPage';
 import ConnectionsPage from './pages/ConnectionsPage';
+import InviteCodesPage from './pages/InviteCodesPage';
 
 export const router = createBrowserRouter([
   // Old /chat/* URLs → redirect to /threads
@@ -91,12 +93,20 @@ export const router = createBrowserRouter([
         element: <MarketplaceDetailPage />,
       },
       {
+        path: 'library/:type/:id',
+        element: <LibraryItemDetailPage />,
+      },
+      {
         path: 'library',
         element: <Navigate to="/marketplace" replace />,
       },
       {
         path: 'connections',
         element: <ConnectionsPage />,
+      },
+      {
+        path: 'invite-codes',
+        element: <InviteCodesPage />,
       },
       {
         path: 'settings',

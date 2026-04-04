@@ -15,7 +15,7 @@ from config.loader import AgentLoader
 
 logger = logging.getLogger(__name__)
 
-HUB_URL = os.environ.get("MYCEL_HUB_URL", "http://localhost:8080")
+HUB_URL = os.environ.get("MYCEL_HUB_URL", "http://localhost:8090")
 
 _hub_client = httpx.Client(timeout=30.0)
 

@@ -1,7 +1,7 @@
 import hashlib
 from pathlib import Path
 
-from storage.providers.sqlite.sync_file_repo import SQLiteSyncFileRepo
+from backend.web.core.storage_factory import make_sync_file_repo
 
 
 def _calculate_checksum(file_path: Path) -> str:
@@ -15,7 +15,7 @@ def _calculate_checksum(file_path: Path) -> str:
 
 class SyncState:
     def __init__(self):
-        self._repo = SQLiteSyncFileRepo()
+        self._repo = make_sync_file_repo()
 
     def close(self) -> None:
         self._repo.close()

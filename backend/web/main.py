@@ -6,9 +6,16 @@ import subprocess
 import sys
 from pathlib import Path
 
-import uvicorn
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
+# Load .env file if ENV_FILE is specified (e.g. ENV_FILE=.env for local dev)
+_env_file = os.getenv("ENV_FILE")
+if _env_file:
+    from dotenv import load_dotenv
+
+    load_dotenv(_env_file, override=False)
+
+import uvicorn  # noqa: E402
+from fastapi import FastAPI  # noqa: E402
+from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
 
 
 def _ensure_windows_db_env_defaults() -> None:
@@ -79,6 +86,7 @@ from backend.web.routers import (  # noqa: E402
     connections,
     debug,
     entities,
+    invite_codes,
     marketplace,
     monitor,
     panel,
@@ -103,6 +111,7 @@ app.add_middleware(
 
 # Include routers
 app.include_router(auth.router)
+app.include_router(invite_codes.router)
 app.include_router(threads.router)
 app.include_router(chats.router)
 app.include_router(entities.router)

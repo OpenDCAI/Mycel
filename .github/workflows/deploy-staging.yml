@@ -1,0 +1,74 @@
+name: Deploy Staging
+
+# Triggers:
+#   1. PR labeled with "deploy-staging" by a collaborator
+#   2. Manual workflow_dispatch (team member specifies branch)
+#
+# Both update the staging apps to the target branch, then deploy.
+
+on:
+  pull_request:
+    types: [labeled]
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Branch or commit SHA to deploy to staging"
+        required: true
+        default: "main"
+
+permissions:
+  pull-requests: write
+
+jobs:
+  deploy-staging:
+    # For label trigger: only run when the label is exactly "deploy-staging"
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'pull_request' && github.event.label.name == 'deploy-staging')
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Resolve target ref
+        id: ref
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            echo "ref=${{ github.head_ref }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "ref=${{ inputs.ref }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Update staging backend branch
+        run: |
+          curl -s -X PATCH "${{ secrets.COOLIFY_URL }}/api/v1/applications/${{ secrets.COOLIFY_BACKEND_STAGING_UUID }}" \
+            -H "Authorization: Bearer ${{ secrets.COOLIFY_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            -d '{"git_branch": "${{ steps.ref.outputs.ref }}"}'
+
+      - name: Update staging frontend branch
+        run: |
+          curl -s -X PATCH "${{ secrets.COOLIFY_URL }}/api/v1/applications/${{ secrets.COOLIFY_FRONTEND_STAGING_UUID }}" \
+            -H "Authorization: Bearer ${{ secrets.COOLIFY_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            -d '{"git_branch": "${{ steps.ref.outputs.ref }}"}'
+
+      - name: Deploy backend to staging
+        run: |
+          curl -sX GET "${{ secrets.COOLIFY_URL }}/api/v1/deploy?uuid=${{ secrets.COOLIFY_BACKEND_STAGING_UUID }}&force=false" \
+            -H "Authorization: Bearer ${{ secrets.COOLIFY_TOKEN }}"
+
+      - name: Deploy frontend to staging
+        run: |
+          curl -sX GET "${{ secrets.COOLIFY_URL }}/api/v1/deploy?uuid=${{ secrets.COOLIFY_FRONTEND_STAGING_UUID }}&force=false" \
+            -H "Authorization: Bearer ${{ secrets.COOLIFY_TOKEN }}"
+
+      - name: Comment on PR with staging URL
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `🚀 **预发部署已触发**\n\n- 前端: https://app.staging.mycel.nextmind.space\n- 后端: https://api.staging.mycel.nextmind.space\n\n分支: \`${{ steps.ref.outputs.ref }}\``
+            })
