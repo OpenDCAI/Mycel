@@ -230,6 +230,69 @@ def test_task_start_can_patch_background_agent_after_tool_result_race():
     assert seg["step"]["subagent_stream"]["status"] == "running"
 
 
+@pytest.mark.parametrize("task_status", ["completed", "error", "cancelled"])
+def test_live_notice_reconciles_subagent_stream_status_from_terminal_notification(task_status: str):
+    builder = DisplayBuilder()
+    thread_id = "parent-thread"
+
+    builder.apply_event(
+        thread_id,
+        "run_start",
+        {"run_id": "run-1", "source": "owner", "showing": True},
+    )
+    builder.apply_event(
+        thread_id,
+        "tool_call",
+        {
+            "id": "tc-agent-1",
+            "name": "Agent",
+            "args": {"prompt": "do work", "run_in_background": True},
+            "showing": True,
+        },
+    )
+    builder.apply_event(
+        thread_id,
+        "tool_result",
+        {
+            "tool_call_id": "tc-agent-1",
+            "name": "Agent",
+            "content": (
+                '{"task_id":"task-123","agent_name":"agent-task-123",'
+                '"thread_id":"subagent-task-123","status":"running",'
+                '"message":"Agent started in background. Use TaskOutput to get result."}'
+            ),
+            "metadata": {},
+            "showing": True,
+        },
+    )
+
+    delta = builder.apply_event(
+        thread_id,
+        "notice",
+        {
+            "content": (
+                "<system-reminder>\n"
+                "<task-notification>\n"
+                "  <run-id>task-123</run-id>\n"
+                f"  <status>{task_status}</status>\n"
+                "  <description>child task</description>\n"
+                "  <summary>child task</summary>\n"
+                "  <result>CHILD_DONE</result>\n"
+                "</task-notification>\n"
+                "</system-reminder>"
+            ),
+            "source": "system",
+            "notification_type": "agent",
+        },
+    )
+
+    seg = builder.get_entries(thread_id)[0]["segments"][0]
+    assert delta is not None
+    assert seg["step"]["subagent_stream"]["task_id"] == "task-123"
+    assert seg["step"]["subagent_stream"]["thread_id"] == "subagent-task-123"
+    assert seg["step"]["subagent_stream"]["status"] == task_status
+
+
 def test_checkpoint_rebuild_reconciles_subagent_stream_status_from_terminal_notification():
     builder = DisplayBuilder()
     thread_id = "parent-thread"

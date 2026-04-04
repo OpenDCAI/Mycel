@@ -562,8 +562,15 @@ def _handle_tool_result(td: ThreadDisplay, data: dict) -> dict | None:
 def _handle_notice(td: ThreadDisplay, data: dict) -> dict | None:
     content = data.get("content", "")
     ntype = data.get("notification_type")
+    task_id, task_status = _extract_terminal_task_status(ntype, content)
 
     turn = _get_current_turn(td)
+    if task_id and task_status:
+        # @@@live-notice-status-reconcile - live parent detail stays on the
+        # in-memory display while the followthrough run is still active, so the
+        # terminal notice must reconcile the earlier Agent step immediately
+        # instead of waiting for a later cold rebuild from checkpoint.
+        _reconcile_subagent_stream_status(td.entries, turn, task_id, task_status)
     if turn:
         # Fold into current turn
         seg = {"type": "notice", "content": content, "notification_type": ntype}
