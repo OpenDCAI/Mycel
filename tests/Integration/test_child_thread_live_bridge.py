@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from types import SimpleNamespace
 
 import pytest
@@ -21,6 +22,10 @@ class _FakeRuntime:
         self._event_callback = None
         self._activity_sink = None
         self.state = SimpleNamespace(flags=SimpleNamespace(is_compacting=False))
+        self.calls = 0
+        self.tokens = 0
+        self.cost = 0.0
+        self.ctx_percent = 0.0
 
     def transition(self, new_state: AgentState) -> bool:
         self.current_state = new_state
@@ -38,17 +43,19 @@ class _FakeRuntime:
     def get_compact_dict(self) -> dict:
         return {
             "state": self.current_state.value,
-            "tokens": 0,
-            "cost": 0.0,
-            "calls": 0,
-            "ctx_percent": 0.0,
+            "tokens": self.tokens,
+            "cost": self.cost,
+            "calls": self.calls,
+            "ctx_percent": self.ctx_percent,
         }
 
     def get_status_dict(self) -> dict:
         return {
             "state": {"state": self.current_state.value, "flags": {}},
-            "tokens": {},
-            "context": {},
+            "tokens": {"total": self.tokens},
+            "context": {"percent": self.ctx_percent},
+            "calls": self.calls,
+            "cost": self.cost,
         }
 
 
@@ -136,6 +143,84 @@ async def test_run_child_thread_live_rebinds_from_parent_sink_and_surfaces_runti
     result = await task
 
     assert result == "CHILD_DONE"
+
+
+@pytest.mark.asyncio
+async def test_run_child_thread_live_raises_when_child_run_emits_error_event(monkeypatch):
+    child_thread_id = "subagent-live-error"
+    agent = _BlockingChildAgent()
+    app = SimpleNamespace(
+        state=SimpleNamespace(
+            display_builder=DisplayBuilder(),
+            queue_manager=MessageQueueManager(),
+            _event_loop=asyncio.get_running_loop(),
+            thread_event_buffers={},
+            thread_tasks={},
+            thread_last_active={},
+            agent_pool={},
+            thread_sandbox={child_thread_id: "local"},
+            thread_cwd={},
+            thread_repo=SimpleNamespace(get_by_id=lambda thread_id: {"model": "gpt-live"} if thread_id == child_thread_id else None),
+        )
+    )
+
+    def fake_start_agent_run(agent, thread_id, message, app, enable_trajectory=False, message_metadata=None, input_messages=None):
+        async def _fake_run():
+            thread_buf = app.state.thread_event_buffers[thread_id]
+            await thread_buf.put({"event": "error", "data": json.dumps({"error": "child model init failed"})})
+            return ""
+
+        app.state.thread_tasks[thread_id] = asyncio.create_task(_fake_run())
+        return "run-error-1"
+
+    monkeypatch.setattr("backend.web.services.streaming_service.start_agent_run", fake_start_agent_run)
+
+    with pytest.raises(RuntimeError, match="child model init failed"):
+        await run_child_thread_live(
+            agent,
+            child_thread_id,
+            "child prompt",
+            app,
+            input_messages=[HumanMessage(content="child prompt")],
+        )
+
+
+@pytest.mark.asyncio
+async def test_run_child_thread_live_raises_when_child_never_makes_a_model_call(monkeypatch):
+    child_thread_id = "subagent-live-no-call"
+    agent = _BlockingChildAgent()
+    app = SimpleNamespace(
+        state=SimpleNamespace(
+            display_builder=DisplayBuilder(),
+            queue_manager=MessageQueueManager(),
+            _event_loop=asyncio.get_running_loop(),
+            thread_event_buffers={},
+            thread_tasks={},
+            thread_last_active={},
+            agent_pool={},
+            thread_sandbox={child_thread_id: "local"},
+            thread_cwd={},
+            thread_repo=SimpleNamespace(get_by_id=lambda thread_id: {"model": "gpt-live"} if thread_id == child_thread_id else None),
+        )
+    )
+
+    def fake_start_agent_run(agent, thread_id, message, app, enable_trajectory=False, message_metadata=None, input_messages=None):
+        async def _fake_run():
+            return ""
+
+        app.state.thread_tasks[thread_id] = asyncio.create_task(_fake_run())
+        return "run-no-call-1"
+
+    monkeypatch.setattr("backend.web.services.streaming_service.start_agent_run", fake_start_agent_run)
+
+    with pytest.raises(RuntimeError, match="before first model call"):
+        await run_child_thread_live(
+            agent,
+            child_thread_id,
+            "child prompt",
+            app,
+            input_messages=[HumanMessage(content="child prompt")],
+        )
 
 
 def test_live_tool_result_restores_subagent_stream_from_agent_background_json():
