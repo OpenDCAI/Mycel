@@ -373,6 +373,7 @@ def list_resource_providers() -> dict[str, Any]:
 
         provider_sessions = grouped.get(config_name, [])
         normalized_sessions: list[dict[str, Any]] = []
+        seen_session_ids: set[str] = set()
         running_count = 0
         # @@@running-dedup - lease-driven query may yield multiple rows per lease (one per crew member).
         # Count each running lease only once.
@@ -389,11 +390,18 @@ def list_resource_providers() -> dict[str, Any]:
                 seen_running_leases.add(lease_id)
             session_metrics = _to_session_metrics(snapshot_by_lease.get(lease_id))
             owner = owners.get(thread_id, {"member_id": None, "member_name": "未绑定Agent"})
+            session_identity = str(session.get("session_id") or f"{lease_id}:{thread_id or 'unbound'}")
+            # @@@resource-session-dedup - terminal fallback can surface multiple
+            # monitor rows for the same lease/thread binding. The overview
+            # contract is one session row per stable session identity.
+            if session_identity in seen_session_ids:
+                continue
+            seen_session_ids.add(session_identity)
             normalized_sessions.append(
                 {
                     # @@@resource-session-identity - monitor rows can legitimately have empty chat session ids.
                     # Use stable lease+thread identity so React keys do not collapse when one lease has multiple threads.
-                    "id": str(session.get("session_id") or f"{lease_id}:{thread_id or 'unbound'}"),
+                    "id": session_identity,
                     "leaseId": lease_id,
                     "threadId": thread_id,
                     "memberId": str(owner.get("member_id") or ""),

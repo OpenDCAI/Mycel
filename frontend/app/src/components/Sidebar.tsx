@@ -24,6 +24,16 @@ function requireSidebarLabel(thread: ThreadSummary): string {
   return thread.sidebar_label;
 }
 
+function memberThreadHref(memberId: string, mainThreadId?: string): string {
+  const encodedMemberId = encodeURIComponent(memberId);
+  // @@@main-thread-direct-route - sidebar switching should reuse the known main
+  // thread route directly; bouncing through /threads/:memberId remounts
+  // NewChatPage and re-runs member bootstrap before landing in ChatPage.
+  return mainThreadId
+    ? `/threads/${encodedMemberId}/${mainThreadId}`
+    : `/threads/${encodedMemberId}`;
+}
+
 function formatRelativeTime(dateStr?: string): string {
   if (!dateStr) return "";
   const date = new Date(dateStr);
@@ -298,7 +308,7 @@ export default function Sidebar({
             return (
               <div key={group.memberId} className="relative group/item w-full flex justify-center">
                 <Link
-                  to={`/threads/${encodeURIComponent(group.memberId)}`}
+                  to={memberThreadHref(group.memberId, mainThread?.thread_id)}
                   title={group.memberName}
                   className={`flex items-center justify-center rounded-xl p-1 transition-colors duration-fast ${
                     isActive ? "bg-muted" : "hover:bg-muted/70"
@@ -394,6 +404,7 @@ export default function Sidebar({
               const isExpanded = expandedMembers.has(group.memberId);
               const urlId = encodeURIComponent(group.memberId);
               const mainThread = group.threads.find((thread) => thread.is_main);
+              const memberHref = memberThreadHref(group.memberId, mainThread?.thread_id);
               const memberIsActive = isMemberActive(group.memberId, mainThread?.thread_id);
               const childThreads = group.threads.filter((thread) => !thread.is_main);
               return (
@@ -415,7 +426,7 @@ export default function Sidebar({
                       } ${isExpanded ? "rotate-90" : ""}`} />
                     </button>
                     <Link
-                      to={`/threads/${urlId}`}
+                      to={memberHref}
                       className="flex items-center gap-1.5 min-w-0 flex-1"
                     >
                       <MemberAvatar name={group.memberName} avatarUrl={group.avatarUrl} type="mycel_agent" size="xs" />
