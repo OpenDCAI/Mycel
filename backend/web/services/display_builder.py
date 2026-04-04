@@ -332,19 +332,12 @@ class DisplayBuilder:
                 seg["step"]["result"] = content_str
                 seg["step"]["status"] = "done"
 
-                # Restore subagent_stream from metadata
                 meta = msg.get("metadata") or {}
-                task_id = meta.get("task_id")
-                sub_thread = meta.get("subagent_thread_id") or (f"subagent-{task_id}" if task_id else None)
-
-                if not task_id and seg["step"].get("name") == "Agent":
-                    try:
-                        parsed = json.loads(content_str)
-                        if isinstance(parsed, dict) and parsed.get("task_id"):
-                            task_id = parsed["task_id"]
-                            sub_thread = parsed.get("thread_id") or f"subagent-{task_id}"
-                    except (json.JSONDecodeError, TypeError):
-                        pass
+                task_id, sub_thread, task_status = _extract_subagent_stream_identity(
+                    seg["step"].get("name"),
+                    meta,
+                    content_str,
+                )
 
                 if sub_thread and not seg["step"].get("subagent_stream"):
                     seg["step"]["subagent_stream"] = {
@@ -353,7 +346,7 @@ class DisplayBuilder:
                         "description": meta.get("description"),
                         "text": "",
                         "tool_calls": [],
-                        "status": "completed",
+                        "status": task_status,
                     }
                 break
 
@@ -502,9 +495,11 @@ def _handle_tool_result(td: ThreadDisplay, data: dict) -> dict | None:
             seg["step"]["result"] = result
             seg["step"]["status"] = "done"
 
-            # Subagent stream tracking
-            task_id = metadata.get("task_id")
-            sub_thread = metadata.get("subagent_thread_id") or (f"subagent-{task_id}" if task_id else None)
+            task_id, sub_thread, task_status = _extract_subagent_stream_identity(
+                seg["step"].get("name"),
+                metadata,
+                result,
+            )
             if sub_thread and not seg["step"].get("subagent_stream"):
                 seg["step"]["subagent_stream"] = {
                     "task_id": task_id or "",
@@ -512,7 +507,7 @@ def _handle_tool_result(td: ThreadDisplay, data: dict) -> dict | None:
                     "description": metadata.get("description"),
                     "text": "",
                     "tool_calls": [],
-                    "status": "running",
+                    "status": task_status,
                 }
 
             return {
@@ -677,6 +672,28 @@ def _find_seg_index(turn: dict, tc_id: str) -> int:
         if seg.get("type") == "tool" and seg.get("step", {}).get("id") == tc_id:
             return i
     return -1
+
+
+def _extract_subagent_stream_identity(step_name: str | None, metadata: dict, content: str) -> tuple[str | None, str | None, str]:
+    task_id = metadata.get("task_id")
+    sub_thread = metadata.get("subagent_thread_id") or (f"subagent-{task_id}" if task_id else None)
+    task_status = "completed" if task_id else "running"
+
+    if task_id or step_name != "Agent":
+        return task_id, sub_thread, task_status
+
+    try:
+        parsed = json.loads(content)
+    except (json.JSONDecodeError, TypeError):
+        return task_id, sub_thread, task_status
+
+    if not isinstance(parsed, dict) or not parsed.get("task_id"):
+        return task_id, sub_thread, task_status
+
+    task_id = parsed["task_id"]
+    sub_thread = parsed.get("thread_id") or f"subagent-{task_id}"
+    task_status = parsed.get("status") or "running"
+    return task_id, sub_thread, task_status
 
 
 # Event type → handler

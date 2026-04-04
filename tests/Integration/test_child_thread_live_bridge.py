@@ -135,3 +135,46 @@ async def test_run_child_thread_live_rebinds_from_parent_sink_and_surfaces_runti
     result = await task
 
     assert result == "CHILD_DONE"
+
+
+def test_live_tool_result_restores_subagent_stream_from_agent_background_json():
+    builder = DisplayBuilder()
+    thread_id = "parent-thread"
+
+    builder.apply_event(
+        thread_id,
+        "run_start",
+        {"run_id": "run-1", "source": "owner", "showing": True},
+    )
+    builder.apply_event(
+        thread_id,
+        "tool_call",
+        {
+            "id": "tc-agent-1",
+            "name": "Agent",
+            "args": {"prompt": "do work", "run_in_background": True},
+            "showing": True,
+        },
+    )
+
+    delta = builder.apply_event(
+        thread_id,
+        "tool_result",
+        {
+            "tool_call_id": "tc-agent-1",
+            "name": "Agent",
+            "content": (
+                '{"task_id":"task-123","agent_name":"agent-task-123",'
+                '"thread_id":"subagent-task-123","status":"running",'
+                '"message":"Agent started in background. Use TaskOutput to get result."}'
+            ),
+            "metadata": {},
+            "showing": True,
+        },
+    )
+
+    seg = builder.get_entries(thread_id)[0]["segments"][0]
+    assert delta is not None
+    assert seg["step"]["subagent_stream"]["task_id"] == "task-123"
+    assert seg["step"]["subagent_stream"]["thread_id"] == "subagent-task-123"
+    assert seg["step"]["subagent_stream"]["status"] == "running"
