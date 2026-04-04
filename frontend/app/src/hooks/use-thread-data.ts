@@ -3,6 +3,7 @@ import {
   getThread,
   type ChatEntry,
   type SandboxInfo,
+  type ThreadDetail,
 } from "../api";
 
 export interface ThreadDataState {
@@ -20,6 +21,18 @@ export interface ThreadDataActions {
   refreshThread: () => Promise<void>;
 }
 
+const threadDetailInflight = new Map<string, Promise<ThreadDetail>>();
+
+function loadThreadDetail(threadId: string): Promise<ThreadDetail> {
+  const existing = threadDetailInflight.get(threadId);
+  if (existing) return existing;
+  const pending = getThread(threadId).finally(() => {
+    threadDetailInflight.delete(threadId);
+  });
+  threadDetailInflight.set(threadId, pending);
+  return pending;
+}
+
 export function useThreadData(threadId: string | undefined, skipInitialLoad = false, initialEntries?: ChatEntry[]): ThreadDataState & ThreadDataActions {
   const [entries, setEntries] = useState<ChatEntry[]>(initialEntries ?? []);
   const [activeSandbox, setActiveSandbox] = useState<SandboxInfo | null>(null);
@@ -29,7 +42,7 @@ export function useThreadData(threadId: string | undefined, skipInitialLoad = fa
   const loadThread = useCallback(async (id: string, silent = false) => {
     if (!silent) setLoading(true);
     try {
-      const thread = await getThread(id);
+      const thread = await loadThreadDetail(id);
       // @@@display-builder — backend returns pre-computed entries + display_seq
       setEntries(thread.entries ?? []);
       setDisplaySeq(thread.display_seq ?? 0);
@@ -60,7 +73,7 @@ export function useThreadData(threadId: string | undefined, skipInitialLoad = fa
       // @@@skip-entries-not-sandbox — skipInitialLoad skips ENTRIES (to avoid
       // overwriting optimistic entries), but we still need sandbox status so
       // TaskProgress shows the correct indicator from the start.
-      getThread(threadId).then(thread => {
+      loadThreadDetail(threadId).then(thread => {
         const sandbox = thread.sandbox;
         setActiveSandbox(sandbox && typeof sandbox === "object" ? (sandbox as SandboxInfo) : null);
       }).catch(() => {});

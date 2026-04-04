@@ -9,6 +9,18 @@ import {
   type PermissionRuleBehavior,
 } from "../api";
 
+const threadPermissionsInflight = new Map<string, ReturnType<typeof getThreadPermissions>>();
+
+function loadThreadPermissions(threadId: string) {
+  const existing = threadPermissionsInflight.get(threadId);
+  if (existing) return existing;
+  const pending = getThreadPermissions(threadId).finally(() => {
+    threadPermissionsInflight.delete(threadId);
+  });
+  threadPermissionsInflight.set(threadId, pending);
+  return pending;
+}
+
 export interface ThreadPermissionsState {
   requests: PermissionRequest[];
   sessionRules: ThreadPermissionRules;
@@ -44,7 +56,7 @@ export function useThreadPermissions(threadId: string | undefined): ThreadPermis
     }
     setLoading(true);
     try {
-      const payload = await getThreadPermissions(threadId);
+      const payload = await loadThreadPermissions(threadId);
       setRequests(payload.requests ?? []);
       setSessionRules(payload.session_rules ?? { allow: [], deny: [], ask: [] });
       setManagedOnly(payload.managed_only ?? false);

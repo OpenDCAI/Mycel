@@ -17,18 +17,35 @@ interface UseBackgroundTasksProps {
   subscribe: UseThreadStreamResult["subscribe"];
 }
 
+const threadTasksInflight = new Map<string, Promise<BackgroundTask[]>>();
+
+function loadThreadTasks(threadId: string): Promise<BackgroundTask[]> {
+  const existing = threadTasksInflight.get(threadId);
+  if (existing) return existing;
+  // @@@tasks-inflight-dedup - React StrictMode remounts the page in dev.
+  // Reuse the first thread task fetch so the dev switch hot path does not
+  // double-hit /tasks before the first response lands.
+  const pending = fetch(`/api/threads/${threadId}/tasks`)
+    .then(async (response) => {
+      if (!response.ok) {
+        throw new Error(response.statusText || `HTTP ${response.status}`);
+      }
+      return response.json() as Promise<BackgroundTask[]>;
+    })
+    .finally(() => {
+      threadTasksInflight.delete(threadId);
+    });
+  threadTasksInflight.set(threadId, pending);
+  return pending;
+}
+
 export function useBackgroundTasks({ threadId, subscribe }: UseBackgroundTasksProps) {
   const [tasks, setTasks] = useState<BackgroundTask[]>([]);
 
   // 从 API 获取任务列表
   const fetchTasks = useCallback(async () => {
     try {
-      const response = await fetch(`/api/threads/${threadId}/tasks`);
-      if (!response.ok) {
-        console.error('[BackgroundTasks] Failed to fetch tasks:', response.statusText);
-        return;
-      }
-      const data = await response.json();
+      const data = await loadThreadTasks(threadId);
       setTasks(data);
     } catch (err) {
       console.error('[BackgroundTasks] Error fetching tasks:', err);
