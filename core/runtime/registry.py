@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
+from copy import deepcopy
 from dataclasses import dataclass
 from enum import Enum
 from typing import Any
@@ -82,10 +83,27 @@ class ToolRegistry:
     def get_inline_schemas(self, discovered_tool_names: set[str] | None = None) -> list[dict]:
         discovered_tool_names = discovered_tool_names or set()
         return [
-            e.get_schema()
+            self._sanitize_schema_for_model(e.get_schema())
             for e in self._tools.values()
             if e.mode == ToolMode.INLINE or e.name in discovered_tool_names
         ]
+
+    def _sanitize_schema_for_model(self, schema: dict) -> dict:
+        # @@@tool-schema-sanitize - runtime-only schema metadata is useful for
+        # validator/readiness, but provider tool schemas must stay within the
+        # subset the live model API accepts.
+        def _walk(value: Any) -> Any:
+            if isinstance(value, dict):
+                return {
+                    key: _walk(child)
+                    for key, child in value.items()
+                    if not (isinstance(key, str) and key.startswith("x-leon-"))
+                }
+            if isinstance(value, list):
+                return [_walk(item) for item in value]
+            return value
+
+        return _walk(deepcopy(schema))
 
     def search(self, query: str, *, modes: set[ToolMode] | None = None) -> list[ToolEntry]:
         """Return matching tools with ranked relevance.

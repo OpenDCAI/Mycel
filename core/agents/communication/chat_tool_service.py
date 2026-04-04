@@ -126,6 +126,32 @@ class ChatToolService:
         self._register_chat_search(registry)
         self._register_directory(registry)
 
+    def _latest_notified_chat_id(self, request: Any) -> str | None:
+        state = getattr(request, "state", None)
+        messages = getattr(state, "messages", None)
+        if not isinstance(messages, list):
+            return None
+        for message in reversed(messages):
+            metadata = getattr(message, "metadata", None) or {}
+            if metadata.get("source") != "external" or metadata.get("notification_type") != "chat":
+                continue
+            content = getattr(message, "content", "")
+            text = content if isinstance(content, str) else str(content)
+            match = re.search(r'chat_read\(chat_id="([^"]+)"\)', text)
+            if match:
+                return match.group(1)
+        return None
+
+    def _fill_missing_chat_target(self, args: dict[str, Any], request: Any) -> dict[str, Any]:
+        if args.get("entity_id"):
+            return args
+        if isinstance(args.get("chat_id"), str) and args["chat_id"].strip():
+            return args
+        notified_chat_id = self._latest_notified_chat_id(request)
+        if notified_chat_id:
+            return {**args, "chat_id": notified_chat_id}
+        return args
+
     def _format_msgs(self, msgs: list, eid: str) -> str:
         lines = []
         for m in msgs:
@@ -357,9 +383,9 @@ class ChatToolService:
                                 ),
                             },
                         },
-                        "anyOf": [
-                            {"required": ["entity_id"]},
-                            {"required": ["chat_id"]},
+                        "x-leon-required-any-of": [
+                            ["entity_id"],
+                            ["chat_id"],
                         ],
                     },
                 },
@@ -368,6 +394,7 @@ class ChatToolService:
                 search_hint="read chat messages history conversation",
                 is_read_only=True,
                 is_concurrency_safe=True,
+                validate_input=self._fill_missing_chat_target,
             )
         )
 
@@ -406,15 +433,16 @@ class ChatToolService:
                             },
                         },
                         "required": ["content"],
-                        "anyOf": [
-                            {"required": ["content", "entity_id"]},
-                            {"required": ["content", "chat_id"]},
+                        "x-leon-required-any-of": [
+                            ["content", "entity_id"],
+                            ["content", "chat_id"],
                         ],
                     },
                 },
                 handler=self._handle_chat_send,
                 source="chat",
                 search_hint="send message reply chat entity",
+                validate_input=self._fill_missing_chat_target,
             )
         )
 

@@ -315,6 +315,10 @@ class QueryLoop:
                     terminal_followthrough_notice = self._get_terminal_followthrough_notice(messages)
                     if terminal_followthrough_notice is not None:
                         ai_msg = self._build_terminal_followthrough_fallback(terminal_followthrough_notice)
+                    else:
+                        chat_followthrough_notice = self._get_chat_followthrough_notice(messages)
+                        if chat_followthrough_notice is not None:
+                            ai_msg = self._build_chat_followthrough_fallback(chat_followthrough_notice)
 
                 # Yield agent update (stream_mode="updates" format)
                 yield {"agent": {"messages": [ai_msg]}}
@@ -1840,6 +1844,24 @@ class QueryLoop:
             return None
         return last_message
 
+    @staticmethod
+    def _get_chat_followthrough_notice(messages: list[Any]) -> HumanMessage | None:
+        if not messages:
+            return None
+        last_message = messages[-1]
+        if last_message.__class__.__name__ != "HumanMessage":
+            return None
+        metadata = getattr(last_message, "metadata", None) or {}
+        if metadata.get("source") != "external":
+            return None
+        if metadata.get("notification_type") != "chat":
+            return None
+        content = getattr(last_message, "content", "")
+        text = content if isinstance(content, str) else str(content)
+        if "New message from" not in text or "chat_read(chat_id=" not in text:
+            return None
+        return last_message
+
     @classmethod
     def _build_terminal_followthrough_fallback(cls, notice: HumanMessage) -> AIMessage:
         metadata = getattr(notice, "metadata", None) or {}
@@ -1860,6 +1882,21 @@ class QueryLoop:
             reply = f"Background {subject} failed, but the followthrough assistant reply was empty."
         else:
             reply = f"Background {subject} update arrived, but the followthrough assistant reply was empty."
+        return AIMessage(content=reply)
+
+    @classmethod
+    def _build_chat_followthrough_fallback(cls, notice: HumanMessage) -> AIMessage:
+        content = getattr(notice, "content", "")
+        text = content if isinstance(content, str) else str(content)
+        chat_id_match = re.search(r'chat_read\(chat_id="([^"]+)"\)', text)
+        if chat_id_match:
+            chat_id = chat_id_match.group(1)
+            reply = (
+                f'I received a chat notification, but the followthrough assistant reply was empty. '
+                f'Read it with chat_read(chat_id="{chat_id}") before deciding whether to reply.'
+            )
+        else:
+            reply = "I received a chat notification, but the followthrough assistant reply was empty."
         return AIMessage(content=reply)
 
 

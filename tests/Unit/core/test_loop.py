@@ -2894,9 +2894,9 @@ async def test_streaming_overlap_waits_for_anyof_tool_args_before_execution():
                     "entity_id": {"type": "string"},
                     "chat_id": {"type": "string"},
                 },
-                "anyOf": [
-                    {"required": ["entity_id"]},
-                    {"required": ["chat_id"]},
+                "x-leon-required-any-of": [
+                    ["entity_id"],
+                    ["chat_id"],
                 ],
             },
         },
@@ -2933,9 +2933,9 @@ def test_normalize_stream_tool_call_keeps_aggregate_args_when_chunk_args_are_emp
                     "entity_id": {"type": "string"},
                     "chat_id": {"type": "string"},
                 },
-                "anyOf": [
-                    {"required": ["entity_id"]},
-                    {"required": ["chat_id"]},
+                "x-leon-required-any-of": [
+                    ["entity_id"],
+                    ["chat_id"],
                 ],
             },
         },

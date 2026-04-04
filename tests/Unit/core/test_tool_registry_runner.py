@@ -126,6 +126,32 @@ class TestToolRegistry:
         assert call_count >= 1
         assert any(s["name"] == "DynTool" for s in schemas)
 
+    def test_inline_schemas_strip_runtime_only_schema_metadata(self):
+        reg = ToolRegistry()
+        reg.register(
+            ToolEntry(
+                name="ChatRead",
+                mode=ToolMode.INLINE,
+                schema={
+                    "name": "ChatRead",
+                    "description": "chat read",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "chat_id": {"type": "string"},
+                        },
+                        "x-leon-required-any-of": [["chat_id"]],
+                    },
+                },
+                handler=lambda **_kwargs: "ok",
+                source="test",
+            )
+        )
+
+        [schema] = reg.get_inline_schemas()
+
+        assert "x-leon-required-any-of" not in schema["parameters"]
+
 
 # ---------------------------------------------------------------------------
 # ToolValidator
@@ -169,7 +195,7 @@ class TestToolValidator:
         result = v.validate(schema, {"a": "hello", "extra": "ok"})
         assert result.ok
 
-    def test_anyof_requires_one_alternative(self):
+    def test_required_any_of_requires_one_alternative(self):
         v = ToolValidator()
         schema = {
             "name": "ChatRead",
@@ -180,9 +206,9 @@ class TestToolValidator:
                     "entity_id": {"type": "string"},
                     "chat_id": {"type": "string"},
                 },
-                "anyOf": [
-                    {"required": ["entity_id"]},
-                    {"required": ["chat_id"]},
+                "x-leon-required-any-of": [
+                    ["entity_id"],
+                    ["chat_id"],
                 ],
             },
         }
@@ -193,7 +219,7 @@ class TestToolValidator:
         assert "entity_id" in str(exc_info.value)
         assert "chat_id" in str(exc_info.value)
 
-    def test_anyof_accepts_present_alternative(self):
+    def test_required_any_of_accepts_present_alternative(self):
         v = ToolValidator()
         schema = {
             "name": "ChatRead",
@@ -204,9 +230,9 @@ class TestToolValidator:
                     "entity_id": {"type": "string"},
                     "chat_id": {"type": "string"},
                 },
-                "anyOf": [
-                    {"required": ["entity_id"]},
-                    {"required": ["chat_id"]},
+                "x-leon-required-any-of": [
+                    ["entity_id"],
+                    ["chat_id"],
                 ],
             },
         }
