@@ -182,6 +182,33 @@ async def _validate_mount_capability_gate(
     )
 
 
+def _provider_unavailable_response(sandbox_type: str) -> JSONResponse:
+    return JSONResponse(
+        status_code=400,
+        content={
+            "error": "sandbox_provider_unavailable",
+            "provider": sandbox_type,
+        },
+    )
+
+
+def _validate_sandbox_provider_gate(app: Any, owner_user_id: str, payload: CreateThreadRequest) -> JSONResponse | None:
+    sandbox_type = payload.sandbox or "local"
+    if payload.lease_id:
+        owned_lease = next(
+            (lease for lease in sandbox_service.list_user_leases(owner_user_id) if lease["lease_id"] == payload.lease_id),
+            None,
+        )
+        if owned_lease is not None:
+            sandbox_type = str(owned_lease["provider_name"] or sandbox_type)
+    if sandbox_type == "local":
+        return None
+    provider = sandbox_service.build_provider_from_config_name(sandbox_type)
+    if provider is not None:
+        return None
+    return _provider_unavailable_response(sandbox_type)
+
+
 def _get_agent_for_thread(app: Any, thread_id: str) -> Any | None:
     """Get agent instance for a thread from the agent pool."""
     pool = getattr(app.state, "agent_pool", None)
@@ -396,6 +423,9 @@ async def create_thread(
     app: Annotated[Any, Depends(get_app)] = None,
 ) -> dict[str, Any] | JSONResponse:
     """Create a new child thread for an agent member."""
+    provider_error = _validate_sandbox_provider_gate(app, user_id, payload)
+    if provider_error is not None:
+        return provider_error
     # Validate bind_mounts capability before creating thread
     sandbox_type = payload.sandbox or "local"
     requested_mounts = payload.bind_mounts if payload.bind_mounts else []

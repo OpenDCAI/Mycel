@@ -138,6 +138,16 @@ def available_sandbox_types() -> list[dict[str, Any]]:
         try:
             config = SandboxConfig.load(name)
             provider_obj = providers.get(name)
+            if provider_obj is None:
+                types.append(
+                    {
+                        "name": name,
+                        "provider": config.provider,
+                        "available": False,
+                        "reason": f"Provider {name} is configured but unavailable in the current process",
+                    }
+                )
+                continue
             item: dict[str, Any] = {
                 "name": name,
                 "provider": config.provider,

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -284,6 +285,73 @@ async def test_create_thread_route_uses_canonical_existing_lease_binding_helper(
         cwd="/workspace/reused",
     )
     assert app.state.thread_cwd[result["thread_id"]] == "/workspace/reused"
+
+
+@pytest.mark.asyncio
+async def test_create_thread_route_rejects_unavailable_provider():
+    app = SimpleNamespace(
+        state=SimpleNamespace(
+            member_repo=_FakeMemberRepo(),
+            thread_repo=_FakeThreadRepo(),
+            entity_repo=_FakeEntityRepo(),
+            thread_sandbox={},
+            thread_cwd={},
+        )
+    )
+    payload = CreateThreadRequest.model_validate(
+        {
+            "member_id": "member-1",
+            "sandbox": "daytona",
+        }
+    )
+
+    with patch.object(threads_router.sandbox_service, "build_provider_from_config_name", return_value=None):
+        result = await threads_router.create_thread(payload, "owner-1", app)
+
+    assert isinstance(result, threads_router.JSONResponse)
+    assert result.status_code == 400
+    assert json.loads(result.body.decode()) == {
+        "error": "sandbox_provider_unavailable",
+        "provider": "daytona",
+    }
+    assert app.state.thread_repo.rows == {}
+
+
+@pytest.mark.asyncio
+async def test_create_thread_route_rejects_unavailable_provider_for_existing_lease():
+    app = SimpleNamespace(
+        state=SimpleNamespace(
+            member_repo=_FakeMemberRepo(),
+            thread_repo=_FakeThreadRepo(),
+            entity_repo=_FakeEntityRepo(),
+            thread_sandbox={},
+            thread_cwd={},
+        )
+    )
+    payload = CreateThreadRequest.model_validate(
+        {
+            "member_id": "member-1",
+            "lease_id": "lease-1",
+        }
+    )
+
+    with (
+        patch.object(
+            threads_router.sandbox_service,
+            "list_user_leases",
+            return_value=[{"lease_id": "lease-1", "provider_name": "daytona", "recipe": None}],
+        ),
+        patch.object(threads_router.sandbox_service, "build_provider_from_config_name", return_value=None),
+    ):
+        result = await threads_router.create_thread(payload, "owner-1", app)
+
+    assert isinstance(result, threads_router.JSONResponse)
+    assert result.status_code == 400
+    assert json.loads(result.body.decode()) == {
+        "error": "sandbox_provider_unavailable",
+        "provider": "daytona",
+    }
+    assert app.state.thread_repo.rows == {}
 
 
 @pytest.mark.asyncio
