@@ -107,10 +107,10 @@ def test_chat_read_validate_input_fills_missing_chat_id_from_latest_notification
             messages=[
                 HumanMessage(
                     content=(
-                        '<system-reminder>\n'
-                        'New message from alice in chat chat-123 (1 unread).\n'
+                        "<system-reminder>\n"
+                        "New message from alice in chat chat-123 (1 unread).\n"
                         'Read it with chat_read(chat_id="chat-123").\n'
-                        '</system-reminder>'
+                        "</system-reminder>"
                     ),
                     metadata={"source": "external", "notification_type": "chat"},
                 )
@@ -146,11 +146,11 @@ def test_chat_send_validate_input_fills_missing_chat_id_from_latest_notification
             messages=[
                 HumanMessage(
                     content=(
-                        '<system-reminder>\n'
-                        'New message from alice in chat chat-456 (1 unread).\n'
+                        "<system-reminder>\n"
+                        "New message from alice in chat chat-456 (1 unread).\n"
                         'Read it with chat_read(chat_id="chat-456").\n'
                         'Reply with chat_send(chat_id="chat-456", content="...").\n'
-                        '</system-reminder>'
+                        "</system-reminder>"
                     ),
                     metadata={"source": "external", "notification_type": "chat"},
                 )

@@ -23,11 +23,7 @@ def build_context_section(
     shell_name: str = "",
 ) -> str:
     if sandbox_name != "local":
-        mode_label = (
-            "Sandbox (isolated local container)"
-            if sandbox_name == "docker"
-            else "Sandbox (isolated cloud environment)"
-        )
+        mode_label = "Sandbox (isolated local container)" if sandbox_name == "docker" else "Sandbox (isolated cloud environment)"
         return f"""- Environment: {sandbox_env_label}
 - Working Directory: {sandbox_working_dir}
 - Mode: {mode_label}"""

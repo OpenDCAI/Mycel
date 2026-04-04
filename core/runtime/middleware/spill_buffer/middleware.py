@@ -12,7 +12,6 @@ from typing import Any
 from langchain_core.messages import ToolMessage
 
 from core.runtime.middleware import AgentMiddleware, ModelRequest, ModelResponse, ToolCallRequest
-
 from core.tools.filesystem.backend import FileSystemBackend
 
 from .spill import spill_if_needed
@@ -79,9 +78,7 @@ class SpillBufferMiddleware(AgentMiddleware):
                 write_result = self.fs_backend.write_file(payload_path, block["base64"])
                 if hasattr(write_result, "success") and not write_result.success:
                     raise RuntimeError(write_result.error or f"failed to persist MCP payload to {payload_path}")
-                lines.append(
-                    f"MCP binary content ({mime_type}) saved to {payload_path} as base64 payload."
-                )
+                lines.append(f"MCP binary content ({mime_type}) saved to {payload_path} as base64 payload.")
                 continue
 
             if isinstance(block.get("url"), str):

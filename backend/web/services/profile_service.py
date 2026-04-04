@@ -4,9 +4,8 @@ import json
 from pathlib import Path
 from typing import Any
 
-from storage.contracts import MemberRow
-
 from config.user_paths import preferred_existing_user_home_path, user_home_path
+from storage.contracts import MemberRow
 
 LEON_HOME = user_home_path()
 CONFIG_PATH = LEON_HOME / "config.json"

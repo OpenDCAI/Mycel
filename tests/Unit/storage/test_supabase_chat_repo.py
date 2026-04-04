@@ -18,7 +18,7 @@ def test_supabase_chat_message_repo_has_unread_mention_tracks_mentions_after_las
                 "chat_id": "chat-1",
                 "sender_entity_id": "entity-other",
                 "content": "old mention",
-                "mentions": "[\"entity-target\"]",
+                "mentions": '["entity-target"]',
                 "created_at": 4.0,
             },
             {
@@ -26,7 +26,7 @@ def test_supabase_chat_message_repo_has_unread_mention_tracks_mentions_after_las
                 "chat_id": "chat-1",
                 "sender_entity_id": "entity-target",
                 "content": "self mention",
-                "mentions": "[\"entity-target\"]",
+                "mentions": '["entity-target"]',
                 "created_at": 6.0,
             },
             {
@@ -34,7 +34,7 @@ def test_supabase_chat_message_repo_has_unread_mention_tracks_mentions_after_las
                 "chat_id": "chat-1",
                 "sender_entity_id": "entity-other",
                 "content": "new mention",
-                "mentions": "[\"entity-target\"]",
+                "mentions": '["entity-target"]',
                 "created_at": 7.0,
             },
             {
@@ -87,7 +87,7 @@ def test_supabase_chat_message_repo_has_unread_mention_false_without_membership_
                 "chat_id": "chat-1",
                 "sender_entity_id": "entity-other",
                 "content": "new mention",
-                "mentions": "[\"entity-target\"]",
+                "mentions": '["entity-target"]',
                 "created_at": 7.0,
             }
         ],

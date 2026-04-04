@@ -9,7 +9,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import signal
-from collections.abc import Callable, Awaitable
+from collections.abc import Awaitable, Callable
 from itertools import groupby
 
 logger = logging.getLogger(__name__)
@@ -82,7 +82,7 @@ class CleanupRegistry:
             result = fn()
             if asyncio.iscoroutine(result):
                 await asyncio.wait_for(result, timeout=self._timeout_s)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             logger.warning("CleanupRegistry: cleanup fn %s timed out after %.2fs", fn, self._timeout_s)
         except Exception:
             logger.exception("CleanupRegistry: error in cleanup fn %s (priority=%d)", fn, priority)

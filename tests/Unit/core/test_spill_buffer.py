@@ -208,7 +208,7 @@ class TestSpillIfNeeded:
         assert result.startswith("<persisted-output")
         assert "</persisted-output>" in result
         assert 'path="/workspace/.leon/tool-results/call_wrapped.txt"' in result
-        assert f"bytes=\"{len(large.encode('utf-8'))}\"" in result
+        assert f'bytes="{len(large.encode("utf-8"))}"' in result
 
     def test_image_block_content_bypasses_spill(self):
         """Image-containing blocks should bypass persistence logic."""

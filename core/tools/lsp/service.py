@@ -23,31 +23,38 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
-_FILE_SIZE_LIMIT = 10 * 1024 * 1024  # 10 MB — matches CC LSP limit
-
 from core.runtime.registry import ToolEntry, ToolMode, ToolRegistry
+
+_FILE_SIZE_LIMIT = 10 * 1024 * 1024  # 10 MB — matches CC LSP limit
 
 logger = logging.getLogger(__name__)
 
 LSP_SCHEMA = {
     "name": "LSP",
-        "description": (
-            "Language Server Protocol code intelligence. "
-            "Operations: goToDefinition, findReferences, hover, documentSymbol, workspaceSymbol, "
-            "goToImplementation, prepareCallHierarchy, incomingCalls, outgoingCalls. "
-            "Language servers are auto-downloaded on first use. "
-            "Supports python, typescript, javascript, go, rust, java, ruby, kotlin. "
-            "file_path must be absolute. line/character are 1-based. "
-            "incomingCalls/outgoingCalls require 'item' from prepareCallHierarchy output."
-        ),
+    "description": (
+        "Language Server Protocol code intelligence. "
+        "Operations: goToDefinition, findReferences, hover, documentSymbol, workspaceSymbol, "
+        "goToImplementation, prepareCallHierarchy, incomingCalls, outgoingCalls. "
+        "Language servers are auto-downloaded on first use. "
+        "Supports python, typescript, javascript, go, rust, java, ruby, kotlin. "
+        "file_path must be absolute. line/character are 1-based. "
+        "incomingCalls/outgoingCalls require 'item' from prepareCallHierarchy output."
+    ),
     "parameters": {
         "type": "object",
         "properties": {
             "operation": {
                 "type": "string",
                 "enum": [
-                    "goToDefinition", "findReferences", "hover", "documentSymbol", "workspaceSymbol",
-                    "goToImplementation", "prepareCallHierarchy", "incomingCalls", "outgoingCalls",
+                    "goToDefinition",
+                    "findReferences",
+                    "hover",
+                    "documentSymbol",
+                    "workspaceSymbol",
+                    "goToImplementation",
+                    "prepareCallHierarchy",
+                    "incomingCalls",
+                    "outgoingCalls",
                 ],
                 "description": "LSP operation to perform",
             },
@@ -129,11 +136,10 @@ class _PyrightSession:
     async def start(self) -> None:
         server = _find_pyright()
         if not server:
-            raise RuntimeError(
-                "pyright-langserver not found. Install with: pip install pyright"
-            )
+            raise RuntimeError("pyright-langserver not found. Install with: pip install pyright")
         self._proc = await asyncio.create_subprocess_exec(
-            server, "--stdio",
+            server,
+            "--stdio",
             stdin=asyncio.subprocess.PIPE,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.DEVNULL,
@@ -141,18 +147,21 @@ class _PyrightSession:
         self._reader_task = asyncio.create_task(self._read_loop(), name="pyright-reader")
 
         # LSP handshake
-        await self._request("initialize", {
-            "processId": os.getpid(),
-            "rootUri": Path(self._workspace_root).as_uri(),
-            "capabilities": {
-                "textDocument": {
-                    "synchronization": {"dynamicRegistration": False},
-                    "implementation": {"dynamicRegistration": False, "linkSupport": True},
-                    "callHierarchy": {"dynamicRegistration": False},
-                }
+        await self._request(
+            "initialize",
+            {
+                "processId": os.getpid(),
+                "rootUri": Path(self._workspace_root).as_uri(),
+                "capabilities": {
+                    "textDocument": {
+                        "synchronization": {"dynamicRegistration": False},
+                        "implementation": {"dynamicRegistration": False, "linkSupport": True},
+                        "callHierarchy": {"dynamicRegistration": False},
+                    }
+                },
+                "initializationOptions": {},
             },
-            "initializationOptions": {},
-        })
+        )
         self._notify("initialized", {})
 
     # ── I/O ───────────────────────────────────────────────────────────
@@ -187,10 +196,7 @@ class _PyrightSession:
                     fut = self._pending.pop(msg_id)
                     if not fut.done():
                         if "error" in msg:
-                            fut.set_exception(RuntimeError(
-                                f"{msg['error'].get('message', 'LSP error')} "
-                                f"({msg['error'].get('code', '')})"
-                            ))
+                            fut.set_exception(RuntimeError(f"{msg['error'].get('message', 'LSP error')} ({msg['error'].get('code', '')})"))
                         else:
                             fut.set_result(msg.get("result"))
                 # All other notifications ($/progress, diagnostics, etc.) are silently dropped
@@ -233,9 +239,7 @@ class _PyrightSession:
             text = Path(abs_path).read_text(encoding="utf-8", errors="replace")
         except OSError:
             text = ""
-        self._notify("textDocument/didOpen", {
-            "textDocument": {"uri": uri, "languageId": "python", "version": 1, "text": text}
-        })
+        self._notify("textDocument/didOpen", {"textDocument": {"uri": uri, "languageId": "python", "version": 1, "text": text}})
         self._open_files.add(uri)
 
     def _close_file(self, abs_path: str) -> None:
@@ -255,10 +259,13 @@ class _PyrightSession:
         self._open_file(abs_path)
         await self._drain()
         uri = Path(abs_path).as_uri()
-        response = await self._request("textDocument/implementation", {
-            "textDocument": {"uri": uri},
-            "position": {"line": line, "character": col},
-        })
+        response = await self._request(
+            "textDocument/implementation",
+            {
+                "textDocument": {"uri": uri},
+                "position": {"line": line, "character": col},
+            },
+        )
         return self._normalise_locations(response)
 
     async def request_prepare_call_hierarchy(self, rel_path: str, line: int, col: int) -> list:
@@ -266,10 +273,13 @@ class _PyrightSession:
         self._open_file(abs_path)
         await self._drain()
         uri = Path(abs_path).as_uri()
-        response = await self._request("textDocument/prepareCallHierarchy", {
-            "textDocument": {"uri": uri},
-            "position": {"line": line, "character": col},
-        })
+        response = await self._request(
+            "textDocument/prepareCallHierarchy",
+            {
+                "textDocument": {"uri": uri},
+                "position": {"line": line, "character": col},
+            },
+        )
         # File stays open — callHierarchy/incomingCalls and outgoingCalls may need it
         return response or []
 
@@ -338,7 +348,7 @@ class _LSPSession:
         self._task = asyncio.create_task(self._run(), name=f"lsp-{self.language}")
         try:
             await asyncio.wait_for(asyncio.shield(self._ready.wait()), timeout=60)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             raise TimeoutError(f"LSP server for '{self.language}' did not start within 60s")
         if self._error:
             raise self._error
@@ -365,7 +375,7 @@ class _LSPSession:
         if self._task and not self._task.done():
             try:
                 await asyncio.wait_for(self._task, timeout=5)
-            except (asyncio.TimeoutError, asyncio.CancelledError):
+            except (TimeoutError, asyncio.CancelledError):
                 self._task.cancel()
                 try:
                     await self._task
@@ -420,11 +430,13 @@ class _LSPSession:
                 item.setdefault("absolutePath", item["uri"].replace("file://", ""))
                 out.append(item)
             elif "targetUri" in item:
-                out.append({
-                    "uri": item["targetUri"],
-                    "absolutePath": item["targetUri"].replace("file://", ""),
-                    "range": item.get("targetSelectionRange", item.get("targetRange", {})),
-                })
+                out.append(
+                    {
+                        "uri": item["targetUri"],
+                        "absolutePath": item["targetUri"].replace("file://", ""),
+                        "range": item.get("targetSelectionRange", item.get("targetRange", {})),
+                    }
+                )
         return out
 
     async def request_prepare_call_hierarchy(self, rel_path: str, line: int, col: int) -> list:
@@ -465,6 +477,7 @@ class _LSPSessionPool:
         if key in self._sessions:
             return self._sessions[key]
         if key not in self._starting:
+
             async def _start() -> _LSPSession:
                 logger.info("[LSPPool] starting %s language server (workspace=%s)...", language, workspace_root)
                 s = _LSPSession(language, workspace_root)
@@ -473,6 +486,7 @@ class _LSPSessionPool:
                 self._starting.pop(key, None)
                 logger.info("[LSPPool] %s language server ready", language)
                 return s
+
             self._starting[key] = asyncio.create_task(_start(), name=f"lsp-start-{language}")
         return await self._starting[key]
 
@@ -480,6 +494,7 @@ class _LSPSessionPool:
         if workspace_root in self._pyright:
             return self._pyright[workspace_root]
         if workspace_root not in self._starting_pyright:
+
             async def _start() -> _PyrightSession:
                 logger.info("[LSPPool] starting pyright (workspace=%s)...", workspace_root)
                 s = _PyrightSession(workspace_root)
@@ -488,6 +503,7 @@ class _LSPSessionPool:
                 self._starting_pyright.pop(workspace_root, None)
                 logger.info("[LSPPool] pyright ready")
                 return s
+
             self._starting_pyright[workspace_root] = asyncio.create_task(_start(), name="lsp-start-pyright")
         return await self._starting_pyright[workspace_root]
 
@@ -522,9 +538,7 @@ class LSPService:
 
     # Operations that Jedi doesn't support — routed to pyright for Python,
     # or to the native server.send.* for other languages.
-    _ADVANCED_OPS: frozenset[str] = frozenset(
-        {"goToImplementation", "prepareCallHierarchy", "incomingCalls", "outgoingCalls"}
-    )
+    _ADVANCED_OPS: frozenset[str] = frozenset({"goToImplementation", "prepareCallHierarchy", "incomingCalls", "outgoingCalls"})
 
     def __init__(self, registry: ToolRegistry, workspace_root: str | Path) -> None:
         self._workspace_root = str(Path(workspace_root).resolve())
@@ -597,7 +611,7 @@ class LSPService:
         """Run _filter_gitignored in batches of 50 (matches CC batch size)."""
         out = []
         for i in range(0, len(locations), 50):
-            out.extend(self._filter_gitignored(locations[i:i + 50]))
+            out.extend(self._filter_gitignored(locations[i : i + 50]))
         return out
 
     async def _filter_gitignored_batched_async(self, locations: list) -> list:

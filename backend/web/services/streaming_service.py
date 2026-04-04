@@ -12,8 +12,8 @@ from typing import Any
 from backend.web.services.event_buffer import RunEventBuffer, ThreadEventBuffer
 from backend.web.services.event_store import cleanup_old_runs
 from backend.web.utils.serializers import extract_text_content
-from core.runtime.notifications import is_terminal_background_notification
 from core.runtime.middleware.monitor import AgentState
+from core.runtime.notifications import is_terminal_background_notification
 from sandbox.thread_context import set_current_run_id, set_current_thread_id
 from storage.contracts import RunEventRepo
 
@@ -22,9 +22,11 @@ logger = logging.getLogger(__name__)
 _TERMINAL_FOLLOWTHROUGH_SYSTEM_NOTE = (
     "Terminal background completion notifications require an explicit assistant followthrough. "
     "Treat these notifications as fresh inputs that need a visible assistant reply. "
-    "You must produce at least one visible assistant message for them; do not stay silent and do not end the run after only surfacing a notice. "
+    "You must produce at least one visible assistant message for them; "
+    "do not stay silent and do not end the run after only surfacing a notice. "
     "Do not call TaskOutput or TaskStop for a terminal notification. "
-    "If no further tool is truly needed, answer directly in natural language and briefly acknowledge the completion, failure, or cancellation honestly."
+    "If no further tool is truly needed, answer directly in natural language "
+    "and briefly acknowledge the completion, failure, or cancellation honestly."
 )
 
 
@@ -277,10 +279,7 @@ def _ensure_thread_handlers(agent: Any, thread_id: str, app: Any) -> None:
     runtime = getattr(agent, "runtime", None)
     if not runtime:
         return
-    if (
-        getattr(runtime, "_bound_thread_id", None) == thread_id
-        and getattr(runtime, "_bound_thread_app", None) is app
-    ):
+    if getattr(runtime, "_bound_thread_id", None) == thread_id and getattr(runtime, "_bound_thread_app", None) is app:
         return
     # Runtime must support bind_thread (AgentRuntime does, test fakes may not)
     if not hasattr(runtime, "bind_thread"):
@@ -902,9 +901,7 @@ async def _run_agent_to_buffer(
                     "notification_type": ntype,
                 }
             ]
-            terminal_followthrough_items.extend(
-                await _emit_queued_terminal_followups(app=app, thread_id=thread_id, emit=emit)
-            )
+            terminal_followthrough_items.extend(await _emit_queued_terminal_followups(app=app, thread_id=thread_id, emit=emit))
             if hasattr(agent, "agent") and hasattr(agent.agent, "system_prompt"):
                 original_system_prompt = agent.agent.system_prompt
                 agent.agent.system_prompt = _augment_system_prompt_for_terminal_followthrough(original_system_prompt)

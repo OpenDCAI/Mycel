@@ -9,12 +9,12 @@ Tools:
 
 from __future__ import annotations
 
-from collections import OrderedDict
-from dataclasses import dataclass
 import logging
-from pathlib import Path
 import tempfile
 import threading
+from collections import OrderedDict
+from dataclasses import dataclass
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from core.runtime.registry import ToolEntry, ToolMode, ToolRegistry
@@ -60,15 +60,14 @@ class _ReadFileStateCache:
         while len(self._entries) > self._max_entries:
             self._entries.popitem(last=False)
 
-    def clone(self) -> "_ReadFileStateCache":
+    def clone(self) -> _ReadFileStateCache:
         clone = _ReadFileStateCache(max_entries=self._max_entries)
         clone._entries = OrderedDict(
-            (path, _ReadFileState(timestamp=state.timestamp, is_partial=state.is_partial))
-            for path, state in self._entries.items()
+            (path, _ReadFileState(timestamp=state.timestamp, is_partial=state.is_partial)) for path, state in self._entries.items()
         )
         return clone
 
-    def merge(self, other: "_ReadFileStateCache") -> None:
+    def merge(self, other: _ReadFileStateCache) -> None:
         for path, incoming in other._entries.items():
             existing = self._entries.get(path)
             if existing is None or self._is_newer(incoming, existing):
@@ -178,10 +177,7 @@ class FileSystemService:
                 mode=ToolMode.INLINE,
                 schema={
                     "name": "Write",
-                    "description": (
-                        "Create or overwrite a file with full content. Forces LF line endings. "
-                        "Path must be absolute."
-                    ),
+                    "description": ("Create or overwrite a file with full content. Forces LF line endings. Path must be absolute."),
                     "parameters": {
                         "type": "object",
                         "properties": {
@@ -361,10 +357,7 @@ class FileSystemService:
             [
                 {
                     "type": "text",
-                    "text": (
-                        f"Read file: {resolved.name}\n"
-                        f"Special content is attached below as structured blocks."
-                    ),
+                    "text": (f"Read file: {resolved.name}\nSpecial content is attached below as structured blocks."),
                 },
                 *content_blocks,
             ],
@@ -380,10 +373,7 @@ class FileSystemService:
     ) -> None:
         result.file_path = str(resolved)
         if isinstance(getattr(result, "content", None), str):
-            result.content = (
-                result.content.replace(str(temp_path), str(resolved))
-                .replace(temp_path.name, resolved.name)
-            )
+            result.content = result.content.replace(str(temp_path), str(resolved)).replace(temp_path.name, resolved.name)
 
     def _record_operation(
         self,
@@ -488,7 +478,11 @@ class FileSystemService:
                 # same local dispatcher for binary/document reads instead of
                 # degrading special files into placeholder text.
                 raw_bytes = download_bytes(str(resolved))
-                if file_type == FileType.BINARY and resolved.suffix.lstrip(".").lower() in IMAGE_EXTENSIONS and len(raw_bytes) > MAX_IMAGE_SIZE:
+                if (
+                    file_type == FileType.BINARY
+                    and resolved.suffix.lstrip(".").lower() in IMAGE_EXTENSIONS
+                    and len(raw_bytes) > MAX_IMAGE_SIZE
+                ):
                     return f"Image exceeds size limit: {len(raw_bytes)} bytes"
                 with tempfile.NamedTemporaryFile(suffix=resolved.suffix, delete=False) as tmp:
                     tmp.write(raw_bytes)

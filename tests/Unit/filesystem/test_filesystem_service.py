@@ -267,6 +267,7 @@ def test_edit_rechecks_staleness_inside_critical_section(tmp_path: Path):
     assert backend.writes == []
     assert backend._content == "alpha\nEXTERNAL\n"
 
+
 def test_concurrent_edits_do_not_both_commit_from_same_stale_read(tmp_path: Path):
     class ConcurrentBackend(FileSystemBackend):
         is_remote = False
@@ -334,10 +335,7 @@ def test_concurrent_edits_do_not_both_commit_from_same_stale_read(tmp_path: Path
     t2.join()
 
     success_count = sum("File edited" in result for result in results)
-    failure_count = sum(
-        ("modified since last read" in result) or ("String not found in file" in result)
-        for result in results
-    )
+    failure_count = sum(("modified since last read" in result) or ("String not found in file" in result) for result in results)
 
     assert success_count == 1
     assert failure_count == 1

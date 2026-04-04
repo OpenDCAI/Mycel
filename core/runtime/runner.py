@@ -9,13 +9,14 @@ import threading
 from collections.abc import Awaitable, Callable
 from typing import Any
 
+from langchain_core.messages import ToolMessage
+
 from core.runtime.middleware import (
     AgentMiddleware,
     ModelRequest,
     ModelResponse,
     ToolCallRequest,
 )
-from langchain_core.messages import ToolMessage
 
 from .errors import InputValidationError
 from .permissions import ToolPermissionContext
@@ -292,7 +293,7 @@ class ToolRunner(AgentMiddleware):
         task = asyncio.create_task(awaitable)
         try:
             return await asyncio.wait_for(task, timeout=timeout_s)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             logger.warning("Async hook %s timed out after %.3fs; ignoring hook result", hook_name, timeout_s)
             task.cancel()
             try:
@@ -476,7 +477,14 @@ class ToolRunner(AgentMiddleware):
                     message = new_message
         return payload["args"], permission, message
 
-    async def _run_pre_tool_use_async(self, request: ToolCallRequest, *, name: str, args: dict, entry) -> tuple[dict, str | None, str | None]:
+    async def _run_pre_tool_use_async(
+        self,
+        request: ToolCallRequest,
+        *,
+        name: str,
+        args: dict,
+        entry,
+    ) -> tuple[dict, str | None, str | None]:
         hooks = self._get_request_hook(request, "pre_tool_use")
         if hooks is None:
             return args, None, None
@@ -575,7 +583,7 @@ class ToolRunner(AgentMiddleware):
         hook_list = hooks if isinstance(hooks, list) else [hooks]
 
         async def _invoke(hook):
-            updated = hook({"name": name, "entry": entry, "message": message}, request)
+            updated = hook(payload, request)
             if asyncio.iscoroutine(updated):
                 updated = await self._await_async_hook_with_timeout(
                     request,
@@ -599,7 +607,16 @@ class ToolRunner(AgentMiddleware):
                     hook_message = new_message
         return permission, hook_message
 
-    def _resolve_permission(self, request: ToolCallRequest, *, name: str, args: dict, entry, hook_permission: str | None, hook_message: str | None) -> ToolResultEnvelope | None:
+    def _resolve_permission(
+        self,
+        request: ToolCallRequest,
+        *,
+        name: str,
+        args: dict,
+        entry,
+        hook_permission: str | None,
+        hook_message: str | None,
+    ) -> ToolResultEnvelope | None:
         if hook_permission == "deny":
             return self._permission_denied_result("deny", hook_message)
 
@@ -667,7 +684,16 @@ class ToolRunner(AgentMiddleware):
             return self._permission_denied_result(rule_permission, rule_message)
         return None
 
-    async def _resolve_permission_async(self, request: ToolCallRequest, *, name: str, args: dict, entry, hook_permission: str | None, hook_message: str | None) -> ToolResultEnvelope | None:
+    async def _resolve_permission_async(
+        self,
+        request: ToolCallRequest,
+        *,
+        name: str,
+        args: dict,
+        entry,
+        hook_permission: str | None,
+        hook_message: str | None,
+    ) -> ToolResultEnvelope | None:
         if hook_permission == "deny":
             return self._permission_denied_result("deny", hook_message)
 
@@ -865,7 +891,13 @@ class ToolRunner(AgentMiddleware):
                 source=source,
             )
 
-    async def _validate_and_run_async(self, request: ToolCallRequest, name: str, args: dict, call_id: str) -> ToolMessage | ToolResultEnvelope | None:
+    async def _validate_and_run_async(
+        self,
+        request: ToolCallRequest,
+        name: str,
+        args: dict,
+        call_id: str,
+    ) -> ToolMessage | ToolResultEnvelope | None:
         entry = self._registry.get(name)
         if entry is None:
             return None

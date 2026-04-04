@@ -164,9 +164,7 @@ def test_create_subagent_context_keeps_parent_state_isolation(runtime_parent_too
 
 
 def test_create_subagent_context_copies_read_state_and_abort_link(runtime_parent_tool_context):
-    runtime_parent_tool_context.read_file_state = {
-        "/tmp/readme.md": {"partial": False, "meta": {"seen": 1}}
-    }
+    runtime_parent_tool_context.read_file_state = {"/tmp/readme.md": {"partial": False, "meta": {"seen": 1}}}
     runtime_parent_tool_context.abort_controller = AbortController()
 
     child = create_subagent_context(runtime_parent_tool_context)

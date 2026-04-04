@@ -20,7 +20,7 @@ class ModelRequest:
     system_message: Any = None
     tools: list | None = None
 
-    def override(self, **changes: Any) -> "ModelRequest":
+    def override(self, **changes: Any) -> ModelRequest:
         return replace(self, **changes)
 
 
@@ -28,7 +28,7 @@ class ModelRequest:
 class ModelResponse:
     result: list
     request_messages: list | None = None
-    prepared_request: "ModelRequest" | None = None
+    prepared_request: ModelRequest | None = None
 
 
 ModelCallResult = ModelResponse
@@ -41,7 +41,7 @@ class ToolCallRequest:
     state: Any = None
     runtime: Any = None
 
-    def override(self, **changes: Any) -> "ToolCallRequest":
+    def override(self, **changes: Any) -> ToolCallRequest:
         return replace(self, **changes)
 
 

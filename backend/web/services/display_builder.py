@@ -75,11 +75,7 @@ def _reconcile_subagent_stream_status(
     turns: list[dict] = []
     if current_turn is not None:
         turns.append(current_turn)
-    turns.extend(
-        entry
-        for entry in reversed(entries)
-        if entry.get("role") == "assistant" and entry is not current_turn
-    )
+    turns.extend(entry for entry in reversed(entries) if entry.get("role") == "assistant" and entry is not current_turn)
     for turn in turns:
         for seg in turn.get("segments", []):
             stream = seg.get("step", {}).get("subagent_stream")
@@ -677,11 +673,7 @@ def _handle_task_start(td: ThreadDisplay, data: dict) -> dict | None:
     # reaches the parent thread. Still patch the newest Agent step that
     # has no child stream, even if its tool_result already marked it done.
     for seg in reversed(turn["segments"]):
-        if (
-            seg.get("type") == "tool"
-            and seg.get("step", {}).get("name") == "Agent"
-            and not seg.get("step", {}).get("subagent_stream")
-        ):
+        if seg.get("type") == "tool" and seg.get("step", {}).get("name") == "Agent" and not seg.get("step", {}).get("subagent_stream"):
             seg["step"]["subagent_stream"] = {
                 "task_id": task_id,
                 "thread_id": sub_thread,

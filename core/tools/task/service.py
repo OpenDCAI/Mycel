@@ -161,14 +161,14 @@ class TaskService:
         return tid or "default"
 
     def _register(self, registry: ToolRegistry) -> None:
-        _READ_ONLY = {"TaskGet", "TaskList"}
+        read_only = {"TaskGet", "TaskList"}
         for name, schema, handler in [
             ("TaskCreate", TASK_CREATE_SCHEMA, self._create),
             ("TaskGet", TASK_GET_SCHEMA, self._get),
             ("TaskList", TASK_LIST_SCHEMA, self._list),
             ("TaskUpdate", TASK_UPDATE_SCHEMA, self._update),
         ]:
-            ro = name in _READ_ONLY
+            ro = name in read_only
             registry.register(
                 ToolEntry(
                     name=name,

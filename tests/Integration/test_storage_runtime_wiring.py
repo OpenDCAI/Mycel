@@ -167,5 +167,3 @@ def test_create_agent_sync_invalid_repo_override_json_fails_loud(
 
     with pytest.raises(RuntimeError, match="Invalid LEON_STORAGE_REPO_PROVIDERS"):
         agent_pool.create_agent_sync("local", workspace_root=tmp_path, model_name="leon:test")
-
-

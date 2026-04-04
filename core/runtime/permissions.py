@@ -3,7 +3,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-
 PERMISSION_RULE_SOURCES = (
     "userSettings",
     "projectSettings",
@@ -19,10 +18,11 @@ PERMISSION_RULE_SOURCES = (
 class ToolPermissionContext:
     is_read_only: bool
     is_destructive: bool = False
-    alwaysAllowRules: dict[str, list[str]] | None = None
-    alwaysDenyRules: dict[str, list[str]] | None = None
-    alwaysAskRules: dict[str, list[str]] | None = None
-    allowManagedPermissionRulesOnly: bool = False
+    # @@@camelcase-permission-surface - external state/routes already speak this camelCase shape.
+    alwaysAllowRules: dict[str, list[str]] | None = None  # noqa: N815
+    alwaysDenyRules: dict[str, list[str]] | None = None  # noqa: N815
+    alwaysAskRules: dict[str, list[str]] | None = None  # noqa: N815
+    allowManagedPermissionRulesOnly: bool = False  # noqa: N815
 
 
 def can_auto_approve(context: ToolPermissionContext) -> bool:

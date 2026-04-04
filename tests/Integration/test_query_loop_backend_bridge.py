@@ -11,18 +11,22 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 
-from backend.web.routers.threads import get_thread_history, get_thread_messages
-from backend.web.routers import threads as threads_router
 from backend.web.models.requests import SendMessageRequest
+from backend.web.routers import threads as threads_router
+from backend.web.routers.threads import get_thread_history, get_thread_messages
 from backend.web.services.display_builder import DisplayBuilder
 from backend.web.services.event_buffer import ThreadEventBuffer
-from backend.web.services.streaming_service import _ensure_thread_handlers
+from backend.web.services.streaming_service import (
+    _ensure_thread_handlers,
+    _repair_incomplete_tool_calls,
+    _run_agent_to_buffer,
+    start_agent_run,
+)
+from core.runtime.loop import QueryLoop
+from core.runtime.middleware.memory.middleware import MemoryMiddleware
+from core.runtime.middleware.monitor.state_monitor import AgentState
 from core.runtime.middleware.queue.manager import MessageQueueManager
 from core.runtime.middleware.queue.middleware import SteeringMiddleware
-from core.runtime.middleware.memory.middleware import MemoryMiddleware
-from backend.web.services.streaming_service import _repair_incomplete_tool_calls, _run_agent_to_buffer, start_agent_run
-from core.runtime.middleware.monitor.state_monitor import AgentState
-from core.runtime.loop import QueryLoop
 from core.runtime.registry import ToolEntry, ToolMode, ToolRegistry
 from core.runtime.state import AppState, BootstrapConfig
 from core.tools.tool_search.service import ToolSearchService
@@ -78,11 +82,7 @@ class _TerminalFollowthroughPromptAwareModel:
         if messages and messages[0].__class__.__name__ == "SystemMessage":
             system_text = getattr(messages[0], "content", "") or ""
         last_human = next(
-            (
-                msg.content
-                for msg in reversed(messages)
-                if msg.__class__.__name__ == "HumanMessage"
-            ),
+            (msg.content for msg in reversed(messages) if msg.__class__.__name__ == "HumanMessage"),
             "",
         )
         if "CommandNotification" not in last_human and "task-notification" not in last_human:
@@ -98,11 +98,7 @@ class _TerminalFollowthroughSilentModel:
 
     async def ainvoke(self, messages):
         last_human = next(
-            (
-                msg.content
-                for msg in reversed(messages)
-                if msg.__class__.__name__ == "HumanMessage"
-            ),
+            (msg.content for msg in reversed(messages) if msg.__class__.__name__ == "HumanMessage"),
             "",
         )
         if "CommandNotification" in last_human or "task-notification" in last_human:
@@ -116,11 +112,7 @@ class _ChatNotificationSilentModel:
 
     async def ainvoke(self, messages):
         last_human = next(
-            (
-                msg.content
-                for msg in reversed(messages)
-                if msg.__class__.__name__ == "HumanMessage"
-            ),
+            (msg.content for msg in reversed(messages) if msg.__class__.__name__ == "HumanMessage"),
             "",
         )
         if "New message from" in last_human and "chat_read(chat_id=" in last_human:
@@ -198,11 +190,7 @@ class _SteerAwareTerminalModel:
 
     async def ainvoke(self, messages):
         last_human = next(
-            (
-                msg.content
-                for msg in reversed(messages)
-                if msg.__class__.__name__ == "HumanMessage"
-            ),
+            (msg.content for msg in reversed(messages) if msg.__class__.__name__ == "HumanMessage"),
             "",
         )
         return AIMessage(content="STEER_DONE" if last_human == "Stop and just say STEER_DONE." else "UNKNOWN")
@@ -217,11 +205,7 @@ class _StopHonestyAwareModel:
         if messages and messages[0].__class__.__name__ == "SystemMessage":
             system_text = getattr(messages[0], "content", "") or ""
         last_human = next(
-            (
-                msg.content
-                for msg in reversed(messages)
-                if msg.__class__.__name__ == "HumanMessage"
-            ),
+            (msg.content for msg in reversed(messages) if msg.__class__.__name__ == "HumanMessage"),
             "",
         )
         if last_human != "Stop immediately. Do not continue the old task. Reply exactly STOPPED_NOW and do not write any file.":
@@ -246,11 +230,7 @@ class _SteerCancelPoisonModel:
                 tool_calls=[{"name": "SleepTool", "args": {}, "id": "tc-sleep"}],
             )
         last_human = next(
-            (
-                msg.content
-                for msg in reversed(messages)
-                if msg.__class__.__name__ == "HumanMessage"
-            ),
+            (msg.content for msg in reversed(messages) if msg.__class__.__name__ == "HumanMessage"),
             "",
         )
         return AIMessage(content=f"LAST_HUMAN:{last_human}")
@@ -367,9 +347,7 @@ async def test_repair_incomplete_tool_calls_uses_query_loop_state_bridge():
     )
     trailing = HumanMessage(content="after tool")
     trailing.id = "human-after"
-    checkpointer.store["repair-live-thread"] = {
-        "channel_values": {"messages": [broken_ai, trailing]}
-    }
+    checkpointer.store["repair-live-thread"] = {"channel_values": {"messages": [broken_ai, trailing]}}
 
     await _repair_incomplete_tool_calls(
         SimpleNamespace(agent=loop),
@@ -546,10 +524,7 @@ async def test_query_loop_persists_visible_terminal_followthrough_when_system_no
         "AIMessage",
     ]
     assert state.values["messages"][-2].content.startswith("<system-reminder><task-notification>")
-    assert (
-        state.values["messages"][-1].content
-        == "Background agent failed, but the followthrough assistant reply was empty."
-    )
+    assert state.values["messages"][-1].content == "Background agent failed, but the followthrough assistant reply was empty."
 
 
 @pytest.mark.asyncio
@@ -713,6 +688,7 @@ async def test_cancelled_midrun_steer_persists_and_does_not_poison_next_turn(mon
     queue_manager = MessageQueueManager(db_path=str(tmp_path / "queue.db"))
     runtime = _StreamingRuntime()
     tool_started = asyncio.Event()
+
     async def sleep_tool() -> str:
         tool_started.set()
         try:
@@ -886,16 +862,12 @@ async def test_cold_rebuild_surfaces_persisted_compaction_notice_in_detail_and_h
         )
 
     assert any(
-        any(
-            segment.get("type") == "notice" and segment.get("notification_type") == "compact"
-            for segment in entry.get("segments", [])
-        )
+        any(segment.get("type") == "notice" and segment.get("notification_type") == "compact" for segment in entry.get("segments", []))
         for entry in detail["entries"]
         if entry.get("role") == "assistant"
     )
     assert any(
-        item.get("role") == "notification" and "Conversation compacted" in item.get("text", "")
-        for item in rebuilt_history["messages"]
+        item.get("role") == "notification" and "Conversation compacted" in item.get("text", "") for item in rebuilt_history["messages"]
     )
 
 
@@ -940,13 +912,11 @@ async def test_cold_rebuild_surfaces_persisted_prompt_too_long_notice_after_reco
         )
 
     assert any(
-        entry.get("role") == "notice"
-        and "Prompt is too long. Automatic recovery exhausted." in entry.get("content", "")
+        entry.get("role") == "notice" and "Prompt is too long. Automatic recovery exhausted." in entry.get("content", "")
         for entry in detail["entries"]
     )
     assert any(
-        item.get("role") == "notification"
-        and "Prompt is too long. Automatic recovery exhausted." in item.get("text", "")
+        item.get("role") == "notification" and "Prompt is too long. Automatic recovery exhausted." in item.get("text", "")
         for item in rebuilt_history["messages"]
     )
 
@@ -993,9 +963,7 @@ async def test_get_thread_messages_idle_rebuild_keeps_terminal_subagent_stream_s
     notice.metadata = {"source": "system", "notification_type": "agent"}
 
     fake_agent = SimpleNamespace(
-        agent=SimpleNamespace(
-            aget_state=AsyncMock(return_value=SimpleNamespace(values={"messages": [ai, tool, notice]}))
-        ),
+        agent=SimpleNamespace(aget_state=AsyncMock(return_value=SimpleNamespace(values={"messages": [ai, tool, notice]}))),
         runtime=SimpleNamespace(current_state=AgentState.IDLE),
     )
     fake_app = SimpleNamespace(state=SimpleNamespace(display_builder=DisplayBuilder()))
@@ -1076,8 +1044,7 @@ async def test_compaction_clear_then_recovery_notice_rebuilds_honestly(tmp_path)
         )
 
     assert any(
-        item.get("role") == "notification" and "Conversation compacted" in item.get("text", "")
-        for item in compact_history["messages"]
+        item.get("role") == "notification" and "Conversation compacted" in item.get("text", "") for item in compact_history["messages"]
     )
     assert any(
         any(
@@ -1156,8 +1123,7 @@ async def test_compaction_clear_then_recovery_notice_rebuilds_honestly(tmp_path)
     ]
     assert not any("Conversation compacted" in item.get("text", "") for item in recovery_history["messages"])
     assert any(
-        entry.get("role") == "notice"
-        and "Prompt is too long. Automatic recovery exhausted." in entry.get("content", "")
+        entry.get("role") == "notice" and "Prompt is too long. Automatic recovery exhausted." in entry.get("content", "")
         for entry in recovery_detail["entries"]
     )
 
@@ -1182,15 +1148,15 @@ async def test_cold_rebuild_surfaces_compaction_breaker_notice_after_repeated_fa
 
     for attempt in range(3):
         async for _ in loop.query(
-                {
-                    "messages": [
-                        {"role": "user", "content": "A" * 8000},
-                        {"role": "assistant", "content": "B" * 8000},
-                        {"role": "user", "content": f"start {attempt} " + ("C" * 8000)},
-                    ]
-                },
-                config=config,
-            ):
+            {
+                "messages": [
+                    {"role": "user", "content": "A" * 8000},
+                    {"role": "assistant", "content": "B" * 8000},
+                    {"role": "user", "content": f"start {attempt} " + ("C" * 8000)},
+                ]
+            },
+            config=config,
+        ):
             pass
 
     fake_agent = SimpleNamespace(

@@ -3,7 +3,7 @@
 Tests the complete flow: MemoryMiddleware → SummaryStore → SQLite → Checkpointer
 """
 
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import MagicMock
 
 import pytest
 from langchain_core.messages import AIMessage, HumanMessage

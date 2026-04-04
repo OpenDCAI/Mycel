@@ -11,9 +11,9 @@ from langchain_core.messages import AIMessage
 
 from core.agents.registry import AgentEntry, AgentRegistry
 from core.agents.service import AgentService
-from core.runtime.registry import ToolRegistry
 from core.runtime.middleware.queue import MessageQueueManager
 from core.runtime.middleware.queue.middleware import SteeringMiddleware
+from core.runtime.registry import ToolRegistry
 from core.tools.command.bash.executor import BashExecutor
 from core.tools.command.service import CommandService
 from sandbox.thread_context import set_current_thread_id
@@ -135,7 +135,7 @@ def test_taskstop_terminates_real_background_bash_run(tmp_path):
 
 def test_sendmessage_search_hint_uses_queue_naming(tmp_path):
     registry = ToolRegistry()
-    service = AgentService(
+    AgentService(
         tool_registry=registry,
         agent_registry=_FakeAgentRegistry(),
         workspace_root=Path(tmp_path),

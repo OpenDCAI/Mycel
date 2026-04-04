@@ -45,14 +45,10 @@ async def test_list_entities_excludes_child_agent_branches_from_chat_discovery()
                     ),
                 ]
             ),
-            member_repo=SimpleNamespace(
-                list_all=lambda: [user, other_human, main_agent_member, child_agent_member]
-            ),
+            member_repo=SimpleNamespace(list_all=lambda: [user, other_human, main_agent_member, child_agent_member]),
             thread_repo=SimpleNamespace(
                 get_by_id=lambda thread_id: (
-                    {"is_main": True, "branch_index": 0}
-                    if thread_id == "thread-main"
-                    else {"is_main": False, "branch_index": 1}
+                    {"is_main": True, "branch_index": 0} if thread_id == "thread-main" else {"is_main": False, "branch_index": 1}
                 )
             ),
         )

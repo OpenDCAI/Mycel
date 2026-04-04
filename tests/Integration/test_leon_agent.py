@@ -4,17 +4,16 @@ Uses mock model to verify the full astream pipeline without real API calls.
 """
 
 import os
-from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from langchain_core.messages import AIMessage, AIMessageChunk, HumanMessage, SystemMessage, ToolMessage
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _mock_model(text="Integration test response"):
     """Create a mock LangChain model that returns a plain AIMessage."""
@@ -122,6 +121,7 @@ def test_leon_agent_destructor_does_not_reenable_skipped_sandbox_cleanup():
 # Integration Tests
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 @_patch_env_api_key()
 async def test_leon_agent_simple_run(tmp_path):
@@ -130,10 +130,11 @@ async def test_leon_agent_simple_run(tmp_path):
 
     mock_model = _mock_model("Hello from integration test")
 
-    with patch("core.runtime.agent.LeonAgent._create_model", return_value=mock_model), \
-         patch("core.runtime.agent.LeonAgent._init_async_components", return_value=(None, [])), \
-         patch("core.runtime.agent.LeonAgent._init_checkpointer", new_callable=AsyncMock, return_value=None):
-
+    with (
+        patch("core.runtime.agent.LeonAgent._create_model", return_value=mock_model),
+        patch("core.runtime.agent.LeonAgent._init_async_components", return_value=(None, [])),
+        patch("core.runtime.agent.LeonAgent._init_checkpointer", new_callable=AsyncMock, return_value=None),
+    ):
         agent = LeonAgent(workspace_root=str(tmp_path), api_key="sk-test-integration")
         await agent.ainit()
 
@@ -164,10 +165,11 @@ async def test_leon_agent_astream_interface_compatible(tmp_path):
 
     mock_model = _mock_model("Compatible response")
 
-    with patch("core.runtime.agent.LeonAgent._create_model", return_value=mock_model), \
-         patch("core.runtime.agent.LeonAgent._init_async_components", return_value=(None, [])), \
-         patch("core.runtime.agent.LeonAgent._init_checkpointer", new_callable=AsyncMock, return_value=None):
-
+    with (
+        patch("core.runtime.agent.LeonAgent._create_model", return_value=mock_model),
+        patch("core.runtime.agent.LeonAgent._init_async_components", return_value=(None, [])),
+        patch("core.runtime.agent.LeonAgent._init_checkpointer", new_callable=AsyncMock, return_value=None),
+    ):
         agent = LeonAgent(workspace_root=str(tmp_path), api_key="sk-test-integration")
         await agent.ainit()
 
@@ -196,10 +198,11 @@ async def test_leon_agent_astream_messages_updates_mode_yields_langgraph_tuples(
 
     mock_model = _mock_model("Tuple compatible response")
 
-    with patch("core.runtime.agent.LeonAgent._create_model", return_value=mock_model), \
-         patch("core.runtime.agent.LeonAgent._init_async_components", return_value=(None, [])), \
-         patch("core.runtime.agent.LeonAgent._init_checkpointer", new_callable=AsyncMock, return_value=None):
-
+    with (
+        patch("core.runtime.agent.LeonAgent._create_model", return_value=mock_model),
+        patch("core.runtime.agent.LeonAgent._init_async_components", return_value=(None, [])),
+        patch("core.runtime.agent.LeonAgent._init_checkpointer", new_callable=AsyncMock, return_value=None),
+    ):
         agent = LeonAgent(workspace_root=str(tmp_path), api_key="sk-test-integration")
         await agent.ainit()
 
@@ -234,10 +237,11 @@ async def test_leon_agent_astream_raises_loudly_on_empty_stream(tmp_path):
     """Empty streaming responses should surface as errors, not silent empty iterators."""
     from core.runtime.agent import LeonAgent
 
-    with patch("core.runtime.agent.LeonAgent._create_model", return_value=_empty_stream_model()), \
-         patch("core.runtime.agent.LeonAgent._init_async_components", return_value=(None, [])), \
-         patch("core.runtime.agent.LeonAgent._init_checkpointer", new_callable=AsyncMock, return_value=None):
-
+    with (
+        patch("core.runtime.agent.LeonAgent._create_model", return_value=_empty_stream_model()),
+        patch("core.runtime.agent.LeonAgent._init_async_components", return_value=(None, [])),
+        patch("core.runtime.agent.LeonAgent._init_checkpointer", new_callable=AsyncMock, return_value=None),
+    ):
         agent = LeonAgent(workspace_root=str(tmp_path), api_key="sk-test-integration")
         await agent.ainit()
 
@@ -256,8 +260,8 @@ async def test_leon_agent_astream_raises_loudly_on_empty_stream(tmp_path):
 @_patch_env_api_key()
 async def test_leon_agent_memoizes_prompt_sections_between_builds(tmp_path):
     """Pattern 6: prompt sections should be cached across repeated prompt assembly."""
-    from core.runtime.agent import LeonAgent
     from core.runtime import prompts as prompt_builders
+    from core.runtime.agent import LeonAgent
 
     mock_model = _mock_model("Prompt cache response")
     original_context = prompt_builders.build_context_section
@@ -272,12 +276,13 @@ async def test_leon_agent_memoizes_prompt_sections_between_builds(tmp_path):
         counts["rules"] += 1
         return original_rules(*args, **kwargs)
 
-    with patch("core.runtime.prompts.build_context_section", side_effect=counted_context), \
-         patch("core.runtime.prompts.build_rules_section", side_effect=counted_rules), \
-         patch("core.runtime.agent.LeonAgent._create_model", return_value=mock_model), \
-         patch("core.runtime.agent.LeonAgent._init_async_components", return_value=(None, [])), \
-         patch("core.runtime.agent.LeonAgent._init_checkpointer", new_callable=AsyncMock, return_value=None):
-
+    with (
+        patch("core.runtime.prompts.build_context_section", side_effect=counted_context),
+        patch("core.runtime.prompts.build_rules_section", side_effect=counted_rules),
+        patch("core.runtime.agent.LeonAgent._create_model", return_value=mock_model),
+        patch("core.runtime.agent.LeonAgent._init_async_components", return_value=(None, [])),
+        patch("core.runtime.agent.LeonAgent._init_checkpointer", new_callable=AsyncMock, return_value=None),
+    ):
         agent = LeonAgent(workspace_root=str(tmp_path), api_key="sk-test-integration")
         await agent.ainit()
 
@@ -294,8 +299,8 @@ async def test_leon_agent_memoizes_prompt_sections_between_builds(tmp_path):
 @_patch_env_api_key()
 async def test_leon_agent_clear_thread_invalidates_prompt_section_cache(tmp_path):
     """Pattern 6: clear should invalidate cached prompt sections before rebuilding."""
-    from core.runtime.agent import LeonAgent
     from core.runtime import prompts as prompt_builders
+    from core.runtime.agent import LeonAgent
 
     mock_model = _mock_model("Prompt clear response")
     original_context = prompt_builders.build_context_section
@@ -310,12 +315,13 @@ async def test_leon_agent_clear_thread_invalidates_prompt_section_cache(tmp_path
         counts["rules"] += 1
         return original_rules(*args, **kwargs)
 
-    with patch("core.runtime.prompts.build_context_section", side_effect=counted_context), \
-         patch("core.runtime.prompts.build_rules_section", side_effect=counted_rules), \
-         patch("core.runtime.agent.LeonAgent._create_model", return_value=mock_model), \
-         patch("core.runtime.agent.LeonAgent._init_async_components", return_value=(None, [])), \
-         patch("core.runtime.agent.LeonAgent._init_checkpointer", new_callable=AsyncMock, return_value=None):
-
+    with (
+        patch("core.runtime.prompts.build_context_section", side_effect=counted_context),
+        patch("core.runtime.prompts.build_rules_section", side_effect=counted_rules),
+        patch("core.runtime.agent.LeonAgent._create_model", return_value=mock_model),
+        patch("core.runtime.agent.LeonAgent._init_async_components", return_value=(None, [])),
+        patch("core.runtime.agent.LeonAgent._init_checkpointer", new_callable=AsyncMock, return_value=None),
+    ):
         agent = LeonAgent(workspace_root=str(tmp_path), api_key="sk-test-integration")
         await agent.ainit()
         agent.agent.aclear = AsyncMock()
@@ -358,10 +364,11 @@ async def test_leon_agent_session_start_hook_runs_on_ainit(tmp_path):
     def on_start(payload):
         seen.append(payload)
 
-    with patch("core.runtime.agent.LeonAgent._create_model", return_value=mock_model), \
-         patch("core.runtime.agent.LeonAgent._init_async_components", return_value=(None, [])), \
-         patch("core.runtime.agent.LeonAgent._init_checkpointer", new_callable=AsyncMock, return_value=None):
-
+    with (
+        patch("core.runtime.agent.LeonAgent._create_model", return_value=mock_model),
+        patch("core.runtime.agent.LeonAgent._init_async_components", return_value=(None, [])),
+        patch("core.runtime.agent.LeonAgent._init_checkpointer", new_callable=AsyncMock, return_value=None),
+    ):
         agent = LeonAgent(workspace_root=str(tmp_path), api_key="sk-test-integration")
         agent.app_state.add_session_hook("SessionStart", on_start)
 
@@ -385,10 +392,11 @@ async def test_leon_agent_session_end_hook_runs_on_close(tmp_path):
     def on_end(payload):
         seen.append(payload)
 
-    with patch("core.runtime.agent.LeonAgent._create_model", return_value=mock_model), \
-         patch("core.runtime.agent.LeonAgent._init_async_components", return_value=(None, [])), \
-         patch("core.runtime.agent.LeonAgent._init_checkpointer", new_callable=AsyncMock, return_value=None):
-
+    with (
+        patch("core.runtime.agent.LeonAgent._create_model", return_value=mock_model),
+        patch("core.runtime.agent.LeonAgent._init_async_components", return_value=(None, [])),
+        patch("core.runtime.agent.LeonAgent._init_checkpointer", new_callable=AsyncMock, return_value=None),
+    ):
         agent = LeonAgent(workspace_root=str(tmp_path), api_key="sk-test-integration")
         await agent.ainit()
         agent.app_state.add_session_hook("SessionEnd", on_end)
@@ -414,10 +422,11 @@ async def test_leon_agent_session_hooks_support_async_callbacks_and_fire_once(tm
     async def on_end(payload):
         seen.append(("end", payload["event"]))
 
-    with patch("core.runtime.agent.LeonAgent._create_model", return_value=mock_model), \
-         patch("core.runtime.agent.LeonAgent._init_async_components", return_value=(None, [])), \
-         patch("core.runtime.agent.LeonAgent._init_checkpointer", new_callable=AsyncMock, return_value=None):
-
+    with (
+        patch("core.runtime.agent.LeonAgent._create_model", return_value=mock_model),
+        patch("core.runtime.agent.LeonAgent._init_async_components", return_value=(None, [])),
+        patch("core.runtime.agent.LeonAgent._init_checkpointer", new_callable=AsyncMock, return_value=None),
+    ):
         agent = LeonAgent(workspace_root=str(tmp_path), api_key="sk-test-integration")
         agent.app_state.add_session_hook("SessionStart", on_start)
         agent.app_state.add_session_hook("SessionEnd", on_end)
@@ -586,10 +595,11 @@ async def test_leon_agent_reinjects_discovered_deferred_tool_schemas_on_followin
 
     probe_model = _DeferredDiscoveryProbeModel()
 
-    with patch("core.runtime.agent.LeonAgent._create_model", return_value=probe_model), \
-         patch("core.runtime.agent.LeonAgent._init_async_components", return_value=(None, [])), \
-         patch("core.runtime.agent.LeonAgent._init_checkpointer", new_callable=AsyncMock, return_value=None):
-
+    with (
+        patch("core.runtime.agent.LeonAgent._create_model", return_value=probe_model),
+        patch("core.runtime.agent.LeonAgent._init_async_components", return_value=(None, [])),
+        patch("core.runtime.agent.LeonAgent._init_checkpointer", new_callable=AsyncMock, return_value=None),
+    ):
         agent = LeonAgent(workspace_root=str(tmp_path), api_key="sk-test-integration")
         await agent.ainit()
 
@@ -613,10 +623,11 @@ async def test_leon_agent_can_execute_discovered_deferred_tool_on_following_turn
 
     probe_model = _DeferredExecutionProbeModel()
 
-    with patch("core.runtime.agent.LeonAgent._create_model", return_value=probe_model), \
-         patch("core.runtime.agent.LeonAgent._init_async_components", return_value=(None, [])), \
-         patch("core.runtime.agent.LeonAgent._init_checkpointer", new_callable=AsyncMock, return_value=None):
-
+    with (
+        patch("core.runtime.agent.LeonAgent._create_model", return_value=probe_model),
+        patch("core.runtime.agent.LeonAgent._init_async_components", return_value=(None, [])),
+        patch("core.runtime.agent.LeonAgent._init_checkpointer", new_callable=AsyncMock, return_value=None),
+    ):
         agent = LeonAgent(workspace_root=str(tmp_path), api_key="sk-test-integration")
         await agent.ainit()
 
@@ -627,10 +638,7 @@ async def test_leon_agent_can_execute_discovered_deferred_tool_on_following_turn
         assert "TaskCreate" not in probe_model.turn_tool_names[0]
         assert "TaskCreate" in probe_model.turn_tool_names[1]
 
-        task_tool_messages = [
-            msg for msg in result["messages"]
-            if isinstance(msg, ToolMessage) and msg.tool_call_id == "tc-task-create"
-        ]
+        task_tool_messages = [msg for msg in result["messages"] if isinstance(msg, ToolMessage) and msg.tool_call_id == "tc-task-create"]
         assert len(task_tool_messages) == 1
         assert "PT02_EXEC" in str(task_tool_messages[0].content)
         assert any(isinstance(msg, AIMessage) and msg.content == "PT02_EXEC_DONE" for msg in result["messages"])
@@ -646,10 +654,11 @@ async def test_leon_agent_deferred_discovery_does_not_leak_across_threads(tmp_pa
 
     probe_model = _DeferredCrossThreadProbeModel()
 
-    with patch("core.runtime.agent.LeonAgent._create_model", return_value=probe_model), \
-         patch("core.runtime.agent.LeonAgent._init_async_components", return_value=(None, [])), \
-         patch("core.runtime.agent.LeonAgent._init_checkpointer", new_callable=AsyncMock, return_value=None):
-
+    with (
+        patch("core.runtime.agent.LeonAgent._create_model", return_value=probe_model),
+        patch("core.runtime.agent.LeonAgent._init_async_components", return_value=(None, [])),
+        patch("core.runtime.agent.LeonAgent._init_checkpointer", new_callable=AsyncMock, return_value=None),
+    ):
         agent = LeonAgent(workspace_root=str(tmp_path), api_key="sk-test-integration")
         await agent.ainit()
 
@@ -676,20 +685,18 @@ async def test_leon_agent_tool_search_exact_select_fails_loudly_for_inline_tools
 
     probe_model = _DeferredInlineSelectProbeModel()
 
-    with patch("core.runtime.agent.LeonAgent._create_model", return_value=probe_model), \
-         patch("core.runtime.agent.LeonAgent._init_async_components", return_value=(None, [])), \
-         patch("core.runtime.agent.LeonAgent._init_checkpointer", new_callable=AsyncMock, return_value=None):
-
+    with (
+        patch("core.runtime.agent.LeonAgent._create_model", return_value=probe_model),
+        patch("core.runtime.agent.LeonAgent._init_async_components", return_value=(None, [])),
+        patch("core.runtime.agent.LeonAgent._init_checkpointer", new_callable=AsyncMock, return_value=None),
+    ):
         agent = LeonAgent(workspace_root=str(tmp_path), api_key="sk-test-integration")
         await agent.ainit()
 
         result = await agent.ainvoke("probe inline select", thread_id="test-inline-select")
 
         assert result["reason"] == "completed"
-        tool_messages = [
-            msg for msg in result["messages"]
-            if isinstance(msg, ToolMessage) and msg.tool_call_id == "tc-search"
-        ]
+        tool_messages = [msg for msg in result["messages"] if isinstance(msg, ToolMessage) and msg.tool_call_id == "tc-search"]
         assert len(tool_messages) == 1
         assert "<tool_use_error>" in str(tool_messages[0].content)
         assert "inline/already-available tools: Read" in str(tool_messages[0].content)
@@ -707,10 +714,11 @@ async def test_leon_agent_restores_discovered_deferred_tools_after_restart(tmp_p
     checkpointer = _MemoryCheckpointer()
     discovery_model = _DeferredDiscoveryProbeModel()
 
-    with patch("core.runtime.agent.LeonAgent._create_model", return_value=discovery_model), \
-         patch("core.runtime.agent.LeonAgent._init_async_components", return_value=(None, [])), \
-         patch("core.runtime.agent.LeonAgent._init_checkpointer", new_callable=AsyncMock, return_value=None):
-
+    with (
+        patch("core.runtime.agent.LeonAgent._create_model", return_value=discovery_model),
+        patch("core.runtime.agent.LeonAgent._init_async_components", return_value=(None, [])),
+        patch("core.runtime.agent.LeonAgent._init_checkpointer", new_callable=AsyncMock, return_value=None),
+    ):
         agent = LeonAgent(workspace_root=str(tmp_path), api_key="sk-test-integration")
         await agent.ainit()
         agent.checkpointer = checkpointer
@@ -722,10 +730,11 @@ async def test_leon_agent_restores_discovered_deferred_tools_after_restart(tmp_p
 
     resume_model = _DeferredResumeProbeModel()
 
-    with patch("core.runtime.agent.LeonAgent._create_model", return_value=resume_model), \
-         patch("core.runtime.agent.LeonAgent._init_async_components", return_value=(None, [])), \
-         patch("core.runtime.agent.LeonAgent._init_checkpointer", new_callable=AsyncMock, return_value=None):
-
+    with (
+        patch("core.runtime.agent.LeonAgent._create_model", return_value=resume_model),
+        patch("core.runtime.agent.LeonAgent._init_async_components", return_value=(None, [])),
+        patch("core.runtime.agent.LeonAgent._init_checkpointer", new_callable=AsyncMock, return_value=None),
+    ):
         agent = LeonAgent(workspace_root=str(tmp_path), api_key="sk-test-integration")
         await agent.ainit()
         agent.checkpointer = checkpointer
@@ -746,20 +755,22 @@ async def test_leon_agent_multiple_thread_ids(tmp_path):
     """Different thread_ids produce independent sessions (no cross-contamination)."""
     from core.runtime.agent import LeonAgent
 
-    responses = iter(["Response for thread-A", "Response for thread-B"])
     mock_model = MagicMock()
     mock_model.bind_tools.return_value = mock_model
     mock_model.with_config.return_value = mock_model
     mock_model.configurable_fields.return_value = mock_model
-    mock_model.ainvoke = AsyncMock(side_effect=[
-        AIMessage(content="Response for thread-A"),
-        AIMessage(content="Response for thread-B"),
-    ])
+    mock_model.ainvoke = AsyncMock(
+        side_effect=[
+            AIMessage(content="Response for thread-A"),
+            AIMessage(content="Response for thread-B"),
+        ]
+    )
 
-    with patch("core.runtime.agent.LeonAgent._create_model", return_value=mock_model), \
-         patch("core.runtime.agent.LeonAgent._init_async_components", return_value=(None, [])), \
-         patch("core.runtime.agent.LeonAgent._init_checkpointer", new_callable=AsyncMock, return_value=None):
-
+    with (
+        patch("core.runtime.agent.LeonAgent._create_model", return_value=mock_model),
+        patch("core.runtime.agent.LeonAgent._init_async_components", return_value=(None, [])),
+        patch("core.runtime.agent.LeonAgent._init_checkpointer", new_callable=AsyncMock, return_value=None),
+    ):
         agent = LeonAgent(workspace_root=str(tmp_path), api_key="sk-test-integration")
         await agent.ainit()
 
@@ -794,10 +805,11 @@ async def test_leon_agent_astream_wrapper_exposes_caller_surface(tmp_path):
 
     mock_model = _mock_model("Caller surface response")
 
-    with patch("core.runtime.agent.LeonAgent._create_model", return_value=mock_model), \
-         patch("core.runtime.agent.LeonAgent._init_async_components", return_value=(None, [])), \
-         patch("core.runtime.agent.LeonAgent._init_checkpointer", new_callable=AsyncMock, return_value=None):
-
+    with (
+        patch("core.runtime.agent.LeonAgent._create_model", return_value=mock_model),
+        patch("core.runtime.agent.LeonAgent._init_async_components", return_value=(None, [])),
+        patch("core.runtime.agent.LeonAgent._init_checkpointer", new_callable=AsyncMock, return_value=None),
+    ):
         agent = LeonAgent(workspace_root=str(tmp_path), api_key="sk-test-integration")
         await agent.ainit()
 
@@ -823,10 +835,11 @@ async def test_leon_agent_astream_can_enforce_max_budget_per_event(tmp_path):
 
     mock_model = _mock_model("Caller surface response")
 
-    with patch("core.runtime.agent.LeonAgent._create_model", return_value=mock_model), \
-         patch("core.runtime.agent.LeonAgent._init_async_components", return_value=(None, [])), \
-         patch("core.runtime.agent.LeonAgent._init_checkpointer", new_callable=AsyncMock, return_value=None):
-
+    with (
+        patch("core.runtime.agent.LeonAgent._create_model", return_value=mock_model),
+        patch("core.runtime.agent.LeonAgent._init_async_components", return_value=(None, [])),
+        patch("core.runtime.agent.LeonAgent._init_checkpointer", new_callable=AsyncMock, return_value=None),
+    ):
         agent = LeonAgent(workspace_root=str(tmp_path), api_key="sk-test-integration")
         await agent.ainit()
 
@@ -861,10 +874,11 @@ async def test_leon_agent_aclear_thread_resets_thread_history(tmp_path):
     mock_model = _mock_model("clearable response")
     checkpointer = _MemoryCheckpointer()
 
-    with patch("core.runtime.agent.LeonAgent._create_model", return_value=mock_model), \
-         patch("core.runtime.agent.LeonAgent._init_async_components", return_value=(None, [])), \
-         patch("core.runtime.agent.LeonAgent._init_checkpointer", new_callable=AsyncMock, return_value=None):
-
+    with (
+        patch("core.runtime.agent.LeonAgent._create_model", return_value=mock_model),
+        patch("core.runtime.agent.LeonAgent._init_async_components", return_value=(None, [])),
+        patch("core.runtime.agent.LeonAgent._init_checkpointer", new_callable=AsyncMock, return_value=None),
+    ):
         agent = LeonAgent(workspace_root=str(tmp_path), api_key="sk-test-integration")
         await agent.ainit()
         agent.checkpointer = checkpointer
@@ -906,10 +920,11 @@ async def test_leon_agent_aclear_thread_does_not_restore_stale_summary(tmp_path)
     mock_model = _mock_model("clearable response")
     checkpointer = _MemoryCheckpointer()
 
-    with patch("core.runtime.agent.LeonAgent._create_model", return_value=mock_model), \
-         patch("core.runtime.agent.LeonAgent._init_async_components", return_value=(None, [])), \
-         patch("core.runtime.agent.LeonAgent._init_checkpointer", new_callable=AsyncMock, return_value=None):
-
+    with (
+        patch("core.runtime.agent.LeonAgent._create_model", return_value=mock_model),
+        patch("core.runtime.agent.LeonAgent._init_async_components", return_value=(None, [])),
+        patch("core.runtime.agent.LeonAgent._init_checkpointer", new_callable=AsyncMock, return_value=None),
+    ):
         agent = LeonAgent(workspace_root=str(tmp_path), api_key="sk-test-integration")
         await agent.ainit()
         agent.checkpointer = checkpointer
@@ -950,10 +965,11 @@ async def test_leon_agent_persists_summary_store_after_second_turn_compaction(tm
     checkpointer = _MemoryCheckpointer()
     probe_model = _DirectCompactionProbeModel()
 
-    with patch("core.runtime.agent.LeonAgent._create_model", return_value=probe_model), \
-         patch("core.runtime.agent.LeonAgent._init_async_components", return_value=(None, [])), \
-         patch("core.runtime.agent.LeonAgent._init_checkpointer", new_callable=AsyncMock, return_value=None):
-
+    with (
+        patch("core.runtime.agent.LeonAgent._create_model", return_value=probe_model),
+        patch("core.runtime.agent.LeonAgent._init_async_components", return_value=(None, [])),
+        patch("core.runtime.agent.LeonAgent._init_checkpointer", new_callable=AsyncMock, return_value=None),
+    ):
         agent = LeonAgent(workspace_root=str(tmp_path), api_key="sk-test-integration")
         await agent.ainit()
         agent.checkpointer = checkpointer

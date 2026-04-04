@@ -48,10 +48,7 @@ def test_list_resource_providers_deduplicates_terminal_fallback_rows(monkeypatch
     monkeypatch.setattr(
         resource_service,
         "_thread_owners",
-        lambda thread_ids: {
-            tid: {"member_id": "member-1", "member_name": "Toad", "avatar_url": None}
-            for tid in thread_ids
-        },
+        lambda thread_ids: {tid: {"member_id": "member-1", "member_name": "Toad", "avatar_url": None} for tid in thread_ids},
     )
     monkeypatch.setattr(resource_service, "list_resource_snapshots", lambda _lease_ids: {})
 

@@ -18,19 +18,18 @@ Tools are registered via Services into ToolRegistry:
 All paths must be absolute. Full security mechanisms and audit logging.
 """
 
+import asyncio
 import concurrent.futures
 import functools
 import inspect
+import logging
 import os
-import threading
 from pathlib import Path
 from typing import Any
 
 from langchain.chat_models import init_chat_model
 from langchain_core.messages import SystemMessage
 from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
-
-from config.schema import DEFAULT_MODEL
 
 # Load .env file
 _env_file = Path(__file__).parent / ".env"
@@ -55,6 +54,10 @@ from core.model_params import normalize_model_kwargs  # noqa: E402
 
 # Import file operation recorder for time travel
 from core.operations import get_recorder  # noqa: E402
+
+# New architecture: ToolRegistry + ToolRunner + Services
+from core.runtime.cleanup import CleanupRegistry  # noqa: E402
+from core.runtime.loop import QueryLoop  # noqa: E402
 from core.runtime.middleware.memory import MemoryMiddleware  # noqa: E402
 from core.runtime.middleware.monitor import MonitorMiddleware, apply_usage_patches  # noqa: E402
 from core.runtime.middleware.prompt_caching import PromptCachingMiddleware  # noqa: E402
@@ -62,10 +65,6 @@ from core.runtime.middleware.queue import MessageQueueManager, SteeringMiddlewar
 
 # Middleware imports (migrated paths)
 from core.runtime.middleware.spill_buffer import SpillBufferMiddleware  # noqa: E402
-
-# New architecture: ToolRegistry + ToolRunner + Services
-from core.runtime.cleanup import CleanupRegistry  # noqa: E402
-from core.runtime.loop import QueryLoop  # noqa: E402
 from core.runtime.registry import ToolEntry, ToolMode, ToolRegistry  # noqa: E402
 from core.runtime.runner import ToolRunner  # noqa: E402
 from core.runtime.state import AppState, BootstrapConfig  # noqa: E402
@@ -86,6 +85,8 @@ from core.tools.tool_search.service import ToolSearchService  # noqa: E402
 # from core.agents.teams.service import TeamService  # @@@teams-removed - module doesn't exist
 from core.tools.web.service import WebService  # noqa: E402
 from storage.container import StorageContainer  # noqa: E402
+
+logger = logging.getLogger(__name__)
 
 # @@@langchain-anthropic-streaming-usage-regression
 apply_usage_patches()
@@ -238,12 +239,7 @@ class LeonAgent:
             active_model = DEFAULT_MODEL
         # Agent frontmatter model applies only when the caller did not explicitly
         # request a model at construction time.
-        if (
-            not self._explicit_model_name
-            and hasattr(self, "_agent_override")
-            and self._agent_override
-            and self._agent_override.model
-        ):
+        if not self._explicit_model_name and hasattr(self, "_agent_override") and self._agent_override and self._agent_override.model:
             active_model = self._agent_override.model
         resolved_model, model_overrides = self.models_config.resolve_model(active_model)
         self.model_name = resolved_model
@@ -913,7 +909,6 @@ class LeonAgent:
             if inspect.isawaitable(result):
                 await result
 
-
     def _cleanup_sandbox(self) -> None:
         """Clean up sandbox resources."""
         if hasattr(self, "_sandbox") and self._sandbox:
@@ -1526,9 +1521,7 @@ class LeonAgent:
             ):
                 yield chunk
                 if max_budget_usd is not None and self.runtime.cost > max_budget_usd:
-                    raise RuntimeError(
-                        f"max_budget_usd exceeded: cost={self.runtime.cost:.6f} budget={max_budget_usd:.6f}"
-                    )
+                    raise RuntimeError(f"max_budget_usd exceeded: cost={self.runtime.cost:.6f} budget={max_budget_usd:.6f}")
         except Exception as e:
             self._monitor_middleware.mark_error(e)
             raise

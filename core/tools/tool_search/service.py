@@ -56,7 +56,7 @@ class ToolSearchService:
         select_names: list[str] = []
         normalized = query.strip()
         if normalized.lower().startswith("select:"):
-            select_names = [name.strip() for name in normalized[len("select:"):].split(",") if name.strip()]
+            select_names = [name.strip() for name in normalized[len("select:") :].split(",") if name.strip()]
 
         results = self._registry.search(query, modes={ToolMode.DEFERRED})
         if select_names:
@@ -70,10 +70,7 @@ class ToolSearchService:
                     parts.append(f"inline/already-available tools: {', '.join(inline)}")
                 if unknown:
                     parts.append(f"unknown tools: {', '.join(unknown)}")
-                raise ValueError(
-                    "tool_search select: only supports deferred tools; "
-                    + "; ".join(parts)
-                )
+                raise ValueError("tool_search select: only supports deferred tools; " + "; ".join(parts))
         else:
             results = results[:5]
         if tool_context is not None and hasattr(tool_context, "discovered_tool_names"):

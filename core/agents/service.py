@@ -36,6 +36,7 @@ def _resolve_default_child_agent_factory():
 
     return create_leon_agent
 
+
 # ── Sub-agent tool filtering (CC alignment) ──────────────────────────────────
 # Tools that sub-agents must never access (prevents controlling parent).
 AGENT_DISALLOWED: set[str] = {"TaskOutput", "TaskStop", "Agent"}
@@ -184,7 +185,9 @@ AGENT_SCHEMA = {
 
 TASK_OUTPUT_SCHEMA = {
     "name": "TaskOutput",
-    "description": "Get output of a background task (agent or bash). Blocks until task completes by default. Returns full text output or error.",
+    "description": (
+        "Get output of a background task (agent or bash). Blocks until task completes by default. Returns full text output or error."
+    ),
     "parameters": {
         "type": "object",
         "properties": {
@@ -572,7 +575,8 @@ class AgentService:
             agent_name_for_role = _get_subagent_agent_name(subagent_type)
 
             try:
-                from core.runtime.fork import create_subagent_context, fork_context as fork_bootstrap
+                from core.runtime.fork import create_subagent_context
+                from core.runtime.fork import fork_context as fork_bootstrap
 
                 # Parent bootstrap is stored on the ToolUseContext or agent instance.
                 # AgentService stores workspace_root and model_name directly; use those
@@ -708,24 +712,21 @@ class AgentService:
             # Build initial input — with or without forked parent context
             if fork_context:
                 from sandbox.thread_context import get_current_messages
+
                 # @@@pt-04-fork-context-source
                 # The Agent tool already has an explicit parent ToolUseContext on
                 # the live ToolRunner path. Forked sub-agents must prefer that
                 # concrete message snapshot over ambient ContextVar state, or the
                 # direct runner path silently drops parent context.
-                parent_msgs = (
-                    list(parent_tool_context.messages)
-                    if parent_tool_context is not None
-                    else get_current_messages()
-                )
-                _FORK_MARKER = (
+                parent_msgs = list(parent_tool_context.messages) if parent_tool_context is not None else get_current_messages()
+                fork_marker = (
                     "\n\n### ENTERING SUB-AGENT ROUTINE ###\n"
                     "Messages above are from the parent thread (read-only context).\n"
                     "Only complete the specific task assigned below.\n\n"
                 )
                 initial_messages: list = [
                     *_filter_fork_messages(parent_msgs),
-                    {"role": "user", "content": _FORK_MARKER + prompt},
+                    {"role": "user", "content": fork_marker + prompt},
                 ]
             else:
                 initial_messages = [{"role": "user", "content": prompt}]
@@ -885,9 +886,7 @@ class AgentService:
             int(getattr(child_bootstrap, "total_tool_duration_ms", 0)) - child_bootstrap_start_tool_duration_ms,
         )
         parent_bootstrap.total_cost_usd = float(getattr(parent_bootstrap, "total_cost_usd", 0.0)) + child_cost_delta
-        parent_bootstrap.total_tool_duration_ms = (
-            int(getattr(parent_bootstrap, "total_tool_duration_ms", 0)) + child_tool_duration_delta
-        )
+        parent_bootstrap.total_tool_duration_ms = int(getattr(parent_bootstrap, "total_tool_duration_ms", 0)) + child_tool_duration_delta
 
     @staticmethod
     def _summarize_progress(text: str, fallback: str) -> str:
@@ -911,7 +910,7 @@ class AgentService:
             try:
                 await asyncio.wait_for(stop_event.wait(), timeout=self._background_progress_interval_s)
                 return
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 pass
 
             if self._queue_manager is None:
@@ -1010,7 +1009,7 @@ class AgentService:
             if callable(wait):
                 try:
                     await asyncio.wait_for(wait(), timeout=1.0)
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     if callable(kill):
                         kill()
                     await wait()

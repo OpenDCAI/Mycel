@@ -23,6 +23,7 @@ from storage.providers.sqlite.kernel import connect_sqlite_async
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def make_registry(*entries):
     reg = ToolRegistry()
     for e in entries:
@@ -288,6 +289,7 @@ async def test_query_loop_rebuilds_turn_local_tool_context_each_tool_turn():
 # ---------------------------------------------------------------------------
 # Tests: no tool calls → single agent chunk
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_no_tool_calls_yields_one_agent_chunk():
@@ -691,9 +693,7 @@ async def test_query_loop_aupdate_state_applies_remove_and_insert_message_repair
     trailing = HumanMessage(content="after tool")
     tool_reply.id = "tool-old"
     trailing.id = "human-after"
-    checkpointer.store["repair-thread"] = {
-        "channel_values": {"messages": [broken_ai, tool_reply, trailing]}
-    }
+    checkpointer.store["repair-thread"] = {"channel_values": {"messages": [broken_ai, tool_reply, trailing]}}
 
     loop = QueryLoop(
         model=mock_model_no_tools("unused"),
@@ -765,11 +765,7 @@ async def test_query_loop_astream_none_resumes_after_state_injection():
     async for event in loop.astream(None, config=config):
         events.append(event)
 
-    assert any(
-        msg.content == "resumed answer"
-        for event in events
-        for msg in event.get("agent", {}).get("messages", [])
-    )
+    assert any(msg.content == "resumed answer" for event in events for msg in event.get("agent", {}).get("messages", []))
 
 
 @pytest.mark.asyncio
@@ -803,6 +799,7 @@ async def test_query_loop_aclear_deletes_persisted_summary_for_thread():
 # ---------------------------------------------------------------------------
 # Tests: with tool calls → agent chunk + tools chunk
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_tool_call_yields_agent_then_tools():
@@ -887,6 +884,7 @@ def test_tool_concurrency_safety_does_not_infer_from_read_only():
 # Tests: max_turns guard
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_max_turns_stops_loop():
     """Agent that hits max_turns should fail loudly on the caller-facing astream surface."""
@@ -924,6 +922,7 @@ async def test_max_turns_stops_loop():
 # ---------------------------------------------------------------------------
 # Tests: input parsing
 # ---------------------------------------------------------------------------
+
 
 def test_parse_input_dict_messages():
     msgs = QueryLoop._parse_input({"messages": [{"role": "user", "content": "hello"}]})
@@ -1728,8 +1727,7 @@ async def test_query_loop_persists_compaction_notice_when_boundary_advances():
     compact_notices = [
         msg
         for msg in app_state.messages
-        if msg.__class__.__name__ == "HumanMessage"
-        and ((getattr(msg, "metadata", None) or {}).get("notification_type") == "compact")
+        if msg.__class__.__name__ == "HumanMessage" and ((getattr(msg, "metadata", None) or {}).get("notification_type") == "compact")
     ]
 
     assert len(compact_notices) == 1
@@ -1793,8 +1791,7 @@ async def test_query_loop_recovers_from_max_output_tokens_with_explicit_continua
     assert model.calls == 3
     assert model.max_tokens_values == [64000, 64000]
     assert any(
-        getattr(msg, "content", "") == "Output token limit hit. Resume directly with no apology or recap."
-        for msg in app_state.messages
+        getattr(msg, "content", "") == "Output token limit hit. Resume directly with no apology or recap." for msg in app_state.messages
     )
 
 
@@ -1896,8 +1893,7 @@ async def test_query_loop_recovers_from_truncated_response_with_withheld_message
     assert result["transition"].reason.value == "max_output_tokens_recovery"
     assert any(getattr(msg, "content", "") == "partial-2" for msg in app_state.messages)
     assert any(
-        getattr(msg, "content", "") == "Output token limit hit. Resume directly with no apology or recap."
-        for msg in app_state.messages
+        getattr(msg, "content", "") == "Output token limit hit. Resume directly with no apology or recap." for msg in app_state.messages
     )
 
 
@@ -2053,8 +2049,7 @@ async def test_query_loop_persists_prompt_too_long_notice_after_recovery_exhaust
     notices = [
         msg
         for msg in app_state.messages
-        if msg.__class__.__name__ == "HumanMessage"
-        and ((getattr(msg, "metadata", None) or {}).get("source") == "system")
+        if msg.__class__.__name__ == "HumanMessage" and ((getattr(msg, "metadata", None) or {}).get("source") == "system")
     ]
     assert notices
     assert notices[-1].content == "Prompt is too long. Automatic recovery exhausted. Clear the thread or start a new one."
@@ -2440,7 +2435,7 @@ async def test_streaming_executor_missing_tool_completes_without_blocking_next_s
             if self.calls == 1:
                 yield AIMessageChunk(
                     content="",
-                    tool_call_chunks=[{"name": "missing_tool", "args": '{}', "id": "tc-missing", "index": 0}],
+                    tool_call_chunks=[{"name": "missing_tool", "args": "{}", "id": "tc-missing", "index": 0}],
                 )
                 yield AIMessageChunk(
                     content="",
@@ -2627,10 +2622,7 @@ async def test_streaming_executor_surfaces_middleware_exception_as_tool_error():
 
     assert result["reason"] == "completed"
     assert any(
-        isinstance(msg, ToolMessage)
-        and msg.tool_call_id == "tc-1"
-        and "middleware boom" in msg.content
-        for msg in result["messages"]
+        isinstance(msg, ToolMessage) and msg.tool_call_id == "tc-1" and "middleware boom" in msg.content for msg in result["messages"]
     )
     assert any(isinstance(msg, AIMessage) and msg.content == "final answer" for msg in result["messages"])
 
@@ -2680,11 +2672,7 @@ async def test_streaming_executor_restarts_queue_after_unsafe_completion_before_
         chunks.append(chunk)
 
     first_agent_index = next(i for i, chunk in enumerate(chunks) if "agent" in chunk)
-    pre_agent_tool_ids = [
-        msg.tool_call_id
-        for chunk in chunks[:first_agent_index]
-        for msg in chunk.get("tools", {}).get("messages", [])
-    ]
+    pre_agent_tool_ids = [msg.tool_call_id for chunk in chunks[:first_agent_index] for msg in chunk.get("tools", {}).get("messages", [])]
 
     assert starts == [
         "start-unsafe-u",
@@ -2783,29 +2771,18 @@ async def test_query_loop_messages_updates_mode_forwards_live_stream_chunks():
 
     message_events = [data for mode, data in events if mode == "messages"]
     texts = [msg.content for msg, _ in message_events if getattr(msg, "content", "")]
-    tool_update_index = next(
-        i for i, item in enumerate(events)
-        if item[0] == "updates" and "tools" in item[1]
-    )
-    thinking_index = next(
-        i for i, item in enumerate(events)
-        if item[0] == "messages" and item[1][0].content == "thinking"
-    )
+    tool_update_index = next(i for i, item in enumerate(events) if item[0] == "updates" and "tools" in item[1])
+    thinking_index = next(i for i, item in enumerate(events) if item[0] == "messages" and item[1][0].content == "thinking")
     tool_chunk_index = next(
-        i for i, item in enumerate(events)
-        if item[0] == "messages"
-        and getattr(item[1][0], "tool_call_chunks", None)
-        and item[1][0].tool_call_chunks[0]["id"] == "tc-1"
+        i
+        for i, item in enumerate(events)
+        if item[0] == "messages" and getattr(item[1][0], "tool_call_chunks", None) and item[1][0].tool_call_chunks[0]["id"] == "tc-1"
     )
 
     assert thinking_index < tool_update_index
     assert tool_chunk_index < tool_update_index
     assert any(msg.content == "thinking" for msg, _ in message_events)
-    assert any(
-        getattr(msg, "tool_call_chunks", None)
-        and msg.tool_call_chunks[0]["id"] == "tc-1"
-        for msg, _ in message_events
-    )
+    assert any(getattr(msg, "tool_call_chunks", None) and msg.tool_call_chunks[0]["id"] == "tc-1" for msg, _ in message_events)
     assert texts == ["thinking", "done", "final answer"]
 
 

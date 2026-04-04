@@ -8,8 +8,9 @@ Layer 3: ToolUseContext — per-turn, holds live closures to AppState
 from __future__ import annotations
 
 import uuid
+from collections.abc import Awaitable, Callable
 from pathlib import Path
-from typing import Any, Awaitable, Callable
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -18,10 +19,11 @@ from .permissions import ToolPermissionContext
 
 
 class ToolPermissionState(BaseModel):
-    alwaysAllowRules: dict[str, list[str]] = Field(default_factory=dict)
-    alwaysDenyRules: dict[str, list[str]] = Field(default_factory=dict)
-    alwaysAskRules: dict[str, list[str]] = Field(default_factory=dict)
-    allowManagedPermissionRulesOnly: bool = False
+    # @@@camelcase-permission-surface - persisted/thread API surface already uses camelCase keys.
+    alwaysAllowRules: dict[str, list[str]] = Field(default_factory=dict)  # noqa: N815
+    alwaysDenyRules: dict[str, list[str]] = Field(default_factory=dict)  # noqa: N815
+    alwaysAskRules: dict[str, list[str]] = Field(default_factory=dict)  # noqa: N815
+    allowManagedPermissionRulesOnly: bool = False  # noqa: N815
 
 
 class BootstrapConfig(BaseModel):
@@ -96,10 +98,10 @@ class AppState(BaseModel):
     # filesystem + terminal core decoupled.
     session_hooks: dict[str, list[Any]] = Field(default_factory=dict)
 
-    def get_state(self) -> "AppState":
+    def get_state(self) -> AppState:
         return self
 
-    def set_state(self, updater: Callable[["AppState"], "AppState"]) -> "AppState":
+    def set_state(self, updater: Callable[[AppState], AppState]) -> AppState:
         updated = updater(self)
         # Mutate in place (Python idiom — no immutable constraint needed here)
         for field_name in AppState.model_fields:

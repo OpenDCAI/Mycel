@@ -15,15 +15,18 @@ from __future__ import annotations
 
 import asyncio
 import copy
-import json
 import inspect
+import json
 import logging
 import re
 import uuid
+from collections.abc import AsyncGenerator
 from dataclasses import dataclass
-from enum import Enum
+from enum import StrEnum
 from types import SimpleNamespace
-from typing import Any, AsyncGenerator
+from typing import Any
+
+from langchain_core.messages import AIMessage, AIMessageChunk, HumanMessage, RemoveMessage, SystemMessage, ToolMessage
 
 from core.runtime.middleware import (
     AgentMiddleware,
@@ -31,11 +34,10 @@ from core.runtime.middleware import (
     ModelResponse,
     ToolCallRequest,
 )
-from langchain_core.messages import AIMessage, AIMessageChunk, HumanMessage, RemoveMessage, SystemMessage, ToolMessage
 
 from .abort import AbortController
-from .registry import ToolMode, ToolRegistry
 from .permissions import ToolPermissionContext, evaluate_permission_rules
+from .registry import ToolMode, ToolRegistry
 from .state import AppState, BootstrapConfig, ToolPermissionState, ToolUseContext
 from .validator import _required_sets_match
 
@@ -47,12 +49,10 @@ _FLOOR_OUTPUT_TOKENS = 3000
 _CONTEXT_OVERFLOW_SAFETY_BUFFER = 1000
 _TRANSIENT_API_MAX_RETRIES = 3
 _TRANSIENT_API_BASE_DELAY_SECONDS = 0.5
-_PROMPT_TOO_LONG_NOTICE_TEXT = (
-    "Prompt is too long. Automatic recovery exhausted. Clear the thread or start a new one."
-)
+_PROMPT_TOO_LONG_NOTICE_TEXT = "Prompt is too long. Automatic recovery exhausted. Clear the thread or start a new one."
 
 
-class TerminalReason(str, Enum):
+class TerminalReason(StrEnum):
     completed = "completed"
     aborted_streaming = "aborted_streaming"
     aborted_tools = "aborted_tools"
@@ -65,7 +65,7 @@ class TerminalReason(str, Enum):
     stop_hook_prevented = "stop_hook_prevented"
 
 
-class ContinueReason(str, Enum):
+class ContinueReason(StrEnum):
     next_turn = "next_turn"
     api_retry = "api_retry"
     collapse_drain_retry = "collapse_drain_retry"
@@ -173,6 +173,7 @@ class QueryLoop:
 
         # Set thread context so MemoryMiddleware can find thread_id via ContextVar
         from sandbox.thread_context import set_current_thread_id
+
         set_current_thread_id(thread_id)
 
         # Load message history and thread-scoped runtime state from checkpointer
@@ -346,6 +347,7 @@ class QueryLoop:
 
                 # Expose current messages for forkContext sub-agent spawning
                 from sandbox.thread_context import set_current_messages
+
                 set_current_messages(messages + [ai_msg])
 
                 if used_streaming_overlap:
@@ -522,22 +524,10 @@ class QueryLoop:
             messages.extend(self._parse_input({"messages": raw_updates}))
         else:
             updates = raw_updates if isinstance(raw_updates, list) else [raw_updates]
-            remove_ids = {
-                update.id
-                for update in updates
-                if isinstance(update, RemoveMessage) and getattr(update, "id", None)
-            }
+            remove_ids = {update.id for update in updates if isinstance(update, RemoveMessage) and getattr(update, "id", None)}
             if remove_ids:
-                messages = [
-                    message
-                    for message in messages
-                    if getattr(message, "id", None) not in remove_ids
-                ]
-            messages.extend(
-                update
-                for update in updates
-                if not isinstance(update, RemoveMessage)
-            )
+                messages = [message for message in messages if getattr(message, "id", None) not in remove_ids]
+            messages.extend(update for update in updates if not isinstance(update, RemoveMessage))
 
         await self._save_messages(thread_id, messages)
         current_turn_count = self._app_state.turn_count if self._app_state is not None else 0
@@ -596,9 +586,7 @@ class QueryLoop:
             return ModelResponse(result=result, request_messages=list(request.messages))
 
         # Build ModelRequest
-        inline_schemas = self._registry.get_inline_schemas(
-            self._get_discovered_tool_names(thread_id)
-        )
+        inline_schemas = self._registry.get_inline_schemas(self._get_discovered_tool_names(thread_id))
         request = ModelRequest(
             model=self.model,
             messages=messages,
@@ -650,9 +638,7 @@ class QueryLoop:
         *,
         thread_id: str,
     ) -> ModelRequest:
-        inline_schemas = self._registry.get_inline_schemas(
-            self._get_discovered_tool_names(thread_id)
-        )
+        inline_schemas = self._registry.get_inline_schemas(self._get_discovered_tool_names(thread_id))
         request = ModelRequest(
             model=self.model,
             messages=messages,
@@ -1380,6 +1366,7 @@ class QueryLoop:
 
         if isinstance(args, str):
             import json
+
             try:
                 args = json.loads(args)
             except Exception:
@@ -1407,6 +1394,7 @@ class QueryLoop:
                 )
             try:
                 import asyncio as _asyncio
+
                 if _asyncio.iscoroutinefunction(entry.handler):
                     result = await entry.handler(**t_args)
                 else:
@@ -1437,6 +1425,7 @@ class QueryLoop:
             if isinstance(args, str):
                 try:
                     import json as _json
+
                     args = _json.loads(args)
                 except Exception:
                     args = {}
@@ -1593,17 +1582,9 @@ class QueryLoop:
         # survive checkpoint replay so backend/UI surfaces stay honest after an
         # idle reload or agent recreation.
         def _update(state: AppState) -> AppState:
-            kept_pending = {
-                key: value
-                for key, value in state.pending_permission_requests.items()
-                if value.get("thread_id") != thread_id
-            }
+            kept_pending = {key: value for key, value in state.pending_permission_requests.items() if value.get("thread_id") != thread_id}
             kept_pending.update(copy.deepcopy(pending))
-            kept_resolved = {
-                key: value
-                for key, value in state.resolved_permission_requests.items()
-                if value.get("thread_id") != thread_id
-            }
+            kept_resolved = {key: value for key, value in state.resolved_permission_requests.items() if value.get("thread_id") != thread_id}
             kept_resolved.update(copy.deepcopy(resolved))
             return state.model_copy(
                 update={
@@ -1770,14 +1751,10 @@ class QueryLoop:
             preserved_total_cost = self._app_state.total_cost
             preserved_tool_overrides = dict(self._app_state.tool_overrides)
             pending_requests = {
-                key: value
-                for key, value in self._app_state.pending_permission_requests.items()
-                if value.get("thread_id") != thread_id
+                key: value for key, value in self._app_state.pending_permission_requests.items() if value.get("thread_id") != thread_id
             }
             resolved_requests = {
-                key: value
-                for key, value in self._app_state.resolved_permission_requests.items()
-                if value.get("thread_id") != thread_id
+                key: value for key, value in self._app_state.resolved_permission_requests.items() if value.get("thread_id") != thread_id
             }
 
             def _reset(state: AppState) -> AppState:
@@ -1884,7 +1861,7 @@ class QueryLoop:
         content = getattr(notice, "content", "")
         text = content if isinstance(content, str) else str(content)
         status_match = re.search(r"<status>(.*?)</status>", text, flags=re.IGNORECASE | re.DOTALL)
-        status = (status_match.group(1).strip().lower() if status_match else "")
+        status = status_match.group(1).strip().lower() if status_match else ""
         subject = "command" if notification_type == "command" else "agent"
         # @@@terminal-followthrough-fallback - terminal background notifications
         # must never collapse into notice-only durable history when the model
@@ -1907,7 +1884,7 @@ class QueryLoop:
         if chat_id_match:
             chat_id = chat_id_match.group(1)
             reply = (
-                f'I received a chat notification, but the followthrough assistant reply was empty. '
+                f"I received a chat notification, but the followthrough assistant reply was empty. "
                 f'Read it with chat_read(chat_id="{chat_id}") before deciding whether to reply.'
             )
         else:
@@ -2091,37 +2068,33 @@ class _StreamingToolExecutor:
 # Closure helpers (avoid late-binding bugs in loop-built lambdas)
 # -------------------------------------------------------------------------
 
+
 def _make_model_wrapper(mw: AgentMiddleware, next_handler):
     """Build an awrap_model_call wrapper that correctly closes over mw and next_handler."""
+
     async def wrapper(request: ModelRequest) -> ModelResponse:
         return await mw.awrap_model_call(request, next_handler)
+
     return wrapper
 
 
 def _make_tool_wrapper(mw: AgentMiddleware, next_handler):
     """Build an awrap_tool_call wrapper that correctly closes over mw and next_handler."""
+
     async def wrapper(request: ToolCallRequest) -> ToolMessage:
         return await mw.awrap_tool_call(request, next_handler)
+
     return wrapper
 
 
 # -------------------------------------------------------------------------
 # Middleware override detection helpers
-# -------------------------------------------------------------------------
-
-from core.runtime.middleware import AgentMiddleware as _BaseMiddleware
-
-
 def _mw_overrides_model_call(mw: AgentMiddleware) -> bool:
     """True if mw actually overrides awrap_model_call (not just inherits the base stub)."""
-    # Check if awrap_model_call is overridden in the concrete class
     mw_type = type(mw)
-    base_fn = getattr(_BaseMiddleware, "awrap_model_call", None)
     own_fn = mw_type.__dict__.get("awrap_model_call")
     if own_fn is not None:
         return True
-    # Fall back: check if wrap_model_call is overridden (sync version is acceptable)
-    base_sync = getattr(_BaseMiddleware, "wrap_model_call", None)
     own_sync = mw_type.__dict__.get("wrap_model_call")
     return own_sync is not None
 

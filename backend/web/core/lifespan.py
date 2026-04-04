@@ -232,4 +232,5 @@ async def lifespan(app: FastAPI):
 
         # Cleanup: stop LSP language servers
         from core.tools.lsp.service import lsp_pool
+
         await lsp_pool.close_all()

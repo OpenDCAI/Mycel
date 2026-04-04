@@ -214,7 +214,7 @@ def test_member_agent_retains_bundle_source_dir(tmp_path: Path, monkeypatch):
     member_dir = home_root / "members" / "alice"
     member_dir.mkdir(parents=True)
     (member_dir / "agent.md").write_text(
-        "---\nname: alice\ntools:\n  - \"*\"\n---\nmember prompt\n",
+        '---\nname: alice\ntools:\n  - "*"\n---\nmember prompt\n',
         encoding="utf-8",
     )
 

@@ -9,8 +9,8 @@ from langchain_core.messages import HumanMessage, SystemMessage, ToolMessage
 
 from backend.web.models.requests import CreateThreadRequest
 from backend.web.routers import threads as threads_router
-from core.runtime.middleware.monitor import AgentState
 from core.runtime.loop import QueryLoop
+from core.runtime.middleware.monitor import AgentState
 from core.runtime.registry import ToolRegistry
 from core.runtime.state import AppState, BootstrapConfig, ToolPermissionState
 from storage.contracts import MemberRow, MemberType
@@ -267,7 +267,11 @@ async def test_create_thread_route_uses_canonical_existing_lease_binding_helper(
     )
 
     with (
-        patch.object(threads_router.sandbox_service, "list_user_leases", return_value=[{"lease_id": "lease-1", "provider_name": "local", "recipe": None}]),
+        patch.object(
+            threads_router.sandbox_service,
+            "list_user_leases",
+            return_value=[{"lease_id": "lease-1", "provider_name": "local", "recipe": None}],
+        ),
         patch.object(threads_router, "bind_thread_to_existing_lease", return_value="/workspace/reused") as bind_helper,
         patch.object(threads_router, "_invalidate_resource_overview_cache", return_value=None),
         patch.object(threads_router, "save_last_successful_config", return_value=None),
@@ -406,10 +410,13 @@ async def test_get_thread_history_does_not_clear_live_pending_requests_during_ac
         ToolMessage(content="Permission required by rule: Bash", tool_call_id="call-1", name="Bash"),
     ]
 
-    with patch.object(threads_router, "resolve_thread_sandbox", return_value="local"), patch.object(
-        threads_router,
-        "get_or_create_agent",
-        AsyncMock(return_value=agent),
+    with (
+        patch.object(threads_router, "resolve_thread_sandbox", return_value="local"),
+        patch.object(
+            threads_router,
+            "get_or_create_agent",
+            AsyncMock(return_value=agent),
+        ),
     ):
         result = await threads_router.get_thread_history(
             "thread-1",

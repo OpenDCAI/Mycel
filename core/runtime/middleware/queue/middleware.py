@@ -58,10 +58,7 @@ def _is_owner_steer_message(message: Any) -> bool:
     if message.__class__.__name__ != "HumanMessage":
         return False
     metadata = getattr(message, "metadata", {}) or {}
-    return bool(
-        metadata.get("is_steer")
-        or (metadata.get("source") == "owner" and metadata.get("notification_type") == "steer")
-    )
+    return bool(metadata.get("is_steer") or (metadata.get("source") == "owner" and metadata.get("notification_type") == "steer"))
 
 
 def _apply_steer_contract(request: ModelRequest) -> ModelRequest:
@@ -80,9 +77,7 @@ def _apply_steer_contract(request: ModelRequest) -> ModelRequest:
         # durable history, but the live model call also needs an explicit
         # non-preemptive contract so it cannot overclaim that already-started
         # tool work was stopped or never produced side effects.
-        return request.override(
-            system_message=SystemMessage(content=f"{content}\n\n{_STEER_NON_PREEMPTIVE_SYSTEM_NOTE}")
-        )
+        return request.override(system_message=SystemMessage(content=f"{content}\n\n{_STEER_NON_PREEMPTIVE_SYSTEM_NOTE}"))
 
     return request.override(messages=[SystemMessage(content=_STEER_NON_PREEMPTIVE_SYSTEM_NOTE), *request.messages])
 

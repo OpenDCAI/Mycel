@@ -94,11 +94,7 @@ class ToolRegistry:
         # subset the live model API accepts.
         def _walk(value: Any) -> Any:
             if isinstance(value, dict):
-                return {
-                    key: _walk(child)
-                    for key, child in value.items()
-                    if not (isinstance(key, str) and key.startswith("x-leon-"))
-                }
+                return {key: _walk(child) for key, child in value.items() if not (isinstance(key, str) and key.startswith("x-leon-"))}
             if isinstance(value, list):
                 return [_walk(item) for item in value]
             return value
@@ -112,20 +108,12 @@ class ToolRegistry:
         Otherwise ranks by: search_hint > name > description.
         """
         q = query.strip()
-        entries = [
-            entry
-            for entry in self._tools.values()
-            if modes is None or entry.mode in modes
-        ]
+        entries = [entry for entry in self._tools.values() if modes is None or entry.mode in modes]
 
         # --- select:<names> exact lookup ---
         if q.lower().startswith("select:"):
-            names = [n.strip() for n in q[len("select:"):].split(",") if n.strip()]
-            results = [
-                self._tools[n]
-                for n in names
-                if n in self._tools and (modes is None or self._tools[n].mode in modes)
-            ]
+            names = [n.strip() for n in q[len("select:") :].split(",") if n.strip()]
+            results = [self._tools[n] for n in names if n in self._tools and (modes is None or self._tools[n].mode in modes)]
             return results
 
         # --- keyword search with ranking ---

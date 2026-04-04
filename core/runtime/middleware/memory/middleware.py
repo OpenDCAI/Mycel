@@ -13,14 +13,14 @@ from collections.abc import Awaitable, Callable
 from pathlib import Path
 from typing import Any
 
+from langchain_core.messages import SystemMessage
+
 from core.runtime.middleware import (
     AgentMiddleware,
     ModelCallResult,
     ModelRequest,
     ModelResponse,
 )
-from langchain_core.messages import SystemMessage
-
 from storage.contracts import SummaryRepo
 
 from .compactor import ContextCompactor
@@ -380,10 +380,7 @@ class MemoryMiddleware(AgentMiddleware):
         self._compaction_breaker_open_by_thread.pop(thread_id, None)
 
     def _record_compaction_notice(self) -> None:
-        content = (
-            f"Conversation compacted. Earlier {self._compact_up_to_index} message(s) "
-            "are now represented by a summary."
-        )
+        content = f"Conversation compacted. Earlier {self._compact_up_to_index} message(s) are now represented by a summary."
         self._queue_owner_notice(
             {
                 "content": content,
