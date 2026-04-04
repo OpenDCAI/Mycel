@@ -95,6 +95,13 @@ class _CommandWrapper(BaseExecutor):
         self._session.touch()
         # @@@command-context - CommandMiddleware passes Cwd/env; preserve that context for remote runtimes.
         wrapped, _ = self._wrap_command(command, cwd, env)
+        print(
+            "[_CommandWrapper.execute] "
+            f"thread_id={self._session.thread_id} "
+            f"terminal_id={self._session.terminal.terminal_id} "
+            f"command={command[:200]!r} "
+            f"cwd={cwd!r} timeout={timeout}"
+        )
         return await self._session.runtime.execute(wrapped, timeout)
 
     async def execute_async(self, command: str, cwd: str | None = None, env: dict[str, str] | None = None):

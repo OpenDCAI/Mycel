@@ -117,15 +117,19 @@ class RemoteSandbox(Sandbox):
         thread_id = get_current_thread_id()
         if not thread_id:
             raise RuntimeError("No thread_id set. Call set_current_thread_id first.")
+        print(f"[RemoteSandbox._get_capability] provider={self._provider.name} thread_id={thread_id}")
         cached = self._capability_cache.get(thread_id)
         if cached is not None and _cached_capability_is_stale(self._manager, thread_id, cached):
             self._capability_cache.pop(thread_id, None)
         if thread_id not in self._capability_cache:
+            print(f"[RemoteSandbox._get_capability] provider={self._provider.name} thread_id={thread_id} cache=miss")
             capability = self._manager.get_sandbox(thread_id)
             if self._config.init_commands and thread_id not in self._init_commands_run:
                 self._run_init_commands(capability)
                 self._init_commands_run.add(thread_id)
             self._capability_cache[thread_id] = capability
+        else:
+            print(f"[RemoteSandbox._get_capability] provider={self._provider.name} thread_id={thread_id} cache=hit")
         return self._capability_cache[thread_id]
 
     def _run_init_commands(self, capability: SandboxCapability) -> None:

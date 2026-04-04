@@ -136,6 +136,21 @@ class CommandService:
 
     async def _execute_blocking(self, command: str, work_dir: str | None, timeout_secs: float) -> str:
         try:
+            from sandbox.thread_context import get_current_thread_id
+
+            current_thread_id = get_current_thread_id()
+        except Exception:
+            current_thread_id = None
+        print(
+            "[CommandService._execute_blocking] "
+            f"executor={type(self._executor).__name__} "
+            f"is_remote={getattr(self._executor, 'is_remote', None)} "
+            f"runtime_owns_cwd={getattr(self._executor, 'runtime_owns_cwd', None)} "
+            f"thread_id={current_thread_id} "
+            f"work_dir={work_dir!r} timeout_secs={timeout_secs} "
+            f"command={command[:200]!r}"
+        )
+        try:
             result = await self._executor.execute(
                 command=command,
                 cwd=work_dir,
