@@ -181,20 +181,6 @@ keywords: [沙箱, docker, e2b, daytona, agentbay, 隔离, 生命周期]
 | 销毁 | `DELETE /api/sandbox/sessions/{id}?provider={type}` |
 | 获取指标 | `GET /api/sandbox/sessions/{id}/metrics` |
 
-## CLI 命令
-
-```bash
-leonai sandbox              # TUI 管理器
-leonai sandbox ls           # 列出活跃会话
-leonai sandbox new docker   # 创建 Docker 会话
-leonai sandbox pause <id>   # 暂停（保留状态）
-leonai sandbox resume <id>  # 恢复
-leonai sandbox rm <id>      # 删除
-leonai sandbox metrics <id> # 查看 CPU/RAM/磁盘
-```
-
-Session ID 可以缩写 — 任何唯一前缀均可。
-
 ## 架构
 
 沙箱是中间件栈之下的基础设施层：

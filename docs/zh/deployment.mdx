@@ -77,12 +77,7 @@ Mycel 配置存储在 `~/.leon/`：
 
 ### 快速配置
 
-```bash
-# 创建 ~/.leon/config.env
-leonai config
-```
-
-或手动创建 `~/.leon/config.env`：
+手动创建 `~/.leon/config.env`：
 
 ```env
 ANTHROPIC_API_KEY=sk-ant-xxx
@@ -220,17 +215,6 @@ Daytona Proxy（端口 4000）必须从 Runner 可访问，文件操作依赖它
 ```
 
 ## 验证
-
-```bash
-# 检查安装
-leonai --version
-
-# 列出沙箱会话
-leonai sandbox ls
-
-# 测试沙箱提供商
-leonai --sandbox docker "echo 沙箱正常"
-```
 
 打开 Web UI `http://localhost:5173`，注册账号，确认 Agent 正常响应。
 

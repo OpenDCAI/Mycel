@@ -178,20 +178,6 @@ From **Resources**:
 | Destroy | `DELETE /api/sandbox/sessions/{id}?provider={type}` |
 | Metrics | `GET /api/sandbox/sessions/{id}/metrics` |
 
-### CLI
-
-```bash
-leonai sandbox              # TUI manager
-leonai sandbox ls           # List active sessions
-leonai sandbox new docker   # Create a Docker session
-leonai sandbox pause <id>   # Pause (state preserved)
-leonai sandbox resume <id>  # Resume
-leonai sandbox rm <id>      # Delete
-leonai sandbox metrics <id> # Show CPU/RAM/disk
-```
-
-Session IDs can be abbreviated — any unique prefix works.
-
 ## Architecture
 
 ```mermaid

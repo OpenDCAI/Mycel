@@ -46,12 +46,7 @@ Mycel uses a split configuration system with three-tier merge: system defaults �
 
 ## First run
 
-```bash
-leonai config        # Interactive wizard — creates ~/.leon/config.env
-leonai config show   # Show current settings
-```
-
-The wizard writes `~/.leon/config.env`:
+Create `~/.leon/config.env`:
 
 ```env
 OPENAI_API_KEY=sk-xxx
@@ -171,8 +166,10 @@ MODEL_NAME=claude-sonnet-4-5-20250929
     | `leon:large` | claude-opus-4-6 | Complex reasoning |
     | `leon:max` | claude-opus-4-6 + temp=0 | Maximum precision |
 
-    ```bash
-    leonai --model leon:large
+    Set via **Settings → Models** in the Web UI, or in `~/.leon/models.json`:
+
+    ```json
+    { "active": { "model": "leon:large" } }
     ```
 
     Override a mapping in `~/.leon/models.json`:
