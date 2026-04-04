@@ -70,6 +70,20 @@ class _LazyExecutor:
         return getattr(self._remote._get_capability().command, name)
 
 
+def _cached_capability_is_stale(manager, thread_id: str, capability) -> bool:
+    session = getattr(capability, "_session", None)
+    if session is None:
+        return True
+    if getattr(session, "status", None) in {"closed", "failed", "paused"}:
+        return True
+    # @@@capability-cache-session-liveness - cached wrappers outlive session teardown;
+    # always confirm the cached session still exists as the current active session.
+    current = manager.session_manager.get(thread_id, session.terminal.terminal_id)
+    if current is None:
+        return True
+    return current.session_id != session.session_id
+
+
 class RemoteSandbox(Sandbox):
     """Concrete sandbox for all provider-backed environments (AgentBay, Docker, E2B, Daytona)."""
 
@@ -103,6 +117,9 @@ class RemoteSandbox(Sandbox):
         thread_id = get_current_thread_id()
         if not thread_id:
             raise RuntimeError("No thread_id set. Call set_current_thread_id first.")
+        cached = self._capability_cache.get(thread_id)
+        if cached is not None and _cached_capability_is_stale(self._manager, thread_id, cached):
+            self._capability_cache.pop(thread_id, None)
         if thread_id not in self._capability_cache:
             capability = self._manager.get_sandbox(thread_id)
             if self._config.init_commands and thread_id not in self._init_commands_run:
@@ -229,6 +246,9 @@ class LocalSandbox(Sandbox):
         thread_id = get_current_thread_id()
         if not thread_id:
             raise RuntimeError("No thread_id set. Call set_current_thread_id first.")
+        cached = self._capability_cache.get(thread_id)
+        if cached is not None and _cached_capability_is_stale(self._manager, thread_id, cached):
+            self._capability_cache.pop(thread_id, None)
         if thread_id not in self._capability_cache:
             self._capability_cache[thread_id] = self._manager.get_sandbox(thread_id)
         return self._capability_cache[thread_id]

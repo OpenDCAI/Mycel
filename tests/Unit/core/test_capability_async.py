@@ -1,8 +1,11 @@
 import asyncio
 import uuid
+from pathlib import Path
 
 from sandbox.capability import SandboxCapability
+from sandbox.base import LocalSandbox
 from sandbox.interfaces.executor import AsyncCommand, ExecuteResult
+from sandbox.thread_context import set_current_thread_id
 
 
 class _DummyState:
@@ -83,3 +86,28 @@ async def _run_async_command_flow():
 
 def test_command_wrapper_supports_execute_async():
     asyncio.run(_run_async_command_flow())
+
+
+def test_local_sandbox_rebuilds_stale_closed_capability_before_execute_async(tmp_path):
+    root = Path(tmp_path)
+    thread_id = "thread-stale-session"
+    sandbox = LocalSandbox(str(root), db_path=root / "sandbox.db")
+    set_current_thread_id(thread_id)
+    capability = sandbox._get_capability()
+    stale_session_id = capability._session.session_id
+    sandbox.manager.session_manager.delete(stale_session_id, reason="test_close")
+
+    async def run():
+        async_cmd = await sandbox.shell().execute_async("sleep 0.01; echo hi")
+        result = await sandbox.shell().wait_for(async_cmd.command_id, timeout=1.0)
+        return async_cmd, result
+
+    async_cmd, result = asyncio.run(run())
+
+    assert capability._session.status == "closed"
+    refreshed = sandbox._get_capability()
+    assert refreshed._session.session_id != stale_session_id
+    assert async_cmd.command_id.startswith("cmd_")
+    assert result is not None
+    assert result.exit_code == 0
+    assert "hi" in result.stdout
