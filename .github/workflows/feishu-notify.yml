@@ -13,7 +13,7 @@ on:
 jobs:
   notify:
     runs-on: ubuntu-latest
-    if: ${{ !contains(github.actor, '[bot]') }}
+    if: ${{ !contains(github.actor, '[bot]') && github.event.repository.fork == false }}
     steps:
       - name: Send to Feishu
         env:
@@ -38,7 +38,10 @@ jobs:
           python3 << 'EOF'
           import os, json, urllib.request
 
-          webhook = os.environ["WEBHOOK"]
+          webhook = os.environ.get("WEBHOOK", "")
+          if not webhook:
+              print("FEISHU_WEBHOOK_URL secret not set, skipping.")
+              exit(0)
           event   = os.environ["GH_EVENT"]
           action  = os.environ["GH_ACTION"]
           actor   = os.environ["GH_ACTOR"]
