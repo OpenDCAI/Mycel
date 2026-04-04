@@ -1117,6 +1117,8 @@ async def test_run_agent_uses_live_child_thread_bridge_when_web_app_present(monk
     assert len(captured["input_messages"]) == 1
     assert captured["input_messages"][0]["role"] == "user"
     assert captured["input_messages"][0]["content"] == "do work"
+    assert captured["agent"].cleanup_calls == 1
+    assert captured["agent"].closed is False
 
 
 def test_agent_schema_does_not_claim_general_has_full_tool_access():
