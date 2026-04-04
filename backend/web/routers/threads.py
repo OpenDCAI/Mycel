@@ -327,7 +327,11 @@ def _create_owned_thread(
     owned_lease: dict[str, Any] | None = None
     if selected_lease_id:
         owned_lease = next(
-            (lease for lease in sandbox_service.list_user_leases(owner_user_id) if lease["lease_id"] == selected_lease_id),
+            (lease for lease in sandbox_service.list_user_leases(
+                owner_user_id,
+                thread_repo=app.state.thread_repo,
+                member_repo=app.state.member_repo,
+            ) if lease["lease_id"] == selected_lease_id),
             None,
         )
         if owned_lease is None:

@@ -5,7 +5,7 @@ import subprocess
 import sys
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
 from backend.web.core.dependencies import get_current_user_id
 from backend.web.services import sandbox_service
@@ -124,8 +124,16 @@ async def list_sandbox_sessions() -> dict[str, Any]:
 @router.get("/leases/mine")
 async def list_my_leases(
     user_id: Annotated[str, Depends(get_current_user_id)],
+    request: Request,
 ) -> dict[str, Any]:
-    leases = await asyncio.to_thread(sandbox_service.list_user_leases, user_id)
+    thread_repo = getattr(request.app.state, "thread_repo", None)
+    member_repo = getattr(request.app.state, "member_repo", None)
+    leases = await asyncio.to_thread(
+        sandbox_service.list_user_leases,
+        user_id,
+        thread_repo=thread_repo,
+        member_repo=member_repo,
+    )
     return {"leases": leases}
 
 

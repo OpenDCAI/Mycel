@@ -336,17 +336,25 @@ def _ensure_leon_dir() -> Path:
 # ── CRUD operations ──
 
 
-def list_members(owner_user_id: str | None = None) -> list[dict[str, Any]]:
-    """List agent members. If owner_user_id given, only that user's agents (no builtin Leon)."""
+def list_members(owner_user_id: str | None = None, member_repo: Any = None) -> list[dict[str, Any]]:
+    """List agent members. If owner_user_id given, only that user's agents (no builtin Leon).
+
+    Args:
+        owner_user_id: Filter to agents owned by this user.
+        member_repo: Injected MemberRepo (respects LEON_STORAGE_STRATEGY). Falls back to SQLite.
+    """
     # @@@auth-scope — scoped by owner from DB, config from filesystem
     if owner_user_id:
-        from storage.providers.sqlite.member_repo import SQLiteMemberRepo
+        if member_repo is None:
+            from storage.providers.sqlite.member_repo import SQLiteMemberRepo
 
-        repo = SQLiteMemberRepo()
-        try:
-            agents = repo.list_by_owner_user_id(owner_user_id)
-        finally:
-            repo.close()
+            repo = SQLiteMemberRepo()
+            try:
+                agents = repo.list_by_owner_user_id(owner_user_id)
+            finally:
+                repo.close()
+        else:
+            agents = member_repo.list_by_owner_user_id(owner_user_id)
         results = []
         for agent in agents:
             agent_dir = MEMBERS_DIR / agent.id
@@ -383,9 +391,9 @@ def get_member(member_id: str) -> dict[str, Any] | None:
     return _member_to_dict(member_dir)
 
 
-def create_member(name: str, description: str = "", owner_user_id: str | None = None) -> dict[str, Any]:
+def create_member(name: str, description: str = "", owner_user_id: str | None = None, member_repo: Any = None) -> dict[str, Any]:
     from storage.contracts import MemberRow, MemberType
-    from storage.providers.sqlite.member_repo import SQLiteMemberRepo, generate_member_id
+    from storage.providers.sqlite.member_repo import generate_member_id
 
     now = time.time()
     now_ms = int(now * 1000)
@@ -403,28 +411,32 @@ def create_member(name: str, description: str = "", owner_user_id: str | None = 
         },
     )
 
-    # Persist to SQLite members table so list_members finds it
+    # Persist to members table so list_members finds it
     if owner_user_id:
-        repo = SQLiteMemberRepo()
-        try:
-            repo.create(
-                MemberRow(
-                    id=member_id,
-                    name=name,
-                    type=MemberType.MYCEL_AGENT,
-                    description=description,
-                    config_dir=str(member_dir),
-                    owner_user_id=owner_user_id,
-                    created_at=now,
-                )
-            )
-        finally:
-            repo.close()
+        row = MemberRow(
+            id=member_id,
+            name=name,
+            type=MemberType.MYCEL_AGENT,
+            description=description,
+            config_dir=str(member_dir),
+            owner_user_id=owner_user_id,
+            created_at=now,
+        )
+        if member_repo is not None:
+            member_repo.create(row)
+        else:
+            from storage.providers.sqlite.member_repo import SQLiteMemberRepo
+
+            repo = SQLiteMemberRepo()
+            try:
+                repo.create(row)
+            finally:
+                repo.close()
 
     return get_member(member_id)  # type: ignore
 
 
-def update_member(member_id: str, **fields: Any) -> dict[str, Any] | None:
+def update_member(member_id: str, member_repo: Any = None, entity_repo: Any = None, thread_repo: Any = None, **fields: Any) -> dict[str, Any] | None:
     if member_id == "__leon__":
         member_dir = _ensure_leon_dir()
     else:
@@ -454,28 +466,33 @@ def update_member(member_id: str, **fields: Any) -> dict[str, Any] | None:
         meta["updated_at"] = int(time.time() * 1000)
         _write_json(member_dir / "meta.json", meta)
 
-        # Sync name to SQLite
+        # Sync name to DB
         if "name" in updates:
-            from storage.providers.sqlite.entity_repo import SQLiteEntityRepo
-            from storage.providers.sqlite.member_repo import SQLiteMemberRepo
-            from storage.providers.sqlite.thread_repo import SQLiteThreadRepo
+            if member_repo is None:
+                from storage.providers.sqlite.member_repo import SQLiteMemberRepo
 
-            repo = SQLiteMemberRepo()
-            entity_repo = SQLiteEntityRepo()
-            thread_repo = SQLiteThreadRepo()
-            try:
-                repo.update(member_id, name=updates["name"])
-                member = repo.get_by_id(member_id)
-                if member is None:
-                    raise ValueError(f"Member {member_id} not found after update")
-                for entity in entity_repo.get_by_member_id(member_id):
-                    if entity.thread_id is None:
-                        entity_repo.update(entity.id, name=member.name)
-                        continue
-                    thread = thread_repo.get_by_id(entity.thread_id)
-                    if thread is None:
-                        raise ValueError(f"Entity {entity.id} references missing thread {entity.thread_id}")
-                    entity_repo.update(
+                member_repo = SQLiteMemberRepo()
+            if entity_repo is None:
+                from storage.providers.sqlite.entity_repo import SQLiteEntityRepo
+
+                entity_repo = SQLiteEntityRepo()
+            if thread_repo is None:
+                from storage.providers.sqlite.thread_repo import SQLiteThreadRepo
+
+                thread_repo = SQLiteThreadRepo()
+
+            member_repo.update(member_id, name=updates["name"])
+            member = member_repo.get_by_id(member_id)
+            if member is None:
+                raise ValueError(f"Member {member_id} not found after update")
+            for entity in entity_repo.get_by_member_id(member_id):
+                if entity.thread_id is None:
+                    entity_repo.update(entity.id, name=member.name)
+                    continue
+                thread = thread_repo.get_by_id(entity.thread_id)
+                if thread is None:
+                    raise ValueError(f"Entity {entity.id} references missing thread {entity.thread_id}")
+                entity_repo.update(
                         entity.id,
                         name=canonical_entity_name(
                             member.name,
@@ -483,10 +500,6 @@ def update_member(member_id: str, **fields: Any) -> dict[str, Any] | None:
                             branch_index=int(thread["branch_index"]),
                         ),
                     )
-            finally:
-                thread_repo.close()
-                entity_repo.close()
-                repo.close()
 
     return get_member(member_id)
 
@@ -679,7 +692,7 @@ def publish_member(member_id: str, bump_type: str = "patch") -> dict[str, Any] |
     return get_member(member_id)
 
 
-def delete_member(member_id: str) -> bool:
+def delete_member(member_id: str, member_repo: Any = None) -> bool:
     if member_id == "__leon__":
         return False
     member_dir = MEMBERS_DIR / member_id
@@ -688,14 +701,17 @@ def delete_member(member_id: str) -> bool:
 
     shutil.rmtree(member_dir)
 
-    # Also remove from SQLite
-    from storage.providers.sqlite.member_repo import SQLiteMemberRepo
+    # Also remove from DB
+    if member_repo is not None:
+        member_repo.delete(member_id)
+    else:
+        from storage.providers.sqlite.member_repo import SQLiteMemberRepo
 
-    repo = SQLiteMemberRepo()
-    try:
-        repo.delete(member_id)
-    finally:
-        repo.close()
+        repo = SQLiteMemberRepo()
+        try:
+            repo.delete(member_id)
+        finally:
+            repo.close()
 
     return True
 
@@ -717,10 +733,11 @@ def install_from_snapshot(
     installed_version: str,
     owner_user_id: str,
     existing_member_id: str | None = None,
+    member_repo: Any = None,
 ) -> str:
     """Create or update a local member from a marketplace snapshot."""
     from storage.contracts import MemberRow, MemberType
-    from storage.providers.sqlite.member_repo import SQLiteMemberRepo, generate_member_id
+    from storage.providers.sqlite.member_repo import generate_member_id
 
     now = time.time()
     now_ms = int(now * 1000)
@@ -809,22 +826,26 @@ def install_from_snapshot(
     }
     _write_json(member_dir / "meta.json", meta)
 
-    # Register in SQLite (new installs only)
+    # Register in DB (new installs only)
     if not existing_member_id and owner_user_id:
-        repo = SQLiteMemberRepo()
-        try:
-            repo.create(
-                MemberRow(
-                    id=member_id,
-                    name=name,
-                    type=MemberType.MYCEL_AGENT,
-                    description=description,
-                    config_dir=str(member_dir),
-                    owner_user_id=owner_user_id,
-                    created_at=now,
-                )
-            )
-        finally:
-            repo.close()
+        row = MemberRow(
+            id=member_id,
+            name=name,
+            type=MemberType.MYCEL_AGENT,
+            description=description,
+            config_dir=str(member_dir),
+            owner_user_id=owner_user_id,
+            created_at=now,
+        )
+        if member_repo is not None:
+            member_repo.create(row)
+        else:
+            from storage.providers.sqlite.member_repo import SQLiteMemberRepo
+
+            repo = SQLiteMemberRepo()
+            try:
+                repo.create(row)
+            finally:
+                repo.close()
 
     return member_id

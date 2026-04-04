@@ -65,7 +65,7 @@ class SupabaseThreadRepo:
                 "cwd": cwd,
                 "model": extra.get("model"),
                 "observation_provider": extra.get("observation_provider"),
-                "is_main": is_main,
+                "is_main": int(is_main),
                 "branch_index": branch_index,
                 "created_at": created_at,
             }
@@ -188,6 +188,8 @@ class SupabaseThreadRepo:
                 is_main=next_is_main if next_is_main is not None else bool(current["is_main"]),
                 branch_index=next_branch_index if next_branch_index is not None else int(current["branch_index"]),
             )
+        if "is_main" in updates:
+            updates["is_main"] = int(bool(updates["is_main"]))
         self._t().update(updates).eq("id", thread_id).execute()
 
     def delete(self, thread_id: str) -> None:
