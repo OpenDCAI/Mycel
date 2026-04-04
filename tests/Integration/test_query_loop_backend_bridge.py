@@ -934,6 +934,61 @@ async def test_cold_rebuild_surfaces_persisted_prompt_too_long_notice_after_reco
 
 
 @pytest.mark.asyncio
+async def test_get_thread_messages_idle_rebuild_keeps_completed_subagent_stream_status():
+    ai = AIMessage(
+        content="",
+        tool_calls=[{"name": "Agent", "args": {"prompt": "do work", "run_in_background": True}, "id": "tc-agent-1"}],
+    )
+    tool = ToolMessage(
+        content=(
+            '{"task_id":"task-123","agent_name":"agent-task-123",'
+            '"thread_id":"subagent-task-123","status":"running",'
+            '"message":"Agent started in background. Use TaskOutput to get result."}'
+        ),
+        name="Agent",
+        tool_call_id="tc-agent-1",
+    )
+    notice = HumanMessage(
+        content=(
+            "<system-reminder>\n"
+            "<task-notification>\n"
+            "  <run-id>task-123</run-id>\n"
+            "  <status>completed</status>\n"
+            "  <description>child task</description>\n"
+            "  <summary>child task</summary>\n"
+            "  <result>CHILD_DONE</result>\n"
+            "</task-notification>\n"
+            "</system-reminder>"
+        )
+    )
+    notice.metadata = {"source": "system", "notification_type": "agent"}
+
+    fake_agent = SimpleNamespace(
+        agent=SimpleNamespace(
+            aget_state=AsyncMock(return_value=SimpleNamespace(values={"messages": [ai, tool, notice]}))
+        ),
+        runtime=SimpleNamespace(current_state=AgentState.IDLE),
+    )
+    fake_app = SimpleNamespace(state=SimpleNamespace(display_builder=DisplayBuilder()))
+
+    with (
+        patch("backend.web.routers.threads.get_or_create_agent", return_value=fake_agent),
+        patch("backend.web.routers.threads.resolve_thread_sandbox", return_value="local"),
+        patch("backend.web.routers.threads.get_sandbox_info", return_value={"type": "local"}),
+    ):
+        detail = await get_thread_messages(
+            "parent-thread",
+            user_id="u",
+            app=fake_app,
+        )
+
+    seg = detail["entries"][0]["segments"][0]
+    assert seg["step"]["subagent_stream"]["task_id"] == "task-123"
+    assert seg["step"]["subagent_stream"]["thread_id"] == "subagent-task-123"
+    assert seg["step"]["subagent_stream"]["status"] == "completed"
+
+
+@pytest.mark.asyncio
 async def test_compaction_clear_then_recovery_notice_rebuilds_honestly(tmp_path):
     checkpointer = _MemoryCheckpointer()
     summary_model = MagicMock()
