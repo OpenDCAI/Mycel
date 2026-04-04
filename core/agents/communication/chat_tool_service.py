@@ -421,9 +421,7 @@ class ChatToolService:
             if type is None or type == "human":
                 all_members = self._members.list_all() if self._members else []
                 for m in all_members:
-                    if m.id == eid or (hasattr(m, "type") and str(m.type) not in ("human", "MemberType.HUMAN")):
-                        continue
-                    if hasattr(m.type, "value") and m.type.value != "human":
+                    if m.id == eid or str(m.type) != "human":
                         continue
                     if search and search.lower() not in m.name.lower():
                         continue
