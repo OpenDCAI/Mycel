@@ -52,6 +52,7 @@ from backend.web.utils.helpers import delete_thread_in_db
 from backend.web.utils.serializers import avatar_url, serialize_message
 from core.runtime.middleware.monitor import AgentState
 from sandbox.config import MountSpec
+from sandbox.manager import bind_thread_to_existing_lease
 from sandbox.recipes import normalize_recipe_snapshot, provider_type_from_name
 from sandbox.thread_context import set_current_thread_id
 from storage.contracts import EntityRow
@@ -273,43 +274,6 @@ def _create_thread_sandbox_resources(thread_id: str, sandbox_type: str, recipe: 
         terminal_repo.close()
 
 
-def _resolve_existing_lease_cwd(lease_id: str, fallback_cwd: str | None) -> str:
-    if fallback_cwd:
-        return fallback_cwd
-
-    from backend.web.core.config import LOCAL_WORKSPACE_ROOT
-    from storage.providers.sqlite.kernel import SQLiteDBRole, resolve_role_db_path
-    from storage.providers.sqlite.terminal_repo import SQLiteTerminalRepo
-
-    terminal_repo = SQLiteTerminalRepo(db_path=resolve_role_db_path(SQLiteDBRole.SANDBOX))
-    try:
-        row = terminal_repo.get_latest_by_lease(lease_id)
-    finally:
-        terminal_repo.close()
-    if row and row.get("cwd"):
-        return str(row["cwd"])
-
-    return str(LOCAL_WORKSPACE_ROOT)
-
-
-def _bind_thread_to_existing_lease(thread_id: str, lease_id: str, *, cwd: str | None) -> str:
-    from storage.providers.sqlite.kernel import SQLiteDBRole, resolve_role_db_path
-    from storage.providers.sqlite.terminal_repo import SQLiteTerminalRepo
-
-    initial_cwd = _resolve_existing_lease_cwd(lease_id, cwd)
-    terminal_repo = SQLiteTerminalRepo(db_path=resolve_role_db_path(SQLiteDBRole.SANDBOX))
-    try:
-        terminal_repo.create(
-            terminal_id=f"term-{uuid.uuid4().hex[:12]}",
-            thread_id=thread_id,
-            lease_id=lease_id,
-            initial_cwd=initial_cwd,
-        )
-    finally:
-        terminal_repo.close()
-    return initial_cwd
-
-
 def _create_owned_thread(
     app: Any,
     owner_user_id: str,
@@ -374,7 +338,7 @@ def _create_owned_thread(
 
     if selected_lease_id:
         # @@@reuse-lease-binding - Reuse an existing lease by attaching a fresh terminal for the new thread.
-        bound_cwd = _bind_thread_to_existing_lease(
+        bound_cwd = bind_thread_to_existing_lease(
             thread_entity_id,
             selected_lease_id,
             cwd=payload.cwd,
