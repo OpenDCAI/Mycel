@@ -3,6 +3,10 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+    volumes:
+      # @@@staging-leon-home-volume - staging runtime state (models/members/sandboxes)
+      # must survive container replacement, otherwise each deploy boots with an empty ~/.leon.
+      - leon-home:/root/.leon
     restart: unless-stopped
 
   frontend:
@@ -14,3 +18,6 @@ services:
     depends_on:
       - backend
     restart: unless-stopped
+
+volumes:
+  leon-home:
