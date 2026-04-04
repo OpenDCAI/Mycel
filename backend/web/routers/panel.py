@@ -33,8 +33,9 @@ router = APIRouter(prefix="/api/panel", tags=["panel"])
 @router.get("/members")
 async def list_members(
     user_id: Annotated[str, Depends(get_current_user_id)],
+    request: Request,
 ) -> dict[str, Any]:
-    items = await asyncio.to_thread(member_service.list_members, user_id)
+    items = await asyncio.to_thread(member_service.list_members, user_id, request.app.state.member_repo)
     return {"items": items}
 
 
@@ -300,8 +301,12 @@ async def update_resource_content(resource_type: str, resource_id: str, req: Upd
 
 
 @router.get("/profile")
-async def get_profile() -> dict[str, Any]:
-    return await asyncio.to_thread(profile_service.get_profile)
+async def get_profile(
+    user_id: Annotated[str, Depends(get_current_user_id)],
+    request: Request,
+) -> dict[str, Any]:
+    member = request.app.state.member_repo.get_by_id(user_id)
+    return await asyncio.to_thread(profile_service.get_profile, member)
 
 
 @router.put("/profile")

@@ -336,17 +336,22 @@ def _ensure_leon_dir() -> Path:
 # ── CRUD operations ──
 
 
-def list_members(owner_user_id: str | None = None) -> list[dict[str, Any]]:
+def list_members(owner_user_id: str | None = None, member_repo: Any | None = None) -> list[dict[str, Any]]:
     """List agent members. If owner_user_id given, only that user's agents (no builtin Leon)."""
     # @@@auth-scope — scoped by owner from DB, config from filesystem
     if owner_user_id:
-        from storage.providers.sqlite.member_repo import SQLiteMemberRepo
+        repo = member_repo
+        close_repo = False
+        if repo is None:
+            from storage.providers.sqlite.member_repo import SQLiteMemberRepo
 
-        repo = SQLiteMemberRepo()
+            repo = SQLiteMemberRepo()
+            close_repo = True
         try:
             agents = repo.list_by_owner_user_id(owner_user_id)
         finally:
-            repo.close()
+            if close_repo:
+                repo.close()
         results = []
         for agent in agents:
             agent_dir = MEMBERS_DIR / agent.id

@@ -47,9 +47,12 @@ async def get_current_entity_id(request: Request) -> str:
     """Extract entity_id from JWT. Used for chat/social scoping (Entity = Thread's identity)."""
     payload = _extract_jwt_payload(request)
     entity_id = payload.get("entity_id")
-    if not entity_id:
-        raise HTTPException(401, "Token missing entity_id — please re-login")
-    return entity_id
+    if entity_id:
+        return entity_id
+    user_id = payload.get("user_id")
+    if not user_id:
+        raise HTTPException(401, "Token missing user_id")
+    return f"{user_id}-1"
 
 
 async def verify_thread_owner(
