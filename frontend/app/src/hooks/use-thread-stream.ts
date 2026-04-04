@@ -35,11 +35,11 @@ class ThreadConnectionManager {
   private threadId = "";
   private ac: AbortController | null = null;
   private version = 0;
-  // @@@dedup-events — track seen seqs in a set (not monotonic max) because
-  // activity_sink and run emit write to thread_buf concurrently, so events
-  // can arrive out of seq order.  A monotonic lastSeenSeq would wrongly skip
-  // lower-seq events that arrive after a higher-seq one.
-  private seenSeqs = new Set<number>();
+  // @@@dedup-events - dedupe by event-type+seq, not raw seq alone. Backend
+  // derived display_delta events intentionally reuse the source event _seq, so
+  // seq-only dedupe would drop the UI-driving delta right after user_message /
+  // run_start and make the thread look frozen until a manual refresh.
+  private seenEventKeys = new Set<string>();
   private subscribers = new Set<(event: StreamEvent) => void>();
   private listener: (() => void) | null = null; // React re-render trigger
   private refreshThreads: (() => Promise<void>) | null = null;
@@ -90,14 +90,15 @@ class ThreadConnectionManager {
             // can open duplicate SSE connections in dev; both deliver the same events).
             const d = (event.data ?? {}) as { _seq?: number };
             if (typeof d._seq === "number") {
-              if (this.seenSeqs.has(d._seq)) {
+              const eventKey = `${event.type}:${d._seq}`;
+              if (this.seenEventKeys.has(eventKey)) {
                 return;
               }
-              this.seenSeqs.add(d._seq);
+              this.seenEventKeys.add(eventKey);
               // Cap set size to prevent unbounded growth
-              if (this.seenSeqs.size > 5000) {
-                const sorted = [...this.seenSeqs].sort((a, b) => a - b);
-                for (let i = 0; i < 2500; i++) this.seenSeqs.delete(sorted[i]);
+              if (this.seenEventKeys.size > 5000) {
+                const oldKeys = [...this.seenEventKeys];
+                for (let i = 0; i < 2500; i++) this.seenEventKeys.delete(oldKeys[i]);
               }
             }
             if (event.type === "status" && event.data) {
