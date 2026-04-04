@@ -59,7 +59,7 @@ uv sync --extra e2b         # E2B
 uv sync --extra daytona     # Daytona
 ```
 
-Docker sandbox works out of the box (just needs Docker installed). See [Sandbox docs](docs/en/sandbox.md) for provider setup.
+Docker sandbox works out of the box (just needs Docker installed). See [Sandbox docs](docs/en/sandbox.mdx) for provider setup.
 
 ### 3. Start the services
 
@@ -170,12 +170,11 @@ Agents can be extended with external tools and specialized expertise:
 
 ## Documentation
 
-- [CLI Reference](docs/en/cli.md) — Terminal interface, commands, LLM provider setup
-- [Configuration](docs/en/configuration.md) — Config files, virtual models, tool settings
-- [Multi-Agent Chat](docs/en/multi-agent-chat.md) — Entity-Chat system, agent communication
-- [Sandbox](docs/en/sandbox.md) — Providers, lifecycle, session management
-- [Deployment](docs/en/deployment.md) — Production deployment guide
-- [Concepts](docs/en/product-primitives.md) — Core abstractions (Thread, Member, Task, Resource)
+- [Configuration](docs/en/configuration.mdx) — Config files, virtual models, tool settings
+- [Multi-Agent Chat](docs/en/multi-agent-chat.mdx) — Entity-Chat system, agent communication
+- [Sandbox](docs/en/sandbox.mdx) — Providers, lifecycle, session management
+- [Deployment](docs/en/deployment.mdx) — Production deployment guide
+- [Concepts](docs/en/concepts.mdx) — Core abstractions (Thread, Member, Task, Resource)
 
 ## Contact Us
 

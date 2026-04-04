@@ -59,7 +59,7 @@ uv sync --extra e2b         # E2B
 uv sync --extra daytona     # Daytona
 ```
 
-Docker 沙箱开箱即用（只需安装 Docker）。详见[沙箱文档](docs/zh/sandbox.md)。
+Docker 沙箱开箱即用（只需安装 Docker）。详见[沙箱文档](docs/zh/sandbox.mdx)。
 
 ### 3. 启动服务
 
@@ -170,12 +170,11 @@ Agent 可通过外部工具和专业技能进行扩展：
 
 ## 文档
 
-- [CLI 参考](docs/zh/cli.md) — 终端界面、命令、LLM 提供商配置
-- [配置指南](docs/zh/configuration.md) — 配置文件、虚拟模型、工具设置
-- [多 Agent 通讯](docs/zh/multi-agent-chat.md) — Entity-Chat 系统、Agent 间通讯
-- [沙箱](docs/zh/sandbox.md) — 提供商、生命周期、会话管理
-- [部署](docs/zh/deployment.md) — 生产部署指南
-- [核心概念](docs/zh/product-primitives.md) — 核心抽象（Thread、Member、Task、Resource）
+- [配置指南](docs/zh/configuration.mdx) — 配置文件、虚拟模型、工具设置
+- [多 Agent 通讯](docs/zh/multi-agent-chat.mdx) — Entity-Chat 系统、Agent 间通讯
+- [沙箱](docs/zh/sandbox.mdx) — 提供商、生命周期、会话管理
+- [部署](docs/zh/deployment.mdx) — 生产部署指南
+- [核心概念](docs/zh/concepts.mdx) — 核心抽象（Thread、Member、Task、Resource）
 
 ## 联系我们
 
