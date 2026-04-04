@@ -2,8 +2,8 @@ from types import SimpleNamespace
 
 from langchain_core.messages import HumanMessage
 
-from core.runtime.agent import LeonAgent
 from core.agents.communication.chat_tool_service import ChatToolService
+from core.runtime.agent import LeonAgent
 from core.runtime.registry import ToolRegistry
 from storage.contracts import EntityRow, MemberRow, MemberType
 
@@ -86,7 +86,7 @@ def test_compose_system_prompt_hardens_chat_reply_contract() -> None:
 
 def test_chat_read_validate_input_fills_missing_chat_id_from_latest_notification() -> None:
     registry = ToolRegistry()
-    service = ChatToolService(
+    ChatToolService(
         registry,
         entity_id="e_agent",
         owner_entity_id="e_owner",
@@ -125,7 +125,7 @@ def test_chat_read_validate_input_fills_missing_chat_id_from_latest_notification
 
 def test_chat_send_validate_input_fills_missing_chat_id_from_latest_notification() -> None:
     registry = ToolRegistry()
-    service = ChatToolService(
+    ChatToolService(
         registry,
         entity_id="e_agent",
         owner_entity_id="e_owner",

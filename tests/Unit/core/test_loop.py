@@ -11,14 +11,13 @@ import pytest
 from langchain_core.messages import AIMessage, AIMessageChunk, HumanMessage, RemoveMessage, SystemMessage, ToolMessage
 from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 
-from core.runtime.middleware.memory import MemoryMiddleware
-from core.runtime.middleware import AgentMiddleware
-from core.runtime.middleware.monitor import AgentState
 from core.runtime.loop import QueryLoop, _StreamingToolExecutor
+from core.runtime.middleware import AgentMiddleware
+from core.runtime.middleware.memory import MemoryMiddleware
+from core.runtime.middleware.monitor import AgentState
 from core.runtime.registry import ToolEntry, ToolMode, ToolRegistry
 from core.runtime.state import AppState, BootstrapConfig, ToolPermissionState
 from storage.providers.sqlite.kernel import connect_sqlite_async
-
 
 # ---------------------------------------------------------------------------
 # Helpers

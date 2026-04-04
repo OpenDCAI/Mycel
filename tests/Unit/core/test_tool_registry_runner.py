@@ -16,10 +16,9 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from langchain_core.tools import tool
 
-from core.runtime.errors import InputValidationError
 from core.runtime.agent import _make_mcp_tool_entry
-from core.runtime.middleware import AgentMiddleware
-from core.runtime.middleware import ToolCallRequest
+from core.runtime.errors import InputValidationError
+from core.runtime.middleware import AgentMiddleware, ToolCallRequest
 from core.runtime.permissions import ToolPermissionContext, can_auto_approve
 from core.runtime.registry import ToolEntry, ToolMode, ToolRegistry
 from core.runtime.runner import ToolRunner

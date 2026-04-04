@@ -1,6 +1,4 @@
-from storage.contracts import ChatMessageRow
 from storage.providers.supabase.chat_repo import SupabaseChatMessageRepo
-
 from tests.fakes.supabase import FakeSupabaseClient
 
 

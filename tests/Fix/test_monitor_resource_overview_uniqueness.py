@@ -34,11 +34,7 @@ def test_list_resource_providers_deduplicates_terminal_fallback_rows(monkeypatch
         },
     ]
 
-    monkeypatch.setattr(
-        resource_service,
-        "SQLiteSandboxMonitorRepo",
-        lambda: _FakeRepo(rows),
-    )
+    monkeypatch.setattr(resource_service, "make_sandbox_monitor_repo", lambda: _FakeRepo(rows))
     monkeypatch.setattr(
         resource_service,
         "available_sandbox_types",
@@ -57,7 +53,7 @@ def test_list_resource_providers_deduplicates_terminal_fallback_rows(monkeypatch
             for tid in thread_ids
         },
     )
-    monkeypatch.setattr(resource_service, "list_snapshots_by_lease_ids", lambda _lease_ids: {})
+    monkeypatch.setattr(resource_service, "list_resource_snapshots", lambda _lease_ids: {})
 
     payload = resource_service.list_resource_providers()
     local = payload["providers"][0]

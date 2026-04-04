@@ -2,8 +2,8 @@ import asyncio
 import uuid
 from pathlib import Path
 
-from sandbox.capability import SandboxCapability
 from sandbox.base import LocalSandbox
+from sandbox.capability import SandboxCapability
 from sandbox.interfaces.executor import AsyncCommand, ExecuteResult
 from sandbox.thread_context import set_current_thread_id
 

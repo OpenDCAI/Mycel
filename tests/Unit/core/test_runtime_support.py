@@ -7,10 +7,10 @@ from typing import Any, get_type_hints
 
 import pytest
 
+import core.runtime.state as runtime_state
 from core.runtime.abort import AbortController
 from core.runtime.cleanup import CleanupRegistry
 from core.runtime.fork import create_subagent_context, fork_context
-import core.runtime.state as runtime_state
 from core.runtime.state import AppState, BootstrapConfig, ToolUseContext
 
 
@@ -118,7 +118,10 @@ def test_tool_use_context_subagent_noop_set_state():
     bc = BootstrapConfig(workspace_root=Path("/tmp"), model_name="test")
     app_state = AppState(turn_count=5)
     calls = []
-    noop = lambda _: calls.append("called")
+
+    def noop(_value):
+        calls.append("called")
+
     ctx = ToolUseContext(bootstrap=bc, get_app_state=lambda: app_state, set_app_state=noop)
     ctx.set_app_state(AppState(turn_count=99))
     assert len(calls) == 1
