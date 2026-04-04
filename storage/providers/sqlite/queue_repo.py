@@ -150,4 +150,9 @@ class SQLiteQueueRepo:
                 self._conn.execute(f"ALTER TABLE message_queue ADD COLUMN {col} {col_type}")
             except sqlite3.OperationalError:
                 pass
+        # @@@entity-id-to-user-id-migration — rename column for existing databases
+        try:
+            self._conn.execute("ALTER TABLE message_queue RENAME COLUMN sender_entity_id TO sender_id")
+        except sqlite3.OperationalError:
+            pass
         self._conn.commit()

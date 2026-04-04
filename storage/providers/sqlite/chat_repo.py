@@ -183,6 +183,11 @@ class SQLiteChatEntityRepo:
             pass
         # @@@chat-entity-index — speeds up find_chat_between and list_chats_for_user
         self._conn.execute("CREATE INDEX IF NOT EXISTS idx_chat_entities_user ON chat_entities(user_id, chat_id)")
+        # @@@entity-id-to-user-id-migration — rename column for existing databases
+        try:
+            self._conn.execute("ALTER TABLE chat_entities RENAME COLUMN entity_id TO user_id")
+        except sqlite3.OperationalError:
+            pass  # column already named user_id, or table is new
         self._conn.commit()
 
 
@@ -368,6 +373,15 @@ class SQLiteChatMessageRepo:
         # @@@mentions-migration — add mentions column if table already exists
         try:
             self._conn.execute("ALTER TABLE chat_messages ADD COLUMN mentions TEXT")
+        except sqlite3.OperationalError:
+            pass
+        # @@@sender-entity-id-to-sender-id-migration — rename columns for existing databases
+        try:
+            self._conn.execute("ALTER TABLE chat_messages RENAME COLUMN sender_entity_id TO sender_id")
+        except sqlite3.OperationalError:
+            pass  # column already named sender_id, or table is new
+        try:
+            self._conn.execute("ALTER TABLE chat_messages RENAME COLUMN mentioned_entity_ids TO mentions")
         except sqlite3.OperationalError:
             pass
         self._conn.commit()

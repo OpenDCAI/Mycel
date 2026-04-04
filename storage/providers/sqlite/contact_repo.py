@@ -100,4 +100,13 @@ class SQLiteContactRepo:
                     PRIMARY KEY (owner_id, target_id)
                 )
             """)
+            # @@@entity-id-to-user-id-migration — rename columns for existing databases
+            try:
+                self._conn.execute("ALTER TABLE contacts RENAME COLUMN owner_entity_id TO owner_id")
+            except sqlite3.OperationalError:
+                pass
+            try:
+                self._conn.execute("ALTER TABLE contacts RENAME COLUMN target_entity_id TO target_id")
+            except sqlite3.OperationalError:
+                pass
             self._conn.commit()

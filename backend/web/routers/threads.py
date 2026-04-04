@@ -194,7 +194,7 @@ def _thread_payload(app: Any, thread_id: str, sandbox_type: str) -> dict[str, An
     if thread is None:
         raise HTTPException(404, "Thread not found")
     member = app.state.member_repo.get_by_id(thread["member_id"])
-    entity = app.state.entity_repo.get_by_thread_id(thread_id)
+    entity = app.state.entity_repo.get_by_id(thread["member_id"])
     if member is None or entity is None:
         raise HTTPException(500, f"Thread {thread_id} missing member/entity")
     return {
@@ -615,8 +615,16 @@ async def delete_thread(
             logger.warning("Failed to destroy sandbox resources for thread %s: %s", thread_id, exc)
         await asyncio.to_thread(delete_thread_in_db, thread_id)
         # Also delete from threads table (entity-chat addition)
+        thread_data = app.state.thread_repo.get_by_id(thread_id)
+        member_id = thread_data["member_id"] if thread_data else None
         app.state.thread_repo.delete(thread_id)
-        # Entity is keyed by member_id (shared across threads), not deleted per-thread
+        # Entity is keyed by member_id (shared across threads) — update its thread_id
+        # to the next main thread, or clear it if no threads remain
+        if member_id:
+            entity = app.state.entity_repo.get_by_id(member_id)
+            if entity and entity.thread_id == thread_id:
+                next_main = app.state.thread_repo.get_main_thread(member_id)
+                app.state.entity_repo.update(member_id, thread_id=next_main["id"] if next_main else None)
 
     # Clean up thread-specific state
     app.state.thread_sandbox.pop(thread_id, None)
