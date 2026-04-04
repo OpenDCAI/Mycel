@@ -1,0 +1,146 @@
+---
+title: CLI reference
+sidebarTitle: CLI
+description: Terminal interface for Mycel — sessions, threads, sandboxes, and non-interactive mode
+icon: square-terminal
+keywords: [CLI, TUI, terminal, leonai, thread, sandbox, non-interactive]
+---
+
+The CLI provides a terminal interface for quick interactions, scripting, and sandbox management. The primary interface is the Web UI — the CLI is a complementary tool for power users and automation.
+
+## Installation
+
+<CodeGroup>
+  ```bash pip
+  pip install leonai
+  ```
+  ```bash uv
+  uv tool install leonai
+  ```
+</CodeGroup>
+
+## First run
+
+```bash
+leonai
+```
+
+If no API key is detected, the config wizard starts automatically:
+
+```bash
+leonai config        # Re-run wizard
+leonai config show   # Show current settings
+```
+
+The wizard writes `~/.leon/config.env` with your API key, base URL, and default model.
+
+## Command reference
+
+<AccordionGroup>
+  <Accordion title="Starting a session" icon="play">
+    ```bash
+    leonai                          # New conversation
+    leonai -c                       # Continue last conversation
+    leonai --thread <thread-id>     # Resume a specific thread
+    leonai --model gpt-4o           # Override model
+    leonai --workspace /path/to/dir # Set working directory
+    leonai --sandbox docker         # Use a sandbox
+    leonai --agent explore          # Use an agent preset
+    ```
+
+    When resuming a thread (`-c` or `--thread`), the sandbox provider is auto-detected from the database — no need to pass `--sandbox` again.
+  </Accordion>
+
+  <Accordion title="Thread management" icon="clock-rotate-left">
+    ```bash
+    leonai thread ls                           # List all threads
+    leonai thread history <thread-id>          # View conversation history
+    leonai thread rewind <thread-id> <cp-id>   # Roll back to a checkpoint
+    leonai thread rm <thread-id>               # Delete a thread
+    ```
+  </Accordion>
+
+  <Accordion title="Non-interactive mode" icon="terminal">
+    ```bash
+    leonai run "Explain this codebase"          # Single message
+    echo "Summarize this" | leonai run --stdin  # Read from stdin
+    leonai run -i                               # Interactive without TUI
+    leonai run -d                               # With debug output
+    ```
+
+    Combine with sandbox:
+
+    ```bash
+    leonai run --sandbox docker "Run the test suite"
+    ```
+  </Accordion>
+
+  <Accordion title="Sandbox management" icon="box">
+    ```bash
+    leonai sandbox              # TUI manager
+    leonai sandbox ls           # List active sessions
+    leonai sandbox new docker   # Create a new session
+    leonai sandbox pause <id>   # Pause (state preserved)
+    leonai sandbox resume <id>  # Resume
+    leonai sandbox rm <id>      # Delete session
+    leonai sandbox metrics <id> # Show CPU/RAM/disk
+    ```
+
+    Session IDs can be abbreviated — any unique prefix works.
+
+    **TUI keybindings** (when running `leonai sandbox`):
+
+    | Key | Action |
+    |-----|--------|
+    | `r` | Refresh session list |
+    | `n` | Create new session |
+    | `d` | Delete selected session |
+    | `p` | Pause selected session |
+    | `u` | Resume selected session |
+    | `m` | Show metrics |
+    | `q` | Quit |
+  </Accordion>
+</AccordionGroup>
+
+## LLM provider examples
+
+<Tabs>
+  <Tab title="Anthropic">
+    ```bash
+    export ANTHROPIC_API_KEY="sk-ant-xxx"
+    leonai --model leon:large
+    ```
+  </Tab>
+  <Tab title="OpenAI">
+    ```bash
+    export OPENAI_API_KEY="sk-xxx"
+    export MODEL_NAME="gpt-4o"
+    leonai
+    ```
+  </Tab>
+  <Tab title="OpenRouter">
+    ```bash
+    export OPENAI_API_KEY="your-openrouter-key"
+    export OPENAI_BASE_URL="https://openrouter.ai/api/v1"
+    export MODEL_NAME="anthropic/claude-sonnet-4-5"
+    leonai
+    ```
+  </Tab>
+  <Tab title="DeepSeek">
+    ```bash
+    export OPENAI_API_KEY="your-deepseek-key"
+    export OPENAI_BASE_URL="https://api.deepseek.com/v1"
+    export MODEL_NAME="deepseek-chat"
+    leonai
+    ```
+  </Tab>
+</Tabs>
+
+**Virtual model aliases:**
+
+| Alias | Maps to | Use case |
+|-------|---------|----------|
+| `leon:mini` | claude-haiku-4-5-20250929 | Fast, simple tasks |
+| `leon:medium` | claude-sonnet-4-5-20250929 | Balanced, daily work |
+| `leon:large` | claude-opus-4-6 | Complex reasoning |
+| `leon:max` | claude-opus-4-6 + temp=0 | Maximum precision |

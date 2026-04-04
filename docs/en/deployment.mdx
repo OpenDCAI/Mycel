@@ -1,0 +1,248 @@
+---
+title: Deployment
+sidebarTitle: Deployment
+description: Install and run Mycel in production
+icon: cloud
+keywords: [deployment, install, production, Docker, configuration, troubleshooting]
+---
+
+## Prerequisites
+
+**Required:**
+- Python 3.11+
+- `uv` package manager — [installation guide](https://docs.astral.sh/uv/getting-started/installation/)
+- Node.js 18+ (for the Web UI)
+- Git
+
+**Optional (by sandbox provider):**
+- Docker daemon — for the Docker sandbox provider
+- E2B API key — [e2b.dev](https://e2b.dev)
+- Daytona API key — [daytona.io](https://daytona.io) or self-hosted instance
+- AgentBay API key and region access
+
+## Installation
+
+<Steps>
+  <Step title="Clone the repository">
+    ```bash
+    git clone https://github.com/OpenDCAI/Mycel.git
+    cd Mycel
+    ```
+  </Step>
+
+  <Step title="Install Python dependencies">
+    ```bash
+    # Core dependencies
+    uv sync
+
+    # With specific sandbox providers
+    uv sync --extra e2b        # E2B
+    uv sync --extra daytona    # Daytona
+    uv sync --extra sandbox    # AgentBay
+    uv sync --extra all        # Everything
+    ```
+
+    Docker works out of the box — just needs Docker installed.
+  </Step>
+
+  <Step title="Install frontend dependencies">
+    ```bash
+    cd frontend/app && npm install && cd ../..
+    ```
+  </Step>
+</Steps>
+
+## Configuration
+
+### User config directory
+
+Mycel stores configuration in `~/.leon/`:
+
+```
+~/.leon/
+├── config.env          # API keys and base URL
+├── runtime.json        # Runtime behavior
+├── models.json         # LLM providers and model mapping
+├── observation.json    # Tracing (Langfuse / LangSmith)
+├── sandboxes/          # Sandbox provider configs
+│   ├── docker.json
+│   ├── e2b.json
+│   └── daytona.json
+├── members/            # Agent member bundles
+├── skills/             # Skill directories
+├── leon.db             # Thread history and agent state
+├── chat.db             # Social layer (chats, entities)
+└── sandbox.db          # Sandbox session tracking
+```
+
+### Quick setup
+
+```bash
+# Creates ~/.leon/config.env
+leonai config
+```
+
+Or create `~/.leon/config.env` manually:
+
+```env
+ANTHROPIC_API_KEY=sk-ant-xxx
+# Or use OpenAI-compatible format:
+# OPENAI_API_KEY=your-key
+# OPENAI_BASE_URL=https://api.openai.com/v1
+# MODEL_NAME=gpt-4o
+```
+
+## Starting services
+
+```bash
+# Terminal 1: backend
+uv run python -m backend.web.main
+# → http://localhost:8001
+
+# Terminal 2: frontend
+cd frontend/app && npm run dev
+# → http://localhost:5173
+```
+
+Override the backend port:
+
+```bash
+PORT=9000 uv run python -m backend.web.main
+# or
+LEON_BACKEND_PORT=9000 uv run python -m backend.web.main
+```
+
+## Sandbox provider setup
+
+See [Sandbox](/en/sandbox) for full provider configuration. Quick reference:
+
+### Docker
+
+Create `~/.leon/sandboxes/docker.json`:
+
+```json
+{
+  "provider": "docker",
+  "on_exit": "pause",
+  "docker": {
+    "image": "python:3.12-slim",
+    "mount_path": "/workspace"
+  }
+}
+```
+
+### E2B
+
+```json
+{
+  "provider": "e2b",
+  "on_exit": "pause",
+  "e2b": {
+    "api_key": "${E2B_API_KEY}",
+    "template": "base",
+    "cwd": "/home/user",
+    "timeout": 300
+  }
+}
+```
+
+### Daytona (SaaS)
+
+```json
+{
+  "provider": "daytona",
+  "on_exit": "pause",
+  "daytona": {
+    "api_key": "${DAYTONA_API_KEY}",
+    "api_url": "https://app.daytona.io/api",
+    "cwd": "/home/daytona"
+  }
+}
+```
+
+### AgentBay
+
+```json
+{
+  "provider": "agentbay",
+  "on_exit": "pause",
+  "agentbay": {
+    "api_key": "${AGENTBAY_API_KEY}",
+    "region_id": "ap-southeast-1",
+    "context_path": "/home/wuying"
+  }
+}
+```
+
+## Verification
+
+```bash
+# Check installation
+leonai --version
+
+# List sandbox sessions
+leonai sandbox ls
+
+# Test a sandbox provider
+leonai --sandbox docker "echo hello from sandbox"
+```
+
+Open the Web UI at `http://localhost:5173`, register an account, and confirm the agent responds.
+
+## Production notes
+
+### Database
+
+Mycel uses SQLite by default. For production:
+
+```bash
+# Backup regularly
+cp ~/.leon/leon.db ~/.leon/leon.db.backup
+```
+
+Multi-user deployments may require PostgreSQL — this requires code changes to the storage layer.
+
+### Security
+
+- Store API keys in `~/.leon/config.env`, never in code or version control
+- Use `${VAR}` substitution in JSON config files instead of hardcoding keys
+- Restrict file permissions: `chmod 600 ~/.leon/config.env`
+- The `block_dangerous_commands` setting (default: `true`) prevents `rm -rf` and similar shell commands
+
+### Proxy environments
+
+If your environment uses an HTTP proxy:
+
+```bash
+# Prevent proxy from affecting the LLM client or Docker CLI
+env -u ALL_PROXY -u all_proxy uv run python -m backend.web.main
+```
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title='"Could not import module" on backend startup'>
+    - Confirm you're in the correct directory
+    - Confirm the virtual environment is active: `source .venv/bin/activate`
+    - Try using the full path: `.venv/bin/python -m backend.web.main`
+  </Accordion>
+
+  <Accordion title='"SOCKS proxy error" from LLM client'>
+    Your shell has `all_proxy=socks5://...` set. Unset before starting:
+    ```bash
+    env -u ALL_PROXY -u all_proxy uv run python -m backend.web.main
+    ```
+  </Accordion>
+
+  <Accordion title="Docker provider hangs">
+    Proxy environment variables inherited by the Docker CLI. Mycel strips these automatically, but if issues persist, check the `docker_host` config field in `~/.leon/sandboxes/docker.json`.
+  </Accordion>
+
+  <Accordion title="Daytona PTY bootstrap fails">
+    Check:
+    1. Workspace image has bash at `/usr/bin/bash`
+    2. Runner has bash at `/usr/bin/bash`
+    3. Runner is on the bridge network
+    4. Daytona Proxy (port 4000) is accessible from the runner
+  </Accordion>
+</AccordionGroup>

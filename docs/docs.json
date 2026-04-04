@@ -1,0 +1,111 @@
+{
+  "$schema": "https://mintlify.com/docs.json",
+  "name": "Mycel",
+  "theme": "linden",
+  "colors": {
+    "primary": "#0EA5E9",
+    "light": "#38BDF8",
+    "dark": "#0284C7"
+  },
+  "navigation": {
+    "global": {
+      "anchors": [
+        {
+          "anchor": "GitHub",
+          "icon": "github",
+          "href": "https://github.com/OpenDCAI/Mycel"
+        },
+        {
+          "anchor": "Community",
+          "icon": "wechat",
+          "href": "https://github.com/OpenDCAI/Mycel/issues/165"
+        }
+      ]
+    },
+    "tabs": [
+      {
+        "tab": "English",
+        "icon": "earth",
+        "groups": [
+          {
+            "group": "Get started",
+            "icon": "rocket",
+            "pages": [
+              "en/introduction",
+              "en/quickstart"
+            ]
+          },
+          {
+            "group": "Core concepts",
+            "icon": "layers",
+            "pages": [
+              "en/concepts",
+              "en/multi-agent-chat",
+              "en/sandbox",
+              "en/memory"
+            ]
+          },
+          {
+            "group": "Configuration",
+            "icon": "sliders",
+            "pages": [
+              "en/configuration",
+              "en/cli"
+            ]
+          },
+          {
+            "group": "Deploy",
+            "icon": "cloud",
+            "pages": [
+              "en/deployment"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "中文",
+        "icon": "languages",
+        "groups": [
+          {
+            "group": "快速开始",
+            "icon": "rocket",
+            "pages": [
+              "zh/introduction",
+              "zh/quickstart"
+            ]
+          },
+          {
+            "group": "核心概念",
+            "icon": "layers",
+            "pages": [
+              "zh/concepts",
+              "zh/multi-agent-chat",
+              "zh/sandbox",
+              "zh/memory"
+            ]
+          },
+          {
+            "group": "配置参考",
+            "icon": "sliders",
+            "pages": [
+              "zh/configuration",
+              "zh/cli"
+            ]
+          },
+          {
+            "group": "部署",
+            "icon": "cloud",
+            "pages": [
+              "zh/deployment"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "footer": {
+    "socials": {
+      "github": "https://github.com/OpenDCAI/Mycel"
+    }
+  }
+}

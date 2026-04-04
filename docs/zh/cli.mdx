@@ -1,0 +1,128 @@
+---
+title: CLI 参考
+sidebarTitle: CLI
+description: Mycel 终端界面 — 会话、Thread、沙箱和非交互模式
+icon: square-terminal
+keywords: [CLI, TUI, 终端, leonai, thread, 沙箱, 非交互]
+---
+
+CLI 提供终端交互、脚本自动化和沙箱管理能力。主要界面是 Web UI — CLI 是面向进阶用户和自动化场景的补充工具。
+
+## 安装
+
+```bash
+pip install leonai
+# 或
+uv tool install leonai
+```
+
+## 首次运行
+
+```bash
+leonai
+```
+
+若未检测到 API Key，配置向导自动启动：
+
+1. **API Key**（必填）— 你的 OpenAI 兼容 API Key
+2. **Base URL**（可选）— 默认 `https://api.openai.com/v1`
+3. **Model name**（可选）— 默认 `claude-sonnet-4-5-20250929`
+
+配置保存到 `~/.leon/config.env`。
+
+```bash
+leonai config        # 重新运行向导
+leonai config show   # 查看当前配置
+```
+
+## 启动会话
+
+```bash
+leonai                          # 新建对话
+leonai -c                       # 继续上次对话
+leonai --thread <thread-id>     # 恢复指定 Thread
+leonai --model gpt-4o           # 覆盖模型
+leonai --workspace /path/to/dir # 设置工作目录
+leonai --sandbox docker         # 使用沙箱
+leonai --agent explore          # 使用 Agent 预设
+```
+
+通过 `-c` 或 `--thread` 恢复 Thread 时，沙箱提供商会从数据库自动检测，无需再次传 `--sandbox`。
+
+## Thread 管理
+
+```bash
+leonai thread ls                           # 列出所有 Thread
+leonai thread history <thread-id>          # 查看对话历史
+leonai thread rewind <thread-id> <cp-id>   # 回退到某个 checkpoint
+leonai thread rm <thread-id>               # 删除 Thread
+```
+
+## 非交互模式
+
+```bash
+leonai run "解释一下这个代码库"              # 单条消息
+echo "总结一下" | leonai run --stdin        # 从 stdin 读取
+leonai run -i                               # 无 TUI 的交互模式
+leonai run -d                               # 带调试输出
+```
+
+结合沙箱使用：
+
+```bash
+leonai run --sandbox docker "运行测试套件"
+```
+
+## 沙箱管理
+
+```bash
+leonai sandbox              # TUI 管理器
+leonai sandbox ls           # 列出活跃会话
+leonai sandbox new docker   # 创建新会话
+leonai sandbox pause <id>   # 暂停（保留状态）
+leonai sandbox resume <id>  # 恢复
+leonai sandbox rm <id>      # 删除会话
+leonai sandbox metrics <id> # 查看 CPU/RAM/磁盘
+```
+
+Session ID 可以缩写 — 任何唯一前缀均可。
+
+### TUI 按键说明
+
+运行 `leonai sandbox`（无子命令）进入 TUI：
+
+| 按键 | 操作 |
+|------|------|
+| `r` | 刷新会话列表 |
+| `n` | 创建新会话 |
+| `d` | 删除选中会话 |
+| `p` | 暂停选中会话 |
+| `u` | 恢复选中会话 |
+| `m` | 查看指标 |
+| `q` | 退出 |
+
+## LLM 提供商示例
+
+Mycel 支持所有 OpenAI 兼容接口：
+
+| 提供商 | Base URL | 示例模型 |
+|--------|----------|----------|
+| OpenAI | `https://api.openai.com/v1` | `gpt-4o` |
+| Anthropic | _(原生客户端)_ | `claude-opus-4-6` |
+| OpenRouter | `https://openrouter.ai/api/v1` | `anthropic/claude-sonnet-4-5` |
+| DeepSeek | `https://api.deepseek.com/v1` | `deepseek-chat` |
+
+通过环境变量设置（覆盖 `~/.leon/config.env`）：
+
+```bash
+export OPENAI_API_KEY="your-key"
+export OPENAI_BASE_URL="https://openrouter.ai/api/v1"
+export MODEL_NAME="anthropic/claude-sonnet-4-5"
+```
+
+或使用虚拟别名：
+
+```bash
+leonai --model leon:mini     # claude-haiku（快速）
+leonai --model leon:large    # claude-opus（复杂任务）
+```
