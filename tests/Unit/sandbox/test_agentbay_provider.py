@@ -92,3 +92,83 @@ def test_execute_prefers_link_url_shell_path_when_session_has_direct_call_metada
             },
         )
     ]
+
+
+def test_get_session_hydrates_sdk_shape_session_from_raw_get_session_metadata():
+    sdk_shape_session = SimpleNamespace(
+        session_id="sess-123",
+        token="tok",
+        resource_url="https://resource",
+        mcp_tools=[],
+    )
+    fake_response = SimpleNamespace(
+        to_map=lambda: {
+            "body": {
+                "Success": True,
+                "Data": {
+                    "LinkUrl": "https://link",
+                    "Token": "tok",
+                    "ToolList": [{"Name": "shell", "Server": "wuying_shell"}],
+                },
+            }
+        }
+    )
+    fake_client = SimpleNamespace(
+        api_key="api-key",
+        get=lambda session_id: SimpleNamespace(success=True, session=sdk_shape_session, error_message=""),
+        client=SimpleNamespace(get_session=lambda request: fake_response),
+    )
+    provider = _provider_with_fake_client(fake_client)
+
+    session = provider._get_session("sess-123")
+
+    assert session is sdk_shape_session
+    assert getattr(session, "link_url") == "https://link"
+    assert getattr(session, "token") == "tok"
+    assert len(getattr(session, "mcp_tools")) == 1
+    assert getattr(session, "mcpTools") == getattr(session, "mcp_tools")
+    assert provider._resolve_shell_server(session) == "wuying_shell"
+
+
+def test_execute_prefers_link_url_shell_path_for_sdk_shape_session():
+    calls: list[tuple[str, object]] = []
+
+    def _link(tool_name: str, args: dict, server_name: str):
+        calls.append(("link", {"tool": tool_name, "args": args, "server": server_name}))
+        return SimpleNamespace(
+            success=True,
+            data=json.dumps({"stdout": "/home/wuying\n", "stderr": "", "exit_code": 0}),
+            error_message="",
+        )
+
+    def _command_execute(**kwargs):
+        calls.append(("command", kwargs))
+        return SimpleNamespace(success=False, output="", error_message="should not be used")
+
+    session = SimpleNamespace(
+        session_id="sess-123",
+        token="tok",
+        link_url="https://link",
+        mcp_tools=[SimpleNamespace(name="shell", server="wuying_shell")],
+        _find_server_for_tool=lambda tool_name: "wuying_shell" if tool_name == "shell" else "",
+        _call_mcp_tool_link_url=_link,
+        command=SimpleNamespace(execute_command=_command_execute),
+    )
+    provider = _provider_with_fake_client(SimpleNamespace())
+    provider._sessions["sess-123"] = session
+
+    result = provider.execute("sess-123", "pwd", timeout_ms=5000, cwd="/home/wuying")
+
+    assert result.output == "/home/wuying\n"
+    assert result.exit_code == 0
+    assert result.error is None
+    assert calls == [
+        (
+            "link",
+            {
+                "tool": "shell",
+                "args": {"command": "pwd", "timeout_ms": 5000, "cwd": "/home/wuying"},
+                "server": "wuying_shell",
+            },
+        )
+    ]

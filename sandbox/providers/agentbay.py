@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import replace
+from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any
 
 from sandbox.provider import (
@@ -270,15 +271,27 @@ class AgentBayProvider(SandboxProvider):
         refreshed = self.client.get(session_id)
         if not refreshed.success:
             raise RuntimeError(f"Failed to hydrate AgentBay session {session_id}: {refreshed.error_message}")
-        return refreshed.session
+        hydrated = refreshed.session
+        if self._session_needs_direct_call_refresh(hydrated):
+            metadata = self._fetch_direct_call_metadata(session_id)
+            self._apply_direct_call_metadata(hydrated, metadata)
+        return hydrated
 
     @staticmethod
     def _resolve_shell_server(session: Any) -> str | None:
-        resolver = getattr(session, "_get_mcp_server_for_tool", None)
-        if callable(resolver):
-            server_name = resolver("shell")
-            if server_name:
-                return str(server_name)
+        for resolver_name in ("_get_mcp_server_for_tool", "_find_server_for_tool"):
+            resolver = getattr(session, resolver_name, None)
+            if callable(resolver):
+                server_name = resolver("shell")
+                if server_name:
+                    return str(server_name)
+        for tools_attr in ("mcpTools", "mcp_tools"):
+            tools = getattr(session, tools_attr, None) or []
+            for tool in tools:
+                if getattr(tool, "name", None) == "shell":
+                    server_name = getattr(tool, "server", "") or ""
+                    if server_name:
+                        return str(server_name)
         return None
 
     @staticmethod
@@ -307,8 +320,39 @@ class AgentBayProvider(SandboxProvider):
             return True
         if not getattr(session, "link_url", ""):
             return True
-        tools = getattr(session, "mcpTools", None)
+        tools = getattr(session, "mcpTools", None) or getattr(session, "mcp_tools", None)
         return not bool(tools)
+
+    def _fetch_direct_call_metadata(self, session_id: str) -> dict[str, Any]:
+        from agentbay.api.models import GetSessionRequest
+
+        # @@@agentbay-raw-get-session - the SDK Session object drops LinkUrl/ToolList for this account tier,
+        # but the raw GetSession response still carries them. Pull that response directly and patch the session.
+        request = GetSessionRequest(authorization=f"Bearer {self.client.api_key}", session_id=session_id)
+        response = self.client.client.get_session(request)
+        body = response.to_map().get("body", {})
+        data = body.get("Data", {}) or {}
+        return {
+            "link_url": data.get("LinkUrl", "") or "",
+            "token": data.get("Token", "") or "",
+            "mcp_tools": [
+                SimpleNamespace(name=str(tool.get("Name", "") or ""), server=str(tool.get("Server", "") or ""))
+                for tool in (data.get("ToolList", []) or [])
+            ],
+        }
+
+    @staticmethod
+    def _apply_direct_call_metadata(session: Any, metadata: dict[str, Any]) -> None:
+        link_url = str(metadata.get("link_url", "") or "")
+        if link_url:
+            setattr(session, "link_url", link_url)
+        token = str(metadata.get("token", "") or "")
+        if token:
+            setattr(session, "token", token)
+        tools = metadata.get("mcp_tools", []) or []
+        if tools:
+            setattr(session, "mcp_tools", tools)
+            setattr(session, "mcpTools", tools)
 
     def create_runtime(self, terminal: AbstractTerminal, lease: SandboxLease) -> PhysicalTerminalRuntime:
         from sandbox.runtime import RemoteWrappedRuntime
