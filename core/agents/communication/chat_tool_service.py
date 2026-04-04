@@ -126,11 +126,18 @@ class ChatToolService:
         self._register_chat_search(registry)
         self._register_directory(registry)
 
+    def _resolve_name(self, user_id: str) -> str:
+        """Resolve display name: entity_repo (agents) → member_repo (humans)."""
+        e = self._entities.get_by_id(user_id)
+        if e:
+            return e.name
+        m = self._members.get_by_id(user_id) if self._members else None
+        return m.name if m else "unknown"
+
     def _format_msgs(self, msgs: list, eid: str) -> str:
         lines = []
         for m in msgs:
-            sender = self._entities.get_by_id(m.sender_id)
-            name = sender.name if sender else "unknown"
+            name = self._resolve_name(m.sender_id)
             tag = "you" if m.sender_id == eid else name
             lines.append(f"[{tag}]: {m.content}")
         return "\n".join(lines)
@@ -206,17 +213,16 @@ class ChatToolService:
     def _register_chat_read(self, registry: ToolRegistry) -> None:
         eid = self._user_id
 
-        def handle(entity_id: str | None = None, chat_id: str | None = None, range: str | None = None) -> str:
+        def handle(user_id: str | None = None, chat_id: str | None = None, range: str | None = None) -> str:
             if chat_id:
                 pass  # use chat_id directly
-            elif entity_id:
-                chat_id = self._chat_entities.find_chat_between(eid, entity_id)
+            elif user_id:
+                chat_id = self._chat_entities.find_chat_between(eid, user_id)
                 if not chat_id:
-                    target = self._entities.get_by_id(entity_id)
-                    name = target.name if target else entity_id
+                    name = self._resolve_name(user_id)
                     return f"No chat history with {name}."
             else:
-                return "Provide entity_id or chat_id."
+                return "Provide user_id or chat_id."
 
             # @@@range-dispatch — if range is provided, use it regardless of unread state.
             if range:
@@ -266,7 +272,7 @@ class ChatToolService:
                     "parameters": {
                         "type": "object",
                         "properties": {
-                            "entity_id": {"type": "string", "description": "user_id for 1:1 chat history"},
+                            "user_id": {"type": "string", "description": "user_id for 1:1 chat history"},
                             "chat_id": {"type": "string", "description": "Chat_id for group chat history"},
                             "range": {
                                 "type": "string",
@@ -287,7 +293,7 @@ class ChatToolService:
 
         def handle(
             content: str,
-            entity_id: str | None = None,
+            user_id: str | None = None,
             chat_id: str | None = None,
             signal: str = "open",
             mentions: list[str] | None = None,
@@ -299,20 +305,17 @@ class ChatToolService:
             if chat_id:
                 if not self._chat_entities.is_participant_in_chat(chat_id, eid):
                     raise RuntimeError(f"You are not a member of chat {chat_id}")
-            elif entity_id:
-                if entity_id == eid:
+            elif user_id:
+                if user_id == eid:
                     raise RuntimeError("Cannot send a message to yourself.")
-                target = self._entities.get_by_id(entity_id)
-                if not target:
-                    raise RuntimeError(f"Entity not found: {entity_id}")
-                target_name = target.name
-                resolved_chat_id = self._chat_entities.find_chat_between(eid, entity_id)
+                target_name = self._resolve_name(user_id)
+                resolved_chat_id = self._chat_entities.find_chat_between(eid, user_id)
                 if not resolved_chat_id:
                     # New chat — no unread possible, create and send
-                    chat = self._chat_service.find_or_create_chat([eid, entity_id])
+                    chat = self._chat_service.find_or_create_chat([eid, user_id])
                     resolved_chat_id = chat.id
             else:
-                raise RuntimeError("Provide entity_id (for 1:1) or chat_id (for group)")
+                raise RuntimeError("Provide user_id (for 1:1) or chat_id (for group)")
 
             # @@@read-before-write-gate — reject if unread messages exist
             unread = self._messages.count_unread(resolved_chat_id, eid)
@@ -334,7 +337,7 @@ class ChatToolService:
                 schema={
                     "name": "chat_send",
                     "description": (
-                        "Send a message. Use entity_id for 1:1 chats, chat_id for group chats.\n\n"
+                        "Send a message. Use user_id for 1:1 chats, chat_id for group chats.\n\n"
                         "You MUST call chat_read() first if you have unread messages — sending will fail otherwise.\n\n"
                         "Signal protocol — append to content:\n"
                         "  (no tag) = I expect a reply from you\n"
@@ -346,7 +349,7 @@ class ChatToolService:
                         "type": "object",
                         "properties": {
                             "content": {"type": "string", "description": "Message content"},
-                            "entity_id": {"type": "string", "description": "Target user_id (for 1:1 chat)"},
+                            "user_id": {"type": "string", "description": "Target user_id (for 1:1 chat)"},
                             "chat_id": {"type": "string", "description": "Target chat_id (for group chat)"},
                             "signal": {
                                 "type": "string",
@@ -371,17 +374,16 @@ class ChatToolService:
     def _register_chat_search(self, registry: ToolRegistry) -> None:
         eid = self._user_id
 
-        def handle(query: str, entity_id: str | None = None) -> str:
+        def handle(query: str, user_id: str | None = None) -> str:
             chat_id = None
-            if entity_id:
-                chat_id = self._chat_entities.find_chat_between(eid, entity_id)
+            if user_id:
+                chat_id = self._chat_entities.find_chat_between(eid, user_id)
             results = self._messages.search(query, chat_id=chat_id, limit=20)
             if not results:
                 return f"No messages matching '{query}'."
             lines = []
             for m in results:
-                sender = self._entities.get_by_id(m.sender_id)
-                name = sender.name if sender else "unknown"
+                name = self._resolve_name(m.sender_id)
                 lines.append(f"[{name}] {m.content[:100]}")
             return "\n".join(lines)
 
@@ -396,7 +398,7 @@ class ChatToolService:
                         "type": "object",
                         "properties": {
                             "query": {"type": "string", "description": "Search query"},
-                            "entity_id": {
+                            "user_id": {
                                 "type": "string",
                                 "description": "Optional: only search in chat with this user",
                             },
@@ -426,8 +428,8 @@ class ChatToolService:
             for e in entities:
                 member = self._members.get_by_id(e.member_id)
                 owner_info = ""
-                if e.type == "agent" and member and member.owner_id:
-                    owner_member = self._members.get_by_id(member.owner_id)
+                if e.type == "agent" and member and member.owner_user_id:
+                    owner_member = self._members.get_by_id(member.owner_user_id)
                     if owner_member:
                         owner_info = f" (owner: {owner_member.name})"
                 lines.append(f"- {e.name} [{e.type}] user_id={e.id}{owner_info}")

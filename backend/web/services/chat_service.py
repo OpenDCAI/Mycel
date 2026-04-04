@@ -100,7 +100,11 @@ class ChatService:
         self._messages.create(msg)
 
         sender = self._entities.get_by_id(sender_id)
-        sender_name = sender.name if sender else "unknown"
+        if not sender:
+            sender_member = self._members.get_by_id(sender_id) if self._members else None
+            sender_name = sender_member.name if sender_member else "unknown"
+        else:
+            sender_name = sender.name
 
         if self._event_bus:
             self._event_bus.publish(
@@ -134,14 +138,21 @@ class ChatService:
         mentions = set(mentioned_ids or [])
         participants = self._chat_entities.list_participants(chat_id)
         sender_entity = self._entities.get_by_id(sender_id)
-        sender_name = sender_entity.name if sender_entity else "unknown"
+        # Resolve sender name + avatar — entity_repo for agents, member_repo for humans
+        if sender_entity:
+            sender_name = sender_entity.name
+            sender_mid = sender_entity.member_id
+        else:
+            sender_member = self._members.get_by_id(sender_id) if self._members else None
+            sender_name = sender_member.name if sender_member else "unknown"
+            sender_mid = sender_id
         # @@@sender-avatar — compute once for all recipients
         sender_avatar_url = None
-        if sender_entity:
+        if sender_mid:
             from backend.web.utils.serializers import avatar_url
 
-            sender_member = self._members.get_by_id(sender_entity.member_id) if self._members else None
-            sender_avatar_url = avatar_url(sender_entity.member_id, bool(sender_member.avatar if sender_member else None))
+            m = self._members.get_by_id(sender_mid) if self._members else None
+            sender_avatar_url = avatar_url(sender_mid, bool(m.avatar if m else None))
 
         for ce in participants:
             if ce.user_id == sender_id:
@@ -207,20 +218,39 @@ class ChatService:
                     m = self._members.get_by_id(e.member_id) if self._members else None
                     entities_info.append(
                         {
-                            "id": e.id,
+                            "id": p.user_id,
                             "name": e.name,
                             "type": e.type,
                             "avatar_url": avatar_url(e.member_id, bool(m.avatar if m else None)),
                         }
                     )
+                else:
+                    # Human participant — no entity row
+                    from backend.web.utils.serializers import avatar_url
+
+                    m = self._members.get_by_id(p.user_id) if self._members else None
+                    if m:
+                        entities_info.append(
+                            {
+                                "id": p.user_id,
+                                "name": m.name,
+                                "type": "human",
+                                "avatar_url": avatar_url(m.id, bool(m.avatar)),
+                            }
+                        )
             msgs = self._messages.list_by_chat(cid, limit=1)
             last_msg = None
             if msgs:
                 m = msgs[0]
                 sender = self._entities.get_by_id(m.sender_id)
+                if not sender:
+                    sender_member = self._members.get_by_id(m.sender_id) if self._members else None
+                    sender_name = sender_member.name if sender_member else "unknown"
+                else:
+                    sender_name = sender.name
                 last_msg = {
                     "content": m.content,
-                    "sender_name": sender.name if sender else "unknown",
+                    "sender_name": sender_name,
                     "created_at": m.created_at,
                 }
             unread = self._messages.count_unread(cid, user_id)

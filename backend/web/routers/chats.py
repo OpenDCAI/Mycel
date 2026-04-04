@@ -81,6 +81,18 @@ async def get_chat(
                     "avatar_url": avatar_url(e.member_id, bool(m.avatar if m else None)),
                 }
             )
+        else:
+            # Human participant — no entity row, resolve from member_repo
+            m = member_repo.get_by_id(p.user_id)
+            if m:
+                entities_info.append(
+                    {
+                        "id": p.user_id,
+                        "name": m.name,
+                        "type": "human",
+                        "avatar_url": avatar_url(m.id, bool(m.avatar)),
+                    }
+                )
     return {
         "id": chat.id,
         "title": chat.title,
@@ -100,20 +112,24 @@ async def list_messages(
 ):
     """List messages in a chat."""
     msgs = app.state.chat_message_repo.list_by_chat(chat_id, limit=limit, before=before)
-    # Batch entity lookup to avoid N+1
+    # Batch sender name lookup: entity_repo (agents) → member_repo (humans)
     entity_repo = app.state.entity_repo
+    member_repo = app.state.member_repo
     sender_ids = {m.sender_id for m in msgs}
-    sender_map = {}
+    sender_names: dict[str, str] = {}
     for sid in sender_ids:
         e = entity_repo.get_by_id(sid)
         if e:
-            sender_map[sid] = e
+            sender_names[sid] = e.name
+        else:
+            m = member_repo.get_by_id(sid)
+            sender_names[sid] = m.name if m else "unknown"
     return [
         {
             "id": m.id,
             "chat_id": m.chat_id,
             "sender_id": m.sender_id,
-            "sender_name": sender_map[m.sender_id].name if m.sender_id in sender_map else "unknown",
+            "sender_name": sender_names.get(m.sender_id, "unknown"),
             "content": m.content,
             "mentioned_ids": m.mentioned_ids,
             "created_at": m.created_at,

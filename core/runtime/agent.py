@@ -247,10 +247,10 @@ class LeonAgent:
             if uid:
                 entity_repo = repos.get("entity_repo")
                 entity = entity_repo.get_by_id(uid) if entity_repo else None
-                owner_member = repos.get("member_repo")
-                owner_member_row = owner_member.get_by_id(owner_uid) if owner_member and owner_uid else None
+                member_repo = repos.get("member_repo")
+                owner_row = member_repo.get_by_id(owner_uid) if member_repo and owner_uid else None
                 name = entity.name if entity else uid
-                owner_name = owner_member_row.name if owner_member_row else "unknown"
+                owner_name = owner_row.name if owner_row else "unknown"
                 self.system_prompt += (
                     f"\n\n**Chat Identity:**\n"
                     f"- Your name: {name}\n"

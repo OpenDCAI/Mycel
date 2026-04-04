@@ -362,6 +362,7 @@ def _create_owned_thread(
     if existing_entity is not None:
         if resolved_is_main:
             app.state.entity_repo.update(agent_member_id, thread_id=thread_entity_id, name=entity_name)
+        # Branch threads don't update the entity — it represents the main identity
     else:
         app.state.entity_repo.create(
             EntityRow(
@@ -615,11 +616,7 @@ async def delete_thread(
         await asyncio.to_thread(delete_thread_in_db, thread_id)
         # Also delete from threads table (entity-chat addition)
         app.state.thread_repo.delete(thread_id)
-        # Delete associated entity
-        try:
-            app.state.entity_repo.delete(thread_id)
-        except Exception:
-            logger.error("Failed to delete entity for thread %s", thread_id, exc_info=True)
+        # Entity is keyed by member_id (shared across threads), not deleted per-thread
 
     # Clean up thread-specific state
     app.state.thread_sandbox.pop(thread_id, None)
