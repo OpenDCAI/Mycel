@@ -6,6 +6,7 @@ Implements SandboxProvider using Alibaba Cloud's AgentBay SDK.
 
 from __future__ import annotations
 
+import json
 from dataclasses import replace
 from typing import TYPE_CHECKING, Any
 
@@ -161,17 +162,25 @@ class AgentBayProvider(SandboxProvider):
     ) -> ProviderExecResult:
         session = self._get_session(session_id)
         timeout_ms = min(timeout_ms, 50000)
+        exec_args = {
+            "command": command,
+            "timeout_ms": timeout_ms,
+            "cwd": cwd or self.default_context_path,
+        }
+        shell_server = self._resolve_shell_server(session)
 
-        result = session.command.execute_command(
-            command=command,
-            timeout_ms=timeout_ms,
-            cwd=cwd or self.default_context_path,
-        )
+        if getattr(session, "link_url", "") and getattr(session, "token", "") and shell_server:
+            # @@@agentbay-shell-link-route - shared staging proved shell can degrade into the API path
+            # despite hydrated direct-call metadata; take the explicit LinkUrl route when shell server is known.
+            tool_result = session._call_mcp_tool_link_url("shell", exec_args, shell_server)
+            return self._provider_exec_result_from_tool_result(tool_result)
+
+        result = session.command.execute_command(**exec_args)
 
         if not result.success:
-            return ProviderExecResult(output="", error=result.error_message)
+            return ProviderExecResult(output=result.output or "", exit_code=result.exit_code or 1, error=result.error_message)
 
-        return ProviderExecResult(output=result.output or "")
+        return ProviderExecResult(output=result.output or "", exit_code=result.exit_code or 0)
 
     def read_file(self, session_id: str, path: str) -> str:
         session = self._get_session(session_id)
@@ -262,6 +271,33 @@ class AgentBayProvider(SandboxProvider):
         if not refreshed.success:
             raise RuntimeError(f"Failed to hydrate AgentBay session {session_id}: {refreshed.error_message}")
         return refreshed.session
+
+    @staticmethod
+    def _resolve_shell_server(session: Any) -> str | None:
+        resolver = getattr(session, "_get_mcp_server_for_tool", None)
+        if callable(resolver):
+            server_name = resolver("shell")
+            if server_name:
+                return str(server_name)
+        return None
+
+    @staticmethod
+    def _provider_exec_result_from_tool_result(tool_result: Any) -> ProviderExecResult:
+        if not getattr(tool_result, "success", False):
+            error_message = getattr(tool_result, "error_message", "") or "Failed to execute command"
+            return ProviderExecResult(output="", exit_code=1, error=error_message)
+        data = getattr(tool_result, "data", "")
+        try:
+            payload = json.loads(data) if isinstance(data, str) else data
+        except json.JSONDecodeError:
+            payload = None
+        if isinstance(payload, dict):
+            stdout = str(payload.get("stdout", "") or "")
+            stderr = str(payload.get("stderr", "") or "")
+            exit_code = int(payload.get("exit_code", 0) or 0)
+            error = stderr or None
+            return ProviderExecResult(output=stdout + stderr, exit_code=exit_code, error=error)
+        return ProviderExecResult(output=str(data or ""), exit_code=0)
 
     @staticmethod
     def _session_needs_direct_call_refresh(session: Any) -> bool:
