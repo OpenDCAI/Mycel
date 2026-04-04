@@ -99,10 +99,6 @@
       }
     ]
   },
-  "redirects": [
-    { "source": "/en/cli", "destination": "/en/configuration" },
-    { "source": "/zh/cli", "destination": "/zh/configuration" }
-  ],
   "footer": {
     "socials": {
       "github": "https://github.com/OpenDCAI/Mycel"
