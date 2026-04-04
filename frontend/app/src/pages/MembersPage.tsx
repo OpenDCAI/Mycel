@@ -178,7 +178,7 @@ export default function MembersPage() {
               };
               const handleStartChat = (e: React.MouseEvent) => {
                 e.stopPropagation();
-                navigate("/chat", { state: { startWith: member.id, memberName: member.name } });
+                navigate(`/threads/${member.id}`);
               };
               const handleCopy = async (e: React.MouseEvent) => {
                 e.stopPropagation();
@@ -204,7 +204,7 @@ export default function MembersPage() {
                 } catch { toast.error("删除失败"); }
               };
               return (
-                <div key={member.id} onClick={handleCardClick} className="surface-interactive p-4 cursor-pointer group hover:-translate-y-0.5 hover:shadow-md" role="button" aria-label={isBuiltin ? `与 ${member.name} 对话` : `查看成员 ${member.name}`} tabIndex={0} onKeyDown={(e) => e.key === "Enter" && handleCardClick()}>
+                <div key={member.id} onClick={handleCardClick} className="surface-interactive p-4 cursor-pointer group hover:-translate-y-0.5 hover:shadow-md" role="button" aria-label={`查看成员 ${member.name}`} tabIndex={0} onKeyDown={(e) => e.key === "Enter" && handleCardClick()}>
                   <div className="flex items-start justify-between mb-3">
                     <AvatarUploadTrigger memberId={member.id} name={member.name} hasAvatar={!!member.avatar_url} />
                     <div className="flex items-center gap-1.5">
@@ -229,7 +229,7 @@ export default function MembersPage() {
                             <MessageSquare className="w-3.5 h-3.5" />
                           </button>
                         </TooltipTrigger>
-                        <TooltipContent side="bottom"><p>发起会话</p></TooltipContent>
+                        <TooltipContent side="bottom"><p>打开线程</p></TooltipContent>
                       </Tooltip>
                       <Tooltip>
                         <TooltipTrigger asChild>

@@ -129,7 +129,7 @@ function MobileThreadList({ threads, loading, onNewChat, onDeleteThread, newChat
         ) : threads.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 px-4">
             <p className="text-sm text-muted-foreground mb-3">暂无会话</p>
-            <button onClick={onNewChat} className="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm">发起会话</button>
+            <button onClick={onNewChat} className="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm">打开成员线程</button>
           </div>
         ) : (
           threads.map(t => {
