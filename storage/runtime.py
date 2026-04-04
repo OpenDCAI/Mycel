@@ -59,6 +59,37 @@ def build_storage_container(
     )
 
 
+def build_thread_repo(
+    *,
+    main_db_path: str | Path | None = None,
+    strategy: str | None = None,
+    supabase_client: Any | None = None,
+    supabase_client_factory: str | None = None,
+    env: Mapping[str, str] | None = None,
+):
+    env_map = env if env is not None else os.environ
+    resolved_strategy = _resolve_strategy(strategy if strategy is not None else env_map.get("LEON_STORAGE_STRATEGY"))
+    if resolved_strategy == "supabase":
+        client = supabase_client
+        if client is None:
+            factory_ref = supabase_client_factory if supabase_client_factory is not None else env_map.get("LEON_SUPABASE_CLIENT_FACTORY")
+            if not factory_ref:
+                raise RuntimeError(
+                    "Supabase thread repo requires runtime config. "
+                    "Set LEON_SUPABASE_CLIENT_FACTORY=<module>:<callable> "
+                    "or inject supabase_client explicitly."
+                )
+            client = _load_factory(factory_ref)()
+        _ensure_supabase_client(client)
+        from storage.providers.supabase.thread_repo import SupabaseThreadRepo
+
+        return SupabaseThreadRepo(client)
+
+    from storage.providers.sqlite.thread_repo import SQLiteThreadRepo
+
+    return SQLiteThreadRepo(db_path=main_db_path)
+
+
 def _resolve_strategy(raw: str | None) -> StorageStrategy:
     value = (raw or "sqlite").strip().lower()
     if value in {"", "sqlite"}:

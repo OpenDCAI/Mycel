@@ -20,8 +20,7 @@ from storage.providers.sqlite.chat_session_repo import SQLiteChatSessionRepo
 from storage.providers.sqlite.kernel import SQLiteDBRole, resolve_role_db_path
 from storage.providers.sqlite.lease_repo import SQLiteLeaseRepo
 from storage.providers.sqlite.terminal_repo import SQLiteTerminalRepo
-from storage.providers.sqlite.thread_repo import SQLiteThreadRepo
-from storage.runtime import build_storage_container
+from storage.runtime import build_storage_container, build_thread_repo
 
 logger = logging.getLogger(__name__)
 
@@ -238,7 +237,7 @@ class SandboxManager:
 
         # @@@member-id-for-volume-naming - read from thread config in leon.db
         member_id = "unknown"
-        thread_repo = SQLiteThreadRepo(resolve_role_db_path(SQLiteDBRole.MAIN))
+        thread_repo = build_thread_repo(main_db_path=resolve_role_db_path(SQLiteDBRole.MAIN))
         try:
             row = thread_repo.get_by_id(thread_id)
             if row:

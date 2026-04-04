@@ -45,10 +45,8 @@ def make_cron_job_repo() -> Any:
 
 
 def make_sandbox_monitor_repo() -> Any:
-    if _strategy() == "supabase":
-        from storage.providers.supabase.sandbox_monitor_repo import SupabaseSandboxMonitorRepo
-
-        return SupabaseSandboxMonitorRepo(_supabase_client())
+    # @@@sandbox-runtime-truth-stays-local - sandbox lifecycle facts still live in local sandbox.db.
+    # Auth/member/thread metadata can be Supabase-backed without moving lease/session/terminal monitoring there.
     from storage.providers.sqlite.sandbox_monitor_repo import SQLiteSandboxMonitorRepo
 
     return SQLiteSandboxMonitorRepo()

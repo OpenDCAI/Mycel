@@ -2,9 +2,13 @@ import json
 from pathlib import Path
 from types import SimpleNamespace
 
+import pytest
+
+import sandbox.manager as sandbox_manager_module
 from sandbox.manager import SandboxManager
 from sandbox.providers.local import LocalSessionProvider
 from sandbox.volume_source import HostVolume
+from sandbox.volume_source import DaytonaVolume
 
 
 class _FakeVolumeRepo:
@@ -33,6 +37,39 @@ class _FakeVolume:
 
     def mount_managed_volume(self, thread_id: str, volume_name: str, remote_path: str) -> None:
         self.mount_calls.append((thread_id, remote_path))
+
+
+class _FakeThreadRepo:
+    def __init__(self, row):
+        self._row = row
+        self.closed = False
+
+    def get_by_id(self, _thread_id: str):
+        return self._row
+
+    def close(self) -> None:
+        self.closed = True
+
+
+class _FakeUpdateRepo:
+    def __init__(self) -> None:
+        self.updated: list[tuple[str, str]] = []
+        self.closed = False
+
+    def update_source(self, volume_id: str, source_json: str) -> None:
+        self.updated.append((volume_id, source_json))
+
+    def close(self) -> None:
+        self.closed = True
+
+
+class _FakeDaytonaProvider:
+    def __init__(self) -> None:
+        self.calls: list[tuple[str, str]] = []
+
+    def create_managed_volume(self, member_id: str, mount_path: str) -> str:
+        self.calls.append((member_id, mount_path))
+        return f"leon-volume-{member_id}"
 
 
 def test_setup_mounts_reads_volume_from_active_storage_repo(tmp_path):
@@ -78,3 +115,52 @@ def test_get_sandbox_local_provider_does_not_require_volume_bootstrap(tmp_path):
     session = manager.session_manager.get("thread-local")
     assert session is not None
     assert session.lease.provider_name == "local"
+
+
+def test_upgrade_to_daytona_volume_uses_runtime_thread_repo_for_member_lookup(monkeypatch, tmp_path):
+    manager = object.__new__(SandboxManager)
+    manager.provider = _FakeDaytonaProvider()
+    update_repo = _FakeUpdateRepo()
+    manager._sandbox_volume_repo = lambda: update_repo
+
+    thread_repo = _FakeThreadRepo({"member_id": "member-supabase"})
+    monkeypatch.setattr(
+        sandbox_manager_module,
+        "build_thread_repo",
+        lambda **_kwargs: thread_repo,
+        raising=False,
+    )
+    monkeypatch.setenv("LEON_STORAGE_STRATEGY", "supabase")
+
+    new_source = manager._upgrade_to_daytona_volume(
+        "thread-supabase",
+        HostVolume(tmp_path / "staging"),
+        "volume-1",
+        "/workspace",
+    )
+
+    assert manager.provider.calls == [("member-supabase", "/workspace")]
+    assert thread_repo.closed is True
+    assert isinstance(new_source, DaytonaVolume)
+    assert update_repo.closed is True
+    assert update_repo.updated
+
+
+@pytest.mark.parametrize(
+    ("strategy", "expected_class_name"),
+    [
+        ("sqlite", "SQLiteSandboxMonitorRepo"),
+        ("supabase", "SQLiteSandboxMonitorRepo"),
+    ],
+)
+def test_make_sandbox_monitor_repo_uses_runtime_sandbox_db(monkeypatch, strategy, expected_class_name):
+    from backend.web.core import storage_factory
+
+    monkeypatch.setenv("LEON_STORAGE_STRATEGY", strategy)
+    storage_factory.make_sandbox_monitor_repo.cache_clear() if hasattr(storage_factory.make_sandbox_monitor_repo, "cache_clear") else None
+
+    repo = storage_factory.make_sandbox_monitor_repo()
+    try:
+        assert repo.__class__.__name__ == expected_class_name
+    finally:
+        repo.close()
