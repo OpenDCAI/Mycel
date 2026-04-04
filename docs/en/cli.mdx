@@ -77,13 +77,15 @@ The wizard writes `~/.leon/config.env` with your API key, base URL, and default 
 
   <Accordion title="Sandbox management" icon="box">
     ```bash
-    leonai sandbox              # TUI manager
-    leonai sandbox ls           # List active sessions
-    leonai sandbox new docker   # Create a new session
-    leonai sandbox pause <id>   # Pause (state preserved)
-    leonai sandbox resume <id>  # Resume
-    leonai sandbox rm <id>      # Delete session
-    leonai sandbox metrics <id> # Show CPU/RAM/disk
+    leonai sandbox                      # TUI manager
+    leonai sandbox ls                   # List active sessions
+    leonai sandbox new docker           # Create a new session
+    leonai sandbox pause <id>           # Pause (state preserved)
+    leonai sandbox resume <id>          # Resume
+    leonai sandbox rm <id>              # Delete session
+    leonai sandbox delete <id>          # Alias for rm
+    leonai sandbox metrics <id>         # Show CPU/RAM/disk
+    leonai sandbox destroy-all-sessions # Destroy all (requires confirmation)
     ```
 
     Session IDs can be abbreviated — any unique prefix works.

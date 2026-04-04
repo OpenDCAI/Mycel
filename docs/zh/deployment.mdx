@@ -160,6 +160,51 @@ LEON_BACKEND_PORT=9000 uv run python -m backend.web.main
 }
 ```
 
+### Daytona（自建）
+
+```json
+{
+  "provider": "daytona",
+  "on_exit": "pause",
+  "daytona": {
+    "api_key": "${DAYTONA_API_KEY}",
+    "api_url": "http://localhost:3986/api",
+    "target": "us",
+    "cwd": "/workspace"
+  }
+}
+```
+
+自建环境要求：
+1. Runner 容器镜像中 bash 路径为 `/usr/bin/bash`
+2. 工作区镜像中 bash 路径为 `/usr/bin/bash`
+3. Runner 必须同时在 compose 网络和 Docker bridge 网络上
+
+**Docker Compose 网络配置：**
+
+```yaml
+services:
+  daytona-runner:
+    image: your-runner-image-with-bash
+    environment:
+      - RUNNER_DOMAIN=runner  # 不能是 localhost
+    networks:
+      - default
+      - bridge
+
+networks:
+  bridge:
+    external: true
+```
+
+在 Runner 的 `/etc/hosts` 中添加：
+
+```
+127.0.0.1 proxy.localhost
+```
+
+Daytona Proxy（端口 4000）必须从 Runner 可访问，文件操作依赖它。
+
 ### AgentBay
 
 ```json
@@ -239,10 +284,17 @@ env -u ALL_PROXY -u all_proxy uv run python -m backend.web.main
   </Accordion>
 
   <Accordion title="Daytona PTY bootstrap 失败">
-    检查：
-    1. 工作区镜像中 bash 路径为 `/usr/bin/bash`
+    按顺序逐项检查：
+
+    1. 工作区镜像中 bash 路径为 `/usr/bin/bash` — 用 `docker run <image> /usr/bin/bash -c "echo ok"` 验证
     2. Runner 中 bash 路径为 `/usr/bin/bash`
-    3. Runner 在 bridge 网络上
-    4. Runner 可以访问 Daytona Proxy（端口 4000）
+    3. Runner 在 Docker bridge 网络上（参见上方 Docker Compose 配置）
+    4. Daytona Proxy（端口 4000）从 Runner 可访问 — 用 `curl http://proxy.localhost:4000` 验证
+
+    常见错误信息：
+    - `fork/exec /usr/bin/bash: no such file or directory` → 工作区镜像缺少 bash
+    - `Failed to create sandbox within 60s` → 网络隔离问题，检查 Runner 网络配置
+    - 文件操作静默失败 → Daytona Proxy 不可达
+  </Accordion>
   </Accordion>
 </AccordionGroup>

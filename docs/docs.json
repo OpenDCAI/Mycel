@@ -8,20 +8,18 @@
     "dark": "#0284C7"
   },
   "navigation": {
-    "global": {
-      "anchors": [
-        {
-          "anchor": "GitHub",
-          "icon": "github",
-          "href": "https://github.com/OpenDCAI/Mycel"
-        },
-        {
-          "anchor": "Community",
-          "icon": "wechat",
-          "href": "https://github.com/OpenDCAI/Mycel/issues/165"
-        }
-      ]
-    },
+    "anchors": [
+      {
+        "anchor": "GitHub",
+        "icon": "github",
+        "href": "https://github.com/OpenDCAI/Mycel"
+      },
+      {
+        "anchor": "Community",
+        "icon": "wechat",
+        "href": "https://github.com/OpenDCAI/Mycel/issues/165"
+      }
+    ],
     "tabs": [
       {
         "tab": "English",

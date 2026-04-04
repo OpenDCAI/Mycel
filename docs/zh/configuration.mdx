@@ -23,6 +23,17 @@ Mycel 使用分层配置系统，三级合并：系统默认值 → 用户配置
 2. `~/.leon/<file>`（用户配置）
 3. `config/defaults/` 中的内置默认值
 
+**各域合并策略：**
+
+| 域 | 策略 |
+|----|------|
+| `runtime`、`memory`、`tools` | 深度合并 — 高优先级层的字段覆盖低优先级层 |
+| `mcp`、`skills` | 查找优先 — 首个定义某 key 的层级获胜，不合并 |
+| `system_prompt` | 查找 — 项目 → 用户 → 系统 |
+| `providers`、`mapping`（models.json） | 按 key 深度合并 |
+| `pool`（models.json） | 最后者胜 — 不合并列表 |
+| `catalog`、`virtual_models`（models.json） | 仅系统层 — 用户不可覆盖 |
+
 ## 首次运行
 
 首次启动时若未检测到 API Key，Mycel 会自动打开配置向导：

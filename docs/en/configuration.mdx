@@ -33,6 +33,17 @@ Mycel uses a split configuration system with three-tier merge: system defaults �
 
 **Priority** (highest to lowest): `.leon/<file>` in workspace → `~/.leon/<file>` → built-in defaults → CLI flags win over all.
 
+**Merge strategy per domain:**
+
+| Domain | Strategy |
+|--------|----------|
+| `runtime`, `memory`, `tools` | Deep merge — higher-priority tiers override individual fields |
+| `mcp`, `skills` | Lookup — first tier that defines a key wins; no merging |
+| `system_prompt` | Lookup — project → user → system |
+| `providers`, `mapping` (models.json) | Deep merge per-key |
+| `pool` (models.json) | Last wins — no list merging |
+| `catalog`, `virtual_models` (models.json) | System-only — never overridden |
+
 ## First run
 
 ```bash

@@ -76,13 +76,15 @@ leonai run --sandbox docker "运行测试套件"
 ## 沙箱管理
 
 ```bash
-leonai sandbox              # TUI 管理器
-leonai sandbox ls           # 列出活跃会话
-leonai sandbox new docker   # 创建新会话
-leonai sandbox pause <id>   # 暂停（保留状态）
-leonai sandbox resume <id>  # 恢复
-leonai sandbox rm <id>      # 删除会话
-leonai sandbox metrics <id> # 查看 CPU/RAM/磁盘
+leonai sandbox                      # TUI 管理器
+leonai sandbox ls                   # 列出活跃会话
+leonai sandbox new docker           # 创建新会话
+leonai sandbox pause <id>           # 暂停（保留状态）
+leonai sandbox resume <id>          # 恢复
+leonai sandbox rm <id>              # 删除会话
+leonai sandbox delete <id>          # rm 的别名
+leonai sandbox metrics <id>         # 查看 CPU/RAM/磁盘
+leonai sandbox destroy-all-sessions # 销毁所有会话（需要确认）
 ```
 
 Session ID 可以缩写 — 任何唯一前缀均可。
