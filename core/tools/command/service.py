@@ -74,6 +74,7 @@ class CommandService:
                         "command": {
                             "type": "string",
                             "description": "Command to execute",
+                            "minLength": 1,
                         },
                         "description": {
                             "type": "string",
@@ -89,6 +90,8 @@ class CommandService:
                         "timeout": {
                             "type": "integer",
                             "description": "Timeout in milliseconds (default: 120000)",
+                            "minimum": 1,
+                            "maximum": 600000,
                         },
                     },
                     required=["command"],

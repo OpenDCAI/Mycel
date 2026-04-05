@@ -70,10 +70,13 @@ class WebService:
                         "query": {
                             "type": "string",
                             "description": "Search query",
+                            "minLength": 1,
                         },
                         "max_results": {
                             "type": "integer",
                             "description": "Maximum number of results (default: 5)",
+                            "minimum": 1,
+                            "maximum": 10,
                         },
                         "allowed_domains": {
                             "type": "array",
@@ -110,10 +113,12 @@ class WebService:
                         "url": {
                             "type": "string",
                             "description": "URL to fetch content from",
+                            "minLength": 1,
                         },
                         "prompt": {
                             "type": "string",
                             "description": "What information to extract from the page",
+                            "minLength": 1,
                         },
                     },
                     required=["url", "prompt"],

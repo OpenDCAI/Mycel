@@ -2183,6 +2183,41 @@ class TestWebToolRegistration:
         assert seen["include_domains"] == ["example.com"]
         assert seen["exclude_domains"] == ["bad.com"]
 
+    def test_web_search_schema_carries_query_and_max_result_constraints(self):
+        reg = ToolRegistry()
+        WebService(registry=reg)
+
+        schema = reg.get("WebSearch").get_schema()
+        props = schema["parameters"]["properties"]
+
+        assert props["query"]["minLength"] == 1
+        assert props["max_results"]["minimum"] == 1
+        assert props["max_results"]["maximum"] == 10
+
+    @pytest.mark.asyncio
+    async def test_web_search_rejects_out_of_range_max_results_at_validation_layer(self):
+        reg = ToolRegistry()
+        WebService(registry=reg)
+        runner = _make_runner(reg.list_all())
+        req = _make_tool_call_request("WebSearch", {"query": "docs", "max_results": 11})
+        req.state = MagicMock()
+
+        result = await runner.awrap_tool_call(req, AsyncMock())
+
+        assert "InputValidationError" in result.content
+        assert "max_results" in result.content
+        assert "at most 10" in result.content
+
+    def test_web_fetch_schema_carries_non_empty_url_and_prompt_constraints(self):
+        reg = ToolRegistry()
+        WebService(registry=reg)
+
+        schema = reg.get("WebFetch").get_schema()
+        props = schema["parameters"]["properties"]
+
+        assert props["url"]["minLength"] == 1
+        assert props["prompt"]["minLength"] == 1
+
     def test_list_dir_schema_uses_path(self, tmp_path):
         reg = ToolRegistry()
         FileSystemService(
@@ -2195,6 +2230,37 @@ class TestWebToolRegistration:
         assert "path" in props
         assert "directory_path" not in props
         assert schema["parameters"]["required"] == ["path"]
+
+    def test_bash_schema_carries_command_and_timeout_constraints(self, tmp_path):
+        reg = ToolRegistry()
+        CommandService(
+            registry=reg,
+            workspace_root=tmp_path,
+        )
+
+        schema = reg.get("Bash").get_schema()
+        props = schema["parameters"]["properties"]
+
+        assert props["command"]["minLength"] == 1
+        assert props["timeout"]["minimum"] == 1
+        assert props["timeout"]["maximum"] == 600000
+
+    @pytest.mark.asyncio
+    async def test_bash_rejects_out_of_range_timeout_at_validation_layer(self, tmp_path):
+        reg = ToolRegistry()
+        CommandService(
+            registry=reg,
+            workspace_root=tmp_path,
+        )
+        runner = _make_runner(reg.list_all())
+        req = _make_tool_call_request("Bash", {"command": "echo hi", "timeout": 600001})
+        req.state = MagicMock()
+
+        result = await runner.awrap_tool_call(req, AsyncMock())
+
+        assert "InputValidationError" in result.content
+        assert "timeout" in result.content
+        assert "at most 600000" in result.content
 
     def test_can_auto_approve_only_for_read_only_non_destructive_tools(self):
         assert can_auto_approve(ToolPermissionContext(is_read_only=True, is_destructive=False)) is True
