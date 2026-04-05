@@ -396,7 +396,12 @@ async def _replay_latest_run_failure_events(
         display_builder.apply_event(thread_id, event_type, payload)
 
 
-def _create_thread_sandbox_resources(thread_id: str, sandbox_type: str, recipe: dict[str, Any] | None) -> None:
+def _create_thread_sandbox_resources(
+    thread_id: str,
+    sandbox_type: str,
+    recipe: dict[str, Any] | None,
+    cwd: str | None = None,
+) -> None:
     """Create volume, lease, and terminal eagerly so volume exists before file uploads."""
     from datetime import datetime
 
@@ -436,11 +441,11 @@ def _create_thread_sandbox_resources(thread_id: str, sandbox_type: str, recipe: 
     terminal_repo = SQLiteTerminalRepo(db_path=sandbox_db)
     try:
         terminal_id = f"term-{uuid.uuid4().hex[:12]}"
-        # @@@initial-cwd - use project root for local, provider default for remote
+        # @@@initial-cwd - local threads own their requested cwd; remote threads start from provider defaults.
         from backend.web.core.config import LOCAL_WORKSPACE_ROOT
 
         if sandbox_type == "local":
-            initial_cwd = str(LOCAL_WORKSPACE_ROOT)
+            initial_cwd = cwd or str(LOCAL_WORKSPACE_ROOT)
         else:
             from backend.web.services.sandbox_service import build_provider_from_config_name
             from sandbox.manager import resolve_provider_cwd
@@ -552,6 +557,7 @@ def _create_owned_thread(
             new_thread_id,
             sandbox_type,
             payload.recipe.model_dump() if payload.recipe else None,
+            payload.cwd,
         )
 
     if selected_lease_id and owned_lease is not None:
@@ -629,7 +635,15 @@ async def resolve_main_thread(
     existing = app.state.thread_repo.get_main_thread(payload.member_id)
     if existing is None:
         return {"thread": None}
-    return {"thread": _thread_payload(app, existing["id"], existing.get("sandbox_type", "local"))}
+    try:
+        return {"thread": _thread_payload(app, existing["id"], existing.get("sandbox_type", "local"))}
+    except HTTPException as exc:
+        # @@@orphan-main-thread - stale bootstrap data can leave the member pointing at a thread whose
+        # member/entity rows are gone. Treat that as "no resolvable main thread" instead of surfacing a 500.
+        if exc.status_code == 500 and "missing member/entity" in str(exc.detail):
+            logger.warning("resolve_main_thread ignored orphaned main thread %s for member %s", existing["id"], payload.member_id)
+            return {"thread": None}
+        raise
 
 
 @router.get("/default-config")

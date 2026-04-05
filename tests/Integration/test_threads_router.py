@@ -42,6 +42,12 @@ class _FakeThreadRepo:
     def __init__(self) -> None:
         self.rows: dict[str, dict] = {}
 
+    def get_by_id(self, thread_id: str):
+        row = self.rows.get(thread_id)
+        if row is None:
+            return None
+        return {"id": thread_id, **row}
+
     def get_main_thread(self, member_id: str):
         for row in self.rows.values():
             if row["member_id"] == member_id and row["is_main"]:
@@ -261,6 +267,32 @@ async def test_create_thread_route_preserves_legacy_sandbox_type_alias():
 
 
 @pytest.mark.asyncio
+async def test_resolve_main_thread_returns_null_for_orphaned_main_thread_metadata():
+    thread_repo = _FakeThreadRepo()
+    thread_repo.create(
+        thread_id="thread-1",
+        member_id="member-1",
+        owner_user_id="owner-1",
+        sandbox_type="local",
+        is_main=True,
+        branch_index=0,
+    )
+    app = SimpleNamespace(
+        state=SimpleNamespace(
+            member_repo=_FakeMemberRepo(),
+            thread_repo=thread_repo,
+            entity_repo=_FakeEntityRepo(),
+        )
+    )
+
+    payload = threads_router.ResolveMainThreadRequest(member_id="member-1")
+
+    result = await threads_router.resolve_main_thread(payload, "owner-1", app)
+
+    assert result == {"thread": None}
+
+
+@pytest.mark.asyncio
 async def test_create_thread_route_uses_canonical_existing_lease_binding_helper():
     app = SimpleNamespace(
         state=SimpleNamespace(
@@ -297,6 +329,41 @@ async def test_create_thread_route_uses_canonical_existing_lease_binding_helper(
         cwd="/workspace/reused",
     )
     assert app.state.thread_cwd[result["thread_id"]] == "/workspace/reused"
+
+
+@pytest.mark.asyncio
+async def test_create_thread_route_passes_local_cwd_into_sandbox_bootstrap():
+    app = SimpleNamespace(
+        state=SimpleNamespace(
+            member_repo=_FakeMemberRepo(),
+            thread_repo=_FakeThreadRepo(),
+            entity_repo=_FakeEntityRepo(),
+            thread_sandbox={},
+            thread_cwd={},
+        )
+    )
+    payload = CreateThreadRequest.model_validate(
+        {
+            "member_id": "member-1",
+            "cwd": "/tmp/fresh-local-thread",
+        }
+    )
+
+    with (
+        patch.object(threads_router, "_validate_sandbox_provider_gate", return_value=None),
+        patch.object(threads_router, "_validate_mount_capability_gate", return_value=None),
+        patch.object(threads_router, "_invalidate_resource_overview_cache", return_value=None),
+        patch.object(threads_router, "save_last_successful_config", return_value=None),
+        patch.object(threads_router, "_create_thread_sandbox_resources", return_value=None) as create_resources,
+    ):
+        result = await threads_router.create_thread(payload, "owner-1", app)
+
+    create_resources.assert_called_once_with(
+        result["thread_id"],
+        "local",
+        None,
+        "/tmp/fresh-local-thread",
+    )
 
 
 @pytest.mark.asyncio

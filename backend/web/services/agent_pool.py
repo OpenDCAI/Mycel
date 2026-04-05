@@ -88,14 +88,22 @@ async def get_or_create_agent(app_obj: FastAPI, sandbox_type: str, thread_id: st
         thread_data = app_obj.state.thread_repo.get_by_id(thread_id) if hasattr(app_obj.state, "thread_repo") else None
         if sandbox_type == "local":
             cwd = app_obj.state.thread_cwd.get(thread_id)
+            cwd_from_live_map = cwd is not None
             if not cwd and thread_data and thread_data.get("cwd"):
                 cwd = thread_data["cwd"]
             if cwd:
+                path = Path(cwd).expanduser()
+                # @@@fresh-local-cwd-owns-workspace - a cwd chosen in this live backend session is
+                # the caller contract for local threads; create it instead of silently falling
+                # back to the repo root. Persisted paths from another host stay advisory.
+                if cwd_from_live_map:
+                    path.mkdir(parents=True, exist_ok=True)
+                    workspace_root = path.resolve()
+                    app_obj.state.thread_cwd[thread_id] = str(workspace_root)
                 # @@@host-local-cwd-is-advisory - persisted local thread cwd can come from another
                 # host (for example a macOS path stored in shared Supabase but replayed inside a
                 # Linux staging container). Only pin workspace_root when that path exists here.
-                path = Path(cwd).expanduser()
-                if path.exists() and path.is_dir():
+                elif path.exists() and path.is_dir():
                     workspace_root = path.resolve()
                     app_obj.state.thread_cwd[thread_id] = str(workspace_root)
                 else:

@@ -43,6 +43,13 @@ class SupabaseEntityRepo:
         rows = q.rows(response, _REPO, "get_by_member_id")
         return [EntityRow.model_validate(r) for r in rows]
 
+    def get_by_thread_id(self, thread_id: str) -> EntityRow | None:
+        response = self._t().select("*").eq("thread_id", thread_id).execute()
+        rows = q.rows(response, _REPO, "get_by_thread_id")
+        if not rows:
+            return None
+        return EntityRow.model_validate(rows[0])
+
     def list_all(self) -> list[EntityRow]:
         query = q.order(self._t().select("*"), "created_at", desc=False, repo=_REPO, operation="list_all")
         rows = q.rows(query.execute(), _REPO, "list_all")

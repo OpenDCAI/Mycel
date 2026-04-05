@@ -101,3 +101,51 @@ async def test_get_or_create_agent_ignores_unavailable_local_cwd(monkeypatch: py
     await agent_pool.get_or_create_agent(app, "local", thread_id="thread-2")
 
     assert captured["workspace_root"] is None
+
+
+@pytest.mark.asyncio
+async def test_get_or_create_agent_honors_fresh_local_thread_cwd_even_when_missing(monkeypatch: pytest.MonkeyPatch, tmp_path):
+    captured: dict[str, object] = {}
+    requested = tmp_path / "fresh-workspace"
+
+    def _fake_create_agent_sync(
+        sandbox_name: str,
+        workspace_root=None,
+        model_name: str | None = None,
+        agent: str | None = None,
+        thread_repo=None,
+        entity_repo=None,
+        member_repo=None,
+        queue_manager=None,
+        chat_repos=None,
+        extra_allowed_paths=None,
+        web_app=None,
+    ) -> object:
+        captured["workspace_root"] = workspace_root
+        return SimpleNamespace()
+
+    class _ThreadRepo:
+        def get_by_id(self, thread_id: str):
+            return {
+                "id": thread_id,
+                "cwd": None,
+                "model": "leon:large",
+            }
+
+    monkeypatch.setattr(agent_pool, "create_agent_sync", _fake_create_agent_sync)
+    monkeypatch.setattr(agent_pool, "get_or_create_agent_id", lambda **_: "agent-3")
+
+    app = SimpleNamespace(
+        state=SimpleNamespace(
+            agent_pool={},
+            thread_repo=_ThreadRepo(),
+            thread_cwd={"thread-3": str(requested)},
+            thread_sandbox={},
+        )
+    )
+
+    await agent_pool.get_or_create_agent(app, "local", thread_id="thread-3")
+
+    assert captured["workspace_root"] == requested.resolve()
+    assert requested.is_dir()
+    assert app.state.thread_cwd["thread-3"] == str(requested.resolve())

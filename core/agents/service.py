@@ -77,17 +77,25 @@ def _resolve_subagent_model(
     subagent_type: str,
     requested_model: str | None,
     inherited_model: str,
+    fallback_model: str | None = None,
 ) -> str:
+    def _is_inherit_marker(value: str | None) -> bool:
+        return value is None or value.lower() in {"default", "inherit"}
+
     env_model = os.getenv("CLAUDE_CODE_SUBAGENT_MODEL")
     if env_model:
         return env_model
-    if requested_model and requested_model.lower() != "default":
+    if requested_model and not _is_inherit_marker(requested_model):
         return requested_model
 
     agent_def = AgentLoader(workspace_root=workspace_root).load_all_agents().get(_get_subagent_agent_name(subagent_type))
     if agent_def and agent_def.model:
         return agent_def.model
 
+    if inherited_model and not _is_inherit_marker(inherited_model):
+        return inherited_model
+    if fallback_model and not _is_inherit_marker(fallback_model):
+        return fallback_model
     return inherited_model
 
 
@@ -639,6 +647,7 @@ class AgentService:
                         subagent_type,
                         model,
                         child_bootstrap.model_name,
+                        self._model_name,
                     )
                     agent = self._child_agent_factory(
                         model_name=selected_model,
@@ -664,6 +673,7 @@ class AgentService:
                         subagent_type,
                         model,
                         child_bootstrap.model_name,
+                        self._model_name,
                     )
                     agent = self._child_agent_factory(
                         model_name=selected_model,
@@ -690,6 +700,7 @@ class AgentService:
                     subagent_type,
                     model,
                     inherited_model or self._model_name,
+                    self._model_name,
                 )
                 agent = self._child_agent_factory(
                     model_name=selected_model,
