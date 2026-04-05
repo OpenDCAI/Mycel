@@ -7,6 +7,9 @@ name: Deploy Staging
 # Both update the staging apps to the target branch, then deploy.
 
 on:
+  push:
+    branches:
+      - pr188-agent-optimize
   pull_request:
     types: [labeled]
   workflow_dispatch:
@@ -23,6 +26,7 @@ jobs:
   deploy-staging:
     # For label trigger: only run when the label is exactly "deploy-staging"
     if: >
+      github.event_name == 'push' ||
       github.event_name == 'workflow_dispatch' ||
       (github.event_name == 'pull_request' && github.event.label.name == 'deploy-staging')
     runs-on: ubuntu-latest
