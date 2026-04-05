@@ -4,7 +4,7 @@ from collections.abc import Awaitable, Callable
 from copy import deepcopy
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any
+from typing import Any, NotRequired, Required, TypedDict, Unpack
 
 from core.runtime.tool_result import ToolResultEnvelope
 
@@ -16,6 +16,29 @@ type Handler = Callable[..., ToolHandlerResult] | Callable[..., Awaitable[ToolHa
 type SchemaProvider = ToolSchema | Callable[[], ToolSchema]
 type ConcurrencySafety = bool | Callable[[ToolArgs], bool]
 type ToolInputValidator = Callable[[ToolArgs, Any], ToolArgs | None] | Callable[[ToolArgs, Any], Awaitable[ToolArgs | None]]
+
+
+class _ToolEntryDefaults(TypedDict):
+    search_hint: str
+    is_concurrency_safe: ConcurrencySafety
+    is_read_only: bool
+    is_destructive: bool
+    context_schema: ToolSchema | None
+    validate_input: ToolInputValidator | None
+
+
+class _ToolEntryBuildArgs(TypedDict, total=False):
+    name: Required[str]
+    mode: Required[ToolMode]
+    schema: Required[SchemaProvider]
+    handler: Required[Handler]
+    source: Required[str]
+    search_hint: NotRequired[str]
+    is_concurrency_safe: NotRequired[ConcurrencySafety]
+    is_read_only: NotRequired[bool]
+    is_destructive: NotRequired[bool]
+    context_schema: NotRequired[ToolSchema | None]
+    validate_input: NotRequired[ToolInputValidator | None]
 
 
 class ToolMode(Enum):
@@ -41,7 +64,8 @@ class ToolEntry:
         return self.schema() if callable(self.schema) else self.schema
 
 
-TOOL_DEFAULTS: dict[str, object] = {
+TOOL_DEFAULTS: _ToolEntryDefaults = {
+    "search_hint": "",
     "is_concurrency_safe": False,
     "is_read_only": False,
     "is_destructive": False,
@@ -50,10 +74,10 @@ TOOL_DEFAULTS: dict[str, object] = {
 }
 
 
-def build_tool(**kwargs: object) -> ToolEntry:
+def build_tool(**kwargs: Unpack[_ToolEntryBuildArgs]) -> ToolEntry:
     """Factory that fills in safety defaults. Fail-closed: assumes write + non-concurrent."""
-    merged = {**TOOL_DEFAULTS, **kwargs}
-    return ToolEntry(**merged)  # type: ignore[arg-type]
+    merged: _ToolEntryBuildArgs = {**TOOL_DEFAULTS, **kwargs}
+    return ToolEntry(**merged)
 
 
 class ToolRegistry:
