@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import os
 import time
+from collections.abc import Callable
 
 import jwt
 
@@ -23,6 +24,7 @@ class AuthService:
         entities: EntityRepo,
         supabase_client=None,
         supabase_auth_client=None,
+        supabase_auth_client_factory: Callable[[], object] | None = None,
         invite_codes: InviteCodeRepo | None = None,
     ) -> None:
         self._members = members
@@ -30,6 +32,7 @@ class AuthService:
         self._entities = entities
         self._sb = supabase_client  # storage/service-role client
         self._sb_auth = supabase_auth_client  # end-user auth client
+        self._sb_auth_factory = supabase_auth_client_factory
         self._invite_codes = invite_codes
 
     # ------------------------------------------------------------------
@@ -41,7 +44,7 @@ class AuthService:
 
     def send_otp(self, email: str, password: str, invite_code: str) -> None:
         """Validate invite code, create user via signUp (sends confirmation OTP to email)."""
-        auth_client = self._require_auth_client()
+        auth_client = self._auth_api(self._require_auth_client())
         if self._sb is None:
             raise RuntimeError("Supabase client required.")
         if self._invite_codes is None or not self._invite_codes.is_valid(invite_code):
@@ -58,7 +61,7 @@ class AuthService:
 
     def verify_register_otp(self, email: str, token: str) -> dict:
         """Verify signup OTP. Returns temp_token to be used in complete_register."""
-        auth_client = self._require_auth_client()
+        auth_client = self._auth_api(self._require_auth_client())
         if self._sb is None:
             raise RuntimeError("Supabase client required.")
         from supabase_auth.errors import AuthApiError
@@ -148,7 +151,7 @@ class AuthService:
 
     def login(self, identifier: str, password: str) -> dict:
         """Login with email or mycel_id + password."""
-        auth_client = self._require_auth_client()
+        auth_client = self._auth_api(self._require_auth_client())
 
         # Resolve email
         email = self._resolve_email(identifier)
@@ -157,7 +160,7 @@ class AuthService:
 
         # Sign in via Supabase
         try:
-            resp = auth_client.auth.sign_in_with_password({"email": email, "password": password})
+            resp = auth_client.sign_in_with_password({"email": email, "password": password})
         except AuthApiError:
             raise ValueError("邮箱或密码错误")
         if resp.user is None or resp.session is None:
@@ -196,9 +199,11 @@ class AuthService:
 
     def verify_token(self, token: str) -> dict:
         """Verify Supabase JWT. Returns {user_id, entity_id}."""
-        if self._sb_auth is not None:
+        auth_client = self._sb_auth_factory() if self._sb_auth_factory is not None else self._sb_auth
+        if auth_client is not None:
+            auth_api = self._auth_api(auth_client)
             try:
-                user_resp = self._sb_auth.auth.get_user(token)
+                user_resp = auth_api.get_user(token)
             except Exception as e:
                 raise ValueError(f"Token 无效: {e}") from e
             if user_resp is None or getattr(user_resp, "user", None) is None:
@@ -234,9 +239,14 @@ class AuthService:
         return identifier.strip()
 
     def _require_auth_client(self):
+        if self._sb_auth_factory is not None:
+            return self._sb_auth_factory()
         if self._sb_auth is None:
             raise RuntimeError("Supabase auth client required. Configure SUPABASE_ANON_KEY for auth runtime.")
         return self._sb_auth
+
+    def _auth_api(self, auth_client):
+        return getattr(auth_client, "auth", auth_client)
 
     def _create_initial_agents(self, owner_user_id: str, now: float) -> dict | None:
         """Create Toad and Morel agents for a new user. Returns first agent info."""

@@ -55,6 +55,22 @@ class SupabaseAgentRegistryRepo:
     def update_status(self, agent_id: str, status: str) -> None:
         self._table().update({"status": status}).eq("agent_id", agent_id).execute()
 
+    def get_latest_by_name_and_parent(self, name: str, parent_agent_id: str | None) -> tuple | None:
+        query = self._table().select("agent_id,name,thread_id,status,parent_agent_id,subagent_type").eq("name", name)
+        if parent_agent_id is None:
+            query = query.is_("parent_agent_id", "null")
+        else:
+            query = query.eq("parent_agent_id", parent_agent_id)
+        rows = q.rows(
+            query.order("created_at", desc=True).limit(1).execute(),
+            _REPO,
+            "get_latest_by_name_and_parent",
+        )
+        if not rows:
+            return None
+        r = rows[0]
+        return (r["agent_id"], r["name"], r["thread_id"], r["status"], r.get("parent_agent_id"), r.get("subagent_type"))
+
     def list_running(self) -> list[tuple]:
         rows = q.rows(
             self._table().select("agent_id,name,thread_id,status,parent_agent_id,subagent_type").eq("status", "running").execute(),

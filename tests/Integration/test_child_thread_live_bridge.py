@@ -266,6 +266,49 @@ def test_live_tool_result_restores_subagent_stream_from_agent_background_json():
     assert seg["step"]["subagent_stream"]["status"] == "running"
 
 
+def test_live_tool_result_restores_subagent_stream_from_blocking_agent_metadata():
+    builder = DisplayBuilder()
+    thread_id = "parent-thread"
+
+    builder.apply_event(
+        thread_id,
+        "run_start",
+        {"run_id": "run-1", "source": "owner", "showing": True},
+    )
+    builder.apply_event(
+        thread_id,
+        "tool_call",
+        {
+            "id": "tc-agent-1",
+            "name": "Agent",
+            "args": {"prompt": "do work"},
+            "showing": True,
+        },
+    )
+
+    delta = builder.apply_event(
+        thread_id,
+        "tool_result",
+        {
+            "tool_call_id": "tc-agent-1",
+            "name": "Agent",
+            "content": "CHILD_DONE",
+            "metadata": {
+                "task_id": "task-456",
+                "subagent_thread_id": "subagent-task-456",
+                "description": "blocking child",
+            },
+            "showing": True,
+        },
+    )
+
+    seg = builder.get_entries(thread_id)[0]["segments"][0]
+    assert delta is not None
+    assert seg["step"]["subagent_stream"]["task_id"] == "task-456"
+    assert seg["step"]["subagent_stream"]["thread_id"] == "subagent-task-456"
+    assert seg["step"]["subagent_stream"]["status"] == "completed"
+
+
 def test_task_start_can_patch_background_agent_after_tool_result_race():
     builder = DisplayBuilder()
     thread_id = "parent-thread"
@@ -418,4 +461,38 @@ def test_checkpoint_rebuild_reconciles_subagent_stream_status_from_terminal_noti
     seg = entries[0]["segments"][0]
     assert seg["step"]["subagent_stream"]["task_id"] == "task-123"
     assert seg["step"]["subagent_stream"]["thread_id"] == "subagent-task-123"
+    assert seg["step"]["subagent_stream"]["status"] == "completed"
+
+
+def test_checkpoint_rebuild_restores_blocking_subagent_stream_from_tool_result_meta():
+    builder = DisplayBuilder()
+    thread_id = "parent-thread"
+
+    ai = AIMessage(
+        content="",
+        tool_calls=[{"name": "Agent", "args": {"prompt": "do work"}, "id": "tc-agent-1"}],
+    )
+    tool = ToolMessage(
+        content="CHILD_DONE",
+        name="Agent",
+        tool_call_id="tc-agent-1",
+        additional_kwargs={
+            "tool_result_meta": {
+                "task_id": "task-456",
+                "subagent_thread_id": "subagent-task-456",
+                "description": "blocking child",
+                "kind": "success",
+                "source": "local",
+            }
+        },
+    )
+
+    entries = builder.build_from_checkpoint(
+        thread_id,
+        [serialize_message(ai), serialize_message(tool)],
+    )
+
+    seg = entries[0]["segments"][0]
+    assert seg["step"]["subagent_stream"]["task_id"] == "task-456"
+    assert seg["step"]["subagent_stream"]["thread_id"] == "subagent-task-456"
     assert seg["step"]["subagent_stream"]["status"] == "completed"

@@ -193,12 +193,20 @@ class SandboxManager:
         if not self._requires_volume_bootstrap() or lease.volume_id:
             return
 
+        volume_id = str(uuid.uuid4())
+        self._create_volume_entry(thread_id, volume_id)
+
+        # @@@remote-volume-self-heal - legacy threads can lose their eager-created lease row
+        # and get rebound through manager recovery; persist a replacement volume_id before mount/sync.
+        self.lease_store.set_volume_id(lease.lease_id, volume_id)
+        lease.volume_id = volume_id
+
+    def _create_volume_entry(self, thread_id: str, volume_id: str) -> None:
         import json
         import os
 
         from sandbox.volume_source import HostVolume
 
-        volume_id = str(uuid.uuid4())
         now_str = datetime.now().isoformat()
         volume_root = Path(os.environ.get("LEON_SANDBOX_VOLUME_ROOT", str(user_home_path("volumes")))).expanduser().resolve()
         volume_root.mkdir(parents=True, exist_ok=True)
@@ -210,10 +218,25 @@ class SandboxManager:
         finally:
             repo.close()
 
-        # @@@remote-volume-self-heal - legacy threads can lose their eager-created lease row
-        # and get rebound through manager recovery; persist a replacement volume_id before mount/sync.
-        self.lease_store.set_volume_id(lease.lease_id, volume_id)
-        lease.volume_id = volume_id
+    def _resolve_volume_entry(self, thread_id: str, lease) -> dict[str, Any]:
+        repo = self._sandbox_volume_repo()
+        try:
+            entry = repo.get(lease.volume_id)
+        finally:
+            repo.close()
+        if entry:
+            return entry
+        # @@@missing-volume-row-self-heal - old remote threads can retain a live lease.volume_id
+        # after the sandbox volume row was pruned; recreate the row in place before mount/sync.
+        self._create_volume_entry(thread_id, lease.volume_id)
+        repo = self._sandbox_volume_repo()
+        try:
+            entry = repo.get(lease.volume_id)
+        finally:
+            repo.close()
+        if not entry:
+            raise ValueError(f"Volume not found: {lease.volume_id}")
+        return entry
 
     def _setup_mounts(self, thread_id: str) -> dict:
         """Mount the lease's volume into the sandbox. Pure sandbox-layer operation."""
@@ -228,14 +251,7 @@ class SandboxManager:
         if not lease:
             raise ValueError(f"No volume for thread {thread_id}")
         self._ensure_thread_volume(thread_id, lease)
-
-        repo = self._sandbox_volume_repo()
-        try:
-            entry = repo.get(lease.volume_id)
-        finally:
-            repo.close()
-        if not entry:
-            raise ValueError(f"Volume not found: {lease.volume_id}")
+        entry = self._resolve_volume_entry(thread_id, lease)
 
         source = deserialize_volume_source(json.loads(entry["source"]))
         volume_id = lease.volume_id
@@ -369,13 +385,7 @@ class SandboxManager:
         if not lease:
             raise ValueError(f"No volume for thread {thread_id}")
         self._ensure_thread_volume(thread_id, lease)
-        repo = self._sandbox_volume_repo()
-        try:
-            entry = repo.get(lease.volume_id)
-        finally:
-            repo.close()
-        if not entry:
-            raise ValueError(f"Volume not found: {lease.volume_id}")
+        entry = self._resolve_volume_entry(thread_id, lease)
         return deserialize_volume_source(json.loads(entry["source"]))
 
     def _sync_to_sandbox(self, thread_id: str, instance_id: str, source=None, files: list[str] | None = None) -> None:
@@ -646,16 +656,10 @@ class SandboxManager:
                                 )
                                 continue
                         except Exception as exc:
-                            print(
-                                f"[idle-reaper] failed to reclaim expired lease {lease.lease_id} "
-                                f"for thread {thread_id}: {exc}"
-                            )
+                            print(f"[idle-reaper] failed to reclaim expired lease {lease.lease_id} for thread {thread_id}: {exc}")
                             continue
                         if not reclaimed:
-                            print(
-                                f"[idle-reaper] failed to reclaim expired lease {lease.lease_id} "
-                                f"for thread {thread_id}"
-                            )
+                            print(f"[idle-reaper] failed to reclaim expired lease {lease.lease_id} for thread {thread_id}")
                             continue
 
             self.session_manager.delete(session_id, reason="idle_timeout")

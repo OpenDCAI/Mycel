@@ -18,6 +18,7 @@ from sandbox.runtime import (
     RemoteWrappedRuntime,
     _extract_state_from_output,
     _normalize_pty_result,
+    _RemoteRuntimeBase,
 )
 from sandbox.terminal import TerminalState, terminal_from_row
 from storage.providers.sqlite.lease_repo import SQLiteLeaseRepo
@@ -87,6 +88,11 @@ def _wrap_remote_state_output(
     lines.extend(f"{k}={v}" for k, v in env_map.items())
     lines.append(end_match.group(0))
     return "\n".join(lines) + "\n"
+
+
+def test_remote_runtime_treats_daytona_pty_1011_as_infra_error():
+    text = 'Failed to send input to PTY: received 1011 (internal error) {"exitCode":1}'
+    assert _RemoteRuntimeBase._looks_like_infra_error(text) is True
 
 
 # TODO(windows-compat): LocalPersistentShellRuntime uses Unix PTY + /tmp paths.

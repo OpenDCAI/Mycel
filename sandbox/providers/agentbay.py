@@ -204,8 +204,7 @@ class AgentBayProvider(SandboxProvider):
             result = session.command.execute_command(**exec_args)
         except Exception as exc:
             print(
-                "[AgentBay.execute] "
-                f"session_id={session_id} path=sdk_command_execute raised={exc.__class__.__name__}: {exc}",
+                f"[AgentBay.execute] session_id={session_id} path=sdk_command_execute raised={exc.__class__.__name__}: {exc}",
                 flush=True,
             )
             raise
@@ -422,9 +421,7 @@ class AgentBayProvider(SandboxProvider):
             error_message = text_content or json.dumps(result_field, ensure_ascii=False)
             return ProviderExecResult(output="", exit_code=1, error=error_message)
 
-        return self._provider_exec_result_from_tool_result(
-            SimpleNamespace(success=True, data=text_content, error_message="")
-        )
+        return self._provider_exec_result_from_tool_result(SimpleNamespace(success=True, data=text_content, error_message=""))
 
     @staticmethod
     def _session_needs_direct_call_refresh(session: Any) -> bool:

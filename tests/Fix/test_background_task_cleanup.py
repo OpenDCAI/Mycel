@@ -89,6 +89,11 @@ class _FailingInitChildAgent:
         raise self._error
 
 
+def _agent_tool_json(result) -> dict:
+    content = getattr(result, "content", result)
+    return json.loads(content)
+
+
 @pytest.mark.skipif(
     sys.platform == "win32" or shutil.which("bash") is None,
     reason="bash background cleanup integration requires Unix-compatible bash",
@@ -294,7 +299,7 @@ async def test_background_agent_progress_notification_reaches_parent_next_turn(t
             description="Investigating repository",
             run_in_background=True,
         )
-        task_id = json.loads(raw)["task_id"]
+        task_id = _agent_tool_json(raw)["task_id"]
         await asyncio.wait_for(started.wait(), timeout=1)
         await asyncio.sleep(0.05)
 
@@ -341,7 +346,7 @@ async def test_background_agent_completion_notification_waits_for_followthrough_
             description="Index repository",
             run_in_background=True,
         )
-        task_id = json.loads(raw)["task_id"]
+        task_id = _agent_tool_json(raw)["task_id"]
         running = service._tasks[task_id]
         await asyncio.wait_for(running.task, timeout=1)
 
@@ -401,9 +406,9 @@ async def test_mixed_success_and_init_failure_background_agents_queue_both_termi
             run_in_background=True,
         )
 
-        await asyncio.wait_for(service._tasks[json.loads(raw_good)["task_id"]].task, timeout=1)
+        await asyncio.wait_for(service._tasks[_agent_tool_json(raw_good)["task_id"]].task, timeout=1)
         with pytest.raises(RuntimeError, match="bad child init"):
-            await asyncio.wait_for(service._tasks[json.loads(raw_bad)["task_id"]].task, timeout=1)
+            await asyncio.wait_for(service._tasks[_agent_tool_json(raw_bad)["task_id"]].task, timeout=1)
 
         queued = queue_manager.list_queue("parent-thread")
 

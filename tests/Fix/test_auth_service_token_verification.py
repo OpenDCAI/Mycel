@@ -39,13 +39,61 @@ class _FakeAuthClient:
         self.auth = _FakeLoginAuth()
 
 
-def _service(*, supabase_client=None, supabase_auth_client=None, member_repo=None, entity_repo=None) -> AuthService:
+class _FactoryBackedLoginAuth:
+    def __init__(self, owner: _FactoryBackedAuthClient) -> None:
+        self._owner = owner
+
+    def sign_in_with_password(self, payload: dict[str, str]):
+        self._owner.calls.append(payload)
+        return SimpleNamespace(
+            user=SimpleNamespace(id="user-1"),
+            session=SimpleNamespace(access_token="tok-1"),
+        )
+
+    def get_user(self, token: str):
+        self._owner.tokens.append(token)
+        return SimpleNamespace(user=SimpleNamespace(id="user-1"))
+
+
+class _FactoryBackedAuthClient:
+    def __init__(self) -> None:
+        self.calls: list[dict[str, str]] = []
+        self.tokens: list[str] = []
+        self.auth = _FactoryBackedLoginAuth(self)
+
+
+class _DirectAuthClient:
+    def __init__(self) -> None:
+        self.calls: list[dict[str, str]] = []
+        self.tokens: list[str] = []
+
+    def sign_in_with_password(self, payload: dict[str, str]):
+        self.calls.append(payload)
+        return SimpleNamespace(
+            user=SimpleNamespace(id="user-1"),
+            session=SimpleNamespace(access_token="tok-1"),
+        )
+
+    def get_user(self, token: str):
+        self.tokens.append(token)
+        return SimpleNamespace(user=SimpleNamespace(id="user-1"))
+
+
+def _service(
+    *,
+    supabase_client=None,
+    supabase_auth_client=None,
+    supabase_auth_client_factory=None,
+    member_repo=None,
+    entity_repo=None,
+) -> AuthService:
     return AuthService(
         members=member_repo or SimpleNamespace(),
         accounts=SimpleNamespace(),
         entities=entity_repo or SimpleNamespace(),
         supabase_client=supabase_client,
         supabase_auth_client=supabase_auth_client,
+        supabase_auth_client_factory=supabase_auth_client_factory,
     )
 
 
@@ -83,3 +131,78 @@ def test_login_uses_dedicated_auth_client_instead_of_storage_client():
 
     assert auth_client.auth.calls == [{"email": "codex@example.com", "password": "pw-1"}]
     assert result["token"] == "tok-1"
+
+
+def test_login_uses_fresh_auth_client_from_factory_per_call():
+    created: list[_FactoryBackedAuthClient] = []
+
+    def factory() -> _FactoryBackedAuthClient:
+        client = _FactoryBackedAuthClient()
+        created.append(client)
+        return client
+
+    member_repo = SimpleNamespace(
+        get_by_id=lambda _user_id: SimpleNamespace(name="codex", mycel_id=10001, email="codex@example.com", avatar=None),
+        list_by_owner_user_id=lambda _user_id: [],
+    )
+    entity_repo = SimpleNamespace(get_by_member_id=lambda _user_id: [SimpleNamespace(id="user-1-1", type="human")])
+    service = _service(
+        supabase_client=SimpleNamespace(auth=None),
+        supabase_auth_client_factory=factory,
+        member_repo=member_repo,
+        entity_repo=entity_repo,
+    )
+
+    service.login("codex@example.com", "pw-1")
+    service.login("codex@example.com", "pw-2")
+
+    assert len(created) == 2
+    assert created[0].calls == [{"email": "codex@example.com", "password": "pw-1"}]
+    assert created[1].calls == [{"email": "codex@example.com", "password": "pw-2"}]
+
+
+def test_verify_token_uses_fresh_auth_client_from_factory_per_call(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.delenv("SUPABASE_JWT_SECRET", raising=False)
+    created: list[_FactoryBackedAuthClient] = []
+
+    def factory() -> _FactoryBackedAuthClient:
+        client = _FactoryBackedAuthClient()
+        created.append(client)
+        return client
+
+    service = _service(supabase_auth_client_factory=factory)
+
+    assert service.verify_token("tok-1") == {"user_id": "user-1", "entity_id": None}
+    assert service.verify_token("tok-2") == {"user_id": "user-1", "entity_id": None}
+    assert len(created) == 2
+    assert created[0].tokens == ["tok-1"]
+    assert created[1].tokens == ["tok-2"]
+
+
+def test_login_accepts_direct_gotrue_client_without_auth_wrapper():
+    auth_client = _DirectAuthClient()
+    member_repo = SimpleNamespace(
+        get_by_id=lambda _user_id: SimpleNamespace(name="codex", mycel_id=10001, email="codex@example.com", avatar=None),
+        list_by_owner_user_id=lambda _user_id: [],
+    )
+    entity_repo = SimpleNamespace(get_by_member_id=lambda _user_id: [SimpleNamespace(id="user-1-1", type="human")])
+
+    result = _service(
+        supabase_client=SimpleNamespace(auth=None),
+        supabase_auth_client=auth_client,
+        member_repo=member_repo,
+        entity_repo=entity_repo,
+    ).login("codex@example.com", "pw-1")
+
+    assert auth_client.calls == [{"email": "codex@example.com", "password": "pw-1"}]
+    assert result["token"] == "tok-1"
+
+
+def test_verify_token_accepts_direct_gotrue_client_without_auth_wrapper(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.delenv("SUPABASE_JWT_SECRET", raising=False)
+    auth_client = _DirectAuthClient()
+
+    payload = _service(supabase_auth_client=auth_client).verify_token("tok-direct")
+
+    assert auth_client.tokens == ["tok-direct"]
+    assert payload == {"user_id": "user-1", "entity_id": None}

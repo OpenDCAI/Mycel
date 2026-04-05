@@ -91,6 +91,24 @@ export function AgentsView({ steps }: AgentsViewProps) {
     return items;
   }, [entries, stream]);
 
+  useEffect(() => {
+    if (steps.length === 0) {
+      if (selectedAgentId !== null) setSelectedAgentId(null);
+      return;
+    }
+    if (selectedAgentId && steps.some((step) => step.id === selectedAgentId)) {
+      return;
+    }
+    const nextFocused =
+      [...steps].reverse().find((step) => {
+        const status = step.subagent_stream?.status;
+        return status === "running" || step.status === "calling";
+      }) ?? steps[steps.length - 1];
+    if (nextFocused && nextFocused.id !== selectedAgentId) {
+      setSelectedAgentId(nextFocused.id);
+    }
+  }, [steps, selectedAgentId]);
+
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
     setIsDragging(true);

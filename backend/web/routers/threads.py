@@ -62,6 +62,10 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/threads", tags=["threads"])
 
 
+def _is_internal_child_thread(thread_id: str) -> bool:
+    return thread_id.startswith("subagent-")
+
+
 def _invalidate_resource_overview_cache() -> None:
     # @@@resource-overview-invalidation - thread/lease mutations change the monitor topology immediately.
     # Clear the overview snapshot so the next /api/monitor/resources read reflects the fresh binding/state.
@@ -496,6 +500,8 @@ async def list_threads(
     threads = []
     for t in raw:
         tid = t["id"]
+        if _is_internal_child_thread(tid):
+            continue
         sandbox_type = t.get("sandbox_type", "local")
         # Check if agent is currently running — pool key is "{thread_id}:{sandbox_type}"
         running = False

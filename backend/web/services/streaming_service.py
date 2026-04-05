@@ -1142,8 +1142,11 @@ async def _run_agent_to_buffer(
                                     continue
                                 if tc_id:
                                     pending_tool_calls.pop(tc_id, None)
-                                if hasattr(msg, "metadata") and isinstance(msg.metadata, dict):
-                                    msg.metadata["run_id"] = run_id
+                                merged_meta = dict(getattr(msg, "metadata", None) or {})
+                                tool_result_meta = getattr(msg, "additional_kwargs", {}).get("tool_result_meta")
+                                if isinstance(tool_result_meta, dict):
+                                    merged_meta = {**tool_result_meta, **merged_meta}
+                                merged_meta["run_id"] = run_id
                                 tool_name = getattr(msg, "name", "") or ""
                                 await emit(
                                     {
@@ -1153,7 +1156,7 @@ async def _run_agent_to_buffer(
                                                 "tool_call_id": tc_id,
                                                 "name": tool_name,
                                                 "content": str(getattr(msg, "content", "")),
-                                                "metadata": getattr(msg, "metadata", None) or {},
+                                                "metadata": merged_meta,
                                                 "showing": True,
                                             },
                                             ensure_ascii=False,

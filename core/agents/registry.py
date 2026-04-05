@@ -73,6 +73,19 @@ class AgentRegistry:
             for row in rows
         ]
 
+    async def get_latest_by_name_and_parent(self, name: str, parent_agent_id: str | None) -> AgentEntry | None:
+        row = self._repo.get_latest_by_name_and_parent(name, parent_agent_id)
+        if row is None:
+            return None
+        return AgentEntry(
+            agent_id=row[0],
+            name=row[1],
+            thread_id=row[2],
+            status=row[3],
+            parent_agent_id=row[4],
+            subagent_type=row[5],
+        )
+
     async def update_status(self, agent_id: str, status: str) -> None:
         async with self._lock:
             self._repo.update_status(agent_id, status)

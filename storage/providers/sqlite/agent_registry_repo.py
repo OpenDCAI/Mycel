@@ -72,6 +72,14 @@ class SQLiteAgentRegistryRepo:
             conn.execute("UPDATE agents SET status=? WHERE agent_id=?", (status, agent_id))
             conn.commit()
 
+    def get_latest_by_name_and_parent(self, name: str, parent_agent_id: str | None) -> tuple | None:
+        with self._conn() as conn:
+            return conn.execute(
+                "SELECT agent_id, name, thread_id, status, parent_agent_id, subagent_type "
+                "FROM agents WHERE name=? AND parent_agent_id IS ? ORDER BY created_at DESC, agent_id DESC LIMIT 1",
+                (name, parent_agent_id),
+            ).fetchone()
+
     def list_running(self) -> list[tuple]:
         with self._conn() as conn:
             return conn.execute(

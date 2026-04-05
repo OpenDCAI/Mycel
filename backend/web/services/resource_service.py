@@ -337,6 +337,13 @@ def _resolve_card_cpu_metric(provider_type: str, telemetry: dict[str, Any]) -> d
     return cpu
 
 
+def _is_resource_visible_thread(thread_id: str | None) -> bool:
+    raw = str(thread_id or "").strip()
+    if raw.startswith("subagent-"):
+        return False
+    return True
+
+
 # ---------------------------------------------------------------------------
 # Public API: resource overview
 # ---------------------------------------------------------------------------
@@ -346,7 +353,7 @@ def list_resource_providers() -> dict[str, Any]:
     # @@@overview-fast-path - avoid provider-network calls; overview uses DB session snapshot.
     repo = make_sandbox_monitor_repo()
     try:
-        sessions = repo.list_sessions_with_leases()
+        sessions = [row for row in repo.list_sessions_with_leases() if _is_resource_visible_thread(row.get("thread_id"))]
     finally:
         repo.close()
 

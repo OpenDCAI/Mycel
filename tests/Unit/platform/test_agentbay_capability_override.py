@@ -6,13 +6,35 @@ from sandbox.providers.agentbay import AgentBayProvider
 
 def _install_fake_agentbay_module(monkeypatch) -> None:
     fake_mod = types.ModuleType("agentbay")
+    fake_api_mod = types.ModuleType("agentbay.api")
+    fake_api_models_mod = types.ModuleType("agentbay.api.models")
 
     class FakeAgentBay:
         def __init__(self, api_key: str):
             self.api_key = api_key
 
+    class FakeCreateSessionParams:
+        def __init__(self):
+            self.image_id = None
+            self.context_syncs = None
+
+    class FakeContextSync:
+        @staticmethod
+        def new(context_id: str, path: str):
+            return {"context_id": context_id, "path": path}
+
+    class FakeGetSessionRequest:
+        def __init__(self, authorization: str, session_id: str):
+            self.authorization = authorization
+            self.session_id = session_id
+
     fake_mod.AgentBay = FakeAgentBay
+    fake_mod.CreateSessionParams = FakeCreateSessionParams
+    fake_mod.ContextSync = FakeContextSync
+    fake_api_models_mod.GetSessionRequest = FakeGetSessionRequest
     monkeypatch.setitem(sys.modules, "agentbay", fake_mod)
+    monkeypatch.setitem(sys.modules, "agentbay.api", fake_api_mod)
+    monkeypatch.setitem(sys.modules, "agentbay.api.models", fake_api_models_mod)
 
 
 def test_agentbay_capability_default_from_class(monkeypatch):
@@ -55,7 +77,12 @@ def test_agentbay_screenshot_uses_current_sdk_method(monkeypatch):
             return _ScreenshotResult()
 
     class _FakeSession:
-        computer = _FakeComputer()
+        def __init__(self) -> None:
+            self.session_id = "sess-1"
+            self.token = "tok"
+            self.link_url = "https://link"
+            self.mcpTools = [object()]
+            self.computer = _FakeComputer()
 
     provider._sessions["sess-1"] = _FakeSession()
     screenshot = provider.screenshot("sess-1")

@@ -28,10 +28,7 @@ def _enrich_task_thread_members(tasks: list[dict[str, Any]]) -> list[dict[str, A
     # from canonical thread metadata before frontend deep-links are rendered.
     thread_repo = build_thread_repo()
     try:
-        member_ids = {
-            thread_id: (thread_repo.get_by_id(thread_id) or {}).get("member_id")
-            for thread_id in thread_ids
-        }
+        member_ids = {thread_id: (thread_repo.get_by_id(thread_id) or {}).get("member_id") for thread_id in thread_ids}
     finally:
         thread_repo.close()
 

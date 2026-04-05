@@ -38,7 +38,15 @@ def extract_text_content(raw_content: Any) -> str:
 def serialize_message(msg: Any) -> dict[str, Any]:
     """Serialize a LangChain message to a JSON-compatible dict."""
     content = getattr(msg, "content", "")
-    metadata = getattr(msg, "metadata", None) or {}
+    metadata = dict(getattr(msg, "metadata", None) or {})
+    additional_kwargs = getattr(msg, "additional_kwargs", None) or {}
+    tool_result_meta = additional_kwargs.get("tool_result_meta")
+    # @@@tool-result-meta-bridge - LangChain ToolMessage keeps durable tool
+    # metadata in additional_kwargs, but Leon display rebuild consumes
+    # serialized metadata. Merge the exact structured tool_result_meta here so
+    # checkpoint rebuild can recover blocking subagent identity honestly.
+    if isinstance(tool_result_meta, dict):
+        metadata = {**tool_result_meta, **metadata}
 
     # Strip system tags from owner HumanMessages (context-shift hints).
     # External HumanMessages keep their <system-reminder> so frontend can

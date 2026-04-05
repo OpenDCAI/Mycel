@@ -7,8 +7,7 @@ import pytest
 import sandbox.manager as sandbox_manager_module
 from sandbox.manager import SandboxManager
 from sandbox.providers.local import LocalSessionProvider
-from sandbox.volume_source import HostVolume
-from sandbox.volume_source import DaytonaVolume
+from sandbox.volume_source import DaytonaVolume, HostVolume
 
 
 class _FakeVolumeRepo:
@@ -154,6 +153,53 @@ def test_setup_mounts_provisions_missing_remote_volume_metadata(monkeypatch, tmp
     assert manager.lease_store.volume_updates == [("lease-1", lease.volume_id)]
     assert repo.requested_ids == [lease.volume_id]
     assert isinstance(result["source"], HostVolume)
+
+
+def test_setup_mounts_recreates_missing_remote_volume_row_for_existing_volume_id(monkeypatch, tmp_path):
+    class _MissingRowRepo(_FakeVolumeRepo):
+        def __init__(self) -> None:
+            super().__init__(HostVolume(tmp_path / "vol").serialize())
+            self._rows: dict[str, dict[str, str]] = {}
+
+        def get(self, volume_id: str):
+            self.requested_ids.append(volume_id)
+            return self._rows.get(volume_id)
+
+        def create(self, volume_id: str, source_json: str, name: str | None, created_at: str) -> None:
+            super().create(volume_id, source_json, name, created_at)
+            self._rows[volume_id] = {"source": source_json}
+
+        def update_source(self, volume_id: str, source_json: str) -> None:
+            self._rows[volume_id] = {"source": source_json}
+            self._source = json.loads(source_json)
+
+    manager = object.__new__(SandboxManager)
+    manager.provider_capability = SimpleNamespace(runtime_kind="daytona_pty")
+    manager.provider = _FakeDaytonaProvider()
+    manager.volume = _FakeVolume()
+    manager._get_active_terminal = lambda _thread_id: SimpleNamespace(lease_id="lease-1")
+    lease = SimpleNamespace(lease_id="lease-1", volume_id="volume-missing")
+    manager._get_lease = lambda _lease_id: lease
+    manager.lease_store = _FakeLeaseStore()
+    repo = _MissingRowRepo()
+    manager._sandbox_volume_repo = lambda: repo
+    thread_repo = _FakeThreadRepo({"member_id": "member-daytona"})
+    monkeypatch.setattr(
+        sandbox_manager_module,
+        "build_thread_repo",
+        lambda **_kwargs: thread_repo,
+        raising=False,
+    )
+    monkeypatch.setenv("LEON_SANDBOX_VOLUME_ROOT", str(tmp_path / "volumes"))
+
+    result = manager._setup_mounts("thread-1")
+
+    assert repo.created == [("volume-missing", "vol-thread-1")]
+    assert manager.lease_store.volume_updates == []
+    assert repo.requested_ids == ["volume-missing", "volume-missing"]
+    assert isinstance(result["source"], DaytonaVolume)
+    assert manager.provider.calls == [("member-daytona", "/workspace")]
+    assert thread_repo.closed is True
 
 
 def test_enforce_idle_timeouts_destroys_when_provider_cannot_pause(monkeypatch):

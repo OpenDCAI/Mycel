@@ -1,8 +1,38 @@
 import json
+import sys
+import types
 from dataclasses import replace
 from types import SimpleNamespace
 
 from sandbox.providers.agentbay import AgentBayProvider
+
+
+def _install_fake_agentbay_module(monkeypatch) -> None:
+    fake_mod = types.ModuleType("agentbay")
+    fake_api_mod = types.ModuleType("agentbay.api")
+    fake_api_models_mod = types.ModuleType("agentbay.api.models")
+
+    class FakeCreateSessionParams:
+        def __init__(self):
+            self.image_id = None
+            self.context_syncs = None
+
+    class FakeContextSync:
+        @staticmethod
+        def new(context_id: str, path: str):
+            return {"context_id": context_id, "path": path}
+
+    class FakeGetSessionRequest:
+        def __init__(self, authorization: str, session_id: str):
+            self.authorization = authorization
+            self.session_id = session_id
+
+    fake_mod.CreateSessionParams = FakeCreateSessionParams
+    fake_mod.ContextSync = FakeContextSync
+    fake_api_models_mod.GetSessionRequest = FakeGetSessionRequest
+    monkeypatch.setitem(sys.modules, "agentbay", fake_mod)
+    monkeypatch.setitem(sys.modules, "agentbay.api", fake_api_mod)
+    monkeypatch.setitem(sys.modules, "agentbay.api.models", fake_api_models_mod)
 
 
 def _provider_with_fake_client(fake_client) -> AgentBayProvider:
@@ -16,7 +46,8 @@ def _provider_with_fake_client(fake_client) -> AgentBayProvider:
     return provider
 
 
-def test_create_session_refreshes_agentbay_session_when_direct_call_fields_missing():
+def test_create_session_refreshes_agentbay_session_when_direct_call_fields_missing(monkeypatch):
+    _install_fake_agentbay_module(monkeypatch)
     raw_session = SimpleNamespace(session_id="sess-123", token="", link_url="", mcpTools=[])
     hydrated_session = SimpleNamespace(session_id="sess-123", token="tok", link_url="https://link", mcpTools=[object()])
     fake_client = SimpleNamespace(
@@ -54,10 +85,11 @@ def test_destroy_session_skips_sync_when_pause_capability_is_disabled():
         success = True
 
     class _Session:
-        session_id = "sess-123"
-        token = "tok"
-        link_url = "https://link"
-        mcpTools = [object()]
+        def __init__(self) -> None:
+            self.session_id = "sess-123"
+            self.token = "tok"
+            self.link_url = "https://link"
+            self.mcpTools = [object()]
 
         def delete(self, *, sync_context: bool):
             calls.append(sync_context)
@@ -121,7 +153,8 @@ def test_execute_prefers_link_url_shell_path_when_session_has_direct_call_metada
     ]
 
 
-def test_get_session_hydrates_sdk_shape_session_from_raw_get_session_metadata():
+def test_get_session_hydrates_sdk_shape_session_from_raw_get_session_metadata(monkeypatch):
+    _install_fake_agentbay_module(monkeypatch)
     sdk_shape_session = SimpleNamespace(
         session_id="sess-123",
         token="tok",

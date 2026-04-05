@@ -119,6 +119,8 @@ def test_list_resource_providers_resolves_owner_metadata_from_runtime_storage(mo
         "available_sandbox_types",
         lambda: [{"name": "daytona", "available": True}],
     )
+    monkeypatch.setattr(resource_service, "resolve_provider_name", lambda *_args, **_kwargs: "daytona")
+    monkeypatch.setattr(resource_service, "_resolve_console_url", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(
         resource_service,
         "_resolve_instance_capabilities",
@@ -151,3 +153,50 @@ def test_list_resource_providers_resolves_owner_metadata_from_runtime_storage(mo
             "metrics": None,
         }
     ]
+
+
+def test_list_resource_providers_hides_subagent_threads(monkeypatch):
+    rows = [
+        {
+            "provider": "daytona",
+            "session_id": "sess-parent",
+            "thread_id": "thread-parent",
+            "lease_id": "lease-parent",
+            "observed_state": "running",
+            "desired_state": "running",
+            "created_at": "2026-04-04T00:00:00",
+        },
+        {
+            "provider": "daytona",
+            "session_id": "sess-child",
+            "thread_id": "subagent-deadbeef",
+            "lease_id": "lease-child",
+            "observed_state": "running",
+            "desired_state": "running",
+            "created_at": "2026-04-04T00:00:01",
+        },
+    ]
+
+    monkeypatch.setattr(resource_service, "make_sandbox_monitor_repo", lambda: _FakeRepo(rows))
+    monkeypatch.setattr(
+        resource_service,
+        "available_sandbox_types",
+        lambda: [{"name": "daytona", "available": True}],
+    )
+    monkeypatch.setattr(
+        resource_service,
+        "_resolve_instance_capabilities",
+        lambda _config_name: (resource_service._empty_capabilities(), None),
+    )
+    monkeypatch.setattr(
+        resource_service,
+        "_thread_owners",
+        lambda thread_ids: {tid: {"member_id": tid, "member_name": tid, "avatar_url": None} for tid in thread_ids},
+    )
+    monkeypatch.setattr(resource_service, "list_resource_snapshots", lambda _lease_ids: {})
+
+    payload = resource_service.list_resource_providers()
+    sessions = payload["providers"][0]["sessions"]
+
+    assert [session["threadId"] for session in sessions] == ["thread-parent"]
+    assert payload["summary"]["running_sessions"] == 1

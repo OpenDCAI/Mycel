@@ -236,6 +236,7 @@ async def test_create_thread_route_preserves_legacy_sandbox_type_alias():
     )
 
     with (
+        patch.object(threads_router, "_validate_sandbox_provider_gate", return_value=None),
         patch.object(threads_router, "_validate_mount_capability_gate", return_value=None),
         patch.object(threads_router, "_create_thread_sandbox_resources", return_value=None),
         patch.object(threads_router, "_invalidate_resource_overview_cache", return_value=None),
@@ -285,6 +286,44 @@ async def test_create_thread_route_uses_canonical_existing_lease_binding_helper(
         cwd="/workspace/reused",
     )
     assert app.state.thread_cwd[result["thread_id"]] == "/workspace/reused"
+
+
+@pytest.mark.asyncio
+async def test_list_threads_hides_internal_subagent_threads():
+    app = SimpleNamespace(
+        state=SimpleNamespace(
+            thread_repo=SimpleNamespace(
+                list_by_owner_user_id=lambda user_id: [
+                    {
+                        "id": "main-thread",
+                        "sandbox_type": "local",
+                        "member_name": "Toad",
+                        "member_id": "member-1",
+                        "entity_name": "Toad",
+                        "branch_index": 0,
+                        "is_main": True,
+                        "member_avatar": None,
+                    },
+                    {
+                        "id": "subagent-deadbeef",
+                        "sandbox_type": "local",
+                        "member_name": "Toad",
+                        "member_id": "member-1",
+                        "entity_name": "worker-1",
+                        "branch_index": 1,
+                        "is_main": False,
+                        "member_avatar": None,
+                    },
+                ]
+            ),
+            agent_pool={},
+            thread_last_active={},
+        )
+    )
+
+    payload = await threads_router.list_threads("owner-1", app)
+
+    assert [item["thread_id"] for item in payload["threads"]] == ["main-thread"]
 
 
 @pytest.mark.asyncio

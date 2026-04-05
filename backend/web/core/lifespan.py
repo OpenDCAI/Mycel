@@ -54,7 +54,6 @@ async def lifespan(app: FastAPI):
         )
 
         _supabase_client = create_supabase_client()
-        _supabase_auth_client = create_supabase_auth_client()
         app.state.member_repo = SupabaseMemberRepo(_supabase_client)
         app.state.account_repo = SupabaseAccountRepo(_supabase_client)
         app.state.entity_repo = SupabaseEntityRepo(_supabase_client)
@@ -67,7 +66,7 @@ async def lifespan(app: FastAPI):
         app.state.invite_code_repo = SupabaseInviteCodeRepo(_supabase_client)
         app.state.user_settings_repo = SupabaseUserSettingsRepo(_supabase_client)
         app.state._supabase_client = _supabase_client
-        app.state._supabase_auth_client = _supabase_auth_client
+        app.state._supabase_auth_client_factory = create_supabase_auth_client
         app.state._storage_container = StorageContainer(strategy="supabase", supabase_client=_supabase_client)
     else:
         from storage.providers.sqlite.chat_repo import SQLiteChatEntityRepo, SQLiteChatMessageRepo, SQLiteChatRepo
@@ -99,7 +98,7 @@ async def lifespan(app: FastAPI):
             accounts=app.state.account_repo,
             entities=app.state.entity_repo,
             supabase_client=_supabase_client,
-            supabase_auth_client=_supabase_auth_client,
+            supabase_auth_client_factory=create_supabase_auth_client,
             invite_codes=app.state.invite_code_repo,
         )
     else:
