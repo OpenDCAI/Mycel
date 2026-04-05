@@ -12,34 +12,41 @@ Middleware Stack
 
 from __future__ import annotations
 
-
-def _render_rule(index: int, title: str, body: str, details: list[str] | None = None) -> str:
-    rule = f"{index}. **{title}**: {body}"
-    if not details:
-        return rule
-    return rule + "\n" + "\n".join(f"   - {detail}" for detail in details)
+from typing import NamedTuple
 
 
-def _build_core_rules(*, is_sandbox: bool, sandbox_name: str, workspace_root: str, working_dir: str) -> list[str]:
-    rules: list[str] = []
+class RuleSpec(NamedTuple):
+    title: str
+    body: str
+    details: tuple[str, ...] = ()
+
+
+def _render_rule(index: int, rule: RuleSpec) -> str:
+    rendered = f"{index}. **{rule.title}**: {rule.body}"
+    if not rule.details:
+        return rendered
+    return rendered + "\n" + "\n".join(f"   - {detail}" for detail in rule.details)
+
+
+def _build_core_rules(*, is_sandbox: bool, sandbox_name: str, workspace_root: str, working_dir: str) -> list[RuleSpec]:
+    rules: list[RuleSpec] = []
     if is_sandbox:
         if sandbox_name == "docker":
             location_rule = "All file and command operations run in a local Docker container, NOT on the user's host filesystem."
         else:
             location_rule = "All file and command operations run in a remote sandbox, NOT on the user's local machine."
-        rules.append(_render_rule(1, "Sandbox Environment", f"{location_rule} The sandbox is an isolated Linux environment."))
+        rules.append(RuleSpec("Sandbox Environment", f"{location_rule} The sandbox is an isolated Linux environment."))
     else:
-        rules.append(_render_rule(1, "Workspace", "File operations are restricted to: " + workspace_root))
+        rules.append(RuleSpec("Workspace", "File operations are restricted to: " + workspace_root))
 
     rules.append(
-        _render_rule(
-            2,
+        RuleSpec(
             "Absolute Paths",
             "All file paths must be absolute paths.",
-            [
+            (
                 f"Correct: `{working_dir}/project/test.py`",
                 "Wrong: `test.py` or `./test.py`",
-            ],
+            ),
         )
     )
 
@@ -47,53 +54,78 @@ def _build_core_rules(*, is_sandbox: bool, sandbox_name: str, workspace_root: st
         security = "The sandbox is isolated. You can install packages, run any commands, and modify files freely."
     else:
         security = "Dangerous commands are blocked. All operations are logged."
-    rules.append(_render_rule(3, "Security", security))
+    rules.append(RuleSpec("Security", security))
     return rules
 
 
-def _build_risk_rules() -> list[str]:
+def _build_risk_rules() -> list[RuleSpec]:
     return [
-        _render_rule(
-            4,
+        RuleSpec(
             "Risky Actions",
             "Ask before destructive, hard-to-reverse, or shared-state actions.",
-            [
+            (
                 "Examples: deleting files, force-pushing, dropping tables, killing unfamiliar processes, modifying shared infrastructure.",
                 "If you see unexpected state, investigate before deleting or overwriting it.",
-            ],
+            ),
         ),
-        _render_rule(
-            5,
+        RuleSpec(
             "No URL Guessing",
             "Do not guess URLs unless the user provided them or you are confident they are directly relevant to programming help.",
         ),
-        _render_rule(
-            6,
+        RuleSpec(
             "Minimal Change",
             "Do not add features, refactor code, or make speculative abstractions beyond what the task requires.",
+            (
+                "Don't create helpers, utilities, or abstractions for one-time operations.",
+                "Don't add error handling, fallbacks, or validation for scenarios that can't happen.",
+            ),
         ),
     ]
 
 
-def _build_tool_preference_rules() -> list[str]:
+def _build_tool_preference_rules() -> list[RuleSpec]:
     return [
-        _render_rule(
-            7,
+        RuleSpec(
             "Tool Priority",
             "When a built-in tool and an MCP tool (`mcp__*`) have the same functionality, use the built-in tool.",
         ),
-        _render_rule(
-            8,
+        RuleSpec(
             "Tool Preference",
             "Prefer dedicated tools over `Bash` when a built-in tool already matches the job.",
-            [
+            (
                 "Use `Read` instead of `cat`, `head`, or `tail`.",
                 "Use `Edit` instead of shell text-munging for file edits.",
                 "Use `Write` instead of heredoc or echo redirection for file creation.",
                 "Use `Glob`/`Grep` for file discovery and content search before falling back to `Bash`.",
-            ],
+            ),
         ),
     ]
+
+
+def _build_interaction_rules() -> list[RuleSpec]:
+    return []
+
+
+def _build_rule_specs(
+    *,
+    is_sandbox: bool,
+    sandbox_name: str,
+    workspace_root: str,
+    working_dir: str,
+) -> list[RuleSpec]:
+    rules: list[RuleSpec] = []
+    rules.extend(
+        _build_core_rules(
+            is_sandbox=is_sandbox,
+            sandbox_name=sandbox_name,
+            workspace_root=workspace_root,
+            working_dir=working_dir,
+        )
+    )
+    rules.extend(_build_risk_rules())
+    rules.extend(_build_tool_preference_rules())
+    rules.extend(_build_interaction_rules())
+    return rules
 
 
 def build_context_section(
@@ -123,18 +155,13 @@ def build_rules_section(
     working_dir: str,
     workspace_root: str,
 ) -> str:
-    rules: list[str] = []
-    rules.extend(
-        _build_core_rules(
-            is_sandbox=is_sandbox,
-            sandbox_name=sandbox_name,
-            workspace_root=workspace_root,
-            working_dir=working_dir,
-        )
+    rule_specs = _build_rule_specs(
+        is_sandbox=is_sandbox,
+        sandbox_name=sandbox_name,
+        workspace_root=workspace_root,
+        working_dir=working_dir,
     )
-    rules.extend(_build_risk_rules())
-    rules.extend(_build_tool_preference_rules())
-    return "\n\n".join(rules)
+    return "\n\n".join(_render_rule(index, rule) for index, rule in enumerate(rule_specs, start=1))
 
 
 def build_base_prompt(context: str, rules: str) -> str:

@@ -350,8 +350,15 @@ def test_build_rules_section_unifies_core_risk_and_tool_preferences():
     assert "**Tool Priority**" in rules
     assert "Do not guess URLs" in rules
     assert "Do not add features, refactor code, or make speculative abstractions" in rules
+    assert "Don't create helpers, utilities, or abstractions for one-time operations" in rules
+    assert "Don't add error handling, fallbacks, or validation for scenarios that can't happen" in rules
     assert "Prefer dedicated tools over `Bash`" in rules
+    assert "Use `Read` instead of `cat`, `head`, or `tail`." in rules
+    assert "Use `Glob`/`Grep` for file discovery and content search before falling back to `Bash`." in rules
     assert "Ask before destructive, hard-to-reverse, or shared-state actions" in rules
+    assert (
+        "Examples: deleting files, force-pushing, dropping tables, killing unfamiliar processes, modifying shared infrastructure." in rules
+    )
     assert "Background Task Description" not in rules
 
 
