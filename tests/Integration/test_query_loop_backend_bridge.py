@@ -128,22 +128,6 @@ class _PromptTooLongTwiceModel:
         raise RuntimeError("prompt is too long")
 
 
-class _PromptTooLongWithFailingCompactorModel:
-    def bind_tools(self, tools):
-        return self
-
-    def bind(self, **kwargs):
-        return self
-
-    async def ainvoke(self, messages):
-        system_text = ""
-        if messages and messages[0].__class__.__name__ == "SystemMessage":
-            system_text = getattr(messages[0], "content", "") or ""
-        if "tasked with summarizing conversations" in system_text or "split turn" in system_text.lower():
-            raise RuntimeError("compaction failed")
-        raise RuntimeError("prompt is too long")
-
-
 class _QueryOkWithFailingCompactorModel:
     def bind_tools(self, tools):
         return self

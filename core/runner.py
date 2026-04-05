@@ -153,7 +153,7 @@ class NonInteractiveRunner:
 
     def _process_chunk(self, chunk: dict, result: dict) -> None:
         """Process streaming chunk, extract tool calls and response"""
-        for node_name, node_update in chunk.items():
+        for _node_name, node_update in chunk.items():
             if not isinstance(node_update, dict):
                 continue
 

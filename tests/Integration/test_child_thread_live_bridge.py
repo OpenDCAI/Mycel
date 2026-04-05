@@ -91,6 +91,90 @@ class _BlockingChildAgent:
         self.agent = _BlockingChildGraph()
 
 
+def _prime_agent_turn(
+    builder: DisplayBuilder,
+    thread_id: str,
+    *,
+    tool_call_id: str = "tc-agent-1",
+    args: dict | None = None,
+    run_id: str = "run-1",
+) -> None:
+    builder.apply_event(
+        thread_id,
+        "run_start",
+        {"run_id": run_id, "source": "owner", "showing": True},
+    )
+    builder.apply_event(
+        thread_id,
+        "tool_call",
+        {
+            "id": tool_call_id,
+            "name": "Agent",
+            "args": args or {"prompt": "do work"},
+            "showing": True,
+        },
+    )
+
+
+def _set_single_subagent_entry(
+    builder: DisplayBuilder,
+    thread_id: str,
+    *,
+    task_id: str,
+    thread_ref: str,
+    status: str,
+    result: str,
+    description: str = "inspect workspace",
+) -> None:
+    builder.set_entries(
+        thread_id,
+        [
+            {"id": "u1", "role": "user", "content": "do work", "timestamp": 1},
+            {
+                "id": "a1",
+                "role": "assistant",
+                "timestamp": 2,
+                "segments": [
+                    {
+                        "type": "tool",
+                        "step": {
+                            "id": "call-agent-1",
+                            "name": "Agent",
+                            "args": {"description": description},
+                            "status": "done",
+                            "result": result,
+                            "subagent_stream": {
+                                "task_id": task_id,
+                                "thread_id": thread_ref,
+                                "description": description,
+                                "text": "",
+                                "tool_calls": [],
+                                "status": status,
+                            },
+                        },
+                    }
+                ],
+            },
+        ],
+    )
+
+
+def _make_router_app(
+    builder: DisplayBuilder,
+    thread_id: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> SimpleNamespace:
+    fake_agent = SimpleNamespace(runtime=SimpleNamespace(current_state=AgentState.ACTIVE), agent=SimpleNamespace(aget_state=None))
+    monkeypatch.setattr(threads_router, "get_or_create_agent", AsyncMock(return_value=fake_agent))
+    return SimpleNamespace(
+        state=SimpleNamespace(
+            display_builder=builder,
+            agent_pool={},
+            thread_sandbox={thread_id: "local"},
+        )
+    )
+
+
 @pytest.mark.asyncio
 async def test_run_child_thread_live_rebinds_from_parent_sink_and_surfaces_runtime_and_detail_before_completion():
     child_thread_id = "subagent-live-1"
@@ -227,22 +311,7 @@ async def test_run_child_thread_live_raises_when_child_never_makes_a_model_call(
 def test_live_tool_result_restores_subagent_stream_from_agent_background_json():
     builder = DisplayBuilder()
     thread_id = "parent-thread"
-
-    builder.apply_event(
-        thread_id,
-        "run_start",
-        {"run_id": "run-1", "source": "owner", "showing": True},
-    )
-    builder.apply_event(
-        thread_id,
-        "tool_call",
-        {
-            "id": "tc-agent-1",
-            "name": "Agent",
-            "args": {"prompt": "do work", "run_in_background": True},
-            "showing": True,
-        },
-    )
+    _prime_agent_turn(builder, thread_id, args={"prompt": "do work", "run_in_background": True})
 
     delta = builder.apply_event(
         thread_id,
@@ -270,22 +339,7 @@ def test_live_tool_result_restores_subagent_stream_from_agent_background_json():
 def test_live_tool_result_restores_subagent_stream_from_blocking_agent_metadata():
     builder = DisplayBuilder()
     thread_id = "parent-thread"
-
-    builder.apply_event(
-        thread_id,
-        "run_start",
-        {"run_id": "run-1", "source": "owner", "showing": True},
-    )
-    builder.apply_event(
-        thread_id,
-        "tool_call",
-        {
-            "id": "tc-agent-1",
-            "name": "Agent",
-            "args": {"prompt": "do work"},
-            "showing": True,
-        },
-    )
+    _prime_agent_turn(builder, thread_id)
 
     delta = builder.apply_event(
         thread_id,
@@ -313,21 +367,11 @@ def test_live_tool_result_restores_subagent_stream_from_blocking_agent_metadata(
 def test_task_start_can_patch_background_agent_after_tool_result_race():
     builder = DisplayBuilder()
     thread_id = "parent-thread"
-
-    builder.apply_event(
+    _prime_agent_turn(
+        builder,
         thread_id,
-        "run_start",
-        {"run_id": "run-1", "source": "owner", "showing": True},
-    )
-    builder.apply_event(
-        thread_id,
-        "tool_call",
-        {
-            "id": "tc-agent-race",
-            "name": "Agent",
-            "args": {"prompt": "do work", "run_in_background": True},
-            "showing": True,
-        },
+        tool_call_id="tc-agent-race",
+        args={"prompt": "do work", "run_in_background": True},
     )
     builder.apply_event(
         thread_id,
@@ -363,22 +407,7 @@ def test_task_start_can_patch_background_agent_after_tool_result_race():
 def test_live_notice_reconciles_subagent_stream_status_from_terminal_notification(task_status: str):
     builder = DisplayBuilder()
     thread_id = "parent-thread"
-
-    builder.apply_event(
-        thread_id,
-        "run_start",
-        {"run_id": "run-1", "source": "owner", "showing": True},
-    )
-    builder.apply_event(
-        thread_id,
-        "tool_call",
-        {
-            "id": "tc-agent-1",
-            "name": "Agent",
-            "args": {"prompt": "do work", "run_in_background": True},
-            "showing": True,
-        },
-    )
+    _prime_agent_turn(builder, thread_id, args={"prompt": "do work", "run_in_background": True})
     builder.apply_event(
         thread_id,
         "tool_result",
@@ -503,47 +532,16 @@ def test_checkpoint_rebuild_restores_blocking_subagent_stream_from_tool_result_m
 async def test_list_tasks_includes_subagent_stream_from_display_entries():
     thread_id = "parent-thread-tasks"
     builder = DisplayBuilder()
-    builder.set_entries(
+    _set_single_subagent_entry(
+        builder,
         thread_id,
-        [
-            {"id": "u1", "role": "user", "content": "do work", "timestamp": 1},
-            {
-                "id": "a1",
-                "role": "assistant",
-                "timestamp": 2,
-                "segments": [
-                    {
-                        "type": "tool",
-                        "step": {
-                            "id": "call-agent-1",
-                            "name": "Agent",
-                            "args": {"description": "inspect workspace"},
-                            "status": "done",
-                            "result": "workspace looks empty",
-                            "subagent_stream": {
-                                "task_id": "task-123",
-                                "thread_id": "subagent-task-123",
-                                "description": "inspect workspace",
-                                "text": "",
-                                "tool_calls": [],
-                                "status": "completed",
-                            },
-                        },
-                    }
-                ],
-            },
-        ],
+        task_id="task-123",
+        thread_ref="subagent-task-123",
+        status="completed",
+        result="workspace looks empty",
     )
-    fake_agent = SimpleNamespace(runtime=SimpleNamespace(current_state=AgentState.ACTIVE), agent=SimpleNamespace(aget_state=None))
     monkeypatch = pytest.MonkeyPatch()
-    monkeypatch.setattr(threads_router, "get_or_create_agent", AsyncMock(return_value=fake_agent))
-    app = SimpleNamespace(
-        state=SimpleNamespace(
-            display_builder=builder,
-            agent_pool={},
-            thread_sandbox={thread_id: "local"},
-        )
-    )
+    app = _make_router_app(builder, thread_id, monkeypatch)
 
     tasks = await threads_router.list_tasks(thread_id, request=SimpleNamespace(app=app))
 
@@ -565,47 +563,16 @@ async def test_list_tasks_includes_subagent_stream_from_display_entries():
 async def test_get_task_returns_subagent_stream_result_from_display_entries():
     thread_id = "parent-thread-task-detail"
     builder = DisplayBuilder()
-    builder.set_entries(
+    _set_single_subagent_entry(
+        builder,
         thread_id,
-        [
-            {"id": "u1", "role": "user", "content": "do work", "timestamp": 1},
-            {
-                "id": "a1",
-                "role": "assistant",
-                "timestamp": 2,
-                "segments": [
-                    {
-                        "type": "tool",
-                        "step": {
-                            "id": "call-agent-1",
-                            "name": "Agent",
-                            "args": {"description": "inspect workspace"},
-                            "status": "done",
-                            "result": "workspace looks empty",
-                            "subagent_stream": {
-                                "task_id": "task-123",
-                                "thread_id": "subagent-task-123",
-                                "description": "inspect workspace",
-                                "text": "",
-                                "tool_calls": [],
-                                "status": "completed",
-                            },
-                        },
-                    }
-                ],
-            },
-        ],
+        task_id="task-123",
+        thread_ref="subagent-task-123",
+        status="completed",
+        result="workspace looks empty",
     )
-    fake_agent = SimpleNamespace(runtime=SimpleNamespace(current_state=AgentState.ACTIVE), agent=SimpleNamespace(aget_state=None))
     monkeypatch = pytest.MonkeyPatch()
-    monkeypatch.setattr(threads_router, "get_or_create_agent", AsyncMock(return_value=fake_agent))
-    app = SimpleNamespace(
-        state=SimpleNamespace(
-            display_builder=builder,
-            agent_pool={},
-            thread_sandbox={thread_id: "local"},
-        )
-    )
+    app = _make_router_app(builder, thread_id, monkeypatch)
 
     task = await threads_router.get_task(thread_id, "task-123", request=SimpleNamespace(app=app))
 
@@ -624,46 +591,15 @@ async def test_get_task_returns_subagent_stream_result_from_display_entries():
 async def test_blocking_subagent_done_state_overrides_stale_running_stream_on_detail_and_tasks(monkeypatch):
     thread_id = "parent-thread-stale-running-completed"
     builder = DisplayBuilder()
-    builder.set_entries(
+    _set_single_subagent_entry(
+        builder,
         thread_id,
-        [
-            {"id": "u1", "role": "user", "content": "do work", "timestamp": 1},
-            {
-                "id": "a1",
-                "role": "assistant",
-                "timestamp": 2,
-                "segments": [
-                    {
-                        "type": "tool",
-                        "step": {
-                            "id": "call-agent-1",
-                            "name": "Agent",
-                            "args": {"description": "inspect workspace"},
-                            "status": "done",
-                            "result": "workspace looks empty",
-                            "subagent_stream": {
-                                "task_id": "task-stale-completed",
-                                "thread_id": "subagent-task-stale-completed",
-                                "description": "inspect workspace",
-                                "text": "",
-                                "tool_calls": [],
-                                "status": "running",
-                            },
-                        },
-                    }
-                ],
-            },
-        ],
+        task_id="task-stale-completed",
+        thread_ref="subagent-task-stale-completed",
+        status="running",
+        result="workspace looks empty",
     )
-    fake_agent = SimpleNamespace(runtime=SimpleNamespace(current_state=AgentState.ACTIVE), agent=SimpleNamespace(aget_state=None))
-    monkeypatch.setattr(threads_router, "get_or_create_agent", AsyncMock(return_value=fake_agent))
-    app = SimpleNamespace(
-        state=SimpleNamespace(
-            display_builder=builder,
-            agent_pool={},
-            thread_sandbox={thread_id: "local"},
-        )
-    )
+    app = _make_router_app(builder, thread_id, monkeypatch)
 
     detail = await threads_router.get_thread_messages(thread_id, user_id="owner-1", app=app)
     tasks = await threads_router.list_tasks(thread_id, request=SimpleNamespace(app=app))
@@ -679,46 +615,15 @@ async def test_blocking_subagent_done_state_overrides_stale_running_stream_on_de
 async def test_blocking_subagent_error_overrides_stale_running_stream_on_detail_and_tasks(monkeypatch):
     thread_id = "parent-thread-stale-running-error"
     builder = DisplayBuilder()
-    builder.set_entries(
+    _set_single_subagent_entry(
+        builder,
         thread_id,
-        [
-            {"id": "u1", "role": "user", "content": "do work", "timestamp": 1},
-            {
-                "id": "a1",
-                "role": "assistant",
-                "timestamp": 2,
-                "segments": [
-                    {
-                        "type": "tool",
-                        "step": {
-                            "id": "call-agent-1",
-                            "name": "Agent",
-                            "args": {"description": "inspect workspace"},
-                            "status": "done",
-                            "result": "<tool_use_error>Agent failed: bad child model</tool_use_error>",
-                            "subagent_stream": {
-                                "task_id": "task-stale-error",
-                                "thread_id": "subagent-task-stale-error",
-                                "description": "inspect workspace",
-                                "text": "",
-                                "tool_calls": [],
-                                "status": "running",
-                            },
-                        },
-                    }
-                ],
-            },
-        ],
+        task_id="task-stale-error",
+        thread_ref="subagent-task-stale-error",
+        status="running",
+        result="<tool_use_error>Agent failed: bad child model</tool_use_error>",
     )
-    fake_agent = SimpleNamespace(runtime=SimpleNamespace(current_state=AgentState.ACTIVE), agent=SimpleNamespace(aget_state=None))
-    monkeypatch.setattr(threads_router, "get_or_create_agent", AsyncMock(return_value=fake_agent))
-    app = SimpleNamespace(
-        state=SimpleNamespace(
-            display_builder=builder,
-            agent_pool={},
-            thread_sandbox={thread_id: "local"},
-        )
-    )
+    app = _make_router_app(builder, thread_id, monkeypatch)
 
     detail = await threads_router.get_thread_messages(thread_id, user_id="owner-1", app=app)
     tasks = await threads_router.list_tasks(thread_id, request=SimpleNamespace(app=app))

@@ -1267,28 +1267,6 @@ class _TruncatedResponseModel:
         return response
 
 
-class _PromptTooLongWithFailingCompactorModel:
-    def __init__(self):
-        self.query_calls = 0
-        self.compact_calls = 0
-
-    def bind_tools(self, tools):
-        return self
-
-    def bind(self, **kwargs):
-        return self
-
-    async def ainvoke(self, messages):
-        system_text = ""
-        if messages and messages[0].__class__.__name__ == "SystemMessage":
-            system_text = getattr(messages[0], "content", "") or ""
-        if "tasked with summarizing conversations" in system_text or "split turn" in system_text.lower():
-            self.compact_calls += 1
-            raise RuntimeError("compaction failed")
-        self.query_calls += 1
-        raise RuntimeError("prompt is too long")
-
-
 class _QueryOkWithFailingCompactorModel:
     def __init__(self):
         self.query_calls = 0

@@ -1006,7 +1006,7 @@ async def _run_agent_to_buffer(
                 mode, data = chunk
 
                 if mode == "messages":
-                    msg_chunk, metadata = data
+                    msg_chunk, _metadata = data
                     msg_class = msg_chunk.__class__.__name__
                     if msg_class == "AIMessageChunk":
                         # @@@compact-leak-guard — skip chunks from compact's summary LLM call.

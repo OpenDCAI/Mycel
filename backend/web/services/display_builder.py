@@ -38,14 +38,8 @@ DeltaType = Literal[
 # Helpers — ported from message-mapper.ts
 # ---------------------------------------------------------------------------
 
-_CHAT_MESSAGE_RE = re.compile(r"<chat-message[^>]*>([\s\S]*?)</chat-message>")
 _TASK_NOTIFICATION_RUN_ID_RE = re.compile(r"<run-id>(.*?)</run-id>", re.IGNORECASE | re.DOTALL)
 _TASK_NOTIFICATION_STATUS_RE = re.compile(r"<status>(.*?)</status>", re.IGNORECASE | re.DOTALL)
-
-
-def _extract_chat_message(text: str) -> str | None:
-    m = _CHAT_MESSAGE_RE.search(text)
-    return m.group(1).strip() if m else None
 
 
 def _make_id(prefix: str = "db") -> str:
