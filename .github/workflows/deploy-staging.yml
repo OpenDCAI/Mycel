@@ -39,6 +39,23 @@ jobs:
             echo "ref=${{ inputs.ref }}" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Check out target ref
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.ref.outputs.ref }}
+
+      - name: Resolve target commit
+        id: target
+        run: |
+          set -euo pipefail
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Assert repo staging compose contract
+        run: |
+          set -euo pipefail
+          grep -F "leon-home:/root/.leon" docker-compose.yml >/dev/null
+          grep -F "volumes:" docker-compose.yml >/dev/null
+
       - name: Update staging stack branch
         run: |
           set -euo pipefail
@@ -50,12 +67,54 @@ jobs:
           printf '%s' "$body" | jq -e --arg uuid "$STAGING_STACK_UUID" '.uuid == $uuid' >/dev/null
 
       - name: Deploy staging stack
+        id: deploy
         run: |
           set -euo pipefail
           body="$(curl -sS --fail-with-body "${{ secrets.COOLIFY_URL }}/api/v1/deploy?uuid=${STAGING_STACK_UUID}&force=false" \
             -H "Authorization: Bearer ${{ secrets.COOLIFY_TOKEN }}")"
           echo "$body"
           printf '%s' "$body" | jq -e --arg uuid "$STAGING_STACK_UUID" '.deployments[0].resource_uuid == $uuid' >/dev/null
+          echo "deployment_uuid=$(printf '%s' "$body" | jq -r '.deployments[0].deployment_uuid')" >> "$GITHUB_OUTPUT"
+
+      - name: Wait for staging deployment
+        run: |
+          set -euo pipefail
+          deployment_uuid="${{ steps.deploy.outputs.deployment_uuid }}"
+          for _ in $(seq 1 60); do
+            body="$(curl -sS --fail-with-body "${{ secrets.COOLIFY_URL }}/api/v1/deployments/${deployment_uuid}" \
+              -H "Authorization: Bearer ${{ secrets.COOLIFY_TOKEN }}")"
+            status="$(printf '%s' "$body" | jq -r '.status')"
+            echo "deployment status: $status"
+            if [ "$status" = "finished" ]; then
+              exit 0
+            fi
+            if [ "$status" != "queued" ] && [ "$status" != "in_progress" ]; then
+              echo "$body"
+              exit 1
+            fi
+            sleep 10
+          done
+          echo "Timed out waiting for staging deployment ${deployment_uuid}"
+          exit 1
+
+      - name: Verify Coolify staging contract
+        run: |
+          set -euo pipefail
+          body="$(curl -sS --fail-with-body "${{ secrets.COOLIFY_URL }}/api/v1/applications/${STAGING_STACK_UUID}" \
+            -H "Authorization: Bearer ${{ secrets.COOLIFY_TOKEN }}")"
+          echo "$body" | jq '{uuid,git_branch,docker_compose_location}'
+          printf '%s' "$body" | jq -e --arg ref "${{ steps.ref.outputs.ref }}" '.git_branch == $ref' >/dev/null
+          printf '%s' "$body" | jq -e '.docker_compose_raw | contains("leon-home:/root/.leon")' >/dev/null
+          printf '%s' "$body" | jq -e --arg volume "${STAGING_STACK_UUID}_leon-home:/root/.leon" '.docker_compose | contains($volume)' >/dev/null
+          printf '%s' "$body" | jq -e --arg sha "${{ steps.target.outputs.sha }}" '.docker_compose | contains($sha)' >/dev/null
+
+      - name: Verify staging health contract
+        run: |
+          set -euo pipefail
+          body="$(curl -sS --fail-with-body "https://app.staging.mycel.nextmind.space/api/monitor/health")"
+          echo "$body"
+          printf '%s' "$body" | jq -e '.db.path == "/root/.leon/sandbox.db"' >/dev/null
+          printf '%s' "$body" | jq -e '.db.exists == true' >/dev/null
 
       - name: Comment on PR with staging URL
         if: github.event_name == 'pull_request'
