@@ -244,6 +244,51 @@ def _thread_payload(app: Any, thread_id: str, sandbox_type: str) -> dict[str, An
     }
 
 
+_IDLE_REPLAYABLE_RUN_EVENTS = frozenset({"error", "cancelled", "retry"})
+
+
+def _checkpoint_tail_is_pending_owner_turn(messages: list[dict[str, Any]]) -> bool:
+    if not messages:
+        return False
+    tail = messages[-1]
+    if tail.get("type") != "HumanMessage":
+        return False
+    meta = tail.get("metadata") or {}
+    return meta.get("source") not in {"system", "external"}
+
+
+async def _replay_latest_run_failure_events(
+    *,
+    thread_id: str,
+    display_builder: Any,
+) -> None:
+    from backend.web.services.event_store import get_latest_run_id, read_events_after
+
+    run_id = await get_latest_run_id(thread_id)
+    if not run_id or run_id.startswith("activity_"):
+        return
+
+    events = await read_events_after(thread_id, run_id, 0)
+    if not any(event.get("event") in _IDLE_REPLAYABLE_RUN_EVENTS for event in events):
+        return
+
+    # @@@idle-run-error-replay - checkpoint can stop at the owner's input when
+    # the run dies before first persisted AI/Tool message. Rebuild must replay
+    # the latest run-level failure events so refresh/detail stays honest.
+    for event in events:
+        event_type = event.get("event", "")
+        if event_type not in {"run_start", "run_done", *_IDLE_REPLAYABLE_RUN_EVENTS}:
+            continue
+        raw_data = event.get("data", "{}")
+        try:
+            payload = json.loads(raw_data) if isinstance(raw_data, str) else raw_data
+        except (json.JSONDecodeError, TypeError):
+            payload = {}
+        if not isinstance(payload, dict):
+            payload = {}
+        display_builder.apply_event(thread_id, event_type, payload)
+
+
 def _create_thread_sandbox_resources(thread_id: str, sandbox_type: str, recipe: dict[str, Any] | None) -> None:
     """Create volume, lease, and terminal eagerly so volume exists before file uploads."""
     from datetime import datetime
@@ -571,6 +616,12 @@ async def get_thread_messages(
 
         annotated, _ = annotate_owner_visibility(serialized)
         entries = display_builder.build_from_checkpoint(thread_id, annotated)
+        if _checkpoint_tail_is_pending_owner_turn(annotated):
+            await _replay_latest_run_failure_events(
+                thread_id=thread_id,
+                display_builder=display_builder,
+            )
+            entries = display_builder.get_entries(thread_id) or entries
 
     sandbox_info = get_sandbox_info(agent, thread_id, sandbox_type)
     return {

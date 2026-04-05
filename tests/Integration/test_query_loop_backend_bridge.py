@@ -809,6 +809,66 @@ async def test_get_thread_messages_rebuilds_idle_thread_when_cached_entries_are_
 
 
 @pytest.mark.asyncio
+async def test_get_thread_messages_idle_rebuild_replays_latest_run_error_from_event_log():
+    human = HumanMessage(content="hello")
+    fake_agent = SimpleNamespace(
+        agent=SimpleNamespace(aget_state=AsyncMock(return_value=SimpleNamespace(values={"messages": [human]}))),
+        runtime=SimpleNamespace(current_state=AgentState.IDLE),
+    )
+    fake_app = SimpleNamespace(state=SimpleNamespace(display_builder=DisplayBuilder()))
+    run_events = [
+        {
+            "seq": 1,
+            "event": "run_start",
+            "data": json.dumps(
+                {
+                    "thread_id": "detail-thread",
+                    "run_id": "run-error-1",
+                    "source": "owner",
+                    "showing": True,
+                }
+            ),
+            "message_id": None,
+        },
+        {
+            "seq": 2,
+            "event": "error",
+            "data": json.dumps({"error": "quota exploded"}),
+            "message_id": None,
+        },
+        {
+            "seq": 3,
+            "event": "run_done",
+            "data": json.dumps({"thread_id": "detail-thread", "run_id": "run-error-1"}),
+            "message_id": None,
+        },
+    ]
+
+    with (
+        patch("backend.web.routers.threads.get_or_create_agent", return_value=fake_agent),
+        patch("backend.web.routers.threads.resolve_thread_sandbox", return_value="local"),
+        patch("backend.web.routers.threads.get_sandbox_info", return_value={"type": "local"}),
+        patch("backend.web.services.event_store.get_latest_run_id", AsyncMock(return_value="run-error-1")),
+        patch("backend.web.services.event_store.read_events_after", AsyncMock(return_value=run_events)),
+    ):
+        detail = await get_thread_messages(
+            "detail-thread",
+            user_id="u",
+            app=fake_app,
+        )
+
+    assert detail["entries"][0]["role"] == "user"
+    assert any(
+        entry.get("role") == "assistant"
+        and any(
+            segment.get("type") == "text" and "quota exploded" in segment.get("content", "")
+            for segment in entry.get("segments", [])
+        )
+        for entry in detail["entries"]
+    )
+
+
+@pytest.mark.asyncio
 async def test_cold_rebuild_surfaces_persisted_compaction_notice_in_detail_and_history():
     checkpointer = _MemoryCheckpointer()
     summary_model = MagicMock()
