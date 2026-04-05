@@ -183,6 +183,8 @@ def test_list_resource_providers_hides_subagent_threads(monkeypatch):
         "available_sandbox_types",
         lambda: [{"name": "daytona", "available": True}],
     )
+    monkeypatch.setattr(resource_service, "resolve_provider_name", lambda *_args, **_kwargs: "daytona")
+    monkeypatch.setattr(resource_service, "_resolve_console_url", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(
         resource_service,
         "_resolve_instance_capabilities",
