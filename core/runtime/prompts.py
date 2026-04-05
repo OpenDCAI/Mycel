@@ -106,12 +106,30 @@ def _build_interaction_rules() -> list[RuleSpec]:
     return []
 
 
+def _build_function_result_clearing_rules(*, spill_buffer_enabled: bool, spill_keep_recent: int) -> list[RuleSpec]:
+    if not spill_buffer_enabled:
+        return []
+    return [
+        RuleSpec(
+            "Function Result Clearing",
+            f"Old tool results may be cleared from context to free up space. The {spill_keep_recent} most recent results are always kept.",
+            (
+                "When working with tool results, write down any important information "
+                "you might need later in your response, as the original tool result "
+                "may be cleared later.",
+            ),
+        )
+    ]
+
+
 def _build_rule_specs(
     *,
     is_sandbox: bool,
     sandbox_name: str,
     workspace_root: str,
     working_dir: str,
+    spill_buffer_enabled: bool,
+    spill_keep_recent: int,
 ) -> list[RuleSpec]:
     rules: list[RuleSpec] = []
     rules.extend(
@@ -124,6 +142,12 @@ def _build_rule_specs(
     )
     rules.extend(_build_risk_rules())
     rules.extend(_build_tool_preference_rules())
+    rules.extend(
+        _build_function_result_clearing_rules(
+            spill_buffer_enabled=spill_buffer_enabled,
+            spill_keep_recent=spill_keep_recent,
+        )
+    )
     rules.extend(_build_interaction_rules())
     return rules
 
@@ -154,12 +178,16 @@ def build_rules_section(
     sandbox_name: str = "",
     working_dir: str,
     workspace_root: str,
+    spill_buffer_enabled: bool = False,
+    spill_keep_recent: int = 0,
 ) -> str:
     rule_specs = _build_rule_specs(
         is_sandbox=is_sandbox,
         sandbox_name=sandbox_name,
         workspace_root=workspace_root,
         working_dir=working_dir,
+        spill_buffer_enabled=spill_buffer_enabled,
+        spill_keep_recent=spill_keep_recent,
     )
     return "\n\n".join(_render_rule(index, rule) for index, rule in enumerate(rule_specs, start=1))
 

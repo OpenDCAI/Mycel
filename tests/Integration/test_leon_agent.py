@@ -530,6 +530,37 @@ def test_build_rules_section_unifies_core_risk_and_tool_preferences():
     assert "Background Task Description" not in rules
 
 
+def test_build_rules_section_includes_function_result_clearing_guidance_when_spill_buffer_enabled():
+    from core.runtime.prompts import build_rules_section
+
+    rules = build_rules_section(
+        is_sandbox=False,
+        working_dir="/repo",
+        workspace_root="/repo",
+        spill_buffer_enabled=True,
+        spill_keep_recent=3,
+    )
+
+    assert "**Function Result Clearing**" in rules
+    assert "Old tool results may be cleared from context to free up space." in rules
+    assert "The 3 most recent results are always kept." in rules
+    assert "write down any important information you might need later in your response" in rules
+
+
+def test_build_rules_section_omits_function_result_clearing_guidance_when_spill_buffer_disabled():
+    from core.runtime.prompts import build_rules_section
+
+    rules = build_rules_section(
+        is_sandbox=False,
+        working_dir="/repo",
+        workspace_root="/repo",
+        spill_buffer_enabled=False,
+        spill_keep_recent=3,
+    )
+
+    assert "**Function Result Clearing**" not in rules
+
+
 @pytest.mark.asyncio
 @_patch_env_api_key()
 async def test_leon_agent_session_start_hook_runs_on_ainit(tmp_path):

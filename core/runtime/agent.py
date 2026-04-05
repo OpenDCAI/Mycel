@@ -1479,6 +1479,8 @@ class LeonAgent:
                 sandbox_name=self._sandbox.name,
                 working_dir=working_dir,
                 workspace_root=str(self.workspace_root),
+                spill_buffer_enabled=self.config.tools.spill_buffer.enabled,
+                spill_keep_recent=self.config.memory.pruning.protect_recent,
             )
 
         return self._get_cached_prompt_section("rules", _build)
