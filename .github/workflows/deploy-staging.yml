@@ -39,6 +39,8 @@ jobs:
         run: |
           if [ "${{ github.event_name }}" = "pull_request" ]; then
             echo "ref=${{ github.head_ref }}" >> "$GITHUB_OUTPUT"
+          elif [ "${{ github.event_name }}" = "push" ]; then
+            echo "ref=${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
           else
             echo "ref=${{ inputs.ref }}" >> "$GITHUB_OUTPUT"
           fi
