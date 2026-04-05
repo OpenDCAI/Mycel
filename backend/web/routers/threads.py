@@ -257,6 +257,70 @@ def _checkpoint_tail_is_pending_owner_turn(messages: list[dict[str, Any]]) -> bo
     return meta.get("source") not in {"system", "external"}
 
 
+async def _get_thread_display_entries(app: Any, thread_id: str) -> list[dict[str, Any]]:
+    display_builder = app.state.display_builder
+    entries = display_builder.get_entries(thread_id)
+    if entries is not None:
+        return entries
+
+    sandbox_type = resolve_thread_sandbox(app, thread_id)
+    agent = await get_or_create_agent(app, sandbox_type, thread_id=thread_id)
+    set_current_thread_id(thread_id)
+    config = {"configurable": {"thread_id": thread_id}}
+    state = await agent.agent.aget_state(config)
+    values = getattr(state, "values", {}) if state else {}
+    messages = values.get("messages", []) if isinstance(values, dict) else []
+    serialized = [serialize_message(msg) for msg in messages]
+
+    from core.runtime.visibility import annotate_owner_visibility
+
+    annotated, _ = annotate_owner_visibility(serialized)
+    entries = display_builder.build_from_checkpoint(thread_id, annotated)
+    if _checkpoint_tail_is_pending_owner_turn(annotated):
+        await _replay_latest_run_failure_events(
+            thread_id=thread_id,
+            display_builder=display_builder,
+        )
+        entries = display_builder.get_entries(thread_id) or entries
+    return entries
+
+
+def _collect_display_subagent_tasks(entries: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
+    tasks: dict[str, dict[str, Any]] = {}
+    for entry in entries:
+        if entry.get("role") != "assistant":
+            continue
+        for seg in entry.get("segments", []):
+            if seg.get("type") != "tool":
+                continue
+            step = seg.get("step") or {}
+            if step.get("name") != "Agent":
+                continue
+            stream = step.get("subagent_stream")
+            if not isinstance(stream, dict) or not stream.get("task_id"):
+                continue
+            task_id = str(stream["task_id"])
+            args = step.get("args") if isinstance(step.get("args"), dict) else {}
+            description = stream.get("description") or args.get("description") or args.get("prompt")
+            status = str(stream.get("status") or ("completed" if step.get("status") == "done" else "running"))
+            result_text = step.get("result") or stream.get("text")
+            # @@@dual-source-task-surface - blocking Agent subagents never enter parent _background_runs,
+            # so /tasks must also project persisted subagent_stream state from display history.
+            tasks[task_id] = {
+                "task_id": task_id,
+                "task_type": "agent",
+                "status": status,
+                "command_line": None,
+                "description": description,
+                "exit_code": None,
+                "error": stream.get("error"),
+                "result": result_text,
+                "text": result_text,
+                "thread_id": stream.get("thread_id"),
+            }
+    return tasks
+
+
 async def _replay_latest_run_failure_events(
     *,
     thread_id: str,
@@ -591,38 +655,10 @@ async def get_thread_messages(
     @@@display-builder — returns pre-computed ChatEntry[] from DisplayBuilder.
     Hot path: return in-memory state.  Cold path: rebuild from checkpoint.
     """
-    display_builder = app.state.display_builder
     sandbox_type = resolve_thread_sandbox(app, thread_id)
     agent = await get_or_create_agent(app, sandbox_type, thread_id=thread_id)
-
-    runtime_active = bool(hasattr(agent, "runtime") and agent.runtime.current_state == AgentState.ACTIVE)
-
-    # @@@detail-cache-honesty
-    # Thread detail must not trust a stale in-memory display cache after the
-    # run has gone idle. Follow-up notifications are checkpoint-persisted, and
-    # history already rebuilds from checkpoint, so detail must do the same when
-    # no live stream is in flight.
-    entries = display_builder.get_entries(thread_id)
-    if entries is None or not runtime_active:
-        # Cold path or idle refresh: rebuild from checkpoint
-        set_current_thread_id(thread_id)
-        config = {"configurable": {"thread_id": thread_id}}
-        state = await agent.agent.aget_state(config)
-        values = getattr(state, "values", {}) if state else {}
-        messages = values.get("messages", []) if isinstance(values, dict) else []
-        serialized = [serialize_message(msg) for msg in messages]
-
-        from core.runtime.visibility import annotate_owner_visibility
-
-        annotated, _ = annotate_owner_visibility(serialized)
-        entries = display_builder.build_from_checkpoint(thread_id, annotated)
-        if _checkpoint_tail_is_pending_owner_turn(annotated):
-            await _replay_latest_run_failure_events(
-                thread_id=thread_id,
-                display_builder=display_builder,
-            )
-            entries = display_builder.get_entries(thread_id) or entries
-
+    display_builder = app.state.display_builder
+    entries = await _get_thread_display_entries(app, thread_id)
     sandbox_info = get_sandbox_info(agent, thread_id, sandbox_type)
     return {
         "thread_id": thread_id,
@@ -1170,8 +1206,10 @@ async def list_tasks(
     """列出线程的所有后台 run（bash + agent）"""
     runs = _get_background_runs(request.app, thread_id)
     result = []
+    seen_task_ids: set[str] = set()
     for task_id, run in runs.items():
         run_type = "bash" if run.__class__.__name__ == "_BashBackgroundRun" else "agent"
+        seen_task_ids.add(task_id)
         result.append(
             {
                 "task_id": task_id,
@@ -1181,6 +1219,20 @@ async def list_tasks(
                 "description": getattr(run, "description", None),
                 "exit_code": getattr(getattr(run, "_cmd", None), "exit_code", None) if run_type == "bash" else None,
                 "error": None,
+            }
+        )
+    for task_id, task in _collect_display_subagent_tasks(await _get_thread_display_entries(request.app, thread_id)).items():
+        if task_id in seen_task_ids:
+            continue
+        result.append(
+            {
+                "task_id": task["task_id"],
+                "task_type": task["task_type"],
+                "status": task["status"],
+                "command_line": task["command_line"],
+                "description": task["description"],
+                "exit_code": task["exit_code"],
+                "error": task["error"],
             }
         )
     return result
@@ -1196,7 +1248,17 @@ async def get_task(
     runs = _get_background_runs(request.app, thread_id)
     run = runs.get(task_id)
     if not run:
-        raise HTTPException(status_code=404, detail="Task not found")
+        task = _collect_display_subagent_tasks(await _get_thread_display_entries(request.app, thread_id)).get(task_id)
+        if task is None:
+            raise HTTPException(status_code=404, detail="Task not found")
+        return {
+            "task_id": task["task_id"],
+            "task_type": task["task_type"],
+            "status": task["status"],
+            "command_line": task["command_line"],
+            "result": task["result"],
+            "text": task["text"],
+        }
 
     run_type = "bash" if run.__class__.__name__ == "_BashBackgroundRun" else "agent"
     result_text = run.get_result() if run.is_done else None
@@ -1220,7 +1282,16 @@ async def cancel_task(
     runs = _get_background_runs(request.app, thread_id)
     run = runs.get(task_id)
     if not run:
-        raise HTTPException(status_code=404, detail="Task not found")
+        task = _collect_display_subagent_tasks(await _get_thread_display_entries(request.app, thread_id)).get(task_id)
+        if task is None:
+            raise HTTPException(status_code=404, detail="Task not found")
+        if task["status"] != "running":
+            raise HTTPException(status_code=400, detail="Task is not running")
+        thread_task = request.app.state.thread_tasks.get(thread_id)
+        if thread_task is None or thread_task.done():
+            raise HTTPException(status_code=400, detail="Task is not independently cancellable")
+        thread_task.cancel()
+        return {"ok": True, "message": "Run cancellation requested", "task_id": task_id}
     if run.is_done:
         raise HTTPException(status_code=400, detail="Task is not running")
 

@@ -34,6 +34,9 @@ class _FakeVolumeRepo:
 class _FakeVolume:
     def __init__(self) -> None:
         self.mount_calls: list[tuple[str, str]] = []
+        self.upload_calls: list[tuple[str, str]] = []
+        self.download_calls: list[tuple[str, str]] = []
+        self.cleared: list[str] = []
 
     def resolve_mount_path(self) -> str:
         return "/workspace"
@@ -43,6 +46,15 @@ class _FakeVolume:
 
     def mount_managed_volume(self, thread_id: str, volume_name: str, remote_path: str) -> None:
         self.mount_calls.append((thread_id, remote_path))
+
+    def sync_upload(self, thread_id: str, session_id: str, source, remote_path: str, files=None) -> None:
+        self.upload_calls.append((thread_id, session_id))
+
+    def sync_download(self, thread_id: str, session_id: str, source, remote_path: str) -> None:
+        self.download_calls.append((thread_id, session_id))
+
+    def clear_sync_state(self, thread_id: str) -> None:
+        self.cleared.append(thread_id)
 
 
 class _FakeThreadRepo:
@@ -243,11 +255,74 @@ def test_enforce_idle_timeouts_destroys_when_provider_cannot_pause(monkeypatch):
         lambda _row, _db_path: SimpleNamespace(terminal_id="term-1", lease_id="lease-1"),
     )
 
-    count = manager.enforce_idle_timeouts()
+    manager.enforce_idle_timeouts()
 
     assert destroy_calls == [True]
     assert manager.session_manager.deleted == [("sess-1", "idle_timeout")]
-    assert count == 1
+
+
+def test_destroy_thread_resources_skips_local_sync_when_lease_has_no_volume_id():
+    manager = object.__new__(SandboxManager)
+    manager.provider_capability = SimpleNamespace(runtime_kind="local")
+    manager.provider = SimpleNamespace(name="local")
+    manager.volume = _FakeVolume()
+    manager._get_thread_lease = lambda _thread_id: lease
+    manager._get_lease = lambda _lease_id: lease
+    manager._resolve_volume_entry = lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("volume lookup should not happen"))
+    manager.terminal_store = SimpleNamespace(
+        list_by_thread=lambda _thread_id: [{"terminal_id": "term-1", "lease_id": "lease-1", "thread_id": "thread-1"}],
+        delete=lambda _terminal_id: deleted_terminals.append(_terminal_id),
+        list_all=lambda: [],
+        db_path=Path("/tmp/fake-sandbox.db"),
+    )
+    manager.session_manager = SimpleNamespace(
+        get=lambda _thread_id, _terminal_id: SimpleNamespace(session_id="sess-1"),
+        delete=lambda session_id, reason: deleted_sessions.append((session_id, reason)),
+    )
+    deleted_terminals: list[str] = []
+    deleted_sessions: list[tuple[str, str]] = []
+    destroy_calls: list[str] = []
+
+    class _Lease:
+        lease_id = "lease-1"
+        observed_state = "running"
+        volume_id = None
+
+        def get_instance(self):
+            return SimpleNamespace(instance_id="instance-1")
+
+        def destroy_instance(self, _provider):
+            destroy_calls.append("lease-1")
+
+    lease = _Lease()
+    manager.lease_store = SimpleNamespace(delete=lambda lease_id: deleted_leases.append(lease_id))
+    deleted_leases: list[str] = []
+
+    assert manager.destroy_thread_resources("thread-1") is True
+    assert manager.volume.download_calls == []
+    assert manager.volume.cleared == ["thread-1"]
+    assert deleted_sessions == [("sess-1", "thread_deleted")]
+    assert deleted_terminals == ["term-1"]
+    assert destroy_calls == ["lease-1"]
+    assert deleted_leases == ["lease-1"]
+
+
+def test_sync_uploads_skips_local_volume_sync_when_lease_has_no_volume_id():
+    manager = object.__new__(SandboxManager)
+    manager.provider_capability = SimpleNamespace(runtime_kind="local")
+    manager.volume = _FakeVolume()
+    manager._get_active_terminal = lambda _thread_id: SimpleNamespace(terminal_id="term-1", lease_id="lease-1")
+    manager._get_lease = lambda _lease_id: SimpleNamespace(volume_id=None)
+    manager._get_thread_lease = lambda _thread_id: SimpleNamespace(volume_id=None)
+    manager._resolve_volume_entry = lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("volume lookup should not happen"))
+    manager.session_manager = SimpleNamespace(
+        get=lambda _thread_id, _terminal_id: SimpleNamespace(
+            lease=SimpleNamespace(get_instance=lambda: SimpleNamespace(instance_id="instance-1"))
+        )
+    )
+
+    assert manager.sync_uploads("thread-1") is True
+    assert manager.volume.upload_calls == []
 
 
 def test_get_sandbox_local_provider_does_not_require_volume_bootstrap(tmp_path):

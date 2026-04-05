@@ -496,3 +496,116 @@ def test_checkpoint_rebuild_restores_blocking_subagent_stream_from_tool_result_m
     assert seg["step"]["subagent_stream"]["task_id"] == "task-456"
     assert seg["step"]["subagent_stream"]["thread_id"] == "subagent-task-456"
     assert seg["step"]["subagent_stream"]["status"] == "completed"
+
+
+@pytest.mark.asyncio
+async def test_list_tasks_includes_subagent_stream_from_display_entries():
+    thread_id = "parent-thread-tasks"
+    builder = DisplayBuilder()
+    builder.set_entries(
+        thread_id,
+        [
+            {"id": "u1", "role": "user", "content": "do work", "timestamp": 1},
+            {
+                "id": "a1",
+                "role": "assistant",
+                "timestamp": 2,
+                "segments": [
+                    {
+                        "type": "tool",
+                        "step": {
+                            "id": "call-agent-1",
+                            "name": "Agent",
+                            "args": {"description": "inspect workspace"},
+                            "status": "done",
+                            "result": "workspace looks empty",
+                            "subagent_stream": {
+                                "task_id": "task-123",
+                                "thread_id": "subagent-task-123",
+                                "description": "inspect workspace",
+                                "text": "",
+                                "tool_calls": [],
+                                "status": "completed",
+                            },
+                        },
+                    }
+                ],
+            },
+        ],
+    )
+    app = SimpleNamespace(
+        state=SimpleNamespace(
+            display_builder=builder,
+            agent_pool={},
+            thread_sandbox={thread_id: "local"},
+        )
+    )
+
+    tasks = await threads_router.list_tasks(thread_id, request=SimpleNamespace(app=app))
+
+    assert tasks == [
+        {
+            "task_id": "task-123",
+            "task_type": "agent",
+            "status": "completed",
+            "command_line": None,
+            "description": "inspect workspace",
+            "exit_code": None,
+            "error": None,
+        }
+    ]
+
+
+@pytest.mark.asyncio
+async def test_get_task_returns_subagent_stream_result_from_display_entries():
+    thread_id = "parent-thread-task-detail"
+    builder = DisplayBuilder()
+    builder.set_entries(
+        thread_id,
+        [
+            {"id": "u1", "role": "user", "content": "do work", "timestamp": 1},
+            {
+                "id": "a1",
+                "role": "assistant",
+                "timestamp": 2,
+                "segments": [
+                    {
+                        "type": "tool",
+                        "step": {
+                            "id": "call-agent-1",
+                            "name": "Agent",
+                            "args": {"description": "inspect workspace"},
+                            "status": "done",
+                            "result": "workspace looks empty",
+                            "subagent_stream": {
+                                "task_id": "task-123",
+                                "thread_id": "subagent-task-123",
+                                "description": "inspect workspace",
+                                "text": "",
+                                "tool_calls": [],
+                                "status": "completed",
+                            },
+                        },
+                    }
+                ],
+            },
+        ],
+    )
+    app = SimpleNamespace(
+        state=SimpleNamespace(
+            display_builder=builder,
+            agent_pool={},
+            thread_sandbox={thread_id: "local"},
+        )
+    )
+
+    task = await threads_router.get_task(thread_id, "task-123", request=SimpleNamespace(app=app))
+
+    assert task == {
+        "task_id": "task-123",
+        "task_type": "agent",
+        "status": "completed",
+        "command_line": None,
+        "result": "workspace looks empty",
+        "text": "workspace looks empty",
+    }

@@ -388,13 +388,24 @@ class SandboxManager:
         entry = self._resolve_volume_entry(thread_id, lease)
         return deserialize_volume_source(json.loads(entry["source"]))
 
+    def _skip_volume_sync_for_local_lease(self, lease) -> bool:
+        # @@@local-no-volume-sync - local sessions may execute directly in host cwd with no sandbox volume row.
+        # In that shape there is nothing to upload/download, so sync paths must no-op instead of inventing one.
+        return lease is not None and not self._requires_volume_bootstrap() and not lease.volume_id
+
     def _sync_to_sandbox(self, thread_id: str, instance_id: str, source=None, files: list[str] | None = None) -> None:
         if source is None:
+            lease = self._get_thread_lease(thread_id)
+            if self._skip_volume_sync_for_local_lease(lease):
+                return
             source = self.resolve_volume_source(thread_id)
         self.volume.sync_upload(thread_id, instance_id, source, self.volume.resolve_mount_path(), files=files)
 
     def _sync_from_sandbox(self, thread_id: str, instance_id: str, source=None) -> None:
         if source is None:
+            lease = self._get_thread_lease(thread_id)
+            if self._skip_volume_sync_for_local_lease(lease):
+                return
             source = self.resolve_volume_source(thread_id)
         self.volume.sync_download(thread_id, instance_id, source, self.volume.resolve_mount_path())
 
