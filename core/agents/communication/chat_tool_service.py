@@ -12,7 +12,7 @@ import time
 from datetime import UTC, datetime
 from typing import Any
 
-from core.runtime.registry import ToolEntry, ToolMode, ToolRegistry
+from core.runtime.registry import ToolEntry, ToolMode, ToolRegistry, make_tool_schema
 
 logger = logging.getLogger(__name__)
 
@@ -313,21 +313,18 @@ class ChatToolService:
             ToolEntry(
                 name="list_chats",
                 mode=ToolMode.INLINE,
-                schema={
-                    "name": "list_chats",
-                    "description": "List your chats. Returns chat summaries with user_ids of participants.",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "unread_only": {
-                                "type": "boolean",
-                                "description": "Only show chats with unread messages",
-                                "default": False,
-                            },
-                            "limit": {"type": "integer", "description": "Max number of chats to return", "default": 20},
+                schema=make_tool_schema(
+                    name="list_chats",
+                    description="List your chats. Returns chat summaries with user_ids of participants.",
+                    properties={
+                        "unread_only": {
+                            "type": "boolean",
+                            "description": "Only show chats with unread messages",
+                            "default": False,
                         },
+                        "limit": {"type": "integer", "description": "Max number of chats to return", "default": 20},
                     },
-                },
+                ),
                 handler=self._handle_list_chats,
                 source="chat",
                 is_read_only=True,
@@ -340,33 +337,32 @@ class ChatToolService:
             ToolEntry(
                 name="read_messages",
                 mode=ToolMode.INLINE,
-                schema={
-                    "name": "read_messages",
-                    "description": (
+                schema=make_tool_schema(
+                    name="read_messages",
+                    description=(
                         "Read chat messages. Returns unread messages by default.\n"
                         "If nothing unread, use range to read history:\n"
                         "  Negative index: '-10:-1' (last 10), '-5:' (last 5)\n"
                         "  Time interval: '-1h:', '-2d:-1d', '2026-03-20:2026-03-22'\n"
                         "Positive indices are NOT allowed."
                     ),
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "user_id": {"type": "string", "description": "user_id for 1:1 chat history"},
-                            "chat_id": {"type": "string", "description": "Chat_id for group chat history"},
-                            "range": {
-                                "type": "string",
-                                "description": (
-                                    "History range. Negative index '-X:-Y' or time '-1h:', '2026-03-20:'. Positive indices NOT allowed."
-                                ),
-                            },
+                    properties={
+                        "user_id": {"type": "string", "description": "user_id for 1:1 chat history"},
+                        "chat_id": {"type": "string", "description": "Chat_id for group chat history"},
+                        "range": {
+                            "type": "string",
+                            "description": (
+                                "History range. Negative index '-X:-Y' or time '-1h:', '2026-03-20:'. Positive indices NOT allowed."
+                            ),
                         },
+                    },
+                    parameter_overrides={
                         "x-leon-required-any-of": [
                             ["user_id"],
                             ["chat_id"],
                         ],
                     },
-                },
+                ),
                 handler=self._handle_read_messages,
                 source="chat",
                 search_hint="read chat messages history conversation",
@@ -381,9 +377,9 @@ class ChatToolService:
             ToolEntry(
                 name="send_message",
                 mode=ToolMode.INLINE,
-                schema={
-                    "name": "send_message",
-                    "description": (
+                schema=make_tool_schema(
+                    name="send_message",
+                    description=(
                         "Send a message. Use user_id for 1:1 chats, chat_id for group chats.\n\n"
                         "You MUST call read_messages() first if you have unread messages — sending will fail otherwise.\n\n"
                         "Signal protocol — append to content:\n"
@@ -392,31 +388,30 @@ class ChatToolService:
                         "  ::close = conversation over, do NOT reply\n\n"
                         "For games/turns: do NOT append ::yield — just send the move and expect a reply."
                     ),
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "content": {"type": "string", "description": "Message content"},
-                            "user_id": {"type": "string", "description": "Target user_id (for 1:1 chat)"},
-                            "chat_id": {"type": "string", "description": "Target chat_id (for group chat)"},
-                            "signal": {
-                                "type": "string",
-                                "enum": ["open", "yield", "close"],
-                                "description": "Signal intent to recipient",
-                                "default": "open",
-                            },
-                            "mentions": {
-                                "type": "array",
-                                "items": {"type": "string"},
-                                "description": "Entity IDs to @mention (overrides mute for these recipients)",
-                            },
+                    properties={
+                        "content": {"type": "string", "description": "Message content"},
+                        "user_id": {"type": "string", "description": "Target user_id (for 1:1 chat)"},
+                        "chat_id": {"type": "string", "description": "Target chat_id (for group chat)"},
+                        "signal": {
+                            "type": "string",
+                            "enum": ["open", "yield", "close"],
+                            "description": "Signal intent to recipient",
+                            "default": "open",
                         },
-                        "required": ["content"],
+                        "mentions": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "description": "Entity IDs to @mention (overrides mute for these recipients)",
+                        },
+                    },
+                    required=["content"],
+                    parameter_overrides={
                         "x-leon-required-any-of": [
                             ["content", "user_id"],
                             ["content", "chat_id"],
                         ],
                     },
-                },
+                ),
                 handler=self._handle_send_message,
                 source="chat",
                 search_hint="send message reply chat entity",
@@ -429,21 +424,18 @@ class ChatToolService:
             ToolEntry(
                 name="search_messages",
                 mode=ToolMode.INLINE,
-                schema={
-                    "name": "search_messages",
-                    "description": "Search messages. Optionally filter by user_id.",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "query": {"type": "string", "description": "Search query"},
-                            "user_id": {
-                                "type": "string",
-                                "description": "Optional: only search in chat with this user",
-                            },
+                schema=make_tool_schema(
+                    name="search_messages",
+                    description="Search messages. Optionally filter by user_id.",
+                    properties={
+                        "query": {"type": "string", "description": "Search query"},
+                        "user_id": {
+                            "type": "string",
+                            "description": "Optional: only search in chat with this user",
                         },
-                        "required": ["query"],
                     },
-                },
+                    required=["query"],
+                ),
                 handler=self._handle_search_messages,
                 source="chat",
                 search_hint="search messages query chat history",

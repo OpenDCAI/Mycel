@@ -11,6 +11,8 @@ from core.runtime.tool_result import ToolResultEnvelope
 type ToolSchema = dict[str, Any]
 type ToolHandlerResult = str | ToolResultEnvelope
 type ToolArgs = dict[str, Any]
+type ToolPropertySchema = dict[str, Any]
+type ToolProperties = dict[str, ToolPropertySchema]
 
 type Handler = Callable[..., ToolHandlerResult] | Callable[..., Awaitable[ToolHandlerResult]]
 type SchemaProvider = ToolSchema | Callable[[], ToolSchema]
@@ -78,6 +80,29 @@ def build_tool(**kwargs: Unpack[_ToolEntryBuildArgs]) -> ToolEntry:
     """Factory that fills in safety defaults. Fail-closed: assumes write + non-concurrent."""
     merged: _ToolEntryBuildArgs = {**TOOL_DEFAULTS, **kwargs}
     return ToolEntry(**merged)
+
+
+def make_tool_schema(
+    *,
+    name: str,
+    description: str,
+    properties: ToolProperties,
+    required: list[str] | None = None,
+    parameter_overrides: ToolSchema | None = None,
+) -> ToolSchema:
+    parameters: ToolSchema = {
+        "type": "object",
+        "properties": properties,
+    }
+    if required:
+        parameters["required"] = required
+    if parameter_overrides:
+        parameters.update(parameter_overrides)
+    return {
+        "name": name,
+        "description": description,
+        "parameters": parameters,
+    }
 
 
 class ToolRegistry:
