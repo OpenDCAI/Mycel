@@ -860,10 +860,7 @@ async def test_get_thread_messages_idle_rebuild_replays_latest_run_error_from_ev
     assert detail["entries"][0]["role"] == "user"
     assert any(
         entry.get("role") == "assistant"
-        and any(
-            segment.get("type") == "text" and "quota exploded" in segment.get("content", "")
-            for segment in entry.get("segments", [])
-        )
+        and any(segment.get("type") == "text" and "quota exploded" in segment.get("content", "") for segment in entry.get("segments", []))
         for entry in detail["entries"]
     )
 
