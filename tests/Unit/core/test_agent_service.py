@@ -1406,6 +1406,46 @@ async def test_run_agent_uses_live_child_thread_bridge_when_web_app_present(monk
     assert captured["agent"].closed is False
 
 
+@pytest.mark.asyncio
+async def test_run_agent_normalizes_workspace_suffix_in_child_prompt(monkeypatch, tmp_path):
+    captured: dict[str, object] = {}
+
+    async def fake_run_child_thread_live(agent, thread_id, prompt, app, *, input_messages):
+        captured["prompt"] = prompt
+        captured["input_messages"] = input_messages
+        return "LIVE_CHILD_DONE"
+
+    def fake_create_leon_agent(*, model_name, workspace_root, **kwargs):
+        return _FakeChildAgent(Path(workspace_root), model_name)
+
+    monkeypatch.setattr("core.runtime.agent.create_leon_agent", fake_create_leon_agent)
+    monkeypatch.setattr("backend.web.services.streaming_service.run_child_thread_live", fake_run_child_thread_live)
+
+    service = AgentService(
+        tool_registry=_FakeRegistry(),
+        agent_registry=_FakeAgentRegistry(),
+        workspace_root=tmp_path,
+        model_name="gpt-test",
+        web_app=SimpleNamespace(),
+    )
+    raw_prompt = f"Inspect the workspace at {tmp_path}/current working directory. Read-only only. Report existing files."
+
+    result = await service._run_agent(
+        task_id="task-1",
+        agent_name="child",
+        thread_id="subagent-1",
+        prompt=raw_prompt,
+        subagent_type="general",
+        max_turns=None,
+        fork_context=False,
+    )
+
+    assert result == "LIVE_CHILD_DONE"
+    expected_prompt = f"Inspect the workspace at {tmp_path}. Read-only only. Report existing files."
+    assert captured["prompt"] == expected_prompt
+    assert captured["input_messages"][0]["content"] == expected_prompt
+
+
 def test_agent_schema_does_not_claim_general_has_full_tool_access():
     description = AGENT_SCHEMA["description"]
 

@@ -91,6 +91,13 @@ def _resolve_subagent_model(
     return inherited_model
 
 
+def _normalize_child_workspace_prompt(prompt: str, workspace_root: Path) -> str:
+    workspace_text = str(workspace_root)
+    for suffix in ("current working directory", "working directory"):
+        prompt = prompt.replace(f"{workspace_text}/{suffix}", workspace_text)
+    return prompt
+
+
 def _filter_fork_messages(messages: list) -> list:
     """Filter parent messages for forkContext sub-agent spawning.
 
@@ -699,6 +706,10 @@ class AgentService:
             # In async context LeonAgent defers checkpointer init; call ainit() to
             # ensure state is persisted (and loadable via GET /api/threads/{thread_id}).
             await agent.ainit()
+            # @@@subagent-prompt-path-sanitize - Parent models sometimes satisfy
+            # "use absolute paths" by appending natural-language cwd labels onto the
+            # real workspace path. Normalize the obvious fake suffix before dispatch.
+            prompt = _normalize_child_workspace_prompt(prompt, agent.workspace_root)
 
             if parent_thread_id and parent_thread_id != thread_id:
                 from sandbox.manager import bind_thread_to_existing_thread_lease
