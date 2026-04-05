@@ -32,13 +32,13 @@ def make_chat_delivery_fn(app: Any):
         content: str,
         sender_name: str,
         chat_id: str,
-        sender_entity_id: str,
+        sender_id: str,
         sender_avatar_url: str | None = None,
         signal: str | None = None,
     ) -> None:
         logger.info("[delivery] _deliver called: entity=%s, thread=%s", entity.id, entity.thread_id)
         future = asyncio.run_coroutine_threadsafe(
-            _async_deliver(app, entity, sender_name, chat_id, sender_entity_id, sender_avatar_url, signal=signal),
+            _async_deliver(app, entity, sender_name, chat_id, sender_id, sender_avatar_url, signal=signal),
             loop,
         )
 
@@ -61,7 +61,7 @@ async def _async_deliver(
     entity: EntityRow,
     sender_name: str,
     chat_id: str,
-    sender_entity_id: str,
+    sender_id: str,
     sender_avatar_url: str | None = None,
     signal: str | None = None,
 ) -> None:
@@ -109,7 +109,7 @@ async def _async_deliver(
         thread_id,
         "chat",
         source="external",
-        sender_entity_id=sender_entity_id,
+        sender_id=sender_id,
         sender_name=sender_name,
         sender_avatar_url=sender_avatar_url,
     )

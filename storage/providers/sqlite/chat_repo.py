@@ -83,24 +83,24 @@ class SQLiteChatEntityRepo:
         if self._own_conn:
             self._conn.close()
 
-    def add_entity(self, chat_id: str, entity_id: str, joined_at: float) -> None:
+    def add_participant(self, chat_id: str, user_id: str, joined_at: float) -> None:
         with self._lock:
             self._conn.execute(
-                "INSERT OR IGNORE INTO chat_entities (chat_id, entity_id, joined_at) VALUES (?, ?, ?)",
-                (chat_id, entity_id, joined_at),
+                "INSERT OR IGNORE INTO chat_entities (chat_id, user_id, joined_at) VALUES (?, ?, ?)",
+                (chat_id, user_id, joined_at),
             )
             self._conn.commit()
 
-    def list_entities(self, chat_id: str) -> list[ChatEntityRow]:
+    def list_participants(self, chat_id: str) -> list[ChatEntityRow]:
         with self._lock:
             rows = self._conn.execute(
-                "SELECT chat_id, entity_id, joined_at, last_read_at, muted, mute_until FROM chat_entities WHERE chat_id = ?",
+                "SELECT chat_id, user_id, joined_at, last_read_at, muted, mute_until FROM chat_entities WHERE chat_id = ?",
                 (chat_id,),
             ).fetchall()
             return [
                 ChatEntityRow(
                     chat_id=r[0],
-                    entity_id=r[1],
+                    user_id=r[1],
                     joined_at=r[2],
                     last_read_at=r[3],
                     muted=bool(r[4]),
@@ -109,52 +109,52 @@ class SQLiteChatEntityRepo:
                 for r in rows
             ]
 
-    def list_chats_for_entity(self, entity_id: str) -> list[str]:
+    def list_chats_for_user(self, user_id: str) -> list[str]:
         with self._lock:
             rows = self._conn.execute(
-                "SELECT chat_id FROM chat_entities WHERE entity_id = ?",
-                (entity_id,),
+                "SELECT chat_id FROM chat_entities WHERE user_id = ?",
+                (user_id,),
             ).fetchall()
             return [r[0] for r in rows]
 
-    def is_entity_in_chat(self, chat_id: str, entity_id: str) -> bool:
+    def is_participant_in_chat(self, chat_id: str, user_id: str) -> bool:
         with self._lock:
             row = self._conn.execute(
-                "SELECT 1 FROM chat_entities WHERE chat_id = ? AND entity_id = ? LIMIT 1",
-                (chat_id, entity_id),
+                "SELECT 1 FROM chat_entities WHERE chat_id = ? AND user_id = ? LIMIT 1",
+                (chat_id, user_id),
             ).fetchone()
             return row is not None
 
-    def update_last_read(self, chat_id: str, entity_id: str, last_read_at: float) -> None:
+    def update_last_read(self, chat_id: str, user_id: str, last_read_at: float) -> None:
         with self._lock:
             self._conn.execute(
-                "UPDATE chat_entities SET last_read_at = ? WHERE chat_id = ? AND entity_id = ?",
-                (last_read_at, chat_id, entity_id),
+                "UPDATE chat_entities SET last_read_at = ? WHERE chat_id = ? AND user_id = ?",
+                (last_read_at, chat_id, user_id),
             )
             self._conn.commit()
 
-    def update_mute(self, chat_id: str, entity_id: str, muted: bool, mute_until: float | None = None) -> None:
+    def update_mute(self, chat_id: str, user_id: str, muted: bool, mute_until: float | None = None) -> None:
         def _do():
             with self._lock:
                 self._conn.execute(
-                    "UPDATE chat_entities SET muted = ?, mute_until = ? WHERE chat_id = ? AND entity_id = ?",
-                    (int(muted), mute_until, chat_id, entity_id),
+                    "UPDATE chat_entities SET muted = ?, mute_until = ? WHERE chat_id = ? AND user_id = ?",
+                    (int(muted), mute_until, chat_id, user_id),
                 )
                 self._conn.commit()
 
         _retry_on_locked(_do)
 
-    # @@@find-chat-between — find the 1:1 chat (exactly 2 members) between two entities.
-    # Must NOT return group chats that happen to contain both entities.
-    def find_chat_between(self, entity_a: str, entity_b: str) -> str | None:
+    # @@@find-chat-between — find the 1:1 chat (exactly 2 members) between two social identities.
+    # Must NOT return group chats that happen to contain both.
+    def find_chat_between(self, user_a: str, user_b: str) -> str | None:
         with self._lock:
             row = self._conn.execute(
                 "SELECT ce1.chat_id FROM chat_entities ce1"
                 " JOIN chat_entities ce2 ON ce1.chat_id = ce2.chat_id"
-                " WHERE ce1.entity_id = ? AND ce2.entity_id = ?"
+                " WHERE ce1.user_id = ? AND ce2.user_id = ?"
                 " AND (SELECT COUNT(*) FROM chat_entities ce3"
                 "      WHERE ce3.chat_id = ce1.chat_id) = 2",
-                (entity_a, entity_b),
+                (user_a, user_b),
             ).fetchone()
             return row[0] if row else None
 
@@ -163,15 +163,21 @@ class SQLiteChatEntityRepo:
             """
             CREATE TABLE IF NOT EXISTS chat_entities (
                 chat_id TEXT NOT NULL REFERENCES chats(id),
-                entity_id TEXT NOT NULL REFERENCES entities(id),
+                user_id TEXT NOT NULL,
                 joined_at REAL NOT NULL,
                 last_read_at REAL,
                 muted INTEGER NOT NULL DEFAULT 0,
                 mute_until REAL,
-                UNIQUE(chat_id, entity_id)
+                UNIQUE(chat_id, user_id)
             )
             """
         )
+        # @@@entity-id-to-user-id-migration - old chat dbs still used entity_id.
+        # Rename first so later index creation does not explode on missing user_id.
+        try:
+            self._conn.execute("ALTER TABLE chat_entities RENAME COLUMN entity_id TO user_id")
+        except sqlite3.OperationalError:
+            pass  # column already named user_id, or table is new
         # @@@chat-entity-migration - add muted/mute_until if table already exists
         try:
             self._conn.execute("ALTER TABLE chat_entities ADD COLUMN muted INTEGER NOT NULL DEFAULT 0")
@@ -181,8 +187,8 @@ class SQLiteChatEntityRepo:
             self._conn.execute("ALTER TABLE chat_entities ADD COLUMN mute_until REAL")
         except sqlite3.OperationalError:
             pass
-        # @@@chat-entity-index — speeds up find_chat_between and list_chats_for_entity
-        self._conn.execute("CREATE INDEX IF NOT EXISTS idx_chat_entities_entity ON chat_entities(entity_id, chat_id)")
+        # @@@chat-entity-index — speeds up find_chat_between and list_chats_for_user
+        self._conn.execute("CREATE INDEX IF NOT EXISTS idx_chat_entities_user ON chat_entities(user_id, chat_id)")
         self._conn.commit()
 
 
@@ -205,25 +211,25 @@ class SQLiteChatMessageRepo:
     def create(self, row: ChatMessageRow) -> None:
         import json as _json
 
-        mentions_json = _json.dumps(row.mentioned_entity_ids) if row.mentioned_entity_ids else None
+        mentions_json = _json.dumps(row.mentioned_ids) if row.mentioned_ids else None
 
         def _do():
             with self._lock:
                 self._conn.execute(
-                    "INSERT INTO chat_messages (id, chat_id, sender_entity_id, content, mentions, created_at) VALUES (?, ?, ?, ?, ?, ?)",
-                    (row.id, row.chat_id, row.sender_entity_id, row.content, mentions_json, row.created_at),
+                    "INSERT INTO chat_messages (id, chat_id, sender_id, content, mentions, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+                    (row.id, row.chat_id, row.sender_id, row.content, mentions_json, row.created_at),
                 )
                 self._conn.commit()
 
         _retry_on_locked(_do)
 
-    _MSG_COLS = "id, chat_id, sender_entity_id, content, mentions, created_at"
+    _MSG_COLS = "id, chat_id, sender_id, content, mentions, created_at"
 
     def _to_msg(self, r: tuple) -> ChatMessageRow:
         import json as _json
 
         mentions = _json.loads(r[4]) if r[4] else []
-        return ChatMessageRow(id=r[0], chat_id=r[1], sender_entity_id=r[2], content=r[3], mentioned_entity_ids=mentions, created_at=r[5])
+        return ChatMessageRow(id=r[0], chat_id=r[1], sender_id=r[2], content=r[3], mentioned_ids=mentions, created_at=r[5])
 
     def list_by_chat(
         self,
@@ -246,25 +252,25 @@ class SQLiteChatMessageRepo:
         rows.reverse()
         return [self._to_msg(r) for r in rows]
 
-    def list_unread(self, chat_id: str, entity_id: str) -> list[ChatMessageRow]:
+    def list_unread(self, chat_id: str, user_id: str) -> list[ChatMessageRow]:
         """Return unread messages (after last_read_at, excluding own) in chronological order."""
         with self._lock:
             cursor_row = self._conn.execute(
-                "SELECT last_read_at FROM chat_entities WHERE chat_id = ? AND entity_id = ?",
-                (chat_id, entity_id),
+                "SELECT last_read_at FROM chat_entities WHERE chat_id = ? AND user_id = ?",
+                (chat_id, user_id),
             ).fetchone()
             last_read = cursor_row[0] if cursor_row else None
             if last_read is None:
                 rows = self._conn.execute(
-                    f"SELECT {self._MSG_COLS} FROM chat_messages WHERE chat_id = ? AND sender_entity_id != ? ORDER BY created_at ASC",
-                    (chat_id, entity_id),
+                    f"SELECT {self._MSG_COLS} FROM chat_messages WHERE chat_id = ? AND sender_id != ? ORDER BY created_at ASC",
+                    (chat_id, user_id),
                 ).fetchall()
             else:
                 rows = self._conn.execute(
                     f"SELECT {self._MSG_COLS} FROM chat_messages"
-                    " WHERE chat_id = ? AND sender_entity_id != ? AND created_at > ?"
+                    " WHERE chat_id = ? AND sender_id != ? AND created_at > ?"
                     " ORDER BY created_at ASC",
-                    (chat_id, entity_id, last_read),
+                    (chat_id, user_id, last_read),
                 ).fetchall()
         return [self._to_msg(r) for r in rows]
 
@@ -294,46 +300,46 @@ class SQLiteChatMessageRepo:
             ).fetchall()
         return [self._to_msg(r) for r in rows]
 
-    def count_unread(self, chat_id: str, entity_id: str) -> int:
+    def count_unread(self, chat_id: str, user_id: str) -> int:
         with self._lock:
             cursor_row = self._conn.execute(
-                "SELECT last_read_at FROM chat_entities WHERE chat_id = ? AND entity_id = ?",
-                (chat_id, entity_id),
+                "SELECT last_read_at FROM chat_entities WHERE chat_id = ? AND user_id = ?",
+                (chat_id, user_id),
             ).fetchone()
             if cursor_row is None:
                 return 0
             last_read = cursor_row[0]
             if last_read is None:
                 row = self._conn.execute(
-                    "SELECT COUNT(*) FROM chat_messages WHERE chat_id = ? AND sender_entity_id != ?",
-                    (chat_id, entity_id),
+                    "SELECT COUNT(*) FROM chat_messages WHERE chat_id = ? AND sender_id != ?",
+                    (chat_id, user_id),
                 ).fetchone()
             else:
                 row = self._conn.execute(
-                    "SELECT COUNT(*) FROM chat_messages WHERE chat_id = ? AND sender_entity_id != ? AND created_at > ?",
-                    (chat_id, entity_id, last_read),
+                    "SELECT COUNT(*) FROM chat_messages WHERE chat_id = ? AND sender_id != ? AND created_at > ?",
+                    (chat_id, user_id, last_read),
                 ).fetchone()
             return int(row[0]) if row else 0
 
-    def has_unread_mention(self, chat_id: str, entity_id: str) -> bool:
-        """Check if there are unread messages that @mention this entity."""
+    def has_unread_mention(self, chat_id: str, user_id: str) -> bool:
+        """Check if there are unread messages that @mention this user."""
         with self._lock:
             cursor_row = self._conn.execute(
-                "SELECT last_read_at FROM chat_entities WHERE chat_id = ? AND entity_id = ?",
-                (chat_id, entity_id),
+                "SELECT last_read_at FROM chat_entities WHERE chat_id = ? AND user_id = ?",
+                (chat_id, user_id),
             ).fetchone()
             last_read = cursor_row[0] if cursor_row else None
             # @@@mention-query — JSON LIKE is crude but sufficient for SQLite without JSON1 extension
-            mention_pattern = f'%"{entity_id}"%'
+            mention_pattern = f'%"{user_id}"%'
             if last_read is None:
                 row = self._conn.execute(
-                    "SELECT COUNT(*) FROM chat_messages WHERE chat_id = ? AND mentions LIKE ? AND sender_entity_id != ?",
-                    (chat_id, mention_pattern, entity_id),
+                    "SELECT COUNT(*) FROM chat_messages WHERE chat_id = ? AND mentions LIKE ? AND sender_id != ?",
+                    (chat_id, mention_pattern, user_id),
                 ).fetchone()
             else:
                 row = self._conn.execute(
-                    "SELECT COUNT(*) FROM chat_messages WHERE chat_id = ? AND mentions LIKE ? AND sender_entity_id != ? AND created_at > ?",
-                    (chat_id, mention_pattern, entity_id, last_read),
+                    "SELECT COUNT(*) FROM chat_messages WHERE chat_id = ? AND mentions LIKE ? AND sender_id != ? AND created_at > ?",
+                    (chat_id, mention_pattern, user_id, last_read),
                 ).fetchone()
             return int(row[0]) > 0 if row else False
 
@@ -357,7 +363,7 @@ class SQLiteChatMessageRepo:
             CREATE TABLE IF NOT EXISTS chat_messages (
                 id TEXT PRIMARY KEY,
                 chat_id TEXT NOT NULL REFERENCES chats(id),
-                sender_entity_id TEXT NOT NULL,
+                sender_id TEXT NOT NULL,
                 content TEXT NOT NULL,
                 mentions TEXT,
                 created_at REAL NOT NULL
@@ -368,6 +374,15 @@ class SQLiteChatMessageRepo:
         # @@@mentions-migration — add mentions column if table already exists
         try:
             self._conn.execute("ALTER TABLE chat_messages ADD COLUMN mentions TEXT")
+        except sqlite3.OperationalError:
+            pass
+        # @@@sender-entity-id-to-sender-id-migration — rename columns for existing databases
+        try:
+            self._conn.execute("ALTER TABLE chat_messages RENAME COLUMN sender_entity_id TO sender_id")
+        except sqlite3.OperationalError:
+            pass  # column already named sender_id, or table is new
+        try:
+            self._conn.execute("ALTER TABLE chat_messages RENAME COLUMN mentioned_entity_ids TO mentions")
         except sqlite3.OperationalError:
             pass
         self._conn.commit()

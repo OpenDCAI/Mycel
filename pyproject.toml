@@ -48,6 +48,8 @@ dependencies = [
     "pyright>=1.1.0",
     "supabase>=2.28.3",
     "fastapi>=0.118.0",
+    "langgraph-checkpoint-postgres>=3.0.5",
+    "psycopg[binary]>=3.3.3",
 ]
 
 [project.optional-dependencies]

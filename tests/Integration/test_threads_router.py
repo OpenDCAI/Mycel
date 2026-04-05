@@ -63,6 +63,17 @@ class _FakeEntityRepo:
     def create(self, row):
         self.rows.append(row)
 
+    def get_by_id(self, entity_id: str):
+        for row in self.rows:
+            if row.id == entity_id:
+                return row
+        return None
+
+    def update_thread_id(self, entity_id: str, thread_id: str):
+        row = self.get_by_id(entity_id)
+        if row is not None:
+            row.thread_id = thread_id
+
 
 class _FakeAuthService:
     def __init__(self) -> None:

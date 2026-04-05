@@ -92,8 +92,8 @@ logger = logging.getLogger(__name__)
 apply_usage_patches()
 
 
-def _lookup_wechat_conn(eid: str):
-    """Lazy WeChat connection lookup by owner entity ID.
+def _lookup_wechat_conn(user_id: str):
+    """Lazy WeChat connection lookup by owner user ID.
 
     Called at tool invocation time — app.state may not be populated at registration.
     """
@@ -101,7 +101,7 @@ def _lookup_wechat_conn(eid: str):
         from backend.web.main import app  # noqa: PLC0415
 
         registry = getattr(app.state, "wechat_registry", None)
-        return registry.get(eid) if registry else None
+        return registry.get(user_id) if registry else None
     except Exception:
         return None
 
@@ -285,10 +285,16 @@ class LeonAgent:
         }
 
         # Initialize checkpointer and MCP tools
+        self.checkpointer = None
         self._aiosqlite_conn, mcp_tools = self._init_async_components()
 
-        # Set checkpointer to None if in async context (will be set by ainit())
-        if self._aiosqlite_conn is None:
+        # If in async context (running loop detected), _init_async_components
+        # skips init and returns (None, []). Distinguish from Postgres path
+        # which also returns conn=None but DID initialize successfully.
+        self._needs_async_init = self._aiosqlite_conn is None and self.checkpointer is None
+
+        # Set checkpointer to None if in async context (will be initialized later)
+        if self._needs_async_init:
             self.checkpointer = None
 
         # Initialize ToolRegistry and Services (new architecture)
@@ -1199,20 +1205,20 @@ class LeonAgent:
         except ImportError:
             self._taskboard_service = None
 
-        # @@@chat-tools - register chat tools for agents with entity identity
+        # @@@chat-tools - register chat tools for agents with user identity
         if self._chat_repos:
             repos = self._chat_repos
-            entity_id = repos.get("entity_id")
-            owner_entity_id = repos.get("owner_entity_id", "")
-            if entity_id:
+            user_id = repos.get("user_id")
+            owner_user_id = repos.get("owner_user_id", "")
+            if user_id:
                 from core.agents.communication.chat_tool_service import ChatToolService
 
                 # @@@lazy-runtime — runtime isn't set yet at _init_services() time.
                 # Pass a callable that resolves runtime lazily at tool call time.
                 self._chat_tool_service = ChatToolService(
                     registry=self._tool_registry,
-                    entity_id=entity_id,
-                    owner_entity_id=owner_entity_id,
+                    user_id=user_id,
+                    owner_user_id=owner_user_id,
                     entity_repo=repos.get("entity_repo"),
                     chat_service=repos.get("chat_service"),
                     chat_entity_repo=repos.get("chat_entity_repo"),
@@ -1223,14 +1229,14 @@ class LeonAgent:
                 )
 
         # @@@wechat-tools — register WeChat tools via lazy connection lookup
-        owner_eid = self._chat_repos.get("owner_entity_id", "") if self._chat_repos else ""
-        if owner_eid:
+        owner_uid = self._chat_repos.get("owner_user_id", "") if self._chat_repos else ""
+        if owner_uid:
             try:
                 from core.tools.wechat.service import WeChatToolService
 
                 self._wechat_tool_service = WeChatToolService(
                     registry=self._tool_registry,
-                    connection_fn=functools.partial(_lookup_wechat_conn, owner_eid),
+                    connection_fn=functools.partial(_lookup_wechat_conn, owner_uid),
                 )
             except ImportError:
                 self._wechat_tool_service = None
@@ -1316,15 +1322,33 @@ class LeonAgent:
             return []
 
     async def _init_checkpointer(self):
-        """Initialize async checkpointer for conversation persistence"""
-        from storage.providers.sqlite.kernel import connect_sqlite_async
+        """Initialize async checkpointer for conversation persistence.
 
-        db_path = self.db_path
-        db_path.parent.mkdir(parents=True, exist_ok=True)
-        conn = await connect_sqlite_async(db_path)
-        self.checkpointer = AsyncSqliteSaver(conn)
-        await self.checkpointer.setup()
-        return conn
+        Uses Postgres (via Supabase) when LEON_STORAGE_STRATEGY=supabase,
+        otherwise falls back to local SQLite.
+        """
+        strategy = os.getenv("LEON_STORAGE_STRATEGY", "sqlite")
+        pg_url = os.getenv("LEON_POSTGRES_URL")
+
+        if strategy == "supabase" and pg_url:
+            from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
+
+            # from_conn_string is an async context manager; enter it and keep
+            # the reference so the connection pool stays open for the agent's lifetime.
+            self._pg_saver_ctx = AsyncPostgresSaver.from_conn_string(pg_url)
+            self.checkpointer = await self._pg_saver_ctx.__aenter__()
+            await self.checkpointer.setup()
+            return None  # no SQLite conn to track
+        else:
+            from storage.providers.sqlite.kernel import connect_sqlite_async
+
+            db_path = self.db_path
+            db_path.parent.mkdir(parents=True, exist_ok=True)
+            conn = await connect_sqlite_async(db_path)
+            self.checkpointer = AsyncSqliteSaver(conn)
+            await self.checkpointer.setup()
+            return conn
+            return conn
 
     def _is_tool_allowed(self, tool) -> bool:
         # Extract original tool name without mcp__ prefix
@@ -1371,19 +1395,21 @@ class LeonAgent:
         # @@@entity-identity — inject chat identity so agent knows who it is in the social layer
         if self._chat_repos:
             repos = self._chat_repos
-            eid = repos.get("entity_id")
-            owner_eid = repos.get("owner_entity_id", "")
-            if eid:
+            uid = repos.get("user_id")
+            owner_uid = repos.get("owner_user_id", "")
+            if uid:
                 entity_repo = repos.get("entity_repo")
-                entity = entity_repo.get_by_id(eid) if entity_repo else None
-                owner_entity = entity_repo.get_by_id(owner_eid) if entity_repo and owner_eid else None
-                name = entity.name if entity else eid
-                owner_name = owner_entity.name if owner_entity else "unknown"
+                member_repo = repos.get("member_repo")
+                entity = entity_repo.get_by_id(uid) if entity_repo else None
+                self_member = member_repo.get_by_id(uid) if member_repo and not entity else None
+                owner_row = member_repo.get_by_id(owner_uid) if member_repo and owner_uid else None
+                name = entity.name if entity else (self_member.name if self_member else uid)
+                owner_name = owner_row.name if owner_row else "unknown"
                 prompt += (
                     f"\n\n**Chat Identity:**\n"
                     f"- Your name: {name}\n"
-                    f"- Your entity_id: {eid}\n"
-                    f"- Your owner: {owner_name} (entity_id: {owner_eid})\n"
+                    f"- Your user_id: {uid}\n"
+                    f"- Your owner: {owner_name} (user_id: {owner_uid})\n"
                     f"- When you receive a chat notification, you MUST read it with chat_read() before deciding what to do.\n"
                     f"- If that notification already gives you a chat_id, prefer using that exact chat_id directly; do not call directory just to resolve the sender first.\n"
                     f"- If you reply to the other party, you MUST call chat_send(). Never claim you replied unless chat_send() succeeded.\n"

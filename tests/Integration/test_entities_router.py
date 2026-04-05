@@ -31,19 +31,21 @@ async def test_list_entities_excludes_child_agent_branches_from_chat_discovery()
     app = SimpleNamespace(
         state=SimpleNamespace(
             entity_repo=SimpleNamespace(
-                list_all=lambda: [
-                    EntityRow(id="u1-1", type="human", member_id="u1", name="owner", created_at=now),
-                    EntityRow(id="u2-1", type="human", member_id="u2", name="other", created_at=now),
-                    EntityRow(id="a-main-1", type="agent", member_id="a-main", name="Toad", thread_id="thread-main", created_at=now),
-                    EntityRow(
-                        id="a-child-1",
-                        type="agent",
-                        member_id="a-child",
-                        name="Toad · 分身1",
-                        thread_id="thread-child",
-                        created_at=now,
-                    ),
-                ]
+                list_by_type=lambda entity_type: (
+                    [
+                        EntityRow(id="a-main-1", type="agent", member_id="a-main", name="Toad", thread_id="thread-main", created_at=now),
+                        EntityRow(
+                            id="a-child-1",
+                            type="agent",
+                            member_id="a-child",
+                            name="Toad · 分身1",
+                            thread_id="thread-child",
+                            created_at=now,
+                        ),
+                    ]
+                    if entity_type == "agent"
+                    else []
+                )
             ),
             member_repo=SimpleNamespace(list_all=lambda: [user, other_human, main_agent_member, child_agent_member]),
             thread_repo=SimpleNamespace(
@@ -56,4 +58,4 @@ async def test_list_entities_excludes_child_agent_branches_from_chat_discovery()
 
     result = await entities_router.list_entities(user_id="u1", app=app)
 
-    assert [item["id"] for item in result] == ["u2-1", "a-main-1"]
+    assert [item["id"] for item in result] == ["u2", "a-main-1"]

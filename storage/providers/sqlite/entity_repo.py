@@ -35,20 +35,15 @@ class SQLiteEntityRepo:
             )
             self._conn.commit()
 
-    def get_by_id(self, entity_id: str) -> EntityRow | None:
+    def get_by_id(self, id: str) -> EntityRow | None:
         with self._lock:
-            row = self._conn.execute("SELECT * FROM entities WHERE id = ?", (entity_id,)).fetchone()
+            row = self._conn.execute("SELECT * FROM entities WHERE id = ?", (id,)).fetchone()
             return self._to_row(row) if row else None
 
     def get_by_member_id(self, member_id: str) -> list[EntityRow]:
         with self._lock:
             rows = self._conn.execute("SELECT * FROM entities WHERE member_id = ?", (member_id,)).fetchall()
             return [self._to_row(r) for r in rows]
-
-    def get_by_thread_id(self, thread_id: str) -> EntityRow | None:
-        with self._lock:
-            row = self._conn.execute("SELECT * FROM entities WHERE thread_id = ?", (thread_id,)).fetchone()
-            return self._to_row(row) if row else None
 
     def list_all(self) -> list[EntityRow]:
         with self._lock:
@@ -63,7 +58,7 @@ class SQLiteEntityRepo:
             ).fetchall()
             return [self._to_row(r) for r in rows]
 
-    def update(self, entity_id: str, **fields: str | None) -> None:
+    def update(self, id: str, **fields: str | None) -> None:
         allowed = {"name", "avatar", "thread_id"}
         updates = {k: v for k, v in fields.items() if k in allowed}
         if not updates:
@@ -72,13 +67,13 @@ class SQLiteEntityRepo:
         with self._lock:
             self._conn.execute(
                 f"UPDATE entities SET {set_clause} WHERE id = ?",
-                (*updates.values(), entity_id),
+                (*updates.values(), id),
             )
             self._conn.commit()
 
-    def delete(self, entity_id: str) -> None:
+    def delete(self, id: str) -> None:
         with self._lock:
-            self._conn.execute("DELETE FROM entities WHERE id = ?", (entity_id,))
+            self._conn.execute("DELETE FROM entities WHERE id = ?", (id,))
             self._conn.commit()
 
     def _to_row(self, r: tuple) -> EntityRow:
@@ -107,5 +102,4 @@ class SQLiteEntityRepo:
             """
         )
         self._conn.execute("CREATE INDEX IF NOT EXISTS idx_entities_member ON entities(member_id)")
-        self._conn.execute("CREATE INDEX IF NOT EXISTS idx_entities_thread ON entities(thread_id)")
         self._conn.commit()

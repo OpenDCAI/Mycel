@@ -16,7 +16,7 @@ class _FakeThreadRepo:
 
 
 class _FakeChatService:
-    def list_chats_for_entity(self, _entity_id: str):
+    def list_chats_for_user(self, _user_id: str):
         return [
             {
                 "id": "chat-1",
@@ -39,7 +39,6 @@ async def test_wechat_routing_targets_hides_internal_subagent_threads():
 
     result = await connections_router.wechat_routing_targets(
         user_id="owner-1",
-        entity_id="human-1",
         app=app,
     )
 

@@ -178,8 +178,10 @@ async def lifespan(app: FastAPI):
         app.state.cron_service = cron_svc
 
         # @@@wechat-registry — create registry with delivery callback, auto-start all
-        from backend.web.services.wechat_service import WeChatConnectionRegistry
+        from backend.web.services.wechat_service import WeChatConnectionRegistry, migrate_entity_id_dirs
         from core.runtime.middleware.queue.formatters import format_wechat_message
+
+        migrate_entity_id_dirs()
 
         async def _wechat_deliver(conn, msg):
             """Delivery callback — routes WeChat messages to configured thread/chat."""
@@ -194,7 +196,7 @@ async def lifespan(app: FastAPI):
                 await route_message_to_brain(app, routing.id, content, source="owner", sender_name=sender_name)
             elif routing.type == "chat":
                 content = format_wechat_message(sender_name, msg.from_user_id, msg.text)
-                app.state.chat_service.send_message(routing.id, conn.entity_id, content)
+                app.state.chat_service.send_message(routing.id, conn.user_id, content)
 
         app.state.wechat_registry = WeChatConnectionRegistry(delivery_fn=_wechat_deliver)
         app.state.wechat_registry.auto_start_all()

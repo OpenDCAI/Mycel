@@ -228,7 +228,7 @@ def _thread_payload(app: Any, thread_id: str, sandbox_type: str) -> dict[str, An
     if thread is None:
         raise HTTPException(404, "Thread not found")
     member = app.state.member_repo.get_by_id(thread["member_id"])
-    entity = app.state.entity_repo.get_by_thread_id(thread_id)
+    entity = app.state.entity_repo.get_by_id(thread["member_id"])
     if member is None or entity is None:
         raise HTTPException(500, f"Thread {thread_id} missing member/entity")
     return {
@@ -314,7 +314,12 @@ def _normalize_blocking_subagent_terminal_status(entries: list[dict[str, Any]]) 
             if not isinstance(stream, dict):
                 continue
             result_text = step.get("result")
-            terminal_status = "error" if isinstance(result_text, str) and result_text.startswith("<tool_use_error>") else "completed"
+            existing_status = str(stream.get("status") or "").lower()
+            terminal_status = (
+                existing_status
+                if existing_status in {"completed", "error", "cancelled"}
+                else ("error" if isinstance(result_text, str) and result_text.startswith("<tool_use_error>") else "completed")
+            )
             if stream.get("status") != terminal_status:
                 # @@@blocking-subagent-terminal-honesty - a finished blocking Agent tool
                 # must not keep exposing a stale running child status on refresh/detail/tasks.
@@ -471,7 +476,15 @@ def _create_owned_thread(
     owned_lease: dict[str, Any] | None = None
     if selected_lease_id:
         owned_lease = next(
-            (lease for lease in sandbox_service.list_user_leases(owner_user_id) if lease["lease_id"] == selected_lease_id),
+            (
+                lease
+                for lease in sandbox_service.list_user_leases(
+                    owner_user_id,
+                    thread_repo=app.state.thread_repo,
+                    member_repo=app.state.member_repo,
+                )
+                if lease["lease_id"] == selected_lease_id
+            ),
             None,
         )
         if owned_lease is None:
@@ -480,13 +493,13 @@ def _create_owned_thread(
 
     # @@@non-atomic-create - these 3 steps (seq++, thread, entity) are not atomic.
     seq = app.state.member_repo.increment_entity_seq(agent_member_id)
-    thread_entity_id = f"{agent_member_id}-{seq}"
+    new_thread_id = f"{agent_member_id}-{seq}"
     has_main = app.state.thread_repo.get_main_thread(agent_member_id) is not None
     resolved_is_main = is_main or not has_main
     branch_index = 0 if resolved_is_main else app.state.thread_repo.get_next_branch_index(agent_member_id)
 
     app.state.thread_repo.create(
-        thread_id=thread_entity_id,
+        thread_id=new_thread_id,
         member_id=agent_member_id,
         sandbox_type=sandbox_type,
         cwd=payload.cwd,
@@ -498,35 +511,45 @@ def _create_owned_thread(
 
     # @@@entity-name-convention - entity display names derive from member + thread role, never sandbox strings.
     entity_name = canonical_entity_name(agent_member.name, is_main=resolved_is_main, branch_index=branch_index)
-    app.state.entity_repo.create(
-        EntityRow(
-            id=thread_entity_id,
-            type="agent",
-            member_id=agent_member_id,
-            name=entity_name,
-            thread_id=thread_entity_id,
-            created_at=time.time(),
+
+    # @@@entity-id-is-member-id - agent entity id = member_id (per-agent, not per-thread).
+    # thread_id field on the entity points to the current main thread.
+    # If entity already exists, update thread_id (main thread changed); otherwise create.
+    existing_entity = app.state.entity_repo.get_by_id(agent_member_id)
+    if existing_entity is not None:
+        if resolved_is_main:
+            app.state.entity_repo.update(agent_member_id, thread_id=new_thread_id, name=entity_name)
+        # Branch threads don't update the entity — it represents the main identity
+    else:
+        app.state.entity_repo.create(
+            EntityRow(
+                id=agent_member_id,
+                type="agent",
+                member_id=agent_member_id,
+                name=entity_name,
+                thread_id=new_thread_id if resolved_is_main else None,
+                created_at=time.time(),
+            )
         )
-    )
 
     # Set thread state
-    app.state.thread_sandbox[thread_entity_id] = sandbox_type
+    app.state.thread_sandbox[new_thread_id] = sandbox_type
     if payload.cwd:
-        app.state.thread_cwd[thread_entity_id] = payload.cwd
+        app.state.thread_cwd[new_thread_id] = payload.cwd
 
     if selected_lease_id:
         # @@@reuse-lease-binding - Reuse an existing lease by attaching a fresh terminal for the new thread.
         bound_cwd = bind_thread_to_existing_lease(
-            thread_entity_id,
+            new_thread_id,
             selected_lease_id,
             cwd=payload.cwd,
         )
-        app.state.thread_cwd[thread_entity_id] = bound_cwd
+        app.state.thread_cwd[new_thread_id] = bound_cwd
     else:
         # @@@lease-early-creation - Create volume + lease + terminal at thread creation
         # so volume exists BEFORE any file uploads.
         _create_thread_sandbox_resources(
-            thread_entity_id,
+            new_thread_id,
             sandbox_type,
             payload.recipe.model_dump() if payload.recipe else None,
         )
@@ -538,7 +561,7 @@ def _create_owned_thread(
             "recipe": owned_lease.get("recipe"),
             "lease_id": owned_lease["lease_id"],
             "model": payload.model,
-            "workspace": app.state.thread_cwd.get(thread_entity_id),
+            "workspace": app.state.thread_cwd.get(new_thread_id),
         }
     else:
         successful_config = {
@@ -550,12 +573,12 @@ def _create_owned_thread(
             ),
             "lease_id": None,
             "model": payload.model,
-            "workspace": app.state.thread_cwd.get(thread_entity_id) or payload.cwd,
+            "workspace": app.state.thread_cwd.get(new_thread_id) or payload.cwd,
         }
     save_last_successful_config(app, owner_user_id, agent_member_id, successful_config)
 
     return {
-        "thread_id": thread_entity_id,
+        "thread_id": new_thread_id,
         "sandbox": sandbox_type,
         "member_id": agent_member_id,
         "member_name": agent_member.name,
@@ -738,12 +761,16 @@ async def delete_thread(
             logger.warning("Failed to destroy sandbox resources for thread %s: %s", thread_id, exc)
         await asyncio.to_thread(delete_thread_in_db, thread_id)
         # Also delete from threads table (entity-chat addition)
+        thread_data = app.state.thread_repo.get_by_id(thread_id)
+        member_id = thread_data["member_id"] if thread_data else None
         app.state.thread_repo.delete(thread_id)
-        # Delete associated entity
-        try:
-            app.state.entity_repo.delete(thread_id)
-        except Exception:
-            logger.error("Failed to delete entity for thread %s", thread_id, exc_info=True)
+        # Entity is keyed by member_id (shared across threads) — update its thread_id
+        # to the next main thread, or clear it if no threads remain
+        if member_id:
+            entity = app.state.entity_repo.get_by_id(member_id)
+            if entity and entity.thread_id == thread_id:
+                next_main = app.state.thread_repo.get_main_thread(member_id)
+                app.state.entity_repo.update(member_id, thread_id=next_main["id"] if next_main else None)
 
     # Clean up thread-specific state
     app.state.thread_sandbox.pop(thread_id, None)

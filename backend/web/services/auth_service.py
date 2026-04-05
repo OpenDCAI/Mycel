@@ -9,7 +9,7 @@ from collections.abc import Callable
 
 import jwt
 
-from storage.contracts import AccountRepo, EntityRepo, EntityRow, InviteCodeRepo, MemberRepo, MemberRow, MemberType
+from storage.contracts import AccountRepo, EntityRepo, InviteCodeRepo, MemberRepo, MemberRow, MemberType
 
 logger = logging.getLogger(__name__)
 
@@ -113,23 +113,9 @@ class AuthService:
                 )
             )
 
-            # Human entity
-            entity_id = f"{auth_user_id}-1"
-            self._entities.create(
-                EntityRow(
-                    id=entity_id,
-                    type="human",
-                    member_id=auth_user_id,
-                    name=display_name,
-                    thread_id=None,
-                    created_at=now,
-                )
-            )
-
             # Initial agents
             first_agent_info = self._create_initial_agents(auth_user_id, now)
         else:
-            entity_id = f"{auth_user_id}-1"
             display_name = existing.name
             mycel_id = existing.mycel_id
             owned_agents = self._members.list_by_owner_user_id(auth_user_id)
@@ -146,7 +132,6 @@ class AuthService:
             "token": temp_token,
             "user": {"id": auth_user_id, "name": display_name, "mycel_id": mycel_id, "email": email_from_payload, "avatar": None},
             "agent": first_agent_info,
-            "entity_id": entity_id,
         }
 
     def login(self, identifier: str, password: str) -> dict:
@@ -175,8 +160,6 @@ class AuthService:
             raise ValueError("账号数据异常，请联系支持")
 
         # Load entities + agents
-        entities = self._entities.get_by_member_id(auth_user_id)
-        human_entity = next((e for e in entities if e.type == "human"), None)
         owned_agents = self._members.list_by_owner_user_id(auth_user_id)
         agent_info = None
         if owned_agents:
@@ -194,7 +177,6 @@ class AuthService:
                 "avatar": member.avatar,
             },
             "agent": agent_info,
-            "entity_id": human_entity.id if human_entity else None,
         }
 
     def verify_token(self, token: str) -> dict:
@@ -219,7 +201,7 @@ class AuthService:
                 algorithms=[SUPABASE_JWT_ALGORITHM],
                 options={"verify_aud": False},
             )
-            return {"user_id": payload["sub"], "entity_id": payload.get("entity_id")}
+            return {"user_id": payload["sub"]}
         except jwt.ExpiredSignatureError:
             raise ValueError("Token 已过期，请重新登录")
         except jwt.InvalidTokenError as e:

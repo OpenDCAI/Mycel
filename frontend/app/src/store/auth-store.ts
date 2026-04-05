@@ -72,7 +72,7 @@ export const useAuthStore = create<AuthState>()(
           token: data.token,
           user: data.user,
           agent: data.agent,
-          entityId: data.entity_id ?? null,
+          entityId: data.user?.id ?? null,
         });
       },
 
@@ -94,7 +94,7 @@ export const useAuthStore = create<AuthState>()(
           token: data.token,
           user: data.user,
           agent: data.agent ?? null,
-          entityId: data.entity_id ?? null,
+          entityId: data.user?.id ?? null,
           setupInfo: { userId: data.user.id, defaultName: data.user.name },
         });
       },

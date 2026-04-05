@@ -82,8 +82,10 @@ def _get_container() -> StorageContainer:
 _cached_thread_repo = None
 
 
-def _get_thread_repo():
-    """Get cached ThreadRepo instance."""
+def _get_thread_repo(thread_repo=None):
+    """Get cached ThreadRepo instance, or use injected repo."""
+    if thread_repo is not None:
+        return thread_repo
     global _cached_thread_repo
     if _cached_thread_repo is not None:
         return _cached_thread_repo
@@ -93,18 +95,18 @@ def _get_thread_repo():
     return _cached_thread_repo
 
 
-def save_thread_config(thread_id: str, **fields: Any) -> None:
-    """Update specific fields of thread in SQLite."""
+def save_thread_config(thread_id: str, thread_repo=None, **fields: Any) -> None:
+    """Update specific fields of thread config."""
     allowed = {"sandbox_type", "cwd", "model", "observation_provider"}
     updates = {k: v for k, v in fields.items() if k in allowed}
     if not updates:
         return
-    _get_thread_repo().update(thread_id, **updates)
+    _get_thread_repo(thread_repo).update(thread_id, **updates)
 
 
-def load_thread_config(thread_id: str) -> dict[str, Any] | None:
-    """Load thread data from SQLite. Returns dict or None."""
-    return _get_thread_repo().get_by_id(thread_id)
+def load_thread_config(thread_id: str, thread_repo=None) -> dict[str, Any] | None:
+    """Load thread data. Returns dict or None."""
+    return _get_thread_repo(thread_repo).get_by_id(thread_id)
 
 
 def get_active_observation_provider() -> str | None:

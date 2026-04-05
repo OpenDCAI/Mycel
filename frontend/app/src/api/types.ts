@@ -336,10 +336,10 @@ export interface ChatDetail {
 export interface ChatMessage {
   id: string;
   chat_id: string;
-  sender_entity_id: string;
+  sender_id: string;
   sender_name: string;
   content: string;
-  mentioned_entity_ids: string[];
+  mentioned_ids: string[];
   created_at: number;
 }
 

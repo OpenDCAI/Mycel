@@ -42,14 +42,14 @@ class SQLiteQueueRepo:
         content: str,
         notification_type: str = "steer",
         source: str | None = None,
-        sender_entity_id: str | None = None,
+        sender_id: str | None = None,
         sender_name: str | None = None,
     ) -> None:
         with self._lock:
             self._conn.execute(
-                "INSERT INTO message_queue (thread_id, content, notification_type, source, sender_entity_id, sender_name)"
+                "INSERT INTO message_queue (thread_id, content, notification_type, source, sender_id, sender_name)"
                 " VALUES (?, ?, ?, ?, ?, ?)",
-                (thread_id, content, notification_type, source, sender_entity_id, sender_name),
+                (thread_id, content, notification_type, source, sender_id, sender_name),
             )
             self._conn.commit()
 
@@ -64,15 +64,11 @@ class SQLiteQueueRepo:
             row = self._conn.execute(
                 "DELETE FROM message_queue "
                 "WHERE id = (SELECT MIN(id) FROM message_queue WHERE thread_id = ?) "
-                "RETURNING content, notification_type, source, sender_entity_id, sender_name",
+                "RETURNING content, notification_type, source, sender_id, sender_name",
                 (thread_id,),
             ).fetchone()
             self._conn.commit()
-            return (
-                QueueItem(content=row[0], notification_type=row[1], source=row[2], sender_entity_id=row[3], sender_name=row[4])
-                if row
-                else None
-            )
+            return QueueItem(content=row[0], notification_type=row[1], source=row[2], sender_id=row[3], sender_name=row[4]) if row else None
 
     def drain_all(self, thread_id: str) -> list[QueueItem]:
         with self._lock:
@@ -83,13 +79,12 @@ class SQLiteQueueRepo:
             if has_row is None:
                 return []
             rows = self._conn.execute(
-                "DELETE FROM message_queue WHERE thread_id = ?"
-                " RETURNING content, notification_type, id, source, sender_entity_id, sender_name",
+                "DELETE FROM message_queue WHERE thread_id = ? RETURNING content, notification_type, id, source, sender_id, sender_name",
                 (thread_id,),
             ).fetchall()
             self._conn.commit()
         return [
-            QueueItem(content=r[0], notification_type=r[1], source=r[3], sender_entity_id=r[4], sender_name=r[5])
+            QueueItem(content=r[0], notification_type=r[1], source=r[3], sender_id=r[4], sender_name=r[5])
             for r in sorted(rows, key=lambda r: r[2])
         ]
 
@@ -133,7 +128,7 @@ class SQLiteQueueRepo:
             "  content           TEXT NOT NULL,"
             "  notification_type TEXT NOT NULL DEFAULT 'steer',"
             "  source            TEXT,"
-            "  sender_entity_id  TEXT,"
+            "  sender_id         TEXT,"
             "  sender_name       TEXT,"
             "  created_at        TEXT DEFAULT (datetime('now'))"
             ")"
@@ -143,11 +138,16 @@ class SQLiteQueueRepo:
         for col, col_type in [
             ("notification_type", "TEXT NOT NULL DEFAULT 'steer'"),
             ("source", "TEXT"),
-            ("sender_entity_id", "TEXT"),
+            ("sender_id", "TEXT"),
             ("sender_name", "TEXT"),
         ]:
             try:
                 self._conn.execute(f"ALTER TABLE message_queue ADD COLUMN {col} {col_type}")
             except sqlite3.OperationalError:
                 pass
+        # @@@entity-id-to-user-id-migration — rename column for existing databases
+        try:
+            self._conn.execute("ALTER TABLE message_queue RENAME COLUMN sender_entity_id TO sender_id")
+        except sqlite3.OperationalError:
+            pass
         self._conn.commit()

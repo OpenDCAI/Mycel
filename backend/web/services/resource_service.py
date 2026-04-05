@@ -216,30 +216,40 @@ def _to_session_metrics(snapshot: dict[str, Any] | None) -> dict[str, Any] | Non
 # ---------------------------------------------------------------------------
 
 
-def _member_meta_map() -> dict[str, dict[str, str | None]]:
+def _member_meta_map(member_repo: Any = None) -> dict[str, dict[str, str | None]]:
     """Build member_id → display metadata map from DB."""
-    repo = build_member_repo(main_db_path=resolve_role_db_path(SQLiteDBRole.MAIN))
+    repo = member_repo
+    own_repo = False
+    if repo is None:
+        repo = build_member_repo(main_db_path=resolve_role_db_path(SQLiteDBRole.MAIN))
+        own_repo = True
     try:
+        members = repo.list_all()
         return {
             m.id: {
                 "member_name": m.name,
                 "avatar_url": avatar_url(m.id, bool(m.avatar)),
             }
-            for m in repo.list_all()
+            for m in members
             if m.id and m.name
         }
     except Exception:
         return {}
     finally:
-        repo.close()
+        if own_repo:
+            repo.close()
 
 
-def _thread_agent_refs(thread_ids: list[str]) -> dict[str, str]:
+def _thread_agent_refs(thread_ids: list[str], thread_repo: Any = None) -> dict[str, str]:
     """Batch lookup agent refs from threads table."""
     unique = sorted({tid for tid in thread_ids if tid})
     if not unique:
         return {}
-    repo = build_thread_repo(main_db_path=resolve_role_db_path(SQLiteDBRole.MAIN))
+    repo = thread_repo
+    own_repo = False
+    if repo is None:
+        repo = build_thread_repo(main_db_path=resolve_role_db_path(SQLiteDBRole.MAIN))
+        own_repo = True
     try:
         refs: dict[str, str] = {}
         for tid in unique:
@@ -251,12 +261,13 @@ def _thread_agent_refs(thread_ids: list[str]) -> dict[str, str]:
     except Exception:
         return {}
     finally:
-        repo.close()
+        if own_repo:
+            repo.close()
 
 
-def _thread_owners(thread_ids: list[str]) -> dict[str, dict[str, str | None]]:
-    refs = _thread_agent_refs(thread_ids)
-    member_meta = _member_meta_map()
+def _thread_owners(thread_ids: list[str], member_repo: Any = None, thread_repo: Any = None) -> dict[str, dict[str, str | None]]:
+    refs = _thread_agent_refs(thread_ids, thread_repo=thread_repo)
+    member_meta = _member_meta_map(member_repo=member_repo)
     owners: dict[str, dict[str, str | None]] = {}
     for thread_id in thread_ids:
         agent_ref = refs.get(thread_id)

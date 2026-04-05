@@ -49,12 +49,15 @@ def list_default_recipes() -> list[dict[str, Any]]:
 def list_user_leases(
     user_id: str,
     *,
+    thread_repo: Any = None,
+    member_repo: Any = None,
     main_db_path: str | Path | None = None,
     sandbox_db_path: str | Path | None = None,
 ) -> list[dict[str, Any]]:
     monitor_repo = make_sandbox_monitor_repo()
-    thread_repo = SQLiteThreadRepo(db_path=main_db_path)
-    member_repo = SQLiteMemberRepo(db_path=main_db_path)
+    _thread_repo = thread_repo or SQLiteThreadRepo(db_path=main_db_path)
+    _member_repo = member_repo or SQLiteMemberRepo(db_path=main_db_path)
+    own_repos = thread_repo is None  # only close if we created them
     try:
         rows = monitor_repo.list_leases_with_threads()
         grouped: dict[str, dict[str, Any]] = {}
@@ -79,10 +82,10 @@ def list_user_leases(
             thread_id = str(row.get("thread_id") or "").strip()
             if not thread_id or thread_id in group["thread_ids"]:
                 continue
-            thread = thread_repo.get_by_id(thread_id)
+            thread = _thread_repo.get_by_id(thread_id)
             if thread is None:
                 continue
-            member = member_repo.get_by_id(thread["member_id"])
+            member = _member_repo.get_by_id(thread["member_id"])
             if member is None or member.owner_user_id != user_id:
                 continue
             group["thread_ids"].append(thread_id)
@@ -114,8 +117,9 @@ def list_user_leases(
             leases.append(lease)
         return leases
     finally:
-        member_repo.close()
-        thread_repo.close()
+        if own_repos:
+            _member_repo.close()
+            _thread_repo.close()
         monitor_repo.close()
 
 

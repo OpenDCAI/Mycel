@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class _ChatEntry:
     chat_id: str
-    entity_id: str
+    user_id: str  # social identity: user_id for humans, member_id for agents
 
 
 class TypingTracker:
@@ -29,14 +29,14 @@ class TypingTracker:
         self._chat_bus = chat_event_bus
         self._active: dict[str, _ChatEntry] = {}
 
-    def start_chat(self, thread_id: str, chat_id: str, entity_id: str) -> None:
+    def start_chat(self, thread_id: str, chat_id: str, user_id: str) -> None:
         """Start typing indicator for a chat-based delivery."""
-        self._active[thread_id] = _ChatEntry(chat_id, entity_id)
+        self._active[thread_id] = _ChatEntry(chat_id, user_id)
         self._chat_bus.publish(
             chat_id,
             {
                 "event": "typing_start",
-                "data": {"entity_id": entity_id},
+                "data": {"user_id": user_id},
             },
         )
 
@@ -48,6 +48,6 @@ class TypingTracker:
             entry.chat_id,
             {
                 "event": "typing_stop",
-                "data": {"entity_id": entry.entity_id},
+                "data": {"user_id": entry.user_id},
             },
         )

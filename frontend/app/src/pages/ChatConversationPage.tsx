@@ -125,7 +125,7 @@ function ChatConversationInner({ chatId }: { chatId: string }) {
           if (prev.some(m => m.id === msg.id)) return prev;
           // Replace optimistic message if sender+content matches
           const optimisticIdx = prev.findIndex(
-            m => m.id.startsWith("optimistic-") && m.sender_entity_id === msg.sender_entity_id && m.content === msg.content,
+            m => m.id.startsWith("optimistic-") && m.sender_id === msg.sender_id && m.content === msg.content,
           );
           if (optimisticIdx >= 0) {
             const next = [...prev];
@@ -148,7 +148,7 @@ function ChatConversationInner({ chatId }: { chatId: string }) {
     es.addEventListener("typing_start", (e) => {
       try {
         const data = JSON.parse(e.data);
-        setTypingEntities(prev => new Set([...prev, data.entity_id]));
+        setTypingEntities(prev => new Set([...prev, data.user_id]));
       } catch (err) { console.warn("[ChatSSE] typing_start parse error:", err); }
     });
 
@@ -157,7 +157,7 @@ function ChatConversationInner({ chatId }: { chatId: string }) {
         const data = JSON.parse(e.data);
         setTypingEntities(prev => {
           const next = new Set(prev);
-          next.delete(data.entity_id);
+          next.delete(data.user_id);
           return next;
         });
       } catch (err) { console.warn("[ChatSSE] typing_stop parse error:", err); }
@@ -187,10 +187,10 @@ function ChatConversationInner({ chatId }: { chatId: string }) {
     const optimisticMsg: ChatMessage = {
       id: `optimistic-${Date.now()}`,
       chat_id: chatId,
-      sender_entity_id: myEntityId,
+      sender_id: myEntityId,
       sender_name: useAuthStore.getState().user?.name || "me",
       content: text,
-      mentioned_entity_ids: [],
+      mentioned_ids: [],
       created_at: Date.now() / 1000,
     };
     setMessages(prev => [...prev, optimisticMsg]);
@@ -201,7 +201,7 @@ function ChatConversationInner({ chatId }: { chatId: string }) {
         method: "POST",
         body: JSON.stringify({
           content: text,
-          sender_entity_id: myEntityId,
+          sender_id: myEntityId,
         }),
       });
       if (!res.ok) {
@@ -309,10 +309,10 @@ function ChatConversationInner({ chatId }: { chatId: string }) {
         ) : (
           <div className="max-w-3xl mx-auto space-y-3.5">
             {messages.map((msg, i) => {
-              const isMine = msg.sender_entity_id === myEntityId;
+              const isMine = msg.sender_id === myEntityId;
               const prev = i > 0 ? messages[i - 1] : null;
               const showTime = shouldShowTime(prev, msg);
-              const entity = entityMap.get(msg.sender_entity_id);
+              const entity = entityMap.get(msg.sender_id);
               const ts = msg.created_at * 1000;
 
               return (

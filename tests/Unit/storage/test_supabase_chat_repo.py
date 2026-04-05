@@ -7,7 +7,7 @@ def test_supabase_chat_message_repo_has_unread_mention_tracks_mentions_after_las
         "chat_entities": [
             {
                 "chat_id": "chat-1",
-                "entity_id": "entity-target",
+                "user_id": "entity-target",
                 "joined_at": 1.0,
                 "last_read_at": 5.0,
             }
@@ -16,7 +16,7 @@ def test_supabase_chat_message_repo_has_unread_mention_tracks_mentions_after_las
             {
                 "id": "msg-old",
                 "chat_id": "chat-1",
-                "sender_entity_id": "entity-other",
+                "sender_id": "entity-other",
                 "content": "old mention",
                 "mentions": '["entity-target"]',
                 "created_at": 4.0,
@@ -24,7 +24,7 @@ def test_supabase_chat_message_repo_has_unread_mention_tracks_mentions_after_las
             {
                 "id": "msg-self",
                 "chat_id": "chat-1",
-                "sender_entity_id": "entity-target",
+                "sender_id": "entity-target",
                 "content": "self mention",
                 "mentions": '["entity-target"]',
                 "created_at": 6.0,
@@ -32,7 +32,7 @@ def test_supabase_chat_message_repo_has_unread_mention_tracks_mentions_after_las
             {
                 "id": "msg-unread",
                 "chat_id": "chat-1",
-                "sender_entity_id": "entity-other",
+                "sender_id": "entity-other",
                 "content": "new mention",
                 "mentions": '["entity-target"]',
                 "created_at": 7.0,
@@ -40,7 +40,7 @@ def test_supabase_chat_message_repo_has_unread_mention_tracks_mentions_after_las
             {
                 "id": "msg-unread-no-mention",
                 "chat_id": "chat-1",
-                "sender_entity_id": "entity-other",
+                "sender_id": "entity-other",
                 "content": "plain unread",
                 "mentions": "[]",
                 "created_at": 8.0,
@@ -57,7 +57,7 @@ def test_supabase_chat_message_repo_has_unread_mention_false_without_matching_un
         "chat_entities": [
             {
                 "chat_id": "chat-1",
-                "entity_id": "entity-target",
+                "user_id": "entity-target",
                 "joined_at": 1.0,
                 "last_read_at": 5.0,
             }
@@ -66,7 +66,7 @@ def test_supabase_chat_message_repo_has_unread_mention_false_without_matching_un
             {
                 "id": "msg-unread",
                 "chat_id": "chat-1",
-                "sender_entity_id": "entity-other",
+                "sender_id": "entity-other",
                 "content": "plain unread",
                 "mentions": "[]",
                 "created_at": 7.0,
@@ -85,7 +85,7 @@ def test_supabase_chat_message_repo_has_unread_mention_false_without_membership_
             {
                 "id": "msg-unread",
                 "chat_id": "chat-1",
-                "sender_entity_id": "entity-other",
+                "sender_id": "entity-other",
                 "content": "new mention",
                 "mentions": '["entity-target"]',
                 "created_at": 7.0,

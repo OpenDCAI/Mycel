@@ -26,6 +26,9 @@ class _MemberRepo:
     def get_by_id(self, member_id: str) -> MemberRow | None:
         return self._members.get(member_id)
 
+    def list_all(self) -> list[MemberRow]:
+        return list(self._members.values())
+
 
 def test_directory_uses_owner_user_id_for_agent_owner_lookup() -> None:
     owner_member = MemberRow(
@@ -46,8 +49,8 @@ def test_directory_uses_owner_user_id_for_agent_owner_lookup() -> None:
 
     service = ChatToolService(
         ToolRegistry(),
-        entity_id="e_owner",
-        owner_entity_id="e_owner",
+        user_id="u_owner",
+        owner_user_id="u_owner",
         entity_repo=_EntityRepo([owner_entity, agent_entity]),
         chat_service=SimpleNamespace(),
         chat_entity_repo=SimpleNamespace(),
@@ -69,9 +72,15 @@ def test_compose_system_prompt_hardens_chat_reply_contract() -> None:
 
     agent = LeonAgent.__new__(LeonAgent)
     agent._chat_repos = {
-        "entity_id": "e_agent",
-        "owner_entity_id": "e_owner",
+        "user_id": "m_agent",
+        "owner_user_id": "u_owner",
         "entity_repo": _EntityRepo([owner_entity, agent_entity]),
+        "member_repo": _MemberRepo(
+            [
+                MemberRow(id="u_owner", name="Owner", type=MemberType.HUMAN, created_at=1.0),
+                MemberRow(id="m_agent", name="Helper Member", type=MemberType.MYCEL_AGENT, owner_user_id="u_owner", created_at=2.0),
+            ]
+        ),
     }
     agent._build_system_prompt = lambda: "BASE"
     agent.config = SimpleNamespace(system_prompt=None)
@@ -88,8 +97,8 @@ def test_chat_read_validate_input_fills_missing_chat_id_from_latest_notification
     registry = ToolRegistry()
     ChatToolService(
         registry,
-        entity_id="e_agent",
-        owner_entity_id="e_owner",
+        user_id="m_agent",
+        owner_user_id="u_owner",
         entity_repo=_EntityRepo([]),
         chat_service=SimpleNamespace(),
         chat_entity_repo=SimpleNamespace(),
@@ -127,8 +136,8 @@ def test_chat_send_validate_input_fills_missing_chat_id_from_latest_notification
     registry = ToolRegistry()
     ChatToolService(
         registry,
-        entity_id="e_agent",
-        owner_entity_id="e_owner",
+        user_id="m_agent",
+        owner_user_id="u_owner",
         entity_repo=_EntityRepo([]),
         chat_service=SimpleNamespace(),
         chat_entity_repo=SimpleNamespace(),
