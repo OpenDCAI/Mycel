@@ -73,7 +73,6 @@ async def resources_refresh():
 @router.get("/sandbox/{lease_id}/browse")
 async def sandbox_browse(lease_id: str, path: str = Query(default="/")):
     from backend.web.services.resource_service import sandbox_browse as _browse
-
     try:
         return await asyncio.to_thread(_browse, lease_id, path)
     except KeyError as e:
@@ -85,7 +84,6 @@ async def sandbox_browse(lease_id: str, path: str = Query(default="/")):
 @router.get("/sandbox/{lease_id}/read")
 async def sandbox_read_file(lease_id: str, path: str = Query(...)):
     from backend.web.services.resource_service import sandbox_read as _read
-
     try:
         return await asyncio.to_thread(_read, lease_id, path)
     except KeyError as e:

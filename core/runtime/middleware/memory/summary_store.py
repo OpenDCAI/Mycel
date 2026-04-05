@@ -22,7 +22,9 @@ from pathlib import Path
 from typing import Any
 
 from storage.contracts import SummaryRepo, SummaryRow
-from storage.providers.sqlite.kernel import SQLiteDBRole, connect_sqlite, resolve_role_db_path
+from storage.providers.sqlite.kernel import SQLiteDBRole, resolve_role_db_path
+from storage.providers.sqlite.kernel import connect_sqlite
+
 from storage.providers.sqlite.summary_repo import SQLiteSummaryRepo
 
 logger = logging.getLogger(__name__)

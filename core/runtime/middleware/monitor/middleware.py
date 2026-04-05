@@ -72,7 +72,9 @@ class MonitorMiddleware(AgentMiddleware):
         overrides = overrides or {}
         lookup_name = overrides.get("based_on") or model_name
         self._token_monitor.cost_calculator = CostCalculator(lookup_name)
-        self._context_monitor.context_limit = overrides.get("context_limit") or get_model_context_limit(lookup_name)
+        self._context_monitor.context_limit = (
+            overrides.get("context_limit") or get_model_context_limit(lookup_name)
+        )
 
     def mark_ready(self) -> None:
         """标记 Agent 就绪（初始化完成后调用）"""

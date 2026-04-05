@@ -1,6 +1,7 @@
 """Tests for TaskBoardMiddleware — agent tools for panel_tasks board."""
 
 import json
+import time
 
 import pytest
 
@@ -10,10 +11,7 @@ from backend.web.services import task_service
 @pytest.fixture(autouse=True)
 def _use_tmp_db(tmp_path, monkeypatch):
     """Redirect task_service to a temporary SQLite database."""
-    from storage.providers.sqlite.panel_task_repo import SQLitePanelTaskRepo
-
-    db_path = tmp_path / "test.db"
-    monkeypatch.setattr(task_service, "make_panel_task_repo", lambda: SQLitePanelTaskRepo(db_path=db_path))
+    monkeypatch.setattr(task_service, "DB_PATH", tmp_path / "test.db")
 
 
 @pytest.fixture()
@@ -196,7 +194,7 @@ class TestListBoardTasks:
         assert result["total"] >= 2
 
     def test_filter_by_status(self, middleware):
-        _t1 = task_service.create_task(title="pending task")
+        t1 = task_service.create_task(title="pending task")
         t2 = task_service.create_task(title="running task")
         task_service.update_task(t2["id"], status="running")
 

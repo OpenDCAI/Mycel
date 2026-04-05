@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useCallback } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
-import { Search, Store, Package, TrendingUp, Clock, Star, RefreshCw, Zap, Users, Trash2 } from "lucide-react";
+import { useState, useEffect, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
+import { Search, Store, Package, TrendingUp, Clock, Star, RefreshCw } from "lucide-react";
 import { useMarketplaceStore } from "@/store/marketplace-store";
 import { useAppStore } from "@/store/app-store";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -9,7 +9,6 @@ import UpdateDialog from "@/components/marketplace/UpdateDialog";
 import type { Member } from "@/store/types";
 
 type Tab = "explore" | "installed";
-type InstalledSubTab = "member" | "skill" | "agent";
 type TypeFilter = "all" | "member" | "agent" | "skill" | "env";
 
 const typeFilters: { id: TypeFilter; label: string }[] = [
@@ -29,13 +28,7 @@ const sortOptions = [
 export default function MarketplacePage() {
   const isMobile = useIsMobile();
   const navigate = useNavigate();
-  const [searchParams, setSearchParams] = useSearchParams();
-
-  const tab = (searchParams.get("tab") as Tab) || "explore";
-  const installedSubTab = (searchParams.get("sub") as InstalledSubTab) || "member";
-
-  const setTab = (t: Tab) => setSearchParams((p) => { p.set("tab", t); p.delete("sub"); return p; }, { replace: true });
-  const setInstalledSubTab = (s: InstalledSubTab) => setSearchParams((p) => { p.set("sub", s); return p; }, { replace: true });
+  const [tab, setTab] = useState<Tab>("explore");
 
   // Explore state
   const items = useMarketplaceStore((s) => s.items);
@@ -48,10 +41,6 @@ export default function MarketplacePage() {
 
   // Installed state
   const memberList = useAppStore((s) => s.memberList);
-  const librarySkills = useAppStore((s) => s.librarySkills);
-  const libraryAgents = useAppStore((s) => s.libraryAgents);
-  const fetchLibrary = useAppStore((s) => s.fetchLibrary);
-  const deleteResource = useAppStore((s) => s.deleteResource);
   const updates = useMarketplaceStore((s) => s.updates);
   const checkUpdates = useMarketplaceStore((s) => s.checkUpdates);
 
@@ -62,7 +51,6 @@ export default function MarketplacePage() {
   // Update dialog
   const [updateDialogOpen, setUpdateDialogOpen] = useState(false);
   const [updateTarget, setUpdateTarget] = useState<{ member: Member; update: any } | null>(null);
-
 
   // Fetch explore items when filters change
   useEffect(() => {
@@ -81,31 +69,12 @@ export default function MarketplacePage() {
     setFilter("type", type === "all" ? null : type);
   };
 
-  // Load library on installed tab open
-  useEffect(() => {
-    if (tab === "installed") {
-      fetchLibrary("skill");
-      fetchLibrary("agent");
-    }
-  }, [tab, fetchLibrary]);
-
   // Installed members with marketplace source info
   const installedMembers = memberList.filter((m) => !m.builtin);
-  const filteredMembers = installedMembers.filter((m) =>
-    !installedSearch || m.name.toLowerCase().includes(installedSearch.toLowerCase())
-  );
-  const filteredSkills = librarySkills.filter((s) =>
-    !installedSearch || s.name.toLowerCase().includes(installedSearch.toLowerCase())
-  );
-  const filteredAgents = libraryAgents.filter((a) =>
-    !installedSearch || a.name.toLowerCase().includes(installedSearch.toLowerCase())
-  );
-
-  const installedSubTabs: { id: InstalledSubTab; label: string; icon: React.ElementType; count: number }[] = [
-    { id: "member", label: "成员", icon: Package, count: installedMembers.length },
-    { id: "skill", label: "Skill", icon: Zap, count: librarySkills.length },
-    { id: "agent", label: "Agent", icon: Users, count: libraryAgents.length },
-  ];
+  const filteredInstalled = installedMembers.filter((m) => {
+    if (installedSearch && !m.name.toLowerCase().includes(installedSearch.toLowerCase())) return false;
+    return true;
+  });
 
   const handleCheckUpdates = useCallback(async () => {
     // source field comes from meta.json; members without it cannot be checked
@@ -317,139 +286,40 @@ export default function MarketplacePage() {
                   />
                 </div>
 
-                {/* Sub-tabs */}
-                <div className="flex gap-1 mb-4">
-                  {installedSubTabs.map((t) => (
-                    <button
-                      key={t.id}
-                      onClick={() => setInstalledSubTab(t.id)}
-                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors duration-fast ${
-                        installedSubTab === t.id
-                          ? "bg-primary/10 text-primary"
-                          : "text-muted-foreground hover:text-foreground hover:bg-muted"
-                      }`}
-                    >
-                      <t.icon className="w-3 h-3" />
-                      {t.label}
-                      {t.count > 0 && (
-                        <span className={`px-1.5 py-0.5 rounded-full text-2xs font-medium ${
-                          installedSubTab === t.id ? "bg-primary/20 text-primary" : "bg-muted text-muted-foreground"
-                        }`}>
-                          {t.count}
-                        </span>
-                      )}
-                    </button>
-                  ))}
+                {/* Grid */}
+                <div className={`grid ${isMobile ? "grid-cols-1" : "grid-cols-2"} gap-3`}>
+                  {filteredInstalled.map((member) => {
+                    const update = updates.find((u) => u.marketplace_item_id === member.id);
+                    return (
+                      <div key={member.id} className="surface-interactive p-4 cursor-pointer group relative" onClick={() => navigate(`/members/${member.id}`)}>
+                        <div className="flex items-start gap-3">
+                          <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+                            <Package className="w-4 h-4 text-primary" />
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <h4 className="text-sm font-medium text-foreground group-hover:text-primary transition-colors duration-fast">{member.name}</h4>
+                            <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{member.description}</p>
+                            <p className="text-2xs text-muted-foreground mt-2 font-mono">v{member.version}</p>
+                          </div>
+                        </div>
+                        {update && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setUpdateTarget({ member, update });
+                              setUpdateDialogOpen(true);
+                            }}
+                            className="absolute top-2 right-2 text-2xs px-2 py-0.5 rounded-full bg-primary/10 text-primary font-medium hover:bg-primary/20 transition-colors duration-fast"
+                          >
+                            更新到 v{update.latest_version}
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
-
-                {/* Member list */}
-                {installedSubTab === "member" && (
-                  <>
-                    <div className={`grid ${isMobile ? "grid-cols-1" : "grid-cols-2"} gap-3`}>
-                      {filteredMembers.map((member) => {
-                        const update = updates.find((u) => u.marketplace_item_id === member.id);
-                        return (
-                          <div key={member.id} className="surface-interactive p-4 cursor-pointer group relative" onClick={() => navigate(`/members/${member.id}`)}>
-                            <div className="flex items-start gap-3">
-                              <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
-                                <Package className="w-4 h-4 text-primary" />
-                              </div>
-                              <div className="min-w-0 flex-1">
-                                <h4 className="text-sm font-medium text-foreground group-hover:text-primary transition-colors duration-fast">{member.name}</h4>
-                                <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{member.description}</p>
-                                <p className="text-2xs text-muted-foreground mt-2 font-mono">v{member.version}</p>
-                              </div>
-                            </div>
-                            {update && (
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setUpdateTarget({ member, update });
-                                  setUpdateDialogOpen(true);
-                                }}
-                                className="absolute top-2 right-2 text-2xs px-2 py-0.5 rounded-full bg-primary/10 text-primary font-medium hover:bg-primary/20 transition-colors duration-fast"
-                              >
-                                更新到 v{update.latest_version}
-                              </button>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                    {filteredMembers.length === 0 && (
-                      <div className="text-center py-12 text-sm text-muted-foreground">暂无已安装的成员</div>
-                    )}
-                  </>
-                )}
-
-                {/* Skill list */}
-                {installedSubTab === "skill" && (
-                  <>
-                    <div className={`grid ${isMobile ? "grid-cols-1" : "grid-cols-2"} gap-3`}>
-                      {filteredSkills.map((skill) => (
-                        <div
-                          key={skill.id}
-                          onClick={() => navigate(`/library/skill/${skill.id}`)}
-                          className="surface-interactive p-4 cursor-pointer group relative"
-                        >
-                          <div className="flex items-start gap-3">
-                            <div className="w-9 h-9 rounded-lg bg-warning/10 flex items-center justify-center shrink-0">
-                              <Zap className="w-4 h-4 text-warning" />
-                            </div>
-                            <div className="min-w-0 flex-1 pr-8">
-                              <h4 className="text-sm font-medium text-foreground group-hover:text-primary transition-colors duration-fast">{skill.name}</h4>
-                              <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{skill.desc || "暂无描述"}</p>
-                            </div>
-                          </div>
-                          <button
-                            onClick={(e) => { e.stopPropagation(); deleteResource("skill", skill.id); }}
-                            className="absolute top-3 right-3 p-1 rounded hover:bg-destructive/10 opacity-0 group-hover:opacity-100 transition-all duration-fast"
-                            title="删除"
-                          >
-                            <Trash2 className="w-3.5 h-3.5 text-muted-foreground hover:text-destructive" />
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                    {filteredSkills.length === 0 && (
-                      <div className="text-center py-12 text-sm text-muted-foreground">暂无已安装的 Skill</div>
-                    )}
-                  </>
-                )}
-
-                {/* Agent list */}
-                {installedSubTab === "agent" && (
-                  <>
-                    <div className={`grid ${isMobile ? "grid-cols-1" : "grid-cols-2"} gap-3`}>
-                      {filteredAgents.map((agent) => (
-                        <div
-                          key={agent.id}
-                          onClick={() => navigate(`/library/agent/${agent.id}`)}
-                          className="surface-interactive p-4 cursor-pointer group relative"
-                        >
-                          <div className="flex items-start gap-3">
-                            <div className="w-9 h-9 rounded-lg bg-info/10 flex items-center justify-center shrink-0">
-                              <Users className="w-4 h-4 text-info" />
-                            </div>
-                            <div className="min-w-0 flex-1 pr-8">
-                              <h4 className="text-sm font-medium text-foreground group-hover:text-primary transition-colors duration-fast">{agent.name}</h4>
-                              <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{agent.desc || "暂无描述"}</p>
-                            </div>
-                          </div>
-                          <button
-                            onClick={(e) => { e.stopPropagation(); deleteResource("agent", agent.id); }}
-                            className="absolute top-3 right-3 p-1 rounded hover:bg-destructive/10 opacity-0 group-hover:opacity-100 transition-all duration-fast"
-                            title="删除"
-                          >
-                            <Trash2 className="w-3.5 h-3.5 text-muted-foreground hover:text-destructive" />
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                    {filteredAgents.length === 0 && (
-                      <div className="text-center py-12 text-sm text-muted-foreground">暂无已安装的 Agent</div>
-                    )}
-                  </>
+                {filteredInstalled.length === 0 && (
+                  <div className="text-center py-12 text-sm text-muted-foreground">暂无已安装的成员</div>
                 )}
               </>
             )}
@@ -467,7 +337,6 @@ export default function MarketplacePage() {
           memberName={updateTarget.member.name}
         />
       )}
-
     </div>
   );
 }

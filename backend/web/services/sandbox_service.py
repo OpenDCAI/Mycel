@@ -8,21 +8,21 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+logger = logging.getLogger(__name__)
+
 from backend.web.core.config import LOCAL_WORKSPACE_ROOT, SANDBOXES_DIR
-from backend.web.core.storage_factory import make_sandbox_monitor_repo
 from backend.web.utils.helpers import is_virtual_thread_id
 from backend.web.utils.serializers import avatar_url
 from sandbox.config import SandboxConfig
+from storage.providers.sqlite.kernel import SQLiteDBRole, resolve_role_db_path
+
+SANDBOX_DB_PATH = resolve_role_db_path(SQLiteDBRole.SANDBOX)
 from sandbox.manager import SandboxManager
 from sandbox.provider import ProviderCapability
 from sandbox.recipes import default_recipe_id, list_builtin_recipes, normalize_recipe_snapshot, provider_type_from_name
-from storage.providers.sqlite.kernel import SQLiteDBRole, resolve_role_db_path
 from storage.providers.sqlite.member_repo import SQLiteMemberRepo
 from storage.providers.sqlite.thread_repo import SQLiteThreadRepo
-
-logger = logging.getLogger(__name__)
-
-SANDBOX_DB_PATH = resolve_role_db_path(SQLiteDBRole.SANDBOX)
+from storage.providers.sqlite.sandbox_monitor_repo import SQLiteSandboxMonitorRepo
 
 _SANDBOX_INVENTORY_LOCK = threading.Lock()
 _SANDBOX_INVENTORY: tuple[dict[str, Any], dict[str, Any]] | None = None
@@ -41,7 +41,6 @@ def _capability_to_dict(capability: ProviderCapability) -> dict[str, Any]:
         "mount": capability.mount.to_dict(),
     }
 
-
 def list_default_recipes() -> list[dict[str, Any]]:
     return list_builtin_recipes(available_sandbox_types())
 
@@ -49,15 +48,12 @@ def list_default_recipes() -> list[dict[str, Any]]:
 def list_user_leases(
     user_id: str,
     *,
-    thread_repo: Any = None,
-    member_repo: Any = None,
     main_db_path: str | Path | None = None,
     sandbox_db_path: str | Path | None = None,
 ) -> list[dict[str, Any]]:
-    monitor_repo = make_sandbox_monitor_repo()
-    _thread_repo = thread_repo or SQLiteThreadRepo(db_path=main_db_path)
-    _member_repo = member_repo or SQLiteMemberRepo(db_path=main_db_path)
-    own_repos = thread_repo is None  # only close if we created them
+    monitor_repo = SQLiteSandboxMonitorRepo(db_path=sandbox_db_path)
+    thread_repo = SQLiteThreadRepo(db_path=main_db_path)
+    member_repo = SQLiteMemberRepo(db_path=main_db_path)
     try:
         rows = monitor_repo.list_leases_with_threads()
         grouped: dict[str, dict[str, Any]] = {}
@@ -82,10 +78,10 @@ def list_user_leases(
             thread_id = str(row.get("thread_id") or "").strip()
             if not thread_id or thread_id in group["thread_ids"]:
                 continue
-            thread = _thread_repo.get_by_id(thread_id)
+            thread = thread_repo.get_by_id(thread_id)
             if thread is None:
                 continue
-            member = _member_repo.get_by_id(thread["member_id"])
+            member = member_repo.get_by_id(thread["member_id"])
             if member is None or member.owner_user_id != user_id:
                 continue
             group["thread_ids"].append(thread_id)
@@ -107,7 +103,6 @@ def list_user_leases(
             provider_type = provider_type_from_name(provider_name)
             if lease["recipe"]:
                 import json
-
                 recipe_snapshot = normalize_recipe_snapshot(provider_type, json.loads(str(lease["recipe"])))
             else:
                 recipe_snapshot = normalize_recipe_snapshot(provider_type)
@@ -117,9 +112,8 @@ def list_user_leases(
             leases.append(lease)
         return leases
     finally:
-        if own_repos:
-            _member_repo.close()
-            _thread_repo.close()
+        member_repo.close()
+        thread_repo.close()
         monitor_repo.close()
 
 
@@ -352,7 +346,6 @@ def mutate_sandbox_session(
             adopt_lease_id = str(lease_id or f"lease-adopt-{uuid.uuid4().hex[:12]}")
             adopt_status = str(session.get("status") or "unknown")
             from sandbox.lease import lease_from_row
-
             adopt_row = manager.lease_store.adopt_instance(
                 lease_id=adopt_lease_id,
                 provider_name=provider_name,

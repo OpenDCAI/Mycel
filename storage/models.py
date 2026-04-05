@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import Enum
 
+
 # ============================================================================
 # Sandbox State Models
 # ============================================================================
@@ -15,16 +16,14 @@ class LeaseObservedState(Enum):
 
     These are the actual states reported by sandbox providers.
     """
-
-    RUNNING = "running"  # Running with bound instance
+    RUNNING = "running"    # Running with bound instance
     DETACHED = "detached"  # Running but detached from terminal
-    PAUSED = "paused"  # Paused
+    PAUSED = "paused"      # Paused
     # None means destroyed
 
 
 class LeaseDesiredState(Enum):
     """Sandbox lease desired state (set by user/system)."""
-
     RUNNING = "running"
     PAUSED = "paused"
     DESTROYED = "destroyed"
@@ -35,14 +34,16 @@ class SessionDisplayStatus(Enum):
 
     These are the status values that frontend expects and displays.
     """
-
-    RUNNING = "running"  # Currently running
-    PAUSED = "paused"  # Paused
-    STOPPED = "stopped"  # Stopped/destroyed
+    RUNNING = "running"      # Currently running
+    PAUSED = "paused"        # Paused
+    STOPPED = "stopped"      # Stopped/destroyed
     DESTROYING = "destroying"  # Being destroyed
 
 
-def map_lease_to_session_status(observed_state: str | None, desired_state: str | None) -> str:
+def map_lease_to_session_status(
+    observed_state: str | None,
+    desired_state: str | None
+) -> str:
     """Map sandbox lease state to frontend display status.
 
     Mapping rules:

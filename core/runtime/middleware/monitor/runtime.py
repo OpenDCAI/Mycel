@@ -6,11 +6,11 @@ import logging
 from collections.abc import Callable
 from typing import Any
 
+logger = logging.getLogger(__name__)
+
 from .context_monitor import ContextMonitor
 from .state_monitor import AgentFlags, AgentState, StateMonitor
 from .token_monitor import TokenMonitor
-
-logger = logging.getLogger(__name__)
 
 
 class AgentRuntime:
@@ -122,7 +122,10 @@ class AgentRuntime:
         """返回精简状态字典，适合轻量观察（不含 streaming 细节）"""
         token = self.token
         ctx = self.context
-        usage_percent = round(ctx.estimated_tokens / ctx.context_limit * 100, 1) if ctx.context_limit > 0 else 0.0
+        usage_percent = (
+            round(ctx.estimated_tokens / ctx.context_limit * 100, 1)
+            if ctx.context_limit > 0 else 0.0
+        )
         return {
             "state": self.state.state.value,
             "tokens": token.total_tokens,
@@ -136,11 +139,11 @@ class AgentRuntime:
         parts = [f"[{self.current_state.value.upper()}]"]
 
         flag_names = [
-            ("is_streaming", "streaming"),
-            ("is_compacting", "compacting"),
-            ("is_waiting", "waiting"),
-            ("is_blocked", "blocked"),
-            ("has_error", "error"),
+            ("isStreaming", "streaming"),
+            ("isCompacting", "compacting"),
+            ("isWaiting", "waiting"),
+            ("isBlocked", "blocked"),
+            ("hasError", "error"),
         ]
         for flag_attr, label in flag_names:
             if getattr(self.flags, flag_attr):

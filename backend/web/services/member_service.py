@@ -23,8 +23,8 @@ import yaml
 
 from backend.web.core.paths import avatars_dir, members_dir
 from backend.web.services.thread_naming import canonical_entity_name
-from backend.web.utils.serializers import avatar_url
 from config.defaults.tool_catalog import TOOLS_BY_NAME, ToolDef
+from backend.web.utils.serializers import avatar_url
 from config.loader import AgentLoader
 
 logger = logging.getLogger(__name__)
@@ -44,7 +44,6 @@ def ensure_members_dir() -> None:
 
 # ── Low-level I/O helpers ──
 
-
 def _read_json(path: Path, default: Any = None) -> Any:
     if not path.exists():
         return default if default is not None else {}
@@ -52,21 +51,14 @@ def _read_json(path: Path, default: Any = None) -> Any:
         return json.loads(path.read_text(encoding="utf-8"))
     except (json.JSONDecodeError, OSError):
         return default if default is not None else {}
-
-
 def _write_json(path: Path, data: Any) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
-def _write_agent_md(
-    path: Path,
-    name: str,
-    description: str = "",
-    model: str | None = None,
-    tools: list[str] | None = None,
-    system_prompt: str = "",
-) -> None:
+def _write_agent_md(path: Path, name: str, description: str = "",
+                    model: str | None = None, tools: list[str] | None = None,
+                    system_prompt: str = "") -> None:
     fm: dict[str, Any] = {"name": name}
     if description:
         fm["description"] = description
@@ -105,7 +97,6 @@ def _parse_agent_md(path: Path) -> dict[str, Any] | None:
 
 
 # ── Migration: config.json → file structure ──
-
 
 def _maybe_migrate_config_json(member_dir: Path) -> None:
     """Migrate legacy config.json to file structure, then delete it."""
@@ -169,7 +160,6 @@ def _maybe_migrate_config_json(member_dir: Path) -> None:
 
 # ── Bundle → frontend dict conversion ──
 
-
 def _member_to_dict(member_dir: Path) -> dict[str, Any] | None:
     """Load member via AgentLoader.load_bundle, convert to frontend format."""
     _maybe_migrate_config_json(member_dir)
@@ -202,7 +192,6 @@ def _member_to_dict(member_dir: Path) -> dict[str, Any] | None:
             desc = rc.desc
             if not desc:
                 from backend.web.services.library_service import get_library_skill_desc
-
                 desc = get_library_skill_desc(skill_name)
             skills_list.append({"name": skill_name, "enabled": rc.enabled, "desc": desc})
 
@@ -223,15 +212,13 @@ def _member_to_dict(member_dir: Path) -> dict[str, Any] | None:
             }
             for t_name, t_info in catalog.items()
         ]
-        sub_agents_list.append(
-            {
-                "name": a.name,
-                "desc": a.description,
-                "tools": agent_tools,
-                "system_prompt": a.system_prompt,
-                "builtin": is_builtin,
-            }
-        )
+        sub_agents_list.append({
+            "name": a.name,
+            "desc": a.description,
+            "tools": agent_tools,
+            "system_prompt": a.system_prompt,
+            "builtin": is_builtin,
+        })
 
     # Convert MCP servers
     mcps_list = [
@@ -269,7 +256,6 @@ def _member_to_dict(member_dir: Path) -> dict[str, Any] | None:
 
 # ── Leon builtin ──
 
-
 def _leon_builtin() -> dict[str, Any]:
     """Build Leon builtin member dict with full tool catalog."""
     catalog = _load_tools_catalog()
@@ -300,17 +286,13 @@ def _load_builtin_agents(catalog: dict[str, ToolDef]) -> list[dict[str, Any]]:
             if ac:
                 is_all = ac.tools == ["*"]
                 agent_tools = [
-                    {"name": k, "enabled": is_all or k in ac.tools, "desc": v.desc, "group": v.group} for k, v in catalog.items()
+                    {"name": k, "enabled": is_all or k in ac.tools, "desc": v.desc, "group": v.group}
+                    for k, v in catalog.items()
                 ]
-                agents.append(
-                    {
-                        "name": ac.name,
-                        "desc": ac.description,
-                        "tools": agent_tools,
-                        "system_prompt": ac.system_prompt,
-                        "builtin": True,
-                    }
-                )
+                agents.append({
+                    "name": ac.name, "desc": ac.description,
+                    "tools": agent_tools, "system_prompt": ac.system_prompt, "builtin": True,
+                })
     return agents
 
 
@@ -319,42 +301,28 @@ def _ensure_leon_dir() -> Path:
     leon_dir = MEMBERS_DIR / "__leon__"
     leon_dir.mkdir(parents=True, exist_ok=True)
     if not (leon_dir / "agent.md").exists():
-        _write_agent_md(leon_dir / "agent.md", name="Leon", description="通用数字成员，随时准备为你工作")
+        _write_agent_md(leon_dir / "agent.md", name="Leon",
+                        description="通用数字成员，随时准备为你工作")
     if not (leon_dir / "meta.json").exists():
-        _write_json(
-            leon_dir / "meta.json",
-            {
-                "status": "active",
-                "version": "1.0.0",
-                "created_at": 0,
-                "updated_at": 0,
-            },
-        )
+        _write_json(leon_dir / "meta.json", {
+            "status": "active", "version": "1.0.0",
+            "created_at": 0, "updated_at": 0,
+        })
     return leon_dir
 
 
 # ── CRUD operations ──
 
-
-def list_members(owner_user_id: str | None = None, member_repo: Any = None) -> list[dict[str, Any]]:
-    """List agent members. If owner_user_id given, only that user's agents (no builtin Leon).
-
-    Args:
-        owner_user_id: Filter to agents owned by this user.
-        member_repo: Injected MemberRepo (respects LEON_STORAGE_STRATEGY). Falls back to SQLite.
-    """
+def list_members(owner_user_id: str | None = None) -> list[dict[str, Any]]:
+    """List agent members. If owner_user_id given, only that user's agents (no builtin Leon)."""
     # @@@auth-scope — scoped by owner from DB, config from filesystem
     if owner_user_id:
-        if member_repo is None:
-            from storage.providers.sqlite.member_repo import SQLiteMemberRepo
-
-            repo = SQLiteMemberRepo()
-            try:
-                agents = repo.list_by_owner_user_id(owner_user_id)
-            finally:
-                repo.close()
-        else:
-            agents = member_repo.list_by_owner_user_id(owner_user_id)
+        from storage.providers.sqlite.member_repo import SQLiteMemberRepo
+        repo = SQLiteMemberRepo()
+        try:
+            agents = repo.list_by_owner_user_id(owner_user_id)
+        finally:
+            repo.close()
         results = []
         for agent in agents:
             agent_dir = MEMBERS_DIR / agent.id
@@ -391,9 +359,9 @@ def get_member(member_id: str) -> dict[str, Any] | None:
     return _member_to_dict(member_dir)
 
 
-def create_member(name: str, description: str = "", owner_user_id: str | None = None, member_repo: Any = None) -> dict[str, Any]:
+def create_member(name: str, description: str = "", owner_user_id: str | None = None) -> dict[str, Any]:
+    from storage.providers.sqlite.member_repo import SQLiteMemberRepo, generate_member_id
     from storage.contracts import MemberRow, MemberType
-    from storage.providers.sqlite.member_repo import generate_member_id
 
     now = time.time()
     now_ms = int(now * 1000)
@@ -401,48 +369,27 @@ def create_member(name: str, description: str = "", owner_user_id: str | None = 
     member_dir = MEMBERS_DIR / member_id
     member_dir.mkdir(parents=True, exist_ok=True)
     _write_agent_md(member_dir / "agent.md", name=name, description=description)
-    _write_json(
-        member_dir / "meta.json",
-        {
-            "status": "draft",
-            "version": "0.1.0",
-            "created_at": now_ms,
-            "updated_at": now_ms,
-        },
-    )
+    _write_json(member_dir / "meta.json", {
+        "status": "draft", "version": "0.1.0",
+        "created_at": now_ms, "updated_at": now_ms,
+    })
 
-    # Persist to members table so list_members finds it
+    # Persist to SQLite members table so list_members finds it
     if owner_user_id:
-        row = MemberRow(
-            id=member_id,
-            name=name,
-            type=MemberType.MYCEL_AGENT,
-            description=description,
-            config_dir=str(member_dir),
-            owner_user_id=owner_user_id,
-            created_at=now,
-        )
-        if member_repo is not None:
-            member_repo.create(row)
-        else:
-            from storage.providers.sqlite.member_repo import SQLiteMemberRepo
-
-            repo = SQLiteMemberRepo()
-            try:
-                repo.create(row)
-            finally:
-                repo.close()
+        repo = SQLiteMemberRepo()
+        try:
+            repo.create(MemberRow(
+                id=member_id, name=name, type=MemberType.MYCEL_AGENT,
+                description=description, config_dir=str(member_dir),
+                owner_user_id=owner_user_id, created_at=now,
+            ))
+        finally:
+            repo.close()
 
     return get_member(member_id)  # type: ignore
 
 
-def update_member(
-    member_id: str,
-    member_repo: Any = None,
-    entity_repo: Any = None,
-    thread_repo: Any = None,
-    **fields: Any,
-) -> dict[str, Any] | None:
+def update_member(member_id: str, **fields: Any) -> dict[str, Any] | None:
     if member_id == "__leon__":
         member_dir = _ensure_leon_dir()
     else:
@@ -472,40 +419,39 @@ def update_member(
         meta["updated_at"] = int(time.time() * 1000)
         _write_json(member_dir / "meta.json", meta)
 
-        # Sync name to DB
+        # Sync name to SQLite
         if "name" in updates:
-            if member_repo is None:
-                from storage.providers.sqlite.member_repo import SQLiteMemberRepo
+            from storage.providers.sqlite.member_repo import SQLiteMemberRepo
+            from storage.providers.sqlite.entity_repo import SQLiteEntityRepo
+            from storage.providers.sqlite.thread_repo import SQLiteThreadRepo
 
-                member_repo = SQLiteMemberRepo()
-            if entity_repo is None:
-                from storage.providers.sqlite.entity_repo import SQLiteEntityRepo
-
-                entity_repo = SQLiteEntityRepo()
-            if thread_repo is None:
-                from storage.providers.sqlite.thread_repo import SQLiteThreadRepo
-
-                thread_repo = SQLiteThreadRepo()
-
-            member_repo.update(member_id, name=updates["name"])
-            member = member_repo.get_by_id(member_id)
-            if member is None:
-                raise ValueError(f"Member {member_id} not found after update")
-            for entity in entity_repo.get_by_member_id(member_id):
-                if entity.thread_id is None:
-                    entity_repo.update(entity.id, name=member.name)
-                    continue
-                thread = thread_repo.get_by_id(entity.thread_id)
-                if thread is None:
-                    raise ValueError(f"Entity {entity.id} references missing thread {entity.thread_id}")
-                entity_repo.update(
-                    entity.id,
-                    name=canonical_entity_name(
-                        member.name,
-                        is_main=bool(thread["is_main"]),
-                        branch_index=int(thread["branch_index"]),
-                    ),
-                )
+            repo = SQLiteMemberRepo()
+            entity_repo = SQLiteEntityRepo()
+            thread_repo = SQLiteThreadRepo()
+            try:
+                repo.update(member_id, name=updates["name"])
+                member = repo.get_by_id(member_id)
+                if member is None:
+                    raise ValueError(f"Member {member_id} not found after update")
+                for entity in entity_repo.get_by_member_id(member_id):
+                    if entity.thread_id is None:
+                        entity_repo.update(entity.id, name=member.name)
+                        continue
+                    thread = thread_repo.get_by_id(entity.thread_id)
+                    if thread is None:
+                        raise ValueError(f"Entity {entity.id} references missing thread {entity.thread_id}")
+                    entity_repo.update(
+                        entity.id,
+                        name=canonical_entity_name(
+                            member.name,
+                            is_main=bool(thread["is_main"]),
+                            branch_index=int(thread["branch_index"]),
+                        ),
+                    )
+            finally:
+                thread_repo.close()
+                entity_repo.close()
+                repo.close()
 
     return get_member(member_id)
 
@@ -554,7 +500,6 @@ def update_member_config(member_id: str, config_patch: dict[str, Any]) -> dict[s
 
 # ── Write helpers for config fields → file structure ──
 
-
 def _write_rules(member_dir: Path, rules: list[dict[str, str]]) -> None:
     """Write rules list to rules/ directory. Replaces all existing rules."""
     rules_dir = member_dir / "rules"
@@ -566,7 +511,9 @@ def _write_rules(member_dir: Path, rules: list[dict[str, str]]) -> None:
     for rule in rules:
         if isinstance(rule, dict) and rule.get("name"):
             name = rule["name"].replace("/", "_").replace("\\", "_")
-            (rules_dir / f"{name}.md").write_text(rule.get("content", ""), encoding="utf-8")
+            (rules_dir / f"{name}.md").write_text(
+                rule.get("content", ""), encoding="utf-8"
+            )
 
 
 def _write_sub_agents(member_dir: Path, agents: list[dict[str, Any]]) -> None:
@@ -662,9 +609,7 @@ def _write_mcps(member_dir: Path, mcps: list[dict[str, Any]]) -> None:
                     }
                 else:
                     servers[item["name"]] = {
-                        "command": "",
-                        "args": [],
-                        "env": {},
+                        "command": "", "args": [], "env": {},
                         "disabled": item.get("disabled", False),
                     }
     if servers:
@@ -676,7 +621,6 @@ def _write_mcps(member_dir: Path, mcps: list[dict[str, Any]]) -> None:
 
 
 # ── Publish / Delete ──
-
 
 def publish_member(member_id: str, bump_type: str = "patch") -> dict[str, Any] | None:
     member_dir = MEMBERS_DIR / member_id
@@ -698,7 +642,7 @@ def publish_member(member_id: str, bump_type: str = "patch") -> dict[str, Any] |
     return get_member(member_id)
 
 
-def delete_member(member_id: str, member_repo: Any = None) -> bool:
+def delete_member(member_id: str) -> bool:
     if member_id == "__leon__":
         return False
     member_dir = MEMBERS_DIR / member_id
@@ -707,27 +651,23 @@ def delete_member(member_id: str, member_repo: Any = None) -> bool:
 
     shutil.rmtree(member_dir)
 
-    # Also remove from DB
-    if member_repo is not None:
-        member_repo.delete(member_id)
-    else:
-        from storage.providers.sqlite.member_repo import SQLiteMemberRepo
-
-        repo = SQLiteMemberRepo()
-        try:
-            repo.delete(member_id)
-        finally:
-            repo.close()
+    # Also remove from SQLite
+    from storage.providers.sqlite.member_repo import SQLiteMemberRepo
+    repo = SQLiteMemberRepo()
+    try:
+        repo.delete(member_id)
+    finally:
+        repo.close()
 
     return True
 
 
 def _sanitize_name(name: str) -> str:
     """Strip path-unsafe characters from snapshot-derived names."""
-    sanitized = re.sub(r'[/\\<>:"|?*\x00-\x1f]', "_", name)
-    sanitized = sanitized.strip(". ")
+    sanitized = re.sub(r'[/\\<>:"|?*\x00-\x1f]', '_', name)
+    sanitized = sanitized.strip('. ')
     if not sanitized:
-        sanitized = "unnamed"
+        sanitized = 'unnamed'
     return sanitized
 
 
@@ -739,11 +679,10 @@ def install_from_snapshot(
     installed_version: str,
     owner_user_id: str,
     existing_member_id: str | None = None,
-    member_repo: Any = None,
 ) -> str:
     """Create or update a local member from a marketplace snapshot."""
+    from storage.providers.sqlite.member_repo import SQLiteMemberRepo, generate_member_id
     from storage.contracts import MemberRow, MemberType
-    from storage.providers.sqlite.member_repo import generate_member_id
 
     now = time.time()
     now_ms = int(now * 1000)
@@ -832,26 +771,18 @@ def install_from_snapshot(
     }
     _write_json(member_dir / "meta.json", meta)
 
-    # Register in DB (new installs only)
+    # Register in SQLite (new installs only)
     if not existing_member_id and owner_user_id:
-        row = MemberRow(
-            id=member_id,
-            name=name,
-            type=MemberType.MYCEL_AGENT,
-            description=description,
-            config_dir=str(member_dir),
-            owner_user_id=owner_user_id,
-            created_at=now,
-        )
-        if member_repo is not None:
-            member_repo.create(row)
-        else:
-            from storage.providers.sqlite.member_repo import SQLiteMemberRepo
-
-            repo = SQLiteMemberRepo()
-            try:
-                repo.create(row)
-            finally:
-                repo.close()
+        repo = SQLiteMemberRepo()
+        try:
+            repo.create(MemberRow(
+                id=member_id, name=name, type=MemberType.MYCEL_AGENT,
+                description=description, config_dir=str(member_dir),
+                owner_user_id=owner_user_id, created_at=now,
+            ))
+        finally:
+            repo.close()
 
     return member_id
+
+

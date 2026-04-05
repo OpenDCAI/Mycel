@@ -22,6 +22,8 @@ export default function MarketplaceDetailPage() {
   const fetchVersionSnapshot = useMarketplaceStore((s) => s.fetchVersionSnapshot);
   const clearSnapshot = useMarketplaceStore((s) => s.clearSnapshot);
   const [installOpen, setInstallOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState<"overview" | "versions" | "files">("overview");
+  const tabLabels: Record<string, string> = { overview: "概览", versions: "版本", files: "文件" };
 
   useEffect(() => {
     if (id) {
@@ -32,11 +34,11 @@ export default function MarketplaceDetailPage() {
   }, [id, fetchDetail, fetchLineage, clearDetail]);
 
   useEffect(() => {
-    if (detail && detail.versions.length > 0 && (detail.type === "skill" || detail.type === "agent")) {
+    if (activeTab === "files" && detail && detail.versions.length > 0) {
       fetchVersionSnapshot(detail.id, detail.versions[0].version);
     }
     return () => clearSnapshot();
-  }, [detail?.id, detail?.type, fetchVersionSnapshot, clearSnapshot]);
+  }, [activeTab, detail?.id, fetchVersionSnapshot, clearSnapshot]);
 
   if (detailLoading) {
     return (
@@ -66,11 +68,11 @@ export default function MarketplaceDetailPage() {
       <div className="max-w-3xl mx-auto py-6 px-4 md:px-6">
         {/* Back button */}
         <button
-          onClick={() => navigate(-1)}
+          onClick={() => navigate("/marketplace")}
           className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors duration-fast mb-6"
         >
           <ArrowLeft className="w-3.5 h-3.5" />
-          返回
+          返回 Marketplace
         </button>
 
         {/* Header */}
@@ -106,40 +108,89 @@ export default function MarketplaceDetailPage() {
           </div>
         )}
 
-        <div className="space-y-6">
-          {/* Lineage */}
-          <LineageTree
-            ancestors={lineage.ancestors}
-            children={lineage.children}
-            currentName={detail.name}
-            onNodeClick={(nodeId) => navigate(`/marketplace/${nodeId}`)}
-          />
+        {/* Tabs */}
+        <div className="flex gap-4 border-b border-border mb-6">
+          {(["overview", "versions", ...(detail.type === "skill" || detail.type === "agent" ? ["files" as const] : [])] as const).map((tab) => (
+            <button
+              key={tab}
+              onClick={() => setActiveTab(tab)}
+              className={`pb-2 text-sm font-medium transition-colors duration-fast border-b-2 ${
+                activeTab === tab ? "border-primary text-foreground" : "border-transparent text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              {tabLabels[tab] ?? tab}
+            </button>
+          ))}
+        </div>
 
-          {/* Version history */}
-          {detail.versions.length > 0 && (
-            <div className="space-y-2">
-              <h3 className="text-sm font-medium text-foreground">版本历史</h3>
-              {detail.versions.map((v) => (
-                <div key={v.id} className="surface-card p-4">
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-sm font-mono font-medium text-primary">v{v.version}</span>
-                    <span className="text-2xs text-muted-foreground">{new Date(v.created_at).toLocaleDateString()}</span>
-                  </div>
-                  {v.release_notes && (
-                    <p className="text-xs text-muted-foreground whitespace-pre-wrap">{v.release_notes}</p>
-                  )}
+        {/* Tab content */}
+        {activeTab === "overview" && (
+          <div className="space-y-6">
+            {/* Lineage */}
+            <LineageTree
+              ancestors={lineage.ancestors}
+              children={lineage.children}
+              currentName={detail.name}
+              onNodeClick={(nodeId) => navigate(`/marketplace/${nodeId}`)}
+            />
+
+            {/* Latest version info */}
+            {detail.versions.length > 0 && (
+              <div className="surface-card p-4 space-y-2">
+                <h3 className="text-sm font-medium text-foreground">最新版本</h3>
+                <p className="text-xs font-mono text-primary">v{detail.versions[0].version}</p>
+                {detail.versions[0].release_notes && (
+                  <p className="text-sm text-muted-foreground whitespace-pre-wrap">{detail.versions[0].release_notes}</p>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {activeTab === "versions" && (
+          <div className="space-y-3">
+            {detail.versions.map((v) => (
+              <div key={v.id} className="surface-card p-4">
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-sm font-mono font-medium text-foreground">v{v.version}</span>
+                  <span className="text-2xs text-muted-foreground">{new Date(v.created_at).toLocaleDateString()}</span>
                 </div>
-              ))}
-            </div>
-          )}
+                {v.release_notes && (
+                  <p className="text-xs text-muted-foreground whitespace-pre-wrap">{v.release_notes}</p>
+                )}
+              </div>
+            ))}
+            {detail.versions.length === 0 && (
+              <p className="text-sm text-muted-foreground text-center py-8">暂无已发布的版本</p>
+            )}
+          </div>
+        )}
 
-          {/* File content for skill / agent */}
-          {(detail.type === "skill" || detail.type === "agent") && (
+        {activeTab === "files" && (
+          <div className="space-y-4">
+            {/* File tree */}
+            <div className="surface-card p-4">
+              <h3 className="text-sm font-medium text-foreground mb-3">文件结构</h3>
+              <div className="font-mono text-xs text-muted-foreground space-y-1">
+                <div className="flex items-center gap-2 text-foreground font-medium">
+                  <span>📁</span>
+                  <span>{detail.slug}/</span>
+                </div>
+                <div className="flex items-center gap-2 ml-5">
+                  <span>📄</span>
+                  <span className="text-primary">SKILL.md</span>
+                </div>
+                <div className="flex items-center gap-2 ml-5">
+                  <span>📄</span>
+                  <span>meta.json</span>
+                </div>
+              </div>
+            </div>
+
+            {/* SKILL.md preview */}
             <div className="surface-card p-4">
               <div className="flex items-center gap-2 mb-3">
-                <span className="text-xs font-mono text-muted-foreground px-2 py-0.5 rounded bg-muted">
-                  {detail.type === "skill" ? "SKILL.md" : "agent.md"}
-                </span>
+                <span className="text-xs font-mono text-muted-foreground px-2 py-0.5 rounded bg-muted">SKILL.md</span>
               </div>
               {snapshotLoading ? (
                 <div className="flex items-center justify-center py-8">
@@ -153,8 +204,8 @@ export default function MarketplaceDetailPage() {
                 <p className="text-sm text-muted-foreground text-center py-6">暂无内容</p>
               )}
             </div>
-          )}
-        </div>
+          </div>
+        )}
       </div>
 
       {/* Install dialog */}

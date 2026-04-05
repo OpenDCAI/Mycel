@@ -1,8 +1,10 @@
 """Unit tests for ChatSession and ChatSessionManager."""
 
 import asyncio
+import tempfile
 import time
 from datetime import datetime, timedelta
+from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
@@ -13,33 +15,36 @@ from sandbox.chat_session import (
     ChatSessionPolicy,
 )
 from sandbox.lease import lease_from_row
-from sandbox.terminal import terminal_from_row
 from storage.providers.sqlite.lease_repo import SQLiteLeaseRepo
+from sandbox.terminal import terminal_from_row
 from storage.providers.sqlite.terminal_repo import SQLiteTerminalRepo
+
+
+@pytest.fixture
+def temp_db():
+    """Create temporary database for testing."""
+    with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:
+        db_path = Path(f.name)
+    yield db_path
+    db_path.unlink(missing_ok=True)
 
 
 @pytest.fixture
 def terminal_store(temp_db):
     """Create SQLiteTerminalRepo with temp database."""
-    store = SQLiteTerminalRepo(db_path=temp_db)
-    yield store
-    store.close()
+    return SQLiteTerminalRepo(db_path=temp_db)
 
 
 class _LeaseStoreCompat:
     """Thin wrapper: repo returns dicts, tests expect domain objects from create/get."""
-
     def __init__(self, repo: SQLiteLeaseRepo):
         self._repo = repo
-
     def create(self, lease_id, provider_name, **kw):
         row = self._repo.create(lease_id, provider_name, **kw)
         return lease_from_row(row, self._repo.db_path)
-
     def get(self, lease_id):
         row = self._repo.get(lease_id)
         return lease_from_row(row, self._repo.db_path) if row else None
-
     def __getattr__(self, name):
         return getattr(self._repo, name)
 
@@ -47,17 +52,13 @@ class _LeaseStoreCompat:
 @pytest.fixture
 def lease_store(temp_db):
     """Create SQLiteLeaseRepo with compat wrapper for tests."""
-    repo = SQLiteLeaseRepo(db_path=temp_db)
-    compat = _LeaseStoreCompat(repo)
-    yield compat
-    repo.close()
+    return _LeaseStoreCompat(SQLiteLeaseRepo(db_path=temp_db))
 
 
 @pytest.fixture
 def mock_provider():
     """Create mock SandboxProvider."""
     from sandbox.providers.local import LocalPersistentShellRuntime
-
     provider = MagicMock()
     provider.name = "local"
     provider.create_runtime.side_effect = lambda terminal, lease: LocalPersistentShellRuntime(terminal, lease)
@@ -67,9 +68,7 @@ def mock_provider():
 @pytest.fixture
 def session_manager(temp_db, mock_provider):
     """Create ChatSessionManager with temp database."""
-    manager = ChatSessionManager(provider=mock_provider, db_path=temp_db)
-    yield manager
-    manager._repo.close()
+    return ChatSessionManager(provider=mock_provider, db_path=temp_db)
 
 
 class TestChatSessionPolicy:
@@ -160,8 +159,9 @@ class TestChatSession:
 
         assert not session.is_expired()
 
-    def test_touch_updates_activity(self, terminal_store, lease_store, session_manager, temp_db):
+    def test_touch_updates_activity(self, terminal_store, lease_store, temp_db, mock_provider):
         """Test touch updates last_active_at."""
+        ChatSessionManager(provider=mock_provider, db_path=temp_db)
         terminal = terminal_from_row(terminal_store.create("term-1", "thread-1", "lease-1"), terminal_store.db_path)
         lease = lease_store.create("lease-1", "local")
         runtime = MagicMock()
@@ -188,8 +188,9 @@ class TestChatSession:
         assert session.last_active_at > old_time
 
     @pytest.mark.asyncio
-    async def test_close_calls_runtime_close(self, terminal_store, lease_store, session_manager, temp_db):
+    async def test_close_calls_runtime_close(self, terminal_store, lease_store, temp_db, mock_provider):
         """Test close calls runtime.close()."""
+        ChatSessionManager(provider=mock_provider, db_path=temp_db)
         terminal = terminal_from_row(terminal_store.create("term-1", "thread-1", "lease-1"), terminal_store.db_path)
         lease = lease_store.create("lease-1", "local")
         runtime = MagicMock()
@@ -219,18 +220,16 @@ class TestChatSession:
 class TestChatSessionManager:
     """Test ChatSessionManager CRUD operations."""
 
-    def test_ensure_tables(self, session_manager, temp_db):
+    def test_ensure_tables(self, temp_db, mock_provider):
         """Test table creation."""
+        manager = ChatSessionManager(provider=mock_provider, db_path=temp_db)
 
         # Verify table exists
         import sqlite3
 
-        conn = sqlite3.connect(str(temp_db))
-        try:
+        with sqlite3.connect(str(temp_db)) as conn:
             cursor = conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='chat_sessions'")
             assert cursor.fetchone() is not None
-        finally:
-            conn.close()
 
     def test_create_session(self, session_manager, terminal_store, lease_store):
         """Test creating a new session."""

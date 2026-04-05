@@ -176,7 +176,9 @@ class TestBackendAPIE2E:
             thread_id = response.json()["thread_id"]
 
             # Frontend: POST /api/threads/{id}/steer
-            response = await client.post(f"{api_base_url}/api/threads/{thread_id}/steer", json={"message": "Test steering message"})
+            response = await client.post(
+                f"{api_base_url}/api/threads/{thread_id}/steer", json={"message": "Test steering message"}
+            )
             assert response.status_code == 200
             data = response.json()
             assert "ok" in data or "status" in data

@@ -3,7 +3,7 @@
 import pytest
 from pydantic import ValidationError
 
-from config.models_schema import ActiveModel, CustomModelConfig, ModelsConfig, ModelSpec, PoolConfig
+from config.models_schema import ActiveModel, CustomModelConfig, ModelSpec, ModelsConfig, PoolConfig
 from core.runtime.middleware.monitor.cost import fetch_openrouter_pricing, get_model_context_limit
 from core.runtime.middleware.monitor.middleware import MonitorMiddleware
 
@@ -42,18 +42,24 @@ class TestResolveModelOverrides:
     """resolve_model 把 based_on/context_limit 放入 overrides"""
 
     def test_virtual_model_passes_based_on(self):
-        config = ModelsConfig(mapping={"leon:custom": ModelSpec(model="Alice", based_on="claude-sonnet-4.5")})
+        config = ModelsConfig(mapping={
+            "leon:custom": ModelSpec(model="Alice", based_on="claude-sonnet-4.5")
+        })
         name, overrides = config.resolve_model("leon:custom")
         assert name == "Alice"
         assert overrides["based_on"] == "claude-sonnet-4.5"
 
     def test_virtual_model_passes_context_limit(self):
-        config = ModelsConfig(mapping={"leon:custom": ModelSpec(model="Alice", context_limit=32768)})
+        config = ModelsConfig(mapping={
+            "leon:custom": ModelSpec(model="Alice", context_limit=32768)
+        })
         name, overrides = config.resolve_model("leon:custom")
         assert overrides["context_limit"] == 32768
 
     def test_non_virtual_model_passes_active_overrides(self):
-        config = ModelsConfig(active=ActiveModel(model="Alice", based_on="claude-sonnet-4.5", context_limit=32768))
+        config = ModelsConfig(active=ActiveModel(
+            model="Alice", based_on="claude-sonnet-4.5", context_limit=32768
+        ))
         name, overrides = config.resolve_model("Alice")
         assert name == "Alice"
         assert overrides["based_on"] == "claude-sonnet-4.5"
@@ -107,13 +113,10 @@ class TestMonitorUpdateModel:
 
     def test_update_model_with_explicit_context_limit(self):
         mw = MonitorMiddleware(model_name="claude-sonnet-4.5")
-        mw.update_model(
-            "Alice",
-            overrides={
-                "based_on": "claude-sonnet-4.5",
-                "context_limit": 32768,
-            },
-        )
+        mw.update_model("Alice", overrides={
+            "based_on": "claude-sonnet-4.5",
+            "context_limit": 32768,
+        })
         assert mw._context_monitor.context_limit == 32768
 
     def test_update_model_no_overrides_uses_model_name(self):
@@ -137,13 +140,10 @@ class TestThreeLevelPriority:
 
     def test_user_context_limit_overrides_lookup(self):
         mw = MonitorMiddleware(model_name="claude-sonnet-4.5")
-        mw.update_model(
-            "Alice",
-            overrides={
-                "based_on": "claude-sonnet-4.5",
-                "context_limit": 32768,
-            },
-        )
+        mw.update_model("Alice", overrides={
+            "based_on": "claude-sonnet-4.5",
+            "context_limit": 32768,
+        })
         assert mw._context_monitor.context_limit == 32768
 
     def test_based_on_lookup_overrides_default(self):

@@ -23,7 +23,11 @@ def normalize_pty_result(output: str, command: str | None = None) -> str:
             compact_line = re.sub(r"\s+", " ", stripped)
             if compact_command in compact_line and compact_line.endswith(">"):
                 prefix = compact_line.split(compact_command, 1)[0]
-                if not prefix or re.search(r"[^A-Za-z0-9_./~:-]", prefix) or (len(prefix) <= 2 and compact_command.startswith(prefix)):
+                if (
+                    not prefix
+                    or re.search(r"[^A-Za-z0-9_./~:-]", prefix)
+                    or (len(prefix) <= 2 and compact_command.startswith(prefix))
+                ):
                     dropped_echo = True
                     continue
         filtered.append(line)

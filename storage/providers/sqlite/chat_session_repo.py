@@ -8,9 +8,10 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from sandbox.chat_session import REQUIRED_CHAT_SESSION_COLUMNS
 from storage.providers.sqlite.connection import create_connection
 from storage.providers.sqlite.kernel import SQLiteDBRole, resolve_role_db_path
+
+from sandbox.chat_session import REQUIRED_CHAT_SESSION_COLUMNS
 
 
 class SQLiteChatSessionRepo:
@@ -137,10 +138,14 @@ class SQLiteChatSessionRepo:
 
         missing = REQUIRED_CHAT_SESSION_COLUMNS - cols
         if missing:
-            raise RuntimeError(f"chat_sessions schema mismatch: missing {sorted(missing)}. Purge ~/.leon/sandbox.db and retry.")
+            raise RuntimeError(
+                f"chat_sessions schema mismatch: missing {sorted(missing)}. Purge ~/.leon/sandbox.db and retry."
+            )
         # @@@single-active-per-terminal - multi-terminal model allows many active sessions per thread, one per terminal.
         if any(cols == {"thread_id"} for cols in unique_index_columns.values()):
-            raise RuntimeError("chat_sessions still has UNIQUE index on thread_id from old schema. Purge ~/.leon/sandbox.db and retry.")
+            raise RuntimeError(
+                "chat_sessions still has UNIQUE index on thread_id from old schema. Purge ~/.leon/sandbox.db and retry."
+            )
 
     # Alias for protocol compliance
     ensure_tables = _ensure_tables
@@ -405,7 +410,7 @@ class SQLiteChatSessionRepo:
     def delete_by_thread(self, thread_id: str) -> None:
         with self._lock:
             rows = self._conn.execute(
-                "SELECT command_id FROM terminal_commands WHERE terminal_id IN (SELECT terminal_id FROM abstract_terminals WHERE thread_id = ?)",  # noqa: E501
+                "SELECT command_id FROM terminal_commands WHERE terminal_id IN (SELECT terminal_id FROM abstract_terminals WHERE thread_id = ?)",
                 (thread_id,),
             ).fetchall()
             if rows:

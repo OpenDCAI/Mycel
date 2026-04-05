@@ -11,16 +11,12 @@ from backend.web.services import task_service
 @pytest.fixture(autouse=True)
 def _use_tmp_db(tmp_path, monkeypatch):
     """Redirect task_service to a temporary SQLite database."""
-    from storage.providers.sqlite.panel_task_repo import SQLitePanelTaskRepo
-
-    db_path = tmp_path / "test.db"
-    monkeypatch.setattr(task_service, "make_panel_task_repo", lambda: SQLitePanelTaskRepo(db_path=db_path))
+    monkeypatch.setattr(task_service, "DB_PATH", tmp_path / "test.db")
 
 
 # ---------------------------------------------------------------------------
 # Table schema
 # ---------------------------------------------------------------------------
-
 
 class TestSchema:
     def test_new_columns_present_on_created_task(self):
@@ -41,7 +37,6 @@ class TestSchema:
 # ---------------------------------------------------------------------------
 # create_task
 # ---------------------------------------------------------------------------
-
 
 class TestCreateTask:
     def test_basic_fields(self):
@@ -67,7 +62,6 @@ class TestCreateTask:
 # ---------------------------------------------------------------------------
 # update_task
 # ---------------------------------------------------------------------------
-
 
 class TestUpdateTask:
     def test_update_title_and_status(self):
@@ -112,7 +106,6 @@ class TestUpdateTask:
 # list / delete / bulk_update
 # ---------------------------------------------------------------------------
 
-
 class TestListDeleteBulk:
     def test_list_returns_all(self):
         task_service.create_task(title="a")
@@ -143,14 +136,11 @@ class TestListDeleteBulk:
 # Migration — existing DB without new columns
 # ---------------------------------------------------------------------------
 
-
 class TestMigration:
     def test_old_table_gets_new_columns(self, tmp_path, monkeypatch):
         """Simulate an old DB that lacks the new columns."""
-        from storage.providers.sqlite.panel_task_repo import SQLitePanelTaskRepo
-
         db_path = tmp_path / "legacy.db"
-        monkeypatch.setattr(task_service, "make_panel_task_repo", lambda: SQLitePanelTaskRepo(db_path=db_path))
+        monkeypatch.setattr(task_service, "DB_PATH", db_path)
 
         # Create the old schema directly
         conn = sqlite3.connect(str(db_path))

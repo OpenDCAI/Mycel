@@ -23,7 +23,6 @@ async def test_get_or_create_agent_creates_once_per_thread(monkeypatch: pytest.M
         agent: str | None = None,
         queue_manager=None,
         chat_repos=None,
-        extra_allowed_paths=None,
     ) -> object:
         time.sleep(0.05)
         obj = SimpleNamespace()
@@ -33,14 +32,12 @@ async def test_get_or_create_agent_creates_once_per_thread(monkeypatch: pytest.M
     monkeypatch.setattr(agent_pool, "create_agent_sync", _fake_create_agent_sync)
     monkeypatch.setattr(agent_pool, "get_or_create_agent_id", lambda **_: "agent-1")
 
-    app = SimpleNamespace(
-        state=SimpleNamespace(
-            agent_pool={},
-            thread_repo=_FakeThreadRepo(),
-            thread_cwd={},
-            thread_sandbox={},
-        )
-    )
+    app = SimpleNamespace(state=SimpleNamespace(
+        agent_pool={},
+        thread_repo=_FakeThreadRepo(),
+        thread_cwd={},
+        thread_sandbox={},
+    ))
 
     first, second = await asyncio.gather(
         agent_pool.get_or_create_agent(app, "local", thread_id="thread-1"),

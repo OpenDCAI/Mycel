@@ -1,7 +1,9 @@
 """Unit tests for SandboxLease and SQLiteLeaseRepo."""
 
 import sqlite3
+import tempfile
 from datetime import datetime
+from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
@@ -10,16 +12,23 @@ from sandbox.lease import (
     SandboxInstance,
     lease_from_row,
 )
-from sandbox.provider import SessionInfo
 from storage.providers.sqlite.lease_repo import SQLiteLeaseRepo
+from sandbox.provider import SessionInfo
+
+
+@pytest.fixture
+def temp_db():
+    """Create temporary database for testing."""
+    with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:
+        db_path = Path(f.name)
+    yield db_path
+    db_path.unlink(missing_ok=True)
 
 
 @pytest.fixture
 def store(temp_db):
     """Create SQLiteLeaseRepo with temp database."""
-    repo = SQLiteLeaseRepo(db_path=temp_db)
-    yield repo
-    repo.close()
+    return SQLiteLeaseRepo(db_path=temp_db)
 
 
 @pytest.fixture
@@ -66,14 +75,14 @@ class TestSandboxInstance:
 class TestLeaseRepo:
     """Test SQLiteLeaseRepo CRUD operations."""
 
-    def test_ensure_tables(self, store, temp_db):
+    def test_ensure_tables(self, temp_db):
         """Test table creation."""
-        conn = sqlite3.connect(str(temp_db))
-        try:
+        SQLiteLeaseRepo(db_path=temp_db)
+
+        # Verify table exists
+        with sqlite3.connect(str(temp_db)) as conn:
             cursor = conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='sandbox_leases'")
             assert cursor.fetchone() is not None
-        finally:
-            conn.close()
 
     def test_create_lease(self, store):
         """Test creating a new lease."""
@@ -138,7 +147,7 @@ class TestLeaseRepo:
 
         e2b_leases = store.list_by_provider("e2b")
         assert len(e2b_leases) == 2
-        assert all(lease["provider_name"] == "e2b" for lease in e2b_leases)
+        assert all(l["provider_name"] == "e2b" for l in e2b_leases)
 
         agentbay_leases = store.list_by_provider("agentbay")
         assert len(agentbay_leases) == 1
@@ -364,14 +373,11 @@ class TestSQLiteLease:
         assert after.needs_refresh == before.needs_refresh
         assert after.observed_state == before.observed_state
 
-        conn = sqlite3.connect(str(store.db_path), timeout=30)
-        try:
+        with sqlite3.connect(str(store.db_path), timeout=30) as conn:
             count_row = conn.execute(
                 "SELECT COUNT(*) FROM lease_events WHERE event_id = ?",
                 ("evt-duplicate",),
             ).fetchone()
-        finally:
-            conn.close()
         assert count_row is not None
         assert int(count_row[0]) == 1
 

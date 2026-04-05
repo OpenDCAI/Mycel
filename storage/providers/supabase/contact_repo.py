@@ -1,66 +1,69 @@
-"""Supabase repository for directional contact relationships."""
+"""Supabase-backed ContactRepo — block/mute contacts for multi-user deployment."""
 
 from __future__ import annotations
 
+import logging
+import time
 from typing import Any
 
 from storage.contracts import ContactRow
-from storage.providers.supabase import _query as q
 
-_REPO = "contact repo"
-_TABLE = "contacts"
+logger = logging.getLogger(__name__)
 
 
 class SupabaseContactRepo:
-    """Directional contact relationship CRUD backed by Supabase."""
+    """ContactRepo backed by Supabase `contacts` table.
+
+    Schema: owner_id TEXT, target_id TEXT, relation TEXT, created_at FLOAT, updated_at FLOAT
+    PK: (owner_id, target_id)
+    """
 
     def __init__(self, client: Any) -> None:
-        self._client = q.validate_client(client, _REPO)
+        self._client = client
 
     def close(self) -> None:
-        return None
+        pass
 
     def upsert(self, row: ContactRow) -> None:
-        self._t().upsert(
-            {
-                "owner_id": row.owner_id,
-                "target_id": row.target_id,
-                "relation": row.relation,
-                "created_at": row.created_at,
-                "updated_at": row.updated_at,
-            },
-            on_conflict="owner_id,target_id",
-        ).execute()
+        self._client.table("contacts").upsert({
+            "owner_id": row.owner_id,
+            "target_id": row.target_id,
+            "relation": row.relation,
+            "created_at": row.created_at,
+            "updated_at": row.updated_at or time.time(),
+        }, on_conflict="owner_id,target_id").execute()
 
     def get(self, owner_id: str, target_id: str) -> ContactRow | None:
-        response = self._t().select("*").eq("owner_id", owner_id).eq("target_id", target_id).execute()
-        rows = q.rows(response, _REPO, "get")
-        if not rows:
+        res = (
+            self._client.table("contacts")
+            .select("*")
+            .eq("owner_id", owner_id)
+            .eq("target_id", target_id)
+            .maybe_single()
+            .execute()
+        )
+        if not res.data:
             return None
-        return self._to_row(rows[0])
+        return self._to_row(res.data)
 
     def list_for_user(self, owner_id: str) -> list[ContactRow]:
-        query = q.order(
-            self._t().select("*").eq("owner_id", owner_id),
-            "created_at",
-            desc=False,
-            repo=_REPO,
-            operation="list_for_user",
+        res = (
+            self._client.table("contacts")
+            .select("*")
+            .eq("owner_id", owner_id)
+            .execute()
         )
-        raw = q.rows(query.execute(), _REPO, "list_for_user")
-        return [self._to_row(r) for r in raw]
+        return [self._to_row(r) for r in (res.data or [])]
 
     def delete(self, owner_id: str, target_id: str) -> None:
-        self._t().delete().eq("owner_id", owner_id).eq("target_id", target_id).execute()
+        self._client.table("contacts").delete().eq("owner_id", owner_id).eq("target_id", target_id).execute()
 
-    def _to_row(self, r: dict[str, Any]) -> ContactRow:
+    @staticmethod
+    def _to_row(r: dict) -> ContactRow:
         return ContactRow(
             owner_id=r["owner_id"],
             target_id=r["target_id"],
             relation=r["relation"],
-            created_at=float(r["created_at"]),
-            updated_at=float(r["updated_at"]) if r.get("updated_at") is not None else None,
+            created_at=r.get("created_at") or time.time(),
+            updated_at=r.get("updated_at"),
         )
-
-    def _t(self) -> Any:
-        return self._client.table(_TABLE)

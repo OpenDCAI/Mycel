@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import threading
+from pathlib import Path
 
 from storage.providers.sqlite.connection import create_connection
 from storage.providers.sqlite.kernel import SQLiteDBRole, resolve_role_db_path

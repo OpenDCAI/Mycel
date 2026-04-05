@@ -34,7 +34,9 @@ def _maybe_import_langchain_openai() -> Any:
 
         return ChatOpenAI
     except Exception as e:  # noqa: BLE001
-        raise RuntimeError("langchain-openai is not installed. Install it with: uv add langchain-openai\n(Then run: uv sync)") from e
+        raise RuntimeError(
+            "langchain-openai is not installed. Install it with: uv add langchain-openai\n(Then run: uv sync)"
+        ) from e
 
 
 def _maybe_import_langchain_tools() -> tuple[Any, Any, Any]:
@@ -107,7 +109,11 @@ def main() -> None:
 
     messages: list[Any] = [
         HumanMessage(
-            content=("请调用工具 make_test_image。工具会返回一张图片作为 content blocks（不是文本/URL）。收到工具结果后，请描述图片内容。")
+            content=(
+                "请调用工具 make_test_image。"
+                "工具会返回一张图片作为 content blocks（不是文本/URL）。"
+                "收到工具结果后，请描述图片内容。"
+            )
         )
     ]
 

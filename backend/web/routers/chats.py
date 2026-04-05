@@ -33,7 +33,7 @@ async def list_chats(
     user_id: Annotated[str, Depends(get_current_user_id)],
     app: Annotated[Any, Depends(get_app)],
 ):
-    """List all chats for the current user (social identity from JWT)."""
+    """List all chats for the current user."""
     return app.state.chat_service.list_chats_for_user(user_id)
 
 
@@ -43,7 +43,7 @@ async def create_chat(
     user_id: Annotated[str, Depends(get_current_user_id)],
     app: Annotated[Any, Depends(get_app)],
 ):
-    """Create a chat between users. 2 users = 1:1 chat, 3+ = group chat."""
+    """Create a chat between entities. 2 entities = 1:1 chat, 3+ = group chat."""
     chat_service = app.state.chat_service
     try:
         if len(body.user_ids) >= 3:
@@ -65,40 +65,16 @@ async def get_chat(
     chat = app.state.chat_repo.get_by_id(chat_id)
     if not chat:
         raise HTTPException(404, "Chat not found")
-    participants = app.state.chat_entity_repo.list_participants(chat_id)
+    participants = app.state.chat_entity_repo.list_members(chat_id)
     entity_repo = app.state.entity_repo
     member_repo = app.state.member_repo
     entities_info = []
     for p in participants:
-        e = entity_repo.get_by_id(p.user_id)
+        e = entity_repo.get_by_id(p.entity_id)
         if e:
             m = member_repo.get_by_id(e.member_id)
-            entities_info.append(
-                {
-                    "id": p.user_id,
-                    "name": e.name,
-                    "type": e.type,
-                    "avatar_url": avatar_url(e.member_id, bool(m.avatar if m else None)),
-                }
-            )
-        else:
-            m = member_repo.get_by_id(p.user_id)
-            if m:
-                entities_info.append(
-                    {
-                        "id": p.user_id,
-                        "name": m.name,
-                        "type": "human",
-                        "avatar_url": avatar_url(m.id, bool(m.avatar)),
-                    }
-                )
-    return {
-        "id": chat.id,
-        "title": chat.title,
-        "status": chat.status,
-        "created_at": chat.created_at,
-        "entities": entities_info,
-    }
+            entities_info.append({"id": e.id, "name": e.name, "type": e.type, "avatar_url": avatar_url(e.member_id, bool(m.avatar if m else None))})
+    return {"id": chat.id, "title": chat.title, "status": chat.status, "created_at": chat.created_at, "entities": entities_info}
 
 
 @router.get("/{chat_id}/messages")
@@ -111,23 +87,18 @@ async def list_messages(
 ):
     """List messages in a chat."""
     msgs = app.state.chat_message_repo.list_by_chat(chat_id, limit=limit, before=before)
+    # Batch entity lookup to avoid N+1
     entity_repo = app.state.entity_repo
-    member_repo = app.state.member_repo
-    sender_ids = {m.sender_id for m in msgs}
-    sender_names: dict[str, str] = {}
+    sender_ids = {m.sender_id for m in msgs}  # sender_id is the storage field name
+    sender_map = {}
     for sid in sender_ids:
         e = entity_repo.get_by_id(sid)
         if e:
-            sender_names[sid] = e.name
-        else:
-            m = member_repo.get_by_id(sid)
-            sender_names[sid] = m.name if m else "unknown"
+            sender_map[sid] = e
     return [
         {
-            "id": m.id,
-            "chat_id": m.chat_id,
-            "sender_id": m.sender_id,
-            "sender_name": sender_names.get(m.sender_id, "unknown"),
+            "id": m.id, "chat_id": m.chat_id, "sender_id": m.sender_id,
+            "sender_name": sender_map[m.sender_id].name if m.sender_id in sender_map else "unknown",
             "content": m.content,
             "mentioned_ids": m.mentioned_ids,
             "created_at": m.created_at,
@@ -144,7 +115,6 @@ async def mark_read(
 ):
     """Mark all messages in this chat as read for the current user."""
     import time
-
     app.state.chat_entity_repo.update_last_read(chat_id, user_id, time.time())
     return {"status": "ok"}
 
@@ -159,17 +129,20 @@ async def send_message(
     """Send a message in a chat."""
     if not body.content.strip():
         raise HTTPException(400, "Content cannot be empty")
-    # Verify sender_id belongs to the authenticated user
-    _verify_participant_ownership(app, body.sender_id, user_id)
+    # Verify sender_id belongs to the authenticated member
+    sender = app.state.entity_repo.get_by_id(body.sender_id)
+    if not sender:
+        raise HTTPException(404, "Sender entity not found")
+    # Entity belongs to member directly, or to an agent owned by member
+    if sender.member_id != user_id:
+        agent_member = app.state.member_repo.get_by_id(sender.member_id)
+        if not agent_member or agent_member.owner_user_id != user_id:
+            raise HTTPException(403, "Sender entity does not belong to you")
     chat_service = app.state.chat_service
     msg = chat_service.send_message(chat_id, body.sender_id, body.content, body.mentioned_ids)
     return {
-        "id": msg.id,
-        "chat_id": msg.chat_id,
-        "sender_id": msg.sender_id,
-        "content": msg.content,
-        "mentioned_ids": msg.mentioned_ids,
-        "created_at": msg.created_at,
+        "id": msg.id, "chat_id": msg.chat_id, "sender_id": msg.sender_id,
+        "content": msg.content, "mentioned_ids": msg.mentioned_ids, "created_at": msg.created_at,
     }
 
 
@@ -181,7 +154,6 @@ async def stream_chat_events(
 ):
     """SSE stream for chat events. Uses ?token= for auth."""
     from backend.web.core.dependencies import _DEV_SKIP_AUTH
-
     if not _DEV_SKIP_AUTH:
         if not token:
             raise HTTPException(401, "Missing token")
@@ -202,7 +174,7 @@ async def stream_chat_events(
                     event_type = event.get("event", "message")
                     data = event.get("data", {})
                     yield f"event: {event_type}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
-                except TimeoutError:
+                except asyncio.TimeoutError:
                     yield ": keepalive\n\n"
         finally:
             event_bus.unsubscribe(chat_id, queue)
@@ -221,19 +193,22 @@ class SetContactBody(BaseModel):
     relation: Literal["normal", "blocked", "muted"]
 
 
-def _verify_participant_ownership(app: Any, participant_id: str, user_id: str) -> None:
-    """Raise 403 if participant_id does not belong to the authenticated user.
+def _verify_entity_ownership(app: Any, entity_id: str, user_id: str) -> None:
+    """Raise 403 if entity does not belong to the authenticated member.
 
-    For humans: participant_id == user_id (direct match).
-    For agents: participant_id == member_id, and agent_member.owner_user_id == user_id.
+    Ownership: entity belongs to member directly, OR entity belongs to
+    an agent member owned by the authenticated member.
     """
-    if participant_id == user_id:
+    entity = app.state.entity_repo.get_by_id(entity_id)
+    if not entity:
+        raise HTTPException(403, "Entity does not belong to you")
+    if entity.member_id == user_id:
         return
-    # Check if it's an agent member owned by this user
-    agent_member = app.state.member_repo.get_by_id(participant_id)
+    # Check if entity belongs to an agent owned by this user
+    agent_member = app.state.member_repo.get_by_id(entity.member_id)
     if agent_member and agent_member.owner_user_id == user_id:
         return
-    raise HTTPException(403, "Participant does not belong to you")
+    raise HTTPException(403, "Entity does not belong to you")
 
 
 @router.post("/contacts")
@@ -243,21 +218,17 @@ async def set_contact(
     app: Annotated[Any, Depends(get_app)],
 ):
     """Set a directional contact relationship (block/mute/normal)."""
-    _verify_participant_ownership(app, body.owner_id, user_id)
+    _verify_entity_ownership(app, body.owner_id, user_id)
     import time
-
     from storage.contracts import ContactRow
-
     contact_repo = app.state.contact_repo
-    contact_repo.upsert(
-        ContactRow(
-            owner_id=body.owner_id,
-            target_id=body.target_id,
-            relation=body.relation,
-            created_at=time.time(),
-            updated_at=time.time(),
-        )
-    )
+    contact_repo.upsert(ContactRow(
+        owner_id=body.owner_id,
+        target_id=body.target_id,
+        relation=body.relation,
+        created_at=time.time(),
+        updated_at=time.time(),
+    ))
     return {"status": "ok", "relation": body.relation}
 
 
@@ -269,7 +240,7 @@ async def delete_contact(
     app: Annotated[Any, Depends(get_app)],
 ):
     """Delete a contact relationship."""
-    _verify_participant_ownership(app, owner_id, user_id)
+    _verify_entity_ownership(app, owner_id, user_id)
     contact_repo = app.state.contact_repo
     contact_repo.delete(owner_id, target_id)
     return {"status": "deleted"}
@@ -293,8 +264,8 @@ async def mute_chat(
     user_id: Annotated[str, Depends(get_current_user_id)],
     app: Annotated[Any, Depends(get_app)],
 ):
-    """Mute/unmute a chat for the current user."""
-    _verify_participant_ownership(app, body.user_id, user_id)
+    """Mute/unmute a chat for a specific entity."""
+    _verify_entity_ownership(app, body.user_id, user_id)
     chat_entity_repo = app.state.chat_entity_repo
     chat_entity_repo.update_mute(chat_id, body.user_id, body.muted, body.mute_until)
     return {"status": "ok", "muted": body.muted}
@@ -310,7 +281,7 @@ async def delete_chat(
     chat = app.state.chat_repo.get_by_id(chat_id)
     if not chat:
         raise HTTPException(404, "Chat not found")
-    if not app.state.chat_entity_repo.is_participant_in_chat(chat_id, user_id):
+    if not app.state.chat_entity_repo.is_member_in_chat(chat_id, user_id):
         raise HTTPException(403, "Not a participant of this chat")
     app.state.chat_repo.delete(chat_id)
     return {"status": "deleted"}

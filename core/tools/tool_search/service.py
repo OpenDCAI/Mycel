@@ -15,7 +15,10 @@ logger = logging.getLogger(__name__)
 
 TOOL_SEARCH_SCHEMA = {
     "name": "tool_search",
-    "description": ("Search for available tools. Use this to discover tools that might help with your task."),
+    "description": (
+        "Search for available tools. "
+        "Use this to discover tools that might help with your task."
+    ),
     "parameters": {
         "type": "object",
         "properties": {

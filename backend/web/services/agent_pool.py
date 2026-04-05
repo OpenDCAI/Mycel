@@ -7,26 +7,18 @@ from typing import Any
 
 from fastapi import FastAPI
 
-from core.identity.agent_registry import get_or_create_agent_id
 from core.runtime.agent import create_leon_agent
+from storage.runtime import build_storage_container
 from sandbox.manager import lookup_sandbox_for_thread
 from sandbox.thread_context import set_current_thread_id
-from storage.runtime import build_storage_container
+from core.identity.agent_registry import get_or_create_agent_id
 
 # Thread lock for config updates
 _config_update_locks: dict[str, asyncio.Lock] = {}
 _agent_create_locks: dict[str, asyncio.Lock] = {}
 
 
-def create_agent_sync(
-    sandbox_name: str,
-    workspace_root: Path | None = None,
-    model_name: str | None = None,
-    agent: str | None = None,
-    queue_manager: Any = None,
-    chat_repos: dict | None = None,
-    extra_allowed_paths: list[str] | None = None,
-) -> Any:
+def create_agent_sync(sandbox_name: str, workspace_root: Path | None = None, model_name: str | None = None, agent: str | None = None, queue_manager: Any = None, chat_repos: dict | None = None, extra_allowed_paths: list[str] | None = None) -> Any:
     """Create a LeonAgent with the given sandbox. Runs in a thread."""
     storage_container = build_storage_container(
         main_db_path=os.getenv("LEON_DB_PATH"),
@@ -34,7 +26,6 @@ def create_agent_sync(
     )
     # @@@web-file-ops-repo - inject storage-backed repo so file_operations route to correct provider.
     from core.operations import FileOperationRecorder, set_recorder
-
     set_recorder(FileOperationRecorder(repo=storage_container.file_operation_repo()))
     return create_leon_agent(
         model_name=model_name,
@@ -98,23 +89,20 @@ async def get_or_create_agent(app_obj: FastAPI, sandbox_type: str, thread_id: st
         chat_repos = None
         if hasattr(app_obj.state, "entity_repo") and thread_data:
             entity_repo = app_obj.state.entity_repo
-            member_repo = getattr(app_obj.state, "member_repo", None)
-            # Entity id = member_id in the new model; look up by member_id, not thread_id
-            agent_member_id = thread_data.get("member_id")
-            agent_entity = entity_repo.get_by_id(agent_member_id) if agent_member_id else None
+            agent_entity = entity_repo.get_by_thread_id(thread_id)
             if agent_entity:
-                # agent social identity = member_id
-                agent_member = member_repo.get_by_id(agent_entity.member_id) if member_repo else None
-                # owner social identity = owner's user_id (same as their member_id for humans)
-                owner_user_id = agent_member.owner_user_id if agent_member else ""
+                # @@@admin-chain — find owner's user_id via Member domain (template ownership).
+                # Thread→Entity→Member(template)→owner_user_id
+                agent_member = app_obj.state.member_repo.get_by_id(agent_entity.member_id) if hasattr(app_obj.state, "member_repo") else None
+                owner_member_id = agent_member.owner_user_id if agent_member and agent_member.owner_user_id else ""
                 chat_repos = {
-                    "user_id": agent_entity.member_id,  # agent's social identity = member_id
-                    "owner_user_id": owner_user_id,
+                    "member_id": agent_entity.id,
+                    "owner_member_id": owner_member_id,
                     "entity_repo": entity_repo,
                     "chat_service": getattr(app_obj.state, "chat_service", None),
                     "chat_entity_repo": getattr(app_obj.state, "chat_entity_repo", None),
                     "chat_message_repo": getattr(app_obj.state, "chat_message_repo", None),
-                    "member_repo": member_repo,
+                    "member_repo": getattr(app_obj.state, "member_repo", None),
                     "chat_event_bus": getattr(app_obj.state, "chat_event_bus", None),
                 }
 
@@ -129,7 +117,6 @@ async def get_or_create_agent(app_obj: FastAPI, sandbox_type: str, thread_id: st
 
         # Merge user-configured allowed_paths from sandbox config
         from sandbox.config import SandboxConfig
-
         try:
             sandbox_config = SandboxConfig.load(sandbox_type)
             extra_allowed_paths.extend(sandbox_config.allowed_paths)
@@ -140,9 +127,7 @@ async def get_or_create_agent(app_obj: FastAPI, sandbox_type: str, thread_id: st
 
         # @@@ agent-init-thread - LeonAgent.__init__ uses run_until_complete, must run in thread
         qm = getattr(app_obj.state, "queue_manager", None)
-        agent_obj = await asyncio.to_thread(
-            create_agent_sync, sandbox_type, workspace_root, model_name, agent_name, qm, chat_repos, extra_allowed_paths
-        )
+        agent_obj = await asyncio.to_thread(create_agent_sync, sandbox_type, workspace_root, model_name, agent_name, qm, chat_repos, extra_allowed_paths)
         member = agent_name or "leon"
         agent_id = get_or_create_agent_id(
             member=member,

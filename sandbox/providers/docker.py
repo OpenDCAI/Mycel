@@ -16,6 +16,8 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+logger = logging.getLogger(__name__)
+
 from sandbox.config import MountSpec
 from sandbox.interfaces.executor import ExecuteResult
 from sandbox.provider import (
@@ -28,21 +30,19 @@ from sandbox.provider import (
     build_resource_capabilities,
 )
 from sandbox.runtime import (
+    _RemoteRuntimeBase,
+    _SubprocessPtySession,
     _build_export_block,
     _build_state_snapshot_cmd,
     _compute_env_delta,
     _extract_state_from_output,
     _parse_env_output,
-    _RemoteRuntimeBase,
-    _SubprocessPtySession,
 )
 
 if TYPE_CHECKING:
     from sandbox.lease import SandboxLease
     from sandbox.runtime import PhysicalTerminalRuntime
     from sandbox.terminal import AbstractTerminal
-
-logger = logging.getLogger(__name__)
 
 
 class DockerProvider(SandboxProvider):
@@ -101,7 +101,9 @@ class DockerProvider(SandboxProvider):
         self.image = image
         self.mount_path = mount_path
         self.default_cwd = default_cwd
-        self.bind_mounts: list[MountSpec] = [MountSpec.model_validate(m) if isinstance(m, dict) else m for m in (bind_mounts or [])]
+        self.bind_mounts: list[MountSpec] = [
+            MountSpec.model_validate(m) if isinstance(m, dict) else m for m in (bind_mounts or [])
+        ]
         self.command_timeout_sec = command_timeout_sec
         self._docker_host = docker_host
         self._sessions: dict[str, str] = {}  # session_id -> container_id
@@ -110,7 +112,9 @@ class DockerProvider(SandboxProvider):
 
     def set_thread_bind_mounts(self, thread_id: str, mounts: list[MountSpec | dict]) -> None:
         """Set thread-specific bind mounts that will be applied when creating sessions."""
-        self._thread_bind_mounts[thread_id] = [MountSpec.model_validate(m) if isinstance(m, dict) else m for m in mounts]
+        self._thread_bind_mounts[thread_id] = [
+            MountSpec.model_validate(m) if isinstance(m, dict) else m for m in mounts
+        ]
 
     # ==================== Managed Volume ====================
 
@@ -123,16 +127,12 @@ class DockerProvider(SandboxProvider):
 
     def set_managed_volume_mount(self, thread_id: str, backend_ref: str, mount_path: str) -> None:
         self._volume_mounts[thread_id] = MountSpec(
-            source=backend_ref,
-            target=mount_path,
-            mode="mount",
-            read_only=False,
+            source=backend_ref, target=mount_path, mode="mount", read_only=False,
         )
 
     def delete_managed_volume(self, backend_ref: str) -> None:
         """Delete managed volume host directory. backend_ref is the host path."""
         import shutil
-
         volume_dir = Path(backend_ref).resolve()
         # @@@safe-volume-delete - refuse to delete outside expected directory
         expected_parent = (Path.home() / ".leon" / "managed_volumes").resolve()
@@ -409,7 +409,7 @@ class DockerProvider(SandboxProvider):
             if writable.lower().endswith("kb"):
                 return float(writable[:-2]) / (1024.0 * 1024.0)
             if writable.endswith("B"):
-                return float(writable[:-1]) / (1024.0**3)
+                return float(writable[:-1]) / (1024.0 ** 3)
         except ValueError:
             pass
         return None
@@ -638,7 +638,9 @@ class DockerPtyRuntime(_RemoteRuntimeBase):
                 return await asyncio.to_thread(self._execute_once_sync, command, timeout, on_stdout_chunk)
             except TimeoutError:
                 await self._recover_after_timeout()
-                return ExecuteResult(exit_code=-1, stdout="", stderr=f"Command timed out after {timeout}s", timed_out=True)
+                return ExecuteResult(
+                    exit_code=-1, stdout="", stderr=f"Command timed out after {timeout}s", timed_out=True
+                )
             except Exception as exc:
                 if self._looks_like_infra_error(str(exc)):
                     self._recover_infra()

@@ -27,13 +27,13 @@ class AgentState(Enum):
 class AgentFlags:
     """Agent 状态标志位"""
 
-    is_streaming: bool = False
-    is_compacting: bool = False
-    is_waiting: bool = False
-    is_blocked: bool = False
-    can_interrupt: bool = True
-    has_error: bool = False
-    needs_recovery: bool = False
+    isStreaming: bool = False
+    isCompacting: bool = False
+    isWaiting: bool = False
+    isBlocked: bool = False
+    canInterrupt: bool = True
+    hasError: bool = False
+    needsRecovery: bool = False
 
 
 # 状态转移规则
@@ -109,7 +109,7 @@ class StateMonitor(BaseMonitor):
 
     def mark_error(self, error: Exception | None = None) -> bool:
         """标记为错误状态"""
-        self.flags.has_error = True
+        self.flags.hasError = True
         if error is not None:
             # @@@error-snapshot - Capture a small, inspectable error snapshot for debugging.
             self.last_error_type = type(error).__name__
@@ -147,11 +147,11 @@ class StateMonitor(BaseMonitor):
         return {
             "state": self.state.value,
             "flags": {
-                "streaming": self.flags.is_streaming,
-                "compacting": self.flags.is_compacting,
-                "waiting": self.flags.is_waiting,
-                "blocked": self.flags.is_blocked,
-                "error": self.flags.has_error,
+                "streaming": self.flags.isStreaming,
+                "compacting": self.flags.isCompacting,
+                "waiting": self.flags.isWaiting,
+                "blocked": self.flags.isBlocked,
+                "error": self.flags.hasError,
             },
             "error": {
                 "type": self.last_error_type,

@@ -16,7 +16,6 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-
 from storage.providers.sqlite.kernel import SQLiteDBRole, connect_sqlite, resolve_role_db_path
 
 REQUIRED_ABSTRACT_TERMINAL_COLUMNS = {

@@ -1,11 +1,7 @@
-import pytest
-
-pytest.skip("pre-existing: resource_snapshot API mismatch — needs test update", allow_module_level=True)
-
 from pathlib import Path
 from unittest.mock import MagicMock
 
-from sandbox.provider import Metrics, ProviderCapability, ProviderExecResult, SandboxProvider, SessionInfo
+from sandbox.provider import Metrics, ProviderCapability, ProviderExecResult, SessionInfo, SandboxProvider
 from sandbox.resource_snapshot import (
     ensure_resource_snapshot_table,
     list_snapshots_by_lease_ids,

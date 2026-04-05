@@ -12,9 +12,9 @@ import logging
 from pathlib import Path
 from typing import Any
 
-from backend.web.core.storage_factory import make_tool_task_repo
 from core.runtime.registry import ToolEntry, ToolMode, ToolRegistry
 from core.tools.task.types import Task, TaskStatus
+from storage.providers.sqlite.tool_task_repo import SQLiteToolTaskRepo
 
 logger = logging.getLogger(__name__)
 
@@ -22,7 +22,10 @@ DEFAULT_DB_PATH = Path.home() / ".leon" / "tasks.db"
 
 TASK_CREATE_SCHEMA = {
     "name": "TaskCreate",
-    "description": ("Create a new task to track work progress. Tasks are created with status 'pending'."),
+    "description": (
+        "Create a new task to track work progress. "
+        "Tasks are created with status 'pending'."
+    ),
     "parameters": {
         "type": "object",
         "properties": {
@@ -64,7 +67,9 @@ TASK_GET_SCHEMA = {
 
 TASK_LIST_SCHEMA = {
     "name": "TaskList",
-    "description": ("List all tasks with summary info: id, subject, status, owner, blockedBy."),
+    "description": (
+        "List all tasks with summary info: id, subject, status, owner, blockedBy."
+    ),
     "parameters": {
         "type": "object",
         "properties": {},
@@ -125,7 +130,6 @@ TASK_UPDATE_SCHEMA = {
     },
 }
 
-
 class TaskService:
     """Task management service providing DEFERRED tools.
 
@@ -143,7 +147,7 @@ class TaskService:
         db_path: Path | None = None,
         thread_id: str | None = None,
     ):
-        self._repo = make_tool_task_repo(db_path or DEFAULT_DB_PATH)
+        self._repo = SQLiteToolTaskRepo(db_path or DEFAULT_DB_PATH)
         self._default_thread_id = thread_id  # override for tests / single-agent TUI
         self._register(registry)
         logger.info("TaskService initialized (db=%s)", db_path or DEFAULT_DB_PATH)
@@ -152,7 +156,6 @@ class TaskService:
         if self._default_thread_id:
             return self._default_thread_id
         from sandbox.thread_context import get_current_thread_id
-
         tid = get_current_thread_id()
         return tid or "default"
 

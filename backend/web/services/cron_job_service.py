@@ -2,15 +2,11 @@
 
 from typing import Any
 
-from backend.web.core.storage_factory import make_cron_job_repo
-
-
-def _repo() -> Any:
-    return make_cron_job_repo()
+from storage.providers.sqlite.cron_job_repo import SQLiteCronJobRepo
 
 
 def list_cron_jobs() -> list[dict[str, Any]]:
-    repo = _repo()
+    repo = SQLiteCronJobRepo()
     try:
         return repo.list_all()
     finally:
@@ -18,7 +14,7 @@ def list_cron_jobs() -> list[dict[str, Any]]:
 
 
 def get_cron_job(job_id: str) -> dict[str, Any] | None:
-    repo = _repo()
+    repo = SQLiteCronJobRepo()
     try:
         return repo.get(job_id)
     finally:
@@ -30,7 +26,8 @@ def create_cron_job(*, name: str, cron_expression: str, **fields: Any) -> dict[s
         raise ValueError("name must not be empty")
     if not cron_expression or not cron_expression.strip():
         raise ValueError("cron_expression must not be empty")
-    repo = _repo()
+
+    repo = SQLiteCronJobRepo()
     try:
         return repo.create(name=name, cron_expression=cron_expression, **fields)
     finally:
@@ -38,7 +35,7 @@ def create_cron_job(*, name: str, cron_expression: str, **fields: Any) -> dict[s
 
 
 def update_cron_job(job_id: str, **fields: Any) -> dict[str, Any] | None:
-    repo = _repo()
+    repo = SQLiteCronJobRepo()
     try:
         return repo.update(job_id, **fields)
     finally:
@@ -46,7 +43,7 @@ def update_cron_job(job_id: str, **fields: Any) -> dict[str, Any] | None:
 
 
 def delete_cron_job(job_id: str) -> bool:
-    repo = _repo()
+    repo = SQLiteCronJobRepo()
     try:
         return repo.delete(job_id)
     finally:

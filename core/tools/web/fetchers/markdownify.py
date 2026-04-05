@@ -24,7 +24,10 @@ except ImportError:
     HAS_BS4 = False
 
 
-_BROWSER_UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
+_BROWSER_UA = (
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+    "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
+)
 
 
 class MarkdownifyFetcher(BaseFetcher):
@@ -126,7 +129,9 @@ class MarkdownifyFetcher(BaseFetcher):
             for tag in soup(["script", "style", "nav", "footer", "header", "aside"]):
                 tag.decompose()
 
-            main_content = soup.find("main") or soup.find("article") or soup.find("div", class_="content") or soup.find("body")
+            main_content = (
+                soup.find("main") or soup.find("article") or soup.find("div", class_="content") or soup.find("body")
+            )
 
             if main_content:
                 html = str(main_content)
@@ -158,7 +163,9 @@ class MarkdownifyFetcher(BaseFetcher):
         for tag in soup(["script", "style", "nav", "footer", "header", "aside"]):
             tag.decompose()
 
-        main_content = soup.find("main") or soup.find("article") or soup.find("div", class_="content") or soup.find("body")
+        main_content = (
+            soup.find("main") or soup.find("article") or soup.find("div", class_="content") or soup.find("body")
+        )
 
         if main_content:
             text = main_content.get_text(separator="\n\n", strip=True)

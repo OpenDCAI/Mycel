@@ -1,6 +1,8 @@
 import pytest
 
 from storage.providers.supabase.summary_repo import SupabaseSummaryRepo
+
+
 from tests.fakes.supabase import FakeSupabaseClient
 
 

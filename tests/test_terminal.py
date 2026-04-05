@@ -2,6 +2,8 @@
 
 import json
 import sqlite3
+import tempfile
+from pathlib import Path
 
 import pytest
 
@@ -10,11 +12,18 @@ from storage.providers.sqlite.terminal_repo import SQLiteTerminalRepo
 
 
 @pytest.fixture
+def temp_db():
+    """Create temporary database for testing."""
+    with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:
+        db_path = Path(f.name)
+    yield db_path
+    db_path.unlink(missing_ok=True)
+
+
+@pytest.fixture
 def store(temp_db):
     """Create SQLiteTerminalRepo with temp database."""
-    repo = SQLiteTerminalRepo(db_path=temp_db)
-    yield repo
-    repo.close()
+    return SQLiteTerminalRepo(db_path=temp_db)
 
 
 def _wrap(store, row):
@@ -87,26 +96,23 @@ class TestTerminalState:
 class TestTerminalStore:
     """Test SQLiteTerminalRepo CRUD operations."""
 
-    def test_ensure_tables(self, store, temp_db):
+    def test_ensure_tables(self, temp_db):
         """Test table creation."""
-        conn = sqlite3.connect(str(temp_db))
-        try:
+        store = SQLiteTerminalRepo(db_path=temp_db)
+
+        # Verify table exists
+        with sqlite3.connect(str(temp_db)) as conn:
             cursor = conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='abstract_terminals'")
             assert cursor.fetchone() is not None
-        finally:
-            conn.close()
 
     def test_create_terminal(self, store):
         """Test creating a new terminal."""
-        terminal = _wrap(
-            store,
-            store.create(
-                terminal_id="term-123",
-                thread_id="thread-456",
-                lease_id="lease-789",
-                initial_cwd="/home/user",
-            ),
-        )
+        terminal = _wrap(store, store.create(
+            terminal_id="term-123",
+            thread_id="thread-456",
+            lease_id="lease-789",
+            initial_cwd="/home/user",
+        ))
 
         assert terminal.terminal_id == "term-123"
         assert terminal.thread_id == "thread-456"
@@ -176,8 +182,7 @@ class TestTerminalStore:
             thread_id="thread-456",
             lease_id="lease-789",
         )
-        conn = sqlite3.connect(str(temp_db))
-        try:
+        with sqlite3.connect(str(temp_db)) as conn:
             conn.execute(
                 """
                 CREATE TABLE IF NOT EXISTS terminal_commands (
@@ -209,20 +214,15 @@ class TestTerminalStore:
                 ("cmd-1", "stdout", "line-1"),
             )
             conn.commit()
-        finally:
-            conn.close()
 
         store.delete("term-123")
 
-        conn2 = sqlite3.connect(str(temp_db))
-        try:
-            cmd_row = conn2.execute("SELECT command_id FROM terminal_commands WHERE command_id = ?", ("cmd-1",)).fetchone()
-            chunk_row = conn2.execute(
+        with sqlite3.connect(str(temp_db)) as conn:
+            cmd_row = conn.execute("SELECT command_id FROM terminal_commands WHERE command_id = ?", ("cmd-1",)).fetchone()
+            chunk_row = conn.execute(
                 "SELECT chunk_id FROM terminal_command_chunks WHERE command_id = ?",
                 ("cmd-1",),
             ).fetchone()
-        finally:
-            conn2.close()
         assert cmd_row is None
         assert chunk_row is None
 
@@ -243,7 +243,6 @@ class TestTerminalStore:
         assert terminals[0]["terminal_id"] == "term-3"
         assert terminals[1]["terminal_id"] == "term-2"
         assert terminals[2]["terminal_id"] == "term-1"
-
 
 class TestSQLiteTerminal:
     """Test SQLiteTerminal state persistence."""
@@ -274,18 +273,16 @@ class TestSQLiteTerminal:
         terminal.update_state(new_state)
 
         # Verify persisted to DB
-        conn = sqlite3.connect(str(temp_db))
-        conn.row_factory = sqlite3.Row
-        try:
+        with sqlite3.connect(str(temp_db)) as conn:
+            conn.row_factory = sqlite3.Row
             row = conn.execute(
                 "SELECT cwd, env_delta_json, state_version FROM abstract_terminals WHERE terminal_id = ?",
                 ("term-1",),
             ).fetchone()
+
             assert row["cwd"] == "/home/user/project"
             assert json.loads(row["env_delta_json"]) == {"FOO": "bar", "BAZ": "qux"}
             assert row["state_version"] == 1
-        finally:
-            conn.close()
 
     def test_state_persists_across_retrieval(self, store):
         """Test that state persists when terminal is retrieved again."""
@@ -368,7 +365,7 @@ class TestTerminalIntegration:
     def test_state_isolation_between_terminals(self, store):
         """Test that state updates are isolated between terminals."""
         term1 = _wrap(store, store.create("term-1", "thread-1", "lease-1", "/home/user1"))
-        _term2 = _wrap(store, store.create("term-2", "thread-2", "lease-1", "/home/user2"))
+        term2 = _wrap(store, store.create("term-2", "thread-2", "lease-1", "/home/user2"))
 
         # Update term1 state
         term1.update_state(TerminalState(cwd="/home/user1/project", env_delta={"FOO": "bar"}))

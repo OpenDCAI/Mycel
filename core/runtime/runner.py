@@ -27,7 +27,9 @@ class ToolRunner(AgentMiddleware):
     - wrap_tool_call: validates, dispatches, normalizes errors
     """
 
-    def __init__(self, registry: ToolRegistry, validator: ToolValidator | None = None):
+    def __init__(
+        self, registry: ToolRegistry, validator: ToolValidator | None = None
+    ):
         self._registry = registry
         self._validator = validator or ToolValidator()
 
@@ -43,7 +45,9 @@ class ToolRunner(AgentMiddleware):
                 name = getattr(t, "name", None)
             if name:
                 existing_names.add(name)
-        new_tools = [s for s in inline_schemas if s.get("name") not in existing_names]
+        new_tools = [
+            s for s in inline_schemas if s.get("name") not in existing_names
+        ]
         return request.override(tools=existing_tools + new_tools)
 
     def _extract_call_info(self, request: ToolCallRequest) -> tuple[str, dict, str]:
@@ -88,7 +92,9 @@ class ToolRunner(AgentMiddleware):
                 name=name,
             )
 
-    async def _validate_and_run_async(self, name: str, args: dict, call_id: str) -> ToolMessage | None:
+    async def _validate_and_run_async(
+        self, name: str, args: dict, call_id: str
+    ) -> ToolMessage | None:
         entry = self._registry.get(name)
         if entry is None:
             return None

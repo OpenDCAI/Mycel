@@ -73,7 +73,9 @@ class FileOperationRecorder:
         rows = self._repo.get_operations_after_checkpoint(thread_id, checkpoint_id)
         return [self._to_file_operation(row) for row in rows]
 
-    def get_operations_between_checkpoints(self, thread_id: str, from_checkpoint_id: str, to_checkpoint_id: str) -> list[FileOperation]:
+    def get_operations_between_checkpoints(
+        self, thread_id: str, from_checkpoint_id: str, to_checkpoint_id: str
+    ) -> list[FileOperation]:
         """Get operations between two checkpoints (exclusive of from, inclusive of to)"""
         rows = self._repo.get_operations_between_checkpoints(thread_id, from_checkpoint_id, to_checkpoint_id)
         return [self._to_file_operation(row) for row in rows]

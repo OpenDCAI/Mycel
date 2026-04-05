@@ -46,8 +46,6 @@ frontend/app/.env.development
 .claude/.stfolder/
 .claude/.vscode/
 .claude/settings.local.json
-.claude/mcp.json
-.mcp.json
 teams
 
 # User-level Leon config and skills
@@ -94,7 +92,6 @@ worktrees/
 /*.png
 /*.yml
 /*.yaml
-!docker-compose.yml
 /dogfood-output/
 /current-chat.yaml
 /.claude/skills/
@@ -106,6 +103,5 @@ frontend/.vite/
 .playwright-cli/
 ops
 
-# Auto-generated
+.lark-events/
 .playwright-mcp/
-/supabase/

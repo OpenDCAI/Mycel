@@ -4,10 +4,12 @@ import os
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
+import pytest
 from langchain_core.messages import ToolMessage
 
-from core.runtime.middleware.spill_buffer.middleware import SKIP_TOOLS, SpillBufferMiddleware
 from core.runtime.middleware.spill_buffer.spill import PREVIEW_BYTES, spill_if_needed
+from core.runtime.middleware.spill_buffer.middleware import SKIP_TOOLS, SpillBufferMiddleware
+
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -61,7 +63,9 @@ class TestSpillIfNeeded:
         )
 
         # Verify write_file was called with the correct spill path.
-        expected_path = os.path.join("/workspace", ".leon", "tool-results", "call_big.txt")
+        expected_path = os.path.join(
+            "/workspace", ".leon", "tool-results", "call_big.txt"
+        )
         fs.write_file.assert_called_once_with(expected_path, large)
 
         # Result must mention the file path and include a preview.
@@ -155,7 +159,7 @@ class TestSpillIfNeeded:
     def test_write_failure_graceful_degradation(self):
         """If write_file raises, a warning is included but no crash."""
         fs = _make_fs_backend()
-        fs.write_file.side_effect = OSError("disk full")
+        fs.write_file.side_effect = IOError("disk full")
 
         large = "B" * 60_000
         result = spill_if_needed(
@@ -342,7 +346,9 @@ class TestSpillBufferMiddleware:
         # Run the async method synchronously via a fresh event loop.
         loop = asyncio.new_event_loop()
         try:
-            result = loop.run_until_complete(mw.awrap_tool_call(request, async_handler))
+            result = loop.run_until_complete(
+                mw.awrap_tool_call(request, async_handler)
+            )
         finally:
             loop.close()
 
@@ -362,7 +368,9 @@ class TestSpillBufferMiddleware:
 
         loop = asyncio.new_event_loop()
         try:
-            result = loop.run_until_complete(mw.awrap_model_call({"messages": []}, async_handler))
+            result = loop.run_until_complete(
+                mw.awrap_model_call({"messages": []}, async_handler)
+            )
         finally:
             loop.close()
         assert result is sentinel
@@ -378,6 +386,8 @@ class TestSpillBufferMiddleware:
 
         result = mw.wrap_tool_call(request, handler)
 
-        expected_path = os.path.join("/workspace", ".leon", "tool-results", f"{unique_id}.txt")
+        expected_path = os.path.join(
+            "/workspace", ".leon", "tool-results", f"{unique_id}.txt"
+        )
         fs.write_file.assert_called_once_with(expected_path, content)
         assert expected_path in result.content

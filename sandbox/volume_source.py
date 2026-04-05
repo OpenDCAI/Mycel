@@ -7,6 +7,7 @@ provider-managed storage (DaytonaVolume). Serialized as JSON to DB.
 from __future__ import annotations
 
 import hashlib
+import json
 import logging
 import shutil
 from datetime import UTC, datetime
@@ -75,13 +76,11 @@ class HostVolume:
             if not item.is_file():
                 continue
             st = item.stat()
-            entries.append(
-                {
-                    "relative_path": str(item.relative_to(self.base_path)),
-                    "size_bytes": st.st_size,
-                    "updated_at": datetime.fromtimestamp(st.st_mtime, tz=UTC).isoformat(),
-                }
-            )
+            entries.append({
+                "relative_path": str(item.relative_to(self.base_path)),
+                "size_bytes": st.st_size,
+                "updated_at": datetime.fromtimestamp(st.st_mtime, tz=UTC).isoformat(),
+            })
         return entries
 
     def resolve_file(self, relative_path: str) -> Path:

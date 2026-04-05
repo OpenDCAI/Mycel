@@ -1,21 +1,21 @@
-import hashlib
 from pathlib import Path
+import hashlib
 
-from backend.web.core.storage_factory import make_sync_file_repo
+from storage.providers.sqlite.sync_file_repo import SQLiteSyncFileRepo
 
 
 def _calculate_checksum(file_path: Path) -> str:
     """Calculate SHA256 checksum of file."""
     sha256 = hashlib.sha256()
-    with open(file_path, "rb") as f:
-        for chunk in iter(lambda: f.read(8192), b""):
+    with open(file_path, 'rb') as f:
+        for chunk in iter(lambda: f.read(8192), b''):
             sha256.update(chunk)
     return sha256.hexdigest()
 
 
 class SyncState:
     def __init__(self):
-        self._repo = make_sync_file_repo()
+        self._repo = SQLiteSyncFileRepo()
 
     def close(self) -> None:
         self._repo.close()

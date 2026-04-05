@@ -1,21 +1,19 @@
-# TODO: thread_config_repo was removed in refactoring; update tests to use thread_repo / thread_launch_pref_repo
+import sqlite3
+from pathlib import Path
+
 import pytest
 
-pytest.skip("thread_config_repo module removed — needs migration to thread_repo", allow_module_level=True)
-
-import sqlite3  # noqa: E402
-from pathlib import Path  # noqa: E402
-
-from storage.providers.sqlite.thread_config_repo import SQLiteThreadConfigRepo  # noqa: F401
-from storage.providers.supabase.thread_config_repo import SupabaseThreadConfigRepo
-
 from backend.web.utils import helpers
+from storage.providers.sqlite.thread_config_repo import SQLiteThreadConfigRepo
+from storage.providers.supabase.thread_config_repo import SupabaseThreadConfigRepo
 
 
 def test_migrate_thread_metadata_table(tmp_path):
     db_path = tmp_path / "leon.db"
     with sqlite3.connect(str(db_path)) as conn:
-        conn.execute("CREATE TABLE thread_metadata (thread_id TEXT PRIMARY KEY, sandbox_type TEXT NOT NULL, cwd TEXT, model TEXT)")
+        conn.execute(
+            "CREATE TABLE thread_metadata (thread_id TEXT PRIMARY KEY, sandbox_type TEXT NOT NULL, cwd TEXT, model TEXT)"
+        )
         conn.execute(
             "INSERT INTO thread_metadata (thread_id, sandbox_type, cwd, model) VALUES (?, ?, ?, ?)",
             ("t-1", "local", "/tmp/ws", "m-1"),

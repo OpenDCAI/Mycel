@@ -46,100 +46,96 @@ class SearchService:
         self._register(registry)
 
     def _register(self, registry: ToolRegistry) -> None:
-        registry.register(
-            ToolEntry(
-                name="Grep",
-                mode=ToolMode.INLINE,
-                schema={
-                    "name": "Grep",
-                    "description": "Search file contents using regex patterns.",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "pattern": {
-                                "type": "string",
-                                "description": "Regex pattern to search for",
-                            },
-                            "path": {
-                                "type": "string",
-                                "description": "File or directory (absolute). Defaults to workspace.",
-                            },
-                            "glob": {
-                                "type": "string",
-                                "description": "Filter files by glob (e.g., '*.py')",
-                            },
-                            "type": {
-                                "type": "string",
-                                "description": "Filter by file type (e.g., 'py', 'js')",
-                            },
-                            "case_insensitive": {
-                                "type": "boolean",
-                                "description": "Case insensitive search",
-                            },
-                            "after_context": {
-                                "type": "integer",
-                                "description": "Lines to show after each match",
-                            },
-                            "before_context": {
-                                "type": "integer",
-                                "description": "Lines to show before each match",
-                            },
-                            "context": {
-                                "type": "integer",
-                                "description": "Context lines before and after each match",
-                            },
-                            "output_mode": {
-                                "type": "string",
-                                "enum": ["content", "files_with_matches", "count"],
-                                "description": "Output format. Default: files_with_matches",
-                            },
-                            "head_limit": {
-                                "type": "integer",
-                                "description": "Limit to first N entries",
-                            },
-                            "offset": {
-                                "type": "integer",
-                                "description": "Skip first N entries",
-                            },
-                            "multiline": {
-                                "type": "boolean",
-                                "description": "Allow pattern to span multiple lines",
-                            },
+        registry.register(ToolEntry(
+            name="Grep",
+            mode=ToolMode.INLINE,
+            schema={
+                "name": "Grep",
+                "description": "Search file contents using regex patterns.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "pattern": {
+                            "type": "string",
+                            "description": "Regex pattern to search for",
                         },
-                        "required": ["pattern"],
+                        "path": {
+                            "type": "string",
+                            "description": "File or directory (absolute). Defaults to workspace.",
+                        },
+                        "glob": {
+                            "type": "string",
+                            "description": "Filter files by glob (e.g., '*.py')",
+                        },
+                        "type": {
+                            "type": "string",
+                            "description": "Filter by file type (e.g., 'py', 'js')",
+                        },
+                        "case_insensitive": {
+                            "type": "boolean",
+                            "description": "Case insensitive search",
+                        },
+                        "after_context": {
+                            "type": "integer",
+                            "description": "Lines to show after each match",
+                        },
+                        "before_context": {
+                            "type": "integer",
+                            "description": "Lines to show before each match",
+                        },
+                        "context": {
+                            "type": "integer",
+                            "description": "Context lines before and after each match",
+                        },
+                        "output_mode": {
+                            "type": "string",
+                            "enum": ["content", "files_with_matches", "count"],
+                            "description": "Output format. Default: files_with_matches",
+                        },
+                        "head_limit": {
+                            "type": "integer",
+                            "description": "Limit to first N entries",
+                        },
+                        "offset": {
+                            "type": "integer",
+                            "description": "Skip first N entries",
+                        },
+                        "multiline": {
+                            "type": "boolean",
+                            "description": "Allow pattern to span multiple lines",
+                        },
                     },
+                    "required": ["pattern"],
                 },
-                handler=self._grep,
-                source="SearchService",
-            )
-        )
+            },
+            handler=self._grep,
+            source="SearchService",
+        ))
 
-        registry.register(
-            ToolEntry(
-                name="Glob",
-                mode=ToolMode.INLINE,
-                schema={
-                    "name": "Glob",
-                    "description": "Find files by glob pattern. Returns paths sorted by modification time.",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "pattern": {
-                                "type": "string",
-                                "description": "Glob pattern (e.g., '**/*.py')",
-                            },
-                            "path": {
-                                "type": "string",
-                                "description": "Directory to search (absolute). Defaults to workspace.",
-                            },
+        registry.register(ToolEntry(
+            name="Glob",
+            mode=ToolMode.INLINE,
+            schema={
+                "name": "Glob",
+                "description": "Find files by glob pattern. Returns paths sorted by modification time.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "pattern": {
+                            "type": "string",
+                            "description": "Glob pattern (e.g., '**/*.py')",
                         },
-                        "required": ["pattern"],
+                        "path": {
+                            "type": "string",
+                            "description": "Directory to search (absolute). Defaults to workspace.",
+                        },
                     },
+                    "required": ["pattern"],
                 },
-                handler=self._glob,
-                source="SearchService",
-            )
-        )
+            },
+            handler=self._glob,
+            source="SearchService",
+        ))
 
     # ------------------------------------------------------------------
     # Path validation
@@ -197,10 +193,8 @@ class SearchService:
         if self.has_ripgrep:
             try:
                 return self._ripgrep_search(
-                    resolved,
-                    pattern,
-                    glob=glob,
-                    type_filter=type,
+                    resolved, pattern,
+                    glob=glob, type_filter=type,
                     case_insensitive=case_insensitive,
                     after_context=after_context,
                     before_context=before_context,
@@ -214,8 +208,7 @@ class SearchService:
                 pass  # fallback to Python
 
         return self._python_grep(
-            resolved,
-            pattern,
+            resolved, pattern,
             glob=glob,
             case_insensitive=case_insensitive,
             output_mode=output_mode,
@@ -269,10 +262,7 @@ class SearchService:
 
         try:
             result = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                timeout=30,
+                cmd, capture_output=True, text=True, timeout=30,
                 cwd=str(self.workspace_root),
             )
         except subprocess.TimeoutExpired:

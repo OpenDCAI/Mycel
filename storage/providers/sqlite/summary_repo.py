@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-import sqlite3
-from collections.abc import Callable
 from contextlib import contextmanager
+import sqlite3
 from pathlib import Path
+from typing import Callable
 
 from storage.providers.sqlite.connection import create_connection
 

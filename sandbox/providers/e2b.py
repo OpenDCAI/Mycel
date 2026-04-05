@@ -15,6 +15,8 @@ import logging
 import os
 from typing import TYPE_CHECKING, Any
 
+logger = logging.getLogger(__name__)
+
 from sandbox.provider import (
     Metrics,
     ProviderCapability,
@@ -28,8 +30,6 @@ if TYPE_CHECKING:
     from sandbox.lease import SandboxLease
     from sandbox.runtime import PhysicalTerminalRuntime
     from sandbox.terminal import AbstractTerminal
-
-logger = logging.getLogger(__name__)
 
 
 class E2BProvider(SandboxProvider):
@@ -279,7 +279,6 @@ class E2BProvider(SandboxProvider):
 
     def create_runtime(self, terminal: AbstractTerminal, lease: SandboxLease) -> PhysicalTerminalRuntime:
         from sandbox.providers.e2b import E2BPtyRuntime
-
         return E2BPtyRuntime(terminal, lease, self)
 
 
@@ -291,13 +290,16 @@ import uuid  # noqa: E402
 
 from sandbox.interfaces.executor import ExecuteResult  # noqa: E402
 from sandbox.runtime import (  # noqa: E402
+    _RemoteRuntimeBase,
+    _SubprocessPtySession,
     _build_export_block,
     _build_state_snapshot_cmd,
     _compute_env_delta,
     _extract_marker_exit,
     _extract_state_from_output,
+    _normalize_pty_result,
     _parse_env_output,
-    _RemoteRuntimeBase,
+    _sanitize_shell_output,
 )
 
 
@@ -401,7 +403,9 @@ class E2BPtyRuntime(_RemoteRuntimeBase):
             try:
                 return await asyncio.to_thread(self._execute_once_sync, command, timeout)
             except TimeoutError:
-                return ExecuteResult(exit_code=-1, stdout="", stderr=f"Command timed out after {timeout}s", timed_out=True)
+                return ExecuteResult(
+                    exit_code=-1, stdout="", stderr=f"Command timed out after {timeout}s", timed_out=True
+                )
             except Exception as exc:
                 if self._looks_like_infra_error(str(exc)):
                     self._recover_infra()

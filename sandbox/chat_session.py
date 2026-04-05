@@ -16,12 +16,12 @@ from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from storage.providers.sqlite.kernel import SQLiteDBRole, connect_sqlite, resolve_role_db_path
 from sandbox.lifecycle import (
     ChatSessionState,
     assert_chat_session_transition,
     parse_chat_session_state,
 )
-from storage.providers.sqlite.kernel import SQLiteDBRole, connect_sqlite, resolve_role_db_path
 
 if TYPE_CHECKING:
     from sandbox.lease import SandboxLease
@@ -167,7 +167,6 @@ class ChatSessionManager:
             self._repo = chat_session_repo
         else:
             from storage.providers.sqlite.chat_session_repo import SQLiteChatSessionRepo
-
             self._repo = SQLiteChatSessionRepo(db_path=db_path)
 
     def _close_runtime(self, session: ChatSession, reason: str) -> None:
@@ -199,8 +198,8 @@ class ChatSessionManager:
 
     def get(self, thread_id: str, terminal_id: str | None = None) -> ChatSession | None:
         if terminal_id is None:
-            from sandbox.terminal import terminal_from_row
             from storage.providers.sqlite.terminal_repo import SQLiteTerminalRepo
+            from sandbox.terminal import terminal_from_row
 
             # @@@thread-get-back-compat - Legacy callers query by thread only; route to current active terminal.
             _term_repo = SQLiteTerminalRepo(db_path=self.db_path)
@@ -224,9 +223,9 @@ class ChatSessionManager:
             return None
 
         from sandbox.lease import lease_from_row
-        from sandbox.terminal import terminal_from_row
         from storage.providers.sqlite.lease_repo import SQLiteLeaseRepo
         from storage.providers.sqlite.terminal_repo import SQLiteTerminalRepo
+        from sandbox.terminal import terminal_from_row
 
         _term_repo = SQLiteTerminalRepo(db_path=self.db_path)
         try:

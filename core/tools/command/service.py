@@ -19,7 +19,9 @@ from pathlib import Path
 from typing import Any
 
 from core.runtime.registry import ToolEntry, ToolMode, ToolRegistry
-from core.tools.command.base import BaseExecutor
+from sandbox.shell_output import normalize_pty_result
+
+from core.tools.command.base import AsyncCommand, BaseExecutor
 from core.tools.command.dispatcher import get_executor
 
 logger = logging.getLogger(__name__)
@@ -57,43 +59,41 @@ class CommandService:
         self._register(registry)
 
     def _register(self, registry: ToolRegistry) -> None:
-        registry.register(
-            ToolEntry(
-                name="Bash",
-                mode=ToolMode.INLINE,
-                schema={
-                    "name": "Bash",
-                    "description": ("Execute shell command. OS auto-detects shell (mac->zsh, linux->bash, win->powershell)."),
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "command": {
-                                "type": "string",
-                                "description": "Command to execute",
-                            },
-                            "description": {
-                                "type": "string",
-                                "description": (
-                                    "Human-readable description of what this command does. "
-                                    "Required when run_in_background is true; shown in the background task indicator."
-                                ),
-                            },
-                            "run_in_background": {
-                                "type": "boolean",
-                                "description": "Run in background (default: false). Returns task ID for status queries.",
-                            },
-                            "timeout": {
-                                "type": "integer",
-                                "description": "Timeout in milliseconds (default: 120000)",
-                            },
+        registry.register(ToolEntry(
+            name="Bash",
+            mode=ToolMode.INLINE,
+            schema={
+                "name": "Bash",
+                "description": (
+                    "Execute shell command. OS auto-detects shell "
+                    "(mac->zsh, linux->bash, win->powershell)."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "command": {
+                            "type": "string",
+                            "description": "Command to execute",
                         },
-                        "required": ["command"],
+                        "description": {
+                            "type": "string",
+                            "description": "Human-readable description of what this command does. Required when run_in_background is true; shown in the background task indicator.",
+                        },
+                        "run_in_background": {
+                            "type": "boolean",
+                            "description": "Run in background (default: false). Returns task ID for status queries.",
+                        },
+                        "timeout": {
+                            "type": "integer",
+                            "description": "Timeout in milliseconds (default: 120000)",
+                        },
                     },
+                    "required": ["command"],
                 },
-                handler=self._bash,
-                source="CommandService",
-            )
-        )
+            },
+            handler=self._bash,
+            source="CommandService",
+        ))
 
     def _check_hooks(self, command: str) -> tuple[bool, str]:
         context = {"workspace_root": str(self.workspace_root)}
@@ -152,16 +152,14 @@ class CommandService:
 
         if self._background_runs is not None:
             from core.agents.service import _BashBackgroundRun
-
             self._background_runs[task_id] = _BashBackgroundRun(async_cmd, command, description=description)
 
         # Build emit_fn for SSE task lifecycle events
         emit_fn = None
         parent_thread_id = None
         try:
-            from backend.web.event_bus import get_event_bus
             from sandbox.thread_context import get_current_thread_id
-
+            from backend.web.event_bus import get_event_bus
             parent_thread_id = get_current_thread_id()
             logger.debug("[CommandService] _execute_async: parent_thread_id=%s task_id=%s", parent_thread_id, task_id)
             if parent_thread_id:
@@ -178,28 +176,26 @@ class CommandService:
 
         # Emit task_start so the frontend dot lights up immediately
         if emit_fn is not None:
-            await emit_fn(
-                {
-                    "event": "task_start",
-                    "data": json.dumps(
-                        {
-                            "task_id": task_id,
-                            "background": True,
-                            "task_type": "bash",
-                            "description": description or command[:80],
-                            "command_line": command,
-                        },
-                        ensure_ascii=False,
-                    ),
-                }
-            )
+            await emit_fn({"event": "task_start", "data": json.dumps({
+                "task_id": task_id,
+                "background": True,
+                "task_type": "bash",
+                "description": description or command[:80],
+                "command_line": command,
+            }, ensure_ascii=False)})
 
         if parent_thread_id:
             asyncio.create_task(
-                self._notify_bash_completion(task_id, async_cmd, command, parent_thread_id, emit_fn, description=description)
+                self._notify_bash_completion(
+                    task_id, async_cmd, command, parent_thread_id, emit_fn, description=description
+                )
             )
 
-        return f"Command started in background.\ntask_id: {task_id}\nUse TaskOutput to get result."
+        return (
+            f"Command started in background.\n"
+            f"task_id: {task_id}\n"
+            f"Use TaskOutput to get result."
+        )
 
     async def _notify_bash_completion(
         self,
@@ -214,30 +210,20 @@ class CommandService:
         while not async_cmd.done:
             await asyncio.sleep(1)
         from core.agents.service import _BashBackgroundRun
-
         result = _BashBackgroundRun(async_cmd, command).get_result() or ""
 
         # Emit task_done so the frontend dot updates in real time
         if emit_fn is not None:
             try:
-                await emit_fn(
-                    {
-                        "event": "task_done",
-                        "data": json.dumps(
-                            {
-                                "task_id": task_id,
-                                "background": True,
-                            },
-                            ensure_ascii=False,
-                        ),
-                    }
-                )
+                await emit_fn({"event": "task_done", "data": json.dumps({
+                    "task_id": task_id,
+                    "background": True,
+                }, ensure_ascii=False)})
             except Exception:
                 pass
 
         if self._queue_manager:
             from core.runtime.middleware.queue.formatters import format_command_notification
-
             exit_code = async_cmd.exit_code or 0
             status = "completed" if exit_code == 0 else "failed"
             notification = format_command_notification(

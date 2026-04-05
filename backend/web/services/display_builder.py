@@ -16,9 +16,6 @@ import uuid
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
-from backend.web.utils.serializers import extract_text_content as _extract_text_content
-from backend.web.utils.serializers import strip_system_tags as _strip_system_tags
-
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
@@ -38,7 +35,9 @@ DeltaType = Literal[
 # Helpers — ported from message-mapper.ts
 # ---------------------------------------------------------------------------
 
+from backend.web.utils.serializers import extract_text_content as _extract_text_content, strip_system_tags as _strip_system_tags
 _CHAT_MESSAGE_RE = re.compile(r"<chat-message[^>]*>([\s\S]*?)</chat-message>")
+
 
 
 def _extract_chat_message(text: str) -> str | None:
@@ -54,23 +53,20 @@ def _make_id(prefix: str = "db") -> str:
 # Entry builders
 # ---------------------------------------------------------------------------
 
-
 def _build_tool_segments(tool_calls: list, msg_index: int, now: int) -> list[dict]:
     segs = []
     for j, raw in enumerate(tool_calls):
         call = raw if isinstance(raw, dict) else {}
-        segs.append(
-            {
-                "type": "tool",
-                "step": {
-                    "id": call.get("id") or f"hist-tc-{msg_index}-{j}",
-                    "name": call.get("name") or "unknown",
-                    "args": call.get("args") or {},
-                    "status": "calling",
-                    "timestamp": now,
-                },
-            }
-        )
+        segs.append({
+            "type": "tool",
+            "step": {
+                "id": call.get("id") or f"hist-tc-{msg_index}-{j}",
+                "name": call.get("name") or "unknown",
+                "args": call.get("args") or {},
+                "status": "calling",
+                "timestamp": now,
+            },
+        })
     return segs
 
 
@@ -93,7 +89,6 @@ def _append_to_turn(turn: dict, msg_id: str, segments: list[dict]) -> None:
 # ThreadDisplay — per-thread in-memory state
 # ---------------------------------------------------------------------------
 
-
 @dataclass
 class ThreadDisplay:
     entries: list[dict] = field(default_factory=list)
@@ -105,7 +100,6 @@ class ThreadDisplay:
 # ---------------------------------------------------------------------------
 # DisplayBuilder — owns all display computation
 # ---------------------------------------------------------------------------
-
 
 class DisplayBuilder:
     """Single source of truth for per-thread ChatEntry[] display state."""
@@ -145,26 +139,17 @@ class DisplayBuilder:
             msg_type = msg.get("type", "")
             if msg_type == "HumanMessage":
                 current_turn, current_run_id = self._handle_human(
-                    msg,
-                    i,
-                    entries,
-                    current_turn,
-                    current_run_id,
-                    now,
+                    msg, i, entries, current_turn, current_run_id, now,
                 )
             elif msg_type == "AIMessage":
                 current_turn, current_run_id = self._handle_ai(
-                    msg,
-                    i,
-                    entries,
-                    current_turn,
-                    current_run_id,
-                    now,
+                    msg, i, entries, current_turn, current_run_id, now,
                 )
             elif msg_type == "ToolMessage":
                 self._handle_tool(msg, i, current_turn, now)
 
-        td = ThreadDisplay(entries=entries, current_turn_id=current_turn["id"] if current_turn else None, current_run_id=current_run_id)
+        td = ThreadDisplay(entries=entries, current_turn_id=current_turn["id"] if current_turn else None,
+                           current_run_id=current_run_id)
         self._threads[thread_id] = td
         return entries
 
@@ -195,7 +180,8 @@ class DisplayBuilder:
             return None
         return _handle_finalize(td)
 
-    def open_turn(self, thread_id: str, turn_id: str | None = None, timestamp: int | None = None) -> dict:
+    def open_turn(self, thread_id: str, turn_id: str | None = None,
+                  timestamp: int | None = None) -> dict:
         """Open a new assistant turn.  Returns append_entry delta."""
         td = self._threads.get(thread_id)
         if td is None:
@@ -221,12 +207,8 @@ class DisplayBuilder:
     # --- Checkpoint handlers (port of message-mapper.ts) ---
 
     def _handle_human(
-        self,
-        msg: dict,
-        i: int,
-        entries: list[dict],
-        current_turn: dict | None,
-        current_run_id: str | None,
+        self, msg: dict, i: int,
+        entries: list[dict], current_turn: dict | None, current_run_id: str | None,
         now: int,
     ) -> tuple[dict | None, str | None]:
         display = msg.get("display") or {}
@@ -245,45 +227,35 @@ class DisplayBuilder:
 
             # Fold into current turn if same run
             if current_turn and (not msg_run_id or msg_run_id == current_run_id):
-                current_turn["segments"].append(
-                    {
-                        "type": "notice",
-                        "content": content,
-                        "notification_type": ntype,
-                    }
-                )
+                current_turn["segments"].append({
+                    "type": "notice",
+                    "content": content,
+                    "notification_type": ntype,
+                })
                 return current_turn, current_run_id
 
             # Standalone notice
-            entries.append(
-                {
-                    "id": msg.get("id") or f"hist-notice-{i}",
-                    "role": "notice",
-                    "content": content,
-                    "notification_type": ntype,
-                    "timestamp": now,
-                }
-            )
+            entries.append({
+                "id": msg.get("id") or f"hist-notice-{i}",
+                "role": "notice",
+                "content": content,
+                "notification_type": ntype,
+                "timestamp": now,
+            })
             return None, None
 
         # Normal user message — strip system-reminder tags (e.g. WeChat metadata)
-        entries.append(
-            {
-                "id": msg.get("id") or f"hist-user-{i}",
-                "role": "user",
-                "content": _strip_system_tags(_extract_text_content(msg.get("content"))),
-                "timestamp": now,
-            }
-        )
+        entries.append({
+            "id": msg.get("id") or f"hist-user-{i}",
+            "role": "user",
+            "content": _strip_system_tags(_extract_text_content(msg.get("content"))),
+            "timestamp": now,
+        })
         return None, None
 
     def _handle_ai(
-        self,
-        msg: dict,
-        i: int,
-        entries: list[dict],
-        current_turn: dict | None,
-        current_run_id: str | None,
+        self, msg: dict, i: int,
+        entries: list[dict], current_turn: dict | None, current_run_id: str | None,
         now: int,
     ) -> tuple[dict | None, str | None]:
         display = msg.get("display") or {}
@@ -361,7 +333,6 @@ class DisplayBuilder:
 # ---------------------------------------------------------------------------
 # Streaming event handlers — called by apply_event
 # ---------------------------------------------------------------------------
-
 
 def _get_current_turn(td: ThreadDisplay) -> dict | None:
     """Get the current open assistant turn, or None."""
@@ -631,12 +602,10 @@ def _handle_task_start(td: ThreadDisplay, data: dict) -> dict | None:
 
     # Find most recent Agent tool call without subagent_stream
     for seg in reversed(turn["segments"]):
-        if (
-            seg.get("type") == "tool"
-            and seg.get("step", {}).get("name") == "Agent"
-            and seg.get("step", {}).get("status") == "calling"
-            and not seg.get("step", {}).get("subagent_stream")
-        ):
+        if (seg.get("type") == "tool"
+                and seg.get("step", {}).get("name") == "Agent"
+                and seg.get("step", {}).get("status") == "calling"
+                and not seg.get("step", {}).get("subagent_stream")):
             seg["step"]["subagent_stream"] = {
                 "task_id": task_id,
                 "thread_id": sub_thread,
@@ -661,7 +630,8 @@ def _handle_task_done(td: ThreadDisplay, data: dict) -> dict | None:
 
     task_id = data["task_id"]
     for seg in turn["segments"]:
-        if seg.get("type") == "tool" and seg.get("step", {}).get("subagent_stream", {}).get("task_id") == task_id:
+        if (seg.get("type") == "tool"
+                and seg.get("step", {}).get("subagent_stream", {}).get("task_id") == task_id):
             seg["step"]["subagent_stream"]["status"] = "completed"
             idx = _find_seg_index(turn, seg["step"]["id"])
             return {

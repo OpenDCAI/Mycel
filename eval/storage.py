@@ -10,15 +10,14 @@ from datetime import UTC
 from pathlib import Path
 
 from config.user_paths import user_home_path
+from eval.repo import SQLiteEvalRepo
 from eval.models import (
     ObjectiveMetrics,
     RunTrajectory,
     SystemMetrics,
 )
-from eval.repo import SQLiteEvalRepo
 
 _DEFAULT_DB_PATH = user_home_path("eval.db")
-
 
 class TrajectoryStore:
     """SQLite-backed storage for eval trajectories and metrics."""

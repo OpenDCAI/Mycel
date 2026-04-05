@@ -56,7 +56,9 @@ class ToolRegistry:
         return self._tools.get(name)
 
     def get_inline_schemas(self) -> list[dict]:
-        return [e.get_schema() for e in self._tools.values() if e.mode == ToolMode.INLINE]
+        return [
+            e.get_schema() for e in self._tools.values() if e.mode == ToolMode.INLINE
+        ]
 
     def search(self, query: str) -> list[ToolEntry]:
         """Return all matching tools (including inline) for tool_search."""

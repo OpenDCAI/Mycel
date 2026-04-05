@@ -70,13 +70,8 @@ class SQLiteCronJobRepo:
 
     def update(self, job_id: str, **fields: Any) -> dict[str, Any] | None:
         allowed = {
-            "name",
-            "description",
-            "cron_expression",
-            "task_template",
-            "enabled",
-            "last_run_at",
-            "next_run_at",
+            "name", "description", "cron_expression", "task_template",
+            "enabled", "last_run_at", "next_run_at",
         }
         updates = {k: v for k, v in fields.items() if k in allowed and v is not None}
         if not updates:

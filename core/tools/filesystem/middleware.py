@@ -94,7 +94,10 @@ class FileSystemMiddleware(AgentMiddleware):
         self._read_files: dict[Path, float | None] = {}
         self.operation_recorder = operation_recorder
         self.verbose = verbose
-        self.extra_allowed_paths: list[Path] = [Path(p) if backend.is_remote else Path(p).resolve() for p in (extra_allowed_paths or [])]
+        self.extra_allowed_paths: list[Path] = [
+            Path(p) if backend.is_remote else Path(p).resolve()
+            for p in (extra_allowed_paths or [])
+        ]
 
         if not backend.is_remote:
             self.workspace_root.mkdir(parents=True, exist_ok=True)
@@ -123,11 +126,7 @@ class FileSystemMiddleware(AgentMiddleware):
             resolved.relative_to(self.workspace_root)
         except ValueError:
             if not any(resolved.is_relative_to(p) for p in self.extra_allowed_paths):
-                return (
-                    False,
-                    f"Path outside workspace\n   Workspace: {self.workspace_root}\n   Attempted: {resolved}",
-                    None,
-                )
+                return False, f"Path outside workspace\n   Workspace: {self.workspace_root}\n   Attempted: {resolved}", None
 
         if self.allowed_extensions and resolved.suffix:
             ext = resolved.suffix.lstrip(".")
@@ -207,7 +206,7 @@ class FileSystemMiddleware(AgentMiddleware):
         """Count total lines in a file (for error messages)."""
         try:
             raw = self.backend.read_file(str(resolved))
-            return raw.content.count("\n") + 1
+            return raw.content.count('\n') + 1
         except Exception:
             return 0
 
@@ -265,7 +264,9 @@ class FileSystemMiddleware(AgentMiddleware):
 
         if isinstance(self.backend, LocalBackend):
             limits = ReadLimits()
-            result = read_file_dispatch(path=resolved, limits=limits, offset=offset if offset > 0 else None, limit=limit)
+            result = read_file_dispatch(
+                path=resolved, limits=limits, offset=offset if offset > 0 else None, limit=limit
+            )
             if not result.error:
                 self._update_file_tracking(resolved)
             return result
@@ -298,9 +299,7 @@ class FileSystemMiddleware(AgentMiddleware):
     def _make_read_tool_message(self, result: ReadResult, tool_call_id: str) -> ToolMessage:
         """Create ToolMessage from ReadResult, using content_blocks for images."""
         if result.content_blocks:
-            image_desc = (
-                f"Image file: {result.file_path}\nSize: {result.total_size:,} bytes\nReturned as image content block for vision model."
-            )
+            image_desc = f"Image file: {result.file_path}\nSize: {result.total_size:,} bytes\nReturned as image content block for vision model."
             return ToolMessage(
                 content=image_desc,
                 content_blocks=result.content_blocks,
@@ -468,9 +467,7 @@ class FileSystemMiddleware(AgentMiddleware):
                 "type": "function",
                 "function": {
                     "name": self.TOOL_READ_FILE,
-                    "description": (
-                        "Read file content (text/code/images/PDF/PPTX/Notebook). Images return as content_blocks. Path must be absolute."
-                    ),
+                    "description": "Read file content (text/code/images/PDF/PPTX/Notebook). Images return as content_blocks. Path must be absolute.",
                     "parameters": {
                         "type": "object",
                         "properties": {

@@ -21,7 +21,6 @@ from langchain.agents.middleware.types import (
 from langchain_core.messages import SystemMessage
 
 from storage.contracts import SummaryRepo
-
 from .compactor import ContextCompactor
 from .pruner import SessionPruner
 from .summary_store import SummaryStore
@@ -188,14 +187,17 @@ class MemoryMiddleware(AgentMiddleware):
 
         if self.verbose:
             final_tokens = self._estimate_tokens(messages) + sys_tokens
-            print(f"[Memory] Final: {len(messages)} msgs (~{final_tokens} tokens) sent to LLM (original: {original_count} msgs)")
+            print(
+                f"[Memory] Final: {len(messages)} msgs (~{final_tokens} tokens) "
+                f"sent to LLM (original: {original_count} msgs)"
+            )
 
         return await handler(request.override(messages=messages))
 
     async def _do_compact(self, messages: list[Any], thread_id: str | None = None) -> list[Any]:
         """Execute compaction: summarize old messages, return compacted list."""
         if self._runtime:
-            self._runtime.set_flag("is_compacting", True)
+            self._runtime.set_flag("isCompacting", True)
         try:
             to_summarize, to_keep = self.compactor.split_messages(messages)
             if len(to_summarize) < 2:
@@ -204,7 +206,9 @@ class MemoryMiddleware(AgentMiddleware):
             is_split_turn, turn_prefix = self.compactor.detect_split_turn(messages, to_keep, self._context_limit)
 
             if is_split_turn:
-                summary_text, prefix_summary = await self.compactor.compact_with_split_turn(to_summarize, turn_prefix, self._resolved_model)
+                summary_text, prefix_summary = await self.compactor.compact_with_split_turn(
+                    to_summarize, turn_prefix, self._resolved_model
+                )
                 to_keep = to_keep[len(turn_prefix) :]
                 if self.verbose:
                     print(
@@ -239,7 +243,7 @@ class MemoryMiddleware(AgentMiddleware):
             return [summary_msg] + to_keep
         finally:
             if self._runtime:
-                self._runtime.set_flag("is_compacting", False)
+                self._runtime.set_flag("isCompacting", False)
 
     async def force_compact(self, messages: list[Any]) -> dict[str, Any] | None:
         """Manual compaction trigger (/compact command). Ignores threshold."""
@@ -252,7 +256,7 @@ class MemoryMiddleware(AgentMiddleware):
             return None
 
         if self._runtime:
-            self._runtime.set_flag("is_compacting", True)
+            self._runtime.set_flag("isCompacting", True)
         try:
             summary_text = await self.compactor.compact(to_summarize, self._resolved_model)
             self._cached_summary = summary_text
@@ -265,7 +269,7 @@ class MemoryMiddleware(AgentMiddleware):
             }
         finally:
             if self._runtime:
-                self._runtime.set_flag("is_compacting", False)
+                self._runtime.set_flag("isCompacting", False)
 
     def _estimate_tokens(self, messages: list[Any]) -> int:
         """Estimate total tokens for messages (chars // 2)."""
@@ -293,7 +297,6 @@ class MemoryMiddleware(AgentMiddleware):
     def _extract_thread_id(self, request: ModelRequest) -> str | None:
         """Extract thread_id from thread context (ContextVar set by streaming/agent)."""
         from sandbox.thread_context import get_current_thread_id
-
         tid = get_current_thread_id()
         if tid:
             return tid
@@ -310,7 +313,8 @@ class MemoryMiddleware(AgentMiddleware):
         """Restore summary from SummaryStore."""
         if not thread_id:
             raise ValueError(
-                "[Memory] thread_id is required for summary persistence. Ensure request.config.configurable contains 'thread_id'."
+                "[Memory] thread_id is required for summary persistence. "
+                "Ensure request.config.configurable contains 'thread_id'."
             )
 
         try:
@@ -378,7 +382,9 @@ class MemoryMiddleware(AgentMiddleware):
             is_split_turn, turn_prefix = self.compactor.detect_split_turn(pruned, to_keep, self._context_limit)
 
             if is_split_turn:
-                summary_text, prefix_summary = await self.compactor.compact_with_split_turn(to_summarize, turn_prefix, self._resolved_model)
+                summary_text, prefix_summary = await self.compactor.compact_with_split_turn(
+                    to_summarize, turn_prefix, self._resolved_model
+                )
                 to_keep = to_keep[len(turn_prefix) :]
             else:
                 summary_text = await self.compactor.compact(to_summarize, self._resolved_model)

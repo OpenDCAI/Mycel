@@ -125,7 +125,10 @@ class TaskBoardService:
                 mode=ToolMode.INLINE,
                 schema={
                     "name": self.TOOL_COMPLETE,
-                    "description": ("Mark a board task as completed with a result summary. Sets progress to 100 and records completed_at."),
+                    "description": (
+                        "Mark a board task as completed with a result summary. "
+                        "Sets progress to 100 and records completed_at."
+                    ),
                     "parameters": {
                         "type": "object",
                         "properties": {
@@ -208,7 +211,6 @@ class TaskBoardService:
     def _get_thread_id(self) -> str:
         try:
             from sandbox.thread_context import get_current_thread_id
-
             return get_current_thread_id() or ""
         except ImportError:
             return ""
@@ -307,7 +309,9 @@ class TaskBoardService:
             return json.dumps({"error": f"Task not found: {TaskId}"})
         return json.dumps({"task": updated}, ensure_ascii=False)
 
-    async def _create_task(self, Title: str, Description: str = "", Priority: str = "medium") -> str:
+    async def _create_task(
+        self, Title: str, Description: str = "", Priority: str = "medium"
+    ) -> str:
         try:
             task = await asyncio.to_thread(
                 task_service.create_task,

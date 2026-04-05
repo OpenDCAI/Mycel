@@ -6,6 +6,7 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Depends, HTTPException, Request
 
 from backend.web.core.dependencies import get_current_user_id
+
 from backend.web.models.panel import (
     BulkDeleteTasksRequest,
     BulkTaskStatusRequest,
@@ -22,21 +23,18 @@ from backend.web.models.panel import (
     UpdateResourceRequest,
     UpdateTaskRequest,
 )
-from backend.web.services import cron_job_service, library_service, member_service, profile_service, task_service
+from backend.web.services import member_service, task_service, library_service, profile_service, cron_job_service
 
 router = APIRouter(prefix="/api/panel", tags=["panel"])
 
 
 # ── Members ──
 
-
 @router.get("/members")
 async def list_members(
     user_id: Annotated[str, Depends(get_current_user_id)],
-    request: Request,
 ) -> dict[str, Any]:
-    member_repo = getattr(request.app.state, "member_repo", None)
-    items = await asyncio.to_thread(member_service.list_members, user_id, member_repo=member_repo)
+    items = await asyncio.to_thread(member_service.list_members, user_id)
     return {"items": items}
 
 
@@ -52,29 +50,15 @@ async def get_member(member_id: str) -> dict[str, Any]:
 async def create_member(
     req: CreateMemberRequest,
     user_id: Annotated[str, Depends(get_current_user_id)],
-    request: Request,
 ) -> dict[str, Any]:
-    member_repo = getattr(request.app.state, "member_repo", None)
-    return await asyncio.to_thread(member_service.create_member, req.name, req.description, owner_user_id=user_id, member_repo=member_repo)
-
+    return await asyncio.to_thread(member_service.create_member, req.name, req.description, owner_user_id=user_id)
 
 @router.put("/members/{member_id}")
-async def update_member(member_id: str, req: UpdateMemberRequest, request: Request) -> dict[str, Any]:
-    member_repo = getattr(request.app.state, "member_repo", None)
-    entity_repo = getattr(request.app.state, "entity_repo", None)
-    thread_repo = getattr(request.app.state, "thread_repo", None)
-    item = await asyncio.to_thread(
-        member_service.update_member,
-        member_id,
-        member_repo=member_repo,
-        entity_repo=entity_repo,
-        thread_repo=thread_repo,
-        **req.model_dump(),
-    )
+async def update_member(member_id: str, req: UpdateMemberRequest) -> dict[str, Any]:
+    item = await asyncio.to_thread(member_service.update_member, member_id, **req.model_dump())
     if not item:
         raise HTTPException(404, "Member not found")
     return item
-
 
 @router.put("/members/{member_id}/config")
 async def update_member_config(member_id: str, req: MemberConfigPayload) -> dict[str, Any]:
@@ -95,18 +79,16 @@ async def publish_member(member_id: str, req: PublishMemberRequest) -> dict[str,
 
 
 @router.delete("/members/{member_id}")
-async def delete_member(member_id: str, request: Request) -> dict[str, Any]:
+async def delete_member(member_id: str) -> dict[str, Any]:
     if member_id == "__leon__":
         raise HTTPException(403, "Cannot delete builtin member")
-    member_repo = getattr(request.app.state, "member_repo", None)
-    ok = await asyncio.to_thread(member_service.delete_member, member_id, member_repo=member_repo)
+    ok = await asyncio.to_thread(member_service.delete_member, member_id)
     if not ok:
         raise HTTPException(404, "Member not found")
     return {"success": True}
 
 
 # ── Tasks ──
-
 
 @router.get("/tasks")
 async def list_tasks() -> dict[str, Any]:
@@ -200,7 +182,6 @@ async def trigger_cron_job(job_id: str, request: Request) -> dict[str, Any]:
 
 
 # ── Library ──
-
 
 @router.get("/library/{resource_type}")
 async def list_library(
@@ -312,7 +293,6 @@ async def update_resource_content(resource_type: str, resource_id: str, req: Upd
 
 
 # ── Profile ──
-
 
 @router.get("/profile")
 async def get_profile() -> dict[str, Any]:

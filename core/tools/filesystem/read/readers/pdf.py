@@ -106,7 +106,11 @@ def _no_pymupdf_result(path: Path) -> ReadResult:
     """Return result when pymupdf is not installed."""
     stat = path.stat()
     content = (
-        f"PDF file: {path.name}\n  Size: {stat.st_size:,} bytes\n\npymupdf is not installed. To read PDF files:\n  uv pip install pymupdf"
+        f"PDF file: {path.name}\n"
+        f"  Size: {stat.st_size:,} bytes\n"
+        f"\n"
+        f"pymupdf is not installed. To read PDF files:\n"
+        f"  uv pip install pymupdf"
     )
     return ReadResult(
         file_path=str(path),

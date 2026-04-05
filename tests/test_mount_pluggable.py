@@ -2,11 +2,6 @@
 
 from __future__ import annotations
 
-# TODO: pre-existing failures — provider capability API changed
-import pytest
-
-pytest.skip("pre-existing: provider capability API mismatch — needs test update", allow_module_level=True)
-
 import subprocess
 import sys
 import types
@@ -97,7 +92,9 @@ def test_mount_capability_gate_respects_mode_handlers() -> None:
     assert mismatch["capability"]["mode_handlers"]["copy"] is False
 
 
-def test_docker_provider_supports_multiple_bind_mount_modes(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+def test_docker_provider_supports_multiple_bind_mount_modes(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     from sandbox.providers.docker import DockerProvider
 
     copy_source = tmp_path / "bootstrap"
@@ -112,12 +109,7 @@ def test_docker_provider_supports_multiple_bind_mount_modes(monkeypatch: pytest.
             {"source": "/host/tasks", "target": "/home/leon/shared/tasks", "mode": "mount", "read_only": False},
             {"source": "/host/docs", "target": "/home/leon/shared/docs", "mode": "mount", "read_only": True},
             {"source": str(copy_source), "target": "/home/leon/bootstrap", "mode": "copy", "read_only": False},
-            {
-                "host_path": "/host/issues",
-                "mount_path": "/home/leon/shared/issues",
-                "mode": "mount",
-                "read_only": False,
-            },
+            {"host_path": "/host/issues", "mount_path": "/home/leon/shared/issues", "mode": "mount", "read_only": False},
         ],
     )
 
@@ -154,8 +146,8 @@ def test_daytona_provider_maps_multiple_mounts_to_http_payload(monkeypatch: pyte
     fake_sdk = types.SimpleNamespace(Daytona=FakeDaytona)
     monkeypatch.setitem(sys.modules, "daytona_sdk", fake_sdk)
 
-    import sandbox.providers.daytona as daytona_module
     from sandbox.providers.daytona import DaytonaProvider
+    import sandbox.providers.daytona as daytona_module
 
     class FakeResponse:
         def __init__(self, status_code: int, payload: dict[str, object]) -> None:
@@ -191,12 +183,7 @@ def test_daytona_provider_maps_multiple_mounts_to_http_payload(monkeypatch: pyte
             {"source": "/host/tasks", "target": "/home/daytona/shared/tasks", "mode": "mount", "read_only": False},
             {"source": "/host/docs", "target": "/home/daytona/shared/docs", "mode": "mount", "read_only": True},
             {"source": "/host/bootstrap", "target": "/home/daytona/bootstrap", "mode": "copy", "read_only": False},
-            {
-                "host_path": "/host/issues",
-                "mount_path": "/home/daytona/shared/issues",
-                "mode": "mount",
-                "read_only": False,
-            },
+            {"host_path": "/host/issues", "mount_path": "/home/daytona/shared/issues", "mode": "mount", "read_only": False},
         ],
     )
 

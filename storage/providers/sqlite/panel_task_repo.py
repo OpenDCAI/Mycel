@@ -127,20 +127,8 @@ class SQLitePanelTaskRepo:
 
     def update(self, task_id: str, **fields: Any) -> dict[str, Any] | None:
         allowed = {
-            "title",
-            "description",
-            "assignee_id",
-            "status",
-            "priority",
-            "progress",
-            "deadline",
-            "thread_id",
-            "source",
-            "cron_job_id",
-            "result",
-            "started_at",
-            "completed_at",
-            "tags",
+            "title", "description", "assignee_id", "status", "priority", "progress", "deadline",
+            "thread_id", "source", "cron_job_id", "result", "started_at", "completed_at", "tags",
         }
         updates = {k: v for k, v in fields.items() if k in allowed and v is not None}
         if "tags" in updates:

@@ -13,7 +13,7 @@ from pydantic import BaseModel
 
 from config.models_loader import ModelsLoader
 from config.models_schema import ModelsConfig
-from config.user_paths import user_home_path, user_home_read_candidates
+from config.user_paths import first_existing_user_home_path, user_home_path, user_home_read_candidates
 
 router = APIRouter(prefix="/api/settings", tags=["settings"])
 
@@ -54,21 +54,6 @@ def save_settings(settings: WorkspaceSettings) -> None:
     SETTINGS_FILE.parent.mkdir(parents=True, exist_ok=True)
     with open(SETTINGS_FILE, "w", encoding="utf-8") as f:
         json.dump(settings.model_dump(), f, indent=2, ensure_ascii=False)
-
-
-def _get_settings_repo(request: Request):
-    """Return the user_settings_repo wired by lifespan, or None in sqlite mode."""
-    return getattr(request.app.state, "user_settings_repo", None)
-
-
-def _try_get_user_id(request: Request) -> str | None:
-    """Extract user_id from JWT without raising; returns None if unavailable."""
-    try:
-        from backend.web.core.dependencies import _extract_jwt_payload
-
-        return _extract_jwt_payload(request)["user_id"]
-    except Exception:
-        return None
 
 
 # ============================================================================
@@ -129,21 +114,9 @@ class UserSettings(BaseModel):
 
 
 @router.get("")
-async def get_settings(request: Request) -> UserSettings:
-    """Get combined settings (workspace + default_model from Supabase or preferences.json, models from models.json)."""
-    repo = _get_settings_repo(request)
-    user_id = _try_get_user_id(request) if repo else None
-
-    if repo and user_id:
-        row = repo.get(user_id)
-        ws = WorkspaceSettings(
-            default_workspace=row.get("default_workspace"),
-            recent_workspaces=row.get("recent_workspaces") or [],
-            default_model=row.get("default_model") or "leon:large",
-        )
-    else:
-        ws = load_settings()
-
+async def get_settings() -> UserSettings:
+    """Get combined settings (workspace + default_model from preferences.json, models from models.json)."""
+    ws = load_settings()
     models = load_merged_models()
 
     # Build compat view
@@ -196,7 +169,7 @@ async def browse_filesystem(path: str = Query(default="~"), include_files: bool 
 @router.get("/read")
 async def read_local_file(path: str = Query(...)) -> dict[str, Any]:
     """Read a local file's content (for SandboxBrowser in resources page)."""
-    _read_max_bytes = 100 * 1024
+    _READ_MAX_BYTES = 100 * 1024
     try:
         target = Path(path).expanduser().resolve()
         if not target.exists():
@@ -204,8 +177,8 @@ async def read_local_file(path: str = Query(...)) -> dict[str, Any]:
         if target.is_dir():
             raise HTTPException(status_code=400, detail="Path is a directory")
         raw = target.read_bytes()
-        truncated = len(raw) > _read_max_bytes
-        content = raw[:_read_max_bytes].decode(errors="replace")
+        truncated = len(raw) > _READ_MAX_BYTES
+        content = raw[:_READ_MAX_BYTES].decode(errors="replace")
         return {"path": str(target), "content": content, "truncated": truncated}
     except HTTPException:
         raise
@@ -214,7 +187,7 @@ async def read_local_file(path: str = Query(...)) -> dict[str, Any]:
 
 
 @router.post("/workspace")
-async def set_default_workspace(request: WorkspaceRequest, req: Request) -> dict[str, Any]:
+async def set_default_workspace(request: WorkspaceRequest) -> dict[str, Any]:
     """Set default workspace path."""
     workspace_path = Path(request.workspace).expanduser().resolve()
     if not workspace_path.exists():
@@ -222,45 +195,35 @@ async def set_default_workspace(request: WorkspaceRequest, req: Request) -> dict
     if not workspace_path.is_dir():
         raise HTTPException(status_code=400, detail="Workspace path is not a directory")
 
+    settings = load_settings()
+    settings.default_workspace = str(workspace_path)
+
     workspace_str = str(workspace_path)
+    if workspace_str in settings.recent_workspaces:
+        settings.recent_workspaces.remove(workspace_str)
+    settings.recent_workspaces.insert(0, workspace_str)
+    settings.recent_workspaces = settings.recent_workspaces[:5]
 
-    repo = _get_settings_repo(req)
-    user_id = _try_get_user_id(req) if repo else None
-    if repo and user_id:
-        repo.set_default_workspace(user_id, workspace_str)
-    else:
-        settings = load_settings()
-        settings.default_workspace = workspace_str
-        if workspace_str in settings.recent_workspaces:
-            settings.recent_workspaces.remove(workspace_str)
-        settings.recent_workspaces.insert(0, workspace_str)
-        settings.recent_workspaces = settings.recent_workspaces[:5]
-        save_settings(settings)
-
+    save_settings(settings)
     return {"success": True, "workspace": workspace_str}
 
 
 @router.post("/workspace/recent")
-async def add_recent_workspace(request: WorkspaceRequest, req: Request) -> dict[str, Any]:
+async def add_recent_workspace(request: WorkspaceRequest) -> dict[str, Any]:
     """Add a workspace to recent list."""
     workspace_path = Path(request.workspace).expanduser().resolve()
     if not workspace_path.exists() or not workspace_path.is_dir():
         raise HTTPException(status_code=400, detail="Invalid workspace path")
 
+    settings = load_settings()
     workspace_str = str(workspace_path)
 
-    repo = _get_settings_repo(req)
-    user_id = _try_get_user_id(req) if repo else None
-    if repo and user_id:
-        repo.add_recent_workspace(user_id, workspace_str)
-    else:
-        settings = load_settings()
-        if workspace_str in settings.recent_workspaces:
-            settings.recent_workspaces.remove(workspace_str)
-        settings.recent_workspaces.insert(0, workspace_str)
-        settings.recent_workspaces = settings.recent_workspaces[:5]
-        save_settings(settings)
+    if workspace_str in settings.recent_workspaces:
+        settings.recent_workspaces.remove(workspace_str)
+    settings.recent_workspaces.insert(0, workspace_str)
+    settings.recent_workspaces = settings.recent_workspaces[:5]
 
+    save_settings(settings)
     return {"success": True}
 
 
@@ -269,16 +232,11 @@ class DefaultModelRequest(BaseModel):
 
 
 @router.post("/default-model")
-async def set_default_model(request: DefaultModelRequest, req: Request) -> dict[str, Any]:
+async def set_default_model(request: DefaultModelRequest) -> dict[str, Any]:
     """Set default virtual model preference."""
-    repo = _get_settings_repo(req)
-    user_id = _try_get_user_id(req) if repo else None
-    if repo and user_id:
-        repo.set_default_model(user_id, request.model)
-    else:
-        settings = load_settings()
-        settings.default_model = request.model
-        save_settings(settings)
+    settings = load_settings()
+    settings.default_model = request.model
+    save_settings(settings)
     return {"success": True, "default_model": request.model}
 
 
@@ -344,14 +302,7 @@ async def get_available_models() -> dict[str, Any]:
                 continue
             seen.add(short_name)
             bundled_providers[short_name] = provider
-            models_list.append(
-                {
-                    "id": short_name,
-                    "name": m.get("name", short_name),
-                    "provider": provider,
-                    "context_length": m.get("context_length"),
-                }
-            )
+            models_list.append({"id": short_name, "name": m.get("name", short_name), "provider": provider, "context_length": m.get("context_length")})
         pricing_ids = seen
 
         # Merge custom + orphaned enabled models
@@ -360,14 +311,7 @@ async def get_available_models() -> dict[str, Any]:
         custom_providers = data.get("pool", {}).get("custom_providers", {})
         extra_ids = set(mc.pool.custom) | (set(mc.pool.enabled) - pricing_ids)
         for mid in sorted(extra_ids):
-            models_list.append(
-                {
-                    "id": mid,
-                    "name": mid,
-                    "custom": True,
-                    "provider": custom_providers.get(mid) or bundled_providers.get(mid),
-                }
-            )
+            models_list.append({"id": mid, "name": mid, "custom": True, "provider": custom_providers.get(mid) or bundled_providers.get(mid)})
 
         # Virtual models from system defaults
         virtual_models = [vm.model_dump() for vm in mc.virtual_models]
@@ -491,7 +435,6 @@ async def test_model(request: ModelTestRequest) -> dict[str, Any]:
     # Infer provider from model name if still unknown
     if not provider_name:
         from langchain.chat_models.base import _attempt_infer_model_provider
-
         provider_name = _attempt_infer_model_provider(resolved)
 
     # Get credentials from providers config
@@ -691,7 +634,8 @@ async def verify_observation() -> dict[str, Any]:
             )
             traces = client.trace.list(limit=5)
             trace_list = [
-                {"id": t.id, "name": t.name, "timestamp": str(t.timestamp)} for t in (traces.data if hasattr(traces, "data") else [])
+                {"id": t.id, "name": t.name, "timestamp": str(t.timestamp)}
+                for t in (traces.data if hasattr(traces, "data") else [])
             ]
             return {
                 "success": True,
@@ -714,13 +658,14 @@ async def verify_observation() -> dict[str, Any]:
                 api_key=cfg.api_key,
                 api_url=cfg.endpoint or "https://api.smith.langchain.com",
             )
-            runs = list(
-                client.list_runs(
-                    project_name=cfg.project or "default",
-                    limit=5,
-                )
-            )
-            run_list = [{"id": str(r.id), "name": r.name, "start_time": str(r.start_time)} for r in runs]
+            runs = list(client.list_runs(
+                project_name=cfg.project or "default",
+                limit=5,
+            ))
+            run_list = [
+                {"id": str(r.id), "name": r.name, "start_time": str(r.start_time)}
+                for r in runs
+            ]
             return {
                 "success": True,
                 "provider": "langsmith",

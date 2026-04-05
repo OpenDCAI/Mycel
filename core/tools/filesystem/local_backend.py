@@ -50,7 +50,6 @@ class LocalBackend(FileSystemBackend):
 
     def list_dir(self, path: str) -> DirListResult:
         import os
-
         try:
             p = Path(path)
             entries = []

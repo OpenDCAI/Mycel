@@ -1,39 +1,29 @@
-"""Supabase sandbox volume repository."""
+"""Supabase stub for sandbox volume repository."""
 
 from __future__ import annotations
 
 from typing import Any
 
-from ._query import rows, validate_client
-
 
 class SupabaseSandboxVolumeRepo:
-    _TABLE = "sandbox_volumes"
 
     def __init__(self, client: Any) -> None:
-        self._client = validate_client(client, "SupabaseSandboxVolumeRepo")
+        raise NotImplementedError("SupabaseSandboxVolumeRepo is not yet implemented")
 
     def close(self) -> None:
-        pass
+        raise NotImplementedError
 
     def create(self, volume_id: str, source_json: str, name: str | None, created_at: str) -> None:
-        self._client.table(self._TABLE).insert(
-            {"volume_id": volume_id, "source": source_json, "name": name, "created_at": created_at}
-        ).execute()
+        raise NotImplementedError
 
     def get(self, volume_id: str) -> dict[str, Any] | None:
-        resp = self._client.table(self._TABLE).select("*").eq("volume_id", volume_id).execute()
-        data = rows(resp, "SupabaseSandboxVolumeRepo", "get")
-        return data[0] if data else None
+        raise NotImplementedError
 
     def update_source(self, volume_id: str, source_json: str) -> None:
-        self._client.table(self._TABLE).update({"source": source_json}).eq("volume_id", volume_id).execute()
+        raise NotImplementedError
 
     def list_all(self) -> list[dict[str, Any]]:
-        resp = self._client.table(self._TABLE).select("*").order("created_at", desc=True).execute()
-        return rows(resp, "SupabaseSandboxVolumeRepo", "list_all")
+        raise NotImplementedError
 
     def delete(self, volume_id: str) -> bool:
-        resp = self._client.table(self._TABLE).delete().eq("volume_id", volume_id).execute()
-        data = rows(resp, "SupabaseSandboxVolumeRepo", "delete")
-        return len(data) > 0
+        raise NotImplementedError

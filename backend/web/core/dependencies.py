@@ -16,9 +16,9 @@ _DEV_PAYLOAD = {"user_id": "dev-user"}
 
 if _DEV_SKIP_AUTH:
     import logging as _logging
-
     _logging.getLogger(__name__).warning(
-        "LEON_DEV_SKIP_AUTH is active — JWT auth is BYPASSED for all requests. This must never be enabled in production."
+        "LEON_DEV_SKIP_AUTH is active — JWT auth is BYPASSED for all requests. "
+        "This must never be enabled in production."
     )
 
 

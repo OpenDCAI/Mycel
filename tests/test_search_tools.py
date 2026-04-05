@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import time
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -9,6 +10,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from core.tools.search.service import DEFAULT_EXCLUDES, SearchService
+
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -21,9 +23,13 @@ def workspace(tmp_path: Path) -> Path:
     # src/main.py
     src = tmp_path / "src"
     src.mkdir()
-    (src / "main.py").write_text("import os\nimport sys\n\ndef main():\n    print('hello world')\n")
+    (src / "main.py").write_text(
+        "import os\nimport sys\n\ndef main():\n    print('hello world')\n"
+    )
     # src/utils.py
-    (src / "utils.py").write_text("def helper():\n    return 42\n\ndef another():\n    return 'HELLO'\n")
+    (src / "utils.py").write_text(
+        "def helper():\n    return 42\n\ndef another():\n    return 'HELLO'\n"
+    )
     # src/app.js
     (src / "app.js").write_text("const app = () => console.log('hello');\n")
     # README.md at root
@@ -112,7 +118,9 @@ class TestGrepCaseInsensitive:
         assert "utils.py" in result
 
     def test_case_insensitive(self, mw: SearchService, workspace: Path):
-        result = _grep(mw, pattern="HELLO", case_insensitive=True, output_mode="files_with_matches")
+        result = _grep(
+            mw, pattern="HELLO", case_insensitive=True, output_mode="files_with_matches"
+        )
         # Should match both utils.py ('HELLO') and data.txt ('hello')
         assert "utils.py" in result
         assert "data.txt" in result
@@ -339,9 +347,9 @@ class TestGlobMtimeSorting:
         lines = result.strip().split("\n")
 
         # new.txt should appear before mid.txt, mid.txt before old.txt
-        new_idx = next(i for i, line in enumerate(lines) if "new.txt" in line)
-        mid_idx = next(i for i, line in enumerate(lines) if "mid.txt" in line)
-        old_idx = next(i for i, line in enumerate(lines) if "old.txt" in line)
+        new_idx = next(i for i, l in enumerate(lines) if "new.txt" in l)
+        mid_idx = next(i for i, l in enumerate(lines) if "mid.txt" in l)
+        old_idx = next(i for i, l in enumerate(lines) if "old.txt" in l)
         assert new_idx < mid_idx < old_idx
 
 

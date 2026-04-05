@@ -35,8 +35,5 @@ class SupabaseCheckpointRepo:
             # @@@supabase-in-clause - keep values in explicit list for PostgREST in_.
             q.in_(
                 self._client.table(table).delete().eq("thread_id", thread_id),
-                "checkpoint_id",
-                checkpoint_ids,
-                _REPO,
-                "delete_checkpoints_by_ids",
+                "checkpoint_id", checkpoint_ids, _REPO, "delete_checkpoints_by_ids",
             ).execute()

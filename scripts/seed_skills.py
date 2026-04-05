@@ -1,5 +1,7 @@
 """Batch-upload local SKILL.md files to the Mycel Hub."""
 
+import json
+import sys
 from pathlib import Path
 
 import httpx
@@ -10,26 +12,10 @@ PUBLISHER_USERNAME = "mycel-official"
 
 # Skills to SKIP (project-specific, not general purpose)
 SKIP = {
-    "bench",
-    "sks",
-    "sksadd",
-    "sksgnew",
-    "sksgrm",
-    "sksls",
-    "sksoff",
-    "skson",
-    "sksrm",
-    "skssearch",
-    "wtpr",
-    "wtrm",
-    "wtls",
-    "wtsync",
-    "wtrebaseall",
-    "wtnew",
-    "invit",
-    "test_leon",
-    "spec",
-    "the-fool",
+    "bench", "sks", "sksadd", "sksgnew", "sksgrm", "sksls",
+    "sksoff", "skson", "sksrm", "skssearch", "wtpr", "wtrm",
+    "wtls", "wtsync", "wtrebaseall", "wtnew", "invit",
+    "test_leon", "spec", "the-fool",
 }
 
 
@@ -53,7 +39,6 @@ def parse_skill(skill_dir: Path) -> dict | None:
         parts = content.split("---", 2)
         if len(parts) >= 3:
             import yaml
-
             try:
                 fm = yaml.safe_load(parts[1])
                 if fm:
@@ -118,16 +103,12 @@ def main():
 
     # Register publisher first
     try:
-        httpx.post(
-            f"{HUB_URL}/api/v1/publishers/register",
-            json={
-                "user_id": PUBLISHER_USER_ID,
-                "username": PUBLISHER_USERNAME,
-                "display_name": "Mycel Official",
-                "bio": "Official curated skills for the Mycel marketplace",
-            },
-            timeout=10.0,
-        ).raise_for_status()
+        httpx.post(f"{HUB_URL}/api/v1/publishers/register", json={
+            "user_id": PUBLISHER_USER_ID,
+            "username": PUBLISHER_USERNAME,
+            "display_name": "Mycel Official",
+            "bio": "Official curated skills for the Mycel marketplace",
+        }, timeout=10.0).raise_for_status()
         print("Publisher registered: mycel-official")
     except Exception as e:
         print(f"Publisher registration: {e}")

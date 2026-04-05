@@ -10,19 +10,20 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+logger = logging.getLogger(__name__)
+
+from storage.providers.sqlite.chat_session_repo import SQLiteChatSessionRepo
+from storage.providers.sqlite.kernel import SQLiteDBRole, resolve_role_db_path
+
 from sandbox.capability import SandboxCapability
 from sandbox.chat_session import ChatSessionManager, ChatSessionPolicy
 from sandbox.lease import lease_from_row
+from storage.providers.sqlite.lease_repo import SQLiteLeaseRepo
+from storage.providers.sqlite.thread_repo import SQLiteThreadRepo
 from sandbox.provider import SandboxProvider
 from sandbox.recipes import bootstrap_recipe
 from sandbox.terminal import TerminalState, terminal_from_row
-from storage.providers.sqlite.chat_session_repo import SQLiteChatSessionRepo
-from storage.providers.sqlite.kernel import SQLiteDBRole, resolve_role_db_path
-from storage.providers.sqlite.lease_repo import SQLiteLeaseRepo
 from storage.providers.sqlite.terminal_repo import SQLiteTerminalRepo
-from storage.providers.sqlite.thread_repo import SQLiteThreadRepo
-
-logger = logging.getLogger(__name__)
 
 
 def resolve_provider_cwd(provider) -> str:
@@ -76,7 +77,6 @@ class SandboxManager:
         )
 
         from sandbox.volume import SandboxVolume
-
         self.volume = SandboxVolume(
             provider=provider,
             provider_capability=self.provider_capability,
@@ -108,7 +108,6 @@ class SandboxManager:
     def _setup_mounts(self, thread_id: str) -> dict:
         """Mount the lease's volume into the sandbox. Pure sandbox-layer operation."""
         import json
-
         from sandbox.volume_source import DaytonaVolume, deserialize_volume_source
         from storage.providers.sqlite.sandbox_volume_repo import SQLiteSandboxVolumeRepo
 
@@ -132,12 +131,10 @@ class SandboxManager:
         remote_path = self.volume.resolve_mount_path()
 
         # @@@daytona-upgrade - first startup creates managed volume
-        if self.provider_capability.runtime_kind == "daytona_pty" and not isinstance(source, DaytonaVolume):
+        if (self.provider_capability.runtime_kind == "daytona_pty"
+                and not isinstance(source, DaytonaVolume)):
             source = self._upgrade_to_daytona_volume(
-                thread_id,
-                source,
-                volume_id,
-                remote_path,
+                thread_id, source, volume_id, remote_path,
             )
 
         if isinstance(source, DaytonaVolume):
@@ -150,7 +147,6 @@ class SandboxManager:
     def _upgrade_to_daytona_volume(self, thread_id: str, current_source, volume_id: str, remote_path: str):
         """First Daytona sandbox start: create managed volume, upgrade VolumeSource in DB."""
         import json
-
         from sandbox.volume_source import DaytonaVolume
         from storage.providers.sqlite.sandbox_volume_repo import SQLiteSandboxVolumeRepo
 
@@ -249,7 +245,6 @@ class SandboxManager:
     def resolve_volume_source(self, thread_id: str):
         """Resolve VolumeSource for a thread via lease chain. Pure sandbox-layer lookup."""
         import json
-
         from sandbox.volume_source import deserialize_volume_source
         from storage.providers.sqlite.sandbox_volume_repo import SQLiteSandboxVolumeRepo
 
@@ -268,7 +263,8 @@ class SandboxManager:
             raise ValueError(f"Volume not found: {lease.volume_id}")
         return deserialize_volume_source(json.loads(entry["source"]))
 
-    def _sync_to_sandbox(self, thread_id: str, instance_id: str, source=None, files: list[str] | None = None) -> None:
+    def _sync_to_sandbox(self, thread_id: str, instance_id: str,
+                         source=None, files: list[str] | None = None) -> None:
         if source is None:
             source = self.resolve_volume_source(thread_id)
         self.volume.sync_upload(thread_id, instance_id, source, self.volume.resolve_mount_path(), files=files)
@@ -299,7 +295,6 @@ class SandboxManager:
 
     def get_sandbox(self, thread_id: str, bind_mounts: list | None = None) -> SandboxCapability:
         from sandbox.thread_context import set_current_thread_id
-
         set_current_thread_id(thread_id)
 
         terminal = self._get_active_terminal(thread_id)
@@ -381,6 +376,7 @@ class SandboxManager:
             self._fire_session_ready(instance.instance_id, "create")
 
         return SandboxCapability(session, manager=self)
+
 
     def create_background_command_session(self, thread_id: str, initial_cwd: str) -> Any:
         default_row = self.terminal_store.get_default(thread_id)
@@ -523,10 +519,14 @@ class SandboxManager:
                         try:
                             paused = lease.pause_instance(self.provider, source="idle_reaper")
                         except Exception as exc:
-                            print(f"[idle-reaper] failed to pause expired lease {lease.lease_id} for thread {thread_id}: {exc}")
+                            print(
+                                f"[idle-reaper] failed to pause expired lease {lease.lease_id} for thread {thread_id}: {exc}"
+                            )
                             continue
                         if not paused:
-                            print(f"[idle-reaper] failed to pause expired lease {lease.lease_id} for thread {thread_id}")
+                            print(
+                                f"[idle-reaper] failed to pause expired lease {lease.lease_id} for thread {thread_id}"
+                            )
                             continue
 
             self.session_manager.delete(session_id, reason="idle_timeout")
@@ -625,7 +625,9 @@ class SandboxManager:
             matched = next((row for row in sessions if str(row.get("session_id")) == session_id), None)
             if matched is not None and str(matched.get("thread_id") or "") != thread_id:
                 matched_thread_id = str(matched.get("thread_id") or "")
-                raise RuntimeError(f"Session {session_id} belongs to thread {matched_thread_id}, not thread {thread_id}")
+                raise RuntimeError(
+                    f"Session {session_id} belongs to thread {matched_thread_id}, not thread {thread_id}"
+                )
 
         terminals = self._get_thread_terminals(thread_id)
         if not terminals:

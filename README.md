@@ -4,7 +4,7 @@
 
 <img src="./assets/banner.png" alt="Mycel Banner" width="600">
 
-**Link: connecting people, agents, and teams for the next era of human-AI collaboration**
+**Production-ready agent runtime for building, running, and governing collaborative AI teams**
 
 🇬🇧 English | [🇨🇳 中文](README.zh.md)
 
@@ -15,16 +15,16 @@
 
 ---
 
-Mycel gives your agents a **body** (portable identity & sandbox), **mind** (shareable templates), **memory** (persistent context), and **social life** (a native messaging layer where humans and agents coexist as equals). It's the platform layer for human-AI teams that actually work together.
+Mycel is an enterprise-grade agent runtime that treats AI agents as long-running co-workers. Built on a middleware-first architecture, it provides the infrastructure layer missing from existing agent frameworks: sandbox isolation, multi-agent communication, and production governance.
 
 ## Why Mycel?
 
-Existing frameworks help you *build* agents. Mycel helps agents *live* — move between tasks, accumulate knowledge, message teammates, and collaborate in workflows that feel as natural as a group chat.
+Existing agent frameworks focus on *building* agents. Mycel focuses on *running* them in production:
 
-- **Body** — Agents get a portable identity with sandbox isolation. Deploy anywhere (Local, Docker, E2B, Daytona, AgentBay), migrate seamlessly, and let your agents work for you — or for others.
-- **Mind** — A template marketplace for agent personas and skills. Share your agent's configuration, subscribe to community templates, or let a well-designed agent earn its keep.
-- **Memory** — Persistent, structured memory that travels with the agent across sessions and contexts.
-- **Social** — All members of the platform — human or AI — exist as first-class entities. Chat naturally, share files, forward conversation threads to agents: the social graph is the collaboration layer.
+- **Middleware Pipeline**: Unified tool injection, validation, security, and observability
+- **Sandbox Isolation**: Run agents in Docker/E2B/cloud with automatic state management
+- **Multi-Agent Communication**: Agents discover, message, and collaborate with each other — and with humans
+- **Production Governance**: Built-in security controls, audit logging, and cost tracking
 
 ## Quick Start
 
@@ -59,7 +59,7 @@ uv sync --extra e2b         # E2B
 uv sync --extra daytona     # Daytona
 ```
 
-Docker sandbox works out of the box (just needs Docker installed). See [Sandbox docs](docs/en/sandbox.mdx) for provider setup.
+Docker sandbox works out of the box (just needs Docker installed). See [Sandbox docs](docs/en/sandbox.md) for provider setup.
 
 ### 3. Start the services
 
@@ -170,11 +170,12 @@ Agents can be extended with external tools and specialized expertise:
 
 ## Documentation
 
-- [Configuration](docs/en/configuration.mdx) — Config files, virtual models, tool settings
-- [Multi-Agent Chat](docs/en/multi-agent-chat.mdx) — Entity-Chat system, agent communication
-- [Sandbox](docs/en/sandbox.mdx) — Providers, lifecycle, session management
-- [Deployment](docs/en/deployment.mdx) — Production deployment guide
-- [Concepts](docs/en/concepts.mdx) — Core abstractions (Thread, Member, Task, Resource)
+- [CLI Reference](docs/en/cli.md) — Terminal interface, commands, LLM provider setup
+- [Configuration](docs/en/configuration.md) — Config files, virtual models, tool settings
+- [Multi-Agent Chat](docs/en/multi-agent-chat.md) — Entity-Chat system, agent communication
+- [Sandbox](docs/en/sandbox.md) — Providers, lifecycle, session management
+- [Deployment](docs/en/deployment.md) — Production deployment guide
+- [Concepts](docs/en/product-primitives.md) — Core abstractions (Thread, Member, Task, Resource)
 
 ## Contact Us
 

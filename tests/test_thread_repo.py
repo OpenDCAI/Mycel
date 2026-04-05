@@ -97,33 +97,27 @@ def test_list_by_owner_user_id_includes_main_flag(tmp_path):
     entity_repo = SQLiteEntityRepo(db_path)
     thread_repo = SQLiteThreadRepo(db_path)
     try:
-        member_repo.create(
-            MemberRow(
-                id="owner-1",
-                name="owner",
-                type=MemberType.HUMAN,
-                created_at=1.0,
-            )
-        )
-        member_repo.create(
-            MemberRow(
-                id="member-1",
-                name="Toad",
-                type=MemberType.MYCEL_AGENT,
-                owner_user_id="owner-1",
-                created_at=2.0,
-            )
-        )
-        entity_repo.create(
-            EntityRow(
-                id="agent-1",
-                type="agent",
-                member_id="member-1",
-                name="Toad",
-                thread_id="agent-1",
-                created_at=3.0,
-            )
-        )
+        member_repo.create(MemberRow(
+            id="owner-1",
+            name="owner",
+            type=MemberType.HUMAN,
+            created_at=1.0,
+        ))
+        member_repo.create(MemberRow(
+            id="member-1",
+            name="Toad",
+            type=MemberType.MYCEL_AGENT,
+            owner_user_id="owner-1",
+            created_at=2.0,
+        ))
+        entity_repo.create(EntityRow(
+            id="agent-1",
+            type="agent",
+            member_id="member-1",
+            name="Toad",
+            thread_id="agent-1",
+            created_at=3.0,
+        ))
         thread_repo.create(
             thread_id="agent-1",
             member_id="member-1",

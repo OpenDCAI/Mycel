@@ -59,7 +59,6 @@ def resolve_role_db_path(role: SQLiteDBRole, db_path: Path | str | None = None) 
 def retry_on_locked(fn, max_retries=5, delay=0.2):
     """Retry a DB write on 'database is locked' errors with exponential backoff."""
     import time
-
     for attempt in range(max_retries):
         try:
             return fn()

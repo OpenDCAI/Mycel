@@ -1,19 +1,10 @@
 """
 P3 端到端测试：验证 Background Task 统一系统
 """
-
 import asyncio
-import os
-
 import httpx
 import pytest
-
 from agent import LeonAgent
-
-pytestmark = pytest.mark.skipif(
-    not os.getenv("ANTHROPIC_API_KEY"),
-    reason="ANTHROPIC_API_KEY not set",
-)
 
 
 @pytest.mark.asyncio
@@ -28,7 +19,7 @@ async def test_bash_task_lifecycle():
     async for chunk in agent.agent.astream(
         {"messages": [{"role": "user", "content": "Run 'sleep 2 && echo done' in background"}]},
         config=config,
-        stream_mode="updates",
+        stream_mode="updates"
     ):
         pass  # 等待命令启动
 
@@ -78,7 +69,7 @@ async def test_agent_task_lifecycle():
     async for chunk in agent.agent.astream(
         {"messages": [{"role": "user", "content": "Create a background task to analyze the current directory"}]},
         config=config,
-        stream_mode="updates",
+        stream_mode="updates"
     ):
         pass
 
@@ -113,7 +104,7 @@ async def test_task_cancel():
     async for chunk in agent.agent.astream(
         {"messages": [{"role": "user", "content": "Run 'sleep 10' in background"}]},
         config=config,
-        stream_mode="updates",
+        stream_mode="updates"
     ):
         pass
 

@@ -4,7 +4,7 @@
 
 <img src="./assets/banner.png" alt="Mycel Banner" width="600">
 
-**Link：连接人与 Agent，构建下一代人机协同**
+**企业级 Agent 运行时，构建、运行和治理协作 AI 团队**
 
 [🇬🇧 English](README.md) | 🇨🇳 中文
 
@@ -15,16 +15,16 @@
 
 ---
 
-Mycel 让你的 Agent 拥有**身体**（可迁移的身份与沙箱）、**思想**（可共享的模板市场）、**记忆**（跨会话的持久上下文）和**社交**（人与 Agent 平等共存的原生消息层）。这是真正意义上的人机协同平台。
+Mycel 是企业级 Agent 运行时，将 AI Agent 视为长期运行的协作伙伴。基于中间件优先架构，提供现有 Agent 框架缺失的基础设施层：沙箱隔离、多 Agent 通讯和生产治理。
 
 ## 为什么选择 Mycel？
 
-现有框架帮你*构建* Agent，Mycel 让 Agent 真正*活着*——在任务间自由迁移、积累知识、给队友发消息，用像群聊一样自然的方式协作。
+现有 Agent 框架专注于*构建* Agent，Mycel 专注于在生产环境*运行*它们：
 
-- **身体** — Agent 拥有可迁移的身份和沙箱隔离。支持 Local / Docker / E2B / Daytona / AgentBay，随时迁移，让你的 Agent 为你工作，也能为别人打工。
-- **思想** — Agent 模板市场：分享你的 Agent 配置，订阅社区模板，让设计精良的 Agent 产生真实价值。
-- **记忆** — 持久结构化记忆，跟随 Agent 跨会话、跨上下文流转。
-- **社交** — 平台上所有成员——无论是人还是 AI——都是一等公民实体。像微信一样自然地聊天、发文件、把聊天记录分享给 Agent：社交图谱就是协作层。
+- **中间件管线**：统一的工具注入、校验、安全和可观测性
+- **沙箱隔离**：在 Docker/E2B/云端运行 Agent，自动状态管理
+- **多 Agent 通讯**：Agent 之间互相发现、发送消息、自主协作——人类也参与其中
+- **生产治理**：内置安全控制、审计日志和成本追踪
 
 ## 快速开始
 
@@ -59,7 +59,7 @@ uv sync --extra e2b         # E2B
 uv sync --extra daytona     # Daytona
 ```
 
-Docker 沙箱开箱即用（只需安装 Docker）。详见[沙箱文档](docs/zh/sandbox.mdx)。
+Docker 沙箱开箱即用（只需安装 Docker）。详见[沙箱文档](docs/zh/sandbox.md)。
 
 ### 3. 启动服务
 
@@ -170,11 +170,12 @@ Agent 可通过外部工具和专业技能进行扩展：
 
 ## 文档
 
-- [配置指南](docs/zh/configuration.mdx) — 配置文件、虚拟模型、工具设置
-- [多 Agent 通讯](docs/zh/multi-agent-chat.mdx) — Entity-Chat 系统、Agent 间通讯
-- [沙箱](docs/zh/sandbox.mdx) — 提供商、生命周期、会话管理
-- [部署](docs/zh/deployment.mdx) — 生产部署指南
-- [核心概念](docs/zh/concepts.mdx) — 核心抽象（Thread、Member、Task、Resource）
+- [CLI 参考](docs/zh/cli.md) — 终端界面、命令、LLM 提供商配置
+- [配置指南](docs/zh/configuration.md) — 配置文件、虚拟模型、工具设置
+- [多 Agent 通讯](docs/zh/multi-agent-chat.md) — Entity-Chat 系统、Agent 间通讯
+- [沙箱](docs/zh/sandbox.md) — 提供商、生命周期、会话管理
+- [部署](docs/zh/deployment.md) — 生产部署指南
+- [核心概念](docs/zh/product-primitives.md) — 核心抽象（Thread、Member、Task、Resource）
 
 ## 联系我们
 

@@ -149,11 +149,17 @@ def _event_payload_to_dict(event: dict[str, Any]) -> dict[str, Any]:
     if raw_data in (None, ""):
         return {}
     if not isinstance(raw_data, str):
-        raise RuntimeError("Run event data must be a dict or JSON string when using storage_container run_event_repo.")
+        raise RuntimeError(
+            "Run event data must be a dict or JSON string when using storage_container run_event_repo."
+        )
     try:
         payload = json.loads(raw_data)
     except json.JSONDecodeError as exc:
-        raise RuntimeError("Run event data must be valid JSON when using storage_container run_event_repo.") from exc
+        raise RuntimeError(
+            "Run event data must be valid JSON when using storage_container run_event_repo."
+        ) from exc
     if not isinstance(payload, dict):
-        raise RuntimeError("Run event data JSON must decode to an object when using storage_container run_event_repo.")
+        raise RuntimeError(
+            "Run event data JSON must decode to an object when using storage_container run_event_repo."
+        )
     return payload

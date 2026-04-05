@@ -1,23 +1,17 @@
 """Tests for sandbox state mapping logic."""
 
 import pytest
-
 from storage.models import (
     map_lease_to_session_status,
+    SessionDisplayStatus,
 )
 
-# TODO: pre-existing — map_lease_to_session_status maps "detached" → "stopped" unconditionally;
-# these tests expect "detached" to inherit desired_state for display. Semantic conflict.
-_SKIP_DETACHED = pytest.mark.skip(reason="pre-existing: detached→stopped mapping conflict")
 
-
-@_SKIP_DETACHED
 def test_map_running_state():
     """Test mapping of running state (detached + running)."""
     assert map_lease_to_session_status("detached", "running") == "running"
 
 
-@_SKIP_DETACHED
 def test_map_pausing_state():
     """Test mapping of pausing in progress (detached + paused)."""
     assert map_lease_to_session_status("detached", "paused") == "paused"
@@ -40,14 +34,12 @@ def test_map_destroying_state():
     assert map_lease_to_session_status("paused", "destroyed") == "destroying"
 
 
-@_SKIP_DETACHED
 def test_case_insensitive():
     """Test that mapping is case-insensitive."""
     assert map_lease_to_session_status("DETACHED", "RUNNING") == "running"
     assert map_lease_to_session_status("Paused", "Paused") == "paused"
 
 
-@_SKIP_DETACHED
 def test_whitespace_handling():
     """Test that mapping handles whitespace."""
     assert map_lease_to_session_status(" detached ", " running ") == "running"

@@ -2,15 +2,11 @@
 
 from typing import Any
 
-from backend.web.core.storage_factory import make_panel_task_repo
-
-
-def _repo() -> Any:
-    return make_panel_task_repo()
+from storage.providers.sqlite.panel_task_repo import SQLitePanelTaskRepo
 
 
 def list_tasks() -> list[dict[str, Any]]:
-    repo = _repo()
+    repo = SQLitePanelTaskRepo()
     try:
         return repo.list_all()
     finally:
@@ -18,7 +14,7 @@ def list_tasks() -> list[dict[str, Any]]:
 
 
 def get_task(task_id: str) -> dict[str, Any] | None:
-    repo = _repo()
+    repo = SQLitePanelTaskRepo()
     try:
         return repo.get(task_id)
     finally:
@@ -26,7 +22,8 @@ def get_task(task_id: str) -> dict[str, Any] | None:
 
 
 def get_highest_priority_pending_task() -> dict[str, Any] | None:
-    repo = _repo()
+    """Return the highest-priority pending task (high > medium > low, oldest first)."""
+    repo = SQLitePanelTaskRepo()
     try:
         return repo.get_highest_priority_pending()
     finally:
@@ -34,7 +31,7 @@ def get_highest_priority_pending_task() -> dict[str, Any] | None:
 
 
 def create_task(**fields: Any) -> dict[str, Any]:
-    repo = _repo()
+    repo = SQLitePanelTaskRepo()
     try:
         return repo.create(**fields)
     finally:
@@ -42,7 +39,7 @@ def create_task(**fields: Any) -> dict[str, Any]:
 
 
 def update_task(task_id: str, **fields: Any) -> dict[str, Any] | None:
-    repo = _repo()
+    repo = SQLitePanelTaskRepo()
     try:
         return repo.update(task_id, **fields)
     finally:
@@ -50,7 +47,7 @@ def update_task(task_id: str, **fields: Any) -> dict[str, Any] | None:
 
 
 def delete_task(task_id: str) -> bool:
-    repo = _repo()
+    repo = SQLitePanelTaskRepo()
     try:
         return repo.delete(task_id)
     finally:
@@ -58,7 +55,7 @@ def delete_task(task_id: str) -> bool:
 
 
 def bulk_delete_tasks(ids: list[str]) -> int:
-    repo = _repo()
+    repo = SQLitePanelTaskRepo()
     try:
         return repo.bulk_delete(ids)
     finally:
@@ -66,7 +63,7 @@ def bulk_delete_tasks(ids: list[str]) -> int:
 
 
 def bulk_update_task_status(ids: list[str], status: str) -> int:
-    repo = _repo()
+    repo = SQLitePanelTaskRepo()
     try:
         return repo.bulk_update_status(ids, status)
     finally:

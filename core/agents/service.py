@@ -46,10 +46,7 @@ AGENT_SCHEMA = {
             },
             "description": {
                 "type": "string",
-                "description": (
-                    "Short description of what agent will do. Required when run_in_background is true; "
-                    "shown in the background task indicator."
-                ),
+                "description": "Short description of what agent will do. Required when run_in_background is true; shown in the background task indicator.",
             },
             "run_in_background": {
                 "type": "boolean",
@@ -178,33 +175,27 @@ class AgentService:
         # Shared with CommandService so TaskOutput covers both bash and agent runs.
         self._tasks: dict[str, BackgroundRun] = shared_runs if shared_runs is not None else {}
 
-        tool_registry.register(
-            ToolEntry(
-                name="Agent",
-                mode=ToolMode.INLINE,
-                schema=AGENT_SCHEMA,
-                handler=self._handle_agent,
-                source="AgentService",
-            )
-        )
-        tool_registry.register(
-            ToolEntry(
-                name="TaskOutput",
-                mode=ToolMode.INLINE,
-                schema=TASK_OUTPUT_SCHEMA,
-                handler=self._handle_task_output,
-                source="AgentService",
-            )
-        )
-        tool_registry.register(
-            ToolEntry(
-                name="TaskStop",
-                mode=ToolMode.INLINE,
-                schema=TASK_STOP_SCHEMA,
-                handler=self._handle_task_stop,
-                source="AgentService",
-            )
-        )
+        tool_registry.register(ToolEntry(
+            name="Agent",
+            mode=ToolMode.INLINE,
+            schema=AGENT_SCHEMA,
+            handler=self._handle_agent,
+            source="AgentService",
+        ))
+        tool_registry.register(ToolEntry(
+            name="TaskOutput",
+            mode=ToolMode.INLINE,
+            schema=TASK_OUTPUT_SCHEMA,
+            handler=self._handle_task_output,
+            source="AgentService",
+        ))
+        tool_registry.register(ToolEntry(
+            name="TaskStop",
+            mode=ToolMode.INLINE,
+            schema=TASK_STOP_SCHEMA,
+            handler=self._handle_task_stop,
+            source="AgentService",
+        ))
 
     async def _handle_agent(
         self,
@@ -236,31 +227,20 @@ class AgentService:
 
         # Create async task (independent LeonAgent runs inside)
         task = asyncio.create_task(
-            self._run_agent(
-                task_id,
-                agent_name,
-                thread_id,
-                prompt,
-                subagent_type,
-                max_turns,
-                description=description or "",
-                run_in_background=run_in_background,
-            )
+            self._run_agent(task_id, agent_name, thread_id, prompt, subagent_type, max_turns,
+                            description=description or "", run_in_background=run_in_background)
         )
         if run_in_background:
             # True fire-and-forget: track in self._tasks for TaskOutput/TaskStop
             running = _RunningTask(task=task, agent_id=task_id, thread_id=thread_id, description=description or "")
             self._tasks[task_id] = running
-            return json.dumps(
-                {
-                    "task_id": task_id,
-                    "agent_name": agent_name,
-                    "thread_id": thread_id,
-                    "status": "running",
-                    "message": "Agent started in background. Use TaskOutput to get result.",
-                },
-                ensure_ascii=False,
-            )
+            return json.dumps({
+                "task_id": task_id,
+                "agent_name": agent_name,
+                "thread_id": thread_id,
+                "status": "running",
+                "message": "Agent started in background. Use TaskOutput to get result.",
+            }, ensure_ascii=False)
 
         # Default: parent blocks until sub-agent completes (does not block frontend event loop)
         try:
@@ -291,7 +271,6 @@ class AgentService:
         # into the parent's "messages" stream. We clear it here so the sub-agent
         # starts a fresh, independent callback context.
         from langchain_core.runnables.config import var_child_runnable_config
-
         var_child_runnable_config.set(None)
 
         # Lazy import avoids circular dependency (agent.py imports AgentService)
@@ -304,7 +283,6 @@ class AgentService:
         emit_fn = None
         try:
             from backend.web.event_bus import get_event_bus
-
             event_bus = get_event_bus()
             emit_fn = event_bus.make_emitter(
                 thread_id=parent_thread_id,
@@ -335,21 +313,13 @@ class AgentService:
 
             # Notify frontend: task started
             if emit_fn is not None:
-                await emit_fn(
-                    {
-                        "event": "task_start",
-                        "data": json.dumps(
-                            {
-                                "task_id": task_id,
-                                "thread_id": thread_id,
-                                "background": run_in_background,
-                                "task_type": "agent",
-                                "description": description or agent_name,
-                            },
-                            ensure_ascii=False,
-                        ),
-                    }
-                )
+                await emit_fn({"event": "task_start", "data": json.dumps({
+                    "task_id": task_id,
+                    "thread_id": thread_id,
+                    "background": run_in_background,
+                    "task_type": "agent",
+                    "description": description or agent_name,
+                }, ensure_ascii=False)})
 
             config = {"configurable": {"thread_id": thread_id}}
             output_parts: list[str] = []
@@ -381,18 +351,10 @@ class AgentService:
             result = "\n".join(output_parts) or "(Agent completed with no text output)"
             # Notify frontend: task done
             if emit_fn is not None:
-                await emit_fn(
-                    {
-                        "event": "task_done",
-                        "data": json.dumps(
-                            {
-                                "task_id": task_id,
-                                "background": run_in_background,
-                            },
-                            ensure_ascii=False,
-                        ),
-                    }
-                )
+                await emit_fn({"event": "task_done", "data": json.dumps({
+                    "task_id": task_id,
+                    "background": run_in_background,
+                }, ensure_ascii=False)})
             # Queue notification only for background runs — blocking callers already
             # received the result as the tool's return value; sending a notification
             # would trigger a spurious new parent turn.
@@ -407,24 +369,16 @@ class AgentService:
                 self._queue_manager.enqueue(notification, parent_thread_id, notification_type="agent")
             return result
 
-        except Exception:
+        except Exception as e:
             logger.exception("[AgentService] Agent %s failed", agent_name)
             await self._agent_registry.update_status(task_id, "error")
             # Notify frontend: task error
             if emit_fn is not None:
                 try:
-                    await emit_fn(
-                        {
-                            "event": "task_error",
-                            "data": json.dumps(
-                                {
-                                    "task_id": task_id,
-                                    "background": run_in_background,
-                                },
-                                ensure_ascii=False,
-                            ),
-                        }
-                    )
+                    await emit_fn({"event": "task_error", "data": json.dumps({
+                        "task_id": task_id,
+                        "background": run_in_background,
+                    }, ensure_ascii=False)})
                 except Exception:
                     pass
             if run_in_background and self._queue_manager and parent_thread_id:
@@ -451,25 +405,19 @@ class AgentService:
             return f"Error: task '{task_id}' not found"
 
         if not running.is_done:
-            return json.dumps(
-                {
-                    "task_id": task_id,
-                    "status": "running",
-                    "message": "Agent is still running.",
-                },
-                ensure_ascii=False,
-            )
+            return json.dumps({
+                "task_id": task_id,
+                "status": "running",
+                "message": "Agent is still running.",
+            }, ensure_ascii=False)
 
         result = running.get_result()
         status = "error" if (result and result.startswith("<tool_use_error>")) else "completed"
-        return json.dumps(
-            {
-                "task_id": task_id,
-                "status": status,
-                "result": result,
-            },
-            ensure_ascii=False,
-        )
+        return json.dumps({
+            "task_id": task_id,
+            "status": status,
+            "result": result,
+        }, ensure_ascii=False)
 
     async def _handle_task_stop(self, task_id: str) -> str:
         """Stop a running background agent task."""

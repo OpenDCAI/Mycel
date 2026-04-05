@@ -79,3 +79,5 @@ def normalize_base_url(url: str) -> str:
 
     # 否则补全 /v1
     return f"{url}/v1"
+
+

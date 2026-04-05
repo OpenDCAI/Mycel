@@ -37,7 +37,6 @@ def _daytona_state_to_status(state: str) -> str:
         return "paused"
     return "unknown"
 
-
 logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
@@ -49,11 +48,7 @@ if TYPE_CHECKING:
 class DaytonaProvider(SandboxProvider):
     """Daytona cloud sandbox provider."""
 
-    CATALOG_ENTRY = {
-        "vendor": "Daytona",
-        "description": "Managed cloud or self-host Daytona sandboxes",
-        "provider_type": "cloud",
-    }
+    CATALOG_ENTRY = {"vendor": "Daytona", "description": "Managed cloud or self-host Daytona sandboxes", "provider_type": "cloud"}
 
     name = "daytona"
     CAPABILITY = ProviderCapability(
@@ -102,7 +97,9 @@ class DaytonaProvider(SandboxProvider):
         self.api_url = api_url
         self.target = target
         self.default_cwd = default_cwd
-        self.bind_mounts: list[MountSpec] = [MountSpec.model_validate(m) if isinstance(m, dict) else m for m in (bind_mounts or [])]
+        self.bind_mounts: list[MountSpec] = [
+            MountSpec.model_validate(m) if isinstance(m, dict) else m for m in (bind_mounts or [])
+        ]
 
         os.environ["DAYTONA_API_KEY"] = api_key
         os.environ["DAYTONA_API_URL"] = api_url
@@ -113,7 +110,9 @@ class DaytonaProvider(SandboxProvider):
 
     def set_thread_bind_mounts(self, thread_id: str, mounts: list[MountSpec | dict]) -> None:
         """Set thread-specific bind mounts that will be applied when creating sessions."""
-        self._thread_bind_mounts[thread_id] = [MountSpec.model_validate(m) if isinstance(m, dict) else m for m in mounts]
+        self._thread_bind_mounts[thread_id] = [
+            MountSpec.model_validate(m) if isinstance(m, dict) else m for m in mounts
+        ]
 
     # ==================== Managed Volume ====================
 
@@ -278,7 +277,9 @@ class DaytonaProvider(SandboxProvider):
     def list_dir(self, session_id: str, path: str) -> list[dict]:
         sb = self._get_sandbox(session_id)
         entries = sb.fs.list_files(path)
-        return [{"name": e.name, "type": "directory" if e.is_dir else "file", "size": e.size or 0} for e in (entries or [])]
+        return [
+            {"name": e.name, "type": "directory" if e.is_dir else "file", "size": e.size or 0} for e in (entries or [])
+        ]
 
     def upload_bytes(self, session_id: str, remote_path: str, data: bytes) -> None:
         sb = self._get_sandbox(session_id)
@@ -293,7 +294,10 @@ class DaytonaProvider(SandboxProvider):
 
     def list_provider_sessions(self) -> list[SessionInfo]:
         result = self.client.list()
-        return [SessionInfo(session_id=sb.id, provider=self.name, status=_daytona_state_to_status(sb.state.value)) for sb in result.items]
+        return [
+            SessionInfo(session_id=sb.id, provider=self.name, status=_daytona_state_to_status(sb.state.value))
+            for sb in result.items
+        ]
 
     # ==================== Inspection ====================
 
@@ -347,9 +351,9 @@ class DaytonaProvider(SandboxProvider):
                 i_disk = text.index(disk_marker)
 
                 cpu1_block = text[:i_mem]
-                mem_block = text[i_mem + len(mem_marker) : i_cpu2]
-                cpu2_block = text[i_cpu2 + len(cpu2_marker) : i_disk]
-                disk_block = text[i_disk + len(disk_marker) :]
+                mem_block = text[i_mem + len(mem_marker):i_cpu2]
+                cpu2_block = text[i_cpu2 + len(cpu2_marker):i_disk]
+                disk_block = text[i_disk + len(disk_marker):]
 
                 def _usage_usec(block: str) -> int | None:
                     for line in block.splitlines():
@@ -365,7 +369,7 @@ class DaytonaProvider(SandboxProvider):
 
                 mem_str = mem_block.strip()
                 if mem_str.isdigit():
-                    memory_used_mb = int(mem_str) / (1024**2)
+                    memory_used_mb = int(mem_str) / (1024 ** 2)
 
                 # du -sm outputs "<MB>\t<path>"; parse the first token
                 disk_line = disk_block.strip().splitlines()[0] if disk_block.strip() else ""
@@ -454,7 +458,9 @@ class DaytonaProvider(SandboxProvider):
             while time.time() < deadline:
                 response = client.get(f"{self.api_url.rstrip('/')}/sandbox/{sandbox_id}", headers=self._api_auth_headers())
                 if response.status_code != 200:
-                    raise RuntimeError(f"Daytona get sandbox failed while waiting for started ({response.status_code}): {response.text}")
+                    raise RuntimeError(
+                        f"Daytona get sandbox failed while waiting for started ({response.status_code}): {response.text}"
+                    )
                 body = response.json()
                 state = str(body.get("state") or "")
                 if state == "started":
@@ -466,7 +472,6 @@ class DaytonaProvider(SandboxProvider):
 
     def create_runtime(self, terminal: AbstractTerminal, lease: SandboxLease) -> PhysicalTerminalRuntime:
         from sandbox.providers.daytona import DaytonaSessionRuntime
-
         return DaytonaSessionRuntime(terminal, lease, self)
 
 
@@ -474,19 +479,24 @@ class DaytonaProvider(SandboxProvider):
 
 import asyncio  # noqa: E402
 import json  # noqa: E402
+import os  # noqa: E402
 import re  # noqa: E402
+import shlex  # noqa: E402
+import time  # noqa: E402
+import uuid  # noqa: E402
 from collections.abc import Callable  # noqa: E402
 
 from sandbox.interfaces.executor import ExecuteResult  # noqa: E402
 from sandbox.runtime import (  # noqa: E402
     ENV_NAME_RE,
+    _RemoteRuntimeBase,
+    _SubprocessPtySession,
     _build_export_block,
     _build_state_snapshot_cmd,
     _compute_env_delta,
     _extract_marker_exit,
     _extract_state_from_output,
     _parse_env_output,
-    _RemoteRuntimeBase,
     _sanitize_shell_output,
 )
 
@@ -515,7 +525,9 @@ class DaytonaSessionRuntime(_RemoteRuntimeBase):
             if isinstance(pwd_hint, str) and os.path.isabs(pwd_hint):
                 cleaned_cwd = pwd_hint
             else:
-                raise RuntimeError(f"Invalid terminal cwd snapshot for terminal {self.terminal.terminal_id}: {state.cwd!r}")
+                raise RuntimeError(
+                    f"Invalid terminal cwd snapshot for terminal {self.terminal.terminal_id}: {state.cwd!r}"
+                )
         if cleaned_cwd != state.cwd or cleaned_env != state.env_delta:
             from sandbox.terminal import TerminalState
 
@@ -748,11 +760,15 @@ class DaytonaSessionRuntime(_RemoteRuntimeBase):
                             stderr=f"Error: snapshot failed: {exc}",
                         )
                 else:
-                    return ExecuteResult(exit_code=1, stdout="", stderr=f"Error: snapshot failed: {self._snapshot_error}")
+                    return ExecuteResult(
+                        exit_code=1, stdout="", stderr=f"Error: snapshot failed: {self._snapshot_error}"
+                    )
             try:
                 first = await asyncio.to_thread(self._execute_once_sync, command, timeout, on_stdout_chunk)
             except TimeoutError:
-                return ExecuteResult(exit_code=-1, stdout="", stderr=f"Command timed out after {timeout}s", timed_out=True)
+                return ExecuteResult(
+                    exit_code=-1, stdout="", stderr=f"Command timed out after {timeout}s", timed_out=True
+                )
             except Exception as exc:
                 if not self._looks_like_infra_error(str(exc)):
                     return ExecuteResult(exit_code=1, stdout="", stderr=f"Error: {exc}")

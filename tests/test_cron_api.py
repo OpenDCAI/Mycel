@@ -5,6 +5,7 @@ from pydantic import ValidationError
 
 from backend.web.models.panel import CreateCronJobRequest, UpdateCronJobRequest
 
+
 # ── CreateCronJobRequest ──
 
 

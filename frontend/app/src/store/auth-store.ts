@@ -10,15 +10,6 @@ import { persist } from "zustand/middleware";
 
 const DEV_SKIP_AUTH = import.meta.env.VITE_DEV_SKIP_AUTH === "true";
 
-// Allow overriding the API origin at runtime via window.__MYCEL_CONFIG__.apiBase
-// (injected by docker-entrypoint.sh), falling back to the Vite build-time variable.
-// Relative URLs are used when neither is set (same-origin / local dev).
-const API_BASE = (
-  (window as { __MYCEL_CONFIG__?: { apiBase?: string } }).__MYCEL_CONFIG__?.apiBase
-  ?? import.meta.env.VITE_API_BASE
-  ?? ""
-).replace(/\/$/, "");
-
 export interface AuthIdentity {
   id: string;
   name: string;
@@ -31,33 +22,28 @@ interface AuthState {
   user: AuthIdentity | null;
   agent: AuthIdentity | null;
   entityId: string | null;
-  setupInfo: { userId: string; defaultName: string } | null;
 
-  login: (identifier: string, password: string) => Promise<void>;
-  sendOtp: (email: string, password: string, inviteCode: string) => Promise<void>;
-  verifyOtp: (email: string, token: string) => Promise<{ tempToken: string }>;
-  completeRegister: (tempToken: string, inviteCode: string) => Promise<void>;
-  clearSetupInfo: () => void;
+  login: (username: string, password: string) => Promise<void>;
+  register: (username: string, password: string) => Promise<void>;
   logout: () => void;
 }
 
-async function apiPost(endpoint: string, body: Record<string, string>) {
-  const res = await fetch(`${API_BASE}/api/auth/${endpoint}`, {
+async function authCall(endpoint: string, username: string, password: string) {
+  const res = await fetch(`/api/auth/${endpoint}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
+    body: JSON.stringify({ username, password }),
   });
   if (!res.ok) {
-    const text = await res.text();
-    let message = text || res.statusText;
+    const body = await res.text();
+    // Parse FastAPI {"detail": "..."} error format
     try {
-      const parsed = JSON.parse(text);
-      const detail = parsed.detail;
-      if (typeof detail === "string") message = detail;
-      else if (Array.isArray(detail)) message = detail.map((d: { msg: string; loc?: string[] }) => `${d.loc?.at(-1) ?? "?"}: ${d.msg}`).join("; ");
-      else if (detail != null) message = JSON.stringify(detail);
-    } catch { /* not JSON, use raw text */ }
-    throw new Error(message);
+      const parsed = JSON.parse(body);
+      throw new Error(parsed.detail || body);
+    } catch (e) {
+      if (e instanceof Error && e.message !== body) throw e;
+      throw new Error(body || res.statusText);
+    }
   }
   return res.json();
 }
@@ -70,49 +56,34 @@ export const useAuthStore = create<AuthState>()(
       token: DEV_SKIP_AUTH ? "dev-skip-auth" : null,
       user: DEV_SKIP_AUTH ? DEV_MOCK_USER : null,
       agent: null,
-      entityId: DEV_SKIP_AUTH ? "dev-user" : null,
-      setupInfo: null,
+      entityId: DEV_SKIP_AUTH ? DEV_MOCK_USER.id : null,
 
-      login: async (identifier, password) => {
-        const data = await apiPost("login", { identifier, password });
+      login: async (username, password) => {
+        const data = await authCall("login", username, password);
         set({
           token: data.token,
           user: data.user,
           agent: data.agent,
           entityId: data.user?.id ?? null,
         });
+        // Full reload so all components initialize from fresh auth state
         window.location.href = "/threads";
       },
 
-      sendOtp: async (email, password, inviteCode) => {
-        await apiPost("send-otp", { email, password, invite_code: inviteCode });
-      },
-
-      verifyOtp: async (email, token) => {
-        const data = await apiPost("verify-otp", { email, token });
-        return { tempToken: data.temp_token };
-      },
-
-      completeRegister: async (tempToken, inviteCode) => {
-        const data = await apiPost("complete-register", {
-          temp_token: tempToken,
-          invite_code: inviteCode,
-        });
+      register: async (username, password) => {
+        const data = await authCall("register", username, password);
         set({
           token: data.token,
           user: data.user,
-          agent: data.agent ?? null,
+          agent: data.agent,
           entityId: data.user?.id ?? null,
-          setupInfo: { userId: data.user.id, defaultName: data.user.name },
         });
-      },
-
-      clearSetupInfo: () => {
-        set({ setupInfo: null });
+        // Full reload so all components initialize from fresh auth state
+        window.location.href = "/threads";
       },
 
       logout: () => {
-        set({ token: null, user: null, agent: null, entityId: null, setupInfo: null });
+        set({ token: null, user: null, agent: null, entityId: null });
       },
     }),
     {
@@ -137,9 +108,7 @@ export async function authFetch(url: string, init?: RequestInit): Promise<Respon
   };
   if (token) headers["Authorization"] = `Bearer ${token}`;
 
-  // Prepend API_BASE for relative URLs when configured
-  const resolvedUrl = API_BASE && url.startsWith("/") ? `${API_BASE}${url}` : url;
-  const res = await fetch(resolvedUrl, { ...init, headers });
+  const res = await fetch(url, { ...init, headers });
   if (res.status === 401 && !DEV_SKIP_AUTH) {
     useAuthStore.getState().logout();
   }

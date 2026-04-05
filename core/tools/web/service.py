@@ -56,69 +56,65 @@ class WebService:
         self._register(registry)
 
     def _register(self, registry: ToolRegistry) -> None:
-        registry.register(
-            ToolEntry(
-                name="WebSearch",
-                mode=ToolMode.INLINE,
-                schema={
-                    "name": "WebSearch",
-                    "description": "Search the web for current information. Returns titles, URLs, and snippets.",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "query": {
-                                "type": "string",
-                                "description": "Search query",
-                            },
-                            "max_results": {
-                                "type": "integer",
-                                "description": "Maximum number of results (default: 5)",
-                            },
-                            "include_domains": {
-                                "type": "array",
-                                "items": {"type": "string"},
-                                "description": "Only include results from these domains",
-                            },
-                            "exclude_domains": {
-                                "type": "array",
-                                "items": {"type": "string"},
-                                "description": "Exclude results from these domains",
-                            },
+        registry.register(ToolEntry(
+            name="WebSearch",
+            mode=ToolMode.INLINE,
+            schema={
+                "name": "WebSearch",
+                "description": "Search the web for current information. Returns titles, URLs, and snippets.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "query": {
+                            "type": "string",
+                            "description": "Search query",
                         },
-                        "required": ["query"],
+                        "max_results": {
+                            "type": "integer",
+                            "description": "Maximum number of results (default: 5)",
+                        },
+                        "include_domains": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "description": "Only include results from these domains",
+                        },
+                        "exclude_domains": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "description": "Exclude results from these domains",
+                        },
                     },
+                    "required": ["query"],
                 },
-                handler=self._web_search,
-                source="WebService",
-            )
-        )
+            },
+            handler=self._web_search,
+            source="WebService",
+        ))
 
-        registry.register(
-            ToolEntry(
-                name="WebFetch",
-                mode=ToolMode.INLINE,
-                schema={
-                    "name": "WebFetch",
-                    "description": "Fetch a URL and extract specific information using AI. Returns processed content, not raw HTML.",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "url": {
-                                "type": "string",
-                                "description": "URL to fetch content from",
-                            },
-                            "prompt": {
-                                "type": "string",
-                                "description": "What information to extract from the page",
-                            },
+        registry.register(ToolEntry(
+            name="WebFetch",
+            mode=ToolMode.INLINE,
+            schema={
+                "name": "WebFetch",
+                "description": "Fetch a URL and extract specific information using AI. Returns processed content, not raw HTML.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "url": {
+                            "type": "string",
+                            "description": "URL to fetch content from",
                         },
-                        "required": ["url", "prompt"],
+                        "prompt": {
+                            "type": "string",
+                            "description": "What information to extract from the page",
+                        },
                     },
+                    "required": ["url", "prompt"],
                 },
-                handler=self._web_fetch,
-                source="WebService",
-            )
-        )
+            },
+            handler=self._web_fetch,
+            source="WebService",
+        ))
 
     async def _web_search(
         self,
@@ -179,7 +175,10 @@ class WebService:
             model = self._extraction_model
             if model is None:
                 preview = content[:5000] if len(content) > 5000 else content
-                return f"AI extraction unavailable. Configure an extraction model. Raw content:\n\n{preview}"
+                return (
+                    "AI extraction unavailable. Configure an extraction model. "
+                    f"Raw content:\n\n{preview}"
+                )
 
             extraction_prompt = (
                 f"You are extracting information from a web page.\n"
@@ -194,7 +193,7 @@ class WebService:
                 timeout=30,
             )
             return response.content
-        except TimeoutError:
+        except asyncio.TimeoutError:
             preview = content[:5000] if len(content) > 5000 else content
             return f"AI extraction timed out (30s). Raw content preview:\n\n{preview}"
         except Exception as e:

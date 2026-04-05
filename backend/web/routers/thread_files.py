@@ -7,8 +7,8 @@ from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse
 
 from backend.web.core.dependencies import get_app, verify_thread_owner
-from backend.web.services import file_channel_service
 from backend.web.services.agent_pool import resolve_thread_sandbox
+from backend.web.services import file_channel_service
 from backend.web.utils.helpers import resolve_local_workspace_path
 from sandbox.thread_context import set_current_thread_id
 
@@ -25,6 +25,7 @@ _public = APIRouter(prefix="/api/threads/{thread_id}/files", tags=["thread-files
 async def list_workspace_path(
     thread_id: str,
     path: str | None = Query(default=None),
+
     app: Annotated[Any, Depends(get_app)] = None,
 ) -> dict[str, Any]:
     """List files and directories in workspace path."""
@@ -44,7 +45,10 @@ async def list_workspace_path(
         return {
             "thread_id": thread_id,
             "path": str(target),
-            "entries": [{"name": e.name, "is_dir": e.is_dir, "size": e.size, "children_count": e.children_count} for e in result.entries],
+            "entries": [
+                {"name": e.name, "is_dir": e.is_dir, "size": e.size, "children_count": e.children_count}
+                for e in result.entries
+            ],
         }
 
     # Remote sandbox
@@ -73,7 +77,10 @@ async def list_workspace_path(
             raise RuntimeError(result.error)
         return {
             "path": target,
-            "entries": [{"name": e.name, "is_dir": e.is_dir, "size": e.size, "children_count": e.children_count} for e in result.entries],
+            "entries": [
+                {"name": e.name, "is_dir": e.is_dir, "size": e.size, "children_count": e.children_count}
+                for e in result.entries
+            ],
         }
 
     try:
@@ -90,6 +97,7 @@ async def list_workspace_path(
 async def read_workspace_file(
     thread_id: str,
     path: str = Query(...),
+
     app: Annotated[Any, Depends(get_app)] = None,
 ) -> dict[str, Any]:
     """Read file content from workspace."""
@@ -143,6 +151,7 @@ async def read_workspace_file(
 @router.get("/channels")
 async def get_sandbox_files(
     thread_id: str,
+
 ) -> dict[str, Any]:
     """Get thread-scoped upload/download channel paths."""
     source = await asyncio.to_thread(file_channel_service.get_file_channel_source, thread_id)
@@ -157,6 +166,7 @@ async def upload_file(
     thread_id: str,
     file: UploadFile = File(...),
     path: str | None = Query(default=None),
+
     app: Annotated[Any, Depends(get_app)] = None,
 ) -> dict[str, Any]:
     """Upload a file into thread sandbox files."""
@@ -202,6 +212,7 @@ async def download_file(
 async def delete_workspace_file(
     thread_id: str,
     path: str = Query(...),
+
 ) -> dict[str, Any]:
     """Delete a file from workspace."""
     try:
@@ -220,6 +231,7 @@ async def delete_workspace_file(
 @router.get("/channel-files")
 async def list_channel_files(
     thread_id: str,
+
 ) -> dict[str, Any]:
     """List files under thread-scoped files directory."""
     try:

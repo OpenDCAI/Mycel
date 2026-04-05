@@ -29,12 +29,8 @@ class DefaultDeliveryResolver:
         self._chat_entities = chat_entity_repo
 
     def resolve(
-        self,
-        recipient_id: str,
-        chat_id: str,
-        sender_id: str,
-        *,
-        is_mentioned: bool = False,
+        self, recipient_id: str, chat_id: str, sender_id: str,
+        *, is_mentioned: bool = False,
     ) -> DeliveryAction:
         # 1. Contact-level block — always DROP, even if mentioned
         contact = self._contacts.get(recipient_id, sender_id)
@@ -61,9 +57,9 @@ class DefaultDeliveryResolver:
 
     def _is_chat_muted(self, user_id: str, chat_id: str) -> bool:
         """Check if user has muted this specific chat."""
-        participants = self._chat_entities.list_participants(chat_id)
-        for ce in participants:
-            if ce.user_id == user_id:
+        members = self._chat_entities.list_members(chat_id)
+        for ce in members:
+            if ce.entity_id == user_id:
                 muted = getattr(ce, "muted", False)
                 if not muted:
                     return False

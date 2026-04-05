@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 from pathlib import Path
 from typing import Any
 
@@ -61,15 +62,9 @@ class AgentLoader:
         # Backward compat: old-style top-level keys fold into runtime
         for cfg in (system_config, user_config, project_config):
             for key in (
-                "context_limit",
-                "enable_audit_log",
-                "allowed_extensions",
-                "block_dangerous_commands",
-                "block_network_commands",
-                "queue_mode",
-                "temperature",
-                "max_tokens",
-                "model_kwargs",
+                "context_limit", "enable_audit_log", "allowed_extensions",
+                "block_dangerous_commands", "block_network_commands",
+                "queue_mode", "temperature", "max_tokens", "model_kwargs",
             ):
                 if key in cfg and key not in merged_runtime:
                     merged_runtime[key] = cfg[key]
@@ -89,7 +84,11 @@ class AgentLoader:
         merged_mcp = self._lookup_merge("mcp", project_config, user_config, system_config)
         merged_skills = self._lookup_merge("skills", project_config, user_config, system_config)
 
-        system_prompt = project_config.get("system_prompt") or user_config.get("system_prompt") or system_config.get("system_prompt")
+        system_prompt = (
+            project_config.get("system_prompt")
+            or user_config.get("system_prompt")
+            or system_config.get("system_prompt")
+        )
 
         final_config: dict[str, Any] = {
             "runtime": merged_runtime,
@@ -322,7 +321,10 @@ class AgentLoader:
         result: dict[str, McpServerConfig] = {}
         for name, cfg in servers.items():
             if isinstance(cfg, dict):
-                result[name] = McpServerConfig(**{k: v for k, v in cfg.items() if k in McpServerConfig.model_fields})
+                result[name] = McpServerConfig(**{
+                    k: v for k, v in cfg.items()
+                    if k in McpServerConfig.model_fields
+                })
         return result
 
     # ── Internal helpers ──

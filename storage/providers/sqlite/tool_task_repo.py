@@ -65,15 +65,9 @@ class SQLiteToolTaskRepo:
                     active_form, owner, blocks, blocked_by, metadata)
                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
-                    thread_id,
-                    task.id,
-                    task.subject,
-                    task.description,
-                    task.status.value,
-                    task.active_form,
-                    task.owner,
-                    json.dumps(task.blocks),
-                    json.dumps(task.blocked_by),
+                    thread_id, task.id, task.subject, task.description,
+                    task.status.value, task.active_form, task.owner,
+                    json.dumps(task.blocks), json.dumps(task.blocked_by),
                     json.dumps(task.metadata),
                 ),
             )
@@ -87,16 +81,11 @@ class SQLiteToolTaskRepo:
                    owner=?, blocks=?, blocked_by=?, metadata=?
                    WHERE thread_id=? AND task_id=?""",
                 (
-                    task.subject,
-                    task.description,
-                    task.status.value,
-                    task.active_form,
-                    task.owner,
-                    json.dumps(task.blocks),
-                    json.dumps(task.blocked_by),
+                    task.subject, task.description, task.status.value,
+                    task.active_form, task.owner,
+                    json.dumps(task.blocks), json.dumps(task.blocked_by),
                     json.dumps(task.metadata),
-                    thread_id,
-                    task.id,
+                    thread_id, task.id,
                 ),
             )
             conn.commit()

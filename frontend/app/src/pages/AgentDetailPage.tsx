@@ -196,7 +196,7 @@ export default function AgentDetail() {
     <div className="h-full flex flex-col">
       {/* Header */}
       <div className="flex items-center gap-3 px-4 py-3 border-b shrink-0">
-        <Button variant="ghost" size="icon" onClick={() => navigate(-1)}>
+        <Button variant="ghost" size="icon" onClick={() => navigate("/members")}>
           <ArrowLeft className="h-4 w-4" />
         </Button>
         <Bot className="h-5 w-5 text-primary" />

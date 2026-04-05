@@ -6,16 +6,9 @@ import subprocess
 import sys
 from pathlib import Path
 
-# Load .env file if ENV_FILE is specified (e.g. ENV_FILE=.env for local dev)
-_env_file = os.getenv("ENV_FILE")
-if _env_file:
-    from dotenv import load_dotenv
-
-    load_dotenv(_env_file, override=False)
-
-import uvicorn  # noqa: E402
-from fastapi import FastAPI  # noqa: E402
-from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
+import uvicorn
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 
 def _ensure_windows_db_env_defaults() -> None:
@@ -79,23 +72,10 @@ def _sqlite_root_supports_wal(root: Path) -> bool:
 
 _ensure_windows_db_env_defaults()
 
-from backend.web.core.lifespan import lifespan  # noqa: E402
-from backend.web.routers import (  # noqa: E402
-    auth,
-    chats,
-    connections,
-    debug,
-    entities,
-    invite_codes,
-    marketplace,
-    monitor,
-    panel,
-    sandbox,
-    settings,
-    thread_files,
-    threads,
-    webhooks,
-)
+from backend.web.core.lifespan import lifespan
+from backend.web.routers import auth, connections, contacts, debug, entities, marketplace, monitor, panel, sandbox, settings, threads, thread_files, webhooks
+from backend.web.routers import messaging as messaging_router
+from messaging.relationships.router import router as relationships_router
 
 # Create FastAPI app
 app = FastAPI(title="Leon Web Backend", lifespan=lifespan)
@@ -111,9 +91,10 @@ app.add_middleware(
 
 # Include routers
 app.include_router(auth.router)
-app.include_router(invite_codes.router)
 app.include_router(threads.router)
-app.include_router(chats.router)
+app.include_router(messaging_router.router)
+app.include_router(contacts.router)
+app.include_router(relationships_router)
 app.include_router(entities.router)
 app.include_router(entities.members_router)
 app.include_router(sandbox.router)
@@ -136,9 +117,7 @@ def _resolve_port() -> int:
     try:
         result = subprocess.run(
             ["git", "config", "--worktree", "--get", "worktree.ports.backend"],
-            capture_output=True,
-            text=True,
-            timeout=3,
+            capture_output=True, text=True, timeout=3,
         )
         if result.returncode == 0 and result.stdout.strip():
             return int(result.stdout.strip())

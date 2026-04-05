@@ -6,9 +6,9 @@ import json
 from datetime import UTC, datetime
 from typing import Any
 
-from backend.web.core.storage_factory import make_sandbox_monitor_repo
 from backend.web.services.sandbox_service import init_providers_and_managers, load_all_sessions
 from storage.providers.sqlite.kernel import SQLiteDBRole, resolve_role_db_path
+from storage.providers.sqlite.sandbox_monitor_repo import SQLiteSandboxMonitorRepo
 
 # ---------------------------------------------------------------------------
 # Mapping helpers (private)
@@ -59,9 +59,7 @@ def _thread_ref(thread_id: str | None) -> dict[str, Any]:
 
 
 def _lease_ref(
-    lease_id: str | None,
-    provider: str | None,
-    instance_id: str | None = None,
+    lease_id: str | None, provider: str | None, instance_id: str | None = None,
 ) -> dict[str, Any]:
     return {
         "lease_id": lease_id,
@@ -148,10 +146,7 @@ def _map_leases(rows: list[dict[str, Any]]) -> dict[str, Any]:
 
 
 def _map_lease_detail(
-    lease_id: str,
-    lease: dict[str, Any],
-    threads: list[dict[str, Any]],
-    events: list[dict[str, Any]],
+    lease_id: str, lease: dict[str, Any], threads: list[dict[str, Any]], events: list[dict[str, Any]],
 ) -> dict[str, Any]:
     badge = _make_badge(lease["desired_state"], lease["observed_state"])
     badge["error"] = lease["last_error"]
@@ -172,7 +167,10 @@ def _map_lease_detail(
         "state": badge,
         "related_threads": {
             "title": "Related Threads",
-            "items": [{"thread_id": r["thread_id"], "thread_url": f"/thread/{r['thread_id']}"} for r in threads],
+            "items": [
+                {"thread_id": r["thread_id"], "thread_url": f"/thread/{r['thread_id']}"}
+                for r in threads
+            ],
         },
         "lease_events": {
             "title": "Lease Events",
@@ -271,7 +269,7 @@ def _map_event_detail(event_id: str, event: dict[str, Any]) -> dict[str, Any]:
 
 
 def list_threads() -> dict[str, Any]:
-    repo = make_sandbox_monitor_repo()
+    repo = SQLiteSandboxMonitorRepo()
     try:
         return _map_threads(repo.query_threads())
     finally:
@@ -279,7 +277,7 @@ def list_threads() -> dict[str, Any]:
 
 
 def get_thread(thread_id: str) -> dict[str, Any]:
-    repo = make_sandbox_monitor_repo()
+    repo = SQLiteSandboxMonitorRepo()
     try:
         summary = repo.query_thread_summary(thread_id)
         if not summary:
@@ -290,7 +288,7 @@ def get_thread(thread_id: str) -> dict[str, Any]:
 
 
 def list_leases() -> dict[str, Any]:
-    repo = make_sandbox_monitor_repo()
+    repo = SQLiteSandboxMonitorRepo()
     try:
         return _map_leases(repo.query_leases())
     finally:
@@ -298,7 +296,7 @@ def list_leases() -> dict[str, Any]:
 
 
 def get_lease(lease_id: str) -> dict[str, Any]:
-    repo = make_sandbox_monitor_repo()
+    repo = SQLiteSandboxMonitorRepo()
     try:
         lease = repo.query_lease(lease_id)
         if not lease:
@@ -311,7 +309,7 @@ def get_lease(lease_id: str) -> dict[str, Any]:
 
 
 def list_diverged() -> dict[str, Any]:
-    repo = make_sandbox_monitor_repo()
+    repo = SQLiteSandboxMonitorRepo()
     try:
         return _map_diverged(repo.query_diverged())
     finally:
@@ -319,7 +317,7 @@ def list_diverged() -> dict[str, Any]:
 
 
 def list_events(limit: int = 100) -> dict[str, Any]:
-    repo = make_sandbox_monitor_repo()
+    repo = SQLiteSandboxMonitorRepo()
     try:
         return _map_events(repo.query_events(limit))
     finally:
@@ -327,7 +325,7 @@ def list_events(limit: int = 100) -> dict[str, Any]:
 
 
 def get_event(event_id: str) -> dict[str, Any]:
-    repo = make_sandbox_monitor_repo()
+    repo = SQLiteSandboxMonitorRepo()
     try:
         event = repo.query_event(event_id)
     finally:
@@ -349,7 +347,7 @@ def runtime_health_snapshot() -> dict[str, Any]:
     tables: dict[str, int] = {"chat_sessions": 0, "sandbox_leases": 0, "lease_events": 0}
 
     if db_exists:
-        repo = make_sandbox_monitor_repo()
+        repo = SQLiteSandboxMonitorRepo()
         try:
             tables = repo.count_rows(list(tables))
         finally:

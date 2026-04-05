@@ -1,12 +1,12 @@
 """Type definitions for Todo middleware."""
 
-from enum import StrEnum
+from enum import Enum
 from typing import Any
 
 from pydantic import BaseModel, Field
 
 
-class TaskStatus(StrEnum):
+class TaskStatus(str, Enum):
     """Task status enum."""
 
     PENDING = "pending"

@@ -2,6 +2,8 @@
 
 import xml.etree.ElementTree as ET
 
+import pytest
+
 from core.runtime.middleware.queue.formatters import format_command_notification
 
 

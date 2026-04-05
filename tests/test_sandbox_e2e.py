@@ -17,10 +17,6 @@ Usage:
     pytest tests/test_sandbox_e2e.py -s
 """
 
-import pytest
-
-pytest.skip("pre-existing: Docker/E2B e2e tests require running providers", allow_module_level=True)
-
 import os
 import sys
 import uuid
@@ -68,8 +64,8 @@ def _invoke_and_extract(agent, message: str, thread_id: str) -> dict:
     """Invoke agent via async runner and extract tool calls + response."""
     import asyncio
 
-    from core.runner import NonInteractiveRunner
     from sandbox.thread_context import set_current_thread_id
+    from core.runner import NonInteractiveRunner
 
     set_current_thread_id(thread_id)
     runner = NonInteractiveRunner(agent, thread_id, debug=True)
@@ -107,7 +103,9 @@ class TestDockerSandboxE2E:
             )
 
             # Verify workspace_root is the sandbox path, not a local resolved path
-            assert str(agent.workspace_root) == "/workspace", f"workspace_root should be /workspace, got {agent.workspace_root}"
+            assert str(agent.workspace_root) == "/workspace", (
+                f"workspace_root should be /workspace, got {agent.workspace_root}"
+            )
 
             # Ensure session exists before invoking
             agent._sandbox.ensure_session(thread_id)
@@ -179,7 +177,9 @@ class TestE2BSandboxE2E:
                 verbose=True,
             )
 
-            assert str(agent.workspace_root) == "/home/user", f"workspace_root should be /home/user, got {agent.workspace_root}"
+            assert str(agent.workspace_root) == "/home/user", (
+                f"workspace_root should be /home/user, got {agent.workspace_root}"
+            )
 
             agent._sandbox.ensure_session(thread_id)
 

@@ -421,14 +421,12 @@ class SQLiteSandboxMonitorRepo:
             instance_id = str(row["instance_id"] or "").strip()
             observed_state = str(row["observed_state"] or "unknown").strip().lower()
             if lease_id and provider_name and instance_id:
-                targets.append(
-                    {
-                        "lease_id": lease_id,
-                        "provider_name": provider_name,
-                        "instance_id": instance_id,
-                        "observed_state": observed_state,
-                    }
-                )
+                targets.append({
+                    "lease_id": lease_id,
+                    "provider_name": provider_name,
+                    "instance_id": instance_id,
+                    "observed_state": observed_state,
+                })
 
         logger.info(f"list_probe_targets returning {len(targets)} targets")
         return targets
@@ -461,3 +459,15 @@ class SQLiteSandboxMonitorRepo:
             (table_name,),
         ).fetchone()
         return row is not None
+
+    def query_event(self, event_id: str) -> dict | None:
+        row = self._conn.execute(
+            """
+            SELECT le.*, sl.provider_name
+            FROM lease_events le
+            LEFT JOIN sandbox_leases sl ON le.lease_id = sl.lease_id
+            WHERE le.event_id = ?
+            """,
+            (event_id,),
+        ).fetchone()
+        return _row_to_dict(row) if row else None

@@ -67,7 +67,9 @@ class ContextMonitor(BaseMonitor):
 
         if isinstance(content, list):
             return sum(
-                len(block.get("text", "")) if isinstance(block, dict) else len(block) for block in content if isinstance(block, (dict, str))
+                len(block.get("text", "")) if isinstance(block, dict) else len(block)
+                for block in content
+                if isinstance(block, (dict, str))
             )
 
         return 0

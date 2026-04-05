@@ -191,7 +191,7 @@ class WebMiddleware(AgentMiddleware):
                 timeout=30,
             )
             return response.content
-        except TimeoutError:
+        except asyncio.TimeoutError:
             preview = content[:5000] if len(content) > 5000 else content
             return f"AI extraction timed out (30s). Raw content preview:\n\n{preview}"
         except Exception as e:

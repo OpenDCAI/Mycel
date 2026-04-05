@@ -1,10 +1,5 @@
 from __future__ import annotations
 
-# TODO: get_sandbox now calls _setup_mounts which requires lease.volume_id; FakeProvider needs update
-import pytest
-
-pytest.skip("pre-existing: FakeProvider missing volume setup — needs test update", allow_module_level=True)
-
 import sqlite3
 from dataclasses import dataclass
 from datetime import datetime, timedelta
@@ -82,7 +77,6 @@ class DummyProvider(SandboxProvider):
 
     def create_runtime(self, terminal, lease):
         from sandbox.runtime import RemoteWrappedRuntime
-
         return RemoteWrappedRuntime(terminal, lease, self)
 
 

@@ -10,9 +10,9 @@ from __future__ import annotations
 import json
 import logging
 
-from backend.web.utils.helpers import _get_container
-
 logger = logging.getLogger(__name__)
+
+from backend.web.utils.helpers import _get_container
 
 
 def _resolve_volume_source(thread_id: str):
@@ -21,11 +21,11 @@ def _resolve_volume_source(thread_id: str):
     This is the application-layer entry point. Uses sandbox-layer stores
     to walk: thread → terminal → lease → volume_id → sandbox_volumes.
     """
-    from sandbox.lease import lease_from_row
-    from sandbox.volume_source import deserialize_volume_source
-    from storage.providers.sqlite.kernel import SQLiteDBRole, resolve_role_db_path
-    from storage.providers.sqlite.lease_repo import SQLiteLeaseRepo
     from storage.providers.sqlite.terminal_repo import SQLiteTerminalRepo
+    from sandbox.lease import lease_from_row
+    from storage.providers.sqlite.lease_repo import SQLiteLeaseRepo
+    from storage.providers.sqlite.kernel import SQLiteDBRole, resolve_role_db_path
+    from sandbox.volume_source import deserialize_volume_source
 
     sandbox_db = resolve_role_db_path(SQLiteDBRole.SANDBOX)
     terminal_repo = SQLiteTerminalRepo(db_path=sandbox_db)
@@ -80,7 +80,6 @@ def save_file(*, thread_id: str, relative_path: str, content: bytes) -> dict:
     result = source.save_file(relative_path, content)
     result["thread_id"] = thread_id
     from backend.web.services.activity_tracker import track_thread_activity
-
     track_thread_activity(thread_id, "file_upload")
     return result
 
