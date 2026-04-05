@@ -69,9 +69,9 @@ class ToolRunner(AgentMiddleware):
 
     def _extract_call_info(self, request: ToolCallRequest) -> tuple[str, dict, str]:
         tool_call = request.tool_call
-        name = tool_call.get("name")
+        name = tool_call.get("name") or ""
         args = tool_call.get("args", {})
-        call_id = tool_call.get("id", "")
+        call_id = tool_call.get("id", "") or ""
 
         if isinstance(args, str):
             try:
@@ -805,6 +805,15 @@ class ToolRunner(AgentMiddleware):
             return "permission_denied_hooks"
         return "post_tool_use"
 
+    @staticmethod
+    def _input_validation_metadata(error: InputValidationError) -> dict[str, object]:
+        metadata: dict[str, object] = {"error_type": "input_validation"}
+        if error.error_code:
+            metadata["error_code"] = error.error_code
+        if error.details:
+            metadata["error_details"] = error.details
+        return metadata
+
     def _validate_and_run(self, request: ToolCallRequest, name: str, args: dict, call_id: str) -> ToolMessage | ToolResultEnvelope | None:
         entry = self._registry.get(name)
         if entry is None:
@@ -818,7 +827,7 @@ class ToolRunner(AgentMiddleware):
             return self._finalize_registered_result(
                 tool_error(
                     f"InputValidationError: {name} failed due to the following issue:\n{e}",
-                    metadata={"error_type": "input_validation"},
+                    metadata=self._input_validation_metadata(e),
                 ),
                 name=name,
                 call_id=call_id,
@@ -910,7 +919,7 @@ class ToolRunner(AgentMiddleware):
             return self._finalize_registered_result(
                 tool_error(
                     f"InputValidationError: {name} failed due to the following issue:\n{e}",
-                    metadata={"error_type": "input_validation"},
+                    metadata=self._input_validation_metadata(e),
                 ),
                 name=name,
                 call_id=call_id,

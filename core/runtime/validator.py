@@ -58,14 +58,35 @@ class ToolValidator:
             required = parameters.get("required", [])
             missing = [f for f in required if f not in args]
             if missing:
-                msgs = [f"The required parameter `{f}` is missing" for f in missing]
-                raise InputValidationError("\n".join(msgs))
+                details = [
+                    {
+                        "field": field,
+                        "error_code": "REQUIRED_FIELD_MISSING",
+                        "message": f"The required parameter `{field}` is missing",
+                    }
+                    for field in missing
+                ]
+                raise InputValidationError(
+                    "\n".join(detail["message"] for detail in details),
+                    error_code="REQUIRED_FIELD_MISSING" if len(details) == 1 else "INPUT_CONSTRAINT_VIOLATION",
+                    details=details,
+                )
             any_of = _required_sets(parameters, "x-leon-required-any-of") or _required_sets(parameters, "anyOf")
             one_of = _required_sets(parameters, "x-leon-required-one-of") or _required_sets(parameters, "oneOf")
             if any_of:
-                raise InputValidationError(f"Arguments must satisfy one of these required sets: {any_of}")
+                message = f"Arguments must satisfy one of these required sets: {any_of}"
+                raise InputValidationError(
+                    message,
+                    error_code="REQUIRED_SET_UNSATISFIED",
+                    details=[{"error_code": "REQUIRED_SET_UNSATISFIED", "message": message}],
+                )
             if one_of:
-                raise InputValidationError(f"Arguments must satisfy exactly one of these required sets: {one_of}")
+                message = f"Arguments must satisfy exactly one of these required sets: {one_of}"
+                raise InputValidationError(
+                    message,
+                    error_code="REQUIRED_SET_UNSATISFIED",
+                    details=[{"error_code": "REQUIRED_SET_UNSATISFIED", "message": message}],
+                )
 
         # Phase 2: type check
         for name, val in args.items():
@@ -73,17 +94,38 @@ class ToolValidator:
             expected = prop.get("type")
             if expected and not self._type_matches(val, expected):
                 actual = type(val).__name__
-                raise InputValidationError(f"The parameter `{name}` type is expected as `{expected}` but provided as `{actual}`")
+                message = f"The parameter `{name}` type is expected as `{expected}` but provided as `{actual}`"
+                raise InputValidationError(
+                    message,
+                    error_code="INVALID_TYPE",
+                    details=[
+                        {
+                            "field": name,
+                            "error_code": "INVALID_TYPE",
+                            "expected": expected,
+                            "actual": actual,
+                            "message": message,
+                        }
+                    ],
+                )
 
         # Phase 3: scalar constraints
         issues = self._validate_scalar_constraints(properties, args)
         if issues:
-            raise InputValidationError("\n".join(issues))
+            raise InputValidationError(
+                "\n".join(str(issue["message"]) for issue in issues),
+                error_code=str(issues[0]["error_code"]) if len(issues) == 1 else "INPUT_CONSTRAINT_VIOLATION",
+                details=issues,
+            )
 
         # Phase 4: enum validation
         issues = self._validate_enum(properties, args)
         if issues:
-            raise InputValidationError(json.dumps(issues))
+            raise InputValidationError(
+                json.dumps(issues),
+                error_code="INVALID_ENUM" if len(issues) == 1 else "INPUT_CONSTRAINT_VIOLATION",
+                details=issues,
+            )
 
         return ValidationResult(ok=True, params=args)
 
@@ -101,34 +143,77 @@ class ToolValidator:
             return True
         return isinstance(val, expected_type)
 
-    def _validate_enum(self, properties: dict, args: dict) -> list:
-        issues = []
+    def _validate_enum(self, properties: dict, args: dict) -> list[dict[str, object]]:
+        issues: list[dict[str, object]] = []
         for name, val in args.items():
             prop = properties.get(name, {})
             enum_vals = prop.get("enum")
             if enum_vals and val not in enum_vals:
-                issues.append({"field": name, "expected": enum_vals, "got": val})
+                issues.append(
+                    {
+                        "field": name,
+                        "error_code": "INVALID_ENUM",
+                        "expected": enum_vals,
+                        "got": val,
+                        "message": f"The parameter `{name}` must be one of {enum_vals}, got {val!r}",
+                    }
+                )
         return issues
 
-    def _validate_scalar_constraints(self, properties: dict, args: dict) -> list[str]:
-        issues: list[str] = []
+    def _validate_scalar_constraints(self, properties: dict, args: dict) -> list[dict[str, object]]:
+        issues: list[dict[str, object]] = []
         for name, val in args.items():
             prop = properties.get(name, {})
             if isinstance(val, str):
                 min_length = prop.get("minLength")
                 if isinstance(min_length, int) and len(val) < min_length:
-                    issues.append(f"The parameter `{name}` must be at least {min_length} characters long")
+                    issues.append(
+                        {
+                            "field": name,
+                            "error_code": "STRING_TOO_SHORT",
+                            "message": f"The parameter `{name}` must be at least {min_length} characters long",
+                            "minimum": min_length,
+                        }
+                    )
                 max_length = prop.get("maxLength")
                 if isinstance(max_length, int) and len(val) > max_length:
-                    issues.append(f"The parameter `{name}` must be at most {max_length} characters long")
+                    issues.append(
+                        {
+                            "field": name,
+                            "error_code": "STRING_TOO_LONG",
+                            "message": f"The parameter `{name}` must be at most {max_length} characters long",
+                            "maximum": max_length,
+                        }
+                    )
                 pattern = prop.get("pattern")
                 if isinstance(pattern, str) and re.search(pattern, val) is None:
-                    issues.append(f"The parameter `{name}` must match pattern `{pattern}`")
+                    issues.append(
+                        {
+                            "field": name,
+                            "error_code": "PATTERN_MISMATCH",
+                            "message": f"The parameter `{name}` must match pattern `{pattern}`",
+                            "pattern": pattern,
+                        }
+                    )
             if isinstance(val, (int, float)) and not isinstance(val, bool):
                 minimum = prop.get("minimum")
                 if isinstance(minimum, (int, float)) and val < minimum:
-                    issues.append(f"The parameter `{name}` must be at least {minimum}")
+                    issues.append(
+                        {
+                            "field": name,
+                            "error_code": "NUMBER_TOO_SMALL",
+                            "message": f"The parameter `{name}` must be at least {minimum}",
+                            "minimum": minimum,
+                        }
+                    )
                 maximum = prop.get("maximum")
                 if isinstance(maximum, (int, float)) and val > maximum:
-                    issues.append(f"The parameter `{name}` must be at most {maximum}")
+                    issues.append(
+                        {
+                            "field": name,
+                            "error_code": "NUMBER_TOO_LARGE",
+                            "message": f"The parameter `{name}` must be at most {maximum}",
+                            "maximum": maximum,
+                        }
+                    )
         return issues

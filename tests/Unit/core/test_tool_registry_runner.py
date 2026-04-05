@@ -192,12 +192,16 @@ class TestToolValidator:
             v.validate(schema, {})
         assert "file_path" in str(exc_info.value)
         assert "missing" in str(exc_info.value)
+        assert exc_info.value.error_code == "REQUIRED_FIELD_MISSING"
+        assert exc_info.value.details[0]["field"] == "file_path"
 
     def test_wrong_type_raises_layer1(self):
         v = ToolValidator()
         schema = self._schema(["count"], {"count": "integer"})
-        with pytest.raises(InputValidationError):
+        with pytest.raises(InputValidationError) as exc_info:
             v.validate(schema, {"count": "not-an-int"})
+        assert exc_info.value.error_code == "INVALID_TYPE"
+        assert exc_info.value.details[0]["field"] == "count"
 
     def test_extra_params_allowed(self):
         v = ToolValidator()
@@ -272,6 +276,8 @@ class TestToolValidator:
 
         assert "file_path" in str(exc_info.value)
         assert "match pattern" in str(exc_info.value)
+        assert exc_info.value.error_code == "PATTERN_MISMATCH"
+        assert exc_info.value.details[0]["error_code"] == "PATTERN_MISMATCH"
 
     def test_numeric_maximum_raises_layer1(self):
         v = ToolValidator()
@@ -294,6 +300,8 @@ class TestToolValidator:
 
         assert "timeout" in str(exc_info.value)
         assert "at most" in str(exc_info.value)
+        assert exc_info.value.error_code == "NUMBER_TOO_LARGE"
+        assert exc_info.value.details[0]["field"] == "timeout"
 
 
 # ---------------------------------------------------------------------------
@@ -345,7 +353,35 @@ class TestToolRunnerErrorNormalization:
         # Layer 1 error format: InputValidationError: {name} failed due to...
         assert "InputValidationError" in result.content
         assert "Read" in result.content
+        assert result.additional_kwargs["tool_result_meta"]["error_code"] == "REQUIRED_FIELD_MISSING"
         assert not called_upstream  # must not fall through to upstream
+
+    def test_layer1_schema_failure_returns_structured_error_details(self):
+        entry = ToolEntry(
+            name="Bash",
+            mode=ToolMode.INLINE,
+            schema={
+                "name": "Bash",
+                "parameters": {
+                    "type": "object",
+                    "required": ["timeout"],
+                    "properties": {
+                        "timeout": {"type": "integer", "maximum": 600000},
+                    },
+                },
+            },
+            handler=lambda timeout: timeout,
+            source="test",
+        )
+        runner = _make_runner([entry])
+        req = _make_tool_call_request("Bash", {"timeout": 600001})
+
+        result = runner.wrap_tool_call(req, lambda r: MagicMock())
+
+        meta = result.additional_kwargs["tool_result_meta"]
+        assert meta["error_type"] == "input_validation"
+        assert meta["error_code"] == "NUMBER_TOO_LARGE"
+        assert meta["error_details"][0]["field"] == "timeout"
 
     def test_layer2_handler_exception_returns_tool_use_error(self):
         def bad_handler(**kwargs):
