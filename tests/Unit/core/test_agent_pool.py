@@ -2,6 +2,7 @@ import asyncio
 import time
 from pathlib import Path
 from types import SimpleNamespace
+from typing import Any, cast
 
 import pytest
 
@@ -48,8 +49,8 @@ async def test_get_or_create_agent_creates_once_per_thread(monkeypatch: pytest.M
     )
 
     first, second = await asyncio.gather(
-        agent_pool.get_or_create_agent(app, "local", thread_id="thread-1"),
-        agent_pool.get_or_create_agent(app, "local", thread_id="thread-1"),
+        agent_pool.get_or_create_agent(cast(Any, app), "local", thread_id="thread-1"),
+        agent_pool.get_or_create_agent(cast(Any, app), "local", thread_id="thread-1"),
     )
 
     assert len(created) == 1
@@ -98,7 +99,7 @@ async def test_get_or_create_agent_ignores_unavailable_local_cwd(monkeypatch: py
         )
     )
 
-    await agent_pool.get_or_create_agent(app, "local", thread_id="thread-2")
+    await agent_pool.get_or_create_agent(cast(Any, app), "local", thread_id="thread-2")
 
     assert captured["workspace_root"] is None
 
@@ -144,8 +145,59 @@ async def test_get_or_create_agent_honors_fresh_local_thread_cwd_even_when_missi
         )
     )
 
-    await agent_pool.get_or_create_agent(app, "local", thread_id="thread-3")
+    await agent_pool.get_or_create_agent(cast(Any, app), "local", thread_id="thread-3")
 
     assert captured["workspace_root"] == requested.resolve()
     assert requested.is_dir()
     assert app.state.thread_cwd["thread-3"] == str(requested.resolve())
+
+
+@pytest.mark.asyncio
+async def test_get_or_create_agent_passes_member_bundle_dir(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
+    captured: dict[str, object] = {}
+    member_dir = tmp_path / "members" / "member-1"
+    member_dir.mkdir(parents=True)
+
+    def _fake_create_agent_sync(
+        sandbox_name: str,
+        workspace_root=None,
+        model_name: str | None = None,
+        agent: str | None = None,
+        bundle_dir=None,
+        thread_repo=None,
+        entity_repo=None,
+        member_repo=None,
+        queue_manager=None,
+        chat_repos=None,
+        extra_allowed_paths=None,
+        web_app=None,
+    ) -> object:
+        captured["bundle_dir"] = bundle_dir
+        return SimpleNamespace()
+
+    class _ThreadRepo:
+        def get_by_id(self, thread_id: str):
+            return {
+                "id": thread_id,
+                "cwd": None,
+                "model": "leon:large",
+                "member_id": "member-1",
+                "member_name": "Toad",
+            }
+
+    monkeypatch.setattr(agent_pool, "create_agent_sync", _fake_create_agent_sync)
+    monkeypatch.setattr(agent_pool, "get_or_create_agent_id", lambda **_: "agent-4")
+    monkeypatch.setattr(agent_pool, "preferred_existing_user_home_path", lambda *parts: member_dir)
+
+    app = SimpleNamespace(
+        state=SimpleNamespace(
+            agent_pool={},
+            thread_repo=_ThreadRepo(),
+            thread_cwd={},
+            thread_sandbox={},
+        )
+    )
+
+    await agent_pool.get_or_create_agent(cast(Any, app), "local", thread_id="thread-4")
+
+    assert captured["bundle_dir"] == member_dir.resolve()

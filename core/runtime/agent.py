@@ -76,6 +76,7 @@ from core.tools.command.hooks.file_permission import FilePermissionHook  # noqa:
 from core.tools.command.service import CommandService  # noqa: E402
 from core.tools.cron.service import CronToolService  # noqa: E402
 from core.tools.filesystem.service import FileSystemService  # noqa: E402
+from core.tools.mcp_resources.service import McpResourceToolService  # noqa: E402
 from core.tools.search.service import SearchService  # noqa: E402
 from core.tools.skills.service import SkillsService  # noqa: E402
 from core.tools.task.service import TaskService  # noqa: E402
@@ -143,6 +144,7 @@ class LeonAgent:
         workspace_root: str | Path | None = None,
         *,
         agent: str | None = None,
+        bundle_dir: str | Path | None = None,
         allowed_file_extensions: list[str] | None = None,
         block_dangerous_commands: bool | None = None,
         block_network_commands: bool | None = None,
@@ -206,6 +208,7 @@ class LeonAgent:
         # New config system mode
         self.config, self.models_config = self._load_config(
             agent_name=agent,
+            bundle_dir=bundle_dir,
             workspace_root=workspace_root,
             sandbox_name=requested_sandbox_name,
             model_name=model_name,
@@ -497,9 +500,15 @@ class LeonAgent:
 
         return blocked
 
+    def _get_mcp_server_configs(self) -> dict[str, Any]:
+        if hasattr(self, "_agent_bundle") and self._agent_bundle and self._agent_bundle.mcp:
+            return {name: srv for name, srv in self._agent_bundle.mcp.items() if not srv.disabled}
+        return self.config.mcp.servers
+
     def _load_config(
         self,
         agent_name: str | None,
+        bundle_dir: str | Path | None,
         workspace_root: str | Path | None,
         sandbox_name: str | None,
         model_name: str | None,
@@ -554,8 +563,14 @@ class LeonAgent:
         models_loader = ModelsLoader(workspace_root=workspace_root)
         models_config = models_loader.load(cli_overrides=models_cli if models_cli else None)
 
+        # @@@bundle-dir-wins - member-backed top-level agents need their own bundle even when
+        # no explicit agent type name is passed through the thread runtime wiring.
+        if bundle_dir is not None:
+            bundle_path = Path(bundle_dir).expanduser().resolve()
+            self._agent_bundle = loader.load_bundle(bundle_path)
+            self._agent_override = self._agent_bundle.agent.model_copy(update={"source_dir": bundle_path})
         # If agent specified, load agent definition to override system_prompt and tools
-        if agent_name:
+        elif agent_name:
             all_agents = loader.load_all_agents()
             agent_def = all_agents.get(agent_name)
             if not agent_def:
@@ -1164,6 +1179,12 @@ class LeonAgent:
             registry=self._tool_registry,
         )
 
+        self._mcp_resource_tool_service = McpResourceToolService(
+            registry=self._tool_registry,
+            client_fn=lambda: getattr(self, "_mcp_client", None),
+            server_configs_fn=self._get_mcp_server_configs,
+        )
+
         # ToolSearch (INLINE - always available for discovering DEFERRED tools)
         self._tool_search_service = ToolSearchService(
             registry=self._tool_registry,
@@ -1243,11 +1264,7 @@ class LeonAgent:
     async def _init_mcp_tools(self) -> list:
         mcp_enabled = self.config.mcp.enabled
 
-        # Use member bundle MCP config if available, else fall back to global config
-        if hasattr(self, "_agent_bundle") and self._agent_bundle and self._agent_bundle.mcp:
-            mcp_servers = {name: srv for name, srv in self._agent_bundle.mcp.items() if not srv.disabled}
-        else:
-            mcp_servers = self.config.mcp.servers
+        mcp_servers = self._get_mcp_server_configs()
 
         if not mcp_enabled or not mcp_servers:
             return []

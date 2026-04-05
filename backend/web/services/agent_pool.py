@@ -8,6 +8,7 @@ from typing import Any
 
 from fastapi import FastAPI
 
+from config.user_paths import preferred_existing_user_home_path
 from core.identity.agent_registry import get_or_create_agent_id
 from core.runtime.agent import create_leon_agent
 from sandbox.manager import lookup_sandbox_for_thread
@@ -26,6 +27,7 @@ def create_agent_sync(
     workspace_root: Path | None = None,
     model_name: str | None = None,
     agent: str | None = None,
+    bundle_dir: Path | None = None,
     thread_repo: Any = None,
     entity_repo: Any = None,
     member_repo: Any = None,
@@ -57,6 +59,7 @@ def create_agent_sync(
         web_app=web_app,
         verbose=True,
         agent=agent,
+        bundle_dir=bundle_dir,
         extra_allowed_paths=extra_allowed_paths,
     )
 
@@ -121,6 +124,11 @@ async def get_or_create_agent(app_obj: FastAPI, sandbox_type: str, thread_id: st
         # @@@agent-vs-member - thread_config.agent stores a member ID (e.g. "__leon__") for display,
         # NOT an agent type name ("bash", "general", etc.). Never pass it to create_leon_agent.
         agent_name = agent  # explicit caller-provided type only; None → default Leon agent
+        bundle_dir = None
+        if thread_data and thread_data.get("member_id"):
+            member_dir = preferred_existing_user_home_path("members", str(thread_data["member_id"]))
+            if member_dir.is_dir():
+                bundle_dir = member_dir.resolve()
 
         # @@@chat-repos - construct chat_repos for ChatToolService if entity system is available
         chat_repos = None
@@ -164,7 +172,7 @@ async def get_or_create_agent(app_obj: FastAPI, sandbox_type: str, thread_id: st
         except FileNotFoundError:
             pass
 
-        extra_allowed_paths = extra_allowed_paths or None
+        extra_allowed_paths_or_none: list[str] | None = extra_allowed_paths or None
 
         # @@@ agent-init-thread - LeonAgent.__init__ uses run_until_complete, must run in thread
         qm = getattr(app_obj.state, "queue_manager", None)
@@ -174,12 +182,13 @@ async def get_or_create_agent(app_obj: FastAPI, sandbox_type: str, thread_id: st
             workspace_root,
             model_name,
             agent_name,
+            bundle_dir,
             getattr(app_obj.state, "thread_repo", None),
             getattr(app_obj.state, "entity_repo", None),
             getattr(app_obj.state, "member_repo", None),
             qm,
             chat_repos,
-            extra_allowed_paths,
+            extra_allowed_paths_or_none,
             app_obj,
         )
         member = agent_name or "leon"

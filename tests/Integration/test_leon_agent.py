@@ -258,6 +258,43 @@ async def test_leon_agent_astream_raises_loudly_on_empty_stream(tmp_path):
 
 @pytest.mark.asyncio
 @_patch_env_api_key()
+async def test_leon_agent_bundle_dir_registers_mcp_resource_tools(tmp_path):
+    """Member bundle MCP config should surface MCP resource tools in the live registry."""
+    from core.runtime.agent import LeonAgent
+
+    member_dir = tmp_path / "members" / "toad"
+    member_dir.mkdir(parents=True)
+    (member_dir / "agent.md").write_text(
+        "---\nname: Toad\ndescription: Demo member\n---\nYou are Toad.\n",
+        encoding="utf-8",
+    )
+    (member_dir / ".mcp.json").write_text(
+        '{"mcpServers":{"nu50demo":{"transport":"stdio","command":"uv","args":["run","python","/tmp/nu50_mcp_server.py"]}}}',
+        encoding="utf-8",
+    )
+
+    mock_model = _mock_model("Bundle MCP response")
+
+    with (
+        patch("core.runtime.agent.LeonAgent._create_model", return_value=mock_model),
+        patch("core.runtime.agent.LeonAgent._init_async_components", return_value=(None, [])),
+        patch("core.runtime.agent.LeonAgent._init_checkpointer", new_callable=AsyncMock, return_value=None),
+    ):
+        agent = LeonAgent(
+            workspace_root=str(tmp_path),
+            bundle_dir=str(member_dir),
+            api_key="sk-test-integration",
+        )
+        await agent.ainit()
+
+        assert agent._tool_registry.get("ListMcpResources") is not None
+        assert agent._tool_registry.get("ReadMcpResource") is not None
+
+        agent.close()
+
+
+@pytest.mark.asyncio
+@_patch_env_api_key()
 async def test_leon_agent_memoizes_prompt_sections_between_builds(tmp_path):
     """Pattern 6: prompt sections should be cached across repeated prompt assembly."""
     from core.runtime import prompts as prompt_builders
