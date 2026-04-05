@@ -1,4 +1,4 @@
-import { ChevronLeft, PanelLeft, Pause, Play } from "lucide-react";
+import { ChevronLeft, PanelLeft, Play } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import type { SandboxInfo } from "../api";
 import { useIsMobile } from "../hooks/use-mobile";
@@ -22,7 +22,6 @@ interface HeaderProps {
   sandboxInfo: SandboxInfo | null;
   currentModel?: string;
   onToggleSidebar: () => void;
-  onPauseSandbox: () => void;
   onResumeSandbox: () => void;
   onModelChange?: (model: string) => void;
 }
@@ -33,7 +32,6 @@ export default function Header({
   sandboxInfo,
   currentModel = "leon:medium",
   onToggleSidebar,
-  onPauseSandbox,
   onResumeSandbox,
   onModelChange,
 }: HeaderProps) {
@@ -90,15 +88,6 @@ export default function Header({
           threadId={activeThreadId}
           onModelChange={onModelChange}
         />
-        {hasRemote && sandboxInfo?.status === "running" && (
-          <button
-            className="px-3 py-1.5 rounded-lg text-xs flex items-center gap-2 border border-border text-foreground-secondary hover:bg-muted hover:text-foreground"
-            onClick={onPauseSandbox}
-          >
-            <Pause className="w-3.5 h-3.5" />
-            暂停
-          </button>
-        )}
         {hasRemote && sandboxInfo?.status === "paused" && (
           <button
             className="px-3 py-1.5 rounded-lg text-xs flex items-center gap-2 border border-border text-foreground-secondary hover:bg-muted hover:text-foreground"

@@ -113,7 +113,7 @@ function ChatPageInner({ threadId }: { threadId: string }) {
 
   const isStreaming = isRunning;
 
-  const { sandboxActionError, handlePauseSandbox, handleResumeSandbox } =
+  const { sandboxActionError, handleResumeSandbox } =
     useSandboxManager({
       activeThreadId: threadId,
       isStreaming,
@@ -245,7 +245,6 @@ function ChatPageInner({ threadId }: { threadId: string }) {
         sandboxInfo={activeSandbox}
         currentModel={currentModel}
         onToggleSidebar={() => setSidebarCollapsed(v => !v)}
-        onPauseSandbox={() => void handlePauseSandbox()}
         onResumeSandbox={() => void handleResumeSandbox()}
         onModelChange={setCurrentModel}
       />
