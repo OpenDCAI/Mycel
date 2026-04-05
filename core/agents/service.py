@@ -25,7 +25,7 @@ from core.runtime.middleware.queue.formatters import (
     format_background_notification,
     format_progress_notification,
 )
-from core.runtime.registry import ToolEntry, ToolMode, ToolRegistry
+from core.runtime.registry import ToolEntry, ToolMode, ToolRegistry, make_tool_schema
 from core.runtime.state import BootstrapConfig, ToolUseContext
 from core.runtime.tool_result import tool_error, tool_success
 from storage.contracts import EntityRow
@@ -147,130 +147,117 @@ def _filter_fork_messages(messages: list) -> list:
     return result
 
 
-AGENT_SCHEMA = {
-    "name": "Agent",
-    "description": (
+AGENT_SCHEMA = make_tool_schema(
+    name="Agent",
+    description=(
         "Launch a sub-agent for independent task execution. "
         "Types: explore (read-only codebase search), plan (architecture design, read-only), "
         "bash (shell commands only), general (broad tool access except Agent, TaskOutput, and TaskStop). "
         "Use for: multi-step tasks, parallel work, tasks needing isolation. "
         "Do NOT use for simple file reads or single grep searches — use the tools directly."
     ),
-    "parameters": {
-        "type": "object",
-        "properties": {
-            "subagent_type": {
-                "type": "string",
-                "enum": ["explore", "plan", "general", "bash"],
-                "description": "Type of agent to spawn. Omit for general-purpose.",
-            },
-            "prompt": {
-                "type": "string",
-                "description": "Task for the agent",
-            },
-            "name": {
-                "type": "string",
-                "description": "Optional display name for the spawned agent",
-            },
-            "description": {
-                "type": "string",
-                "description": (
-                    "Short description of what agent will do. Required when run_in_background is true; "
-                    "shown in the background task indicator."
-                ),
-            },
-            "run_in_background": {
-                "type": "boolean",
-                "default": False,
-                "description": "Fire-and-forget: return immediately with task_id instead of waiting for completion",
-            },
-            "model": {
-                "type": "string",
-                "description": "Optional sub-agent model override. Priority: env > this field > agent frontmatter > inherit.",
-            },
-            "max_turns": {
-                "type": "integer",
-                "description": "Maximum turns the agent can take",
-            },
-            "fork_context": {
-                "type": "boolean",
-                "default": False,
-                "description": (
-                    "Inherit parent conversation history as read-only context. "
-                    "Use when the sub-agent needs background from the parent's work. "
-                    "Adds a ### ENTERING SUB-AGENT ROUTINE ### marker so the sub-agent "
-                    "knows which messages are context vs its actual task."
-                ),
-            },
+    properties={
+        "subagent_type": {
+            "type": "string",
+            "enum": ["explore", "plan", "general", "bash"],
+            "description": "Type of agent to spawn. Omit for general-purpose.",
         },
-        "required": ["prompt", "description"],
+        "prompt": {
+            "type": "string",
+            "description": "Task for the agent",
+        },
+        "name": {
+            "type": "string",
+            "description": "Optional display name for the spawned agent",
+        },
+        "description": {
+            "type": "string",
+            "description": (
+                "Short description of what agent will do. Required when run_in_background is true; shown in the background task indicator."
+            ),
+        },
+        "run_in_background": {
+            "type": "boolean",
+            "default": False,
+            "description": "Fire-and-forget: return immediately with task_id instead of waiting for completion",
+        },
+        "model": {
+            "type": "string",
+            "description": "Optional sub-agent model override. Priority: env > this field > agent frontmatter > inherit.",
+        },
+        "max_turns": {
+            "type": "integer",
+            "description": "Maximum turns the agent can take",
+        },
+        "fork_context": {
+            "type": "boolean",
+            "default": False,
+            "description": (
+                "Inherit parent conversation history as read-only context. "
+                "Use when the sub-agent needs background from the parent's work. "
+                "Adds a ### ENTERING SUB-AGENT ROUTINE ### marker so the sub-agent "
+                "knows which messages are context vs its actual task."
+            ),
+        },
     },
-}
+    required=["prompt", "description"],
+)
 
-TASK_OUTPUT_SCHEMA = {
-    "name": "TaskOutput",
-    "description": (
+TASK_OUTPUT_SCHEMA = make_tool_schema(
+    name="TaskOutput",
+    description=(
         "Get output of a background task (agent or bash). Blocks until task completes by default. Returns full text output or error."
     ),
-    "parameters": {
-        "type": "object",
-        "properties": {
-            "task_id": {
-                "type": "string",
-                "description": "The task ID returned when starting a background agent",
-            },
-            "block": {
-                "type": "boolean",
-                "default": True,
-                "description": "Whether to wait for completion. Use false for a non-blocking status check.",
-            },
-            "timeout": {
-                "type": "integer",
-                "default": 30000,
-                "description": "Maximum wait time in milliseconds when block=true (default: 30000, max: 600000).",
-            },
+    properties={
+        "task_id": {
+            "type": "string",
+            "description": "The task ID returned when starting a background agent",
         },
-        "required": ["task_id"],
+        "block": {
+            "type": "boolean",
+            "default": True,
+            "description": "Whether to wait for completion. Use false for a non-blocking status check.",
+        },
+        "timeout": {
+            "type": "integer",
+            "default": 30000,
+            "description": "Maximum wait time in milliseconds when block=true (default: 30000, max: 600000).",
+        },
     },
-}
+    required=["task_id"],
+)
 
-TASK_STOP_SCHEMA = {
-    "name": "TaskStop",
-    "description": "Cancel a running background task. Sends cancellation signal; task may take a moment to stop.",
-    "parameters": {
-        "type": "object",
-        "properties": {
-            "task_id": {
-                "type": "string",
-                "description": "The task ID to stop",
-            },
+TASK_STOP_SCHEMA = make_tool_schema(
+    name="TaskStop",
+    description="Cancel a running background task. Sends cancellation signal; task may take a moment to stop.",
+    properties={
+        "task_id": {
+            "type": "string",
+            "description": "The task ID to stop",
         },
-        "required": ["task_id"],
     },
-}
+    required=["task_id"],
+)
 
-SEND_MESSAGE_SCHEMA = {
-    "name": "SendMessage",
-    "description": "Send a queued message to another running agent by name. Delivered before that agent's next model turn.",
-    "parameters": {
-        "type": "object",
-        "properties": {
-            "target_name": {
-                "type": "string",
-                "description": "Display name of the running target agent",
-            },
-            "message": {
-                "type": "string",
-                "description": "Message body to deliver",
-            },
-            "sender_name": {
-                "type": "string",
-                "description": "Optional sender label for the delivered message",
-            },
+SEND_MESSAGE_SCHEMA = make_tool_schema(
+    name="SendMessage",
+    description="Send a queued message to another running agent by name. Delivered before that agent's next model turn.",
+    properties={
+        "target_name": {
+            "type": "string",
+            "description": "Display name of the running target agent",
         },
-        "required": ["target_name", "message"],
+        "message": {
+            "type": "string",
+            "description": "Message body to deliver",
+        },
+        "sender_name": {
+            "type": "string",
+            "description": "Optional sender label for the delivered message",
+        },
     },
-}
+    required=["target_name", "message"],
+)
 
 
 class _RunningTask:
