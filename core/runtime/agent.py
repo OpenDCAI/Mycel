@@ -215,8 +215,10 @@ class LeonAgent:
         # Initialize checkpointer and MCP tools
         self._aiosqlite_conn, mcp_tools = self._init_async_components()
 
-        # If in async context, mark as needing async initialization
-        self._needs_async_init = self._aiosqlite_conn is None
+        # If in async context (running loop detected), _init_async_components
+        # skips init and returns (None, []). Distinguish from Postgres path
+        # which also returns conn=None but DID initialize successfully.
+        self._needs_async_init = self._aiosqlite_conn is None and self.checkpointer is None
 
         # Set checkpointer to None if in async context (will be initialized later)
         if self._needs_async_init:
@@ -1125,15 +1127,33 @@ class LeonAgent:
             return []
 
     async def _init_checkpointer(self):
-        """Initialize async checkpointer for conversation persistence"""
-        from storage.providers.sqlite.kernel import connect_sqlite_async
+        """Initialize async checkpointer for conversation persistence.
 
-        db_path = self.db_path
-        db_path.parent.mkdir(parents=True, exist_ok=True)
-        conn = await connect_sqlite_async(db_path)
-        self.checkpointer = AsyncSqliteSaver(conn)
-        await self.checkpointer.setup()
-        return conn
+        Uses Postgres (via Supabase) when LEON_STORAGE_STRATEGY=supabase,
+        otherwise falls back to local SQLite.
+        """
+        strategy = os.getenv("LEON_STORAGE_STRATEGY", "sqlite")
+        pg_url = os.getenv("LEON_POSTGRES_URL")
+
+        if strategy == "supabase" and pg_url:
+            from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
+
+            # from_conn_string is an async context manager; enter it and keep
+            # the reference so the connection pool stays open for the agent's lifetime.
+            self._pg_saver_ctx = AsyncPostgresSaver.from_conn_string(pg_url)
+            self.checkpointer = await self._pg_saver_ctx.__aenter__()
+            await self.checkpointer.setup()
+            return None  # no SQLite conn to track
+        else:
+            from storage.providers.sqlite.kernel import connect_sqlite_async
+
+            db_path = self.db_path
+            db_path.parent.mkdir(parents=True, exist_ok=True)
+            conn = await connect_sqlite_async(db_path)
+            self.checkpointer = AsyncSqliteSaver(conn)
+            await self.checkpointer.setup()
+            return conn
+            return conn
 
     def _is_tool_allowed(self, tool) -> bool:
         # Extract original tool name without mcp__ prefix

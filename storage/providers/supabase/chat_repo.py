@@ -177,9 +177,7 @@ class SupabaseChatMessageRepo:
     def list_unread(self, chat_id: str, user_id: str) -> list[ChatMessageRow]:
         """Return unread messages (after last_read_at, excluding own) in chronological order."""
         # Fetch last_read_at for this user in this chat.
-        resp_ce = (
-            self._client.table(_TABLE_CHAT_ENTITIES).select("last_read_at").eq("chat_id", chat_id).eq("user_id", user_id).execute()
-        )
+        resp_ce = self._client.table(_TABLE_CHAT_ENTITIES).select("last_read_at").eq("chat_id", chat_id).eq("user_id", user_id).execute()
         ce_rows = q.rows(resp_ce, _REPO_MSG, "list_unread(last_read_at)")
         last_read: float | None = None
         if ce_rows:
@@ -195,9 +193,7 @@ class SupabaseChatMessageRepo:
 
     def count_unread(self, chat_id: str, user_id: str) -> int:
         # Fetch last_read_at for this user in this chat.
-        resp_ce = (
-            self._client.table(_TABLE_CHAT_ENTITIES).select("last_read_at").eq("chat_id", chat_id).eq("user_id", user_id).execute()
-        )
+        resp_ce = self._client.table(_TABLE_CHAT_ENTITIES).select("last_read_at").eq("chat_id", chat_id).eq("user_id", user_id).execute()
         ce_rows = q.rows(resp_ce, _REPO_MSG, "count_unread(last_read_at)")
         if not ce_rows:
             return 0
