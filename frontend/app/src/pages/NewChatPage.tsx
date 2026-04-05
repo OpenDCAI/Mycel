@@ -472,7 +472,10 @@ export default function NewChatPage({ mode = "member" }: { mode?: "member" | "ne
     ? `复用 ${providerSummaryLabel} 的现有 sandbox`
     : `新建 ${providerSummaryLabel} sandbox · ${recipeSummaryLabel}`;
 
-  if (loading || resolveState === "resolving" || configDefaultsLoading) {
+  // @@@defer-default-config - default config should refine the create form, not block
+  // entry into the no-main-thread UI. If the config fetch stalls, users still need the
+  // create-chat surface with sane local defaults.
+  if (loading || resolveState === "resolving") {
     return (
       <div className="flex-1 flex items-center justify-center relative">
         <div className="w-full max-w-[420px] px-6 text-center">
