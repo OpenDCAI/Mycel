@@ -13,6 +13,7 @@ import Header from "../components/Header";
 import InputBox from "../components/InputBox";
 import TaskProgress from "../components/TaskProgress";
 import TokenStats from "../components/TokenStats";
+import { askUserQuestionSelectionKey, buildAskUserAnswers } from "./ask-user-question";
 import { authFetch, useAuthStore } from "../store/auth-store";
 import { useAppActions } from "../hooks/use-app-actions";
 import { useBackgroundTasks } from "../hooks/use-background-tasks";
@@ -37,10 +38,6 @@ function isAskUserQuestionRequest(
   request: PermissionRequest | null,
 ): request is PermissionRequest & { args: PermissionRequest["args"] & { questions: AskUserQuestionPrompt[] } } {
   return !!request && request.tool_name === "AskUserQuestion" && Array.isArray(request.args?.questions);
-}
-
-function questionSelectionKey(question: AskUserQuestionPrompt): string {
-  return `${question.header}::${question.question}`;
 }
 
 /** Thin wrapper: key={threadId} forces remount → all hook state resets naturally. */
@@ -186,9 +183,9 @@ function ChatPageInner({ threadId }: { threadId: string }) {
   );
 
   const handleQuestionSelection = useCallback(
-    (question: AskUserQuestionPrompt, optionLabel: string) => {
+    (questionIndex: number, question: AskUserQuestionPrompt, optionLabel: string) => {
       if (!currentPermissionRequest) return;
-      const key = questionSelectionKey(question);
+      const key = askUserQuestionSelectionKey(questionIndex);
       setQuestionSelectionsByRequest((prev) => {
         const currentForRequest = prev[currentPermissionRequest.request_id] ?? {};
         const current = currentForRequest[key] ?? [];
@@ -212,11 +209,7 @@ function ChatPageInner({ threadId }: { threadId: string }) {
 
   const handleSubmitQuestionAnswers = useCallback(async () => {
     if (!currentPermissionRequest || !isAskUserQuestionRequest(currentPermissionRequest)) return;
-    const answers: AskUserAnswer[] = currentPermissionRequest.args.questions.map((question) => ({
-      header: question.header,
-      question: question.question,
-      selected_options: questionSelections[questionSelectionKey(question)] ?? [],
-    }));
+    const answers: AskUserAnswer[] = buildAskUserAnswers(currentPermissionRequest.args.questions, questionSelections);
     try {
       await resolvePermission(
         currentPermissionRequest.request_id,
@@ -239,7 +232,7 @@ function ChatPageInner({ threadId }: { threadId: string }) {
     ? currentPermissionRequest.args.questions
     : [];
   const canSubmitQuestionAnswers = questionPrompts.length > 0
-    && questionPrompts.every((question) => (questionSelections[questionSelectionKey(question)] ?? []).length > 0);
+    && questionPrompts.every((_, index) => (questionSelections[askUserQuestionSelectionKey(index)] ?? []).length > 0);
 
   const handlePersistedPermissionDecision = useCallback(
     async (decision: "allow" | "deny") => {
@@ -316,15 +309,15 @@ function ChatPageInner({ threadId }: { threadId: string }) {
               <div className="max-w-3xl mx-auto">
                 <Alert className="border-warning/20 bg-transparent px-0 py-0">
                   <ShieldAlert className="text-warning" />
-                  <AlertTitle>权限确认：{currentPermissionRequest.tool_name}</AlertTitle>
+                  <AlertTitle>{isAskUserQuestionRequest(currentPermissionRequest) ? "回答问题" : `权限确认：${currentPermissionRequest.tool_name}`}</AlertTitle>
                   <AlertDescription>
                     {isAskUserQuestionRequest(currentPermissionRequest) ? (
                       <div className="space-y-3">
                         <p>{currentPermissionRequest.message || "Leon 需要你的回答后才能继续。"}</p>
-                        {questionPrompts.map((question) => {
-                          const selected = questionSelections[questionSelectionKey(question)] ?? [];
+                        {questionPrompts.map((question, index) => {
+                          const selected = questionSelections[askUserQuestionSelectionKey(index)] ?? [];
                           return (
-                            <div key={questionSelectionKey(question)} className="space-y-2 rounded-lg border border-border/60 bg-background/70 p-3">
+                            <div key={`${currentPermissionRequest.request_id}:${index}`} className="space-y-2 rounded-lg border border-border/60 bg-background/70 p-3">
                               <div>
                                 <p className="text-sm font-medium">{question.header}</p>
                                 <p className="text-sm text-muted-foreground">{question.question}</p>
@@ -341,7 +334,7 @@ function ChatPageInner({ threadId }: { threadId: string }) {
                                           ? "border-primary bg-primary/10 text-foreground"
                                           : "border-border/60 bg-background hover:border-primary/40 hover:bg-muted/40"
                                       }`}
-                                      onClick={() => handleQuestionSelection(question, option.label)}
+                                      onClick={() => handleQuestionSelection(index, question, option.label)}
                                     >
                                       <div className="text-sm font-medium">{option.label}</div>
                                       <div className="text-xs text-muted-foreground">{option.description}</div>

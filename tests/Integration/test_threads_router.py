@@ -248,7 +248,7 @@ class _FakeAskUserQuestionAgent(_FakePermissionAgent):
                         }
                     ]
                 },
-                "message": "Answer questions?",
+                "message": "Please answer the following questions so Leon can continue.",
             }
         ]
 
