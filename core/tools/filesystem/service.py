@@ -15,10 +15,10 @@ import threading
 from collections import OrderedDict
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
 from core.runtime.registry import ToolEntry, ToolMode, ToolRegistry
-from core.runtime.tool_result import tool_success
+from core.runtime.tool_result import ToolResultEnvelope, tool_success
 from core.tools.filesystem.backend import FileSystemBackend
 from core.tools.filesystem.read import ReadLimits
 from core.tools.filesystem.read import read_file as read_file_dispatch
@@ -30,6 +30,8 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 DEFAULT_READ_STATE_CACHE_SIZE = 100
+type ResolvedPath = Path | PurePosixPath
+type ValidationResult = tuple[Literal[True], str, ResolvedPath] | tuple[Literal[False], str, None]
 
 
 def _remote_path(path: str | Path) -> PurePosixPath:
@@ -48,20 +50,20 @@ class _ReadFileState:
 class _ReadFileStateCache:
     def __init__(self, max_entries: int = DEFAULT_READ_STATE_CACHE_SIZE):
         self._max_entries = max_entries
-        self._entries: OrderedDict[Path, _ReadFileState] = OrderedDict()
+        self._entries: OrderedDict[ResolvedPath, _ReadFileState] = OrderedDict()
 
     @staticmethod
     def make_state(*, timestamp: float | None, is_partial: bool) -> _ReadFileState:
         return _ReadFileState(timestamp=timestamp, is_partial=is_partial)
 
-    def get(self, path: Path) -> _ReadFileState | None:
+    def get(self, path: ResolvedPath) -> _ReadFileState | None:
         state = self._entries.get(path)
         if state is None:
             return None
         self._entries.move_to_end(path)
         return state
 
-    def set(self, path: Path, state: _ReadFileState) -> None:
+    def set(self, path: ResolvedPath, state: _ReadFileState) -> None:
         self._entries[path] = state
         self._entries.move_to_end(path)
         while len(self._entries) > self._max_entries:
@@ -115,7 +117,7 @@ class FileSystemService:
             backend = LocalBackend()
 
         self.backend = backend
-        self.workspace_root = _remote_path(workspace_root) if backend.is_remote else Path(workspace_root).resolve()
+        self.workspace_root: ResolvedPath = _remote_path(workspace_root) if backend.is_remote else Path(workspace_root).resolve()
         self.max_file_size = max_file_size
         self.allowed_extensions = allowed_extensions
         self.hooks = hooks or []
@@ -125,7 +127,7 @@ class FileSystemService:
         self.extra_allowed_paths = [_remote_path(p) if backend.is_remote else Path(p).resolve() for p in (extra_allowed_paths or [])]
         self._edit_critical_section = threading.Lock()
 
-        if not backend.is_remote:
+        if not backend.is_remote and isinstance(self.workspace_root, Path):
             self.workspace_root.mkdir(parents=True, exist_ok=True)
 
         self._register(registry)
@@ -276,7 +278,7 @@ class FileSystemService:
     # Path validation (reused from middleware)
     # ------------------------------------------------------------------
 
-    def _validate_path(self, path: str, operation: str) -> tuple[bool, str, Path | PurePosixPath | None]:
+    def _validate_path(self, path: str, operation: str) -> ValidationResult:
         if self.backend.is_remote:
             if not _remote_path(path).is_absolute():
                 return False, f"Path must be absolute: {path}", None
@@ -315,7 +317,7 @@ class FileSystemService:
 
         return True, "", resolved
 
-    def _check_file_staleness(self, resolved: Path | PurePosixPath) -> str | None:
+    def _check_file_staleness(self, resolved: ResolvedPath) -> str | None:
         state = self._read_files.get(resolved)
         if state is None:
             return "File has not been read yet. Read the full file first before editing."
@@ -331,13 +333,13 @@ class FileSystemService:
 
     def _update_file_tracking(
         self,
-        resolved: Path | PurePosixPath,
+        resolved: ResolvedPath,
         *,
         is_partial: bool,
         file_type: FileType | None = None,
     ) -> None:
         if file_type is None:
-            file_type = detect_file_type(resolved)
+            file_type = self._detect_file_type(resolved)
         if file_type not in {FileType.TEXT, FileType.NOTEBOOK}:
             return
         self._read_files.set(
@@ -362,13 +364,16 @@ class FileSystemService:
                 return start_line > 1 or end_line < total_lines
         return False
 
+    def _detect_file_type(self, resolved: ResolvedPath) -> FileType:
+        return detect_file_type(Path(str(resolved)))
+
     def _structured_media_success(
         self,
         *,
-        resolved: Path,
+        resolved: ResolvedPath,
         file_type: FileType,
         content_blocks: list[dict[str, str]],
-    ):
+    ) -> ToolResultEnvelope:
         return tool_success(
             [
                 {
@@ -384,7 +389,7 @@ class FileSystemService:
         self,
         *,
         result,
-        resolved: Path | PurePosixPath,
+        resolved: ResolvedPath,
         temp_path: Path,
     ) -> None:
         result.file_path = str(resolved)
@@ -420,7 +425,7 @@ class FileSystemService:
         except Exception as e:
             raise RuntimeError(f"[FileSystemService] Failed to record operation: {e}") from e
 
-    def _count_lines(self, resolved: Path | PurePosixPath) -> int:
+    def _count_lines(self, resolved: ResolvedPath) -> int:
         try:
             raw = self.backend.read_file(str(resolved))
             return raw.content.count("\n") + 1
@@ -431,10 +436,11 @@ class FileSystemService:
     # Tool handlers
     # ------------------------------------------------------------------
 
-    def _read_file(self, file_path: str, offset: int = 0, limit: int | None = None, pages: str | None = None) -> str:
+    def _read_file(self, file_path: str, offset: int = 0, limit: int | None = None, pages: str | None = None) -> str | ToolResultEnvelope:
         is_valid, error, resolved = self._validate_path(file_path, "read")
         if not is_valid:
             return error
+        assert resolved is not None
 
         file_size = self.backend.file_size(str(resolved))
 
@@ -463,6 +469,7 @@ class FileSystemService:
         from core.tools.filesystem.local_backend import LocalBackend
 
         if isinstance(self.backend, LocalBackend):
+            assert isinstance(resolved, Path)
             limits = ReadLimits()
             result = read_file_dispatch(
                 path=resolved,
@@ -486,7 +493,7 @@ class FileSystemService:
             return result.format_output()
 
         try:
-            file_type = detect_file_type(resolved)
+            file_type = self._detect_file_type(resolved)
             download_bytes = getattr(self.backend, "download_bytes", None)
             if callable(download_bytes) and file_type in {FileType.BINARY, FileType.DOCUMENT}:
                 # @@@dt-02-remote-special-file-bridge
@@ -494,6 +501,9 @@ class FileSystemService:
                 # same local dispatcher for binary/document reads instead of
                 # degrading special files into placeholder text.
                 raw_bytes = download_bytes(str(resolved))
+                if not isinstance(raw_bytes, (bytes, bytearray)):
+                    raise TypeError(f"Remote special-file download returned {type(raw_bytes).__name__}, expected bytes.")
+                raw_bytes = bytes(raw_bytes)
                 if (
                     file_type == FileType.BINARY
                     and resolved.suffix.lstrip(".").lower() in IMAGE_EXTENSIONS
@@ -546,6 +556,7 @@ class FileSystemService:
         is_valid, error, resolved = self._validate_path(file_path, "write")
         if not is_valid:
             return error
+        assert resolved is not None
 
         try:
             normalized = self._normalize_write_content(content)
@@ -570,6 +581,7 @@ class FileSystemService:
         is_valid, error, resolved = self._validate_path(file_path, "edit")
         if not is_valid:
             return error
+        assert resolved is not None
 
         if resolved.suffix.lower() == ".ipynb":
             return "Notebook files (.ipynb) are not supported by Edit. Use Write to overwrite the full JSON."
@@ -647,6 +659,7 @@ class FileSystemService:
         is_valid, error, resolved = self._validate_path(directory_path, "list")
         if not is_valid:
             return error
+        assert resolved is not None
 
         if not self.backend.is_dir(str(resolved)):
             if self.backend.file_exists(str(resolved)):

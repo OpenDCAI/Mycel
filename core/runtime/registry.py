@@ -6,10 +6,16 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any
 
-Handler = Callable[..., str] | Callable[..., Awaitable[str]]
-SchemaProvider = dict | Callable[[], dict]
-ConcurrencySafety = bool | Callable[[dict], bool]
-ToolInputValidator = Callable[[dict, Any], dict | None] | Callable[[dict, Any], Awaitable[dict | None]]
+from core.runtime.tool_result import ToolResultEnvelope
+
+type ToolSchema = dict[str, Any]
+type ToolHandlerResult = str | ToolResultEnvelope
+type ToolArgs = dict[str, Any]
+
+type Handler = Callable[..., ToolHandlerResult] | Callable[..., Awaitable[ToolHandlerResult]]
+type SchemaProvider = ToolSchema | Callable[[], ToolSchema]
+type ConcurrencySafety = bool | Callable[[ToolArgs], bool]
+type ToolInputValidator = Callable[[ToolArgs, Any], ToolArgs | None] | Callable[[ToolArgs, Any], Awaitable[ToolArgs | None]]
 
 
 class ToolMode(Enum):
@@ -28,10 +34,10 @@ class ToolEntry:
     is_concurrency_safe: ConcurrencySafety = False  # fail-closed: assume not safe
     is_read_only: bool = False  # fail-closed: assume write operation
     is_destructive: bool = False  # advisory metadata for permission/UI layers
-    context_schema: dict | None = None  # fields this tool needs from ToolUseContext
+    context_schema: ToolSchema | None = None  # fields this tool needs from ToolUseContext
     validate_input: ToolInputValidator | None = None
 
-    def get_schema(self) -> dict:
+    def get_schema(self) -> ToolSchema:
         return self.schema() if callable(self.schema) else self.schema
 
 
