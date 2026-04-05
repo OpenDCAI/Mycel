@@ -36,7 +36,7 @@ class SandboxCapability:
     def __init__(self, session: ChatSession, manager: SandboxManager | None = None):
         self._session = session
         self._command_wrapper = _CommandWrapper(session, manager=manager)
-        self._fs_wrapper = _FileSystemWrapper(session)
+        self._fs_wrapper = _FileSystemWrapper(session, manager=manager)
 
     @property
     def command(self) -> BaseExecutor:
@@ -186,8 +186,9 @@ class _FileSystemWrapper(FileSystemBackend):
 
     is_remote = True
 
-    def __init__(self, session: ChatSession):
+    def __init__(self, session: ChatSession, manager: SandboxManager | None = None):
         self._session = session
+        self._manager = manager
 
     def _get_provider(self):
         """Get provider from session's lease."""
@@ -201,7 +202,14 @@ class _FileSystemWrapper(FileSystemBackend):
         # @@@lease-convergence - File operations can also wake paused instances; always converge through lease.
         provider = getattr(self._session.runtime, "provider", None)
         if provider is not None:
-            instance = self._session.lease.ensure_active_instance(provider)
+            try:
+                instance = self._session.lease.ensure_active_instance(provider)
+            except RuntimeError:
+                if self._manager is None or getattr(self._session.lease, "observed_state", None) != "paused":
+                    raise
+                if not self._manager.resume_session(self._session.thread_id, source="auto_resume"):
+                    raise
+                instance = self._session.lease.ensure_active_instance(provider)
         else:
             instance = self._session.lease.get_instance()
             if not instance:

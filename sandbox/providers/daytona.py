@@ -15,6 +15,7 @@ import time
 import uuid
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
+from urllib.parse import urlparse, urlunparse
 
 import httpx
 
@@ -107,6 +108,13 @@ class DaytonaProvider(SandboxProvider):
         os.environ["DAYTONA_API_KEY"] = api_key
         os.environ["DAYTONA_API_URL"] = api_url
         self.client = Daytona()
+        original_get_proxy_toolbox_url = self.client._get_proxy_toolbox_url
+
+        def _wrapped_get_proxy_toolbox_url(sandbox_id: str, region_id: str) -> str:
+            raw_url = original_get_proxy_toolbox_url(sandbox_id, region_id)
+            return self._normalize_toolbox_proxy_url(raw_url)
+
+        self.client._get_proxy_toolbox_url = _wrapped_get_proxy_toolbox_url
         self._sandboxes: dict[str, Any] = {}
         self._thread_bind_mounts: dict[str, list[MountSpec]] = {}  # thread_id -> bind_mounts
         self._volume_mounts: dict[str, tuple[str, str]] = {}  # thread_id -> (volume_id, mount_path)
@@ -393,6 +401,19 @@ class DaytonaProvider(SandboxProvider):
         if session_id not in self._sandboxes:
             self._sandboxes[session_id] = self.client.find_one(session_id)
         return self._sandboxes[session_id]
+
+    def _normalize_toolbox_proxy_url(self, raw_url: str) -> str:
+        api_host = (urlparse(self.api_url).hostname or "").lower()
+        if api_host not in {"localhost", "127.0.0.1"}:
+            return raw_url
+
+        parsed = urlparse(raw_url)
+        if (parsed.hostname or "").lower() != "172.18.0.1":
+            return raw_url
+
+        # @@@local-toolbox-loopback - self-host Daytona local dev reaches toolbox through
+        # the SSH-forwarded loopback proxy on :4000, not the server-side docker bridge gateway.
+        return urlunparse(parsed._replace(netloc=f"127.0.0.1:{parsed.port or 4000}"))
 
     def get_runtime_sandbox(self, session_id: str):
         """Expose native SDK sandbox for runtime-level persistent terminal handling."""

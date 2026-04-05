@@ -1,6 +1,7 @@
 import asyncio
 import uuid
 from pathlib import Path
+from types import SimpleNamespace
 
 from sandbox.base import LocalSandbox
 from sandbox.capability import SandboxCapability
@@ -111,3 +112,50 @@ def test_local_sandbox_rebuilds_stale_closed_capability_before_execute_async(tmp
     assert result is not None
     assert result.exit_code == 0
     assert "hi" in result.stdout
+
+
+def test_filesystem_wrapper_auto_resumes_paused_lease_before_listing():
+    class _PausedLease:
+        def __init__(self):
+            self.observed_state = "paused"
+
+        def ensure_active_instance(self, _provider):
+            if self.observed_state == "paused":
+                raise RuntimeError("Sandbox lease lease-1 is paused. Resume before executing commands.")
+            return SimpleNamespace(instance_id="inst-1")
+
+    class _RemoteProvider:
+        def list_dir(self, instance_id: str, path: str):
+            assert instance_id == "inst-1"
+            assert path == "/home/daytona"
+            return [{"name": "demo.txt", "type": "file", "size": 7}]
+
+    lease = _PausedLease()
+    provider = _RemoteProvider()
+    resume_calls: list[tuple[str, str]] = []
+
+    class _RemoteSession:
+        def __init__(self):
+            self.thread_id = "thread-paused"
+            self.terminal = _DummyTerminal()
+            self.lease = lease
+            self.runtime = SimpleNamespace(provider=provider)
+            self.touches = 0
+
+        def touch(self):
+            self.touches += 1
+
+    session = _RemoteSession()
+    manager = SimpleNamespace(
+        resume_session=lambda thread_id, source="user_resume": (
+            resume_calls.append((thread_id, source)) or setattr(lease, "observed_state", "running") or True
+        )
+    )
+
+    capability = SandboxCapability(session, manager=manager)
+
+    result = capability.fs.list_dir("/home/daytona")
+
+    assert resume_calls == [("thread-paused", "auto_resume")]
+    assert [entry.name for entry in result.entries] == ["demo.txt"]
+    assert result.error is None
