@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 from types import SimpleNamespace
+from unittest.mock import AsyncMock
 
 import pytest
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
@@ -533,6 +534,9 @@ async def test_list_tasks_includes_subagent_stream_from_display_entries():
             },
         ],
     )
+    fake_agent = SimpleNamespace(runtime=SimpleNamespace(current_state=AgentState.ACTIVE), agent=SimpleNamespace(aget_state=None))
+    monkeypatch = pytest.MonkeyPatch()
+    monkeypatch.setattr(threads_router, "get_or_create_agent", AsyncMock(return_value=fake_agent))
     app = SimpleNamespace(
         state=SimpleNamespace(
             display_builder=builder,
@@ -554,6 +558,7 @@ async def test_list_tasks_includes_subagent_stream_from_display_entries():
             "error": None,
         }
     ]
+    monkeypatch.undo()
 
 
 @pytest.mark.asyncio
@@ -591,6 +596,9 @@ async def test_get_task_returns_subagent_stream_result_from_display_entries():
             },
         ],
     )
+    fake_agent = SimpleNamespace(runtime=SimpleNamespace(current_state=AgentState.ACTIVE), agent=SimpleNamespace(aget_state=None))
+    monkeypatch = pytest.MonkeyPatch()
+    monkeypatch.setattr(threads_router, "get_or_create_agent", AsyncMock(return_value=fake_agent))
     app = SimpleNamespace(
         state=SimpleNamespace(
             display_builder=builder,
@@ -609,3 +617,114 @@ async def test_get_task_returns_subagent_stream_result_from_display_entries():
         "result": "workspace looks empty",
         "text": "workspace looks empty",
     }
+    monkeypatch.undo()
+
+
+@pytest.mark.asyncio
+async def test_blocking_subagent_done_state_overrides_stale_running_stream_on_detail_and_tasks(monkeypatch):
+    thread_id = "parent-thread-stale-running-completed"
+    builder = DisplayBuilder()
+    builder.set_entries(
+        thread_id,
+        [
+            {"id": "u1", "role": "user", "content": "do work", "timestamp": 1},
+            {
+                "id": "a1",
+                "role": "assistant",
+                "timestamp": 2,
+                "segments": [
+                    {
+                        "type": "tool",
+                        "step": {
+                            "id": "call-agent-1",
+                            "name": "Agent",
+                            "args": {"description": "inspect workspace"},
+                            "status": "done",
+                            "result": "workspace looks empty",
+                            "subagent_stream": {
+                                "task_id": "task-stale-completed",
+                                "thread_id": "subagent-task-stale-completed",
+                                "description": "inspect workspace",
+                                "text": "",
+                                "tool_calls": [],
+                                "status": "running",
+                            },
+                        },
+                    }
+                ],
+            },
+        ],
+    )
+    fake_agent = SimpleNamespace(runtime=SimpleNamespace(current_state=AgentState.ACTIVE), agent=SimpleNamespace(aget_state=None))
+    monkeypatch.setattr(threads_router, "get_or_create_agent", AsyncMock(return_value=fake_agent))
+    app = SimpleNamespace(
+        state=SimpleNamespace(
+            display_builder=builder,
+            agent_pool={},
+            thread_sandbox={thread_id: "local"},
+        )
+    )
+
+    detail = await threads_router.get_thread_messages(thread_id, user_id="owner-1", app=app)
+    tasks = await threads_router.list_tasks(thread_id, request=SimpleNamespace(app=app))
+    task = await threads_router.get_task(thread_id, "task-stale-completed", request=SimpleNamespace(app=app))
+
+    stream = detail["entries"][1]["segments"][0]["step"]["subagent_stream"]
+    assert stream["status"] == "completed"
+    assert tasks[0]["status"] == "completed"
+    assert task["status"] == "completed"
+
+
+@pytest.mark.asyncio
+async def test_blocking_subagent_error_overrides_stale_running_stream_on_detail_and_tasks(monkeypatch):
+    thread_id = "parent-thread-stale-running-error"
+    builder = DisplayBuilder()
+    builder.set_entries(
+        thread_id,
+        [
+            {"id": "u1", "role": "user", "content": "do work", "timestamp": 1},
+            {
+                "id": "a1",
+                "role": "assistant",
+                "timestamp": 2,
+                "segments": [
+                    {
+                        "type": "tool",
+                        "step": {
+                            "id": "call-agent-1",
+                            "name": "Agent",
+                            "args": {"description": "inspect workspace"},
+                            "status": "done",
+                            "result": "<tool_use_error>Agent failed: bad child model</tool_use_error>",
+                            "subagent_stream": {
+                                "task_id": "task-stale-error",
+                                "thread_id": "subagent-task-stale-error",
+                                "description": "inspect workspace",
+                                "text": "",
+                                "tool_calls": [],
+                                "status": "running",
+                            },
+                        },
+                    }
+                ],
+            },
+        ],
+    )
+    fake_agent = SimpleNamespace(runtime=SimpleNamespace(current_state=AgentState.ACTIVE), agent=SimpleNamespace(aget_state=None))
+    monkeypatch.setattr(threads_router, "get_or_create_agent", AsyncMock(return_value=fake_agent))
+    app = SimpleNamespace(
+        state=SimpleNamespace(
+            display_builder=builder,
+            agent_pool={},
+            thread_sandbox={thread_id: "local"},
+        )
+    )
+
+    detail = await threads_router.get_thread_messages(thread_id, user_id="owner-1", app=app)
+    tasks = await threads_router.list_tasks(thread_id, request=SimpleNamespace(app=app))
+    task = await threads_router.get_task(thread_id, "task-stale-error", request=SimpleNamespace(app=app))
+
+    stream = detail["entries"][1]["segments"][0]["step"]["subagent_stream"]
+    assert stream["status"] == "error"
+    assert tasks[0]["status"] == "error"
+    assert task["status"] == "error"

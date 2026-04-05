@@ -260,6 +260,8 @@ def _checkpoint_tail_is_pending_owner_turn(messages: list[dict[str, Any]]) -> bo
 async def _get_thread_display_entries(app: Any, thread_id: str) -> list[dict[str, Any]]:
     display_builder = app.state.display_builder
     entries = display_builder.get_entries(thread_id)
+    if entries is not None:
+        _normalize_blocking_subagent_terminal_status(entries)
     sandbox_type = resolve_thread_sandbox(app, thread_id)
     agent = await get_or_create_agent(app, sandbox_type, thread_id=thread_id)
     if entries is not None and getattr(agent.runtime, "current_state", None) != AgentState.IDLE:
@@ -284,6 +286,7 @@ async def _get_thread_display_entries(app: Any, thread_id: str) -> list[dict[str
             display_builder=display_builder,
         )
         entries = display_builder.get_entries(thread_id) or entries
+    _normalize_blocking_subagent_terminal_status(entries)
     return entries
 
 
@@ -295,6 +298,29 @@ def _display_entries_need_idle_rebuild(entries: list[dict[str, Any]], messages: 
     # @@@idle-cache-honesty - idle detail must not trust cached assistant shells after
     # clear/restart. Rebuild only when cache is visibly impossible for the persisted checkpoint.
     return any(entry.get("role") == "assistant" and not entry.get("segments") for entry in entries)
+
+
+def _normalize_blocking_subagent_terminal_status(entries: list[dict[str, Any]]) -> None:
+    for entry in entries:
+        if entry.get("role") != "assistant":
+            continue
+        for seg in entry.get("segments", []):
+            if seg.get("type") != "tool":
+                continue
+            step = seg.get("step") or {}
+            if step.get("name") != "Agent" or step.get("status") != "done":
+                continue
+            stream = step.get("subagent_stream")
+            if not isinstance(stream, dict):
+                continue
+            result_text = step.get("result")
+            terminal_status = "error" if isinstance(result_text, str) and result_text.startswith("<tool_use_error>") else "completed"
+            if stream.get("status") != terminal_status:
+                # @@@blocking-subagent-terminal-honesty - a finished blocking Agent tool
+                # must not keep exposing a stale running child status on refresh/detail/tasks.
+                stream["status"] = terminal_status
+            if terminal_status == "error" and not stream.get("error") and isinstance(result_text, str):
+                stream["error"] = result_text
 
 
 def _collect_display_subagent_tasks(entries: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:

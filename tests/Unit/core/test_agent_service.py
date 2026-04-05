@@ -830,6 +830,40 @@ async def test_agent_tool_model_priority_prefers_tool_over_frontmatter_and_paren
 
 
 @pytest.mark.asyncio
+async def test_agent_tool_model_default_literal_inherits_parent_model(monkeypatch, tmp_path):
+    captured: dict[str, object] = {}
+
+    def fake_create_leon_agent(*, model_name, workspace_root, **kwargs):
+        captured["model_name"] = model_name
+        captured["kwargs"] = kwargs
+        return _FakeChildAgent(Path(workspace_root), model_name)
+
+    monkeypatch.setattr("core.runtime.agent.create_leon_agent", fake_create_leon_agent)
+
+    registry = ToolRegistry()
+    AgentService(
+        tool_registry=registry,
+        agent_registry=_FakeAgentRegistry(),
+        workspace_root=tmp_path,
+        model_name="parent-model",
+    )
+    runner = ToolRunner(registry=registry)
+    request = SimpleNamespace(
+        tool_call={
+            "name": "Agent",
+            "args": {"prompt": "inspect", "subagent_type": "explore", "model": "default"},
+            "id": "tc-1",
+        },
+        state=_make_parent_context(tmp_path, model_name="parent-model"),
+    )
+
+    await runner.awrap_tool_call(request, AsyncMock())
+
+    assert captured["model_name"] == "parent-model"
+    assert captured["kwargs"]["agent"] == "explore"
+
+
+@pytest.mark.asyncio
 async def test_agent_tool_model_priority_prefers_frontmatter_over_parent(monkeypatch, tmp_path):
     agent_dir = tmp_path / ".leon" / "agents"
     agent_dir.mkdir(parents=True)

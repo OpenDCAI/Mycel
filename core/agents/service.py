@@ -81,7 +81,7 @@ def _resolve_subagent_model(
     env_model = os.getenv("CLAUDE_CODE_SUBAGENT_MODEL")
     if env_model:
         return env_model
-    if requested_model:
+    if requested_model and requested_model.lower() != "default":
         return requested_model
 
     agent_def = AgentLoader(workspace_root=workspace_root).load_all_agents().get(_get_subagent_agent_name(subagent_type))
