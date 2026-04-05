@@ -195,28 +195,6 @@ export async function listMyLeases(signal?: AbortSignal): Promise<UserLeaseSumma
   return payload.leases;
 }
 
-export async function pauseThreadSandbox(threadId: string): Promise<void> {
-  await request(`/api/threads/${encodeURIComponent(threadId)}/sandbox/pause`, { method: "POST" });
-}
-
-export async function resumeThreadSandbox(threadId: string): Promise<void> {
-  await request(`/api/threads/${encodeURIComponent(threadId)}/sandbox/resume`, { method: "POST" });
-}
-
-export async function pauseSandboxSession(sessionId: string, provider: string): Promise<void> {
-  await request(
-    `/api/sandbox/sessions/${encodeURIComponent(sessionId)}/pause?provider=${encodeURIComponent(provider)}`,
-    { method: "POST" },
-  );
-}
-
-export async function resumeSandboxSession(sessionId: string, provider: string): Promise<void> {
-  await request(
-    `/api/sandbox/sessions/${encodeURIComponent(sessionId)}/resume?provider=${encodeURIComponent(provider)}`,
-    { method: "POST" },
-  );
-}
-
 export async function destroySandboxSession(sessionId: string, provider: string): Promise<void> {
   await request(
     `/api/sandbox/sessions/${encodeURIComponent(sessionId)}?provider=${encodeURIComponent(provider)}`,

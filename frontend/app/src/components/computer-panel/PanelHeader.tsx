@@ -1,17 +1,9 @@
-import { Pause, Play } from "lucide-react";
-import { pauseThreadSandbox, resumeThreadSandbox, type LeaseStatus } from "../../api";
-
 interface PanelHeaderProps {
   threadId: string | null;
-  isRemote: boolean;
-  lease: LeaseStatus | null;
   onClose: () => void;
-  onRefreshStatus: () => Promise<unknown>;
 }
 
-export function PanelHeader({ threadId, isRemote, lease, onClose, onRefreshStatus }: PanelHeaderProps) {
-  const instanceState = lease?.instance?.state;
-
+export function PanelHeader({ threadId, onClose }: PanelHeaderProps) {
   return (
     <div className="h-12 flex items-center justify-between px-4 flex-shrink-0 border-b border-border">
       <div>
@@ -21,22 +13,6 @@ export function PanelHeader({ threadId, isRemote, lease, onClose, onRefreshStatu
         </p>
       </div>
       <div className="flex items-center gap-1">
-        {isRemote && instanceState === "running" && (
-          <button
-            className="w-8 h-8 rounded-lg flex items-center justify-center text-muted-foreground/70 hover:bg-muted hover:text-foreground"
-            onClick={() => void (threadId && pauseThreadSandbox(threadId).then(() => onRefreshStatus()))}
-          >
-            <Pause className="w-4 h-4" />
-          </button>
-        )}
-        {isRemote && instanceState === "paused" && (
-          <button
-            className="w-8 h-8 rounded-lg flex items-center justify-center text-muted-foreground/70 hover:bg-muted hover:text-success"
-            onClick={() => void (threadId && resumeThreadSandbox(threadId).then(() => onRefreshStatus()))}
-          >
-            <Play className="w-4 h-4" />
-          </button>
-        )}
         <button
           className="w-8 h-8 rounded-lg flex items-center justify-center text-muted-foreground/70 hover:bg-muted hover:text-foreground"
           onClick={onClose}

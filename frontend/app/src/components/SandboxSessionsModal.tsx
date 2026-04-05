@@ -1,10 +1,8 @@
-import { Loader2, Pause, Play, Trash2 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { Loader2, Trash2 } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
 import {
   destroySandboxSession,
   listSandboxSessions,
-  pauseSandboxSession,
-  resumeSandboxSession,
   type SandboxSession,
 } from "../api";
 import {
@@ -29,7 +27,7 @@ export default function SandboxSessionsModal({ isOpen, onClose, onSessionMutated
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  async function refresh(opts?: { silent?: boolean }) {
+  const refresh = useCallback(async (opts?: { silent?: boolean }) => {
     const silent = opts?.silent ?? false;
     const showInitialLoading = !hasLoaded && !silent;
     if (showInitialLoading) {
@@ -48,7 +46,7 @@ export default function SandboxSessionsModal({ isOpen, onClose, onSessionMutated
       setLoading(false);
       setRefreshing(false);
     }
-  }
+  }, [hasLoaded]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -57,7 +55,7 @@ export default function SandboxSessionsModal({ isOpen, onClose, onSessionMutated
       void refresh({ silent: true });
     }, 2500);
     return () => window.clearInterval(timer);
-  }, [isOpen]);
+  }, [isOpen, refresh]);
 
   async function withBusy(row: SandboxSession, fn: () => Promise<void>) {
     setBusy(row.session_id);
@@ -153,26 +151,6 @@ export default function SandboxSessionsModal({ isOpen, onClose, onSessionMutated
                     </div>
                   </div>
                   <div className="flex items-center gap-1.5 flex-shrink-0">
-                    {row.status === "running" && (
-                      <button
-                        className="w-8 h-8 rounded-lg flex items-center justify-center text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-30"
-                        disabled={busy === row.session_id}
-                        onClick={() => void withBusy(row, () => pauseSandboxSession(row.session_id, row.provider))}
-                        title="暂停"
-                      >
-                        <Pause className="w-4 h-4" />
-                      </button>
-                    )}
-                    {row.status === "paused" && (
-                      <button
-                        className="w-8 h-8 rounded-lg flex items-center justify-center text-muted-foreground hover:bg-accent hover:text-success disabled:opacity-30"
-                        disabled={busy === row.session_id}
-                        onClick={() => void withBusy(row, () => resumeSandboxSession(row.session_id, row.provider))}
-                        title="恢复"
-                      >
-                        <Play className="w-4 h-4" />
-                      </button>
-                    )}
                     <button
                       className="w-8 h-8 rounded-lg flex items-center justify-center text-muted-foreground hover:bg-destructive/10 hover:text-destructive disabled:opacity-30"
                       disabled={busy === row.session_id}

@@ -1,8 +1,6 @@
-import { useCallback, useEffect, useState } from "react";
+import { useEffect } from "react";
 import {
   getThreadLease,
-  pauseThreadSandbox,
-  resumeThreadSandbox,
   type SandboxInfo,
 } from "../api";
 
@@ -11,21 +9,10 @@ interface SandboxManagerDeps {
   isStreaming: boolean;
   activeSandbox: SandboxInfo | null;
   setActiveSandbox: React.Dispatch<React.SetStateAction<SandboxInfo | null>>;
-  loadThread: (threadId: string) => Promise<void>;
 }
 
-export interface SandboxManagerState {
-  sandboxActionError: string | null;
-}
-
-export interface SandboxManagerActions {
-  handlePauseSandbox: () => Promise<void>;
-  handleResumeSandbox: () => Promise<void>;
-}
-
-export function useSandboxManager(deps: SandboxManagerDeps): SandboxManagerState & SandboxManagerActions {
-  const { activeThreadId, isStreaming, activeSandbox, setActiveSandbox, loadThread } = deps;
-  const [sandboxActionError, setSandboxActionError] = useState<string | null>(null);
+export function useSandboxManager(deps: SandboxManagerDeps): void {
+  const { activeThreadId, isStreaming, activeSandbox, setActiveSandbox } = deps;
 
   // Poll sandbox status while streaming (remote sandboxes only)
   useEffect(() => {
@@ -58,29 +45,5 @@ export function useSandboxManager(deps: SandboxManagerDeps): SandboxManagerState
       cancelled = true;
       window.clearInterval(timer);
     };
-  }, [isStreaming, activeThreadId, activeSandbox?.type, setActiveSandbox]);
-
-  const handlePauseSandbox = useCallback(async () => {
-    if (!activeThreadId) return;
-    setSandboxActionError(null);
-    try {
-      await pauseThreadSandbox(activeThreadId);
-      await loadThread(activeThreadId);
-    } catch (e) {
-      setSandboxActionError(e instanceof Error ? e.message : String(e));
-    }
-  }, [activeThreadId, loadThread]);
-
-  const handleResumeSandbox = useCallback(async () => {
-    if (!activeThreadId) return;
-    setSandboxActionError(null);
-    try {
-      await resumeThreadSandbox(activeThreadId);
-      await loadThread(activeThreadId);
-    } catch (e) {
-      setSandboxActionError(e instanceof Error ? e.message : String(e));
-    }
-  }, [activeThreadId, loadThread]);
-
-  return { sandboxActionError, handlePauseSandbox, handleResumeSandbox };
+  }, [isStreaming, activeThreadId, activeSandbox, setActiveSandbox]);
 }
