@@ -83,7 +83,6 @@ from backend.web.core.lifespan import lifespan  # noqa: E402
 from backend.web.routers import (  # noqa: E402
     auth,
     chats,
-    connections,
     debug,
     entities,
     invite_codes,
@@ -118,7 +117,6 @@ app.include_router(entities.router)
 app.include_router(entities.members_router)
 app.include_router(sandbox.router)
 app.include_router(webhooks.router)
-app.include_router(connections.router)
 app.include_router(thread_files.router)
 app.include_router(thread_files._public)
 app.include_router(settings.router)

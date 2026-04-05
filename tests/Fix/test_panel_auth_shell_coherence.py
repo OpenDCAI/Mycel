@@ -67,7 +67,7 @@ def test_builtin_member_surface_exposes_chat_tools():
     member = member_service._leon_builtin()
     tools = {item["name"]: item for item in member["config"]["tools"]}
 
-    for tool_name in ("chats", "chat_read", "chat_send", "chat_search", "directory"):
+    for tool_name in ("chats", "read_message", "send_message", "search_message", "directory"):
         assert tool_name in tools
         assert tools[tool_name]["enabled"] is True
         assert tools[tool_name]["group"] == "chat"

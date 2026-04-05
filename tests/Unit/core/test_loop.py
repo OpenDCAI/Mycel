@@ -1332,7 +1332,7 @@ class _SplitAnyOfStreamingToolModel:
         if self.calls == 1:
             yield AIMessageChunk(
                 content="",
-                tool_call_chunks=[{"name": "chat_read", "args": "", "id": "tc-chat-read", "index": 0}],
+                tool_call_chunks=[{"name": "read_message", "args": "", "id": "tc-chat-read", "index": 0}],
             )
             yield AIMessageChunk(
                 content="",
@@ -2720,7 +2720,7 @@ async def test_streaming_overlap_waits_for_anyof_tool_args_before_execution():
     model = _SplitAnyOfStreamingToolModel()
     seen_calls = []
 
-    def chat_read_handler(entity_id: str | None = None, chat_id: str | None = None) -> str:
+    def read_message_handler(entity_id: str | None = None, chat_id: str | None = None) -> str:
         seen_calls.append({"entity_id": entity_id, "chat_id": chat_id})
         if chat_id:
             return f"chat:{chat_id}"
@@ -2729,10 +2729,10 @@ async def test_streaming_overlap_waits_for_anyof_tool_args_before_execution():
         return "Provide entity_id or chat_id."
 
     entry = ToolEntry(
-        name="chat_read",
+        name="read_message",
         mode=ToolMode.INLINE,
         schema={
-            "name": "chat_read",
+            "name": "read_message",
             "description": "read chat",
             "parameters": {
                 "type": "object",
@@ -2747,7 +2747,7 @@ async def test_streaming_overlap_waits_for_anyof_tool_args_before_execution():
                 ],
             },
         },
-        handler=chat_read_handler,
+        handler=read_message_handler,
         source="test",
         is_concurrency_safe=True,
     )
@@ -2768,10 +2768,10 @@ async def test_streaming_overlap_waits_for_anyof_tool_args_before_execution():
 
 def test_normalize_stream_tool_call_keeps_aggregate_args_when_chunk_args_are_empty():
     entry = ToolEntry(
-        name="chat_read",
+        name="read_message",
         mode=ToolMode.INLINE,
         schema={
-            "name": "chat_read",
+            "name": "read_message",
             "description": "read chat",
             "parameters": {
                 "type": "object",
@@ -2798,12 +2798,12 @@ def test_normalize_stream_tool_call_keeps_aggregate_args_when_chunk_args_are_emp
     )
 
     normalized = loop._normalize_stream_tool_call(
-        {"name": "chat_read", "args": {"chat_id": "chat-1"}, "id": "tc-chat-read"},
-        [{"name": "chat_read", "args": "", "id": "tc-chat-read", "index": 0}],
+        {"name": "read_message", "args": {"chat_id": "chat-1"}, "id": "tc-chat-read"},
+        [{"name": "read_message", "args": "", "id": "tc-chat-read", "index": 0}],
     )
 
     assert normalized == {
-        "name": "chat_read",
+        "name": "read_message",
         "args": {"chat_id": "chat-1"},
         "id": "tc-chat-read",
     }

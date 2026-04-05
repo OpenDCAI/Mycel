@@ -16,7 +16,7 @@ from core.runtime.registry import ToolEntry, ToolMode, ToolRegistry
 
 logger = logging.getLogger(__name__)
 
-# @@@range-parser — parse range strings for chat_read history queries.
+# @@@range-parser — parse range strings for read_message history queries.
 # Supports: negative index (-10:-1), relative time (-2h:, -1d:-6h), ISO dates (2026-03-20:2026-03-22).
 _RELATIVE_RE = re.compile(r"^-(\d+)([hdm])$")
 
@@ -121,9 +121,9 @@ class ChatToolService:
 
     def _register(self, registry: ToolRegistry) -> None:
         self._register_chats(registry)
-        self._register_chat_read(registry)
-        self._register_chat_send(registry)
-        self._register_chat_search(registry)
+        self._register_read_message(registry)
+        self._register_send_message(registry)
+        self._register_search_message(registry)
         self._register_directory(registry)
 
     def _latest_notified_chat_id(self, request: Any) -> str | None:
@@ -137,7 +137,7 @@ class ChatToolService:
                 continue
             content = getattr(message, "content", "")
             text = content if isinstance(content, str) else str(content)
-            match = re.search(r'chat_read\(chat_id="([^"]+)"\)', text)
+            match = re.search(r'read_message\(chat_id="([^"]+)"\)', text)
             if match:
                 return match.group(1)
         return None
@@ -210,7 +210,7 @@ class ChatToolService:
             lines.append(f"- {name}{id_str}{unread_str}{last_preview}")
         return "\n".join(lines)
 
-    def _handle_chat_read(self, user_id: str | None = None, chat_id: str | None = None, range: str | None = None) -> str:
+    def _handle_read_message(self, user_id: str | None = None, chat_id: str | None = None, range: str | None = None) -> str:
         eid = self._user_id
         if chat_id:
             pass  # use chat_id directly
@@ -231,7 +231,7 @@ class ChatToolService:
             msgs = self._fetch_by_range(chat_id, parsed)
             if not msgs:
                 return "No messages in that range."
-            # @@@range-marks-read — WORKAROUND: unblock chat_send by pushing
+            # @@@range-marks-read — WORKAROUND: unblock send_message by pushing
             # last_read_at to now. This marks ALL messages as read, not just
             # the requested range. Proper fix needs per-message read tracking
             # instead of the current single-timestamp waterline model.
@@ -254,7 +254,7 @@ class ChatToolService:
             "  range='2026-03-20:2026-03-22' (date range)"
         )
 
-    def _handle_chat_send(
+    def _handle_send_message(
         self,
         content: str,
         user_id: str | None = None,
@@ -285,9 +285,9 @@ class ChatToolService:
         # @@@read-before-write-gate — reject if unread messages exist
         unread = self._messages.count_unread(resolved_chat_id, eid)
         if unread > 0:
-            raise RuntimeError(f"You have {unread} unread message(s). Call chat_read(chat_id='{resolved_chat_id}') first.")
+            raise RuntimeError(f"You have {unread} unread message(s). Call read_message(chat_id='{resolved_chat_id}') first.")
 
-        # Append signal to content (for chat_read) + pass through chain (for notification)
+        # Append signal to content (for read_message) + pass through chain (for notification)
         effective_signal = signal if signal in ("yield", "close") else None
         if effective_signal:
             content = f"{content}\n[signal: {effective_signal}]"
@@ -295,7 +295,7 @@ class ChatToolService:
         self._chat_service.send_message(resolved_chat_id, eid, content, mentions, signal=effective_signal)
         return f"Message sent to {target_name}."
 
-    def _handle_chat_search(self, query: str, user_id: str | None = None) -> str:
+    def _handle_search_message(self, query: str, user_id: str | None = None) -> str:
         eid = self._user_id
         chat_id = None
         if user_id:
@@ -368,13 +368,13 @@ class ChatToolService:
             )
         )
 
-    def _register_chat_read(self, registry: ToolRegistry) -> None:
+    def _register_read_message(self, registry: ToolRegistry) -> None:
         registry.register(
             ToolEntry(
-                name="chat_read",
+                name="read_message",
                 mode=ToolMode.INLINE,
                 schema={
-                    "name": "chat_read",
+                    "name": "read_message",
                     "description": (
                         "Read chat messages. Returns unread messages by default.\n"
                         "If nothing unread, use range to read history:\n"
@@ -400,7 +400,7 @@ class ChatToolService:
                         ],
                     },
                 },
-                handler=self._handle_chat_read,
+                handler=self._handle_read_message,
                 source="chat",
                 search_hint="read chat messages history conversation",
                 is_read_only=True,
@@ -409,16 +409,16 @@ class ChatToolService:
             )
         )
 
-    def _register_chat_send(self, registry: ToolRegistry) -> None:
+    def _register_send_message(self, registry: ToolRegistry) -> None:
         registry.register(
             ToolEntry(
-                name="chat_send",
+                name="send_message",
                 mode=ToolMode.INLINE,
                 schema={
-                    "name": "chat_send",
+                    "name": "send_message",
                     "description": (
                         "Send a message. Use user_id for 1:1 chats, chat_id for group chats.\n\n"
-                        "You MUST call chat_read() first if you have unread messages — sending will fail otherwise.\n\n"
+                        "You MUST call read_message() first if you have unread messages — sending will fail otherwise.\n\n"
                         "Signal protocol — append to content:\n"
                         "  (no tag) = I expect a reply from you\n"
                         "  ::yield = I'm done with my turn; reply only if you want to\n"
@@ -450,20 +450,20 @@ class ChatToolService:
                         ],
                     },
                 },
-                handler=self._handle_chat_send,
+                handler=self._handle_send_message,
                 source="chat",
                 search_hint="send message reply chat entity",
                 validate_input=self._fill_missing_chat_target,
             )
         )
 
-    def _register_chat_search(self, registry: ToolRegistry) -> None:
+    def _register_search_message(self, registry: ToolRegistry) -> None:
         registry.register(
             ToolEntry(
-                name="chat_search",
+                name="search_message",
                 mode=ToolMode.INLINE,
                 schema={
-                    "name": "chat_search",
+                    "name": "search_message",
                     "description": "Search messages. Optionally filter by user_id.",
                     "parameters": {
                         "type": "object",
@@ -477,7 +477,7 @@ class ChatToolService:
                         "required": ["query"],
                     },
                 },
-                handler=self._handle_chat_search,
+                handler=self._handle_search_message,
                 source="chat",
                 search_hint="search messages query chat history",
                 is_read_only=True,
@@ -492,7 +492,7 @@ class ChatToolService:
                 mode=ToolMode.INLINE,
                 schema={
                     "name": "directory",
-                    "description": "Browse the user directory. Returns user_ids for use with chat_send, chat_read.",
+                    "description": "Browse the user directory. Returns user_ids for use with send_message, read_message.",
                     "parameters": {
                         "type": "object",
                         "properties": {

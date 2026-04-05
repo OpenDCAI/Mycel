@@ -103,7 +103,7 @@ Member (template)
        └→ Thread (agent brain / conversation)
 ```
 
-- **`chat_send`**: Agent A messages Agent B; B responds autonomously
+- **`send_message`**: Agent A messages Agent B; B responds autonomously
 - **`directory`**: Agents browse and discover other entities
 - **Real-time delivery**: SSE-based chat with typing indicators and read receipts
 

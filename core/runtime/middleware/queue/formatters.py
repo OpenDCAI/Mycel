@@ -11,17 +11,17 @@ from typing import Literal
 
 
 def format_chat_notification(sender_name: str, chat_id: str, unread_count: int, signal: str | None = None) -> str:
-    """Lightweight notification — agent must chat_read to see content.
+    """Lightweight notification — agent must read_message to see content.
 
     @@@v3-notification-only — no message content injected. Agent calls
-    chat_read(chat_id=...) to read, then chat_send() to reply.
+    read_message(chat_id=...) to read, then send_message() to reply.
     """
     signal_hint = f" [signal: {signal}]" if signal and signal != "open" else ""
     return (
         "<system-reminder>\n"
         f"New message from {sender_name} in chat {chat_id} ({unread_count} unread).{signal_hint}\n"
-        f'Read it with chat_read(chat_id="{chat_id}").\n'
-        f'Reply with chat_send(chat_id="{chat_id}", content="...").\n'
+        f'Read it with read_message(chat_id="{chat_id}").\n'
+        f'Reply with send_message(chat_id="{chat_id}", content="...").\n'
         "Prefer using this exact chat_id directly; do not call directory just to resolve the sender first.\n"
         "Do not treat your normal assistant text as a chat reply.\n"
         "</system-reminder>"
@@ -85,24 +85,6 @@ def format_background_notification(
     parts.append("</task-notification>")
     parts.append("</system-reminder>")
     return "\n".join(parts)
-
-
-def format_wechat_message(sender_name: str, user_id: str, text: str) -> str:
-    """Format incoming WeChat message for thread delivery.
-
-    Agent sees: full message with user_id metadata (needed for wechat_send reply).
-    Frontend sees: just the message text (system-reminder stripped).
-    """
-    return (
-        f"{text}\n"
-        "<system-reminder>\n"
-        "<wechat-message>\n"
-        f"  <sender>{escape(sender_name)}</sender>\n"
-        f"  <user-id>{escape(user_id)}</user-id>\n"
-        "</wechat-message>\n"
-        'To reply, use wechat_send(user_id="' + escape(user_id) + '", text="...").\n'
-        "</system-reminder>"
-    )
 
 
 def format_command_notification(

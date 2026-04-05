@@ -20,7 +20,6 @@ All paths must be absolute. Full security mechanisms and audit logging.
 
 import asyncio
 import concurrent.futures
-import functools
 import inspect
 import logging
 import os
@@ -90,21 +89,6 @@ logger = logging.getLogger(__name__)
 
 # @@@langchain-anthropic-streaming-usage-regression
 apply_usage_patches()
-
-
-def _lookup_wechat_conn(user_id: str):
-    """Lazy WeChat connection lookup by owner user ID.
-
-    Called at tool invocation time — app.state may not be populated at registration.
-    """
-    try:
-        from backend.web.main import app  # noqa: PLC0415
-
-        registry = getattr(app.state, "wechat_registry", None)
-        return registry.get(user_id) if registry else None
-    except Exception:
-        return None
-
 
 def _make_mcp_tool_entry(tool) -> ToolEntry:
     schema_model = getattr(tool, "tool_call_schema", None)
@@ -1228,19 +1212,6 @@ class LeonAgent:
                     runtime_fn=lambda: getattr(self, "runtime", None),
                 )
 
-        # @@@wechat-tools — register WeChat tools via lazy connection lookup
-        owner_uid = self._chat_repos.get("owner_user_id", "") if self._chat_repos else ""
-        if owner_uid:
-            try:
-                from core.tools.wechat.service import WeChatToolService
-
-                self._wechat_tool_service = WeChatToolService(
-                    registry=self._tool_registry,
-                    connection_fn=functools.partial(_lookup_wechat_conn, owner_uid),
-                )
-            except ImportError:
-                self._wechat_tool_service = None
-
         # LSP tools — DEFERRED, always registered, multilspy checked at call time
         self._lsp_service = None
         try:
@@ -1410,10 +1381,10 @@ class LeonAgent:
                     f"- Your name: {name}\n"
                     f"- Your user_id: {uid}\n"
                     f"- Your owner: {owner_name} (user_id: {owner_uid})\n"
-                    f"- When you receive a chat notification, you MUST read it with chat_read() before deciding what to do.\n"
+                    f"- When you receive a chat notification, you MUST read it with read_message() before deciding what to do.\n"
                     f"- If that notification already gives you a chat_id, prefer using that exact chat_id directly; do not call directory just to resolve the sender first.\n"
-                    f"- If you reply to the other party, you MUST call chat_send(). Never claim you replied unless chat_send() succeeded.\n"
-                    f"- Your normal text output goes to your owner's thread, not to the chat — only chat_send() delivers to the other party.\n"
+                    f"- If you reply to the other party, you MUST call send_message(). Never claim you replied unless send_message() succeeded.\n"
+                    f"- Your normal text output goes to your owner's thread, not to the chat — only send_message() delivers to the other party.\n"
                 )
         return prompt
 

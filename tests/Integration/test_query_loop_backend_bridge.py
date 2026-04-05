@@ -115,7 +115,7 @@ class _ChatNotificationSilentModel:
             (msg.content for msg in reversed(messages) if msg.__class__.__name__ == "HumanMessage"),
             "",
         )
-        if "New message from" in last_human and "chat_read(chat_id=" in last_human:
+        if "New message from" in last_human and "read_message(chat_id=" in last_human:
             return AIMessage(content="")
         return AIMessage(content="UNRELATED")
 
@@ -1858,14 +1858,14 @@ async def test_run_agent_to_buffer_turns_silent_chat_notification_into_visible_f
         tmp_path,
         loop=loop,
         thread_id="thread-chat-followthrough-silent",
-        message='<system-reminder>\nNew message from alice in chat chat-123 (1 unread).\nRead it with chat_read(chat_id="chat-123").\nReply with chat_send(chat_id="chat-123", content="...").\nDo not treat your normal assistant text as a chat reply.\n</system-reminder>',
+        message='<system-reminder>\nNew message from alice in chat chat-123 (1 unread).\nRead it with read_message(chat_id="chat-123").\nReply with send_message(chat_id="chat-123", content="...").\nDo not treat your normal assistant text as a chat reply.\n</system-reminder>',
         run_id="run-chat-followthrough-silent",
         message_metadata={"source": "external", "notification_type": "chat"},
     )
     _assert_notice_then_text(
         entries,
-        'chat_read(chat_id="chat-123")',
-        'I received a chat notification, but the followthrough assistant reply was empty. Read it with chat_read(chat_id="chat-123") before deciding whether to reply.',
+        'read_message(chat_id="chat-123")',
+        'I received a chat notification, but the followthrough assistant reply was empty. Read it with read_message(chat_id="chat-123") before deciding whether to reply.',
     )
 
 

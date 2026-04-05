@@ -6,15 +6,15 @@ from core.runtime.middleware.queue.formatters import format_chat_notification, f
 
 
 class TestFormatChatNotification:
-    def test_includes_explicit_chat_read_and_chat_send_instructions(self):
+    def test_includes_explicit_read_message_and_send_message_instructions(self):
         result = format_chat_notification(
             sender_name="alice",
             chat_id="chat-123",
             unread_count=2,
         )
 
-        assert 'chat_read(chat_id="chat-123")' in result
-        assert 'chat_send(chat_id="chat-123", content="...")' in result
+        assert 'read_message(chat_id="chat-123")' in result
+        assert 'send_message(chat_id="chat-123", content="...")' in result
         assert "Prefer using this exact chat_id directly" in result
         assert "Do not treat your normal assistant text as a chat reply." in result
 

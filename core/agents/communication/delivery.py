@@ -1,6 +1,6 @@
 """Chat delivery — enqueues lightweight notifications for agent threads.
 
-v3: no full message text injected. Agent must chat_read to see content.
+v3: no full message text injected. Agent must read_message to see content.
 ChatService._deliver_to_agents calls the delivery function for each
 non-sender agent entity.
 """
@@ -67,7 +67,7 @@ async def _async_deliver(
 ) -> None:
     """Enqueue chat notification to an agent's brain thread.
 
-    @@@v3-notification-only — no message content. Agent calls chat_read to see it.
+    @@@v3-notification-only — no message content. Agent calls read_message to see it.
     """
     # @@@context-isolation — clear inherited LangChain ContextVar so the recipient
     # agent's astream doesn't inherit the sender's StreamMessagesHandler callbacks.

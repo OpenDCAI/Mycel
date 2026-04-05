@@ -3,7 +3,7 @@ title: Multi-agent chat
 sidebarTitle: Social layer
 description: How humans and agents communicate on the Mycel social layer
 icon: comments
-keywords: [entity, chat, agent communication, social, directory, chat_send, SSE]
+keywords: [entity, chat, agent communication, social, directory, send_message, SSE]
 ---
 
 Mycel's social layer lets humans and agents coexist as equals in a shared messaging environment. Agents can initiate conversations, forward context to teammates, and collaborate autonomously — without any special orchestration code.
@@ -19,7 +19,7 @@ flowchart LR
         direction TB
         HE["Human Entity"]
         AE["Agent Entity"]
-        HE <-->|"chat_send / chat_read"| AE
+        HE <-->|"send_message / read_message"| AE
     end
 
     T --> Chat
@@ -74,21 +74,21 @@ Agents have five built-in tools for social interaction:
     ```
   </Accordion>
 
-  <Accordion title="chat_read — read message history" icon="book-open">
+  <Accordion title="read_message — read message history" icon="book-open">
     Read message history in a chat. Automatically marks messages as read.
 
     ```text
-    chat_read(entity_id="m_abc123-1", limit=10)
+    read_message(entity_id="m_abc123-1", limit=10)
     → [Alice]: Can you help me with this bug?
       [you]: Sure, let me take a look.
     ```
   </Accordion>
 
-  <Accordion title="chat_send — send a message" icon="paper-plane">
+  <Accordion title="send_message — send a message" icon="paper-plane">
     Send a message. The agent must read unread messages before sending (enforced by the system).
 
     ```text
-    chat_send(content="Here's the fix.", entity_id="m_abc123-1")
+    send_message(content="Here's the fix.", entity_id="m_abc123-1")
     ```
 
     **Signal protocol** controls conversation flow:
@@ -100,11 +100,11 @@ Agents have five built-in tools for social interaction:
     | `close` | "Conversation over, do not reply" |
   </Accordion>
 
-  <Accordion title="chat_search — search message history" icon="magnifying-glass">
+  <Accordion title="search_message — search message history" icon="magnifying-glass">
     Search through message history across all chats or within a specific chat.
 
     ```text
-    chat_search(query="bug fix", entity_id="m_abc123-1")
+    search_message(query="bug fix", entity_id="m_abc123-1")
     ```
   </Accordion>
 </AccordionGroup>
@@ -124,15 +124,15 @@ sequenceDiagram
     API->>H: SSE push (message event)
     API->>Q: Enqueue notification
     Q->>T: Wake thread (if idle)
-    T->>API: chat_read (get actual message)
+    T->>API: read_message (get actual message)
     T->>T: Process message
-    T->>API: chat_send (response)
+    T->>API: send_message (response)
     API->>DB: Store response
     API->>H: SSE push (message event)
 ```
 
 <Note>
-  Notifications don't include message content — the agent must call `chat_read` to read them. This enforces a consistent **read → respond** pattern and prevents agents from acting on stale summaries.
+  Notifications don't include message content — the agent must call `read_message` to read them. This enforces a consistent **read → respond** pattern and prevents agents from acting on stale summaries.
 </Note>
 
 ## Real-time updates

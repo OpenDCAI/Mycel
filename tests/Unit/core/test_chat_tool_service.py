@@ -87,13 +87,13 @@ def test_compose_system_prompt_hardens_chat_reply_contract() -> None:
 
     prompt = agent._compose_system_prompt()
 
-    assert "you MUST read it with chat_read()" in prompt
+    assert "you MUST read it with read_message()" in prompt
     assert "prefer using that exact chat_id directly" in prompt
-    assert "you MUST call chat_send()" in prompt
-    assert "Never claim you replied unless chat_send() succeeded." in prompt
+    assert "you MUST call send_message()" in prompt
+    assert "Never claim you replied unless send_message() succeeded." in prompt
 
 
-def test_chat_read_validate_input_fills_missing_chat_id_from_latest_notification() -> None:
+def test_read_message_validate_input_fills_missing_chat_id_from_latest_notification() -> None:
     registry = ToolRegistry()
     ChatToolService(
         registry,
@@ -107,7 +107,7 @@ def test_chat_read_validate_input_fills_missing_chat_id_from_latest_notification
         chat_event_bus=SimpleNamespace(),
         runtime_fn=lambda: None,
     )
-    entry = registry.get("chat_read")
+    entry = registry.get("read_message")
     assert entry is not None
     assert entry.validate_input is not None
 
@@ -118,7 +118,7 @@ def test_chat_read_validate_input_fills_missing_chat_id_from_latest_notification
                     content=(
                         "<system-reminder>\n"
                         "New message from alice in chat chat-123 (1 unread).\n"
-                        'Read it with chat_read(chat_id="chat-123").\n'
+                        'Read it with read_message(chat_id="chat-123").\n'
                         "</system-reminder>"
                     ),
                     metadata={"source": "external", "notification_type": "chat"},
@@ -132,7 +132,7 @@ def test_chat_read_validate_input_fills_missing_chat_id_from_latest_notification
     assert args == {"chat_id": "chat-123", "range": "-10:"}
 
 
-def test_chat_send_validate_input_fills_missing_chat_id_from_latest_notification() -> None:
+def test_send_message_validate_input_fills_missing_chat_id_from_latest_notification() -> None:
     registry = ToolRegistry()
     ChatToolService(
         registry,
@@ -146,7 +146,7 @@ def test_chat_send_validate_input_fills_missing_chat_id_from_latest_notification
         chat_event_bus=SimpleNamespace(),
         runtime_fn=lambda: None,
     )
-    entry = registry.get("chat_send")
+    entry = registry.get("send_message")
     assert entry is not None
     assert entry.validate_input is not None
 
@@ -157,8 +157,8 @@ def test_chat_send_validate_input_fills_missing_chat_id_from_latest_notification
                     content=(
                         "<system-reminder>\n"
                         "New message from alice in chat chat-456 (1 unread).\n"
-                        'Read it with chat_read(chat_id="chat-456").\n'
-                        'Reply with chat_send(chat_id="chat-456", content="...").\n'
+                        'Read it with read_message(chat_id="chat-456").\n'
+                        'Reply with send_message(chat_id="chat-456", content="...").\n'
                         "</system-reminder>"
                     ),
                     metadata={"source": "external", "notification_type": "chat"},

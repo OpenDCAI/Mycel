@@ -1868,7 +1868,7 @@ class QueryLoop:
             return None
         content = getattr(last_message, "content", "")
         text = content if isinstance(content, str) else str(content)
-        if "New message from" not in text or "chat_read(chat_id=" not in text:
+        if "New message from" not in text or "read_message(chat_id=" not in text:
             return None
         return last_message
 
@@ -1898,12 +1898,12 @@ class QueryLoop:
     def _build_chat_followthrough_fallback(cls, notice: HumanMessage) -> AIMessage:
         content = getattr(notice, "content", "")
         text = content if isinstance(content, str) else str(content)
-        chat_id_match = re.search(r'chat_read\(chat_id="([^"]+)"\)', text)
+        chat_id_match = re.search(r'read_message\(chat_id="([^"]+)"\)', text)
         if chat_id_match:
             chat_id = chat_id_match.group(1)
             reply = (
                 f"I received a chat notification, but the followthrough assistant reply was empty. "
-                f'Read it with chat_read(chat_id="{chat_id}") before deciding whether to reply.'
+                f'Read it with read_message(chat_id="{chat_id}") before deciding whether to reply.'
             )
         else:
             reply = "I received a chat notification, but the followthrough assistant reply was empty."

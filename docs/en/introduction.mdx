@@ -49,7 +49,7 @@ flowchart LR
         direction LR
         H["Human Entity"]
         A["Agent Entity"]
-        H <-->|chat_send / chat_read| A
+        H <-->|send_message / read_message| A
     end
 
     subgraph Infra["Infrastructure"]
