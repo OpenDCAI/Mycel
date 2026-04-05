@@ -1,6 +1,7 @@
 """Application lifespan management."""
 
 import asyncio
+import os
 from contextlib import asynccontextmanager
 from typing import Any
 
@@ -150,24 +151,39 @@ async def lifespan(app: FastAPI):
     app.state.chat_event_bus = SupabaseRealtimeBridge()
     app.state.typing_tracker = MessagingTypingTracker(app.state.chat_event_bus)
 
-    # Messaging system — Supabase-backed (required), uses anon key
-    from backend.web.core.supabase_factory import create_messaging_supabase_client
-    from storage.providers.supabase.messaging_repo import (
-        SupabaseChatMemberRepo,
-        SupabaseMessageReadRepo,
-        SupabaseMessagesRepo,
-        SupabaseRelationshipRepo,
-    )
+    # Messaging system — Supabase-backed when SUPABASE env vars are available
+    _supabase_url = os.getenv("SUPABASE_INTERNAL_URL") or os.getenv("SUPABASE_PUBLIC_URL")
+    _supabase_key = os.getenv("LEON_SUPABASE_ANON_KEY") or os.getenv("LEON_SUPABASE_SERVICE_ROLE_KEY")
+    _messaging_supabase_available = bool(_supabase_url and _supabase_key)
 
-    _supabase = create_messaging_supabase_client()
-    _chat_member_repo = SupabaseChatMemberRepo(_supabase)
-    _messages_repo = SupabaseMessagesRepo(_supabase)
-    _message_read_repo = SupabaseMessageReadRepo(_supabase)
-    app.state.relationship_repo = SupabaseRelationshipRepo(_supabase)
+    if _messaging_supabase_available:
+        from backend.web.core.supabase_factory import create_messaging_supabase_client
+        from storage.providers.supabase.messaging_repo import (
+            SupabaseChatMemberRepo,
+            SupabaseMessageReadRepo,
+            SupabaseMessagesRepo,
+            SupabaseRelationshipRepo,
+        )
 
-    from storage.providers.supabase.contact_repo import SupabaseContactRepo
+        _supabase = create_messaging_supabase_client()
+        _chat_member_repo = SupabaseChatMemberRepo(_supabase)
+        _messages_repo = SupabaseMessagesRepo(_supabase)
+        _message_read_repo = SupabaseMessageReadRepo(_supabase)
+        app.state.relationship_repo = SupabaseRelationshipRepo(_supabase)
 
-    app.state.contact_repo = SupabaseContactRepo(_supabase)
+        from storage.providers.supabase.contact_repo import SupabaseContactRepo
+
+        app.state.contact_repo = SupabaseContactRepo(_supabase)
+    else:
+        import logging as _logging
+        _logging.getLogger(__name__).warning(
+            "Messaging Supabase client not configured — relationship/contact features unavailable."
+        )
+        _chat_member_repo = None
+        _messages_repo = None
+        _message_read_repo = None
+        app.state.relationship_repo = None
+        app.state.contact_repo = None
 
     from messaging.delivery.resolver import HireVisitDeliveryResolver
 

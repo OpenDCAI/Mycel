@@ -315,8 +315,12 @@ export interface ChatMessage {
   sender_id: string;
   sender_name: string;
   content: string;
+  message_type: MessageType;
   mentioned_ids: string[];
+  signal: "open" | "yield" | "close" | null;
+  retracted_at: string | null;
   created_at: number;
+  _status?: MessageStatus;
 }
 
 export interface TaskAgentRequest {
@@ -349,3 +353,42 @@ export interface SandboxUploadResult {
   size_bytes: number;
   sha256: string;
 }
+
+// --- Social / Relationship types ---
+
+export type RelationshipState =
+  | "none" | "pending_a_to_b" | "pending_b_to_a" | "visit" | "hire";
+
+export interface Relationship {
+  id: string;
+  other_user_id: string;
+  state: RelationshipState;
+  direction: "a_to_b" | "b_to_a" | null;
+  is_requester: boolean;
+  hire_granted_at: string | null;
+  hire_revoked_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export type ContactRelation = "normal" | "blocked" | "muted";
+
+export interface Contact {
+  owner_user_id: string;
+  target_user_id: string;
+  relation: ContactRelation;
+  created_at: string;
+  updated_at: string | null;
+}
+
+export interface AgentProfile {
+  id: string;
+  name: string;
+  type: "agent";
+  avatar_url?: string;
+  description?: string;
+}
+
+export type MessageStatus = "sending" | "sent" | "read";
+
+export type MessageType = "human" | "ai" | "ai_process" | "system" | "notification";
