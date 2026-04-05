@@ -178,18 +178,18 @@ async def get_or_create_agent(app_obj: FastAPI, sandbox_type: str, thread_id: st
         qm = getattr(app_obj.state, "queue_manager", None)
         agent_obj = await asyncio.to_thread(
             create_agent_sync,
-            sandbox_type,
-            workspace_root,
-            model_name,
-            agent_name,
-            bundle_dir,
-            getattr(app_obj.state, "thread_repo", None),
-            getattr(app_obj.state, "entity_repo", None),
-            getattr(app_obj.state, "member_repo", None),
-            qm,
-            chat_repos,
-            extra_allowed_paths_or_none,
-            app_obj,
+            sandbox_name=sandbox_type,
+            workspace_root=workspace_root,
+            model_name=model_name,
+            agent=agent_name,
+            bundle_dir=bundle_dir,
+            thread_repo=getattr(app_obj.state, "thread_repo", None),
+            entity_repo=getattr(app_obj.state, "entity_repo", None),
+            member_repo=getattr(app_obj.state, "member_repo", None),
+            queue_manager=qm,
+            chat_repos=chat_repos,
+            extra_allowed_paths=extra_allowed_paths_or_none,
+            web_app=app_obj,
         )
         member = agent_name or "leon"
         agent_id = get_or_create_agent_id(
