@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from contextlib import contextmanager
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -264,6 +265,28 @@ def _make_clear_thread_app():
     return app, display_builder, queue_manager
 
 
+@contextmanager
+def _patch_create_thread_noop_guards():
+    with (
+        patch.object(threads_router, "_validate_sandbox_provider_gate", return_value=None),
+        patch.object(threads_router, "_validate_mount_capability_gate", return_value=None),
+        patch.object(threads_router, "_create_thread_sandbox_resources", return_value=None) as create_resources,
+        patch.object(threads_router, "_invalidate_resource_overview_cache", return_value=None),
+        patch.object(threads_router, "save_last_successful_config", return_value=None),
+    ):
+        yield create_resources
+
+
+@contextmanager
+def _patch_local_clear_thread_agent(agent):
+    with (
+        patch.object(threads_router, "resolve_thread_sandbox", return_value="local"),
+        patch.object(threads_router, "get_or_create_agent", AsyncMock(return_value=agent)),
+        patch.object(threads_router, "get_thread_lock", AsyncMock(return_value=_NullLock())),
+    ):
+        yield
+
+
 @pytest.mark.asyncio
 async def test_create_thread_route_preserves_legacy_sandbox_type_alias():
     app = _make_threads_app(thread_sandbox={}, thread_cwd={})
@@ -275,13 +298,7 @@ async def test_create_thread_route_preserves_legacy_sandbox_type_alias():
         }
     )
 
-    with (
-        patch.object(threads_router, "_validate_sandbox_provider_gate", return_value=None),
-        patch.object(threads_router, "_validate_mount_capability_gate", return_value=None),
-        patch.object(threads_router, "_create_thread_sandbox_resources", return_value=None),
-        patch.object(threads_router, "_invalidate_resource_overview_cache", return_value=None),
-        patch.object(threads_router, "save_last_successful_config", return_value=None),
-    ):
+    with _patch_create_thread_noop_guards():
         result = await threads_router.create_thread(payload, "owner-1", app)
 
     assert result["sandbox"] == "daytona_selfhost"
@@ -350,13 +367,7 @@ async def test_create_thread_route_passes_local_cwd_into_sandbox_bootstrap():
         }
     )
 
-    with (
-        patch.object(threads_router, "_validate_sandbox_provider_gate", return_value=None),
-        patch.object(threads_router, "_validate_mount_capability_gate", return_value=None),
-        patch.object(threads_router, "_invalidate_resource_overview_cache", return_value=None),
-        patch.object(threads_router, "save_last_successful_config", return_value=None),
-        patch.object(threads_router, "_create_thread_sandbox_resources", return_value=None) as create_resources,
-    ):
+    with _patch_create_thread_noop_guards() as create_resources:
         result = await threads_router.create_thread(payload, "owner-1", app)
 
     create_resources.assert_called_once_with(
@@ -714,11 +725,7 @@ async def test_clear_thread_route_clears_agent_state_and_thread_buffers():
     agent = _FakeClearAgent()
     app, display_builder, queue_manager = _make_clear_thread_app()
 
-    with (
-        patch.object(threads_router, "resolve_thread_sandbox", return_value="local"),
-        patch.object(threads_router, "get_or_create_agent", AsyncMock(return_value=agent)),
-        patch.object(threads_router, "get_thread_lock", AsyncMock(return_value=_NullLock())),
-    ):
+    with _patch_local_clear_thread_agent(agent):
         result = await threads_router.clear_thread_history(
             "thread-1",
             user_id="owner-1",
@@ -737,11 +744,7 @@ async def test_clear_thread_route_rejects_active_run():
     agent = _FakeClearAgent(state=AgentState.ACTIVE)
     app, display_builder, queue_manager = _make_clear_thread_app()
 
-    with (
-        patch.object(threads_router, "resolve_thread_sandbox", return_value="local"),
-        patch.object(threads_router, "get_or_create_agent", AsyncMock(return_value=agent)),
-        patch.object(threads_router, "get_thread_lock", AsyncMock(return_value=_NullLock())),
-    ):
+    with _patch_local_clear_thread_agent(agent):
         with pytest.raises(threads_router.HTTPException) as exc_info:
             await threads_router.clear_thread_history(
                 "thread-1",
