@@ -581,12 +581,12 @@ class FileSystemMiddleware(AgentMiddleware):
                     "parameters": {
                         "type": "object",
                         "properties": {
-                            "directory_path": {
+                            "path": {
                                 "type": "string",
                                 "description": "Absolute directory path (e.g., /path/to/dir). Do NOT use '.' or '..'",
                             },
                         },
-                        "required": ["directory_path"],
+                        "required": ["path"],
                     },
                 },
             },
@@ -643,7 +643,7 @@ class FileSystemMiddleware(AgentMiddleware):
             return ToolMessage(content=result, tool_call_id=tool_call_id)
 
         if tool_name == self.TOOL_LIST_DIR:
-            result = self._list_dir_impl(directory_path=args.get("directory_path", ""))
+            result = self._list_dir_impl(directory_path=args.get("path", ""))
             return ToolMessage(content=result, tool_call_id=tool_call_id)
 
         return None

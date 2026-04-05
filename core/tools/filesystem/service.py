@@ -256,12 +256,12 @@ class FileSystemService:
                     "parameters": {
                         "type": "object",
                         "properties": {
-                            "directory_path": {
+                            "path": {
                                 "type": "string",
                                 "description": "Absolute directory path",
                             },
                         },
-                        "required": ["directory_path"],
+                        "required": ["path"],
                     },
                 },
                 handler=self._list_dir,
@@ -642,7 +642,8 @@ class FileSystemService:
         except Exception as e:
             return f"Error editing file: {e}"
 
-    def _list_dir(self, directory_path: str) -> str:
+    def _list_dir(self, path: str) -> str:
+        directory_path = path
         is_valid, error, resolved = self._validate_path(directory_path, "list")
         if not is_valid:
             return error

@@ -103,8 +103,8 @@ class WebMiddleware(AgentMiddleware):
         self,
         Query: str,
         MaxResults: int | None = None,
-        IncludeDomains: list[str] | None = None,
-        ExcludeDomains: list[str] | None = None,
+        AllowedDomains: list[str] | None = None,
+        BlockedDomains: list[str] | None = None,
     ) -> SearchResult:
         """
         实现 web_search（多提供商降级）
@@ -121,8 +121,8 @@ class WebMiddleware(AgentMiddleware):
                 result = await searcher.search(
                     query=Query,
                     max_results=max_results,
-                    include_domains=IncludeDomains,
-                    exclude_domains=ExcludeDomains,
+                    include_domains=AllowedDomains,
+                    exclude_domains=BlockedDomains,
                 )
                 if not result.error:
                     return result
@@ -217,12 +217,12 @@ class WebMiddleware(AgentMiddleware):
                                 "type": "integer",
                                 "description": "Maximum number of results (default: 5)",
                             },
-                            "IncludeDomains": {
+                            "AllowedDomains": {
                                 "type": "array",
                                 "items": {"type": "string"},
                                 "description": "Only include results from these domains",
                             },
-                            "ExcludeDomains": {
+                            "BlockedDomains": {
                                 "type": "array",
                                 "items": {"type": "string"},
                                 "description": "Exclude results from these domains",
@@ -281,8 +281,8 @@ class WebMiddleware(AgentMiddleware):
             result = await self._web_search_impl(
                 Query=args.get("Query", ""),
                 MaxResults=args.get("MaxResults"),
-                IncludeDomains=args.get("IncludeDomains"),
-                ExcludeDomains=args.get("ExcludeDomains"),
+                AllowedDomains=args.get("AllowedDomains"),
+                BlockedDomains=args.get("BlockedDomains"),
             )
             return ToolMessage(content=result.format_output(), tool_call_id=tool_call_id)
 

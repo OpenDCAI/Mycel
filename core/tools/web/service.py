@@ -77,12 +77,12 @@ class WebService:
                                 "type": "integer",
                                 "description": "Maximum number of results (default: 5)",
                             },
-                            "include_domains": {
+                            "allowed_domains": {
                                 "type": "array",
                                 "items": {"type": "string"},
                                 "description": "Only include results from these domains",
                             },
-                            "exclude_domains": {
+                            "blocked_domains": {
                                 "type": "array",
                                 "items": {"type": "string"},
                                 "description": "Exclude results from these domains",
@@ -135,8 +135,8 @@ class WebService:
         self,
         query: str,
         max_results: int | None = None,
-        include_domains: list[str] | None = None,
-        exclude_domains: list[str] | None = None,
+        allowed_domains: list[str] | None = None,
+        blocked_domains: list[str] | None = None,
     ) -> str:
         if not self._searchers:
             return "No search providers configured"
@@ -148,8 +148,8 @@ class WebService:
                 result: SearchResult = await searcher.search(
                     query=query,
                     max_results=effective_max,
-                    include_domains=include_domains,
-                    exclude_domains=exclude_domains,
+                    include_domains=allowed_domains,
+                    exclude_domains=blocked_domains,
                 )
                 if not result.error:
                     return result.format_output()

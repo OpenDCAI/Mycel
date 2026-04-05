@@ -195,7 +195,7 @@ AGENT_SCHEMA = {
                 ),
             },
         },
-        "required": ["prompt"],
+        "required": ["prompt", "description"],
     },
 }
 
@@ -210,6 +210,16 @@ TASK_OUTPUT_SCHEMA = {
             "task_id": {
                 "type": "string",
                 "description": "The task ID returned when starting a background agent",
+            },
+            "block": {
+                "type": "boolean",
+                "default": True,
+                "description": "Whether to wait for completion. Use false for a non-blocking status check.",
+            },
+            "timeout": {
+                "type": "integer",
+                "default": 30000,
+                "description": "Maximum wait time in milliseconds when block=true (default: 30000, max: 600000).",
             },
         },
         "required": ["task_id"],
@@ -315,6 +325,25 @@ def _background_run_running_message(running: BackgroundRun) -> str:
 
 def _background_run_result_status(result: str | None) -> str:
     return "error" if (result and result.startswith("<tool_use_error>")) else "completed"
+
+
+async def _wait_for_background_run(running: BackgroundRun, timeout_ms: int) -> bool:
+    timeout_s = max(timeout_ms, 0) / 1000.0
+    if isinstance(running, _RunningTask):
+        try:
+            await asyncio.wait_for(asyncio.shield(running.task), timeout=timeout_s)
+            return True
+        except TimeoutError:
+            return running.is_done
+
+    loop = asyncio.get_running_loop()
+    deadline = loop.time() + timeout_s
+    while True:
+        if running.is_done:
+            return True
+        if loop.time() >= deadline:
+            return False
+        await asyncio.sleep(0.1)
 
 
 class AgentService:
@@ -998,11 +1027,44 @@ class AgentService:
                 sender_name=agent_name,
             )
 
-    async def _handle_task_output(self, task_id: str) -> str:
+    async def _handle_task_output(self, task_id: str, block: bool = True, timeout: int = 30_000) -> str:
         """Get output of a background agent task."""
         running = self._tasks.get(task_id)
         if not running:
             return f"Error: task '{task_id}' not found"
+
+        if not block:
+            if not running.is_done:
+                return json.dumps(
+                    {
+                        "task_id": task_id,
+                        "status": "running",
+                        "message": _background_run_running_message(running),
+                    },
+                    ensure_ascii=False,
+                )
+
+            result = running.get_result()
+            return json.dumps(
+                {
+                    "task_id": task_id,
+                    "status": _background_run_result_status(result),
+                    "result": result,
+                },
+                ensure_ascii=False,
+            )
+
+        if not running.is_done:
+            completed = await _wait_for_background_run(running, min(timeout, 600_000))
+            if not completed and not running.is_done:
+                return json.dumps(
+                    {
+                        "task_id": task_id,
+                        "status": "timeout",
+                        "message": _background_run_running_message(running),
+                    },
+                    ensure_ascii=False,
+                )
 
         if not running.is_done:
             return json.dumps(

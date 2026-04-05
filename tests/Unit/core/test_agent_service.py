@@ -10,7 +10,15 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from core.agents.service import AGENT_DISALLOWED, AGENT_SCHEMA, EXPLORE_ALLOWED, AgentService, _BashBackgroundRun, _RunningTask
+from core.agents.service import (
+    AGENT_DISALLOWED,
+    AGENT_SCHEMA,
+    EXPLORE_ALLOWED,
+    TASK_OUTPUT_SCHEMA,
+    AgentService,
+    _BashBackgroundRun,
+    _RunningTask,
+)
 from core.runtime.registry import ToolRegistry
 from core.runtime.runner import ToolRunner
 from core.runtime.state import AppState, BootstrapConfig, ToolUseContext
@@ -203,7 +211,7 @@ async def test_task_output_reports_running_command_honestly(tmp_path):
     async_cmd = _FakeAsyncCommand()
     service._tasks["cmd_test123"] = _BashBackgroundRun(async_cmd, "echo hello")
 
-    payload = json.loads(await service._handle_task_output("cmd_test123"))
+    payload = json.loads(await service._handle_task_output("cmd_test123", block=False))
 
     assert payload == {
         "task_id": "cmd_test123",
@@ -223,7 +231,7 @@ async def test_task_output_keeps_agent_running_message_for_agent_tasks(tmp_path)
     )
 
     try:
-        payload = json.loads(await service._handle_task_output("task_agent123"))
+        payload = json.loads(await service._handle_task_output("task_agent123", block=False))
     finally:
         task.cancel()
         with pytest.raises(asyncio.CancelledError):
@@ -232,6 +240,30 @@ async def test_task_output_keeps_agent_running_message_for_agent_tasks(tmp_path)
     assert payload == {
         "task_id": "task_agent123",
         "status": "running",
+        "message": "Agent is still running.",
+    }
+
+
+@pytest.mark.asyncio
+async def test_task_output_times_out_when_blocking_wait_expires(tmp_path):
+    service = _make_service(tmp_path)
+    task = asyncio.create_task(_sleep_forever())
+    service._tasks["task_agent123"] = _RunningTask(
+        task=task,
+        agent_id="agent-1",
+        thread_id="thread-1",
+    )
+
+    try:
+        payload = json.loads(await service._handle_task_output("task_agent123", timeout=1))
+    finally:
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+
+    assert payload == {
+        "task_id": "task_agent123",
+        "status": "timeout",
         "message": "Agent is still running.",
     }
 
@@ -401,7 +433,11 @@ async def test_agent_tool_fork_context_uses_parent_tool_context_messages(monkeyp
     _make_service(tmp_path, tool_registry=registry)
     runner = ToolRunner(registry=registry)
     request = SimpleNamespace(
-        tool_call={"name": "Agent", "args": {"prompt": "inspect", "fork_context": True}, "id": "tc-1"},
+        tool_call={
+            "name": "Agent",
+            "args": {"prompt": "inspect", "description": "inspect workspace", "fork_context": True},
+            "id": "tc-1",
+        },
         state=_make_parent_context(tmp_path),
     )
 
@@ -445,7 +481,11 @@ async def test_agent_tool_fork_context_treats_empty_parent_messages_as_authorita
     parent_context = _make_parent_context(tmp_path)
     parent_context.messages = []
     request = SimpleNamespace(
-        tool_call={"name": "Agent", "args": {"prompt": "inspect", "fork_context": True}, "id": "tc-1"},
+        tool_call={
+            "name": "Agent",
+            "args": {"prompt": "inspect", "description": "inspect workspace", "fork_context": True},
+            "id": "tc-1",
+        },
         state=parent_context,
     )
 
@@ -571,7 +611,7 @@ async def test_agent_tool_live_runner_path_passes_isolated_tool_context_to_child
     runner = ToolRunner(registry=registry)
     parent_context = _make_parent_context(tmp_path)
     request = SimpleNamespace(
-        tool_call={"name": "Agent", "args": {"prompt": "do work"}, "id": "tc-1"},
+        tool_call={"name": "Agent", "args": {"prompt": "do work", "description": "do work"}, "id": "tc-1"},
         state=parent_context,
     )
 
@@ -677,7 +717,11 @@ async def test_agent_tool_live_runner_path_applies_role_specific_tool_filters(mo
     _make_service(tmp_path, tool_registry=registry, model_name="gpt-parent")
     runner = ToolRunner(registry=registry)
     request = SimpleNamespace(
-        tool_call={"name": "Agent", "args": {"prompt": "inspect", "subagent_type": "explore"}, "id": "tc-1"},
+        tool_call={
+            "name": "Agent",
+            "args": {"prompt": "inspect", "description": "inspect workspace", "subagent_type": "explore"},
+            "id": "tc-1",
+        },
         state=_make_parent_context(tmp_path, model_name="gpt-parent"),
     )
 
@@ -714,7 +758,12 @@ async def test_agent_tool_model_priority_prefers_env_over_tool_frontmatter_and_p
     request = SimpleNamespace(
         tool_call={
             "name": "Agent",
-            "args": {"prompt": "inspect", "subagent_type": "explore", "model": "tool-model"},
+            "args": {
+                "prompt": "inspect",
+                "description": "inspect workspace",
+                "subagent_type": "explore",
+                "model": "tool-model",
+            },
             "id": "tc-1",
         },
         state=_make_parent_context(tmp_path, model_name="parent-model"),
@@ -749,7 +798,12 @@ async def test_agent_tool_model_priority_prefers_tool_over_frontmatter_and_paren
     request = SimpleNamespace(
         tool_call={
             "name": "Agent",
-            "args": {"prompt": "inspect", "subagent_type": "explore", "model": "tool-model"},
+            "args": {
+                "prompt": "inspect",
+                "description": "inspect workspace",
+                "subagent_type": "explore",
+                "model": "tool-model",
+            },
             "id": "tc-1",
         },
         state=_make_parent_context(tmp_path, model_name="parent-model"),
@@ -778,7 +832,12 @@ async def test_agent_tool_model_default_literal_inherits_parent_model(monkeypatc
     request = SimpleNamespace(
         tool_call={
             "name": "Agent",
-            "args": {"prompt": "inspect", "subagent_type": "explore", "model": "default"},
+            "args": {
+                "prompt": "inspect",
+                "description": "inspect workspace",
+                "subagent_type": "explore",
+                "model": "default",
+            },
             "id": "tc-1",
         },
         state=_make_parent_context(tmp_path, model_name="parent-model"),
@@ -807,7 +866,12 @@ async def test_agent_tool_model_inherit_literal_inherits_parent_model(monkeypatc
     request = SimpleNamespace(
         tool_call={
             "name": "Agent",
-            "args": {"prompt": "inspect", "subagent_type": "explore", "model": "inherit"},
+            "args": {
+                "prompt": "inspect",
+                "description": "inspect workspace",
+                "subagent_type": "explore",
+                "model": "inherit",
+            },
             "id": "tc-1",
         },
         state=_make_parent_context(tmp_path, model_name="parent-model"),
@@ -836,7 +900,7 @@ async def test_agent_tool_inherited_default_bootstrap_model_uses_parent_service_
     request = SimpleNamespace(
         tool_call={
             "name": "Agent",
-            "args": {"prompt": "inspect", "subagent_type": "explore"},
+            "args": {"prompt": "inspect", "description": "inspect workspace", "subagent_type": "explore"},
             "id": "tc-1",
         },
         state=_make_parent_context(tmp_path, model_name="default"),
@@ -869,7 +933,11 @@ async def test_agent_tool_model_priority_prefers_frontmatter_over_parent(monkeyp
     _make_service(tmp_path, tool_registry=registry, model_name="parent-model")
     runner = ToolRunner(registry=registry)
     request = SimpleNamespace(
-        tool_call={"name": "Agent", "args": {"prompt": "inspect", "subagent_type": "explore"}, "id": "tc-1"},
+        tool_call={
+            "name": "Agent",
+            "args": {"prompt": "inspect", "description": "inspect workspace", "subagent_type": "explore"},
+            "id": "tc-1",
+        },
         state=_make_parent_context(tmp_path, model_name="parent-model"),
     )
 
@@ -894,7 +962,11 @@ async def test_agent_tool_model_priority_inherits_parent_when_no_env_tool_or_fro
     _make_service(tmp_path, tool_registry=registry, model_name="service-model")
     runner = ToolRunner(registry=registry)
     request = SimpleNamespace(
-        tool_call={"name": "Agent", "args": {"prompt": "inspect", "subagent_type": "explore"}, "id": "tc-1"},
+        tool_call={
+            "name": "Agent",
+            "args": {"prompt": "inspect", "description": "inspect workspace", "subagent_type": "explore"},
+            "id": "tc-1",
+        },
         state=_make_parent_context(tmp_path, model_name="parent-model"),
     )
 
@@ -1275,7 +1347,11 @@ async def test_agent_tool_blocking_result_preserves_child_identity_metadata(monk
     _make_service(tmp_path, tool_registry=registry)
     runner = ToolRunner(registry=registry)
     request = SimpleNamespace(
-        tool_call={"name": "Agent", "args": {"prompt": "inspect"}, "id": "tc-1"},
+        tool_call={
+            "name": "Agent",
+            "args": {"prompt": "inspect", "description": "inspect workspace"},
+            "id": "tc-1",
+        },
         state=_make_parent_context(tmp_path),
     )
 
@@ -1369,3 +1445,14 @@ def test_agent_schema_does_not_claim_general_has_full_tool_access():
 
     assert "general (full tool access)" not in description
     assert "general (broad tool access except Agent, TaskOutput, and TaskStop)" in description
+
+
+def test_agent_schema_requires_description():
+    assert AGENT_SCHEMA["parameters"]["required"] == ["prompt", "description"]
+
+
+def test_task_output_schema_exposes_block_and_timeout():
+    properties = TASK_OUTPUT_SCHEMA["parameters"]["properties"]
+
+    assert properties["block"]["default"] is True
+    assert properties["timeout"]["default"] == 30000

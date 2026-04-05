@@ -11,6 +11,7 @@ from __future__ import annotations
 import asyncio
 import json
 import time
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -2034,6 +2035,52 @@ class TestWebToolRegistration:
         assert reg.get("WebSearch").mode == ToolMode.DEFERRED
         assert reg.get("WebFetch").mode == ToolMode.DEFERRED
         assert [schema["name"] for schema in reg.get_inline_schemas()] == []
+
+    @pytest.mark.asyncio
+    async def test_web_search_schema_uses_allowed_and_blocked_domains(self):
+        reg = ToolRegistry()
+        service = WebService(registry=reg)
+        seen: dict[str, object] = {}
+
+        class _FakeSearcher:
+            async def search(self, *, query, max_results, include_domains=None, exclude_domains=None):
+                seen["query"] = query
+                seen["max_results"] = max_results
+                seen["include_domains"] = include_domains
+                seen["exclude_domains"] = exclude_domains
+                return SimpleNamespace(error=None, format_output=lambda: "fake results")
+
+        service._searchers = [("fake", _FakeSearcher())]
+
+        schema = reg.get("WebSearch").schema
+        props = schema["parameters"]["properties"]
+        assert "allowed_domains" in props
+        assert "blocked_domains" in props
+        assert "include_domains" not in props
+        assert "exclude_domains" not in props
+
+        result = await service._web_search(
+            query="docs",
+            allowed_domains=["example.com"],
+            blocked_domains=["bad.com"],
+        )
+
+        assert result == "fake results"
+        assert seen["include_domains"] == ["example.com"]
+        assert seen["exclude_domains"] == ["bad.com"]
+
+    def test_list_dir_schema_uses_path(self, tmp_path):
+        reg = ToolRegistry()
+        FileSystemService(
+            registry=reg,
+            workspace_root=tmp_path,
+        )
+
+        schema = reg.get("list_dir").schema
+        props = schema["parameters"]["properties"]
+        assert "path" in props
+        assert "directory_path" not in props
+        assert schema["parameters"]["required"] == ["path"]
 
     def test_can_auto_approve_only_for_read_only_non_destructive_tools(self):
         assert can_auto_approve(ToolPermissionContext(is_read_only=True, is_destructive=False)) is True
