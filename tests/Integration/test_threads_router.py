@@ -233,17 +233,26 @@ class _FakeClearAgent:
         self.aclear_thread = AsyncMock()
 
 
-@pytest.mark.asyncio
-async def test_create_thread_route_preserves_legacy_sandbox_type_alias():
-    app = SimpleNamespace(
+def _make_threads_app(
+    *,
+    member_repo=None,
+    thread_repo=None,
+    entity_repo=None,
+    **state_overrides,
+):
+    return SimpleNamespace(
         state=SimpleNamespace(
-            member_repo=_FakeMemberRepo(),
-            thread_repo=_FakeThreadRepo(),
-            entity_repo=_FakeEntityRepo(),
-            thread_sandbox={},
-            thread_cwd={},
+            member_repo=member_repo or _FakeMemberRepo(),
+            thread_repo=thread_repo or _FakeThreadRepo(),
+            entity_repo=entity_repo or _FakeEntityRepo(),
+            **state_overrides,
         )
     )
+
+
+@pytest.mark.asyncio
+async def test_create_thread_route_preserves_legacy_sandbox_type_alias():
+    app = _make_threads_app(thread_sandbox={}, thread_cwd={})
     payload = CreateThreadRequest.model_validate(
         {
             "member_id": "member-1",
@@ -277,13 +286,7 @@ async def test_resolve_main_thread_returns_null_for_orphaned_main_thread_metadat
         is_main=True,
         branch_index=0,
     )
-    app = SimpleNamespace(
-        state=SimpleNamespace(
-            member_repo=_FakeMemberRepo(),
-            thread_repo=thread_repo,
-            entity_repo=_FakeEntityRepo(),
-        )
-    )
+    app = _make_threads_app(thread_repo=thread_repo)
 
     payload = threads_router.ResolveMainThreadRequest(member_id="member-1")
 
@@ -294,15 +297,7 @@ async def test_resolve_main_thread_returns_null_for_orphaned_main_thread_metadat
 
 @pytest.mark.asyncio
 async def test_create_thread_route_uses_canonical_existing_lease_binding_helper():
-    app = SimpleNamespace(
-        state=SimpleNamespace(
-            member_repo=_FakeMemberRepo(),
-            thread_repo=_FakeThreadRepo(),
-            entity_repo=_FakeEntityRepo(),
-            thread_sandbox={},
-            thread_cwd={},
-        )
-    )
+    app = _make_threads_app(thread_sandbox={}, thread_cwd={})
     payload = CreateThreadRequest.model_validate(
         {
             "member_id": "member-1",
@@ -333,15 +328,7 @@ async def test_create_thread_route_uses_canonical_existing_lease_binding_helper(
 
 @pytest.mark.asyncio
 async def test_create_thread_route_passes_local_cwd_into_sandbox_bootstrap():
-    app = SimpleNamespace(
-        state=SimpleNamespace(
-            member_repo=_FakeMemberRepo(),
-            thread_repo=_FakeThreadRepo(),
-            entity_repo=_FakeEntityRepo(),
-            thread_sandbox={},
-            thread_cwd={},
-        )
-    )
+    app = _make_threads_app(thread_sandbox={}, thread_cwd={})
     payload = CreateThreadRequest.model_validate(
         {
             "member_id": "member-1",
