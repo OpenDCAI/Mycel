@@ -31,12 +31,12 @@ def make_registry(*entries):
     return reg
 
 
-def make_loop(model, registry=None, middleware=None, max_turns=10, app_state=None, runtime=None, bootstrap=None):
+def make_loop(model, registry=None, middleware=None, max_turns=10, app_state=None, runtime=None, bootstrap=None, checkpointer=None):
     return QueryLoop(
         model=model,
         system_prompt=SystemMessage(content="You are a test assistant."),
         middleware=middleware or [],
-        checkpointer=None,
+        checkpointer=checkpointer,
         registry=registry or make_registry(),
         app_state=app_state,
         runtime=runtime,
@@ -86,6 +86,27 @@ def mock_model_with_two_tool_turns():
     model = MagicMock()
     model.bind_tools.return_value = model
     model.ainvoke = AsyncMock(side_effect=[first, second, final])
+    return model
+
+
+def _make_summary_memory_middleware(*, context_limit=40, keep_recent_tokens=10, compaction_threshold=0.1):
+    summary_model = MagicMock()
+    summary_model.bind.return_value = summary_model
+    summary_model.ainvoke = AsyncMock(return_value=AIMessage(content="SUMMARY"))
+
+    memory = MemoryMiddleware(
+        context_limit=context_limit,
+        compaction_config=SimpleNamespace(reserve_tokens=0, keep_recent_tokens=keep_recent_tokens),
+        compaction_threshold=compaction_threshold,
+    )
+    memory.set_model(summary_model)
+    return memory, summary_model
+
+
+def _make_prompt_too_long_model(*responses):
+    model = MagicMock()
+    model.bind_tools.return_value = model
+    model.ainvoke = AsyncMock(side_effect=list(responses))
     return model
 
 
@@ -324,16 +345,11 @@ async def test_query_loop_clear_resets_turn_state_but_preserves_accumulators():
     checkpointer = _MemoryCheckpointer()
     app_state = AppState(total_cost=1.25, tool_overrides={"Bash": False})
     bootstrap = BootstrapConfig(workspace_root=Path("/tmp"), model_name="test-model")
-    loop = QueryLoop(
+    loop = make_loop(
         model=model,
-        system_prompt=SystemMessage(content="You are a test assistant."),
-        middleware=[],
         checkpointer=checkpointer,
-        registry=make_registry(),
         app_state=app_state,
-        runtime=None,
         bootstrap=bootstrap,
-        max_turns=10,
     )
 
     async for _ in loop.query(
@@ -371,16 +387,10 @@ async def test_query_loop_replays_messages_with_real_async_sqlite_saver():
 
     try:
         model = mock_model_no_tools("persist me")
-        loop = QueryLoop(
+        loop = make_loop(
             model=model,
-            system_prompt=SystemMessage(content="You are a test assistant."),
-            middleware=[],
             checkpointer=saver,
-            registry=make_registry(),
             app_state=AppState(),
-            runtime=None,
-            bootstrap=BootstrapConfig(workspace_root=Path("/tmp"), model_name="test-model"),
-            max_turns=10,
         )
 
         async for _ in loop.query(
@@ -404,16 +414,11 @@ async def test_query_loop_aclear_wipes_real_async_sqlite_saver_history():
 
     try:
         model = mock_model_no_tools("persist me")
-        loop = QueryLoop(
+        loop = make_loop(
             model=model,
-            system_prompt=SystemMessage(content="You are a test assistant."),
-            middleware=[],
             checkpointer=saver,
-            registry=make_registry(),
             app_state=AppState(total_cost=1.25),
-            runtime=None,
             bootstrap=BootstrapConfig(workspace_root=Path("/tmp"), model_name="test-model", total_cost_usd=1.25),
-            max_turns=10,
         )
 
         async for _ in loop.query(
@@ -437,16 +442,10 @@ async def test_query_loop_aclear_wipes_real_async_sqlite_saver_history():
 async def test_query_loop_aget_state_exposes_messages_for_backend_callers():
     model = mock_model_no_tools("state me")
     checkpointer = _MemoryCheckpointer()
-    loop = QueryLoop(
+    loop = make_loop(
         model=model,
-        system_prompt=SystemMessage(content="You are a test assistant."),
-        middleware=[],
         checkpointer=checkpointer,
-        registry=make_registry(),
         app_state=AppState(),
-        runtime=None,
-        bootstrap=BootstrapConfig(workspace_root=Path("/tmp"), model_name="test-model"),
-        max_turns=10,
     )
     config = {"configurable": {"thread_id": "state-thread"}}
 
@@ -484,12 +483,9 @@ async def test_query_loop_aget_state_exposes_persisted_permission_state_for_back
             "message": "approved",
         }
     }
-    loop = QueryLoop(
+    loop = make_loop(
         model=mock_model_no_tools("persist permissions"),
-        system_prompt=SystemMessage(content="You are a test assistant."),
-        middleware=[],
         checkpointer=checkpointer,
-        registry=make_registry(),
         app_state=AppState(
             tool_permission_context=ToolPermissionState(
                 alwaysAllowRules={"session": ["Write"]},
@@ -499,24 +495,15 @@ async def test_query_loop_aget_state_exposes_persisted_permission_state_for_back
             pending_permission_requests=pending,
             resolved_permission_requests=resolved,
         ),
-        runtime=None,
-        bootstrap=BootstrapConfig(workspace_root=Path("/tmp"), model_name="test-model"),
-        max_turns=10,
     )
     config = {"configurable": {"thread_id": "perm-thread"}}
 
     await loop._save_messages("perm-thread", [HumanMessage(content="hello")])
 
-    reloaded = QueryLoop(
+    reloaded = make_loop(
         model=mock_model_no_tools("unused"),
-        system_prompt=SystemMessage(content="You are a test assistant."),
-        middleware=[],
         checkpointer=checkpointer,
-        registry=make_registry(),
         app_state=AppState(),
-        runtime=None,
-        bootstrap=BootstrapConfig(workspace_root=Path("/tmp"), model_name="test-model"),
-        max_turns=10,
     )
 
     state = await reloaded.aget_state(config)
@@ -547,16 +534,11 @@ async def test_query_loop_aget_state_uses_live_permission_state_while_active():
             }
         },
     )
-    loop = QueryLoop(
+    loop = make_loop(
         model=mock_model_no_tools("unused"),
-        system_prompt=SystemMessage(content="You are a test assistant."),
-        middleware=[],
         checkpointer=checkpointer,
-        registry=make_registry(),
         app_state=app_state,
         runtime=SimpleNamespace(current_state=AgentState.ACTIVE),
-        bootstrap=BootstrapConfig(workspace_root=Path("/tmp"), model_name="test-model"),
-        max_turns=10,
     )
     config = {"configurable": {"thread_id": "perm-thread"}}
 
@@ -602,12 +584,9 @@ async def test_query_loop_restores_persisted_permission_state_into_live_app_stat
             "message": "approved",
         }
     }
-    seed_loop = QueryLoop(
+    seed_loop = make_loop(
         model=mock_model_no_tools("seed"),
-        system_prompt=SystemMessage(content="You are a test assistant."),
-        middleware=[],
         checkpointer=checkpointer,
-        registry=make_registry(),
         app_state=AppState(
             tool_permission_context=ToolPermissionState(
                 alwaysAllowRules={"session": ["Write"]},
@@ -617,23 +596,14 @@ async def test_query_loop_restores_persisted_permission_state_into_live_app_stat
             pending_permission_requests=pending,
             resolved_permission_requests=resolved,
         ),
-        runtime=None,
-        bootstrap=BootstrapConfig(workspace_root=Path("/tmp"), model_name="test-model"),
-        max_turns=10,
     )
     await seed_loop._save_messages("perm-thread", [HumanMessage(content="existing")])
 
     app_state = AppState()
-    reloaded = QueryLoop(
+    reloaded = make_loop(
         model=mock_model_no_tools("after restore"),
-        system_prompt=SystemMessage(content="You are a test assistant."),
-        middleware=[],
         checkpointer=checkpointer,
-        registry=make_registry(),
         app_state=app_state,
-        runtime=None,
-        bootstrap=BootstrapConfig(workspace_root=Path("/tmp"), model_name="test-model"),
-        max_turns=10,
     )
 
     async for _ in reloaded.query(
@@ -653,16 +623,10 @@ async def test_query_loop_restores_persisted_permission_state_into_live_app_stat
 async def test_query_loop_aupdate_state_appends_start_messages_for_resume():
     model = mock_model_no_tools("after resume")
     checkpointer = _MemoryCheckpointer()
-    loop = QueryLoop(
+    loop = make_loop(
         model=model,
-        system_prompt=SystemMessage(content="You are a test assistant."),
-        middleware=[],
         checkpointer=checkpointer,
-        registry=make_registry(),
         app_state=AppState(),
-        runtime=None,
-        bootstrap=BootstrapConfig(workspace_root=Path("/tmp"), model_name="test-model"),
-        max_turns=10,
     )
     config = {"configurable": {"thread_id": "resume-thread"}}
 
@@ -695,16 +659,10 @@ async def test_query_loop_aupdate_state_applies_remove_and_insert_message_repair
     trailing.id = "human-after"
     checkpointer.store["repair-thread"] = {"channel_values": {"messages": [broken_ai, tool_reply, trailing]}}
 
-    loop = QueryLoop(
+    loop = make_loop(
         model=mock_model_no_tools("unused"),
-        system_prompt=SystemMessage(content="You are a test assistant."),
-        middleware=[],
         checkpointer=checkpointer,
-        registry=make_registry(),
         app_state=AppState(),
-        runtime=None,
-        bootstrap=BootstrapConfig(workspace_root=Path("/tmp"), model_name="test-model"),
-        max_turns=10,
     )
     config = {"configurable": {"thread_id": "repair-thread"}}
 
@@ -1570,16 +1528,7 @@ async def test_query_loop_syncs_compact_boundary_index_from_memory_middleware():
 @pytest.mark.asyncio
 async def test_query_loop_syncs_tool_context_after_real_memory_compaction():
     capture = _CaptureToolContextMiddleware()
-    summary_model = MagicMock()
-    summary_model.bind.return_value = summary_model
-    summary_model.ainvoke = AsyncMock(return_value=AIMessage(content="SUMMARY"))
-
-    memory = MemoryMiddleware(
-        context_limit=40,
-        compaction_config=SimpleNamespace(reserve_tokens=0, keep_recent_tokens=10),
-        compaction_threshold=0.1,
-    )
-    memory.set_model(summary_model)
+    memory, _summary_model = _make_summary_memory_middleware()
 
     model = mock_model_with_tool_call(tool_name="echo", args={"message": "ctx"}, then_text="done")
 
@@ -1623,16 +1572,7 @@ async def test_query_loop_syncs_tool_context_after_real_memory_compaction():
 @pytest.mark.asyncio
 async def test_query_loop_syncs_compact_boundary_before_tool_execution():
     capture = _CaptureToolContextMiddleware()
-    summary_model = MagicMock()
-    summary_model.bind.return_value = summary_model
-    summary_model.ainvoke = AsyncMock(return_value=AIMessage(content="SUMMARY"))
-
-    memory = MemoryMiddleware(
-        context_limit=40,
-        compaction_config=SimpleNamespace(reserve_tokens=0, keep_recent_tokens=10),
-        compaction_threshold=0.1,
-    )
-    memory.set_model(summary_model)
+    memory, _summary_model = _make_summary_memory_middleware()
 
     model = mock_model_with_tool_call(tool_name="echo", args={"message": "ctx"}, then_text="done")
 
@@ -1673,16 +1613,7 @@ async def test_query_loop_syncs_compact_boundary_before_tool_execution():
 
 @pytest.mark.asyncio
 async def test_query_loop_persists_compaction_notice_when_boundary_advances():
-    summary_model = MagicMock()
-    summary_model.bind.return_value = summary_model
-    summary_model.ainvoke = AsyncMock(return_value=AIMessage(content="SUMMARY"))
-
-    memory = MemoryMiddleware(
-        context_limit=40,
-        compaction_config=SimpleNamespace(reserve_tokens=0, keep_recent_tokens=10),
-        compaction_threshold=0.1,
-    )
-    memory.set_model(summary_model)
+    memory, _summary_model = _make_summary_memory_middleware()
 
     app_state = AppState()
     loop = make_loop(
@@ -1717,16 +1648,7 @@ async def test_query_loop_persists_compaction_notice_when_boundary_advances():
 
 @pytest.mark.asyncio
 async def test_memory_middleware_emits_runtime_compaction_notice():
-    summary_model = MagicMock()
-    summary_model.bind.return_value = summary_model
-    summary_model.ainvoke = AsyncMock(return_value=AIMessage(content="SUMMARY"))
-
-    memory = MemoryMiddleware(
-        context_limit=40,
-        compaction_config=SimpleNamespace(reserve_tokens=0, keep_recent_tokens=10),
-        compaction_threshold=0.1,
-    )
-    memory.set_model(summary_model)
+    memory, _summary_model = _make_summary_memory_middleware()
     runtime = SimpleNamespace(cost=0.0, events=[], set_flag=lambda *_args, **_kwargs: None)
     runtime.emit_activity_event = lambda event: runtime.events.append(event)
     memory.set_runtime(runtime)
@@ -1897,13 +1819,9 @@ async def test_query_loop_surfaces_withheld_truncated_message_after_recovery_exh
 
 @pytest.mark.asyncio
 async def test_query_loop_retries_prompt_too_long_via_reactive_compact():
-    model = MagicMock()
-    model.bind_tools.return_value = model
-    model.ainvoke = AsyncMock(
-        side_effect=[
-            RuntimeError("prompt is too long"),
-            AIMessage(content="after compact"),
-        ]
+    model = _make_prompt_too_long_model(
+        RuntimeError("prompt is too long"),
+        AIMessage(content="after compact"),
     )
     app_state = AppState()
     loop = make_loop(
@@ -1947,13 +1865,9 @@ async def test_handle_model_error_recovery_returns_typed_result_object():
 @pytest.mark.asyncio
 async def test_query_loop_retries_prompt_too_long_via_collapse_drain_before_compact():
     collapse = _CollapseDrainMiddleware()
-    model = MagicMock()
-    model.bind_tools.return_value = model
-    model.ainvoke = AsyncMock(
-        side_effect=[
-            RuntimeError("prompt is too long"),
-            AIMessage(content="after drain"),
-        ]
+    model = _make_prompt_too_long_model(
+        RuntimeError("prompt is too long"),
+        AIMessage(content="after drain"),
     )
     app_state = AppState()
     loop = make_loop(
@@ -1976,14 +1890,10 @@ async def test_query_loop_retries_prompt_too_long_via_collapse_drain_before_comp
 @pytest.mark.asyncio
 async def test_query_loop_collapse_drain_is_single_shot_before_reactive_compact():
     collapse = _CollapseDrainMiddleware()
-    model = MagicMock()
-    model.bind_tools.return_value = model
-    model.ainvoke = AsyncMock(
-        side_effect=[
-            RuntimeError("prompt is too long"),
-            RuntimeError("prompt is too long"),
-            AIMessage(content="after compact"),
-        ]
+    model = _make_prompt_too_long_model(
+        RuntimeError("prompt is too long"),
+        RuntimeError("prompt is too long"),
+        AIMessage(content="after compact"),
     )
     app_state = AppState()
     loop = make_loop(
@@ -2005,13 +1915,9 @@ async def test_query_loop_collapse_drain_is_single_shot_before_reactive_compact(
 
 @pytest.mark.asyncio
 async def test_query_loop_persists_prompt_too_long_notice_after_recovery_exhausts():
-    model = MagicMock()
-    model.bind_tools.return_value = model
-    model.ainvoke = AsyncMock(
-        side_effect=[
-            RuntimeError("prompt is too long"),
-            RuntimeError("prompt is too long"),
-        ]
+    model = _make_prompt_too_long_model(
+        RuntimeError("prompt is too long"),
+        RuntimeError("prompt is too long"),
     )
     app_state = AppState()
     loop = make_loop(
@@ -2035,13 +1941,9 @@ async def test_query_loop_persists_prompt_too_long_notice_after_recovery_exhaust
 
 @pytest.mark.asyncio
 async def test_query_loop_astream_raises_prompt_too_long_notice_text_after_recovery_exhausts():
-    model = MagicMock()
-    model.bind_tools.return_value = model
-    model.ainvoke = AsyncMock(
-        side_effect=[
-            RuntimeError("prompt is too long"),
-            RuntimeError("prompt is too long"),
-        ]
+    model = _make_prompt_too_long_model(
+        RuntimeError("prompt is too long"),
+        RuntimeError("prompt is too long"),
     )
     loop = make_loop(
         model,
