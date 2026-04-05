@@ -57,6 +57,7 @@ from core.operations import get_recorder  # noqa: E402
 # New architecture: ToolRegistry + ToolRunner + Services
 from core.runtime.cleanup import CleanupRegistry  # noqa: E402
 from core.runtime.loop import QueryLoop  # noqa: E402
+from core.runtime.middleware.mcp_instructions import McpInstructionsDeltaMiddleware  # noqa: E402
 from core.runtime.middleware.memory import MemoryMiddleware  # noqa: E402
 from core.runtime.middleware.monitor import MonitorMiddleware, apply_usage_patches  # noqa: E402
 from core.runtime.middleware.prompt_caching import PromptCachingMiddleware  # noqa: E402
@@ -504,6 +505,15 @@ class LeonAgent:
         if hasattr(self, "_agent_bundle") and self._agent_bundle and self._agent_bundle.mcp:
             return {name: srv for name, srv in self._agent_bundle.mcp.items() if not srv.disabled}
         return self.config.mcp.servers
+
+    def _get_mcp_instruction_blocks(self) -> dict[str, str]:
+        blocks: dict[str, str] = {}
+        for name, cfg in self._get_mcp_server_configs().items():
+            instructions = getattr(cfg, "instructions", None)
+            if not isinstance(instructions, str) or not instructions.strip():
+                continue
+            blocks[name] = instructions.strip()
+        return blocks
 
     def _load_config(
         self,
@@ -1011,11 +1021,19 @@ class LeonAgent:
         if memory_enabled:
             self._add_memory_middleware(middleware)
 
-        # 4. Steering — injects queued messages before model call
+        # 4. MCP instructions delta — thread-scoped reminder when MCP guidance changes
+        middleware.append(
+            McpInstructionsDeltaMiddleware(
+                get_instruction_blocks=self._get_mcp_instruction_blocks,
+                get_app_state=lambda: self.app_state,
+            )
+        )
+
+        # 5. Steering — injects queued messages before model call
         self._steering_middleware = SteeringMiddleware(queue_manager=self.queue_manager)
         middleware.append(self._steering_middleware)
 
-        # 5. ToolRunner (innermost — routes all ToolRegistry-registered tool calls)
+        # 6. ToolRunner (innermost — routes all ToolRegistry-registered tool calls)
         self._tool_runner = ToolRunner(
             registry=self._tool_registry,
             validator=ToolValidator(),

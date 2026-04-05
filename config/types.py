@@ -25,6 +25,7 @@ class McpServerConfig(BaseModel):
     args: list[str] = Field(default_factory=list)
     env: dict[str, str] = Field(default_factory=dict)
     url: str | None = None
+    instructions: str | None = None
     allowed_tools: list[str] | None = None
     disabled: bool = False
 

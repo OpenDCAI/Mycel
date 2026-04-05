@@ -3,6 +3,7 @@
 Uses mock model to verify the full astream pipeline without real API calls.
 """
 
+import json
 import os
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -98,6 +99,28 @@ class _DirectCompactionProbeModel:
 
         self.turn_calls += 1
         return AIMessage(content=f"OK_{self.turn_calls}")
+
+
+class _MessageCaptureModel:
+    def __init__(self, text: str = "captured"):
+        self.calls: list[list[object]] = []
+        self.text = text
+
+    def bind_tools(self, tools):
+        return self
+
+    def configurable_fields(self, **kwargs):
+        return self
+
+    def with_config(self, **kwargs):
+        return self
+
+    def bind(self, **kwargs):
+        return self
+
+    async def ainvoke(self, messages):
+        self.calls.append(list(messages))
+        return AIMessage(content=self.text)
 
 
 def test_leon_agent_destructor_does_not_reenable_skipped_sandbox_cleanup():
@@ -289,6 +312,114 @@ async def test_leon_agent_bundle_dir_registers_mcp_resource_tools(tmp_path):
 
         assert agent._tool_registry.get("ListMcpResources") is not None
         assert agent._tool_registry.get("ReadMcpResource") is not None
+
+        agent.close()
+
+
+@pytest.mark.asyncio
+@_patch_env_api_key()
+async def test_leon_agent_announces_mcp_instruction_delta_once_and_reannounces_on_change(tmp_path):
+    from core.runtime.agent import LeonAgent
+
+    member_dir = tmp_path / "members" / "toad"
+    member_dir.mkdir(parents=True)
+    (member_dir / "agent.md").write_text(
+        "---\nname: Toad\ndescription: Demo member\n---\nYou are Toad.\n",
+        encoding="utf-8",
+    )
+
+    def _write_mcp(instructions: str) -> None:
+        (member_dir / ".mcp.json").write_text(
+            json.dumps(
+                {
+                    "mcpServers": {
+                        "nu50demo": {
+                            "transport": "stdio",
+                            "command": "uv",
+                            "args": ["run", "python", "/tmp/nu50_mcp_server.py"],
+                            "instructions": instructions,
+                        }
+                    }
+                }
+            ),
+            encoding="utf-8",
+        )
+
+    def _message_text(message: object) -> str:
+        content = getattr(message, "content", "")
+        if isinstance(content, str):
+            return content
+        if isinstance(content, list):
+            return "\n".join(str(block.get("text", "")) for block in content if isinstance(block, dict))
+        return str(content)
+
+    def _delta_messages(messages: list[object]) -> list[str]:
+        hits: list[str] = []
+        for message in messages:
+            content = _message_text(message)
+            if "<mcp_instructions_delta>" in content:
+                hits.append(content)
+        return hits
+
+    _write_mcp("Use nu50demo carefully.")
+    first_model = _MessageCaptureModel("First MCP delta response")
+    checkpointer = _MemoryCheckpointer()
+
+    with (
+        patch("core.runtime.agent.LeonAgent._create_model", return_value=first_model),
+        patch("core.runtime.agent.LeonAgent._init_async_components", return_value=(None, [])),
+        patch("core.runtime.agent.LeonAgent._init_checkpointer", new_callable=AsyncMock, return_value=None),
+    ):
+        agent = LeonAgent(
+            workspace_root=str(tmp_path),
+            bundle_dir=str(member_dir),
+            api_key="sk-test-integration",
+        )
+        await agent.ainit()
+        agent.checkpointer = checkpointer
+        agent.agent.checkpointer = checkpointer
+
+        await agent.ainvoke("first turn", thread_id="mcp-delta-thread")
+        assert first_model.calls
+        first_messages = first_model.calls[0]
+        first_deltas = _delta_messages(first_messages)
+        assert len(first_deltas) == 1
+        assert "Use nu50demo carefully." in first_deltas[0]
+
+        second_call_index = len(first_model.calls)
+        await agent.ainvoke("second turn", thread_id="mcp-delta-thread")
+        assert len(first_model.calls) > second_call_index
+        second_messages = first_model.calls[second_call_index]
+        second_deltas = _delta_messages(second_messages)
+        assert len(second_deltas) == 1
+        assert second_deltas[0] == first_deltas[0]
+
+        agent.close()
+
+    _write_mcp("Use nu50demo only for trusted reads.")
+    second_model = _MessageCaptureModel("Second MCP delta response")
+
+    with (
+        patch("core.runtime.agent.LeonAgent._create_model", return_value=second_model),
+        patch("core.runtime.agent.LeonAgent._init_async_components", return_value=(None, [])),
+        patch("core.runtime.agent.LeonAgent._init_checkpointer", new_callable=AsyncMock, return_value=None),
+    ):
+        agent = LeonAgent(
+            workspace_root=str(tmp_path),
+            bundle_dir=str(member_dir),
+            api_key="sk-test-integration",
+        )
+        await agent.ainit()
+        agent.checkpointer = checkpointer
+        agent.agent.checkpointer = checkpointer
+
+        await agent.ainvoke("third turn", thread_id="mcp-delta-thread")
+        assert second_model.calls
+        third_messages = second_model.calls[0]
+        third_deltas = _delta_messages(third_messages)
+        assert len(third_deltas) == 2
+        assert "Use nu50demo carefully." in third_deltas[0]
+        assert "Use nu50demo only for trusted reads." in third_deltas[1]
 
         agent.close()
 
