@@ -346,78 +346,123 @@ class FileSystemService:
         assert resolved is not None
         return None, resolved
 
-    def _validate_read_args(self, args: dict[str, Any], request: Any) -> dict[str, Any]:
-        error, resolved = self._validate_existing_path(args["file_path"], "read")
+    def _validation_message(self, error: dict[str, object]) -> str:
+        return str(error["message"])
+
+    def _read_preflight(
+        self,
+        *,
+        file_path: str,
+        offset: int = 0,
+        limit: int | None = None,
+        pages: str | None = None,
+    ) -> tuple[dict[str, object] | None, ResolvedPath | None]:
+        error, resolved = self._validate_existing_path(file_path, "read")
         if error is not None:
-            return error
+            return error, None
         assert resolved is not None
 
         file_size = self.backend.file_size(str(resolved))
         if file_size is not None and file_size > self.max_file_size:
-            return self._validation_error(
-                f"File too large: {file_size:,} bytes (max: {self.max_file_size:,} bytes)",
-                "FILE_TOO_LARGE",
+            return (
+                self._validation_error(
+                    f"File too large: {file_size:,} bytes (max: {self.max_file_size:,} bytes)",
+                    "FILE_TOO_LARGE",
+                ),
+                None,
             )
 
-        has_pagination = (args.get("offset") or 0) > 0 or args.get("limit") is not None or args.get("pages") is not None
+        has_pagination = offset > 0 or limit is not None or pages is not None
         if not has_pagination and file_size is not None:
             limits = ReadLimits()
             if file_size > limits.max_size_bytes:
                 total_lines = self._count_lines(resolved)
-                return self._validation_error(
-                    (
-                        f"File content ({file_size:,} bytes) exceeds maximum allowed size ({limits.max_size_bytes:,} bytes).\n"
-                        f"Use offset and limit parameters to read specific sections.\n"
-                        f"Total lines: {total_lines}"
+                return (
+                    self._validation_error(
+                        (
+                            f"File content ({file_size:,} bytes) exceeds maximum allowed size ({limits.max_size_bytes:,} bytes).\n"
+                            f"Use offset and limit parameters to read specific sections.\n"
+                            f"Total lines: {total_lines}"
+                        ),
+                        "READ_REQUIRES_PAGINATION",
                     ),
-                    "READ_REQUIRES_PAGINATION",
+                    None,
                 )
             estimated_tokens = file_size // 4
             if estimated_tokens > limits.max_tokens:
                 total_lines = self._count_lines(resolved)
-                return self._validation_error(
-                    (
-                        f"File content (~{estimated_tokens:,} tokens) exceeds maximum allowed tokens ({limits.max_tokens:,}).\n"
-                        f"Use offset and limit parameters to read specific sections.\n"
-                        f"Total lines: {total_lines}"
+                return (
+                    self._validation_error(
+                        (
+                            f"File content (~{estimated_tokens:,} tokens) exceeds maximum allowed tokens ({limits.max_tokens:,}).\n"
+                            f"Use offset and limit parameters to read specific sections.\n"
+                            f"Total lines: {total_lines}"
+                        ),
+                        "READ_REQUIRES_PAGINATION",
                     ),
-                    "READ_REQUIRES_PAGINATION",
+                    None,
                 )
 
-        return args
+        return None, resolved
+
+    def _edit_preflight(self, *, file_path: str) -> tuple[dict[str, object] | None, ResolvedPath | None]:
+        error, resolved = self._validate_existing_path(file_path, "edit")
+        if error is not None:
+            return error, None
+        assert resolved is not None
+
+        if resolved.suffix.lower() == ".ipynb":
+            return (
+                self._validation_error(
+                    "Notebook files (.ipynb) are not supported by Edit. Use Write to overwrite the full JSON.",
+                    "NOTEBOOK_EDIT_UNSUPPORTED",
+                ),
+                None,
+            )
+
+        file_size = self.backend.file_size(str(resolved))
+        if file_size is not None and file_size > self.max_edit_file_size:
+            return (
+                self._validation_error(
+                    f"File too large for Edit: {file_size:,} bytes (max: {self.max_edit_file_size:,} bytes)",
+                    "FILE_TOO_LARGE",
+                ),
+                None,
+            )
+
+        return None, resolved
+
+    def _list_dir_preflight(self, *, path: str) -> tuple[dict[str, object] | None, ResolvedPath | None]:
+        error, resolved = self._validate_existing_path(path, "list")
+        if error is not None:
+            return error, None
+        assert resolved is not None
+        if not self.backend.is_dir(str(resolved)):
+            if self.backend.file_exists(str(resolved)):
+                return self._validation_error(f"Not a directory: {path}", "NOT_A_DIRECTORY"), None
+            return self._validation_error(f"Directory not found: {path}", "DIRECTORY_NOT_FOUND"), None
+        return None, resolved
+
+    def _validate_read_args(self, args: dict[str, Any], request: Any) -> dict[str, Any]:
+        error, _ = self._read_preflight(
+            file_path=args["file_path"],
+            offset=args.get("offset") or 0,
+            limit=args.get("limit"),
+            pages=args.get("pages"),
+        )
+        return error or args
 
     def _validate_write_args(self, args: dict[str, Any], request: Any) -> dict[str, Any]:
         error, _ = self._validate_existing_path(args["file_path"], "write")
         return error or args
 
     def _validate_edit_args(self, args: dict[str, Any], request: Any) -> dict[str, Any]:
-        error, resolved = self._validate_existing_path(args["file_path"], "edit")
-        if error is not None:
-            return error
-        assert resolved is not None
-        if resolved.suffix.lower() == ".ipynb":
-            return self._validation_error(
-                "Notebook files (.ipynb) are not supported by Edit. Use Write to overwrite the full JSON.",
-                "NOTEBOOK_EDIT_UNSUPPORTED",
-            )
-        file_size = self.backend.file_size(str(resolved))
-        if file_size is not None and file_size > self.max_edit_file_size:
-            return self._validation_error(
-                f"File too large for Edit: {file_size:,} bytes (max: {self.max_edit_file_size:,} bytes)",
-                "FILE_TOO_LARGE",
-            )
-        return args
+        error, _ = self._edit_preflight(file_path=args["file_path"])
+        return error or args
 
     def _validate_list_dir_args(self, args: dict[str, Any], request: Any) -> dict[str, Any]:
-        error, resolved = self._validate_existing_path(args["path"], "list")
-        if error is not None:
-            return error
-        assert resolved is not None
-        if not self.backend.is_dir(str(resolved)):
-            if self.backend.file_exists(str(resolved)):
-                return self._validation_error(f"Not a directory: {args['path']}", "NOT_A_DIRECTORY")
-            return self._validation_error(f"Directory not found: {args['path']}", "DIRECTORY_NOT_FOUND")
-        return args
+        error, _ = self._list_dir_preflight(path=args["path"])
+        return error or args
 
     def _check_file_staleness(self, resolved: ResolvedPath) -> str | None:
         state = self._read_files.get(resolved)
@@ -539,34 +584,15 @@ class FileSystemService:
     # ------------------------------------------------------------------
 
     def _read_file(self, file_path: str, offset: int = 0, limit: int | None = None, pages: str | None = None) -> str | ToolResultEnvelope:
-        is_valid, error, resolved = self._validate_path(file_path, "read")
-        if not is_valid:
-            return error
+        error, resolved = self._read_preflight(
+            file_path=file_path,
+            offset=offset,
+            limit=limit,
+            pages=pages,
+        )
+        if error is not None:
+            return self._validation_message(error)
         assert resolved is not None
-
-        file_size = self.backend.file_size(str(resolved))
-
-        if file_size is not None and file_size > self.max_file_size:
-            return f"File too large: {file_size:,} bytes (max: {self.max_file_size:,} bytes)"
-
-        has_pagination = offset > 0 or limit is not None or pages is not None
-        if not has_pagination and file_size is not None:
-            limits = ReadLimits()
-            if file_size > limits.max_size_bytes:
-                total_lines = self._count_lines(resolved)
-                return (
-                    f"File content ({file_size:,} bytes) exceeds maximum allowed size ({limits.max_size_bytes:,} bytes).\n"
-                    f"Use offset and limit parameters to read specific sections.\n"
-                    f"Total lines: {total_lines}"
-                )
-            estimated_tokens = file_size // 4
-            if estimated_tokens > limits.max_tokens:
-                total_lines = self._count_lines(resolved)
-                return (
-                    f"File content (~{estimated_tokens:,} tokens) exceeds maximum allowed tokens ({limits.max_tokens:,}).\n"
-                    f"Use offset and limit parameters to read specific sections.\n"
-                    f"Total lines: {total_lines}"
-                )
 
         from core.tools.filesystem.local_backend import LocalBackend
 
@@ -680,13 +706,10 @@ class FileSystemService:
             return f"Error writing file: {e}"
 
     def _edit_file(self, file_path: str, old_string: str, new_string: str, replace_all: bool = False) -> str:
-        is_valid, error, resolved = self._validate_path(file_path, "edit")
-        if not is_valid:
-            return error
+        error, resolved = self._edit_preflight(file_path=file_path)
+        if error is not None:
+            return self._validation_message(error)
         assert resolved is not None
-
-        if resolved.suffix.lower() == ".ipynb":
-            return "Notebook files (.ipynb) are not supported by Edit. Use Write to overwrite the full JSON."
 
         try:
             # @@@edit-critical-lock
@@ -704,11 +727,6 @@ class FileSystemService:
 
                 if old_string == "":
                     return "Cannot use empty old_string on an existing file. Use Write to replace the full file content."
-
-                file_size = self.backend.file_size(str(resolved))
-                if file_size is not None and file_size > self.max_edit_file_size:
-                    return f"File too large for Edit: {file_size:,} bytes (max: {self.max_edit_file_size:,} bytes)"
-
                 staleness_error = self._check_file_staleness(resolved)
                 if staleness_error:
                     return staleness_error
@@ -758,15 +776,10 @@ class FileSystemService:
 
     def _list_dir(self, path: str) -> str:
         directory_path = path
-        is_valid, error, resolved = self._validate_path(directory_path, "list")
-        if not is_valid:
-            return error
+        error, resolved = self._list_dir_preflight(path=directory_path)
+        if error is not None:
+            return self._validation_message(error)
         assert resolved is not None
-
-        if not self.backend.is_dir(str(resolved)):
-            if self.backend.file_exists(str(resolved)):
-                return f"Not a directory: {directory_path}"
-            return f"Directory not found: {directory_path}"
 
         try:
             result = self.backend.list_dir(str(resolved))
