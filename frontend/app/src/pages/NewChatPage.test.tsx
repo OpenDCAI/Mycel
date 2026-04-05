@@ -9,6 +9,14 @@ import { useAppStore } from "../store/app-store";
 
 const handleGetMainThread = vi.fn();
 
+vi.mock("zustand/middleware", async () => {
+  const actual = await vi.importActual<typeof import("zustand/middleware")>("zustand/middleware");
+  return {
+    ...actual,
+    persist: ((initializer: unknown) => initializer) as typeof actual.persist,
+  };
+});
+
 vi.mock("../components/CenteredInputBox", () => ({
   default: () => <div>centered-input-box</div>,
 }));
@@ -71,7 +79,6 @@ function ContextOutlet() {
 
 describe("NewChatPage", () => {
   beforeEach(() => {
-    localStorage.clear();
     handleGetMainThread.mockReset();
     handleGetMainThread.mockResolvedValue(null);
 

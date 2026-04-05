@@ -73,6 +73,38 @@ interface AppState {
   getResourceUsedBy: (type: string, name: string) => string[];
 }
 
+type LibraryType = "skill" | "mcp" | "agent" | "recipe";
+type LibraryStateKey = "librarySkills" | "libraryMcps" | "libraryAgents" | "libraryRecipes";
+
+const DEFAULT_PROFILE: UserProfile = { name: "User", initials: "U", email: "" };
+const LIBRARY_STATE_KEYS: Record<LibraryType, LibraryStateKey> = {
+  skill: "librarySkills",
+  mcp: "libraryMcps",
+  agent: "libraryAgents",
+  recipe: "libraryRecipes",
+};
+
+function getLibraryStateKey(type: string): LibraryStateKey {
+  const key = LIBRARY_STATE_KEYS[type as LibraryType];
+  if (!key) throw new Error(`Unsupported library type: ${type}`);
+  return key;
+}
+
+function emptySessionState() {
+  return {
+    memberList: [],
+    taskList: [],
+    cronJobs: [],
+    librarySkills: [],
+    libraryMcps: [],
+    libraryAgents: [],
+    libraryRecipes: [],
+    userProfile: DEFAULT_PROFILE,
+    loaded: false,
+    error: null,
+  };
+}
+
 async function api<T = unknown>(path: string, opts?: RequestInit): Promise<T> {
   const token = useAuthStore.getState().token;
   const headers: Record<string, string> = { "Content-Type": "application/json" };
@@ -83,16 +115,7 @@ async function api<T = unknown>(path: string, opts?: RequestInit): Promise<T> {
 }
 
 export const useAppStore = create<AppState>()((set, get) => ({
-  memberList: [],
-  taskList: [],
-  cronJobs: [],
-  librarySkills: [],
-  libraryMcps: [],
-  libraryAgents: [],
-  libraryRecipes: [],
-  userProfile: { name: "User", initials: "U", email: "" },
-  loaded: false,
-  error: null,
+  ...emptySessionState(),
 
   loadAll: async () => {
     if (get().loaded) return;
@@ -138,18 +161,7 @@ export const useAppStore = create<AppState>()((set, get) => ({
 
   resetSessionData: () => {
     loadAllInflight = null;
-    set({
-      memberList: [],
-      taskList: [],
-      cronJobs: [],
-      librarySkills: [],
-      libraryMcps: [],
-      libraryAgents: [],
-      libraryRecipes: [],
-      userProfile: { name: "User", initials: "U", email: "" },
-      loaded: false,
-      error: null,
-    });
+    set(emptySessionState());
   },
 
   // ── Members ──
@@ -288,10 +300,8 @@ export const useAppStore = create<AppState>()((set, get) => ({
   // ── Library ──
   fetchLibrary: async (type) => {
     const data = await api<{ items: ResourceItem[] }>(`/library/${type}`);
-    if (type === "skill") set({ librarySkills: data.items });
-    else if (type === "mcp") set({ libraryMcps: data.items });
-    else if (type === "agent") set({ libraryAgents: data.items });
-    else if (type === "recipe") set({ libraryRecipes: data.items });
+    const key = getLibraryStateKey(type);
+    set({ [key]: data.items } as Pick<AppState, typeof key>);
   },
 
   fetchLibraryNames: async (type) => {
@@ -304,10 +314,8 @@ export const useAppStore = create<AppState>()((set, get) => ({
       method: "POST",
       body: JSON.stringify({ name, desc, ...extra }),
     });
-    if (type === "skill") set((s) => ({ librarySkills: [...s.librarySkills, item] }));
-    else if (type === "mcp") set((s) => ({ libraryMcps: [...s.libraryMcps, item] }));
-    else if (type === "agent") set((s) => ({ libraryAgents: [...s.libraryAgents, item] }));
-    else set((s) => ({ libraryRecipes: [...s.libraryRecipes, item] }));
+    const key = getLibraryStateKey(type);
+    set((s) => ({ [key]: [...s[key], item] }) as Pick<AppState, typeof key>);
     return item;
   },
 
@@ -316,23 +324,23 @@ export const useAppStore = create<AppState>()((set, get) => ({
       method: "PUT",
       body: JSON.stringify(fields),
     });
-    const updater = (list: ResourceItem[]) => list.map((x) => (x.id === id ? updated : x));
-    if (type === "skill") set((s) => ({ librarySkills: updater(s.librarySkills) }));
-    else if (type === "mcp") set((s) => ({ libraryMcps: updater(s.libraryMcps) }));
-    else if (type === "agent") set((s) => ({ libraryAgents: updater(s.libraryAgents) }));
-    else set((s) => ({ libraryRecipes: updater(s.libraryRecipes) }));
+    const key = getLibraryStateKey(type);
+    set((s) => ({
+      [key]: s[key].map((item) => (item.id === id ? updated : item)),
+    }) as Pick<AppState, typeof key>);
   },
 
   deleteResource: async (type, id) => {
     await api(`/library/${type}/${id}`, { method: "DELETE" });
-    const filter = (list: ResourceItem[]) => list.filter((x) => x.id !== id);
-    if (type === "skill") set((s) => ({ librarySkills: filter(s.librarySkills) }));
-    else if (type === "mcp") set((s) => ({ libraryMcps: filter(s.libraryMcps) }));
-    else if (type === "agent") set((s) => ({ libraryAgents: filter(s.libraryAgents) }));
-    else {
+    if (type === "recipe") {
       const data = await api<{ items: ResourceItem[] }>(`/library/${type}`);
       set({ libraryRecipes: data.items });
+      return;
     }
+    const key = getLibraryStateKey(type);
+    set((s) => ({
+      [key]: s[key].filter((item) => item.id !== id),
+    }) as Pick<AppState, typeof key>);
   },
 
   fetchResourceContent: async (type, id) => {

@@ -22,6 +22,34 @@ interface OutletContext {
   setSessionsOpen: (value: boolean) => void;
 }
 
+function ResolveStateCard({
+  memberName,
+  memberAvatarUrl,
+  title,
+  description,
+  destructive = false,
+}: {
+  memberName: string;
+  memberAvatarUrl?: string;
+  title: string;
+  description: string;
+  destructive?: boolean;
+}) {
+  return (
+    <div className="flex-1 flex items-center justify-center relative">
+      <div className="w-full max-w-[420px] px-6 text-center">
+        <div className="flex justify-center mb-4">
+          <MemberAvatar name={memberName} avatarUrl={memberAvatarUrl} type="mycel_agent" size="lg" />
+        </div>
+        <h1 className="text-xl font-medium text-foreground mb-2">{title}</h1>
+        <p className={`text-sm ${destructive ? "text-destructive" : "text-muted-foreground"}`}>
+          {description}
+        </p>
+      </div>
+    </div>
+  );
+}
+
 const PROVIDER_TYPE_LABELS: Record<string, string> = {
   local: "Local",
   daytona: "Daytona",
@@ -477,37 +505,24 @@ export default function NewChatPage({ mode = "member" }: { mode?: "member" | "ne
   // create-chat surface with sane local defaults.
   if (loading || resolveState === "resolving") {
     return (
-      <div className="flex-1 flex items-center justify-center relative">
-        <div className="w-full max-w-[420px] px-6 text-center">
-          <div className="flex justify-center mb-4">
-            <MemberAvatar name={memberName} avatarUrl={memberAvatarUrl} type="mycel_agent" size="lg" />
-          </div>
-          <h1 className="text-xl font-medium text-foreground mb-2">
-            正在检查 {memberName} 的主对话
-          </h1>
-          <p className="text-sm text-muted-foreground">
-            如果没有主对话，这里会进入创建界面。
-          </p>
-        </div>
-      </div>
+      <ResolveStateCard
+        memberName={memberName}
+        memberAvatarUrl={memberAvatarUrl ?? undefined}
+        title={`正在检查 ${memberName} 的主对话`}
+        description="如果没有主对话，这里会进入创建界面。"
+      />
     );
   }
 
   if (resolveState === "error") {
     return (
-      <div className="flex-1 flex items-center justify-center relative">
-        <div className="w-full max-w-[420px] px-6 text-center">
-          <div className="flex justify-center mb-4">
-            <MemberAvatar name={memberName} avatarUrl={memberAvatarUrl} type="mycel_agent" size="lg" />
-          </div>
-          <h1 className="text-xl font-medium text-foreground mb-2">
-            无法检查 {memberName} 的主对话
-          </h1>
-          <p className="text-sm text-destructive">
-            {error ?? "未知错误"}
-          </p>
-        </div>
-      </div>
+      <ResolveStateCard
+        memberName={memberName}
+        memberAvatarUrl={memberAvatarUrl ?? undefined}
+        title={`无法检查 ${memberName} 的主对话`}
+        description={error ?? "未知错误"}
+        destructive
+      />
     );
   }
 

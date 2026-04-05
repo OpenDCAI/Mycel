@@ -6,9 +6,16 @@ import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { LoginForm } from "./RootLayout";
 import { useAuthStore } from "../store/auth-store";
 
+vi.mock("zustand/middleware", async () => {
+  const actual = await vi.importActual<typeof import("zustand/middleware")>("zustand/middleware");
+  return {
+    ...actual,
+    persist: ((initializer: unknown) => initializer) as typeof actual.persist,
+  };
+});
+
 describe("LoginForm", () => {
   beforeEach(() => {
-    localStorage.clear();
     useAuthStore.setState({
       token: null,
       user: null,
