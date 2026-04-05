@@ -355,6 +355,19 @@ def _is_resource_visible_thread(thread_id: str | None) -> bool:
     return True
 
 
+def _resource_session_identity(session: dict[str, Any]) -> str:
+    lease_id = str(session.get("lease_id") or "")
+    thread_id = str(session.get("thread_id") or "")
+    if lease_id and thread_id:
+        # @@@resource-session-contract - resource cards are lease/thread scoped, not chat-session scoped.
+        # Terminal fallback rows can carry distinct session ids for the same visible lease+thread binding.
+        return f"{lease_id}:{thread_id}"
+    session_id = str(session.get("session_id") or "")
+    if session_id:
+        return session_id
+    return f"{lease_id}:{thread_id or 'unbound'}"
+
+
 # ---------------------------------------------------------------------------
 # Public API: resource overview
 # ---------------------------------------------------------------------------
@@ -408,7 +421,7 @@ def list_resource_providers() -> dict[str, Any]:
                 seen_running_leases.add(lease_id)
             session_metrics = _to_session_metrics(snapshot_by_lease.get(lease_id))
             owner = owners.get(thread_id, {"member_id": None, "member_name": "未绑定Agent"})
-            session_identity = str(session.get("session_id") or f"{lease_id}:{thread_id or 'unbound'}")
+            session_identity = _resource_session_identity(session)
             # @@@resource-session-dedup - terminal fallback can surface multiple
             # monitor rows for the same lease/thread binding. The overview
             # contract is one session row per stable session identity.

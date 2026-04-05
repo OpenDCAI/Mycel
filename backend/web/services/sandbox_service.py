@@ -77,10 +77,11 @@ def list_user_leases(
                     "cwd": row.get("cwd"),
                     "thread_ids": [],
                     "agents": [],
+                    "_seen_member_ids": set(),
                 },
             )
             thread_id = str(row.get("thread_id") or "").strip()
-            if not thread_id or thread_id in group["thread_ids"]:
+            if not _is_user_visible_lease_thread(thread_id) or thread_id in group["thread_ids"]:
                 continue
             thread = _thread_repo.get_by_id(thread_id)
             if thread is None:
@@ -89,18 +90,21 @@ def list_user_leases(
             if member is None or member.owner_user_id != user_id:
                 continue
             group["thread_ids"].append(thread_id)
-            group["agents"].append(
-                {
-                    "member_id": member.id,
-                    "member_name": member.name,
-                    "avatar_url": avatar_url(member.id, bool(member.avatar)),
-                }
-            )
+            if member.id not in group["_seen_member_ids"]:
+                group["_seen_member_ids"].add(member.id)
+                group["agents"].append(
+                    {
+                        "member_id": member.id,
+                        "member_name": member.name,
+                        "avatar_url": avatar_url(member.id, bool(member.avatar)),
+                    }
+                )
             if not group["cwd"] and row.get("cwd"):
                 group["cwd"] = row.get("cwd")
 
         leases: list[dict[str, Any]] = []
         for lease in grouped.values():
+            lease.pop("_seen_member_ids", None)
             if not lease["thread_ids"]:
                 continue
             provider_name = lease["provider_name"]
@@ -121,6 +125,17 @@ def list_user_leases(
             _member_repo.close()
             _thread_repo.close()
         monitor_repo.close()
+
+
+def _is_user_visible_lease_thread(thread_id: str | None) -> bool:
+    raw = str(thread_id or "").strip()
+    if not raw:
+        return False
+    if raw.startswith("subagent-"):
+        return False
+    if is_virtual_thread_id(raw):
+        return False
+    return True
 
 
 def available_sandbox_types() -> list[dict[str, Any]]:

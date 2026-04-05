@@ -142,7 +142,7 @@ def test_list_resource_providers_resolves_owner_metadata_from_runtime_storage(mo
 
     assert payload["providers"][0]["sessions"] == [
         {
-            "id": "sess-1",
+            "id": "lease-1:thread-supabase",
             "leaseId": "lease-1",
             "threadId": "thread-supabase",
             "memberId": "member-1",
@@ -202,3 +202,63 @@ def test_list_resource_providers_hides_subagent_threads(monkeypatch):
 
     assert [session["threadId"] for session in sessions] == ["thread-parent"]
     assert payload["summary"]["running_sessions"] == 1
+
+
+def test_list_resource_providers_deduplicates_same_lease_thread_even_with_distinct_session_ids(monkeypatch):
+    rows = [
+        {
+            "provider": "daytona_selfhost",
+            "session_id": "sess-a",
+            "thread_id": "thread-parent",
+            "lease_id": "lease-1",
+            "observed_state": "running",
+            "desired_state": "running",
+            "created_at": "2026-04-04T00:00:00",
+        },
+        {
+            "provider": "daytona_selfhost",
+            "session_id": "sess-b",
+            "thread_id": "thread-parent",
+            "lease_id": "lease-1",
+            "observed_state": "running",
+            "desired_state": "running",
+            "created_at": "2026-04-04T00:00:01",
+        },
+    ]
+
+    monkeypatch.setattr(resource_service, "make_sandbox_monitor_repo", lambda: _FakeRepo(rows))
+    monkeypatch.setattr(
+        resource_service,
+        "available_sandbox_types",
+        lambda: [{"name": "daytona_selfhost", "available": True}],
+    )
+    monkeypatch.setattr(resource_service, "resolve_provider_name", lambda *_args, **_kwargs: "daytona")
+    monkeypatch.setattr(resource_service, "_resolve_console_url", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(
+        resource_service,
+        "_resolve_instance_capabilities",
+        lambda _config_name: (resource_service._empty_capabilities(), None),
+    )
+    monkeypatch.setattr(
+        resource_service,
+        "_thread_owners",
+        lambda thread_ids: {tid: {"member_id": "member-1", "member_name": "Toad", "avatar_url": None} for tid in thread_ids},
+    )
+    monkeypatch.setattr(resource_service, "list_resource_snapshots", lambda _lease_ids: {})
+
+    payload = resource_service.list_resource_providers()
+    sessions = payload["providers"][0]["sessions"]
+
+    assert sessions == [
+        {
+            "id": "lease-1:thread-parent",
+            "leaseId": "lease-1",
+            "threadId": "thread-parent",
+            "memberId": "member-1",
+            "memberName": "Toad",
+            "avatarUrl": None,
+            "status": "running",
+            "startedAt": "2026-04-04T00:00:00",
+            "metrics": None,
+        }
+    ]
