@@ -168,6 +168,23 @@ class _ToolSearchInlineSelectModel:
         return AIMessage(content="after-inline-select")
 
 
+class _ToolThenConcurrencyLimitModel:
+    def __init__(self) -> None:
+        self._turn = 0
+
+    def bind_tools(self, tools):
+        return self
+
+    async def ainvoke(self, messages):
+        if self._turn == 0:
+            self._turn += 1
+            return AIMessage(
+                content="",
+                tool_calls=[{"name": "Write", "args": {"file_path": "/tmp/demo.txt", "content": "hi"}, "id": "tc-write"}],
+            )
+        raise RuntimeError("Concurrency limit exceeded for user, please retry later")
+
+
 class _SteerAwareTerminalModel:
     def bind_tools(self, tools):
         return self
@@ -615,6 +632,50 @@ async def test_get_thread_history_retains_tool_search_inline_select_error():
     assert "<tool_use_error>" in history["messages"][2]["text"]
     assert "inline/already-available tools: Read" in history["messages"][2]["text"]
     assert history["messages"][3]["text"] == "after-inline-select"
+
+
+@pytest.mark.asyncio
+async def test_get_thread_history_persists_visible_assistant_error_after_model_failure():
+    checkpointer = _MemoryCheckpointer()
+    registry = ToolRegistry()
+    registry.register(
+        ToolEntry(
+            name="Write",
+            mode=ToolMode.INLINE,
+            schema={"name": "Write", "description": "write file"},
+            handler=lambda **_: "FILE_WRITTEN",
+            source="test",
+        )
+    )
+    loop = _make_loop(
+        model=_ToolThenConcurrencyLimitModel(),
+        registry=registry,
+        checkpointer=checkpointer,
+    )
+    config = {"configurable": {"thread_id": "history-visible-model-error"}}
+
+    async for _ in loop.query(
+        {"messages": [{"role": "user", "content": "write once, then continue"}]},
+        config=config,
+    ):
+        pass
+
+    fake_agent = SimpleNamespace(agent=loop)
+    fake_app = SimpleNamespace(state=SimpleNamespace())
+    with (
+        patch("backend.web.routers.threads.get_or_create_agent", return_value=fake_agent),
+        patch("backend.web.routers.threads.resolve_thread_sandbox", return_value="local"),
+    ):
+        history = await get_thread_history(
+            "history-visible-model-error",
+            limit=20,
+            truncate=300,
+            user_id="u",
+            app=fake_app,
+        )
+
+    assert [item["role"] for item in history["messages"]] == ["human", "tool_call", "tool_result", "assistant"]
+    assert history["messages"][-1]["text"] == "Error: Concurrency limit exceeded for user, please retry later"
 
 
 @pytest.mark.asyncio

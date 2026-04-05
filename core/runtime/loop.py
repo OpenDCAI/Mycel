@@ -396,6 +396,9 @@ class QueryLoop:
 
         # Persist message history
         self._collect_memory_system_notices(pending_system_notices)
+        visible_terminal_error = self._build_visible_terminal_error_message(terminal, messages)
+        if visible_terminal_error is not None:
+            messages.append(visible_terminal_error)
         terminal_notice = self._build_terminal_notice(terminal)
         if terminal_notice is not None:
             pending_system_notices.append(terminal_notice)
@@ -1712,6 +1715,21 @@ class QueryLoop:
         if terminal.reason is TerminalReason.prompt_too_long:
             return _PROMPT_TOO_LONG_NOTICE_TEXT
         return terminal.error or terminal.reason.value
+
+    def _build_visible_terminal_error_message(
+        self,
+        terminal: TerminalState,
+        messages: list[Any],
+    ) -> AIMessage | None:
+        if terminal.reason is TerminalReason.completed:
+            return None
+        error_text = self._terminal_error_text(terminal).strip()
+        if not error_text:
+            return None
+        last_message = messages[-1] if messages else None
+        if isinstance(last_message, AIMessage) and self._ai_message_has_visible_content(last_message):
+            return None
+        return AIMessage(content=f"Error: {error_text}")
 
     @staticmethod
     def _checkpoint_config(thread_id: str) -> dict[str, Any]:
