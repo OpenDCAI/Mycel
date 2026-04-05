@@ -14,7 +14,6 @@ import type {
   ThreadPermissions,
   ThreadPermissionRules,
   PermissionRuleBehavior,
-  SandboxChannelFilesResult,
   SandboxFileResult,
   SandboxFilesListResult,
   SandboxUploadResult,
@@ -151,17 +150,6 @@ export async function sendMessage(threadId: string, message: string): Promise<{ 
   });
 }
 
-export async function queueMessage(threadId: string, message: string): Promise<void> {
-  await request(`/api/threads/${encodeURIComponent(threadId)}/queue`, {
-    method: "POST",
-    body: JSON.stringify({ message }),
-  });
-}
-
-export async function getQueue(threadId: string): Promise<{ messages: Array<{ id: number; content: string; created_at: string }> }> {
-  return request(`/api/threads/${encodeURIComponent(threadId)}/queue`);
-}
-
 // --- Sandbox API ---
 
 export async function listSandboxTypes(): Promise<SandboxType[]> {
@@ -210,10 +198,6 @@ export async function pauseThreadSandbox(threadId: string): Promise<void> {
 
 export async function resumeThreadSandbox(threadId: string): Promise<void> {
   await request(`/api/threads/${encodeURIComponent(threadId)}/sandbox/resume`, { method: "POST" });
-}
-
-export async function destroyThreadSandbox(threadId: string): Promise<void> {
-  await request(`/api/threads/${encodeURIComponent(threadId)}/sandbox`, { method: "DELETE" });
 }
 
 export async function pauseSandboxSession(sessionId: string, provider: string): Promise<void> {
@@ -266,12 +250,6 @@ export async function readSandboxFile(threadId: string, path: string): Promise<S
   return request(`${sandboxFilesBase(threadId)}/read?path=${encodeURIComponent(path)}`);
 }
 
-export async function listSandboxChannelFiles(
-  threadId: string,
-): Promise<SandboxChannelFilesResult> {
-  return request(`${sandboxFilesBase(threadId)}/channel-files`);
-}
-
 export async function uploadSandboxFile(
   threadId: string,
   opts: { file: File; path?: string },
@@ -302,11 +280,6 @@ export function getSandboxDownloadUrl(
 
 // --- Settings API ---
 
-export async function listSandboxConfigs(): Promise<Record<string, Record<string, unknown>>> {
-  const payload = await request<{ sandboxes: Record<string, Record<string, unknown>> }>("/api/settings/sandboxes");
-  return payload.sandboxes;
-}
-
 export async function saveSandboxConfig(name: string, config: Record<string, unknown>): Promise<void> {
   await request("/api/settings/sandboxes", {
     method: "POST",
@@ -315,10 +288,6 @@ export async function saveSandboxConfig(name: string, config: Record<string, unk
 }
 
 // --- Observation API ---
-
-export async function getObservationConfig(): Promise<Record<string, unknown>> {
-  return request("/api/settings/observation");
-}
 
 export async function saveObservationConfig(
   active: string | null,

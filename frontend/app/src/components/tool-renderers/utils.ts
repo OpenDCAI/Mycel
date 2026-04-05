@@ -40,7 +40,3 @@ export function inferLanguage(filePath: string): string {
 
   return langMap[ext] || 'plaintext';
 }
-
-export function countLines(text: string): number {
-  return text.split('\n').length;
-}

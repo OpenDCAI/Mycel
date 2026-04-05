@@ -52,38 +52,3 @@ export function CapabilityStrip({ capabilities }: { capabilities: ProviderCapabi
     </div>
   );
 }
-
-/** Detailed capability tiles for ProviderDetail */
-export function CapabilityGrid({ capabilities }: { capabilities: ProviderCapabilities }) {
-  return (
-    <div className="grid grid-cols-4 gap-2">
-      {CAPABILITY_KEYS.map((key) => {
-        const Icon = CAPABILITY_ICON_MAP[key];
-        const has = capabilities[key];
-        return (
-          <div
-            key={key}
-            className={[
-              "flex items-center gap-2 px-3 py-2 rounded-lg border transition-all duration-fast",
-              has
-                ? "border-foreground/15 bg-foreground/[0.04] shadow-sm"
-                : "border-transparent bg-muted/30 opacity-40",
-            ].join(" ")}
-          >
-            <div
-              className={[
-                "w-6 h-6 rounded-md flex items-center justify-center shrink-0",
-                has ? "bg-foreground/10 text-foreground" : "bg-muted text-muted-foreground",
-              ].join(" ")}
-            >
-              <Icon className="w-3.5 h-3.5" />
-            </div>
-            <span className={`text-xs ${has ? "text-foreground font-medium" : "text-muted-foreground"}`}>
-              {CAPABILITY_LABELS[key]}
-            </span>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
