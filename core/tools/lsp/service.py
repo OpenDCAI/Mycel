@@ -23,15 +23,15 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
-from core.runtime.registry import ToolEntry, ToolMode, ToolRegistry
+from core.runtime.registry import ToolEntry, ToolMode, ToolRegistry, make_tool_schema
 
 _FILE_SIZE_LIMIT = 10 * 1024 * 1024  # 10 MB — matches CC LSP limit
 
 logger = logging.getLogger(__name__)
 
-LSP_SCHEMA = {
-    "name": "LSP",
-    "description": (
+LSP_SCHEMA = make_tool_schema(
+    name="LSP",
+    description=(
         "Language Server Protocol code intelligence. "
         "Operations: goToDefinition, findReferences, hover, documentSymbol, workspaceSymbol, "
         "goToImplementation, prepareCallHierarchy, incomingCalls, outgoingCalls. "
@@ -40,52 +40,49 @@ LSP_SCHEMA = {
         "file_path must be absolute. line/character are 1-based. "
         "incomingCalls/outgoingCalls require 'item' from prepareCallHierarchy output."
     ),
-    "parameters": {
-        "type": "object",
-        "properties": {
-            "operation": {
-                "type": "string",
-                "enum": [
-                    "goToDefinition",
-                    "findReferences",
-                    "hover",
-                    "documentSymbol",
-                    "workspaceSymbol",
-                    "goToImplementation",
-                    "prepareCallHierarchy",
-                    "incomingCalls",
-                    "outgoingCalls",
-                ],
-                "description": "LSP operation to perform",
-            },
-            "file_path": {
-                "type": "string",
-                "description": "Absolute path to file (required for all operations except workspaceSymbol)",
-            },
-            "line": {
-                "type": "integer",
-                "description": "1-based line number (required for goToDefinition, findReferences, hover)",
-            },
-            "character": {
-                "type": "integer",
-                "description": "1-based character offset (required for goToDefinition, findReferences, hover)",
-            },
-            "query": {
-                "type": "string",
-                "description": "Symbol name to search (required for workspaceSymbol)",
-            },
-            "language": {
-                "type": "string",
-                "description": "Language override. Auto-detected from file extension if omitted.",
-            },
-            "item": {
-                "type": "object",
-                "description": "CallHierarchyItem from prepareCallHierarchy (required for incomingCalls/outgoingCalls).",
-            },
+    properties={
+        "operation": {
+            "type": "string",
+            "enum": [
+                "goToDefinition",
+                "findReferences",
+                "hover",
+                "documentSymbol",
+                "workspaceSymbol",
+                "goToImplementation",
+                "prepareCallHierarchy",
+                "incomingCalls",
+                "outgoingCalls",
+            ],
+            "description": "LSP operation to perform",
         },
-        "required": ["operation"],
+        "file_path": {
+            "type": "string",
+            "description": "Absolute path to file (required for all operations except workspaceSymbol)",
+        },
+        "line": {
+            "type": "integer",
+            "description": "1-based line number (required for goToDefinition, findReferences, hover)",
+        },
+        "character": {
+            "type": "integer",
+            "description": "1-based character offset (required for goToDefinition, findReferences, hover)",
+        },
+        "query": {
+            "type": "string",
+            "description": "Symbol name to search (required for workspaceSymbol)",
+        },
+        "language": {
+            "type": "string",
+            "description": "Language override. Auto-detected from file extension if omitted.",
+        },
+        "item": {
+            "type": "object",
+            "description": "CallHierarchyItem from prepareCallHierarchy (required for incomingCalls/outgoingCalls).",
+        },
     },
-}
+    required=["operation"],
+)
 
 # File extension → multilspy language identifier
 _EXT_TO_LANG: dict[str, str] = {
@@ -744,6 +741,7 @@ class LSPService:
             if operation == "goToDefinition":
                 if not file_path or zero_line is None or zero_character is None:
                     return "goToDefinition requires: file_path, line, character"
+                assert session is not None
                 results = await session.request_definition(rel, zero_line, zero_character)
                 results = await self._filter_gitignored_batched_async(results)
                 if not results:
@@ -753,6 +751,7 @@ class LSPService:
             elif operation == "findReferences":
                 if not file_path or zero_line is None or zero_character is None:
                     return "findReferences requires: file_path, line, character"
+                assert session is not None
                 results = await session.request_references(rel, zero_line, zero_character)
                 results = await self._filter_gitignored_batched_async(results)
                 if not results:
@@ -762,6 +761,7 @@ class LSPService:
             elif operation == "hover":
                 if not file_path or zero_line is None or zero_character is None:
                     return "hover requires: file_path, line, character"
+                assert session is not None
                 result = await session.request_hover(rel, zero_line, zero_character)
                 if not result:
                     return "No hover info."
@@ -770,6 +770,7 @@ class LSPService:
             elif operation == "documentSymbol":
                 if not file_path:
                     return "documentSymbol requires: file_path"
+                assert session is not None
                 symbols = await session.request_document_symbols(rel)
                 if not symbols:
                     return "No symbols found."
@@ -778,6 +779,7 @@ class LSPService:
             elif operation == "workspaceSymbol":
                 if not query:
                     return "workspaceSymbol requires: query"
+                assert session is not None
                 symbols = await session.request_workspace_symbol(query)
                 if not symbols:
                     return f"No symbols matching '{query}'."
@@ -787,6 +789,7 @@ class LSPService:
                 if not file_path or zero_line is None or zero_character is None:
                     return "goToImplementation requires: file_path, line, character"
                 src = pyright if use_pyright else session
+                assert src is not None
                 results = await src.request_implementation(rel, zero_line, zero_character)
                 results = await self._filter_gitignored_batched_async(results)
                 if not results:
@@ -797,6 +800,7 @@ class LSPService:
                 if not file_path or zero_line is None or zero_character is None:
                     return "prepareCallHierarchy requires: file_path, line, character"
                 src = pyright if use_pyright else session
+                assert src is not None
                 items = await src.request_prepare_call_hierarchy(rel, zero_line, zero_character)
                 if not items:
                     return "No call hierarchy items found."
@@ -806,6 +810,7 @@ class LSPService:
                 if not item:
                     return "incomingCalls requires: item (CallHierarchyItem from prepareCallHierarchy)"
                 src = pyright if use_pyright else session
+                assert src is not None
                 calls = await src.request_incoming_calls(item)
                 if not calls:
                     return "No incoming calls found."
@@ -815,6 +820,7 @@ class LSPService:
                 if not item:
                     return "outgoingCalls requires: item (CallHierarchyItem from prepareCallHierarchy)"
                 src = pyright if use_pyright else session
+                assert src is not None
                 calls = await src.request_outgoing_calls(item)
                 if not calls:
                     return "No outgoing calls found."

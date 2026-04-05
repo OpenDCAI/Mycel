@@ -9,29 +9,26 @@ from __future__ import annotations
 import json
 import logging
 
-from core.runtime.registry import ToolEntry, ToolMode, ToolRegistry
+from core.runtime.registry import ToolEntry, ToolMode, ToolRegistry, make_tool_schema
 
 logger = logging.getLogger(__name__)
 
-TOOL_SEARCH_SCHEMA = {
-    "name": "tool_search",
-    "description": (
+TOOL_SEARCH_SCHEMA = make_tool_schema(
+    name="tool_search",
+    description=(
         "Search for available deferred tools by name or keyword. "
         "Use 'select:ToolA,ToolB' for exact deferred-tool lookup (returns full schema). "
         "Use keywords for fuzzy search (up to 5 results). "
         "Deferred tools are only usable after discovery via this tool."
     ),
-    "parameters": {
-        "type": "object",
-        "properties": {
-            "query": {
-                "type": "string",
-                "description": "Search query. Use 'select:ToolA,ToolB' for exact deferred-tool lookup, or keywords for fuzzy search.",
-            },
+    properties={
+        "query": {
+            "type": "string",
+            "description": "Search query. Use 'select:ToolA,ToolB' for exact deferred-tool lookup, or keywords for fuzzy search.",
         },
-        "required": ["query"],
     },
-}
+    required=["query"],
+)
 
 
 class ToolSearchService:

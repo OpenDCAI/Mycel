@@ -12,7 +12,7 @@ import re
 from collections.abc import Sequence
 from pathlib import Path
 
-from core.runtime.registry import ToolEntry, ToolMode, ToolRegistry
+from core.runtime.registry import ToolEntry, ToolMode, ToolRegistry, make_tool_schema
 
 
 class SkillsService:
@@ -75,25 +75,22 @@ class SkillsService:
         available_skills = list(self._skills_index.keys())
         skills_list = "\n".join(f"- {name}" for name in available_skills)
 
-        return {
-            "name": "load_skill",
-            "description": (
+        return make_tool_schema(
+            name="load_skill",
+            description=(
                 f"Load a skill for domain-specific guidance. "
                 f"Use when you need specialized workflows (TDD, debugging, git). "
                 f"Skills are loaded on-demand to save context.\n\n"
                 f"Available skills:\n{skills_list}"
             ),
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "skill_name": {
-                        "type": "string",
-                        "description": f"Name of the skill to load. Available: {', '.join(self._skills_index.keys())}",
-                    },
+            properties={
+                "skill_name": {
+                    "type": "string",
+                    "description": f"Name of the skill to load. Available: {', '.join(self._skills_index.keys())}",
                 },
-                "required": ["skill_name"],
             },
-        }
+            required=["skill_name"],
+        )
 
     def _load_skill(self, skill_name: str) -> str:
         if skill_name not in self._skills_index:
