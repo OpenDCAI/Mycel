@@ -123,6 +123,23 @@ def _append_to_turn(turn: dict, msg_id: str, segments: list[dict]) -> None:
     turn.setdefault("messageIds", []).append(msg_id)
 
 
+def _build_subagent_stream(
+    *,
+    task_id: str,
+    thread_id: str,
+    description: str | None,
+    status: str,
+) -> dict[str, Any]:
+    return {
+        "task_id": task_id,
+        "thread_id": thread_id,
+        "description": description,
+        "text": "",
+        "tool_calls": [],
+        "status": status,
+    }
+
+
 # ---------------------------------------------------------------------------
 # ThreadDisplay — per-thread in-memory state
 # ---------------------------------------------------------------------------
@@ -538,14 +555,12 @@ def _handle_tool_result(td: ThreadDisplay, data: dict) -> dict | None:
                 result,
             )
             if sub_thread and not seg["step"].get("subagent_stream"):
-                seg["step"]["subagent_stream"] = {
-                    "task_id": task_id or "",
-                    "thread_id": sub_thread,
-                    "description": metadata.get("description"),
-                    "text": "",
-                    "tool_calls": [],
-                    "status": task_status,
-                }
+                seg["step"]["subagent_stream"] = _build_subagent_stream(
+                    task_id=task_id or "",
+                    thread_id=sub_thread,
+                    description=metadata.get("description"),
+                    status=task_status,
+                )
 
             return {
                 "type": "update_segment",
@@ -674,14 +689,12 @@ def _handle_task_start(td: ThreadDisplay, data: dict) -> dict | None:
     # has no child stream, even if its tool_result already marked it done.
     for seg in reversed(turn["segments"]):
         if seg.get("type") == "tool" and seg.get("step", {}).get("name") == "Agent" and not seg.get("step", {}).get("subagent_stream"):
-            seg["step"]["subagent_stream"] = {
-                "task_id": task_id,
-                "thread_id": sub_thread,
-                "description": data.get("description"),
-                "text": "",
-                "tool_calls": [],
-                "status": "running",
-            }
+            seg["step"]["subagent_stream"] = _build_subagent_stream(
+                task_id=task_id,
+                thread_id=sub_thread,
+                description=data.get("description"),
+                status="running",
+            )
             idx = _find_seg_index(turn, seg["step"]["id"])
             return {
                 "type": "update_segment",

@@ -1481,19 +1481,40 @@ async def observe_thread_events(
     disconnect (or server shutdown) closes the connection.
     run_done is a flow event, not a terminal signal.
     """
-    yield {"retry": 5000}
-
     # Always start from the beginning of the ring buffer.
     # For after=0 (new connection): replay all buffered events so we never miss
     # events emitted between postRun and SSE connect (race condition fix).
     # For after>0 (reconnect): start from ring start, filter by _seq below.
-    cursor = 0
+    async for event in _observe_sse_buffer(thread_buf, after=after, stop_on_finish=False):
+        yield event
 
+
+async def observe_run_events(
+    buf: RunEventBuffer,
+    after: int = 0,
+) -> AsyncGenerator[dict[str, str], None]:
+    """Consume events from a RunEventBuffer (subagent streams only). Yields SSE event dicts."""
+    async for event in _observe_sse_buffer(buf, after=after, stop_on_finish=True):
+        yield event
+
+
+async def _observe_sse_buffer(
+    buf: ThreadEventBuffer | RunEventBuffer,
+    *,
+    after: int,
+    stop_on_finish: bool,
+) -> AsyncGenerator[dict[str, str], None]:
+    """Shared SSE observer loop for thread and run buffers."""
+    yield {"retry": 5000}
+
+    cursor = 0
     while True:
-        events, cursor = await thread_buf.read_with_timeout(cursor, timeout=30)
-        if events is None:
+        events, cursor = await buf.read_with_timeout(cursor, timeout=30)
+        if events is None and not buf.finished.is_set():
             yield {"comment": "keepalive"}
             continue
+        if stop_on_finish and not events and buf.finished.is_set():
+            break
         if not events:
             continue
         for event in events:
@@ -1506,44 +1527,6 @@ async def observe_thread_events(
             # @@@after-filter — skip events already seen on reconnect.
             # display_delta now carries the source raw-event seq too, so stale
             # derived deltas are filtered together with their persisted source.
-            if after > 0 and isinstance(parsed_data, dict) and "_seq" in parsed_data:
-                if parsed_data["_seq"] <= after:
-                    continue
-
-            seq_id = str(parsed_data["_seq"]) if isinstance(parsed_data, dict) and "_seq" in parsed_data else None
-            if seq_id:
-                yield {**event, "id": seq_id}
-            else:
-                yield event
-
-
-async def observe_run_events(
-    buf: RunEventBuffer,
-    after: int = 0,
-) -> AsyncGenerator[dict[str, str], None]:
-    """Consume events from a RunEventBuffer (subagent streams only). Yields SSE event dicts."""
-    yield {"retry": 5000}
-
-    cursor = 0
-    while True:
-        events, cursor = await buf.read_with_timeout(cursor, timeout=30)
-        if events is None and not buf.finished.is_set():
-            yield {"comment": "keepalive"}
-            continue
-        if not events and buf.finished.is_set():
-            break
-        if not events:
-            continue
-        for event in events:
-            parsed_data = None
-            try:
-                parsed_data = json.loads(event.get("data", "{}"))
-            except (json.JSONDecodeError, TypeError):
-                pass
-
-            # @@@after-filter — skip events already seen on reconnect.
-            # Events without _seq (e.g. display_delta) are never filtered —
-            # they are ephemeral derivatives of persisted events.
             if after > 0 and isinstance(parsed_data, dict) and "_seq" in parsed_data:
                 if parsed_data["_seq"] <= after:
                     continue
