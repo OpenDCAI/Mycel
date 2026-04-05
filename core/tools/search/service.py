@@ -12,7 +12,7 @@ import shutil
 import subprocess
 from pathlib import Path
 
-from core.runtime.registry import ToolEntry, ToolMode, ToolRegistry
+from core.runtime.registry import ToolEntry, ToolMode, ToolRegistry, make_tool_schema
 
 DEFAULT_EXCLUDES: list[str] = [
     "node_modules",
@@ -55,74 +55,71 @@ class SearchService:
             ToolEntry(
                 name="Grep",
                 mode=ToolMode.INLINE,
-                schema={
-                    "name": "Grep",
-                    "description": (
+                schema=make_tool_schema(
+                    name="Grep",
+                    description=(
                         "Regex search across files (ripgrep-based). "
                         "Default output_mode: files_with_matches (sorted by mtime). Default head_limit: 250 entries. "
                         "Auto-excludes .git/.svn/.hg dirs. Max column width 500 chars (suppresses minified/base64). "
                         "Use output_mode='content' with after_context/before_context/context for context lines."
                     ),
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "pattern": {
-                                "type": "string",
-                                "description": "Regex pattern to search for",
-                            },
-                            "path": {
-                                "type": "string",
-                                "description": "File or directory (absolute). Defaults to workspace.",
-                            },
-                            "glob": {
-                                "type": "string",
-                                "description": "Filter files by glob (e.g., '*.py')",
-                            },
-                            "type": {
-                                "type": "string",
-                                "description": "Filter by file type (e.g., 'py', 'js')",
-                            },
-                            "case_insensitive": {
-                                "type": "boolean",
-                                "description": "Case insensitive search",
-                            },
-                            "after_context": {
-                                "type": "integer",
-                                "description": "Lines to show after each match",
-                            },
-                            "before_context": {
-                                "type": "integer",
-                                "description": "Lines to show before each match",
-                            },
-                            "context": {
-                                "type": "integer",
-                                "description": "Context lines before and after each match",
-                            },
-                            "output_mode": {
-                                "type": "string",
-                                "enum": ["content", "files_with_matches", "count"],
-                                "description": "Output format. Default: files_with_matches",
-                            },
-                            "head_limit": {
-                                "type": "integer",
-                                "description": "Limit to first N entries",
-                            },
-                            "offset": {
-                                "type": "integer",
-                                "description": "Skip first N entries",
-                            },
-                            "multiline": {
-                                "type": "boolean",
-                                "description": "Allow pattern to span multiple lines",
-                            },
-                            "line_numbers": {
-                                "type": "boolean",
-                                "description": "Show line numbers (default true). Only applies with output_mode='content'.",
-                            },
+                    properties={
+                        "pattern": {
+                            "type": "string",
+                            "description": "Regex pattern to search for",
                         },
-                        "required": ["pattern"],
+                        "path": {
+                            "type": "string",
+                            "description": "File or directory (absolute). Defaults to workspace.",
+                        },
+                        "glob": {
+                            "type": "string",
+                            "description": "Filter files by glob (e.g., '*.py')",
+                        },
+                        "type": {
+                            "type": "string",
+                            "description": "Filter by file type (e.g., 'py', 'js')",
+                        },
+                        "case_insensitive": {
+                            "type": "boolean",
+                            "description": "Case insensitive search",
+                        },
+                        "after_context": {
+                            "type": "integer",
+                            "description": "Lines to show after each match",
+                        },
+                        "before_context": {
+                            "type": "integer",
+                            "description": "Lines to show before each match",
+                        },
+                        "context": {
+                            "type": "integer",
+                            "description": "Context lines before and after each match",
+                        },
+                        "output_mode": {
+                            "type": "string",
+                            "enum": ["content", "files_with_matches", "count"],
+                            "description": "Output format. Default: files_with_matches",
+                        },
+                        "head_limit": {
+                            "type": "integer",
+                            "description": "Limit to first N entries",
+                        },
+                        "offset": {
+                            "type": "integer",
+                            "description": "Skip first N entries",
+                        },
+                        "multiline": {
+                            "type": "boolean",
+                            "description": "Allow pattern to span multiple lines",
+                        },
+                        "line_numbers": {
+                            "type": "boolean",
+                            "description": "Show line numbers (default true). Only applies with output_mode='content'.",
+                        },
                     },
-                },
+                    required=["pattern"],
+                ),
                 handler=self._grep,
                 source="SearchService",
                 search_hint="search file contents regex pattern matching ripgrep",
@@ -135,28 +132,25 @@ class SearchService:
             ToolEntry(
                 name="Glob",
                 mode=ToolMode.INLINE,
-                schema={
-                    "name": "Glob",
-                    "description": (
+                schema=make_tool_schema(
+                    name="Glob",
+                    description=(
                         "Fast file pattern matching (ripgrep-based). Returns paths sorted by modification time. "
                         "Includes hidden files, ignores .gitignore. Default limit 100 results. "
                         "Use '**/*.py' for recursive search. Path must be absolute."
                     ),
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "pattern": {
-                                "type": "string",
-                                "description": "Glob pattern (e.g., '**/*.py')",
-                            },
-                            "path": {
-                                "type": "string",
-                                "description": "Directory to search (absolute). Defaults to workspace.",
-                            },
+                    properties={
+                        "pattern": {
+                            "type": "string",
+                            "description": "Glob pattern (e.g., '**/*.py')",
                         },
-                        "required": ["pattern"],
+                        "path": {
+                            "type": "string",
+                            "description": "Directory to search (absolute). Defaults to workspace.",
+                        },
                     },
-                },
+                    required=["pattern"],
+                ),
                 handler=self._glob,
                 source="SearchService",
                 search_hint="find files by name glob pattern matching",

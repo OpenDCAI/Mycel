@@ -15,11 +15,12 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+from collections.abc import Awaitable, Callable
 from pathlib import Path
 from typing import Any
 
-from core.runtime.registry import ToolEntry, ToolMode, ToolRegistry
-from core.runtime.tool_result import tool_permission_denied
+from core.runtime.registry import ToolEntry, ToolMode, ToolRegistry, make_tool_schema
+from core.runtime.tool_result import ToolResultEnvelope, tool_permission_denied
 from core.tools.command.base import BaseExecutor, describe_execution_exception
 from core.tools.command.dispatcher import get_executor
 
@@ -62,39 +63,36 @@ class CommandService:
             ToolEntry(
                 name="Bash",
                 mode=ToolMode.INLINE,
-                schema={
-                    "name": "Bash",
-                    "description": (
+                schema=make_tool_schema(
+                    name="Bash",
+                    description=(
                         "Execute shell command (zsh on macOS, bash on Linux, PowerShell on Windows). "
                         "Default timeout 120s (max 600s). Dangerous commands are blocked. "
                         "Prefer dedicated tools over Bash: Read over cat, Grep over grep/rg, Glob over find/ls, Edit over sed/awk."
                     ),
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "command": {
-                                "type": "string",
-                                "description": "Command to execute",
-                            },
-                            "description": {
-                                "type": "string",
-                                "description": (
-                                    "Human-readable description of what this command does. "
-                                    "Required when run_in_background is true; shown in the background task indicator."
-                                ),
-                            },
-                            "run_in_background": {
-                                "type": "boolean",
-                                "description": "Run in background (default: false). Returns task ID for status queries.",
-                            },
-                            "timeout": {
-                                "type": "integer",
-                                "description": "Timeout in milliseconds (default: 120000)",
-                            },
+                    properties={
+                        "command": {
+                            "type": "string",
+                            "description": "Command to execute",
                         },
-                        "required": ["command"],
+                        "description": {
+                            "type": "string",
+                            "description": (
+                                "Human-readable description of what this command does. "
+                                "Required when run_in_background is true; shown in the background task indicator."
+                            ),
+                        },
+                        "run_in_background": {
+                            "type": "boolean",
+                            "description": "Run in background (default: false). Returns task ID for status queries.",
+                        },
+                        "timeout": {
+                            "type": "integer",
+                            "description": "Timeout in milliseconds (default: 120000)",
+                        },
                     },
-                },
+                    required=["command"],
+                ),
                 handler=self._bash,
                 source="CommandService",
             )
@@ -118,7 +116,7 @@ class CommandService:
         description: str = "",
         run_in_background: bool = False,
         timeout: int = DEFAULT_TIMEOUT_MS,
-    ) -> str:
+    ) -> str | ToolResultEnvelope:
         allowed, error_msg = self._check_hooks(command)
         if not allowed:
             return tool_permission_denied(
@@ -180,7 +178,7 @@ class CommandService:
             self._background_runs[task_id] = _BashBackgroundRun(async_cmd, command, description=description)
 
         # Build emit_fn for SSE task lifecycle events
-        emit_fn = None
+        emit_fn: Callable[[dict[str, Any]], Awaitable[None] | None] | None = None
         parent_thread_id = None
         try:
             from backend.web.event_bus import get_event_bus
@@ -202,7 +200,7 @@ class CommandService:
 
         # Emit task_start so the frontend dot lights up immediately
         if emit_fn is not None:
-            await emit_fn(
+            emission = emit_fn(
                 {
                     "event": "task_start",
                     "data": json.dumps(
@@ -217,6 +215,8 @@ class CommandService:
                     ),
                 }
             )
+            if asyncio.iscoroutine(emission):
+                await emission
 
         if parent_thread_id:
             asyncio.create_task(
@@ -231,7 +231,7 @@ class CommandService:
         async_cmd: Any,
         command: str,
         parent_thread_id: str,
-        emit_fn: Any = None,
+        emit_fn: Callable[[dict[str, Any]], Awaitable[None] | None] | None = None,
         description: str = "",
     ) -> None:
         """Poll until async command finishes, then enqueue CommandNotification."""
@@ -244,7 +244,7 @@ class CommandService:
         # Emit task_done so the frontend dot updates in real time
         if emit_fn is not None:
             try:
-                await emit_fn(
+                emission = emit_fn(
                     {
                         "event": "task_done",
                         "data": json.dumps(
@@ -256,6 +256,8 @@ class CommandService:
                         ),
                     }
                 )
+                if asyncio.iscoroutine(emission):
+                    await emission
             except Exception:
                 pass
 

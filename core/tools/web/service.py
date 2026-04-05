@@ -10,7 +10,7 @@ from __future__ import annotations
 import asyncio
 from typing import Any
 
-from core.runtime.registry import ToolEntry, ToolMode, ToolRegistry
+from core.runtime.registry import ToolEntry, ToolMode, ToolRegistry, make_tool_schema
 from core.tools.web.fetchers.jina import JinaFetcher
 from core.tools.web.fetchers.markdownify import MarkdownifyFetcher
 from core.tools.web.searchers.exa import ExaSearcher
@@ -60,37 +60,34 @@ class WebService:
             ToolEntry(
                 name="WebSearch",
                 mode=ToolMode.DEFERRED,
-                schema={
-                    "name": "WebSearch",
-                    "description": (
+                schema=make_tool_schema(
+                    name="WebSearch",
+                    description=(
                         "Search the web. Returns titles, URLs, and text snippets. "
                         "Use for current events, documentation lookups, or fact-checking. Max 10 results per query."
                     ),
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "query": {
-                                "type": "string",
-                                "description": "Search query",
-                            },
-                            "max_results": {
-                                "type": "integer",
-                                "description": "Maximum number of results (default: 5)",
-                            },
-                            "allowed_domains": {
-                                "type": "array",
-                                "items": {"type": "string"},
-                                "description": "Only include results from these domains",
-                            },
-                            "blocked_domains": {
-                                "type": "array",
-                                "items": {"type": "string"},
-                                "description": "Exclude results from these domains",
-                            },
+                    properties={
+                        "query": {
+                            "type": "string",
+                            "description": "Search query",
                         },
-                        "required": ["query"],
+                        "max_results": {
+                            "type": "integer",
+                            "description": "Maximum number of results (default: 5)",
+                        },
+                        "allowed_domains": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "description": "Only include results from these domains",
+                        },
+                        "blocked_domains": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "description": "Exclude results from these domains",
+                        },
                     },
-                },
+                    required=["query"],
+                ),
                 handler=self._web_search,
                 source="WebService",
                 is_concurrency_safe=True,
@@ -102,28 +99,25 @@ class WebService:
             ToolEntry(
                 name="WebFetch",
                 mode=ToolMode.DEFERRED,
-                schema={
-                    "name": "WebFetch",
-                    "description": (
+                schema=make_tool_schema(
+                    name="WebFetch",
+                    description=(
                         "Fetch a URL and extract specific information via AI. Returns processed text, not raw HTML. "
                         "Provide a focused prompt describing what to extract. "
                         "Useful for reading documentation pages, API references, or articles."
                     ),
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "url": {
-                                "type": "string",
-                                "description": "URL to fetch content from",
-                            },
-                            "prompt": {
-                                "type": "string",
-                                "description": "What information to extract from the page",
-                            },
+                    properties={
+                        "url": {
+                            "type": "string",
+                            "description": "URL to fetch content from",
                         },
-                        "required": ["url", "prompt"],
+                        "prompt": {
+                            "type": "string",
+                            "description": "What information to extract from the page",
+                        },
                     },
-                },
+                    required=["url", "prompt"],
+                ),
                 handler=self._web_fetch,
                 source="WebService",
                 is_concurrency_safe=True,
