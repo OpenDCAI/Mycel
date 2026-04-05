@@ -250,6 +250,20 @@ def _make_threads_app(
     )
 
 
+def _make_clear_thread_app():
+    display_builder = SimpleNamespace(clear=MagicMock())
+    queue_manager = SimpleNamespace(clear_all=MagicMock())
+    app = SimpleNamespace(
+        state=SimpleNamespace(
+            agent_pool={},
+            display_builder=display_builder,
+            queue_manager=queue_manager,
+            thread_event_buffers={"thread-1": object()},
+        )
+    )
+    return app, display_builder, queue_manager
+
+
 @pytest.mark.asyncio
 async def test_create_thread_route_preserves_legacy_sandbox_type_alias():
     app = _make_threads_app(thread_sandbox={}, thread_cwd={})
@@ -722,16 +736,7 @@ async def test_remove_thread_permission_rule_persists_session_rule_change():
 @pytest.mark.asyncio
 async def test_clear_thread_route_clears_agent_state_and_thread_buffers():
     agent = _FakeClearAgent()
-    display_builder = SimpleNamespace(clear=MagicMock())
-    queue_manager = SimpleNamespace(clear_all=MagicMock())
-    app = SimpleNamespace(
-        state=SimpleNamespace(
-            agent_pool={},
-            display_builder=display_builder,
-            queue_manager=queue_manager,
-            thread_event_buffers={"thread-1": object()},
-        )
-    )
+    app, display_builder, queue_manager = _make_clear_thread_app()
 
     with (
         patch.object(threads_router, "resolve_thread_sandbox", return_value="local"),
@@ -754,16 +759,7 @@ async def test_clear_thread_route_clears_agent_state_and_thread_buffers():
 @pytest.mark.asyncio
 async def test_clear_thread_route_rejects_active_run():
     agent = _FakeClearAgent(state=AgentState.ACTIVE)
-    display_builder = SimpleNamespace(clear=MagicMock())
-    queue_manager = SimpleNamespace(clear_all=MagicMock())
-    app = SimpleNamespace(
-        state=SimpleNamespace(
-            agent_pool={},
-            display_builder=display_builder,
-            queue_manager=queue_manager,
-            thread_event_buffers={"thread-1": object()},
-        )
-    )
+    app, display_builder, queue_manager = _make_clear_thread_app()
 
     with (
         patch.object(threads_router, "resolve_thread_sandbox", return_value="local"),
