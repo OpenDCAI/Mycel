@@ -13,6 +13,89 @@ Middleware Stack
 from __future__ import annotations
 
 
+def _render_rule(index: int, title: str, body: str, details: list[str] | None = None) -> str:
+    rule = f"{index}. **{title}**: {body}"
+    if not details:
+        return rule
+    return rule + "\n" + "\n".join(f"   - {detail}" for detail in details)
+
+
+def _build_core_rules(*, is_sandbox: bool, sandbox_name: str, workspace_root: str, working_dir: str) -> list[str]:
+    rules: list[str] = []
+    if is_sandbox:
+        if sandbox_name == "docker":
+            location_rule = "All file and command operations run in a local Docker container, NOT on the user's host filesystem."
+        else:
+            location_rule = "All file and command operations run in a remote sandbox, NOT on the user's local machine."
+        rules.append(_render_rule(1, "Sandbox Environment", f"{location_rule} The sandbox is an isolated Linux environment."))
+    else:
+        rules.append(_render_rule(1, "Workspace", "File operations are restricted to: " + workspace_root))
+
+    rules.append(
+        _render_rule(
+            2,
+            "Absolute Paths",
+            "All file paths must be absolute paths.",
+            [
+                f"Correct: `{working_dir}/project/test.py`",
+                "Wrong: `test.py` or `./test.py`",
+            ],
+        )
+    )
+
+    if is_sandbox:
+        security = "The sandbox is isolated. You can install packages, run any commands, and modify files freely."
+    else:
+        security = "Dangerous commands are blocked. All operations are logged."
+    rules.append(_render_rule(3, "Security", security))
+    return rules
+
+
+def _build_risk_rules() -> list[str]:
+    return [
+        _render_rule(
+            4,
+            "Risky Actions",
+            "Ask before destructive, hard-to-reverse, or shared-state actions.",
+            [
+                "Examples: deleting files, force-pushing, dropping tables, killing unfamiliar processes, modifying shared infrastructure.",
+                "If you see unexpected state, investigate before deleting or overwriting it.",
+            ],
+        ),
+        _render_rule(
+            5,
+            "No URL Guessing",
+            "Do not guess URLs unless the user provided them or you are confident they are directly relevant to programming help.",
+        ),
+        _render_rule(
+            6,
+            "Minimal Change",
+            "Do not add features, refactor code, or make speculative abstractions beyond what the task requires.",
+        ),
+    ]
+
+
+def _build_tool_preference_rules() -> list[str]:
+    return [
+        _render_rule(
+            7,
+            "Tool Priority",
+            "When a built-in tool and an MCP tool (`mcp__*`) have the same functionality, use the built-in tool.",
+        ),
+        _render_rule(
+            8,
+            "Tool Preference",
+            "Prefer dedicated tools over `Bash` when a built-in tool already matches the job.",
+            [
+                "Use `Read` instead of `cat`, `head`, or `tail`.",
+                "Use `Edit` instead of shell text-munging for file edits.",
+                "Use `Write` instead of heredoc or echo redirection for file creation.",
+                "Use `Glob`/`Grep` for file discovery and content search before falling back to `Bash`.",
+            ],
+        ),
+    ]
+
+
 def build_context_section(
     *,
     sandbox_name: str,
@@ -41,33 +124,16 @@ def build_rules_section(
     workspace_root: str,
 ) -> str:
     rules: list[str] = []
-
-    # Rule 1: Environment-specific
-    if is_sandbox:
-        if sandbox_name == "docker":
-            location_rule = "All file and command operations run in a local Docker container, NOT on the user's host filesystem."
-        else:
-            location_rule = "All file and command operations run in a remote sandbox, NOT on the user's local machine."
-        rules.append(f"1. **Sandbox Environment**: {location_rule} The sandbox is an isolated Linux environment.")
-    else:
-        rules.append("1. **Workspace**: File operations are restricted to: " + workspace_root)
-
-    # Rule 2: Absolute paths
-    rules.append(f"""2. **Absolute Paths**: All file paths must be absolute paths.
-   - ✅ Correct: `{working_dir}/project/test.py`
-   - ❌ Wrong: `test.py` or `./test.py`""")
-
-    # Rule 3: Security
-    if is_sandbox:
-        rules.append("3. **Security**: The sandbox is isolated. You can install packages, run any commands, and modify files freely.")
-    else:
-        rules.append("3. **Security**: Dangerous commands are blocked. All operations are logged.")
-
-    # Rule 4: Tool priority
-    rules.append(
-        """4. **Tool Priority**: When a built-in tool and an MCP tool (`mcp__*`) have the same functionality, use the built-in tool."""
+    rules.extend(
+        _build_core_rules(
+            is_sandbox=is_sandbox,
+            sandbox_name=sandbox_name,
+            workspace_root=workspace_root,
+            working_dir=working_dir,
+        )
     )
-
+    rules.extend(_build_risk_rules())
+    rules.extend(_build_tool_preference_rules())
     return "\n\n".join(rules)
 
 

@@ -335,7 +335,7 @@ async def test_leon_agent_clear_thread_invalidates_prompt_section_cache(tmp_path
         agent.close()
 
 
-def test_build_rules_section_omits_tool_specific_usage_lore():
+def test_build_rules_section_unifies_core_risk_and_tool_preferences():
     from core.runtime.prompts import build_rules_section
 
     rules = build_rules_section(
@@ -348,9 +348,11 @@ def test_build_rules_section_omits_tool_specific_usage_lore():
     assert "**Absolute Paths**" in rules
     assert "**Security**" in rules
     assert "**Tool Priority**" in rules
-    assert "Use Dedicated Tools Instead of Shell Commands" not in rules
+    assert "Do not guess URLs" in rules
+    assert "Do not add features, refactor code, or make speculative abstractions" in rules
+    assert "Prefer dedicated tools over `Bash`" in rules
+    assert "Ask before destructive, hard-to-reverse, or shared-state actions" in rules
     assert "Background Task Description" not in rules
-    assert "**Deferred Tools**" not in rules
 
 
 @pytest.mark.asyncio
