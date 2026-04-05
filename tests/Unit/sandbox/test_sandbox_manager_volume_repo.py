@@ -373,6 +373,53 @@ def test_get_sandbox_auto_resumes_paused_lease_when_reconstructing_session():
     assert resume_calls == [("thread-1", "auto_resume")]
 
 
+def test_get_sandbox_auto_resumes_live_session_when_lease_state_is_paused():
+    manager = object.__new__(SandboxManager)
+    terminal = SimpleNamespace(
+        terminal_id="term-1",
+        lease_id="lease-1",
+        get_state=lambda: SimpleNamespace(cwd="/tmp", env_delta={}, state_version=0),
+    )
+    paused_lease = SimpleNamespace(
+        lease_id="lease-1",
+        provider_name="local",
+        observed_state="paused",
+        bind_mounts=None,
+    )
+    resumed_lease = SimpleNamespace(
+        lease_id="lease-1",
+        provider_name="local",
+        observed_state="running",
+        bind_mounts=None,
+    )
+    live_session = SimpleNamespace(
+        terminal=terminal,
+        lease=paused_lease,
+        status="active",
+    )
+
+    manager.provider = SimpleNamespace(name="local")
+    manager.provider_capability = SimpleNamespace(runtime_kind="local", eager_instance_binding=False)
+    manager.volume = _FakeVolume()
+    manager._assert_lease_provider = lambda _lease, _thread_id: None
+    manager._ensure_bound_instance = lambda _lease: None
+    resume_calls: list[tuple[str, str]] = []
+
+    def _get_session(_thread_id, _terminal_id):
+        if resume_calls:
+            return SimpleNamespace(terminal=terminal, lease=resumed_lease, status="active")
+        return live_session
+
+    manager._get_active_terminal = lambda _thread_id: terminal
+    manager.resume_session = lambda thread_id, source="user_resume": resume_calls.append((thread_id, source)) or True
+    manager.session_manager = SimpleNamespace(get=_get_session)
+
+    capability = manager.get_sandbox("thread-1")
+
+    assert resume_calls == [("thread-1", "auto_resume")]
+    assert capability._session.lease is resumed_lease
+
+
 def test_resume_session_rebinds_live_session_lease_after_resume():
     manager = object.__new__(SandboxManager)
     terminal = SimpleNamespace(terminal_id="term-1", lease_id="lease-1")

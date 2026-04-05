@@ -438,7 +438,7 @@ class SandboxManager:
         if session:
             self._assert_lease_provider(session.lease, thread_id)
             # @@@activity-resume - Any new activity against a paused thread must resume before command execution.
-            if session.status == "paused":
+            if session.status == "paused" or getattr(session.lease, "observed_state", None) == "paused":
                 if not self.resume_session(thread_id, source="auto_resume"):
                     raise RuntimeError(f"Failed to resume paused session for thread {thread_id}")
                 session = self.session_manager.get(thread_id, session.terminal.terminal_id)

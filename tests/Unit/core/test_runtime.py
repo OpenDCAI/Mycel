@@ -95,6 +95,10 @@ def test_remote_runtime_treats_daytona_pty_1011_as_infra_error():
     assert _RemoteRuntimeBase._looks_like_infra_error(text) is True
 
 
+def test_remote_runtime_treats_broken_pipe_as_infra_error():
+    assert _RemoteRuntimeBase._looks_like_infra_error("[Errno 32] Broken pipe") is True
+
+
 # TODO(windows-compat): LocalPersistentShellRuntime uses Unix PTY + /tmp paths.
 # Tracked in: https://github.com/OpenDCAI/Mycel/issues — Windows shell support needed.
 @pytest.mark.skipif(sys.platform == "win32", reason="LocalPersistentShellRuntime requires a Unix shell")
@@ -643,6 +647,36 @@ async def test_daytona_runtime_hydrates_once_per_pty_session(terminal_store, lea
 
     assert init_count == 1
     await runtime.close()
+
+
+@pytest.mark.asyncio
+async def test_daytona_runtime_retries_once_after_broken_pipe(terminal_store, lease_store):
+    terminal = terminal_from_row(terminal_store.create("term-3b", "thread-3b", "lease-3b", "/tmp"), terminal_store.db_path)
+    lease = lease_store.create("lease-3b", "daytona")
+    provider = MagicMock()
+    from sandbox.providers.daytona import DaytonaSessionRuntime
+
+    runtime = DaytonaSessionRuntime(terminal, lease, provider)
+    calls: list[str] = []
+    recover_events: list[str] = []
+
+    def _fake_execute_once_sync(command: str, timeout: float | None = None, on_stdout_chunk=None):
+        calls.append(command)
+        if len(calls) == 1:
+            raise RuntimeError("[Errno 32] Broken pipe")
+        return ExecuteResult(exit_code=0, stdout="ok\n", stderr="")
+
+    runtime._execute_once_sync = _fake_execute_once_sync  # type: ignore[attr-defined]
+    runtime._recover_infra = lambda: recover_events.append("recover")  # type: ignore[attr-defined]
+    runtime._close_shell_sync = lambda: recover_events.append("close")  # type: ignore[attr-defined]
+    runtime._schedule_snapshot = lambda generation, timeout: None  # type: ignore[attr-defined]
+
+    result = await runtime.execute("echo ok")
+
+    assert result.exit_code == 0
+    assert result.stdout == "ok\n"
+    assert calls == ["echo ok", "echo ok"]
+    assert recover_events == ["recover", "close"]
 
 
 def test_extract_state_from_output_ignores_prompt_noise():

@@ -762,6 +762,7 @@ class _RemoteRuntimeBase(PhysicalTerminalRuntime):
             "no close frame",
             "internal error",
             "1011",
+            "broken pipe",
             "transport",
             "unreachable",
             "timed out",
