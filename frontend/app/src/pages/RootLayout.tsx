@@ -65,9 +65,21 @@ function AuthenticatedLayout() {
   }, [authUser]);
 
   const loadAll = useAppStore((s) => s.loadAll);
+  const resetSessionData = useAppStore((s) => s.resetSessionData);
   const storeAddTask = useAppStore((s) => s.addTask);
+  const lastLoadedUserIdRef = useRef<string | null>(null);
 
-  useEffect(() => { loadAll(); }, [loadAll]);
+  useEffect(() => {
+    const userId = authUser?.id ?? null;
+    if (!userId) return;
+    if (lastLoadedUserIdRef.current === userId) return;
+    // @@@auth-session-reset - switching users in the same SPA process must discard
+    // panel caches before reloading, otherwise the next account inherits old
+    // members/tasks and the sidebar mixes identities.
+    lastLoadedUserIdRef.current = userId;
+    resetSessionData();
+    void loadAll();
+  }, [authUser?.id, loadAll, resetSessionData]);
 
   const [expanded, setExpanded] = useState(() => {
     const saved = localStorage.getItem("sidebar-expanded");
@@ -391,10 +403,11 @@ function AuthHeader({ title, subtitle }: { title: string; subtitle?: string }) {
   );
 }
 
-function LoginForm() {
+export function LoginForm() {
   const [step, setStep] = useState<AuthStep>({ type: "login" });
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const navigate = useNavigate();
 
   const login = useAuthStore(s => s.login);
   const sendOtp = useAuthStore(s => s.sendOtp);
@@ -408,6 +421,7 @@ function LoginForm() {
     return <LoginStep
       onSubmit={async (identifier, password) => {
         await login(identifier, password);
+        navigate("/threads", { replace: true });
       }}
       onSwitch={() => reset({ type: "reg_email" })}
       error={error} setError={setError}

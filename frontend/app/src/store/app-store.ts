@@ -24,6 +24,7 @@ interface AppState {
   // ── Init ──
   loadAll: () => Promise<void>;
   retry: () => Promise<void>;
+  resetSessionData: () => void;
 
   // ── Members ──
   fetchMembers: () => Promise<void>;
@@ -133,6 +134,22 @@ export const useAppStore = create<AppState>()((set, get) => ({
   retry: async () => {
     set({ loaded: false, error: null });
     await get().loadAll();
+  },
+
+  resetSessionData: () => {
+    loadAllInflight = null;
+    set({
+      memberList: [],
+      taskList: [],
+      cronJobs: [],
+      librarySkills: [],
+      libraryMcps: [],
+      libraryAgents: [],
+      libraryRecipes: [],
+      userProfile: { name: "User", initials: "U", email: "" },
+      loaded: false,
+      error: null,
+    });
   },
 
   // ── Members ──
