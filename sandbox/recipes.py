@@ -1,9 +1,8 @@
 from __future__ import annotations
 
-from copy import deepcopy
 import shlex
+from copy import deepcopy
 from typing import Any
-
 
 FEATURE_CATALOG: dict[str, dict[str, str]] = {
     "lark_cli": {
@@ -28,11 +27,7 @@ def provider_type_from_name(name: str) -> str:
 
 
 def humanize_recipe_provider(name: str) -> str:
-    return " ".join(
-        part[:1].upper() + part[1:]
-        for part in name.replace("-", "_").split("_")
-        if part
-    )
+    return " ".join(part[:1].upper() + part[1:] for part in name.replace("-", "_").split("_") if part)
 
 
 def default_recipe_id(provider_type: str) -> str:
@@ -90,11 +85,7 @@ def recipe_features(recipe: dict[str, Any] | None) -> dict[str, bool]:
     raw = recipe.get("features")
     if not isinstance(raw, dict):
         return {}
-    return {
-        key: bool(value)
-        for key, value in raw.items()
-        if key in FEATURE_CATALOG
-    }
+    return {key: bool(value) for key, value in raw.items() if key in FEATURE_CATALOG}
 
 
 def list_builtin_recipes(sandbox_types: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -167,13 +158,15 @@ def bootstrap_recipe(provider, *, session_id: str, recipe: dict[str, Any] | None
     # terminal env_delta, otherwise remote sandboxes like self-hosted Daytona hit EACCES on global npm installs.
     install = provider.execute(
         session_id,
-        "\n".join([
-            f"mkdir -p {shlex.quote(user_local_bin)}",
-            f"export NPM_CONFIG_PREFIX={shlex.quote(f'{home_dir}/.local')}",
-            f"export PATH={shlex.quote(desired_path)}",
-            "npm install -g @larksuite/cli",
-            "command -v lark-cli",
-        ]),
+        "\n".join(
+            [
+                f"mkdir -p {shlex.quote(user_local_bin)}",
+                f"export NPM_CONFIG_PREFIX={shlex.quote(f'{home_dir}/.local')}",
+                f"export PATH={shlex.quote(desired_path)}",
+                "npm install -g @larksuite/cli",
+                "command -v lark-cli",
+            ]
+        ),
         timeout_ms=300_000,
         cwd=cwd,
     )
@@ -222,19 +215,23 @@ def _install_lark_cli_wrapper(provider, *, session_id: str, cwd: str, home_dir: 
     # @@@lark-cli-pty-ci-wrapper - The upstream binary hangs under Daytona PTY unless CI=1.
     # Install a tiny wrapper so agent Bash calls keep using `lark-cli`, but run the real binary
     # with the minimal env tweak that makes PTY execution terminate.
-    script = "\n".join([
-        "#!/bin/sh",
-        f"exec env CI=1 {shlex.quote(real_bin)} \"$@\"",
-    ])
-    cmd = "\n".join([
-        f"mkdir -p {shlex.quote(user_local_bin)}",
-        f"cat <<'EOF' > {shlex.quote(wrapper_path)}",
-        script,
-        "EOF",
-        f"chmod +x {shlex.quote(wrapper_path)}",
-        f"export PATH={shlex.quote(user_local_bin)}:$PATH",
-        "lark-cli --version",
-    ])
+    script = "\n".join(
+        [
+            "#!/bin/sh",
+            f'exec env CI=1 {shlex.quote(real_bin)} "$@"',
+        ]
+    )
+    cmd = "\n".join(
+        [
+            f"mkdir -p {shlex.quote(user_local_bin)}",
+            f"cat <<'EOF' > {shlex.quote(wrapper_path)}",
+            script,
+            "EOF",
+            f"chmod +x {shlex.quote(wrapper_path)}",
+            f"export PATH={shlex.quote(user_local_bin)}:$PATH",
+            "lark-cli --version",
+        ]
+    )
     result = provider.execute(session_id, cmd, timeout_ms=60_000, cwd=cwd)
     if result.exit_code != 0:
         error = result.error or result.output or "failed to install lark-cli wrapper"

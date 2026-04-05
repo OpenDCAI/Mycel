@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from collections.abc import Mapping
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Mapping
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from sandbox.runtime import PhysicalTerminalRuntime
     from sandbox.lease import SandboxLease
+    from sandbox.runtime import PhysicalTerminalRuntime
     from sandbox.terminal import AbstractTerminal
 
 RESOURCE_CAPABILITY_KEYS = (
@@ -206,7 +207,9 @@ class SandboxProvider(ABC):
                 "top -bn1 | grep 'Cpu(s)' | sed 's/.*, *\\([0-9.]*\\)%* id.*/\\1/' | awk '{print 100 - $1}'",
                 timeout_ms=5000,
             )
-            cpu_percent = float(cpu_result.output.strip()) if cpu_result.exit_code == 0 and cpu_result.output.strip() else None
+            cpu_percent = (
+                float(cpu_result.output.strip()) if cpu_result.exit_code == 0 and cpu_result.output.strip() else None
+            )
 
             mem_result = self.execute(session_id, "free -m | awk 'NR==2{print $3,$2}'", timeout_ms=5000)
             memory_used_mb, memory_total_mb = None, None
@@ -215,7 +218,9 @@ class SandboxProvider(ABC):
                 memory_used_mb = float(parts[0]) if len(parts) > 0 else None
                 memory_total_mb = float(parts[1]) if len(parts) > 1 else None
 
-            disk_result = self.execute(session_id, "df -BG / | awk 'NR==2{gsub(/G/,\"\"); print $3,$2}'", timeout_ms=5000)
+            disk_result = self.execute(
+                session_id, "df -BG / | awk 'NR==2{gsub(/G/,\"\"); print $3,$2}'", timeout_ms=5000
+            )
             disk_used_gb, disk_total_gb = None, None
             if disk_result.exit_code == 0 and disk_result.output.strip():
                 parts = disk_result.output.strip().split()

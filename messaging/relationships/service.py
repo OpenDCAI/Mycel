@@ -7,7 +7,7 @@ from typing import Any
 
 from messaging._utils import now_iso
 from messaging.contracts import RelationshipEvent, RelationshipRow, RelationshipState
-from messaging.relationships.state_machine import TransitionError, get_pending_direction, transition
+from messaging.relationships.state_machine import transition
 
 logger = logging.getLogger(__name__)
 
@@ -48,12 +48,14 @@ class RelationshipService:
             current_state = existing["state"]
             current_direction = existing.get("direction")
 
-        new_state, new_direction = transition(
-            current_state, current_direction, event, requester_is_a=requester_is_a
-        )
+        new_state, new_direction = transition(current_state, current_direction, event, requester_is_a=requester_is_a)
         logger.info(
             "[relationship] %s + %s → %s (actor=%s event=%s)",
-            current_state, event, new_state, actor_id[:15], event,
+            current_state,
+            event,
+            new_state,
+            actor_id[:15],
+            event,
         )
 
         fields: dict[str, Any] = {"state": new_state, "direction": new_direction}

@@ -10,8 +10,8 @@ from backend.web.utils.helpers import _get_container, extract_webhook_instance_i
 from storage.providers.sqlite.kernel import SQLiteDBRole, resolve_role_db_path
 
 SANDBOX_DB_PATH = resolve_role_db_path(SQLiteDBRole.SANDBOX)
-from sandbox.lease import lease_from_row
-from storage.providers.sqlite.lease_repo import SQLiteLeaseRepo
+from sandbox.lease import lease_from_row  # noqa: E402
+from storage.providers.sqlite.lease_repo import SQLiteLeaseRepo  # noqa: E402
 
 router = APIRouter(prefix="/api/webhooks", tags=["webhooks"])
 
@@ -27,7 +27,9 @@ async def ingest_provider_webhook(provider_name: str, payload: dict[str, Any]) -
     lease_repo = SQLiteLeaseRepo(db_path=SANDBOX_DB_PATH)
     event_repo = _get_container().provider_event_repo()
     try:
-        lease_row = await asyncio.to_thread(lease_repo.find_by_instance, provider_name=provider_name, instance_id=instance_id)
+        lease_row = await asyncio.to_thread(
+            lease_repo.find_by_instance, provider_name=provider_name, instance_id=instance_id
+        )
         lease = lease_from_row(lease_row, lease_repo.db_path) if lease_row else None
         matched_lease_id = lease.lease_id if lease else None
 

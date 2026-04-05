@@ -211,6 +211,7 @@ class TaskBoardService:
     def _get_thread_id(self) -> str:
         try:
             from sandbox.thread_context import get_current_thread_id
+
             return get_current_thread_id() or ""
         except ImportError:
             return ""
@@ -219,7 +220,7 @@ class TaskBoardService:
     # Handlers (async — ToolRunner awaits coroutines)
     # ------------------------------------------------------------------
 
-    async def _list_tasks(self, Status: str = "", Priority: str = "") -> str:
+    async def _list_tasks(self, Status: str = "", Priority: str = "") -> str:  # noqa: N803
         try:
             tasks = await asyncio.to_thread(task_service.list_tasks)
         except Exception as e:
@@ -233,7 +234,7 @@ class TaskBoardService:
 
         return json.dumps({"tasks": tasks, "total": len(tasks)}, ensure_ascii=False)
 
-    async def _claim_task(self, TaskId: str) -> str:
+    async def _claim_task(self, TaskId: str) -> str:  # noqa: N803
         thread_id = self._get_thread_id()
         now_ms = int(time.time() * 1000)
         try:
@@ -251,7 +252,7 @@ class TaskBoardService:
             return json.dumps({"error": f"Task not found: {TaskId}"})
         return json.dumps({"task": updated}, ensure_ascii=False)
 
-    async def _update_progress(self, TaskId: str, Progress: int, Note: str = "") -> str:
+    async def _update_progress(self, TaskId: str, Progress: int, Note: str = "") -> str:  # noqa: N803
         update_kwargs: dict[str, Any] = {"progress": Progress}
 
         if Note:
@@ -274,7 +275,7 @@ class TaskBoardService:
             return json.dumps({"error": f"Task not found: {TaskId}"})
         return json.dumps({"task": updated}, ensure_ascii=False)
 
-    async def _complete_task(self, TaskId: str, Result: str) -> str:
+    async def _complete_task(self, TaskId: str, Result: str) -> str:  # noqa: N803
         now_ms = int(time.time() * 1000)
         try:
             updated = await asyncio.to_thread(
@@ -292,7 +293,7 @@ class TaskBoardService:
             return json.dumps({"error": f"Task not found: {TaskId}"})
         return json.dumps({"task": updated}, ensure_ascii=False)
 
-    async def _fail_task(self, TaskId: str, Reason: str) -> str:
+    async def _fail_task(self, TaskId: str, Reason: str) -> str:  # noqa: N803
         now_ms = int(time.time() * 1000)
         try:
             updated = await asyncio.to_thread(
@@ -309,9 +310,7 @@ class TaskBoardService:
             return json.dumps({"error": f"Task not found: {TaskId}"})
         return json.dumps({"task": updated}, ensure_ascii=False)
 
-    async def _create_task(
-        self, Title: str, Description: str = "", Priority: str = "medium"
-    ) -> str:
+    async def _create_task(self, Title: str, Description: str = "", Priority: str = "medium") -> str:  # noqa: N803
         try:
             task = await asyncio.to_thread(
                 task_service.create_task,

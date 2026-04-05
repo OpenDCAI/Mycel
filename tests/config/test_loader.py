@@ -1,7 +1,7 @@
 """Comprehensive tests for config.loader module."""
 
-import json
 import os
+import sys
 
 import pytest
 
@@ -137,6 +137,7 @@ class TestConfigLoader:
         result = loader._expand_env_vars(obj)
         assert result == ["/path1", "/path2"]
 
+    @pytest.mark.skipif(sys.platform == "win32", reason="HOME monkeypatch does not affect expanduser on Windows")
     def test_expand_env_vars_tilde(self, tmp_path, monkeypatch):
         loader = ConfigLoader()
 

@@ -8,11 +8,11 @@ from pathlib import Path
 
 from storage.contracts import ChatEntityRow, ChatMessageRow, ChatRow
 from storage.providers.sqlite.connection import create_connection
-from storage.providers.sqlite.kernel import SQLiteDBRole, resolve_role_db_path, retry_on_locked as _retry_on_locked
+from storage.providers.sqlite.kernel import SQLiteDBRole, resolve_role_db_path
+from storage.providers.sqlite.kernel import retry_on_locked as _retry_on_locked
 
 
 class SQLiteChatRepo:
-
     def __init__(self, db_path: str | Path | None = None, conn: sqlite3.Connection | None = None) -> None:
         self._own_conn = conn is None
         self._lock = threading.Lock()
@@ -32,11 +32,11 @@ class SQLiteChatRepo:
         def _do():
             with self._lock:
                 self._conn.execute(
-                    "INSERT INTO chats (id, title, status, created_at, updated_at)"
-                    " VALUES (?, ?, ?, ?, ?)",
+                    "INSERT INTO chats (id, title, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
                     (row.id, row.title, row.status, row.created_at, row.updated_at),
                 )
                 self._conn.commit()
+
         _retry_on_locked(_do)
 
     def get_by_id(self, chat_id: str) -> ChatRow | None:
@@ -68,7 +68,6 @@ class SQLiteChatRepo:
 
 
 class SQLiteChatEntityRepo:
-
     def __init__(self, db_path: str | Path | None = None, conn: sqlite3.Connection | None = None) -> None:
         self._own_conn = conn is None
         self._lock = threading.Lock()
@@ -87,8 +86,7 @@ class SQLiteChatEntityRepo:
     def add_member(self, chat_id: str, user_id: str, joined_at: float) -> None:
         with self._lock:
             self._conn.execute(
-                "INSERT OR IGNORE INTO chat_entities (chat_id, user_id, joined_at)"
-                " VALUES (?, ?, ?)",
+                "INSERT OR IGNORE INTO chat_entities (chat_id, user_id, joined_at) VALUES (?, ?, ?)",
                 (chat_id, user_id, joined_at),
             )
             self._conn.commit()
@@ -102,8 +100,12 @@ class SQLiteChatEntityRepo:
             ).fetchall()
             return [
                 ChatEntityRow(
-                    chat_id=r[0], user_id=r[1], joined_at=r[2], last_read_at=r[3],
-                    muted=bool(r[4]), mute_until=r[5],
+                    chat_id=r[0],
+                    user_id=r[1],
+                    joined_at=r[2],
+                    last_read_at=r[3],
+                    muted=bool(r[4]),
+                    mute_until=r[5],
                 )
                 for r in rows
             ]
@@ -140,6 +142,7 @@ class SQLiteChatEntityRepo:
                     (int(muted), mute_until, chat_id, user_id),
                 )
                 self._conn.commit()
+
         _retry_on_locked(_do)
 
     # @@@find-chat-between — find the 1:1 chat (exactly 2 members) between two users.
@@ -191,7 +194,6 @@ class SQLiteChatEntityRepo:
 
 
 class SQLiteChatMessageRepo:
-
     def __init__(self, db_path: str | Path | None = None, conn: sqlite3.Connection | None = None) -> None:
         self._own_conn = conn is None
         self._lock = threading.Lock()
@@ -209,7 +211,9 @@ class SQLiteChatMessageRepo:
 
     def create(self, row: ChatMessageRow) -> None:
         import json as _json
+
         mentions_json = _json.dumps(row.mentioned_ids) if row.mentioned_ids else None
+
         def _do():
             with self._lock:
                 self._conn.execute(
@@ -218,17 +222,25 @@ class SQLiteChatMessageRepo:
                     (row.id, row.chat_id, row.sender_id, row.content, mentions_json, row.created_at),
                 )
                 self._conn.commit()
+
         _retry_on_locked(_do)
 
     _MSG_COLS = "id, chat_id, sender_id, content, mentions, created_at"
 
     def _to_msg(self, r: tuple) -> ChatMessageRow:
         import json as _json
+
         mentions = _json.loads(r[4]) if r[4] else []
-        return ChatMessageRow(id=r[0], chat_id=r[1], sender_id=r[2], content=r[3], mentioned_ids=mentions, created_at=r[5])
+        return ChatMessageRow(
+            id=r[0], chat_id=r[1], sender_id=r[2], content=r[3], mentioned_ids=mentions, created_at=r[5]
+        )
 
     def list_by_chat(
-        self, chat_id: str, *, limit: int = 50, before: float | None = None,
+        self,
+        chat_id: str,
+        *,
+        limit: int = 50,
+        before: float | None = None,
     ) -> list[ChatMessageRow]:
         with self._lock:
             if before is not None:
@@ -240,9 +252,7 @@ class SQLiteChatMessageRepo:
                 ).fetchall()
             else:
                 rows = self._conn.execute(
-                    f"SELECT {self._MSG_COLS} FROM chat_messages"
-                    " WHERE chat_id = ?"
-                    " ORDER BY created_at DESC LIMIT ?",
+                    f"SELECT {self._MSG_COLS} FROM chat_messages WHERE chat_id = ? ORDER BY created_at DESC LIMIT ?",
                     (chat_id, limit),
                 ).fetchall()
         rows.reverse()
@@ -273,7 +283,12 @@ class SQLiteChatMessageRepo:
         return [self._to_msg(r) for r in rows]
 
     def list_by_time_range(
-        self, chat_id: str, *, after: float | None = None, before: float | None = None, limit: int = 100,
+        self,
+        chat_id: str,
+        *,
+        after: float | None = None,
+        before: float | None = None,
+        limit: int = 100,
     ) -> list[ChatMessageRow]:
         """Return messages in a time range, chronological order."""
         with self._lock:
@@ -288,8 +303,7 @@ class SQLiteChatMessageRepo:
             where = " AND ".join(clauses)
             params.append(limit)
             rows = self._conn.execute(
-                f"SELECT {self._MSG_COLS} FROM chat_messages"
-                f" WHERE {where} ORDER BY created_at ASC LIMIT ?",
+                f"SELECT {self._MSG_COLS} FROM chat_messages WHERE {where} ORDER BY created_at ASC LIMIT ?",
                 tuple(params),
             ).fetchall()
         return [self._to_msg(r) for r in rows]
@@ -332,7 +346,7 @@ class SQLiteChatMessageRepo:
                 ).fetchone()
             else:
                 row = self._conn.execute(
-                    "SELECT COUNT(*) FROM chat_messages WHERE chat_id = ? AND mentions LIKE ? AND sender_id != ? AND created_at > ?",
+                    "SELECT COUNT(*) FROM chat_messages WHERE chat_id = ? AND mentions LIKE ? AND sender_id != ? AND created_at > ?",  # noqa: E501
                     (chat_id, mention_pattern, user_id, last_read),
                 ).fetchone()
             return int(row[0]) > 0 if row else False
@@ -348,9 +362,7 @@ class SQLiteChatMessageRepo:
                 ).fetchall()
             else:
                 rows = self._conn.execute(
-                    f"SELECT {self._MSG_COLS} FROM chat_messages"
-                    " WHERE content LIKE ?"
-                    " ORDER BY created_at ASC LIMIT ?",
+                    f"SELECT {self._MSG_COLS} FROM chat_messages WHERE content LIKE ? ORDER BY created_at ASC LIMIT ?",
                     (f"%{query}%", limit),
                 ).fetchall()
         return [self._to_msg(r) for r in rows]

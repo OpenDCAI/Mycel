@@ -48,7 +48,9 @@ class SupabaseProviderEventRepo:
         raw = q.rows(
             q.limit(
                 q.order(
-                    self._t().select("event_id,provider_name,instance_id,event_type,payload_json,matched_lease_id,created_at"),
+                    self._t().select(
+                        "event_id,provider_name,instance_id,event_type,payload_json,matched_lease_id,created_at"
+                    ),
                     "created_at",
                     desc=True,
                     repo=_REPO,

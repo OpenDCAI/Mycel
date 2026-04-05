@@ -95,8 +95,7 @@ class FileSystemMiddleware(AgentMiddleware):
         self.operation_recorder = operation_recorder
         self.verbose = verbose
         self.extra_allowed_paths: list[Path] = [
-            Path(p) if backend.is_remote else Path(p).resolve()
-            for p in (extra_allowed_paths or [])
+            Path(p) if backend.is_remote else Path(p).resolve() for p in (extra_allowed_paths or [])
         ]
 
         if not backend.is_remote:
@@ -126,7 +125,11 @@ class FileSystemMiddleware(AgentMiddleware):
             resolved.relative_to(self.workspace_root)
         except ValueError:
             if not any(resolved.is_relative_to(p) for p in self.extra_allowed_paths):
-                return False, f"Path outside workspace\n   Workspace: {self.workspace_root}\n   Attempted: {resolved}", None
+                return (
+                    False,
+                    f"Path outside workspace\n   Workspace: {self.workspace_root}\n   Attempted: {resolved}",
+                    None,
+                )
 
         if self.allowed_extensions and resolved.suffix:
             ext = resolved.suffix.lstrip(".")
@@ -206,7 +209,7 @@ class FileSystemMiddleware(AgentMiddleware):
         """Count total lines in a file (for error messages)."""
         try:
             raw = self.backend.read_file(str(resolved))
-            return raw.content.count('\n') + 1
+            return raw.content.count("\n") + 1
         except Exception:
             return 0
 
@@ -241,7 +244,7 @@ class FileSystemMiddleware(AgentMiddleware):
                     file_path=file_path,
                     file_type=None,  # type: ignore[arg-type]
                     error=(
-                        f"File content ({file_size:,} bytes) exceeds maximum allowed size ({limits.max_size_bytes:,} bytes).\n"
+                        f"File content ({file_size:,} bytes) exceeds maximum allowed size ({limits.max_size_bytes:,} bytes).\n"  # noqa: E501
                         f"Use offset and limit parameters to read specific sections.\n"
                         f"Total lines: {total_lines}"
                     ),
@@ -254,7 +257,7 @@ class FileSystemMiddleware(AgentMiddleware):
                     file_path=file_path,
                     file_type=None,  # type: ignore[arg-type]
                     error=(
-                        f"File content (~{estimated_tokens:,} tokens) exceeds maximum allowed tokens ({limits.max_tokens:,}).\n"
+                        f"File content (~{estimated_tokens:,} tokens) exceeds maximum allowed tokens ({limits.max_tokens:,}).\n"  # noqa: E501
                         f"Use offset and limit parameters to read specific sections.\n"
                         f"Total lines: {total_lines}"
                     ),
@@ -299,7 +302,7 @@ class FileSystemMiddleware(AgentMiddleware):
     def _make_read_tool_message(self, result: ReadResult, tool_call_id: str) -> ToolMessage:
         """Create ToolMessage from ReadResult, using content_blocks for images."""
         if result.content_blocks:
-            image_desc = f"Image file: {result.file_path}\nSize: {result.total_size:,} bytes\nReturned as image content block for vision model."
+            image_desc = f"Image file: {result.file_path}\nSize: {result.total_size:,} bytes\nReturned as image content block for vision model."  # noqa: E501
             return ToolMessage(
                 content=image_desc,
                 content_blocks=result.content_blocks,
@@ -360,7 +363,7 @@ class FileSystemMiddleware(AgentMiddleware):
 
             count = content.count(old_string)
             if count > 1:
-                return f"String appears {count} times in file (not unique)\n   Use multi_edit or provide more context to make it unique"
+                return f"String appears {count} times in file (not unique)\n   Use multi_edit or provide more context to make it unique"  # noqa: E501
 
             new_content = content.replace(old_string, new_string)
             result = self.backend.write_file(str(resolved), new_content)
@@ -467,7 +470,7 @@ class FileSystemMiddleware(AgentMiddleware):
                 "type": "function",
                 "function": {
                     "name": self.TOOL_READ_FILE,
-                    "description": "Read file content (text/code/images/PDF/PPTX/Notebook). Images return as content_blocks. Path must be absolute.",
+                    "description": "Read file content (text/code/images/PDF/PPTX/Notebook). Images return as content_blocks. Path must be absolute.",  # noqa: E501
                     "parameters": {
                         "type": "object",
                         "properties": {

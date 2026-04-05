@@ -25,13 +25,16 @@ class SupabaseContactRepo:
         pass
 
     def upsert(self, row: ContactRow) -> None:
-        self._client.table("contacts").upsert({
-            "owner_id": row.owner_id,
-            "target_id": row.target_id,
-            "relation": row.relation,
-            "created_at": row.created_at,
-            "updated_at": row.updated_at or time.time(),
-        }, on_conflict="owner_id,target_id").execute()
+        self._client.table("contacts").upsert(
+            {
+                "owner_id": row.owner_id,
+                "target_id": row.target_id,
+                "relation": row.relation,
+                "created_at": row.created_at,
+                "updated_at": row.updated_at or time.time(),
+            },
+            on_conflict="owner_id,target_id",
+        ).execute()
 
     def get(self, owner_id: str, target_id: str) -> ContactRow | None:
         res = (
@@ -47,12 +50,7 @@ class SupabaseContactRepo:
         return self._to_row(res.data)
 
     def list_for_user(self, owner_id: str) -> list[ContactRow]:
-        res = (
-            self._client.table("contacts")
-            .select("*")
-            .eq("owner_id", owner_id)
-            .execute()
-        )
+        res = self._client.table("contacts").select("*").eq("owner_id", owner_id).execute()
         return [self._to_row(r) for r in (res.data or [])]
 
     def delete(self, owner_id: str, target_id: str) -> None:

@@ -12,18 +12,17 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
-from storage.providers.sqlite.chat_session_repo import SQLiteChatSessionRepo
-from storage.providers.sqlite.kernel import SQLiteDBRole, resolve_role_db_path
-
-from sandbox.capability import SandboxCapability
-from sandbox.chat_session import ChatSessionManager, ChatSessionPolicy
-from sandbox.lease import lease_from_row
-from storage.providers.sqlite.lease_repo import SQLiteLeaseRepo
-from storage.providers.sqlite.thread_repo import SQLiteThreadRepo
-from sandbox.provider import SandboxProvider
-from sandbox.recipes import bootstrap_recipe
-from sandbox.terminal import TerminalState, terminal_from_row
-from storage.providers.sqlite.terminal_repo import SQLiteTerminalRepo
+from sandbox.capability import SandboxCapability  # noqa: E402
+from sandbox.chat_session import ChatSessionManager, ChatSessionPolicy  # noqa: E402
+from sandbox.lease import lease_from_row  # noqa: E402
+from sandbox.provider import SandboxProvider  # noqa: E402
+from sandbox.recipes import bootstrap_recipe  # noqa: E402
+from sandbox.terminal import TerminalState, terminal_from_row  # noqa: E402
+from storage.providers.sqlite.chat_session_repo import SQLiteChatSessionRepo  # noqa: E402
+from storage.providers.sqlite.kernel import SQLiteDBRole, resolve_role_db_path  # noqa: E402
+from storage.providers.sqlite.lease_repo import SQLiteLeaseRepo  # noqa: E402
+from storage.providers.sqlite.terminal_repo import SQLiteTerminalRepo  # noqa: E402
+from storage.providers.sqlite.thread_repo import SQLiteThreadRepo  # noqa: E402
 
 
 def resolve_provider_cwd(provider) -> str:
@@ -77,6 +76,7 @@ class SandboxManager:
         )
 
         from sandbox.volume import SandboxVolume
+
         self.volume = SandboxVolume(
             provider=provider,
             provider_capability=self.provider_capability,
@@ -108,6 +108,7 @@ class SandboxManager:
     def _setup_mounts(self, thread_id: str) -> dict:
         """Mount the lease's volume into the sandbox. Pure sandbox-layer operation."""
         import json
+
         from sandbox.volume_source import DaytonaVolume, deserialize_volume_source
         from storage.providers.sqlite.sandbox_volume_repo import SQLiteSandboxVolumeRepo
 
@@ -131,10 +132,12 @@ class SandboxManager:
         remote_path = self.volume.resolve_mount_path()
 
         # @@@daytona-upgrade - first startup creates managed volume
-        if (self.provider_capability.runtime_kind == "daytona_pty"
-                and not isinstance(source, DaytonaVolume)):
+        if self.provider_capability.runtime_kind == "daytona_pty" and not isinstance(source, DaytonaVolume):
             source = self._upgrade_to_daytona_volume(
-                thread_id, source, volume_id, remote_path,
+                thread_id,
+                source,
+                volume_id,
+                remote_path,
             )
 
         if isinstance(source, DaytonaVolume):
@@ -147,6 +150,7 @@ class SandboxManager:
     def _upgrade_to_daytona_volume(self, thread_id: str, current_source, volume_id: str, remote_path: str):
         """First Daytona sandbox start: create managed volume, upgrade VolumeSource in DB."""
         import json
+
         from sandbox.volume_source import DaytonaVolume
         from storage.providers.sqlite.sandbox_volume_repo import SQLiteSandboxVolumeRepo
 
@@ -205,7 +209,7 @@ class SandboxManager:
         if row:
             return terminal_from_row(row, self.terminal_store.db_path)
         thread_terminals = self.terminal_store.list_by_thread(thread_id)
-        # @@@thread-pointer-consistency - If terminals exist but no active pointer, DB is inconsistent and must fail loudly.
+        # @@@thread-pointer-consistency - If terminals exist but no active pointer, DB is inconsistent and must fail loudly.  # noqa: E501
         if thread_terminals:
             raise RuntimeError(f"Thread {thread_id} has terminals but no active terminal pointer")
         return None
@@ -245,6 +249,7 @@ class SandboxManager:
     def resolve_volume_source(self, thread_id: str):
         """Resolve VolumeSource for a thread via lease chain. Pure sandbox-layer lookup."""
         import json
+
         from sandbox.volume_source import deserialize_volume_source
         from storage.providers.sqlite.sandbox_volume_repo import SQLiteSandboxVolumeRepo
 
@@ -263,8 +268,7 @@ class SandboxManager:
             raise ValueError(f"Volume not found: {lease.volume_id}")
         return deserialize_volume_source(json.loads(entry["source"]))
 
-    def _sync_to_sandbox(self, thread_id: str, instance_id: str,
-                         source=None, files: list[str] | None = None) -> None:
+    def _sync_to_sandbox(self, thread_id: str, instance_id: str, source=None, files: list[str] | None = None) -> None:
         if source is None:
             source = self.resolve_volume_source(thread_id)
         self.volume.sync_upload(thread_id, instance_id, source, self.volume.resolve_mount_path(), files=files)
@@ -295,6 +299,7 @@ class SandboxManager:
 
     def get_sandbox(self, thread_id: str, bind_mounts: list | None = None) -> SandboxCapability:
         from sandbox.thread_context import set_current_thread_id
+
         set_current_thread_id(thread_id)
 
         terminal = self._get_active_terminal(thread_id)
@@ -376,7 +381,6 @@ class SandboxManager:
             self._fire_session_ready(instance.instance_id, "create")
 
         return SandboxCapability(session, manager=self)
-
 
     def create_background_command_session(self, thread_id: str, initial_cwd: str) -> Any:
         default_row = self.terminal_store.get_default(thread_id)
@@ -520,7 +524,7 @@ class SandboxManager:
                             paused = lease.pause_instance(self.provider, source="idle_reaper")
                         except Exception as exc:
                             print(
-                                f"[idle-reaper] failed to pause expired lease {lease.lease_id} for thread {thread_id}: {exc}"
+                                f"[idle-reaper] failed to pause expired lease {lease.lease_id} for thread {thread_id}: {exc}"  # noqa: E501
                             )
                             continue
                         if not paused:

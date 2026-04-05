@@ -42,7 +42,7 @@ class TrajectoryTracer(BaseTracer):
         """Called when a root run completes. Collect the full Run tree."""
         self.traced_runs.append(run)
 
-    def to_trajectory(self) -> RunTrajectory:
+    def to_trajectory(self) -> RunTrajectory:  # noqa: F821
         """Convert collected Run trees into a RunTrajectory."""
         import json
 
@@ -74,7 +74,7 @@ class TrajectoryTracer(BaseTracer):
             status="completed",
         )
 
-    def enrich_from_runtime(self, trajectory: RunTrajectory, runtime: Any) -> None:
+    def enrich_from_runtime(self, trajectory: RunTrajectory, runtime: Any) -> None:  # noqa: F821
         """Enrich trajectory with token data from MonitorMiddleware runtime.
 
         Streaming mode doesn't populate Run.outputs with usage_metadata,
@@ -135,7 +135,7 @@ class TrajectoryTracer(BaseTracer):
         for child in run.child_runs:
             self._walk_run_tree(child, llm_calls, tool_calls)
 
-    def _extract_llm_record(self, run: Run) -> LLMCallRecord | None:
+    def _extract_llm_record(self, run: Run) -> LLMCallRecord | None:  # noqa: F821
         """Extract LLMCallRecord from a chat_model Run."""
         from eval.models import LLMCallRecord
 
@@ -211,7 +211,7 @@ class TrajectoryTracer(BaseTracer):
             tool_calls_requested=tool_calls_requested,
         )
 
-    def _extract_tool_record(self, run: Run) -> ToolCallRecord | None:
+    def _extract_tool_record(self, run: Run) -> ToolCallRecord | None:  # noqa: F821
         """Extract ToolCallRecord from a tool Run."""
         import json
 

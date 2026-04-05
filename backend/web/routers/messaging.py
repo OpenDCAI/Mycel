@@ -9,7 +9,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -116,7 +116,12 @@ async def create_chat(
             chat = _messaging(app).create_group_chat(body.user_ids, body.title)
         else:
             chat = _messaging(app).find_or_create_chat(body.user_ids, body.title)
-        return {"id": chat["id"], "title": chat.get("title"), "status": chat.get("status"), "created_at": chat.get("created_at")}
+        return {
+            "id": chat["id"],
+            "title": chat.get("title"),
+            "status": chat.get("status"),
+            "created_at": chat.get("created_at"),
+        }
     except ValueError as e:
         raise HTTPException(400, str(e))
 
@@ -142,11 +147,21 @@ async def get_chat(
         e = app.state.entity_repo.get_by_id(uid) if uid else None
         if e:
             mem = app.state.member_repo.get_by_id(e.member_id)
-            entities_info.append({
-                "id": e.id, "name": e.name, "type": e.type,
-                "avatar_url": avatar_url(e.member_id, bool(mem.avatar if mem else None)),
-            })
-    return {"id": chat.id, "title": chat.title, "status": chat.status, "created_at": chat.created_at, "entities": entities_info}
+            entities_info.append(
+                {
+                    "id": e.id,
+                    "name": e.name,
+                    "type": e.type,
+                    "avatar_url": avatar_url(e.member_id, bool(mem.avatar if mem else None)),
+                }
+            )
+    return {
+        "id": chat.id,
+        "title": chat.title,
+        "status": chat.status,
+        "created_at": chat.created_at,
+        "entities": entities_info,
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -177,7 +192,9 @@ async def send_message(
         raise HTTPException(400, "Content cannot be empty")
     _verify_member_ownership(app, body.sender_id, user_id)
     msg = _messaging(app).send(
-        chat_id, body.sender_id, body.content,
+        chat_id,
+        body.sender_id,
+        body.content,
         mentions=body.mentioned_ids,
         signal=body.signal,
         message_type=body.message_type,
@@ -251,6 +268,7 @@ async def stream_chat_events(
     app: Annotated[Any, Depends(get_app)] = None,
 ):
     from backend.web.core.dependencies import _DEV_SKIP_AUTH
+
     if not _DEV_SKIP_AUTH:
         if not token:
             raise HTTPException(401, "Missing token")
@@ -260,6 +278,7 @@ async def stream_chat_events(
             raise HTTPException(401, str(e))
 
     from fastapi.responses import StreamingResponse
+
     event_bus = app.state.chat_event_bus
     queue = event_bus.subscribe(chat_id)
 
@@ -272,7 +291,7 @@ async def stream_chat_events(
                     event_type = event.get("event", "message")
                     data = event.get("data", {})
                     yield f"event: {event_type}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     yield ": keepalive\n\n"
         finally:
             event_bus.unsubscribe(chat_id, queue)
@@ -293,14 +312,18 @@ async def set_contact(
 ):
     _verify_member_ownership(app, body.owner_id, user_id)
     import time
+
     from storage.contracts import ContactRow
-    app.state.contact_repo.upsert(ContactRow(
-        owner_id=body.owner_id,
-        target_id=body.target_id,
-        relation=body.relation,
-        created_at=time.time(),
-        updated_at=time.time(),
-    ))
+
+    app.state.contact_repo.upsert(
+        ContactRow(
+            owner_id=body.owner_id,
+            target_id=body.target_id,
+            relation=body.relation,
+            created_at=time.time(),
+            updated_at=time.time(),
+        )
+    )
     return {"status": "ok", "relation": body.relation}
 
 
@@ -329,9 +352,6 @@ async def mute_chat(
     app: Annotated[Any, Depends(get_app)],
 ):
     _verify_member_ownership(app, body.user_id, user_id)
-    mute_until_iso = (
-        datetime.fromtimestamp(body.mute_until, tz=timezone.utc).isoformat()
-        if body.mute_until else None
-    )
+    mute_until_iso = datetime.fromtimestamp(body.mute_until, tz=UTC).isoformat() if body.mute_until else None
     _messaging(app)._members_repo.update_mute(chat_id, body.user_id, body.muted, mute_until_iso)
     return {"status": "ok", "muted": body.muted}

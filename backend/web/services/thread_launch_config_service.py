@@ -45,7 +45,9 @@ def resolve_default_config(app: Any, owner_user_id: str, member_id: str) -> dict
 
     # @@@thread-launch-default-precedence - prefer the last successful thread config, then the last confirmed draft,
     # and only then derive from current leases/providers. This keeps defaults tied to actual member usage first.
-    successful = _validate_saved_config(prefs.get("last_successful"), leases=leases, providers=providers, recipes=recipes)
+    successful = _validate_saved_config(
+        prefs.get("last_successful"), leases=leases, providers=providers, recipes=recipes
+    )
     if successful is not None:
         return {"source": "last_successful", "config": successful}
 
@@ -77,9 +79,7 @@ def _validate_saved_config(
     config = normalize_launch_config_payload(payload)
     provider_names = {str(item["name"]) for item in providers}
     recipes_by_id = {
-        str(item["id"]): item
-        for item in recipes
-        if item.get("available", True) and item.get("provider_type")
+        str(item["id"]): item for item in recipes if item.get("available", True) and item.get("provider_type")
     }
 
     if config["create_mode"] == "existing":
@@ -128,7 +128,8 @@ def _derive_default_config(
 ) -> dict[str, Any]:
     member_thread_ids = {str(item.get("id") or "").strip() for item in member_threads if item.get("id")}
     member_leases = [
-        lease for lease in leases
+        lease
+        for lease in leases
         if any(str(thread_id or "").strip() in member_thread_ids for thread_id in lease.get("thread_ids") or [])
     ]
     if member_leases:
@@ -147,7 +148,8 @@ def _derive_default_config(
     provider_type = provider_type_from_name(provider_config)
     recipe = next(
         (
-            item for item in recipes
+            item
+            for item in recipes
             if item.get("available", True) and str(item.get("provider_type") or "") == provider_type
         ),
         None,

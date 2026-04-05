@@ -46,7 +46,7 @@ def _resolve_run_event_repo(run_event_repo: RunEventRepo | None) -> RunEventRepo
         _default_run_event_repo_path = None
 
     container = build_storage_container(main_db_path=_DB_PATH)
-    # @@@event-store-single-path - keep one persistence boundary; when caller omits repo, resolve default repo from storage container.
+    # @@@event-store-single-path - keep one persistence boundary; when caller omits repo, resolve default repo from storage container.  # noqa: E501
     _default_run_event_repo = container.run_event_repo()
     _default_run_event_repo_path = _DB_PATH
     return _default_run_event_repo
@@ -149,17 +149,11 @@ def _event_payload_to_dict(event: dict[str, Any]) -> dict[str, Any]:
     if raw_data in (None, ""):
         return {}
     if not isinstance(raw_data, str):
-        raise RuntimeError(
-            "Run event data must be a dict or JSON string when using storage_container run_event_repo."
-        )
+        raise RuntimeError("Run event data must be a dict or JSON string when using storage_container run_event_repo.")
     try:
         payload = json.loads(raw_data)
     except json.JSONDecodeError as exc:
-        raise RuntimeError(
-            "Run event data must be valid JSON when using storage_container run_event_repo."
-        ) from exc
+        raise RuntimeError("Run event data must be valid JSON when using storage_container run_event_repo.") from exc
     if not isinstance(payload, dict):
-        raise RuntimeError(
-            "Run event data JSON must decode to an object when using storage_container run_event_repo."
-        )
+        raise RuntimeError("Run event data JSON must decode to an object when using storage_container run_event_repo.")
     return payload

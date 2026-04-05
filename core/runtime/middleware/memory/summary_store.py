@@ -22,9 +22,7 @@ from pathlib import Path
 from typing import Any
 
 from storage.contracts import SummaryRepo, SummaryRow
-from storage.providers.sqlite.kernel import SQLiteDBRole, resolve_role_db_path
-from storage.providers.sqlite.kernel import connect_sqlite
-
+from storage.providers.sqlite.kernel import SQLiteDBRole, connect_sqlite, resolve_role_db_path
 from storage.providers.sqlite.summary_repo import SQLiteSummaryRepo
 
 logger = logging.getLogger(__name__)
@@ -66,7 +64,7 @@ class SummaryStore:
         if summary_repo is not None:
             self._repo = summary_repo
         else:
-            # @@@connect_injection - keep _connect as an indirection point so existing retry/rollback tests can patch it.
+            # @@@connect_injection - keep _connect as an indirection point so existing retry/rollback tests can patch it.  # noqa: E501
             self._repo = SQLiteSummaryRepo(db_path, connect_fn=lambda p: _connect(p))
         self._ensure_tables()
 

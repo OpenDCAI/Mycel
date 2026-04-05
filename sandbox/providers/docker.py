@@ -18,9 +18,9 @@ from typing import TYPE_CHECKING
 
 logger = logging.getLogger(__name__)
 
-from sandbox.config import MountSpec
-from sandbox.interfaces.executor import ExecuteResult
-from sandbox.provider import (
+from sandbox.config import MountSpec  # noqa: E402
+from sandbox.interfaces.executor import ExecuteResult  # noqa: E402
+from sandbox.provider import (  # noqa: E402
     Metrics,
     MountCapability,
     ProviderCapability,
@@ -29,14 +29,14 @@ from sandbox.provider import (
     SessionInfo,
     build_resource_capabilities,
 )
-from sandbox.runtime import (
-    _RemoteRuntimeBase,
-    _SubprocessPtySession,
+from sandbox.runtime import (  # noqa: E402
     _build_export_block,
     _build_state_snapshot_cmd,
     _compute_env_delta,
     _extract_state_from_output,
     _parse_env_output,
+    _RemoteRuntimeBase,
+    _SubprocessPtySession,
 )
 
 if TYPE_CHECKING:
@@ -127,12 +127,16 @@ class DockerProvider(SandboxProvider):
 
     def set_managed_volume_mount(self, thread_id: str, backend_ref: str, mount_path: str) -> None:
         self._volume_mounts[thread_id] = MountSpec(
-            source=backend_ref, target=mount_path, mode="mount", read_only=False,
+            source=backend_ref,
+            target=mount_path,
+            mode="mount",
+            read_only=False,
         )
 
     def delete_managed_volume(self, backend_ref: str) -> None:
         """Delete managed volume host directory. backend_ref is the host path."""
         import shutil
+
         volume_dir = Path(backend_ref).resolve()
         # @@@safe-volume-delete - refuse to delete outside expected directory
         expected_parent = (Path.home() / ".leon" / "managed_volumes").resolve()
@@ -409,7 +413,7 @@ class DockerProvider(SandboxProvider):
             if writable.lower().endswith("kb"):
                 return float(writable[:-2]) / (1024.0 * 1024.0)
             if writable.endswith("B"):
-                return float(writable[:-1]) / (1024.0 ** 3)
+                return float(writable[:-1]) / (1024.0**3)
         except ValueError:
             pass
         return None

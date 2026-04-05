@@ -72,10 +72,24 @@ def _sqlite_root_supports_wal(root: Path) -> bool:
 
 _ensure_windows_db_env_defaults()
 
-from backend.web.core.lifespan import lifespan
-from backend.web.routers import auth, connections, contacts, debug, entities, marketplace, monitor, panel, sandbox, settings, threads, thread_files, webhooks
-from backend.web.routers import messaging as messaging_router
-from messaging.relationships.router import router as relationships_router
+from backend.web.core.lifespan import lifespan  # noqa: E402
+from backend.web.routers import (  # noqa: E402
+    auth,
+    connections,
+    contacts,
+    debug,
+    entities,
+    marketplace,
+    monitor,
+    panel,
+    sandbox,
+    settings,
+    thread_files,
+    threads,
+    webhooks,
+)
+from backend.web.routers import messaging as messaging_router  # noqa: E402
+from messaging.relationships.router import router as relationships_router  # noqa: E402
 
 # Create FastAPI app
 app = FastAPI(title="Leon Web Backend", lifespan=lifespan)
@@ -117,7 +131,9 @@ def _resolve_port() -> int:
     try:
         result = subprocess.run(
             ["git", "config", "--worktree", "--get", "worktree.ports.backend"],
-            capture_output=True, text=True, timeout=3,
+            capture_output=True,
+            text=True,
+            timeout=3,
         )
         if result.returncode == 0 and result.stdout.strip():
             return int(result.stdout.strip())

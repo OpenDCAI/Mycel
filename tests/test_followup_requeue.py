@@ -9,14 +9,12 @@ Covers the _consume_followup_queue function:
 """
 
 import asyncio
-import json
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import pytest
 
 from core.runtime.middleware.queue.manager import MessageQueueManager
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -61,8 +59,10 @@ class TestConsumeFollowupQueue:
 
     def test_no_followup_does_nothing(self, mock_agent, mock_app):
         """When queue is empty, nothing happens."""
+
         async def _run():
             from backend.web.services.streaming_service import _consume_followup_queue
+
             await _consume_followup_queue(mock_agent, "thread-1", mock_app)
             # Queue is still empty
             assert mock_app.state.queue_manager.dequeue("thread-1") is None
@@ -84,8 +84,17 @@ class TestConsumeFollowupQueue:
                 await _consume_followup_queue(mock_agent, "thread-1", mock_app)
 
                 mock_start.assert_called_once_with(
-                    mock_agent, "thread-1", "do something", mock_app,
-                    message_metadata={"source": "system", "notification_type": "steer"},
+                    mock_agent,
+                    "thread-1",
+                    "do something",
+                    mock_app,
+                    message_metadata={
+                        "source": "system",
+                        "notification_type": "steer",
+                        "sender_name": None,
+                        "sender_avatar_url": None,
+                        "is_steer": False,
+                    },
                 )
             # Message was consumed, queue is empty
             assert queue_manager.dequeue("thread-1") is None
@@ -99,8 +108,7 @@ class TestConsumeFollowupQueue:
         async def _run():
             from backend.web.services.streaming_service import _consume_followup_queue
 
-            with patch("backend.web.services.streaming_service.start_agent_run",
-                       side_effect=RuntimeError("boom")):
+            with patch("backend.web.services.streaming_service.start_agent_run", side_effect=RuntimeError("boom")):
                 await _consume_followup_queue(mock_agent, "thread-1", mock_app)
 
             # Message was re-enqueued — it should be available again
@@ -118,8 +126,9 @@ class TestConsumeFollowupQueue:
             from backend.web.services.streaming_service import _consume_followup_queue
 
             # First attempt: fails
-            with patch("backend.web.services.streaming_service.start_agent_run",
-                       side_effect=RuntimeError("temporary failure")):
+            with patch(
+                "backend.web.services.streaming_service.start_agent_run", side_effect=RuntimeError("temporary failure")
+            ):
                 await _consume_followup_queue(mock_agent, "thread-1", mock_app)
 
             # Verify message was re-enqueued
@@ -132,8 +141,17 @@ class TestConsumeFollowupQueue:
                 await _consume_followup_queue(mock_agent, "thread-1", mock_app)
 
                 mock_start.assert_called_once_with(
-                    mock_agent, "thread-1", "retry me", mock_app,
-                    message_metadata={"source": "system", "notification_type": "steer"},
+                    mock_agent,
+                    "thread-1",
+                    "retry me",
+                    mock_app,
+                    message_metadata={
+                        "source": "system",
+                        "notification_type": "steer",
+                        "sender_name": None,
+                        "sender_avatar_url": None,
+                        "is_steer": False,
+                    },
                 )
 
             # Queue is now empty
@@ -143,6 +161,7 @@ class TestConsumeFollowupQueue:
 
     def test_no_re_enqueue_when_dequeue_returns_none(self, mock_agent, mock_app, queue_manager):
         """If dequeue itself raises, followup is None so re-enqueue is skipped."""
+
         async def _run():
             from backend.web.services.streaming_service import _consume_followup_queue
 
@@ -163,10 +182,11 @@ class TestConsumeFollowupQueue:
         async def _run():
             from backend.web.services.streaming_service import _consume_followup_queue
 
-            with patch("backend.web.services.streaming_service.start_agent_run",
-                       side_effect=RuntimeError("start failed")):
+            with patch(
+                "backend.web.services.streaming_service.start_agent_run", side_effect=RuntimeError("start failed")
+            ):
                 # Also make re-enqueue fail
-                original_enqueue = queue_manager.enqueue
+                _original_enqueue = queue_manager.enqueue
                 with patch.object(queue_manager, "enqueue", side_effect=RuntimeError("enqueue failed")):
                     await _consume_followup_queue(mock_agent, "thread-1", mock_app)
 
@@ -191,4 +211,3 @@ class TestConsumeFollowupQueue:
             assert queue_manager.dequeue("thread-1") is None
 
         asyncio.run(_run())
-

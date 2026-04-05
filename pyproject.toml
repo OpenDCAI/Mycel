@@ -124,6 +124,9 @@ ignore = []
 [tool.ruff.lint.per-file-ignores]
 "tests/*.py" = ["E402"]
 "examples/*.py" = ["E402"]
+"core/runtime/agent.py" = ["E501"]
+"sandbox/lease.py" = ["E501"]
+"storage/providers/sqlite/terminal_repo.py" = ["E501"]
 
 [dependency-groups]
 dev = [

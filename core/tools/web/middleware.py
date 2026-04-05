@@ -101,10 +101,10 @@ class WebMiddleware(AgentMiddleware):
 
     async def _web_search_impl(
         self,
-        Query: str,
-        MaxResults: int | None = None,
-        IncludeDomains: list[str] | None = None,
-        ExcludeDomains: list[str] | None = None,
+        Query: str,  # noqa: N803
+        MaxResults: int | None = None,  # noqa: N803
+        IncludeDomains: list[str] | None = None,  # noqa: N803
+        ExcludeDomains: list[str] | None = None,  # noqa: N803
     ) -> SearchResult:
         """
         实现 web_search（多提供商降级）
@@ -132,7 +132,7 @@ class WebMiddleware(AgentMiddleware):
 
         return SearchResult(query=Query, error="All search providers failed")
 
-    async def _fetch_impl(self, Url: str, Prompt: str) -> str:
+    async def _fetch_impl(self, Url: str, Prompt: str) -> str:  # noqa: N803
         """
         Fetch URL content and extract information using AI.
 
@@ -176,7 +176,7 @@ class WebMiddleware(AgentMiddleware):
             model = self._extraction_model
             if model is None:
                 preview = content[:5000] if len(content) > 5000 else content
-                return f"AI extraction unavailable. Configure an extraction model (e.g. leon:mini) in settings. Raw content:\n\n{preview}"
+                return f"AI extraction unavailable. Configure an extraction model (e.g. leon:mini) in settings. Raw content:\n\n{preview}"  # noqa: E501
 
             extraction_prompt = (
                 f"You are extracting information from a web page.\n"
@@ -191,7 +191,7 @@ class WebMiddleware(AgentMiddleware):
                 timeout=30,
             )
             return response.content
-        except asyncio.TimeoutError:
+        except TimeoutError:
             preview = content[:5000] if len(content) > 5000 else content
             return f"AI extraction timed out (30s). Raw content preview:\n\n{preview}"
         except Exception as e:
@@ -236,7 +236,7 @@ class WebMiddleware(AgentMiddleware):
                 "type": "function",
                 "function": {
                     "name": self.TOOL_FETCH,
-                    "description": "Fetch a URL and extract specific information using AI. Returns processed content, not raw HTML.",
+                    "description": "Fetch a URL and extract specific information using AI. Returns processed content, not raw HTML.",  # noqa: E501
                     "parameters": {
                         "type": "object",
                         "properties": {

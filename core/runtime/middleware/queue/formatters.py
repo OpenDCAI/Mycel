@@ -10,8 +10,7 @@ from html import escape
 from typing import Literal
 
 
-def format_chat_notification(sender_name: str, chat_id: str, unread_count: int,
-                              signal: str | None = None) -> str:
+def format_chat_notification(sender_name: str, chat_id: str, unread_count: int, signal: str | None = None) -> str:
     """Lightweight notification — agent must chat_read to see content.
 
     @@@v3-notification-only — no message content injected. Agent calls
@@ -68,7 +67,7 @@ def format_wechat_message(sender_name: str, user_id: str, text: str) -> str:
         f"  <sender>{escape(sender_name)}</sender>\n"
         f"  <user-id>{escape(user_id)}</user-id>\n"
         "</wechat-message>\n"
-        "To reply, use wechat_send(user_id=\"" + escape(user_id) + "\", text=\"...\").\n"
+        'To reply, use wechat_send(user_id="' + escape(user_id) + '", text="...").\n'
         "</system-reminder>"
     )
 

@@ -11,7 +11,6 @@ from typing import Any, Literal, Protocol
 
 from pydantic import BaseModel, ConfigDict
 
-
 # ---------------------------------------------------------------------------
 # User — social identity first-class citizen
 # ---------------------------------------------------------------------------
@@ -20,15 +19,16 @@ from pydantic import BaseModel, ConfigDict
 class User(BaseModel):
     model_config = ConfigDict(strict=True, frozen=True)
 
-    id: str                              # entity_id
+    id: str  # entity_id
     name: str
     avatar_url: str | None = None
     type: Literal["human", "agent"]
-    owner_id: str | None = None          # owner user_id for agents; None for humans
+    owner_id: str | None = None  # owner user_id for agents; None for humans
 
 
 class UserRepo(Protocol):
     """Resolve a User from entity_id. Reads from entity + member tables."""
+
     def get_user(self, user_id: str) -> User | None: ...
     def list_users(self) -> list[User]: ...
 
@@ -59,7 +59,7 @@ class MessageRow(BaseModel):
 
     id: str
     chat_id: str
-    sender_id: str                                       # user_id (entity_id)
+    sender_id: str  # user_id (entity_id)
     content: str
     content_type: ContentType = "text"
     message_type: MessageType = "human"

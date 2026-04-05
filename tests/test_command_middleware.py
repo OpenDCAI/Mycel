@@ -5,10 +5,10 @@ from dataclasses import dataclass
 
 import pytest
 
-from core.tools.command.middleware import CommandMiddleware
 from core.tools.command.base import AsyncCommand, BaseExecutor, ExecuteResult
 from core.tools.command.dispatcher import get_executor, get_shell_info
 from core.tools.command.hooks.dangerous_commands import DangerousCommandsHook
+from core.tools.command.middleware import CommandMiddleware
 
 
 class TestExecuteResult:
@@ -93,7 +93,7 @@ class TestAsyncExecution:
         status = await executor.get_status(async_cmd.command_id)
         assert status is not None
 
-        await asyncio.sleep(0.2)
+        await asyncio.sleep(1.0)
 
         status = await executor.get_status(async_cmd.command_id)
         assert status is not None

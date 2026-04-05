@@ -24,23 +24,27 @@ class SupabaseEvalRepo:
     def save_trajectory(self, trajectory: RunTrajectory, trajectory_json: str) -> str:
         run_id = trajectory.id
         run_rows = q.rows(
-            self._t("eval_runs").insert({
-                "id": run_id,
-                "thread_id": trajectory.thread_id,
-                "started_at": trajectory.started_at,
-                "finished_at": trajectory.finished_at,
-                "user_message": trajectory.user_message,
-                "final_response": trajectory.final_response,
-                "status": trajectory.status,
-                "run_tree_json": trajectory.run_tree_json,
-                "trajectory_json": trajectory_json,
-            }).execute(),
-            _REPO, "save_trajectory eval_runs",
+            self._t("eval_runs")
+            .insert(
+                {
+                    "id": run_id,
+                    "thread_id": trajectory.thread_id,
+                    "started_at": trajectory.started_at,
+                    "finished_at": trajectory.finished_at,
+                    "user_message": trajectory.user_message,
+                    "final_response": trajectory.final_response,
+                    "status": trajectory.status,
+                    "run_tree_json": trajectory.run_tree_json,
+                    "trajectory_json": trajectory_json,
+                }
+            )
+            .execute(),
+            _REPO,
+            "save_trajectory eval_runs",
         )
         if not run_rows:
             raise RuntimeError(
-                "Supabase eval repo expected inserted row for save_trajectory eval_runs. "
-                "Check table permissions."
+                "Supabase eval repo expected inserted row for save_trajectory eval_runs. Check table permissions."
             )
         if trajectory.llm_calls:
             llm_rows = [
@@ -59,7 +63,8 @@ class SupabaseEvalRepo:
             ]
             q.rows(
                 self._t("eval_llm_calls").insert(llm_rows).execute(),
-                _REPO, "save_trajectory eval_llm_calls",
+                _REPO,
+                "save_trajectory eval_llm_calls",
             )
         if trajectory.tool_calls:
             tool_rows = [
@@ -79,31 +84,36 @@ class SupabaseEvalRepo:
             ]
             q.rows(
                 self._t("eval_tool_calls").insert(tool_rows).execute(),
-                _REPO, "save_trajectory eval_tool_calls",
+                _REPO,
+                "save_trajectory eval_tool_calls",
             )
         return run_id
 
     def save_metrics(self, run_id: str, tier: str, timestamp: str, metrics_json: str) -> None:
         rows = q.rows(
-            self._t("eval_metrics").insert({
-                "id": str(uuid4()),
-                "run_id": run_id,
-                "tier": tier,
-                "timestamp": timestamp,
-                "metrics_json": metrics_json,
-            }).execute(),
-            _REPO, "save_metrics",
+            self._t("eval_metrics")
+            .insert(
+                {
+                    "id": str(uuid4()),
+                    "run_id": run_id,
+                    "tier": tier,
+                    "timestamp": timestamp,
+                    "metrics_json": metrics_json,
+                }
+            )
+            .execute(),
+            _REPO,
+            "save_metrics",
         )
         if not rows:
-            raise RuntimeError(
-                "Supabase eval repo expected inserted row for save_metrics. "
-                "Check table permissions."
-            )
+            raise RuntimeError("Supabase eval repo expected inserted row for save_metrics. Check table permissions.")
 
     def get_trajectory_json(self, run_id: str) -> str | None:
         query = q.limit(
             self._t("eval_runs").select("trajectory_json").eq("id", run_id),
-            1, _REPO, "get_trajectory_json",
+            1,
+            _REPO,
+            "get_trajectory_json",
         )
         rows = q.rows(query.execute(), _REPO, "get_trajectory_json")
         if not rows:
@@ -121,7 +131,9 @@ class SupabaseEvalRepo:
         if thread_id:
             query = query.eq("thread_id", thread_id)
         # @@@eval-list-order - newest started_at first, matching SQLite path.
-        query = q.limit(q.order(query, "started_at", desc=True, repo=_REPO, operation="list_runs"), limit, _REPO, "list_runs")
+        query = q.limit(
+            q.order(query, "started_at", desc=True, repo=_REPO, operation="list_runs"), limit, _REPO, "list_runs"
+        )
         return [
             {
                 "id": str(row.get("id") or ""),

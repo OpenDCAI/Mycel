@@ -12,7 +12,6 @@ from storage.providers.sqlite.kernel import SQLiteDBRole, resolve_role_db_path
 
 
 class SQLiteEntityRepo:
-
     def __init__(self, db_path: str | Path | None = None, conn: sqlite3.Connection | None = None) -> None:
         self._own_conn = conn is None
         self._lock = threading.Lock()
@@ -60,7 +59,8 @@ class SQLiteEntityRepo:
     def list_by_type(self, entity_type: str) -> list[EntityRow]:
         with self._lock:
             rows = self._conn.execute(
-                "SELECT * FROM entities WHERE type = ? ORDER BY created_at", (entity_type,),
+                "SELECT * FROM entities WHERE type = ? ORDER BY created_at",
+                (entity_type,),
             ).fetchall()
             return [self._to_row(r) for r in rows]
 
@@ -84,8 +84,13 @@ class SQLiteEntityRepo:
 
     def _to_row(self, r: tuple) -> EntityRow:
         return EntityRow(
-            id=r[0], type=r[1], member_id=r[2], name=r[3],
-            avatar=r[4], thread_id=r[5], created_at=r[6],
+            id=r[0],
+            type=r[1],
+            member_id=r[2],
+            name=r[3],
+            avatar=r[4],
+            thread_id=r[5],
+            created_at=r[6],
         )
 
     def _ensure_table(self) -> None:

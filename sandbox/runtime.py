@@ -78,7 +78,7 @@ def _extract_state_from_output(
     matches = list(pattern.finditer(raw_output))
     if not matches:
         # @@@markerless-empty-output-fallback - Some lightweight providers/tests return empty stdout on successful exec.
-        # Keep previous terminal snapshot only for truly-empty output; any non-empty markerless output still fails loudly.
+        # Keep previous terminal snapshot only for truly-empty output; any non-empty markerless output still fails loudly.  # noqa: E501
         if not _sanitize_shell_output(raw_output).strip():
             return cwd_fallback, dict(env_fallback), ""
         raise RuntimeError("Failed to parse terminal state: state markers not found")
@@ -256,7 +256,7 @@ class _SubprocessPtySession:
         probe_marker = f"__LEON_PROBE_{uuid.uuid4().hex[:8]}__"
         probe_re = re.compile(rf"{re.escape(probe_marker)}\s+0")
         try:
-            os.write(self._master_fd, f"true && printf '\\n{probe_marker} %s\\n' $?\n".encode("utf-8"))
+            os.write(self._master_fd, f"true && printf '\\n{probe_marker} %s\\n' $?\n".encode())
         except OSError:
             return False
 
@@ -607,7 +607,7 @@ class PhysicalTerminalRuntime(ABC):
         cmd = self._commands.get(command_id)
         if cmd:
             if not cmd.done and command_id not in self._tasks:
-                # @@@cross-runtime-status-source - If this runtime didn't start the task, trust DB row instead of stale memory.
+                # @@@cross-runtime-status-source - If this runtime didn't start the task, trust DB row instead of stale memory.  # noqa: E501
                 refreshed = self._load_command_from_db(command_id)
                 return refreshed or cmd
             return cmd
@@ -879,14 +879,18 @@ class RemoteWrappedRuntime(_RemoteRuntimeBase):
 def __getattr__(name: str):
     if name == "DockerPtyRuntime":
         from sandbox.providers.docker import DockerPtyRuntime
+
         return DockerPtyRuntime
     if name == "LocalPersistentShellRuntime":
         from sandbox.providers.local import LocalPersistentShellRuntime
+
         return LocalPersistentShellRuntime
     if name == "DaytonaSessionRuntime":
         from sandbox.providers.daytona import DaytonaSessionRuntime
+
         return DaytonaSessionRuntime
     if name == "E2BPtyRuntime":
         from sandbox.providers.e2b import E2BPtyRuntime
+
         return E2BPtyRuntime
     raise AttributeError(f"module 'sandbox.runtime' has no attribute {name!r}")

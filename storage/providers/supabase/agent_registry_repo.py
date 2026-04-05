@@ -43,7 +43,10 @@ class SupabaseAgentRegistryRepo:
 
     def get_by_id(self, agent_id: str) -> tuple | None:
         rows = q.rows(
-            self._table().select("agent_id,name,thread_id,status,parent_agent_id,subagent_type").eq("agent_id", agent_id).execute(),
+            self._table()
+            .select("agent_id,name,thread_id,status,parent_agent_id,subagent_type")
+            .eq("agent_id", agent_id)
+            .execute(),
             _REPO,
             "get_by_id",
         )
@@ -57,8 +60,14 @@ class SupabaseAgentRegistryRepo:
 
     def list_running(self) -> list[tuple]:
         rows = q.rows(
-            self._table().select("agent_id,name,thread_id,status,parent_agent_id,subagent_type").eq("status", "running").execute(),
+            self._table()
+            .select("agent_id,name,thread_id,status,parent_agent_id,subagent_type")
+            .eq("status", "running")
+            .execute(),
             _REPO,
             "list_running",
         )
-        return [(r["agent_id"], r["name"], r["thread_id"], r["status"], r.get("parent_agent_id"), r.get("subagent_type")) for r in rows]
+        return [
+            (r["agent_id"], r["name"], r["thread_id"], r["status"], r.get("parent_agent_id"), r.get("subagent_type"))
+            for r in rows
+        ]

@@ -7,18 +7,26 @@ from typing import Any
 
 from fastapi import FastAPI
 
+from core.identity.agent_registry import get_or_create_agent_id
 from core.runtime.agent import create_leon_agent
-from storage.runtime import build_storage_container
 from sandbox.manager import lookup_sandbox_for_thread
 from sandbox.thread_context import set_current_thread_id
-from core.identity.agent_registry import get_or_create_agent_id
+from storage.runtime import build_storage_container
 
 # Thread lock for config updates
 _config_update_locks: dict[str, asyncio.Lock] = {}
 _agent_create_locks: dict[str, asyncio.Lock] = {}
 
 
-def create_agent_sync(sandbox_name: str, workspace_root: Path | None = None, model_name: str | None = None, agent: str | None = None, queue_manager: Any = None, chat_repos: dict | None = None, extra_allowed_paths: list[str] | None = None) -> Any:
+def create_agent_sync(
+    sandbox_name: str,
+    workspace_root: Path | None = None,
+    model_name: str | None = None,
+    agent: str | None = None,
+    queue_manager: Any = None,
+    chat_repos: dict | None = None,
+    extra_allowed_paths: list[str] | None = None,
+) -> Any:
     """Create a LeonAgent with the given sandbox. Runs in a thread."""
     storage_container = build_storage_container(
         main_db_path=os.getenv("LEON_DB_PATH"),
@@ -26,6 +34,7 @@ def create_agent_sync(sandbox_name: str, workspace_root: Path | None = None, mod
     )
     # @@@web-file-ops-repo - inject storage-backed repo so file_operations route to correct provider.
     from core.operations import FileOperationRecorder, set_recorder
+
     set_recorder(FileOperationRecorder(repo=storage_container.file_operation_repo()))
     return create_leon_agent(
         model_name=model_name,
@@ -40,7 +49,9 @@ def create_agent_sync(sandbox_name: str, workspace_root: Path | None = None, mod
     )
 
 
-async def get_or_create_agent(app_obj: FastAPI, sandbox_type: str, thread_id: str | None = None, agent: str | None = None) -> Any:
+async def get_or_create_agent(
+    app_obj: FastAPI, sandbox_type: str, thread_id: str | None = None, agent: str | None = None
+) -> Any:
     """Lazy agent pool — one agent per thread, created on demand."""
     if thread_id:
         set_current_thread_id(thread_id)
@@ -93,7 +104,11 @@ async def get_or_create_agent(app_obj: FastAPI, sandbox_type: str, thread_id: st
             if agent_entity:
                 # @@@admin-chain — find owner's user_id via Member domain (template ownership).
                 # Thread→Entity→Member(template)→owner_user_id
-                agent_member = app_obj.state.member_repo.get_by_id(agent_entity.member_id) if hasattr(app_obj.state, "member_repo") else None
+                agent_member = (
+                    app_obj.state.member_repo.get_by_id(agent_entity.member_id)
+                    if hasattr(app_obj.state, "member_repo")
+                    else None
+                )
                 owner_member_id = agent_member.owner_user_id if agent_member and agent_member.owner_user_id else ""
                 chat_repos = {
                     "member_id": agent_entity.id,
@@ -117,6 +132,7 @@ async def get_or_create_agent(app_obj: FastAPI, sandbox_type: str, thread_id: st
 
         # Merge user-configured allowed_paths from sandbox config
         from sandbox.config import SandboxConfig
+
         try:
             sandbox_config = SandboxConfig.load(sandbox_type)
             extra_allowed_paths.extend(sandbox_config.allowed_paths)
@@ -127,7 +143,9 @@ async def get_or_create_agent(app_obj: FastAPI, sandbox_type: str, thread_id: st
 
         # @@@ agent-init-thread - LeonAgent.__init__ uses run_until_complete, must run in thread
         qm = getattr(app_obj.state, "queue_manager", None)
-        agent_obj = await asyncio.to_thread(create_agent_sync, sandbox_type, workspace_root, model_name, agent_name, qm, chat_repos, extra_allowed_paths)
+        agent_obj = await asyncio.to_thread(
+            create_agent_sync, sandbox_type, workspace_root, model_name, agent_name, qm, chat_repos, extra_allowed_paths
+        )
         member = agent_name or "leon"
         agent_id = get_or_create_agent_id(
             member=member,

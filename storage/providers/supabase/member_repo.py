@@ -109,7 +109,9 @@ class SupabaseMemberRepo:
         # data may be a list with one element (scalar), or an int directly
         if isinstance(data, list):
             if not data:
-                raise RuntimeError(f"Supabase {_MEMBER_REPO} increment_entity_seq returned empty list for member {member_id}.")
+                raise RuntimeError(
+                    f"Supabase {_MEMBER_REPO} increment_entity_seq returned empty list for member {member_id}."
+                )
             return int(data[0])
         return int(data)
 

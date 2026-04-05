@@ -1,6 +1,5 @@
 """Batch-upload skills from cloned GitHub repos to the Mycel Hub."""
 
-import sys
 from pathlib import Path
 
 import httpx
@@ -24,19 +23,33 @@ REPOS = [
 
 # Skip directories that are not skills
 SKIP_DIRS = {
-    ".git", ".github", "node_modules", "__pycache__", "docs", "doc",
-    "template", "spec", "eval-workspace", "custom-gpt", "commands",
-    "tools", ".vscode",
+    ".git",
+    ".github",
+    "node_modules",
+    "__pycache__",
+    "docs",
+    "doc",
+    "template",
+    "spec",
+    "eval-workspace",
+    "custom-gpt",
+    "commands",
+    "tools",
+    ".vscode",
 }
 
 
 def register_publisher(user_id: str, username: str, display_name: str) -> None:
     try:
-        httpx.post(f"{HUB_URL}/api/v1/publishers/register", json={
-            "user_id": user_id,
-            "username": username,
-            "display_name": display_name,
-        }, timeout=10.0).raise_for_status()
+        httpx.post(
+            f"{HUB_URL}/api/v1/publishers/register",
+            json={
+                "user_id": user_id,
+                "username": username,
+                "display_name": display_name,
+            },
+            timeout=10.0,
+        ).raise_for_status()
     except Exception as e:
         print(f"  Publisher {username}: {e}")
 
@@ -107,6 +120,7 @@ def find_skill_dirs(repo_root: Path, skill_roots: list[Path] | None) -> list[Pat
 
 def upload(payload: dict) -> bool:
     import time
+
     for attempt in range(3):
         try:
             resp = httpx.post(f"{HUB_URL}/api/v1/publish", json=payload, timeout=30.0)

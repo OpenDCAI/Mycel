@@ -19,11 +19,13 @@ def test_refresh_resource_snapshots_probes_running_leases_only(monkeypatch):
     monkeypatch.setattr(resource_service, "ensure_resource_snapshot_table", lambda: None)
     monkeypatch.setattr(
         resource_service,
-        "SQLiteSandboxMonitorRepo",
-        lambda: _make_probe_repo([
-            {"provider_name": "p1", "instance_id": "s-1", "lease_id": "l-1", "observed_state": "detached"},
-            {"provider_name": "p1", "instance_id": "s-2", "lease_id": "l-2", "observed_state": "paused"},
-        ]),
+        "make_sandbox_monitor_repo",
+        lambda: _make_probe_repo(
+            [
+                {"provider_name": "p1", "instance_id": "s-1", "lease_id": "l-1", "observed_state": "detached"},
+                {"provider_name": "p1", "instance_id": "s-2", "lease_id": "l-2", "observed_state": "paused"},
+            ]
+        ),
     )
     monkeypatch.setattr(resource_service, "build_provider_from_config_name", lambda _: _FakeProvider())
 
@@ -50,15 +52,19 @@ def test_refresh_resource_snapshots_counts_provider_build_error(monkeypatch):
     monkeypatch.setattr(resource_service, "ensure_resource_snapshot_table", lambda: None)
     monkeypatch.setattr(
         resource_service,
-        "SQLiteSandboxMonitorRepo",
-        lambda: _make_probe_repo([
-            {"provider_name": "p-missing", "instance_id": "s-1", "lease_id": "l-1", "observed_state": "detached"},
-        ]),
+        "make_sandbox_monitor_repo",
+        lambda: _make_probe_repo(
+            [
+                {"provider_name": "p-missing", "instance_id": "s-1", "lease_id": "l-1", "observed_state": "detached"},
+            ]
+        ),
     )
     monkeypatch.setattr(resource_service, "build_provider_from_config_name", lambda _: None)
     upserts: list[dict] = []
     monkeypatch.setattr(
-        resource_service, "upsert_lease_resource_snapshot", lambda **kwargs: upserts.append(kwargs),
+        resource_service,
+        "upsert_resource_snapshot",
+        lambda **kwargs: upserts.append(kwargs),
     )
 
     result = resource_service.refresh_resource_snapshots()

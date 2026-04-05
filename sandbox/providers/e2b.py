@@ -17,7 +17,7 @@ from typing import TYPE_CHECKING, Any
 
 logger = logging.getLogger(__name__)
 
-from sandbox.provider import (
+from sandbox.provider import (  # noqa: E402
     Metrics,
     ProviderCapability,
     ProviderExecResult,
@@ -279,6 +279,7 @@ class E2BProvider(SandboxProvider):
 
     def create_runtime(self, terminal: AbstractTerminal, lease: SandboxLease) -> PhysicalTerminalRuntime:
         from sandbox.providers.e2b import E2BPtyRuntime
+
         return E2BPtyRuntime(terminal, lease, self)
 
 
@@ -290,16 +291,13 @@ import uuid  # noqa: E402
 
 from sandbox.interfaces.executor import ExecuteResult  # noqa: E402
 from sandbox.runtime import (  # noqa: E402
-    _RemoteRuntimeBase,
-    _SubprocessPtySession,
     _build_export_block,
     _build_state_snapshot_cmd,
     _compute_env_delta,
     _extract_marker_exit,
     _extract_state_from_output,
-    _normalize_pty_result,
     _parse_env_output,
-    _sanitize_shell_output,
+    _RemoteRuntimeBase,
 )
 
 

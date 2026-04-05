@@ -41,22 +41,47 @@ class SQLiteThreadRepo:
         if self._own_conn:
             self._conn.close()
 
-    def create(self, thread_id: str, member_id: str, sandbox_type: str,
-               cwd: str | None = None, created_at: float = 0, **extra: Any) -> None:
+    def create(
+        self,
+        thread_id: str,
+        member_id: str,
+        sandbox_type: str,
+        cwd: str | None = None,
+        created_at: float = 0,
+        **extra: Any,
+    ) -> None:
         is_main = bool(extra.get("is_main", False))
         branch_index = int(extra["branch_index"])
         _validate_thread_identity(is_main=is_main, branch_index=branch_index)
         with self._lock:
             self._conn.execute(
-                "INSERT INTO threads (id, member_id, sandbox_type, cwd, model, observation_provider, is_main, branch_index, created_at)"
+                "INSERT INTO threads (id, member_id, sandbox_type, cwd, model, observation_provider, is_main, branch_index, created_at)"  # noqa: E501
                 " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                (thread_id, member_id, sandbox_type, cwd,
-                 extra.get("model"), extra.get("observation_provider"),
-                 int(is_main), branch_index, created_at),
+                (
+                    thread_id,
+                    member_id,
+                    sandbox_type,
+                    cwd,
+                    extra.get("model"),
+                    extra.get("observation_provider"),
+                    int(is_main),
+                    branch_index,
+                    created_at,
+                ),
             )
             self._conn.commit()
 
-    _COLS = ("id", "member_id", "sandbox_type", "model", "cwd", "observation_provider", "is_main", "branch_index", "created_at")
+    _COLS = (
+        "id",
+        "member_id",
+        "sandbox_type",
+        "model",
+        "cwd",
+        "observation_provider",
+        "is_main",
+        "branch_index",
+        "created_at",
+    )
     _SELECT = ", ".join(_COLS)
 
     def _to_dict(self, r: tuple) -> dict[str, Any]:
@@ -89,7 +114,8 @@ class SQLiteThreadRepo:
     def list_by_member(self, member_id: str) -> list[dict[str, Any]]:
         with self._lock:
             rows = self._conn.execute(
-                f"SELECT {self._SELECT} FROM threads WHERE member_id = ? ORDER BY branch_index, created_at", (member_id,),
+                f"SELECT {self._SELECT} FROM threads WHERE member_id = ? ORDER BY branch_index, created_at",
+                (member_id,),
             ).fetchall()
             return [self._to_dict(r) for r in rows]
 
@@ -110,9 +136,15 @@ class SQLiteThreadRepo:
                 (owner_user_id,),
             ).fetchall()
             ncols = len(self._COLS)
-            return [{**self._to_dict(r[:ncols]),
-                     "member_name": r[ncols], "member_avatar": r[ncols + 1],
-                     "entity_name": r[ncols + 2]} for r in rows]
+            return [
+                {
+                    **self._to_dict(r[:ncols]),
+                    "member_name": r[ncols],
+                    "member_avatar": r[ncols + 1],
+                    "entity_name": r[ncols + 2],
+                }
+                for r in rows
+            ]
 
     def update(self, thread_id: str, **fields: Any) -> None:
         allowed = {"sandbox_type", "model", "cwd", "observation_provider", "is_main", "branch_index"}
@@ -160,7 +192,7 @@ class SQLiteThreadRepo:
         if "branch_index" not in cols:
             raise RuntimeError("threads table missing branch_index; reset ~/.leon/leon.db for the new schema")
         self._conn.execute(
-            "CREATE UNIQUE INDEX IF NOT EXISTS idx_threads_single_main_per_member ON threads(member_id) WHERE is_main = 1"
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_threads_single_main_per_member ON threads(member_id) WHERE is_main = 1"  # noqa: E501
         )
         self._conn.execute(
             "CREATE UNIQUE INDEX IF NOT EXISTS idx_threads_member_branch ON threads(member_id, branch_index)"

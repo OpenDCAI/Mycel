@@ -82,8 +82,8 @@ def main() -> None:
         if not base_url.endswith("/v1"):
             base_url = f"{base_url}/v1"
 
-    ChatOpenAI = _maybe_import_langchain_openai()
-    HumanMessage, ToolMessage, tool = _maybe_import_langchain_tools()
+    ChatOpenAI = _maybe_import_langchain_openai()  # noqa: N806
+    HumanMessage, ToolMessage, tool = _maybe_import_langchain_tools()  # noqa: N806
 
     @tool(description="Return repo image.png as an OpenAI-compatible image content block.")
     def make_test_image() -> list[dict[str, str]]:

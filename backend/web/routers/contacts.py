@@ -6,7 +6,7 @@ import logging
 import time
 from typing import Annotated, Any, Literal
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 
 from backend.web.core.dependencies import get_app, get_current_user_id
@@ -48,13 +48,15 @@ async def set_contact(
     app: Annotated[Any, Depends(get_app)],
 ):
     """Upsert contact (block/mute/normal)."""
-    app.state.contact_repo.upsert(ContactRow(
-        owner_id=user_id,
-        target_id=body.target_id,
-        relation=body.relation,
-        created_at=time.time(),
-        updated_at=time.time(),
-    ))
+    app.state.contact_repo.upsert(
+        ContactRow(
+            owner_id=user_id,
+            target_id=body.target_id,
+            relation=body.relation,
+            created_at=time.time(),
+            updated_at=time.time(),
+        )
+    )
     return {"status": "ok", "relation": body.relation}
 
 

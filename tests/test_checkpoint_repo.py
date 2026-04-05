@@ -64,7 +64,9 @@ def test_delete_checkpoints_by_ids(tmp_path):
         left_checkpoints = conn.execute(
             "SELECT thread_id, checkpoint_id FROM checkpoints ORDER BY thread_id, checkpoint_id"
         ).fetchall()
-        left_writes = conn.execute("SELECT thread_id, checkpoint_id FROM writes ORDER BY thread_id, checkpoint_id").fetchall()
+        left_writes = conn.execute(
+            "SELECT thread_id, checkpoint_id FROM writes ORDER BY thread_id, checkpoint_id"
+        ).fetchall()
         left_cp_writes = conn.execute(
             "SELECT thread_id, checkpoint_id FROM checkpoint_writes ORDER BY thread_id, checkpoint_id"
         ).fetchall()

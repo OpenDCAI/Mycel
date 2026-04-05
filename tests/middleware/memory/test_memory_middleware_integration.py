@@ -3,8 +3,6 @@
 Tests the complete flow: MemoryMiddleware → SummaryStore → SQLite → Checkpointer
 """
 
-import tempfile
-from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -12,20 +10,6 @@ from langchain_core.messages import AIMessage, HumanMessage
 
 from core.runtime.middleware.memory.middleware import MemoryMiddleware
 from core.runtime.middleware.memory.summary_store import SummaryStore
-
-
-@pytest.fixture
-def temp_db():
-    """Create temporary database for testing."""
-    with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:
-        db_path = Path(f.name)
-    yield db_path
-    db_path.unlink(missing_ok=True)
-    # Cleanup WAL files
-    for suffix in ["-wal", "-shm"]:
-        wal_file = Path(str(db_path) + suffix)
-        if wal_file.exists():
-            wal_file.unlink()
 
 
 @pytest.fixture

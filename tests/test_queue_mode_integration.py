@@ -29,6 +29,7 @@ def test_queue_mode_steer_non_preemptive():
     4. Verify steer message is injected before next model call
     """
     from agent import create_leon_agent
+
     agent = create_leon_agent()
     queue_manager = agent.queue_manager
 

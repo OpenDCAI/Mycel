@@ -1,13 +1,11 @@
 """Tests for marketplace_client business logic (publish/download)."""
 
 import json
-from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
 import backend.web.services.library_service as _lib_svc
-
 
 # ── Version Bump (tested via publish internals) ──
 
@@ -42,8 +40,9 @@ class TestVersionBump:
 # ── Helpers ──
 
 
-def _make_hub_response(item_type: str, slug: str, content: str = "# Hello",
-                       version: str = "1.0.0", publisher: str = "tester") -> dict:
+def _make_hub_response(
+    item_type: str, slug: str, content: str = "# Hello", version: str = "1.0.0", publisher: str = "tester"
+) -> dict:
     """Build a fake Hub /download response."""
     return {
         "item": {
@@ -73,6 +72,7 @@ class TestDownloadSkill:
 
         with patch("backend.web.services.marketplace_client._hub_api", return_value=hub_resp):
             from backend.web.services.marketplace_client import download
+
             result = download("item-123")
 
         assert result["type"] == "skill"
@@ -88,11 +88,10 @@ class TestDownloadSkill:
 
         with patch("backend.web.services.marketplace_client._hub_api", return_value=hub_resp):
             from backend.web.services.marketplace_client import download
+
             download("item-456")
 
-        meta = json.loads(
-            (lib / "skills" / "tracked-skill" / "meta.json").read_text(encoding="utf-8")
-        )
+        meta = json.loads((lib / "skills" / "tracked-skill" / "meta.json").read_text(encoding="utf-8"))
         assert meta["source"]["marketplace_item_id"] == "item-456"
         assert meta["source"]["installed_version"] == "2.1.0"
         assert meta["source"]["publisher"] == "alice"
@@ -104,6 +103,7 @@ class TestDownloadSkill:
 
         with patch("backend.web.services.marketplace_client._hub_api", return_value=hub_resp):
             from backend.web.services.marketplace_client import download
+
             with pytest.raises(ValueError, match="Invalid slug"):
                 download("item-evil")
 
@@ -122,6 +122,7 @@ class TestDownloadAgent:
 
         with patch("backend.web.services.marketplace_client._hub_api", return_value=hub_resp):
             from backend.web.services.marketplace_client import download
+
             result = download("item-a1")
 
         assert result["type"] == "agent"
@@ -137,11 +138,10 @@ class TestDownloadAgent:
 
         with patch("backend.web.services.marketplace_client._hub_api", return_value=hub_resp):
             from backend.web.services.marketplace_client import download
+
             download("item-a2")
 
-        meta = json.loads(
-            (lib / "agents" / "meta-agent.json").read_text(encoding="utf-8")
-        )
+        meta = json.loads((lib / "agents" / "meta-agent.json").read_text(encoding="utf-8"))
         assert meta["source"]["marketplace_item_id"] == "item-a2"
         assert meta["source"]["installed_version"] == "3.0.0"
         assert meta["source"]["publisher"] == "bob"
@@ -169,7 +169,5 @@ class TestDownloadIdempotency:
         assert result["version"] == "1.0.1"
         content = (lib / "skills" / "idem-skill" / "SKILL.md").read_text(encoding="utf-8")
         assert content == "V2"
-        meta = json.loads(
-            (lib / "skills" / "idem-skill" / "meta.json").read_text(encoding="utf-8")
-        )
+        meta = json.loads((lib / "skills" / "idem-skill" / "meta.json").read_text(encoding="utf-8"))
         assert meta["source"]["installed_version"] == "1.0.1"

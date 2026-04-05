@@ -20,7 +20,7 @@ def ensure_library_dir() -> None:
     (LIBRARY_DIR / "skills").mkdir(exist_ok=True)
     (LIBRARY_DIR / "agents").mkdir(exist_ok=True)
     legacy_recipe_dir = LIBRARY_DIR / "recipes"
-    # @@@recipe-storage-cutover - recipes now live in SQLite only; delete the dead file tree so it cannot masquerade as live state.
+    # @@@recipe-storage-cutover - recipes now live in SQLite only; delete the dead file tree so it cannot masquerade as live state.  # noqa: E501
     if legacy_recipe_dir.exists():
         if legacy_recipe_dir.is_dir():
             shutil.rmtree(legacy_recipe_dir)
@@ -121,29 +121,44 @@ def list_library(
             for d in sorted(skills_dir.iterdir()):
                 if d.is_dir():
                     meta = _read_json(d / "meta.json", {})
-                    results.append({
-                        "id": d.name, "type": "skill",
-                        "name": meta.get("name", d.name), "desc": meta.get("desc", ""),
-                        "created_at": meta.get("created_at", 0), "updated_at": meta.get("updated_at", 0),
-                    })
+                    results.append(
+                        {
+                            "id": d.name,
+                            "type": "skill",
+                            "name": meta.get("name", d.name),
+                            "desc": meta.get("desc", ""),
+                            "created_at": meta.get("created_at", 0),
+                            "updated_at": meta.get("updated_at", 0),
+                        }
+                    )
     elif resource_type == "agent":
         agents_dir = LIBRARY_DIR / "agents"
         if agents_dir.exists():
             for f in sorted(agents_dir.glob("*.md")):
                 meta = _read_json(f.with_suffix(".json"), {})
-                results.append({
-                    "id": f.stem, "type": "agent",
-                    "name": meta.get("name", f.stem), "desc": meta.get("desc", ""),
-                    "created_at": meta.get("created_at", 0), "updated_at": meta.get("updated_at", 0),
-                })
+                results.append(
+                    {
+                        "id": f.stem,
+                        "type": "agent",
+                        "name": meta.get("name", f.stem),
+                        "desc": meta.get("desc", ""),
+                        "created_at": meta.get("created_at", 0),
+                        "updated_at": meta.get("updated_at", 0),
+                    }
+                )
     elif resource_type == "mcp":
         mcp_data = _read_json(LIBRARY_DIR / ".mcp.json", {"mcpServers": {}})
         for name, cfg in mcp_data.get("mcpServers", {}).items():
-            results.append({
-                "id": name, "type": "mcp", "name": name,
-                "desc": cfg.get("desc", ""),
-                "created_at": cfg.get("created_at", 0), "updated_at": cfg.get("updated_at", 0),
-            })
+            results.append(
+                {
+                    "id": name,
+                    "type": "mcp",
+                    "name": name,
+                    "desc": cfg.get("desc", ""),
+                    "created_at": cfg.get("created_at", 0),
+                    "updated_at": cfg.get("updated_at", 0),
+                }
+            )
     return results
 
 
@@ -169,10 +184,7 @@ def create_resource(
         if not provider_type:
             raise ValueError("Recipe provider_type is required")
         feature_source = features if isinstance(features, dict) else {}
-        feature_values = {
-            key: bool(feature_source.get(key, False))
-            for key in FEATURE_CATALOG
-        }
+        feature_values = {key: bool(feature_source.get(key, False)) for key in FEATURE_CATALOG}
         recipe_id = f"{provider_type}:custom:{uuid.uuid4().hex[:8]}"
         item = _normalize_recipe_item(
             {
@@ -199,28 +211,44 @@ def create_resource(
         rid = name.lower().replace(" ", "-")
         skill_dir = LIBRARY_DIR / "skills" / rid
         skill_dir.mkdir(parents=True, exist_ok=True)
-        _write_json(skill_dir / "meta.json", {
-            "name": name, "desc": desc, "category": cat,
-            "created_at": now, "updated_at": now,
-        })
+        _write_json(
+            skill_dir / "meta.json",
+            {
+                "name": name,
+                "desc": desc,
+                "category": cat,
+                "created_at": now,
+                "updated_at": now,
+            },
+        )
         (skill_dir / "SKILL.md").write_text(f"# {name}\n\n{desc}\n", encoding="utf-8")
         return {"id": rid, "type": "skill", "name": name, "desc": desc, "created_at": now, "updated_at": now}
     elif resource_type == "agent":
         rid = name.lower().replace(" ", "-")
         agents_dir = LIBRARY_DIR / "agents"
         agents_dir.mkdir(parents=True, exist_ok=True)
-        _write_json(agents_dir / f"{rid}.json", {
-            "name": name, "desc": desc, "category": cat,
-            "created_at": now, "updated_at": now,
-        })
-        (agents_dir / f"{rid}.md").write_text(f"---\nname: {rid}\ndescription: {desc}\n---\n\n# {name}\n", encoding="utf-8")
+        _write_json(
+            agents_dir / f"{rid}.json",
+            {
+                "name": name,
+                "desc": desc,
+                "category": cat,
+                "created_at": now,
+                "updated_at": now,
+            },
+        )
+        (agents_dir / f"{rid}.md").write_text(
+            f"---\nname: {rid}\ndescription: {desc}\n---\n\n# {name}\n", encoding="utf-8"
+        )
         return {"id": rid, "type": "agent", "name": name, "desc": desc, "created_at": now, "updated_at": now}
     elif resource_type == "mcp":
         mcp_path = LIBRARY_DIR / ".mcp.json"
         mcp_data = _read_json(mcp_path, {"mcpServers": {}})
         mcp_data["mcpServers"][name] = {
-            "desc": desc, "category": cat,
-            "created_at": now, "updated_at": now,
+            "desc": desc,
+            "category": cat,
+            "created_at": now,
+            "updated_at": now,
         }
         _write_json(mcp_path, mcp_data)
         return {"id": name, "type": "mcp", "name": name, "desc": desc, "created_at": now, "updated_at": now}
@@ -278,7 +306,14 @@ def update_resource(
         meta.update(updates)
         meta["updated_at"] = now
         _write_json(meta_path, meta)
-        return {"id": resource_id, "type": "skill", "name": meta.get("name", resource_id), "desc": meta.get("desc", ""), "created_at": meta.get("created_at", 0), "updated_at": now}
+        return {
+            "id": resource_id,
+            "type": "skill",
+            "name": meta.get("name", resource_id),
+            "desc": meta.get("desc", ""),
+            "created_at": meta.get("created_at", 0),
+            "updated_at": now,
+        }
     elif resource_type == "agent":
         meta_path = LIBRARY_DIR / "agents" / f"{resource_id}.json"
         if not meta_path.exists():
@@ -287,7 +322,14 @@ def update_resource(
         meta.update(updates)
         meta["updated_at"] = now
         _write_json(meta_path, meta)
-        return {"id": resource_id, "type": "agent", "name": meta.get("name", resource_id), "desc": meta.get("desc", ""), "created_at": meta.get("created_at", 0), "updated_at": now}
+        return {
+            "id": resource_id,
+            "type": "agent",
+            "name": meta.get("name", resource_id),
+            "desc": meta.get("desc", ""),
+            "created_at": meta.get("created_at", 0),
+            "updated_at": now,
+        }
     elif resource_type == "mcp":
         mcp_path = LIBRARY_DIR / ".mcp.json"
         mcp_data = _read_json(mcp_path, {"mcpServers": {}})
@@ -297,8 +339,16 @@ def update_resource(
         mcp_data["mcpServers"][resource_id]["updated_at"] = now
         _write_json(mcp_path, mcp_data)
         entry = mcp_data["mcpServers"][resource_id]
-        return {"id": resource_id, "type": "mcp", "name": entry.get("name", resource_id), "desc": entry.get("desc", ""), "created_at": entry.get("created_at", 0), "updated_at": now}
+        return {
+            "id": resource_id,
+            "type": "mcp",
+            "name": entry.get("name", resource_id),
+            "desc": entry.get("desc", ""),
+            "created_at": entry.get("created_at", 0),
+            "updated_at": now,
+        }
     return None
+
 
 def delete_resource(
     resource_type: str,
@@ -355,7 +405,10 @@ def list_library_names(
     results: list[dict[str, str]] = []
     if resource_type == "recipe":
         owner_user_id = _require_recipe_owner(owner_user_id)
-        return [{"name": item["name"], "desc": item["desc"]} for item in list_library("recipe", owner_user_id=owner_user_id, recipe_repo=recipe_repo)]
+        return [
+            {"name": item["name"], "desc": item["desc"]}
+            for item in list_library("recipe", owner_user_id=owner_user_id, recipe_repo=recipe_repo)
+        ]
     if resource_type == "skill":
         skills_dir = LIBRARY_DIR / "skills"
         if skills_dir.exists():

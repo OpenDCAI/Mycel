@@ -8,9 +8,9 @@ from fastapi import FastAPI
 
 from backend.web.services.event_buffer import RunEventBuffer, ThreadEventBuffer
 from backend.web.services.idle_reaper import idle_reaper_loop
-from core.runtime.middleware.queue import MessageQueueManager
 from backend.web.services.resource_cache import resource_overview_refresh_loop
 from config.env_manager import ConfigManager
+from core.runtime.middleware.queue import MessageQueueManager
 
 
 def _seed_dev_user(app: FastAPI) -> None:
@@ -23,15 +23,14 @@ def _seed_dev_user(app: FastAPI) -> None:
     import time
     from pathlib import Path
 
+    from backend.web.services.member_service import MEMBERS_DIR, _write_agent_md, _write_json
     from storage.contracts import MemberRow, MemberType
     from storage.providers.sqlite.member_repo import generate_member_id
-    from backend.web.services.member_service import MEMBERS_DIR, _write_agent_md, _write_json
 
     log = logging.getLogger(__name__)
     member_repo = app.state.member_repo
-    entity_repo = app.state.entity_repo
 
-    DEV_USER_ID = "dev-user"
+    DEV_USER_ID = "dev-user"  # noqa: N806
 
     if member_repo.get_by_id(DEV_USER_ID) is not None:
         return  # already seeded
@@ -40,9 +39,14 @@ def _seed_dev_user(app: FastAPI) -> None:
     now = time.time()
 
     # Human member row
-    member_repo.create(MemberRow(
-        id=DEV_USER_ID, name="Dev", type=MemberType.HUMAN, created_at=now,
-    ))
+    member_repo.create(
+        MemberRow(
+            id=DEV_USER_ID,
+            name="Dev",
+            type=MemberType.HUMAN,
+            created_at=now,
+        )
+    )
 
     # Initial agents (same as register())
     initial_agents = [
@@ -55,23 +59,32 @@ def _seed_dev_user(app: FastAPI) -> None:
         agent_id = generate_member_id()
         agent_dir = MEMBERS_DIR / agent_id
         agent_dir.mkdir(parents=True, exist_ok=True)
-        _write_agent_md(agent_dir / "agent.md", name=agent_def["name"],
-                        description=agent_def["description"])
-        _write_json(agent_dir / "meta.json", {
-            "status": "active", "version": "1.0.0",
-            "created_at": int(now * 1000), "updated_at": int(now * 1000),
-        })
-        member_repo.create(MemberRow(
-            id=agent_id, name=agent_def["name"], type=MemberType.MYCEL_AGENT,
-            description=agent_def["description"],
-            config_dir=str(agent_dir),
-            owner_user_id=DEV_USER_ID,
-            created_at=now,
-        ))
+        _write_agent_md(agent_dir / "agent.md", name=agent_def["name"], description=agent_def["description"])
+        _write_json(
+            agent_dir / "meta.json",
+            {
+                "status": "active",
+                "version": "1.0.0",
+                "created_at": int(now * 1000),
+                "updated_at": int(now * 1000),
+            },
+        )
+        member_repo.create(
+            MemberRow(
+                id=agent_id,
+                name=agent_def["name"],
+                type=MemberType.MYCEL_AGENT,
+                description=agent_def["description"],
+                config_dir=str(agent_dir),
+                owner_user_id=DEV_USER_ID,
+                created_at=now,
+            )
+        )
         src_avatar = assets_dir / agent_def["avatar"]
         if src_avatar.exists():
             try:
                 from backend.web.routers.entities import process_and_save_avatar
+
                 avatar_path = process_and_save_avatar(src_avatar, agent_id)
                 member_repo.update(agent_id, avatar=avatar_path, updated_at=now)
             except Exception as e:
@@ -97,13 +110,13 @@ async def lifespan(app: FastAPI):
     ensure_library_dir()
 
     # ---- Entity-Chat repos + services ----
-    from storage.providers.sqlite.member_repo import SQLiteMemberRepo, SQLiteAccountRepo
+    from storage.providers.sqlite.chat_repo import SQLiteChatEntityRepo, SQLiteChatMessageRepo, SQLiteChatRepo
     from storage.providers.sqlite.entity_repo import SQLiteEntityRepo
-    from storage.providers.sqlite.thread_repo import SQLiteThreadRepo
-    from storage.providers.sqlite.thread_launch_pref_repo import SQLiteThreadLaunchPrefRepo
-    from storage.providers.sqlite.recipe_repo import SQLiteRecipeRepo
-    from storage.providers.sqlite.chat_repo import SQLiteChatRepo, SQLiteChatEntityRepo, SQLiteChatMessageRepo
     from storage.providers.sqlite.kernel import SQLiteDBRole, resolve_role_db_path
+    from storage.providers.sqlite.member_repo import SQLiteAccountRepo, SQLiteMemberRepo
+    from storage.providers.sqlite.recipe_repo import SQLiteRecipeRepo
+    from storage.providers.sqlite.thread_launch_pref_repo import SQLiteThreadLaunchPrefRepo
+    from storage.providers.sqlite.thread_repo import SQLiteThreadRepo
 
     db = resolve_role_db_path(SQLiteDBRole.MAIN)
     chat_db = resolve_role_db_path(SQLiteDBRole.CHAT)
@@ -119,6 +132,7 @@ async def lifespan(app: FastAPI):
     app.state.chat_message_repo = SQLiteChatMessageRepo(chat_db)
 
     from backend.web.services.auth_service import AuthService
+
     app.state.auth_service = AuthService(
         members=app.state.member_repo,
         accounts=app.state.account_repo,
@@ -126,11 +140,13 @@ async def lifespan(app: FastAPI):
 
     # Dev bypass: seed dev-user + initial agents on first startup
     from backend.web.core.dependencies import _DEV_SKIP_AUTH
+
     if _DEV_SKIP_AUTH:
         _seed_dev_user(app)
 
     from messaging.realtime.bridge import SupabaseRealtimeBridge
     from messaging.realtime.typing import TypingTracker as MessagingTypingTracker
+
     app.state.chat_event_bus = SupabaseRealtimeBridge()
     app.state.typing_tracker = MessagingTypingTracker(app.state.chat_event_bus)
 
@@ -138,10 +154,11 @@ async def lifespan(app: FastAPI):
     from backend.web.core.supabase_factory import create_messaging_supabase_client
     from storage.providers.supabase.messaging_repo import (
         SupabaseChatMemberRepo,
-        SupabaseMessagesRepo,
         SupabaseMessageReadRepo,
+        SupabaseMessagesRepo,
         SupabaseRelationshipRepo,
     )
+
     _supabase = create_messaging_supabase_client()
     _chat_member_repo = SupabaseChatMemberRepo(_supabase)
     _messages_repo = SupabaseMessagesRepo(_supabase)
@@ -149,9 +166,11 @@ async def lifespan(app: FastAPI):
     app.state.relationship_repo = SupabaseRelationshipRepo(_supabase)
 
     from storage.providers.supabase.contact_repo import SupabaseContactRepo
+
     app.state.contact_repo = SupabaseContactRepo(_supabase)
 
     from messaging.delivery.resolver import HireVisitDeliveryResolver
+
     delivery_resolver = HireVisitDeliveryResolver(
         contact_repo=app.state.contact_repo,
         chat_member_repo=_chat_member_repo,
@@ -159,12 +178,14 @@ async def lifespan(app: FastAPI):
     )
 
     from messaging.relationships.service import RelationshipService
+
     app.state.relationship_service = RelationshipService(
         app.state.relationship_repo,
         entity_repo=app.state.entity_repo,
     )
 
     from messaging.service import MessagingService
+
     app.state.messaging_service = MessagingService(
         chat_repo=app.state.chat_repo,
         chat_member_repo=_chat_member_repo,
@@ -178,6 +199,7 @@ async def lifespan(app: FastAPI):
 
     # Wire chat delivery after event loop is available
     from core.agents.communication.delivery import make_chat_delivery_fn
+
     _delivery_fn = make_chat_delivery_fn(app)
     app.state.messaging_service.set_delivery_fn(_delivery_fn)
 
@@ -193,6 +215,7 @@ async def lifespan(app: FastAPI):
     app.state.subagent_buffers: dict[str, RunEventBuffer] = {}
 
     from backend.web.services.display_builder import DisplayBuilder
+
     app.state.display_builder = DisplayBuilder()
     app.state.thread_last_active: dict[str, float] = {}  # thread_id → epoch timestamp
     app.state.idle_reaper_task: asyncio.Task | None = None
@@ -226,6 +249,7 @@ async def lifespan(app: FastAPI):
             sender_name = msg.from_user_id.split("@")[0] or msg.from_user_id
             if routing.type == "thread":
                 from backend.web.services.message_routing import route_message_to_brain
+
                 content = format_wechat_message(sender_name, msg.from_user_id, msg.text)
                 await route_message_to_brain(app, routing.id, content, source="owner", sender_name=sender_name)
             elif routing.type == "chat":

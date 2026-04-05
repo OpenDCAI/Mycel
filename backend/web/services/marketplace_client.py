@@ -1,4 +1,5 @@
 """HTTP client for Mycel Hub marketplace API."""
+
 import json
 import logging
 import os
@@ -78,11 +79,13 @@ def _serialize_member_snapshot(member_id: str) -> dict:
                 skill_md = skill_dir / "SKILL.md"
                 if skill_md.exists():
                     meta = _read_json(skill_dir / "meta.json")
-                    skills.append({
-                        "name": skill_dir.name,
-                        "content": skill_md.read_text(encoding="utf-8"),
-                        "meta": meta,
-                    })
+                    skills.append(
+                        {
+                            "name": skill_dir.name,
+                            "content": skill_md.read_text(encoding="utf-8"),
+                            "meta": meta,
+                        }
+                    )
 
     # MCP
     mcp = _read_json(member_dir / ".mcp.json")
@@ -141,21 +144,25 @@ def publish(
     parent_version = source.get("installed_version")
 
     # Call Hub API
-    result = _hub_api("POST", "/publish", json={
-        "slug": slug,
-        "type": type_,
-        "name": bundle.agent.name,
-        "description": bundle.agent.description,
-        "version": new_version,
-        "release_notes": release_notes,
-        "tags": tags,
-        "visibility": visibility,
-        "snapshot": snapshot,
-        "parent_item_id": parent_item_id,
-        "parent_version": parent_version,
-        "publisher_user_id": publisher_user_id,
-        "publisher_username": publisher_username,
-    })
+    result = _hub_api(
+        "POST",
+        "/publish",
+        json={
+            "slug": slug,
+            "type": type_,
+            "name": bundle.agent.name,
+            "description": bundle.agent.description,
+            "version": new_version,
+            "release_notes": release_notes,
+            "tags": tags,
+            "visibility": visibility,
+            "snapshot": snapshot,
+            "parent_item_id": parent_item_id,
+            "parent_version": parent_version,
+            "publisher_user_id": publisher_user_id,
+            "publisher_username": publisher_username,
+        },
+    )
 
     # Update local meta.json
     meta["version"] = new_version
@@ -181,6 +188,7 @@ def download(item_id: str, owner_user_id: str = "system") -> dict:
     item_type = item.get("type", "skill")
 
     from backend.web.services.library_service import LIBRARY_DIR
+
     now = int(time.time() * 1000)
 
     if item_type == "skill":
@@ -242,6 +250,7 @@ def download(item_id: str, owner_user_id: str = "system") -> dict:
     elif item_type == "member":
         # Members still get installed as full members
         from backend.web.services.member_service import install_from_snapshot
+
         member_id = install_from_snapshot(
             snapshot=snapshot,
             name=item["name"],
@@ -263,6 +272,7 @@ def upgrade(member_id: str, item_id: str, owner_user_id: str) -> dict:
     installed_version = result["version"]
 
     from backend.web.services.member_service import install_from_snapshot
+
     install_from_snapshot(
         snapshot=snapshot,
         name=result["item"]["name"],

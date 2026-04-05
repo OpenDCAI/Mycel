@@ -6,7 +6,6 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Depends, HTTPException, Request
 
 from backend.web.core.dependencies import get_current_user_id
-
 from backend.web.models.panel import (
     BulkDeleteTasksRequest,
     BulkTaskStatusRequest,
@@ -23,12 +22,13 @@ from backend.web.models.panel import (
     UpdateResourceRequest,
     UpdateTaskRequest,
 )
-from backend.web.services import member_service, task_service, library_service, profile_service, cron_job_service
+from backend.web.services import cron_job_service, library_service, member_service, profile_service, task_service
 
 router = APIRouter(prefix="/api/panel", tags=["panel"])
 
 
 # ── Members ──
+
 
 @router.get("/members")
 async def list_members(
@@ -53,12 +53,14 @@ async def create_member(
 ) -> dict[str, Any]:
     return await asyncio.to_thread(member_service.create_member, req.name, req.description, owner_user_id=user_id)
 
+
 @router.put("/members/{member_id}")
 async def update_member(member_id: str, req: UpdateMemberRequest) -> dict[str, Any]:
     item = await asyncio.to_thread(member_service.update_member, member_id, **req.model_dump())
     if not item:
         raise HTTPException(404, "Member not found")
     return item
+
 
 @router.put("/members/{member_id}/config")
 async def update_member_config(member_id: str, req: MemberConfigPayload) -> dict[str, Any]:
@@ -89,6 +91,7 @@ async def delete_member(member_id: str) -> dict[str, Any]:
 
 
 # ── Tasks ──
+
 
 @router.get("/tasks")
 async def list_tasks() -> dict[str, Any]:
@@ -183,6 +186,7 @@ async def trigger_cron_job(job_id: str, request: Request) -> dict[str, Any]:
 
 # ── Library ──
 
+
 @router.get("/library/{resource_type}")
 async def list_library(
     resource_type: str,
@@ -241,7 +245,9 @@ async def delete_resource(
     request: Request,
     user_id: Annotated[str, Depends(get_current_user_id)],
 ) -> dict[str, Any]:
-    ok = await asyncio.to_thread(library_service.delete_resource, resource_type, resource_id, user_id, request.app.state.recipe_repo)
+    ok = await asyncio.to_thread(
+        library_service.delete_resource, resource_type, resource_id, user_id, request.app.state.recipe_repo
+    )
     if not ok:
         raise HTTPException(404, "Resource not found")
     return {"success": True}
@@ -253,7 +259,9 @@ async def list_library_names(
     request: Request,
     user_id: Annotated[str, Depends(get_current_user_id)],
 ) -> dict[str, Any]:
-    items = await asyncio.to_thread(library_service.list_library_names, resource_type, user_id, request.app.state.recipe_repo)
+    items = await asyncio.to_thread(
+        library_service.list_library_names, resource_type, user_id, request.app.state.recipe_repo
+    )
     return {"items": items}
 
 
@@ -283,7 +291,9 @@ async def get_resource_content(
 
 
 @router.put("/library/{resource_type}/{resource_id}/content")
-async def update_resource_content(resource_type: str, resource_id: str, req: UpdateResourceContentRequest) -> dict[str, Any]:
+async def update_resource_content(
+    resource_type: str, resource_id: str, req: UpdateResourceContentRequest
+) -> dict[str, Any]:
     if resource_type == "recipe":
         raise HTTPException(400, "Recipes are read-only")
     ok = await asyncio.to_thread(library_service.update_resource_content, resource_type, resource_id, req.content)
@@ -293,6 +303,7 @@ async def update_resource_content(resource_type: str, resource_id: str, req: Upd
 
 
 # ── Profile ──
+
 
 @router.get("/profile")
 async def get_profile() -> dict[str, Any]:

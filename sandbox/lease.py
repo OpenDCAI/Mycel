@@ -20,12 +20,12 @@ from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from storage.providers.sqlite.kernel import SQLiteDBRole, connect_sqlite, resolve_role_db_path
 from sandbox.lifecycle import (
     LeaseInstanceState,
     assert_lease_instance_transition,
     parse_lease_instance_state,
 )
+from storage.providers.sqlite.kernel import SQLiteDBRole, connect_sqlite, resolve_role_db_path
 
 if TYPE_CHECKING:
     from sandbox.provider import SandboxProvider
@@ -499,6 +499,7 @@ class SQLiteLease(SandboxLease):
         with self._instance_lock():
             if event_type != "intent.ensure_running":
                 from storage.providers.sqlite.lease_repo import SQLiteLeaseRepo
+
                 _repo = SQLiteLeaseRepo(db_path=self.db_path)
                 try:
                     _row = _repo.get(self.lease_id)
@@ -669,6 +670,7 @@ class SQLiteLease(SandboxLease):
 
         with self._instance_lock():
             from storage.providers.sqlite.lease_repo import SQLiteLeaseRepo
+
             _repo = SQLiteLeaseRepo(db_path=self.db_path)
             try:
                 _row = _repo.get(self.lease_id)
@@ -704,6 +706,7 @@ class SQLiteLease(SandboxLease):
             self.status = "recovering"
             self._persist_lease_metadata()
             from sandbox.thread_context import get_current_thread_id
+
             thread_id = get_current_thread_id()
             session_info = provider.create_session(context_id=f"leon-{self.lease_id}", thread_id=thread_id)
             self._current_instance = SandboxInstance(
@@ -807,7 +810,9 @@ def lease_from_row(row: dict, db_path: Path) -> SQLiteLease:
             instance_id=row["current_instance_id"],
             provider_name=row["provider_name"],
             status=row.get("instance_status") or row.get("observed_state") or "unknown",
-            created_at=datetime.fromisoformat(str(row["instance_created_at"])) if row.get("instance_created_at") else datetime.now(),
+            created_at=datetime.fromisoformat(str(row["instance_created_at"]))
+            if row.get("instance_created_at")
+            else datetime.now(),
         )
 
     observed_at = None

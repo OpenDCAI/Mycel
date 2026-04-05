@@ -106,7 +106,7 @@ class EvalRunner:
         captures: list[TrajectoryCapture],
         started_at: str,
         finished_at: str,
-    ) -> RunTrajectory:
+    ) -> RunTrajectory:  # noqa: F821
         """Merge multiple TrajectoryCaptures into a single RunTrajectory."""
         from eval.models import LLMCallRecord, RunTrajectory, ToolCallRecord
 

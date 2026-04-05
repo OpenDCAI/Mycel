@@ -21,6 +21,7 @@ from langchain.agents.middleware.types import (
 from langchain_core.messages import SystemMessage
 
 from storage.contracts import SummaryRepo
+
 from .compactor import ContextCompactor
 from .pruner import SessionPruner
 from .summary_store import SummaryStore
@@ -73,7 +74,9 @@ class MemoryMiddleware(AgentMiddleware):
 
         # Persistent storage
         summary_db_path = db_path or Path.home() / ".leon" / "leon.db"
-        self.summary_store = SummaryStore(summary_db_path, summary_repo=summary_repo) if (db_path or summary_repo) else None
+        self.summary_store = (
+            SummaryStore(summary_db_path, summary_repo=summary_repo) if (db_path or summary_repo) else None
+        )
         self.checkpointer = checkpointer
 
         # Injected references (set by agent.py after construction)
@@ -297,6 +300,7 @@ class MemoryMiddleware(AgentMiddleware):
     def _extract_thread_id(self, request: ModelRequest) -> str | None:
         """Extract thread_id from thread context (ContextVar set by streaming/agent)."""
         from sandbox.thread_context import get_current_thread_id
+
         tid = get_current_thread_id()
         if tid:
             return tid

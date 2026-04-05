@@ -7,6 +7,7 @@ All IDs are TEXT (UUID strings) for consistency with existing SQLite schema.
 from __future__ import annotations
 
 import logging
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from messaging._utils import now_iso
@@ -61,14 +62,14 @@ class SupabaseChatMemberRepo:
         return None
 
     def update_last_read(self, chat_id: str, user_id: str) -> None:
-        self._client.table("chat_members").update(
-            {"last_read_at": now_iso()}
-        ).eq("chat_id", chat_id).eq("user_id", user_id).execute()
+        self._client.table("chat_members").update({"last_read_at": now_iso()}).eq("chat_id", chat_id).eq(
+            "user_id", user_id
+        ).execute()
 
     def update_mute(self, chat_id: str, user_id: str, muted: bool, mute_until: str | None = None) -> None:
-        self._client.table("chat_members").update(
-            {"muted": muted, "mute_until": mute_until}
-        ).eq("chat_id", chat_id).eq("user_id", user_id).execute()
+        self._client.table("chat_members").update({"muted": muted, "mute_until": mute_until}).eq("chat_id", chat_id).eq(
+            "user_id", user_id
+        ).execute()
 
 
 class SupabaseMessagesRepo:
@@ -158,8 +159,6 @@ class SupabaseMessagesRepo:
 
     def retract(self, message_id: str, sender_id: str) -> bool:
         """Retract a message within 2-minute window."""
-        import uuid
-        from datetime import timedelta
 
         msg = self.get_by_id(message_id)
         if not msg or msg.get("sender_id") != sender_id:
@@ -168,13 +167,13 @@ class SupabaseMessagesRepo:
         if created:
             try:
                 created_dt = datetime.fromisoformat(created.replace("Z", "+00:00"))
-                if datetime.now(tz=timezone.utc) - created_dt > timedelta(minutes=2):
+                if datetime.now(tz=UTC) - created_dt > timedelta(minutes=2):
                     return False
             except (ValueError, AttributeError):
                 pass
-        self._client.table("messages").update(
-            {"retracted_at": now_iso(), "content": "[已撤回]"}
-        ).eq("id", message_id).execute()
+        self._client.table("messages").update({"retracted_at": now_iso(), "content": "[已撤回]"}).eq(
+            "id", message_id
+        ).execute()
         return True
 
     def delete_for(self, message_id: str, user_id: str) -> None:
@@ -185,9 +184,7 @@ class SupabaseMessagesRepo:
         deleted_for = list(msg.get("deleted_for") or [])
         if user_id not in deleted_for:
             deleted_for.append(user_id)
-        self._client.table("messages").update(
-            {"deleted_for": deleted_for}
-        ).eq("id", message_id).execute()
+        self._client.table("messages").update({"deleted_for": deleted_for}).eq("id", message_id).execute()
 
     def search(self, query: str, *, chat_id: str | None = None, limit: int = 50) -> list[dict[str, Any]]:
         q = self._client.table("messages").select("*").ilike("content", f"%{query}%").is_("deleted_at", "null")
@@ -230,7 +227,9 @@ class SupabaseMessageReadRepo:
             self._client.table("message_reads").upsert(rows, on_conflict="message_id,user_id").execute()
 
     def get_read_count(self, message_id: str) -> int:
-        res = self._client.table("message_reads").select("user_id", count="exact").eq("message_id", message_id).execute()
+        res = (
+            self._client.table("message_reads").select("user_id", count="exact").eq("message_id", message_id).execute()
+        )
         return res.count or 0
 
     def has_read(self, message_id: str, user_id: str) -> bool:
@@ -287,6 +286,7 @@ class SupabaseRelationshipRepo:
             return res.data[0] if res.data else {**existing, "updated_at": now, **fields}
         else:
             import uuid
+
             row = {"id": str(uuid.uuid4()), "principal_a": pa, "principal_b": pb, "updated_at": now, **fields}
             res = self._client.table("relationships").insert(row).execute()
             return res.data[0] if res.data else row

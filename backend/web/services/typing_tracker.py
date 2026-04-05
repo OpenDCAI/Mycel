@@ -32,16 +32,22 @@ class TypingTracker:
     def start_chat(self, thread_id: str, chat_id: str, member_id: str) -> None:
         """Start typing indicator for a chat-based delivery."""
         self._active[thread_id] = _ChatEntry(chat_id, member_id)
-        self._chat_bus.publish(chat_id, {
-            "event": "typing_start",
-            "data": {"member_id": member_id},
-        })
+        self._chat_bus.publish(
+            chat_id,
+            {
+                "event": "typing_start",
+                "data": {"member_id": member_id},
+            },
+        )
 
     def stop(self, thread_id: str) -> None:
         entry = self._active.pop(thread_id, None)
         if not entry:
             return
-        self._chat_bus.publish(entry.chat_id, {
-            "event": "typing_stop",
-            "data": {"member_id": entry.member_id},
-        })
+        self._chat_bus.publish(
+            entry.chat_id,
+            {
+                "event": "typing_stop",
+                "data": {"member_id": entry.member_id},
+            },
+        )

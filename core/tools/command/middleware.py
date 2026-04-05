@@ -8,21 +8,20 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-
 from pathlib import Path
 from typing import Any
 
 logger = logging.getLogger(__name__)
 
-from langchain.agents.middleware import AgentMiddleware, AgentState
-from langchain.agents.middleware.types import ModelRequest, ModelResponse
-from langchain.tools import ToolRuntime, tool
-from langgraph.runtime import Runtime
+from langchain.agents.middleware import AgentMiddleware, AgentState  # noqa: E402
+from langchain.agents.middleware.types import ModelRequest, ModelResponse  # noqa: E402
+from langchain.tools import ToolRuntime, tool  # noqa: E402
+from langgraph.runtime import Runtime  # noqa: E402
 
-from sandbox.shell_output import normalize_pty_result
+from sandbox.shell_output import normalize_pty_result  # noqa: E402
 
-from .base import AsyncCommand, BaseExecutor
-from .dispatcher import get_executor, get_shell_info
+from .base import AsyncCommand, BaseExecutor  # noqa: E402
+from .dispatcher import get_executor, get_shell_info  # noqa: E402
 
 RUN_COMMAND_TOOL_NAME = "run_command"
 COMMAND_STATUS_TOOL_NAME = "command_status"
@@ -113,10 +112,10 @@ class CommandMiddleware(AgentMiddleware[CommandState]):
         async def run_command_tool(
             *,
             runtime: ToolRuntime[CommandState],
-            CommandLine: str,
-            Cwd: str | None = None,
-            Blocking: bool = True,
-            Timeout: int | None = None,
+            CommandLine: str,  # noqa: N803
+            Cwd: str | None = None,  # noqa: N803
+            Blocking: bool = True,  # noqa: N803
+            Timeout: int | None = None,  # noqa: N803
         ) -> str:
             """Execute shell command. OS auto-detects shell (mac→zsh, linux→bash, win→powershell).
 
@@ -137,8 +136,8 @@ class CommandMiddleware(AgentMiddleware[CommandState]):
         async def command_status_tool(
             *,
             runtime: ToolRuntime[CommandState],
-            CommandId: str,
-            WaitDurationSeconds: int = 0,
+            CommandId: str,  # noqa: N803
+            WaitDurationSeconds: int = 0,  # noqa: N803
         ) -> str:
             """Check status of a non-blocking command.
 
@@ -225,15 +224,20 @@ class CommandMiddleware(AgentMiddleware[CommandState]):
         # Emit task_start event
         runtime = getattr(self._agent, "runtime", None) if self._agent else None
         if runtime:
-            runtime.emit_activity_event({
-                "event": "task_start",
-                "data": json.dumps({
-                    "task_id": async_cmd.command_id,
-                    "task_type": "bash",
-                    "command_line": command_line,
-                    "background": True,
-                }, ensure_ascii=False),
-            })
+            runtime.emit_activity_event(
+                {
+                    "event": "task_start",
+                    "data": json.dumps(
+                        {
+                            "task_id": async_cmd.command_id,
+                            "task_type": "bash",
+                            "command_line": command_line,
+                            "background": True,
+                        },
+                        ensure_ascii=False,
+                    ),
+                }
+            )
 
         if timeout and timeout > 0:
             await asyncio.sleep(min(timeout, 1.0))
@@ -244,16 +248,14 @@ class CommandMiddleware(AgentMiddleware[CommandState]):
                 result = await self._executor.wait_for(async_cmd.command_id)
                 if result:
                     return result.to_tool_result()
-        except (asyncio.TimeoutError, OSError) as e:
+        except (TimeoutError, OSError) as e:
             logger.debug("Status check failed for %s (command may still be running): %s", async_cmd.command_id, e)
         except Exception:
             logger.warning("Unexpected error checking status for command %s", async_cmd.command_id, exc_info=True)
 
         # Start background monitoring
         if runtime:
-            asyncio.create_task(
-                self._monitor_async_command(async_cmd.command_id, command_line, runtime)
-            )
+            asyncio.create_task(self._monitor_async_command(async_cmd.command_id, command_line, runtime))
 
         return (
             f"Command started in background.\n"
@@ -261,9 +263,7 @@ class CommandMiddleware(AgentMiddleware[CommandState]):
             f"Use command_status tool to check progress."
         )
 
-    async def _monitor_async_command(
-        self, command_id: str, command_line: str, runtime: Any
-    ) -> None:
+    async def _monitor_async_command(self, command_id: str, command_line: str, runtime: Any) -> None:
         """Monitor async command and emit completion events."""
         while True:
             await asyncio.sleep(2.0)
@@ -305,14 +305,19 @@ class CommandMiddleware(AgentMiddleware[CommandState]):
 
                 # Emit task completion event
                 event_type = "task_done" if exit_code == 0 else "task_error"
-                runtime.emit_activity_event({
-                    "event": event_type,
-                    "data": json.dumps({
-                        "task_id": command_id,
-                        "exit_code": exit_code,
-                        "background": True,
-                    }, ensure_ascii=False),
-                })
+                runtime.emit_activity_event(
+                    {
+                        "event": event_type,
+                        "data": json.dumps(
+                            {
+                                "task_id": command_id,
+                                "exit_code": exit_code,
+                                "background": True,
+                            },
+                            ensure_ascii=False,
+                        ),
+                    }
+                )
                 break
 
     async def _inject_command_notification(

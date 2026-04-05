@@ -24,7 +24,9 @@ class SupabaseThreadLaunchPrefRepo:
     def get(self, owner_user_id: str, member_id: str) -> dict[str, Any] | None:
         response = (
             self._t()
-            .select("owner_user_id, member_id, last_confirmed_json, last_successful_json, last_confirmed_at, last_successful_at")
+            .select(
+                "owner_user_id, member_id, last_confirmed_json, last_successful_json, last_confirmed_at, last_successful_at"  # noqa: E501
+            )
             .eq("owner_user_id", owner_user_id)
             .eq("member_id", member_id)
             .execute()

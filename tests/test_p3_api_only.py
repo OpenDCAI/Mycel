@@ -1,8 +1,16 @@
 """
 P3 API 端点测试：仅测试 REST API，不依赖 LeonAgent
 """
+
+import os
+
 import httpx
 import pytest
+
+pytestmark = pytest.mark.skipif(
+    not os.getenv("LEON_E2E_BACKEND"),
+    reason="LEON_E2E_BACKEND not set (requires running backend)",
+)
 
 
 BASE_URL = "http://127.0.0.1:8003"
@@ -30,7 +38,7 @@ async def test_get_nonexistent_task():
     async with httpx.AsyncClient() as client:
         response = await client.get(f"{BASE_URL}/api/threads/{thread_id}/tasks/{task_id}")
         assert response.status_code == 404
-        print(f"✓ 不存在的任务返回 404")
+        print("✓ 不存在的任务返回 404")
 
 
 @pytest.mark.asyncio
@@ -42,7 +50,7 @@ async def test_cancel_nonexistent_task():
     async with httpx.AsyncClient() as client:
         response = await client.post(f"{BASE_URL}/api/threads/{thread_id}/tasks/{task_id}/cancel")
         assert response.status_code == 404
-        print(f"✓ 取消不存在的任务返回 404")
+        print("✓ 取消不存在的任务返回 404")
 
 
 @pytest.mark.asyncio
@@ -54,17 +62,17 @@ async def test_api_endpoints_exist():
         # 测试列表端点
         response = await client.get(f"{BASE_URL}/api/threads/{thread_id}/tasks")
         assert response.status_code == 200
-        print(f"✓ GET /tasks 端点存在")
+        print("✓ GET /tasks 端点存在")
 
         # 测试详情端点（404 也说明端点存在）
         response = await client.get(f"{BASE_URL}/api/threads/{thread_id}/tasks/fake-id")
         assert response.status_code == 404
-        print(f"✓ GET /tasks/{{task_id}} 端点存在")
+        print("✓ GET /tasks/{task_id} 端点存在")
 
         # 测试取消端点（404 也说明端点存在）
         response = await client.post(f"{BASE_URL}/api/threads/{thread_id}/tasks/fake-id/cancel")
         assert response.status_code == 404
-        print(f"✓ POST /tasks/{{task_id}}/cancel 端点存在")
+        print("✓ POST /tasks/{task_id}/cancel 端点存在")
 
 
 if __name__ == "__main__":

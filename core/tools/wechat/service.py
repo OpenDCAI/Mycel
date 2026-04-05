@@ -7,7 +7,8 @@ Tools are scoped to the agent's owner's entity_id (the human who connected WeCha
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Callable
+from collections.abc import Callable
+from typing import TYPE_CHECKING
 
 from core.runtime.registry import ToolEntry, ToolMode, ToolRegistry
 
@@ -45,35 +46,37 @@ class WeChatToolService:
             except RuntimeError as e:
                 return f"Error: {e}"
 
-        registry.register(ToolEntry(
-            name="wechat_send",
-            mode=ToolMode.INLINE,
-            schema={
-                "name": "wechat_send",
-                "description": (
-                    "Send a text message to a WeChat user via the connected WeChat bot.\n"
-                    "Use wechat_contacts to find available user_ids.\n"
-                    "The user must have messaged the bot first before you can reply.\n"
-                    "Keep messages concise — WeChat is a chat app. Use plain text, no markdown."
-                ),
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "user_id": {
-                            "type": "string",
-                            "description": "WeChat user ID (format: xxx@im.wechat). Get from wechat_contacts.",
+        registry.register(
+            ToolEntry(
+                name="wechat_send",
+                mode=ToolMode.INLINE,
+                schema={
+                    "name": "wechat_send",
+                    "description": (
+                        "Send a text message to a WeChat user via the connected WeChat bot.\n"
+                        "Use wechat_contacts to find available user_ids.\n"
+                        "The user must have messaged the bot first before you can reply.\n"
+                        "Keep messages concise — WeChat is a chat app. Use plain text, no markdown."
+                    ),
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "user_id": {
+                                "type": "string",
+                                "description": "WeChat user ID (format: xxx@im.wechat). Get from wechat_contacts.",
+                            },
+                            "text": {
+                                "type": "string",
+                                "description": "Plain text message to send. No markdown — WeChat won't render it.",
+                            },
                         },
-                        "text": {
-                            "type": "string",
-                            "description": "Plain text message to send. No markdown — WeChat won't render it.",
-                        },
+                        "required": ["user_id", "text"],
                     },
-                    "required": ["user_id", "text"],
                 },
-            },
-            handler=handle,
-            source="wechat",
-        ))
+                handler=handle,
+                source="wechat",
+            )
+        )
 
     def _register_wechat_contacts(self, registry: ToolRegistry) -> None:
         get_conn = self._get_conn
@@ -88,17 +91,19 @@ class WeChatToolService:
             lines = [f"- {c['display_name']} [user_id: {c['user_id']}]" for c in contacts]
             return "\n".join(lines)
 
-        registry.register(ToolEntry(
-            name="wechat_contacts",
-            mode=ToolMode.INLINE,
-            schema={
-                "name": "wechat_contacts",
-                "description": "List WeChat contacts who have messaged the bot. Returns user_ids for use with wechat_send.",
-                "parameters": {
-                    "type": "object",
-                    "properties": {},
+        registry.register(
+            ToolEntry(
+                name="wechat_contacts",
+                mode=ToolMode.INLINE,
+                schema={
+                    "name": "wechat_contacts",
+                    "description": "List WeChat contacts who have messaged the bot. Returns user_ids for use with wechat_send.",  # noqa: E501
+                    "parameters": {
+                        "type": "object",
+                        "properties": {},
+                    },
                 },
-            },
-            handler=handle,
-            source="wechat",
-        ))
+                handler=handle,
+                source="wechat",
+            )
+        )

@@ -35,25 +35,26 @@ class SupabaseSummaryRepo:
         created_at: str,
     ) -> None:
         self._t().update({"is_active": False}).eq("thread_id", thread_id).eq("is_active", True).execute()
-        response = self._t().insert(
-            {
-                "summary_id": summary_id,
-                "thread_id": thread_id,
-                "summary_text": summary_text,
-                "compact_up_to_index": compact_up_to_index,
-                "compacted_at": compacted_at,
-                "is_split_turn": is_split_turn,
-                "split_turn_prefix": split_turn_prefix,
-                "is_active": True,
-                "created_at": created_at,
-            }
-        ).execute()
+        response = (
+            self._t()
+            .insert(
+                {
+                    "summary_id": summary_id,
+                    "thread_id": thread_id,
+                    "summary_text": summary_text,
+                    "compact_up_to_index": compact_up_to_index,
+                    "compacted_at": compacted_at,
+                    "is_split_turn": is_split_turn,
+                    "split_turn_prefix": split_turn_prefix,
+                    "is_active": True,
+                    "created_at": created_at,
+                }
+            )
+            .execute()
+        )
         inserted = q.rows(response, _REPO, "save_summary")
         if not inserted:
-            raise RuntimeError(
-                "Supabase summary repo expected inserted row for save_summary. "
-                "Check table permissions."
-            )
+            raise RuntimeError("Supabase summary repo expected inserted row for save_summary. Check table permissions.")
         if inserted[0].get("summary_id") is None:
             raise RuntimeError(
                 "Supabase summary repo expected non-null summary_id in save_summary response. "
@@ -63,13 +64,21 @@ class SupabaseSummaryRepo:
     def get_latest_summary_row(self, thread_id: str) -> dict[str, Any] | None:
         query = q.limit(
             q.order(
-                self._t().select(
+                self._t()
+                .select(
                     "summary_id,thread_id,summary_text,compact_up_to_index,compacted_at,"
                     "is_split_turn,split_turn_prefix,is_active,created_at"
-                ).eq("thread_id", thread_id).eq("is_active", True),
-                "created_at", desc=True, repo=_REPO, operation="get_latest_summary_row",
+                )
+                .eq("thread_id", thread_id)
+                .eq("is_active", True),
+                "created_at",
+                desc=True,
+                repo=_REPO,
+                operation="get_latest_summary_row",
             ),
-            1, _REPO, "get_latest_summary_row",
+            1,
+            _REPO,
+            "get_latest_summary_row",
         )
         rows = q.rows(query.execute(), _REPO, "get_latest_summary_row")
         if not rows:
@@ -78,12 +87,17 @@ class SupabaseSummaryRepo:
 
     def list_summaries(self, thread_id: str) -> list[dict[str, object]]:
         query = q.order(
-            self._t().select(
-                "summary_id,thread_id,compact_up_to_index,compacted_at,is_split_turn,is_active,created_at"
-            ).eq("thread_id", thread_id),
-            "created_at", desc=True, repo=_REPO, operation="list_summaries",
+            self._t()
+            .select("summary_id,thread_id,compact_up_to_index,compacted_at,is_split_turn,is_active,created_at")
+            .eq("thread_id", thread_id),
+            "created_at",
+            desc=True,
+            repo=_REPO,
+            operation="list_summaries",
         )
-        return [self._hydrate_listing(row, "list_summaries") for row in q.rows(query.execute(), _REPO, "list_summaries")]
+        return [
+            self._hydrate_listing(row, "list_summaries") for row in q.rows(query.execute(), _REPO, "list_summaries")
+        ]
 
     def delete_thread_summaries(self, thread_id: str) -> None:
         self._t().delete().eq("thread_id", thread_id).execute()
@@ -95,8 +109,7 @@ class SupabaseSummaryRepo:
         value = row.get(field)
         if value is None:
             raise RuntimeError(
-                f"Supabase summary repo expected non-null {field} in {operation} row. "
-                "Check summaries table schema."
+                f"Supabase summary repo expected non-null {field} in {operation} row. Check summaries table schema."
             )
         return value
 

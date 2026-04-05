@@ -46,10 +46,15 @@ def get_or_create_agent_id(
     instances = _load()
 
     for aid, info in instances.items():
-        if info.get("member") == member and info.get("thread_id") == thread_id and info.get("sandbox_type") == sandbox_type:
+        if (
+            info.get("member") == member
+            and info.get("thread_id") == thread_id
+            and info.get("sandbox_type") == sandbox_type
+        ):
             return aid
 
     import time
+
     agent_id = uuid.uuid4().hex[:8]
     entry: dict[str, Any] = {
         "member": member,

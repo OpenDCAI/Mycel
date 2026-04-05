@@ -81,7 +81,7 @@ class SQLiteThreadLaunchPrefRepo:
                 (owner_user_id, member_id),
             )
             self._conn.execute(
-                f"UPDATE thread_launch_prefs SET {json_col} = ?, {ts_col} = ? WHERE owner_user_id = ? AND member_id = ?",
+                f"UPDATE thread_launch_prefs SET {json_col} = ?, {ts_col} = ? WHERE owner_user_id = ? AND member_id = ?",  # noqa: E501
                 (payload, now, owner_user_id, member_id),
             )
             self._conn.commit()

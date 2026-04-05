@@ -19,8 +19,9 @@ import random
 import struct
 import time
 from base64 import b64encode
+from collections.abc import Awaitable, Callable
 from pathlib import Path
-from typing import Awaitable, Callable, Literal
+from typing import Literal
 
 import httpx
 from pydantic import BaseModel
@@ -262,10 +263,7 @@ class WeChatConnection:
         }
 
     def list_contacts(self) -> list[dict[str, str]]:
-        return [
-            {"user_id": uid, "display_name": uid.split("@")[0] or uid}
-            for uid in self._context_tokens
-        ]
+        return [{"user_id": uid, "display_name": uid.split("@")[0] or uid} for uid in self._context_tokens]
 
     # --- QR Login ---
 
@@ -280,7 +278,8 @@ class WeChatConnection:
         url = f"{DEFAULT_BASE_URL}/ilink/bot/get_qrcode_status?qrcode={qrcode}"
         try:
             resp = await self._http.get(
-                url, headers={"iLink-App-ClientVersion": "1"},
+                url,
+                headers={"iLink-App-ClientVersion": "1"},
                 timeout=LONG_POLL_TIMEOUT_S + 5,
             )
             resp.raise_for_status()
@@ -303,8 +302,7 @@ class WeChatConnection:
             )
             self._credentials = creds
             _save_json(self.user_id, "credentials.json", creds.model_dump())
-            logger.info("WeChat connected for user=%s account=%s",
-                        self.user_id[:12], creds.account_id)
+            logger.info("WeChat connected for user=%s account=%s", self.user_id[:12], creds.account_id)
             self.start_polling()
             return {"status": "confirmed", "account_id": creds.account_id}
         return {"status": status}
@@ -360,8 +358,7 @@ class WeChatConnection:
                 messages = await self._get_updates()
                 consecutive_failures = 0
                 for msg in messages:
-                    logger.info("WeChat[%s] from=%s: %s",
-                                self.user_id[:8], msg.from_user_id[:20], msg.text[:60])
+                    logger.info("WeChat[%s] from=%s: %s", self.user_id[:8], msg.from_user_id[:20], msg.text[:60])
                     asyncio.create_task(self._deliver_message(msg))
             except asyncio.CancelledError:
                 return
@@ -382,15 +379,18 @@ class WeChatConnection:
     async def _get_updates(self) -> list[WeChatMessage]:
         if not self._credentials:
             raise RuntimeError("Not connected")
-        body = json.dumps({
-            "get_updates_buf": self._sync_buf,
-            "base_info": {"channel_version": CHANNEL_VERSION},
-        })
+        body = json.dumps(
+            {
+                "get_updates_buf": self._sync_buf,
+                "base_info": {"channel_version": CHANNEL_VERSION},
+            }
+        )
         headers = _build_headers(self._credentials.token, body)
         try:
             resp = await self._http.post(
                 f"{self._credentials.base_url}/ilink/bot/getupdates",
-                content=body, headers=headers,
+                content=body,
+                headers=headers,
                 timeout=LONG_POLL_TIMEOUT_S + 5,
             )
             resp.raise_for_status()
@@ -421,9 +421,13 @@ class WeChatConnection:
             if ctx_token:
                 self._context_tokens[sender] = ctx_token
                 tokens_changed = True
-            messages.append(WeChatMessage(
-                from_user_id=sender, text=text, context_token=ctx_token,
-            ))
+            messages.append(
+                WeChatMessage(
+                    from_user_id=sender,
+                    text=text,
+                    context_token=ctx_token,
+                )
+            )
         if tokens_changed:
             await asyncio.to_thread(_save_json, self.user_id, "context_tokens.json", self._context_tokens)
         return messages
@@ -435,27 +439,28 @@ class WeChatConnection:
             raise RuntimeError("WeChat not connected")
         context_token = self._context_tokens.get(to_user_id)
         if not context_token:
-            raise RuntimeError(
-                f"No context_token for {to_user_id}. "
-                "The user needs to message the bot first."
-            )
+            raise RuntimeError(f"No context_token for {to_user_id}. The user needs to message the bot first.")
         client_id = f"leon:{int(time.time())}-{random.randint(0, 0xFFFF):04x}"
-        body = json.dumps({
-            "msg": {
-                "from_user_id": "",
-                "to_user_id": to_user_id,
-                "client_id": client_id,
-                "message_type": MSG_TYPE_BOT,
-                "message_state": MSG_STATE_FINISH,
-                "item_list": [{"type": MSG_ITEM_TEXT, "text_item": {"text": text}}],
-                "context_token": context_token,
-            },
-            "base_info": {"channel_version": CHANNEL_VERSION},
-        })
+        body = json.dumps(
+            {
+                "msg": {
+                    "from_user_id": "",
+                    "to_user_id": to_user_id,
+                    "client_id": client_id,
+                    "message_type": MSG_TYPE_BOT,
+                    "message_state": MSG_STATE_FINISH,
+                    "item_list": [{"type": MSG_ITEM_TEXT, "text_item": {"text": text}}],
+                    "context_token": context_token,
+                },
+                "base_info": {"channel_version": CHANNEL_VERSION},
+            }
+        )
         headers = _build_headers(self._credentials.token, body)
         resp = await self._http.post(
             f"{self._credentials.base_url}/ilink/bot/sendmessage",
-            content=body, headers=headers, timeout=SEND_TIMEOUT_S,
+            content=body,
+            headers=headers,
+            timeout=SEND_TIMEOUT_S,
         )
         resp.raise_for_status()
         return client_id

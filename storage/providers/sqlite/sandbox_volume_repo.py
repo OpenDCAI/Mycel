@@ -10,7 +10,6 @@ from storage.providers.sqlite.kernel import SQLiteDBRole, connect_sqlite_role
 
 
 class SQLiteSandboxVolumeRepo:
-
     def __init__(self, db_path: str | Path | None = None) -> None:
         self._conn = connect_sqlite_role(
             SQLiteDBRole.SANDBOX,

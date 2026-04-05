@@ -2,20 +2,18 @@
 
 from __future__ import annotations
 
-import json
 import sqlite3
 import threading
 from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from storage.providers.sqlite.connection import create_connection
-from storage.providers.sqlite.kernel import SQLiteDBRole, resolve_role_db_path
-
 from sandbox.terminal import (
     REQUIRED_ABSTRACT_TERMINAL_COLUMNS,
     REQUIRED_TERMINAL_POINTER_COLUMNS,
 )
+from storage.providers.sqlite.connection import create_connection
+from storage.providers.sqlite.kernel import SQLiteDBRole, resolve_role_db_path
 
 
 class SQLiteTerminalRepo:
@@ -333,7 +331,9 @@ class SQLiteTerminalRepo:
                 return
             thread_id = str(terminal["thread_id"])
 
-            tables = {row[0] for row in self._conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()}
+            tables = {
+                row[0] for row in self._conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
+            }
             if "terminal_commands" in tables:
                 if "terminal_command_chunks" in tables:
                     self._conn.execute(

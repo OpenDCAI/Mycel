@@ -8,9 +8,9 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
-from .context_monitor import ContextMonitor
-from .state_monitor import AgentFlags, AgentState, StateMonitor
-from .token_monitor import TokenMonitor
+from .context_monitor import ContextMonitor  # noqa: E402
+from .state_monitor import AgentFlags, AgentState, StateMonitor  # noqa: E402
+from .token_monitor import TokenMonitor  # noqa: E402
 
 
 class AgentRuntime:
@@ -122,10 +122,7 @@ class AgentRuntime:
         """返回精简状态字典，适合轻量观察（不含 streaming 细节）"""
         token = self.token
         ctx = self.context
-        usage_percent = (
-            round(ctx.estimated_tokens / ctx.context_limit * 100, 1)
-            if ctx.context_limit > 0 else 0.0
-        )
+        usage_percent = round(ctx.estimated_tokens / ctx.context_limit * 100, 1) if ctx.context_limit > 0 else 0.0
         return {
             "state": self.state.state.value,
             "tokens": token.total_tokens,

@@ -88,6 +88,7 @@ class RemoteSandbox(Sandbox):
         self._default_cwd = default_cwd
         self._provider = provider
         from sandbox.manager import SandboxManager
+
         self._manager = SandboxManager(provider=provider, db_path=db_path)
         self._on_exit = config.on_exit
         self._name = name or config.name
@@ -98,6 +99,7 @@ class RemoteSandbox(Sandbox):
 
     def _get_capability(self) -> SandboxCapability:
         from sandbox.thread_context import get_current_thread_id
+
         thread_id = get_current_thread_id()
         if not thread_id:
             raise RuntimeError("No thread_id set. Call set_current_thread_id first.")
@@ -117,7 +119,6 @@ class RemoteSandbox(Sandbox):
                 loop = None
 
             if loop:
-                import concurrent.futures
                 future = asyncio.run_coroutine_threadsafe(capability.command.execute(cmd), loop)
                 result = future.result(timeout=30)
             else:
@@ -153,6 +154,7 @@ class RemoteSandbox(Sandbox):
 
     def ensure_session(self, thread_id: str) -> None:
         from sandbox.thread_context import set_current_thread_id
+
         set_current_thread_id(thread_id)
         self._capability_cache.pop(thread_id, None)
         self._get_capability()
@@ -200,9 +202,12 @@ class LocalSandbox(Sandbox):
     def __init__(self, workspace_root: str, db_path: Path | None = None) -> None:
         from sandbox.manager import SandboxManager
         from sandbox.providers.local import LocalSessionProvider
+
         self._workspace_root = workspace_root
         self._provider = LocalSessionProvider(default_cwd=workspace_root)
-        self._manager = SandboxManager(provider=self._provider, db_path=db_path or (Path.home() / ".leon" / "sandbox.db"))
+        self._manager = SandboxManager(
+            provider=self._provider, db_path=db_path or (Path.home() / ".leon" / "sandbox.db")
+        )
         self._capability_cache: dict[str, SandboxCapability] = {}
 
     @property
@@ -223,6 +228,7 @@ class LocalSandbox(Sandbox):
 
     def _get_capability(self) -> SandboxCapability:
         from sandbox.thread_context import get_current_thread_id
+
         thread_id = get_current_thread_id()
         if not thread_id:
             raise RuntimeError("No thread_id set. Call set_current_thread_id first.")
@@ -238,6 +244,7 @@ class LocalSandbox(Sandbox):
 
     def ensure_session(self, thread_id: str) -> None:
         from sandbox.thread_context import set_current_thread_id
+
         set_current_thread_id(thread_id)
         self._capability_cache.pop(thread_id, None)
         self._get_capability()

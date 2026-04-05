@@ -59,7 +59,9 @@ def _thread_ref(thread_id: str | None) -> dict[str, Any]:
 
 
 def _lease_ref(
-    lease_id: str | None, provider: str | None, instance_id: str | None = None,
+    lease_id: str | None,
+    provider: str | None,
+    instance_id: str | None = None,
 ) -> dict[str, Any]:
     return {
         "lease_id": lease_id,
@@ -146,7 +148,10 @@ def _map_leases(rows: list[dict[str, Any]]) -> dict[str, Any]:
 
 
 def _map_lease_detail(
-    lease_id: str, lease: dict[str, Any], threads: list[dict[str, Any]], events: list[dict[str, Any]],
+    lease_id: str,
+    lease: dict[str, Any],
+    threads: list[dict[str, Any]],
+    events: list[dict[str, Any]],
 ) -> dict[str, Any]:
     badge = _make_badge(lease["desired_state"], lease["observed_state"])
     badge["error"] = lease["last_error"]
@@ -167,10 +172,7 @@ def _map_lease_detail(
         "state": badge,
         "related_threads": {
             "title": "Related Threads",
-            "items": [
-                {"thread_id": r["thread_id"], "thread_url": f"/thread/{r['thread_id']}"}
-                for r in threads
-            ],
+            "items": [{"thread_id": r["thread_id"], "thread_url": f"/thread/{r['thread_id']}"} for r in threads],
         },
         "lease_events": {
             "title": "Lease Events",

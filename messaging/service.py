@@ -11,10 +11,11 @@ from __future__ import annotations
 
 import logging
 import uuid
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 from backend.web.utils.serializers import avatar_url
-from messaging._utils import now_iso, ts_to_iso
+from messaging._utils import now_iso
 from messaging.contracts import ContentType, MessageType
 
 logger = logging.getLogger(__name__)
@@ -25,15 +26,15 @@ class MessagingService:
 
     def __init__(
         self,
-        chat_repo: Any,                 # storage.providers.sqlite.chat_repo.SQLiteChatRepo (for chat creation)
-        chat_member_repo: Any,          # SupabaseChatMemberRepo or compatible
-        messages_repo: Any,             # SupabaseMessagesRepo
-        message_read_repo: Any,         # SupabaseMessageReadRepo
-        entity_repo: Any,               # EntityRepo (for sender lookup)
-        member_repo: Any,               # MemberRepo (for avatar)
+        chat_repo: Any,  # storage.providers.sqlite.chat_repo.SQLiteChatRepo (for chat creation)
+        chat_member_repo: Any,  # SupabaseChatMemberRepo or compatible
+        messages_repo: Any,  # SupabaseMessagesRepo
+        message_read_repo: Any,  # SupabaseMessageReadRepo
+        entity_repo: Any,  # EntityRepo (for sender lookup)
+        member_repo: Any,  # MemberRepo (for avatar)
         delivery_resolver: Any | None = None,
         delivery_fn: Callable | None = None,
-        event_bus: Any | None = None,   # ChatEventBus or SupabaseRealtimeBridge (optional)
+        event_bus: Any | None = None,  # ChatEventBus or SupabaseRealtimeBridge (optional)
     ) -> None:
         self._chats = chat_repo
         self._members_repo = chat_member_repo
@@ -69,7 +70,9 @@ class MessagingService:
 
     def _create_chat(self, user_ids: list[str], *, chat_type: str, title: str | None) -> dict[str, Any]:
         import time
+
         from storage.contracts import ChatRow
+
         chat_id = str(uuid.uuid4())
         now = time.time()
         self._chats.create(ChatRow(id=chat_id, title=title, status="active", created_at=now))
@@ -114,16 +117,21 @@ class MessagingService:
             row["ai_metadata"] = ai_metadata
 
         created = self._messages.create(row)
-        logger.debug("[messaging] send chat=%s sender=%s msg=%s type=%s", chat_id[:8], sender_id[:15], msg_id[:8], message_type)
+        logger.debug(
+            "[messaging] send chat=%s sender=%s msg=%s type=%s", chat_id[:8], sender_id[:15], msg_id[:8], message_type
+        )
 
         # Publish to event bus (SSE / Realtime bridge)
         sender = self._entities.get_by_id(sender_id)
         sender_name = sender.name if sender else "unknown"
         if self._event_bus:
-            self._event_bus.publish(chat_id, {
-                "event": "message",
-                "data": {**created, "sender_name": sender_name},
-            })
+            self._event_bus.publish(
+                chat_id,
+                {
+                    "event": "message",
+                    "data": {**created, "sender_name": sender_name},
+                },
+            )
 
         # Deliver to agent recipients
         if message_type in ("human", "ai"):
@@ -132,8 +140,12 @@ class MessagingService:
         return created
 
     def _deliver_to_agents(
-        self, chat_id: str, sender_id: str, content: str,
-        mentions: list[str], signal: str | None = None,
+        self,
+        chat_id: str,
+        sender_id: str,
+        content: str,
+        mentions: list[str],
+        signal: str | None = None,
     ) -> None:
         mention_set = set(mentions)
         members = self._members_repo.list_members(chat_id)
@@ -153,6 +165,7 @@ class MessagingService:
                 continue
 
             from messaging.delivery.actions import DeliveryAction
+
             if self._delivery_resolver:
                 is_mentioned = uid in mention_set
                 action = self._delivery_resolver.resolve(uid, chat_id, sender_id, is_mentioned=is_mentioned)
@@ -162,7 +175,9 @@ class MessagingService:
 
             if self._delivery_fn:
                 try:
-                    self._delivery_fn(entity, content, sender_name, chat_id, sender_id, sender_avatar_url, signal=signal)
+                    self._delivery_fn(
+                        entity, content, sender_name, chat_id, sender_id, sender_avatar_url, signal=signal
+                    )
                 except Exception:
                     logger.exception("[messaging] delivery failed for entity %s", uid)
 
@@ -221,10 +236,14 @@ class MessagingService:
                 e = self._entities.get_by_id(uid) if uid else None
                 if e:
                     mem = self._member_repo.get_by_id(e.member_id) if self._member_repo else None
-                    entities_info.append({
-                        "id": e.id, "name": e.name, "type": e.type,
-                        "avatar_url": avatar_url(e.member_id, bool(mem.avatar if mem else None)),
-                    })
+                    entities_info.append(
+                        {
+                            "id": e.id,
+                            "name": e.name,
+                            "type": e.type,
+                            "avatar_url": avatar_url(e.member_id, bool(mem.avatar if mem else None)),
+                        }
+                    )
             msgs = self._messages.list_by_chat(cid, limit=1)
             last_msg = None
             if msgs:
@@ -236,14 +255,16 @@ class MessagingService:
                     "created_at": m.get("created_at"),
                 }
             unread = self.count_unread(cid, user_id)
-            result.append({
-                "id": cid,
-                "title": chat.title,
-                "status": chat.status,
-                "created_at": chat.created_at,
-                "entities": entities_info,
-                "last_message": last_msg,
-                "unread_count": unread,
-                "has_mention": False,  # TODO: implement mention tracking
-            })
+            result.append(
+                {
+                    "id": cid,
+                    "title": chat.title,
+                    "status": chat.status,
+                    "created_at": chat.created_at,
+                    "entities": entities_info,
+                    "last_message": last_msg,
+                    "unread_count": unread,
+                    "has_mention": False,  # TODO: implement mention tracking
+                }
+            )
         return result

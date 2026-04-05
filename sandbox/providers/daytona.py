@@ -37,6 +37,7 @@ def _daytona_state_to_status(state: str) -> str:
         return "paused"
     return "unknown"
 
+
 logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
@@ -48,7 +49,11 @@ if TYPE_CHECKING:
 class DaytonaProvider(SandboxProvider):
     """Daytona cloud sandbox provider."""
 
-    CATALOG_ENTRY = {"vendor": "Daytona", "description": "Managed cloud or self-host Daytona sandboxes", "provider_type": "cloud"}
+    CATALOG_ENTRY = {
+        "vendor": "Daytona",
+        "description": "Managed cloud or self-host Daytona sandboxes",
+        "provider_type": "cloud",
+    }
 
     name = "daytona"
     CAPABILITY = ProviderCapability(
@@ -173,7 +178,7 @@ class DaytonaProvider(SandboxProvider):
                 mount_mounts.append(mount)
 
         if mount_mounts:
-            # @@@daytona-bindmount-http-create - SDK currently lacks bind_mounts field, so self-host bind mounts use direct API create.
+            # @@@daytona-bindmount-http-create - SDK currently lacks bind_mounts field, so self-host bind mounts use direct API create.  # noqa: E501
             sandbox_id = self._create_via_http(bind_mounts=mount_mounts)
             self._wait_until_started(sandbox_id)
             sb = self.client.find_one(sandbox_id)
@@ -216,7 +221,9 @@ class DaytonaProvider(SandboxProvider):
             logger.warning("[DaytonaProvider] pause_session error for %s, verifying actual state", session_id)
             actual = self.get_session_status(session_id)
             if actual == "paused":
-                logger.info("[DaytonaProvider] sandbox %s is actually stopped despite error — pause succeeded", session_id)
+                logger.info(
+                    "[DaytonaProvider] sandbox %s is actually stopped despite error — pause succeeded", session_id
+                )
                 return True
             logger.error("[DaytonaProvider] pause_session truly failed for %s (state=%s)", session_id, actual)
             return False
@@ -231,7 +238,9 @@ class DaytonaProvider(SandboxProvider):
             logger.warning("[DaytonaProvider] resume_session error for %s, verifying actual state", session_id)
             actual = self.get_session_status(session_id)
             if actual == "running":
-                logger.info("[DaytonaProvider] sandbox %s is actually running despite error — resume succeeded", session_id)
+                logger.info(
+                    "[DaytonaProvider] sandbox %s is actually running despite error — resume succeeded", session_id
+                )
                 return True
             logger.error("[DaytonaProvider] resume_session truly failed for %s (state=%s)", session_id, actual)
             return False
@@ -351,9 +360,9 @@ class DaytonaProvider(SandboxProvider):
                 i_disk = text.index(disk_marker)
 
                 cpu1_block = text[:i_mem]
-                mem_block = text[i_mem + len(mem_marker):i_cpu2]
-                cpu2_block = text[i_cpu2 + len(cpu2_marker):i_disk]
-                disk_block = text[i_disk + len(disk_marker):]
+                mem_block = text[i_mem + len(mem_marker) : i_cpu2]
+                cpu2_block = text[i_cpu2 + len(cpu2_marker) : i_disk]
+                disk_block = text[i_disk + len(disk_marker) :]
 
                 def _usage_usec(block: str) -> int | None:
                     for line in block.splitlines():
@@ -369,7 +378,7 @@ class DaytonaProvider(SandboxProvider):
 
                 mem_str = mem_block.strip()
                 if mem_str.isdigit():
-                    memory_used_mb = int(mem_str) / (1024 ** 2)
+                    memory_used_mb = int(mem_str) / (1024**2)
 
                 # du -sm outputs "<MB>\t<path>"; parse the first token
                 disk_line = disk_block.strip().splitlines()[0] if disk_block.strip() else ""
@@ -413,7 +422,9 @@ class DaytonaProvider(SandboxProvider):
             "bindMounts": normalized_mounts,
         }
         with httpx.Client(timeout=30.0) as client:
-            response = client.post(f"{self.api_url.rstrip('/')}/sandbox", headers=self._api_auth_headers(), json=payload)
+            response = client.post(
+                f"{self.api_url.rstrip('/')}/sandbox", headers=self._api_auth_headers(), json=payload
+            )
         if response.status_code != 200:
             raise RuntimeError(f"Daytona create sandbox failed ({response.status_code}): {response.text}")
         sandbox_id = response.json().get("id")
@@ -456,10 +467,12 @@ class DaytonaProvider(SandboxProvider):
         deadline = time.time() + timeout_seconds
         with httpx.Client(timeout=15.0) as client:
             while time.time() < deadline:
-                response = client.get(f"{self.api_url.rstrip('/')}/sandbox/{sandbox_id}", headers=self._api_auth_headers())
+                response = client.get(
+                    f"{self.api_url.rstrip('/')}/sandbox/{sandbox_id}", headers=self._api_auth_headers()
+                )
                 if response.status_code != 200:
                     raise RuntimeError(
-                        f"Daytona get sandbox failed while waiting for started ({response.status_code}): {response.text}"
+                        f"Daytona get sandbox failed while waiting for started ({response.status_code}): {response.text}"  # noqa: E501
                     )
                 body = response.json()
                 state = str(body.get("state") or "")
@@ -472,6 +485,7 @@ class DaytonaProvider(SandboxProvider):
 
     def create_runtime(self, terminal: AbstractTerminal, lease: SandboxLease) -> PhysicalTerminalRuntime:
         from sandbox.providers.daytona import DaytonaSessionRuntime
+
         return DaytonaSessionRuntime(terminal, lease, self)
 
 
@@ -479,24 +493,19 @@ class DaytonaProvider(SandboxProvider):
 
 import asyncio  # noqa: E402
 import json  # noqa: E402
-import os  # noqa: E402
 import re  # noqa: E402
-import shlex  # noqa: E402
-import time  # noqa: E402
-import uuid  # noqa: E402
 from collections.abc import Callable  # noqa: E402
 
 from sandbox.interfaces.executor import ExecuteResult  # noqa: E402
 from sandbox.runtime import (  # noqa: E402
     ENV_NAME_RE,
-    _RemoteRuntimeBase,
-    _SubprocessPtySession,
     _build_export_block,
     _build_state_snapshot_cmd,
     _compute_env_delta,
     _extract_marker_exit,
     _extract_state_from_output,
     _parse_env_output,
+    _RemoteRuntimeBase,
     _sanitize_shell_output,
 )
 
@@ -531,7 +540,7 @@ class DaytonaSessionRuntime(_RemoteRuntimeBase):
         if cleaned_cwd != state.cwd or cleaned_env != state.env_delta:
             from sandbox.terminal import TerminalState
 
-            # @@@daytona-state-sanitize - Legacy prompt noise can corrupt persisted cwd/env_delta and break PTY creation.
+            # @@@daytona-state-sanitize - Legacy prompt noise can corrupt persisted cwd/env_delta and break PTY creation.  # noqa: E501
             # Normalize once here so new abstract terminals inherit only valid state.
             self.update_terminal_state(TerminalState(cwd=cleaned_cwd, env_delta=cleaned_env))
         return cleaned_cwd, cleaned_env
@@ -649,7 +658,9 @@ class DaytonaSessionRuntime(_RemoteRuntimeBase):
                     if "fork/exec" in message and "no such file" in message:
                         # Diagnose: check if working directory exists
                         try:
-                            result = sandbox.process.exec_sync(f"test -d {effective_cwd} && echo y || echo n", timeout=5)
+                            result = sandbox.process.exec_sync(
+                                f"test -d {effective_cwd} && echo y || echo n", timeout=5
+                            )
                             if "n" in result.stdout:
                                 raise RuntimeError(
                                     f"PTY bootstrap failed: working directory '{effective_cwd}' does not exist. "
@@ -720,7 +731,7 @@ class DaytonaSessionRuntime(_RemoteRuntimeBase):
             except Exception as exc:
                 message = str(exc)
                 if self._looks_like_infra_error(message):
-                    # @@@daytona-snapshot-retry - Snapshot can fail due to stale PTY websocket even if sandbox is running.
+                    # @@@daytona-snapshot-retry - Snapshot can fail due to stale PTY websocket even if sandbox is running.  # noqa: E501
                     # Refresh infra truth once, re-create PTY, and retry exactly once.
                     try:
                         self._recover_infra()

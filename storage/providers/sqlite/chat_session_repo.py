@@ -8,10 +8,9 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from sandbox.chat_session import REQUIRED_CHAT_SESSION_COLUMNS
 from storage.providers.sqlite.connection import create_connection
 from storage.providers.sqlite.kernel import SQLiteDBRole, resolve_role_db_path
-
-from sandbox.chat_session import REQUIRED_CHAT_SESSION_COLUMNS
 
 
 class SQLiteChatSessionRepo:
@@ -410,7 +409,7 @@ class SQLiteChatSessionRepo:
     def delete_by_thread(self, thread_id: str) -> None:
         with self._lock:
             rows = self._conn.execute(
-                "SELECT command_id FROM terminal_commands WHERE terminal_id IN (SELECT terminal_id FROM abstract_terminals WHERE thread_id = ?)",
+                "SELECT command_id FROM terminal_commands WHERE terminal_id IN (SELECT terminal_id FROM abstract_terminals WHERE thread_id = ?)",  # noqa: E501
                 (thread_id,),
             ).fetchall()
             if rows:
@@ -421,7 +420,7 @@ class SQLiteChatSessionRepo:
                     command_ids,
                 )
             self._conn.execute(
-                "DELETE FROM terminal_commands WHERE terminal_id IN (SELECT terminal_id FROM abstract_terminals WHERE thread_id = ?)",
+                "DELETE FROM terminal_commands WHERE terminal_id IN (SELECT terminal_id FROM abstract_terminals WHERE thread_id = ?)",  # noqa: E501
                 (thread_id,),
             )
             self._conn.execute("DELETE FROM chat_sessions WHERE thread_id = ?", (thread_id,))

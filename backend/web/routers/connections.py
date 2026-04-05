@@ -106,9 +106,7 @@ async def wechat_set_routing(
     user_id: Annotated[str, Depends(get_current_user_id)],
     app: Annotated[Any, Depends(get_app)],
 ) -> dict:
-    _get_registry(app).get(user_id).set_routing(
-        RoutingConfig(type=body.type, id=body.id, label=body.label)
-    )
+    _get_registry(app).get(user_id).set_routing(RoutingConfig(type=body.type, id=body.id, label=body.label))
     return {"ok": True}
 
 
@@ -134,6 +132,7 @@ async def wechat_routing_targets(
     user_id: needed for thread ownership lookup and chat participation lookup.
     """
     from backend.web.utils.serializers import avatar_url
+
     raw_threads = app.state.thread_repo.list_by_owner_user_id(user_id)
     threads = [
         {

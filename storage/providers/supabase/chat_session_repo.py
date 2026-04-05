@@ -166,9 +166,9 @@ class SupabaseChatSessionRepo:
         last_active = last_active_at or now_iso
 
         # Supersede any existing active sessions for this terminal
-        self._sessions().update({"status": "closed", "ended_at": now_iso, "close_reason": "superseded"}).eq("terminal_id", terminal_id).in_(
-            "status", ["active", "idle", "paused"]
-        ).execute()
+        self._sessions().update({"status": "closed", "ended_at": now_iso, "close_reason": "superseded"}).eq(
+            "terminal_id", terminal_id
+        ).in_("status", ["active", "idle", "paused"]).execute()
 
         self._sessions().insert(
             {
@@ -226,9 +226,9 @@ class SupabaseChatSessionRepo:
         ).execute()
 
     def delete_session(self, session_id: str, *, reason: str = "closed") -> None:
-        self._sessions().update({"status": "closed", "ended_at": datetime.now().isoformat(), "close_reason": reason}).eq(
-            "chat_session_id", session_id
-        ).in_("status", ["active", "idle", "paused"]).execute()
+        self._sessions().update(
+            {"status": "closed", "ended_at": datetime.now().isoformat(), "close_reason": reason}
+        ).eq("chat_session_id", session_id).in_("status", ["active", "idle", "paused"]).execute()
 
     def delete_by_thread(self, thread_id: str) -> None:
         # Find terminal_ids for this thread

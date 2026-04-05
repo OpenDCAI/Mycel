@@ -28,7 +28,12 @@ class SupabaseUserSettingsRepo:
             "get",
         )
         if not rows:
-            return {"user_id": user_id, "default_workspace": None, "recent_workspaces": [], "default_model": "leon:large"}
+            return {
+                "user_id": user_id,
+                "default_workspace": None,
+                "recent_workspaces": [],
+                "default_model": "leon:large",
+            }
         row = dict(rows[0])
         if isinstance(row.get("recent_workspaces"), str):
             import json

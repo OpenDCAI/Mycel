@@ -8,15 +8,13 @@ while maintaining the same interface as before.
 from __future__ import annotations
 
 import shlex
-import sqlite3
 import uuid
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from storage.providers.sqlite.kernel import connect_sqlite
-
 from sandbox.interfaces.executor import BaseExecutor
 from sandbox.interfaces.filesystem import FileSystemBackend
+from storage.providers.sqlite.kernel import connect_sqlite
 
 if TYPE_CHECKING:
     from sandbox.chat_session import ChatSession
@@ -140,6 +138,7 @@ class _CommandWrapper(BaseExecutor):
         if terminal_row is None:
             raise RuntimeError(f"Terminal {terminal_id} not found")
         from sandbox.terminal import terminal_from_row
+
         terminal = terminal_from_row(terminal_row, self._manager.terminal_store.db_path)
         if terminal.thread_id != self._session.thread_id:
             raise RuntimeError(

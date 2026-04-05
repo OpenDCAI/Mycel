@@ -11,12 +11,12 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
-from backend.web.services.event_buffer import RunEventBuffer, ThreadEventBuffer
-from backend.web.services.event_store import cleanup_old_runs
-from backend.web.utils.serializers import extract_text_content
-from core.runtime.middleware.monitor import AgentState
-from storage.contracts import RunEventRepo
-from sandbox.thread_context import set_current_run_id, set_current_thread_id
+from backend.web.services.event_buffer import RunEventBuffer, ThreadEventBuffer  # noqa: E402
+from backend.web.services.event_store import cleanup_old_runs  # noqa: E402
+from backend.web.utils.serializers import extract_text_content  # noqa: E402
+from core.runtime.middleware.monitor import AgentState  # noqa: E402
+from sandbox.thread_context import set_current_run_id, set_current_thread_id  # noqa: E402
+from storage.contracts import RunEventRepo  # noqa: E402
 
 
 def _resolve_run_event_repo(agent: Any) -> RunEventRepo | None:
@@ -24,7 +24,7 @@ def _resolve_run_event_repo(agent: Any) -> RunEventRepo | None:
     if storage_container is None:
         return None
 
-    # @@@runtime-storage-consumer - runtime run lifecycle must consume injected storage container, not assignment-only wiring.
+    # @@@runtime-storage-consumer - runtime run lifecycle must consume injected storage container, not assignment-only wiring.  # noqa: E501
     return storage_container.run_event_repo()
 
 
@@ -119,7 +119,10 @@ async def write_cancellation_markers(
             new_versions,
         )
     except Exception:
-        logger.exception("[streaming] failed to write cancellation markers for thread %s", config.get("configurable", {}).get("thread_id"))
+        logger.exception(
+            "[streaming] failed to write cancellation markers for thread %s",
+            config.get("configurable", {}).get("thread_id"),
+        )
 
     return cancelled_tool_call_ids
 
@@ -169,7 +172,9 @@ async def _repair_incomplete_tool_calls(agent: Any, config: dict[str, Any]) -> N
         thread_id = config.get("configurable", {}).get("thread_id")
         logger.warning(
             "[streaming] Repairing %d incomplete tool_call(s) in thread %s: %s",
-            len(unmatched), thread_id, list(unmatched.keys()),
+            len(unmatched),
+            thread_id,
+            list(unmatched.keys()),
         )
 
         # Strategy: remove messages after the broken AIMessage, then re-add
@@ -189,7 +194,7 @@ async def _repair_incomplete_tool_calls(agent: Any, config: dict[str, Any]) -> N
             return
 
         # Messages after the broken AIMessage that need to be re-ordered
-        after_msgs = messages[broken_ai_idx + 1:]
+        after_msgs = messages[broken_ai_idx + 1 :]
 
         # Build update: remove all messages after broken AI, then add
         # ToolMessage(s) + remaining messages in order
@@ -274,7 +279,7 @@ def _ensure_thread_handlers(agent: Any, thread_id: str, app: Any) -> None:
             data["_seq"] = seq
             event = {**event, "data": json.dumps(data, ensure_ascii=False)}
         # Only SSE-valid fields: extra metadata (agent_id, agent_name) stays in event_store
-        _SSE_FIELDS = frozenset({"event", "data", "id", "retry", "comment"})
+        _SSE_FIELDS = frozenset({"event", "data", "id", "retry", "comment"})  # noqa: N806
         sse_event = {k: v for k, v in event.items() if k in _SSE_FIELDS}
         await thread_buf.put(sse_event)
 
@@ -283,10 +288,12 @@ def _ensure_thread_handlers(agent: Any, thread_id: str, app: Any) -> None:
         if event_type and isinstance(data, dict):
             delta = display_builder_ref.apply_event(thread_id, event_type, data)
             if delta:
-                await thread_buf.put({
-                    "event": "display_delta",
-                    "data": json.dumps(delta, ensure_ascii=False),
-                })
+                await thread_buf.put(
+                    {
+                        "event": "display_delta",
+                        "data": json.dumps(delta, ensure_ascii=False),
+                    }
+                )
 
     qm = app.state.queue_manager
     loop = getattr(app.state, "_event_loop", None)
@@ -297,18 +304,24 @@ def _ensure_thread_handlers(agent: Any, thread_id: str, app: Any) -> None:
             # Agent already ACTIVE — before_model will drain_all on the next LLM call.
             source = getattr(item, "source", None)
             if loop and not loop.is_closed():
+
                 async def _emit_active_event() -> None:
                     if source == "owner":
                         # @@@steer-instant-feedback — emit user_message immediately
                         # so display_builder creates user entry without waiting for
                         # before_model or _consume_followup_queue.
-                        await activity_sink({
-                            "event": "user_message",
-                            "data": json.dumps({
-                                "content": item.content,
-                                "showing": True,
-                            }, ensure_ascii=False),
-                        })
+                        await activity_sink(
+                            {
+                                "event": "user_message",
+                                "data": json.dumps(
+                                    {
+                                        "content": item.content,
+                                        "showing": True,
+                                    },
+                                    ensure_ascii=False,
+                                ),
+                            }
+                        )
                     # @@@no-steer-notice — external notifications (chat, etc.) should NOT
                     # emit notice here. Two cases:
                     #   1. before_model drains it → agent processes inline, no divider needed
@@ -316,13 +329,16 @@ def _ensure_thread_handlers(agent: Any, thread_id: str, app: Any) -> None:
                     #      _run_agent_to_buffer emits notice at run-start (the correct path)
                     # Emitting here causes duplicate: this transient notice + the persistent
                     # run-notice from case 2 (which has checkpoint backing).
+
                 loop.call_soon_threadsafe(loop.create_task, _emit_active_event())
             return
 
         item = qm.dequeue(thread_id)
         if not item:
             # Lost race to finally block — undo transition
-            logger.warning("wake_handler: dequeue returned None for thread %s (race with drain_all), reverting to IDLE", thread_id)
+            logger.warning(
+                "wake_handler: dequeue returned None for thread %s (race with drain_all), reverting to IDLE", thread_id
+            )
             if hasattr(agent, "runtime"):
                 agent.runtime.transition(AgentState.IDLE)
             return
@@ -333,7 +349,10 @@ def _ensure_thread_handlers(agent: Any, thread_id: str, app: Any) -> None:
             # reopened turn.
             try:
                 start_agent_run(
-                    agent, thread_id, item.content, app,
+                    agent,
+                    thread_id,
+                    item.content,
+                    app,
                     message_metadata={
                         "source": getattr(item, "source", None) or "system",
                         "notification_type": item.notification_type,
@@ -362,6 +381,7 @@ def _ensure_thread_handlers(agent: Any, thread_id: str, app: Any) -> None:
     # flow into this thread's SSE stream.
     try:
         from backend.web.event_bus import get_event_bus
+
         get_event_bus().subscribe(thread_id, activity_sink)
     except ImportError:
         pass
@@ -416,10 +436,12 @@ async def _run_agent_to_buffer(
         if event_type and isinstance(data, dict):
             delta = display_builder.apply_event(thread_id, event_type, data)
             if delta:
-                await thread_buf.put({
-                    "event": "display_delta",
-                    "data": json.dumps(delta, ensure_ascii=False),
-                })
+                await thread_buf.put(
+                    {
+                        "event": "display_delta",
+                        "data": json.dumps(delta, ensure_ascii=False),
+                    }
+                )
 
     task = None
     stream_gen = None
@@ -499,7 +521,12 @@ async def _run_agent_to_buffer(
                         config.setdefault("callbacks", []).append(obs_handler)
                         config.setdefault("metadata", {})["session_id"] = thread_id
         except ImportError as imp_err:
-            logger.warning("Observation provider '%s' missing package: %s. Install: uv pip install 'leonai[%s]'", obs_provider, imp_err, obs_provider)
+            logger.warning(
+                "Observation provider '%s' missing package: %s. Install: uv pip install 'leonai[%s]'",
+                obs_provider,
+                imp_err,
+                obs_provider,
+            )
         except Exception as obs_err:
             logger.warning("Observation handler error: %s", obs_err, exc_info=True)
 
@@ -538,7 +565,9 @@ async def _run_agent_to_buffer(
                             if tc_id:
                                 checkpoint_tc_ids.add(tc_id)
         except Exception:
-            logger.warning("[stream:checkpoint] failed to pre-populate tc_ids for thread=%s", thread_id[:15], exc_info=True)
+            logger.warning(
+                "[stream:checkpoint] failed to pre-populate tc_ids for thread=%s", thread_id[:15], exc_info=True
+            )
         emitted_tool_call_ids.update(checkpoint_tc_ids)
         logger.debug("[stream:checkpoint] thread=%s pre-populated %d tc_ids", thread_id[:15], len(checkpoint_tc_ids))
 
@@ -556,6 +585,7 @@ async def _run_agent_to_buffer(
 
         # Track last-active for sidebar sorting
         import time as _time
+
         app.state.thread_last_active[thread_id] = _time.time()
 
         # @@@user-entry — emit user_message so display_builder can add a UserMessage
@@ -567,42 +597,58 @@ async def _run_agent_to_buffer(
             # @@@strip-for-display — agent sees full content (with system-reminder),
             # frontend sees clean text (tags stripped)
             from backend.web.utils.serializers import strip_system_tags
-            display_content = strip_system_tags(message) if "<system-reminder>" in message else message
-            await emit({
-                "event": "user_message",
-                "data": json.dumps({
-                    "content": display_content,
-                    "showing": True,
-                    **({"attachments": meta["attachments"]} if meta.get("attachments") else {}),
-                }, ensure_ascii=False),
-            })
 
-        await emit({
-            "event": "run_start",
-            "data": json.dumps({
-                "thread_id": thread_id,
-                "run_id": run_id,
-                "source": src,
-                "sender_name": meta.get("sender_name"),
-                "showing": True,
-            }),
-        })
+            display_content = strip_system_tags(message) if "<system-reminder>" in message else message
+            await emit(
+                {
+                    "event": "user_message",
+                    "data": json.dumps(
+                        {
+                            "content": display_content,
+                            "showing": True,
+                            **({"attachments": meta["attachments"]} if meta.get("attachments") else {}),
+                        },
+                        ensure_ascii=False,
+                    ),
+                }
+            )
+
+        await emit(
+            {
+                "event": "run_start",
+                "data": json.dumps(
+                    {
+                        "thread_id": thread_id,
+                        "run_id": run_id,
+                        "source": src,
+                        "sender_name": meta.get("sender_name"),
+                        "showing": True,
+                    }
+                ),
+            }
+        )
 
         # @@@run-notice — emit notice right after run_start so frontend folds it
         # into the (re)opened turn.  Only for external notifications (not owner steer).
         ntype = meta.get("notification_type")
         if src and src != "owner" and ntype == "chat":
-            await emit({
-                "event": "notice",
-                "data": json.dumps({
-                    "content": message,
-                    "source": src,
-                    "notification_type": ntype,
-                }, ensure_ascii=False),
-            })
+            await emit(
+                {
+                    "event": "notice",
+                    "data": json.dumps(
+                        {
+                            "content": message,
+                            "source": src,
+                            "notification_type": ntype,
+                        },
+                        ensure_ascii=False,
+                    ),
+                }
+            )
 
         if message_metadata:
             from langchain_core.messages import HumanMessage
+
             _initial_input: dict | None = {"messages": [HumanMessage(content=message, metadata=message_metadata)]}
         else:
             _initial_input = {"messages": [{"role": "user", "content": message}]}
@@ -631,15 +677,19 @@ async def _run_agent_to_buffer(
                 yield chunk
             logger.debug("[stream] thread=%s STREAM DONE chunks=%d", thread_id[:15], chunk_count)
 
-        MAX_STREAM_RETRIES = 10
+        MAX_STREAM_RETRIES = 10  # noqa: N806
 
         def _is_retryable_stream_error(err: Exception) -> bool:
             try:
                 import httpx
-                return isinstance(err, (
-                    httpx.RemoteProtocolError,
-                    httpx.ReadError,
-                ))
+
+                return isinstance(
+                    err,
+                    (
+                        httpx.RemoteProtocolError,
+                        httpx.ReadError,
+                    ),
+                )
             except ImportError:
                 return False
 
@@ -692,10 +742,13 @@ async def _run_agent_to_buffer(
                             await emit(
                                 {
                                     "event": "text",
-                                    "data": json.dumps({
-                                        "content": content,
-                                        "showing": True,
-                                    }, ensure_ascii=False),
+                                    "data": json.dumps(
+                                        {
+                                            "content": content,
+                                            "showing": True,
+                                        },
+                                        ensure_ascii=False,
+                                    ),
                                 },
                                 message_id=chunk_msg_id,
                             )
@@ -708,7 +761,9 @@ async def _run_agent_to_buffer(
                                 emitted_tool_call_ids.add(tc_id)
                                 pending_tool_calls[tc_id] = {"name": tc_name, "args": {}}
                                 tc_data: dict[str, Any] = {
-                                    "id": tc_id, "name": tc_name, "args": {},
+                                    "id": tc_id,
+                                    "name": tc_name,
+                                    "args": {},
                                     "showing": True,
                                 }
                                 await emit(
@@ -746,15 +801,25 @@ async def _run_agent_to_buffer(
                                 # folds it into the current turn as a segment (same as
                                 # cold-path checkpoint rebuild behavior).
                                 meta = getattr(msg, "metadata", None) or {}
-                                if meta.get("notification_type") == "chat" and meta.get("source") in ("external", "system"):
-                                    await emit({
-                                        "event": "notice",
-                                        "data": json.dumps({
-                                            "content": msg.content if isinstance(msg.content, str) else str(msg.content),
-                                            "source": meta.get("source", "external"),
-                                            "notification_type": "chat",
-                                        }, ensure_ascii=False),
-                                    })
+                                if meta.get("notification_type") == "chat" and meta.get("source") in (
+                                    "external",
+                                    "system",
+                                ):
+                                    await emit(
+                                        {
+                                            "event": "notice",
+                                            "data": json.dumps(
+                                                {
+                                                    "content": msg.content
+                                                    if isinstance(msg.content, str)
+                                                    else str(msg.content),
+                                                    "source": meta.get("source", "external"),
+                                                    "notification_type": "chat",
+                                                },
+                                                ensure_ascii=False,
+                                            ),
+                                        }
+                                    )
                                 continue
 
                             if msg_class == "AIMessage":
@@ -766,8 +831,14 @@ async def _run_agent_to_buffer(
                                     tc_id = tc.get("id")
                                     tc_name = tc.get("name", "unknown")
                                     full_args = tc.get("args", {})
-                                    logger.debug("[stream:update] tc=%s name=%s dup=%s chk=%s thread=%s",
-                                                 tc_id or "?", tc_name, tc_id in emitted_tool_call_ids, tc_id in checkpoint_tc_ids, thread_id)
+                                    logger.debug(
+                                        "[stream:update] tc=%s name=%s dup=%s chk=%s thread=%s",
+                                        tc_id or "?",
+                                        tc_name,
+                                        tc_id in emitted_tool_call_ids,
+                                        tc_id in checkpoint_tc_ids,
+                                        thread_id,
+                                    )
                                     # @@@checkpoint-dedup — skip tool_calls from previous runs
                                     # but allow current run's updates (delivers full args after early emission)
                                     if tc_id and tc_id in checkpoint_tc_ids:
@@ -838,18 +909,25 @@ async def _run_agent_to_buffer(
 
             if _is_retryable_stream_error(stream_err) and stream_attempt < MAX_STREAM_RETRIES:
                 stream_attempt += 1
-                wait = max(min(2 ** stream_attempt, 30) + random.uniform(-1.0, 1.0), 1.0)
-                await emit({"event": "retry", "data": json.dumps({
-                    "attempt": stream_attempt,
-                    "max_attempts": MAX_STREAM_RETRIES,
-                    "wait_seconds": round(wait, 1),
-                }, ensure_ascii=False)})
+                wait = max(min(2**stream_attempt, 30) + random.uniform(-1.0, 1.0), 1.0)
+                await emit(
+                    {
+                        "event": "retry",
+                        "data": json.dumps(
+                            {
+                                "attempt": stream_attempt,
+                                "max_attempts": MAX_STREAM_RETRIES,
+                                "wait_seconds": round(wait, 1),
+                            },
+                            ensure_ascii=False,
+                        ),
+                    }
+                )
                 await stream_gen.aclose()
                 await asyncio.sleep(wait)
             else:
                 traceback.print_exc()
-                await emit({"event": "error", "data": json.dumps(
-                    {"error": str(stream_err)}, ensure_ascii=False)})
+                await emit({"event": "error", "data": json.dumps({"error": str(stream_err)}, ensure_ascii=False)})
                 break
 
         # Final status
@@ -914,6 +992,7 @@ async def _run_agent_to_buffer(
             try:
                 if obs_active == "langfuse":
                     from langfuse import get_client
+
                     get_client().flush()
                 elif obs_active == "langsmith":
                     obs_handler.wait_for_futures()
@@ -927,7 +1006,7 @@ async def _run_agent_to_buffer(
             agent.runtime.transition(AgentState.IDLE)
 
         # Check for pending board tasks on idle
-        taskboard_svc = getattr(agent, '_taskboard_service', None)
+        taskboard_svc = getattr(agent, "_taskboard_service", None)
         if taskboard_svc is not None and taskboard_svc.auto_claim:
             try:
                 next_task = await taskboard_svc.on_idle()
@@ -966,14 +1045,19 @@ async def _consume_followup_queue(agent: Any, thread_id: str, app: Any) -> None:
         item = qm.dequeue(thread_id)
         if item and app:
             if hasattr(agent, "runtime") and agent.runtime.transition(AgentState.ACTIVE):
-                start_agent_run(agent, thread_id, item.content, app,
-                                message_metadata={
-                                    "source": item.source or "system",
-                                    "notification_type": item.notification_type,
-                                    "sender_name": item.sender_name,
-                                    "sender_avatar_url": item.sender_avatar_url,
-                                    "is_steer": getattr(item, "is_steer", False),
-                                })
+                start_agent_run(
+                    agent,
+                    thread_id,
+                    item.content,
+                    app,
+                    message_metadata={
+                        "source": item.source or "system",
+                        "notification_type": item.notification_type,
+                        "sender_name": item.sender_name,
+                        "sender_avatar_url": item.sender_avatar_url,
+                        "is_steer": getattr(item, "is_steer", False),
+                    },
+                )
     except Exception:
         logger.exception("Failed to consume followup queue for thread %s", thread_id)
         # Re-enqueue the message if it was already dequeued to prevent data loss
@@ -981,7 +1065,9 @@ async def _consume_followup_queue(agent: Any, thread_id: str, app: Any) -> None:
             try:
                 app.state.queue_manager.enqueue(item.content, thread_id, notification_type=item.notification_type)
             except Exception:
-                logger.error("Failed to re-enqueue followup for thread %s — message lost: %.200s", thread_id, item.content)
+                logger.error(
+                    "Failed to re-enqueue followup for thread %s — message lost: %.200s", thread_id, item.content
+                )
 
 
 # ---------------------------------------------------------------------------
@@ -1095,4 +1181,3 @@ async def observe_run_events(
                 yield {**event, "id": seq_id}
             else:
                 yield event
-
