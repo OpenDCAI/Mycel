@@ -436,7 +436,13 @@ def create_member(name: str, description: str = "", owner_user_id: str | None = 
     return get_member(member_id)  # type: ignore
 
 
-def update_member(member_id: str, member_repo: Any = None, entity_repo: Any = None, thread_repo: Any = None, **fields: Any) -> dict[str, Any] | None:
+def update_member(
+    member_id: str,
+    member_repo: Any = None,
+    entity_repo: Any = None,
+    thread_repo: Any = None,
+    **fields: Any,
+) -> dict[str, Any] | None:
     if member_id == "__leon__":
         member_dir = _ensure_leon_dir()
     else:
@@ -493,13 +499,13 @@ def update_member(member_id: str, member_repo: Any = None, entity_repo: Any = No
                 if thread is None:
                     raise ValueError(f"Entity {entity.id} references missing thread {entity.thread_id}")
                 entity_repo.update(
-                        entity.id,
-                        name=canonical_entity_name(
-                            member.name,
-                            is_main=bool(thread["is_main"]),
-                            branch_index=int(thread["branch_index"]),
-                        ),
-                    )
+                    entity.id,
+                    name=canonical_entity_name(
+                        member.name,
+                        is_main=bool(thread["is_main"]),
+                        branch_index=int(thread["branch_index"]),
+                    ),
+                )
 
     return get_member(member_id)
 

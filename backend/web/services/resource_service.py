@@ -245,6 +245,8 @@ def _thread_agent_refs(thread_ids: list[str], thread_repo: Any = None) -> dict[s
     if not unique:
         return {}
     if thread_repo is None:
+        from storage.providers.sqlite.thread_repo import SQLiteThreadRepo
+
         repo = SQLiteThreadRepo()
         own_repo = True
     else:

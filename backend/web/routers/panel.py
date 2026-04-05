@@ -63,7 +63,14 @@ async def update_member(member_id: str, req: UpdateMemberRequest, request: Reque
     member_repo = getattr(request.app.state, "member_repo", None)
     entity_repo = getattr(request.app.state, "entity_repo", None)
     thread_repo = getattr(request.app.state, "thread_repo", None)
-    item = await asyncio.to_thread(member_service.update_member, member_id, member_repo=member_repo, entity_repo=entity_repo, thread_repo=thread_repo, **req.model_dump())
+    item = await asyncio.to_thread(
+        member_service.update_member,
+        member_id,
+        member_repo=member_repo,
+        entity_repo=entity_repo,
+        thread_repo=thread_repo,
+        **req.model_dump(),
+    )
     if not item:
         raise HTTPException(404, "Member not found")
     return item
