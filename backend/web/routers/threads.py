@@ -1277,6 +1277,33 @@ def _get_background_runs(app: Any, thread_id: str) -> dict:
     return getattr(agent, "_background_runs", {}) if agent else {}
 
 
+def _background_run_type(run: Any) -> str:
+    return "bash" if run.__class__.__name__ == "_BashBackgroundRun" else "agent"
+
+
+def _serialize_background_run(task_id: str, run: Any, *, include_result: bool) -> dict[str, Any]:
+    run_type = _background_run_type(run)
+    result_text = run.get_result() if include_result and run.is_done else None
+    payload = {
+        "task_id": task_id,
+        "task_type": run_type,
+        "status": "completed" if run.is_done else "running",
+        "command_line": getattr(run, "command", None) if run_type == "bash" else None,
+    }
+    if include_result:
+        payload["result"] = result_text
+        payload["text"] = result_text
+        return payload
+    payload["description"] = getattr(run, "description", None)
+    payload["exit_code"] = getattr(getattr(run, "_cmd", None), "exit_code", None) if run_type == "bash" else None
+    payload["error"] = None
+    return payload
+
+
+async def _get_display_task_map(app: Any, thread_id: str) -> dict[str, dict[str, Any]]:
+    return _collect_display_subagent_tasks(await _get_thread_display_entries(app, thread_id))
+
+
 @router.get("/{thread_id}/tasks")
 async def list_tasks(
     thread_id: str,
@@ -1284,23 +1311,9 @@ async def list_tasks(
 ) -> list[dict]:
     """列出线程的所有后台 run（bash + agent）"""
     runs = _get_background_runs(request.app, thread_id)
-    result = []
-    seen_task_ids: set[str] = set()
-    for task_id, run in runs.items():
-        run_type = "bash" if run.__class__.__name__ == "_BashBackgroundRun" else "agent"
-        seen_task_ids.add(task_id)
-        result.append(
-            {
-                "task_id": task_id,
-                "task_type": run_type,
-                "status": "completed" if run.is_done else "running",
-                "command_line": getattr(run, "command", None) if run_type == "bash" else None,
-                "description": getattr(run, "description", None),
-                "exit_code": getattr(getattr(run, "_cmd", None), "exit_code", None) if run_type == "bash" else None,
-                "error": None,
-            }
-        )
-    for task_id, task in _collect_display_subagent_tasks(await _get_thread_display_entries(request.app, thread_id)).items():
+    result = [_serialize_background_run(task_id, run, include_result=False) for task_id, run in runs.items()]
+    seen_task_ids = set(runs)
+    for task_id, task in (await _get_display_task_map(request.app, thread_id)).items():
         if task_id in seen_task_ids:
             continue
         result.append(
@@ -1327,7 +1340,7 @@ async def get_task(
     runs = _get_background_runs(request.app, thread_id)
     run = runs.get(task_id)
     if not run:
-        task = _collect_display_subagent_tasks(await _get_thread_display_entries(request.app, thread_id)).get(task_id)
+        task = (await _get_display_task_map(request.app, thread_id)).get(task_id)
         if task is None:
             raise HTTPException(status_code=404, detail="Task not found")
         return {
@@ -1339,16 +1352,7 @@ async def get_task(
             "text": task["text"],
         }
 
-    run_type = "bash" if run.__class__.__name__ == "_BashBackgroundRun" else "agent"
-    result_text = run.get_result() if run.is_done else None
-    return {
-        "task_id": task_id,
-        "task_type": run_type,
-        "status": "completed" if run.is_done else "running",
-        "command_line": getattr(run, "command", None) if run_type == "bash" else None,
-        "result": result_text,
-        "text": result_text,
-    }
+    return _serialize_background_run(task_id, run, include_result=True)
 
 
 @router.post("/{thread_id}/tasks/{task_id}/cancel")
@@ -1361,7 +1365,7 @@ async def cancel_task(
     runs = _get_background_runs(request.app, thread_id)
     run = runs.get(task_id)
     if not run:
-        task = _collect_display_subagent_tasks(await _get_thread_display_entries(request.app, thread_id)).get(task_id)
+        task = (await _get_display_task_map(request.app, thread_id)).get(task_id)
         if task is None:
             raise HTTPException(status_code=404, detail="Task not found")
         if task["status"] != "running":

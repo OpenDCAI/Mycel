@@ -309,6 +309,14 @@ class _BashBackgroundRun:
 BackgroundRun = _RunningTask | _BashBackgroundRun
 
 
+def _background_run_running_message(running: BackgroundRun) -> str:
+    return "Command is still running." if isinstance(running, _BashBackgroundRun) else "Agent is still running."
+
+
+def _background_run_result_status(result: str | None) -> str:
+    return "error" if (result and result.startswith("<tool_use_error>")) else "completed"
+
+
 class AgentService:
     """Registers Agent, TaskOutput, TaskStop tools into ToolRegistry.
 
@@ -997,22 +1005,20 @@ class AgentService:
             return f"Error: task '{task_id}' not found"
 
         if not running.is_done:
-            message = "Command is still running." if isinstance(running, _BashBackgroundRun) else "Agent is still running."
             return json.dumps(
                 {
                     "task_id": task_id,
                     "status": "running",
-                    "message": message,
+                    "message": _background_run_running_message(running),
                 },
                 ensure_ascii=False,
             )
 
         result = running.get_result()
-        status = "error" if (result and result.startswith("<tool_use_error>")) else "completed"
         return json.dumps(
             {
                 "task_id": task_id,
-                "status": status,
+                "status": _background_run_result_status(result),
                 "result": result,
             },
             ensure_ascii=False,
