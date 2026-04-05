@@ -1,4 +1,4 @@
-"""Chat tool service — 7 tools for entity-to-entity communication.
+"""Chat tool service — Mycel-native tools for entity-to-entity communication.
 
 Tools use user_ids as parameters (human = Supabase auth UUID, agent = member_id).
 Two users share at most one chat; the system auto-resolves user_id → chat.
@@ -16,7 +16,7 @@ from core.runtime.registry import ToolEntry, ToolMode, ToolRegistry
 
 logger = logging.getLogger(__name__)
 
-# @@@range-parser — parse range strings for read_message history queries.
+# @@@range-parser — parse range strings for read_messages history queries.
 # Supports: negative index (-10:-1), relative time (-2h:, -1d:-6h), ISO dates (2026-03-20:2026-03-22).
 _RELATIVE_RE = re.compile(r"^-(\d+)([hdm])$")
 
@@ -89,7 +89,7 @@ def _parse_time_endpoint(s: str, now: float) -> float | None:
 
 
 class ChatToolService:
-    """Registers 5 chat tools into ToolRegistry.
+    """Registers the chat tool surface into ToolRegistry.
 
     Each tool closure captures user_id (the calling agent's social identity = member_id).
     """
@@ -120,11 +120,10 @@ class ChatToolService:
         self._register(registry)
 
     def _register(self, registry: ToolRegistry) -> None:
-        self._register_chats(registry)
-        self._register_read_message(registry)
+        self._register_list_chats(registry)
+        self._register_read_messages(registry)
         self._register_send_message(registry)
-        self._register_search_message(registry)
-        self._register_directory(registry)
+        self._register_search_messages(registry)
 
     def _latest_notified_chat_id(self, request: Any) -> str | None:
         state = getattr(request, "state", None)
@@ -137,7 +136,7 @@ class ChatToolService:
                 continue
             content = getattr(message, "content", "")
             text = content if isinstance(content, str) else str(content)
-            match = re.search(r'read_message\(chat_id="([^"]+)"\)', text)
+            match = re.search(r'read_messages\(chat_id="([^"]+)"\)', text)
             if match:
                 return match.group(1)
         return None
@@ -185,7 +184,7 @@ class ChatToolService:
                 before=parsed["before"],
             )
 
-    def _handle_chats(self, unread_only: bool = False, limit: int = 20) -> str:
+    def _handle_list_chats(self, unread_only: bool = False, limit: int = 20) -> str:
         eid = self._user_id
         chats = self._chat_service.list_chats_for_user(eid)
         if unread_only:
@@ -210,7 +209,7 @@ class ChatToolService:
             lines.append(f"- {name}{id_str}{unread_str}{last_preview}")
         return "\n".join(lines)
 
-    def _handle_read_message(self, user_id: str | None = None, chat_id: str | None = None, range: str | None = None) -> str:
+    def _handle_read_messages(self, user_id: str | None = None, chat_id: str | None = None, range: str | None = None) -> str:
         eid = self._user_id
         if chat_id:
             pass  # use chat_id directly
@@ -285,9 +284,9 @@ class ChatToolService:
         # @@@read-before-write-gate — reject if unread messages exist
         unread = self._messages.count_unread(resolved_chat_id, eid)
         if unread > 0:
-            raise RuntimeError(f"You have {unread} unread message(s). Call read_message(chat_id='{resolved_chat_id}') first.")
+            raise RuntimeError(f"You have {unread} unread message(s). Call read_messages(chat_id='{resolved_chat_id}') first.")
 
-        # Append signal to content (for read_message) + pass through chain (for notification)
+        # Append signal to content (for read_messages) + pass through chain (for notification)
         effective_signal = signal if signal in ("yield", "close") else None
         if effective_signal:
             content = f"{content}\n[signal: {effective_signal}]"
@@ -295,7 +294,7 @@ class ChatToolService:
         self._chat_service.send_message(resolved_chat_id, eid, content, mentions, signal=effective_signal)
         return f"Message sent to {target_name}."
 
-    def _handle_search_message(self, query: str, user_id: str | None = None) -> str:
+    def _handle_search_messages(self, query: str, user_id: str | None = None) -> str:
         eid = self._user_id
         chat_id = None
         if user_id:
@@ -309,45 +308,13 @@ class ChatToolService:
             lines.append(f"[{name}] {m.content[:100]}")
         return "\n".join(lines)
 
-    def _handle_directory(self, search: str | None = None, type: str | None = None) -> str:
-        lines = []
-        eid = self._user_id
-        all_members = self._members.list_all() if self._members else []
-        member_map = {m.id: m for m in all_members}
-
-        if type is None or type == "human":
-            for member in all_members:
-                if member.id == eid or member.type != "human":
-                    continue
-                if search and search.lower() not in member.name.lower():
-                    continue
-                lines.append(f"- {member.name} [human] user_id={member.id}")
-
-        if type is None or type == "agent":
-            for entity in self._entities.list_all():
-                if entity.id == eid or entity.type != "agent":
-                    continue
-                if search and search.lower() not in entity.name.lower():
-                    continue
-                member = member_map.get(entity.member_id)
-                owner_info = ""
-                if member and member.owner_user_id:
-                    owner = member_map.get(member.owner_user_id)
-                    if owner:
-                        owner_info = f" (owner: {owner.name})"
-                lines.append(f"- {entity.name} [{entity.type}] user_id={entity.id}{owner_info}")
-
-        if not lines:
-            return "No users found."
-        return "\n".join(lines)
-
-    def _register_chats(self, registry: ToolRegistry) -> None:
+    def _register_list_chats(self, registry: ToolRegistry) -> None:
         registry.register(
             ToolEntry(
-                name="chats",
+                name="list_chats",
                 mode=ToolMode.INLINE,
                 schema={
-                    "name": "chats",
+                    "name": "list_chats",
                     "description": "List your chats. Returns chat summaries with user_ids of participants.",
                     "parameters": {
                         "type": "object",
@@ -361,20 +328,20 @@ class ChatToolService:
                         },
                     },
                 },
-                handler=self._handle_chats,
+                handler=self._handle_list_chats,
                 source="chat",
                 is_read_only=True,
                 is_concurrency_safe=True,
             )
         )
 
-    def _register_read_message(self, registry: ToolRegistry) -> None:
+    def _register_read_messages(self, registry: ToolRegistry) -> None:
         registry.register(
             ToolEntry(
-                name="read_message",
+                name="read_messages",
                 mode=ToolMode.INLINE,
                 schema={
-                    "name": "read_message",
+                    "name": "read_messages",
                     "description": (
                         "Read chat messages. Returns unread messages by default.\n"
                         "If nothing unread, use range to read history:\n"
@@ -400,7 +367,7 @@ class ChatToolService:
                         ],
                     },
                 },
-                handler=self._handle_read_message,
+                handler=self._handle_read_messages,
                 source="chat",
                 search_hint="read chat messages history conversation",
                 is_read_only=True,
@@ -418,7 +385,7 @@ class ChatToolService:
                     "name": "send_message",
                     "description": (
                         "Send a message. Use user_id for 1:1 chats, chat_id for group chats.\n\n"
-                        "You MUST call read_message() first if you have unread messages — sending will fail otherwise.\n\n"
+                        "You MUST call read_messages() first if you have unread messages — sending will fail otherwise.\n\n"
                         "Signal protocol — append to content:\n"
                         "  (no tag) = I expect a reply from you\n"
                         "  ::yield = I'm done with my turn; reply only if you want to\n"
@@ -457,13 +424,13 @@ class ChatToolService:
             )
         )
 
-    def _register_search_message(self, registry: ToolRegistry) -> None:
+    def _register_search_messages(self, registry: ToolRegistry) -> None:
         registry.register(
             ToolEntry(
-                name="search_message",
+                name="search_messages",
                 mode=ToolMode.INLINE,
                 schema={
-                    "name": "search_message",
+                    "name": "search_messages",
                     "description": "Search messages. Optionally filter by user_id.",
                     "parameters": {
                         "type": "object",
@@ -477,33 +444,9 @@ class ChatToolService:
                         "required": ["query"],
                     },
                 },
-                handler=self._handle_search_message,
+                handler=self._handle_search_messages,
                 source="chat",
                 search_hint="search messages query chat history",
-                is_read_only=True,
-                is_concurrency_safe=True,
-            )
-        )
-
-    def _register_directory(self, registry: ToolRegistry) -> None:
-        registry.register(
-            ToolEntry(
-                name="directory",
-                mode=ToolMode.INLINE,
-                schema={
-                    "name": "directory",
-                    "description": "Browse the user directory. Returns user_ids for use with send_message, read_message.",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "search": {"type": "string", "description": "Search by name"},
-                            "type": {"type": "string", "description": "Filter by type: 'human' or 'agent'"},
-                        },
-                    },
-                },
-                handler=self._handle_directory,
-                source="chat",
-                search_hint="browse entity directory find agent human",
                 is_read_only=True,
                 is_concurrency_safe=True,
             )

@@ -67,7 +67,10 @@ def test_builtin_member_surface_exposes_chat_tools():
     member = member_service._leon_builtin()
     tools = {item["name"]: item for item in member["config"]["tools"]}
 
-    for tool_name in ("chats", "read_message", "send_message", "search_message", "directory"):
+    for tool_name in ("list_chats", "read_messages", "send_message", "search_messages"):
         assert tool_name in tools
         assert tools[tool_name]["enabled"] is True
         assert tools[tool_name]["group"] == "chat"
+
+    for removed_name in ("chats", "read_message", "search_message", "directory", "wechat_send", "wechat_contacts"):
+        assert removed_name not in tools

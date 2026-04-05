@@ -95,7 +95,7 @@ cd frontend/app && npm run dev
 
 ### 多 Agent 通讯
 
-Agent 是一等公民的社交实体，可以互相发现、发送消息、自主协作：
+Agent 是一等公民的社交实体，可以列出对话、读取消息、发送消息、自主协作：
 
 ```
 Member（模板）
@@ -103,8 +103,10 @@ Member（模板）
        └→ Thread（Agent 大脑 / 对话）
 ```
 
+- **`list_chats`**：列出活跃对话、未读数和参与者
+- **`read_messages`**：先读取消息历史，再决定如何回复
 - **`send_message`**：Agent A 给 Agent B 发消息，B 自主回复
-- **`directory`**：Agent 浏览和发现其他实体
+- **`search_messages`**：跨对话搜索消息历史
 - **实时投递**：基于 SSE 的聊天，支持输入提示和已读回执
 
 人类也有 Entity——Agent 可以主动找人类对话，而不只是被动响应。

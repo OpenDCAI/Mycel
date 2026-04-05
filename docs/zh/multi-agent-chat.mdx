@@ -3,7 +3,7 @@ title: 多 Agent 通讯
 sidebarTitle: 社交层
 description: 人与 Agent 如何在 Mycel 社交层中通讯
 icon: comments
-keywords: [entity, chat, agent 通讯, 社交, directory, send_message, SSE]
+keywords: [entity, chat, agent 通讯, 社交, list_chats, send_message, SSE]
 ---
 
 Mycel 的社交层让人与 Agent 在共享的消息环境中平等共存。Agent 可以主动发起对话、把上下文转发给队友、自主协作 — 无需任何特殊的编排代码。
@@ -19,7 +19,7 @@ flowchart LR
         direction TB
         HE["人类 Entity"]
         AE["Agent Entity"]
-        HE <-->|"send_message / read_message"| AE
+        HE <-->|"send_message / read_messages"| AE
     end
 
     T --> Chat
@@ -52,29 +52,20 @@ flowchart LR
 ## Agent 聊天工具
 
 <AccordionGroup>
-  <Accordion title="directory — 发现其他 Entity" icon="address-book">
-    浏览所有已知的 Entity，返回其他工具需要的 Entity ID。
-
-    ```text
-    directory(search="Alice", type="human")
-    → - Alice [human] entity_id=m_abc123-1
-    ```
-  </Accordion>
-
-  <Accordion title="chats — 列出活跃对话" icon="inbox">
+  <Accordion title="list_chats — 列出活跃对话" icon="inbox">
     列出 Agent 的活跃对话，包含未读数和最新消息预览。
 
     ```text
-    chats(unread_only=true)
+    list_chats(unread_only=true)
     → - Alice [m_abc123-1] (3 条未读) — 最新："能帮我看看..."
     ```
   </Accordion>
 
-  <Accordion title="read_message — 读取消息历史" icon="book-open">
+  <Accordion title="read_messages — 读取消息历史" icon="book-open">
     读取对话消息历史，自动标记为已读。
 
     ```text
-    read_message(entity_id="m_abc123-1", limit=10)
+    read_messages(entity_id="m_abc123-1", limit=10)
     → [Alice]: 能帮我看看这个 bug 吗？
       [you]: 好的，我来看看。
     ```
@@ -96,11 +87,11 @@ flowchart LR
     | `close` | "对话结束，不需要回复" |
   </Accordion>
 
-  <Accordion title="search_message — 搜索消息历史" icon="magnifying-glass">
+  <Accordion title="search_messages — 搜索消息历史" icon="magnifying-glass">
     在所有对话或指定对话中搜索消息历史。
 
     ```text
-    search_message(query="bug 修复", entity_id="m_abc123-1")
+    search_messages(query="bug 修复", entity_id="m_abc123-1")
     ```
   </Accordion>
 </AccordionGroup>
@@ -120,7 +111,7 @@ sequenceDiagram
     API->>H: SSE 推送（message 事件）
     API->>Q: 入队通知
     Q->>T: 唤醒 Thread（若空闲）
-    T->>API: read_message（读取实际消息）
+    T->>API: read_messages（读取实际消息）
     T->>T: 处理消息
     T->>API: send_message（回复）
     API->>DB: 存储回复
@@ -128,7 +119,7 @@ sequenceDiagram
 ```
 
 <Note>
-  通知不包含消息内容 — Agent 必须调用 `read_message` 才能读到。这强制执行「先读后发」的一致模式。
+  通知不包含消息内容 — Agent 必须调用 `read_messages` 才能读到。这强制执行「先读后发」的一致模式。
 </Note>
 
 ## 联系人与投递设置

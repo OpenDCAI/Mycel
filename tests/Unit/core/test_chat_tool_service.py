@@ -30,40 +30,28 @@ class _MemberRepo:
         return list(self._members.values())
 
 
-def test_directory_uses_owner_user_id_for_agent_owner_lookup() -> None:
-    owner_member = MemberRow(
-        id="u_owner",
-        name="Owner",
-        type=MemberType.HUMAN,
-        created_at=1.0,
-    )
-    agent_member = MemberRow(
-        id="m_agent",
-        name="Agent Member",
-        type=MemberType.MYCEL_AGENT,
+def test_chat_tool_registry_exposes_only_canonical_chat_surface() -> None:
+    registry = ToolRegistry()
+    ChatToolService(
+        registry,
+        user_id="m_agent",
         owner_user_id="u_owner",
-        created_at=2.0,
-    )
-    owner_entity = EntityRow(id="e_owner", type="human", member_id="u_owner", name="Owner", created_at=1.0)
-    agent_entity = EntityRow(id="e_agent", type="agent", member_id="m_agent", name="Helper", created_at=2.0)
-
-    service = ChatToolService(
-        ToolRegistry(),
-        user_id="u_owner",
-        owner_user_id="u_owner",
-        entity_repo=_EntityRepo([owner_entity, agent_entity]),
+        entity_repo=_EntityRepo([]),
         chat_service=SimpleNamespace(),
         chat_entity_repo=SimpleNamespace(),
         chat_message_repo=SimpleNamespace(),
-        member_repo=_MemberRepo([owner_member, agent_member]),
+        member_repo=_MemberRepo([]),
         chat_event_bus=SimpleNamespace(),
         runtime_fn=lambda: None,
     )
 
-    result = service._handle_directory(type="agent")
+    for tool_name in ("list_chats", "read_messages", "send_message", "search_messages"):
+        assert registry.get(tool_name) is not None
 
-    assert "Helper" in result
-    assert "(owner: Owner)" in result
+    assert registry.get("chats") is None
+    assert registry.get("read_message") is None
+    assert registry.get("search_message") is None
+    assert registry.get("directory") is None
 
 
 def test_compose_system_prompt_hardens_chat_reply_contract() -> None:
@@ -87,13 +75,14 @@ def test_compose_system_prompt_hardens_chat_reply_contract() -> None:
 
     prompt = agent._compose_system_prompt()
 
-    assert "you MUST read it with read_message()" in prompt
+    assert "you MUST read it with read_messages()" in prompt
     assert "prefer using that exact chat_id directly" in prompt
     assert "you MUST call send_message()" in prompt
     assert "Never claim you replied unless send_message() succeeded." in prompt
+    assert "directory" not in prompt
 
 
-def test_read_message_validate_input_fills_missing_chat_id_from_latest_notification() -> None:
+def test_read_messages_validate_input_fills_missing_chat_id_from_latest_notification() -> None:
     registry = ToolRegistry()
     ChatToolService(
         registry,
@@ -107,7 +96,7 @@ def test_read_message_validate_input_fills_missing_chat_id_from_latest_notificat
         chat_event_bus=SimpleNamespace(),
         runtime_fn=lambda: None,
     )
-    entry = registry.get("read_message")
+    entry = registry.get("read_messages")
     assert entry is not None
     assert entry.validate_input is not None
 
@@ -118,7 +107,7 @@ def test_read_message_validate_input_fills_missing_chat_id_from_latest_notificat
                     content=(
                         "<system-reminder>\n"
                         "New message from alice in chat chat-123 (1 unread).\n"
-                        'Read it with read_message(chat_id="chat-123").\n'
+                        'Read it with read_messages(chat_id="chat-123").\n'
                         "</system-reminder>"
                     ),
                     metadata={"source": "external", "notification_type": "chat"},
@@ -157,7 +146,7 @@ def test_send_message_validate_input_fills_missing_chat_id_from_latest_notificat
                     content=(
                         "<system-reminder>\n"
                         "New message from alice in chat chat-456 (1 unread).\n"
-                        'Read it with read_message(chat_id="chat-456").\n'
+                        'Read it with read_messages(chat_id="chat-456").\n'
                         'Reply with send_message(chat_id="chat-456", content="...").\n'
                         "</system-reminder>"
                     ),

@@ -1382,8 +1382,8 @@ class LeonAgent:
                     f"- Your name: {name}\n"
                     f"- Your user_id: {uid}\n"
                     f"- Your owner: {owner_name} (user_id: {owner_uid})\n"
-                    f"- When you receive a chat notification, you MUST read it with read_message() before deciding what to do.\n"
-                    f"- If that notification already gives you a chat_id, prefer using that exact chat_id directly; do not call directory just to resolve the sender first.\n"
+                    f"- When you receive a chat notification, you MUST read it with read_messages() before deciding what to do.\n"
+                    f"- If that notification already gives you a chat_id, prefer using that exact chat_id directly.\n"
                     f"- If you reply to the other party, you MUST call send_message(). Never claim you replied unless send_message() succeeded.\n"
                     f"- Your normal text output goes to your owner's thread, not to the chat — only send_message() delivers to the other party.\n"
                 )

@@ -95,7 +95,7 @@ Full-featured web platform for managing and interacting with agents:
 
 ### Multi-Agent Communication
 
-Agents are first-class social entities. They can discover each other, send messages, and collaborate autonomously:
+Agents are first-class social entities. They can list chats, read messages, send messages, and collaborate autonomously:
 
 ```
 Member (template)
@@ -103,8 +103,10 @@ Member (template)
        └→ Thread (agent brain / conversation)
 ```
 
+- **`list_chats`**: List active conversations with unread counts and participants
+- **`read_messages`**: Read message history before responding
 - **`send_message`**: Agent A messages Agent B; B responds autonomously
-- **`directory`**: Agents browse and discover other entities
+- **`search_messages`**: Search message history across chats
 - **Real-time delivery**: SSE-based chat with typing indicators and read receipts
 
 Humans also have entities — agents can initiate conversations with humans, not just the other way around.
