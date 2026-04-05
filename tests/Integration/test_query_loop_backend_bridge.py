@@ -336,6 +336,11 @@ def _patch_streaming_event_store(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr("backend.web.services.streaming_service.cleanup_old_runs", fake_cleanup_old_runs)
 
 
+def _patch_direct_streaming(monkeypatch: pytest.MonkeyPatch) -> None:
+    _patch_streaming_event_store(monkeypatch)
+    monkeypatch.setattr("backend.web.services.streaming_service._ensure_thread_handlers", lambda *args, **kwargs: None)
+
+
 def _make_streaming_agent(loop: QueryLoop, *, queue_manager: MessageQueueManager | None = None) -> SimpleNamespace:
     agent = SimpleNamespace(
         agent=loop,
@@ -384,6 +389,62 @@ def _make_direct_streaming_context(
     agent = _make_streaming_agent(loop, queue_manager=queue_manager)
     app, _ = _make_streaming_app(tmp_path, queue_manager=queue_manager)
     return agent, app, ThreadEventBuffer()
+
+
+def _make_route_followthrough_context(
+    tmp_path: Path,
+    *,
+    thread_id: str,
+    loop: QueryLoop,
+) -> tuple[MessageQueueManager, SimpleNamespace, SimpleNamespace]:
+    queue_manager = MessageQueueManager(db_path=str(tmp_path / "queue.db"))
+    agent = _make_streaming_agent(loop, queue_manager=queue_manager)
+    app, _ = _make_streaming_app(tmp_path, thread_id=thread_id, agent=agent, queue_manager=queue_manager)
+    _ensure_thread_handlers(agent, thread_id, app)
+    return queue_manager, agent, app
+
+
+async def _run_direct_notification_followthrough(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    *,
+    loop: QueryLoop,
+    thread_id: str,
+    message: str,
+    run_id: str,
+    message_metadata: dict[str, str] | None = None,
+) -> list[dict]:
+    _patch_direct_streaming(monkeypatch)
+    agent, app, thread_buf = _make_direct_streaming_context(tmp_path, loop)
+
+    await _run_agent_to_buffer(
+        agent,
+        thread_id,
+        message,
+        app,
+        False,
+        thread_buf,
+        run_id,
+        message_metadata=message_metadata,
+    )
+
+    entries = app.state.display_builder.get_entries(thread_id)
+    assert entries is not None
+    return entries
+
+
+def _assert_notice_then_text(entries: list[dict], notice_contains: str, expected_text: str) -> None:
+    assert entries[0]["segments"][0]["type"] == "notice"
+    assert notice_contains in entries[0]["segments"][0]["content"]
+    assert entries[0]["segments"][1] == {"type": "text", "content": expected_text}
+
+
+async def _get_local_thread_history(thread_id: str, *, agent: SimpleNamespace, app: SimpleNamespace) -> dict:
+    with (
+        patch.object(threads_router, "get_or_create_agent", return_value=agent),
+        patch.object(threads_router, "resolve_thread_sandbox", return_value="local"),
+    ):
+        return await get_thread_history(thread_id, limit=20, truncate=400, user_id="u", app=app)
 
 
 def _patch_fake_event_bus(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -1492,188 +1553,123 @@ async def test_run_agent_to_buffer_resumes_graph_for_terminal_background_notific
 
 
 @pytest.mark.asyncio
-async def test_run_agent_to_buffer_surfaces_terminal_notice_then_assistant_followthrough(monkeypatch, tmp_path):
-    _patch_streaming_event_store(monkeypatch)
-    monkeypatch.setattr("backend.web.services.streaming_service._ensure_thread_handlers", lambda *args, **kwargs: None)
-
+@pytest.mark.parametrize(
+    (
+        "thread_id",
+        "run_id",
+        "message",
+        "message_metadata",
+        "notice_contains",
+        "expected_text",
+    ),
+    [
+        (
+            "thread-terminal-followthrough",
+            "run-terminal-followthrough",
+            "<system-reminder><task-notification><status>completed</status><result>BG_OK</result></task-notification></system-reminder>",
+            {"source": "system", "notification_type": "agent"},
+            "BG_OK",
+            "AFTER_BG_DONE",
+        ),
+        (
+            "thread-command-followthrough",
+            "run-command-followthrough",
+            "<system-reminder><CommandNotification><Status>completed</Status><Output>42</Output></CommandNotification></system-reminder>",
+            {"source": "system", "notification_type": "command"},
+            "CommandNotification",
+            "AFTER_COMMAND_DONE",
+        ),
+        (
+            "thread-command-cancel-followthrough",
+            "run-command-cancel-followthrough",
+            '<CommandNotification task_id="cmd-x" status="cancelled"><Status>cancelled</Status><Description>cancelled task</Description></CommandNotification>',
+            {"source": "system", "notification_type": "command"},
+            "cancelled",
+            "AFTER_COMMAND_CANCELLED",
+        ),
+    ],
+)
+async def test_run_agent_to_buffer_surfaces_notice_then_assistant_followthrough(
+    monkeypatch,
+    tmp_path,
+    thread_id: str,
+    run_id: str,
+    message: str,
+    message_metadata: dict[str, str],
+    notice_contains: str,
+    expected_text: str,
+):
     checkpointer = _MemoryCheckpointer()
-    loop = _make_loop(text="AFTER_BG_DONE", checkpointer=checkpointer)
-    agent = _make_streaming_agent(loop)
-    app, _ = _make_streaming_app(tmp_path)
-    thread_buf = ThreadEventBuffer()
+    loop = _make_loop(text=expected_text, checkpointer=checkpointer)
 
-    await _run_agent_to_buffer(
-        agent,
-        "thread-terminal-followthrough",
-        "<system-reminder><task-notification><status>completed</status><result>BG_OK</result></task-notification></system-reminder>",
-        app,
-        False,
-        thread_buf,
-        "run-terminal-followthrough",
-        message_metadata={"source": "system", "notification_type": "agent"},
+    entries = await _run_direct_notification_followthrough(
+        monkeypatch,
+        tmp_path,
+        loop=loop,
+        thread_id=thread_id,
+        message=message,
+        run_id=run_id,
+        message_metadata=message_metadata,
     )
 
-    entries = app.state.display_builder.get_entries("thread-terminal-followthrough")
-    assert entries is not None
-    assert entries[0]["segments"][0]["type"] == "notice"
-    assert "BG_OK" in entries[0]["segments"][0]["content"]
-    assert entries[0]["segments"][1] == {"type": "text", "content": "AFTER_BG_DONE"}
+    _assert_notice_then_text(entries, notice_contains, expected_text)
 
 
 @pytest.mark.asyncio
-async def test_run_agent_to_buffer_surfaces_command_completion_then_assistant_followthrough(monkeypatch, tmp_path):
-    _patch_streaming_event_store(monkeypatch)
-    monkeypatch.setattr("backend.web.services.streaming_service._ensure_thread_handlers", lambda *args, **kwargs: None)
-
-    checkpointer = _MemoryCheckpointer()
-    loop = _make_loop(text="AFTER_COMMAND_DONE", checkpointer=checkpointer)
-    agent = _make_streaming_agent(loop)
-    app, _ = _make_streaming_app(tmp_path)
-    thread_buf = ThreadEventBuffer()
-
-    await _run_agent_to_buffer(
-        agent,
-        "thread-command-followthrough",
-        "<system-reminder><CommandNotification><Status>completed</Status><Output>42</Output></CommandNotification></system-reminder>",
-        app,
-        False,
-        thread_buf,
-        "run-command-followthrough",
-        message_metadata={"source": "system", "notification_type": "command"},
-    )
-
-    entries = app.state.display_builder.get_entries("thread-command-followthrough")
-    assert entries is not None
-    assert entries[0]["segments"][0]["type"] == "notice"
-    assert "CommandNotification" in entries[0]["segments"][0]["content"]
-    assert entries[0]["segments"][1] == {"type": "text", "content": "AFTER_COMMAND_DONE"}
-
-
-@pytest.mark.asyncio
-async def test_run_agent_to_buffer_surfaces_command_cancellation_then_assistant_followthrough(monkeypatch, tmp_path):
-    _patch_streaming_event_store(monkeypatch)
-    monkeypatch.setattr("backend.web.services.streaming_service._ensure_thread_handlers", lambda *args, **kwargs: None)
-
-    checkpointer = _MemoryCheckpointer()
-    loop = _make_loop(text="AFTER_COMMAND_CANCELLED", checkpointer=checkpointer)
-    agent = _make_streaming_agent(loop)
-    app, _ = _make_streaming_app(tmp_path)
-    thread_buf = ThreadEventBuffer()
-
-    await _run_agent_to_buffer(
-        agent,
-        "thread-command-cancel-followthrough",
-        '<CommandNotification task_id="cmd-x" status="cancelled"><Status>cancelled</Status><Description>cancelled task</Description></CommandNotification>',
-        app,
-        False,
-        thread_buf,
-        "run-command-cancel-followthrough",
-        message_metadata={"source": "system", "notification_type": "command"},
-    )
-
-    entries = app.state.display_builder.get_entries("thread-command-cancel-followthrough")
-    assert entries is not None
-    assert entries[0]["segments"][0]["type"] == "notice"
-    assert "cancelled" in entries[0]["segments"][0]["content"]
-    assert entries[0]["segments"][1] == {"type": "text", "content": "AFTER_COMMAND_CANCELLED"}
-
-
-@pytest.mark.asyncio
-async def test_queue_wake_handler_starts_terminal_command_followthrough_run(monkeypatch, tmp_path):
+@pytest.mark.parametrize(
+    ("thread_id", "message", "notification_type", "expected_notice", "expected_text"),
+    [
+        (
+            "thread-route-followthrough",
+            "<system-reminder><CommandNotification><Status>completed</Status><Output>42</Output></CommandNotification></system-reminder>",
+            "command",
+            "CommandNotification",
+            "AFTER_QUEUE_WAKE",
+        ),
+        (
+            "thread-route-agent-followthrough",
+            "<system-reminder><task-notification><status>completed</status><summary>Simple background tool test</summary><result>Simple Background Tool Test Done</result></task-notification></system-reminder>",
+            "agent",
+            "Simple Background Tool Test Done",
+            "AFTER_AGENT_WAKE",
+        ),
+        (
+            "thread-route-agent-error-followthrough",
+            "<system-reminder><task-notification><status>error</status><summary>Simple background tool test</summary><result>Agent failed</result></task-notification></system-reminder>",
+            "agent",
+            "Agent failed",
+            "AFTER_AGENT_ERROR_WAKE",
+        ),
+    ],
+)
+async def test_queue_wake_handler_starts_terminal_followthrough_run(
+    monkeypatch,
+    tmp_path,
+    thread_id: str,
+    message: str,
+    notification_type: str,
+    expected_notice: str,
+    expected_text: str,
+):
     _patch_streaming_event_store(monkeypatch)
 
-    thread_id = "thread-route-followthrough"
     checkpointer = _MemoryCheckpointer()
-    loop = _make_loop(text="AFTER_QUEUE_WAKE", checkpointer=checkpointer)
-    queue_manager = MessageQueueManager(db_path=str(tmp_path / "queue.db"))
-    agent = _make_streaming_agent(loop, queue_manager=queue_manager)
-    app, _ = _make_streaming_app(tmp_path, thread_id=thread_id, agent=agent, queue_manager=queue_manager)
+    loop = _make_loop(text=expected_text, checkpointer=checkpointer)
+    queue_manager, agent, app = _make_route_followthrough_context(tmp_path, thread_id=thread_id, loop=loop)
 
-    _ensure_thread_handlers(agent, thread_id, app)
     queue_manager.enqueue(
-        "<system-reminder><CommandNotification><Status>completed</Status><Output>42</Output></CommandNotification></system-reminder>",
+        message,
         thread_id,
-        notification_type="command",
+        notification_type=notification_type,
         source="system",
     )
 
-    await _wait_for_followthrough_text(loop, thread_id, "AFTER_QUEUE_WAKE")
-
-    with (
-        patch.object(threads_router, "get_or_create_agent", return_value=agent),
-        patch.object(threads_router, "resolve_thread_sandbox", return_value="local"),
-    ):
-        history = await get_thread_history(thread_id, limit=20, truncate=400, user_id="u", app=app)
+    await _wait_for_followthrough_text(loop, thread_id, expected_text)
+    history = await _get_local_thread_history(thread_id, agent=agent, app=app)
 
     assert [item["role"] for item in history["messages"]] == ["notification", "assistant"]
-    assert "CommandNotification" in history["messages"][0]["text"]
-    assert history["messages"][1]["text"] == "AFTER_QUEUE_WAKE"
-
-
-@pytest.mark.asyncio
-async def test_queue_wake_handler_starts_terminal_agent_followthrough_run(monkeypatch, tmp_path):
-    _patch_streaming_event_store(monkeypatch)
-
-    thread_id = "thread-route-agent-followthrough"
-    checkpointer = _MemoryCheckpointer()
-    loop = _make_loop(text="AFTER_AGENT_WAKE", checkpointer=checkpointer)
-    queue_manager = MessageQueueManager(db_path=str(tmp_path / "queue.db"))
-    agent = _make_streaming_agent(loop, queue_manager=queue_manager)
-    app, _ = _make_streaming_app(tmp_path, thread_id=thread_id, agent=agent, queue_manager=queue_manager)
-
-    _ensure_thread_handlers(agent, thread_id, app)
-    queue_manager.enqueue(
-        "<system-reminder><task-notification><status>completed</status><summary>Simple background tool test</summary><result>Simple Background Tool Test Done</result></task-notification></system-reminder>",
-        thread_id,
-        notification_type="agent",
-        source="system",
-    )
-
-    await _wait_for_followthrough_text(loop, thread_id, "AFTER_AGENT_WAKE")
-
-    with (
-        patch.object(threads_router, "get_or_create_agent", return_value=agent),
-        patch.object(threads_router, "resolve_thread_sandbox", return_value="local"),
-    ):
-        history = await get_thread_history(thread_id, limit=20, truncate=400, user_id="u", app=app)
-
-    assert [item["role"] for item in history["messages"]] == ["notification", "assistant"]
-    assert "task-notification" in history["messages"][0]["text"]
-    assert "Simple Background Tool Test Done" in history["messages"][0]["text"]
-    assert history["messages"][1]["text"] == "AFTER_AGENT_WAKE"
-
-
-@pytest.mark.asyncio
-async def test_queue_wake_handler_starts_terminal_agent_error_followthrough_run(monkeypatch, tmp_path):
-    _patch_streaming_event_store(monkeypatch)
-
-    thread_id = "thread-route-agent-error-followthrough"
-    checkpointer = _MemoryCheckpointer()
-    loop = _make_loop(text="AFTER_AGENT_ERROR_WAKE", checkpointer=checkpointer)
-    queue_manager = MessageQueueManager(db_path=str(tmp_path / "queue.db"))
-    agent = _make_streaming_agent(loop, queue_manager=queue_manager)
-    app, _ = _make_streaming_app(tmp_path, thread_id=thread_id, agent=agent, queue_manager=queue_manager)
-
-    _ensure_thread_handlers(agent, thread_id, app)
-    queue_manager.enqueue(
-        "<system-reminder><task-notification><status>error</status><summary>Simple background tool test</summary><result>Agent failed</result></task-notification></system-reminder>",
-        thread_id,
-        notification_type="agent",
-        source="system",
-    )
-
-    await _wait_for_followthrough_text(loop, thread_id, "AFTER_AGENT_ERROR_WAKE")
-
-    with (
-        patch.object(threads_router, "get_or_create_agent", return_value=agent),
-        patch.object(threads_router, "resolve_thread_sandbox", return_value="local"),
-    ):
-        history = await get_thread_history(thread_id, limit=20, truncate=400, user_id="u", app=app)
-
-    assert [item["role"] for item in history["messages"]] == ["notification", "assistant"]
-    assert "task-notification" in history["messages"][0]["text"]
-    assert "Agent failed" in history["messages"][0]["text"]
-    assert history["messages"][1]["text"] == "AFTER_AGENT_ERROR_WAKE"
+    assert expected_notice in history["messages"][0]["text"]
+    assert history["messages"][1]["text"] == expected_text
 
 
 @pytest.mark.asyncio
@@ -1684,22 +1680,12 @@ async def test_cancelled_task_notification_wakes_followthrough_run(monkeypatch, 
     thread_id = "thread-route-cancel-followthrough"
     checkpointer = _MemoryCheckpointer()
     loop = _make_loop(text="AFTER_CANCEL_WAKE", checkpointer=checkpointer)
-    queue_manager = MessageQueueManager(db_path=str(tmp_path / "queue.db"))
-    agent = _make_streaming_agent(loop, queue_manager=queue_manager)
-    app, _ = _make_streaming_app(tmp_path, thread_id=thread_id, agent=agent, queue_manager=queue_manager)
-
-    _ensure_thread_handlers(agent, thread_id, app)
+    queue_manager, agent, app = _make_route_followthrough_context(tmp_path, thread_id=thread_id, loop=loop)
     run = SimpleNamespace(is_done=True, description="cancelled task", command="echo hi")
     await threads_router._notify_task_cancelled(app, thread_id, "cmd-cancel", run)
 
     await _wait_for_followthrough_text(loop, thread_id, "AFTER_CANCEL_WAKE")
-
-    with (
-        patch.object(threads_router, "get_or_create_agent", return_value=agent),
-        patch.object(threads_router, "resolve_thread_sandbox", return_value="local"),
-    ):
-        history = await get_thread_history(thread_id, limit=20, truncate=400, user_id="u", app=app)
-
+    history = await _get_local_thread_history(thread_id, agent=agent, app=app)
     assert [item["role"] for item in history["messages"]] == ["notification", "assistant"]
     assert "cancelled" in history["messages"][0]["text"]
     assert history["messages"][1]["text"] == "AFTER_CANCEL_WAKE"
@@ -1760,86 +1746,58 @@ async def test_send_message_route_then_agent_terminal_notification_reenters_foll
 
 @pytest.mark.asyncio
 async def test_run_agent_to_buffer_adds_terminal_followthrough_system_note_to_prevent_silent_completion(monkeypatch, tmp_path):
-    _patch_streaming_event_store(monkeypatch)
-    monkeypatch.setattr("backend.web.services.streaming_service._ensure_thread_handlers", lambda *args, **kwargs: None)
-
     checkpointer = _MemoryCheckpointer()
     loop = _make_loop(model=_TerminalFollowthroughPromptAwareModel(), checkpointer=checkpointer)
-    agent, app, thread_buf = _make_direct_streaming_context(tmp_path, loop)
-
-    await _run_agent_to_buffer(
-        agent,
-        "thread-terminal-followthrough-note",
-        "<system-reminder><CommandNotification><Status>completed</Status><Output>42</Output></CommandNotification></system-reminder>",
-        app,
-        False,
-        thread_buf,
-        "run-terminal-followthrough-note",
+    entries = await _run_direct_notification_followthrough(
+        monkeypatch,
+        tmp_path,
+        loop=loop,
+        thread_id="thread-terminal-followthrough-note",
+        message="<system-reminder><CommandNotification><Status>completed</Status><Output>42</Output></CommandNotification></system-reminder>",
+        run_id="run-terminal-followthrough-note",
         message_metadata={"source": "system", "notification_type": "command"},
     )
-
-    entries = app.state.display_builder.get_entries("thread-terminal-followthrough-note")
-    assert entries is not None
-    assert entries[0]["segments"][0]["type"] == "notice"
-    assert entries[0]["segments"][1] == {"type": "text", "content": "FOLLOWTHROUGH_ACK"}
+    _assert_notice_then_text(entries, "CommandNotification", "FOLLOWTHROUGH_ACK")
 
 
 @pytest.mark.asyncio
 async def test_run_agent_to_buffer_turns_silent_terminal_reentry_into_visible_followthrough(monkeypatch, tmp_path):
-    _patch_streaming_event_store(monkeypatch)
-    monkeypatch.setattr("backend.web.services.streaming_service._ensure_thread_handlers", lambda *args, **kwargs: None)
-
     checkpointer = _MemoryCheckpointer()
     loop = _make_loop(model=_TerminalFollowthroughSilentModel(), checkpointer=checkpointer)
-    agent, app, thread_buf = _make_direct_streaming_context(tmp_path, loop)
-
-    await _run_agent_to_buffer(
-        agent,
-        "thread-terminal-followthrough-silent",
-        "<system-reminder><CommandNotification><Status>completed</Status><Output>42</Output></CommandNotification></system-reminder>",
-        app,
-        False,
-        thread_buf,
-        "run-terminal-followthrough-silent",
+    entries = await _run_direct_notification_followthrough(
+        monkeypatch,
+        tmp_path,
+        loop=loop,
+        thread_id="thread-terminal-followthrough-silent",
+        message="<system-reminder><CommandNotification><Status>completed</Status><Output>42</Output></CommandNotification></system-reminder>",
+        run_id="run-terminal-followthrough-silent",
         message_metadata={"source": "system", "notification_type": "command"},
     )
-
-    entries = app.state.display_builder.get_entries("thread-terminal-followthrough-silent")
-    assert entries is not None
-    assert entries[0]["segments"][0]["type"] == "notice"
-    assert entries[0]["segments"][1] == {
-        "type": "text",
-        "content": "Background command completed, but the followthrough assistant reply was empty.",
-    }
+    _assert_notice_then_text(
+        entries,
+        "CommandNotification",
+        "Background command completed, but the followthrough assistant reply was empty.",
+    )
 
 
 @pytest.mark.asyncio
 async def test_run_agent_to_buffer_turns_silent_chat_notification_into_visible_followthrough(monkeypatch, tmp_path):
-    _patch_streaming_event_store(monkeypatch)
-    monkeypatch.setattr("backend.web.services.streaming_service._ensure_thread_handlers", lambda *args, **kwargs: None)
-
     checkpointer = _MemoryCheckpointer()
     loop = _make_loop(model=_ChatNotificationSilentModel(), checkpointer=checkpointer)
-    agent, app, thread_buf = _make_direct_streaming_context(tmp_path, loop)
-
-    await _run_agent_to_buffer(
-        agent,
-        "thread-chat-followthrough-silent",
-        '<system-reminder>\nNew message from alice in chat chat-123 (1 unread).\nRead it with chat_read(chat_id="chat-123").\nReply with chat_send(chat_id="chat-123", content="...").\nDo not treat your normal assistant text as a chat reply.\n</system-reminder>',
-        app,
-        False,
-        thread_buf,
-        "run-chat-followthrough-silent",
+    entries = await _run_direct_notification_followthrough(
+        monkeypatch,
+        tmp_path,
+        loop=loop,
+        thread_id="thread-chat-followthrough-silent",
+        message='<system-reminder>\nNew message from alice in chat chat-123 (1 unread).\nRead it with chat_read(chat_id="chat-123").\nReply with chat_send(chat_id="chat-123", content="...").\nDo not treat your normal assistant text as a chat reply.\n</system-reminder>',
+        run_id="run-chat-followthrough-silent",
         message_metadata={"source": "external", "notification_type": "chat"},
     )
-
-    entries = app.state.display_builder.get_entries("thread-chat-followthrough-silent")
-    assert entries is not None
-    assert entries[0]["segments"][0]["type"] == "notice"
-    assert entries[0]["segments"][1] == {
-        "type": "text",
-        "content": 'I received a chat notification, but the followthrough assistant reply was empty. Read it with chat_read(chat_id="chat-123") before deciding whether to reply.',
-    }
+    _assert_notice_then_text(
+        entries,
+        'chat_read(chat_id="chat-123")',
+        'I received a chat notification, but the followthrough assistant reply was empty. Read it with chat_read(chat_id="chat-123") before deciding whether to reply.',
+    )
 
 
 @pytest.mark.asyncio
