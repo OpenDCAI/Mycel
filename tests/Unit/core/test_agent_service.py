@@ -174,6 +174,19 @@ def _make_parent_context(tmp_path: Path, model_name: str = "gpt-parent") -> Tool
     )
 
 
+def _make_service(tmp_path: Path, **kwargs) -> AgentService:
+    tool_registry = kwargs.pop("tool_registry", None) or _FakeRegistry()
+    agent_registry = kwargs.pop("agent_registry", None) or _FakeAgentRegistry()
+    model_name = kwargs.pop("model_name", "gpt-test")
+    return AgentService(
+        tool_registry=tool_registry,
+        agent_registry=agent_registry,
+        workspace_root=tmp_path,
+        model_name=model_name,
+        **kwargs,
+    )
+
+
 def _agent_tool_json(result) -> dict:
     content = getattr(result, "content", result)
     return json.loads(content)
@@ -186,12 +199,7 @@ async def _sleep_forever():
 
 @pytest.mark.asyncio
 async def test_task_output_reports_running_command_honestly(tmp_path):
-    service = AgentService(
-        tool_registry=_FakeRegistry(),
-        agent_registry=_FakeAgentRegistry(),
-        workspace_root=tmp_path,
-        model_name="gpt-test",
-    )
+    service = _make_service(tmp_path)
     async_cmd = _FakeAsyncCommand()
     service._tasks["cmd_test123"] = _BashBackgroundRun(async_cmd, "echo hello")
 
@@ -206,12 +214,7 @@ async def test_task_output_reports_running_command_honestly(tmp_path):
 
 @pytest.mark.asyncio
 async def test_task_output_keeps_agent_running_message_for_agent_tasks(tmp_path):
-    service = AgentService(
-        tool_registry=_FakeRegistry(),
-        agent_registry=_FakeAgentRegistry(),
-        workspace_root=tmp_path,
-        model_name="gpt-test",
-    )
+    service = _make_service(tmp_path)
     task = asyncio.create_task(_sleep_forever())
     service._tasks["task_agent123"] = _RunningTask(
         task=task,
@@ -244,12 +247,7 @@ async def test_run_agent_applies_forked_bootstrap_to_child_agent(monkeypatch, tm
 
     monkeypatch.setattr("core.runtime.agent.create_leon_agent", fake_create_leon_agent)
 
-    service = AgentService(
-        tool_registry=_FakeRegistry(),
-        agent_registry=_FakeAgentRegistry(),
-        workspace_root=tmp_path,
-        model_name="gpt-test",
-    )
+    service = _make_service(tmp_path)
     service._parent_bootstrap = BootstrapConfig(
         workspace_root=Path("/workspace"),
         original_cwd=Path("/launcher"),
@@ -301,12 +299,7 @@ async def test_run_agent_applies_isolated_tool_context_to_child_agent_service(mo
 
     monkeypatch.setattr("core.runtime.agent.create_leon_agent", fake_create_leon_agent)
 
-    service = AgentService(
-        tool_registry=_FakeRegistry(),
-        agent_registry=_FakeAgentRegistry(),
-        workspace_root=tmp_path,
-        model_name="gpt-test",
-    )
+    service = _make_service(tmp_path)
     parent_context = _make_parent_context(tmp_path)
 
     result = await service._run_agent(
@@ -342,12 +335,7 @@ async def test_run_agent_uses_explicit_child_fork_wiring_api(monkeypatch, tmp_pa
 
     monkeypatch.setattr("core.runtime.agent.create_leon_agent", fake_create_leon_agent)
 
-    service = AgentService(
-        tool_registry=_FakeRegistry(),
-        agent_registry=_FakeAgentRegistry(),
-        workspace_root=tmp_path,
-        model_name="gpt-test",
-    )
+    service = _make_service(tmp_path)
     parent_context = _make_parent_context(tmp_path)
 
     result = await service._run_agent(
@@ -377,13 +365,7 @@ async def test_run_agent_uses_injected_child_agent_factory(tmp_path):
         created.append(child)
         return child
 
-    service = AgentService(
-        tool_registry=_FakeRegistry(),
-        agent_registry=_FakeAgentRegistry(),
-        workspace_root=tmp_path,
-        model_name="gpt-test",
-        child_agent_factory=fake_child_agent_factory,
-    )
+    service = _make_service(tmp_path, child_agent_factory=fake_child_agent_factory)
 
     result = await service._run_agent(
         task_id="task-1",
@@ -416,12 +398,7 @@ async def test_agent_tool_fork_context_uses_parent_tool_context_messages(monkeyp
     monkeypatch.setattr("core.runtime.agent.create_leon_agent", fake_create_leon_agent)
 
     registry = ToolRegistry()
-    AgentService(
-        tool_registry=registry,
-        agent_registry=_FakeAgentRegistry(),
-        workspace_root=tmp_path,
-        model_name="gpt-test",
-    )
+    _make_service(tmp_path, tool_registry=registry)
     runner = ToolRunner(registry=registry)
     request = SimpleNamespace(
         tool_call={"name": "Agent", "args": {"prompt": "inspect", "fork_context": True}, "id": "tc-1"},
@@ -463,12 +440,7 @@ async def test_agent_tool_fork_context_treats_empty_parent_messages_as_authorita
     set_current_messages([{"role": "user", "content": "AMBIENT_LEAK"}])
 
     registry = ToolRegistry()
-    AgentService(
-        tool_registry=registry,
-        agent_registry=_FakeAgentRegistry(),
-        workspace_root=tmp_path,
-        model_name="gpt-test",
-    )
+    _make_service(tmp_path, tool_registry=registry)
     runner = ToolRunner(registry=registry)
     parent_context = _make_parent_context(tmp_path)
     parent_context.messages = []
@@ -512,12 +484,7 @@ async def test_run_agent_rolls_child_bootstrap_costs_back_into_parent_bootstrap(
 
     monkeypatch.setattr("core.runtime.agent.create_leon_agent", fake_create_leon_agent)
 
-    service = AgentService(
-        tool_registry=_FakeRegistry(),
-        agent_registry=_FakeAgentRegistry(),
-        workspace_root=tmp_path,
-        model_name="gpt-test",
-    )
+    service = _make_service(tmp_path)
     service._parent_bootstrap = BootstrapConfig(
         workspace_root=Path("/workspace"),
         model_name="gpt-parent",
@@ -563,12 +530,7 @@ async def test_run_agent_preserves_concurrent_parent_and_child_bootstrap_growth(
 
     monkeypatch.setattr("core.runtime.agent.create_leon_agent", fake_create_leon_agent)
 
-    service = AgentService(
-        tool_registry=_FakeRegistry(),
-        agent_registry=_FakeAgentRegistry(),
-        workspace_root=tmp_path,
-        model_name="gpt-test",
-    )
+    service = _make_service(tmp_path)
     service._parent_bootstrap = BootstrapConfig(
         workspace_root=Path("/workspace"),
         model_name="gpt-parent",
@@ -605,12 +567,7 @@ async def test_agent_tool_live_runner_path_passes_isolated_tool_context_to_child
     monkeypatch.setattr("core.runtime.agent.create_leon_agent", fake_create_leon_agent)
 
     registry = ToolRegistry()
-    AgentService(
-        tool_registry=registry,
-        agent_registry=_FakeAgentRegistry(),
-        workspace_root=tmp_path,
-        model_name="gpt-test",
-    )
+    _make_service(tmp_path, tool_registry=registry)
     runner = ToolRunner(registry=registry)
     parent_context = _make_parent_context(tmp_path)
     request = SimpleNamespace(
@@ -644,12 +601,7 @@ async def test_run_agent_without_fork_context_does_not_inject_parent_messages(mo
 
     monkeypatch.setattr("core.runtime.agent.create_leon_agent", fake_create_leon_agent)
 
-    service = AgentService(
-        tool_registry=_FakeRegistry(),
-        agent_registry=_FakeAgentRegistry(),
-        workspace_root=tmp_path,
-        model_name="gpt-test",
-    )
+    service = _make_service(tmp_path)
     parent_context = _make_parent_context(tmp_path)
     parent_context.messages = [
         {
@@ -684,12 +636,7 @@ async def test_run_agent_child_tool_context_deep_clones_read_file_state(monkeypa
 
     monkeypatch.setattr("core.runtime.agent.create_leon_agent", fake_create_leon_agent)
 
-    service = AgentService(
-        tool_registry=_FakeRegistry(),
-        agent_registry=_FakeAgentRegistry(),
-        workspace_root=tmp_path,
-        model_name="gpt-test",
-    )
+    service = _make_service(tmp_path)
     parent_context = _make_parent_context(tmp_path)
     parent_context.read_file_state = {"/tmp/readme.md": {"partial": False, "meta": {"seen": 1}}}
 
@@ -727,12 +674,7 @@ async def test_agent_tool_live_runner_path_applies_role_specific_tool_filters(mo
     monkeypatch.setattr("core.runtime.agent.create_leon_agent", fake_create_leon_agent)
 
     registry = ToolRegistry()
-    AgentService(
-        tool_registry=registry,
-        agent_registry=_FakeAgentRegistry(),
-        workspace_root=tmp_path,
-        model_name="gpt-parent",
-    )
+    _make_service(tmp_path, tool_registry=registry, model_name="gpt-parent")
     runner = ToolRunner(registry=registry)
     request = SimpleNamespace(
         tool_call={"name": "Agent", "args": {"prompt": "inspect", "subagent_type": "explore"}, "id": "tc-1"},
@@ -767,12 +709,7 @@ async def test_agent_tool_model_priority_prefers_env_over_tool_frontmatter_and_p
     monkeypatch.setenv("CLAUDE_CODE_SUBAGENT_MODEL", "env-model")
 
     registry = ToolRegistry()
-    AgentService(
-        tool_registry=registry,
-        agent_registry=_FakeAgentRegistry(),
-        workspace_root=tmp_path,
-        model_name="parent-model",
-    )
+    _make_service(tmp_path, tool_registry=registry, model_name="parent-model")
     runner = ToolRunner(registry=registry)
     request = SimpleNamespace(
         tool_call={
@@ -807,12 +744,7 @@ async def test_agent_tool_model_priority_prefers_tool_over_frontmatter_and_paren
     monkeypatch.setattr("core.runtime.agent.create_leon_agent", fake_create_leon_agent)
 
     registry = ToolRegistry()
-    AgentService(
-        tool_registry=registry,
-        agent_registry=_FakeAgentRegistry(),
-        workspace_root=tmp_path,
-        model_name="parent-model",
-    )
+    _make_service(tmp_path, tool_registry=registry, model_name="parent-model")
     runner = ToolRunner(registry=registry)
     request = SimpleNamespace(
         tool_call={
@@ -841,12 +773,7 @@ async def test_agent_tool_model_default_literal_inherits_parent_model(monkeypatc
     monkeypatch.setattr("core.runtime.agent.create_leon_agent", fake_create_leon_agent)
 
     registry = ToolRegistry()
-    AgentService(
-        tool_registry=registry,
-        agent_registry=_FakeAgentRegistry(),
-        workspace_root=tmp_path,
-        model_name="parent-model",
-    )
+    _make_service(tmp_path, tool_registry=registry, model_name="parent-model")
     runner = ToolRunner(registry=registry)
     request = SimpleNamespace(
         tool_call={
@@ -875,12 +802,7 @@ async def test_agent_tool_model_inherit_literal_inherits_parent_model(monkeypatc
     monkeypatch.setattr("core.runtime.agent.create_leon_agent", fake_create_leon_agent)
 
     registry = ToolRegistry()
-    AgentService(
-        tool_registry=registry,
-        agent_registry=_FakeAgentRegistry(),
-        workspace_root=tmp_path,
-        model_name="parent-model",
-    )
+    _make_service(tmp_path, tool_registry=registry, model_name="parent-model")
     runner = ToolRunner(registry=registry)
     request = SimpleNamespace(
         tool_call={
@@ -909,12 +831,7 @@ async def test_agent_tool_inherited_default_bootstrap_model_uses_parent_service_
     monkeypatch.setattr("core.runtime.agent.create_leon_agent", fake_create_leon_agent)
 
     registry = ToolRegistry()
-    AgentService(
-        tool_registry=registry,
-        agent_registry=_FakeAgentRegistry(),
-        workspace_root=tmp_path,
-        model_name="parent-service-model",
-    )
+    _make_service(tmp_path, tool_registry=registry, model_name="parent-service-model")
     runner = ToolRunner(registry=registry)
     request = SimpleNamespace(
         tool_call={
@@ -949,12 +866,7 @@ async def test_agent_tool_model_priority_prefers_frontmatter_over_parent(monkeyp
     monkeypatch.setattr("core.runtime.agent.create_leon_agent", fake_create_leon_agent)
 
     registry = ToolRegistry()
-    AgentService(
-        tool_registry=registry,
-        agent_registry=_FakeAgentRegistry(),
-        workspace_root=tmp_path,
-        model_name="parent-model",
-    )
+    _make_service(tmp_path, tool_registry=registry, model_name="parent-model")
     runner = ToolRunner(registry=registry)
     request = SimpleNamespace(
         tool_call={"name": "Agent", "args": {"prompt": "inspect", "subagent_type": "explore"}, "id": "tc-1"},
@@ -979,12 +891,7 @@ async def test_agent_tool_model_priority_inherits_parent_when_no_env_tool_or_fro
     monkeypatch.setattr("core.runtime.agent.create_leon_agent", fake_create_leon_agent)
 
     registry = ToolRegistry()
-    AgentService(
-        tool_registry=registry,
-        agent_registry=_FakeAgentRegistry(),
-        workspace_root=tmp_path,
-        model_name="service-model",
-    )
+    _make_service(tmp_path, tool_registry=registry, model_name="service-model")
     runner = ToolRunner(registry=registry)
     request = SimpleNamespace(
         tool_call={"name": "Agent", "args": {"prompt": "inspect", "subagent_type": "explore"}, "id": "tc-1"},
@@ -999,12 +906,7 @@ async def test_agent_tool_model_priority_inherits_parent_when_no_env_tool_or_fro
 
 @pytest.mark.asyncio
 async def test_cleanup_background_runs_cancels_pending_agent_and_shell_runs(tmp_path):
-    service = AgentService(
-        tool_registry=_FakeRegistry(),
-        agent_registry=_FakeAgentRegistry(),
-        workspace_root=tmp_path,
-        model_name="gpt-test",
-    )
+    service = _make_service(tmp_path)
     agent_task = asyncio.create_task(_sleep_forever())
     shell_cmd = _FakeAsyncCommand()
     service._tasks["agent-task"] = _RunningTask(
@@ -1030,12 +932,7 @@ async def test_cleanup_background_runs_cancels_pending_agent_and_shell_runs(tmp_
 @pytest.mark.asyncio
 async def test_cleanup_background_runs_does_not_relabel_completed_agent_run(tmp_path):
     registry = _FakeAgentRegistry()
-    service = AgentService(
-        tool_registry=_FakeRegistry(),
-        agent_registry=registry,
-        workspace_root=tmp_path,
-        model_name="gpt-test",
-    )
+    service = _make_service(tmp_path, agent_registry=registry)
     completed_task = asyncio.create_task(asyncio.sleep(0, result="done"))
     await completed_task
     service._tasks["agent-task"] = _RunningTask(
@@ -1062,12 +959,7 @@ async def test_run_agent_cleans_up_child_background_runs_before_close(monkeypatc
 
     monkeypatch.setattr("core.runtime.agent.create_leon_agent", fake_create_leon_agent)
 
-    service = AgentService(
-        tool_registry=_FakeRegistry(),
-        agent_registry=_FakeAgentRegistry(),
-        workspace_root=tmp_path,
-        model_name="gpt-test",
-    )
+    service = _make_service(tmp_path)
 
     result = await service._run_agent(
         task_id="task-1",
@@ -1094,12 +986,7 @@ async def test_run_agent_links_child_abort_controller_to_parent_tool_context(mon
 
     monkeypatch.setattr("core.runtime.agent.create_leon_agent", fake_create_leon_agent)
 
-    service = AgentService(
-        tool_registry=_FakeRegistry(),
-        agent_registry=_FakeAgentRegistry(),
-        workspace_root=tmp_path,
-        model_name="gpt-test",
-    )
+    service = _make_service(tmp_path)
     parent_context = _make_parent_context(tmp_path)
 
     result = await service._run_agent(
@@ -1159,12 +1046,7 @@ async def test_run_agent_reuses_parent_lease_for_child_thread_terminal(monkeypat
     monkeypatch.setattr("core.runtime.agent.create_leon_agent", fake_create_leon_agent)
     set_current_thread_id(parent_thread_id)
 
-    service = AgentService(
-        tool_registry=_FakeRegistry(),
-        agent_registry=_FakeAgentRegistry(),
-        workspace_root=tmp_path,
-        model_name="gpt-test",
-    )
+    service = _make_service(tmp_path)
 
     try:
         result = await service._run_agent(
@@ -1196,12 +1078,7 @@ async def test_run_agent_inherits_parent_sandbox_when_forking_child(monkeypatch,
 
     monkeypatch.setattr("core.runtime.agent.create_leon_agent", fake_create_leon_agent)
 
-    service = AgentService(
-        tool_registry=_FakeRegistry(),
-        agent_registry=_FakeAgentRegistry(),
-        workspace_root=tmp_path,
-        model_name="gpt-test",
-    )
+    service = _make_service(tmp_path)
     service._parent_bootstrap = BootstrapConfig(
         workspace_root=Path("/home/daytona"),
         original_cwd=Path("/home/daytona"),
@@ -1237,12 +1114,7 @@ async def test_run_agent_child_cleanup_skips_sandbox_close(monkeypatch, tmp_path
 
     monkeypatch.setattr("core.runtime.agent.create_leon_agent", fake_create_leon_agent)
 
-    service = AgentService(
-        tool_registry=_FakeRegistry(),
-        agent_registry=_FakeAgentRegistry(),
-        workspace_root=tmp_path,
-        model_name="gpt-test",
-    )
+    service = _make_service(tmp_path)
 
     result = await service._run_agent(
         task_id="task-1",
@@ -1282,11 +1154,8 @@ async def test_handle_agent_registers_subagent_thread_metadata_before_return(mon
     )
     entity_repo = _FakeEntityRepo()
     member_repo = _FakeMemberRepo({"member-1": "Toad"})
-    service = AgentService(
-        tool_registry=_FakeRegistry(),
-        agent_registry=_FakeAgentRegistry(),
-        workspace_root=tmp_path,
-        model_name="gpt-test",
+    service = _make_service(
+        tmp_path,
         thread_repo=thread_repo,
         entity_repo=entity_repo,
         member_repo=member_repo,
@@ -1371,11 +1240,9 @@ async def test_handle_agent_reuses_existing_completed_child_thread_for_same_pare
         parent_agent_id="parent-thread",
         subagent_type="general",
     )
-    service = AgentService(
-        tool_registry=_FakeRegistry(),
+    service = _make_service(
+        tmp_path,
         agent_registry=registry,
-        workspace_root=tmp_path,
-        model_name="gpt-test",
         thread_repo=thread_repo,
         entity_repo=entity_repo,
         member_repo=_FakeMemberRepo({"member-1": "Toad"}),
@@ -1405,12 +1272,7 @@ async def test_agent_tool_blocking_result_preserves_child_identity_metadata(monk
     monkeypatch.setattr("core.runtime.agent.create_leon_agent", fake_create_leon_agent)
 
     registry = ToolRegistry()
-    AgentService(
-        tool_registry=registry,
-        agent_registry=_FakeAgentRegistry(),
-        workspace_root=tmp_path,
-        model_name="gpt-test",
-    )
+    _make_service(tmp_path, tool_registry=registry)
     runner = ToolRunner(registry=registry)
     request = SimpleNamespace(
         tool_call={"name": "Agent", "args": {"prompt": "inspect"}, "id": "tc-1"},
@@ -1444,13 +1306,7 @@ async def test_run_agent_uses_live_child_thread_bridge_when_web_app_present(monk
     monkeypatch.setattr("backend.web.services.streaming_service.run_child_thread_live", fake_run_child_thread_live)
 
     web_app = SimpleNamespace()
-    service = AgentService(
-        tool_registry=_FakeRegistry(),
-        agent_registry=_FakeAgentRegistry(),
-        workspace_root=tmp_path,
-        model_name="gpt-test",
-        web_app=web_app,
-    )
+    service = _make_service(tmp_path, web_app=web_app)
 
     result = await service._run_agent(
         task_id="task-1",
@@ -1489,13 +1345,7 @@ async def test_run_agent_normalizes_workspace_suffix_in_child_prompt(monkeypatch
     monkeypatch.setattr("core.runtime.agent.create_leon_agent", fake_create_leon_agent)
     monkeypatch.setattr("backend.web.services.streaming_service.run_child_thread_live", fake_run_child_thread_live)
 
-    service = AgentService(
-        tool_registry=_FakeRegistry(),
-        agent_registry=_FakeAgentRegistry(),
-        workspace_root=tmp_path,
-        model_name="gpt-test",
-        web_app=SimpleNamespace(),
-    )
+    service = _make_service(tmp_path, web_app=SimpleNamespace())
     raw_prompt = f"Inspect the workspace at {tmp_path}/current working directory. Read-only only. Report existing files."
 
     result = await service._run_agent(
