@@ -260,11 +260,11 @@ def _checkpoint_tail_is_pending_owner_turn(messages: list[dict[str, Any]]) -> bo
 async def _get_thread_display_entries(app: Any, thread_id: str) -> list[dict[str, Any]]:
     display_builder = app.state.display_builder
     entries = display_builder.get_entries(thread_id)
-    if entries is not None:
-        return entries
-
     sandbox_type = resolve_thread_sandbox(app, thread_id)
     agent = await get_or_create_agent(app, sandbox_type, thread_id=thread_id)
+    if entries is not None and getattr(agent.runtime, "current_state", None) != AgentState.IDLE:
+        return entries
+
     set_current_thread_id(thread_id)
     config = {"configurable": {"thread_id": thread_id}}
     state = await agent.agent.aget_state(config)
@@ -275,6 +275,8 @@ async def _get_thread_display_entries(app: Any, thread_id: str) -> list[dict[str
     from core.runtime.visibility import annotate_owner_visibility
 
     annotated, _ = annotate_owner_visibility(serialized)
+    if entries is not None and not _display_entries_need_idle_rebuild(entries, annotated):
+        return entries
     entries = display_builder.build_from_checkpoint(thread_id, annotated)
     if _checkpoint_tail_is_pending_owner_turn(annotated):
         await _replay_latest_run_failure_events(
@@ -283,6 +285,16 @@ async def _get_thread_display_entries(app: Any, thread_id: str) -> list[dict[str
         )
         entries = display_builder.get_entries(thread_id) or entries
     return entries
+
+
+def _display_entries_need_idle_rebuild(entries: list[dict[str, Any]], messages: list[dict[str, Any]]) -> bool:
+    if not messages:
+        return bool(entries)
+    if not entries:
+        return True
+    # @@@idle-cache-honesty - idle detail must not trust cached assistant shells after
+    # clear/restart. Rebuild only when cache is visibly impossible for the persisted checkpoint.
+    return any(entry.get("role") == "assistant" and not entry.get("segments") for entry in entries)
 
 
 def _collect_display_subagent_tasks(entries: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
