@@ -470,6 +470,20 @@ class SandboxManager:
             if not lease:
                 lease = self._create_lease(terminal.lease_id, self.provider.name)
             self._assert_lease_provider(lease, thread_id)
+            if lease.observed_state == "paused":
+                # @@@paused-lease-rehydrate - a persisted thread can lose its in-memory chat session
+                # while the lease stays paused in storage; resume before reconstructing capability.
+                if not self.resume_session(thread_id, source="auto_resume"):
+                    raise RuntimeError(f"Failed to resume paused session for thread {thread_id}")
+                session = self.session_manager.get(thread_id, terminal.terminal_id)
+                if session:
+                    self._assert_lease_provider(session.lease, thread_id)
+                    self._ensure_bound_instance(session.lease)
+                    return SandboxCapability(session, manager=self)
+                lease = self._get_lease(terminal.lease_id)
+                if not lease:
+                    raise RuntimeError(f"Lease disappeared after resume for thread {thread_id}")
+                self._assert_lease_provider(lease, thread_id)
 
         # Stamp bind_mounts on lease so lazy creation paths pick them up
         if bind_mounts:

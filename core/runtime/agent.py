@@ -90,6 +90,7 @@ logger = logging.getLogger(__name__)
 # @@@langchain-anthropic-streaming-usage-regression
 apply_usage_patches()
 
+
 def _make_mcp_tool_entry(tool) -> ToolEntry:
     schema_model = getattr(tool, "tool_call_schema", None)
     if schema_model is not None and hasattr(schema_model, "model_json_schema"):

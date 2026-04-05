@@ -339,6 +339,40 @@ def test_get_sandbox_local_provider_does_not_require_volume_bootstrap(tmp_path):
     assert session.lease.provider_name == "local"
 
 
+def test_get_sandbox_auto_resumes_paused_lease_when_reconstructing_session():
+    manager = object.__new__(SandboxManager)
+    manager.provider = SimpleNamespace(name="local")
+    manager.provider_capability = SimpleNamespace(runtime_kind="local", eager_instance_binding=False)
+    manager.volume = _FakeVolume()
+    terminal = SimpleNamespace(
+        terminal_id="term-1",
+        lease_id="lease-1",
+        get_state=lambda: SimpleNamespace(cwd="/tmp", env_delta={}, state_version=0),
+        update_state=lambda _state: None,
+    )
+    lease = SimpleNamespace(
+        provider_name="local",
+        observed_state="paused",
+        bind_mounts=None,
+        recipe=None,
+        get_instance=lambda: SimpleNamespace(instance_id="instance-1"),
+    )
+    manager._get_active_terminal = lambda _thread_id: terminal
+    manager._get_lease = lambda _lease_id: lease
+    manager._assert_lease_provider = lambda _lease, _thread_id: None
+    manager._ensure_bound_instance = lambda _lease: None
+    resume_calls: list[tuple[str, str]] = []
+    manager.resume_session = lambda thread_id, source="user_resume": resume_calls.append((thread_id, source)) or True
+    manager.session_manager = SimpleNamespace(
+        get=lambda _thread_id, _terminal_id: None,
+        create=lambda **_kwargs: SimpleNamespace(session_id="sess-1", terminal=terminal, lease=lease),
+    )
+
+    manager.get_sandbox("thread-1")
+
+    assert resume_calls == [("thread-1", "auto_resume")]
+
+
 def test_upgrade_to_daytona_volume_uses_runtime_thread_repo_for_member_lookup(monkeypatch, tmp_path):
     manager = object.__new__(SandboxManager)
     manager.provider = _FakeDaytonaProvider()
