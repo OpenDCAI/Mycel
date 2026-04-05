@@ -1154,8 +1154,13 @@ async def test_cold_rebuild_surfaces_persisted_prompt_too_long_notice_after_reco
         )
 
     assert any(
-        entry.get("role") == "notice" and "Prompt is too long. Automatic recovery exhausted." in entry.get("content", "")
+        any(
+            segment.get("type") == "notice"
+            and "Prompt is too long. Automatic recovery exhausted." in segment.get("content", "")
+            for segment in entry.get("segments", [])
+        )
         for entry in detail["entries"]
+        if entry.get("role") == "assistant"
     )
     assert any(
         item.get("role") == "notification" and "Prompt is too long. Automatic recovery exhausted." in item.get("text", "")
@@ -1365,8 +1370,13 @@ async def test_compaction_clear_then_recovery_notice_rebuilds_honestly(tmp_path)
     ]
     assert not any("Conversation compacted" in item.get("text", "") for item in recovery_history["messages"])
     assert any(
-        entry.get("role") == "notice" and "Prompt is too long. Automatic recovery exhausted." in entry.get("content", "")
+        any(
+            segment.get("type") == "notice"
+            and "Prompt is too long. Automatic recovery exhausted." in segment.get("content", "")
+            for segment in entry.get("segments", [])
+        )
         for entry in recovery_detail["entries"]
+        if entry.get("role") == "assistant"
     )
 
 
