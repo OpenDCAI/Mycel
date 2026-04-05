@@ -78,6 +78,17 @@ class _DirectAuthClient:
         self.tokens.append(token)
         return SimpleNamespace(user=SimpleNamespace(id="user-1"))
 
+    def sign_up(self, payload: dict[str, str]):
+        self.calls.append(payload)
+        return SimpleNamespace(user=SimpleNamespace(id="user-1"), session=None)
+
+    def verify_otp(self, payload: dict[str, str]):
+        self.calls.append(payload)
+        return SimpleNamespace(
+            user=SimpleNamespace(id="user-1"),
+            session=SimpleNamespace(access_token="temp-token-1"),
+        )
+
 
 def _service(
     *,
@@ -86,6 +97,7 @@ def _service(
     supabase_auth_client_factory=None,
     member_repo=None,
     entity_repo=None,
+    invite_codes=None,
 ) -> AuthService:
     return AuthService(
         members=member_repo or SimpleNamespace(),
@@ -94,6 +106,7 @@ def _service(
         supabase_client=supabase_client,
         supabase_auth_client=supabase_auth_client,
         supabase_auth_client_factory=supabase_auth_client_factory,
+        invite_codes=invite_codes,
     )
 
 
@@ -206,3 +219,28 @@ def test_verify_token_accepts_direct_gotrue_client_without_auth_wrapper(monkeypa
 
     assert auth_client.tokens == ["tok-direct"]
     assert payload == {"user_id": "user-1", "entity_id": None}
+
+
+def test_send_otp_accepts_direct_gotrue_client_without_auth_wrapper():
+    auth_client = _DirectAuthClient()
+    invite_codes = SimpleNamespace(is_valid=lambda code: code == "invite-1")
+
+    _service(
+        supabase_client=SimpleNamespace(auth=None),
+        supabase_auth_client=auth_client,
+        invite_codes=invite_codes,
+    ).send_otp("fresh@example.com", "pw-1", "invite-1")
+
+    assert auth_client.calls == [{"email": "fresh@example.com", "password": "pw-1"}]
+
+
+def test_verify_register_otp_accepts_direct_gotrue_client_without_auth_wrapper():
+    auth_client = _DirectAuthClient()
+
+    result = _service(
+        supabase_client=SimpleNamespace(auth=None),
+        supabase_auth_client=auth_client,
+    ).verify_register_otp("fresh@example.com", "123456")
+
+    assert auth_client.calls == [{"email": "fresh@example.com", "token": "123456", "type": "signup"}]
+    assert result == {"temp_token": "temp-token-1"}

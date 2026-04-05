@@ -52,7 +52,7 @@ class AuthService:
         from supabase_auth.errors import AuthApiError
 
         try:
-            auth_client.auth.sign_up({"email": email, "password": password})
+            auth_client.sign_up({"email": email, "password": password})
         except AuthApiError as e:
             msg = e.message or ""
             if "already registered" in msg or "already exists" in msg:
@@ -67,7 +67,7 @@ class AuthService:
         from supabase_auth.errors import AuthApiError
 
         try:
-            resp = auth_client.auth.verify_otp({"email": email, "token": token, "type": "signup"})
+            resp = auth_client.verify_otp({"email": email, "token": token, "type": "signup"})
         except AuthApiError as e:
             raise ValueError(f"验证码错误: {e.message}") from e
         if resp.user is None or resp.session is None:
