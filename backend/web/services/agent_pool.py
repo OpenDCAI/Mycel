@@ -49,9 +49,7 @@ def create_agent_sync(
     )
 
 
-async def get_or_create_agent(
-    app_obj: FastAPI, sandbox_type: str, thread_id: str | None = None, agent: str | None = None
-) -> Any:
+async def get_or_create_agent(app_obj: FastAPI, sandbox_type: str, thread_id: str | None = None, agent: str | None = None) -> Any:
     """Lazy agent pool — one agent per thread, created on demand."""
     if thread_id:
         set_current_thread_id(thread_id)
@@ -105,9 +103,7 @@ async def get_or_create_agent(
                 # @@@admin-chain — find owner's user_id via Member domain (template ownership).
                 # Thread→Entity→Member(template)→owner_user_id
                 agent_member = (
-                    app_obj.state.member_repo.get_by_id(agent_entity.member_id)
-                    if hasattr(app_obj.state, "member_repo")
-                    else None
+                    app_obj.state.member_repo.get_by_id(agent_entity.member_id) if hasattr(app_obj.state, "member_repo") else None
                 )
                 owner_member_id = agent_member.owner_user_id if agent_member and agent_member.owner_user_id else ""
                 chat_repos = {

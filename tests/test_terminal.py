@@ -216,9 +216,7 @@ class TestTerminalStore:
 
         conn2 = sqlite3.connect(str(temp_db))
         try:
-            cmd_row = conn2.execute(
-                "SELECT command_id FROM terminal_commands WHERE command_id = ?", ("cmd-1",)
-            ).fetchone()
+            cmd_row = conn2.execute("SELECT command_id FROM terminal_commands WHERE command_id = ?", ("cmd-1",)).fetchone()
             chunk_row = conn2.execute(
                 "SELECT chunk_id FROM terminal_command_chunks WHERE command_id = ?",
                 ("cmd-1",),

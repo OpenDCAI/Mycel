@@ -102,9 +102,7 @@ class DaytonaProvider(SandboxProvider):
         self.api_url = api_url
         self.target = target
         self.default_cwd = default_cwd
-        self.bind_mounts: list[MountSpec] = [
-            MountSpec.model_validate(m) if isinstance(m, dict) else m for m in (bind_mounts or [])
-        ]
+        self.bind_mounts: list[MountSpec] = [MountSpec.model_validate(m) if isinstance(m, dict) else m for m in (bind_mounts or [])]
 
         os.environ["DAYTONA_API_KEY"] = api_key
         os.environ["DAYTONA_API_URL"] = api_url
@@ -115,9 +113,7 @@ class DaytonaProvider(SandboxProvider):
 
     def set_thread_bind_mounts(self, thread_id: str, mounts: list[MountSpec | dict]) -> None:
         """Set thread-specific bind mounts that will be applied when creating sessions."""
-        self._thread_bind_mounts[thread_id] = [
-            MountSpec.model_validate(m) if isinstance(m, dict) else m for m in mounts
-        ]
+        self._thread_bind_mounts[thread_id] = [MountSpec.model_validate(m) if isinstance(m, dict) else m for m in mounts]
 
     # ==================== Managed Volume ====================
 
@@ -221,9 +217,7 @@ class DaytonaProvider(SandboxProvider):
             logger.warning("[DaytonaProvider] pause_session error for %s, verifying actual state", session_id)
             actual = self.get_session_status(session_id)
             if actual == "paused":
-                logger.info(
-                    "[DaytonaProvider] sandbox %s is actually stopped despite error — pause succeeded", session_id
-                )
+                logger.info("[DaytonaProvider] sandbox %s is actually stopped despite error — pause succeeded", session_id)
                 return True
             logger.error("[DaytonaProvider] pause_session truly failed for %s (state=%s)", session_id, actual)
             return False
@@ -238,9 +232,7 @@ class DaytonaProvider(SandboxProvider):
             logger.warning("[DaytonaProvider] resume_session error for %s, verifying actual state", session_id)
             actual = self.get_session_status(session_id)
             if actual == "running":
-                logger.info(
-                    "[DaytonaProvider] sandbox %s is actually running despite error — resume succeeded", session_id
-                )
+                logger.info("[DaytonaProvider] sandbox %s is actually running despite error — resume succeeded", session_id)
                 return True
             logger.error("[DaytonaProvider] resume_session truly failed for %s (state=%s)", session_id, actual)
             return False
@@ -286,9 +278,7 @@ class DaytonaProvider(SandboxProvider):
     def list_dir(self, session_id: str, path: str) -> list[dict]:
         sb = self._get_sandbox(session_id)
         entries = sb.fs.list_files(path)
-        return [
-            {"name": e.name, "type": "directory" if e.is_dir else "file", "size": e.size or 0} for e in (entries or [])
-        ]
+        return [{"name": e.name, "type": "directory" if e.is_dir else "file", "size": e.size or 0} for e in (entries or [])]
 
     def upload_bytes(self, session_id: str, remote_path: str, data: bytes) -> None:
         sb = self._get_sandbox(session_id)
@@ -303,10 +293,7 @@ class DaytonaProvider(SandboxProvider):
 
     def list_provider_sessions(self) -> list[SessionInfo]:
         result = self.client.list()
-        return [
-            SessionInfo(session_id=sb.id, provider=self.name, status=_daytona_state_to_status(sb.state.value))
-            for sb in result.items
-        ]
+        return [SessionInfo(session_id=sb.id, provider=self.name, status=_daytona_state_to_status(sb.state.value)) for sb in result.items]
 
     # ==================== Inspection ====================
 
@@ -422,9 +409,7 @@ class DaytonaProvider(SandboxProvider):
             "bindMounts": normalized_mounts,
         }
         with httpx.Client(timeout=30.0) as client:
-            response = client.post(
-                f"{self.api_url.rstrip('/')}/sandbox", headers=self._api_auth_headers(), json=payload
-            )
+            response = client.post(f"{self.api_url.rstrip('/')}/sandbox", headers=self._api_auth_headers(), json=payload)
         if response.status_code != 200:
             raise RuntimeError(f"Daytona create sandbox failed ({response.status_code}): {response.text}")
         sandbox_id = response.json().get("id")
@@ -467,9 +452,7 @@ class DaytonaProvider(SandboxProvider):
         deadline = time.time() + timeout_seconds
         with httpx.Client(timeout=15.0) as client:
             while time.time() < deadline:
-                response = client.get(
-                    f"{self.api_url.rstrip('/')}/sandbox/{sandbox_id}", headers=self._api_auth_headers()
-                )
+                response = client.get(f"{self.api_url.rstrip('/')}/sandbox/{sandbox_id}", headers=self._api_auth_headers())
                 if response.status_code != 200:
                     raise RuntimeError(
                         f"Daytona get sandbox failed while waiting for started ({response.status_code}): {response.text}"  # noqa: E501
@@ -534,9 +517,7 @@ class DaytonaSessionRuntime(_RemoteRuntimeBase):
             if isinstance(pwd_hint, str) and os.path.isabs(pwd_hint):
                 cleaned_cwd = pwd_hint
             else:
-                raise RuntimeError(
-                    f"Invalid terminal cwd snapshot for terminal {self.terminal.terminal_id}: {state.cwd!r}"
-                )
+                raise RuntimeError(f"Invalid terminal cwd snapshot for terminal {self.terminal.terminal_id}: {state.cwd!r}")
         if cleaned_cwd != state.cwd or cleaned_env != state.env_delta:
             from sandbox.terminal import TerminalState
 
@@ -658,9 +639,7 @@ class DaytonaSessionRuntime(_RemoteRuntimeBase):
                     if "fork/exec" in message and "no such file" in message:
                         # Diagnose: check if working directory exists
                         try:
-                            result = sandbox.process.exec_sync(
-                                f"test -d {effective_cwd} && echo y || echo n", timeout=5
-                            )
+                            result = sandbox.process.exec_sync(f"test -d {effective_cwd} && echo y || echo n", timeout=5)
                             if "n" in result.stdout:
                                 raise RuntimeError(
                                     f"PTY bootstrap failed: working directory '{effective_cwd}' does not exist. "
@@ -771,15 +750,11 @@ class DaytonaSessionRuntime(_RemoteRuntimeBase):
                             stderr=f"Error: snapshot failed: {exc}",
                         )
                 else:
-                    return ExecuteResult(
-                        exit_code=1, stdout="", stderr=f"Error: snapshot failed: {self._snapshot_error}"
-                    )
+                    return ExecuteResult(exit_code=1, stdout="", stderr=f"Error: snapshot failed: {self._snapshot_error}")
             try:
                 first = await asyncio.to_thread(self._execute_once_sync, command, timeout, on_stdout_chunk)
             except TimeoutError:
-                return ExecuteResult(
-                    exit_code=-1, stdout="", stderr=f"Command timed out after {timeout}s", timed_out=True
-                )
+                return ExecuteResult(exit_code=-1, stdout="", stderr=f"Command timed out after {timeout}s", timed_out=True)
             except Exception as exc:
                 if not self._looks_like_infra_error(str(exc)):
                     return ExecuteResult(exit_code=1, stdout="", stderr=f"Error: {exc}")

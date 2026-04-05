@@ -30,12 +30,7 @@ def _parse_range(range_str: str) -> dict:
     right_is_pos_int = bool(re.match(r"^\d+$", right)) if right else False
     if left_is_pos_int or right_is_pos_int:
         raise ValueError("Positive indices not allowed. Use negative indices like '-10:-1'.")
-    if (
-        left_is_neg_int
-        and right_is_neg_int
-        and not _RELATIVE_RE.match(left or "")
-        and not _RELATIVE_RE.match(right or "")
-    ):
+    if left_is_neg_int and right_is_neg_int and not _RELATIVE_RE.match(left or "") and not _RELATIVE_RE.match(right or ""):
         start = int(left) if left else None
         end = int(right) if right else None
         if start is not None and end is not None:
@@ -294,9 +289,7 @@ class ChatToolService:
 
             unread = self._messaging.count_unread(resolved_chat_id, eid)
             if unread > 0:
-                raise RuntimeError(
-                    f"You have {unread} unread message(s). Call chat_read(chat_id='{resolved_chat_id}') first."
-                )
+                raise RuntimeError(f"You have {unread} unread message(s). Call chat_read(chat_id='{resolved_chat_id}') first.")
 
             effective_signal = signal if signal in ("yield", "close") else None
             if effective_signal:

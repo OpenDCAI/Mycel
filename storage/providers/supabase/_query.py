@@ -8,13 +8,9 @@ from typing import Any
 def validate_client(client: Any, repo: str) -> Any:
     """Validate and return a Supabase client, raising on None or missing table()."""
     if client is None:
-        raise RuntimeError(
-            f"Supabase {repo} requires a client. Pass supabase_client=... into StorageContainer(strategy='supabase')."
-        )
+        raise RuntimeError(f"Supabase {repo} requires a client. Pass supabase_client=... into StorageContainer(strategy='supabase').")
     if not hasattr(client, "table"):
-        raise RuntimeError(
-            f"Supabase {repo} requires a client with table(name). Use supabase-py client or a compatible adapter."
-        )
+        raise RuntimeError(f"Supabase {repo} requires a client with table(name). Use supabase-py client or a compatible adapter.")
     return client
 
 
@@ -25,9 +21,7 @@ def rows(response: Any, repo: str, operation: str) -> list[dict[str, Any]]:
     else:
         payload = getattr(response, "data", None)
     if payload is None:
-        raise RuntimeError(
-            f"Supabase {repo} expected `.data` payload for {operation}. Check Supabase client compatibility."
-        )
+        raise RuntimeError(f"Supabase {repo} expected `.data` payload for {operation}. Check Supabase client compatibility.")
     if not isinstance(payload, list):
         raise RuntimeError(f"Supabase {repo} expected list payload for {operation}, got {type(payload).__name__}.")
     for row in payload:

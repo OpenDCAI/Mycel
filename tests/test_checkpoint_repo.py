@@ -61,18 +61,10 @@ def test_delete_checkpoints_by_ids(tmp_path):
         repo.close()
 
     with sqlite3.connect(str(db_path)) as conn:
-        left_checkpoints = conn.execute(
-            "SELECT thread_id, checkpoint_id FROM checkpoints ORDER BY thread_id, checkpoint_id"
-        ).fetchall()
-        left_writes = conn.execute(
-            "SELECT thread_id, checkpoint_id FROM writes ORDER BY thread_id, checkpoint_id"
-        ).fetchall()
-        left_cp_writes = conn.execute(
-            "SELECT thread_id, checkpoint_id FROM checkpoint_writes ORDER BY thread_id, checkpoint_id"
-        ).fetchall()
-        left_cp_blobs = conn.execute(
-            "SELECT thread_id, checkpoint_id FROM checkpoint_blobs ORDER BY thread_id, checkpoint_id"
-        ).fetchall()
+        left_checkpoints = conn.execute("SELECT thread_id, checkpoint_id FROM checkpoints ORDER BY thread_id, checkpoint_id").fetchall()
+        left_writes = conn.execute("SELECT thread_id, checkpoint_id FROM writes ORDER BY thread_id, checkpoint_id").fetchall()
+        left_cp_writes = conn.execute("SELECT thread_id, checkpoint_id FROM checkpoint_writes ORDER BY thread_id, checkpoint_id").fetchall()
+        left_cp_blobs = conn.execute("SELECT thread_id, checkpoint_id FROM checkpoint_blobs ORDER BY thread_id, checkpoint_id").fetchall()
 
     assert left_checkpoints == [("t-1", "c1"), ("t-2", "c2")]
     assert left_writes == [("t-2", "c2")]

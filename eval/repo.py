@@ -172,9 +172,7 @@ class SQLiteEvalRepo:
             ).fetchall()
         else:
             rows = self._conn.execute(
-                "SELECT id, thread_id, started_at, finished_at, status, "
-                "user_message FROM eval_runs "
-                "ORDER BY started_at DESC LIMIT ?",
+                "SELECT id, thread_id, started_at, finished_at, status, user_message FROM eval_runs ORDER BY started_at DESC LIMIT ?",
                 (limit,),
             ).fetchall()
         return [dict(r) for r in rows]

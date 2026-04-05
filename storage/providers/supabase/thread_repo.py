@@ -120,9 +120,7 @@ class SupabaseThreadRepo:
         We query members for the owner, then fetch threads for those member IDs.
         """
         # Step 1: get member IDs for this owner
-        mem_response = (
-            self._client.table("members").select("id, name, avatar").eq("owner_user_id", owner_user_id).execute()
-        )
+        mem_response = self._client.table("members").select("id, name, avatar").eq("owner_user_id", owner_user_id).execute()
         member_rows = q.rows(mem_response, _REPO, "list_by_owner_user_id:members")
         if not member_rows:
             return []

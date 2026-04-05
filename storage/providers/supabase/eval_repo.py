@@ -43,9 +43,7 @@ class SupabaseEvalRepo:
             "save_trajectory eval_runs",
         )
         if not run_rows:
-            raise RuntimeError(
-                "Supabase eval repo expected inserted row for save_trajectory eval_runs. Check table permissions."
-            )
+            raise RuntimeError("Supabase eval repo expected inserted row for save_trajectory eval_runs. Check table permissions.")
         if trajectory.llm_calls:
             llm_rows = [
                 {
@@ -120,10 +118,7 @@ class SupabaseEvalRepo:
             return None
         val = rows[0].get("trajectory_json")
         if val is None:
-            raise RuntimeError(
-                "Supabase eval repo expected non-null trajectory_json in get_trajectory_json. "
-                "Check eval_runs table schema."
-            )
+            raise RuntimeError("Supabase eval repo expected non-null trajectory_json in get_trajectory_json. Check eval_runs table schema.")
         return str(val)
 
     def list_runs(self, thread_id: str | None = None, limit: int = 50) -> list[dict]:
@@ -131,9 +126,7 @@ class SupabaseEvalRepo:
         if thread_id:
             query = query.eq("thread_id", thread_id)
         # @@@eval-list-order - newest started_at first, matching SQLite path.
-        query = q.limit(
-            q.order(query, "started_at", desc=True, repo=_REPO, operation="list_runs"), limit, _REPO, "list_runs"
-        )
+        query = q.limit(q.order(query, "started_at", desc=True, repo=_REPO, operation="list_runs"), limit, _REPO, "list_runs")
         return [
             {
                 "id": str(row.get("id") or ""),

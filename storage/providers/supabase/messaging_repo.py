@@ -39,14 +39,7 @@ class SupabaseChatMemberRepo:
         return [r["chat_id"] for r in (res.data or [])]
 
     def is_member(self, chat_id: str, user_id: str) -> bool:
-        res = (
-            self._client.table("chat_members")
-            .select("user_id")
-            .eq("chat_id", chat_id)
-            .eq("user_id", user_id)
-            .limit(1)
-            .execute()
-        )
+        res = self._client.table("chat_members").select("user_id").eq("chat_id", chat_id).eq("user_id", user_id).limit(1).execute()
         return bool(res.data)
 
     def find_chat_between(self, user_a: str, user_b: str) -> str | None:
@@ -62,9 +55,7 @@ class SupabaseChatMemberRepo:
         return None
 
     def update_last_read(self, chat_id: str, user_id: str) -> None:
-        self._client.table("chat_members").update({"last_read_at": now_iso()}).eq("chat_id", chat_id).eq(
-            "user_id", user_id
-        ).execute()
+        self._client.table("chat_members").update({"last_read_at": now_iso()}).eq("chat_id", chat_id).eq("user_id", user_id).execute()
 
     def update_mute(self, chat_id: str, user_id: str, muted: bool, mute_until: str | None = None) -> None:
         self._client.table("chat_members").update({"muted": muted, "mute_until": mute_until}).eq("chat_id", chat_id).eq(
@@ -107,24 +98,13 @@ class SupabaseMessagesRepo:
         """Messages after user's last_read_at, excluding own, not deleted."""
         # Get last_read_at from chat_members
         member_res = (
-            self._client.table("chat_members")
-            .select("last_read_at")
-            .eq("chat_id", chat_id)
-            .eq("user_id", user_id)
-            .limit(1)
-            .execute()
+            self._client.table("chat_members").select("last_read_at").eq("chat_id", chat_id).eq("user_id", user_id).limit(1).execute()
         )
         last_read = None
         if member_res.data:
             last_read = member_res.data[0].get("last_read_at")
 
-        q = (
-            self._client.table("messages")
-            .select("*")
-            .eq("chat_id", chat_id)
-            .neq("sender_id", user_id)
-            .is_("deleted_at", "null")
-        )
+        q = self._client.table("messages").select("*").eq("chat_id", chat_id).neq("sender_id", user_id).is_("deleted_at", "null")
         if last_read:
             q = q.gt("created_at", last_read)
         res = q.order("created_at", desc=False).execute()
@@ -134,12 +114,7 @@ class SupabaseMessagesRepo:
     def count_unread(self, chat_id: str, user_id: str) -> int:
         """Count unread messages using a COUNT query to avoid materializing rows."""
         member_res = (
-            self._client.table("chat_members")
-            .select("last_read_at")
-            .eq("chat_id", chat_id)
-            .eq("user_id", user_id)
-            .limit(1)
-            .execute()
+            self._client.table("chat_members").select("last_read_at").eq("chat_id", chat_id).eq("user_id", user_id).limit(1).execute()
         )
         last_read = None
         if member_res.data:
@@ -171,9 +146,7 @@ class SupabaseMessagesRepo:
                     return False
             except (ValueError, AttributeError):
                 pass
-        self._client.table("messages").update({"retracted_at": now_iso(), "content": "[已撤回]"}).eq(
-            "id", message_id
-        ).execute()
+        self._client.table("messages").update({"retracted_at": now_iso(), "content": "[已撤回]"}).eq("id", message_id).execute()
         return True
 
     def delete_for(self, message_id: str, user_id: str) -> None:
@@ -227,20 +200,11 @@ class SupabaseMessageReadRepo:
             self._client.table("message_reads").upsert(rows, on_conflict="message_id,user_id").execute()
 
     def get_read_count(self, message_id: str) -> int:
-        res = (
-            self._client.table("message_reads").select("user_id", count="exact").eq("message_id", message_id).execute()
-        )
+        res = self._client.table("message_reads").select("user_id", count="exact").eq("message_id", message_id).execute()
         return res.count or 0
 
     def has_read(self, message_id: str, user_id: str) -> bool:
-        res = (
-            self._client.table("message_reads")
-            .select("user_id")
-            .eq("message_id", message_id)
-            .eq("user_id", user_id)
-            .limit(1)
-            .execute()
-        )
+        res = self._client.table("message_reads").select("user_id").eq("message_id", message_id).eq("user_id", user_id).limit(1).execute()
         return bool(res.data)
 
 
@@ -258,14 +222,7 @@ class SupabaseRelationshipRepo:
 
     def get(self, user_a: str, user_b: str) -> dict[str, Any] | None:
         pa, pb = self._ordered(user_a, user_b)
-        res = (
-            self._client.table("relationships")
-            .select("*")
-            .eq("principal_a", pa)
-            .eq("principal_b", pb)
-            .limit(1)
-            .execute()
-        )
+        res = self._client.table("relationships").select("*").eq("principal_a", pa).eq("principal_b", pb).limit(1).execute()
         return res.data[0] if res.data else None
 
     def get_by_id(self, relationship_id: str) -> dict[str, Any] | None:
@@ -277,12 +234,7 @@ class SupabaseRelationshipRepo:
         existing = self.get(user_a, user_b)
         now = now_iso()
         if existing:
-            res = (
-                self._client.table("relationships")
-                .update({"updated_at": now, **fields})
-                .eq("id", existing["id"])
-                .execute()
-            )
+            res = self._client.table("relationships").update({"updated_at": now, **fields}).eq("id", existing["id"]).execute()
             return res.data[0] if res.data else {**existing, "updated_at": now, **fields}
         else:
             import uuid
@@ -293,10 +245,5 @@ class SupabaseRelationshipRepo:
 
     def list_for_user(self, user_id: str) -> list[dict[str, Any]]:
         # Single query with OR filter
-        res = (
-            self._client.table("relationships")
-            .select("*")
-            .or_(f"principal_a.eq.{user_id},principal_b.eq.{user_id}")
-            .execute()
-        )
+        res = self._client.table("relationships").select("*").or_(f"principal_a.eq.{user_id},principal_b.eq.{user_id}").execute()
         return res.data or []

@@ -34,9 +34,7 @@ class RuntimeConfig(BaseModel):
     allowed_extensions: list[str] | None = Field(None, description="Allowed extensions (None = all)")
     block_dangerous_commands: bool = Field(True, description="Block dangerous commands")
     block_network_commands: bool = Field(False, description="Block network commands")
-    queue_mode: str = Field(
-        "steer", deprecated=True, description="Deprecated. Queue mode is now determined by message timing."
-    )
+    queue_mode: str = Field("steer", deprecated=True, description="Deprecated. Queue mode is now determined by message timing.")
 
 
 # ============================================================================

@@ -63,9 +63,7 @@ class CommandService:
                 mode=ToolMode.INLINE,
                 schema={
                     "name": "Bash",
-                    "description": (
-                        "Execute shell command. OS auto-detects shell (mac->zsh, linux->bash, win->powershell)."
-                    ),
+                    "description": ("Execute shell command. OS auto-detects shell (mac->zsh, linux->bash, win->powershell)."),
                     "parameters": {
                         "type": "object",
                         "properties": {
@@ -137,9 +135,7 @@ class CommandService:
             return f"Error executing command: {e}"
         return result.to_tool_result()
 
-    async def _execute_async(
-        self, command: str, work_dir: str | None, timeout_secs: float, description: str = ""
-    ) -> str:
+    async def _execute_async(self, command: str, work_dir: str | None, timeout_secs: float, description: str = "") -> str:
         try:
             async_cmd = await self._executor.execute_async(
                 command=command,
@@ -197,9 +193,7 @@ class CommandService:
 
         if parent_thread_id:
             asyncio.create_task(
-                self._notify_bash_completion(
-                    task_id, async_cmd, command, parent_thread_id, emit_fn, description=description
-                )
+                self._notify_bash_completion(task_id, async_cmd, command, parent_thread_id, emit_fn, description=description)
             )
 
         return f"Command started in background.\ntask_id: {task_id}\nUse TaskOutput to get result."

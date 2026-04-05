@@ -43,9 +43,7 @@ class SandboxVolume:
             return
         from sandbox.config import MountSpec
 
-        self.provider.set_thread_bind_mounts(
-            thread_id, [MountSpec(source=str(host), target=target_path, read_only=False)]
-        )
+        self.provider.set_thread_bind_mounts(thread_id, [MountSpec(source=str(host), target=target_path, read_only=False)])
 
     def mount_managed_volume(self, thread_id: str, backend_ref: str, target_path: str) -> None:
         """Mount provider-managed persistent volume."""
@@ -55,9 +53,7 @@ class SandboxVolume:
         """Container-side path where volumes are mounted."""
         return getattr(self.provider, "WORKSPACE_ROOT", "/workspace") + "/files"
 
-    def sync_upload(
-        self, thread_id: str, session_id: str, source: VolumeSource, remote_path: str, files: list[str] | None = None
-    ) -> None:
+    def sync_upload(self, thread_id: str, session_id: str, source: VolumeSource, remote_path: str, files: list[str] | None = None) -> None:
         """Sync files from VolumeSource to sandbox."""
         host = source.host_path
         if not host:

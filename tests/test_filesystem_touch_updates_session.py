@@ -49,9 +49,7 @@ class _FakeProvider(SandboxProvider):
     def get_session_status(self, session_id: str) -> str:
         return self._statuses.get(session_id, "deleted")
 
-    def execute(
-        self, session_id: str, command: str, timeout_ms: int = 30000, cwd: str | None = None
-    ) -> ProviderExecResult:
+    def execute(self, session_id: str, command: str, timeout_ms: int = 30000, cwd: str | None = None) -> ProviderExecResult:
         return ProviderExecResult(output="", exit_code=0)
 
     def read_file(self, session_id: str, path: str) -> str:

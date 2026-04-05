@@ -51,9 +51,7 @@ class FileSystemService:
         self.hooks = hooks or []
         self._read_files: dict[Path, float | None] = {}
         self.operation_recorder = operation_recorder
-        self.extra_allowed_paths: list[Path] = [
-            Path(p) if backend.is_remote else Path(p).resolve() for p in (extra_allowed_paths or [])
-        ]
+        self.extra_allowed_paths: list[Path] = [Path(p) if backend.is_remote else Path(p).resolve() for p in (extra_allowed_paths or [])]
 
         if not backend.is_remote:
             self.workspace_root.mkdir(parents=True, exist_ok=True)

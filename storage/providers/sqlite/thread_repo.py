@@ -194,10 +194,6 @@ class SQLiteThreadRepo:
         self._conn.execute(
             "CREATE UNIQUE INDEX IF NOT EXISTS idx_threads_single_main_per_member ON threads(member_id) WHERE is_main = 1"  # noqa: E501
         )
-        self._conn.execute(
-            "CREATE UNIQUE INDEX IF NOT EXISTS idx_threads_member_branch ON threads(member_id, branch_index)"
-        )
-        self._conn.execute(
-            "CREATE INDEX IF NOT EXISTS idx_threads_member_created ON threads(member_id, branch_index, created_at)"
-        )
+        self._conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_threads_member_branch ON threads(member_id, branch_index)")
+        self._conn.execute("CREATE INDEX IF NOT EXISTS idx_threads_member_created ON threads(member_id, branch_index, created_at)")
         self._conn.commit()

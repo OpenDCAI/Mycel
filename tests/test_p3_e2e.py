@@ -41,9 +41,7 @@ async def test_bash_task_lifecycle():
         assert len(tasks) > 0, "应该有至少一个任务"
         bash_task = next((t for t in tasks if t["task_type"] == "bash"), None)
         assert bash_task is not None, "应该有 bash 类型的任务"
-        assert bash_task["status"] in ["running", "completed"], (
-            f"任务状态应该是 running 或 completed，实际: {bash_task['status']}"
-        )
+        assert bash_task["status"] in ["running", "completed"], f"任务状态应该是 running 或 completed，实际: {bash_task['status']}"
 
         task_id = bash_task["task_id"]
 

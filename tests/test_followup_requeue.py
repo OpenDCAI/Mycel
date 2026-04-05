@@ -126,9 +126,7 @@ class TestConsumeFollowupQueue:
             from backend.web.services.streaming_service import _consume_followup_queue
 
             # First attempt: fails
-            with patch(
-                "backend.web.services.streaming_service.start_agent_run", side_effect=RuntimeError("temporary failure")
-            ):
+            with patch("backend.web.services.streaming_service.start_agent_run", side_effect=RuntimeError("temporary failure")):
                 await _consume_followup_queue(mock_agent, "thread-1", mock_app)
 
             # Verify message was re-enqueued
@@ -182,9 +180,7 @@ class TestConsumeFollowupQueue:
         async def _run():
             from backend.web.services.streaming_service import _consume_followup_queue
 
-            with patch(
-                "backend.web.services.streaming_service.start_agent_run", side_effect=RuntimeError("start failed")
-            ):
+            with patch("backend.web.services.streaming_service.start_agent_run", side_effect=RuntimeError("start failed")):
                 # Also make re-enqueue fail
                 _original_enqueue = queue_manager.enqueue
                 with patch.object(queue_manager, "enqueue", side_effect=RuntimeError("enqueue failed")):

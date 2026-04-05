@@ -81,9 +81,7 @@ def transition(
             return ("visit", None)
 
         case _:
-            raise TransitionError(
-                f"Invalid transition: state={current_state!r} event={event!r} requester_is_a={requester_is_a}"
-            )
+            raise TransitionError(f"Invalid transition: state={current_state!r} event={event!r} requester_is_a={requester_is_a}")
 
 
 def resolve_direction(

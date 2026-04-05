@@ -190,13 +190,9 @@ def _member_to_dict(member_dir: Path) -> dict[str, Any] | None:
         runtime_key = f"tools:{tool_name}"
         if runtime_key in bundle.runtime:
             rc = bundle.runtime[runtime_key]
-            tools_list.append(
-                {"name": tool_name, "enabled": rc.enabled, "desc": rc.desc or tool_info.desc, "group": tool_info.group}
-            )
+            tools_list.append({"name": tool_name, "enabled": rc.enabled, "desc": rc.desc or tool_info.desc, "group": tool_info.group})
         else:
-            tools_list.append(
-                {"name": tool_name, "enabled": tool_info.default, "desc": tool_info.desc, "group": tool_info.group}
-            )
+            tools_list.append({"name": tool_name, "enabled": tool_info.default, "desc": tool_info.desc, "group": tool_info.group})
 
     # Skills from runtime — enrich desc from Library if empty
     skills_list = []
@@ -304,8 +300,7 @@ def _load_builtin_agents(catalog: dict[str, ToolDef]) -> list[dict[str, Any]]:
             if ac:
                 is_all = ac.tools == ["*"]
                 agent_tools = [
-                    {"name": k, "enabled": is_all or k in ac.tools, "desc": v.desc, "group": v.group}
-                    for k, v in catalog.items()
+                    {"name": k, "enabled": is_all or k in ac.tools, "desc": v.desc, "group": v.group} for k, v in catalog.items()
                 ]
                 agents.append(
                     {
@@ -803,9 +798,7 @@ def install_from_snapshot(
     meta = {
         "status": "active",
         "version": installed_version,
-        "created_at": now_ms
-        if not existing_member_id
-        else _read_json(member_dir / "meta.json", {}).get("created_at", now_ms),
+        "created_at": now_ms if not existing_member_id else _read_json(member_dir / "meta.json", {}).get("created_at", now_ms),
         "updated_at": now_ms,
         "source": {
             "marketplace_item_id": marketplace_item_id,

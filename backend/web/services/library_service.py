@@ -237,9 +237,7 @@ def create_resource(
                 "updated_at": now,
             },
         )
-        (agents_dir / f"{rid}.md").write_text(
-            f"---\nname: {rid}\ndescription: {desc}\n---\n\n# {name}\n", encoding="utf-8"
-        )
+        (agents_dir / f"{rid}.md").write_text(f"---\nname: {rid}\ndescription: {desc}\n---\n\n# {name}\n", encoding="utf-8")
         return {"id": rid, "type": "agent", "name": name, "desc": desc, "created_at": now, "updated_at": now}
     elif resource_type == "mcp":
         mcp_path = LIBRARY_DIR / ".mcp.json"

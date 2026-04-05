@@ -102,10 +102,7 @@ class SupabaseLeaseRepo:
     def find_by_instance(self, *, provider_name: str, instance_id: str) -> dict[str, Any] | None:
         rows = q.rows(
             q.limit(
-                self._leases()
-                .select("lease_id")
-                .eq("provider_name", provider_name)
-                .eq("current_instance_id", instance_id),
+                self._leases().select("lease_id").eq("provider_name", provider_name).eq("current_instance_id", instance_id),
                 1,
                 _REPO,
                 "find_by_instance",
@@ -133,9 +130,7 @@ class SupabaseLeaseRepo:
             existing = self.get(lease_id)
 
         if existing["provider_name"] != provider_name:
-            raise RuntimeError(
-                f"Lease provider mismatch during adopt: lease={existing['provider_name']}, requested={provider_name}"
-            )
+            raise RuntimeError(f"Lease provider mismatch during adopt: lease={existing['provider_name']}, requested={provider_name}")
 
         now = datetime.now().isoformat()
         normalized = parse_lease_instance_state(status).value

@@ -176,9 +176,8 @@ async def lifespan(app: FastAPI):
         app.state.contact_repo = SupabaseContactRepo(_supabase)
     else:
         import logging as _logging
-        _logging.getLogger(__name__).warning(
-            "Messaging Supabase client not configured — relationship/contact features unavailable."
-        )
+
+        _logging.getLogger(__name__).warning("Messaging Supabase client not configured — relationship/contact features unavailable.")
         _chat_member_repo = None
         _messages_repo = None
         _message_read_repo = None

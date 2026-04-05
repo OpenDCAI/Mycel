@@ -159,9 +159,7 @@ class SQLiteLeaseRepo:
             self.create(lease_id=lease_id, provider_name=provider_name)
             existing = self.get(lease_id)
         if existing["provider_name"] != provider_name:
-            raise RuntimeError(
-                f"Lease provider mismatch during adopt: lease={existing['provider_name']}, requested={provider_name}"
-            )
+            raise RuntimeError(f"Lease provider mismatch during adopt: lease={existing['provider_name']}, requested={provider_name}")
 
         now = datetime.now().isoformat()
         normalized = parse_lease_instance_state(status).value
@@ -389,9 +387,7 @@ class SQLiteLeaseRepo:
 
         missing_lease = REQUIRED_LEASE_COLUMNS - lease_cols
         if missing_lease:
-            raise RuntimeError(
-                f"sandbox_leases schema mismatch: missing {sorted(missing_lease)}. Purge ~/.leon/sandbox.db and retry."
-            )
+            raise RuntimeError(f"sandbox_leases schema mismatch: missing {sorted(missing_lease)}. Purge ~/.leon/sandbox.db and retry.")
         missing_instances = REQUIRED_INSTANCE_COLUMNS - instance_cols
         if missing_instances:
             raise RuntimeError(
@@ -399,6 +395,4 @@ class SQLiteLeaseRepo:
             )
         missing_events = REQUIRED_EVENT_COLUMNS - event_cols
         if missing_events:
-            raise RuntimeError(
-                f"lease_events schema mismatch: missing {sorted(missing_events)}. Purge ~/.leon/sandbox.db and retry."
-            )
+            raise RuntimeError(f"lease_events schema mismatch: missing {sorted(missing_events)}. Purge ~/.leon/sandbox.db and retry.")

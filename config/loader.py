@@ -89,11 +89,7 @@ class AgentLoader:
         merged_mcp = self._lookup_merge("mcp", project_config, user_config, system_config)
         merged_skills = self._lookup_merge("skills", project_config, user_config, system_config)
 
-        system_prompt = (
-            project_config.get("system_prompt")
-            or user_config.get("system_prompt")
-            or system_config.get("system_prompt")
-        )
+        system_prompt = project_config.get("system_prompt") or user_config.get("system_prompt") or system_config.get("system_prompt")
 
         final_config: dict[str, Any] = {
             "runtime": merged_runtime,

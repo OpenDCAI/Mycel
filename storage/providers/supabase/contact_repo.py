@@ -37,14 +37,7 @@ class SupabaseContactRepo:
         ).execute()
 
     def get(self, owner_id: str, target_id: str) -> ContactRow | None:
-        res = (
-            self._client.table("contacts")
-            .select("*")
-            .eq("owner_id", owner_id)
-            .eq("target_id", target_id)
-            .maybe_single()
-            .execute()
-        )
+        res = self._client.table("contacts").select("*").eq("owner_id", owner_id).eq("target_id", target_id).maybe_single().execute()
         if not res.data:
             return None
         return self._to_row(res.data)

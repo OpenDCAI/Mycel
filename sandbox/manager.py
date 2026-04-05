@@ -528,9 +528,7 @@ class SandboxManager:
                             )
                             continue
                         if not paused:
-                            print(
-                                f"[idle-reaper] failed to pause expired lease {lease.lease_id} for thread {thread_id}"
-                            )
+                            print(f"[idle-reaper] failed to pause expired lease {lease.lease_id} for thread {thread_id}")
                             continue
 
             self.session_manager.delete(session_id, reason="idle_timeout")
@@ -629,9 +627,7 @@ class SandboxManager:
             matched = next((row for row in sessions if str(row.get("session_id")) == session_id), None)
             if matched is not None and str(matched.get("thread_id") or "") != thread_id:
                 matched_thread_id = str(matched.get("thread_id") or "")
-                raise RuntimeError(
-                    f"Session {session_id} belongs to thread {matched_thread_id}, not thread {thread_id}"
-                )
+                raise RuntimeError(f"Session {session_id} belongs to thread {matched_thread_id}, not thread {thread_id}")
 
         terminals = self._get_thread_terminals(thread_id)
         if not terminals:

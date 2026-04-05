@@ -121,9 +121,7 @@ class TaskBoardMiddleware(AgentMiddleware):
                 "type": "function",
                 "function": {
                     "name": self.TOOL_PROGRESS,
-                    "description": (
-                        "Update a task's progress percentage. Optionally append a note to the description."
-                    ),
+                    "description": ("Update a task's progress percentage. Optionally append a note to the description."),
                     "parameters": {
                         "type": "object",
                         "properties": {
@@ -148,10 +146,7 @@ class TaskBoardMiddleware(AgentMiddleware):
                 "type": "function",
                 "function": {
                     "name": self.TOOL_COMPLETE,
-                    "description": (
-                        "Mark a board task as completed with a result summary. "
-                        "Sets progress to 100 and records completed_at."
-                    ),
+                    "description": ("Mark a board task as completed with a result summary. Sets progress to 100 and records completed_at."),
                     "parameters": {
                         "type": "object",
                         "properties": {

@@ -36,10 +36,7 @@ class SupabaseTerminalRepo:
 
     def _get_pointer_row(self, thread_id: str) -> dict[str, Any] | None:
         rows = q.rows(
-            self._pointers()
-            .select("thread_id,active_terminal_id,default_terminal_id")
-            .eq("thread_id", thread_id)
-            .execute(),
+            self._pointers().select("thread_id,active_terminal_id,default_terminal_id").eq("thread_id", thread_id).execute(),
             _REPO,
             "get_pointer",
         )
@@ -114,9 +111,7 @@ class SupabaseTerminalRepo:
     def list_all(self) -> list[dict[str, Any]]:
         raw = q.rows(
             q.order(
-                self._terminals().select(
-                    "terminal_id,thread_id,lease_id,cwd,env_delta_json,state_version,created_at,updated_at"
-                ),
+                self._terminals().select("terminal_id,thread_id,lease_id,cwd,env_delta_json,state_version,created_at,updated_at"),
                 "created_at",
                 desc=True,
                 repo=_REPO,
@@ -185,9 +180,7 @@ class SupabaseTerminalRepo:
         if terminal is None:
             raise RuntimeError(f"Terminal {terminal_id} not found")
         if terminal["thread_id"] != thread_id:
-            raise RuntimeError(
-                f"Terminal {terminal_id} belongs to thread {terminal['thread_id']}, not thread {thread_id}"
-            )
+            raise RuntimeError(f"Terminal {terminal_id} belongs to thread {terminal['thread_id']}, not thread {thread_id}")
 
         now = datetime.now().isoformat()
         pointer = self._get_pointer_row(thread_id)
@@ -225,10 +218,7 @@ class SupabaseTerminalRepo:
             [
                 r["command_id"]
                 for r in q.rows(
-                    self._client.table("terminal_commands")
-                    .select("command_id")
-                    .eq("terminal_id", terminal_id)
-                    .execute(),
+                    self._client.table("terminal_commands").select("command_id").eq("terminal_id", terminal_id).execute(),
                     _REPO,
                     "delete chunks pre-select",
                 )
@@ -268,9 +258,7 @@ class SupabaseTerminalRepo:
             self._pointers().update(
                 {
                     "active_terminal_id": next_terminal_id if active_terminal_id == terminal_id else active_terminal_id,
-                    "default_terminal_id": next_terminal_id
-                    if default_terminal_id == terminal_id
-                    else default_terminal_id,
+                    "default_terminal_id": next_terminal_id if default_terminal_id == terminal_id else default_terminal_id,
                     "updated_at": datetime.now().isoformat(),
                 }
             ).eq("thread_id", thread_id).execute()

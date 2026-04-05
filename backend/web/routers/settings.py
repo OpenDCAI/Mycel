@@ -138,9 +138,7 @@ async def get_settings() -> UserSettings:
 
 
 @router.get("/browse")
-async def browse_filesystem(
-    path: str = Query(default="~"), include_files: bool = Query(default=False)
-) -> dict[str, Any]:
+async def browse_filesystem(path: str = Query(default="~"), include_files: bool = Query(default=False)) -> dict[str, Any]:
     """Browse filesystem directories (and optionally files)."""
     try:
         target_path = Path(path).expanduser().resolve()
@@ -282,9 +280,7 @@ async def update_model_config(request: ModelConfigRequest, req: Request) -> dict
 @router.get("/available-models")
 async def get_available_models() -> dict[str, Any]:
     """Get all available models and virtual models from models.json."""
-    models_file = (
-        Path(__file__).parent.parent.parent.parent / "core" / "runtime" / "middleware" / "monitor" / "models.json"
-    )
+    models_file = Path(__file__).parent.parent.parent.parent / "core" / "runtime" / "middleware" / "monitor" / "models.json"
 
     if not models_file.exists():
         raise HTTPException(status_code=500, detail="Models data not found")
@@ -653,8 +649,7 @@ async def verify_observation() -> dict[str, Any]:
             )
             traces = client.trace.list(limit=5)
             trace_list = [
-                {"id": t.id, "name": t.name, "timestamp": str(t.timestamp)}
-                for t in (traces.data if hasattr(traces, "data") else [])
+                {"id": t.id, "name": t.name, "timestamp": str(t.timestamp)} for t in (traces.data if hasattr(traces, "data") else [])
             ]
             return {
                 "success": True,

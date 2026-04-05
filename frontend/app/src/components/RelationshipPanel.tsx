@@ -97,7 +97,7 @@ export default function RelationshipPanel({ agentMemberId }: Props) {
         () => { fetchRelationship(); },
       )
       .subscribe();
-    return () => { supabase.removeChannel(channel); };
+    return () => { supabase?.removeChannel(channel); };
   }, [myEntityId, fetchRelationship]);
 
   const act = useCallback(async (action: () => Promise<Response>, successMsg: string) => {

@@ -168,9 +168,7 @@ class DisplayBuilder:
             elif msg_type == "ToolMessage":
                 self._handle_tool(msg, i, current_turn, now)
 
-        td = ThreadDisplay(
-            entries=entries, current_turn_id=current_turn["id"] if current_turn else None, current_run_id=current_run_id
-        )
+        td = ThreadDisplay(entries=entries, current_turn_id=current_turn["id"] if current_turn else None, current_run_id=current_run_id)
         self._threads[thread_id] = td
         return entries
 

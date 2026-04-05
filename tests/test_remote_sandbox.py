@@ -59,9 +59,7 @@ def _make_provider(on_init_exit_code: int = 0) -> MagicMock:
     return provider
 
 
-def _make_sandbox(
-    provider, db_path: Path, init_commands: list[str] | None = None, on_exit: str = "pause"
-) -> RemoteSandbox:
+def _make_sandbox(provider, db_path: Path, init_commands: list[str] | None = None, on_exit: str = "pause") -> RemoteSandbox:
     config = SandboxConfig(provider="mock", on_exit=on_exit, init_commands=init_commands or [])
     return RemoteSandbox(
         provider=provider,
@@ -120,9 +118,7 @@ def test_close_pause_calls_pause_all_sessions(temp_db):
 
 def test_close_destroy_calls_destroy_for_each_session(temp_db):
     sandbox = _make_sandbox(_make_provider(), temp_db, on_exit="destroy")
-    sandbox._manager.list_sessions = MagicMock(
-        return_value=[{"thread_id": "t1"}, {"thread_id": "t2"}, {"thread_id": "t3"}]
-    )
+    sandbox._manager.list_sessions = MagicMock(return_value=[{"thread_id": "t1"}, {"thread_id": "t2"}, {"thread_id": "t3"}])
     sandbox._manager.destroy_session = MagicMock(return_value=True)
     sandbox.close()
     assert sandbox._manager.destroy_session.call_count == 3
@@ -130,9 +126,7 @@ def test_close_destroy_calls_destroy_for_each_session(temp_db):
 
 def test_close_destroy_continues_after_one_failure(temp_db):
     sandbox = _make_sandbox(_make_provider(), temp_db, on_exit="destroy")
-    sandbox._manager.list_sessions = MagicMock(
-        return_value=[{"thread_id": "t1"}, {"thread_id": "t2"}, {"thread_id": "t3"}]
-    )
+    sandbox._manager.list_sessions = MagicMock(return_value=[{"thread_id": "t1"}, {"thread_id": "t2"}, {"thread_id": "t3"}])
 
     call_count = 0
 

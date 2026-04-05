@@ -123,9 +123,7 @@ def list_snapshots_by_lease_ids(lease_ids: list[str], db_path: Path | None = Non
     placeholders = ",".join(["?"] * len(unique_lease_ids))
     with _connect(db_path) as conn:
         conn.row_factory = sqlite3.Row
-        table = conn.execute(
-            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='lease_resource_snapshots' LIMIT 1"
-        ).fetchone()
+        table = conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='lease_resource_snapshots' LIMIT 1").fetchone()
         if table is None:
             return {}
         rows = conn.execute(

@@ -141,10 +141,7 @@ def test_docker_provider_supports_multiple_bind_mount_modes(monkeypatch: pytest.
     assert all(str(copy_source) not in spec for spec in volume_specs)
 
     serialized_calls = [" ".join(cmd) for cmd in calls]
-    assert any(
-        "docker cp" in cmd and "bootstrap/." in cmd and "container-123:/home/leon/bootstrap" in cmd
-        for cmd in serialized_calls
-    )
+    assert any("docker cp" in cmd and "bootstrap/." in cmd and "container-123:/home/leon/bootstrap" in cmd for cmd in serialized_calls)
 
 
 def test_daytona_provider_maps_multiple_mounts_to_http_payload(monkeypatch: pytest.MonkeyPatch) -> None:

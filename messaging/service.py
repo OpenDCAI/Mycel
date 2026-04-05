@@ -117,9 +117,7 @@ class MessagingService:
             row["ai_metadata"] = ai_metadata
 
         created = self._messages.create(row)
-        logger.debug(
-            "[messaging] send chat=%s sender=%s msg=%s type=%s", chat_id[:8], sender_id[:15], msg_id[:8], message_type
-        )
+        logger.debug("[messaging] send chat=%s sender=%s msg=%s type=%s", chat_id[:8], sender_id[:15], msg_id[:8], message_type)
 
         # Publish to event bus (SSE / Realtime bridge)
         sender = self._entities.get_by_id(sender_id)
@@ -175,9 +173,7 @@ class MessagingService:
 
             if self._delivery_fn:
                 try:
-                    self._delivery_fn(
-                        entity, content, sender_name, chat_id, sender_id, sender_avatar_url, signal=signal
-                    )
+                    self._delivery_fn(entity, content, sender_name, chat_id, sender_id, sender_avatar_url, signal=signal)
                 except Exception:
                     logger.exception("[messaging] delivery failed for entity %s", uid)
 

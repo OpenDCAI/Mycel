@@ -45,8 +45,7 @@ class SQLiteContactRepo:
     def get(self, owner_id: str, target_id: str) -> ContactRow | None:
         with self._lock:
             row = self._conn.execute(
-                "SELECT owner_id, target_id, relation, created_at, updated_at"
-                " FROM contacts WHERE owner_id = ? AND target_id = ?",
+                "SELECT owner_id, target_id, relation, created_at, updated_at FROM contacts WHERE owner_id = ? AND target_id = ?",
                 (owner_id, target_id),
             ).fetchone()
         if not row:
@@ -62,8 +61,7 @@ class SQLiteContactRepo:
     def list_for_user(self, owner_id: str) -> list[ContactRow]:
         with self._lock:
             rows = self._conn.execute(
-                "SELECT owner_id, target_id, relation, created_at, updated_at"
-                " FROM contacts WHERE owner_id = ? ORDER BY created_at",
+                "SELECT owner_id, target_id, relation, created_at, updated_at FROM contacts WHERE owner_id = ? ORDER BY created_at",
                 (owner_id,),
             ).fetchall()
         return [

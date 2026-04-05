@@ -17,12 +17,7 @@ def format_chat_notification(sender_name: str, chat_id: str, unread_count: int, 
     chat_read(chat_id=...) to read, then chat_send() to reply.
     """
     signal_hint = f" [signal: {signal}]" if signal and signal != "open" else ""
-    return (
-        "<system-reminder>\n"
-        f"New message from {sender_name} in chat {chat_id} "
-        f"({unread_count} unread).{signal_hint}\n"
-        "</system-reminder>"
-    )
+    return f"<system-reminder>\nNew message from {sender_name} in chat {chat_id} ({unread_count} unread).{signal_hint}\n</system-reminder>"
 
 
 def format_background_notification(

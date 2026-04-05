@@ -137,14 +137,10 @@ class SQLiteChatSessionRepo:
 
         missing = REQUIRED_CHAT_SESSION_COLUMNS - cols
         if missing:
-            raise RuntimeError(
-                f"chat_sessions schema mismatch: missing {sorted(missing)}. Purge ~/.leon/sandbox.db and retry."
-            )
+            raise RuntimeError(f"chat_sessions schema mismatch: missing {sorted(missing)}. Purge ~/.leon/sandbox.db and retry.")
         # @@@single-active-per-terminal - multi-terminal model allows many active sessions per thread, one per terminal.
         if any(cols == {"thread_id"} for cols in unique_index_columns.values()):
-            raise RuntimeError(
-                "chat_sessions still has UNIQUE index on thread_id from old schema. Purge ~/.leon/sandbox.db and retry."
-            )
+            raise RuntimeError("chat_sessions still has UNIQUE index on thread_id from old schema. Purge ~/.leon/sandbox.db and retry.")
 
     # Alias for protocol compliance
     ensure_tables = _ensure_tables

@@ -125,10 +125,7 @@ class TaskBoardService:
                 mode=ToolMode.INLINE,
                 schema={
                     "name": self.TOOL_COMPLETE,
-                    "description": (
-                        "Mark a board task as completed with a result summary. "
-                        "Sets progress to 100 and records completed_at."
-                    ),
+                    "description": ("Mark a board task as completed with a result summary. Sets progress to 100 and records completed_at."),
                     "parameters": {
                         "type": "object",
                         "properties": {

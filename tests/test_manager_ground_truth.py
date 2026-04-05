@@ -84,9 +84,7 @@ class FakeProvider(SandboxProvider):
         return None
 
     def list_provider_sessions(self) -> list[SessionInfo]:
-        return [
-            SessionInfo(session_id=sid, provider=self.name, status=status) for sid, status in self._statuses.items()
-        ]
+        return [SessionInfo(session_id=sid, provider=self.name, status=status) for sid, status in self._statuses.items()]
 
     def create_runtime(self, terminal, lease):
         from sandbox.runtime import RemoteWrappedRuntime

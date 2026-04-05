@@ -113,9 +113,7 @@ def _batch_upload_tar(session_id: str, provider, workspace: Path, workspace_root
     if exit_code is not None and exit_code != 0:
         error_msg = getattr(result, "error", "") or getattr(result, "output", "")
         raise RuntimeError(f"Batch upload failed (exit {exit_code}): {error_msg}")
-    logger.info(
-        "[SYNC-PERF] batch_upload_tar: %d files, %d bytes tar, %.3fs", len(files), len(tar_bytes), time.time() - t0
-    )
+    logger.info("[SYNC-PERF] batch_upload_tar: %d files, %d bytes tar, %.3fs", len(files), len(tar_bytes), time.time() - t0)
 
 
 def _batch_download_tar(session_id: str, provider, workspace: Path, workspace_root: str):

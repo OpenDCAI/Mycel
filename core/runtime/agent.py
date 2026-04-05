@@ -480,9 +480,7 @@ class LeonAgent:
         env_db_path = os.getenv("LEON_DB_PATH")
         env_sandbox_db_path = os.getenv("LEON_SANDBOX_DB_PATH")
         self.db_path = Path(env_db_path).expanduser() if env_db_path else (Path.home() / ".leon" / "leon.db")
-        self.sandbox_db_path = (
-            Path(env_sandbox_db_path).expanduser() if env_sandbox_db_path else (Path.home() / ".leon" / "sandbox.db")
-        )
+        self.sandbox_db_path = Path(env_sandbox_db_path).expanduser() if env_sandbox_db_path else (Path.home() / ".leon" / "sandbox.db")
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self.sandbox_db_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -689,9 +687,7 @@ class LeonAgent:
             from core.runtime.middleware.monitor.cost import get_model_context_limit
 
             lookup_name = model_overrides.get("based_on") or resolved_model
-            self._memory_middleware.set_context_limit(
-                model_overrides.get("context_limit") or get_model_context_limit(lookup_name)
-            )
+            self._memory_middleware.set_context_limit(model_overrides.get("context_limit") or get_model_context_limit(lookup_name))
             self._memory_middleware.set_model(self.model, self._current_model_config)
 
         if self.verbose:
@@ -864,9 +860,7 @@ class LeonAgent:
         """Add memory middleware to stack."""
         # @@@context-limit-fallback — prefer mapping override (e.g. leon:tiny → 8000),
         # then Monitor's resolved value (model API → 128000 fallback).
-        context_limit = (
-            self._model_overrides.get("context_limit") or self._monitor_middleware._context_monitor.context_limit
-        )
+        context_limit = self._model_overrides.get("context_limit") or self._monitor_middleware._context_monitor.context_limit
         pruning_config = self.config.memory.pruning
         compaction_config = self.config.memory.compaction
 
@@ -982,9 +976,7 @@ class LeonAgent:
             # Use member bundle's skills enabled/disabled state if available
             enabled_skills = self.config.skills.skills
             if hasattr(self, "_agent_bundle") and self._agent_bundle:
-                bundle_skill_entries = {
-                    k.split(":", 1)[1]: v for k, v in self._agent_bundle.runtime.items() if k.startswith("skills:")
-                }
+                bundle_skill_entries = {k.split(":", 1)[1]: v for k, v in self._agent_bundle.runtime.items() if k.startswith("skills:")}
                 if bundle_skill_entries:
                     enabled_skills = {name: rc.enabled for name, rc in bundle_skill_entries.items()}
             self._skills_service = SkillsService(
@@ -1165,9 +1157,7 @@ class LeonAgent:
             prompt = self._agent_override.system_prompt
             # Append bundle rules (from rules/*.md) to system prompt
             if hasattr(self, "_agent_bundle") and self._agent_bundle and self._agent_bundle.rules:
-                rule_parts = [
-                    f"## {r['name']}\n{r['content']}" for r in self._agent_bundle.rules if r.get("content", "").strip()
-                ]
+                rule_parts = [f"## {r['name']}\n{r['content']}" for r in self._agent_bundle.rules if r.get("content", "").strip()]
                 if rule_parts:
                     prompt += "\n\n---\n\n" + "\n\n".join(rule_parts)
             return prompt
@@ -1217,9 +1207,7 @@ class LeonAgent:
             if self._sandbox.name == "docker":
                 location_rule = "All file and command operations run in a local Docker container, NOT on the user's host filesystem."  # noqa: E501
             else:
-                location_rule = (
-                    "All file and command operations run in a remote sandbox, NOT on the user's local machine."
-                )
+                location_rule = "All file and command operations run in a remote sandbox, NOT on the user's local machine."
             rules.append(f"1. **Sandbox Environment**: {location_rule} The sandbox is an isolated Linux environment.")
         else:
             rules.append("1. **Workspace**: File operations are restricted to: " + str(self.workspace_root))

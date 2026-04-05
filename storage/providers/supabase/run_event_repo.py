@@ -43,14 +43,10 @@ class SupabaseRunEventRepo:
         )
         inserted = q.rows(response, _REPO, "append_event")
         if not inserted:
-            raise RuntimeError(
-                "Supabase run event repo expected inserted row for append_event. Check table permissions."
-            )
+            raise RuntimeError("Supabase run event repo expected inserted row for append_event. Check table permissions.")
         seq = inserted[0].get("seq")
         if seq is None:
-            raise RuntimeError(
-                "Supabase run event repo expected non-null seq in append_event response. Check run_events table schema."
-            )
+            raise RuntimeError("Supabase run event repo expected non-null seq in append_event response. Check run_events table schema.")
         return int(seq)
 
     def list_events(
@@ -85,9 +81,7 @@ class SupabaseRunEventRepo:
         for row in raw_rows:
             seq = row.get("seq")
             if seq is None:
-                raise RuntimeError(
-                    "Supabase run event repo expected non-null seq in list_events row. Check run_events table schema."
-                )
+                raise RuntimeError("Supabase run event repo expected non-null seq in list_events row. Check run_events table schema.")
             payload = row.get("data")
             if payload in (None, ""):
                 parsed: dict[str, Any] = {}
@@ -95,26 +89,18 @@ class SupabaseRunEventRepo:
                 try:
                     loaded = json.loads(payload)
                 except json.JSONDecodeError as exc:
-                    raise RuntimeError(
-                        f"Supabase run event repo expected valid JSON in list_events data: {exc}."
-                    ) from exc
+                    raise RuntimeError(f"Supabase run event repo expected valid JSON in list_events data: {exc}.") from exc
                 if not isinstance(loaded, dict):
-                    raise RuntimeError(
-                        f"Supabase run event repo expected dict JSON in list_events, got {type(loaded).__name__}."
-                    )
+                    raise RuntimeError(f"Supabase run event repo expected dict JSON in list_events, got {type(loaded).__name__}.")
                 parsed = loaded
             elif isinstance(payload, dict):
                 parsed = payload
             else:
-                raise RuntimeError(
-                    f"Supabase run event repo expected str or dict data in list_events, got {type(payload).__name__}."
-                )
+                raise RuntimeError(f"Supabase run event repo expected str or dict data in list_events, got {type(payload).__name__}.")
 
             message_id = row.get("message_id")
             if message_id is not None and not isinstance(message_id, str):
-                raise RuntimeError(
-                    f"Supabase run event repo expected message_id to be str or null, got {type(message_id).__name__}."
-                )
+                raise RuntimeError(f"Supabase run event repo expected message_id to be str or null, got {type(message_id).__name__}.")
             events.append(
                 {
                     "seq": int(seq),
@@ -127,9 +113,7 @@ class SupabaseRunEventRepo:
 
     def latest_seq(self, thread_id: str) -> int:
         query = q.limit(
-            q.order(
-                self._t().select("seq").eq("thread_id", thread_id), "seq", desc=True, repo=_REPO, operation="latest_seq"
-            ),
+            q.order(self._t().select("seq").eq("thread_id", thread_id), "seq", desc=True, repo=_REPO, operation="latest_seq"),
             1,
             _REPO,
             "latest_seq",
@@ -139,9 +123,7 @@ class SupabaseRunEventRepo:
             return 0
         seq = rows[0].get("seq")
         if seq is None:
-            raise RuntimeError(
-                "Supabase run event repo expected non-null seq in latest_seq row. Check run_events table schema."
-            )
+            raise RuntimeError("Supabase run event repo expected non-null seq in latest_seq row. Check run_events table schema.")
         return int(seq)
 
     def run_start_seq(self, thread_id: str, run_id: str) -> int:
@@ -210,9 +192,7 @@ class SupabaseRunEventRepo:
         if not run_ids:
             return 0
         pre = q.rows(
-            q.in_(
-                self._t().select("seq").eq("thread_id", thread_id), "run_id", run_ids, _REPO, "delete_runs"
-            ).execute(),
+            q.in_(self._t().select("seq").eq("thread_id", thread_id), "run_id", run_ids, _REPO, "delete_runs").execute(),
             _REPO,
             "delete_runs pre-count",
         )

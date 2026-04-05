@@ -247,9 +247,7 @@ class SQLiteLease(SandboxLease):
             if observed == "unknown":
                 self.observed_state = observed
                 return
-            raise RuntimeError(
-                f"Lease {self.lease_id}: cannot set observed={observed} without bound instance ({reason})"
-            )
+            raise RuntimeError(f"Lease {self.lease_id}: cannot set observed={observed} without bound instance ({reason})")
 
         if observed == "running":
             assert_lease_instance_transition(self._instance_state(), LeaseInstanceState.RUNNING, reason=reason)
@@ -695,9 +693,7 @@ class SQLiteLease(SandboxLease):
                     if self.observed_state == "running" and self._current_instance:
                         return self._current_instance
                     if self.observed_state == "paused":
-                        raise RuntimeError(
-                            f"Sandbox lease {self.lease_id} is paused. Resume before executing commands."
-                        )
+                        raise RuntimeError(f"Sandbox lease {self.lease_id} is paused. Resume before executing commands.")
                 except RuntimeError:
                     raise
                 except Exception as exc:
@@ -810,9 +806,7 @@ def lease_from_row(row: dict, db_path: Path) -> SQLiteLease:
             instance_id=row["current_instance_id"],
             provider_name=row["provider_name"],
             status=row.get("instance_status") or row.get("observed_state") or "unknown",
-            created_at=datetime.fromisoformat(str(row["instance_created_at"]))
-            if row.get("instance_created_at")
-            else datetime.now(),
+            created_at=datetime.fromisoformat(str(row["instance_created_at"])) if row.get("instance_created_at") else datetime.now(),
         )
 
     observed_at = None

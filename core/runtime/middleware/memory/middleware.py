@@ -74,9 +74,7 @@ class MemoryMiddleware(AgentMiddleware):
 
         # Persistent storage
         summary_db_path = db_path or Path.home() / ".leon" / "leon.db"
-        self.summary_store = (
-            SummaryStore(summary_db_path, summary_repo=summary_repo) if (db_path or summary_repo) else None
-        )
+        self.summary_store = SummaryStore(summary_db_path, summary_repo=summary_repo) if (db_path or summary_repo) else None
         self.checkpointer = checkpointer
 
         # Injected references (set by agent.py after construction)
@@ -190,10 +188,7 @@ class MemoryMiddleware(AgentMiddleware):
 
         if self.verbose:
             final_tokens = self._estimate_tokens(messages) + sys_tokens
-            print(
-                f"[Memory] Final: {len(messages)} msgs (~{final_tokens} tokens) "
-                f"sent to LLM (original: {original_count} msgs)"
-            )
+            print(f"[Memory] Final: {len(messages)} msgs (~{final_tokens} tokens) sent to LLM (original: {original_count} msgs)")
 
         return await handler(request.override(messages=messages))
 
@@ -209,9 +204,7 @@ class MemoryMiddleware(AgentMiddleware):
             is_split_turn, turn_prefix = self.compactor.detect_split_turn(messages, to_keep, self._context_limit)
 
             if is_split_turn:
-                summary_text, prefix_summary = await self.compactor.compact_with_split_turn(
-                    to_summarize, turn_prefix, self._resolved_model
-                )
+                summary_text, prefix_summary = await self.compactor.compact_with_split_turn(to_summarize, turn_prefix, self._resolved_model)
                 to_keep = to_keep[len(turn_prefix) :]
                 if self.verbose:
                     print(
@@ -317,8 +310,7 @@ class MemoryMiddleware(AgentMiddleware):
         """Restore summary from SummaryStore."""
         if not thread_id:
             raise ValueError(
-                "[Memory] thread_id is required for summary persistence. "
-                "Ensure request.config.configurable contains 'thread_id'."
+                "[Memory] thread_id is required for summary persistence. Ensure request.config.configurable contains 'thread_id'."
             )
 
         try:
@@ -386,9 +378,7 @@ class MemoryMiddleware(AgentMiddleware):
             is_split_turn, turn_prefix = self.compactor.detect_split_turn(pruned, to_keep, self._context_limit)
 
             if is_split_turn:
-                summary_text, prefix_summary = await self.compactor.compact_with_split_turn(
-                    to_summarize, turn_prefix, self._resolved_model
-                )
+                summary_text, prefix_summary = await self.compactor.compact_with_split_turn(to_summarize, turn_prefix, self._resolved_model)
                 to_keep = to_keep[len(turn_prefix) :]
             else:
                 summary_text = await self.compactor.compact(to_summarize, self._resolved_model)

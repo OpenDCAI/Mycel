@@ -271,9 +271,7 @@ def test_run_runtime_consumes_storage_container_run_event_repo(monkeypatch: pyte
 
         qm = MagicMock()
         qm.dequeue.return_value = None
-        app = SimpleNamespace(
-            state=SimpleNamespace(thread_tasks={}, thread_event_buffers={}, subagent_buffers={}, queue_manager=qm)
-        )
+        app = SimpleNamespace(state=SimpleNamespace(thread_tasks={}, thread_event_buffers={}, subagent_buffers={}, queue_manager=qm))
         thread_buf = ThreadEventBuffer()
         run_id = "run-1"
 
@@ -326,9 +324,7 @@ def test_run_runtime_without_storage_container_keeps_sqlite_event_store_path(mon
         qm = MagicMock()
         qm.dequeue.return_value = None
         agent = _FakeRuntimeAgent(storage_container=None)
-        app = SimpleNamespace(
-            state=SimpleNamespace(thread_tasks={}, thread_event_buffers={}, subagent_buffers={}, queue_manager=qm)
-        )
+        app = SimpleNamespace(state=SimpleNamespace(thread_tasks={}, thread_event_buffers={}, subagent_buffers={}, queue_manager=qm))
         thread_buf = ThreadEventBuffer()
         run_id = "run-1"
 

@@ -30,8 +30,7 @@ class SQLiteEntityRepo:
     def create(self, row: EntityRow) -> None:
         with self._lock:
             self._conn.execute(
-                "INSERT INTO entities (id, type, member_id, name, avatar, thread_id, created_at)"
-                " VALUES (?, ?, ?, ?, ?, ?, ?)",
+                "INSERT INTO entities (id, type, member_id, name, avatar, thread_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
                 (row.id, row.type, row.member_id, row.name, row.avatar, row.thread_id, row.created_at),
             )
             self._conn.commit()

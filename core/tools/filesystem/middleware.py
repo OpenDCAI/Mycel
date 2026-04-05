@@ -94,9 +94,7 @@ class FileSystemMiddleware(AgentMiddleware):
         self._read_files: dict[Path, float | None] = {}
         self.operation_recorder = operation_recorder
         self.verbose = verbose
-        self.extra_allowed_paths: list[Path] = [
-            Path(p) if backend.is_remote else Path(p).resolve() for p in (extra_allowed_paths or [])
-        ]
+        self.extra_allowed_paths: list[Path] = [Path(p) if backend.is_remote else Path(p).resolve() for p in (extra_allowed_paths or [])]
 
         if not backend.is_remote:
             self.workspace_root.mkdir(parents=True, exist_ok=True)
@@ -267,9 +265,7 @@ class FileSystemMiddleware(AgentMiddleware):
 
         if isinstance(self.backend, LocalBackend):
             limits = ReadLimits()
-            result = read_file_dispatch(
-                path=resolved, limits=limits, offset=offset if offset > 0 else None, limit=limit
-            )
+            result = read_file_dispatch(path=resolved, limits=limits, offset=offset if offset > 0 else None, limit=limit)
             if not result.error:
                 self._update_file_tracking(resolved)
             return result
@@ -302,7 +298,9 @@ class FileSystemMiddleware(AgentMiddleware):
     def _make_read_tool_message(self, result: ReadResult, tool_call_id: str) -> ToolMessage:
         """Create ToolMessage from ReadResult, using content_blocks for images."""
         if result.content_blocks:
-            image_desc = f"Image file: {result.file_path}\nSize: {result.total_size:,} bytes\nReturned as image content block for vision model."  # noqa: E501
+            image_desc = (
+                f"Image file: {result.file_path}\nSize: {result.total_size:,} bytes\nReturned as image content block for vision model."  # noqa: E501
+            )
             return ToolMessage(
                 content=image_desc,
                 content_blocks=result.content_blocks,

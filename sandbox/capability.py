@@ -90,9 +90,7 @@ class _CommandWrapper(BaseExecutor):
             wrapped = f"cd {shlex.quote(cwd)}\n{wrapped}"
         return wrapped, work_dir
 
-    async def execute(
-        self, command: str, cwd: str | None = None, timeout: float | None = None, env: dict[str, str] | None = None
-    ):
+    async def execute(self, command: str, cwd: str | None = None, timeout: float | None = None, env: dict[str, str] | None = None):
         """Execute command via runtime."""
         self._session.touch()
         # @@@command-context - CommandMiddleware passes Cwd/env; preserve that context for remote runtimes.
@@ -141,9 +139,7 @@ class _CommandWrapper(BaseExecutor):
 
         terminal = terminal_from_row(terminal_row, self._manager.terminal_store.db_path)
         if terminal.thread_id != self._session.thread_id:
-            raise RuntimeError(
-                f"Terminal {terminal_id} belongs to thread {terminal.thread_id}, not {self._session.thread_id}"
-            )
+            raise RuntimeError(f"Terminal {terminal_id} belongs to thread {terminal.thread_id}, not {self._session.thread_id}")
         lease = self._manager.get_lease(terminal.lease_id)
         if lease is None:
             raise RuntimeError(f"Lease {terminal.lease_id} not found for terminal {terminal_id}")

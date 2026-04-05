@@ -20,11 +20,7 @@ class SupabaseSandboxMonitorRepo:
 
     def query_threads(self, *, thread_id: str | None = None) -> list[dict]:
         # Fetch active chat_sessions joined with sandbox_leases via lease_id
-        q_sessions = (
-            self._client.table("chat_sessions")
-            .select("thread_id,chat_session_id,last_active_at,lease_id")
-            .neq("status", "closed")
-        )
+        q_sessions = self._client.table("chat_sessions").select("thread_id,chat_session_id,last_active_at,lease_id").neq("status", "closed")
         if thread_id is not None:
             q_sessions = q_sessions.eq("thread_id", thread_id)
         sessions = q.rows(
@@ -40,9 +36,7 @@ class SupabaseSandboxMonitorRepo:
         if lease_ids:
             leases = q.rows(
                 q.in_(
-                    self._client.table("sandbox_leases").select(
-                        "lease_id,provider_name,desired_state,observed_state,current_instance_id"
-                    ),
+                    self._client.table("sandbox_leases").select("lease_id,provider_name,desired_state,observed_state,current_instance_id"),
                     "lease_id",
                     lease_ids,
                     _REPO,
@@ -311,19 +305,14 @@ class SupabaseSandboxMonitorRepo:
     def list_sessions_with_leases(self) -> list[dict]:
         # Active sessions joined with leases
         active_sessions = q.rows(
-            self._client.table("chat_sessions")
-            .select("chat_session_id,thread_id,lease_id,started_at")
-            .neq("status", "closed")
-            .execute(),
+            self._client.table("chat_sessions").select("chat_session_id,thread_id,lease_id,started_at").neq("status", "closed").execute(),
             _REPO,
             "list_sessions_with_leases active",
         )
 
         # All leases (for terminal fallback)
         leases = q.rows(
-            self._client.table("sandbox_leases")
-            .select("lease_id,provider_name,observed_state,desired_state,created_at")
-            .execute(),
+            self._client.table("sandbox_leases").select("lease_id,provider_name,observed_state,desired_state,created_at").execute(),
             _REPO,
             "list_sessions_with_leases leases",
         )
@@ -423,10 +412,7 @@ class SupabaseSandboxMonitorRepo:
     def query_lease_instance_id(self, lease_id: str) -> str | None:
         try:
             instances = q.rows(
-                self._client.table("sandbox_instances")
-                .select("provider_session_id")
-                .eq("lease_id", lease_id)
-                .execute(),
+                self._client.table("sandbox_instances").select("provider_session_id").eq("lease_id", lease_id).execute(),
                 _REPO,
                 "query_lease_instance_id",
             )

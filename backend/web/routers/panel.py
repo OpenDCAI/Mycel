@@ -245,9 +245,7 @@ async def delete_resource(
     request: Request,
     user_id: Annotated[str, Depends(get_current_user_id)],
 ) -> dict[str, Any]:
-    ok = await asyncio.to_thread(
-        library_service.delete_resource, resource_type, resource_id, user_id, request.app.state.recipe_repo
-    )
+    ok = await asyncio.to_thread(library_service.delete_resource, resource_type, resource_id, user_id, request.app.state.recipe_repo)
     if not ok:
         raise HTTPException(404, "Resource not found")
     return {"success": True}
@@ -259,9 +257,7 @@ async def list_library_names(
     request: Request,
     user_id: Annotated[str, Depends(get_current_user_id)],
 ) -> dict[str, Any]:
-    items = await asyncio.to_thread(
-        library_service.list_library_names, resource_type, user_id, request.app.state.recipe_repo
-    )
+    items = await asyncio.to_thread(library_service.list_library_names, resource_type, user_id, request.app.state.recipe_repo)
     return {"items": items}
 
 
@@ -291,9 +287,7 @@ async def get_resource_content(
 
 
 @router.put("/library/{resource_type}/{resource_id}/content")
-async def update_resource_content(
-    resource_type: str, resource_id: str, req: UpdateResourceContentRequest
-) -> dict[str, Any]:
+async def update_resource_content(resource_type: str, resource_id: str, req: UpdateResourceContentRequest) -> dict[str, Any]:
     if resource_type == "recipe":
         raise HTTPException(400, "Recipes are read-only")
     ok = await asyncio.to_thread(library_service.update_resource_content, resource_type, resource_id, req.content)

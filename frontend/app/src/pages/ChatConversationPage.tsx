@@ -190,7 +190,10 @@ function ChatConversationInner({ chatId }: { chatId: string }) {
       sender_id: myEntityId,
       sender_name: useAuthStore.getState().user?.name || "me",
       content: text,
+      message_type: "human",
       mentioned_ids: [],
+      signal: null,
+      retracted_at: null,
       created_at: Date.now() / 1000,
     };
     setMessages(prev => [...prev, optimisticMsg]);

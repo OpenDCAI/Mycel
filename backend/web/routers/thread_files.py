@@ -44,10 +44,7 @@ async def list_workspace_path(
         return {
             "thread_id": thread_id,
             "path": str(target),
-            "entries": [
-                {"name": e.name, "is_dir": e.is_dir, "size": e.size, "children_count": e.children_count}
-                for e in result.entries
-            ],
+            "entries": [{"name": e.name, "is_dir": e.is_dir, "size": e.size, "children_count": e.children_count} for e in result.entries],
         }
 
     # Remote sandbox
@@ -76,10 +73,7 @@ async def list_workspace_path(
             raise RuntimeError(result.error)
         return {
             "path": target,
-            "entries": [
-                {"name": e.name, "is_dir": e.is_dir, "size": e.size, "children_count": e.children_count}
-                for e in result.entries
-            ],
+            "entries": [{"name": e.name, "is_dir": e.is_dir, "size": e.size, "children_count": e.children_count} for e in result.entries],
         }
 
     try:

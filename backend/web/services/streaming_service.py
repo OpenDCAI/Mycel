@@ -336,9 +336,7 @@ def _ensure_thread_handlers(agent: Any, thread_id: str, app: Any) -> None:
         item = qm.dequeue(thread_id)
         if not item:
             # Lost race to finally block — undo transition
-            logger.warning(
-                "wake_handler: dequeue returned None for thread %s (race with drain_all), reverting to IDLE", thread_id
-            )
+            logger.warning("wake_handler: dequeue returned None for thread %s (race with drain_all), reverting to IDLE", thread_id)
             if hasattr(agent, "runtime"):
                 agent.runtime.transition(AgentState.IDLE)
             return
@@ -565,9 +563,7 @@ async def _run_agent_to_buffer(
                             if tc_id:
                                 checkpoint_tc_ids.add(tc_id)
         except Exception:
-            logger.warning(
-                "[stream:checkpoint] failed to pre-populate tc_ids for thread=%s", thread_id[:15], exc_info=True
-            )
+            logger.warning("[stream:checkpoint] failed to pre-populate tc_ids for thread=%s", thread_id[:15], exc_info=True)
         emitted_tool_call_ids.update(checkpoint_tc_ids)
         logger.debug("[stream:checkpoint] thread=%s pre-populated %d tc_ids", thread_id[:15], len(checkpoint_tc_ids))
 
@@ -810,9 +806,7 @@ async def _run_agent_to_buffer(
                                             "event": "notice",
                                             "data": json.dumps(
                                                 {
-                                                    "content": msg.content
-                                                    if isinstance(msg.content, str)
-                                                    else str(msg.content),
+                                                    "content": msg.content if isinstance(msg.content, str) else str(msg.content),
                                                     "source": meta.get("source", "external"),
                                                     "notification_type": "chat",
                                                 },
@@ -1065,9 +1059,7 @@ async def _consume_followup_queue(agent: Any, thread_id: str, app: Any) -> None:
             try:
                 app.state.queue_manager.enqueue(item.content, thread_id, notification_type=item.notification_type)
             except Exception:
-                logger.error(
-                    "Failed to re-enqueue followup for thread %s — message lost: %.200s", thread_id, item.content
-                )
+                logger.error("Failed to re-enqueue followup for thread %s — message lost: %.200s", thread_id, item.content)
 
 
 # ---------------------------------------------------------------------------

@@ -69,8 +69,7 @@ class StorageContainer:
     ) -> None:
         if strategy not in self._SUPPORTED_STRATEGIES:
             raise ValueError(
-                f"Unsupported storage strategy: {strategy}. "
-                f"Supported strategies: {', '.join(sorted(self._SUPPORTED_STRATEGIES))}"
+                f"Unsupported storage strategy: {strategy}. Supported strategies: {', '.join(sorted(self._SUPPORTED_STRATEGIES))}"
             )
         root = Path.home() / ".leon"
         self._main_db = Path(main_db_path) if main_db_path else root / "leon.db"
@@ -162,10 +161,7 @@ class StorageContainer:
         """Generic repo builder: supabase via registry, sqlite via factory."""
         if self._provider_for(name) == "supabase":
             if self._supabase_client is None:
-                raise RuntimeError(
-                    f"Supabase strategy {name} requires supabase_client. "
-                    "Pass supabase_client=... into StorageContainer."
-                )
+                raise RuntimeError(f"Supabase strategy {name} requires supabase_client. Pass supabase_client=... into StorageContainer.")
             mod_path, cls_name = _REPO_REGISTRY[name]
             mod = importlib.import_module(mod_path)
             return getattr(mod, cls_name)(client=self._supabase_client)
@@ -193,15 +189,11 @@ class StorageContainer:
         # @@@repo-provider-override - default strategy keeps current behavior; only explicitly listed repos diverge.
         for repo_name, provider in overrides.items():
             if not isinstance(provider, str):
-                raise ValueError(
-                    f"Invalid provider value for {repo_name}: {provider!r}. Expected 'sqlite' or 'supabase'."
-                )
+                raise ValueError(f"Invalid provider value for {repo_name}: {provider!r}. Expected 'sqlite' or 'supabase'.")
             normalized = provider.strip().lower()
             if normalized not in cls._SUPPORTED_STRATEGIES:
                 supported = ", ".join(sorted(cls._SUPPORTED_STRATEGIES))
-                raise ValueError(
-                    f"Unsupported provider for {repo_name}: {provider!r}. Supported providers: {supported}"
-                )
+                raise ValueError(f"Unsupported provider for {repo_name}: {provider!r}. Supported providers: {supported}")
             resolved[repo_name] = normalized
         return resolved
 

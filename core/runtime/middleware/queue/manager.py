@@ -48,9 +48,7 @@ class MessageQueueManager:
         is_steer: bool = False,
     ) -> None:
         """Persist a message. Fires wake handler after INSERT."""
-        self._repo.enqueue(
-            thread_id, content, notification_type, source=source, sender_id=sender_id, sender_name=sender_name
-        )
+        self._repo.enqueue(thread_id, content, notification_type, source=source, sender_id=sender_id, sender_name=sender_name)
         with self._wake_lock:
             handler = self._wake_handlers.get(thread_id)
         if handler:

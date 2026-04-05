@@ -87,11 +87,7 @@ def main() -> None:
 
     messages: list[Any] = [
         HumanMessage(
-            content=(
-                "请调用工具 make_test_image。"
-                "工具会返回一张图片作为 content blocks（不是文本/URL）。"
-                "收到工具结果后，请描述图片内容。"
-            )
+            content=("请调用工具 make_test_image。工具会返回一张图片作为 content blocks（不是文本/URL）。收到工具结果后，请描述图片内容。")
         )
     ]
 

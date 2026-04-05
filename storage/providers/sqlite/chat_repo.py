@@ -94,8 +94,7 @@ class SQLiteChatEntityRepo:
     def list_members(self, chat_id: str) -> list[ChatEntityRow]:
         with self._lock:
             rows = self._conn.execute(
-                "SELECT chat_id, user_id, joined_at, last_read_at, muted, mute_until"
-                " FROM chat_entities WHERE chat_id = ?",
+                "SELECT chat_id, user_id, joined_at, last_read_at, muted, mute_until FROM chat_entities WHERE chat_id = ?",
                 (chat_id,),
             ).fetchall()
             return [
@@ -217,8 +216,7 @@ class SQLiteChatMessageRepo:
         def _do():
             with self._lock:
                 self._conn.execute(
-                    "INSERT INTO chat_messages (id, chat_id, sender_id, content, mentions, created_at)"
-                    " VALUES (?, ?, ?, ?, ?, ?)",
+                    "INSERT INTO chat_messages (id, chat_id, sender_id, content, mentions, created_at) VALUES (?, ?, ?, ?, ?, ?)",
                     (row.id, row.chat_id, row.sender_id, row.content, mentions_json, row.created_at),
                 )
                 self._conn.commit()
@@ -231,9 +229,7 @@ class SQLiteChatMessageRepo:
         import json as _json
 
         mentions = _json.loads(r[4]) if r[4] else []
-        return ChatMessageRow(
-            id=r[0], chat_id=r[1], sender_id=r[2], content=r[3], mentioned_ids=mentions, created_at=r[5]
-        )
+        return ChatMessageRow(id=r[0], chat_id=r[1], sender_id=r[2], content=r[3], mentioned_ids=mentions, created_at=r[5])
 
     def list_by_chat(
         self,
@@ -245,9 +241,7 @@ class SQLiteChatMessageRepo:
         with self._lock:
             if before is not None:
                 rows = self._conn.execute(
-                    f"SELECT {self._MSG_COLS} FROM chat_messages"
-                    " WHERE chat_id = ? AND created_at < ?"
-                    " ORDER BY created_at DESC LIMIT ?",
+                    f"SELECT {self._MSG_COLS} FROM chat_messages WHERE chat_id = ? AND created_at < ? ORDER BY created_at DESC LIMIT ?",
                     (chat_id, before, limit),
                 ).fetchall()
             else:
@@ -268,9 +262,7 @@ class SQLiteChatMessageRepo:
             last_read = cursor_row[0] if cursor_row else None
             if last_read is None:
                 rows = self._conn.execute(
-                    f"SELECT {self._MSG_COLS} FROM chat_messages"
-                    " WHERE chat_id = ? AND sender_id != ?"
-                    " ORDER BY created_at ASC",
+                    f"SELECT {self._MSG_COLS} FROM chat_messages WHERE chat_id = ? AND sender_id != ? ORDER BY created_at ASC",
                     (chat_id, user_id),
                 ).fetchall()
             else:
@@ -355,9 +347,7 @@ class SQLiteChatMessageRepo:
         with self._lock:
             if chat_id:
                 rows = self._conn.execute(
-                    f"SELECT {self._MSG_COLS} FROM chat_messages"
-                    " WHERE chat_id = ? AND content LIKE ?"
-                    " ORDER BY created_at ASC LIMIT ?",
+                    f"SELECT {self._MSG_COLS} FROM chat_messages WHERE chat_id = ? AND content LIKE ? ORDER BY created_at ASC LIMIT ?",
                     (chat_id, f"%{query}%", limit),
                 ).fetchall()
             else:
@@ -380,9 +370,7 @@ class SQLiteChatMessageRepo:
             )
             """
         )
-        self._conn.execute(
-            "CREATE INDEX IF NOT EXISTS idx_chat_messages_chat_time ON chat_messages(chat_id, created_at)"
-        )
+        self._conn.execute("CREATE INDEX IF NOT EXISTS idx_chat_messages_chat_time ON chat_messages(chat_id, created_at)")
         # @@@mentions-migration — add mentions column if table already exists
         try:
             self._conn.execute("ALTER TABLE chat_messages ADD COLUMN mentions TEXT")

@@ -56,10 +56,7 @@ class SupabaseSummaryRepo:
         if not inserted:
             raise RuntimeError("Supabase summary repo expected inserted row for save_summary. Check table permissions.")
         if inserted[0].get("summary_id") is None:
-            raise RuntimeError(
-                "Supabase summary repo expected non-null summary_id in save_summary response. "
-                "Check summaries table schema."
-            )
+            raise RuntimeError("Supabase summary repo expected non-null summary_id in save_summary response. Check summaries table schema.")
 
     def get_latest_summary_row(self, thread_id: str) -> dict[str, Any] | None:
         query = q.limit(
@@ -95,9 +92,7 @@ class SupabaseSummaryRepo:
             repo=_REPO,
             operation="list_summaries",
         )
-        return [
-            self._hydrate_listing(row, "list_summaries") for row in q.rows(query.execute(), _REPO, "list_summaries")
-        ]
+        return [self._hydrate_listing(row, "list_summaries") for row in q.rows(query.execute(), _REPO, "list_summaries")]
 
     def delete_thread_summaries(self, thread_id: str) -> None:
         self._t().delete().eq("thread_id", thread_id).execute()
@@ -108,9 +103,7 @@ class SupabaseSummaryRepo:
     def _required(self, row: dict[str, Any], field: str, operation: str) -> Any:
         value = row.get(field)
         if value is None:
-            raise RuntimeError(
-                f"Supabase summary repo expected non-null {field} in {operation} row. Check summaries table schema."
-            )
+            raise RuntimeError(f"Supabase summary repo expected non-null {field} in {operation} row. Check summaries table schema.")
         return value
 
     def _as_bool(self, value: Any, field: str, operation: str) -> bool:
@@ -118,10 +111,7 @@ class SupabaseSummaryRepo:
             return value
         if isinstance(value, int) and value in (0, 1):
             return bool(value)
-        raise RuntimeError(
-            f"Supabase summary repo expected {field} to be bool (or 0/1 int) in {operation}, "
-            f"got {type(value).__name__}."
-        )
+        raise RuntimeError(f"Supabase summary repo expected {field} to be bool (or 0/1 int) in {operation}, got {type(value).__name__}.")
 
     def _hydrate_full(self, row: dict[str, Any], operation: str) -> dict[str, Any]:
         # @@@bool-normalization - avoid silent truthiness bugs like bool("false") == True.

@@ -46,12 +46,7 @@ def _parse_range(range_str: str) -> dict:
     if left_is_pos_int or right_is_pos_int:
         raise ValueError("Positive indices not allowed. Use negative indices like '-10:-1'.")
 
-    if (
-        left_is_neg_int
-        and right_is_neg_int
-        and not _RELATIVE_RE.match(left or "")
-        and not _RELATIVE_RE.match(right or "")
-    ):
+    if left_is_neg_int and right_is_neg_int and not _RELATIVE_RE.match(left or "") and not _RELATIVE_RE.match(right or ""):
         # Pure negative integer range
         start = int(left) if left else None  # e.g. -10
         end = int(right) if right else None  # e.g. -1
@@ -320,9 +315,7 @@ class ChatToolService:
             # @@@read-before-write-gate — reject if unread messages exist
             unread = self._messages.count_unread(resolved_chat_id, eid)
             if unread > 0:
-                raise RuntimeError(
-                    f"You have {unread} unread message(s). Call chat_read(chat_id='{resolved_chat_id}') first."
-                )
+                raise RuntimeError(f"You have {unread} unread message(s). Call chat_read(chat_id='{resolved_chat_id}') first.")
 
             # Append signal to content (for chat_read) + pass through chain (for notification)
             effective_signal = signal if signal in ("yield", "close") else None

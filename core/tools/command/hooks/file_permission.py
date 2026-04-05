@@ -40,9 +40,7 @@ class FilePermissionHook:
                 path.resolve().relative_to(blocked.resolve())
                 return HookResult.block_command(
                     error_message=(
-                        f"❌ PERMISSION DENIED: Access to this path is blocked\n"
-                        f"   File: {file_path}\n"
-                        f"   Blocked path: {blocked}"
+                        f"❌ PERMISSION DENIED: Access to this path is blocked\n   File: {file_path}\n   Blocked path: {blocked}"
                     )
                 )
             except ValueError:

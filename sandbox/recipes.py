@@ -58,9 +58,7 @@ def normalize_recipe_snapshot(provider_type: str, recipe: dict[str, Any] | None 
 
     requested_type = str(recipe.get("provider_type") or provider_type).strip() or provider_type
     if requested_type != provider_type:
-        raise RuntimeError(
-            f"Recipe provider_type {requested_type!r} does not match selected provider_type {provider_type!r}"
-        )
+        raise RuntimeError(f"Recipe provider_type {requested_type!r} does not match selected provider_type {provider_type!r}")
 
     requested_features = recipe.get("features")
     normalized_features = dict(base["features"])
@@ -121,9 +119,7 @@ def list_builtin_recipes(sandbox_types: list[dict[str, Any]]) -> list[dict[str, 
 def resolve_builtin_recipe(provider_type: str, recipe_id: str | None = None) -> dict[str, Any]:
     base = default_recipe_snapshot(provider_type)
     if recipe_id and recipe_id != base["id"]:
-        raise RuntimeError(
-            f"Unknown recipe id {recipe_id!r} for provider type {provider_type}. Builtin recipes only expose defaults."
-        )
+        raise RuntimeError(f"Unknown recipe id {recipe_id!r} for provider type {provider_type}. Builtin recipes only expose defaults.")
     return base
 
 

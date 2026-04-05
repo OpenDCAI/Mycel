@@ -51,7 +51,7 @@ export default function NotificationBell({ showLabel }: NotificationBellProps) {
       .on("postgres_changes", { event: "*", schema: "public", table: "relationships", filter: `principal_a=eq.${myEntityId}` }, fetchPending)
       .on("postgres_changes", { event: "*", schema: "public", table: "relationships", filter: `principal_b=eq.${myEntityId}` }, fetchPending)
       .subscribe();
-    return () => { supabase.removeChannel(channel); };
+    return () => { supabase?.removeChannel(channel); };
   }, [myEntityId, fetchPending]);
 
   const handleApprove = async (relId: string) => {

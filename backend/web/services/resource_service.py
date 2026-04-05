@@ -271,9 +271,7 @@ def _thread_agent_refs(thread_ids: list[str], thread_repo: Any = None) -> dict[s
             repo.close()
 
 
-def _thread_owners(
-    thread_ids: list[str], member_repo: Any = None, thread_repo: Any = None
-) -> dict[str, dict[str, str | None]]:
+def _thread_owners(thread_ids: list[str], member_repo: Any = None, thread_repo: Any = None) -> dict[str, dict[str, str | None]]:
     refs = _thread_agent_refs(thread_ids, thread_repo=thread_repo)
     member_meta = _member_meta_map(member_repo=member_repo)
     owners: dict[str, dict[str, str | None]] = {}
@@ -308,9 +306,7 @@ def _aggregate_provider_telemetry(
 
     cpu_used = _sum_or_none([float(s["cpu_used"]) for s in snapshots if s.get("cpu_used") is not None])
     cpu_limit = _sum_or_none([float(s["cpu_limit"]) for s in snapshots if s.get("cpu_limit") is not None])
-    mem_used = _sum_or_none(
-        [float(s["memory_used_mb"]) / 1024.0 for s in snapshots if s.get("memory_used_mb") is not None]
-    )
+    mem_used = _sum_or_none([float(s["memory_used_mb"]) / 1024.0 for s in snapshots if s.get("memory_used_mb") is not None])
     mem_limit = _sum_or_none(
         [
             float(s["memory_total_mb"]) / 1024.0
@@ -321,11 +317,7 @@ def _aggregate_provider_telemetry(
     disk_used = _sum_or_none([float(s["disk_used_gb"]) for s in snapshots if s.get("disk_used_gb") is not None])
     # @@@disk-total-zero-guard - disk_total=0 is physically impossible; treat as missing probe data.
     disk_limit = _sum_or_none(
-        [
-            float(s["disk_total_gb"])
-            for s in snapshots
-            if s.get("disk_total_gb") is not None and float(s["disk_total_gb"]) > 0
-        ]
+        [float(s["disk_total_gb"]) for s in snapshots if s.get("disk_total_gb") is not None and float(s["disk_total_gb"]) > 0]
     )
 
     has_snapshots = len(snapshots) > 0
@@ -389,9 +381,7 @@ def list_resource_providers() -> dict[str, Any]:
         config_name = str(item["name"])
         available = bool(item.get("available"))
         provider_name = resolve_provider_name(config_name, sandboxes_dir=SANDBOXES_DIR)
-        catalog = _CATALOG.get(provider_name) or _CatalogEntry(
-            vendor=None, description=provider_name, provider_type="cloud"
-        )
+        catalog = _CATALOG.get(provider_name) or _CatalogEntry(vendor=None, description=provider_name, provider_type="cloud")
         capabilities, capability_error = _resolve_instance_capabilities(config_name)
         effective_available = available and capability_error is None
         unavailable_reason: str | None = None
@@ -464,9 +454,7 @@ def list_resource_providers() -> dict[str, Any]:
                 "type": provider_type,
                 "status": _to_resource_status(effective_available, running_count),
                 "unavailableReason": unavailable_reason,
-                "error": (
-                    {"code": "PROVIDER_UNAVAILABLE", "message": unavailable_reason} if unavailable_reason else None
-                ),
+                "error": ({"code": "PROVIDER_UNAVAILABLE", "message": unavailable_reason} if unavailable_reason else None),
                 "capabilities": capabilities,
                 "telemetry": telemetry,
                 "cardCpu": _resolve_card_cpu_metric(provider_type, telemetry),

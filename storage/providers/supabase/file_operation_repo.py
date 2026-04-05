@@ -54,15 +54,10 @@ class SupabaseFileOperationRepo:
         )
         inserted = q.rows(response, _REPO, "record")
         if not inserted:
-            raise RuntimeError(
-                "Supabase file operation repo expected inserted row for record. Check table permissions."
-            )
+            raise RuntimeError("Supabase file operation repo expected inserted row for record. Check table permissions.")
         inserted_id = inserted[0].get("id")
         if not inserted_id:
-            raise RuntimeError(
-                "Supabase file operation repo expected non-null id in record response. "
-                "Check file_operations table schema."
-            )
+            raise RuntimeError("Supabase file operation repo expected non-null id in record response. Check file_operations table schema.")
         return str(inserted_id)
 
     def get_operations_for_thread(self, thread_id: str, status: str = "applied") -> list[FileOperationRow]:
@@ -73,10 +68,7 @@ class SupabaseFileOperationRepo:
             repo=_REPO,
             operation="get_operations_for_thread",
         )
-        return [
-            self._hydrate(row, "get_operations_for_thread")
-            for row in q.rows(query.execute(), _REPO, "get_operations_for_thread")
-        ]
+        return [self._hydrate(row, "get_operations_for_thread") for row in q.rows(query.execute(), _REPO, "get_operations_for_thread")]
 
     def get_operations_after_checkpoint(self, thread_id: str, checkpoint_id: str) -> list[FileOperationRow]:
         ts_rows = q.rows(
@@ -108,8 +100,7 @@ class SupabaseFileOperationRepo:
             target_ts = ts_rows[0].get("timestamp")
             if target_ts is None:
                 raise RuntimeError(
-                    "Supabase file operation repo expected non-null timestamp in checkpoint ts lookup. "
-                    "Check file_operations table schema."
+                    "Supabase file operation repo expected non-null timestamp in checkpoint ts lookup. Check file_operations table schema."
                 )
             query = q.order(
                 q.gte(
@@ -137,11 +128,7 @@ class SupabaseFileOperationRepo:
     ) -> list[FileOperationRow]:
         # @@@checkpoint-window-parity - mirror SQLite WHERE checkpoint_id != from_checkpoint_id at query level.
         query = q.order(
-            self._t()
-            .select("*")
-            .eq("thread_id", thread_id)
-            .neq("checkpoint_id", from_checkpoint_id)
-            .eq("status", "applied"),
+            self._t().select("*").eq("thread_id", thread_id).neq("checkpoint_id", from_checkpoint_id).eq("status", "applied"),
             "timestamp",
             desc=True,
             repo=_REPO,
@@ -165,14 +152,11 @@ class SupabaseFileOperationRepo:
             operation="get_operations_for_checkpoint",
         )
         return [
-            self._hydrate(row, "get_operations_for_checkpoint")
-            for row in q.rows(query.execute(), _REPO, "get_operations_for_checkpoint")
+            self._hydrate(row, "get_operations_for_checkpoint") for row in q.rows(query.execute(), _REPO, "get_operations_for_checkpoint")
         ]
 
     def count_operations_for_checkpoint(self, thread_id: str, checkpoint_id: str) -> int:
-        query = (
-            self._t().select("id").eq("thread_id", thread_id).eq("checkpoint_id", checkpoint_id).eq("status", "applied")
-        )
+        query = self._t().select("id").eq("thread_id", thread_id).eq("checkpoint_id", checkpoint_id).eq("status", "applied")
         return len(q.rows(query.execute(), _REPO, "count_operations_for_checkpoint"))
 
     def mark_reverted(self, operation_ids: list[str]) -> None:
@@ -220,19 +204,13 @@ class SupabaseFileOperationRepo:
             try:
                 loaded = json.loads(changes_raw)
             except json.JSONDecodeError as exc:
-                raise RuntimeError(
-                    f"Supabase file operation repo expected valid JSON in changes column ({operation}): {exc}."
-                ) from exc
+                raise RuntimeError(f"Supabase file operation repo expected valid JSON in changes column ({operation}): {exc}.") from exc
             if not isinstance(loaded, list) or not all(isinstance(i, dict) for i in loaded):
-                raise RuntimeError(
-                    f"Supabase file operation repo expected changes JSON to decode to list[dict] in {operation}."
-                )
+                raise RuntimeError(f"Supabase file operation repo expected changes JSON to decode to list[dict] in {operation}.")
             changes = loaded
         elif isinstance(changes_raw, list):
             if not all(isinstance(i, dict) for i in changes_raw):
-                raise RuntimeError(
-                    f"Supabase file operation repo expected changes list items to be dict in {operation}."
-                )
+                raise RuntimeError(f"Supabase file operation repo expected changes list items to be dict in {operation}.")
             changes = changes_raw
         else:
             raise RuntimeError(

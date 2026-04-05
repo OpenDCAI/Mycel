@@ -47,9 +47,7 @@ class SQLiteAgentRegistryRepo:
     ) -> None:
         with self._conn() as conn:
             conn.execute(
-                "INSERT OR REPLACE INTO agents "
-                "(agent_id, name, thread_id, status, parent_agent_id, subagent_type) "
-                "VALUES (?,?,?,?,?,?)",
+                "INSERT OR REPLACE INTO agents (agent_id, name, thread_id, status, parent_agent_id, subagent_type) VALUES (?,?,?,?,?,?)",
                 (agent_id, name, thread_id, status, parent_agent_id, subagent_type),
             )
             conn.commit()
@@ -69,6 +67,5 @@ class SQLiteAgentRegistryRepo:
     def list_running(self) -> list[tuple]:
         with self._conn() as conn:
             return conn.execute(
-                "SELECT agent_id, name, thread_id, status, parent_agent_id, subagent_type "
-                "FROM agents WHERE status='running'"
+                "SELECT agent_id, name, thread_id, status, parent_agent_id, subagent_type FROM agents WHERE status='running'"
             ).fetchall()

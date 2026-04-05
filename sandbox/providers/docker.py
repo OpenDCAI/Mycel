@@ -101,9 +101,7 @@ class DockerProvider(SandboxProvider):
         self.image = image
         self.mount_path = mount_path
         self.default_cwd = default_cwd
-        self.bind_mounts: list[MountSpec] = [
-            MountSpec.model_validate(m) if isinstance(m, dict) else m for m in (bind_mounts or [])
-        ]
+        self.bind_mounts: list[MountSpec] = [MountSpec.model_validate(m) if isinstance(m, dict) else m for m in (bind_mounts or [])]
         self.command_timeout_sec = command_timeout_sec
         self._docker_host = docker_host
         self._sessions: dict[str, str] = {}  # session_id -> container_id
@@ -112,9 +110,7 @@ class DockerProvider(SandboxProvider):
 
     def set_thread_bind_mounts(self, thread_id: str, mounts: list[MountSpec | dict]) -> None:
         """Set thread-specific bind mounts that will be applied when creating sessions."""
-        self._thread_bind_mounts[thread_id] = [
-            MountSpec.model_validate(m) if isinstance(m, dict) else m for m in mounts
-        ]
+        self._thread_bind_mounts[thread_id] = [MountSpec.model_validate(m) if isinstance(m, dict) else m for m in mounts]
 
     # ==================== Managed Volume ====================
 
@@ -642,9 +638,7 @@ class DockerPtyRuntime(_RemoteRuntimeBase):
                 return await asyncio.to_thread(self._execute_once_sync, command, timeout, on_stdout_chunk)
             except TimeoutError:
                 await self._recover_after_timeout()
-                return ExecuteResult(
-                    exit_code=-1, stdout="", stderr=f"Command timed out after {timeout}s", timed_out=True
-                )
+                return ExecuteResult(exit_code=-1, stdout="", stderr=f"Command timed out after {timeout}s", timed_out=True)
             except Exception as exc:
                 if self._looks_like_infra_error(str(exc)):
                     self._recover_infra()

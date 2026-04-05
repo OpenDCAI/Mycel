@@ -401,9 +401,7 @@ class E2BPtyRuntime(_RemoteRuntimeBase):
             try:
                 return await asyncio.to_thread(self._execute_once_sync, command, timeout)
             except TimeoutError:
-                return ExecuteResult(
-                    exit_code=-1, stdout="", stderr=f"Command timed out after {timeout}s", timed_out=True
-                )
+                return ExecuteResult(exit_code=-1, stdout="", stderr=f"Command timed out after {timeout}s", timed_out=True)
             except Exception as exc:
                 if self._looks_like_infra_error(str(exc)):
                     self._recover_infra()

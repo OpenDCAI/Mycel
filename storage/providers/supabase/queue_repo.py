@@ -48,9 +48,7 @@ class SupabaseQueueRepo:
         head = q.rows(
             q.limit(
                 q.order(
-                    self._t()
-                    .select("id,content,notification_type,source,sender_id,sender_name")
-                    .eq("thread_id", thread_id),
+                    self._t().select("id,content,notification_type,source,sender_id,sender_name").eq("thread_id", thread_id),
                     "id",
                     desc=False,
                     repo=_REPO,
@@ -68,9 +66,7 @@ class SupabaseQueueRepo:
         row = head[0]
         row_id = row.get("id")
         if row_id is None:
-            raise RuntimeError(
-                "Supabase queue repo expected non-null id in dequeue row. Check message_queue table schema."
-            )
+            raise RuntimeError("Supabase queue repo expected non-null id in dequeue row. Check message_queue table schema.")
         # Delete the row we just selected
         self._t().delete().eq("id", row_id).execute()
         return QueueItem(
@@ -85,9 +81,7 @@ class SupabaseQueueRepo:
         # Fetch all rows ordered by id, then delete them all
         raw = q.rows(
             q.order(
-                self._t()
-                .select("id,content,notification_type,source,sender_id,sender_name")
-                .eq("thread_id", thread_id),
+                self._t().select("id,content,notification_type,source,sender_id,sender_name").eq("thread_id", thread_id),
                 "id",
                 desc=False,
                 repo=_REPO,

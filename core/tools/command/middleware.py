@@ -257,11 +257,7 @@ class CommandMiddleware(AgentMiddleware[CommandState]):
         if runtime:
             asyncio.create_task(self._monitor_async_command(async_cmd.command_id, command_line, runtime))
 
-        return (
-            f"Command started in background.\n"
-            f"CommandId: {async_cmd.command_id}\n"
-            f"Use command_status tool to check progress."
-        )
+        return f"Command started in background.\nCommandId: {async_cmd.command_id}\nUse command_status tool to check progress."
 
     async def _monitor_async_command(self, command_id: str, command_line: str, runtime: Any) -> None:
         """Monitor async command and emit completion events."""

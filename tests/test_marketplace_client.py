@@ -40,9 +40,7 @@ class TestVersionBump:
 # ── Helpers ──
 
 
-def _make_hub_response(
-    item_type: str, slug: str, content: str = "# Hello", version: str = "1.0.0", publisher: str = "tester"
-) -> dict:
+def _make_hub_response(item_type: str, slug: str, content: str = "# Hello", version: str = "1.0.0", publisher: str = "tester") -> dict:
     """Build a fake Hub /download response."""
     return {
         "item": {

@@ -39,11 +39,7 @@ def build_storage_container(
 
     client = supabase_client
     if client is None:
-        factory_ref = (
-            supabase_client_factory
-            if supabase_client_factory is not None
-            else env_map.get("LEON_SUPABASE_CLIENT_FACTORY")
-        )
+        factory_ref = supabase_client_factory if supabase_client_factory is not None else env_map.get("LEON_SUPABASE_CLIENT_FACTORY")
         if not factory_ref:
             raise RuntimeError(
                 "Supabase storage strategy requires runtime config. "
@@ -90,9 +86,7 @@ def _resolve_repo_providers(
         raise RuntimeError(f"Invalid LEON_STORAGE_REPO_PROVIDERS value: {raw!r}. Expected JSON object.")
     for key, value in parsed.items():
         if not isinstance(key, str) or not isinstance(value, str):
-            raise RuntimeError(
-                "Invalid LEON_STORAGE_REPO_PROVIDERS entries. Expected string-to-string map of repo_name -> provider."
-            )
+            raise RuntimeError("Invalid LEON_STORAGE_REPO_PROVIDERS entries. Expected string-to-string map of repo_name -> provider.")
     return parsed
 
 
@@ -135,6 +129,4 @@ def _ensure_supabase_client(client: Any) -> None:
         raise RuntimeError("Supabase client factory returned None.")
     table_method = getattr(client, "table", None)
     if not callable(table_method):
-        raise RuntimeError(
-            "Supabase client must expose a callable table(name) API. Check LEON_SUPABASE_CLIENT_FACTORY output."
-        )
+        raise RuntimeError("Supabase client must expose a callable table(name) API. Check LEON_SUPABASE_CLIENT_FACTORY output.")

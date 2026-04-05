@@ -107,9 +107,7 @@ class TestDockerSandboxE2E:
             )
 
             # Verify workspace_root is the sandbox path, not a local resolved path
-            assert str(agent.workspace_root) == "/workspace", (
-                f"workspace_root should be /workspace, got {agent.workspace_root}"
-            )
+            assert str(agent.workspace_root) == "/workspace", f"workspace_root should be /workspace, got {agent.workspace_root}"
 
             # Ensure session exists before invoking
             agent._sandbox.ensure_session(thread_id)
@@ -181,9 +179,7 @@ class TestE2BSandboxE2E:
                 verbose=True,
             )
 
-            assert str(agent.workspace_root) == "/home/user", (
-                f"workspace_root should be /home/user, got {agent.workspace_root}"
-            )
+            assert str(agent.workspace_root) == "/home/user", f"workspace_root should be /home/user, got {agent.workspace_root}"
 
             agent._sandbox.ensure_session(thread_id)
 

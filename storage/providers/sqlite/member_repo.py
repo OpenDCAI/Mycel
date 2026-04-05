@@ -169,8 +169,7 @@ class SQLiteAccountRepo:
     def create(self, row: AccountRow) -> None:
         with self._lock:
             self._conn.execute(
-                "INSERT INTO accounts (id, user_id, username, password_hash, api_key_hash, created_at)"
-                " VALUES (?, ?, ?, ?, ?, ?)",
+                "INSERT INTO accounts (id, user_id, username, password_hash, api_key_hash, created_at) VALUES (?, ?, ?, ?, ?, ?)",
                 (row.id, row.user_id, row.username, row.password_hash, row.api_key_hash, row.created_at),
             )
             self._conn.commit()

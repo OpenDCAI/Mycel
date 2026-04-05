@@ -326,11 +326,7 @@ def _create_owned_thread(
     owned_lease: dict[str, Any] | None = None
     if selected_lease_id:
         owned_lease = next(
-            (
-                lease
-                for lease in sandbox_service.list_user_leases(owner_user_id)
-                if lease["lease_id"] == selected_lease_id
-            ),
+            (lease for lease in sandbox_service.list_user_leases(owner_user_id) if lease["lease_id"] == selected_lease_id),
             None,
         )
         if owned_lease is None:
@@ -655,9 +651,7 @@ async def send_message(
             agent=agent,
         )
 
-    return await route_message_to_brain(
-        app, thread_id, message, source="owner", attachments=payload.attachments or None
-    )
+    return await route_message_to_brain(app, thread_id, message, source="owner", attachments=payload.attachments or None)
 
 
 @router.post("/{thread_id}/queue")

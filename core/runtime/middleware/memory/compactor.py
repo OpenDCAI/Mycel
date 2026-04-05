@@ -174,9 +174,7 @@ class ContextCompactor:
         prefix_end_idx = self._adjust_boundary(to_keep, prefix_end_idx)
         return to_keep[:prefix_end_idx]
 
-    async def compact_with_split_turn(
-        self, to_summarize: list[Any], turn_prefix: list[Any], model: Any
-    ) -> tuple[str, str]:
+    async def compact_with_split_turn(self, to_summarize: list[Any], turn_prefix: list[Any], model: Any) -> tuple[str, str]:
         """Generate summary with split turn handling.
 
         Creates two summaries:

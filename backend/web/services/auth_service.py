@@ -131,9 +131,7 @@ class AuthService:
                     "avatar": None,
                 }
 
-            logger.info(
-                "Created agent '%s' (member=%s) for user '%s'", agent_def["name"], agent_member_id[:8], username
-            )
+            logger.info("Created agent '%s' (member=%s) for user '%s'", agent_def["name"], agent_member_id[:8], username)
 
         token = self._make_token(user_id)
 

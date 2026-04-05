@@ -126,8 +126,7 @@ class RemoteSandbox(Sandbox):
 
             if result.exit_code != 0:
                 raise RuntimeError(
-                    f"Init command #{i} failed: {cmd}\n"
-                    f"exit={result.exit_code}\nstderr={result.stderr}\nstdout={result.stdout}"
+                    f"Init command #{i} failed: {cmd}\nexit={result.exit_code}\nstderr={result.stderr}\nstdout={result.stdout}"
                 )
 
     def fs(self) -> FileSystemBackend:
@@ -205,9 +204,7 @@ class LocalSandbox(Sandbox):
 
         self._workspace_root = workspace_root
         self._provider = LocalSessionProvider(default_cwd=workspace_root)
-        self._manager = SandboxManager(
-            provider=self._provider, db_path=db_path or (Path.home() / ".leon" / "sandbox.db")
-        )
+        self._manager = SandboxManager(provider=self._provider, db_path=db_path or (Path.home() / ".leon" / "sandbox.db"))
         self._capability_cache: dict[str, SandboxCapability] = {}
 
     @property
