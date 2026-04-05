@@ -14,8 +14,9 @@ import logging
 import os
 import time
 import uuid
+from collections.abc import Awaitable, Callable
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any, cast
 
 from config.loader import AgentLoader
 from core.agents.registry import AgentEntry, AgentRegistry
@@ -25,17 +26,24 @@ from core.runtime.middleware.queue.formatters import (
     format_progress_notification,
 )
 from core.runtime.registry import ToolEntry, ToolMode, ToolRegistry
-from core.runtime.state import ToolUseContext
+from core.runtime.state import BootstrapConfig, ToolUseContext
 from core.runtime.tool_result import tool_error, tool_success
 from storage.contracts import EntityRow
 
 logger = logging.getLogger(__name__)
 
+if TYPE_CHECKING:
+    from core.runtime.agent import LeonAgent
 
-def _resolve_default_child_agent_factory():
+
+EventEmitter = Callable[[dict[str, Any]], Awaitable[None] | None]
+ChildAgentFactory = Callable[..., "LeonAgent"]
+
+
+def _resolve_default_child_agent_factory() -> ChildAgentFactory:
     from core.runtime.agent import create_leon_agent
 
-    return create_leon_agent
+    return cast(ChildAgentFactory, create_leon_agent)
 
 
 # ── Sub-agent tool filtering (CC alignment) ──────────────────────────────────
@@ -371,7 +379,7 @@ class AgentService:
         entity_repo: Any = None,
         member_repo: Any = None,
         web_app: Any = None,
-        child_agent_factory: Any = None,
+        child_agent_factory: ChildAgentFactory | None = None,
     ):
         self._agent_registry = agent_registry
         self._workspace_root = workspace_root
@@ -383,6 +391,8 @@ class AgentService:
         self._member_repo = member_repo
         self._web_app = web_app
         self._child_agent_factory = child_agent_factory or _resolve_default_child_agent_factory()
+        self._parent_bootstrap: BootstrapConfig | None = None
+        self._parent_tool_context: Any | None = None
         # Shared with CommandService so TaskOutput covers both bash and agent runs.
         self._tasks: dict[str, BackgroundRun] = shared_runs if shared_runs is not None else {}
 
@@ -633,20 +643,21 @@ class AgentService:
         )
 
         # emit_fn is set if EventBus is available; used for task lifecycle SSE events
-        emit_fn = None
+        emit_fn: EventEmitter | None = None
         try:
             from backend.web.event_bus import get_event_bus
 
-            event_bus = get_event_bus()
-            emit_fn = event_bus.make_emitter(
-                thread_id=parent_thread_id,
-                agent_id=task_id,
-                agent_name=agent_name,
-            )
+            if parent_thread_id:
+                event_bus = get_event_bus()
+                emit_fn = event_bus.make_emitter(
+                    thread_id=parent_thread_id,
+                    agent_id=task_id,
+                    agent_name=agent_name,
+                )
         except ImportError:
             pass  # backend not available in standalone core usage
 
-        agent = None
+        agent: LeonAgent | None = None
         progress_task: asyncio.Task | None = None
         progress_stop: asyncio.Event | None = None
         child_bootstrap_start_cost = 0.0
@@ -726,6 +737,7 @@ class AgentService:
                 # Keep the forked bootstrap/context handoff behind an explicit
                 # LeonAgent API so AgentService stops reaching into QueryLoop
                 # internals directly.
+                assert agent is not None
                 agent.apply_forked_child_context(
                     child_bootstrap,
                     tool_context=child_tool_context,
@@ -753,6 +765,7 @@ class AgentService:
                 )
             # In async context LeonAgent defers checkpointer init; call ainit() to
             # ensure state is persisted (and loadable via GET /api/threads/{thread_id}).
+            assert agent is not None
             await agent.ainit()
             # @@@subagent-prompt-path-sanitize - Parent models sometimes satisfy
             # "use absolute paths" by appending natural-language cwd labels onto the
@@ -768,14 +781,15 @@ class AgentService:
             # Wire child agent events to the parent's EventBus subscription
             # so the parent SSE stream shows sub-agent activity.
             if emit_fn is not None:
-                if hasattr(agent, "runtime") and hasattr(agent.runtime, "bind_thread"):
-                    agent.runtime.bind_thread(activity_sink=emit_fn)
+                runtime = getattr(agent, "runtime", None)
+                if runtime is not None and hasattr(runtime, "bind_thread"):
+                    runtime.bind_thread(activity_sink=emit_fn)
 
             set_current_thread_id(thread_id)
 
             # Notify frontend: task started
             if emit_fn is not None:
-                await emit_fn(
+                emission = emit_fn(
                     {
                         "event": "task_start",
                         "data": json.dumps(
@@ -790,6 +804,8 @@ class AgentService:
                         ),
                     }
                 )
+                if asyncio.iscoroutine(emission):
+                    await emission
 
             config = {"configurable": {"thread_id": thread_id}}
             output_parts: list[str] = []
@@ -876,7 +892,7 @@ class AgentService:
                 await progress_task
             # Notify frontend: task done
             if emit_fn is not None:
-                await emit_fn(
+                emission = emit_fn(
                     {
                         "event": "task_done",
                         "data": json.dumps(
@@ -888,6 +904,8 @@ class AgentService:
                         ),
                     }
                 )
+                if asyncio.iscoroutine(emission):
+                    await emission
             # Queue notification only for background runs — blocking callers already
             # received the result as the tool's return value; sending a notification
             # would trigger a spurious new parent turn.
@@ -913,7 +931,7 @@ class AgentService:
             # Notify frontend: task error
             if emit_fn is not None:
                 try:
-                    await emit_fn(
+                    emission = emit_fn(
                         {
                             "event": "task_error",
                             "data": json.dumps(
@@ -925,6 +943,8 @@ class AgentService:
                             ),
                         }
                     )
+                    if asyncio.iscoroutine(emission):
+                        await emission
                 except Exception:
                     pass
             if run_in_background and self._queue_manager and parent_thread_id:
@@ -1137,12 +1157,13 @@ class AgentService:
             if callable(terminate):
                 terminate()
             if callable(wait):
+                wait_fn = cast(Callable[[], Awaitable[Any]], wait)
                 try:
-                    await asyncio.wait_for(wait(), timeout=1.0)
+                    await asyncio.wait_for(wait_fn(), timeout=1.0)
                 except TimeoutError:
                     if callable(kill):
                         kill()
-                    await wait()
+                    await wait_fn()
 
         self._tasks.pop(task_id, None)
 

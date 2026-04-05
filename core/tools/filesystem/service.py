@@ -13,11 +13,12 @@ import logging
 import tempfile
 import threading
 from collections import OrderedDict
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import TYPE_CHECKING, Any, Literal
 
-from core.runtime.registry import ToolEntry, ToolMode, ToolRegistry
+from core.runtime.registry import ToolEntry, ToolMode, ToolRegistry, make_tool_schema
 from core.runtime.tool_result import ToolResultEnvelope, tool_success
 from core.tools.filesystem.backend import FileSystemBackend
 from core.tools.filesystem.read import ReadLimits
@@ -107,7 +108,7 @@ class FileSystemService:
         hooks: list[Any] | None = None,
         operation_recorder: FileOperationRecorder | None = None,
         backend: FileSystemBackend | None = None,
-        extra_allowed_paths: list[str | Path] | None = None,
+        extra_allowed_paths: Sequence[str | Path] | None = None,
         max_read_cache_entries: int = DEFAULT_READ_STATE_CACHE_SIZE,
         max_edit_file_size: int | None = None,
     ):
@@ -141,37 +142,34 @@ class FileSystemService:
             ToolEntry(
                 name="Read",
                 mode=ToolMode.INLINE,
-                schema={
-                    "name": "Read",
-                    "description": (
+                schema=make_tool_schema(
+                    name="Read",
+                    description=(
                         "Read file content. Output uses cat -n format (line numbers starting at 1). "
                         "Default reads up to 2000 lines from start; use offset/limit for long files. "
                         "Supports images (PNG/JPG), PDF (use pages param for large PDFs), and Jupyter notebooks. "
                         "Path must be absolute."
                     ),
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "file_path": {
-                                "type": "string",
-                                "description": "Absolute file path",
-                            },
-                            "offset": {
-                                "type": "integer",
-                                "description": "Start line (1-indexed, optional)",
-                            },
-                            "limit": {
-                                "type": "integer",
-                                "description": "Number of lines to read (optional)",
-                            },
-                            "pages": {
-                                "type": "string",
-                                "description": "Page range for PDF files (e.g. '1-5'). Max 20 pages per request.",
-                            },
+                    properties={
+                        "file_path": {
+                            "type": "string",
+                            "description": "Absolute file path",
                         },
-                        "required": ["file_path"],
+                        "offset": {
+                            "type": "integer",
+                            "description": "Start line (1-indexed, optional)",
+                        },
+                        "limit": {
+                            "type": "integer",
+                            "description": "Number of lines to read (optional)",
+                        },
+                        "pages": {
+                            "type": "string",
+                            "description": "Page range for PDF files (e.g. '1-5'). Max 20 pages per request.",
+                        },
                     },
-                },
+                    required=["file_path"],
+                ),
                 handler=self._read_file,
                 source="FileSystemService",
                 search_hint="read view file content text code image PDF notebook",
@@ -184,24 +182,21 @@ class FileSystemService:
             ToolEntry(
                 name="Write",
                 mode=ToolMode.INLINE,
-                schema={
-                    "name": "Write",
-                    "description": ("Create or overwrite a file with full content. Forces LF line endings. Path must be absolute."),
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "file_path": {
-                                "type": "string",
-                                "description": "Absolute file path",
-                            },
-                            "content": {
-                                "type": "string",
-                                "description": "File content",
-                            },
+                schema=make_tool_schema(
+                    name="Write",
+                    description="Create or overwrite a file with full content. Forces LF line endings. Path must be absolute.",
+                    properties={
+                        "file_path": {
+                            "type": "string",
+                            "description": "Absolute file path",
                         },
-                        "required": ["file_path", "content"],
+                        "content": {
+                            "type": "string",
+                            "description": "File content",
+                        },
                     },
-                },
+                    required=["file_path", "content"],
+                ),
                 handler=self._write_file,
                 source="FileSystemService",
                 search_hint="create new file write content to disk",
@@ -212,36 +207,33 @@ class FileSystemService:
             ToolEntry(
                 name="Edit",
                 mode=ToolMode.INLINE,
-                schema={
-                    "name": "Edit",
-                    "description": (
+                schema=make_tool_schema(
+                    name="Edit",
+                    description=(
                         "Edit file via exact string replacement. You MUST Read the file first. "
                         "old_string must match exactly one location (or use replace_all=true). "
                         "Does not support .ipynb files (use Write to overwrite full JSON). Path must be absolute."
                     ),
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "file_path": {
-                                "type": "string",
-                                "description": "Absolute file path",
-                            },
-                            "old_string": {
-                                "type": "string",
-                                "description": "Exact string to replace",
-                            },
-                            "new_string": {
-                                "type": "string",
-                                "description": "Replacement string",
-                            },
-                            "replace_all": {
-                                "type": "boolean",
-                                "description": "Replace all occurrences (default: false)",
-                            },
+                    properties={
+                        "file_path": {
+                            "type": "string",
+                            "description": "Absolute file path",
                         },
-                        "required": ["file_path", "old_string", "new_string"],
+                        "old_string": {
+                            "type": "string",
+                            "description": "Exact string to replace",
+                        },
+                        "new_string": {
+                            "type": "string",
+                            "description": "Replacement string",
+                        },
+                        "replace_all": {
+                            "type": "boolean",
+                            "description": "Replace all occurrences (default: false)",
+                        },
                     },
-                },
+                    required=["file_path", "old_string", "new_string"],
+                ),
                 handler=self._edit_file,
                 source="FileSystemService",
                 search_hint="edit modify replace string in existing file",
@@ -252,20 +244,17 @@ class FileSystemService:
             ToolEntry(
                 name="list_dir",
                 mode=ToolMode.INLINE,
-                schema={
-                    "name": "list_dir",
-                    "description": "List directory contents (files and subdirectories, non-recursive). Path must be absolute.",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "path": {
-                                "type": "string",
-                                "description": "Absolute directory path",
-                            },
+                schema=make_tool_schema(
+                    name="list_dir",
+                    description="List directory contents (files and subdirectories, non-recursive). Path must be absolute.",
+                    properties={
+                        "path": {
+                            "type": "string",
+                            "description": "Absolute directory path",
                         },
-                        "required": ["path"],
                     },
-                },
+                    required=["path"],
+                ),
                 handler=self._list_dir,
                 source="FileSystemService",
                 search_hint="list directory contents browse folder",

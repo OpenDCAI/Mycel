@@ -64,7 +64,7 @@ from core.runtime.middleware.queue import MessageQueueManager, SteeringMiddlewar
 
 # Middleware imports (migrated paths)
 from core.runtime.middleware.spill_buffer import SpillBufferMiddleware  # noqa: E402
-from core.runtime.registry import ToolEntry, ToolMode, ToolRegistry  # noqa: E402
+from core.runtime.registry import ToolEntry, ToolMode, ToolRegistry, make_tool_schema  # noqa: E402
 from core.runtime.runner import ToolRunner  # noqa: E402
 from core.runtime.state import AppState, BootstrapConfig  # noqa: E402
 from core.runtime.validator import ToolValidator  # noqa: E402
@@ -109,11 +109,12 @@ def _make_mcp_tool_entry(tool) -> ToolEntry:
     return ToolEntry(
         name=tool.name,
         mode=ToolMode.INLINE,
-        schema={
-            "name": tool.name,
-            "description": getattr(tool, "description", "") or tool.name,
-            "parameters": parameters,
-        },
+        schema=make_tool_schema(
+            name=tool.name,
+            description=getattr(tool, "description", "") or tool.name,
+            properties={},
+            parameter_overrides=parameters,
+        ),
         handler=mcp_handler,
         source="mcp",
     )
@@ -943,7 +944,9 @@ class LeonAgent:
             return
 
         try:
-            self._run_async_cleanup(lambda: self._mcp_client.close(), "MCP client")
+            close_fn = getattr(self._mcp_client, "close", None)
+            if callable(close_fn):
+                self._run_async_cleanup(close_fn, "MCP client")
         except Exception as e:
             print(f"[LeonAgent] MCP cleanup error: {e}")
         self._mcp_client = None

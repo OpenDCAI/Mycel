@@ -9,6 +9,7 @@ Uses dynamic schema (callable) to reflect current skill index on each call.
 from __future__ import annotations
 
 import re
+from collections.abc import Sequence
 from pathlib import Path
 
 from core.runtime.registry import ToolEntry, ToolMode, ToolRegistry
@@ -20,7 +21,7 @@ class SkillsService:
     def __init__(
         self,
         registry: ToolRegistry,
-        skill_paths: list[str | Path],
+        skill_paths: Sequence[str | Path],
         enabled_skills: dict[str, bool] | None = None,
     ):
         self.skill_paths = [Path(p).expanduser().resolve() for p in skill_paths]

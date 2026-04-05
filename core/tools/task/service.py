@@ -143,7 +143,7 @@ class TaskService:
     def __init__(
         self,
         registry: ToolRegistry,
-        workspace_root: str | None = None,
+        workspace_root: str | Path | None = None,
         db_path: Path | None = None,
         thread_id: str | None = None,
     ):
