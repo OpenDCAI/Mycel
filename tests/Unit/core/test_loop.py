@@ -110,6 +110,17 @@ def _make_prompt_too_long_model(*responses):
     return model
 
 
+def make_inline_tool(name, handler, *, schema=None, is_concurrency_safe=True):
+    return ToolEntry(
+        name=name,
+        mode=ToolMode.INLINE,
+        schema=schema or {"name": name, "description": name, "parameters": {}},
+        handler=handler,
+        source="test",
+        is_concurrency_safe=is_concurrency_safe,
+    )
+
+
 def test_tool_use_context_get_app_state_is_live_closure():
     app_state = AppState(turn_count=1)
     loop = make_loop(mock_model_no_tools(), app_state=app_state)
@@ -1064,14 +1075,7 @@ async def test_query_loop_syncs_tool_context_messages_to_query_time_array():
     def echo_handler(message: str) -> str:
         return f"echo: {message}"
 
-    entry = ToolEntry(
-        name="echo",
-        mode=ToolMode.INLINE,
-        schema={"name": "echo", "description": "echo", "parameters": {}},
-        handler=echo_handler,
-        source="test",
-        is_concurrency_safe=True,
-    )
+    entry = make_inline_tool("echo", echo_handler)
     loop = make_loop(
         model,
         registry=make_registry(entry),
@@ -1476,14 +1480,7 @@ async def test_query_loop_does_not_double_apply_compact_boundary_before_memory_m
     def echo_handler(message: str) -> str:
         return f"echo: {message}"
 
-    entry = ToolEntry(
-        name="echo",
-        mode=ToolMode.INLINE,
-        schema={"name": "echo", "description": "echo", "parameters": {}},
-        handler=echo_handler,
-        source="test",
-        is_concurrency_safe=True,
-    )
+    entry = make_inline_tool("echo", echo_handler)
     history = [
         HumanMessage(content="h0"),
         AIMessage(content="a1"),
@@ -1535,14 +1532,7 @@ async def test_query_loop_syncs_tool_context_after_real_memory_compaction():
     def echo_handler(message: str) -> str:
         return f"echo: {message}"
 
-    entry = ToolEntry(
-        name="echo",
-        mode=ToolMode.INLINE,
-        schema={"name": "echo", "description": "echo", "parameters": {}},
-        handler=echo_handler,
-        source="test",
-        is_concurrency_safe=True,
-    )
+    entry = make_inline_tool("echo", echo_handler)
 
     history = [
         HumanMessage(content="A" * 80),
@@ -2583,22 +2573,8 @@ async def test_streaming_executor_bash_error_cancels_siblings_without_killing_pa
         events.append(f"finish-safe-{message}")
         return f"safe: {message}"
 
-    bash_entry = ToolEntry(
-        name="bash",
-        mode=ToolMode.INLINE,
-        schema={"name": "bash", "description": "bash", "parameters": {}},
-        handler=bash_handler,
-        source="test",
-        is_concurrency_safe=True,
-    )
-    safe_entry = ToolEntry(
-        name="safe",
-        mode=ToolMode.INLINE,
-        schema={"name": "safe", "description": "safe", "parameters": {}},
-        handler=safe_handler,
-        source="test",
-        is_concurrency_safe=True,
-    )
+    bash_entry = make_inline_tool("bash", bash_handler)
+    safe_entry = make_inline_tool("safe", safe_handler)
     loop = make_loop(
         model,
         registry=make_registry(bash_entry, safe_entry),
@@ -2627,14 +2603,7 @@ async def test_query_loop_messages_updates_mode_forwards_live_stream_chunks():
         await asyncio.sleep(0.01)
         return f"echo: {message}"
 
-    entry = ToolEntry(
-        name="echo",
-        mode=ToolMode.INLINE,
-        schema={"name": "echo", "description": "echo", "parameters": {}},
-        handler=echo_handler,
-        source="test",
-        is_concurrency_safe=True,
-    )
+    entry = make_inline_tool("echo", echo_handler)
     loop = make_loop(
         model,
         registry=make_registry(entry),
