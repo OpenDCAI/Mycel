@@ -221,6 +221,8 @@ TASK_OUTPUT_SCHEMA = make_tool_schema(
         "timeout": {
             "type": "integer",
             "default": 30000,
+            "minimum": 0,
+            "maximum": 600000,
             "description": "Maximum wait time in milliseconds when block=true (default: 30000, max: 600000).",
         },
     },

@@ -1,4 +1,5 @@
 import json
+import re
 
 from .errors import InputValidationError
 
@@ -74,7 +75,12 @@ class ToolValidator:
                 actual = type(val).__name__
                 raise InputValidationError(f"The parameter `{name}` type is expected as `{expected}` but provided as `{actual}`")
 
-        # Phase 3: enum validation
+        # Phase 3: scalar constraints
+        issues = self._validate_scalar_constraints(properties, args)
+        if issues:
+            raise InputValidationError("\n".join(issues))
+
+        # Phase 4: enum validation
         issues = self._validate_enum(properties, args)
         if issues:
             raise InputValidationError(json.dumps(issues))
@@ -102,4 +108,27 @@ class ToolValidator:
             enum_vals = prop.get("enum")
             if enum_vals and val not in enum_vals:
                 issues.append({"field": name, "expected": enum_vals, "got": val})
+        return issues
+
+    def _validate_scalar_constraints(self, properties: dict, args: dict) -> list[str]:
+        issues: list[str] = []
+        for name, val in args.items():
+            prop = properties.get(name, {})
+            if isinstance(val, str):
+                min_length = prop.get("minLength")
+                if isinstance(min_length, int) and len(val) < min_length:
+                    issues.append(f"The parameter `{name}` must be at least {min_length} characters long")
+                max_length = prop.get("maxLength")
+                if isinstance(max_length, int) and len(val) > max_length:
+                    issues.append(f"The parameter `{name}` must be at most {max_length} characters long")
+                pattern = prop.get("pattern")
+                if isinstance(pattern, str) and re.search(pattern, val) is None:
+                    issues.append(f"The parameter `{name}` must match pattern `{pattern}`")
+            if isinstance(val, (int, float)) and not isinstance(val, bool):
+                minimum = prop.get("minimum")
+                if isinstance(minimum, (int, float)) and val < minimum:
+                    issues.append(f"The parameter `{name}` must be at least {minimum}")
+                maximum = prop.get("maximum")
+                if isinstance(maximum, (int, float)) and val > maximum:
+                    issues.append(f"The parameter `{name}` must be at most {maximum}")
         return issues

@@ -154,6 +154,8 @@ class FileSystemService:
                         "file_path": {
                             "type": "string",
                             "description": "Absolute file path",
+                            "minLength": 1,
+                            "pattern": "^/",
                         },
                         "offset": {
                             "type": "integer",
@@ -171,6 +173,7 @@ class FileSystemService:
                     required=["file_path"],
                 ),
                 handler=self._read_file,
+                validate_input=self._validate_read_args,
                 source="FileSystemService",
                 search_hint="read view file content text code image PDF notebook",
                 is_read_only=True,
@@ -189,6 +192,8 @@ class FileSystemService:
                         "file_path": {
                             "type": "string",
                             "description": "Absolute file path",
+                            "minLength": 1,
+                            "pattern": "^/",
                         },
                         "content": {
                             "type": "string",
@@ -198,6 +203,7 @@ class FileSystemService:
                     required=["file_path", "content"],
                 ),
                 handler=self._write_file,
+                validate_input=self._validate_write_args,
                 source="FileSystemService",
                 search_hint="create new file write content to disk",
             )
@@ -218,6 +224,8 @@ class FileSystemService:
                         "file_path": {
                             "type": "string",
                             "description": "Absolute file path",
+                            "minLength": 1,
+                            "pattern": "^/",
                         },
                         "old_string": {
                             "type": "string",
@@ -235,6 +243,7 @@ class FileSystemService:
                     required=["file_path", "old_string", "new_string"],
                 ),
                 handler=self._edit_file,
+                validate_input=self._validate_edit_args,
                 source="FileSystemService",
                 search_hint="edit modify replace string in existing file",
             )
@@ -251,11 +260,14 @@ class FileSystemService:
                         "path": {
                             "type": "string",
                             "description": "Absolute directory path",
+                            "minLength": 1,
+                            "pattern": "^/",
                         },
                     },
                     required=["path"],
                 ),
                 handler=self._list_dir,
+                validate_input=self._validate_list_dir_args,
                 source="FileSystemService",
                 search_hint="list directory contents browse folder",
                 is_read_only=True,
@@ -305,6 +317,107 @@ class FileSystemService:
                     return False, result.error_message, None
 
         return True, "", resolved
+
+    def _validation_error(self, message: str, error_code: str) -> dict[str, object]:
+        return {
+            "result": False,
+            "message": message,
+            "errorCode": error_code,
+        }
+
+    def _path_validation_error(self, message: str) -> dict[str, object]:
+        # @@@filesystem-validation-codes - Keep the pre-execution path failure
+        # mapping centralized so the runner can surface stable structured
+        # codes instead of ad-hoc handler strings on the highest-traffic tools.
+        if message.startswith("Path must be absolute:"):
+            return self._validation_error(message, "PATH_NOT_ABSOLUTE")
+        if message.startswith("Invalid path:"):
+            return self._validation_error(message, "INVALID_PATH")
+        if message.startswith("Path outside workspace"):
+            return self._validation_error(message, "PATH_OUTSIDE_WORKSPACE")
+        if message.startswith("File type not allowed:"):
+            return self._validation_error(message, "FILE_TYPE_NOT_ALLOWED")
+        return self._validation_error(message, "INVALID_PATH")
+
+    def _validate_existing_path(self, path: str, operation: str) -> tuple[dict[str, object] | None, ResolvedPath | None]:
+        is_valid, error, resolved = self._validate_path(path, operation)
+        if not is_valid:
+            return self._path_validation_error(error), None
+        assert resolved is not None
+        return None, resolved
+
+    def _validate_read_args(self, args: dict[str, Any], request: Any) -> dict[str, Any]:
+        error, resolved = self._validate_existing_path(args["file_path"], "read")
+        if error is not None:
+            return error
+        assert resolved is not None
+
+        file_size = self.backend.file_size(str(resolved))
+        if file_size is not None and file_size > self.max_file_size:
+            return self._validation_error(
+                f"File too large: {file_size:,} bytes (max: {self.max_file_size:,} bytes)",
+                "FILE_TOO_LARGE",
+            )
+
+        has_pagination = (args.get("offset") or 0) > 0 or args.get("limit") is not None or args.get("pages") is not None
+        if not has_pagination and file_size is not None:
+            limits = ReadLimits()
+            if file_size > limits.max_size_bytes:
+                total_lines = self._count_lines(resolved)
+                return self._validation_error(
+                    (
+                        f"File content ({file_size:,} bytes) exceeds maximum allowed size ({limits.max_size_bytes:,} bytes).\n"
+                        f"Use offset and limit parameters to read specific sections.\n"
+                        f"Total lines: {total_lines}"
+                    ),
+                    "READ_REQUIRES_PAGINATION",
+                )
+            estimated_tokens = file_size // 4
+            if estimated_tokens > limits.max_tokens:
+                total_lines = self._count_lines(resolved)
+                return self._validation_error(
+                    (
+                        f"File content (~{estimated_tokens:,} tokens) exceeds maximum allowed tokens ({limits.max_tokens:,}).\n"
+                        f"Use offset and limit parameters to read specific sections.\n"
+                        f"Total lines: {total_lines}"
+                    ),
+                    "READ_REQUIRES_PAGINATION",
+                )
+
+        return args
+
+    def _validate_write_args(self, args: dict[str, Any], request: Any) -> dict[str, Any]:
+        error, _ = self._validate_existing_path(args["file_path"], "write")
+        return error or args
+
+    def _validate_edit_args(self, args: dict[str, Any], request: Any) -> dict[str, Any]:
+        error, resolved = self._validate_existing_path(args["file_path"], "edit")
+        if error is not None:
+            return error
+        assert resolved is not None
+        if resolved.suffix.lower() == ".ipynb":
+            return self._validation_error(
+                "Notebook files (.ipynb) are not supported by Edit. Use Write to overwrite the full JSON.",
+                "NOTEBOOK_EDIT_UNSUPPORTED",
+            )
+        file_size = self.backend.file_size(str(resolved))
+        if file_size is not None and file_size > self.max_edit_file_size:
+            return self._validation_error(
+                f"File too large for Edit: {file_size:,} bytes (max: {self.max_edit_file_size:,} bytes)",
+                "FILE_TOO_LARGE",
+            )
+        return args
+
+    def _validate_list_dir_args(self, args: dict[str, Any], request: Any) -> dict[str, Any]:
+        error, resolved = self._validate_existing_path(args["path"], "list")
+        if error is not None:
+            return error
+        assert resolved is not None
+        if not self.backend.is_dir(str(resolved)):
+            if self.backend.file_exists(str(resolved)):
+                return self._validation_error(f"Not a directory: {args['path']}", "NOT_A_DIRECTORY")
+            return self._validation_error(f"Directory not found: {args['path']}", "DIRECTORY_NOT_FOUND")
+        return args
 
     def _check_file_staleness(self, resolved: ResolvedPath) -> str | None:
         state = self._read_files.get(resolved)

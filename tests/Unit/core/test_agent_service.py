@@ -1456,3 +1456,4 @@ def test_task_output_schema_exposes_block_and_timeout():
 
     assert properties["block"]["default"] is True
     assert properties["timeout"]["default"] == 30000
+    assert properties["timeout"]["maximum"] == 600000

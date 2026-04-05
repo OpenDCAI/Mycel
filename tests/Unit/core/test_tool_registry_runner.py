@@ -250,6 +250,51 @@ class TestToolValidator:
         result = v.validate(schema, {"chat_id": "chat-1"})
         assert result.ok
 
+    def test_string_constraints_raise_layer1(self):
+        v = ToolValidator()
+        schema = {
+            "name": "Read",
+            "parameters": {
+                "type": "object",
+                "required": ["file_path"],
+                "properties": {
+                    "file_path": {
+                        "type": "string",
+                        "minLength": 1,
+                        "pattern": "^/",
+                    }
+                },
+            },
+        }
+
+        with pytest.raises(InputValidationError) as exc_info:
+            v.validate(schema, {"file_path": "relative/path.txt"})
+
+        assert "file_path" in str(exc_info.value)
+        assert "match pattern" in str(exc_info.value)
+
+    def test_numeric_maximum_raises_layer1(self):
+        v = ToolValidator()
+        schema = {
+            "name": "TaskOutput",
+            "parameters": {
+                "type": "object",
+                "required": ["timeout"],
+                "properties": {
+                    "timeout": {
+                        "type": "integer",
+                        "maximum": 600000,
+                    }
+                },
+            },
+        }
+
+        with pytest.raises(InputValidationError) as exc_info:
+            v.validate(schema, {"timeout": 600001})
+
+        assert "timeout" in str(exc_info.value)
+        assert "at most" in str(exc_info.value)
+
 
 # ---------------------------------------------------------------------------
 # ToolRunner — P0 error normalization
@@ -1031,6 +1076,75 @@ class TestToolRunnerErrorNormalization:
         assert result.additional_kwargs["tool_result_meta"]["error_type"] == "tool_input_validation"
         assert result.additional_kwargs["tool_result_meta"]["error_code"] == "E_NO"
         assert events == ["tool-validate"]
+
+    @pytest.mark.asyncio
+    async def test_filesystem_list_dir_outside_workspace_fails_with_structured_error_code(self, tmp_path):
+        registry = ToolRegistry()
+        FileSystemService(
+            registry=registry,
+            workspace_root=tmp_path,
+        )
+        runner = _make_runner(registry.list_all())
+        outside = (tmp_path.parent / "outside").resolve()
+        req = _make_tool_call_request("list_dir", {"path": str(outside)})
+        req.state = MagicMock()
+
+        result = await runner.awrap_tool_call(req, AsyncMock())
+
+        assert "ToolValidationError" in result.content
+        assert "outside workspace" in result.content.lower()
+        assert result.additional_kwargs["tool_result_meta"]["error_type"] == "tool_input_validation"
+        assert result.additional_kwargs["tool_result_meta"]["error_code"] == "PATH_OUTSIDE_WORKSPACE"
+
+    @pytest.mark.asyncio
+    async def test_filesystem_read_large_file_fails_before_handler_as_tool_validation(self, tmp_path):
+        class LargeFileBackend(FileSystemBackend):
+            is_remote = False
+
+            def __init__(self):
+                self.read_calls = 0
+
+            def read_file(self, path: str) -> FileReadResult:
+                self.read_calls += 1
+                raise AssertionError("read_file should not run for oversize preflight")
+
+            def write_file(self, path: str, content: str) -> FileWriteResult:
+                return FileWriteResult(success=True)
+
+            def file_exists(self, path: str) -> bool:
+                return True
+
+            def file_mtime(self, path: str) -> float | None:
+                return None
+
+            def file_size(self, path: str) -> int | None:
+                return 11 * 1024 * 1024
+
+            def is_dir(self, path: str) -> bool:
+                return False
+
+            def list_dir(self, path: str) -> DirListResult:
+                return DirListResult(entries=[])
+
+        backend = LargeFileBackend()
+        registry = ToolRegistry()
+        FileSystemService(
+            registry=registry,
+            workspace_root=tmp_path,
+            backend=backend,
+        )
+        runner = _make_runner(registry.list_all())
+        target = (tmp_path / "too-large.txt").resolve()
+        req = _make_tool_call_request("Read", {"file_path": str(target)})
+        req.state = MagicMock()
+
+        result = await runner.awrap_tool_call(req, AsyncMock())
+
+        assert "ToolValidationError" in result.content
+        assert "too large" in result.content.lower()
+        assert result.additional_kwargs["tool_result_meta"]["error_type"] == "tool_input_validation"
+        assert result.additional_kwargs["tool_result_meta"]["error_code"] == "FILE_TOO_LARGE"
+        assert backend.read_calls == 0
 
     @pytest.mark.asyncio
     async def test_hook_allow_cannot_bypass_permission_deny_rule(self):
