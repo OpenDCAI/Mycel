@@ -31,6 +31,7 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 DEFAULT_READ_STATE_CACHE_SIZE = 100
+ABSOLUTE_PATH_PATTERN = r"^(?:/|[A-Za-z]:[\\/])"
 type ResolvedPath = Path | PurePosixPath
 type ValidationResult = tuple[Literal[True], str, ResolvedPath] | tuple[Literal[False], str, None]
 
@@ -155,7 +156,7 @@ class FileSystemService:
                             "type": "string",
                             "description": "Absolute file path",
                             "minLength": 1,
-                            "pattern": "^/",
+                            "pattern": ABSOLUTE_PATH_PATTERN,
                         },
                         "offset": {
                             "type": "integer",
@@ -193,7 +194,7 @@ class FileSystemService:
                             "type": "string",
                             "description": "Absolute file path",
                             "minLength": 1,
-                            "pattern": "^/",
+                            "pattern": ABSOLUTE_PATH_PATTERN,
                         },
                         "content": {
                             "type": "string",
@@ -225,7 +226,7 @@ class FileSystemService:
                             "type": "string",
                             "description": "Absolute file path",
                             "minLength": 1,
-                            "pattern": "^/",
+                            "pattern": ABSOLUTE_PATH_PATTERN,
                         },
                         "old_string": {
                             "type": "string",
@@ -261,7 +262,7 @@ class FileSystemService:
                             "type": "string",
                             "description": "Absolute directory path",
                             "minLength": 1,
-                            "pattern": "^/",
+                            "pattern": ABSOLUTE_PATH_PATTERN,
                         },
                     },
                     required=["path"],

@@ -279,6 +279,27 @@ class TestToolValidator:
         assert exc_info.value.error_code == "PATTERN_MISMATCH"
         assert exc_info.value.details[0]["error_code"] == "PATTERN_MISMATCH"
 
+    def test_absolute_path_pattern_accepts_windows_drive_paths(self):
+        v = ToolValidator()
+        schema = {
+            "name": "Read",
+            "parameters": {
+                "type": "object",
+                "required": ["file_path"],
+                "properties": {
+                    "file_path": {
+                        "type": "string",
+                        "minLength": 1,
+                        "pattern": r"^(?:/|[A-Za-z]:[\\/])",
+                    }
+                },
+            },
+        }
+
+        result = v.validate(schema, {"file_path": r"C:\tmp\file.txt"})
+
+        assert result.ok
+
     def test_numeric_maximum_raises_layer1(self):
         v = ToolValidator()
         schema = {

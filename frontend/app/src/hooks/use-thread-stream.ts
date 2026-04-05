@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useReducer, useRef } from "react";
+import { useCallback, useEffect, useReducer, useState } from "react";
 import { getThreadRuntime, streamThreadEvents, type StreamStatus } from "../api";
 import type { StreamEvent } from "../api/types";
 
@@ -202,12 +202,11 @@ export function useThreadStream(
 ): UseThreadStreamResult {
   const { loading, refreshThreads, runStarted } = deps;
   const [, rerender] = useReducer((x: number) => x + 1, 0);
-  const mgrRef = useRef<ThreadConnectionManager | null>(null);
-  if (!mgrRef.current) mgrRef.current = new ThreadConnectionManager();
-  const mgr = mgrRef.current;
+  const [mgr] = useState(() => new ThreadConnectionManager());
 
-  // Keep refreshThreads callback up-to-date without re-creating the manager
-  mgr.setRefreshThreads(refreshThreads);
+  useEffect(() => {
+    mgr.setRefreshThreads(refreshThreads);
+  }, [mgr, refreshThreads]);
 
   // State changes → re-render; dispose on unmount
   useEffect(() => {
@@ -224,7 +223,7 @@ export function useThreadStream(
       mgr.initFromRuntime(threadId);
     }
     return () => mgr.disconnect();
-  }, [mgr, threadId, loading]);
+  }, [mgr, threadId, loading, runStarted]);
 
   // Tab visibility: reconnect on error when tab becomes visible
   useEffect(() => {

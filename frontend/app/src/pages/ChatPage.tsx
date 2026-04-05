@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams, useOutletContext, useLocation } from "react-router-dom";
 import { Check, ShieldAlert, X } from "lucide-react";
 import { toast } from "sonner";
@@ -66,6 +66,7 @@ function ChatPageInner({ threadId }: { threadId: string }) {
 
   const state = location.state as { selectedModel?: string; runStarted?: boolean; message?: string } | null;
   const [currentModel, setCurrentModel] = useState<string>(state?.selectedModel ?? "");
+  const [defaultModel, setDefaultModel] = useState<string>("");
 
   // location.state.runStarted is set by NewChatPage on SPA navigation only.
   // On page refresh the browser preserves state but React Router resets it to null,
@@ -101,23 +102,13 @@ function ChatPageInner({ threadId }: { threadId: string }) {
     });
 
   useEffect(() => {
-    if (state?.selectedModel) return;
-    if (runtimeStatus?.model) {
-      setCurrentModel(runtimeStatus.model);
-      return;
-    }
-    if (currentModel || threadStream.phase === "connecting" || threadStream.phase === "idle") return;
+    if (state?.selectedModel || runtimeStatus?.model || currentModel) return;
+    if (threadStream.phase === "connecting" || threadStream.phase === "idle") return;
     fetch("/api/settings")
       .then((r) => r.json())
-      .then((settings) => setCurrentModel(settings.default_model || "leon:large"))
-      .catch(() => setCurrentModel("leon:large"));
+      .then((settings) => setDefaultModel(settings.default_model || "leon:large"))
+      .catch(() => setDefaultModel("leon:large"));
   }, [currentModel, runtimeStatus?.model, state?.selectedModel, threadStream.phase]);
-
-  // @@@debug-entries — expose current entries for backend comparison
-  useEffect(() => {
-    (window as Window & { __debugEntries?: () => unknown[] }).__debugEntries =
-      () => JSON.parse(JSON.stringify(entries)) as unknown[];
-  }, [entries]);
 
   const { tasks, refresh: refreshTasks } = useBackgroundTasks({ threadId, subscribe: threadStream.subscribe });
 
@@ -173,7 +164,11 @@ function ChatPageInner({ threadId }: { threadId: string }) {
   const computerResize = useResizableX(600, 360, 1200, true);
   const currentPermissionRequest = pendingPermissionRequests[0] ?? null;
   const [questionSelectionsByRequest, setQuestionSelectionsByRequest] = useState<Record<string, Record<string, string[]>>>({});
-  const questionSelections = currentPermissionRequest ? (questionSelectionsByRequest[currentPermissionRequest.request_id] ?? {}) : {};
+  const questionSelections = useMemo(
+    () => (currentPermissionRequest ? (questionSelectionsByRequest[currentPermissionRequest.request_id] ?? {}) : {}),
+    [currentPermissionRequest, questionSelectionsByRequest],
+  );
+  const effectiveModel = (state?.selectedModel ?? runtimeStatus?.model ?? currentModel) || defaultModel;
 
   const handleResolvePermission = useCallback(
     async (decision: "allow" | "deny") => {
@@ -309,7 +304,7 @@ function ChatPageInner({ threadId }: { threadId: string }) {
         activeThreadId={threadId}
         threadTitle={currentThread?.entity_name ?? null}
         sandboxInfo={activeSandbox}
-        currentModel={currentModel}
+        currentModel={effectiveModel}
         onToggleSidebar={() => setSidebarCollapsed(v => !v)}
         onModelChange={setCurrentModel}
       />
