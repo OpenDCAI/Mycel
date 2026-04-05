@@ -353,6 +353,7 @@ def _make_streaming_app(
     thread_id: str | None = None,
     agent: SimpleNamespace | None = None,
     queue_manager: MessageQueueManager | None = None,
+    include_route_locks: bool = False,
 ) -> tuple[SimpleNamespace, MessageQueueManager]:
     queue_manager = queue_manager or MessageQueueManager(db_path=str(tmp_path / "queue.db"))
     state = SimpleNamespace(
@@ -368,7 +369,35 @@ def _make_streaming_app(
         state.agent_pool = {f"{thread_id}:local": agent}
         state.thread_sandbox = {thread_id: "local"}
         state._event_loop = asyncio.get_running_loop()
+    if include_route_locks:
+        state.thread_locks = {}
+        state.thread_locks_guard = asyncio.Lock()
     return SimpleNamespace(state=state), queue_manager
+
+
+def _make_direct_streaming_context(
+    tmp_path: Path,
+    loop: QueryLoop,
+    *,
+    queue_manager: MessageQueueManager | None = None,
+) -> tuple[SimpleNamespace, SimpleNamespace, ThreadEventBuffer]:
+    agent = _make_streaming_agent(loop, queue_manager=queue_manager)
+    app, _ = _make_streaming_app(tmp_path, queue_manager=queue_manager)
+    return agent, app, ThreadEventBuffer()
+
+
+def _patch_fake_event_bus(monkeypatch: pytest.MonkeyPatch) -> None:
+    class _FakeEventBus:
+        def subscribe(self, *_args, **_kwargs):
+            return None
+
+        def make_emitter(self, **_kwargs):
+            async def _emit(_event):
+                return None
+
+            return _emit
+
+    monkeypatch.setattr("backend.web.event_bus.get_event_bus", lambda: _FakeEventBus())
 
 
 @pytest.mark.asyncio
@@ -1649,54 +1678,15 @@ async def test_queue_wake_handler_starts_terminal_agent_error_followthrough_run(
 
 @pytest.mark.asyncio
 async def test_cancelled_task_notification_wakes_followthrough_run(monkeypatch, tmp_path):
-    seq = 0
-
-    async def fake_append_event(thread_id, run_id, event, message_id=None, run_event_repo=None):
-        nonlocal seq
-        seq += 1
-        return seq
-
-    async def fake_cleanup_old_runs(thread_id, keep_latest=1, run_event_repo=None):
-        return 0
-
-    class _FakeEventBus:
-        def subscribe(self, *_args, **_kwargs):
-            return None
-
-        def make_emitter(self, **_kwargs):
-            async def _emit(_event):
-                return None
-
-            return _emit
-
-    monkeypatch.setattr("backend.web.services.event_store.append_event", fake_append_event)
-    monkeypatch.setattr("backend.web.services.streaming_service.cleanup_old_runs", fake_cleanup_old_runs)
-    monkeypatch.setattr("backend.web.event_bus.get_event_bus", lambda: _FakeEventBus())
+    _patch_streaming_event_store(monkeypatch)
+    _patch_fake_event_bus(monkeypatch)
 
     thread_id = "thread-route-cancel-followthrough"
     checkpointer = _MemoryCheckpointer()
     loop = _make_loop(text="AFTER_CANCEL_WAKE", checkpointer=checkpointer)
     queue_manager = MessageQueueManager(db_path=str(tmp_path / "queue.db"))
-    agent = SimpleNamespace(
-        agent=loop,
-        runtime=_StreamingRuntime(),
-        storage_container=None,
-        queue_manager=queue_manager,
-    )
-    app = SimpleNamespace(
-        state=SimpleNamespace(
-            display_builder=DisplayBuilder(),
-            thread_tasks={},
-            thread_event_buffers={},
-            subagent_buffers={},
-            queue_manager=queue_manager,
-            thread_last_active={},
-            typing_tracker=None,
-            agent_pool={f"{thread_id}:local": agent},
-            thread_sandbox={thread_id: "local"},
-            _event_loop=asyncio.get_running_loop(),
-        )
-    )
+    agent = _make_streaming_agent(loop, queue_manager=queue_manager)
+    app, _ = _make_streaming_app(tmp_path, thread_id=thread_id, agent=agent, queue_manager=queue_manager)
 
     _ensure_thread_handlers(agent, thread_id, app)
     run = SimpleNamespace(is_done=True, description="cancelled task", command="echo hi")
@@ -1717,44 +1707,19 @@ async def test_cancelled_task_notification_wakes_followthrough_run(monkeypatch, 
 
 @pytest.mark.asyncio
 async def test_send_message_route_then_agent_terminal_notification_reenters_followthrough(monkeypatch, tmp_path):
-    seq = 0
-
-    async def fake_append_event(thread_id, run_id, event, message_id=None, run_event_repo=None):
-        nonlocal seq
-        seq += 1
-        return seq
-
-    async def fake_cleanup_old_runs(thread_id, keep_latest=1, run_event_repo=None):
-        return 0
-
-    monkeypatch.setattr("backend.web.services.event_store.append_event", fake_append_event)
-    monkeypatch.setattr("backend.web.services.streaming_service.cleanup_old_runs", fake_cleanup_old_runs)
+    _patch_streaming_event_store(monkeypatch)
 
     thread_id = "thread-route-send-message-followthrough"
     checkpointer = _MemoryCheckpointer()
     loop = _make_loop(model=_TurnTextModel("OWNER_OK", "AFTER_AGENT_ROUTE_WAKE"), checkpointer=checkpointer)
     queue_manager = MessageQueueManager(db_path=str(tmp_path / "queue.db"))
-    agent = SimpleNamespace(
-        agent=loop,
-        runtime=_StreamingRuntime(),
-        storage_container=None,
+    agent = _make_streaming_agent(loop, queue_manager=queue_manager)
+    app, _ = _make_streaming_app(
+        tmp_path,
+        thread_id=thread_id,
+        agent=agent,
         queue_manager=queue_manager,
-    )
-    app = SimpleNamespace(
-        state=SimpleNamespace(
-            display_builder=DisplayBuilder(),
-            thread_tasks={},
-            thread_event_buffers={},
-            subagent_buffers={},
-            queue_manager=queue_manager,
-            thread_last_active={},
-            typing_tracker=None,
-            thread_locks={},
-            thread_locks_guard=asyncio.Lock(),
-            agent_pool={f"{thread_id}:local": agent},
-            thread_sandbox={thread_id: "local"},
-            _event_loop=asyncio.get_running_loop(),
-        )
+        include_route_locks=True,
     )
 
     with (
@@ -1795,39 +1760,12 @@ async def test_send_message_route_then_agent_terminal_notification_reenters_foll
 
 @pytest.mark.asyncio
 async def test_run_agent_to_buffer_adds_terminal_followthrough_system_note_to_prevent_silent_completion(monkeypatch, tmp_path):
-    seq = 0
-
-    async def fake_append_event(thread_id, run_id, event, message_id=None, run_event_repo=None):
-        nonlocal seq
-        seq += 1
-        return seq
-
-    async def fake_cleanup_old_runs(thread_id, keep_latest=1, run_event_repo=None):
-        return 0
-
-    monkeypatch.setattr("backend.web.services.event_store.append_event", fake_append_event)
-    monkeypatch.setattr("backend.web.services.streaming_service.cleanup_old_runs", fake_cleanup_old_runs)
+    _patch_streaming_event_store(monkeypatch)
     monkeypatch.setattr("backend.web.services.streaming_service._ensure_thread_handlers", lambda *args, **kwargs: None)
 
     checkpointer = _MemoryCheckpointer()
     loop = _make_loop(model=_TerminalFollowthroughPromptAwareModel(), checkpointer=checkpointer)
-    agent = SimpleNamespace(
-        agent=loop,
-        runtime=_StreamingRuntime(),
-        storage_container=None,
-    )
-    app = SimpleNamespace(
-        state=SimpleNamespace(
-            display_builder=DisplayBuilder(),
-            thread_tasks={},
-            thread_event_buffers={},
-            subagent_buffers={},
-            queue_manager=MessageQueueManager(db_path=str(tmp_path / "queue.db")),
-            thread_last_active={},
-            typing_tracker=None,
-        )
-    )
-    thread_buf = ThreadEventBuffer()
+    agent, app, thread_buf = _make_direct_streaming_context(tmp_path, loop)
 
     await _run_agent_to_buffer(
         agent,
@@ -1848,39 +1786,12 @@ async def test_run_agent_to_buffer_adds_terminal_followthrough_system_note_to_pr
 
 @pytest.mark.asyncio
 async def test_run_agent_to_buffer_turns_silent_terminal_reentry_into_visible_followthrough(monkeypatch, tmp_path):
-    seq = 0
-
-    async def fake_append_event(thread_id, run_id, event, message_id=None, run_event_repo=None):
-        nonlocal seq
-        seq += 1
-        return seq
-
-    async def fake_cleanup_old_runs(thread_id, keep_latest=1, run_event_repo=None):
-        return 0
-
-    monkeypatch.setattr("backend.web.services.event_store.append_event", fake_append_event)
-    monkeypatch.setattr("backend.web.services.streaming_service.cleanup_old_runs", fake_cleanup_old_runs)
+    _patch_streaming_event_store(monkeypatch)
     monkeypatch.setattr("backend.web.services.streaming_service._ensure_thread_handlers", lambda *args, **kwargs: None)
 
     checkpointer = _MemoryCheckpointer()
     loop = _make_loop(model=_TerminalFollowthroughSilentModel(), checkpointer=checkpointer)
-    agent = SimpleNamespace(
-        agent=loop,
-        runtime=_StreamingRuntime(),
-        storage_container=None,
-    )
-    app = SimpleNamespace(
-        state=SimpleNamespace(
-            display_builder=DisplayBuilder(),
-            thread_tasks={},
-            thread_event_buffers={},
-            subagent_buffers={},
-            queue_manager=MessageQueueManager(db_path=str(tmp_path / "queue.db")),
-            thread_last_active={},
-            typing_tracker=None,
-        )
-    )
-    thread_buf = ThreadEventBuffer()
+    agent, app, thread_buf = _make_direct_streaming_context(tmp_path, loop)
 
     await _run_agent_to_buffer(
         agent,
@@ -1904,39 +1815,12 @@ async def test_run_agent_to_buffer_turns_silent_terminal_reentry_into_visible_fo
 
 @pytest.mark.asyncio
 async def test_run_agent_to_buffer_turns_silent_chat_notification_into_visible_followthrough(monkeypatch, tmp_path):
-    seq = 0
-
-    async def fake_append_event(thread_id, run_id, event, message_id=None, run_event_repo=None):
-        nonlocal seq
-        seq += 1
-        return seq
-
-    async def fake_cleanup_old_runs(thread_id, keep_latest=1, run_event_repo=None):
-        return 0
-
-    monkeypatch.setattr("backend.web.services.event_store.append_event", fake_append_event)
-    monkeypatch.setattr("backend.web.services.streaming_service.cleanup_old_runs", fake_cleanup_old_runs)
+    _patch_streaming_event_store(monkeypatch)
     monkeypatch.setattr("backend.web.services.streaming_service._ensure_thread_handlers", lambda *args, **kwargs: None)
 
     checkpointer = _MemoryCheckpointer()
     loop = _make_loop(model=_ChatNotificationSilentModel(), checkpointer=checkpointer)
-    agent = SimpleNamespace(
-        agent=loop,
-        runtime=_StreamingRuntime(),
-        storage_container=None,
-    )
-    app = SimpleNamespace(
-        state=SimpleNamespace(
-            display_builder=DisplayBuilder(),
-            thread_tasks={},
-            thread_event_buffers={},
-            subagent_buffers={},
-            queue_manager=MessageQueueManager(db_path=str(tmp_path / "queue.db")),
-            thread_last_active={},
-            typing_tracker=None,
-        )
-    )
-    thread_buf = ThreadEventBuffer()
+    agent, app, thread_buf = _make_direct_streaming_context(tmp_path, loop)
 
     await _run_agent_to_buffer(
         agent,
@@ -1960,39 +1844,12 @@ async def test_run_agent_to_buffer_turns_silent_chat_notification_into_visible_f
 
 @pytest.mark.asyncio
 async def test_run_agent_to_buffer_tags_display_delta_with_source_seq(monkeypatch, tmp_path):
-    seq = 0
-
-    async def fake_append_event(thread_id, run_id, event, message_id=None, run_event_repo=None):
-        nonlocal seq
-        seq += 1
-        return seq
-
-    async def fake_cleanup_old_runs(thread_id, keep_latest=1, run_event_repo=None):
-        return 0
-
-    monkeypatch.setattr("backend.web.services.event_store.append_event", fake_append_event)
-    monkeypatch.setattr("backend.web.services.streaming_service.cleanup_old_runs", fake_cleanup_old_runs)
+    _patch_streaming_event_store(monkeypatch)
     monkeypatch.setattr("backend.web.services.streaming_service._ensure_thread_handlers", lambda *args, **kwargs: None)
 
     checkpointer = _MemoryCheckpointer()
     loop = _make_loop(model=_NoToolModel("SEQ_OK"), checkpointer=checkpointer)
-    agent = SimpleNamespace(
-        agent=loop,
-        runtime=_StreamingRuntime(),
-        storage_container=None,
-    )
-    app = SimpleNamespace(
-        state=SimpleNamespace(
-            display_builder=DisplayBuilder(),
-            thread_tasks={},
-            thread_event_buffers={},
-            subagent_buffers={},
-            queue_manager=MessageQueueManager(db_path=str(tmp_path / "queue.db")),
-            thread_last_active={},
-            typing_tracker=None,
-        )
-    )
-    thread_buf = ThreadEventBuffer()
+    agent, app, thread_buf = _make_direct_streaming_context(tmp_path, loop)
 
     await _run_agent_to_buffer(
         agent,
