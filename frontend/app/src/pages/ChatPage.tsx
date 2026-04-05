@@ -3,7 +3,7 @@ import { useParams, useOutletContext, useLocation } from "react-router-dom";
 import { Check, ShieldAlert, X } from "lucide-react";
 import { toast } from "sonner";
 import ChatArea from "../components/ChatArea";
-import type { AssistantTurn } from "../api";
+import type { AssistantTurn, AskUserAnswer, AskUserQuestionPrompt, PermissionRequest } from "../api";
 import { uploadSandboxFile } from "../api";
 import { Alert, AlertDescription, AlertTitle } from "../components/ui/alert";
 import { Button } from "../components/ui/button";
@@ -31,6 +31,16 @@ interface OutletContext {
   sidebarCollapsed: boolean;
   setSidebarCollapsed: React.Dispatch<React.SetStateAction<boolean>>;
   setSessionsOpen: (value: boolean) => void;
+}
+
+function isAskUserQuestionRequest(
+  request: PermissionRequest | null,
+): request is PermissionRequest & { args: PermissionRequest["args"] & { questions: AskUserQuestionPrompt[] } } {
+  return !!request && request.tool_name === "AskUserQuestion" && Array.isArray(request.args?.questions);
+}
+
+function questionSelectionKey(question: AskUserQuestionPrompt): string {
+  return `${question.header}::${question.question}`;
 }
 
 /** Thin wrapper: key={threadId} forces remount → all hook state resets naturally. */
@@ -164,6 +174,8 @@ function ChatPageInner({ threadId }: { threadId: string }) {
 
   const computerResize = useResizableX(600, 360, 1200, true);
   const currentPermissionRequest = pendingPermissionRequests[0] ?? null;
+  const [questionSelectionsByRequest, setQuestionSelectionsByRequest] = useState<Record<string, Record<string, string[]>>>({});
+  const questionSelections = currentPermissionRequest ? (questionSelectionsByRequest[currentPermissionRequest.request_id] ?? {}) : {};
 
   const handleResolvePermission = useCallback(
     async (decision: "allow" | "deny") => {
@@ -179,6 +191,62 @@ function ChatPageInner({ threadId }: { threadId: string }) {
     },
     [currentPermissionRequest, refreshThread, resolvePermission],
   );
+
+  const handleQuestionSelection = useCallback(
+    (question: AskUserQuestionPrompt, optionLabel: string) => {
+      if (!currentPermissionRequest) return;
+      const key = questionSelectionKey(question);
+      setQuestionSelectionsByRequest((prev) => {
+        const currentForRequest = prev[currentPermissionRequest.request_id] ?? {};
+        const current = currentForRequest[key] ?? [];
+        if (question.multiSelect) {
+          const next = current.includes(optionLabel)
+            ? current.filter((item) => item !== optionLabel)
+            : [...current, optionLabel];
+          return {
+            ...prev,
+            [currentPermissionRequest.request_id]: { ...currentForRequest, [key]: next },
+          };
+        }
+        return {
+          ...prev,
+          [currentPermissionRequest.request_id]: { ...currentForRequest, [key]: [optionLabel] },
+        };
+      });
+    },
+    [currentPermissionRequest],
+  );
+
+  const handleSubmitQuestionAnswers = useCallback(async () => {
+    if (!currentPermissionRequest || !isAskUserQuestionRequest(currentPermissionRequest)) return;
+    const answers: AskUserAnswer[] = currentPermissionRequest.args.questions.map((question) => ({
+      header: question.header,
+      question: question.question,
+      selected_options: questionSelections[questionSelectionKey(question)] ?? [],
+    }));
+    try {
+      await resolvePermission(
+        currentPermissionRequest.request_id,
+        "allow",
+        undefined,
+        answers,
+        typeof currentPermissionRequest.args.annotations === "object" && currentPermissionRequest.args.annotations !== null
+          ? currentPermissionRequest.args.annotations as Record<string, unknown>
+          : undefined,
+      );
+      await refreshThread();
+      toast.success("已提交回答，Leon 会继续当前任务");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      toast.error(`提交回答失败: ${message}`);
+    }
+  }, [currentPermissionRequest, questionSelections, refreshThread, resolvePermission]);
+
+  const questionPrompts = isAskUserQuestionRequest(currentPermissionRequest)
+    ? currentPermissionRequest.args.questions
+    : [];
+  const canSubmitQuestionAnswers = questionPrompts.length > 0
+    && questionPrompts.every((question) => (questionSelections[questionSelectionKey(question)] ?? []).length > 0);
 
   const handlePersistedPermissionDecision = useCallback(
     async (decision: "allow" | "deny") => {
@@ -262,61 +330,113 @@ function ChatPageInner({ threadId }: { threadId: string }) {
                   <ShieldAlert className="text-warning" />
                   <AlertTitle>权限确认：{currentPermissionRequest.tool_name}</AlertTitle>
                   <AlertDescription>
-                    <p>{currentPermissionRequest.message || "该工具需要你明确批准后才能继续。"}</p>
-                    <p className="text-xs text-muted-foreground">
-                      处理后不会自动重跑；Leon 需要在下一次相同操作时继续执行。
-                    </p>
-                    <code className="block w-full overflow-x-auto rounded-md bg-background/80 px-2 py-1 text-xs text-foreground border border-border/60">
-                      {JSON.stringify(currentPermissionRequest.args)}
-                    </code>
+                    {isAskUserQuestionRequest(currentPermissionRequest) ? (
+                      <div className="space-y-3">
+                        <p>{currentPermissionRequest.message || "Leon 需要你的回答后才能继续。"}</p>
+                        {questionPrompts.map((question) => {
+                          const selected = questionSelections[questionSelectionKey(question)] ?? [];
+                          return (
+                            <div key={questionSelectionKey(question)} className="space-y-2 rounded-lg border border-border/60 bg-background/70 p-3">
+                              <div>
+                                <p className="text-sm font-medium">{question.header}</p>
+                                <p className="text-sm text-muted-foreground">{question.question}</p>
+                              </div>
+                              <div className="space-y-2">
+                                {question.options.map((option) => {
+                                  const active = selected.includes(option.label);
+                                  return (
+                                    <button
+                                      key={option.label}
+                                      type="button"
+                                      className={`w-full rounded-lg border px-3 py-2 text-left transition-colors ${
+                                        active
+                                          ? "border-primary bg-primary/10 text-foreground"
+                                          : "border-border/60 bg-background hover:border-primary/40 hover:bg-muted/40"
+                                      }`}
+                                      onClick={() => handleQuestionSelection(question, option.label)}
+                                    >
+                                      <div className="text-sm font-medium">{option.label}</div>
+                                      <div className="text-xs text-muted-foreground">{option.description}</div>
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          );
+                        })}
+                        <div className="flex items-center gap-2 pt-1">
+                          <Button
+                            size="sm"
+                            onClick={() => void handleSubmitQuestionAnswers()}
+                            disabled={resolvingId === currentPermissionRequest.request_id || !canSubmitQuestionAnswers}
+                          >
+                            提交回答
+                          </Button>
+                        </div>
+                      </div>
+                    ) : (
+                      <>
+                        <p>{currentPermissionRequest.message || "该工具需要你明确批准后才能继续。"}</p>
+                        <p className="text-xs text-muted-foreground">
+                          处理后不会自动重跑；Leon 需要在下一次相同操作时继续执行。
+                        </p>
+                        <code className="block w-full overflow-x-auto rounded-md bg-background/80 px-2 py-1 text-xs text-foreground border border-border/60">
+                          {JSON.stringify(currentPermissionRequest.args)}
+                        </code>
+                      </>
+                    )}
                     {pendingPermissionRequests.length > 1 && (
                       <p className="text-xs text-muted-foreground">
                         还有 {pendingPermissionRequests.length - 1} 条待处理请求。
                       </p>
                     )}
-                    <div className="flex items-center gap-2 pt-1">
-                      <Button
-                        size="sm"
-                        onClick={() => void handleResolvePermission("allow")}
-                        disabled={resolvingId === currentPermissionRequest.request_id}
-                      >
-                        <Check className="w-4 h-4" />
-                        批准
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => void handleResolvePermission("deny")}
-                        disabled={resolvingId === currentPermissionRequest.request_id}
-                      >
-                        <X className="w-4 h-4" />
-                        拒绝
-                      </Button>
-                      {!managedOnly && (
-                        <>
+                    {!isAskUserQuestionRequest(currentPermissionRequest) && (
+                      <>
+                        <div className="flex items-center gap-2 pt-1">
                           <Button
                             size="sm"
-                            variant="secondary"
-                            onClick={() => void handlePersistedPermissionDecision("allow")}
+                            onClick={() => void handleResolvePermission("allow")}
                             disabled={resolvingId === currentPermissionRequest.request_id}
                           >
-                            本线程始终批准
+                            <Check className="w-4 h-4" />
+                            批准
                           </Button>
                           <Button
                             size="sm"
-                            variant="secondary"
-                            onClick={() => void handlePersistedPermissionDecision("deny")}
+                            variant="outline"
+                            onClick={() => void handleResolvePermission("deny")}
                             disabled={resolvingId === currentPermissionRequest.request_id}
                           >
-                            本线程始终拒绝
+                            <X className="w-4 h-4" />
+                            拒绝
                           </Button>
-                        </>
-                      )}
-                    </div>
-                    {managedOnly && (
-                      <p className="pt-1 text-xs text-muted-foreground">
-                        当前为 managed-only 模式，不能写入线程级权限覆盖规则。
-                      </p>
+                          {!managedOnly && (
+                            <>
+                              <Button
+                                size="sm"
+                                variant="secondary"
+                                onClick={() => void handlePersistedPermissionDecision("allow")}
+                                disabled={resolvingId === currentPermissionRequest.request_id}
+                              >
+                                本线程始终批准
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="secondary"
+                                onClick={() => void handlePersistedPermissionDecision("deny")}
+                                disabled={resolvingId === currentPermissionRequest.request_id}
+                              >
+                                本线程始终拒绝
+                              </Button>
+                            </>
+                          )}
+                        </div>
+                        {managedOnly && (
+                          <p className="pt-1 text-xs text-muted-foreground">
+                            当前为 managed-only 模式，不能写入线程级权限覆盖规则。
+                          </p>
+                        )}
+                      </>
                     )}
                   </AlertDescription>
                 </Alert>

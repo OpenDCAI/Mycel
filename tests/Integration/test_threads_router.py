@@ -113,7 +113,7 @@ class _FakePermissionAgent:
             "ask": ["Edit"],
         }
         self.managed_only = False
-        self.resolve_calls: list[tuple[str, str, str | None]] = []
+        self.resolve_calls: list[tuple[str, str, str | None, list[dict] | None, dict | None]] = []
         self.rule_add_calls: list[tuple[str, str]] = []
         self.rule_remove_calls: list[tuple[str, str]] = []
         self.agent = SimpleNamespace(
@@ -126,8 +126,16 @@ class _FakePermissionAgent:
             return list(self.pending)
         return [item for item in self.pending if item["thread_id"] == thread_id]
 
-    def resolve_permission_request(self, request_id: str, *, decision: str, message: str | None = None) -> bool:
-        self.resolve_calls.append((request_id, decision, message))
+    def resolve_permission_request(
+        self,
+        request_id: str,
+        *,
+        decision: str,
+        message: str | None = None,
+        answers: list[dict] | None = None,
+        annotations: dict | None = None,
+    ) -> bool:
+        self.resolve_calls.append((request_id, decision, message, answers, annotations))
         if request_id != "perm-1":
             return False
         self.pending = []
@@ -218,6 +226,46 @@ class _LivePendingPermissionAgent:
                 "ask": list(state.alwaysAskRules.get("session", [])),
             },
         }
+
+
+class _FakeAskUserQuestionAgent(_FakePermissionAgent):
+    def __init__(self) -> None:
+        super().__init__()
+        self.pending = [
+            {
+                "request_id": "perm-ask",
+                "thread_id": "thread-1",
+                "tool_name": "AskUserQuestion",
+                "args": {
+                    "questions": [
+                        {
+                            "header": "Style",
+                            "question": "Choose a style",
+                            "options": [
+                                {"label": "Minimal", "description": "Keep it simple"},
+                                {"label": "Bold", "description": "Make it loud"},
+                            ],
+                        }
+                    ]
+                },
+                "message": "Answer questions?",
+            }
+        ]
+
+    def resolve_permission_request(
+        self,
+        request_id: str,
+        *,
+        decision: str,
+        message: str | None = None,
+        answers: list[dict] | None = None,
+        annotations: dict | None = None,
+    ) -> bool:
+        self.resolve_calls.append((request_id, decision, message, answers, annotations))
+        if request_id != "perm-ask":
+            return False
+        self.pending = []
+        return True
 
 
 class _NullLock:
@@ -627,8 +675,86 @@ async def test_resolve_thread_permission_request_persists_resolution():
     )
 
     assert result == {"ok": True, "thread_id": "thread-1", "request_id": "perm-1"}
-    assert agent.resolve_calls == [("perm-1", "allow", "go ahead")]
+    assert agent.resolve_calls == [("perm-1", "allow", "go ahead", None, None)]
     agent.agent.apersist_state.assert_awaited_once_with("thread-1")
+
+
+@pytest.mark.asyncio
+async def test_resolve_ask_user_question_request_starts_followup_run_with_answers():
+    agent = _FakeAskUserQuestionAgent()
+    app = SimpleNamespace()
+    payload = SimpleNamespace(
+        decision="allow",
+        message=None,
+        answers=[
+            {
+                "header": "Style",
+                "question": "Choose a style",
+                "selected_options": ["Minimal"],
+            }
+        ],
+        annotations={"source": "ask-user-ui"},
+    )
+
+    with patch(
+        "backend.web.services.message_routing.route_message_to_brain",
+        AsyncMock(return_value={"status": "started", "routing": "direct", "thread_id": "thread-1"}),
+    ) as route_message:
+        result = await threads_router.resolve_thread_permission_request(
+            "thread-1",
+            "perm-ask",
+            payload,
+            user_id="owner-1",
+            agent=agent,
+            app=app,
+        )
+
+    assert result == {
+        "ok": True,
+        "thread_id": "thread-1",
+        "request_id": "perm-ask",
+        "followup": {"status": "started", "routing": "direct", "thread_id": "thread-1"},
+    }
+    assert agent.resolve_calls == [
+        (
+            "perm-ask",
+            "allow",
+            None,
+            [
+                {
+                    "header": "Style",
+                    "question": "Choose a style",
+                    "selected_options": ["Minimal"],
+                }
+            ],
+            {"source": "ask-user-ui"},
+        )
+    ]
+    route_message.assert_awaited_once()
+    followup_message = route_message.await_args.args[2]
+    assert "AskUserQuestion" in followup_message
+    assert "Minimal" in followup_message
+    assert "Choose a style" in followup_message
+    agent.agent.apersist_state.assert_awaited_once_with("thread-1")
+
+
+@pytest.mark.asyncio
+async def test_resolve_ask_user_question_request_requires_answers_for_allow():
+    agent = _FakeAskUserQuestionAgent()
+
+    with pytest.raises(threads_router.HTTPException) as exc_info:
+        await threads_router.resolve_thread_permission_request(
+            "thread-1",
+            "perm-ask",
+            SimpleNamespace(decision="allow", message=None, answers=None, annotations=None),
+            user_id="owner-1",
+            agent=agent,
+            app=SimpleNamespace(),
+        )
+
+    assert exc_info.value.status_code == 400
+    assert exc_info.value.detail == "AskUserQuestion answers are required when approving the request"
+    agent.agent.apersist_state.assert_not_awaited()
 
 
 @pytest.mark.asyncio

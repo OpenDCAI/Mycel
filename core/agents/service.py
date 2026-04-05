@@ -25,9 +25,10 @@ from core.runtime.middleware.queue.formatters import (
     format_background_notification,
     format_progress_notification,
 )
+from core.runtime.permissions import ToolPermissionContext
 from core.runtime.registry import ToolEntry, ToolMode, ToolRegistry, make_tool_schema
 from core.runtime.state import BootstrapConfig, ToolUseContext
-from core.runtime.tool_result import tool_error, tool_success
+from core.runtime.tool_result import tool_error, tool_permission_request, tool_success
 from storage.contracts import EntityRow
 
 logger = logging.getLogger(__name__)
@@ -261,6 +262,56 @@ SEND_MESSAGE_SCHEMA = make_tool_schema(
     required=["target_name", "message"],
 )
 
+ASK_USER_QUESTION_SCHEMA = make_tool_schema(
+    name="AskUserQuestion",
+    description=(
+        "Ask the user one or more structured questions when progress requires their choice or clarification. "
+        "Use for genuine ambiguity, preference selection, or approval that needs an explicit answer before continuing."
+    ),
+    properties={
+        "questions": {
+            "type": "array",
+            "description": "Questions to present to the user.",
+            "minItems": 1,
+            "items": {
+                "type": "object",
+                "properties": {
+                    "header": {"type": "string", "description": "Short UI label for the question."},
+                    "question": {"type": "string", "description": "Full question text shown to the user."},
+                    "multiSelect": {
+                        "type": "boolean",
+                        "default": False,
+                        "description": "Whether the user may pick multiple options.",
+                    },
+                    "options": {
+                        "type": "array",
+                        "minItems": 1,
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "label": {"type": "string"},
+                                "description": {"type": "string"},
+                                "preview": {"type": "string"},
+                            },
+                            "required": ["label", "description"],
+                        },
+                    },
+                },
+                "required": ["header", "question", "options"],
+            },
+        },
+        "annotations": {
+            "type": "object",
+            "description": "Optional structured annotations kept with the question request.",
+        },
+        "metadata": {
+            "type": "object",
+            "description": "Optional metadata describing the source of the question request.",
+        },
+    },
+    required=["questions"],
+)
+
 
 class _RunningTask:
     """Tracks a background asyncio.Task (agent run) with its metadata."""
@@ -425,6 +476,18 @@ class AgentService:
                 handler=self._handle_send_message,
                 source="AgentService",
                 search_hint="send message running agent delivery queue",
+            )
+        )
+        tool_registry.register(
+            ToolEntry(
+                name="AskUserQuestion",
+                mode=ToolMode.INLINE,
+                schema=ASK_USER_QUESTION_SCHEMA,
+                handler=self._handle_ask_user_question,
+                source="AgentService",
+                search_hint="ask user question clarification choice preference",
+                is_read_only=True,
+                is_concurrency_safe=True,
             )
         )
 
@@ -1123,6 +1186,42 @@ class AgentService:
             sender_name=sender_name or "agent",
         )
         return f"Message sent to {target.name}."
+
+    async def _handle_ask_user_question(
+        self,
+        questions: list[dict[str, Any]],
+        annotations: dict[str, Any] | None = None,
+        metadata: dict[str, Any] | None = None,
+        tool_context: ToolUseContext | None = None,
+    ) -> Any:
+        if tool_context is None or tool_context.request_permission is None:
+            return tool_error("<tool_use_error>AskUserQuestion requires an interactive owner resolver</tool_use_error>")
+
+        payload: dict[str, Any] = {"questions": questions}
+        if annotations is not None:
+            payload["annotations"] = annotations
+        if metadata is not None:
+            payload["metadata"] = metadata
+
+        request_result = tool_context.request_permission(
+            "AskUserQuestion",
+            payload,
+            ToolPermissionContext(is_read_only=True, is_destructive=False),
+            None,
+            "Answer questions?",
+        )
+        request_id = request_result.get("request_id") if isinstance(request_result, dict) else request_result
+        if not isinstance(request_id, str) or not request_id:
+            return tool_error("<tool_use_error>AskUserQuestion could not create a user-facing request</tool_use_error>")
+
+        return tool_permission_request(
+            "User input required to continue.",
+            metadata={
+                "decision": "ask",
+                "request_id": request_id,
+                "request_kind": "ask_user_question",
+            },
+        )
 
     async def _stop_background_run(self, task_id: str, running: BackgroundRun) -> None:
         if isinstance(running, _RunningTask):

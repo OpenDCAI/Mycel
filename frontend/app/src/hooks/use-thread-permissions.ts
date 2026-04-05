@@ -4,6 +4,7 @@ import {
   getThreadPermissions,
   removeThreadPermissionRule,
   resolveThreadPermission,
+  type AskUserAnswer,
   type PermissionRequest,
   type ThreadPermissionRules,
   type PermissionRuleBehavior,
@@ -35,6 +36,8 @@ export interface ThreadPermissionsActions {
     requestId: string,
     decision: "allow" | "deny",
     message?: string,
+    answers?: AskUserAnswer[],
+    annotations?: Record<string, unknown>,
   ) => Promise<void>;
   addSessionRule: (behavior: PermissionRuleBehavior, toolName: string) => Promise<void>;
   removeSessionRule: (behavior: PermissionRuleBehavior, toolName: string) => Promise<void>;
@@ -70,17 +73,24 @@ export function useThreadPermissions(threadId: string | undefined): ThreadPermis
       if (refreshGenerationRef.current !== generation) return;
       console.error("[useThreadPermissions] Failed to load permissions:", err);
     } finally {
-      if (refreshGenerationRef.current !== generation) return;
-      setLoading(false);
+      if (refreshGenerationRef.current === generation) {
+        setLoading(false);
+      }
     }
   }, [threadId]);
 
   const resolvePermissionRequest = useCallback(
-    async (requestId: string, decision: "allow" | "deny", message?: string) => {
+    async (
+      requestId: string,
+      decision: "allow" | "deny",
+      message?: string,
+      answers?: AskUserAnswer[],
+      annotations?: Record<string, unknown>,
+    ) => {
       if (!threadId) return;
       setResolvingId(requestId);
       try {
-        await resolveThreadPermission(threadId, requestId, decision, message);
+        await resolveThreadPermission(threadId, requestId, decision, message, answers, annotations);
         await refreshPermissions();
       } finally {
         setResolvingId(null);

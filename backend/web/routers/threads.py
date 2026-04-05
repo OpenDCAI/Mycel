@@ -196,6 +196,44 @@ def _provider_unavailable_response(sandbox_type: str) -> JSONResponse:
     )
 
 
+def _format_ask_user_question_followup(
+    pending_request: dict[str, Any],
+    *,
+    answers: list[dict[str, Any]],
+    annotations: dict[str, Any] | None,
+) -> str:
+    payload: dict[str, Any] = {
+        "questions": (pending_request.get("args") or {}).get("questions", []),
+        "answers": answers,
+    }
+    if annotations is not None:
+        payload["annotations"] = annotations
+    # @@@ask-user-followup-payload - keep this as one narrow, structured owner reply
+    # so the resumed run can continue from the user's choices without inventing
+    # a bespoke second continuation channel.
+    return (
+        "The user answered your AskUserQuestion prompt. Continue the task using these answers.\n"
+        "<ask_user_question_answers>\n"
+        f"{json.dumps(payload, ensure_ascii=False, indent=2)}\n"
+        "</ask_user_question_answers>"
+    )
+
+
+def _serialize_permission_answers(payload: Any) -> list[dict[str, Any]] | None:
+    raw_answers = getattr(payload, "answers", None)
+    if raw_answers is None:
+        return None
+    serialized: list[dict[str, Any]] = []
+    for item in raw_answers:
+        if hasattr(item, "model_dump"):
+            serialized.append(item.model_dump(exclude_none=True))
+        elif isinstance(item, dict):
+            serialized.append({key: value for key, value in item.items() if value is not None})
+        else:
+            serialized.append({key: value for key, value in vars(item).items() if value is not None})
+    return serialized
+
+
 def _validate_sandbox_provider_gate(app: Any, owner_user_id: str, payload: CreateThreadRequest) -> JSONResponse | None:
     sandbox_type = payload.sandbox or "local"
     if payload.lease_id:
@@ -343,7 +381,8 @@ def _collect_display_subagent_tasks(entries: list[dict[str, Any]]) -> dict[str, 
             if not isinstance(stream, dict) or not stream.get("task_id"):
                 continue
             task_id = str(stream["task_id"])
-            args = step.get("args") if isinstance(step.get("args"), dict) else {}
+            raw_args = step.get("args")
+            args: dict[str, Any] = raw_args if isinstance(raw_args, dict) else {}
             description = stream.get("description") or args.get("description") or args.get("prompt")
             status = str(stream.get("status") or ("completed" if step.get("status") == "done" else "running"))
             result_text = step.get("result") or stream.get("text")
@@ -879,7 +918,7 @@ async def get_thread_history(
     thread_id: str,
     limit: int = 20,
     truncate: int = 300,
-    user_id: Annotated[str, Depends(verify_thread_owner)] = None,
+    user_id: Annotated[str | None, Depends(verify_thread_owner)] = None,
     app: Annotated[Any, Depends(get_app)] = None,
 ) -> dict[str, Any]:
     """Compact conversation history for debugging — no raw LangChain noise.
@@ -959,7 +998,7 @@ async def get_thread_history(
 @router.get("/{thread_id}/permissions")
 async def get_thread_permissions(
     thread_id: str,
-    user_id: Annotated[str, Depends(verify_thread_owner)] = None,
+    user_id: Annotated[str | None, Depends(verify_thread_owner)] = None,
     agent: Annotated[Any, Depends(get_thread_agent)] = None,
 ) -> dict[str, Any]:
     await agent.agent.aget_state({"configurable": {"thread_id": thread_id}})
@@ -977,26 +1016,58 @@ async def resolve_thread_permission_request(
     thread_id: str,
     request_id: str,
     payload: ResolvePermissionRequest,
-    user_id: Annotated[str, Depends(verify_thread_owner)] = None,
+    user_id: Annotated[str | None, Depends(verify_thread_owner)] = None,
     agent: Annotated[Any, Depends(get_thread_agent)] = None,
+    app: Annotated[Any, Depends(get_app)] = None,
 ) -> dict[str, Any]:
     await agent.agent.aget_state({"configurable": {"thread_id": thread_id}})
+    pending_requests = {
+        item.get("request_id"): item
+        for item in agent.get_pending_permission_requests(thread_id)
+        if isinstance(item, dict) and item.get("request_id")
+    }
+    pending_request = pending_requests.get(request_id)
+    is_ask_user_question = bool(pending_request and pending_request.get("tool_name") == "AskUserQuestion")
+    answers = _serialize_permission_answers(payload)
+    if is_ask_user_question and payload.decision == "allow" and not answers:
+        raise HTTPException(status_code=400, detail="AskUserQuestion answers are required when approving the request")
     ok = agent.resolve_permission_request(
         request_id,
         decision=payload.decision,
         message=payload.message,
+        answers=answers,
+        annotations=getattr(payload, "annotations", None),
     )
     if not ok:
         raise HTTPException(status_code=404, detail="Permission request not found")
     await agent.agent.apersist_state(thread_id)
-    return {"ok": True, "thread_id": thread_id, "request_id": request_id}
+
+    followup: dict[str, Any] | None = None
+    if is_ask_user_question and payload.decision == "allow" and pending_request is not None and answers is not None:
+        from backend.web.services.message_routing import route_message_to_brain
+
+        followup = await route_message_to_brain(
+            app,
+            thread_id,
+            _format_ask_user_question_followup(
+                pending_request,
+                answers=answers,
+                annotations=getattr(payload, "annotations", None),
+            ),
+            source="owner",
+        )
+
+    response = {"ok": True, "thread_id": thread_id, "request_id": request_id}
+    if followup is not None:
+        response["followup"] = followup
+    return response
 
 
 @router.post("/{thread_id}/permissions/rules")
 async def add_thread_permission_rule(
     thread_id: str,
     payload: ThreadPermissionRuleRequest,
-    user_id: Annotated[str, Depends(verify_thread_owner)] = None,
+    user_id: Annotated[str | None, Depends(verify_thread_owner)] = None,
     agent: Annotated[Any, Depends(get_thread_agent)] = None,
 ) -> dict[str, Any]:
     await agent.agent.aget_state({"configurable": {"thread_id": thread_id}})
@@ -1026,7 +1097,7 @@ async def delete_thread_permission_rule(
     thread_id: str,
     behavior: str,
     tool_name: str,
-    user_id: Annotated[str, Depends(verify_thread_owner)] = None,
+    user_id: Annotated[str | None, Depends(verify_thread_owner)] = None,
     agent: Annotated[Any, Depends(get_thread_agent)] = None,
 ) -> dict[str, Any]:
     await agent.agent.aget_state({"configurable": {"thread_id": thread_id}})
@@ -1052,7 +1123,7 @@ async def delete_thread_permission_rule(
 async def get_thread_runtime(
     thread_id: str,
     stream: bool = False,
-    user_id: Annotated[str, Depends(verify_thread_owner)] = None,
+    user_id: Annotated[str | None, Depends(verify_thread_owner)] = None,
     app: Annotated[Any, Depends(get_app)] = None,
 ) -> dict[str, Any]:
     """Get runtime status for a thread."""
@@ -1256,7 +1327,7 @@ async def stream_thread_events(
 @router.post("/{thread_id}/runs/cancel")
 async def cancel_run(
     thread_id: str,
-    user_id: Annotated[str, Depends(verify_thread_owner)] = None,
+    user_id: Annotated[str | None, Depends(verify_thread_owner)] = None,
     app: Annotated[Any, Depends(get_app)] = None,
 ):
     """Cancel an active run for the given thread."""
@@ -1412,7 +1483,7 @@ async def _notify_task_cancelled(app: Any, thread_id: str, task_id: str, run: An
             agent_id=task_id,
             agent_name=f"cancel-{task_id[:8]}",
         )
-        await emit_fn(
+        emission = emit_fn(
             {
                 "event": "task_done",
                 "data": json.dumps(
@@ -1425,6 +1496,8 @@ async def _notify_task_cancelled(app: Any, thread_id: str, task_id: str, run: An
                 ),
             }
         )
+        if asyncio.iscoroutine(emission):
+            await emission
     except Exception:
         logger.warning("Failed to emit task_done for cancelled task %s", task_id, exc_info=True)
 

@@ -1,6 +1,6 @@
 """Pydantic request models for Leon web API."""
 
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import AliasChoices, BaseModel, Field
 
@@ -55,9 +55,18 @@ class SendMessageRequest(BaseModel):
     attachments: list[str] = Field(default_factory=list)
 
 
+class AskUserAnswerRequest(BaseModel):
+    header: str | None = None
+    question: str | None = None
+    selected_options: list[str] = Field(default_factory=list)
+    free_text: str | None = None
+
+
 class ResolvePermissionRequest(BaseModel):
     decision: Literal["allow", "deny"]
     message: str | None = None
+    answers: list[AskUserAnswerRequest] | None = None
+    annotations: dict[str, Any] | None = None
 
 
 class ThreadPermissionRuleRequest(BaseModel):

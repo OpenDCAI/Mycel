@@ -53,6 +53,26 @@ export interface PermissionRequest {
   message?: string | null;
 }
 
+export interface AskUserQuestionOption {
+  label: string;
+  description: string;
+  preview?: string | null;
+}
+
+export interface AskUserQuestionPrompt {
+  header: string;
+  question: string;
+  options: AskUserQuestionOption[];
+  multiSelect?: boolean;
+}
+
+export interface AskUserAnswer {
+  header?: string;
+  question?: string;
+  selected_options: string[];
+  free_text?: string | null;
+}
+
 export type PermissionRuleBehavior = "allow" | "deny" | "ask";
 
 export interface ThreadPermissionRules {

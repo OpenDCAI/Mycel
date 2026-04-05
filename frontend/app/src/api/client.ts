@@ -14,6 +14,7 @@ import type {
   ThreadPermissions,
   ThreadPermissionRules,
   PermissionRuleBehavior,
+  AskUserAnswer,
   SandboxFileResult,
   SandboxFilesListResult,
   SandboxUploadResult,
@@ -110,10 +111,12 @@ export async function resolveThreadPermission(
   requestId: string,
   decision: "allow" | "deny",
   message?: string,
+  answers?: AskUserAnswer[],
+  annotations?: Record<string, unknown>,
 ): Promise<{ ok: boolean; thread_id: string; request_id: string }> {
   return request(`/api/threads/${encodeURIComponent(threadId)}/permissions/${encodeURIComponent(requestId)}/resolve`, {
     method: "POST",
-    body: JSON.stringify({ decision, message }),
+    body: JSON.stringify({ decision, message, answers, annotations }),
   });
 }
 

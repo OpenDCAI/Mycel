@@ -1646,17 +1646,24 @@ class LeonAgent:
         *,
         decision: str,
         message: str | None = None,
+        answers: list[dict[str, Any]] | None = None,
+        annotations: dict[str, Any] | None = None,
     ) -> bool:
         pending = self._app_state.pending_permission_requests.get(request_id)
         if pending is None:
             return False
 
         resolved = dict(self._app_state.resolved_permission_requests)
-        resolved[request_id] = {
+        payload = {
             **pending,
             "decision": decision,
             "message": message or pending.get("message"),
         }
+        if answers is not None:
+            payload["answers"] = answers
+        if annotations is not None:
+            payload["annotations"] = annotations
+        resolved[request_id] = payload
         still_pending = dict(self._app_state.pending_permission_requests)
         still_pending.pop(request_id, None)
         self._app_state.set_state(

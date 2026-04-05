@@ -13,6 +13,7 @@ import pytest
 from core.agents.service import (
     AGENT_DISALLOWED,
     AGENT_SCHEMA,
+    ASK_USER_QUESTION_SCHEMA,
     EXPLORE_ALLOWED,
     TASK_OUTPUT_SCHEMA,
     AgentService,
@@ -1457,3 +1458,68 @@ def test_task_output_schema_exposes_block_and_timeout():
     assert properties["block"]["default"] is True
     assert properties["timeout"]["default"] == 30000
     assert properties["timeout"]["maximum"] == 600000
+
+
+@pytest.mark.asyncio
+async def test_ask_user_question_requests_structured_question_payload(tmp_path):
+    registry = ToolRegistry()
+    _make_service(tmp_path, tool_registry=registry)
+    runner = ToolRunner(registry=registry)
+    app_state = AppState()
+    captured: dict[str, object] = {}
+
+    def request_permission(name, args, context, request, message):
+        captured["name"] = name
+        captured["args"] = dict(args)
+        captured["message"] = message
+        return {"request_id": "ask-1"}
+
+    request = SimpleNamespace(
+        tool_call={
+            "name": "AskUserQuestion",
+            "args": {
+                "questions": [
+                    {
+                        "header": "Color",
+                        "question": "Which color should I use?",
+                        "options": [
+                            {"label": "Blue", "description": "Use blue"},
+                            {"label": "Green", "description": "Use green"},
+                        ],
+                    }
+                ]
+            },
+            "id": "tc-1",
+        },
+        state=ToolUseContext(
+            bootstrap=BootstrapConfig(workspace_root=tmp_path, model_name="gpt-test"),
+            get_app_state=app_state.get_state,
+            set_app_state=app_state.set_state,
+            request_permission=request_permission,
+        ),
+    )
+
+    result = await runner.awrap_tool_call(request, AsyncMock())
+
+    meta = result.additional_kwargs["tool_result_meta"]
+    assert meta["kind"] == "permission_request"
+    assert meta["request_id"] == "ask-1"
+    assert result.content == "User input required to continue."
+    assert captured["name"] == "AskUserQuestion"
+    assert captured["message"] == "Answer questions?"
+    assert captured["args"] == {
+        "questions": [
+            {
+                "header": "Color",
+                "question": "Which color should I use?",
+                "options": [
+                    {"label": "Blue", "description": "Use blue"},
+                    {"label": "Green", "description": "Use green"},
+                ],
+            }
+        ]
+    }
+
+
+def test_ask_user_question_schema_requires_questions():
+    assert ASK_USER_QUESTION_SCHEMA["parameters"]["required"] == ["questions"]
