@@ -159,3 +159,37 @@ def test_filesystem_wrapper_auto_resumes_paused_lease_before_listing():
     assert resume_calls == [("thread-paused", "auto_resume")]
     assert [entry.name for entry in result.entries] == ["demo.txt"]
     assert result.error is None
+
+
+def test_filesystem_wrapper_derives_remote_file_size_from_parent_listing():
+    class _Lease:
+        observed_state = "running"
+
+        def ensure_active_instance(self, _provider):
+            return SimpleNamespace(instance_id="inst-1")
+
+    class _RemoteProvider:
+        def list_dir(self, instance_id: str, path: str):
+            assert instance_id == "inst-1"
+            assert path == "/home/daytona"
+            return [
+                {"name": "demo.txt", "type": "file", "size": 42},
+                {"name": "nested", "type": "directory", "size": 0},
+            ]
+
+    class _RemoteSession:
+        def __init__(self):
+            self.thread_id = "thread-size"
+            self.terminal = _DummyTerminal()
+            self.lease = _Lease()
+            self.runtime = SimpleNamespace(provider=_RemoteProvider())
+            self.touches = 0
+
+        def touch(self):
+            self.touches += 1
+
+    capability = SandboxCapability(_RemoteSession())
+
+    assert capability.fs.file_size("/home/daytona/demo.txt") == 42
+    assert capability.fs.file_size("/home/daytona/missing.txt") is None
+    assert capability.fs.file_size("/") is None

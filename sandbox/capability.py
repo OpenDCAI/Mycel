@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import shlex
 import uuid
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import TYPE_CHECKING
 
 from sandbox.interfaces.executor import BaseExecutor
@@ -258,7 +258,30 @@ class _FileSystemWrapper(FileSystemBackend):
         return None
 
     def file_size(self, path: str) -> int | None:
-        """Not available for remote sandbox."""
+        """Best-effort size lookup via parent directory listing."""
+        self._session.touch()
+        provider = self._get_provider()
+        instance_id = self._get_instance_id()
+
+        target = PurePosixPath(path)
+        if not target.name:
+            return None
+
+        parent = str(target.parent) or "/"
+        try:
+            entries = provider.list_dir(instance_id, parent)
+        except Exception:
+            return None
+
+        for entry in entries or []:
+            if entry.get("name") != target.name:
+                continue
+            size = entry.get("size")
+            if isinstance(size, int):
+                return size
+            if isinstance(size, float):
+                return int(size)
+            return None
         return None
 
     def is_dir(self, path: str) -> bool:

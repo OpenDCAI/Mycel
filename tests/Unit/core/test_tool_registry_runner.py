@@ -528,6 +528,52 @@ class TestToolRunnerErrorNormalization:
         assert result.content == expected
 
     @pytest.mark.asyncio
+    async def test_filesystem_service_remote_special_file_fails_before_download_when_size_known(self):
+        class RemoteLargePdfBackend(FileSystemBackend):
+            is_remote = True
+
+            def read_file(self, path: str) -> FileReadResult:
+                raise AssertionError("read_file should not run for oversize remote preflight")
+
+            def write_file(self, path: str, content: str) -> FileWriteResult:
+                return FileWriteResult(success=True)
+
+            def file_exists(self, path: str) -> bool:
+                return True
+
+            def file_mtime(self, path: str) -> float | None:
+                return None
+
+            def file_size(self, path: str) -> int | None:
+                return 11 * 1024 * 1024
+
+            def is_dir(self, path: str) -> bool:
+                return False
+
+            def list_dir(self, path: str) -> DirListResult:
+                return DirListResult(entries=[])
+
+            def download_bytes(self, path: str) -> bytes:
+                raise AssertionError("download_bytes should not run for oversize remote preflight")
+
+        registry = ToolRegistry()
+        FileSystemService(
+            registry=registry,
+            workspace_root="/workspace",
+            backend=RemoteLargePdfBackend(),
+        )
+
+        runner = _make_runner(registry.list_all())
+        req = _make_tool_call_request("Read", {"file_path": "/workspace/huge.pdf"})
+        req.state = MagicMock()
+
+        result = await runner.awrap_tool_call(req, AsyncMock())
+
+        assert "ToolValidationError" in result.content
+        assert "too large" in result.content.lower()
+        assert result.additional_kwargs["tool_result_meta"]["error_code"] == "FILE_TOO_LARGE"
+
+    @pytest.mark.asyncio
     async def test_filesystem_service_read_accepts_pdf_pages_argument(self, tmp_path):
         pdf_bytes = b"%PDF-1.4\nnot-a-real-pdf\n"
         local_pdf = tmp_path / "paged.pdf"
