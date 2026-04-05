@@ -754,6 +754,10 @@ class SandboxManager:
         for terminal in terminals:
             session = self.session_manager.get(thread_id, terminal.terminal_id)
             if session:
+                session.lease = lease
+                runtime = getattr(session, "runtime", None)
+                if runtime is not None:
+                    runtime.lease = lease
                 self.session_manager.resume(session.session_id)
                 resumed_any = True
 

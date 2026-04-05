@@ -373,6 +373,41 @@ def test_get_sandbox_auto_resumes_paused_lease_when_reconstructing_session():
     assert resume_calls == [("thread-1", "auto_resume")]
 
 
+def test_resume_session_rebinds_live_session_lease_after_resume():
+    manager = object.__new__(SandboxManager)
+    terminal = SimpleNamespace(terminal_id="term-1", lease_id="lease-1")
+    resumed_lease = SimpleNamespace(
+        lease_id="lease-1",
+        observed_state="running",
+        get_instance=lambda: SimpleNamespace(instance_id="instance-1"),
+        resume_instance=lambda _provider, source="user_resume": True,
+    )
+    stale_lease = SimpleNamespace(lease_id="lease-1", observed_state="paused")
+    runtime = SimpleNamespace(lease=stale_lease)
+    live_session = SimpleNamespace(
+        session_id="sess-1",
+        terminal=terminal,
+        lease=stale_lease,
+        runtime=runtime,
+        status="paused",
+    )
+    manager.provider = SimpleNamespace(name="local")
+    manager._get_thread_terminals = lambda _thread_id: [terminal]
+    manager._get_thread_lease = lambda _thread_id: resumed_lease
+    manager._sync_to_sandbox = lambda *_args, **_kwargs: None
+    manager._ensure_chat_session = lambda _thread_id: None
+    manager.session_manager = SimpleNamespace(
+        get=lambda _thread_id, _terminal_id: live_session,
+        resume=lambda _session_id: setattr(live_session, "status", "active"),
+    )
+
+    ok = manager.resume_session("thread-1", source="auto_resume")
+
+    assert ok is True
+    assert live_session.lease is resumed_lease
+    assert runtime.lease is resumed_lease
+
+
 def test_upgrade_to_daytona_volume_uses_runtime_thread_repo_for_member_lookup(monkeypatch, tmp_path):
     manager = object.__new__(SandboxManager)
     manager.provider = _FakeDaytonaProvider()
