@@ -176,9 +176,13 @@ export function useDisplayDeltas(
   const { threadId, onUpdate, displaySeq, stream } = deps;
 
   const [sendPending, setSendPending] = useState(false);
+  const [displayRunState, setDisplayRunState] = useState<{
+    threadId: string;
+    state: "unknown" | "open" | "closed";
+  }>({ threadId, state: "unknown" });
   const { isRunning: streamIsRunning, runtimeStatus, subscribe } = stream;
-
-  const isRunning = streamIsRunning || sendPending;
+  const currentDisplayRunState = displayRunState.threadId === threadId ? displayRunState.state : "unknown";
+  const isRunning = sendPending || (currentDisplayRunState === "unknown" ? streamIsRunning : currentDisplayRunState === "open");
 
   useEffect(() => {
     if (!streamIsRunning) return;
@@ -205,11 +209,18 @@ export function useDisplayDeltas(
       // @@@display-seq-dedup — skip stale deltas replayed from ring buffer
       const deltaSeq = delta._display_seq;
       if (typeof deltaSeq === "number" && deltaSeq <= displaySeqRef.current) return;
+      if (delta.type === "append_entry" && delta.entry.role === "assistant" && delta.entry.streaming !== false) {
+        setSendPending(false);
+        setDisplayRunState({ threadId, state: "open" });
+      }
+      if (delta.type === "finalize_turn") {
+        setDisplayRunState({ threadId, state: "closed" });
+      }
       flushSync(() => {
         onUpdateRef.current((prev) => applyDelta(prev, delta));
       });
     });
-  }, [subscribe]);
+  }, [subscribe, threadId]);
 
   const handleSendMessage = useCallback(
     async (message: string, attachments?: string[]) => {
