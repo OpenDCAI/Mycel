@@ -68,11 +68,7 @@ class SQLiteQueueRepo:
                 (thread_id,),
             ).fetchone()
             self._conn.commit()
-            return (
-                QueueItem(content=row[0], notification_type=row[1], source=row[2], sender_id=row[3], sender_name=row[4])
-                if row
-                else None
-            )
+            return QueueItem(content=row[0], notification_type=row[1], source=row[2], sender_id=row[3], sender_name=row[4]) if row else None
 
     def drain_all(self, thread_id: str) -> list[QueueItem]:
         with self._lock:
@@ -83,8 +79,7 @@ class SQLiteQueueRepo:
             if has_row is None:
                 return []
             rows = self._conn.execute(
-                "DELETE FROM message_queue WHERE thread_id = ?"
-                " RETURNING content, notification_type, id, source, sender_id, sender_name",
+                "DELETE FROM message_queue WHERE thread_id = ? RETURNING content, notification_type, id, source, sender_id, sender_name",
                 (thread_id,),
             ).fetchall()
             self._conn.commit()
