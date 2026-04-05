@@ -115,6 +115,7 @@ function applyDelta(entries: ChatEntry[], delta: DisplayDelta): ChatEntry[] {
           if (seg.step.subagent_stream) {
             seg.step = {
               ...seg.step,
+              status: patch.subagent_stream_status === "completed" ? "done" : seg.step.status,
               subagent_stream: { ...seg.step.subagent_stream, status: patch.subagent_stream_status as "completed" },
             };
           }
