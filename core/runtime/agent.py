@@ -74,6 +74,7 @@ from core.tools.command.hooks.dangerous_commands import DangerousCommandsHook  #
 from core.tools.command.hooks.file_access_logger import FileAccessLoggerHook  # noqa: E402
 from core.tools.command.hooks.file_permission import FilePermissionHook  # noqa: E402
 from core.tools.command.service import CommandService  # noqa: E402
+from core.tools.cron.service import CronToolService  # noqa: E402
 from core.tools.filesystem.service import FileSystemService  # noqa: E402
 from core.tools.search.service import SearchService  # noqa: E402
 from core.tools.skills.service import SkillsService  # noqa: E402
@@ -1156,6 +1157,11 @@ class LeonAgent:
         self._task_service = TaskService(
             registry=self._tool_registry,
             workspace_root=self.workspace_root,
+        )
+
+        # Cron tools (DEFERRED - backed by existing panel cron_jobs substrate)
+        self._cron_tool_service = CronToolService(
+            registry=self._tool_registry,
         )
 
         # ToolSearch (INLINE - always available for discovering DEFERRED tools)

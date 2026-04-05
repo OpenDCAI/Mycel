@@ -23,6 +23,7 @@ class ToolGroup(StrEnum):
     AGENT = "agent"
     CHAT = "chat"
     TODO = "todo"
+    CRON = "cron"
     SKILLS = "skills"
     SYSTEM = "system"
     TASKBOARD = "taskboard"
@@ -74,6 +75,10 @@ TOOLS: list[ToolDef] = [
     ToolDef(name="TaskGet", desc="获取任务详情", group=ToolGroup.TODO, mode=ToolMode.DEFERRED),
     ToolDef(name="TaskList", desc="列出所有任务", group=ToolGroup.TODO, mode=ToolMode.DEFERRED),
     ToolDef(name="TaskUpdate", desc="更新任务状态", group=ToolGroup.TODO, mode=ToolMode.DEFERRED),
+    # cron — backed by existing cron_jobs substrate; off by default until explicitly enabled
+    ToolDef(name="CronCreate", desc="创建定时任务", group=ToolGroup.CRON, mode=ToolMode.DEFERRED, default=False),
+    ToolDef(name="CronDelete", desc="删除定时任务", group=ToolGroup.CRON, mode=ToolMode.DEFERRED, default=False),
+    ToolDef(name="CronList", desc="列出定时任务", group=ToolGroup.CRON, mode=ToolMode.DEFERRED, default=False),
     # skills
     ToolDef(name="load_skill", desc="加载 Skill", group=ToolGroup.SKILLS),
     # system
