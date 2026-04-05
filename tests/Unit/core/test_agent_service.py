@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
@@ -25,11 +26,17 @@ class _FakeRegistry:
 
 
 class _FakeAgentRegistry:
+    def __init__(self) -> None:
+        self._latest_by_name_parent: dict[tuple[str, str | None], object] = {}
+
     async def register(self, entry):
         self.entry = entry
 
     async def update_status(self, agent_id: str, status: str):
         self.last_status = (agent_id, status)
+
+    async def get_latest_by_name_and_parent(self, name: str, parent_agent_id: str | None):
+        return self._latest_by_name_parent.get((name, parent_agent_id))
 
 
 class _FakeThreadRepo:
@@ -167,9 +174,63 @@ def _make_parent_context(tmp_path: Path, model_name: str = "gpt-parent") -> Tool
     )
 
 
+def _agent_tool_json(result) -> dict:
+    content = getattr(result, "content", result)
+    return json.loads(content)
+
+
 async def _sleep_forever():
     while True:
         await asyncio.sleep(3600)
+
+
+@pytest.mark.asyncio
+async def test_task_output_reports_running_command_honestly(tmp_path):
+    service = AgentService(
+        tool_registry=_FakeRegistry(),
+        agent_registry=_FakeAgentRegistry(),
+        workspace_root=tmp_path,
+        model_name="gpt-test",
+    )
+    async_cmd = _FakeAsyncCommand()
+    service._tasks["cmd_test123"] = _BashBackgroundRun(async_cmd, "echo hello")
+
+    payload = json.loads(await service._handle_task_output("cmd_test123"))
+
+    assert payload == {
+        "task_id": "cmd_test123",
+        "status": "running",
+        "message": "Command is still running.",
+    }
+
+
+@pytest.mark.asyncio
+async def test_task_output_keeps_agent_running_message_for_agent_tasks(tmp_path):
+    service = AgentService(
+        tool_registry=_FakeRegistry(),
+        agent_registry=_FakeAgentRegistry(),
+        workspace_root=tmp_path,
+        model_name="gpt-test",
+    )
+    task = asyncio.create_task(_sleep_forever())
+    service._tasks["task_agent123"] = _RunningTask(
+        task=task,
+        agent_id="agent-1",
+        thread_id="thread-1",
+    )
+
+    try:
+        payload = json.loads(await service._handle_task_output("task_agent123"))
+    finally:
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+
+    assert payload == {
+        "task_id": "task_agent123",
+        "status": "running",
+        "message": "Agent is still running.",
+    }
 
 
 @pytest.mark.asyncio
@@ -1136,7 +1197,7 @@ async def test_handle_agent_registers_subagent_thread_metadata_before_return(mon
             name="worker-1",
             run_in_background=True,
         )
-        payload = __import__("json").loads(raw)
+        payload = _agent_tool_json(raw)
         child_thread_id = payload["thread_id"]
 
         child_thread = thread_repo.get_by_id(child_thread_id)
@@ -1155,6 +1216,110 @@ async def test_handle_agent_registers_subagent_thread_metadata_before_return(mon
     finally:
         await service.cleanup_background_runs()
         set_current_thread_id("")
+
+
+@pytest.mark.asyncio
+async def test_handle_agent_reuses_existing_completed_child_thread_for_same_parent_and_name(monkeypatch, tmp_path):
+    def fake_create_leon_agent(*, model_name, workspace_root, **kwargs):
+        return _FakeChildAgent(Path(workspace_root), model_name)
+
+    monkeypatch.setattr("core.runtime.agent.create_leon_agent", fake_create_leon_agent)
+
+    thread_repo = _FakeThreadRepo(
+        rows={
+            "parent-thread": {
+                "id": "parent-thread",
+                "member_id": "member-1",
+                "sandbox_type": "daytona_selfhost",
+                "cwd": "/home/daytona",
+                "model": "gpt-parent",
+                "is_main": True,
+                "branch_index": 0,
+                "created_at": 1.0,
+            },
+            "subagent-existing": {
+                "id": "subagent-existing",
+                "member_id": "member-1",
+                "sandbox_type": "daytona_selfhost",
+                "cwd": "/home/daytona",
+                "model": "gpt-test",
+                "is_main": False,
+                "branch_index": 1,
+                "created_at": 2.0,
+            },
+        }
+    )
+    entity_repo = _FakeEntityRepo()
+    entity_repo.create(
+        EntityRow(
+            id="subagent-existing",
+            member_id="member-1",
+            thread_id="subagent-existing",
+            name="worker-1",
+            type="agent",
+            created_at=2.0,
+        )
+    )
+    registry = _FakeAgentRegistry()
+    registry._latest_by_name_parent[("worker-1", "parent-thread")] = SimpleNamespace(
+        agent_id="old-agent",
+        name="worker-1",
+        thread_id="subagent-existing",
+        status="completed",
+        parent_agent_id="parent-thread",
+        subagent_type="general",
+    )
+    service = AgentService(
+        tool_registry=_FakeRegistry(),
+        agent_registry=registry,
+        workspace_root=tmp_path,
+        model_name="gpt-test",
+        thread_repo=thread_repo,
+        entity_repo=entity_repo,
+        member_repo=_FakeMemberRepo({"member-1": "Toad"}),
+    )
+
+    set_current_thread_id("parent-thread")
+    try:
+        raw = await service._handle_agent(
+            prompt="continue work",
+            name="worker-1",
+            run_in_background=True,
+        )
+
+        payload = _agent_tool_json(raw)
+        assert payload["thread_id"] == "subagent-existing"
+        assert len(thread_repo.created) == 0
+    finally:
+        await service.cleanup_background_runs()
+        set_current_thread_id("")
+
+
+@pytest.mark.asyncio
+async def test_agent_tool_blocking_result_preserves_child_identity_metadata(monkeypatch, tmp_path):
+    def fake_create_leon_agent(*, model_name, workspace_root, **kwargs):
+        return _FakeChildAgent(Path(workspace_root), model_name)
+
+    monkeypatch.setattr("core.runtime.agent.create_leon_agent", fake_create_leon_agent)
+
+    registry = ToolRegistry()
+    AgentService(
+        tool_registry=registry,
+        agent_registry=_FakeAgentRegistry(),
+        workspace_root=tmp_path,
+        model_name="gpt-test",
+    )
+    runner = ToolRunner(registry=registry)
+    request = SimpleNamespace(
+        tool_call={"name": "Agent", "args": {"prompt": "inspect"}, "id": "tc-1"},
+        state=_make_parent_context(tmp_path),
+    )
+
+    result = await runner.awrap_tool_call(request, AsyncMock())
+
+    meta = result.additional_kwargs["tool_result_meta"]
+    assert meta["task_id"]
+    assert meta["subagent_thread_id"].startswith("subagent-")
 
 
 @pytest.mark.asyncio

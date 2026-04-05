@@ -26,6 +26,7 @@ from core.runtime.middleware.queue.formatters import (
 )
 from core.runtime.registry import ToolEntry, ToolMode, ToolRegistry
 from core.runtime.state import ToolUseContext
+from core.runtime.tool_result import tool_error, tool_success
 from storage.contracts import EntityRow
 
 logger = logging.getLogger(__name__)
@@ -390,7 +391,19 @@ class AgentService:
     ) -> None:
         if self._thread_repo is None or self._entity_repo is None or self._member_repo is None or not parent_thread_id:
             return
-        if self._thread_repo.get_by_id(thread_id) is not None:
+        existing_thread = self._thread_repo.get_by_id(thread_id)
+        if existing_thread is not None:
+            if self._entity_repo.get_by_thread_id(thread_id) is None:
+                self._entity_repo.create(
+                    EntityRow(
+                        id=thread_id,
+                        type="agent",
+                        member_id=existing_thread["member_id"],
+                        name=agent_name,
+                        thread_id=thread_id,
+                        created_at=time.time(),
+                    )
+                )
             return
 
         parent_thread = self._thread_repo.get_by_id(parent_thread_id)
@@ -440,14 +453,18 @@ class AgentService:
         max_turns: int | None = None,
         fork_context: bool = False,
         tool_context: ToolUseContext | None = None,
-    ) -> str:
+    ) -> Any:
         """Spawn an independent LeonAgent and run it with the given prompt."""
         from sandbox.thread_context import get_current_thread_id
 
         task_id = uuid.uuid4().hex[:8]
         agent_name = name or f"agent-{task_id}"
-        thread_id = f"subagent-{task_id}"
         parent_thread_id = get_current_thread_id()
+        existing_child = None
+        lookup_existing_child = getattr(self._agent_registry, "get_latest_by_name_and_parent", None)
+        if name and parent_thread_id and lookup_existing_child is not None:
+            existing_child = await lookup_existing_child(name, parent_thread_id)
+        thread_id = existing_child.thread_id if existing_child is not None and existing_child.status != "running" else f"subagent-{task_id}"
 
         # Register in AgentRegistry immediately
         entry = AgentEntry(
@@ -486,25 +503,46 @@ class AgentService:
             # True fire-and-forget: track in self._tasks for TaskOutput/TaskStop
             running = _RunningTask(task=task, agent_id=task_id, thread_id=thread_id, description=description or "")
             self._tasks[task_id] = running
-            return json.dumps(
-                {
+            return tool_success(
+                json.dumps(
+                    {
+                        "task_id": task_id,
+                        "agent_name": agent_name,
+                        "thread_id": thread_id,
+                        "status": "running",
+                        "message": "Agent started in background. Use TaskOutput to get result.",
+                    },
+                    ensure_ascii=False,
+                ),
+                metadata={
                     "task_id": task_id,
-                    "agent_name": agent_name,
-                    "thread_id": thread_id,
-                    "status": "running",
-                    "message": "Agent started in background. Use TaskOutput to get result.",
+                    "subagent_thread_id": thread_id,
+                    "description": description or agent_name,
                 },
-                ensure_ascii=False,
             )
 
         # Default: parent blocks until sub-agent completes (does not block frontend event loop)
         try:
             result = await task
             await self._agent_registry.update_status(task_id, "completed")
-            return result
+            return tool_success(
+                result,
+                metadata={
+                    "task_id": task_id,
+                    "subagent_thread_id": thread_id,
+                    "description": description or agent_name,
+                },
+            )
         except Exception as e:
             await self._agent_registry.update_status(task_id, "error")
-            return f"<tool_use_error>Agent failed: {e}</tool_use_error>"
+            return tool_error(
+                f"<tool_use_error>Agent failed: {e}</tool_use_error>",
+                metadata={
+                    "task_id": task_id,
+                    "subagent_thread_id": thread_id,
+                    "description": description or agent_name,
+                },
+            )
 
     async def _run_agent(
         self,
@@ -936,11 +974,12 @@ class AgentService:
             return f"Error: task '{task_id}' not found"
 
         if not running.is_done:
+            message = "Command is still running." if isinstance(running, _BashBackgroundRun) else "Agent is still running."
             return json.dumps(
                 {
                     "task_id": task_id,
                     "status": "running",
-                    "message": "Agent is still running.",
+                    "message": message,
                 },
                 ensure_ascii=False,
             )
