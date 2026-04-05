@@ -143,6 +143,7 @@ async def wechat_routing_targets(
             "avatar_url": avatar_url(t.get("member_id"), bool(t.get("member_avatar"))),
         }
         for t in raw_threads
+        if not str(t.get("id", "")).startswith("subagent-")
     ]
 
     raw_chats = app.state.chat_service.list_chats_for_entity(entity_id)
