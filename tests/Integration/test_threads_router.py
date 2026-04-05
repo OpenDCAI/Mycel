@@ -369,35 +369,33 @@ async def test_create_thread_route_passes_local_cwd_into_sandbox_bootstrap():
 
 @pytest.mark.asyncio
 async def test_list_threads_hides_internal_subagent_threads():
-    app = SimpleNamespace(
-        state=SimpleNamespace(
-            thread_repo=SimpleNamespace(
-                list_by_owner_user_id=lambda user_id: [
-                    {
-                        "id": "main-thread",
-                        "sandbox_type": "local",
-                        "member_name": "Toad",
-                        "member_id": "member-1",
-                        "entity_name": "Toad",
-                        "branch_index": 0,
-                        "is_main": True,
-                        "member_avatar": None,
-                    },
-                    {
-                        "id": "subagent-deadbeef",
-                        "sandbox_type": "local",
-                        "member_name": "Toad",
-                        "member_id": "member-1",
-                        "entity_name": "worker-1",
-                        "branch_index": 1,
-                        "is_main": False,
-                        "member_avatar": None,
-                    },
-                ]
-            ),
-            agent_pool={},
-            thread_last_active={},
-        )
+    app = _make_threads_app(
+        thread_repo=SimpleNamespace(
+            list_by_owner_user_id=lambda user_id: [
+                {
+                    "id": "main-thread",
+                    "sandbox_type": "local",
+                    "member_name": "Toad",
+                    "member_id": "member-1",
+                    "entity_name": "Toad",
+                    "branch_index": 0,
+                    "is_main": True,
+                    "member_avatar": None,
+                },
+                {
+                    "id": "subagent-deadbeef",
+                    "sandbox_type": "local",
+                    "member_name": "Toad",
+                    "member_id": "member-1",
+                    "entity_name": "worker-1",
+                    "branch_index": 1,
+                    "is_main": False,
+                    "member_avatar": None,
+                },
+            ]
+        ),
+        agent_pool={},
+        thread_last_active={},
     )
 
     payload = await threads_router.list_threads("owner-1", app)
@@ -407,15 +405,7 @@ async def test_list_threads_hides_internal_subagent_threads():
 
 @pytest.mark.asyncio
 async def test_create_thread_route_rejects_unavailable_provider():
-    app = SimpleNamespace(
-        state=SimpleNamespace(
-            member_repo=_FakeMemberRepo(),
-            thread_repo=_FakeThreadRepo(),
-            entity_repo=_FakeEntityRepo(),
-            thread_sandbox={},
-            thread_cwd={},
-        )
-    )
+    app = _make_threads_app(thread_sandbox={}, thread_cwd={})
     payload = CreateThreadRequest.model_validate(
         {
             "member_id": "member-1",
@@ -437,15 +427,7 @@ async def test_create_thread_route_rejects_unavailable_provider():
 
 @pytest.mark.asyncio
 async def test_create_thread_route_rejects_unavailable_provider_for_existing_lease():
-    app = SimpleNamespace(
-        state=SimpleNamespace(
-            member_repo=_FakeMemberRepo(),
-            thread_repo=_FakeThreadRepo(),
-            entity_repo=_FakeEntityRepo(),
-            thread_sandbox={},
-            thread_cwd={},
-        )
-    )
+    app = _make_threads_app(thread_sandbox={}, thread_cwd={})
     payload = CreateThreadRequest.model_validate(
         {
             "member_id": "member-1",
@@ -474,13 +456,10 @@ async def test_create_thread_route_rejects_unavailable_provider_for_existing_lea
 
 @pytest.mark.asyncio
 async def test_stream_thread_events_requires_token():
-    app = SimpleNamespace(
-        state=SimpleNamespace(
-            auth_service=_FakeAuthService(),
-            thread_repo=SimpleNamespace(get_by_id=lambda _thread_id: None),
-            member_repo=_FakeMemberRepo(),
-            thread_event_buffers={},
-        )
+    app = _make_threads_app(
+        auth_service=_FakeAuthService(),
+        thread_repo=SimpleNamespace(get_by_id=lambda _thread_id: None),
+        thread_event_buffers={},
     )
 
     with pytest.raises(threads_router.HTTPException) as exc_info:
@@ -499,13 +478,10 @@ async def test_stream_thread_events_requires_token():
 async def test_stream_thread_events_verifies_token_before_owner_check():
     auth_service = _FakeAuthService()
     thread_repo = SimpleNamespace(get_by_id=lambda _thread_id: {"member_id": "member-1"})
-    app = SimpleNamespace(
-        state=SimpleNamespace(
-            auth_service=auth_service,
-            thread_repo=thread_repo,
-            member_repo=_FakeMemberRepo(),
-            thread_event_buffers={},
-        )
+    app = _make_threads_app(
+        auth_service=auth_service,
+        thread_repo=thread_repo,
+        thread_event_buffers={},
     )
 
     response = await threads_router.stream_thread_events(
