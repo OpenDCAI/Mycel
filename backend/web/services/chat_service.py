@@ -10,9 +10,9 @@ from typing import Any
 
 from backend.web.utils.serializers import avatar_url
 from storage.contracts import (
-    ChatParticipantRepo,
     ChatMessageRepo,
     ChatMessageRow,
+    ChatParticipantRepo,
     ChatRepo,
     ChatRow,
     DeliveryResolver,

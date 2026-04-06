@@ -8,7 +8,6 @@ from __future__ import annotations
 #   • current user is excluded
 #   • other humans and agents are all included (no branch filtering)
 #   • thread metadata (is_main, branch_index) is attached from thread_repo
-
 from types import SimpleNamespace
 
 import pytest

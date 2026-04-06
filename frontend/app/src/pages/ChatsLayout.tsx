@@ -38,11 +38,11 @@ function NewChatDialog({ onClose, onCreated }: { onClose: () => void; onCreated:
   }, []);
 
   const filtered = search
-    ? entities.filter((e) => {
+    ? members.filter((e) => {
       const haystack = [e.name, e.owner_name || "", e.member_name || ""].join(" ").toLowerCase();
       return haystack.includes(search.toLowerCase());
     })
-    : entities;
+    : members;
 
   const toggle = (id: string) => {
     setSelected(prev => {
@@ -53,7 +53,7 @@ function NewChatDialog({ onClose, onCreated }: { onClose: () => void; onCreated:
   };
 
   const isGroup = selected.size >= 2;
-  const selectedEntities = entities.filter(e => selected.has(e.id));
+  const selectedEntities = members.filter(e => selected.has(e.id));
 
   const handleCreate = useCallback(async () => {
     if (!myUserId || selected.size === 0 || creating) return;
@@ -116,7 +116,7 @@ function NewChatDialog({ onClose, onCreated }: { onClose: () => void; onCreated:
         <div className="max-h-56 overflow-y-auto px-2 pb-2">
           {filtered.length === 0 ? (
             <p className="text-xs text-muted-foreground text-center py-4">
-              {entities.length === 0 ? "暂无其他用户" : "无匹配结果"}
+              {members.length === 0 ? "暂无其他用户" : "无匹配结果"}
             </p>
           ) : filtered.map(e => {
             const isSelected = selected.has(e.id);

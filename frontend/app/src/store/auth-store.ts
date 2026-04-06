@@ -63,7 +63,7 @@ export const useAuthStore = create<AuthState>()(
       token: null,
       user: null,
       agent: null,
-      userId: DEV_SKIP_AUTH ? "dev-user" : null,
+      userId: null,
       setupInfo: null,
 
       login: async (identifier, password) => {

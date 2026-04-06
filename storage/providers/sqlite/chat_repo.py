@@ -6,7 +6,7 @@ import sqlite3
 import threading
 from pathlib import Path
 
-from storage.contracts import ChatParticipantRow, ChatMessageRow, ChatRow
+from storage.contracts import ChatMessageRow, ChatParticipantRow, ChatRow
 from storage.providers.sqlite.connection import create_connection
 from storage.providers.sqlite.kernel import SQLiteDBRole, resolve_role_db_path
 from storage.providers.sqlite.kernel import retry_on_locked as _retry_on_locked
@@ -188,7 +188,7 @@ class SQLiteChatParticipantRepo:
         except sqlite3.OperationalError:
             pass
         # @@@chat-participant-index — speeds up find_chat_between and list_chats_for_user
-        self._conn.execute("CREATE INDEX IF NOT EXISTS idx_chat_entities_user ON chat_entities(user_id, chat_id)")
+        self._conn.execute("CREATE INDEX IF NOT EXISTS idx_chat_participants_user ON chat_participants(user_id, chat_id)")
         self._conn.commit()
 
 

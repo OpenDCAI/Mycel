@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from storage.contracts import ChatParticipantRow, ChatMessageRow, ChatRow
+from storage.contracts import ChatMessageRow, ChatParticipantRow, ChatRow
 from storage.providers.supabase import _query as q
 
 _REPO_CHAT = "chat repo"

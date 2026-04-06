@@ -29,7 +29,6 @@ export interface ThreadSummary {
   updated_at?: string;
   running?: boolean;
   member_id?: string;
-  member_name?: string;
   /** Canonical thread/member display name. Main: {member}. Child: {member} · 分身N */
   member_name?: string;
   branch_index?: number;

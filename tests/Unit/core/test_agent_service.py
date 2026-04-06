@@ -27,6 +27,7 @@ from sandbox.manager import SandboxManager
 from sandbox.providers.local import LocalSessionProvider
 from sandbox.thread_context import get_current_thread_id, set_current_messages, set_current_thread_id
 
+
 class _FakeRegistry:
     def register(self, entry):
         self.last_entry = entry

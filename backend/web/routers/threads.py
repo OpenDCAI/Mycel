@@ -295,7 +295,6 @@ def _thread_payload(app: Any, thread_id: str, sandbox_type: str) -> dict[str, An
         "sandbox": sandbox_type,
         "member_id": member.id,
         "member_name": member.name,
-        "member_name": member.name,
         "branch_index": thread["branch_index"],
         "sidebar_label": sidebar_label(is_main=thread["is_main"], branch_index=thread["branch_index"]),
         "avatar_url": avatar_url(member.id, bool(member.avatar)),
@@ -629,7 +628,6 @@ def _create_owned_thread(
         "sandbox": sandbox_type,
         "member_id": agent_member_id,
         "member_name": agent_member.name,
-        "member_name": agent_member.name,
         "branch_index": branch_index,
         "sidebar_label": sidebar_label(is_main=resolved_is_main, branch_index=branch_index),
         "avatar_url": avatar_url(agent_member_id, bool(agent_member.avatar)),
@@ -745,7 +743,6 @@ async def list_threads(
                 "sandbox": t.get("sandbox_type", "local"),
                 "member_name": t.get("member_name"),
                 "member_id": t.get("member_id"),
-                "member_name": t.get("member_name"),
                 "branch_index": t.get("branch_index"),
                 "sidebar_label": sidebar_label(
                     is_main=bool(t.get("is_main", False)),

@@ -4,7 +4,7 @@ from tests.fakes.supabase import FakeSupabaseClient
 
 def test_supabase_chat_message_repo_has_unread_mention_tracks_mentions_after_last_read():
     tables = {
-        "chat_entities": [
+        "chat_participants": [
             {
                 "chat_id": "chat-1",
                 "user_id": "entity-target",
@@ -54,7 +54,7 @@ def test_supabase_chat_message_repo_has_unread_mention_tracks_mentions_after_las
 
 def test_supabase_chat_message_repo_has_unread_mention_false_without_matching_unread_mentions():
     tables = {
-        "chat_entities": [
+        "chat_participants": [
             {
                 "chat_id": "chat-1",
                 "user_id": "entity-target",
@@ -80,7 +80,7 @@ def test_supabase_chat_message_repo_has_unread_mention_false_without_matching_un
 
 def test_supabase_chat_message_repo_has_unread_mention_false_without_membership_row():
     tables = {
-        "chat_entities": [],
+        "chat_participants": [],
         "chat_messages": [
             {
                 "id": "msg-unread",
