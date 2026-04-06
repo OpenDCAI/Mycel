@@ -46,8 +46,6 @@ async def lifespan(app: FastAPI):
         from backend.web.core.supabase_factory import create_supabase_auth_client, create_supabase_client
         from storage.container import StorageContainer
         from storage.providers.supabase import (
-            SupabaseChatMessageRepo,
-            SupabaseChatParticipantRepo,
             SupabaseChatRepo,
             SupabaseContactRepo,
             SupabaseInviteCodeRepo,
@@ -65,15 +63,13 @@ async def lifespan(app: FastAPI):
         app.state.thread_launch_pref_repo = SupabaseThreadLaunchPrefRepo(_supabase_client)
         app.state.recipe_repo = SupabaseRecipeRepo(_supabase_client)
         app.state.chat_repo = SupabaseChatRepo(_supabase_client)
-        app.state.chat_participant_repo = SupabaseChatParticipantRepo(_supabase_client)
-        app.state.chat_message_repo = SupabaseChatMessageRepo(_supabase_client)
         app.state.invite_code_repo = SupabaseInviteCodeRepo(_supabase_client)
         app.state.user_settings_repo = SupabaseUserSettingsRepo(_supabase_client)
         app.state._supabase_client = _supabase_client
         app.state._supabase_auth_client_factory = _supabase_auth_client_factory
         app.state._storage_container = StorageContainer(strategy="supabase", supabase_client=_supabase_client)
     else:
-        from storage.providers.sqlite.chat_repo import SQLiteChatMessageRepo, SQLiteChatParticipantRepo, SQLiteChatRepo
+        from storage.providers.sqlite.chat_repo import SQLiteChatRepo
         from storage.providers.sqlite.kernel import SQLiteDBRole, resolve_role_db_path
         from storage.providers.sqlite.member_repo import SQLiteMemberRepo
         from storage.providers.sqlite.recipe_repo import SQLiteRecipeRepo
@@ -88,8 +84,6 @@ async def lifespan(app: FastAPI):
         app.state.thread_launch_pref_repo = SQLiteThreadLaunchPrefRepo(db)
         app.state.recipe_repo = SQLiteRecipeRepo(db)
         app.state.chat_repo = SQLiteChatRepo(chat_db)
-        app.state.chat_participant_repo = SQLiteChatParticipantRepo(chat_db)
-        app.state.chat_message_repo = SQLiteChatMessageRepo(chat_db)
 
     from backend.web.services.auth_service import AuthService
 

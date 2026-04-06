@@ -82,7 +82,6 @@ _ensure_windows_db_env_defaults()
 from backend.web.core.lifespan import lifespan  # noqa: E402
 from backend.web.routers import (  # noqa: E402
     auth,
-    chats,
     contacts,
     entities,
     invite_codes,
@@ -115,12 +114,7 @@ app.include_router(auth.router)
 app.include_router(invite_codes.router)
 app.include_router(threads.router)
 
-# Chat router: Supabase mode uses messaging.py, SQLite mode uses chats.py
-_storage_strategy = os.getenv("LEON_STORAGE_STRATEGY", "sqlite")
-if _storage_strategy == "supabase":
-    app.include_router(messaging_router.router)
-else:
-    app.include_router(chats.router)
+app.include_router(messaging_router.router)
 
 app.include_router(contacts.router)
 app.include_router(relationships_router)
