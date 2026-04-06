@@ -141,6 +141,11 @@ class _FakePermissionAgent:
         self.pending = []
         return True
 
+    def drop_permission_request(self, request_id: str) -> bool:
+        before = len(self.pending)
+        self.pending = [item for item in self.pending if item["request_id"] != request_id]
+        return len(self.pending) != before
+
     def get_thread_permission_rules(self, thread_id: str) -> dict[str, object]:
         return {
             "thread_id": thread_id,
@@ -735,7 +740,9 @@ async def test_resolve_ask_user_question_request_starts_followup_run_with_answer
     assert "AskUserQuestion" in followup_message
     assert "Minimal" in followup_message
     assert "Choose a style" in followup_message
-    agent.agent.apersist_state.assert_awaited_once_with("thread-1")
+    assert agent.pending == []
+    assert agent.agent.apersist_state.await_count == 2
+    assert [call.args for call in agent.agent.apersist_state.await_args_list] == [("thread-1",), ("thread-1",)]
 
 
 @pytest.mark.asyncio

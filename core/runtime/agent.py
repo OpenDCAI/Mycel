@@ -1696,6 +1696,27 @@ class LeonAgent:
         )
         return True
 
+    def drop_permission_request(self, request_id: str) -> bool:
+        had_pending = request_id in self._app_state.pending_permission_requests
+        had_resolved = request_id in self._app_state.resolved_permission_requests
+        if not had_pending and not had_resolved:
+            return False
+
+        def _drop(state: AppState) -> AppState:
+            pending = dict(state.pending_permission_requests)
+            resolved = dict(state.resolved_permission_requests)
+            pending.pop(request_id, None)
+            resolved.pop(request_id, None)
+            return state.model_copy(
+                update={
+                    "pending_permission_requests": pending,
+                    "resolved_permission_requests": resolved,
+                }
+            )
+
+        self._app_state.set_state(_drop)
+        return True
+
     def get_response(self, message: str, thread_id: str = "default", **kwargs) -> str:
         """Get agent's text response.
 

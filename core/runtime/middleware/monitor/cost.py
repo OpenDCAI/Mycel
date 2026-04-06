@@ -112,7 +112,7 @@ def _load_cache() -> tuple[dict[str, dict[str, str]], dict[str, int], dict[str, 
     if not cache_path.exists():
         return None
     try:
-        data = json.loads(cache_path.read_text())
+        data = json.loads(cache_path.read_text(encoding="utf-8"))
         if time.time() - data.get("timestamp", 0) > _CACHE_TTL:
             return None
         models = data.get("models", {})
@@ -128,7 +128,7 @@ def _save_cache(models: dict[str, dict[str, str]], context_limits: dict[str, int
     try:
         _CACHE_PATH.parent.mkdir(parents=True, exist_ok=True)
         data = {"timestamp": time.time(), "models": models, "context_limits": context_limits, "providers": providers}
-        _CACHE_PATH.write_text(json.dumps(data))
+        _CACHE_PATH.write_text(json.dumps(data), encoding="utf-8")
     except Exception:
         pass
 
@@ -225,7 +225,10 @@ def _load_bundled() -> dict[str, dict[str, Decimal]]:
     if not _BUNDLED_PATH.exists():
         return {}
     try:
-        data = json.loads(_BUNDLED_PATH.read_text())
+        # @@@bundled-models-utf8 - Windows runners do not default to UTF-8.
+        # The bundled OpenRouter snapshot contains non-ASCII descriptions, so
+        # implicit decoding can fail and silently collapse pricing/context data.
+        data = json.loads(_BUNDLED_PATH.read_text(encoding="utf-8"))
         result: dict[str, dict[str, Decimal]] = {}
         ctx_result: dict[str, int] = {}
         prov_result: dict[str, str] = {}

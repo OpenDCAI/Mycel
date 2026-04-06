@@ -62,6 +62,14 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/threads", tags=["threads"])
 
 
+class _NoopAsyncLock:
+    async def __aenter__(self) -> None:
+        return None
+
+    async def __aexit__(self, exc_type, exc, tb) -> bool:
+        return False
+
+
 def _is_internal_child_thread(thread_id: str) -> bool:
     return thread_id.startswith("subagent-")
 
@@ -999,16 +1007,21 @@ async def get_thread_history(
 async def get_thread_permissions(
     thread_id: str,
     user_id: Annotated[str | None, Depends(verify_thread_owner)] = None,
+    thread_lock: Annotated[asyncio.Lock | None, Depends(get_thread_lock)] = None,
     agent: Annotated[Any, Depends(get_thread_agent)] = None,
 ) -> dict[str, Any]:
-    await agent.agent.aget_state({"configurable": {"thread_id": thread_id}})
-    rule_state = agent.get_thread_permission_rules(thread_id)
-    return {
-        "thread_id": thread_id,
-        "requests": agent.get_pending_permission_requests(thread_id),
-        "session_rules": rule_state["rules"],
-        "managed_only": rule_state["managed_only"],
-    }
+    # @@@permission-state-lock - owner polling and resolve can race on idle
+    # threads. Serialize the lightweight /permissions read with resolve/persist
+    # so stale checkpoint hydration cannot resurrect an already-resolved request.
+    async with thread_lock or _NoopAsyncLock():
+        await agent.agent.aget_state({"configurable": {"thread_id": thread_id}})
+        rule_state = agent.get_thread_permission_rules(thread_id)
+        return {
+            "thread_id": thread_id,
+            "requests": agent.get_pending_permission_requests(thread_id),
+            "session_rules": rule_state["rules"],
+            "managed_only": rule_state["managed_only"],
+        }
 
 
 @router.post("/{thread_id}/permissions/{request_id}/resolve")
@@ -1019,28 +1032,36 @@ async def resolve_thread_permission_request(
     user_id: Annotated[str | None, Depends(verify_thread_owner)] = None,
     agent: Annotated[Any, Depends(get_thread_agent)] = None,
     app: Annotated[Any, Depends(get_app)] = None,
+    thread_lock: Annotated[asyncio.Lock | None, Depends(get_thread_lock)] = None,
 ) -> dict[str, Any]:
-    await agent.agent.aget_state({"configurable": {"thread_id": thread_id}})
-    pending_requests = {
-        item.get("request_id"): item
-        for item in agent.get_pending_permission_requests(thread_id)
-        if isinstance(item, dict) and item.get("request_id")
-    }
-    pending_request = pending_requests.get(request_id)
-    is_ask_user_question = bool(pending_request and pending_request.get("tool_name") == "AskUserQuestion")
-    answers = _serialize_permission_answers(payload)
-    if is_ask_user_question and payload.decision == "allow" and not answers:
-        raise HTTPException(status_code=400, detail="AskUserQuestion answers are required when approving the request")
-    ok = agent.resolve_permission_request(
-        request_id,
-        decision=payload.decision,
-        message=payload.message,
-        answers=answers,
-        annotations=getattr(payload, "annotations", None),
-    )
-    if not ok:
-        raise HTTPException(status_code=404, detail="Permission request not found")
-    await agent.agent.apersist_state(thread_id)
+    async with thread_lock or _NoopAsyncLock():
+        await agent.agent.aget_state({"configurable": {"thread_id": thread_id}})
+        pending_requests = {
+            item.get("request_id"): item
+            for item in agent.get_pending_permission_requests(thread_id)
+            if isinstance(item, dict) and item.get("request_id")
+        }
+        pending_request = pending_requests.get(request_id)
+        is_ask_user_question = bool(pending_request and pending_request.get("tool_name") == "AskUserQuestion")
+        answers = _serialize_permission_answers(payload)
+        if is_ask_user_question and payload.decision == "allow" and not answers:
+            raise HTTPException(status_code=400, detail="AskUserQuestion answers are required when approving the request")
+        ok = agent.resolve_permission_request(
+            request_id,
+            decision=payload.decision,
+            message=payload.message,
+            answers=answers,
+            annotations=getattr(payload, "annotations", None),
+        )
+        if not ok:
+            raise HTTPException(status_code=404, detail="Permission request not found")
+        await agent.agent.apersist_state(thread_id)
+        if is_ask_user_question and payload.decision == "allow" and answers is not None:
+            # @@@ask-user-lifecycle - the owner's answer is about to become a
+            # real follow-up user message. Clear the old request before that
+            # run starts so checkpoint replay cannot resurrect the popup.
+            agent.drop_permission_request(request_id)
+            await agent.agent.apersist_state(thread_id)
 
     followup: dict[str, Any] | None = None
     if is_ask_user_question and payload.decision == "allow" and pending_request is not None and answers is not None:

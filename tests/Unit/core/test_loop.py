@@ -631,6 +631,83 @@ async def test_query_loop_restores_persisted_permission_state_into_live_app_stat
 
 
 @pytest.mark.asyncio
+async def test_query_loop_persists_cleared_permission_state_after_resolution_consumed():
+    checkpointer = _MemoryCheckpointer()
+    request_id = "perm-ask"
+    thread_id = "perm-thread"
+    args = {
+        "questions": [
+            {
+                "header": "Choice",
+                "question": "Pick one.",
+                "multiSelect": False,
+                "options": [{"label": "Alpha", "description": "Alpha"}],
+            }
+        ]
+    }
+    app_state = AppState(
+        messages=[HumanMessage(content="existing")],
+        pending_permission_requests={
+            request_id: {
+                "request_id": request_id,
+                "thread_id": thread_id,
+                "tool_name": "AskUserQuestion",
+                "args": args,
+                "message": "Answer questions?",
+            }
+        },
+    )
+    loop = make_loop(
+        model=mock_model_no_tools("seed"),
+        checkpointer=checkpointer,
+        app_state=app_state,
+    )
+
+    resolved_payload = {
+        "request_id": request_id,
+        "thread_id": thread_id,
+        "tool_name": "AskUserQuestion",
+        "args": args,
+        "decision": "allow",
+        "message": "Answer questions?",
+        "answers": [
+            {
+                "header": "Choice",
+                "question": "Pick one.",
+                "selected_options": ["Alpha"],
+            }
+        ],
+    }
+    app_state.set_state(
+        lambda prev: prev.model_copy(
+            update={
+                "pending_permission_requests": {},
+                "resolved_permission_requests": {request_id: resolved_payload},
+            }
+        )
+    )
+
+    await loop.apersist_state(thread_id)
+    persisted = await loop._load_checkpoint_channel_values(thread_id)
+    assert persisted["pending_permission_requests"] == {}
+    assert persisted["resolved_permission_requests"] == {request_id: resolved_payload}
+
+    ctx = loop._build_tool_use_context([], thread_id=thread_id)
+    assert ctx is not None
+    assert ctx.consume_permission_resolution("AskUserQuestion", args, None, None) == {
+        "decision": "allow",
+        "message": "Answer questions?",
+    }
+    assert app_state.pending_permission_requests == {}
+    assert app_state.resolved_permission_requests == {}
+
+    await loop.apersist_state(thread_id)
+    persisted = await loop._load_checkpoint_channel_values(thread_id)
+    assert persisted["pending_permission_requests"] == {}
+    assert persisted["resolved_permission_requests"] == {}
+
+
+@pytest.mark.asyncio
 async def test_query_loop_aupdate_state_appends_start_messages_for_resume():
     model = mock_model_no_tools("after resume")
     checkpointer = _MemoryCheckpointer()
