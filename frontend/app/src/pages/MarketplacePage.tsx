@@ -349,7 +349,7 @@ export default function MarketplacePage() {
                       {filteredMembers.map((member) => {
                         const update = updates.find((u) => u.marketplace_item_id === member.id);
                         return (
-                          <div key={member.id} className="surface-interactive p-4 cursor-pointer group relative" onClick={() => navigate(`/members/${member.id}`)}>
+                          <div key={member.id} className="surface-interactive p-4 cursor-pointer group relative" onClick={() => navigate(`/contacts/agents/${member.id}`)}>
                             <div className="flex items-start gap-3">
                               <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
                                 <Package className="w-4 h-4 text-primary" />

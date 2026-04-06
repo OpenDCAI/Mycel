@@ -1,5 +1,5 @@
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
-import { MessageSquare, MessagesSquare, Users, ListTodo, Store, Layers, Settings, Plus, ChevronLeft, ChevronRight, LogOut, Camera, Eye, EyeOff } from "lucide-react";
+import { MessageSquare, Users, Store, Settings, Plus, ChevronLeft, ChevronRight, LogOut, Camera, Eye, EyeOff } from "lucide-react";
 import { useState, useEffect, useCallback, useRef } from "react";
 import { uploadMemberAvatar } from "@/api/client";
 import MemberAvatar from "@/components/MemberAvatar";
@@ -12,12 +12,9 @@ import { useAuthStore } from "@/store/auth-store";
 import { toast } from "sonner";
 
 const navItems = [
-  { to: "/threads", icon: MessageSquare, label: "Workspace" },
-  { to: "/chats", icon: MessagesSquare, label: "Chats" },
-  { to: "/members", icon: Users, label: "Members" },
-  { to: "/tasks", icon: ListTodo, label: "Tasks" },
-  { to: "/resources", icon: Layers, label: "Resources" },
-  { to: "/marketplace", icon: Store, label: "Marketplace" },
+  { to: "/chat", icon: MessageSquare, label: "对话" },
+  { to: "/contacts", icon: Users, label: "通讯录" },
+  { to: "/marketplace", icon: Store, label: "市场" },
 ];
 
 const mobileNavItems = [
@@ -65,7 +62,6 @@ function AuthenticatedLayout() {
 
   const loadAll = useAppStore((s) => s.loadAll);
   const resetSessionData = useAppStore((s) => s.resetSessionData);
-  const storeAddTask = useAppStore((s) => s.addTask);
   const lastLoadedUserIdRef = useRef<string | null>(null);
 
   useEffect(() => {
@@ -101,16 +97,8 @@ function AuthenticatedLayout() {
     switch (action) {
       case "staff": setCreateMemberOpen(true); break;
       case "chat": setNewChatOpen(true); break;
-      case "task":
-        try {
-          await storeAddTask();
-          navigate("/tasks");
-        } catch (e: unknown) {
-          toast.error("创建失败: " + (e instanceof Error ? e.message : String(e)));
-        }
-        break;
     }
-  }, [navigate, storeAddTask]);
+  }, []);
 
   const createBtnRef = useRef<HTMLButtonElement>(null);
 
@@ -150,7 +138,7 @@ function AuthenticatedLayout() {
     return () => { window.removeEventListener("mousemove", onMove); window.removeEventListener("mouseup", onUp); };
   }, [dragging, dragWidth]);
 
-  const isChat = location.pathname.startsWith("/threads") || location.pathname.startsWith("/chats");
+  const isChat = location.pathname.startsWith("/chat");
   const sidebarPx = dragging && dragWidth !== null ? dragWidth : (expanded ? EXPANDED_W : COLLAPSED_W);
   const showLabels = dragging ? (dragWidth !== null && dragWidth >= SNAP_THRESHOLD) : expanded;
 
@@ -368,10 +356,7 @@ function CreateDropdown({
           <Users className="w-3.5 h-3.5 text-muted-foreground" /> 新建成员
         </button>
         <button onClick={() => onAction("chat")} className="w-full px-3 py-2 text-left text-sm text-foreground hover:bg-muted transition-colors duration-fast flex items-center gap-2.5">
-          <MessageSquare className="w-3.5 h-3.5 text-muted-foreground" /> 打开成员线程
-        </button>
-        <button onClick={() => onAction("task")} className="w-full px-3 py-2 text-left text-sm text-foreground hover:bg-muted transition-colors duration-fast flex items-center gap-2.5">
-          <ListTodo className="w-3.5 h-3.5 text-muted-foreground" /> 新建任务
+          <MessageSquare className="w-3.5 h-3.5 text-muted-foreground" /> 发起会话
         </button>
       </div>
     </>
@@ -420,7 +405,7 @@ export function LoginForm() {
     return <LoginStep
       onSubmit={async (identifier, password) => {
         await login(identifier, password);
-        navigate("/threads", { replace: true });
+        navigate("/chat", { replace: true });
       }}
       onSwitch={() => reset({ type: "reg_email" })}
       error={error} setError={setError}
@@ -626,7 +611,7 @@ function SetupNameStep({ userId, defaultName }: { userId: string; defaultName: s
 
   function done() {
     clearSetupInfo();
-    navigate("/threads", { replace: true });
+    navigate("/chat", { replace: true });
   }
 
   async function handleSubmit(e: React.FormEvent) {

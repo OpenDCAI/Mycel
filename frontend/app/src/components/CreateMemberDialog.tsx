@@ -29,7 +29,7 @@ export default function CreateMemberDialog({ open, onOpenChange }: Props) {
       onOpenChange(false);
       setName("");
       setDescription("");
-      navigate(`/members/${member.id}`);
+      navigate(`/contacts/agents/${member.id}`);
     } catch (e) {
       toast.error("创建失败，请重试");
     }

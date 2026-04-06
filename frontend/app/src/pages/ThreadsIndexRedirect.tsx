@@ -37,15 +37,15 @@ export default function ThreadsIndexRedirect() {
         if (cancelled) return;
         navigate(
           thread
-            ? `/threads/${memberId}/${encodeURIComponent(thread.thread_id)}`
-            : `/threads/${memberId}`,
+            ? `/chat/hire/${memberId}/${encodeURIComponent(thread.thread_id)}`
+            : `/chat/hire/${memberId}`,
           { replace: true },
         );
       } catch (error) {
         if (cancelled) return;
         if (error instanceof DOMException && error.name === "AbortError") return;
         console.error("[ThreadsIndexRedirect] resolve main thread failed:", error);
-        navigate(`/threads/${memberId}`, { replace: true });
+        navigate(`/chat/hire/${memberId}`, { replace: true });
       }
     }
 
