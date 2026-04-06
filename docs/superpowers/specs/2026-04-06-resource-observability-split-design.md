@@ -189,6 +189,13 @@ These are not vague “polish later” notes. They are concrete seams that now b
   - keep raw/global truth available
   - add explicit categorization/regrouping for active, diverged, orphan, and historical leases
   - reduce “system looks broken” confusion without hiding the raw facts
+- Current landed phase:
+  - `/api/monitor/leases` still preserves the original `summary/groups/items` contract, but now also returns backend-owned `triage.summary` and ordered `triage.groups`
+  - the new `triage` layer separates `active_drift`, `detached_residue`, `orphan_cleanup`, and `healthy_capacity`
+  - classification is still built from existing database-agnostic fields (`desired_state`, `observed_state`, `thread_id`, `updated_at`) rather than new SQLite-specific lookups
+  - the monitor `Resources` page now reads that triage surface directly, so the live page can show `3 active drift + 26 detached residue` instead of one opaque `29 diverged`
+- Honest boundary:
+  - this is still a phase-2 heuristic, not a full lifecycle model; age-based detached residue is a better operator default, but not yet a richer typed runtime contract
 
 ### Slice D4: Dashboard Entry And Global Resources Surface
 

@@ -29,8 +29,12 @@
   - evaluation detail payload includes backend-owned `info.operator_surface`
   - provisional eval detail opens with `Operator Status`, artifact paths, and explicit next steps
   - redundant provisional score metadata is folded behind `Score artifacts (provisional)` instead of occupying the first screen
+- `D3` now has a landed phase-2:
+  - `/api/monitor/leases` now adds backend-owned `triage.summary` and `triage.groups`
+  - triage distinguishes `active_drift`, `detached_residue`, `orphan_cleanup`, and `healthy_capacity`
+  - monitor `Resources` consumes that triage surface directly instead of flattening everything back into `diverged/orphan`
 - next honest follow-up remains:
-  - `D3` because lease regrouping has now moved onto a backend semantic contract, but the categories are still shallow and need stronger lifecycle meaning
+  - `D3` because lease regrouping is still heuristic and needs stronger lifecycle meaning than age-based detached residue alone
   - `D2` because the current operator surface only hardens the provisional/bootstrap-failure case and still lacks richer lifecycle typing for other eval states
 
 ---

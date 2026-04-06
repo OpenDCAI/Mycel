@@ -130,6 +130,16 @@ def test_list_leases_exposes_semantic_groups_and_summary(monkeypatch):
             return None
 
     monkeypatch.setattr(monitor_service, "make_sandbox_monitor_repo", lambda: FakeRepo())
+    monkeypatch.setattr(
+        monitor_service,
+        "_hours_since",
+        lambda iso_timestamp: {
+            "2026-04-06T00:10:00": 0.5,
+            "2026-04-06T00:11:00": 0.5,
+            "2026-04-06T00:12:00": 10.0,
+            "2026-04-06T00:13:00": 10.0,
+        }.get(iso_timestamp),
+    )
 
     payload = monitor_service.list_leases()
 
@@ -146,12 +156,58 @@ def test_list_leases_exposes_semantic_groups_and_summary(monkeypatch):
         "orphan",
         "healthy",
     ]
+    assert payload["triage"]["summary"] == {
+        "total": 4,
+        "active_drift": 1,
+        "detached_residue": 0,
+        "orphan_cleanup": 2,
+        "healthy_capacity": 1,
+    }
+    assert [group["key"] for group in payload["triage"]["groups"]] == [
+        "active_drift",
+        "detached_residue",
+        "orphan_cleanup",
+        "healthy_capacity",
+    ]
     by_id = {item["lease_id"]: item for item in payload["items"]}
     assert by_id["lease-healthy"]["semantics"]["category"] == "healthy"
+    assert by_id["lease-healthy"]["triage"]["category"] == "healthy_capacity"
     assert by_id["lease-diverged"]["semantics"]["category"] == "diverged"
+    assert by_id["lease-diverged"]["triage"]["category"] == "active_drift"
     assert by_id["lease-orphan-diverged"]["semantics"]["category"] == "orphan_diverged"
+    assert by_id["lease-orphan-diverged"]["triage"]["category"] == "orphan_cleanup"
     assert by_id["lease-orphan"]["semantics"]["category"] == "orphan"
+    assert by_id["lease-orphan"]["triage"]["category"] == "orphan_cleanup"
 
+
+def test_list_leases_marks_old_detached_running_rows_as_detached_residue(monkeypatch):
+    class FakeRepo:
+        def query_leases(self):
+            return [
+                {
+                    "lease_id": "lease-stale",
+                    "provider_name": "local",
+                    "desired_state": "running",
+                    "observed_state": "detached",
+                    "current_instance_id": "inst-9",
+                    "last_error": None,
+                    "updated_at": "2026-04-05T00:00:00",
+                    "thread_id": "subagent-1234",
+                }
+            ]
+
+        def close(self):
+            return None
+
+    monkeypatch.setattr(monitor_service, "make_sandbox_monitor_repo", lambda: FakeRepo())
+    monkeypatch.setattr(monitor_service, "_hours_since", lambda _: 24.0)
+
+    payload = monitor_service.list_leases()
+
+    item = payload["items"][0]
+    assert item["semantics"]["category"] == "diverged"
+    assert item["triage"]["category"] == "detached_residue"
+    assert payload["triage"]["summary"]["detached_residue"] == 1
 
 def test_build_evaluation_operator_surface_flags_runner_exit_before_threads_materialize():
     payload = monitor_service.build_evaluation_operator_surface(

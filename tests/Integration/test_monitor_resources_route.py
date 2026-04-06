@@ -69,5 +69,10 @@ def test_monitor_leases_route_exposes_summary_and_groups():
     payload = response.json()
     assert "summary" in payload
     assert "groups" in payload
+    assert "triage" in payload
     assert set(payload["summary"]).issuperset({"total", "healthy", "diverged", "orphan", "orphan_diverged"})
     assert isinstance(payload["groups"], list)
+    assert set(payload["triage"]["summary"]).issuperset(
+        {"total", "active_drift", "detached_residue", "orphan_cleanup", "healthy_capacity"}
+    )
+    assert isinstance(payload["triage"]["groups"], list)

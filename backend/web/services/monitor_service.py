@@ -112,6 +112,41 @@ EVAL_NOTE_KEYS = [
     "stderr_log",
 ]
 
+LEASE_TRIAGE_ORDER = [
+    "active_drift",
+    "detached_residue",
+    "orphan_cleanup",
+    "healthy_capacity",
+]
+
+LEASE_TRIAGE_META = {
+    "active_drift": {
+        "title": "Active Drift",
+        "description": "Leases whose desired and observed state still disagree recently enough to warrant active operator attention.",
+        "tone": "warning",
+    },
+    "detached_residue": {
+        "title": "Detached Residue",
+        "description": (
+            "Leases still marked desired=running but observed=detached long after the runtime "
+            "stopped moving. Usually cleanup debt, not live pressure."
+        ),
+        "tone": "danger",
+    },
+    "orphan_cleanup": {
+        "title": "Orphan Cleanup",
+        "description": "Lease rows that have already lost thread binding and mainly represent cleanup backlog or historical residue.",
+        "tone": "warning",
+    },
+    "healthy_capacity": {
+        "title": "Healthy Capacity",
+        "description": "Leases with attached thread context and converged runtime state.",
+        "tone": "success",
+    },
+}
+
+DETACHED_RESIDUE_THRESHOLD_HOURS = 4.0
+
 
 def _classify_lease_semantics(*, thread_id: str | None, badge: dict[str, Any]) -> dict[str, str]:
     is_orphan = not bool(thread_id)
@@ -129,6 +164,61 @@ def _classify_lease_semantics(*, thread_id: str | None, badge: dict[str, Any]) -
         "category": category,
         "title": meta["title"],
         "description": meta["description"],
+    }
+
+
+def _parse_local_timestamp(iso_timestamp: str | None) -> datetime | None:
+    if not iso_timestamp:
+        return None
+    cleaned = iso_timestamp
+    if "Z" in cleaned:
+        cleaned = cleaned.replace("Z", "")
+    if "+" in cleaned:
+        cleaned = cleaned.split("+")[0]
+    try:
+        return datetime.fromisoformat(cleaned)
+    except ValueError:
+        return None
+
+
+def _hours_since(iso_timestamp: str | None) -> float | None:
+    dt = _parse_local_timestamp(iso_timestamp)
+    if dt is None:
+        return None
+    delta = datetime.now() - dt
+    return delta.total_seconds() / 3600
+
+
+def _classify_lease_triage(
+    *,
+    thread_id: str | None,
+    badge: dict[str, Any],
+    observed_state: str | None,
+    desired_state: str | None,
+    updated_at: str | None,
+) -> dict[str, Any]:
+    observed = str(observed_state or "").strip().lower() or None
+    desired = str(desired_state or "").strip().lower() or None
+    age_hours = _hours_since(updated_at)
+    is_orphan = not bool(thread_id)
+    is_converged = bool(badge.get("converged"))
+
+    if is_orphan:
+        key = "orphan_cleanup"
+    elif is_converged:
+        key = "healthy_capacity"
+    elif observed == "detached" and desired == "running" and age_hours is not None and age_hours >= DETACHED_RESIDUE_THRESHOLD_HOURS:
+        key = "detached_residue"
+    else:
+        key = "active_drift"
+
+    meta = LEASE_TRIAGE_META[key]
+    return {
+        "category": key,
+        "title": meta["title"],
+        "description": meta["description"],
+        "tone": meta["tone"],
+        "age_hours": age_hours,
     }
 
 
@@ -292,6 +382,13 @@ def _map_leases(rows: list[dict[str, Any]]) -> dict[str, Any]:
     items = []
     for row in rows:
         badge = _make_badge(row["desired_state"], row["observed_state"])
+        triage = _classify_lease_triage(
+            thread_id=row["thread_id"],
+            badge=badge,
+            observed_state=row["observed_state"],
+            desired_state=row["desired_state"],
+            updated_at=row["updated_at"],
+        )
         items.append(
             {
                 "lease_id": row["lease_id"],
@@ -301,6 +398,7 @@ def _map_leases(rows: list[dict[str, Any]]) -> dict[str, Any]:
                 "thread": _thread_ref(row["thread_id"]),
                 "state_badge": badge,
                 "semantics": _classify_lease_semantics(thread_id=row["thread_id"], badge=badge),
+                "triage": triage,
                 "error": row["last_error"],
                 "updated_at": row["updated_at"],
                 "updated_ago": _format_time_ago(row["updated_at"]),
@@ -326,11 +424,35 @@ def _map_leases(rows: list[dict[str, Any]]) -> dict[str, Any]:
             }
         )
 
+    triage_summary = {key: 0 for key in LEASE_TRIAGE_ORDER}
+    for item in items:
+        triage_summary[item["triage"]["category"]] += 1
+    triage_summary["total"] = len(items)
+
+    triage_groups = []
+    for key in LEASE_TRIAGE_ORDER:
+        meta = LEASE_TRIAGE_META[key]
+        group_items = [item for item in items if item["triage"]["category"] == key]
+        triage_groups.append(
+            {
+                "key": key,
+                "title": meta["title"],
+                "description": meta["description"],
+                "tone": meta["tone"],
+                "count": len(group_items),
+                "items": group_items,
+            }
+        )
+
     return {
         "title": "All Leases",
         "count": len(items),
         "summary": summary,
         "groups": groups,
+        "triage": {
+            "summary": triage_summary,
+            "groups": triage_groups,
+        },
         "items": items,
     }
 

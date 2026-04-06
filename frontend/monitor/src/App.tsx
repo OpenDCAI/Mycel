@@ -316,13 +316,14 @@ function MonitorResourcesPage() {
   const providers = Array.isArray(resourceData.providers) ? resourceData.providers : [];
   const summary = resourceData.summary || {};
   const leases = Array.isArray(leaseData.items) ? leaseData.items : [];
-  const leaseSummary = leaseData.summary || {};
-  const leaseGroups = Array.isArray(leaseData.groups) ? leaseData.groups : [];
+  const leaseTriage = leaseData.triage || {};
+  const triageSummary = leaseTriage.summary || {};
+  const triageGroups = Array.isArray(leaseTriage.groups) ? leaseTriage.groups : [];
   const selectedProvider = providers.find((provider: any) => provider.id === selectedId) || providers[0] || null;
-  const divergedLeases = (leaseGroups.find((group: any) => group.key === 'diverged')?.items || []) as any[];
-  const orphanDivergedLeases = (leaseGroups.find((group: any) => group.key === 'orphan_diverged')?.items || []) as any[];
-  const orphanLeases = (leaseGroups.find((group: any) => group.key === 'orphan')?.items || []) as any[];
-  const healthyLeases = (leaseGroups.find((group: any) => group.key === 'healthy')?.items || []) as any[];
+  const activeDriftLeases = (triageGroups.find((group: any) => group.key === 'active_drift')?.items || []) as any[];
+  const detachedResidueLeases = (triageGroups.find((group: any) => group.key === 'detached_residue')?.items || []) as any[];
+  const orphanCleanupLeases = (triageGroups.find((group: any) => group.key === 'orphan_cleanup')?.items || []) as any[];
+  const healthyCapacityLeases = (triageGroups.find((group: any) => group.key === 'healthy_capacity')?.items || []) as any[];
   const refreshedAt = summary.last_refreshed_at || summary.snapshot_at;
   const selectedSessions = Array.isArray(selectedProvider?.sessions) ? selectedProvider.sessions : [];
   const selectedRunning = selectedSessions.filter((session: any) => session.status === 'running').length;
@@ -344,8 +345,9 @@ function MonitorResourcesPage() {
       <section className="resource-summary-grid">
         <DashboardMetric label="Providers" value={summary.total_providers || 0} note={`${summary.active_providers || 0} active · ${summary.unavailable_providers || 0} unavailable`} />
         <DashboardMetric label="Running sessions" value={summary.running_sessions || 0} note={refreshedAt ? `refreshed ${new Date(refreshedAt).toLocaleTimeString()}` : 'no timestamp'} />
-        <DashboardMetric label="Diverged leases" value={(leaseSummary.diverged || 0) + (leaseSummary.orphan_diverged || 0)} note={`${(leaseSummary.orphan || 0) + (leaseSummary.orphan_diverged || 0)} orphan`} tone={((leaseSummary.diverged || 0) + (leaseSummary.orphan_diverged || 0)) > 0 ? 'warning' : 'success'} />
-        <DashboardMetric label="Healthy leases" value={leaseSummary.healthy || 0} note={`${leaseSummary.total || leases.length} total`} tone={(leaseSummary.healthy || 0) > 0 ? 'success' : 'danger'} />
+        <DashboardMetric label="Active drift" value={triageSummary.active_drift || 0} note="needs operator attention" tone={(triageSummary.active_drift || 0) > 0 ? 'warning' : 'success'} />
+        <DashboardMetric label="Detached residue" value={triageSummary.detached_residue || 0} note={`${triageSummary.orphan_cleanup || 0} cleanup backlog`} tone={(triageSummary.detached_residue || 0) > 0 ? 'danger' : 'success'} />
+        <DashboardMetric label="Healthy leases" value={triageSummary.healthy_capacity || 0} note={`${triageSummary.total || leases.length} total`} tone={(triageSummary.healthy_capacity || 0) > 0 ? 'success' : 'danger'} />
       </section>
 
       <section className="resource-section-shell">
@@ -494,16 +496,34 @@ function MonitorResourcesPage() {
         <div className="section-row">
           <div>
             <h2>Lease Health</h2>
-            <p className="description">Grouped triage surface from backend lease semantics. Diverged rows show state drift; orphan rows show leases no longer bound to a live thread.</p>
+            <p className="description">Backend-owned lease lifecycle triage. Separate live drift from stale detached residue before assuming the whole system is on fire.</p>
           </div>
           <Link className="quick-link" to="/leases">
             Legacy flat table
           </Link>
         </div>
+        <div className="resource-overview-strip">
+          <span className="resource-overview-pill">
+            <span className="resource-overview-label">active drift</span>
+            <strong>{activeDriftLeases.length}</strong>
+          </span>
+          <span className="resource-overview-pill">
+            <span className="resource-overview-label">detached residue</span>
+            <strong>{detachedResidueLeases.length}</strong>
+          </span>
+          <span className="resource-overview-pill">
+            <span className="resource-overview-label">orphan cleanup</span>
+            <strong>{orphanCleanupLeases.length}</strong>
+          </span>
+          <span className="resource-overview-pill">
+            <span className="resource-overview-label">healthy</span>
+            <strong>{healthyCapacityLeases.length}</strong>
+          </span>
+        </div>
         <div className="lease-cluster-grid">
           <article className="hint-box">
-            <h2>Diverged ({divergedLeases.length + orphanDivergedLeases.length})</h2>
-            <p className="description">Desired and observed states no longer match, including leases that already lost thread binding.</p>
+            <h2>Active Drift ({activeDriftLeases.length})</h2>
+            <p className="description">Recent desired/observed mismatch. These rows deserve live operator attention before they age into residue.</p>
             <table>
               <thead>
                 <tr>
@@ -515,7 +535,7 @@ function MonitorResourcesPage() {
                 </tr>
               </thead>
               <tbody>
-                {[...orphanDivergedLeases, ...divergedLeases].slice(0, 8).map((item: any) => (
+                {activeDriftLeases.slice(0, 8).map((item: any) => (
                   <tr key={item.lease_id}>
                     <td><Link to={item.lease_url}>{shortId(item.lease_id, 12)}</Link></td>
                     <td>{item.provider}</td>
@@ -524,9 +544,9 @@ function MonitorResourcesPage() {
                     <td>{item.updated_ago}</td>
                   </tr>
                 ))}
-                {divergedLeases.length + orphanDivergedLeases.length === 0 ? (
+                {activeDriftLeases.length === 0 ? (
                   <tr>
-                    <td colSpan={5}>No diverged leases.</td>
+                    <td colSpan={5}>No active drift right now.</td>
                   </tr>
                 ) : null}
               </tbody>
@@ -534,8 +554,42 @@ function MonitorResourcesPage() {
           </article>
 
           <article className="hint-box">
-            <h2>Orphans ({orphanLeases.length})</h2>
-            <p className="description">Lease rows with no active thread binding. These usually indicate cleanup debt or abandoned runtime state.</p>
+            <h2>Detached Residue ({detachedResidueLeases.length})</h2>
+            <p className="description">Detached rows that still want `running` long after the runtime stopped moving. Usually cleanup debt, not fresh pressure.</p>
+            <table>
+              <thead>
+                <tr>
+                  <th>Lease</th>
+                  <th>Provider</th>
+                  <th>Thread</th>
+                  <th>State</th>
+                  <th>Updated</th>
+                </tr>
+              </thead>
+              <tbody>
+                {detachedResidueLeases.slice(0, 8).map((item: any) => (
+                  <tr key={item.lease_id}>
+                    <td><Link to={item.lease_url}>{shortId(item.lease_id, 12)}</Link></td>
+                    <td>{item.provider}</td>
+                    <td>{item.thread?.thread_id ? <Link to={item.thread.thread_url}>{shortId(item.thread.thread_id, 12)}</Link> : <span className="orphan">orphan</span>}</td>
+                    <td><StateBadge badge={item.state_badge} /></td>
+                    <td>{item.updated_ago}</td>
+                  </tr>
+                ))}
+                {detachedResidueLeases.length === 0 ? (
+                  <tr>
+                    <td colSpan={5}>No detached residue.</td>
+                  </tr>
+                ) : null}
+              </tbody>
+            </table>
+          </article>
+        </div>
+
+        <div className="lease-cluster-grid">
+          <article className="hint-box">
+            <h2>Cleanup Backlog ({orphanCleanupLeases.length})</h2>
+            <p className="description">Rows that already lost thread binding. Keep them visible for cleanup honesty, but do not confuse them with live compute pressure.</p>
             <table>
               <thead>
                 <tr>
@@ -543,22 +597,54 @@ function MonitorResourcesPage() {
                   <th>Provider</th>
                   <th>Instance</th>
                   <th>State</th>
-                  <th>Error</th>
+                  <th>Updated</th>
                 </tr>
               </thead>
               <tbody>
-                {orphanLeases.slice(0, 8).map((item: any) => (
+                {orphanCleanupLeases.slice(0, 8).map((item: any) => (
                   <tr key={item.lease_id}>
                     <td><Link to={item.lease_url}>{shortId(item.lease_id, 12)}</Link></td>
                     <td>{item.provider}</td>
                     <td className="mono">{shortId(item.instance_id, 12)}</td>
                     <td><StateBadge badge={item.state_badge} /></td>
-                    <td className="error">{item.error || '-'}</td>
+                    <td>{item.updated_ago}</td>
                   </tr>
                 ))}
-                {orphanLeases.length === 0 ? (
+                {orphanCleanupLeases.length === 0 ? (
                   <tr>
-                    <td colSpan={5}>No orphan leases.</td>
+                    <td colSpan={5}>No orphan cleanup rows.</td>
+                  </tr>
+                ) : null}
+              </tbody>
+            </table>
+          </article>
+
+          <article className="hint-box">
+            <h2>Healthy Capacity ({healthyCapacityLeases.length})</h2>
+            <p className="description">Converged lease rows still attached to thread context. Use this as the counterweight to the noisy failure buckets above.</p>
+            <table>
+              <thead>
+                <tr>
+                  <th>Lease</th>
+                  <th>Provider</th>
+                  <th>Thread</th>
+                  <th>State</th>
+                  <th>Updated</th>
+                </tr>
+              </thead>
+              <tbody>
+                {healthyCapacityLeases.slice(0, 8).map((item: any) => (
+                  <tr key={item.lease_id}>
+                    <td><Link to={item.lease_url}>{shortId(item.lease_id, 12)}</Link></td>
+                    <td>{item.provider}</td>
+                    <td>{item.thread?.thread_id ? <Link to={item.thread.thread_url}>{shortId(item.thread.thread_id, 12)}</Link> : <span className="orphan">orphan</span>}</td>
+                    <td><StateBadge badge={item.state_badge} /></td>
+                    <td>{item.updated_ago}</td>
+                  </tr>
+                ))}
+                {healthyCapacityLeases.length === 0 ? (
+                  <tr>
+                    <td colSpan={5}>No healthy capacity rows yet.</td>
                   </tr>
                 ) : null}
               </tbody>
