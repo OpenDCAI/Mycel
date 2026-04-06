@@ -431,7 +431,11 @@ def test_get_sandbox_auto_resumes_live_session_when_lease_state_is_paused():
 def test_get_sandbox_routes_bind_mounts_to_provider_thread_state():
     manager = _new_test_manager()
     bind_mount_calls: list[tuple[str, list[dict[str, str]]]] = []
-    terminal = SimpleNamespace(terminal_id="term-1", lease_id="lease-1")
+    terminal = SimpleNamespace(
+        terminal_id="term-1",
+        lease_id="lease-1",
+        get_state=lambda: SimpleNamespace(cwd="/tmp", env_delta={}, state_version=0),
+    )
     lease = SimpleNamespace(
         lease_id="lease-1",
         provider_name="local",
