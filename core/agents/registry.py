@@ -58,13 +58,7 @@ class AgentRegistry:
 
     def __init__(self, repo: Any = None):
         self._lock = asyncio.Lock()
-        if repo is not None:
-            self._repo = repo
-        else:
-            try:
-                self._repo = make_agent_registry_repo()
-            except RuntimeError:
-                self._repo = _InMemoryAgentRegistryRepo()
+        self._repo = repo or make_agent_registry_repo()
 
     async def register(self, entry: AgentEntry) -> None:
         async with self._lock:

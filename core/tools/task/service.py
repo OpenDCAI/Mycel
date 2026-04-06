@@ -138,7 +138,7 @@ class TaskService:
         self._repo = make_tool_task_repo(db_path or DEFAULT_DB_PATH)
         self._default_thread_id = thread_id  # override for tests / single-agent TUI
         self._register(registry)
-        logger.info("TaskService initialized (db=%s)", db_path or DEFAULT_DB_PATH)
+        logger.info("TaskService initialized")
 
     def _get_thread_id(self) -> str:
         if self._default_thread_id:
