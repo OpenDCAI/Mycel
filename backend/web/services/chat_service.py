@@ -42,6 +42,12 @@ class ChatService:
         self._delivery_fn = delivery_fn
         self._delivery_resolver = delivery_resolver
 
+    def _require_chat(self, chat_id: str) -> ChatRow:
+        chat = self._chats.get_by_id(chat_id)
+        if chat is None:
+            raise RuntimeError(f"Chat {chat_id} not found after creation")
+        return chat
+
     def _resolve_name(self, user_id: str) -> str:
         """Resolve display name from member_repo."""
         m = self._members.get_by_id(user_id) if self._members else None
@@ -54,14 +60,14 @@ class ChatService:
 
         existing_id = self._chat_participants.find_chat_between(user_ids[0], user_ids[1])
         if existing_id:
-            return self._chats.get_by_id(existing_id)
+            return self._require_chat(existing_id)
 
         now = time.time()
         chat_id = str(uuid.uuid4())
         self._chats.create(ChatRow(id=chat_id, title=title, created_at=now))
         for uid in user_ids:
             self._chat_participants.add_participant(chat_id, uid, now)
-        return self._chats.get_by_id(chat_id)
+        return self._require_chat(chat_id)
 
     def create_group_chat(self, user_ids: list[str], title: str | None = None) -> ChatRow:
         """Create a group chat with 3+ participants."""
@@ -72,7 +78,7 @@ class ChatService:
         self._chats.create(ChatRow(id=chat_id, title=title, created_at=now))
         for uid in user_ids:
             self._chat_participants.add_participant(chat_id, uid, now)
-        return self._chats.get_by_id(chat_id)
+        return self._require_chat(chat_id)
 
     def send_message(
         self,

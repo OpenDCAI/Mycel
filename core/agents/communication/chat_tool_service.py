@@ -209,7 +209,7 @@ class ChatToolService:
         if chat_id:
             pass  # use chat_id directly
         elif user_id:
-            chat_id = self._chat_entities.find_chat_between(eid, user_id)
+            chat_id = self._chat_participants.find_chat_between(eid, user_id)
             if not chat_id:
                 name = self._resolve_name(user_id)
                 return f"No chat history with {name}."
@@ -229,13 +229,13 @@ class ChatToolService:
             # last_read_at to now. This marks ALL messages as read, not just
             # the requested range. Proper fix needs per-message read tracking
             # instead of the current single-timestamp waterline model.
-            self._chat_entities.update_last_read(chat_id, eid, time.time())
+            self._chat_participants.update_last_read(chat_id, eid, time.time())
             return self._format_msgs(msgs, eid)
 
         # @@@read-unread-only — default to unread messages only.
         msgs = self._messages.list_unread(chat_id, eid)
         if msgs:
-            self._chat_entities.update_last_read(chat_id, eid, time.time())
+            self._chat_participants.update_last_read(chat_id, eid, time.time())
             return self._format_msgs(msgs, eid)
 
         # Nothing unread — prompt agent to use range parameter
@@ -262,13 +262,13 @@ class ChatToolService:
         target_name = "chat"
 
         if chat_id:
-            if not self._chat_entities.is_participant_in_chat(chat_id, eid):
+            if not self._chat_participants.is_participant_in_chat(chat_id, eid):
                 raise RuntimeError(f"You are not a member of chat {chat_id}")
         elif user_id:
             if user_id == eid:
                 raise RuntimeError("Cannot send a message to yourself.")
             target_name = self._resolve_name(user_id)
-            resolved_chat_id = self._chat_entities.find_chat_between(eid, user_id)
+            resolved_chat_id = self._chat_participants.find_chat_between(eid, user_id)
             if not resolved_chat_id:
                 # New chat — no unread possible, create and send
                 chat = self._chat_service.find_or_create_chat([eid, user_id])
@@ -293,7 +293,7 @@ class ChatToolService:
         eid = self._user_id
         chat_id = None
         if user_id:
-            chat_id = self._chat_entities.find_chat_between(eid, user_id)
+            chat_id = self._chat_participants.find_chat_between(eid, user_id)
         results = self._messages.search(query, chat_id=chat_id, limit=20)
         if not results:
             return f"No messages matching '{query}'."
