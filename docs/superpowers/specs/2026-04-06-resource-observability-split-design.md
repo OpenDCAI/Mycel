@@ -71,10 +71,15 @@ What changes:
   - storage repos
   - sandbox lease/terminal/chat-session persistence
   - resource snapshots / telemetry
+- Shared resource helpers:
+  - provider catalog / console URL / capability lookup
+  - telemetry normalization and metric shaping
+  - runtime thread/member owner lookup
 - Global monitor projection:
   - monitor routes and services
   - global/admin DTOs
 - Product resource projection:
+  - `resource_projection_service.py`
   - resource routes and services
   - user-visible DTOs
 
@@ -84,6 +89,7 @@ What changes:
 - Monitor may not import product-layer services.
 - Both may depend on shared storage/domain truth.
 - Shared truth enters through storage contracts, not ad-hoc SQLite factories.
+- Shared projection helpers should live in a neutral helper module, not as private imports back into `resource_service.py`.
 
 ## Honest Scope Boundary
 

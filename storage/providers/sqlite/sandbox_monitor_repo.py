@@ -29,25 +29,46 @@ class SQLiteSandboxMonitorRepo:
     def close(self) -> None:
         self._conn.close()
 
-    def query_threads(self) -> list[dict]:
-        rows = self._conn.execute(
-            """
-            SELECT
-                cs.thread_id,
-                COUNT(DISTINCT cs.chat_session_id) as session_count,
-                MAX(cs.last_active_at) as last_active,
-                sl.lease_id,
-                sl.provider_name,
-                sl.desired_state,
-                sl.observed_state,
-                sl.current_instance_id
-            FROM chat_sessions cs
-            LEFT JOIN sandbox_leases sl ON cs.lease_id = sl.lease_id
-            WHERE cs.status != 'closed'
-            GROUP BY cs.thread_id
-            ORDER BY MAX(cs.last_active_at) DESC
-            """
-        ).fetchall()
+    def query_threads(self, *, thread_id: str | None = None) -> list[dict]:
+        if thread_id is None:
+            rows = self._conn.execute(
+                """
+                SELECT
+                    cs.thread_id,
+                    COUNT(DISTINCT cs.chat_session_id) as session_count,
+                    MAX(cs.last_active_at) as last_active,
+                    sl.lease_id,
+                    sl.provider_name,
+                    sl.desired_state,
+                    sl.observed_state,
+                    sl.current_instance_id
+                FROM chat_sessions cs
+                LEFT JOIN sandbox_leases sl ON cs.lease_id = sl.lease_id
+                WHERE cs.status != 'closed'
+                GROUP BY cs.thread_id
+                ORDER BY MAX(cs.last_active_at) DESC
+                """
+            ).fetchall()
+        else:
+            rows = self._conn.execute(
+                """
+                SELECT
+                    cs.thread_id,
+                    COUNT(DISTINCT cs.chat_session_id) as session_count,
+                    MAX(cs.last_active_at) as last_active,
+                    sl.lease_id,
+                    sl.provider_name,
+                    sl.desired_state,
+                    sl.observed_state,
+                    sl.current_instance_id
+                FROM chat_sessions cs
+                LEFT JOIN sandbox_leases sl ON cs.lease_id = sl.lease_id
+                WHERE cs.status != 'closed' AND cs.thread_id = ?
+                GROUP BY cs.thread_id
+                ORDER BY MAX(cs.last_active_at) DESC
+                """,
+                (thread_id,),
+            ).fetchall()
         return [_row_to_dict(r) for r in rows]
 
     def query_thread_summary(self, thread_id: str) -> dict | None:
@@ -168,7 +189,6 @@ class SQLiteSandboxMonitorRepo:
                 sl.recipe_json,
                 sl.desired_state,
                 sl.observed_state,
-                sl.created_at,
                 sl.updated_at,
                 at.thread_id,
                 at.cwd
