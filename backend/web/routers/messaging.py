@@ -10,7 +10,7 @@ import asyncio
 import json
 import logging
 from datetime import UTC, datetime
-from typing import Annotated, Any, Literal
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
@@ -39,12 +39,6 @@ class SendMessageBody(BaseModel):
     mentioned_ids: list[str] | None = None
     message_type: str = "human"
     signal: str | None = None
-
-
-class SetContactBody(BaseModel):
-    owner_id: str
-    target_id: str
-    relation: Literal["normal", "blocked", "muted"]
 
 
 class MuteChatBody(BaseModel):
@@ -140,7 +134,7 @@ async def get_chat(
     chat = app.state.chat_repo.get_by_id(chat_id)
     if not chat:
         raise HTTPException(404, "Chat not found")
-    members_list = _messaging(app)._members_repo.list_members(chat_id)
+    members_list = _messaging(app).list_chat_members(chat_id)
     members_info = []
     for m in members_list:
         uid = m.get("user_id")
@@ -251,7 +245,7 @@ async def delete_chat(
     chat = app.state.chat_repo.get_by_id(chat_id)
     if not chat:
         raise HTTPException(404, "Chat not found")
-    if not _messaging(app)._members_repo.is_member(chat_id, user_id):
+    if not _messaging(app).is_chat_member(chat_id, user_id):
         raise HTTPException(403, "Not a participant of this chat")
     app.state.chat_repo.delete(chat_id)
     return {"status": "deleted"}
@@ -301,46 +295,6 @@ async def stream_chat_events(
 
 
 # ---------------------------------------------------------------------------
-# Contact management
-# ---------------------------------------------------------------------------
-
-
-@router.post("/contacts")
-async def set_contact(
-    body: SetContactBody,
-    user_id: Annotated[str, Depends(get_current_user_id)],
-    app: Annotated[Any, Depends(get_app)],
-):
-    _verify_member_ownership(app, body.owner_id, user_id)
-    import time
-
-    from storage.contracts import ContactRow
-
-    app.state.contact_repo.upsert(
-        ContactRow(
-            owner_id=body.owner_id,
-            target_id=body.target_id,
-            relation=body.relation,
-            created_at=time.time(),
-            updated_at=time.time(),
-        )
-    )
-    return {"status": "ok", "relation": body.relation}
-
-
-@router.delete("/contacts/{owner_id}/{target_id}")
-async def delete_contact(
-    owner_id: str,
-    target_id: str,
-    user_id: Annotated[str, Depends(get_current_user_id)],
-    app: Annotated[Any, Depends(get_app)],
-):
-    _verify_member_ownership(app, owner_id, user_id)
-    app.state.contact_repo.delete(owner_id, target_id)
-    return {"status": "deleted"}
-
-
-# ---------------------------------------------------------------------------
 # Chat mute
 # ---------------------------------------------------------------------------
 
@@ -354,5 +308,5 @@ async def mute_chat(
 ):
     _verify_member_ownership(app, body.user_id, user_id)
     mute_until_iso = datetime.fromtimestamp(body.mute_until, tz=UTC).isoformat() if body.mute_until else None
-    _messaging(app)._members_repo.update_mute(chat_id, body.user_id, body.muted, mute_until_iso)
+    _messaging(app).update_mute(chat_id, body.user_id, body.muted, mute_until_iso)
     return {"status": "ok", "muted": body.muted}

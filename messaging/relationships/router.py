@@ -32,10 +32,12 @@ def _get_rel_service(app: Any):
     return svc
 
 
-def _get_existing(svc, relationship_id: str) -> dict:
+def _get_existing(svc, relationship_id: str, user_id: str) -> dict:
     existing = svc.get_by_id(relationship_id)
     if not existing:
         raise HTTPException(404, "Relationship not found")
+    if user_id not in (existing["principal_a"], existing["principal_b"]):
+        raise HTTPException(403, "Not a party of this relationship")
     return existing
 
 
@@ -101,7 +103,7 @@ async def approve_relationship(
     app: Annotated[Any, Depends(get_app)],
 ):
     svc = _get_rel_service(app)
-    existing = _get_existing(svc, relationship_id)
+    existing = _get_existing(svc, relationship_id, user_id)
     requester_id, _ = _resolve_parties(existing, user_id)
     if user_id == requester_id:
         raise HTTPException(409, "Cannot approve your own request")
@@ -118,7 +120,7 @@ async def reject_relationship(
     app: Annotated[Any, Depends(get_app)],
 ):
     svc = _get_rel_service(app)
-    existing = _get_existing(svc, relationship_id)
+    existing = _get_existing(svc, relationship_id, user_id)
     requester_id, _ = _resolve_parties(existing, user_id)
     if user_id == requester_id:
         raise HTTPException(409, "Cannot reject your own request")
@@ -136,7 +138,7 @@ async def upgrade_relationship(
     app: Annotated[Any, Depends(get_app)],
 ):
     svc = _get_rel_service(app)
-    existing = _get_existing(svc, relationship_id)
+    existing = _get_existing(svc, relationship_id, user_id)
     _, other_id = _resolve_parties(existing, user_id)
     try:
         return _row_to_dict(svc.upgrade(user_id, other_id, snapshot=body.hire_snapshot), user_id)
@@ -151,7 +153,7 @@ async def revoke_relationship(
     app: Annotated[Any, Depends(get_app)],
 ):
     svc = _get_rel_service(app)
-    existing = _get_existing(svc, relationship_id)
+    existing = _get_existing(svc, relationship_id, user_id)
     _, other_id = _resolve_parties(existing, user_id)
     try:
         return _row_to_dict(svc.revoke(user_id, other_id), user_id)
@@ -166,7 +168,7 @@ async def downgrade_relationship(
     app: Annotated[Any, Depends(get_app)],
 ):
     svc = _get_rel_service(app)
-    existing = _get_existing(svc, relationship_id)
+    existing = _get_existing(svc, relationship_id, user_id)
     _, other_id = _resolve_parties(existing, user_id)
     try:
         return _row_to_dict(svc.downgrade(user_id, other_id), user_id)

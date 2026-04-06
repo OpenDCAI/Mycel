@@ -331,27 +331,6 @@ class LeonAgent:
         if hasattr(self, "_agent_service"):
             self._agent_service._parent_bootstrap = self._bootstrap
 
-        # @@@chat-identity — inject chat identity so agent knows who it is in the social layer
-        if self._chat_repos:
-            repos = self._chat_repos
-            uid = repos.get("user_id")
-            owner_uid = repos.get("owner_user_id", "")
-            if uid:
-                member_repo = repos.get("member_repo")
-                me = member_repo.get_by_id(uid) if member_repo else None
-                owner_row = member_repo.get_by_id(owner_uid) if member_repo and owner_uid else None
-                name = me.name if me else uid
-                owner_name = owner_row.name if owner_row else "unknown"
-                self.system_prompt += (
-                    f"\n\n**Chat Identity:**\n"
-                    f"- Your name: {name}\n"
-                    f"- Your user_id: {uid}\n"
-                    f"- Your owner: {owner_name} (user_id: {owner_uid})\n"
-                    f"- When you receive a chat notification, READ the message with chat_read(), "
-                    f"then REPLY with chat_send(). Your text output goes to your owner's thread, "
-                    f"not to the chat — only chat_send() delivers to the other party.\n"
-                )
-
         # Create agent via QueryLoop (replaces LangGraph create_agent)
         self.agent = QueryLoop(
             model=self.model,

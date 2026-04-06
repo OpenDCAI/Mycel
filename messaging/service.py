@@ -212,6 +212,15 @@ class MessagingService:
     def search_messages(self, query: str, *, chat_id: str | None = None) -> list[dict[str, Any]]:
         return self._messages.search(query, chat_id=chat_id)
 
+    def list_chat_members(self, chat_id: str) -> list[dict[str, Any]]:
+        return self._members_repo.list_members(chat_id)
+
+    def is_chat_member(self, chat_id: str, user_id: str) -> bool:
+        return self._members_repo.is_member(chat_id, user_id)
+
+    def update_mute(self, chat_id: str, user_id: str, muted: bool, mute_until: str | None) -> None:
+        self._members_repo.update_mute(chat_id, user_id, muted, mute_until)
+
     def list_chats_for_user(self, user_id: str) -> list[dict[str, Any]]:
         """List all active chats for user with summary info."""
         chat_ids = self._members_repo.list_chats_for_user(user_id)
@@ -226,13 +235,12 @@ class MessagingService:
                 uid = m.get("user_id")
                 e = self._member_repo.get_by_id(uid) if uid else None
                 if e:
-                    mem = self._member_repo.get_by_id(e.member_id) if self._member_repo else None
                     entities_info.append(
                         {
                             "id": e.id,
                             "name": e.name,
                             "type": e.type,
-                            "avatar_url": avatar_url(e.member_id, bool(mem.avatar if mem else None)),
+                            "avatar_url": avatar_url(e.id, bool(e.avatar)),
                         }
                     )
             msgs = self._messages.list_by_chat(cid, limit=1)
