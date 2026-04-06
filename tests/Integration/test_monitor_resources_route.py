@@ -93,7 +93,6 @@ def test_monitor_and_product_resource_routes_coexist_intentionally(monkeypatch):
     assert monitor_response.status_code == 200
     assert product_response.status_code == 200
 
-
 def test_monitor_health_route_smoke():
     with TestClient(_build_monitor_test_app()) as client:
         response = client.get("/api/monitor/health")
