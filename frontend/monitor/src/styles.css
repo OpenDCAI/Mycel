@@ -822,6 +822,12 @@ section li {
   border-color: transparent;
 }
 
+.chip-danger {
+  background: var(--danger-soft);
+  color: var(--danger);
+  border-color: transparent;
+}
+
 .evaluation-flow,
 .evaluation-overview,
 .evaluation-notes {

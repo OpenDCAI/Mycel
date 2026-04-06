@@ -35,6 +35,7 @@
 - Active continuation is `#210`, not `#209`.
 - `#210` uses `PR #182` as the monitor baseline by transplanting the compat monitor onto a current resource-split branch instead of building on the reduced dev monitor shell.
 - This branch keeps the full compat operator surface (`threads`, `traces`, `leases`, `evaluation`) and applies a bounded light-theme cleanup so operators are not dropped into a dark, overloaded console.
+- Latest frontend review closeout on `#210` is intentionally narrow: `EvaluationDetailPage` now gives the primary status chip semantic warning/danger/success treatment instead of leaving status visually flatter than the secondary publishable chip, and the score-grid JSX structure was re-indented so future edits do not misread the DOM hierarchy.
 
 ## Proposal Comparison
 
