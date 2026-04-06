@@ -43,6 +43,27 @@ class DirectoryItem(BaseModel):
     is_dir: bool
 
 
+def _resolve_workspace_path_or_400(
+    workspace: str,
+    *,
+    missing_detail: str,
+    not_dir_detail: str,
+) -> str:
+    workspace_path = Path(workspace).expanduser().resolve()
+    if not workspace_path.exists():
+        raise HTTPException(status_code=400, detail=missing_detail)
+    if not workspace_path.is_dir():
+        raise HTTPException(status_code=400, detail=not_dir_detail)
+    return str(workspace_path)
+
+
+def _remember_recent_workspace(settings: "WorkspaceSettings", workspace_str: str) -> None:
+    if workspace_str in settings.recent_workspaces:
+        settings.recent_workspaces.remove(workspace_str)
+    settings.recent_workspaces.insert(0, workspace_str)
+    settings.recent_workspaces = settings.recent_workspaces[:5]
+
+
 def load_settings() -> WorkspaceSettings:
     try:
         data = _load_user_json("preferences.json")
@@ -240,13 +261,11 @@ async def set_default_workspace(
     user_id: Annotated[str, Depends(get_current_user_id)],
 ) -> dict[str, Any]:
     """Set default workspace path."""
-    workspace_path = Path(request.workspace).expanduser().resolve()
-    if not workspace_path.exists():
-        raise HTTPException(status_code=400, detail="Workspace path does not exist")
-    if not workspace_path.is_dir():
-        raise HTTPException(status_code=400, detail="Workspace path is not a directory")
-
-    workspace_str = str(workspace_path)
+    workspace_str = _resolve_workspace_path_or_400(
+        request.workspace,
+        missing_detail="Workspace path does not exist",
+        not_dir_detail="Workspace path is not a directory",
+    )
 
     repo = _get_settings_repo(req)
     if repo and user_id:
@@ -254,10 +273,7 @@ async def set_default_workspace(
     else:
         settings = load_settings()
         settings.default_workspace = workspace_str
-        if workspace_str in settings.recent_workspaces:
-            settings.recent_workspaces.remove(workspace_str)
-        settings.recent_workspaces.insert(0, workspace_str)
-        settings.recent_workspaces = settings.recent_workspaces[:5]
+        _remember_recent_workspace(settings, workspace_str)
         save_settings(settings)
 
     return {"success": True, "workspace": workspace_str}
@@ -270,21 +286,18 @@ async def add_recent_workspace(
     user_id: Annotated[str, Depends(get_current_user_id)],
 ) -> dict[str, Any]:
     """Add a workspace to recent list."""
-    workspace_path = Path(request.workspace).expanduser().resolve()
-    if not workspace_path.exists() or not workspace_path.is_dir():
-        raise HTTPException(status_code=400, detail="Invalid workspace path")
-
-    workspace_str = str(workspace_path)
+    workspace_str = _resolve_workspace_path_or_400(
+        request.workspace,
+        missing_detail="Invalid workspace path",
+        not_dir_detail="Invalid workspace path",
+    )
 
     repo = _get_settings_repo(req)
     if repo and user_id:
         repo.add_recent_workspace(user_id, workspace_str)
     else:
         settings = load_settings()
-        if workspace_str in settings.recent_workspaces:
-            settings.recent_workspaces.remove(workspace_str)
-        settings.recent_workspaces.insert(0, workspace_str)
-        settings.recent_workspaces = settings.recent_workspaces[:5]
+        _remember_recent_workspace(settings, workspace_str)
         save_settings(settings)
 
     return {"success": True}
