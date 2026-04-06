@@ -193,3 +193,76 @@ These are not vague “polish later” notes. They are concrete seams that now b
   - add a dashboard landing page
   - add a monitor resources entry, likely by transplanting/reusing the existing `ResourcesPage` visual structure against the global monitor contract
   - keep product `/resources` on the user-scoped contract and keep monitor resources global
+
+## Current IA Direction
+
+This is the current recommended monitor IA after the latest user review and the Chloe/CCM design pass.
+
+### Top-level Navigation
+
+- `Dashboard`
+- `Threads`
+- `Resources`
+- `Eval`
+
+### Explicit removals / merges
+
+- remove the top-nav caption (`Global ops surface...`)
+- stop defaulting `/` to `/threads`; default to `/dashboard`
+- merge the current top-level `Traces` tab into the thread drill-down path instead of keeping it as a separate first-class nav destination
+- replace the top-level `Leases` tab with `Resources`; lease health remains visible, but as one section inside the broader resources/infrastructure surface
+
+### Dashboard Shape
+
+- `Infra Health`
+  - provider availability
+  - diverged lease count
+  - orphan lease count
+  - links into filtered resource/lease views
+- `Active Workload`
+  - active threads
+  - running sessions
+  - recent errors
+- `Eval Snapshot`
+  - latest evaluation status
+  - progress
+  - publishable/final score when available
+
+The dashboard is a switchboard, not a full destination page. It should answer “what needs attention?” and route the operator into the right deeper surface.
+
+### Resources Surface
+
+- top section: global provider cards and provider detail, transplanted from the existing product `ResourcesPage` family where possible
+- bottom section: lease health triage, grouped instead of dumped
+  - diverged
+  - orphan
+  - healthy/history (collapsed or de-emphasized)
+
+### Current D4 Phase-1 Landing
+
+- compat monitor now has a real `/dashboard` entry backed by `/api/monitor/dashboard`
+- top-level nav is now `Dashboard / Threads / Resources / Eval`
+- root route now lands on `/dashboard`
+- top-nav caption has been removed
+- monitor `Resources` is now a first-class page using the global monitor contract:
+  - `GET /api/monitor/resources`
+  - `POST /api/monitor/resources/refresh`
+  - `GET /api/monitor/leases`
+- the monitor resources page now has:
+  - provider grid
+  - selected provider detail
+  - global session table per provider
+  - grouped lease health sections (`Diverged`, `Orphans`, `All leases`)
+- evaluation guidance is no longer sprayed across the first screen; tutorial/reference sections are now collapsed by default behind an operator-guide `<details>` block
+
+### D4 Remaining Gaps
+
+- provider detail is now useful, but it is still lighter than the original product `ResourcesPage` family
+- lease regrouping exists, but backend-side semantic categorization is still shallow and belongs to `D3`
+- dashboard is currently a compact switchboard; it does not yet expose richer error drill-down or resource anomaly timelines
+
+### Why this IA
+
+- the backend already exposes `/api/monitor/resources`; the missing piece is a monitor entry surface, not another resource backend invention
+- leases are one kind of infrastructure/resource truth, not a top-level product of their own
+- traces are usually reached through a thread/run drill-down, so a separate top-level `Traces` tab adds noise before it adds value

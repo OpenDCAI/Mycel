@@ -12,6 +12,23 @@
 
 **Additional sequencing note after live operator review:** before this branch is mergeable as a monitor base, the next follow-up cuts must address four honesty seams now visible in the real UI: `D1` threads pagination contract, `D2` provisional evaluation detail as an operator surface, `D3` lease orphan/diverged regrouping, and `D4` dashboard + global resources entry.
 
+**Current execution order after `D1`:**
+- `D4` dashboard + global resources entry
+- `D3` lease semantics/regrouping inside the new resources surface
+- `D2` provisional evaluation operator surface
+
+**Live progress after latest frontend pass:**
+- `D1` is done
+- `D4` now has a landed phase-1:
+  - `/dashboard` route and `/api/monitor/dashboard` backend payload exist
+  - top nav is `Dashboard / Threads / Resources / Eval`
+  - root lands on `/dashboard`
+  - monitor `Resources` uses the global monitor contract and includes grouped lease triage
+  - evaluation tutorial/reference sections are collapsed by default
+- next honest follow-up remains:
+  - `D3` because lease regrouping still relies on shallow frontend grouping over raw facts
+  - `D2` because provisional eval detail still needs a stronger operator-facing explanation and artifact/log next-step surface
+
 ---
 
 ### Task 1: Lock Storage Abstraction For Monitor Reads

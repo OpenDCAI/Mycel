@@ -46,3 +46,16 @@ def test_monitor_health_route_smoke():
     assert "snapshot_at" in payload
     assert "db" in payload
     assert "sessions" in payload
+
+
+def test_monitor_dashboard_route_smoke():
+    with TestClient(app) as client:
+        response = client.get("/api/monitor/dashboard")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert "snapshot_at" in payload
+    assert "resources_summary" in payload
+    assert "infra" in payload
+    assert "workload" in payload
+    assert "latest_evaluation" in payload

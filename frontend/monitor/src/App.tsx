@@ -62,6 +62,547 @@ function StateBadge({ badge }: { badge: any }) {
   return <span className={className} title={tooltip}>{text}</span>;
 }
 
+function DashboardMetric({
+  label,
+  value,
+  note,
+  tone = 'default',
+}: {
+  label: string;
+  value: React.ReactNode;
+  note?: React.ReactNode;
+  tone?: 'default' | 'warning' | 'danger' | 'success';
+}) {
+  return (
+    <div className={`dashboard-metric dashboard-metric-${tone}`}>
+      <span className="dashboard-metric-label">{label}</span>
+      <strong className="dashboard-metric-value">{value}</strong>
+      {note ? <span className="dashboard-metric-note">{note}</span> : null}
+    </div>
+  );
+}
+
+function DashboardPage() {
+  const [data, setData] = React.useState<any>(null);
+  const [loading, setLoading] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
+
+  const loadDashboard = React.useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const payload = await fetchAPI('/dashboard');
+      setData(payload);
+    } catch (e: any) {
+      setError(e?.message || String(e));
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  React.useEffect(() => {
+    void loadDashboard();
+  }, [loadDashboard]);
+
+  if (error) {
+    return (
+      <div className="page" data-testid="page-dashboard">
+        <h1>Dashboard</h1>
+        <div className="page-error">Dashboard load failed: {error}</div>
+      </div>
+    );
+  }
+
+  if (!data) {
+    return (
+      <div className="page" data-testid="page-dashboard">
+        <div className="page-loading">Loading...</div>
+      </div>
+    );
+  }
+
+  const infra = data.infra || {};
+  const workload = data.workload || {};
+  const latestEval = data.latest_evaluation || null;
+  const resourcesSummary = data.resources_summary || {};
+
+  return (
+    <div className="page" data-testid="page-dashboard">
+      <div className="section-row">
+        <div>
+          <h1>Dashboard</h1>
+          <p className="description">Operator landing for resource health, workload pressure, and the latest evaluation run.</p>
+        </div>
+        <button className="ghost-btn" onClick={() => void loadDashboard()} disabled={loading}>
+          {loading ? 'Refreshing...' : 'Refresh'}
+        </button>
+      </div>
+
+      <section className="dashboard-grid">
+        <article className="hint-box dashboard-card">
+          <div className="section-row dashboard-card-head">
+            <div>
+              <h2>Infra Health</h2>
+              <p className="description">Global provider and lease state from the monitor backend.</p>
+            </div>
+            <Link className="quick-link" to="/resources">
+              Open resources
+            </Link>
+          </div>
+          <div className="dashboard-metric-grid">
+            <DashboardMetric
+              label="Providers"
+              value={`${resourcesSummary.active_providers || 0}/${resourcesSummary.total_providers || 0}`}
+              note={`${resourcesSummary.unavailable_providers || 0} unavailable`}
+              tone={(resourcesSummary.unavailable_providers || 0) > 0 ? 'warning' : 'success'}
+            />
+            <DashboardMetric
+              label="Diverged leases"
+              value={infra.leases_diverged || 0}
+              note={`${infra.leases_total || 0} total`}
+              tone={(infra.leases_diverged || 0) > 0 ? 'warning' : 'success'}
+            />
+            <DashboardMetric
+              label="Orphans"
+              value={infra.leases_orphan || 0}
+              note={`${infra.leases_healthy || 0} healthy`}
+              tone={(infra.leases_orphan || 0) > 0 ? 'danger' : 'success'}
+            />
+          </div>
+        </article>
+
+        <article className="hint-box dashboard-card">
+          <div className="section-row dashboard-card-head">
+            <div>
+              <h2>Active Workload</h2>
+              <p className="description">How much monitored runtime is currently alive across DB sessions, providers, and evaluations.</p>
+            </div>
+            <Link className="quick-link" to="/threads">
+              Open threads
+            </Link>
+          </div>
+          <div className="dashboard-metric-grid">
+            <DashboardMetric
+              label="DB sessions"
+              value={workload.db_sessions_total || 0}
+              note="durable chat sessions"
+            />
+            <DashboardMetric
+              label="Provider sessions"
+              value={workload.provider_sessions_total || 0}
+              note="reported by providers"
+            />
+            <DashboardMetric
+              label="Running sessions"
+              value={workload.running_sessions || 0}
+              note={`${workload.evaluations_running || 0} eval jobs running`}
+              tone={(workload.running_sessions || 0) > 0 ? 'default' : 'warning'}
+            />
+          </div>
+        </article>
+
+        <article className="hint-box dashboard-card dashboard-card-eval">
+          <div className="section-row dashboard-card-head">
+            <div>
+              <h2>Latest Eval</h2>
+              <p className="description">Most recent evaluation known to the monitor. Use this as the fastest jump into detail.</p>
+            </div>
+            <Link className="quick-link" to={latestEval?.evaluation_url || '/evaluation'}>
+              {latestEval ? 'Open latest eval' : 'Open eval list'}
+            </Link>
+          </div>
+          {latestEval ? (
+            <div className="dashboard-eval-body">
+              <div className="chip-row">
+                <span className={`status-chip ${latestEval.status === 'provisional' ? 'chip-warning' : latestEval.status === 'error' ? 'chip-danger' : 'chip-muted'}`}>
+                  {latestEval.status}
+                </span>
+                <span className={`status-chip ${latestEval.publishable ? 'chip-success' : 'chip-warning'}`}>
+                  publishable={String(Boolean(latestEval.publishable))}
+                </span>
+              </div>
+              <div className="mono dashboard-eval-id">{latestEval.evaluation_id}</div>
+              <div className="eval-progress-track">
+                <div className="eval-progress-fill" style={{ width: `${Number(latestEval.progress_pct || 0)}%` }} />
+              </div>
+              <div className="mono eval-progress-line">
+                {latestEval.threads_done || 0}/{latestEval.threads_total || 0} threads · {formatPct(latestEval.progress_pct || 0)} · updated {latestEval.updated_ago || '-'}
+              </div>
+              <div className="dashboard-eval-footer">
+                <DashboardMetric
+                  label="Primary score"
+                  value={latestEval.primary_score_pct == null ? 'provisional' : formatPct(latestEval.primary_score_pct)}
+                  note={latestEval.primary_score_pct == null ? 'score blocked until summary lands' : 'publishable score'}
+                  tone={latestEval.primary_score_pct == null ? 'warning' : 'success'}
+                />
+              </div>
+            </div>
+          ) : (
+            <div className="dashboard-empty">
+              <p className="description">No evaluation rows yet. Open Eval to submit a minimal run.</p>
+            </div>
+          )}
+        </article>
+      </section>
+    </div>
+  );
+}
+
+function MonitorResourcesPage() {
+  const [resourceData, setResourceData] = React.useState<any>(null);
+  const [leaseData, setLeaseData] = React.useState<any>(null);
+  const [selectedId, setSelectedId] = React.useState('');
+  const [loading, setLoading] = React.useState(false);
+  const [refreshing, setRefreshing] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
+
+  const loadResources = React.useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const [resources, leases] = await Promise.all([
+        fetchAPI('/resources'),
+        fetchAPI('/leases'),
+      ]);
+      setResourceData(resources);
+      setLeaseData(leases);
+      const providers = Array.isArray(resources?.providers) ? resources.providers : [];
+      setSelectedId((prev) => (providers.some((provider: any) => provider.id === prev) ? prev : providers[0]?.id || ''));
+    } catch (e: any) {
+      setError(e?.message || String(e));
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  const refreshNow = React.useCallback(async () => {
+    setRefreshing(true);
+    setError(null);
+    try {
+      const [resources, leases] = await Promise.all([
+        fetchJSON(`${API_BASE}/resources/refresh`, { method: 'POST' }),
+        fetchAPI('/leases'),
+      ]);
+      setResourceData(resources);
+      setLeaseData(leases);
+    } catch (e: any) {
+      setError(e?.message || String(e));
+    } finally {
+      setRefreshing(false);
+    }
+  }, []);
+
+  React.useEffect(() => {
+    void loadResources();
+  }, [loadResources]);
+
+  if (error) {
+    return (
+      <div className="page" data-testid="page-resources">
+        <h1>Resources</h1>
+        <div className="page-error">Resource load failed: {error}</div>
+      </div>
+    );
+  }
+
+  if (!resourceData || !leaseData) {
+    return (
+      <div className="page" data-testid="page-resources">
+        <div className="page-loading">Loading...</div>
+      </div>
+    );
+  }
+
+  const providers = Array.isArray(resourceData.providers) ? resourceData.providers : [];
+  const summary = resourceData.summary || {};
+  const leases = Array.isArray(leaseData.items) ? leaseData.items : [];
+  const selectedProvider = providers.find((provider: any) => provider.id === selectedId) || providers[0] || null;
+  const divergedLeases = leases.filter((item: any) => item.state_badge?.desired !== item.state_badge?.observed);
+  const orphanLeases = leases.filter((item: any) => Boolean(item.thread?.is_orphan));
+  const healthyLeases = leases.filter((item: any) => Boolean(item.state_badge?.converged));
+  const refreshedAt = summary.last_refreshed_at || summary.snapshot_at;
+  const selectedSessions = Array.isArray(selectedProvider?.sessions) ? selectedProvider.sessions : [];
+  const selectedRunning = selectedSessions.filter((session: any) => session.status === 'running').length;
+  const selectedPaused = selectedSessions.filter((session: any) => session.status === 'paused').length;
+  const selectedStopped = selectedSessions.filter((session: any) => session.status === 'stopped').length;
+
+  return (
+    <div className="page" data-testid="page-resources">
+      <div className="section-row">
+        <div>
+          <h1>Resources</h1>
+          <p className="description">Global provider health and lease triage. Product resources stay user-scoped; this page keeps the infra-wide lens.</p>
+        </div>
+        <button className="ghost-btn" onClick={() => void refreshNow()} disabled={refreshing || loading}>
+          {refreshing ? 'Refreshing...' : 'Refresh'}
+        </button>
+      </div>
+
+      <section className="resource-summary-grid">
+        <DashboardMetric label="Providers" value={summary.total_providers || 0} note={`${summary.active_providers || 0} active · ${summary.unavailable_providers || 0} unavailable`} />
+        <DashboardMetric label="Running sessions" value={summary.running_sessions || 0} note={refreshedAt ? `refreshed ${new Date(refreshedAt).toLocaleTimeString()}` : 'no timestamp'} />
+        <DashboardMetric label="Diverged leases" value={divergedLeases.length} note={`${orphanLeases.length} orphan`} tone={divergedLeases.length > 0 ? 'warning' : 'success'} />
+        <DashboardMetric label="Healthy leases" value={healthyLeases.length} note={`${leases.length} total`} tone={healthyLeases.length > 0 ? 'success' : 'danger'} />
+      </section>
+
+      <section className="resource-section-shell">
+        <div className="section-row">
+          <div>
+            <h2>Providers</h2>
+            <p className="description">Same provider surface as the product page, but backed by the global monitor contract.</p>
+          </div>
+        </div>
+        <div className="monitor-provider-grid">
+          {providers.map((provider: any) => {
+            const sessions = Array.isArray(provider.sessions) ? provider.sessions : [];
+            const runningCount = sessions.filter((session: any) => session.status === 'running').length;
+            const unavailable = provider.status === 'unavailable';
+            const cpuUsed = provider.cardCpu?.used;
+            const memoryUsed = provider.telemetry?.memory?.used;
+            return (
+              <button
+                key={provider.id}
+                type="button"
+                className={`monitor-provider-card${provider.id === selectedId ? ' is-selected' : ''}${unavailable ? ' is-unavailable' : ''}`}
+                onClick={() => setSelectedId(provider.id)}
+                data-provider-id={provider.id}
+              >
+                <div className="monitor-provider-header">
+                  <div>
+                    <strong>{provider.name}</strong>
+                    <p>{provider.type} {provider.vendor ? `· ${provider.vendor}` : ''}</p>
+                  </div>
+                  <span className={`status-chip ${unavailable ? 'chip-danger' : provider.status === 'active' ? 'chip-success' : 'chip-muted'}`}>
+                    {provider.status}
+                  </span>
+                </div>
+                <div className="monitor-provider-metrics">
+                  <DashboardMetric label="Sessions" value={sessions.length} note={`${runningCount} running`} />
+                  <DashboardMetric label="CPU" value={cpuUsed == null ? '--' : `${Number(cpuUsed).toFixed(1)}%`} note={provider.cardCpu?.freshness || 'no signal'} />
+                  <DashboardMetric label="Memory" value={memoryUsed == null ? '--' : `${Number(memoryUsed).toFixed(1)} GB`} note={provider.telemetry?.memory?.freshness || 'no signal'} />
+                </div>
+                {provider.unavailableReason || provider.error ? (
+                  <p className="provider-inline-error">{provider.unavailableReason || provider.error}</p>
+                ) : null}
+              </button>
+            );
+          })}
+        </div>
+      </section>
+
+      {selectedProvider ? (
+        <section className="resource-section-shell">
+          <div className="section-row">
+            <div>
+              <h2>{selectedProvider.name}</h2>
+              <p className="description">{selectedProvider.description || 'No provider description.'}</p>
+            </div>
+            {selectedProvider.consoleUrl ? (
+              <a className="quick-link" href={selectedProvider.consoleUrl} target="_blank" rel="noreferrer">
+                Open console
+              </a>
+            ) : null}
+          </div>
+          <div className="resource-overview-strip">
+            <span className="resource-overview-pill">
+              <span className="resource-overview-label">status</span>
+              <strong>{selectedProvider.status}</strong>
+            </span>
+            <span className="resource-overview-pill">
+              <span className="resource-overview-label">running</span>
+              <strong>{selectedRunning}</strong>
+            </span>
+            <span className="resource-overview-pill">
+              <span className="resource-overview-label">paused</span>
+              <strong>{selectedPaused}</strong>
+            </span>
+            <span className="resource-overview-pill">
+              <span className="resource-overview-label">stopped</span>
+              <strong>{selectedStopped}</strong>
+            </span>
+          </div>
+          <div className="info-grid info-grid-compact">
+            <div>
+              <strong>Provider</strong>
+              <span>{selectedProvider.type}{selectedProvider.vendor ? ` · ${selectedProvider.vendor}` : ''}</span>
+            </div>
+            <div>
+              <strong>Capabilities</strong>
+              <span>{Object.entries(selectedProvider.capabilities || {}).filter(([, enabled]) => Boolean(enabled)).map(([name]) => name).join(', ') || '-'}</span>
+            </div>
+            <div>
+              <strong>CPU</strong>
+              <span>{selectedProvider.telemetry?.cpu?.used == null ? '--' : `${Number(selectedProvider.telemetry.cpu.used).toFixed(1)}%`}</span>
+            </div>
+            <div>
+              <strong>Memory</strong>
+              <span>{selectedProvider.telemetry?.memory?.used == null ? '--' : `${Number(selectedProvider.telemetry.memory.used).toFixed(1)} / ${selectedProvider.telemetry?.memory?.limit ?? '--'} GB`}</span>
+            </div>
+            <div>
+              <strong>Disk</strong>
+              <span>{selectedProvider.telemetry?.disk?.used == null ? '--' : `${Number(selectedProvider.telemetry.disk.used).toFixed(1)} / ${selectedProvider.telemetry?.disk?.limit ?? '--'} GB`}</span>
+            </div>
+            <div>
+              <strong>Reason</strong>
+              <span>{selectedProvider.unavailableReason || selectedProvider.error || 'healthy'}</span>
+            </div>
+          </div>
+          <div className="resource-session-shell">
+            <div className="section-row">
+              <div>
+                <h2>Sessions ({selectedSessions.length})</h2>
+                <p className="description">Global session rows currently attached to this provider. This is the monitor-side truth surface, not the user projection.</p>
+              </div>
+            </div>
+            <table>
+              <thead>
+                <tr>
+                  <th>Session</th>
+                  <th>Thread</th>
+                  <th>Lease</th>
+                  <th>Member</th>
+                  <th>Status</th>
+                  <th>Started</th>
+                </tr>
+              </thead>
+              <tbody>
+                {selectedSessions.map((session: any) => (
+                  <tr key={session.id}>
+                    <td className="mono">{shortId(session.id, 12)}</td>
+                    <td>{session.threadId ? <Link to={`/thread/${session.threadId}`}>{shortId(session.threadId, 12)}</Link> : '-'}</td>
+                    <td>{session.leaseId ? <Link to={`/lease/${session.leaseId}`}>{shortId(session.leaseId, 12)}</Link> : '-'}</td>
+                    <td>{session.memberName || session.memberId || '-'}</td>
+                    <td>{session.status}</td>
+                    <td>{session.startedAt ? new Date(session.startedAt).toLocaleString() : '-'}</td>
+                  </tr>
+                ))}
+                {selectedSessions.length === 0 ? (
+                  <tr>
+                    <td colSpan={6}>No sessions reported for this provider.</td>
+                  </tr>
+                ) : null}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      ) : null}
+
+      <section className="resource-section-shell" id="lease-health">
+        <div className="section-row">
+          <div>
+            <h2>Lease Health</h2>
+            <p className="description">Grouped triage surface. Diverged rows show state drift; orphan rows show leases no longer bound to a live thread.</p>
+          </div>
+          <Link className="quick-link" to="/leases">
+            Legacy flat table
+          </Link>
+        </div>
+        <div className="lease-cluster-grid">
+          <article className="hint-box">
+            <h2>Diverged ({divergedLeases.length})</h2>
+            <p className="description">Desired and observed states no longer match.</p>
+            <table>
+              <thead>
+                <tr>
+                  <th>Lease</th>
+                  <th>Provider</th>
+                  <th>Thread</th>
+                  <th>State</th>
+                  <th>Updated</th>
+                </tr>
+              </thead>
+              <tbody>
+                {divergedLeases.slice(0, 8).map((item: any) => (
+                  <tr key={item.lease_id}>
+                    <td><Link to={item.lease_url}>{shortId(item.lease_id, 12)}</Link></td>
+                    <td>{item.provider}</td>
+                    <td>{item.thread?.thread_id ? <Link to={item.thread.thread_url}>{shortId(item.thread.thread_id, 12)}</Link> : <span className="orphan">orphan</span>}</td>
+                    <td><StateBadge badge={item.state_badge} /></td>
+                    <td>{item.updated_ago}</td>
+                  </tr>
+                ))}
+                {divergedLeases.length === 0 ? (
+                  <tr>
+                    <td colSpan={5}>No diverged leases.</td>
+                  </tr>
+                ) : null}
+              </tbody>
+            </table>
+          </article>
+
+          <article className="hint-box">
+            <h2>Orphans ({orphanLeases.length})</h2>
+            <p className="description">Lease rows with no active thread binding. These usually indicate cleanup debt or abandoned runtime state.</p>
+            <table>
+              <thead>
+                <tr>
+                  <th>Lease</th>
+                  <th>Provider</th>
+                  <th>Instance</th>
+                  <th>State</th>
+                  <th>Error</th>
+                </tr>
+              </thead>
+              <tbody>
+                {orphanLeases.slice(0, 8).map((item: any) => (
+                  <tr key={item.lease_id}>
+                    <td><Link to={item.lease_url}>{shortId(item.lease_id, 12)}</Link></td>
+                    <td>{item.provider}</td>
+                    <td className="mono">{shortId(item.instance_id, 12)}</td>
+                    <td><StateBadge badge={item.state_badge} /></td>
+                    <td className="error">{item.error || '-'}</td>
+                  </tr>
+                ))}
+                {orphanLeases.length === 0 ? (
+                  <tr>
+                    <td colSpan={5}>No orphan leases.</td>
+                  </tr>
+                ) : null}
+              </tbody>
+            </table>
+          </article>
+        </div>
+
+        <details className="lease-details-shell">
+          <summary>All leases ({leases.length})</summary>
+          <table>
+            <thead>
+              <tr>
+                <th>Lease ID</th>
+                <th>Provider</th>
+                <th>Instance ID</th>
+                <th>Thread</th>
+                <th>State</th>
+                <th>Updated</th>
+                <th>Error</th>
+              </tr>
+            </thead>
+            <tbody>
+              {leases.map((item: any) => (
+                <tr key={item.lease_id}>
+                  <td><Link to={item.lease_url}>{item.lease_id}</Link></td>
+                  <td>{item.provider}</td>
+                  <td className="mono">{item.instance_id?.slice(0, 12) || '-'}</td>
+                  <td>
+                    {item.thread.thread_id ? (
+                      <Link to={item.thread.thread_url}>{item.thread.thread_id.slice(0, 8)}</Link>
+                    ) : (
+                      <span className="orphan">orphan</span>
+                    )}
+                  </td>
+                  <td><StateBadge badge={item.state_badge} /></td>
+                  <td>{item.updated_ago}</td>
+                  <td className="error">{item.error || '-'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </details>
+      </section>
+    </div>
+  );
+}
+
 // Page: Threads List
 function ThreadsPage() {
   const [data, setData] = React.useState<any>(null);
@@ -1664,21 +2205,6 @@ function EvaluationPage() {
       <h1>Evaluations</h1>
       <p className="description">One evaluation contains many threads. Start jobs from config panel, track durable progress in list, then drill into thread trace.</p>
 
-      <section className="evaluation-flow">
-        <article className="hint-box">
-          <h2>1. Submit</h2>
-          <p className="description">Open config, choose scope/profile/sandbox, then submit one batch run.</p>
-        </article>
-        <article className="hint-box">
-          <h2>2. Track</h2>
-          <p className="description">List auto-refreshes every 5s and survives reload. Status is backend-persisted.</p>
-        </article>
-        <article className="hint-box">
-          <h2>3. Inspect</h2>
-          <p className="description">Open evaluation detail to jump to per-thread trace and tool-call timeline.</p>
-        </article>
-      </section>
-
       <section className="evaluation-overview">
         <div className="hint-box">
           <h2>Current Submission</h2>
@@ -1712,6 +2238,43 @@ function EvaluationPage() {
           </button>
         </div>
       </section>
+
+      <details className="operator-notes-shell">
+        <summary>Operator guide</summary>
+        <section className="evaluation-flow">
+          <article className="hint-box">
+            <h2>1. Submit</h2>
+            <p className="description">Open config, choose scope/profile/sandbox, then submit one batch run.</p>
+          </article>
+          <article className="hint-box">
+            <h2>2. Track</h2>
+            <p className="description">List auto-refreshes every 5s and survives reload. Status is backend-persisted.</p>
+          </article>
+          <article className="hint-box">
+            <h2>3. Inspect</h2>
+            <p className="description">Open evaluation detail to jump to per-thread trace and tool-call timeline.</p>
+          </article>
+        </section>
+
+        <section className="evaluation-notes">
+          <article className="hint-box">
+            <h2>Status Guide</h2>
+            <ul>
+              {statusReference.map((row) => (
+                <li key={row[0]}><span className="mono">{row[0]}</span>: {row[1]}</li>
+              ))}
+            </ul>
+          </article>
+          <article className="hint-box">
+            <h2>Field Guide</h2>
+            <ul>
+              {parameterReference.slice(0, 4).map((row) => (
+                <li key={row[0]}><span className="mono">{row[0]}</span>: {row[1]}</li>
+              ))}
+            </ul>
+          </article>
+        </section>
+      </details>
 
       <section>
         <div className="section-row">
@@ -1812,25 +2375,6 @@ function EvaluationPage() {
             Next
           </button>
         </div>
-      </section>
-
-      <section className="evaluation-notes">
-        <article className="hint-box">
-          <h2>Status Guide</h2>
-          <ul>
-            {statusReference.map((row) => (
-              <li key={row[0]}><span className="mono">{row[0]}</span>: {row[1]}</li>
-            ))}
-          </ul>
-        </article>
-        <article className="hint-box">
-          <h2>Field Guide</h2>
-          <ul>
-            {parameterReference.slice(0, 4).map((row) => (
-              <li key={row[0]}><span className="mono">{row[0]}</span>: {row[1]}</li>
-            ))}
-          </ul>
-        </article>
       </section>
 
       {composerOpen && (
@@ -2169,12 +2713,11 @@ function Layout({ children }: { children: React.ReactNode }) {
       <nav className="top-nav" data-testid="monitor-nav">
         <div className="top-nav-brand">
           <h1 className="logo">Mycel Sandbox Monitor</h1>
-          <p className="nav-caption">Global ops surface for threads, traces, leases, and eval runs.</p>
         </div>
         <div className="nav-links">
+          <NavLink data-testid="nav-dashboard" to="/dashboard">Dashboard</NavLink>
           <NavLink data-testid="nav-threads" to="/threads">Threads</NavLink>
-          <NavLink data-testid="nav-traces" to="/traces">Traces</NavLink>
-          <NavLink data-testid="nav-leases" to="/leases">Leases</NavLink>
+          <NavLink data-testid="nav-resources" to="/resources">Resources</NavLink>
           <NavLink data-testid="nav-eval" to="/evaluation">Eval</NavLink>
         </div>
       </nav>
@@ -2192,8 +2735,10 @@ export default function App() {
       <ScrollToTopOnRouteChange />
       <Layout>
         <Routes>
-          <Route path="/" element={<Navigate to="/threads" replace />} />
+          <Route path="/" element={<Navigate to="/dashboard" replace />} />
+          <Route path="/dashboard" element={<DashboardPage />} />
           <Route path="/threads" element={<ThreadsPage />} />
+          <Route path="/resources" element={<MonitorResourcesPage />} />
           <Route path="/traces" element={<TracesPage />} />
           <Route path="/thread/:threadId" element={<ThreadDetailPage />} />
           <Route path="/session/:sessionId" element={<SessionDetailPage />} />
