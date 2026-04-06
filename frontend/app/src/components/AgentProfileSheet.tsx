@@ -110,7 +110,7 @@ export default function AgentProfileSheet({ userId, open, onOpenChange }: AgentP
 
               <div className="space-y-2">
                 <button
-                  onClick={() => { onOpenChange(false); navigate("/chats"); }}
+                  onClick={() => { onOpenChange(false); navigate("/chat"); }}
                   className="w-full flex items-center justify-center gap-2 py-2 rounded-lg bg-foreground text-background text-sm font-medium hover:opacity-90 transition-opacity duration-fast"
                 >
                   <MessageSquare className="w-4 h-4" />发消息

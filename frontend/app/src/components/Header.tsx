@@ -48,7 +48,7 @@ export default function Header({
       <div className="flex items-center gap-3 min-w-0">
         {isMobile ? (
           <button
-            onClick={() => navigate("/threads")}
+            onClick={() => navigate("/chat")}
             className="w-8 h-8 rounded-lg flex items-center justify-center text-muted-foreground hover:bg-muted hover:text-foreground"
           >
             <ChevronLeft className="w-5 h-5" />
