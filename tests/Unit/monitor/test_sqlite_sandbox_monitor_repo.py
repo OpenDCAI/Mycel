@@ -40,7 +40,7 @@ def _bootstrap_monitor_db(db_path):
         conn.close()
 
 
-def test_list_sessions_with_leases_prefers_visible_parent_thread_over_newer_subagent_terminal(tmp_path):
+def test_list_sessions_with_leases_keeps_raw_newest_terminal_truth(tmp_path):
     db_path = tmp_path / "sandbox.db"
     _bootstrap_monitor_db(db_path)
 
@@ -92,14 +92,6 @@ def test_list_sessions_with_leases_prefers_visible_parent_thread_over_newer_suba
     finally:
         repo.close()
 
-    assert rows == [
-        {
-            "provider": "daytona_selfhost",
-            "session_id": None,
-            "thread_id": "thread-parent",
-            "lease_id": "lease-1",
-            "observed_state": "paused",
-            "desired_state": "paused",
-            "created_at": "2026-04-05T13:00:00",
-        }
-    ]
+    assert len(rows) == 2
+    assert {row["thread_id"] for row in rows} == {"thread-parent", "subagent-deadbeef"}
+    assert all(row["lease_id"] == "lease-1" for row in rows)

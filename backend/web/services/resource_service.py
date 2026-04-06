@@ -74,7 +74,8 @@ def _resolve_console_url(provider_name: str, config_name: str, *, sandboxes_dir:
     if provider_name == "e2b":
         return "https://e2b.dev"
     if provider_name == "daytona":
-        daytona = payload.get("daytona") if isinstance(payload.get("daytona"), dict) else {}
+        raw_daytona = payload.get("daytona")
+        daytona = raw_daytona if isinstance(raw_daytona, dict) else {}
         target = str(daytona.get("target") or "").strip().lower()
         if target == "cloud":
             return "https://app.daytona.io"
@@ -368,6 +369,49 @@ def _resource_session_identity(session: dict[str, Any]) -> str:
     return f"{lease_id}:{thread_id or 'unbound'}"
 
 
+def _project_user_visible_resource_sessions(repo: Any, rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Project raw monitor rows into the user-visible resource surface.
+
+    @@@user-visible-resource-projection - raw monitor rows may be bound to a newer
+    subagent terminal even though the lease still belongs to a user-visible parent
+    thread. Keep raw monitor truth in the repo; only the Resources UI gets this
+    parent-thread preference.
+    """
+    grouped: dict[str, list[dict[str, Any]]] = {}
+    for row in rows:
+        lease_id = str(row.get("lease_id") or "")
+        grouped.setdefault(lease_id, []).append(dict(row))
+
+    projected: list[dict[str, Any]] = []
+    for lease_id, group in grouped.items():
+        visible_rows = [row for row in group if _is_resource_visible_thread(row.get("thread_id"))]
+        if visible_rows:
+            projected.extend(visible_rows)
+            continue
+
+        if not lease_id:
+            continue
+
+        try:
+            thread_rows = repo.query_lease_threads(lease_id)
+        except Exception:
+            thread_rows = []
+
+        preferred_thread_id = next(
+            (str(item.get("thread_id") or "").strip() for item in thread_rows if _is_resource_visible_thread(item.get("thread_id"))),
+            "",
+        )
+        if not preferred_thread_id:
+            continue
+
+        base = dict(group[0])
+        base["thread_id"] = preferred_thread_id
+        base["session_id"] = None
+        projected.append(base)
+
+    return projected
+
+
 # ---------------------------------------------------------------------------
 # Public API: resource overview
 # ---------------------------------------------------------------------------
@@ -377,7 +421,8 @@ def list_resource_providers() -> dict[str, Any]:
     # @@@overview-fast-path - avoid provider-network calls; overview uses DB session snapshot.
     repo = make_sandbox_monitor_repo()
     try:
-        sessions = [row for row in repo.list_sessions_with_leases() if _is_resource_visible_thread(row.get("thread_id"))]
+        raw_sessions = repo.list_sessions_with_leases()
+        sessions = _project_user_visible_resource_sessions(repo, raw_sessions)
     finally:
         repo.close()
 
