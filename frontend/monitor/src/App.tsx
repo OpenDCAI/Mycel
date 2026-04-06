@@ -7,6 +7,7 @@ import {
   NavLink,
   Navigate,
   useLocation,
+  useNavigate,
   useParams,
 } from "react-router-dom";
 import "./styles.css";
@@ -175,10 +176,16 @@ function DashboardPage() {
           <div className="section-row dashboard-card-head">
             <h2>Infra Health</h2>
             <div className="console-header-actions">
-              <button className="ghost-btn" onClick={() => void loadDashboard()} disabled={loading}>
+              <button
+                className="ghost-btn"
+                onClick={() => void loadDashboard()}
+                disabled={loading}
+              >
                 {loading ? "Refreshing..." : "Refresh"}
               </button>
-              <Link className="quick-link" to="/resources">Resources</Link>
+              <Link className="quick-link" to="/resources">
+                Resources
+              </Link>
             </div>
           </div>
           <div className="dashboard-metric-grid">
@@ -278,7 +285,9 @@ function DashboardPage() {
                 <div className="eval-progress-track">
                   <div
                     className="eval-progress-fill"
-                    style={{ width: `${Number(latestEval.progress_pct || 0)}%` }}
+                    style={{
+                      width: `${Number(latestEval.progress_pct || 0)}%`,
+                    }}
                   />
                 </div>
                 <div className="mono eval-progress-line">
@@ -843,42 +852,42 @@ function MonitorResourcesPage() {
     <div className="page" data-testid="page-resources">
       <div className="sticky-context">
         <div className="resource-summary-grid">
-        <DashboardMetric
-          label="Providers"
-          value={summary.total_providers || 0}
-          note={`${summary.active_providers || 0} active · ${summary.unavailable_providers || 0} unavailable`}
-        />
-        <DashboardMetric
-          label="Running sessions"
-          value={summary.running_sessions || 0}
-          note={
-            refreshedAt
-              ? `refreshed ${new Date(refreshedAt).toLocaleTimeString()}`
-              : "no timestamp"
-          }
-        />
-        <DashboardMetric
-          label="Active drift"
-          value={triageSummary.active_drift || 0}
-          note="needs operator attention"
-          tone={(triageSummary.active_drift || 0) > 0 ? "warning" : "success"}
-        />
-        <DashboardMetric
-          label="Detached residue"
-          value={triageSummary.detached_residue || 0}
-          note={`${triageSummary.orphan_cleanup || 0} cleanup backlog`}
-          tone={
-            (triageSummary.detached_residue || 0) > 0 ? "danger" : "success"
-          }
-        />
-        <DashboardMetric
-          label="Healthy leases"
-          value={triageSummary.healthy_capacity || 0}
-          note={`${triageSummary.total || leases.length} total`}
-          tone={
-            (triageSummary.healthy_capacity || 0) > 0 ? "success" : "danger"
-          }
-        />
+          <DashboardMetric
+            label="Providers"
+            value={summary.total_providers || 0}
+            note={`${summary.active_providers || 0} active · ${summary.unavailable_providers || 0} unavailable`}
+          />
+          <DashboardMetric
+            label="Running sessions"
+            value={summary.running_sessions || 0}
+            note={
+              refreshedAt
+                ? `refreshed ${new Date(refreshedAt).toLocaleTimeString()}`
+                : "no timestamp"
+            }
+          />
+          <DashboardMetric
+            label="Active drift"
+            value={triageSummary.active_drift || 0}
+            note="needs operator attention"
+            tone={(triageSummary.active_drift || 0) > 0 ? "warning" : "success"}
+          />
+          <DashboardMetric
+            label="Detached residue"
+            value={triageSummary.detached_residue || 0}
+            note={`${triageSummary.orphan_cleanup || 0} cleanup backlog`}
+            tone={
+              (triageSummary.detached_residue || 0) > 0 ? "danger" : "success"
+            }
+          />
+          <DashboardMetric
+            label="Healthy leases"
+            value={triageSummary.healthy_capacity || 0}
+            note={`${triageSummary.total || leases.length} total`}
+            tone={
+              (triageSummary.healthy_capacity || 0) > 0 ? "success" : "danger"
+            }
+          />
         </div>
       </div>
 
@@ -886,14 +895,22 @@ function MonitorResourcesPage() {
         <div className="resource-rail">
           <div className="section-row">
             <h2>Providers</h2>
-            <button className="ghost-btn" onClick={() => void refreshNow()} disabled={refreshing || loading}>
+            <button
+              className="ghost-btn"
+              onClick={() => void refreshNow()}
+              disabled={refreshing || loading}
+            >
               {refreshing ? "..." : "Refresh"}
             </button>
           </div>
           <div className="resource-rail-list">
             {providers.map((provider: any) => {
-              const sessions = Array.isArray(provider.sessions) ? provider.sessions : [];
-              const runningCount = sessions.filter((s: any) => s.status === "running").length;
+              const sessions = Array.isArray(provider.sessions)
+                ? provider.sessions
+                : [];
+              const runningCount = sessions.filter(
+                (s: any) => s.status === "running",
+              ).length;
               const unavailable = provider.status === "unavailable";
               return (
                 <button
@@ -909,7 +926,9 @@ function MonitorResourcesPage() {
                   </div>
                   <div className="resource-rail-meta">
                     <span>{provider.type}</span>
-                    <span>{sessions.length} sess · {runningCount} run</span>
+                    <span>
+                      {sessions.length} sess · {runningCount} run
+                    </span>
                   </div>
                 </button>
               );
@@ -918,235 +937,242 @@ function MonitorResourcesPage() {
         </div>
         <div className="resource-detail">
           {selectedProvider ? (
-          <>
-          <div className="provider-detail-shell">
-            <div className="section-row">
-              <div>
-                <div className="provider-detail-heading">
-                  <ProviderStatusLight status={selectedProvider.status} />
-                  <h2>{selectedProvider.name}</h2>
+            <>
+              <div className="provider-detail-shell">
+                <div className="section-row">
+                  <div>
+                    <div className="provider-detail-heading">
+                      <ProviderStatusLight status={selectedProvider.status} />
+                      <h2>{selectedProvider.name}</h2>
+                    </div>
+                    <p className="description">
+                      {selectedProvider.description ||
+                        "No provider description."}
+                    </p>
+                  </div>
+                  <div className="provider-detail-actions">
+                    <span
+                      className={`status-chip ${selectedProvider.status === "active" ? "chip-success" : selectedProvider.status === "unavailable" ? "chip-danger" : "chip-muted"}`}
+                    >
+                      {selectedProvider.type}
+                      {selectedProvider.vendor
+                        ? ` · ${selectedProvider.vendor}`
+                        : ""}
+                    </span>
+                    {selectedProvider.consoleUrl ? (
+                      <a
+                        className="quick-link"
+                        href={selectedProvider.consoleUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        Open console
+                      </a>
+                    ) : null}
+                  </div>
                 </div>
-                <p className="description">
-                  {selectedProvider.description || "No provider description."}
-                </p>
+                <div className="resource-overview-strip">
+                  <span className="resource-overview-pill">
+                    <span className="resource-overview-label">status</span>
+                    <strong>{selectedProvider.status}</strong>
+                  </span>
+                  <span className="resource-overview-pill">
+                    <span className="resource-overview-label">running</span>
+                    <strong>{selectedRunning}</strong>
+                  </span>
+                  <span className="resource-overview-pill">
+                    <span className="resource-overview-label">paused</span>
+                    <strong>{selectedPaused}</strong>
+                  </span>
+                  <span className="resource-overview-pill">
+                    <span className="resource-overview-label">stopped</span>
+                    <strong>{selectedStopped}</strong>
+                  </span>
+                </div>
+                <CapabilityStrip capabilities={selectedProvider.capabilities} />
+                <div className="info-grid info-grid-compact">
+                  <div>
+                    <strong>Provider</strong>
+                    <span>
+                      {selectedProvider.type}
+                      {selectedProvider.vendor
+                        ? ` · ${selectedProvider.vendor}`
+                        : ""}
+                    </span>
+                  </div>
+                  <div>
+                    <strong>CPU</strong>
+                    <span>
+                      {selectedProvider.telemetry?.cpu?.used == null
+                        ? "--"
+                        : `${Number(selectedProvider.telemetry.cpu.used).toFixed(1)}%`}
+                    </span>
+                  </div>
+                  <div>
+                    <strong>Memory</strong>
+                    <span>
+                      {selectedProvider.telemetry?.memory?.used == null
+                        ? "--"
+                        : `${Number(selectedProvider.telemetry.memory.used).toFixed(1)} / ${selectedProvider.telemetry?.memory?.limit ?? "--"} GB`}
+                    </span>
+                  </div>
+                  <div>
+                    <strong>Disk</strong>
+                    <span>
+                      {selectedProvider.telemetry?.disk?.used == null
+                        ? "--"
+                        : `${Number(selectedProvider.telemetry.disk.used).toFixed(1)} / ${selectedProvider.telemetry?.disk?.limit ?? "--"} GB`}
+                    </span>
+                  </div>
+                  <div>
+                    <strong>Running metric</strong>
+                    <span>
+                      {selectedProvider.telemetry?.running?.used == null
+                        ? "--"
+                        : `${selectedProvider.telemetry.running.used} / ${selectedProvider.telemetry?.running?.limit ?? "--"} ${selectedProvider.telemetry?.running?.unit || ""}`}
+                    </span>
+                  </div>
+                  <div>
+                    <strong>Reason</strong>
+                    <span>
+                      {selectedProvider.unavailableReason ||
+                        selectedProvider.error ||
+                        "healthy"}
+                    </span>
+                  </div>
+                </div>
               </div>
-              <div className="provider-detail-actions">
-                <span
-                  className={`status-chip ${selectedProvider.status === "active" ? "chip-success" : selectedProvider.status === "unavailable" ? "chip-danger" : "chip-muted"}`}
-                >
-                  {selectedProvider.type}
-                  {selectedProvider.vendor
-                    ? ` · ${selectedProvider.vendor}`
-                    : ""}
-                </span>
-                {selectedProvider.consoleUrl ? (
-                  <a
-                    className="quick-link"
-                    href={selectedProvider.consoleUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    Open console
-                  </a>
+              <div className="resource-session-shell depth-recessed">
+                <div className="section-row">
+                  <div>
+                    <h2>Leases ({selectedLeaseGroups.length})</h2>
+                  </div>
+                </div>
+                <div className="provider-lease-grid">
+                  {selectedLeaseGroups.map((group: any) => (
+                    <ProviderLeaseCard
+                      key={leaseGroupKey(group)}
+                      group={group}
+                      selected={
+                        selectedLeaseGroup != null &&
+                        leaseGroupKey(group) ===
+                          leaseGroupKey(selectedLeaseGroup)
+                      }
+                      onSelect={() => setSelectedLeaseId(leaseGroupKey(group))}
+                    />
+                  ))}
+                  {selectedLeaseGroups.length === 0 ? (
+                    <div className="dashboard-empty">
+                      No lease groups reported for this provider.
+                    </div>
+                  ) : null}
+                </div>
+                {selectedLeaseGroup ? (
+                  <MonitorLeaseDetailPanel group={selectedLeaseGroup} />
                 ) : null}
-              </div>
-            </div>
-            <div className="resource-overview-strip">
-              <span className="resource-overview-pill">
-                <span className="resource-overview-label">status</span>
-                <strong>{selectedProvider.status}</strong>
-              </span>
-              <span className="resource-overview-pill">
-                <span className="resource-overview-label">running</span>
-                <strong>{selectedRunning}</strong>
-              </span>
-              <span className="resource-overview-pill">
-                <span className="resource-overview-label">paused</span>
-                <strong>{selectedPaused}</strong>
-              </span>
-              <span className="resource-overview-pill">
-                <span className="resource-overview-label">stopped</span>
-                <strong>{selectedStopped}</strong>
-              </span>
-            </div>
-            <CapabilityStrip capabilities={selectedProvider.capabilities} />
-            <div className="info-grid info-grid-compact">
-              <div>
-                <strong>Provider</strong>
-                <span>
-                  {selectedProvider.type}
-                  {selectedProvider.vendor
-                    ? ` · ${selectedProvider.vendor}`
-                    : ""}
-                </span>
-              </div>
-              <div>
-                <strong>CPU</strong>
-                <span>
-                  {selectedProvider.telemetry?.cpu?.used == null
-                    ? "--"
-                    : `${Number(selectedProvider.telemetry.cpu.used).toFixed(1)}%`}
-                </span>
-              </div>
-              <div>
-                <strong>Memory</strong>
-                <span>
-                  {selectedProvider.telemetry?.memory?.used == null
-                    ? "--"
-                    : `${Number(selectedProvider.telemetry.memory.used).toFixed(1)} / ${selectedProvider.telemetry?.memory?.limit ?? "--"} GB`}
-                </span>
-              </div>
-              <div>
-                <strong>Disk</strong>
-                <span>
-                  {selectedProvider.telemetry?.disk?.used == null
-                    ? "--"
-                    : `${Number(selectedProvider.telemetry.disk.used).toFixed(1)} / ${selectedProvider.telemetry?.disk?.limit ?? "--"} GB`}
-                </span>
-              </div>
-              <div>
-                <strong>Running metric</strong>
-                <span>
-                  {selectedProvider.telemetry?.running?.used == null
-                    ? "--"
-                    : `${selectedProvider.telemetry.running.used} / ${selectedProvider.telemetry?.running?.limit ?? "--"} ${selectedProvider.telemetry?.running?.unit || ""}`}
-                </span>
-              </div>
-              <div>
-                <strong>Reason</strong>
-                <span>
-                  {selectedProvider.unavailableReason ||
-                    selectedProvider.error ||
-                    "healthy"}
-                </span>
-              </div>
-            </div>
-          </div>
-          <div className="resource-session-shell depth-recessed">
-            <div className="section-row">
-              <div>
-                <h2>Leases ({selectedLeaseGroups.length})</h2>
-              </div>
-            </div>
-            <div className="provider-lease-grid">
-              {selectedLeaseGroups.map((group: any) => (
-                <ProviderLeaseCard
-                  key={leaseGroupKey(group)}
-                  group={group}
-                  selected={
-                    selectedLeaseGroup != null &&
-                    leaseGroupKey(group) === leaseGroupKey(selectedLeaseGroup)
-                  }
-                  onSelect={() => setSelectedLeaseId(leaseGroupKey(group))}
-                />
-              ))}
-              {selectedLeaseGroups.length === 0 ? (
-                <div className="dashboard-empty">
-                  No lease groups reported for this provider.
-                </div>
-              ) : null}
-            </div>
-            {selectedLeaseGroup ? (
-              <MonitorLeaseDetailPanel group={selectedLeaseGroup} />
-            ) : null}
-            <div className="section-row">
-              <div>
-                <h2>
-                  Sessions (
-                  {sessionScope === "provider"
-                    ? selectedSessions.length
-                    : scopedSessions.length}
-                  )
-                </h2>
-                <p className="count">
-                  {sessionScope === "provider"
-                    ? "full provider truth surface"
-                    : "scoped to selected lease"}
-                </p>
-              </div>
-              <div
-                className="segmented-toggle"
-                data-testid="session-scope-toggle"
-              >
-                <button
-                  type="button"
-                  className={`ghost-btn${sessionScope === "lease" ? " is-active" : ""}`}
-                  onClick={() => setSessionScope("lease")}
-                  disabled={!selectedLeaseGroup}
-                >
-                  Selected lease
-                </button>
-                <button
-                  type="button"
-                  className={`ghost-btn${sessionScope === "provider" ? " is-active" : ""}`}
-                  onClick={() => setSessionScope("provider")}
-                >
-                  All provider sessions
-                </button>
-              </div>
-            </div>
-            <table className="resource-table-dense">
-              <thead>
-                <tr>
-                  <th>Session</th>
-                  <th>Thread</th>
-                  <th>Lease</th>
-                  <th>Member</th>
-                  <th>Status</th>
-                  <th>Started</th>
-                </tr>
-              </thead>
-              <tbody>
-                {scopedSessions.map((session: any) => (
-                  <tr key={session.id}>
-                    <td className="mono">{shortId(session.id, 12)}</td>
-                    <td>
-                      {session.threadId ? (
-                        <Link to={`/thread/${session.threadId}`}>
-                          {shortId(session.threadId, 12)}
-                        </Link>
-                      ) : (
-                        "-"
-                      )}
-                    </td>
-                    <td>
-                      {session.leaseId ? (
-                        <Link to={`/lease/${session.leaseId}`}>
-                          {shortId(session.leaseId, 12)}
-                        </Link>
-                      ) : (
-                        "-"
-                      )}
-                    </td>
-                    <td>{session.memberName || session.memberId || "-"}</td>
-                    <td>{session.status}</td>
-                    <td>
-                      {session.startedAt
-                        ? new Date(session.startedAt).toLocaleString()
-                        : "-"}
-                    </td>
-                  </tr>
-                ))}
-                {scopedSessions.length === 0 ? (
-                  <tr>
-                    <td colSpan={6}>
+                <div className="section-row">
+                  <div>
+                    <h2>
+                      Sessions (
                       {sessionScope === "provider"
-                        ? "No sessions reported for this provider."
-                        : "No sessions reported for the selected lease group."}
-                    </td>
-                  </tr>
-                ) : null}
-              </tbody>
-            </table>
-          </div>
-          </>
+                        ? selectedSessions.length
+                        : scopedSessions.length}
+                      )
+                    </h2>
+                    <p className="count">
+                      {sessionScope === "provider"
+                        ? "full provider truth surface"
+                        : "scoped to selected lease"}
+                    </p>
+                  </div>
+                  <div
+                    className="segmented-toggle"
+                    data-testid="session-scope-toggle"
+                  >
+                    <button
+                      type="button"
+                      className={`ghost-btn${sessionScope === "lease" ? " is-active" : ""}`}
+                      onClick={() => setSessionScope("lease")}
+                      disabled={!selectedLeaseGroup}
+                    >
+                      Selected lease
+                    </button>
+                    <button
+                      type="button"
+                      className={`ghost-btn${sessionScope === "provider" ? " is-active" : ""}`}
+                      onClick={() => setSessionScope("provider")}
+                    >
+                      All provider sessions
+                    </button>
+                  </div>
+                </div>
+                <table className="resource-table-dense">
+                  <thead>
+                    <tr>
+                      <th>Session</th>
+                      <th>Thread</th>
+                      <th>Lease</th>
+                      <th>Member</th>
+                      <th>Status</th>
+                      <th>Started</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {scopedSessions.map((session: any) => (
+                      <tr key={session.id}>
+                        <td className="mono">{shortId(session.id, 12)}</td>
+                        <td>
+                          {session.threadId ? (
+                            <Link to={`/thread/${session.threadId}`}>
+                              {shortId(session.threadId, 12)}
+                            </Link>
+                          ) : (
+                            "-"
+                          )}
+                        </td>
+                        <td>
+                          {session.leaseId ? (
+                            <Link to={`/lease/${session.leaseId}`}>
+                              {shortId(session.leaseId, 12)}
+                            </Link>
+                          ) : (
+                            "-"
+                          )}
+                        </td>
+                        <td>{session.memberName || session.memberId || "-"}</td>
+                        <td>{session.status}</td>
+                        <td>
+                          {session.startedAt
+                            ? new Date(session.startedAt).toLocaleString()
+                            : "-"}
+                        </td>
+                      </tr>
+                    ))}
+                    {scopedSessions.length === 0 ? (
+                      <tr>
+                        <td colSpan={6}>
+                          {sessionScope === "provider"
+                            ? "No sessions reported for this provider."
+                            : "No sessions reported for the selected lease group."}
+                        </td>
+                      </tr>
+                    ) : null}
+                  </tbody>
+                </table>
+              </div>
+            </>
           ) : (
-            <div className="dashboard-empty">Select a provider from the list.</div>
+            <div className="dashboard-empty">
+              Select a provider from the list.
+            </div>
           )}
         </div>
       </section>
 
-      <section className="resource-section-shell depth-secondary" id="lease-health">
+      <section
+        className="resource-section-shell depth-secondary"
+        id="lease-health"
+      >
         <div className="section-row">
           <div>
             <h2>Lease Health</h2>
@@ -3253,6 +3279,7 @@ function EventDetailPage() {
 // Page: Evaluation
 function EvaluationPage() {
   const location = useLocation();
+  const navigate = useNavigate();
   const [dataset, setDataset] = React.useState("SWE-bench/SWE-bench_Lite");
   const [split, setSplit] = React.useState("test");
   const [startIdx, setStartIdx] = React.useState("0");
@@ -3323,7 +3350,7 @@ function EvaluationPage() {
         throw new Error("create evaluation returned empty evaluation_id");
       setEvaluationId(nextEvalId);
       setRunStatus("submitted");
-      setComposerOpen(false);
+      closeComposer();
       await loadEvaluations();
     } catch (e: any) {
       setRunStatus("error");
@@ -3381,13 +3408,29 @@ function EvaluationPage() {
     setComposerOpen(query.get("new") === "1");
   }, [location.search]);
 
+  // @@@evaluation-query-close - clear the query flag on close so the shell CTA can reopen the composer on the next click.
+  function closeComposer() {
+    const query = new URLSearchParams(location.search);
+    query.delete("new");
+    setComposerOpen(false);
+    navigate(
+      {
+        pathname: location.pathname,
+        search: query.toString() ? `?${query.toString()}` : "",
+      },
+      { replace: true },
+    );
+  }
+
   return (
     <div className="page">
       <section className="eval-split-layout">
         <div className="eval-split-aside depth-recessed">
           <h2>Current Submission</h2>
           <div className="chip-row">
-            <span className={`status-chip ${currentEval ? evaluationStatusTone(currentEval) : "chip-muted"}`}>
+            <span
+              className={`status-chip ${currentEval ? evaluationStatusTone(currentEval) : "chip-muted"}`}
+            >
               {String(currentEval?.status || runStatus || "idle").toUpperCase()}
             </span>
           </div>
@@ -3418,144 +3461,151 @@ function EvaluationPage() {
           )}
         </div>
         <section className="eval-split-main depth-primary">
-        <div className="section-row">
-          <h2>Evaluations ({evalPagination?.total ?? evaluations.length})</h2>
-          <span className="count">auto refresh 5s</span>
-        </div>
-        <div className="count evaluation-meta-row">
-          <span>{evalPagination?.total ?? evaluations.length} evaluations</span>
-          <span>{runsLoading ? "loading..." : "idle"}</span>
-          <span>page {evalPagination?.page ?? 1}</span>
-        </div>
-        <table>
-          <thead>
-            <tr>
-              <th title="Unique evaluation id">Evaluation</th>
-              <th title="Benchmark dataset id">Dataset</th>
-              <th title="Case index range inside selected split">Range</th>
-              <th title="prompt_profile / sandbox">Profile / Sandbox</th>
-              <th title="queued / running / completed / completed_with_errors / error">
-                Status
-              </th>
-              <th title="total / completed / started|in-progress / pending / progress%">
-                Progress
-              </th>
-              <th title="resolved / total from SWE-bench summary">Score</th>
-              <th title="Last persisted status update">Updated</th>
-            </tr>
-          </thead>
-          <tbody>
-            {evaluations.map((item: any) => (
-              <tr key={item.evaluation_id}>
-                <td>
-                  <Link to={item.evaluation_url}>
-                    {shortId(item.evaluation_id, 14)}
-                  </Link>
-                </td>
-                <td className="mono">{item.dataset}</td>
-                <td>
-                  {item.start_idx}..{item.start_idx + item.slice_count - 1}
-                </td>
-                <td className="mono">
-                  {item.prompt_profile || "-"} / {item.sandbox || "-"}
-                </td>
-                <td>
-                  {(() => {
-                    return (
-                      <div className="eval-status-stack">
-                        <span className={`status-chip ${evaluationStatusTone(item)}`}>
-                          {String(item.status || "-").toUpperCase()}
-                        </span>
-                        <span
-                          className={`status-chip ${Boolean(item.score?.publishable ?? item.score?.score_gate === "final") ? "chip-success" : "chip-muted"}`}
-                        >
-                          {Boolean(item.score?.publishable ?? item.score?.score_gate === "final")
-                            ? "publishable"
-                            : "provisional"}
-                        </span>
-                      </div>
-                    );
-                  })()}
-                </td>
-                <td>
-                  {(() => {
-                    const p = evalProgress(item);
-                    return (
-                      <div className="eval-progress-cell">
-                        <div className="eval-progress-track">
-                          <div
-                            className="eval-progress-fill"
-                            style={{ width: `${p.pct.toFixed(1)}%` }}
-                          />
-                        </div>
-                        <div className="mono eval-progress-line">
-                          {formatProgressSummary(p)}
-                        </div>
-                      </div>
-                    );
-                  })()}
-                </td>
-                <td className="mono">
-                  <div className="eval-score-stack">
-                    <span className={`status-chip ${evaluationScoreTone(item)}`}>
-                      {(item.score?.publishable ?? item.score?.score_gate === "final")
-                        ? `R ${formatResolvedScore(item)}`
-                        : "R PROVISIONAL"}
-                    </span>
-                    <div>
-                      C {formatPct(item.score?.completed_rate_pct)} | T{" "}
-                      {formatPct(item.score?.tool_call_thread_rate_pct)}
-                    </div>
-                  </div>
-                </td>
-                <td>{item.updated_ago || "-"}</td>
-              </tr>
-            ))}
-            {evaluations.length === 0 && (
+          <div className="section-row">
+            <h2>Evaluations ({evalPagination?.total ?? evaluations.length})</h2>
+            <span className="count">auto refresh 5s</span>
+          </div>
+          <div className="count evaluation-meta-row">
+            <span>
+              {evalPagination?.total ?? evaluations.length} evaluations
+            </span>
+            <span>{runsLoading ? "loading..." : "idle"}</span>
+            <span>page {evalPagination?.page ?? 1}</span>
+          </div>
+          <table>
+            <thead>
               <tr>
-                <td colSpan={8}>No evaluations yet.</td>
+                <th title="Unique evaluation id">Evaluation</th>
+                <th title="Benchmark dataset id">Dataset</th>
+                <th title="Case index range inside selected split">Range</th>
+                <th title="prompt_profile / sandbox">Profile / Sandbox</th>
+                <th title="queued / running / completed / completed_with_errors / error">
+                  Status
+                </th>
+                <th title="total / completed / started|in-progress / pending / progress%">
+                  Progress
+                </th>
+                <th title="resolved / total from SWE-bench summary">Score</th>
+                <th title="Last persisted status update">Updated</th>
               </tr>
-            )}
-          </tbody>
-        </table>
-        <div className="evaluation-pagination-row">
-          <div className="count evaluation-pagination-copy">
-            offset={evalPagination?.offset ?? 0} | limit=
-            {evalPagination?.limit ?? evalLimit} | total=
-            {evalPagination?.total ?? evaluations.length}
+            </thead>
+            <tbody>
+              {evaluations.map((item: any) => (
+                <tr key={item.evaluation_id}>
+                  <td>
+                    <Link to={item.evaluation_url}>
+                      {shortId(item.evaluation_id, 14)}
+                    </Link>
+                  </td>
+                  <td className="mono">{item.dataset}</td>
+                  <td>
+                    {item.start_idx}..{item.start_idx + item.slice_count - 1}
+                  </td>
+                  <td className="mono">
+                    {item.prompt_profile || "-"} / {item.sandbox || "-"}
+                  </td>
+                  <td>
+                    {(() => {
+                      return (
+                        <div className="eval-status-stack">
+                          <span
+                            className={`status-chip ${evaluationStatusTone(item)}`}
+                          >
+                            {String(item.status || "-").toUpperCase()}
+                          </span>
+                          <span
+                            className={`status-chip ${Boolean(item.score?.publishable ?? item.score?.score_gate === "final") ? "chip-success" : "chip-muted"}`}
+                          >
+                            {Boolean(
+                              item.score?.publishable ??
+                              item.score?.score_gate === "final",
+                            )
+                              ? "publishable"
+                              : "provisional"}
+                          </span>
+                        </div>
+                      );
+                    })()}
+                  </td>
+                  <td>
+                    {(() => {
+                      const p = evalProgress(item);
+                      return (
+                        <div className="eval-progress-cell">
+                          <div className="eval-progress-track">
+                            <div
+                              className="eval-progress-fill"
+                              style={{ width: `${p.pct.toFixed(1)}%` }}
+                            />
+                          </div>
+                          <div className="mono eval-progress-line">
+                            {formatProgressSummary(p)}
+                          </div>
+                        </div>
+                      );
+                    })()}
+                  </td>
+                  <td className="mono">
+                    <div className="eval-score-stack">
+                      <span
+                        className={`status-chip ${evaluationScoreTone(item)}`}
+                      >
+                        {(item.score?.publishable ??
+                        item.score?.score_gate === "final")
+                          ? `R ${formatResolvedScore(item)}`
+                          : "R PROVISIONAL"}
+                      </span>
+                      <div>
+                        C {formatPct(item.score?.completed_rate_pct)} | T{" "}
+                        {formatPct(item.score?.tool_call_thread_rate_pct)}
+                      </div>
+                    </div>
+                  </td>
+                  <td>{item.updated_ago || "-"}</td>
+                </tr>
+              ))}
+              {evaluations.length === 0 && (
+                <tr>
+                  <td colSpan={8}>No evaluations yet.</td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+          <div className="evaluation-pagination-row">
+            <div className="count evaluation-pagination-copy">
+              offset={evalPagination?.offset ?? 0} | limit=
+              {evalPagination?.limit ?? evalLimit} | total=
+              {evalPagination?.total ?? evaluations.length}
+            </div>
+            <div className="evaluation-pagination-actions">
+              <button
+                className="ghost-btn"
+                onClick={() =>
+                  setEvalOffset(Math.max(evalPagination?.prev_offset ?? 0, 0))
+                }
+                disabled={!evalPagination?.has_prev || runsLoading}
+              >
+                Prev
+              </button>
+              <button
+                className="ghost-btn"
+                onClick={() =>
+                  setEvalOffset(
+                    evalPagination?.next_offset ?? evalOffset + evalLimit,
+                  )
+                }
+                disabled={!evalPagination?.has_next || runsLoading}
+              >
+                Next
+              </button>
+            </div>
           </div>
-          <div className="evaluation-pagination-actions">
-            <button
-              className="ghost-btn"
-              onClick={() =>
-                setEvalOffset(Math.max(evalPagination?.prev_offset ?? 0, 0))
-              }
-              disabled={!evalPagination?.has_prev || runsLoading}
-            >
-              Prev
-            </button>
-            <button
-              className="ghost-btn"
-              onClick={() =>
-                setEvalOffset(
-                  evalPagination?.next_offset ?? evalOffset + evalLimit,
-                )
-              }
-              disabled={!evalPagination?.has_next || runsLoading}
-            >
-              Next
-            </button>
-          </div>
-        </div>
         </section>
       </section>
 
       {composerOpen && (
         // @@@evaluation-composer-modal - keep config editing in a fixed layer to avoid "tail jump" in long list pages.
-        <div
-          className="eval-composer-backdrop"
-          onClick={() => setComposerOpen(false)}
-        >
+        <div className="eval-composer-backdrop" onClick={closeComposer}>
           <section
             className="eval-composer-panel"
             onClick={(e) => e.stopPropagation()}
@@ -3564,7 +3614,7 @@ function EvaluationPage() {
               <h2>New Evaluation Config</h2>
               <button
                 className="ghost-btn"
-                onClick={() => setComposerOpen(false)}
+                onClick={closeComposer}
                 disabled={runStatus === "starting"}
               >
                 Close
@@ -3723,7 +3773,7 @@ function EvaluationPage() {
                   </button>
                   <button
                     className="ghost-btn"
-                    onClick={() => setComposerOpen(false)}
+                    onClick={closeComposer}
                     disabled={runStatus === "starting"}
                   >
                     Cancel
@@ -4120,22 +4170,52 @@ const SHELL_NAV_GROUPS = [
   {
     label: "Overview",
     items: [
-      { to: "/dashboard", label: "Dashboard", shortLabel: "DB", testId: "nav-dashboard" },
+      {
+        to: "/dashboard",
+        label: "Dashboard",
+        shortLabel: "DB",
+        testId: "nav-dashboard",
+      },
     ],
   },
   {
     label: "Infrastructure",
     items: [
-      { to: "/resources", label: "Resources", shortLabel: "RS", testId: "nav-resources" },
-      { to: "/leases", label: "Leases", shortLabel: "LS", testId: "nav-leases" },
+      {
+        to: "/resources",
+        label: "Resources",
+        shortLabel: "RS",
+        testId: "nav-resources",
+      },
+      {
+        to: "/leases",
+        label: "Leases",
+        shortLabel: "LS",
+        testId: "nav-leases",
+      },
     ],
   },
   {
     label: "Workload",
     items: [
-      { to: "/evaluation", label: "Evaluations", shortLabel: "EV", testId: "nav-eval" },
-      { to: "/threads", label: "Threads", shortLabel: "TH", testId: "nav-threads" },
-      { to: "/traces", label: "Traces", shortLabel: "TR", testId: "nav-traces" },
+      {
+        to: "/evaluation",
+        label: "Evaluations",
+        shortLabel: "EV",
+        testId: "nav-eval",
+      },
+      {
+        to: "/threads",
+        label: "Threads",
+        shortLabel: "TH",
+        testId: "nav-threads",
+      },
+      {
+        to: "/traces",
+        label: "Traces",
+        shortLabel: "TR",
+        testId: "nav-traces",
+      },
     ],
   },
 ] as const;
@@ -4162,18 +4242,33 @@ const GUIDE_SECTIONS = [
 function shellMeta(pathname: string): { title: string; subtitle: string } {
   // @@@shell-route-bucketing - detail routes inherit the nearest console section.
   if (pathname.startsWith("/resources") || pathname.startsWith("/lease"))
-    return { title: "Resources", subtitle: "Provider health · lease triage · session truth" };
+    return {
+      title: "Resources",
+      subtitle: "Provider health · lease triage · session truth",
+    };
   if (pathname.startsWith("/evaluation"))
-    return { title: "Evaluations", subtitle: "Submit · track · inspect artifacts" };
+    return {
+      title: "Evaluations",
+      subtitle: "Submit · track · inspect artifacts",
+    };
   if (pathname.startsWith("/threads") || pathname.startsWith("/thread"))
-    return { title: "Threads", subtitle: "Global thread index · session and trace drill-down" };
+    return {
+      title: "Threads",
+      subtitle: "Global thread index · session and trace drill-down",
+    };
   if (pathname.startsWith("/traces") || pathname.startsWith("/session"))
-    return { title: "Traces", subtitle: "Sequence-level session and tool-call inspection" };
+    return {
+      title: "Traces",
+      subtitle: "Sequence-level session and tool-call inspection",
+    };
   if (pathname.startsWith("/events") || pathname.startsWith("/event"))
     return { title: "Events", subtitle: "Lease and runtime event history" };
   if (pathname.startsWith("/leases"))
     return { title: "Leases", subtitle: "Grouped triage · raw truth fallback" };
-  return { title: "Dashboard", subtitle: "Health · workload · latest evaluation" };
+  return {
+    title: "Dashboard",
+    subtitle: "Health · workload · latest evaluation",
+  };
 }
 
 function OperatorGuideModal({
