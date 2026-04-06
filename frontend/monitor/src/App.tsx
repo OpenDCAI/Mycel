@@ -1154,8 +1154,20 @@ function SessionDetailPage() {
       .catch((e) => setError(e.message));
   }, [sessionId]);
 
-  if (error) return <div className="error">Session load failed: {error}</div>;
-  if (!data) return <div>Loading...</div>;
+  if (error) {
+    return (
+      <div className="page">
+        <div className="page-error">Session load failed: {error}</div>
+      </div>
+    );
+  }
+  if (!data) {
+    return (
+      <div className="page">
+        <div className="page-loading">Loading...</div>
+      </div>
+    );
+  }
 
   return (
     <div className="page">
@@ -1170,6 +1182,17 @@ function SessionDetailPage() {
         <div><strong>Last Active:</strong> {data.info.last_active_ago}</div>
         <div><strong>Ended:</strong> {data.info.ended_ago || '-'}</div>
       </section>
+
+      <div className="page-tools">
+        <Link className="quick-link" to={data.thread_url}>
+          View thread trace
+        </Link>
+        {data.info.lease_id && (
+          <Link className="quick-link" to={`/lease/${data.info.lease_id}`}>
+            View lease
+          </Link>
+        )}
+      </div>
     </div>
   );
 }
@@ -1920,12 +1943,29 @@ function EvaluationPage() {
 function EvaluationDetailPage() {
   const { evaluationId } = useParams();
   const [data, setData] = React.useState<any>(null);
+  const [error, setError] = React.useState<string | null>(null);
 
   React.useEffect(() => {
-    fetchAPI(`/evaluation/${evaluationId}`).then(setData);
+    setError(null);
+    fetchAPI(`/evaluation/${evaluationId}`)
+      .then(setData)
+      .catch((e) => setError(e.message));
   }, [evaluationId]);
 
-  if (!data) return <div>Loading...</div>;
+  if (error) {
+    return (
+      <div className="page">
+        <div className="page-error">Evaluation load failed: {error}</div>
+      </div>
+    );
+  }
+  if (!data) {
+    return (
+      <div className="page">
+        <div className="page-loading">Loading...</div>
+      </div>
+    );
+  }
   const detailProgress = evalProgress({
     threads_done: data.info?.threads_done ?? 0,
     threads_running: data.info?.threads_running ?? 0,
@@ -1942,12 +1982,18 @@ function EvaluationDetailPage() {
     <div className="page">
       <Breadcrumb items={data.breadcrumb} />
       <h1>Evaluation: {shortId(data.evaluation_id, 14)}</h1>
-      <p className="count">
-        {data.info.status} | dataset={data.info.dataset} | {threadStateLabel}={data.info.threads_running}/{data.info.threads_total}
-        {' '}| gate={scoreGate}
-        {' '}| publishable={String(publishable)}
-        {' '}| score={scoreFinal ? `${data.info.score?.resolved_instances ?? 0}/${data.info.score?.total_instances ?? 0} (${formatPct(data.info.score?.primary_score_pct)})` : 'PROVISIONAL'}
-      </p>
+      <div className="eval-summary-bar">
+        <span className="eval-summary-chip">{data.info.status}</span>
+        <span className="eval-summary-chip mono">{data.info.dataset}</span>
+        <span className="eval-summary-chip">{threadStateLabel}={data.info.threads_running}/{data.info.threads_total}</span>
+        <span className="eval-summary-chip">gate={scoreGate}</span>
+        <span className={`eval-summary-chip ${publishable ? 'chip-success' : 'chip-warning'}`}>
+          publishable={String(publishable)}
+        </span>
+        <span className="eval-summary-chip">
+          score={scoreFinal ? `${data.info.score?.resolved_instances ?? 0}/${data.info.score?.total_instances ?? 0} (${formatPct(data.info.score?.primary_score_pct)})` : 'PROVISIONAL'}
+        </span>
+      </div>
       <section className="eval-runtime-panel">
         <div className="mono">phase: {String(data.info.status || '-').toUpperCase()}</div>
         <div className="eval-progress-track">
@@ -1958,16 +2004,24 @@ function EvaluationDetailPage() {
         </div>
       </section>
 
-      <section className="info-grid">
-        <div><strong>Split:</strong> {data.info.split}</div>
-        <div><strong>Start:</strong> {data.info.start_idx}</div>
-        <div><strong>Count:</strong> {data.info.slice_count}</div>
-        <div><strong>Profile:</strong> {data.info.prompt_profile}</div>
-        <div><strong>Timeout:</strong> {data.info.timeout_sec}s</div>
-        <div><strong>Recursion:</strong> {data.info.recursion_limit}</div>
-        <div><strong>Score Gate:</strong> {scoreGate}</div>
-        <div><strong>Publishable:</strong> {String(publishable)}</div>
-        <div><strong>Summary:</strong> {summaryReady ? 'ready' : 'missing'}</div>
+      <section>
+        <h2>Config</h2>
+        <div className="info-grid info-grid-compact">
+          <div><strong>Split:</strong> {data.info.split}</div>
+          <div><strong>Start:</strong> {data.info.start_idx}</div>
+          <div><strong>Count:</strong> {data.info.slice_count}</div>
+          <div><strong>Profile:</strong> {data.info.prompt_profile}</div>
+          <div><strong>Timeout:</strong> {data.info.timeout_sec}s</div>
+          <div><strong>Recursion:</strong> {data.info.recursion_limit}</div>
+        </div>
+      </section>
+
+      <section>
+        <h2>Score</h2>
+        <div className="info-grid">
+          <div><strong>Score Gate:</strong> {scoreGate}</div>
+          <div><strong>Publishable:</strong> {String(publishable)}</div>
+          <div><strong>Summary:</strong> {summaryReady ? 'ready' : 'missing'}</div>
         {scoreFinal ? (
           <>
             <div><strong>Resolved:</strong> {data.info.score?.resolved_instances ?? 0}/{data.info.score?.total_instances ?? 0}</div>
@@ -1992,6 +2046,7 @@ function EvaluationDetailPage() {
           </>
         )}
         <div><strong>Run Dir:</strong> <span className="mono">{data.info.score?.run_dir || '-'}</span></div>
+        </div>
       </section>
 
       <section>

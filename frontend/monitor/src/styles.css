@@ -155,6 +155,18 @@ h2 {
   max-width: 72ch;
 }
 
+.page-loading,
+.page-error {
+  padding: 3rem 0;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 0.95rem;
+}
+
+.page-error {
+  color: var(--danger);
+}
+
 button,
 select,
 input {
@@ -210,6 +222,13 @@ th {
 td {
   padding: 0.75rem 1rem;
   border-top: 1px solid var(--border);
+}
+
+td[colspan] {
+  text-align: center;
+  color: var(--text-muted);
+  font-style: italic;
+  padding: 2rem 1rem;
 }
 
 .page[data-testid="page-traces"] td,
@@ -311,6 +330,12 @@ section li {
   color: var(--text-muted);
   font-size: 0.85rem;
   font-weight: 500;
+}
+
+.info-grid-compact {
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  padding: 1rem 1.2rem;
+  gap: 0.75rem;
 }
 
 .hint-box {
@@ -768,6 +793,35 @@ section li {
   font-style: italic;
 }
 
+.eval-summary-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-bottom: 1rem;
+}
+
+.eval-summary-chip {
+  display: inline-block;
+  padding: 0.2rem 0.55rem;
+  border-radius: 4px;
+  font-size: 0.82rem;
+  background: var(--bg-muted);
+  color: var(--text-secondary);
+  border: 1px solid var(--border);
+}
+
+.chip-success {
+  background: var(--success-soft);
+  color: var(--success);
+  border-color: transparent;
+}
+
+.chip-warning {
+  background: var(--warning-soft);
+  color: var(--warning);
+  border-color: transparent;
+}
+
 .evaluation-flow,
 .evaluation-overview,
 .evaluation-notes {
@@ -850,6 +904,13 @@ section li {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
+}
+
+section.eval-runtime-panel {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 1rem 1.2rem;
 }
 
 .eval-progress-track {
