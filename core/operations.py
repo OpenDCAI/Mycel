@@ -30,10 +30,7 @@ class FileOperation:
 class FileOperationRecorder:
     """Records file operations for time travel rollback"""
 
-    def __init__(self, db_path: Path | str | None = None, repo=None):
-        # @@@repo-injection - web path injects repo via injection.
-        if repo is None:
-            raise RuntimeError("FileOperationRecorder requires an injected repo")
+    def __init__(self, repo=None):
         self._repo = repo
 
     def record(
@@ -46,7 +43,9 @@ class FileOperationRecorder:
         after_content: str,
         changes: list[dict] | None = None,
     ) -> str:
-        """Record a file operation"""
+        """Record a file operation. Noop if no repo configured."""
+        if self._repo is None:
+            return ""
         return self._repo.record(
             thread_id=thread_id,
             checkpoint_id=checkpoint_id,
@@ -58,35 +57,42 @@ class FileOperationRecorder:
         )
 
     def get_operations_for_thread(self, thread_id: str, status: str = "applied") -> list[FileOperation]:
-        """Get all operations for a thread"""
+        if self._repo is None:
+            return []
         rows = self._repo.get_operations_for_thread(thread_id, status=status)
         return [self._to_file_operation(row) for row in rows]
 
     def get_operations_after_checkpoint(self, thread_id: str, checkpoint_id: str) -> list[FileOperation]:
-        """Get operations after a specific checkpoint (for rollback)"""
+        if self._repo is None:
+            return []
         rows = self._repo.get_operations_after_checkpoint(thread_id, checkpoint_id)
         return [self._to_file_operation(row) for row in rows]
 
     def get_operations_between_checkpoints(self, thread_id: str, from_checkpoint_id: str, to_checkpoint_id: str) -> list[FileOperation]:
-        """Get operations between two checkpoints (exclusive of from, inclusive of to)"""
+        if self._repo is None:
+            return []
         rows = self._repo.get_operations_between_checkpoints(thread_id, from_checkpoint_id, to_checkpoint_id)
         return [self._to_file_operation(row) for row in rows]
 
     def get_operations_for_checkpoint(self, thread_id: str, checkpoint_id: str) -> list[FileOperation]:
-        """Get all operations for a specific checkpoint"""
+        if self._repo is None:
+            return []
         rows = self._repo.get_operations_for_checkpoint(thread_id, checkpoint_id)
         return [self._to_file_operation(row) for row in rows]
 
     def count_operations_for_checkpoint(self, thread_id: str, checkpoint_id: str) -> int:
-        """Count operations for a specific checkpoint"""
+        if self._repo is None:
+            return 0
         return self._repo.count_operations_for_checkpoint(thread_id, checkpoint_id)
 
     def mark_reverted(self, operation_ids: list[str]) -> None:
-        """Mark operations as reverted"""
+        if self._repo is None:
+            return
         self._repo.mark_reverted(operation_ids)
 
     def delete_thread_operations(self, thread_id: str) -> int:
-        """Delete all operations for a thread"""
+        if self._repo is None:
+            return 0
         return self._repo.delete_thread_operations(thread_id)
 
     def _to_file_operation(self, row: FileOperationRow) -> FileOperation:

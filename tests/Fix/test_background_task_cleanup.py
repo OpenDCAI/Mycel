@@ -21,11 +21,37 @@ from sandbox.thread_context import set_current_thread_id
 
 
 class _FakeAgentRegistry:
+    def __init__(self):
+        self._entries: dict[str, AgentEntry] = {}
+
     async def register(self, entry):
+        self._entries[entry.agent_id] = entry
         self.entry = entry
 
     async def update_status(self, agent_id: str, status: str):
         self.last_status = (agent_id, status)
+        if agent_id in self._entries:
+            self._entries[agent_id] = AgentEntry(
+                agent_id=agent_id,
+                name=self._entries[agent_id].name,
+                thread_id=self._entries[agent_id].thread_id,
+                status=status,
+                parent_agent_id=self._entries[agent_id].parent_agent_id,
+                subagent_type=self._entries[agent_id].subagent_type,
+            )
+
+    async def list_running_by_name(self, name: str) -> list[AgentEntry]:
+        return [e for e in self._entries.values() if e.name == name and e.status == "running"]
+
+    async def get_by_id(self, agent_id: str) -> AgentEntry | None:
+        return self._entries.get(agent_id)
+
+    async def get_latest_by_name_and_parent(self, name: str, parent_agent_id: str | None) -> AgentEntry | None:
+        matches = [e for e in self._entries.values() if e.name == name and e.parent_agent_id == parent_agent_id]
+        return matches[-1] if matches else None
+
+    async def list_running(self) -> list[AgentEntry]:
+        return [e for e in self._entries.values() if e.status == "running"]
 
 
 def _fake_agent_registry() -> AgentRegistry:
@@ -173,7 +199,7 @@ def test_sendmessage_search_hint_uses_queue_naming(tmp_path):
 @pytest.mark.asyncio
 async def test_sendmessage_enqueues_real_agent_notification_for_target_thread(tmp_path):
     registry = ToolRegistry()
-    agent_registry = AgentRegistry(db_path=tmp_path / "agents.db")
+    agent_registry = cast(AgentRegistry, _FakeAgentRegistry())
     queue_manager = MessageQueueManager(db_path=str(tmp_path / "queue.db"))
     service = AgentService(
         tool_registry=registry,
@@ -208,7 +234,7 @@ async def test_sendmessage_enqueues_real_agent_notification_for_target_thread(tm
 @pytest.mark.asyncio
 async def test_sendmessage_reaches_target_next_turn_via_steering_middleware(tmp_path):
     registry = ToolRegistry()
-    agent_registry = AgentRegistry(db_path=tmp_path / "agents.db")
+    agent_registry = cast(AgentRegistry, _FakeAgentRegistry())
     queue_manager = MessageQueueManager(db_path=str(tmp_path / "queue.db"))
     service = AgentService(
         tool_registry=registry,
@@ -249,7 +275,7 @@ async def test_sendmessage_reaches_target_next_turn_via_steering_middleware(tmp_
 @pytest.mark.asyncio
 async def test_sendmessage_rejects_ambiguous_running_agent_names(tmp_path):
     registry = ToolRegistry()
-    agent_registry = AgentRegistry(db_path=tmp_path / "agents.db")
+    agent_registry = cast(AgentRegistry, _FakeAgentRegistry())
     queue_manager = MessageQueueManager(db_path=str(tmp_path / "queue.db"))
     service = AgentService(
         tool_registry=registry,
