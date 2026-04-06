@@ -779,12 +779,17 @@ function MonitorResourcesPage() {
     }
   }, []);
 
-  const cleanupLease = React.useCallback(
+  const cleanupLeases = React.useCallback(
     async (
-      leaseId: string,
+      leaseIds: string[],
       expectedCategory: "detached_residue" | "orphan_cleanup",
+      scopeLabel: string,
     ) => {
-      setCleanupBusyId(leaseId);
+      const targetIds = leaseIds.filter(Boolean);
+      if (targetIds.length === 0) {
+        return;
+      }
+      setCleanupBusyId(scopeLabel);
       setCleanupFeedback(null);
       try {
         const payload = await fetchJSON(`${API_BASE}/resources/cleanup`, {
@@ -792,7 +797,7 @@ function MonitorResourcesPage() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             action: "cleanup_residue",
-            lease_ids: [leaseId],
+            lease_ids: targetIds,
             expected_category: expectedCategory,
           }),
         });
@@ -816,7 +821,7 @@ function MonitorResourcesPage() {
         }
         setCleanupFeedback({
           tone: "success",
-          text: `Cleanup applied: ${cleanedCount} lease cleaned from ${expectedCategory}.`,
+          text: `Cleanup applied: ${cleanedCount} lease${cleanedCount === 1 ? "" : "s"} cleaned from ${expectedCategory}.`,
         });
       } catch (e: any) {
         setCleanupFeedback({
@@ -907,6 +912,8 @@ function MonitorResourcesPage() {
   const hasPrimaryLeaseAttention =
     activeDriftLeases.length > 0 || detachedResidueLeases.length > 0;
   const hasSecondaryLeaseAttention = orphanCleanupLeases.length > 0;
+  const visibleDetachedResidueLeases = detachedResidueLeases.slice(0, 8);
+  const visibleOrphanCleanupLeases = orphanCleanupLeases.slice(0, 8);
   const refreshedAt = summary.last_refreshed_at || summary.snapshot_at;
   const selectedSessions = Array.isArray(selectedProvider?.sessions)
     ? selectedProvider.sessions
@@ -1340,7 +1347,32 @@ function MonitorResourcesPage() {
 
             {detachedResidueLeases.length > 0 ? (
               <article className="depth-primary">
-                <h2>Detached Residue ({detachedResidueLeases.length})</h2>
+                <div className="section-row">
+                  <h2>Detached Residue ({detachedResidueLeases.length})</h2>
+                  <button
+                    type="button"
+                    className="ghost-btn"
+                    disabled={
+                      cleanupBusyId === "group:detached_residue" ||
+                      refreshing ||
+                      loading
+                    }
+                    onClick={() =>
+                      void cleanupLeases(
+                        visibleDetachedResidueLeases.map(
+                          (item: any) => item.lease_id,
+                        ),
+                        "detached_residue",
+                        "group:detached_residue",
+                      )
+                    }
+                    data-testid="cleanup-visible-detached-residue"
+                  >
+                    {cleanupBusyId === "group:detached_residue"
+                      ? "Cleaning..."
+                      : "Cleanup visible"}
+                  </button>
+                </div>
                 <table>
                   <thead>
                     <tr>
@@ -1353,7 +1385,7 @@ function MonitorResourcesPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {detachedResidueLeases.slice(0, 8).map((item: any) => (
+                    {visibleDetachedResidueLeases.map((item: any) => (
                       <tr key={item.lease_id}>
                         <td>
                           <Link to={item.lease_url}>
@@ -1384,9 +1416,10 @@ function MonitorResourcesPage() {
                               loading
                             }
                             onClick={() =>
-                              void cleanupLease(
-                                item.lease_id,
+                              void cleanupLeases(
+                                [item.lease_id],
                                 "detached_residue",
+                                item.lease_id,
                               )
                             }
                             data-testid={`cleanup-${item.lease_id}`}
@@ -1408,7 +1441,32 @@ function MonitorResourcesPage() {
         {hasSecondaryLeaseAttention ? (
           <div className="lease-cluster-grid">
             <article className="depth-recessed">
-              <h2>Cleanup Backlog ({orphanCleanupLeases.length})</h2>
+              <div className="section-row">
+                <h2>Cleanup Backlog ({orphanCleanupLeases.length})</h2>
+                <button
+                  type="button"
+                  className="ghost-btn"
+                  disabled={
+                    cleanupBusyId === "group:orphan_cleanup" ||
+                    refreshing ||
+                    loading
+                  }
+                  onClick={() =>
+                    void cleanupLeases(
+                      visibleOrphanCleanupLeases.map(
+                        (item: any) => item.lease_id,
+                      ),
+                      "orphan_cleanup",
+                      "group:orphan_cleanup",
+                    )
+                  }
+                  data-testid="cleanup-visible-orphan-cleanup"
+                >
+                  {cleanupBusyId === "group:orphan_cleanup"
+                    ? "Cleaning..."
+                    : "Cleanup visible"}
+                </button>
+              </div>
               <table>
                 <thead>
                   <tr>
@@ -1421,7 +1479,7 @@ function MonitorResourcesPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {orphanCleanupLeases.slice(0, 8).map((item: any) => (
+                  {visibleOrphanCleanupLeases.map((item: any) => (
                     <tr key={item.lease_id}>
                       <td>
                         <Link to={item.lease_url}>
@@ -1444,7 +1502,11 @@ function MonitorResourcesPage() {
                             loading
                           }
                           onClick={() =>
-                            void cleanupLease(item.lease_id, "orphan_cleanup")
+                            void cleanupLeases(
+                              [item.lease_id],
+                              "orphan_cleanup",
+                              item.lease_id,
+                            )
                           }
                           data-testid={`cleanup-${item.lease_id}`}
                         >

@@ -398,7 +398,8 @@ The dashboard is a switchboard, not a full destination page. It should answer â€
   - refuses cleanup when a provider-backed destroy step is still required but unavailable/failing
 - current honest boundary:
   - backend contract is live and tested
-  - UI buttons in monitor `Resources -> Lease Health` are still pending
+  - first monitor UI buttons are live
+  - broader cleanup ergonomics and bulk controls may still evolve
 
 #### Why This Shape
 
@@ -437,6 +438,9 @@ The dashboard is a switchboard, not a full destination page. It should answer â€
 - monitor `Resources -> Lease Health` now exposes per-row `Cleanup` buttons only for:
   - `detached_residue`
   - `orphan_cleanup`
+- monitor `Resources -> Lease Health` also now exposes bounded group actions:
+  - `Cleanup visible` for the currently rendered `detached_residue` rows
+  - `Cleanup visible` for the currently rendered `orphan_cleanup` rows
 - no cleanup controls were added to:
   - product `/resources`
   - provider detail working surface
@@ -444,7 +448,8 @@ The dashboard is a switchboard, not a full destination page. It should answer â€
   - `healthy_capacity`
 - current UI behavior:
   - clicking `Cleanup` calls `POST /api/monitor/resources/cleanup`
-  - button goes busy for the targeted lease only
+  - clicking `Cleanup visible` still sends explicit visible `lease_ids`; it does not invoke a hidden bulk backend mode
+  - button goes busy for the targeted lease or targeted visible bucket only
   - result is rendered via an inline feedback strip
   - visible state change comes from a re-fetch of monitor resources/leases, not optimistic removal
 

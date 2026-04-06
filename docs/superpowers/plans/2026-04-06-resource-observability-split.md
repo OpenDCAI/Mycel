@@ -78,11 +78,13 @@
       - `uv run pyright backend/web/services/monitor_service.py backend/web/routers/monitor.py` -> `0 errors`
   - landed monitor UI slice:
     - monitor `Resources -> Lease Health` now exposes per-row `Cleanup` only for `detached_residue` and `orphan_cleanup`
+    - monitor `Resources -> Lease Health` now also exposes `Cleanup visible` for the currently rendered backlog rows in those same two buckets
     - success/failure state is shown via explicit feedback banner, not optimistic disappearance
     - focused proof:
       - `cd frontend/monitor && npm run build` -> green
-      - Playwright caller-proof clicked a real cleanup button and the page returned explicit failure text instead of silently swallowing it:
-        - `Cleanup incomplete: 0 cleaned · 1 skipped · 1 errors (lease-39ab24: lease no longer exists).`
+      - Playwright caller-proof clicked a real group cleanup button and the page re-fetched into an honest smaller backlog state:
+        - `cleanup-bulk-verify-after.yaml` contains `Cleanup applied: 8 leases cleaned from detached_residue.`
+        - `cleanup-bulk-verify-after.yaml` contains `Detached Residue (8)`
 - next honest follow-up remains:
   - `D3` because lease regrouping is still heuristic and needs stronger lifecycle meaning than age-based detached residue alone
 
