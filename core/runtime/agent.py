@@ -1243,26 +1243,23 @@ class LeonAgent:
         except ImportError:
             self._taskboard_service = None
 
-        # @@@chat-tools - register chat tools for agents with user identity
+        # @@@chat-tools - register chat tools for agents with user identity (v2 messaging)
         if self._chat_repos:
             repos = self._chat_repos
             user_id = repos.get("user_id")
-            owner_user_id = repos.get("owner_user_id", "")
+            owner_id = repos.get("owner_id", "")
             if user_id:
-                from core.agents.communication.chat_tool_service import ChatToolService
+                from messaging.tools.chat_tool_service import ChatToolService
 
-                # @@@lazy-runtime — runtime isn't set yet at _init_services() time.
-                # Pass a callable that resolves runtime lazily at tool call time.
                 self._chat_tool_service = ChatToolService(
                     registry=self._tool_registry,
                     user_id=user_id,
-                    owner_user_id=owner_user_id,
-                    chat_service=repos.get("chat_service"),
-                    chat_participant_repo=repos.get("chat_participant_repo"),
-                    chat_message_repo=repos.get("chat_message_repo"),
+                    owner_id=owner_id,
+                    messaging_service=repos.get("messaging_service"),
+                    chat_member_repo=repos.get("chat_member_repo"),
+                    messages_repo=repos.get("messages_repo"),
                     member_repo=repos.get("member_repo"),
-                    chat_event_bus=repos.get("chat_event_bus"),
-                    runtime_fn=lambda: getattr(self, "runtime", None),
+                    relationship_repo=repos.get("relationship_repo"),
                 )
 
         # LSP tools — DEFERRED, always registered, multilspy checked at call time
@@ -1416,7 +1413,7 @@ class LeonAgent:
         if self._chat_repos:
             repos = self._chat_repos
             uid = repos.get("user_id")
-            owner_uid = repos.get("owner_user_id", "")
+            owner_uid = repos.get("owner_id", "")
             if uid:
                 member_repo = repos.get("member_repo")
                 self_member = member_repo.get_by_id(uid) if member_repo else None
@@ -1428,10 +1425,10 @@ class LeonAgent:
                     f"- Your name: {name}\n"
                     f"- Your user_id: {uid}\n"
                     f"- Your owner: {owner_name} (user_id: {owner_uid})\n"
-                    f"- When you receive a chat notification, you MUST read it with read_messages() before deciding what to do.\n"
+                    f"- When you receive a chat notification, you MUST read it with chat_read() before deciding what to do.\n"
                     f"- If that notification already gives you a chat_id, prefer using that exact chat_id directly.\n"
-                    f"- If you reply to the other party, you MUST call send_message(). Never claim you replied unless send_message() succeeded.\n"
-                    f"- Your normal text output goes to your owner's thread, not to the chat — only send_message() delivers to the other party.\n"
+                    f"- If you reply to the other party, you MUST call chat_send(). Never claim you replied unless chat_send() succeeded.\n"
+                    f"- Your normal text output goes to your owner's thread, not to the chat — only chat_send() delivers to the other party.\n"
                 )
         return prompt
 

@@ -93,7 +93,7 @@ async def _async_deliver(
     if typing_tracker is not None:
         typing_tracker.start_chat(thread_id, chat_id, member.id)
 
-    unread_count = app.state.chat_message_repo.count_unread(chat_id, member.id)
+    unread_count = app.state.messaging_service.count_unread(chat_id, member.id)
 
     formatted = format_chat_notification(sender_name, chat_id, unread_count, signal=signal)
 
