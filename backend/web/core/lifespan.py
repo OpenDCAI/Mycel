@@ -1,8 +1,9 @@
 """Application lifespan management."""
 
 import asyncio
+import os
 from contextlib import asynccontextmanager
-from typing import Any
+from typing import Any, cast
 
 from fastapi import FastAPI
 
@@ -12,9 +13,19 @@ from backend.web.services.resource_cache import resource_overview_refresh_loop
 from core.runtime.middleware.queue import MessageQueueManager
 
 
+def _require_web_runtime_contract() -> None:
+    # @@@web-checkpointer-contract - web routes can create LeonAgent on first
+    # message, so missing Postgres checkpointer config is a startup contract
+    # violation, not a late per-request error.
+    if not os.getenv("LEON_POSTGRES_URL"):
+        raise RuntimeError("LEON_POSTGRES_URL is required for backend web runtime")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """FastAPI lifespan context manager for startup and shutdown."""
+    _require_web_runtime_contract()
+
     # ---- Member-Chat repos + services ----
     from backend.web.core.supabase_factory import create_supabase_auth_client, create_supabase_client
     from storage.container import StorageContainer
@@ -107,23 +118,23 @@ async def lifespan(app: FastAPI):
 
     # ---- Existing state ----
     app.state.queue_manager = MessageQueueManager()
-    app.state.agent_pool: dict[str, Any] = {}
-    app.state.thread_sandbox: dict[str, str] = {}
-    app.state.thread_cwd: dict[str, str] = {}
-    app.state.thread_locks: dict[str, asyncio.Lock] = {}
+    app.state.agent_pool = cast(dict[str, Any], {})
+    app.state.thread_sandbox = cast(dict[str, str], {})
+    app.state.thread_cwd = cast(dict[str, str], {})
+    app.state.thread_locks = cast(dict[str, asyncio.Lock], {})
     app.state.thread_locks_guard = asyncio.Lock()
-    app.state.thread_tasks: dict[str, asyncio.Task] = {}
-    app.state.thread_event_buffers: dict[str, ThreadEventBuffer] = {}
-    app.state.subagent_buffers: dict[str, RunEventBuffer] = {}
+    app.state.thread_tasks = cast(dict[str, asyncio.Task[Any]], {})
+    app.state.thread_event_buffers = cast(dict[str, ThreadEventBuffer], {})
+    app.state.subagent_buffers = cast(dict[str, RunEventBuffer], {})
 
     from backend.web.services.display_builder import DisplayBuilder
 
     app.state.display_builder = DisplayBuilder()
-    app.state.thread_last_active: dict[str, float] = {}  # thread_id → epoch timestamp
-    app.state.idle_reaper_task: asyncio.Task | None = None
+    app.state.thread_last_active = cast(dict[str, float], {})  # thread_id → epoch timestamp
+    app.state.idle_reaper_task = cast(asyncio.Task[Any] | None, None)
     app.state.cron_service = None
     app.state._event_loop = asyncio.get_running_loop()
-    app.state.monitor_resources_task: asyncio.Task | None = None
+    app.state.monitor_resources_task = cast(asyncio.Task[Any] | None, None)
 
     try:
         # Start idle reaper background task
