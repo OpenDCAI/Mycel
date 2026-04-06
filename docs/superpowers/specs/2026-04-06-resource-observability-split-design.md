@@ -357,6 +357,18 @@ The dashboard is a switchboard, not a full destination page. It should answer â€
 - semantics are still inferred from current lease row + thread binding only; they do not yet account for stronger lifecycle facts such as historical cleanup windows or explicit terminal/session shutdown markers
 - the legacy `/leases` flat table still exists as a drill-down/debug surface, though the monitor resources page now gives a better default entry by rendering only non-empty attention groups and collapsing healthy capacity
 
+### Next D3 Follow-on: Bounded Resource Cleanup
+
+- monitor `Resources` should eventually expose a small cleanup surface for global backlog classes
+- first target is not live lease mutation; it is bounded cleanup of rows that already read like backlog:
+  - `detached_residue`
+  - `orphan_cleanup`
+- the cleanup contract must stay backend-owned and explicit:
+  - no frontend-only disappearance tricks
+  - no silent fallback when cleanup is unsupported
+  - no product-page reuse of these controls
+- if this lands, it should appear as an operator action inside the global monitor resources surface, close to lease health / residue drill-down, not as a generic product resource affordance
+
 ### Why this IA
 
 - the backend already exposes `/api/monitor/resources`; the missing piece is a monitor entry surface, not another resource backend invention

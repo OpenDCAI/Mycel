@@ -55,6 +55,10 @@
   - triage distinguishes `active_drift`, `detached_residue`, `orphan_cleanup`, and `healthy_capacity`
   - monitor `Resources` consumes that triage surface directly instead of flattening everything back into `diverged/orphan`
   - legacy `/leases` also now leads with triage buckets before the collapsed raw table
+- new queued follow-up:
+  - bounded resource cleanup inside monitor `Resources`
+  - first slice must target backlog-like classes only (`detached_residue`, `orphan_cleanup`)
+  - cleanup action must be backend-owned and Playwright-proven; dead buttons do not count
 - next honest follow-up remains:
   - `D3` because lease regrouping is still heuristic and needs stronger lifecycle meaning than age-based detached residue alone
 

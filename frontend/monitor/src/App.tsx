@@ -843,8 +843,11 @@ function MonitorResourcesPage() {
     ) ||
     selectedLeaseGroups[0] ||
     null;
+  // @@@resource-session-scope - no lease group means provider scope is the only honest truth surface, even if the UI last asked for lease scope.
+  const effectiveSessionScope =
+    selectedLeaseGroup == null ? "provider" : sessionScope;
   const scopedSessions =
-    sessionScope === "provider" || !selectedLeaseGroup
+    effectiveSessionScope === "provider" || !selectedLeaseGroup
       ? selectedSessions
       : selectedLeaseGroup.sessions;
 
@@ -1074,37 +1077,40 @@ function MonitorResourcesPage() {
                   <div>
                     <h2>
                       Sessions (
-                      {sessionScope === "provider"
+                      {effectiveSessionScope === "provider"
                         ? selectedSessions.length
                         : scopedSessions.length}
                       )
                     </h2>
                     <p className="count">
-                      {sessionScope === "provider"
+                      {selectedLeaseGroup == null
+                        ? "full provider truth surface"
+                        : effectiveSessionScope === "provider"
                         ? "full provider truth surface"
                         : "scoped to selected lease"}
                     </p>
                   </div>
-                  <div
-                    className="segmented-toggle"
-                    data-testid="session-scope-toggle"
-                  >
-                    <button
-                      type="button"
-                      className={`ghost-btn${sessionScope === "lease" ? " is-active" : ""}`}
-                      onClick={() => setSessionScope("lease")}
-                      disabled={!selectedLeaseGroup}
+                  {selectedLeaseGroup ? (
+                    <div
+                      className="segmented-toggle"
+                      data-testid="session-scope-toggle"
                     >
-                      Selected lease
-                    </button>
-                    <button
-                      type="button"
-                      className={`ghost-btn${sessionScope === "provider" ? " is-active" : ""}`}
-                      onClick={() => setSessionScope("provider")}
-                    >
-                      All provider sessions
-                    </button>
-                  </div>
+                      <button
+                        type="button"
+                        className={`ghost-btn${effectiveSessionScope === "lease" ? " is-active" : ""}`}
+                        onClick={() => setSessionScope("lease")}
+                      >
+                        Selected lease
+                      </button>
+                      <button
+                        type="button"
+                        className={`ghost-btn${effectiveSessionScope === "provider" ? " is-active" : ""}`}
+                        onClick={() => setSessionScope("provider")}
+                      >
+                        All provider sessions
+                      </button>
+                    </div>
+                  ) : null}
                 </div>
                 <table className="resource-table-dense">
                   <thead>
@@ -1151,7 +1157,7 @@ function MonitorResourcesPage() {
                     {scopedSessions.length === 0 ? (
                       <tr>
                         <td colSpan={6}>
-                          {sessionScope === "provider"
+                          {effectiveSessionScope === "provider"
                             ? "No sessions reported for this provider."
                             : "No sessions reported for the selected lease group."}
                         </td>
