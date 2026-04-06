@@ -8,7 +8,7 @@ import asyncio
 
 from fastapi import HTTPException, Query, Request
 
-from backend.web.monitor import get_db, list_evaluations, list_leases, router
+from backend.web.monitor import list_evaluations, list_leases, router
 from backend.web.services import monitor_service
 from backend.web.services.resource_cache import (
     get_monitor_resource_overview_snapshot,
@@ -25,12 +25,7 @@ def health_snapshot():
 def dashboard_snapshot(request: Request):
     health = monitor_service.runtime_health_snapshot()
     resources = get_monitor_resource_overview_snapshot()
-    db_gen = get_db()
-    db = next(db_gen)
-    try:
-        leases = list_leases(db=db)
-    finally:
-        db_gen.close()
+    leases = list_leases()
     evaluations = list_evaluations(limit=5, offset=0, request=request)
 
     resource_summary = resources.get("summary") or {}

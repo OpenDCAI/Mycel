@@ -75,6 +75,52 @@ def _lease_link(lease_id: str | None) -> dict[str, Any]:
     return {"lease_id": lease_id, "lease_url": f"/lease/{lease_id}" if lease_id else None}
 
 
+LEASE_SEMANTIC_ORDER = [
+    "orphan_diverged",
+    "diverged",
+    "orphan",
+    "healthy",
+]
+
+LEASE_SEMANTIC_META = {
+    "orphan_diverged": {
+        "title": "Orphaned + Diverged",
+        "description": "Lease lost thread binding while desired and observed state still disagree.",
+    },
+    "diverged": {
+        "title": "Diverged",
+        "description": "Lease is still attached to a thread, but runtime state has not converged.",
+    },
+    "orphan": {
+        "title": "Orphans",
+        "description": "Lease has no active thread binding. Usually cleanup or historical residue.",
+    },
+    "healthy": {
+        "title": "Healthy",
+        "description": "Lease has a thread binding and desired state matches observed state.",
+    },
+}
+
+
+def _classify_lease_semantics(*, thread_id: str | None, badge: dict[str, Any]) -> dict[str, str]:
+    is_orphan = not bool(thread_id)
+    is_converged = bool(badge.get("converged"))
+    if is_orphan and not is_converged:
+        category = "orphan_diverged"
+    elif not is_converged:
+        category = "diverged"
+    elif is_orphan:
+        category = "orphan"
+    else:
+        category = "healthy"
+    meta = LEASE_SEMANTIC_META[category]
+    return {
+        "category": category,
+        "title": meta["title"],
+        "description": meta["description"],
+    }
+
+
 # ---------------------------------------------------------------------------
 # Mappers (private)
 # ---------------------------------------------------------------------------
@@ -130,21 +176,50 @@ def _map_thread_detail(thread_id: str, sessions: list[dict[str, Any]]) -> dict[s
 
 
 def _map_leases(rows: list[dict[str, Any]]) -> dict[str, Any]:
-    items = [
-        {
-            "lease_id": row["lease_id"],
-            "lease_url": f"/lease/{row['lease_id']}",
-            "provider": row["provider_name"],
-            "instance_id": row["current_instance_id"],
-            "thread": _thread_ref(row["thread_id"]),
-            "state_badge": _make_badge(row["desired_state"], row["observed_state"]),
-            "error": row["last_error"],
-            "updated_at": row["updated_at"],
-            "updated_ago": _format_time_ago(row["updated_at"]),
-        }
-        for row in rows
-    ]
-    return {"title": "All Leases", "count": len(items), "items": items}
+    items = []
+    for row in rows:
+        badge = _make_badge(row["desired_state"], row["observed_state"])
+        items.append(
+            {
+                "lease_id": row["lease_id"],
+                "lease_url": f"/lease/{row['lease_id']}",
+                "provider": row["provider_name"],
+                "instance_id": row["current_instance_id"],
+                "thread": _thread_ref(row["thread_id"]),
+                "state_badge": badge,
+                "semantics": _classify_lease_semantics(thread_id=row["thread_id"], badge=badge),
+                "error": row["last_error"],
+                "updated_at": row["updated_at"],
+                "updated_ago": _format_time_ago(row["updated_at"]),
+            }
+        )
+
+    summary = {key: 0 for key in LEASE_SEMANTIC_ORDER}
+    for item in items:
+        summary[item["semantics"]["category"]] += 1
+    summary["total"] = len(items)
+
+    groups = []
+    for key in LEASE_SEMANTIC_ORDER:
+        meta = LEASE_SEMANTIC_META[key]
+        group_items = [item for item in items if item["semantics"]["category"] == key]
+        groups.append(
+            {
+                "key": key,
+                "title": meta["title"],
+                "description": meta["description"],
+                "count": len(group_items),
+                "items": group_items,
+            }
+        )
+
+    return {
+        "title": "All Leases",
+        "count": len(items),
+        "summary": summary,
+        "groups": groups,
+        "items": items,
+    }
 
 
 def _map_lease_detail(
