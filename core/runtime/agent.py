@@ -413,6 +413,11 @@ class LeonAgent:
 
             # Update agent with checkpointer
             self.agent.checkpointer = self.checkpointer
+            if hasattr(self, "_memory_middleware"):
+                # @@@late-checkpointer-fanout - async bringup creates the saver after
+                # middleware construction, so QueryLoop and MemoryMiddleware must be
+                # rewired together or rebuild/persistence surfaces drift apart.
+                self._memory_middleware.checkpointer = self.checkpointer
 
             self._monitor_middleware.mark_ready()
 

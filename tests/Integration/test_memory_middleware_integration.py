@@ -38,6 +38,11 @@ def mock_checkpointer():
         }
 
     checkpointer.get = mock_get
+
+    async def mock_aget(config):
+        return mock_get(config)
+
+    checkpointer.aget = mock_aget
     return checkpointer
 
 
@@ -79,6 +84,17 @@ def create_large_message_list(count: int = 50) -> list:
         messages.append(HumanMessage(content=f"User message {i}" * 100))  # ~1500 chars each
         messages.append(AIMessage(content=f"AI response {i}" * 100))
     return messages
+
+
+class _AsyncOnlyCheckpointer:
+    def __init__(self) -> None:
+        self.store: dict[str, dict] = {}
+
+    async def aget(self, cfg):
+        return self.store.get(cfg["configurable"]["thread_id"])
+
+    async def aput(self, cfg, checkpoint, metadata, new_versions):
+        self.store[cfg["configurable"]["thread_id"]] = checkpoint
 
 
 class TestSummarySaveOnCompaction:
@@ -212,6 +228,8 @@ class TestSummaryRestoreOnStartup:
         result_t1 = await middleware.awrap_model_call(request_t1, handler)
         set_current_thread_id("t2")
         result_t2 = await middleware.awrap_model_call(request_t2, handler)
+        assert result_t1.request_messages is not None
+        assert result_t2.request_messages is not None
 
         assert [getattr(msg, "content", "") for msg in result_t1.request_messages] == [
             "[Conversation Summary]\nSUMMARY ONE",
@@ -288,6 +306,34 @@ class TestSplitTurnSaveAndRestore:
 
 class TestRebuildFromCheckpointer:
     """Test 4: Verify summary can be rebuilt from checkpointer when store data is corrupted."""
+
+    @pytest.mark.asyncio
+    async def test_late_bound_async_checkpointer_rebuilds_summary(self, temp_db, mock_model):
+        """Late-bound async savers should be enough for rebuild; sync .get() is not required."""
+        middleware = MemoryMiddleware(
+            context_limit=10000,
+            compaction_threshold=0.5,
+            db_path=temp_db,
+            checkpointer=None,
+            verbose=True,
+        )
+        middleware.set_model(mock_model)
+
+        checkpointer = _AsyncOnlyCheckpointer()
+        checkpointer.store["late-rebuild-thread"] = {
+            "channel_values": {
+                "messages": create_large_message_list(30),
+            }
+        }
+        middleware.checkpointer = checkpointer
+
+        await middleware._rebuild_summary_from_checkpointer("late-rebuild-thread")
+
+        store = SummaryStore(temp_db)
+        rebuilt_summary = store.get_latest_summary("late-rebuild-thread")
+        assert rebuilt_summary is not None
+        assert "This is a test summary of the conversation." in rebuilt_summary.summary_text
+        assert rebuilt_summary.compact_up_to_index > 0
 
     @pytest.mark.asyncio
     async def test_rebuild_from_checkpointer(self, temp_db, mock_model, mock_checkpointer, mock_request):
@@ -431,6 +477,7 @@ class TestCompactionBreakerScope:
         assert snapshot == {"failure_count": 0, "breaker_open": False}
 
         result = await middleware.awrap_model_call(mock_request, mock_handler)
+        assert result.request_messages is not None
         assert getattr(result.request_messages[0], "content", "").startswith("[Conversation Summary]\nRecovered summary")
         assert model.compact_calls >= 5
 

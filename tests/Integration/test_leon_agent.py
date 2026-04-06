@@ -198,6 +198,44 @@ async def test_leon_agent_simple_run(tmp_path):
 
 @pytest.mark.asyncio
 @_patch_env_api_key()
+async def test_leon_agent_ainit_pushes_late_checkpointer_into_memory_middleware(tmp_path):
+    """Async checkpointer init should update both QueryLoop and MemoryMiddleware."""
+    from core.runtime.agent import LeonAgent
+
+    mock_model = _mock_model("late checkpointer")
+    checkpointer = _MemoryCheckpointer()
+
+    async def _late_init_checkpointer(self):
+        self.checkpointer = checkpointer
+
+    with (
+        patch.dict(
+            os.environ,
+            {
+                "SUPABASE_PUBLIC_URL": "http://127.0.0.1:54320",
+                "SUPABASE_INTERNAL_URL": "http://127.0.0.1:54320",
+                "LEON_SUPABASE_SERVICE_ROLE_KEY": "dummy",
+                "SUPABASE_ANON_KEY": "dummy",
+            },
+        ),
+        patch("core.runtime.agent.LeonAgent._create_model", return_value=mock_model),
+        patch("core.runtime.agent.LeonAgent._init_async_components", return_value=(None, [])),
+        patch("core.runtime.agent.LeonAgent._init_checkpointer", new=_late_init_checkpointer),
+        patch("core.runtime.agent.LeonAgent._init_mcp_tools", new_callable=AsyncMock, return_value=[]),
+    ):
+        agent = LeonAgent(workspace_root=str(tmp_path), api_key="sk-test-integration")
+        assert agent._memory_middleware.checkpointer is None
+
+        await agent.ainit()
+
+        assert agent.agent.checkpointer is checkpointer
+        assert agent._memory_middleware.checkpointer is checkpointer
+
+        agent.close()
+
+
+@pytest.mark.asyncio
+@_patch_env_api_key()
 async def test_leon_agent_astream_interface_compatible(tmp_path):
     """astream yields dicts with 'agent' key — compatible with LangGraph stream_mode=updates."""
     from core.runtime.agent import LeonAgent

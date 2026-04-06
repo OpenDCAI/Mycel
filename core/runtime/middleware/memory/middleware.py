@@ -15,6 +15,8 @@ from typing import Any
 
 from langchain_core.messages import SystemMessage
 
+from core.runtime.checkpoint_store import CheckpointStore
+from core.runtime.langgraph_checkpoint_store import LangGraphCheckpointStore
 from core.runtime.middleware import (
     AgentMiddleware,
     ModelCallResult,
@@ -77,6 +79,8 @@ class MemoryMiddleware(AgentMiddleware):
         # Persistent storage
         summary_db_path = db_path or Path.home() / ".leon" / "leon.db"
         self.summary_store = SummaryStore(summary_db_path, summary_repo=summary_repo) if (db_path or summary_repo) else None
+        self._checkpointer: Any = None
+        self._checkpoint_store: CheckpointStore | None = None
         self.checkpointer = checkpointer
 
         # Injected references (set by agent.py after construction)
@@ -106,6 +110,15 @@ class MemoryMiddleware(AgentMiddleware):
         """
         self._model = model
         self._model_config = model_config
+
+    @property
+    def checkpointer(self) -> Any:
+        return self._checkpointer
+
+    @checkpointer.setter
+    def checkpointer(self, value: Any) -> None:
+        self._checkpointer = value
+        self._checkpoint_store = LangGraphCheckpointStore(value) if value is not None else None
 
     @property
     def _resolved_model(self) -> Any:
@@ -503,18 +516,18 @@ class MemoryMiddleware(AgentMiddleware):
     async def _rebuild_summary_from_checkpointer(self, thread_id: str) -> None:
         """Rebuild summary from checkpointer when store data is corrupted."""
         try:
-            if self.summary_store is None:
+            if self.summary_store is None or self._checkpoint_store is None:
                 return
             if self.verbose:
                 print(f"[Memory] Rebuilding summary from checkpointer for thread {thread_id}...")
 
-            checkpoint = self.checkpointer.get({"configurable": {"thread_id": thread_id}})
-            if not checkpoint:
+            checkpoint_state = await self._checkpoint_store.load(thread_id)
+            if checkpoint_state is None:
                 if self.verbose:
                     print("[Memory] No checkpoint found, skipping rebuild")
                 return
 
-            messages = checkpoint.get("channel_values", {}).get("messages", [])
+            messages = list(checkpoint_state.messages)
             if not messages:
                 if self.verbose:
                     print("[Memory] No messages in checkpoint, skipping rebuild")
