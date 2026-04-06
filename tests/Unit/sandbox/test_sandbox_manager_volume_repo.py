@@ -428,6 +428,35 @@ def test_get_sandbox_auto_resumes_live_session_when_lease_state_is_paused():
     assert capability._session.lease is resumed_lease
 
 
+def test_get_sandbox_routes_bind_mounts_to_provider_thread_state():
+    manager = _new_test_manager()
+    bind_mount_calls: list[tuple[str, list[dict[str, str]]]] = []
+    terminal = SimpleNamespace(terminal_id="term-1", lease_id="lease-1")
+    lease = SimpleNamespace(
+        lease_id="lease-1",
+        provider_name="local",
+        observed_state="running",
+        get_instance=lambda: SimpleNamespace(instance_id="instance-1"),
+    )
+    session = SimpleNamespace(terminal=terminal, lease=lease, status="active")
+
+    manager.provider = SimpleNamespace(
+        name="local",
+        set_thread_bind_mounts=lambda thread_id, mounts: bind_mount_calls.append((thread_id, mounts)),
+    )
+    manager.provider_capability = SimpleNamespace(runtime_kind="local", eager_instance_binding=False)
+    manager._get_active_terminal = lambda _thread_id: terminal
+    manager._assert_lease_provider = lambda _lease, _thread_id: None
+    manager._ensure_bound_instance = lambda _lease: None
+    manager.session_manager = SimpleNamespace(get=lambda _thread_id, _terminal_id: session)
+
+    mounts = [{"source": "/tmp/a", "target": "/workspace/a"}]
+    capability = manager.get_sandbox("thread-1", bind_mounts=mounts)
+
+    assert bind_mount_calls == [("thread-1", mounts)]
+    assert capability._session is session
+
+
 def test_resume_session_rebinds_live_session_lease_after_resume():
     manager = _new_test_manager()
     terminal = SimpleNamespace(terminal_id="term-1", lease_id="lease-1")

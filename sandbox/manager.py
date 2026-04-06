@@ -445,9 +445,9 @@ class SandboxManager:
                 if not session:
                     raise RuntimeError(f"Session disappeared after resume for thread {thread_id}")
                 self._assert_lease_provider(session.lease, thread_id)
-            # Stamp bind_mounts on lease so lazy creation paths pick them up
+            # Stamp bind_mounts on provider thread state so lazy create_session paths pick them up
             if bind_mounts:
-                session.lease.bind_mounts = bind_mounts
+                self.provider.set_thread_bind_mounts(thread_id, bind_mounts)
             self._ensure_bound_instance(session.lease)
             return SandboxCapability(session, manager=self)
 
@@ -485,9 +485,9 @@ class SandboxManager:
                     raise RuntimeError(f"Lease disappeared after resume for thread {thread_id}")
                 self._assert_lease_provider(lease, thread_id)
 
-        # Stamp bind_mounts on lease so lazy creation paths pick them up
+        # Stamp bind_mounts on provider thread state so lazy create_session paths pick them up
         if bind_mounts:
-            lease.bind_mounts = bind_mounts
+            self.provider.set_thread_bind_mounts(thread_id, bind_mounts)
 
         storage = None
         if self._requires_volume_bootstrap():
@@ -914,33 +914,32 @@ class SandboxManager:
                     }
                 )
 
-        if hasattr(self.provider, "list_provider_sessions"):
-            try:
-                provider_sessions = self.provider.list_provider_sessions() or []
-            except Exception:
-                logger.warning("Failed to list provider sessions for %s", self.provider.name, exc_info=True)
-                provider_sessions = []
+        try:
+            provider_sessions = self.provider.list_provider_sessions() or []
+        except Exception:
+            logger.warning("Failed to list provider sessions for %s", self.provider.name, exc_info=True)
+            provider_sessions = []
 
-            for ps in provider_sessions:
-                instance_id = getattr(ps, "session_id", None)
-                status = getattr(ps, "status", None) or "unknown"
-                if not instance_id or status in {"deleted", "dead", "stopped"} or instance_id in seen_instance_ids:
-                    continue
+        for ps in provider_sessions:
+            instance_id = getattr(ps, "session_id", None)
+            status = getattr(ps, "status", None) or "unknown"
+            if not instance_id or status in {"deleted", "dead", "stopped"} or instance_id in seen_instance_ids:
+                continue
 
-                sessions.append(
-                    {
-                        "session_id": instance_id,
-                        "thread_id": "(orphan)",
-                        "provider": self.provider.name,
-                        "status": status,
-                        "created_at": None,
-                        "last_active": None,
-                        "lease_id": None,
-                        "instance_id": instance_id,
-                        "chat_session_id": None,
-                        "source": "provider_orphan",
-                        "inspect_visible": inspect_visible,
-                    }
-                )
+            sessions.append(
+                {
+                    "session_id": instance_id,
+                    "thread_id": "(orphan)",
+                    "provider": self.provider.name,
+                    "status": status,
+                    "created_at": None,
+                    "last_active": None,
+                    "lease_id": None,
+                    "instance_id": instance_id,
+                    "chat_session_id": None,
+                    "source": "provider_orphan",
+                    "inspect_visible": inspect_visible,
+                }
+            )
 
         return sessions

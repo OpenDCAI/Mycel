@@ -36,6 +36,12 @@ else:
 ENV_NAME_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 
 
+def _require_select_module():
+    if select is None:
+        raise RuntimeError("PTY sessions are not supported on Windows")
+    return select
+
+
 def _parse_env_output(raw: str) -> dict[str, str]:
     env_map: dict[str, str] = {}
     for line in raw.replace("\r", "").splitlines():
@@ -199,7 +205,7 @@ class _SubprocessPtySession:
             if deadline is not None and time.monotonic() > deadline:
                 raise TimeoutError(f"Command timed out after {timeout}s")
             wait_sec = 0.1 if deadline is None else max(0.0, min(0.1, deadline - time.monotonic()))
-            readable, _, _ = select.select([self._master_fd], [], [], wait_sec)
+            readable, _, _ = _require_select_module().select([self._master_fd], [], [], wait_sec)
             if not readable:
                 continue
             chunk = os.read(self._master_fd, 4096)
@@ -241,7 +247,7 @@ class _SubprocessPtySession:
         drain_deadline = time.monotonic() + 1.0
         while time.monotonic() < drain_deadline:
             remaining = max(0.0, drain_deadline - time.monotonic())
-            readable, _, _ = select.select([self._master_fd], [], [], min(0.1, remaining))
+            readable, _, _ = _require_select_module().select([self._master_fd], [], [], min(0.1, remaining))
             if not readable:
                 continue
             try:
@@ -264,7 +270,7 @@ class _SubprocessPtySession:
         probe_buf = bytearray()
         while time.monotonic() < probe_deadline:
             wait_sec = max(0.0, min(0.1, probe_deadline - time.monotonic()))
-            readable, _, _ = select.select([self._master_fd], [], [], wait_sec)
+            readable, _, _ = _require_select_module().select([self._master_fd], [], [], wait_sec)
             if not readable:
                 continue
             try:

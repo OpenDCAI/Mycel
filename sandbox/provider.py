@@ -267,3 +267,7 @@ class SandboxProvider(ABC):
     def set_thread_bind_mounts(self, thread_id: str, mounts: list) -> None:
         """Set per-thread bind mounts for next create_session(). No-op for providers without mount support."""
         pass
+
+    def list_provider_sessions(self) -> list[SessionInfo]:
+        """List raw provider sessions for monitor/orphan visibility. Empty by default."""
+        return []
