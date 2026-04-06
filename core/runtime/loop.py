@@ -597,6 +597,14 @@ class QueryLoop:
         self.last_continue = transition
         yield {"terminal": terminal, "transition": transition}
 
+    def _make_streaming_tool_executor(self, *, tool_context: ToolUseContext | None) -> StreamingToolExecutor:
+        return StreamingToolExecutor(
+            execute_tool=self._execute_single_tool,
+            is_concurrency_safe=self._tool_is_concurrency_safe,
+            lookup_tool=self._registry.get,
+            tool_context=tool_context,
+        )
+
     async def astream(
         self,
         input: dict,
@@ -873,12 +881,7 @@ class QueryLoop:
             call_messages.append(prepared_request.system_message)
         call_messages.extend(prepared_request.messages)
 
-        executor = StreamingToolExecutor(
-            execute_tool=self._execute_single_tool,
-            is_concurrency_safe=self._tool_is_concurrency_safe,
-            lookup_tool=self._registry.get,
-            tool_context=tool_context,
-        )
+        executor = self._make_streaming_tool_executor(tool_context=tool_context)
         aggregate: AIMessageChunk | None = None
         seen_tool_ids: set[str] = set()
         streamed_tool_calls: list[dict[str, Any]] = []
@@ -2202,16 +2205,6 @@ class QueryLoop:
         else:
             reply = "I received a chat notification, but the followthrough assistant reply was empty."
         return AIMessage(content=reply)
-
-
-class _StreamingToolExecutor(StreamingToolExecutor):
-    def __init__(self, loop: QueryLoop, tool_context: ToolUseContext | None):
-        super().__init__(
-            execute_tool=loop._execute_single_tool,
-            is_concurrency_safe=loop._tool_is_concurrency_safe,
-            lookup_tool=loop._registry.get,
-            tool_context=tool_context,
-        )
 
 
 # -------------------------------------------------------------------------

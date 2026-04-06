@@ -13,7 +13,7 @@ import pytest
 from langchain_core.messages import AIMessage, AIMessageChunk, HumanMessage, RemoveMessage, SystemMessage, ToolMessage
 from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 
-from core.runtime.loop import QueryLoop, _StreamingToolExecutor
+from core.runtime.loop import QueryLoop, StreamingToolExecutor
 from core.runtime.middleware import AgentMiddleware
 from core.runtime.middleware.memory import MemoryMiddleware
 from core.runtime.middleware.monitor import AgentState
@@ -2564,7 +2564,7 @@ async def test_streaming_executor_missing_tool_is_immediately_completed():
         app_state=AppState(),
         runtime=SimpleNamespace(cost=0.0),
     )
-    executor = _StreamingToolExecutor(loop=loop, tool_context=None)
+    executor = loop._make_streaming_tool_executor(tool_context=None)
 
     await executor.add_tool({"name": "missing_tool", "args": {}, "id": "tc-missing"})
     await executor.add_tool({"name": "safe", "args": {"message": "s"}, "id": "tc-safe"})
@@ -2606,7 +2606,7 @@ async def test_streaming_executor_can_run_with_injected_dependencies_without_que
 
 
 @pytest.mark.asyncio
-async def test_private_streaming_executor_adapter_still_executes_via_query_loop_dependencies():
+async def test_query_loop_builds_streaming_executor_from_its_dependencies():
     executed: list[str] = []
 
     async def safe_handler(message: str) -> str:
@@ -2628,10 +2628,11 @@ async def test_private_streaming_executor_adapter_still_executes_via_query_loop_
         runtime=SimpleNamespace(cost=0.0),
     )
 
-    executor = _StreamingToolExecutor(loop=loop, tool_context=None)
+    executor = loop._make_streaming_tool_executor(tool_context=None)
     await executor.add_tool({"name": "safe", "args": {"message": "s"}, "id": "tc-safe"})
     ready = await executor.drain_remaining()
 
+    assert isinstance(executor, StreamingToolExecutor)
     assert [msg.tool_call_id for msg in ready] == ["tc-safe"]
     assert ready[0].content == "safe:s"
     assert executed == ["s"]
