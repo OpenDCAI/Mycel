@@ -6,8 +6,8 @@ from types import SimpleNamespace
 import pytest
 from fastapi import HTTPException
 
-from backend.web.routers import panel as panel_router
 from backend.web.models.panel import PublishMemberRequest, UpdateMemberRequest
+from backend.web.routers import panel as panel_router
 from backend.web.services import member_service, profile_service
 from storage.contracts import MemberRow, MemberType
 
