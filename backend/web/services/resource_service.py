@@ -540,6 +540,36 @@ def list_resource_providers() -> dict[str, Any]:
     return {"summary": summary, "providers": providers}
 
 
+def visible_resource_session_stats() -> dict[str, dict[str, int]]:
+    """Return the current user-visible session/running counts per provider."""
+    repo = make_sandbox_monitor_repo()
+    try:
+        raw_sessions = repo.list_sessions_with_leases()
+        sessions = _project_user_visible_resource_sessions(repo, raw_sessions)
+    finally:
+        repo.close()
+
+    stats: dict[str, dict[str, int]] = {}
+    seen_session_ids: set[str] = set()
+    seen_running_leases: set[tuple[str, str]] = set()
+    for session in sessions:
+        provider_instance = str(session.get("provider") or "local")
+        provider_stats = stats.setdefault(provider_instance, {"sessions": 0, "running": 0})
+        session_identity = _resource_session_identity(session)
+        if session_identity not in seen_session_ids:
+            seen_session_ids.add(session_identity)
+            provider_stats["sessions"] += 1
+
+        lease_id = str(session.get("lease_id") or "")
+        normalized = map_lease_to_session_status(session.get("observed_state"), session.get("desired_state"))
+        running_identity = (provider_instance, lease_id)
+        if normalized == "running" and lease_id and running_identity not in seen_running_leases:
+            seen_running_leases.add(running_identity)
+            provider_stats["running"] += 1
+
+    return stats
+
+
 # ---------------------------------------------------------------------------
 # Public API: sandbox filesystem browse
 # ---------------------------------------------------------------------------

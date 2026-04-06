@@ -55,6 +55,23 @@ def _with_refresh_metadata(
     return payload
 
 
+def _snapshot_drifted_from_live_sessions(snapshot: dict[str, Any]) -> bool:
+    live_stats = resource_service.visible_resource_session_stats()
+    for provider in snapshot.get("providers") or []:
+        provider_id = str(provider.get("id") or "")
+        current = live_stats.get(provider_id, {"sessions": 0, "running": 0})
+        cached_running = int(((provider.get("telemetry") or {}).get("running") or {}).get("used") or 0)
+        cached_sessions = len(provider.get("sessions") or [])
+        if cached_running != current["running"] or cached_sessions != current["sessions"]:
+            return True
+    for provider_id, current in live_stats.items():
+        if current["running"] or current["sessions"]:
+            cached = next((item for item in snapshot.get("providers") or [] if str(item.get("id") or "") == provider_id), None)
+            if cached is None:
+                return True
+    return False
+
+
 def refresh_resource_overview_sync() -> dict[str, Any]:
     """Refresh cached overview snapshot and return latest payload."""
     global _snapshot_cache
@@ -84,6 +101,11 @@ def get_resource_overview_snapshot() -> dict[str, Any]:
     with _snapshot_lock:
         cached = copy.deepcopy(_snapshot_cache)
     if cached is not None:
+        # @@@resource-cache-live-drift - durable session truth lands in sandbox.db after a run
+        # starts; if the cached Resources snapshot no longer matches visible lease/session
+        # counts, refresh synchronously instead of serving a stale zero-sandbox card.
+        if _snapshot_drifted_from_live_sessions(cached):
+            return refresh_resource_overview_sync()
         return cached
     # @@@cold-start-cache-fill - route fallback fills cache once to keep first call deterministic.
     return refresh_resource_overview_sync()
