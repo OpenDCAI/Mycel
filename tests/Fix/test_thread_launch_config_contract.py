@@ -51,11 +51,7 @@ class _FakeThreadRepo:
         self.rows[kwargs["thread_id"]] = dict(kwargs)
 
     def list_by_member(self, member_id: str):
-        return [
-            {"id": thread_id, **row}
-            for thread_id, row in self.rows.items()
-            if row["member_id"] == member_id
-        ]
+        return [{"id": thread_id, **row} for thread_id, row in self.rows.items() if row["member_id"] == member_id]
 
 
 class _FakeThreadLaunchPrefRepo:
