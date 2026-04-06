@@ -320,6 +320,18 @@ The dashboard is a switchboard, not a full destination page. It should answer â€
   - no import of product sandbox components
   - only existing provider/session/lease payload data is reused
 
+### Current D4 Phase-6 Landing
+
+- the provider session table now obeys the active drill-down instead of always dumping every provider row:
+  - default scope is `Selected lease`
+  - operator can explicitly switch to `All provider sessions`
+- this turns the lease detail + session table into one coherent path:
+  - choose lease
+  - inspect lease detail
+  - see only the session rows for that lease by default
+  - opt back into the noisier provider-wide truth table when needed
+- still no backend changes; this is a frontend-owned information-ordering fix over existing payload data
+
 ### D4 Remaining Gaps
 
 - monitor provider/detail surface is now close to the product resources page in interaction quality, but still lacks the richer sandbox-sheet capabilities such as file browsing or per-session live metrics

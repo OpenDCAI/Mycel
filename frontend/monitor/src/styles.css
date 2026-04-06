@@ -913,6 +913,19 @@ section li {
   color: var(--text);
 }
 
+.ghost-btn.is-active {
+  background: var(--accent-soft);
+  border-color: rgba(37, 99, 235, 0.16);
+  color: var(--accent);
+}
+
+.segmented-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
 .primary-btn {
   background: var(--text);
   color: #fff;

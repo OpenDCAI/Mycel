@@ -714,6 +714,9 @@ function MonitorResourcesPage() {
   const [leaseData, setLeaseData] = React.useState<any>(null);
   const [selectedId, setSelectedId] = React.useState("");
   const [selectedLeaseId, setSelectedLeaseId] = React.useState("");
+  const [sessionScope, setSessionScope] = React.useState<"lease" | "provider">(
+    "lease",
+  );
   const [loading, setLoading] = React.useState(false);
   const [refreshing, setRefreshing] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
@@ -788,6 +791,10 @@ function MonitorResourcesPage() {
     });
   }, [leaseData, resourceData, selectedId]);
 
+  React.useEffect(() => {
+    setSessionScope("lease");
+  }, [selectedId, selectedLeaseId]);
+
   if (error) {
     return (
       <div className="page" data-testid="page-resources">
@@ -854,6 +861,10 @@ function MonitorResourcesPage() {
     ) ||
     selectedLeaseGroups[0] ||
     null;
+  const scopedSessions =
+    sessionScope === "provider" || !selectedLeaseGroup
+      ? selectedSessions
+      : selectedLeaseGroup.sessions;
 
   return (
     <div className="page" data-testid="page-resources">
@@ -1129,11 +1140,38 @@ function MonitorResourcesPage() {
             ) : null}
             <div className="section-row">
               <div>
-                <h2>Sessions ({selectedSessions.length})</h2>
+                <h2>
+                  Sessions (
+                  {sessionScope === "provider"
+                    ? selectedSessions.length
+                    : scopedSessions.length}
+                  )
+                </h2>
                 <p className="description">
-                  Global session rows currently attached to this provider. This
-                  is the monitor-side truth surface, not the user projection.
+                  {sessionScope === "provider"
+                    ? "Global session rows currently attached to this provider. This is the full monitor-side truth surface."
+                    : "Session rows for the selected lease group. Switch back to all provider sessions when you need the noisier truth table."}
                 </p>
+              </div>
+              <div
+                className="segmented-toggle"
+                data-testid="session-scope-toggle"
+              >
+                <button
+                  type="button"
+                  className={`ghost-btn${sessionScope === "lease" ? " is-active" : ""}`}
+                  onClick={() => setSessionScope("lease")}
+                  disabled={!selectedLeaseGroup}
+                >
+                  Selected lease
+                </button>
+                <button
+                  type="button"
+                  className={`ghost-btn${sessionScope === "provider" ? " is-active" : ""}`}
+                  onClick={() => setSessionScope("provider")}
+                >
+                  All provider sessions
+                </button>
               </div>
             </div>
             <table>
@@ -1148,7 +1186,7 @@ function MonitorResourcesPage() {
                 </tr>
               </thead>
               <tbody>
-                {selectedSessions.map((session: any) => (
+                {scopedSessions.map((session: any) => (
                   <tr key={session.id}>
                     <td className="mono">{shortId(session.id, 12)}</td>
                     <td>
@@ -1178,9 +1216,13 @@ function MonitorResourcesPage() {
                     </td>
                   </tr>
                 ))}
-                {selectedSessions.length === 0 ? (
+                {scopedSessions.length === 0 ? (
                   <tr>
-                    <td colSpan={6}>No sessions reported for this provider.</td>
+                    <td colSpan={6}>
+                      {sessionScope === "provider"
+                        ? "No sessions reported for this provider."
+                        : "No sessions reported for the selected lease group."}
+                    </td>
                   </tr>
                 ) : null}
               </tbody>

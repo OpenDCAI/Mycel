@@ -40,6 +40,10 @@
   - selected lease cards now open a dedicated `Lease Detail` panel before the full provider session table
   - the panel reuses existing payload data only: lease/thread links, member, started time, and grouped session rows
   - this gives monitor resources a local deep-drill layer without changing backend contracts
+- `D4` now has a landed phase-6:
+  - the provider session table now defaults to `Selected lease` scope instead of always showing every provider session row
+  - operators can switch back to `All provider sessions` when they want the full truth table
+  - this makes the lease drill-down and the table below it read as one path instead of two competing surfaces
 - `D2` now has a landed phase-2:
   - evaluation detail payload includes backend-owned `info.operator_surface`
   - provisional eval detail opens with `Operator Status`, artifact paths, and explicit next steps
