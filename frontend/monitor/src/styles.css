@@ -101,7 +101,29 @@ body {
 .console-nav {
   display: flex;
   flex-direction: column;
-  gap: 0.3rem;
+  gap: 1.1rem;
+}
+
+/* @@@nav-group-rhythm - section spacing + muted label creates hierarchy without decoration */
+.console-nav-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.console-nav-group + .console-nav-group {
+  padding-top: 0.65rem;
+  border-top: 1px solid rgba(231, 231, 231, 0.72);
+}
+
+.console-nav-group-label {
+  display: block;
+  padding: 0 0.75rem 0.3rem;
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
 }
 
 .console-nav a {
@@ -130,6 +152,7 @@ body {
   color: var(--accent);
   background: var(--accent-soft);
   border-color: rgba(37, 99, 235, 0.12);
+  box-shadow: inset 2px 0 0 var(--accent);
 }
 
 .console-nav-mark {
@@ -2155,8 +2178,17 @@ section.eval-runtime-panel {
   }
 
   .console-nav {
+    gap: 0.75rem;
+  }
+
+  .console-nav-group {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 0.3rem;
+  }
+
+  .console-nav-group-label {
+    grid-column: 1 / -1;
   }
 
   .console-header {
@@ -2219,7 +2251,7 @@ section.eval-runtime-panel {
     padding-right: 1rem;
   }
 
-  .console-nav {
+  .console-nav-group {
     grid-template-columns: 1fr 1fr;
   }
 
