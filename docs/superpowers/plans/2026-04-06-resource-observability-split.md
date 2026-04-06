@@ -79,12 +79,15 @@
   - landed monitor UI slice:
     - monitor `Resources -> Lease Health` now exposes per-row `Cleanup` only for `detached_residue` and `orphan_cleanup`
     - monitor `Resources -> Lease Health` now also exposes `Cleanup visible` for the currently rendered backlog rows in those same two buckets
+    - group cleanup now stages an inline `Confirm cleanup / Cancel` guardrail before mutating multiple leases
     - success/failure state is shown via explicit feedback banner, not optimistic disappearance
     - focused proof:
       - `cd frontend/monitor && npm run build` -> green
-      - Playwright caller-proof clicked a real group cleanup button and the page re-fetched into an honest smaller backlog state:
-        - `cleanup-bulk-verify-after.yaml` contains `Cleanup applied: 8 leases cleaned from detached_residue.`
-        - `cleanup-bulk-verify-after.yaml` contains `Detached Residue (8)`
+      - Playwright caller-proof clicked `Cleanup visible` and first got an inline confirmation state:
+        - `cleanup-confirm-pending.yaml` contains `Confirm cleanup`
+        - `cleanup-confirm-pending.yaml` contains `Remove 8 visible leases from Detached Residue.`
+      - then clicking `Confirm cleanup` re-fetched into an honest smaller backlog state:
+        - `cleanup-confirm-after.yaml` contains `Cleanup applied: 8 leases cleaned from detached_residue.`
 - next honest follow-up remains:
   - `D3` because lease regrouping is still heuristic and needs stronger lifecycle meaning than age-based detached residue alone
 

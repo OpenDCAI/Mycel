@@ -736,6 +736,13 @@ function MonitorResourcesPage() {
     tone: "success" | "error";
     text: string;
   } | null>(null);
+  const [cleanupConfirm, setCleanupConfirm] = React.useState<{
+    leaseIds: string[];
+    expectedCategory: "detached_residue" | "orphan_cleanup";
+    scopeLabel: string;
+    label: string;
+    count: number;
+  } | null>(null);
 
   const loadResources = React.useCallback(async () => {
     setLoading(true);
@@ -765,6 +772,7 @@ function MonitorResourcesPage() {
   const refreshNow = React.useCallback(async () => {
     setRefreshing(true);
     setError(null);
+    setCleanupConfirm(null);
     try {
       const [resources, leases] = await Promise.all([
         fetchJSON(`${API_BASE}/resources/refresh`, { method: "POST" }),
@@ -791,6 +799,7 @@ function MonitorResourcesPage() {
       }
       setCleanupBusyId(scopeLabel);
       setCleanupFeedback(null);
+      setCleanupConfirm(null);
       try {
         const payload = await fetchJSON(`${API_BASE}/resources/cleanup`, {
           method: "POST",
@@ -914,6 +923,7 @@ function MonitorResourcesPage() {
   const hasSecondaryLeaseAttention = orphanCleanupLeases.length > 0;
   const visibleDetachedResidueLeases = detachedResidueLeases.slice(0, 8);
   const visibleOrphanCleanupLeases = orphanCleanupLeases.slice(0, 8);
+  // @@@cleanup-visible-confirm - visible-bucket cleanup mutates multiple leases, so group actions stage an explicit confirm while single-row cleanup stays one-click.
   const refreshedAt = summary.last_refreshed_at || summary.snapshot_at;
   const selectedSessions = Array.isArray(selectedProvider?.sessions)
     ? selectedProvider.sessions
@@ -1301,6 +1311,42 @@ function MonitorResourcesPage() {
             {cleanupFeedback.text}
           </div>
         ) : null}
+        {cleanupConfirm ? (
+          <div className="cleanup-confirm" data-testid="cleanup-confirm">
+            <div>
+              <strong>Confirm cleanup</strong>
+              <p>
+                Remove {cleanupConfirm.count} visible lease
+                {cleanupConfirm.count === 1 ? "" : "s"} from{" "}
+                {cleanupConfirm.label}.
+              </p>
+            </div>
+            <div className="cleanup-confirm-actions">
+              <button
+                type="button"
+                className="ghost-btn"
+                onClick={() => setCleanupConfirm(null)}
+                disabled={Boolean(cleanupBusyId) || refreshing || loading}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="primary-btn"
+                onClick={() =>
+                  void cleanupLeases(
+                    cleanupConfirm.leaseIds,
+                    cleanupConfirm.expectedCategory,
+                    cleanupConfirm.scopeLabel,
+                  )
+                }
+                disabled={Boolean(cleanupBusyId) || refreshing || loading}
+              >
+                Confirm cleanup
+              </button>
+            </div>
+          </div>
+        ) : null}
         {hasPrimaryLeaseAttention ? (
           <div className="lease-cluster-grid">
             {activeDriftLeases.length > 0 ? (
@@ -1358,19 +1404,23 @@ function MonitorResourcesPage() {
                       loading
                     }
                     onClick={() =>
-                      void cleanupLeases(
-                        visibleDetachedResidueLeases.map(
+                      setCleanupConfirm({
+                        leaseIds: visibleDetachedResidueLeases.map(
                           (item: any) => item.lease_id,
                         ),
-                        "detached_residue",
-                        "group:detached_residue",
-                      )
+                        expectedCategory: "detached_residue",
+                        scopeLabel: "group:detached_residue",
+                        label: "Detached Residue",
+                        count: visibleDetachedResidueLeases.length,
+                      })
                     }
                     data-testid="cleanup-visible-detached-residue"
                   >
                     {cleanupBusyId === "group:detached_residue"
                       ? "Cleaning..."
-                      : "Cleanup visible"}
+                      : cleanupConfirm?.scopeLabel === "group:detached_residue"
+                        ? "Awaiting confirm"
+                        : "Cleanup visible"}
                   </button>
                 </div>
                 <table>
@@ -1452,19 +1502,23 @@ function MonitorResourcesPage() {
                     loading
                   }
                   onClick={() =>
-                    void cleanupLeases(
-                      visibleOrphanCleanupLeases.map(
+                    setCleanupConfirm({
+                      leaseIds: visibleOrphanCleanupLeases.map(
                         (item: any) => item.lease_id,
                       ),
-                      "orphan_cleanup",
-                      "group:orphan_cleanup",
-                    )
+                      expectedCategory: "orphan_cleanup",
+                      scopeLabel: "group:orphan_cleanup",
+                      label: "Cleanup Backlog",
+                      count: visibleOrphanCleanupLeases.length,
+                    })
                   }
                   data-testid="cleanup-visible-orphan-cleanup"
                 >
                   {cleanupBusyId === "group:orphan_cleanup"
                     ? "Cleaning..."
-                    : "Cleanup visible"}
+                    : cleanupConfirm?.scopeLabel === "group:orphan_cleanup"
+                      ? "Awaiting confirm"
+                      : "Cleanup visible"}
                 </button>
               </div>
               <table>

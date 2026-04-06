@@ -448,7 +448,8 @@ The dashboard is a switchboard, not a full destination page. It should answer â€
   - `healthy_capacity`
 - current UI behavior:
   - clicking `Cleanup` calls `POST /api/monitor/resources/cleanup`
-  - clicking `Cleanup visible` still sends explicit visible `lease_ids`; it does not invoke a hidden bulk backend mode
+  - clicking `Cleanup visible` first stages an inline confirm row for the current bucket
+  - clicking `Confirm cleanup` then sends explicit visible `lease_ids`; it does not invoke a hidden bulk backend mode
   - button goes busy for the targeted lease or targeted visible bucket only
   - result is rendered via an inline feedback strip
   - visible state change comes from a re-fetch of monitor resources/leases, not optimistic removal

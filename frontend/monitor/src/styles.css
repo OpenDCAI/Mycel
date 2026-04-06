@@ -554,6 +554,31 @@ h2 {
   color: var(--danger);
 }
 
+.cleanup-confirm {
+  margin: 0 0 1rem;
+  padding: 0.9rem 1rem;
+  border-radius: 14px;
+  border: 1px solid rgba(245, 158, 11, 0.22);
+  background: linear-gradient(180deg, var(--panel) 0%, var(--warning-soft) 100%);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.cleanup-confirm p {
+  margin: 0.25rem 0 0;
+  color: var(--text-secondary);
+}
+
+.cleanup-confirm-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  flex-wrap: wrap;
+}
+
 .resource-section-shell {
   margin-bottom: 1.25rem;
 }
