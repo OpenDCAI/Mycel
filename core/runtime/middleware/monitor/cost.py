@@ -163,11 +163,17 @@ def fetch_openrouter_pricing() -> dict[str, dict[str, Decimal]]:
     cached = _load_cache()
     if cached:
         models_raw, ctx, provs = cached
-        _pricing_data = _deserialize_costs(models_raw)
-        _context_limits = ctx
-        _model_providers = provs
-        _initialized = True
-        return _pricing_data
+        cached_costs = _deserialize_costs(models_raw)
+        # @@@pricing-cache-integrity - older CI caches can carry context/provider
+        # metadata with an empty model-pricing payload, which makes cost
+        # calculation silently degrade while context-limit tests still pass.
+        # Treat that cache as invalid and fall through to bundled/API reload.
+        if cached_costs:
+            _pricing_data = cached_costs
+            _context_limits = ctx
+            _model_providers = provs
+            _initialized = True
+            return _pricing_data
 
     _pricing_data = _fetch_from_openrouter() or _load_bundled()
     _initialized = True

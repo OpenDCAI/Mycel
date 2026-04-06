@@ -1,9 +1,12 @@
 """Tests for model config enrichment (based_on + context_limit)."""
 
+import importlib
+
 import pytest
 from pydantic import ValidationError
 
 from config.models_schema import ActiveModel, CustomModelConfig, ModelsConfig, ModelSpec, PoolConfig
+from core.runtime.middleware.monitor import cost as cost_module
 from core.runtime.middleware.monitor.cost import fetch_openrouter_pricing, get_model_context_limit
 from core.runtime.middleware.monitor.middleware import MonitorMiddleware
 
@@ -130,6 +133,25 @@ class TestMonitorUpdateModel:
         mw = MonitorMiddleware(model_name="claude-sonnet-4.5")
         mw.update_model("Alice", overrides={"based_on": "claude-sonnet-4.5"})
         assert mw._token_monitor.cost_calculator.costs != {}
+
+    def test_empty_cached_pricing_falls_back_to_bundled_models(self, monkeypatch: pytest.MonkeyPatch):
+        importlib.reload(cost_module)
+
+        monkeypatch.setattr(
+            cost_module,
+            "_load_cache",
+            lambda: (
+                {},
+                {"claude-sonnet-4.5": SONNET_LIMIT},
+                {"claude-sonnet-4.5": "anthropic"},
+            ),
+        )
+        monkeypatch.setattr(cost_module, "_fetch_from_openrouter", lambda: None)
+
+        prices = cost_module.fetch_openrouter_pricing()
+
+        assert prices.get("claude-sonnet-4.5") is not None
+        assert cost_module.CostCalculator("claude-sonnet-4.5").costs != {}
 
 
 class TestThreeLevelPriority:
