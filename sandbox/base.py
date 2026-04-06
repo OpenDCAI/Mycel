@@ -11,8 +11,9 @@ import asyncio
 import logging
 import threading
 from abc import ABC, abstractmethod
+from collections.abc import Coroutine
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 logger = logging.getLogger(__name__)
 
@@ -85,13 +86,13 @@ def _cached_capability_is_stale(manager, thread_id: str, capability) -> bool:
     return current.session_id != session.session_id
 
 
-def _run_coroutine_blocking(coro, *, timeout: float | None = None):
+def _run_coroutine_blocking[T](coro: Coroutine[Any, Any, T], *, timeout: float | None = None) -> T:
     try:
         asyncio.get_running_loop()
     except RuntimeError:
         return asyncio.run(coro)
 
-    result: dict[str, object] = {}
+    result: dict[str, T] = {}
     error: dict[str, BaseException] = {}
     done = threading.Event()
 
@@ -111,7 +112,9 @@ def _run_coroutine_blocking(coro, *, timeout: float | None = None):
         raise TimeoutError(f"Coroutine timed out after {timeout}s")
     if "value" in error:
         raise error["value"]
-    return result.get("value")
+    if "value" not in result:
+        raise RuntimeError("Coroutine bridge finished without a result")
+    return result["value"]
 
 
 class RemoteSandbox(Sandbox):

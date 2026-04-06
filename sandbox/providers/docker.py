@@ -14,7 +14,7 @@ import subprocess
 import uuid
 from collections.abc import Callable
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal, overload
 
 from sandbox.config import MountSpec
 from sandbox.interfaces.executor import ExecuteResult
@@ -443,6 +443,12 @@ class DockerProvider(SandboxProvider):
 
     def create_runtime(self, terminal: AbstractTerminal, lease: SandboxLease) -> PhysicalTerminalRuntime:
         return DockerPtyRuntime(terminal, lease, self)
+
+    @overload
+    def _get_container_id(self, session_id: str, allow_missing: Literal[False] = False) -> str: ...
+
+    @overload
+    def _get_container_id(self, session_id: str, allow_missing: Literal[True]) -> str | None: ...
 
     def _get_container_id(self, session_id: str, allow_missing: bool = False) -> str | None:
         container_id = self._sessions.get(session_id)
