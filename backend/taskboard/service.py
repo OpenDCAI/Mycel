@@ -17,13 +17,8 @@ import logging
 import time
 from typing import Any
 
+from backend.taskboard._service_loader import require_task_service
 from core.runtime.registry import ToolEntry, ToolMode, ToolRegistry
-
-# Lazy import: backend is only available when running as web service
-try:
-    from backend.web.services import task_service
-except ImportError:
-    task_service = None  # type: ignore[assignment]
 
 logger = logging.getLogger(__name__)
 
@@ -218,6 +213,7 @@ class TaskBoardService:
     # ------------------------------------------------------------------
 
     async def _list_tasks(self, Status: str = "", Priority: str = "") -> str:
+        task_service = require_task_service()
         try:
             tasks = await asyncio.to_thread(task_service.list_tasks)
         except Exception as e:
@@ -232,6 +228,7 @@ class TaskBoardService:
         return json.dumps({"tasks": tasks, "total": len(tasks)}, ensure_ascii=False)
 
     async def _claim_task(self, TaskId: str) -> str:
+        task_service = require_task_service()
         thread_id = self._get_thread_id()
         now_ms = int(time.time() * 1000)
         try:
@@ -250,6 +247,7 @@ class TaskBoardService:
         return json.dumps({"task": updated}, ensure_ascii=False)
 
     async def _update_progress(self, TaskId: str, Progress: int, Note: str = "") -> str:
+        task_service = require_task_service()
         update_kwargs: dict[str, Any] = {"progress": Progress}
 
         if Note:
@@ -273,6 +271,7 @@ class TaskBoardService:
         return json.dumps({"task": updated}, ensure_ascii=False)
 
     async def _complete_task(self, TaskId: str, Result: str) -> str:
+        task_service = require_task_service()
         now_ms = int(time.time() * 1000)
         try:
             updated = await asyncio.to_thread(
@@ -291,6 +290,7 @@ class TaskBoardService:
         return json.dumps({"task": updated}, ensure_ascii=False)
 
     async def _fail_task(self, TaskId: str, Reason: str) -> str:
+        task_service = require_task_service()
         now_ms = int(time.time() * 1000)
         try:
             updated = await asyncio.to_thread(
@@ -308,6 +308,7 @@ class TaskBoardService:
         return json.dumps({"task": updated}, ensure_ascii=False)
 
     async def _create_task(self, Title: str, Description: str = "", Priority: str = "medium") -> str:
+        task_service = require_task_service()
         try:
             task = await asyncio.to_thread(
                 task_service.create_task,
@@ -327,4 +328,5 @@ class TaskBoardService:
 
     async def on_idle(self) -> dict[str, Any] | None:
         """Called when agent enters IDLE state. Returns highest-priority pending task, or None."""
+        task_service = require_task_service()
         return await asyncio.to_thread(task_service.get_highest_priority_pending_task)

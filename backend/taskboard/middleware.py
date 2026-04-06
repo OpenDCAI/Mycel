@@ -16,7 +16,7 @@ import asyncio
 import json
 import logging
 import time
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Mapping
 from typing import Any
 
 from langchain.agents.middleware.types import (
@@ -26,12 +26,9 @@ from langchain.agents.middleware.types import (
     ToolCallRequest,
 )
 from langchain_core.messages import ToolMessage
+from langchain_core.messages.tool import ToolCall
 
-# Lazy import: backend is only available when running as web service
-try:
-    from backend.web.services import task_service
-except ImportError:
-    task_service = None  # type: ignore[assignment]
+from backend.taskboard._service_loader import require_task_service
 
 logger = logging.getLogger(__name__)
 
@@ -76,7 +73,7 @@ class TaskBoardMiddleware(AgentMiddleware):
     # Tool schemas
     # ------------------------------------------------------------------
 
-    def _get_tool_schemas(self) -> list[dict]:
+    def _get_tool_schemas(self) -> list[dict[str, Any]]:
         """Return OpenAI-format function schemas, filtered by blocked_tools."""
         schemas = [
             {
@@ -263,7 +260,7 @@ class TaskBoardMiddleware(AgentMiddleware):
     # Dispatch
     # ------------------------------------------------------------------
 
-    def _handle_tool_call(self, tool_call: dict) -> ToolMessage:
+    def _handle_tool_call(self, tool_call: Mapping[str, Any] | ToolCall) -> ToolMessage:
         tool_name = tool_call.get("name")
         tool_id = tool_call.get("id", "")
         args = tool_call.get("args", {})
@@ -292,6 +289,7 @@ class TaskBoardMiddleware(AgentMiddleware):
 
     def _handle_list(self, args: dict) -> dict:
         """List board tasks with optional status/priority filter."""
+        task_service = require_task_service()
         try:
             tasks = task_service.list_tasks()
         except Exception as e:
@@ -310,6 +308,7 @@ class TaskBoardMiddleware(AgentMiddleware):
 
     def _handle_claim(self, args: dict) -> dict:
         """Claim a task: set running + thread_id + started_at."""
+        task_service = require_task_service()
         task_id = args.get("TaskId", "")
         now_ms = int(time.time() * 1000)
         updated = task_service.update_task(
@@ -324,6 +323,7 @@ class TaskBoardMiddleware(AgentMiddleware):
 
     def _handle_progress(self, args: dict) -> dict:
         """Update task progress and optionally append a note."""
+        task_service = require_task_service()
         task_id = args.get("TaskId", "")
         progress = args.get("Progress", 0)
 
@@ -346,6 +346,7 @@ class TaskBoardMiddleware(AgentMiddleware):
 
     def _handle_complete(self, args: dict) -> dict:
         """Complete a task with result."""
+        task_service = require_task_service()
         task_id = args.get("TaskId", "")
         result_text = args.get("Result", "")
         now_ms = int(time.time() * 1000)
@@ -362,6 +363,7 @@ class TaskBoardMiddleware(AgentMiddleware):
 
     def _handle_fail(self, args: dict) -> dict:
         """Fail a task with reason."""
+        task_service = require_task_service()
         task_id = args.get("TaskId", "")
         reason = args.get("Reason", "")
         now_ms = int(time.time() * 1000)
@@ -381,6 +383,7 @@ class TaskBoardMiddleware(AgentMiddleware):
 
     async def on_idle(self) -> dict[str, Any] | None:
         """Called when agent enters IDLE state. Returns highest-priority pending task, or None."""
+        task_service = require_task_service()
         return await asyncio.to_thread(task_service.get_highest_priority_pending_task)
 
     # ------------------------------------------------------------------
@@ -389,6 +392,7 @@ class TaskBoardMiddleware(AgentMiddleware):
 
     def _handle_create(self, args: dict) -> dict:
         """Create a board task with source='agent'."""
+        task_service = require_task_service()
         try:
             task = task_service.create_task(
                 title=args.get("Title", "New task"),
