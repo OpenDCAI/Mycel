@@ -341,6 +341,90 @@ function SessionDotStrip({ sessions }: { sessions: any[] }) {
   );
 }
 
+function groupSessionsByLease(sessions: any[]) {
+  const statusOrder: Record<string, number> = { running: 0, destroying: 1, paused: 2, stopped: 3 };
+  const groups = new Map<string, any[]>();
+  for (const session of sessions) {
+    const key = session.leaseId || session.id;
+    const bucket = groups.get(key) || [];
+    bucket.push(session);
+    groups.set(key, bucket);
+  }
+  return Array.from(groups.values())
+    .map((group) => {
+      const sorted = [...group].sort((a, b) => (statusOrder[a.status] ?? 4) - (statusOrder[b.status] ?? 4));
+      const lead = sorted[0];
+      return {
+        leaseId: lead.leaseId || lead.id,
+        status: lead.status,
+        sessions: sorted,
+        threadId: lead.threadId || null,
+        memberName: lead.memberName || lead.memberId || '未绑定Agent',
+        startedAt: sorted.reduce((min, item) => (item.startedAt < min ? item.startedAt : min), sorted[0].startedAt),
+      };
+    })
+    .sort((a, b) => (statusOrder[a.status] ?? 4) - (statusOrder[b.status] ?? 4));
+}
+
+function ProviderLeaseCard({ group }: { group: any }) {
+  const running = group.sessions.filter((session: any) => session.status === 'running').length;
+  const paused = group.sessions.filter((session: any) => session.status === 'paused').length;
+  const stopped = group.sessions.filter((session: any) => session.status === 'stopped').length;
+  const toneClass =
+    group.status === 'running'
+      ? 'status-running'
+      : group.status === 'paused'
+        ? 'status-paused'
+        : group.status === 'destroying'
+          ? 'status-destroying'
+          : 'status-stopped';
+  return (
+    <article className="provider-lease-card">
+      <div className="provider-lease-header">
+        <div>
+          {group.leaseId ? (
+            <Link className="provider-lease-link" to={`/lease/${group.leaseId}`}>
+              {shortId(group.leaseId, 12)}
+            </Link>
+          ) : (
+            <strong className="provider-lease-link">ephemeral</strong>
+          )}
+          <p>{group.threadId ? shortId(group.threadId, 14) : 'no thread binding'}</p>
+        </div>
+        <span className={`status-chip ${toneClass}`}>{group.status}</span>
+      </div>
+      <div className="provider-lease-meta">
+        <span>
+          <strong>Member</strong>
+          {group.memberName}
+        </span>
+        <span>
+          <strong>Started</strong>
+          {new Date(group.startedAt).toLocaleString()}
+        </span>
+      </div>
+      <div className="resource-overview-strip provider-lease-strip">
+        <span className="resource-overview-pill">
+          <span className="resource-overview-label">sessions</span>
+          <strong>{group.sessions.length}</strong>
+        </span>
+        <span className="resource-overview-pill">
+          <span className="resource-overview-label">running</span>
+          <strong>{running}</strong>
+        </span>
+        <span className="resource-overview-pill">
+          <span className="resource-overview-label">paused</span>
+          <strong>{paused}</strong>
+        </span>
+        <span className="resource-overview-pill">
+          <span className="resource-overview-label">stopped</span>
+          <strong>{stopped}</strong>
+        </span>
+      </div>
+    </article>
+  );
+}
+
 function MonitorResourcesPage() {
   const [resourceData, setResourceData] = React.useState<any>(null);
   const [leaseData, setLeaseData] = React.useState<any>(null);
@@ -419,6 +503,7 @@ function MonitorResourcesPage() {
   const healthyCapacityLeases = (triageGroups.find((group: any) => group.key === 'healthy_capacity')?.items || []) as any[];
   const refreshedAt = summary.last_refreshed_at || summary.snapshot_at;
   const selectedSessions = Array.isArray(selectedProvider?.sessions) ? selectedProvider.sessions : [];
+  const selectedLeaseGroups = groupSessionsByLease(selectedSessions);
   const selectedRunning = selectedSessions.filter((session: any) => session.status === 'running').length;
   const selectedPaused = selectedSessions.filter((session: any) => session.status === 'paused').length;
   const selectedStopped = selectedSessions.filter((session: any) => session.status === 'stopped').length;
@@ -569,6 +654,20 @@ function MonitorResourcesPage() {
             </div>
           </div>
           <div className="resource-session-shell">
+            <div className="section-row">
+              <div>
+                <h2>Leases ({selectedLeaseGroups.length})</h2>
+                <p className="description">Monitor-side lease grouping for this provider. This is the closest equivalent to the product sandbox cards, but still grounded in global monitor truth.</p>
+              </div>
+            </div>
+            <div className="provider-lease-grid">
+              {selectedLeaseGroups.map((group: any) => (
+                <ProviderLeaseCard key={group.leaseId || group.threadId || group.startedAt} group={group} />
+              ))}
+              {selectedLeaseGroups.length === 0 ? (
+                <div className="dashboard-empty">No lease groups reported for this provider.</div>
+              ) : null}
+            </div>
             <div className="section-row">
               <div>
                 <h2>Sessions ({selectedSessions.length})</h2>

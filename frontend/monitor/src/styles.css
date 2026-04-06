@@ -479,6 +479,68 @@ h2 {
   margin-top: 1rem;
 }
 
+.provider-lease-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 0.85rem;
+  margin-bottom: 1rem;
+}
+
+.provider-lease-card {
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--panel);
+  padding: 0.9rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.provider-lease-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.provider-lease-header p {
+  margin: 0.22rem 0 0;
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  font-family: 'SF Mono', Monaco, monospace;
+}
+
+.provider-lease-link {
+  color: var(--accent);
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.provider-lease-link:hover {
+  text-decoration: underline;
+}
+
+.provider-lease-meta {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.6rem;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+
+.provider-lease-meta strong {
+  display: block;
+  margin-bottom: 0.2rem;
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.provider-lease-strip {
+  margin-bottom: 0;
+}
+
 .resource-overview-strip {
   display: flex;
   gap: 0.65rem;
@@ -1469,6 +1531,7 @@ section.eval-runtime-panel {
   .evaluation-notes > *,
   .evaluation-overview > *,
   .evaluation-column,
+  .provider-lease-meta,
   .lease-cluster-grid > *,
   .eval-operator-grid > * {
     grid-column: span 12;

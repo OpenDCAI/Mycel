@@ -284,9 +284,18 @@ The dashboard is a switchboard, not a full destination page. It should answer â€
   - global session table kept below as the monitor-only truth surface
 - monitor-side null telemetry now stays `--` instead of being accidentally coerced into `0.0`, which was misleading for unavailable providers
 
+### Current D4 Phase-3 Landing
+
+- selected provider detail now includes a monitor-side lease card grid above the raw session table
+- this is the closest monitor equivalent to the product sandbox-card layer:
+  - grouped by lease
+  - surfaces member, thread, started time, and per-lease session counts
+  - keeps the full raw session table below instead of replacing it
+- the monitor page still does not import product frontend components directly; it mirrors the interaction shape locally so the contract boundary remains clean
+
 ### D4 Remaining Gaps
 
-- monitor provider/detail surface is now close to the product resources page in interaction quality, but still lacks the richer sandbox-card drill-down family the product page has
+- monitor provider/detail surface is now close to the product resources page in interaction quality, but still lacks the richer sandbox-sheet / deep drill-down family the product page has
 - lease regrouping exists, but backend-side semantic categorization is still shallow and belongs to `D3`
 - dashboard is currently a compact switchboard; it does not yet expose richer error drill-down or resource anomaly timelines
 
