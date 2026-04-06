@@ -38,7 +38,7 @@ class MemoryMiddleware(AgentMiddleware):
     Layer 2 (Compaction): LLM summarization when context exceeds threshold
     """
 
-    tools = []  # no tools injected
+    tools = ()  # no tools injected
 
     def __init__(
         self,
@@ -463,6 +463,8 @@ class MemoryMiddleware(AgentMiddleware):
             )
 
         try:
+            if self.summary_store is None:
+                return
             self._cached_summary = None
             self._compact_up_to_index = 0
             summary_data = self.summary_store.get_latest_summary(thread_id)
@@ -501,6 +503,8 @@ class MemoryMiddleware(AgentMiddleware):
     async def _rebuild_summary_from_checkpointer(self, thread_id: str) -> None:
         """Rebuild summary from checkpointer when store data is corrupted."""
         try:
+            if self.summary_store is None:
+                return
             if self.verbose:
                 print(f"[Memory] Rebuilding summary from checkpointer for thread {thread_id}...")
 

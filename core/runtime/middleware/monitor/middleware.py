@@ -25,7 +25,7 @@ class MonitorMiddleware(AgentMiddleware):
     提供 AgentRuntime 聚合所有监控数据。
     """
 
-    tools = []  # 不注入工具
+    tools = ()  # 不注入工具
 
     def __init__(self, context_limit: int = 0, model_name: str = "", verbose: bool = False):
         self.verbose = verbose
