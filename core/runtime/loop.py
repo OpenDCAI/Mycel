@@ -105,7 +105,7 @@ class _TrackedTool:
     tool_call: dict[str, Any]
     is_concurrency_safe: bool
     status: str = "queued"
-    task: asyncio.Task[ToolMessage] | None = None
+    task: asyncio.Task[None] | None = None
     result: ToolMessage | None = None
 
 
@@ -188,7 +188,7 @@ class StreamingToolExecutor:
         # early. Synthetic error emission is still a later hardening pass, but
         # task cleanup itself must happen now.
         self._discarded = True
-        running: list[asyncio.Task[ToolMessage]] = []
+        running: list[asyncio.Task[None]] = []
         for tracked in self._tracked:
             if tracked.status == "queued":
                 tracked.status = "completed"
@@ -257,7 +257,7 @@ class StreamingToolExecutor:
         # local to the current executor iteration so the parent loop survives
         # and later turns can continue with explicit tool errors.
         self._discarded = True
-        running: list[asyncio.Task[ToolMessage]] = []
+        running: list[asyncio.Task[None]] = []
         for tracked in self._tracked:
             if tracked is excluding or tracked.status in {"completed", "yielded"}:
                 continue
