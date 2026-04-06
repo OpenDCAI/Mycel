@@ -209,13 +209,11 @@ def test_list_leases_marks_old_detached_running_rows_as_detached_residue(monkeyp
     assert item["triage"]["category"] == "detached_residue"
     assert payload["triage"]["summary"]["detached_residue"] == 1
 
+
 def test_build_evaluation_operator_surface_flags_runner_exit_before_threads_materialize():
     payload = monitor_service.build_evaluation_operator_surface(
         status="provisional",
-        notes=(
-            "runner=direct rc=1 sandbox=local "
-            "run_dir=/tmp/eval stdout_log=/tmp/eval/out.log stderr_log=/tmp/eval/err.log"
-        ),
+        notes=("runner=direct rc=1 sandbox=local run_dir=/tmp/eval stdout_log=/tmp/eval/out.log stderr_log=/tmp/eval/err.log"),
         score={
             "score_gate": "provisional",
             "publishable": False,
@@ -230,6 +228,7 @@ def test_build_evaluation_operator_surface_flags_runner_exit_before_threads_mate
         threads_done=0,
     )
 
+    assert payload["kind"] == "bootstrap_failure"
     assert payload["tone"] == "danger"
     assert payload["headline"] == "Runner exited before evaluation threads materialized."
     assert "bootstrap failure" in payload["summary"]
@@ -243,4 +242,66 @@ def test_build_evaluation_operator_surface_flags_runner_exit_before_threads_mate
         "Run manifest",
         "STDOUT log",
         "STDERR log",
+        "Eval summary",
+        "Trace summaries",
+    }
+    assert payload["artifact_summary"] == {
+        "present": 4,
+        "missing": 2,
+        "total": 6,
+    }
+    assert payload["artifacts"][0]["status"] == "present"
+    assert payload["artifacts"][-1]["status"] == "missing"
+
+
+def test_build_evaluation_operator_surface_marks_running_waiting_for_threads():
+    payload = monitor_service.build_evaluation_operator_surface(
+        status="running",
+        notes="runner=direct rc=0",
+        score={
+            "score_gate": "provisional",
+            "publishable": False,
+            "run_dir": "/tmp/eval",
+            "manifest_path": "/tmp/eval/run_manifest.json",
+            "eval_summary_path": None,
+            "trace_summaries_path": None,
+            "scored": False,
+        },
+        threads_total=0,
+        threads_running=2,
+        threads_done=0,
+    )
+
+    assert payload["kind"] == "running_waiting_for_threads"
+    assert payload["tone"] == "default"
+    assert "actively running" in payload["headline"]
+    assert payload["artifact_summary"]["present"] == 2
+
+
+def test_build_evaluation_operator_surface_marks_completed_with_errors():
+    payload = monitor_service.build_evaluation_operator_surface(
+        status="completed_with_errors",
+        notes="runner=direct rc=0",
+        score={
+            "score_gate": "final",
+            "publishable": True,
+            "run_dir": "/tmp/eval",
+            "manifest_path": "/tmp/eval/run_manifest.json",
+            "eval_summary_path": "/tmp/eval/eval_summary.json",
+            "trace_summaries_path": "/tmp/eval/trace_summaries.jsonl",
+            "scored": True,
+            "error_instances": 2,
+        },
+        threads_total=10,
+        threads_running=0,
+        threads_done=10,
+    )
+
+    assert payload["kind"] == "completed_with_errors"
+    assert payload["tone"] == "warning"
+    assert "completed with recorded errors" in payload["headline"]
+    assert payload["artifact_summary"] == {
+        "present": 4,
+        "missing": 2,
+        "total": 6,
     }

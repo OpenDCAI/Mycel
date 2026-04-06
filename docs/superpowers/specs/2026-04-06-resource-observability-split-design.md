@@ -177,8 +177,10 @@ These are not vague “polish later” notes. They are concrete seams that now b
   - the monitor eval detail page now opens with a dedicated `Operator Status` block instead of leading with a sparse provisional score grid
   - the first screen now explains `runner exit before threads materialized`, surfaces `run_dir / manifest / stdout / stderr`, and gives explicit next-step guidance
   - redundant provisional score metadata is still available, but collapsed behind `Score artifacts (provisional)` by default so the page reads like an operator surface instead of a failed report
+  - operator payload now also carries a typed `kind` plus `artifact_summary`, and keeps all six artifact slots (`run_dir / manifest / stdout / stderr / eval_summary / trace_summaries`) with explicit `present|missing` status instead of filtering missing ones away
+  - the same backend helper now distinguishes at least `bootstrap_failure`, `running_waiting_for_threads`, `running_active`, `completed_with_errors`, `completed_publishable`, and `provisional_waiting_for_summary`
 - Honest boundary:
-  - this phase explains one real provisional failure mode clearly, but it does not yet model every evaluation lifecycle branch as a richer typed contract
+  - this phase now covers the main eval lifecycle branches more honestly, but it is still a typed operator contract layered over compat-monitor facts rather than a deeper evaluation storage rewrite
 
 ### Slice D3: Lease Semantics And Regrouping
 

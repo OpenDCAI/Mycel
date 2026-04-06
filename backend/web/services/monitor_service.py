@@ -248,14 +248,28 @@ def build_evaluation_operator_surface(
     scored = bool(score.get("scored"))
     score_gate = str(score.get("score_gate") or "provisional")
     artifacts = [
-        {"label": "Run directory", "path": score.get("run_dir") or extracted.get("run_dir")},
+        {
+            "label": "Run directory",
+            "path": score.get("run_dir") or extracted.get("run_dir"),
+        },
         {"label": "Run manifest", "path": score.get("manifest_path")},
         {"label": "STDOUT log", "path": extracted.get("stdout_log")},
         {"label": "STDERR log", "path": extracted.get("stderr_log")},
         {"label": "Eval summary", "path": score.get("eval_summary_path")},
         {"label": "Trace summaries", "path": score.get("trace_summaries_path")},
     ]
-    artifacts = [item for item in artifacts if item["path"]]
+    artifacts = [
+        {
+            **item,
+            "status": "present" if item["path"] else "missing",
+        }
+        for item in artifacts
+    ]
+    artifact_summary = {
+        "present": sum(1 for item in artifacts if item["status"] == "present"),
+        "missing": sum(1 for item in artifacts if item["status"] == "missing"),
+        "total": len(artifacts),
+    }
 
     facts = [
         {"label": "Status", "value": status},
@@ -270,6 +284,7 @@ def build_evaluation_operator_surface(
     if rc is not None:
         facts.append({"label": "Exit code", "value": str(rc)})
 
+    kind = "collecting_runtime_evidence"
     tone = "default"
     headline = "Evaluation is still collecting runtime evidence."
     summary = "Use the artifacts below to inspect progress and confirm whether thread rows are materializing."
@@ -279,6 +294,7 @@ def build_evaluation_operator_surface(
     ]
 
     if status == "provisional" and not scored:
+        kind = "provisional_waiting_for_summary"
         tone = "warning"
         headline = "Evaluation is provisional. Final score is blocked."
         summary = "This run has not produced the final eval summary yet, so publishable scoring is intentionally withheld."
@@ -288,6 +304,7 @@ def build_evaluation_operator_surface(
         ]
 
     if rc is not None and rc != 0 and threads_total == 0:
+        kind = "bootstrap_failure"
         tone = "danger"
         headline = "Runner exited before evaluation threads materialized."
         summary = "Treat this as a bootstrap failure, not as an empty successful run. No evaluation thread rows were created."
@@ -296,7 +313,19 @@ def build_evaluation_operator_surface(
             "Use the run manifest and stdout log to confirm whether the slice was prepared before exit.",
             "Re-run only after the failing dependency or model configuration is understood.",
         ]
+    elif status == "running" and threads_total == 0 and threads_running > 0:
+        kind = "running_waiting_for_threads"
+        tone = "default"
+        headline = "Evaluation is actively running while thread rows catch up."
+        summary = (
+            "The runner is alive, but thread rows have not materialized yet. Treat this as an ingestion lag window, not as an empty run."
+        )
+        next_steps = [
+            "Refresh after the first thread row materializes.",
+            "Use stdout/stderr to confirm the solve loop is still advancing.",
+        ]
     elif status == "running":
+        kind = "running_active"
         tone = "default"
         headline = "Evaluation is actively running."
         summary = "Thread rows and traces may lag behind the runner. Use live progress and logs before declaring drift."
@@ -304,7 +333,19 @@ def build_evaluation_operator_surface(
             "Refresh after new thread rows materialize.",
             "Inspect traces only after the first active thread appears.",
         ]
+    elif status == "completed_with_errors" and scored:
+        kind = "completed_with_errors"
+        tone = "warning"
+        headline = "Evaluation completed with recorded errors."
+        summary = (
+            "Some thread rows reached completion, but at least one instance recorded an error. Treat this as reviewable but not clean."
+        )
+        next_steps = [
+            "Inspect error-bearing threads before comparing this run against cleaner baselines.",
+            "Use eval summary and trace summaries to isolate failing instances.",
+        ]
     elif status == "completed" and scored:
+        kind = "completed_publishable"
         tone = "success"
         headline = "Evaluation finished with a publishable score surface."
         summary = "Score artifacts are present. Use the thread table to drill into trace-level evidence."
@@ -314,11 +355,13 @@ def build_evaluation_operator_surface(
         ]
 
     return {
+        "kind": kind,
         "tone": tone,
         "headline": headline,
         "summary": summary,
         "facts": facts,
         "artifacts": artifacts,
+        "artifact_summary": artifact_summary,
         "next_steps": next_steps,
         "raw_notes": notes,
     }

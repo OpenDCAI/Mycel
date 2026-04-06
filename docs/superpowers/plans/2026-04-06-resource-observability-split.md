@@ -32,10 +32,12 @@
 - `D4` now has a landed phase-3:
   - selected provider detail now shows a lease card grid before the raw session table
   - monitor keeps the raw session table for truth, but no longer forces operators to start from the noisiest surface
-- `D2` now has a landed phase-1:
+- `D2` now has a landed phase-2:
   - evaluation detail payload includes backend-owned `info.operator_surface`
   - provisional eval detail opens with `Operator Status`, artifact paths, and explicit next steps
   - redundant provisional score metadata is folded behind `Score artifacts (provisional)` instead of occupying the first screen
+  - operator payload now includes typed lifecycle `kind` and `artifact_summary`
+  - all six artifact slots stay visible with explicit `present|missing` status instead of silently dropping missing files
 - `D3` now has a landed phase-2:
   - `/api/monitor/leases` now adds backend-owned `triage.summary` and `triage.groups`
   - triage distinguishes `active_drift`, `detached_residue`, `orphan_cleanup`, and `healthy_capacity`
@@ -43,7 +45,6 @@
   - legacy `/leases` also now leads with triage buckets before the collapsed raw table
 - next honest follow-up remains:
   - `D3` because lease regrouping is still heuristic and needs stronger lifecycle meaning than age-based detached residue alone
-  - `D2` because the current operator surface only hardens the provisional/bootstrap-failure case and still lacks richer lifecycle typing for other eval states
 
 ---
 
