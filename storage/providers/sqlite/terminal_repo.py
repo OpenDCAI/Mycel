@@ -133,13 +133,30 @@ class SQLiteTerminalRepo:
         pointer = self._get_pointer_row(thread_id)
         if pointer is None:
             return None
-        return self.get_by_id(str(pointer["active_terminal_id"]))
+        row = self.get_by_id(str(pointer["active_terminal_id"]))
+        if row is not None:
+            return row
+        latest = self.list_by_thread(thread_id)
+        if not latest:
+            return None
+        # @@@stale-terminal-pointer-heal - stale pointer rows can survive direct
+        # row deletion / pre-fix thread bootstrap. Repair against the newest
+        # terminal instead of leaving the thread permanently unreadable.
+        self._ensure_thread_pointer(thread_id, str(latest[0]["terminal_id"]))
+        return self.get_by_id(str(latest[0]["terminal_id"])) or latest[0]
 
     def get_default(self, thread_id: str) -> dict[str, Any] | None:
         pointer = self._get_pointer_row(thread_id)
         if pointer is None:
             return None
-        return self.get_by_id(str(pointer["default_terminal_id"]))
+        row = self.get_by_id(str(pointer["default_terminal_id"]))
+        if row is not None:
+            return row
+        latest = self.list_by_thread(thread_id)
+        if not latest:
+            return None
+        self._ensure_thread_pointer(thread_id, str(latest[0]["terminal_id"]))
+        return self.get_by_id(str(latest[0]["terminal_id"])) or latest[0]
 
     def get_by_id(self, terminal_id: str) -> dict[str, Any] | None:
         with self._lock:
@@ -215,11 +232,50 @@ class SQLiteTerminalRepo:
     def _ensure_thread_pointer(self, thread_id: str, terminal_id: str) -> None:
         now = datetime.now().isoformat()
         with self._lock:
+            self._conn.row_factory = sqlite3.Row
             row = self._conn.execute(
-                "SELECT thread_id FROM thread_terminal_pointers WHERE thread_id = ?",
+                """
+                SELECT active_terminal_id, default_terminal_id
+                FROM thread_terminal_pointers
+                WHERE thread_id = ?
+                """,
                 (thread_id,),
             ).fetchone()
-            if row:
+            if row is not None:
+                active_row = self._conn.execute(
+                    """
+                    SELECT terminal_id
+                    FROM abstract_terminals
+                    WHERE terminal_id = ? AND thread_id = ?
+                    """,
+                    (str(row["active_terminal_id"]), thread_id),
+                ).fetchone()
+                default_row = self._conn.execute(
+                    """
+                    SELECT terminal_id
+                    FROM abstract_terminals
+                    WHERE terminal_id = ? AND thread_id = ?
+                    """,
+                    (str(row["default_terminal_id"]), thread_id),
+                ).fetchone()
+                if active_row is not None and default_row is not None:
+                    self._conn.row_factory = None
+                    return
+                self._conn.execute(
+                    """
+                    UPDATE thread_terminal_pointers
+                    SET active_terminal_id = ?, default_terminal_id = ?, updated_at = ?
+                    WHERE thread_id = ?
+                    """,
+                    (
+                        str(row["active_terminal_id"]) if active_row is not None else terminal_id,
+                        str(row["default_terminal_id"]) if default_row is not None else terminal_id,
+                        now,
+                        thread_id,
+                    ),
+                )
+                self._conn.row_factory = None
+                self._conn.commit()
                 return
             self._conn.execute(
                 """
@@ -228,6 +284,7 @@ class SQLiteTerminalRepo:
                 """,
                 (thread_id, terminal_id, terminal_id, now),
             )
+            self._conn.row_factory = None
             self._conn.commit()
 
     def create(

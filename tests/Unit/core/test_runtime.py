@@ -105,6 +105,22 @@ def _make_instance(
     )
 
 
+def test_sqlite_terminal_repo_create_repairs_stale_active_pointer(temp_db):
+    repo = SQLiteTerminalRepo(db_path=temp_db)
+    try:
+        repo.create("term-old", "thread-1", "lease-1", "/tmp")
+        repo._conn.execute("DELETE FROM abstract_terminals WHERE terminal_id = ?", ("term-old",))
+        repo._conn.commit()
+
+        repo.create("term-new", "thread-1", "lease-1", "/tmp")
+
+        active = repo.get_active("thread-1")
+        assert active is not None
+        assert active["terminal_id"] == "term-new"
+    finally:
+        repo.close()
+
+
 def test_remote_runtime_treats_daytona_pty_1011_as_infra_error():
     text = 'Failed to send input to PTY: received 1011 (internal error) {"exitCode":1}'
     assert _RemoteRuntimeBase._looks_like_infra_error(text) is True

@@ -24,7 +24,7 @@ from collections.abc import AsyncGenerator, Awaitable, Callable
 from dataclasses import dataclass
 from enum import StrEnum
 from types import SimpleNamespace
-from typing import Any
+from typing import Any, cast
 
 from langchain_core.messages import AIMessage, AIMessageChunk, HumanMessage, RemoveMessage, SystemMessage, ToolMessage
 
@@ -1877,10 +1877,27 @@ class QueryLoop:
         if self.checkpointer is None:
             return
         try:
-            from langgraph.checkpoint.base import CheckpointMetadata, empty_checkpoint
+            from langgraph.checkpoint.base import Checkpoint, CheckpointMetadata, create_checkpoint, empty_checkpoint
 
             cfg = self._checkpoint_config(thread_id)
-            checkpoint = empty_checkpoint()
+            existing_checkpoint: Checkpoint | None = None
+            aget_tuple = getattr(self.checkpointer, "aget_tuple", None)
+            if callable(aget_tuple):
+                checkpoint_tuple_result = aget_tuple(cfg)
+                checkpoint_tuple = (
+                    await checkpoint_tuple_result if inspect.isawaitable(checkpoint_tuple_result) else checkpoint_tuple_result
+                )
+                checkpoint_value = getattr(checkpoint_tuple, "checkpoint", None)
+                if isinstance(checkpoint_value, dict):
+                    existing_checkpoint = cast(Checkpoint, checkpoint_value)
+            if existing_checkpoint is None:
+                aget = getattr(self.checkpointer, "aget", None)
+                if callable(aget):
+                    checkpoint_result = aget(cfg)
+                    checkpoint_value = await checkpoint_result if inspect.isawaitable(checkpoint_result) else checkpoint_result
+                    if isinstance(checkpoint_value, dict):
+                        existing_checkpoint = cast(Checkpoint, checkpoint_value)
+            checkpoint = create_checkpoint(existing_checkpoint or empty_checkpoint(), None, len(messages))
             permission_context, pending_requests, resolved_requests = self._thread_permission_state_snapshot(thread_id)
             memory_state = self._thread_memory_state_snapshot(thread_id)
             mcp_instruction_state = self._thread_mcp_instruction_state_snapshot(thread_id)
@@ -1892,11 +1909,19 @@ class QueryLoop:
                 "memory_compaction_state": memory_state,
                 "mcp_instruction_state": mcp_instruction_state,
             }
+            new_versions = {}
+            get_next_version = getattr(self.checkpointer, "get_next_version", None)
+            if callable(get_next_version):
+                current_versions = dict(checkpoint.get("channel_versions", {}) or {})
+                for channel_name in checkpoint["channel_values"]:
+                    new_versions[channel_name] = get_next_version(current_versions.get(channel_name), None)
+                checkpoint["channel_versions"] = {**current_versions, **new_versions}
+                checkpoint["updated_channels"] = list(new_versions)
             metadata: CheckpointMetadata = {
                 "source": "loop",
                 "step": len(messages),
             }
-            await self.checkpointer.aput(cfg, checkpoint, metadata, {})
+            await self.checkpointer.aput(cfg, checkpoint, metadata, new_versions)
         except Exception:
             logger.debug("QueryLoop: could not save checkpoint for thread %s", thread_id, exc_info=True)
 

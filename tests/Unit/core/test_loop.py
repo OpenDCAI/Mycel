@@ -59,6 +59,38 @@ class _MemoryCheckpointer:
         self.store[cfg["configurable"]["thread_id"]] = checkpoint
 
 
+class _VersionAwareBlobCheckpointer:
+    """Minimal saver that only persists blob-like channel values when versions advance."""
+
+    def __init__(self):
+        self.store = {}
+
+    async def aget(self, cfg):
+        return self.store.get(cfg["configurable"]["thread_id"])
+
+    def get_next_version(self, current, channel):
+        if current is None:
+            current_v = 0
+        elif isinstance(current, int):
+            current_v = current
+        else:
+            current_v = int(str(current).split(".")[0])
+        return f"{current_v + 1:032}.test"
+
+    async def aput(self, cfg, checkpoint, metadata, new_versions):
+        primitive = (str, int, float, bool, type(None))
+        persisted = checkpoint.copy()
+        persisted["channel_values"] = {
+            key: value for key, value in checkpoint["channel_values"].items() if isinstance(value, primitive) or key in new_versions
+        }
+        persisted["channel_versions"] = {
+            **dict(checkpoint.get("channel_versions", {}) or {}),
+            **new_versions,
+        }
+        persisted["updated_channels"] = list(new_versions)
+        self.store[cfg["configurable"]["thread_id"]] = persisted
+
+
 def mock_model_no_tools(text="Hello!"):
     """Model that returns a plain AIMessage (no tool calls)."""
     ai_msg = AIMessage(content=text)
@@ -479,6 +511,23 @@ async def test_query_loop_replays_messages_with_real_async_sqlite_saver():
         assert [msg.content for msg in reloaded] == ["first", "persist me"]
     finally:
         await conn.close()
+
+
+@pytest.mark.asyncio
+async def test_query_loop_save_messages_advances_versions_for_blob_style_savers():
+    checkpointer = _VersionAwareBlobCheckpointer()
+    loop = make_loop(
+        model=mock_model_no_tools("unused"),
+        checkpointer=checkpointer,
+        app_state=AppState(),
+    )
+
+    await loop._save_messages("blob-thread", [HumanMessage(content="persist me")])
+
+    reloaded = await loop._load_messages("blob-thread")
+
+    assert [msg.content for msg in reloaded] == ["persist me"]
+    assert "messages" in checkpointer.store["blob-thread"]["channel_versions"]
 
 
 @pytest.mark.asyncio

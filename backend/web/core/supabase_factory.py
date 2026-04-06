@@ -59,15 +59,16 @@ def create_supabase_auth_client():
 
 
 def create_messaging_supabase_client():
-    """Build a supabase-py client for messaging repos using anon key.
+    """Build a server-side Supabase client for messaging repos.
 
-    The anon key works for messaging tables which have no RLS policies
-    in the current self-hosted setup.
+    @@@messaging-public-schema - messaging tables still live in public while
+    main product storage moved to LEON_DB_SCHEMA, so this client must stay on
+    public and use server credentials.
     """
     url = _resolve_supabase_url()
-    key = os.getenv("SUPABASE_ANON_KEY")
+    key = os.getenv("LEON_SUPABASE_SERVICE_ROLE_KEY")
     if not key:
-        raise RuntimeError("SUPABASE_ANON_KEY is required for messaging.")
+        raise RuntimeError("LEON_SUPABASE_SERVICE_ROLE_KEY is required for messaging.")
     timeout = httpx.Timeout(30.0, connect=10.0)
     http_client = httpx.Client(timeout=timeout, trust_env=False)
-    return create_client(url, key, options=ClientOptions(httpx_client=http_client))
+    return create_client(url, key, options=ClientOptions(httpx_client=http_client, schema="public"))
