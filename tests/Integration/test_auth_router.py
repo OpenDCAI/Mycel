@@ -6,7 +6,7 @@ import pytest
 from fastapi import HTTPException
 
 from backend.web.routers import auth as auth_router
-from backend.web.routers import chats as chats_router
+from backend.web.routers import messaging as chats_router
 
 
 class _FakeAuthService:

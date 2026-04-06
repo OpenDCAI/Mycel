@@ -107,7 +107,7 @@ export function useRealtimeMessages({ chatId, enabled = true }: UseRealtimeMessa
     channelRef.current = channel;
 
     return () => {
-      void supabase.removeChannel(channel);
+      void supabase!.removeChannel(channel);
       channelRef.current = null;
     };
   }, [enabled, chatId]);

@@ -36,7 +36,6 @@ function AuthenticatedLayout() {
   const authLogout = useAuthStore(s => s.logout);
 
   const location = useLocation();
-  const navigate = useNavigate();
   const isMobile = useIsMobile();
   const [showCreate, setShowCreate] = useState(false);
   const [createMemberOpen, setCreateMemberOpen] = useState(false);
