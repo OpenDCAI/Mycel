@@ -4241,6 +4241,8 @@ const GUIDE_SECTIONS = [
 
 function shellMeta(pathname: string): { title: string; subtitle: string } {
   // @@@shell-route-bucketing - detail routes inherit the nearest console section.
+  if (pathname.startsWith("/leases"))
+    return { title: "Leases", subtitle: "Grouped triage · raw truth fallback" };
   if (pathname.startsWith("/resources") || pathname.startsWith("/lease"))
     return {
       title: "Resources",
@@ -4263,8 +4265,6 @@ function shellMeta(pathname: string): { title: string; subtitle: string } {
     };
   if (pathname.startsWith("/events") || pathname.startsWith("/event"))
     return { title: "Events", subtitle: "Lease and runtime event history" };
-  if (pathname.startsWith("/leases"))
-    return { title: "Leases", subtitle: "Grouped triage · raw truth fallback" };
   return {
     title: "Dashboard",
     subtitle: "Health · workload · latest evaluation",
