@@ -143,7 +143,7 @@ class ChatRow(BaseModel):
     updated_at: float | None = None
 
 
-class ChatEntityRow(BaseModel):
+class ChatParticipantRow(BaseModel):
     chat_id: str
     user_id: str  # social identity: user_id for humans, member_id for agents
     joined_at: float
@@ -171,7 +171,7 @@ class DeliveryAction(StrEnum):
 
     DELIVER = "deliver"  # full delivery: inject into agent context, wake agent
     NOTIFY = "notify"  # red dot only: message stored, unread counted, no delivery
-    DROP = "drop"  # silent: message stored but invisible to this entity
+    DROP = "drop"  # silent: message stored but invisible to this user
 
 
 ContactRelation = Literal["normal", "blocked", "muted"]
@@ -373,10 +373,10 @@ class ChatRepo(Protocol):
     def delete(self, chat_id: str) -> None: ...
 
 
-class ChatEntityRepo(Protocol):
+class ChatParticipantRepo(Protocol):
     def close(self) -> None: ...
     def add_participant(self, chat_id: str, user_id: str, joined_at: float) -> None: ...
-    def list_participants(self, chat_id: str) -> list[ChatEntityRow]: ...
+    def list_participants(self, chat_id: str) -> list[ChatParticipantRow]: ...
     def list_chats_for_user(self, user_id: str) -> list[str]: ...
     def is_participant_in_chat(self, chat_id: str, user_id: str) -> bool: ...
     def update_last_read(self, chat_id: str, user_id: str, last_read_at: float) -> None: ...

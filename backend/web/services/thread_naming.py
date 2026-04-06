@@ -12,7 +12,7 @@ def validate_thread_identity(*, is_main: bool, branch_index: int) -> None:
         raise ValueError("Child thread must have branch_index>0")
 
 
-def canonical_entity_name(member_name: str, *, is_main: bool, branch_index: int) -> str:
+def canonical_thread_name(member_name: str, *, is_main: bool, branch_index: int) -> str:
     validate_thread_identity(is_main=is_main, branch_index=branch_index)
     if is_main:
         return member_name

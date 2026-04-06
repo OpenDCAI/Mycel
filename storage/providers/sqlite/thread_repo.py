@@ -120,17 +120,13 @@ class SQLiteThreadRepo:
             return [self._to_dict(r) for r in rows]
 
     def list_by_owner_user_id(self, owner_user_id: str) -> list[dict[str, Any]]:
-        """Return all threads owned by this user (via members.owner_user_id JOIN).
-
-        Also JOINs entities (entity.id == member_id) for entity_name.
-        """
+        """Return all threads owned by this user (via members.owner_user_id JOIN)."""
         cols = ", ".join(f"t.{c}" for c in self._COLS)
         with self._lock:
             rows = self._conn.execute(
-                f"SELECT {cols}, m.name as member_name, m.avatar as member_avatar,"
-                " e.name as entity_name FROM threads t"
+                f"SELECT {cols}, m.name as member_name, m.avatar as member_avatar"
+                " FROM threads t"
                 " JOIN members m ON t.member_id = m.id"
-                " LEFT JOIN entities e ON e.id = t.member_id"
                 " WHERE m.owner_user_id = ?"
                 " ORDER BY t.is_main DESC, t.created_at",
                 (owner_user_id,),
@@ -141,7 +137,6 @@ class SQLiteThreadRepo:
                     **self._to_dict(r[:ncols]),
                     "member_name": r[ncols],
                     "member_avatar": r[ncols + 1],
-                    "entity_name": r[ncols + 2],
                 }
                 for r in rows
             ]

@@ -101,7 +101,7 @@ class ChatToolService:
         owner_user_id: str,
         *,
         chat_service: Any = None,
-        chat_entity_repo: Any = None,
+        chat_participant_repo: Any = None,
         chat_message_repo: Any = None,
         member_repo: Any = None,
         chat_event_bus: Any = None,
@@ -110,7 +110,7 @@ class ChatToolService:
         self._user_id = user_id
         self._owner_user_id = owner_user_id
         self._chat_service = chat_service
-        self._chat_entities = chat_entity_repo
+        self._chat_participants = chat_participant_repo
         self._messages = chat_message_repo
         self._members = member_repo
         self._event_bus = chat_event_bus

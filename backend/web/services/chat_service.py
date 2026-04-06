@@ -10,7 +10,7 @@ from typing import Any
 
 from backend.web.utils.serializers import avatar_url
 from storage.contracts import (
-    ChatEntityRepo,
+    ChatParticipantRepo,
     ChatMessageRepo,
     ChatMessageRow,
     ChatRepo,
@@ -27,7 +27,7 @@ class ChatService:
     def __init__(
         self,
         chat_repo: ChatRepo,
-        chat_entity_repo: ChatEntityRepo,
+        chat_participant_repo: ChatParticipantRepo,
         chat_message_repo: ChatMessageRepo,
         member_repo: MemberRepo,
         event_bus: Any = None,
@@ -35,7 +35,7 @@ class ChatService:
         delivery_resolver: DeliveryResolver | None = None,
     ) -> None:
         self._chats = chat_repo
-        self._chat_entities = chat_entity_repo
+        self._chat_participants = chat_participant_repo
         self._messages = chat_message_repo
         self._members = member_repo
         self._event_bus = event_bus
@@ -52,7 +52,7 @@ class ChatService:
         if len(user_ids) != 2:
             raise ValueError("Use create_group_chat() for 3+ participants")
 
-        existing_id = self._chat_entities.find_chat_between(user_ids[0], user_ids[1])
+        existing_id = self._chat_participants.find_chat_between(user_ids[0], user_ids[1])
         if existing_id:
             return self._chats.get_by_id(existing_id)
 
@@ -60,7 +60,7 @@ class ChatService:
         chat_id = str(uuid.uuid4())
         self._chats.create(ChatRow(id=chat_id, title=title, created_at=now))
         for uid in user_ids:
-            self._chat_entities.add_participant(chat_id, uid, now)
+            self._chat_participants.add_participant(chat_id, uid, now)
         return self._chats.get_by_id(chat_id)
 
     def create_group_chat(self, user_ids: list[str], title: str | None = None) -> ChatRow:
@@ -71,7 +71,7 @@ class ChatService:
         chat_id = str(uuid.uuid4())
         self._chats.create(ChatRow(id=chat_id, title=title, created_at=now))
         for uid in user_ids:
-            self._chat_entities.add_participant(chat_id, uid, now)
+            self._chat_participants.add_participant(chat_id, uid, now)
         return self._chats.get_by_id(chat_id)
 
     def send_message(
@@ -136,7 +136,7 @@ class ChatService:
     ) -> None:
         """For each non-sender agent participant in the chat, deliver to their brain thread."""
         mentions = set(mentioned_ids or [])
-        participants = self._chat_entities.list_participants(chat_id)
+        participants = self._chat_participants.list_participants(chat_id)
         sender_member = self._members.get_by_id(sender_id) if self._members else None
         sender_avatar_url = avatar_url(sender_id, bool(sender_member.avatar if sender_member else None))
 
@@ -186,13 +186,13 @@ class ChatService:
 
     def list_chats_for_user(self, user_id: str) -> list[dict]:
         """List all chats for a user (social identity) with summary info."""
-        chat_ids = self._chat_entities.list_chats_for_user(user_id)
+        chat_ids = self._chat_participants.list_chats_for_user(user_id)
         result = []
         for cid in chat_ids:
             chat = self._chats.get_by_id(cid)
             if not chat or chat.status != "active":
                 continue
-            participants = self._chat_entities.list_participants(cid)
+            participants = self._chat_participants.list_participants(cid)
             entities_info = []
             for p in participants:
                 m = self._members.get_by_id(p.user_id) if self._members else None

@@ -20,7 +20,7 @@ interface MemberAvatarProps {
   name: string;
   /** Avatar image URL from backend. Frontend doesn't build URLs. */
   avatarUrl?: string;
-  /** Entity/member type — for deterministic fallback color. */
+  /** Member type — for deterministic fallback color. */
   type?: string;
   size?: keyof typeof SIZE_MAP;
   className?: string;

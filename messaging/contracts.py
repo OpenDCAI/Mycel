@@ -1,7 +1,7 @@
 """messaging/contracts.py — canonical types for the messaging module.
 
 All types are Pydantic v2, strict=True, frozen=True.
-User is the first-class social identity (wraps entity_id).
+User is the first-class social identity (the social identity).
 """
 
 from __future__ import annotations
@@ -19,7 +19,7 @@ from pydantic import BaseModel, ConfigDict
 class User(BaseModel):
     model_config = ConfigDict(strict=True, frozen=True)
 
-    id: str  # entity_id
+    id: str  # member_id
     name: str
     avatar_url: str | None = None
     type: Literal["human", "agent"]
@@ -27,7 +27,7 @@ class User(BaseModel):
 
 
 class UserRepo(Protocol):
-    """Resolve a User from entity_id. Reads from entity + member tables."""
+    """Resolve a User by user_id. Reads from member table."""
 
     def get_user(self, user_id: str) -> User | None: ...
     def list_users(self) -> list[User]: ...
@@ -59,7 +59,7 @@ class MessageRow(BaseModel):
 
     id: str
     chat_id: str
-    sender_id: str  # user_id (entity_id)
+    sender_id: str  # user_id
     content: str
     content_type: ContentType = "text"
     message_type: MessageType = "human"

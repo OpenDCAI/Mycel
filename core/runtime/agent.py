@@ -331,7 +331,7 @@ class LeonAgent:
         if hasattr(self, "_agent_service"):
             self._agent_service._parent_bootstrap = self._bootstrap
 
-        # @@@entity-identity — inject chat identity so agent knows who it is in the social layer
+        # @@@chat-identity — inject chat identity so agent knows who it is in the social layer
         if self._chat_repos:
             repos = self._chat_repos
             uid = repos.get("user_id")
@@ -1270,7 +1270,7 @@ class LeonAgent:
                     user_id=user_id,
                     owner_user_id=owner_user_id,
                     chat_service=repos.get("chat_service"),
-                    chat_entity_repo=repos.get("chat_entity_repo"),
+                    chat_participant_repo=repos.get("chat_participant_repo"),
                     chat_message_repo=repos.get("chat_message_repo"),
                     member_repo=repos.get("member_repo"),
                     chat_event_bus=repos.get("chat_event_bus"),

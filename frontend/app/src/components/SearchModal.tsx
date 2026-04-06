@@ -31,14 +31,14 @@ export default function SearchModal({ isOpen, threads, onClose, onSelectThread }
           {threads.map((thread) => (
             <CommandItem
               key={thread.thread_id}
-              value={`${thread.thread_id} ${thread.sandbox ?? "local"} ${thread.entity_name ?? ""} ${thread.member_name ?? ""} ${thread.sidebar_label ?? ""}`}
+              value={`${thread.thread_id} ${thread.sandbox ?? "local"} ${thread.member_name ?? ""} ${thread.member_name ?? ""} ${thread.sidebar_label ?? ""}`}
               onSelect={() => {
                 onSelectThread(thread.thread_id);
                 onClose();
               }}
             >
               <div className="flex flex-col gap-0.5 min-w-0">
-                <span className="text-sm truncate">{thread.entity_name || thread.thread_id}</span>
+                <span className="text-sm truncate">{thread.member_name || thread.thread_id}</span>
                 <span className="text-xs text-muted-foreground flex gap-2">
                   <span>{thread.sandbox ?? "local"}</span>
                   {thread.updated_at && (

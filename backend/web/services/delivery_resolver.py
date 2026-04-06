@@ -9,7 +9,7 @@ from __future__ import annotations
 import logging
 import time
 
-from storage.contracts import ChatEntityRepo, ContactRepo, DeliveryAction
+from storage.contracts import ChatParticipantRepo, ContactRepo, DeliveryAction
 
 logger = logging.getLogger(__name__)
 
@@ -24,9 +24,9 @@ class DefaultDeliveryResolver:
     4. Default                                     → DELIVER
     """
 
-    def __init__(self, contact_repo: ContactRepo, chat_entity_repo: ChatEntityRepo) -> None:
+    def __init__(self, contact_repo: ContactRepo, chat_participant_repo: ChatParticipantRepo) -> None:
         self._contacts = contact_repo
-        self._chat_entities = chat_entity_repo
+        self._chat_participants = chat_participant_repo
 
     def resolve(
         self,
@@ -61,7 +61,7 @@ class DefaultDeliveryResolver:
 
     def _is_chat_muted(self, user_id: str, chat_id: str) -> bool:
         """Check if user has muted this specific chat."""
-        participants = self._chat_entities.list_participants(chat_id)
+        participants = self._chat_participants.list_participants(chat_id)
         for ce in participants:
             if ce.user_id == user_id:
                 muted = getattr(ce, "muted", False)
