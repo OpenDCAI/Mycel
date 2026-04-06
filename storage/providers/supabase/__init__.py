@@ -1,5 +1,6 @@
 """Supabase storage provider implementations."""
 
+from .agent_config_repo import SupabaseAgentConfigRepo
 from .agent_registry_repo import SupabaseAgentRegistryRepo
 from .chat_repo import SupabaseChatRepo
 from .chat_session_repo import SupabaseChatSessionRepo
@@ -29,6 +30,7 @@ from .user_settings_repo import SupabaseUserSettingsRepo
 
 __all__ = [
 
+    "SupabaseAgentConfigRepo",
     "SupabaseAgentRegistryRepo",
     "SupabaseChatRepo",
     "SupabaseChatSessionRepo",
