@@ -249,9 +249,7 @@ def test_get_lease_falls_back_to_historical_session_rows(monkeypatch):
     assert payload["lease_id"] == "lease-historical"
     assert payload["info"]["provider"] == "unknown"
     assert payload["state"]["text"] == "destroyed"
-    assert payload["related_threads"]["items"] == [
-        {"thread_id": "thread-historical", "thread_url": "/thread/thread-historical"}
-    ]
+    assert payload["related_threads"]["items"] == [{"thread_id": "thread-historical", "thread_url": "/thread/thread-historical"}]
 
 
 def test_build_evaluation_operator_surface_flags_runner_exit_before_threads_materialize():
@@ -349,3 +347,138 @@ def test_build_evaluation_operator_surface_marks_completed_with_errors():
         "missing": 2,
         "total": 6,
     }
+
+
+def test_cleanup_resource_leases_deletes_allowed_detached_residue(monkeypatch):
+    rows = [
+        {
+            "lease_id": "lease-stale",
+            "provider_name": "local",
+            "desired_state": "running",
+            "observed_state": "detached",
+            "current_instance_id": None,
+            "last_error": None,
+            "updated_at": "2026-04-05T00:00:00",
+            "thread_id": "subagent-1234",
+        }
+    ]
+
+    class FakeMonitorRepo:
+        def query_leases(self):
+            return list(rows)
+
+        def query_lease_sessions(self, lease_id):
+            assert lease_id == "lease-stale"
+            return [{"chat_session_id": "sess-old", "status": "closed"}]
+
+        def close(self):
+            return None
+
+    class FakeLeaseRepo:
+        def __init__(self):
+            self.deleted = []
+
+        def delete(self, lease_id):
+            self.deleted.append(lease_id)
+            rows[:] = [row for row in rows if row["lease_id"] != lease_id]
+
+        def close(self):
+            return None
+
+    class FakeChatSessionRepo:
+        def lease_has_running_command(self, lease_id):
+            assert lease_id == "lease-stale"
+            return False
+
+        def close(self):
+            return None
+
+    lease_repo = FakeLeaseRepo()
+    monkeypatch.setattr(monitor_service, "make_sandbox_monitor_repo", lambda: FakeMonitorRepo())
+    monkeypatch.setattr(monitor_service, "make_lease_repo", lambda: lease_repo)
+    monkeypatch.setattr(monitor_service, "make_chat_session_repo", lambda: FakeChatSessionRepo())
+    monkeypatch.setattr(monitor_service, "init_providers_and_managers", lambda: ({}, {}))
+    monkeypatch.setattr(monitor_service, "_hours_since", lambda _: 24.0)
+
+    payload = monitor_service.cleanup_resource_leases(
+        action="cleanup_residue",
+        lease_ids=["lease-stale"],
+        expected_category="detached_residue",
+    )
+
+    assert lease_repo.deleted == ["lease-stale"]
+    assert payload["attempted"] == ["lease-stale"]
+    assert payload["cleaned"] == [{"lease_id": "lease-stale", "category": "detached_residue"}]
+    assert payload["skipped"] == []
+    assert payload["errors"] == []
+    assert payload["refreshed_summary"]["detached_residue"] == 0
+
+
+def test_cleanup_resource_leases_reports_category_mismatch_without_deleting(monkeypatch):
+    rows = [
+        {
+            "lease_id": "lease-live",
+            "provider_name": "local",
+            "desired_state": "running",
+            "observed_state": "detached",
+            "current_instance_id": "inst-live",
+            "last_error": None,
+            "updated_at": "2026-04-06T00:00:00",
+            "thread_id": "thread-1",
+        }
+    ]
+
+    class FakeMonitorRepo:
+        def query_leases(self):
+            return list(rows)
+
+        def query_lease_sessions(self, lease_id):
+            assert lease_id == "lease-live"
+            return [{"chat_session_id": "sess-live", "status": "active"}]
+
+        def close(self):
+            return None
+
+    class FakeLeaseRepo:
+        def __init__(self):
+            self.deleted = []
+
+        def delete(self, lease_id):
+            self.deleted.append(lease_id)
+
+        def close(self):
+            return None
+
+    class FakeChatSessionRepo:
+        def lease_has_running_command(self, lease_id):
+            assert lease_id == "lease-live"
+            return True
+
+        def close(self):
+            return None
+
+    lease_repo = FakeLeaseRepo()
+    monkeypatch.setattr(monitor_service, "make_sandbox_monitor_repo", lambda: FakeMonitorRepo())
+    monkeypatch.setattr(monitor_service, "make_lease_repo", lambda: lease_repo)
+    monkeypatch.setattr(monitor_service, "make_chat_session_repo", lambda: FakeChatSessionRepo())
+    monkeypatch.setattr(monitor_service, "init_providers_and_managers", lambda: ({}, {}))
+    monkeypatch.setattr(monitor_service, "_hours_since", lambda _: 0.5)
+
+    payload = monitor_service.cleanup_resource_leases(
+        action="cleanup_residue",
+        lease_ids=["lease-live"],
+        expected_category="detached_residue",
+    )
+
+    assert lease_repo.deleted == []
+    assert payload["attempted"] == ["lease-live"]
+    assert payload["cleaned"] == []
+    assert payload["skipped"] == ["lease-live"]
+    assert payload["errors"] == [
+        {
+            "lease_id": "lease-live",
+            "reason": "category_mismatch",
+            "expected_category": "detached_residue",
+            "actual_category": "active_drift",
+        }
+    ]

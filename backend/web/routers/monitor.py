@@ -7,6 +7,7 @@ preserving the newer resource/health helper endpoints added on main.
 import asyncio
 
 from fastapi import HTTPException, Query, Request
+from pydantic import BaseModel, Field
 
 from backend.web.monitor import list_evaluations, list_leases, router
 from backend.web.services import monitor_service
@@ -14,6 +15,12 @@ from backend.web.services.resource_cache import (
     get_monitor_resource_overview_snapshot,
     refresh_monitor_resource_overview_sync,
 )
+
+
+class ResourceCleanupRequest(BaseModel):
+    action: str = Field(default="cleanup_residue")
+    lease_ids: list[str]
+    expected_category: str
 
 
 @router.get("/health")
@@ -80,6 +87,21 @@ def resources_overview():
 async def resources_refresh():
     # @@@refresh-off-main-loop - provider I/O stays off event loop to avoid request head-of-line blocking.
     return await asyncio.to_thread(refresh_monitor_resource_overview_sync)
+
+
+@router.post("/resources/cleanup")
+async def resources_cleanup(payload: ResourceCleanupRequest):
+    from backend.web.services import monitor_service
+
+    try:
+        return await asyncio.to_thread(
+            monitor_service.cleanup_resource_leases,
+            action=payload.action,
+            lease_ids=payload.lease_ids,
+            expected_category=payload.expected_category,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @router.get("/sandbox/{lease_id}/browse")

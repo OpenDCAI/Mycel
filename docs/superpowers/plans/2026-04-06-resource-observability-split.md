@@ -59,6 +59,23 @@
   - bounded resource cleanup inside monitor `Resources`
   - first slice must target backlog-like classes only (`detached_residue`, `orphan_cleanup`)
   - cleanup action must be backend-owned and Playwright-proven; dead buttons do not count
+  - chosen contract shape:
+    - `POST /api/monitor/resources/cleanup`
+    - request = `action + explicit lease_ids + expected_category`
+    - response = `attempted/cleaned/skipped/errors/refreshed_summary`
+  - chosen execution shape:
+    - re-query backend triage before every mutation
+    - reuse existing provider destroy + lease repo delete semantics
+    - fail loudly if a lease has drifted back into live/healthy classes
+  - landed backend slice:
+    - `backend/web/routers/monitor.py` now exposes `POST /api/monitor/resources/cleanup`
+    - `backend/web/services/monitor_service.py` now owns `cleanup_resource_leases(...)`
+    - route/service return `attempted/cleaned/skipped/errors/refreshed_summary`
+    - focused proof:
+      - `env -u ALL_PROXY -u all_proxy uv run pytest -q tests/Unit/monitor/test_monitor_compat.py tests/Integration/test_monitor_resources_route.py` -> `17 passed`
+      - `uv run ruff check backend/web/services/monitor_service.py backend/web/routers/monitor.py tests/Unit/monitor/test_monitor_compat.py tests/Integration/test_monitor_resources_route.py` -> green
+      - `uv run ruff format --check backend/web/services/monitor_service.py backend/web/routers/monitor.py tests/Unit/monitor/test_monitor_compat.py tests/Integration/test_monitor_resources_route.py` -> green
+      - `uv run pyright backend/web/services/monitor_service.py backend/web/routers/monitor.py` -> `0 errors`
 - next honest follow-up remains:
   - `D3` because lease regrouping is still heuristic and needs stronger lifecycle meaning than age-based detached residue alone
 

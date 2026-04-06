@@ -7,7 +7,7 @@ import re
 from datetime import UTC, datetime
 from typing import Any
 
-from backend.web.core.storage_factory import make_sandbox_monitor_repo
+from backend.web.core.storage_factory import make_chat_session_repo, make_lease_repo, make_sandbox_monitor_repo
 from backend.web.services.sandbox_service import init_providers_and_managers, load_all_sessions
 from storage.providers.sqlite.kernel import SQLiteDBRole, resolve_role_db_path
 
@@ -146,6 +146,8 @@ LEASE_TRIAGE_META = {
 }
 
 DETACHED_RESIDUE_THRESHOLD_HOURS = 4.0
+RESOURCE_CLEANUP_ALLOWED_CATEGORIES = {"detached_residue", "orphan_cleanup"}
+ACTIVE_CHAT_SESSION_STATUSES = {"active", "idle", "paused"}
 
 
 def _classify_lease_semantics(*, thread_id: str | None, badge: dict[str, Any]) -> dict[str, str]:
@@ -220,6 +222,32 @@ def _classify_lease_triage(
         "tone": meta["tone"],
         "age_hours": age_hours,
     }
+
+
+def _cleanable_lease_ids(lease_ids: list[str]) -> list[str]:
+    cleaned: list[str] = []
+    seen: set[str] = set()
+    for raw in lease_ids:
+        lease_id = str(raw or "").strip()
+        if not lease_id or lease_id in seen:
+            continue
+        seen.add(lease_id)
+        cleaned.append(lease_id)
+    if not cleaned:
+        raise ValueError("lease_ids must contain at least one non-empty lease id")
+    return cleaned
+
+
+def _triage_category_for_row(row: dict[str, Any]) -> str:
+    badge = _make_badge(row.get("desired_state"), row.get("observed_state"))
+    triage = _classify_lease_triage(
+        thread_id=row.get("thread_id"),
+        badge=badge,
+        observed_state=row.get("observed_state"),
+        desired_state=row.get("desired_state"),
+        updated_at=row.get("updated_at"),
+    )
+    return str(triage["category"])
 
 
 def _extract_eval_note_value(notes: str, key: str) -> str | None:
@@ -554,9 +582,7 @@ def _historical_lease_detail(
         return None
 
     created_candidates = [
-        str(value)
-        for value in [*(row.get("started_at") for row in sessions), *(row.get("created_at") for row in events)]
-        if value
+        str(value) for value in [*(row.get("started_at") for row in sessions), *(row.get("created_at") for row in events)] if value
     ]
     updated_candidates = [
         str(value)
@@ -691,6 +717,138 @@ def list_leases() -> dict[str, Any]:
         return _map_leases(repo.query_leases())
     finally:
         repo.close()
+
+
+def cleanup_resource_leases(
+    *,
+    action: str,
+    lease_ids: list[str],
+    expected_category: str,
+) -> dict[str, Any]:
+    if action != "cleanup_residue":
+        raise ValueError(f"Unsupported cleanup action: {action}")
+    if expected_category not in RESOURCE_CLEANUP_ALLOWED_CATEGORIES:
+        raise ValueError("expected_category must be one of: detached_residue, orphan_cleanup")
+
+    target_lease_ids = _cleanable_lease_ids(lease_ids)
+    monitor_repo = make_sandbox_monitor_repo()
+    lease_repo = make_lease_repo()
+    chat_session_repo = make_chat_session_repo()
+    try:
+        rows_by_id = {str(row.get("lease_id") or ""): row for row in monitor_repo.query_leases() if row.get("lease_id")}
+        providers, _ = init_providers_and_managers()
+        cleaned: list[dict[str, Any]] = []
+        skipped: list[str] = []
+        errors: list[dict[str, Any]] = []
+
+        for lease_id in target_lease_ids:
+            row = rows_by_id.get(lease_id)
+            if row is None:
+                skipped.append(lease_id)
+                errors.append({"lease_id": lease_id, "reason": "lease_not_found"})
+                continue
+
+            actual_category = _triage_category_for_row(row)
+            if actual_category != expected_category:
+                skipped.append(lease_id)
+                errors.append(
+                    {
+                        "lease_id": lease_id,
+                        "reason": "category_mismatch",
+                        "expected_category": expected_category,
+                        "actual_category": actual_category,
+                    }
+                )
+                continue
+
+            sessions = monitor_repo.query_lease_sessions(lease_id)
+            live_session_ids = [
+                str(session.get("chat_session_id"))
+                for session in sessions
+                if str(session.get("status") or "").strip().lower() in ACTIVE_CHAT_SESSION_STATUSES
+            ]
+            if live_session_ids:
+                skipped.append(lease_id)
+                errors.append(
+                    {
+                        "lease_id": lease_id,
+                        "reason": "live_sessions_present",
+                        "session_ids": live_session_ids,
+                    }
+                )
+                continue
+
+            if chat_session_repo.lease_has_running_command(lease_id):
+                skipped.append(lease_id)
+                errors.append({"lease_id": lease_id, "reason": "running_command_present"})
+                continue
+
+            provider_name = str(row.get("provider_name") or "").strip()
+            instance_id = str(row.get("current_instance_id") or "").strip() or None
+            if instance_id:
+                provider = providers.get(provider_name)
+                if provider is None:
+                    skipped.append(lease_id)
+                    errors.append(
+                        {
+                            "lease_id": lease_id,
+                            "reason": "provider_unavailable",
+                            "provider": provider_name,
+                        }
+                    )
+                    continue
+                if not provider.get_capability().can_destroy:
+                    skipped.append(lease_id)
+                    errors.append(
+                        {
+                            "lease_id": lease_id,
+                            "reason": "provider_destroy_unsupported",
+                            "provider": provider_name,
+                        }
+                    )
+                    continue
+                try:
+                    destroyed = provider.destroy_session(instance_id, sync=True)
+                except Exception as exc:
+                    skipped.append(lease_id)
+                    errors.append(
+                        {
+                            "lease_id": lease_id,
+                            "reason": "provider_destroy_failed",
+                            "provider": provider_name,
+                            "detail": str(exc),
+                        }
+                    )
+                    continue
+                if not destroyed:
+                    skipped.append(lease_id)
+                    errors.append(
+                        {
+                            "lease_id": lease_id,
+                            "reason": "provider_destroy_failed",
+                            "provider": provider_name,
+                            "detail": "destroy_session returned false",
+                        }
+                    )
+                    continue
+
+            lease_repo.delete(lease_id)
+            cleaned.append({"lease_id": lease_id, "category": actual_category})
+
+        refreshed_summary = list_leases()["triage"]["summary"]
+        return {
+            "action": action,
+            "expected_category": expected_category,
+            "attempted": target_lease_ids,
+            "cleaned": cleaned,
+            "skipped": skipped,
+            "errors": errors,
+            "refreshed_summary": refreshed_summary,
+        }
+    finally:
+        chat_session_repo.close()
+        lease_repo.close()
+        monitor_repo.close()
 
 
 def get_lease(lease_id: str) -> dict[str, Any]:

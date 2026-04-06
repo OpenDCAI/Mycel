@@ -72,7 +72,48 @@ def test_monitor_leases_route_exposes_summary_and_groups():
     assert "triage" in payload
     assert set(payload["summary"]).issuperset({"total", "healthy", "diverged", "orphan", "orphan_diverged"})
     assert isinstance(payload["groups"], list)
-    assert set(payload["triage"]["summary"]).issuperset(
-        {"total", "active_drift", "detached_residue", "orphan_cleanup", "healthy_capacity"}
-    )
+    assert set(payload["triage"]["summary"]).issuperset({"total", "active_drift", "detached_residue", "orphan_cleanup", "healthy_capacity"})
     assert isinstance(payload["triage"]["groups"], list)
+
+
+def test_monitor_resources_cleanup_route_forwards_structured_payload(monkeypatch):
+    from backend.web.services import monitor_service
+
+    monkeypatch.setattr(
+        monitor_service,
+        "cleanup_resource_leases",
+        lambda *, action, lease_ids, expected_category: {
+            "action": action,
+            "expected_category": expected_category,
+            "attempted": list(lease_ids),
+            "cleaned": [{"lease_id": "lease-1", "category": expected_category}],
+            "skipped": [],
+            "errors": [],
+            "refreshed_summary": {
+                "total": 1,
+                "active_drift": 0,
+                "detached_residue": 0,
+                "orphan_cleanup": 1,
+                "healthy_capacity": 0,
+            },
+        },
+    )
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/api/monitor/resources/cleanup",
+            json={
+                "action": "cleanup_residue",
+                "lease_ids": ["lease-1"],
+                "expected_category": "detached_residue",
+            },
+        )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["action"] == "cleanup_residue"
+    assert payload["attempted"] == ["lease-1"]
+    assert payload["cleaned"] == [{"lease_id": "lease-1", "category": "detached_residue"}]
+    assert payload["skipped"] == []
+    assert payload["errors"] == []
+    assert set(payload["refreshed_summary"]).issuperset({"total", "active_drift", "detached_residue", "orphan_cleanup", "healthy_capacity"})
