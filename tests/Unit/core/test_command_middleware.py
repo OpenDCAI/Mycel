@@ -90,7 +90,8 @@ class TestAsyncExecution:
     @pytest.mark.asyncio
     async def test_get_status(self):
         executor = get_executor()
-        async_cmd = await executor.execute_async("sleep 0.1 && echo done")
+        command = "Start-Sleep -Milliseconds 100; Write-Output done" if executor.shell_name == "powershell" else "sleep 0.1 && echo done"
+        async_cmd = await executor.execute_async(command)
 
         status = await executor.get_status(async_cmd.command_id)
         assert status is not None
