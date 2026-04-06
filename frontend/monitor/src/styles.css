@@ -1506,6 +1506,10 @@ section li {
   flex-wrap: wrap;
   align-items: center;
   gap: 0.55rem;
+  padding: 0.7rem 0.8rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.72);
 }
 
 .trace-run-select {
@@ -1554,17 +1558,31 @@ section li {
 
 .trace-raw-toggle {
   color: var(--text-secondary);
-  font-size: 0.9rem;
+  font-size: 0.84rem;
   display: flex;
   align-items: center;
   gap: 0.35rem;
+  padding: 0.25rem 0.5rem;
+  border-radius: 999px;
+  background: var(--bg-soft);
 }
 
 .trace-metrics {
   display: flex;
-  gap: 1rem;
+  flex-wrap: wrap;
+  gap: 0.45rem;
   color: var(--text-secondary);
-  font-size: 0.9rem;
+  font-size: 0.84rem;
+  margin-bottom: 0.35rem;
+}
+
+.trace-metrics span {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.22rem 0.5rem;
+  border-radius: 999px;
+  background: var(--bg-soft);
+  border: 1px solid var(--border);
 }
 
 .trace-timeline {
