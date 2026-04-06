@@ -9,7 +9,7 @@ from collections.abc import Callable
 
 import jwt
 
-from storage.contracts import AccountRepo, InviteCodeRepo, MemberRepo, MemberRow, MemberType
+from storage.contracts import InviteCodeRepo, MemberRepo, MemberRow, MemberType
 
 logger = logging.getLogger(__name__)
 
@@ -20,14 +20,12 @@ class AuthService:
     def __init__(
         self,
         members: MemberRepo,
-        accounts: AccountRepo,
         supabase_client=None,
         supabase_auth_client=None,
         supabase_auth_client_factory: Callable[[], object] | None = None,
         invite_codes: InviteCodeRepo | None = None,
     ) -> None:
         self._members = members
-        self._accounts = accounts
         self._sb = supabase_client  # storage/service-role client
         self._sb_auth = supabase_auth_client  # end-user auth client
         self._sb_auth_factory = supabase_auth_client_factory

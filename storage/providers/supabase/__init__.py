@@ -10,7 +10,7 @@ from .eval_repo import SupabaseEvalRepo
 from .file_operation_repo import SupabaseFileOperationRepo
 from .invite_code_repo import SupabaseInviteCodeRepo
 from .lease_repo import SupabaseLeaseRepo
-from .member_repo import SupabaseAccountRepo, SupabaseMemberRepo
+from .member_repo import SupabaseMemberRepo
 from .panel_task_repo import SupabasePanelTaskRepo
 from .provider_event_repo import SupabaseProviderEventRepo
 from .queue_repo import SupabaseQueueRepo
@@ -28,7 +28,7 @@ from .tool_task_repo import SupabaseToolTaskRepo
 from .user_settings_repo import SupabaseUserSettingsRepo
 
 __all__ = [
-    "SupabaseAccountRepo",
+
     "SupabaseAgentRegistryRepo",
     "SupabaseChatParticipantRepo",
     "SupabaseChatMessageRepo",

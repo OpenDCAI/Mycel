@@ -4,14 +4,12 @@ from __future__ import annotations
 
 from typing import Any
 
-from storage.contracts import AccountRow, MemberRow
+from storage.contracts import MemberRow
 from storage.providers.supabase import _query as q
 
 _MEMBER_REPO = "member repo"
 _MEMBER_TABLE = "members"
 
-_ACCOUNT_REPO = "account repo"
-_ACCOUNT_TABLE = "accounts"
 
 
 class SupabaseMemberRepo:
@@ -135,48 +133,3 @@ class SupabaseMemberRepo:
         return self._client.table(_MEMBER_TABLE)
 
 
-class SupabaseAccountRepo:
-    def __init__(self, client: Any) -> None:
-        self._client = q.validate_client(client, _ACCOUNT_REPO)
-
-    def close(self) -> None:
-        return None
-
-    def create(self, row: AccountRow) -> None:
-        self._t().insert(
-            {
-                "id": row.id,
-                "user_id": row.user_id,
-                "username": row.username,
-                "password_hash": row.password_hash,
-                "api_key_hash": row.api_key_hash,
-                "created_at": row.created_at,
-            }
-        ).execute()
-
-    def get_by_id(self, account_id: str) -> AccountRow | None:
-        response = self._t().select("*").eq("id", account_id).execute()
-        rows = q.rows(response, _ACCOUNT_REPO, "get_by_id")
-        if not rows:
-            return None
-        return AccountRow.model_validate(rows[0])
-
-    def get_by_user_id(self, user_id: str) -> AccountRow | None:
-        response = self._t().select("*").eq("user_id", user_id).execute()
-        rows = q.rows(response, _ACCOUNT_REPO, "get_by_user_id")
-        if not rows:
-            return None
-        return AccountRow.model_validate(rows[0])
-
-    def get_by_username(self, username: str) -> AccountRow | None:
-        response = self._t().select("*").eq("username", username).execute()
-        rows = q.rows(response, _ACCOUNT_REPO, "get_by_username")
-        if not rows:
-            return None
-        return AccountRow.model_validate(rows[0])
-
-    def delete(self, account_id: str) -> None:
-        self._t().delete().eq("id", account_id).execute()
-
-    def _t(self) -> Any:
-        return self._client.table(_ACCOUNT_TABLE)

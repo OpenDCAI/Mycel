@@ -11,7 +11,7 @@ from storage.providers.sqlite.connection import create_connection
 class SQLiteCheckpointRepo:
     """Minimal checkpoint repository for thread-level read/write cleanup."""
 
-    _ALLOWED_TABLES = {"checkpoints", "writes", "checkpoint_writes", "checkpoint_blobs"}
+    _ALLOWED_TABLES = {"checkpoints", "checkpoint_writes", "checkpoint_blobs"}
 
     def __init__(self, db_path: str | Path | None = None, conn: sqlite3.Connection | None = None) -> None:
         self._own_conn = conn is None
@@ -40,7 +40,6 @@ class SQLiteCheckpointRepo:
 
     def delete_thread_data(self, thread_id: str) -> None:
         self._delete_by_thread("checkpoints", thread_id)
-        self._delete_by_thread("writes", thread_id)
         self._delete_by_thread("checkpoint_writes", thread_id)
         self._delete_by_thread("checkpoint_blobs", thread_id)
         self._conn.commit()
@@ -50,7 +49,6 @@ class SQLiteCheckpointRepo:
             return
 
         self._delete_by_thread_and_checkpoint_ids("checkpoints", thread_id, checkpoint_ids)
-        self._delete_by_thread_and_checkpoint_ids("writes", thread_id, checkpoint_ids)
         self._delete_by_thread_and_checkpoint_ids("checkpoint_writes", thread_id, checkpoint_ids)
         self._delete_by_thread_and_checkpoint_ids("checkpoint_blobs", thread_id, checkpoint_ids)
         self._conn.commit()

@@ -7,7 +7,7 @@ from typing import Any
 from storage.providers.supabase import _query as q
 
 _REPO = "checkpoint repo"
-_TABLES = ("checkpoints", "writes", "checkpoint_writes", "checkpoint_blobs")
+_TABLES = ("checkpoints", "checkpoint_writes", "checkpoint_blobs")
 
 
 class SupabaseCheckpointRepo:
