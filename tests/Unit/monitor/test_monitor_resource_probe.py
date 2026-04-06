@@ -15,6 +15,17 @@ def _make_probe_repo(targets: list[dict]):
     return repo
 
 
+class _FakeSnapshotRepo:
+    def __init__(self) -> None:
+        self.upserts: list[dict] = []
+
+    def close(self) -> None:
+        return None
+
+    def upsert_lease_resource_snapshot(self, **kwargs):
+        self.upserts.append(kwargs)
+
+
 def test_refresh_resource_snapshots_probes_running_leases_only(monkeypatch):
     monkeypatch.setattr(resource_service, "ensure_resource_snapshot_table", lambda: None)
     monkeypatch.setattr(
@@ -28,6 +39,7 @@ def test_refresh_resource_snapshots_probes_running_leases_only(monkeypatch):
         ),
     )
     monkeypatch.setattr(resource_service, "build_provider_from_config_name", lambda _: _FakeProvider())
+    monkeypatch.setattr(resource_service, "build_resource_snapshot_repo", lambda: _FakeSnapshotRepo())
 
     calls: list[dict] = []
 
@@ -60,19 +72,46 @@ def test_refresh_resource_snapshots_counts_provider_build_error(monkeypatch):
         ),
     )
     monkeypatch.setattr(resource_service, "build_provider_from_config_name", lambda _: None)
-    upserts: list[dict] = []
-    monkeypatch.setattr(
-        resource_service,
-        "upsert_resource_snapshot",
-        lambda **kwargs: upserts.append(kwargs),
-    )
+    snapshot_repo = _FakeSnapshotRepo()
+    monkeypatch.setattr(resource_service, "build_resource_snapshot_repo", lambda: snapshot_repo)
 
     result = resource_service.refresh_resource_snapshots()
     assert result["probed"] == 0
     assert result["errors"] == 1
     assert result["running_targets"] == 1
     assert result["non_running_targets"] == 0
-    assert len(upserts) == 1
-    assert upserts[0]["lease_id"] == "l-1"
-    assert upserts[0]["probe_mode"] == "running_runtime"
-    assert upserts[0]["probe_error"] == "provider init failed: p-missing"
+    assert len(snapshot_repo.upserts) == 1
+    assert snapshot_repo.upserts[0]["lease_id"] == "l-1"
+    assert snapshot_repo.upserts[0]["probe_mode"] == "running_runtime"
+    assert snapshot_repo.upserts[0]["probe_error"] == "provider init failed: p-missing"
+
+
+def test_refresh_resource_snapshots_prefers_shared_runtime_snapshot_repo(monkeypatch):
+    monkeypatch.setattr(resource_service, "ensure_resource_snapshot_table", lambda: None)
+    monkeypatch.setattr(
+        resource_service,
+        "make_sandbox_monitor_repo",
+        lambda: _make_probe_repo(
+            [
+                {"provider_name": "p-missing", "instance_id": "s-1", "lease_id": "l-1", "observed_state": "detached"},
+            ]
+        ),
+    )
+    monkeypatch.setattr(resource_service, "build_provider_from_config_name", lambda _: None)
+
+    repo = _FakeSnapshotRepo()
+    monkeypatch.setattr(resource_service, "build_resource_snapshot_repo", lambda: repo, raising=False)
+
+    result = resource_service.refresh_resource_snapshots()
+
+    assert result["probed"] == 0
+    assert result["errors"] == 1
+    assert repo.upserts == [
+        {
+            "lease_id": "l-1",
+            "provider_name": "p-missing",
+            "observed_state": "detached",
+            "probe_mode": "running_runtime",
+            "probe_error": "provider init failed: p-missing",
+        }
+    ]

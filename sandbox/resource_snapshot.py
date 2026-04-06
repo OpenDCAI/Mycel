@@ -5,8 +5,8 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from backend.web.core.storage_factory import list_resource_snapshots, upsert_resource_snapshot
 from sandbox.provider import SandboxProvider
+from storage.runtime import build_resource_snapshot_repo
 
 
 def ensure_resource_snapshot_table() -> None:
@@ -14,11 +14,19 @@ def ensure_resource_snapshot_table() -> None:
 
 
 def upsert_lease_resource_snapshot(**kwargs) -> None:  # type: ignore[no-untyped-def]
-    upsert_resource_snapshot(**kwargs)
+    repo = build_resource_snapshot_repo()
+    try:
+        repo.upsert_lease_resource_snapshot(**kwargs)
+    finally:
+        repo.close()
 
 
 def list_snapshots_by_lease_ids(lease_ids: list[str], **kwargs) -> dict:  # type: ignore[no-untyped-def,type-arg]
-    return list_resource_snapshots(lease_ids, **kwargs)
+    repo = build_resource_snapshot_repo()
+    try:
+        return repo.list_snapshots_by_lease_ids(lease_ids)
+    finally:
+        repo.close()
 
 
 __all__ = [
@@ -52,6 +60,7 @@ def probe_and_upsert_for_instance(
     probe_mode: str,
     provider: SandboxProvider,
     instance_id: str,
+    repo: Any | None = None,
     db_path: Path | None = None,  # deprecated, ignored
 ) -> dict[str, Any]:
     """Probe provider metrics and persist to storage."""
@@ -92,7 +101,8 @@ def probe_and_upsert_for_instance(
     ) and probe_error is None:
         probe_error = "metrics unavailable"
 
-    upsert_lease_resource_snapshot(
+    upsert = repo.upsert_lease_resource_snapshot if repo is not None else upsert_lease_resource_snapshot
+    upsert(
         lease_id=lease_id,
         provider_name=provider_name,
         observed_state=observed_state,

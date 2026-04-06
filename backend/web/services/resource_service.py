@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from backend.web.core.config import SANDBOXES_DIR
-from backend.web.core.storage_factory import list_resource_snapshots, make_sandbox_monitor_repo, upsert_resource_snapshot
+from backend.web.core.storage_factory import list_resource_snapshots, make_sandbox_monitor_repo
 from backend.web.services.config_loader import SandboxConfigLoader
 from backend.web.services.sandbox_service import available_sandbox_types, build_provider_from_config_name
 from backend.web.utils.serializers import avatar_url
@@ -23,7 +23,7 @@ from sandbox.resource_snapshot import (
     probe_and_upsert_for_instance,
 )
 from storage.models import map_lease_to_session_status
-from storage.runtime import build_member_repo, build_thread_repo
+from storage.runtime import build_member_repo, build_resource_snapshot_repo, build_thread_repo
 
 _CONFIG_LOADER = SandboxConfigLoader(SANDBOXES_DIR)
 
@@ -724,6 +724,7 @@ def refresh_resource_snapshots() -> dict[str, Any]:
         probe_targets = repo.list_probe_targets()
     finally:
         repo.close()
+    snapshot_repo = build_resource_snapshot_repo()
 
     provider_cache: dict[str, Any] = {}
     probed = 0
@@ -731,44 +732,48 @@ def refresh_resource_snapshots() -> dict[str, Any]:
     running_targets = 0
     non_running_targets = 0
 
-    for item in probe_targets:
-        lease_id = item["lease_id"]
-        provider_key = item["provider_name"]
-        instance_id = item["instance_id"]
-        status = item["observed_state"]
-        # detached means running (not connected to terminal)
-        probe_mode = "running_runtime" if status in ("running", "detached") else "non_running_sdk"
-        if probe_mode == "running_runtime":
-            running_targets += 1
-        else:
-            non_running_targets += 1
+    try:
+        for item in probe_targets:
+            lease_id = item["lease_id"]
+            provider_key = item["provider_name"]
+            instance_id = item["instance_id"]
+            status = item["observed_state"]
+            # detached means running (not connected to terminal)
+            probe_mode = "running_runtime" if status in ("running", "detached") else "non_running_sdk"
+            if probe_mode == "running_runtime":
+                running_targets += 1
+            else:
+                non_running_targets += 1
 
-        provider = provider_cache.get(provider_key)
-        if provider is None:
-            provider = build_provider_from_config_name(provider_key)
-            provider_cache[provider_key] = provider
-        if provider is None:
-            upsert_resource_snapshot(
+            provider = provider_cache.get(provider_key)
+            if provider is None:
+                provider = build_provider_from_config_name(provider_key)
+                provider_cache[provider_key] = provider
+            if provider is None:
+                snapshot_repo.upsert_lease_resource_snapshot(
+                    lease_id=lease_id,
+                    provider_name=provider_key,
+                    observed_state=status,
+                    probe_mode=probe_mode,
+                    probe_error=f"provider init failed: {provider_key}",
+                )
+                errors += 1
+                continue
+
+            result = probe_and_upsert_for_instance(
                 lease_id=lease_id,
                 provider_name=provider_key,
                 observed_state=status,
                 probe_mode=probe_mode,
-                probe_error=f"provider init failed: {provider_key}",
+                provider=provider,
+                instance_id=instance_id,
+                repo=snapshot_repo,
             )
-            errors += 1
-            continue
-
-        result = probe_and_upsert_for_instance(
-            lease_id=lease_id,
-            provider_name=provider_key,
-            observed_state=status,
-            probe_mode=probe_mode,
-            provider=provider,
-            instance_id=instance_id,
-        )
-        probed += 1
-        if not result["ok"]:
-            errors += 1
+            probed += 1
+            if not result["ok"]:
+                errors += 1
+    finally:
+        snapshot_repo.close()
 
     return {
         "probed": probed,

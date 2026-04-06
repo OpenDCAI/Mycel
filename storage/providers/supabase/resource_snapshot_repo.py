@@ -74,3 +74,17 @@ def list_snapshots_by_lease_ids(
         "list_by_ids",
     )
     return {str(r["lease_id"]): dict(r) for r in rows}
+
+
+class SupabaseResourceSnapshotRepo:
+    def __init__(self, client: Any) -> None:
+        self._client = client
+
+    def close(self) -> None:
+        return None
+
+    def upsert_lease_resource_snapshot(self, **kwargs: Any) -> None:
+        upsert_lease_resource_snapshot(**kwargs, client=self._client)
+
+    def list_snapshots_by_lease_ids(self, lease_ids: list[str]) -> dict[str, dict[str, Any]]:
+        return list_snapshots_by_lease_ids(lease_ids, client=self._client)

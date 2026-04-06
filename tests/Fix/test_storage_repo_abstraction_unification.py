@@ -9,6 +9,7 @@ from backend.web.core import lifespan as lifespan_module
 from core.agents.registry import AgentRegistry
 from core.runtime.registry import ToolRegistry
 from core.tools.task.service import TaskService
+from sandbox import resource_snapshot as resource_snapshot_module
 from sandbox.sync.state import SyncState
 from storage.container import StorageContainer
 
@@ -74,6 +75,9 @@ class _FakeContainer:
         return _FakeRepo()
 
     def sync_file_repo(self) -> _FakeRepo:
+        return _FakeRepo()
+
+    def resource_snapshot_repo(self) -> _FakeRepo:
         return _FakeRepo()
 
 
@@ -192,6 +196,7 @@ def test_storage_container_exposes_bypass_repo_builders() -> None:
     assert callable(container.agent_registry_repo)
     assert callable(container.tool_task_repo)
     assert callable(container.sync_file_repo)
+    assert callable(container.resource_snapshot_repo)
 
 
 @pytest.mark.asyncio
@@ -247,3 +252,56 @@ def test_runtime_services_default_to_storage_runtime_container(monkeypatch: pyte
     assert task_service._repo is container.tool_task_repo_value
     assert agent_registry._repo is container.agent_registry_repo_value
     assert sync_state._repo is container.sync_file_repo_value
+
+
+def test_resource_snapshot_helpers_default_to_storage_runtime_container(monkeypatch: pytest.MonkeyPatch) -> None:
+    class _FakeResourceSnapshotRepo:
+        def __init__(self) -> None:
+            self.upserts: list[dict[str, object]] = []
+            self.snapshots = {"lease-1": {"lease_id": "lease-1", "cpu_used": 1.0}}
+
+        def close(self) -> None:
+            return None
+
+        def upsert_lease_resource_snapshot(self, **kwargs: object) -> None:
+            self.upserts.append(kwargs)
+
+        def list_snapshots_by_lease_ids(self, lease_ids: list[str]) -> dict[str, dict[str, object]]:
+            return {lease_id: self.snapshots[lease_id] for lease_id in lease_ids if lease_id in self.snapshots}
+
+    class _FakeRuntimeContainer:
+        def __init__(self) -> None:
+            self.resource_snapshot_repo_value = _FakeResourceSnapshotRepo()
+
+        def resource_snapshot_repo(self) -> _FakeResourceSnapshotRepo:
+            return self.resource_snapshot_repo_value
+
+    container = _FakeRuntimeContainer()
+
+    monkeypatch.setattr(
+        "backend.web.core.storage_factory.upsert_resource_snapshot",
+        lambda **_kwargs: (_ for _ in ()).throw(AssertionError("unexpected web storage factory resource upsert")),
+    )
+    monkeypatch.setattr(
+        "backend.web.core.storage_factory.list_resource_snapshots",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("unexpected web storage factory resource list")),
+    )
+    monkeypatch.setattr("storage.runtime.build_storage_container", lambda **_kwargs: container)
+
+    resource_snapshot_module.upsert_lease_resource_snapshot(
+        lease_id="lease-1",
+        provider_name="daytona",
+        observed_state="running",
+        probe_mode="runtime",
+    )
+    snapshots = resource_snapshot_module.list_snapshots_by_lease_ids(["lease-1"])
+
+    assert container.resource_snapshot_repo_value.upserts == [
+        {
+            "lease_id": "lease-1",
+            "provider_name": "daytona",
+            "observed_state": "running",
+            "probe_mode": "runtime",
+        }
+    ]
+    assert snapshots == {"lease-1": {"lease_id": "lease-1", "cpu_used": 1.0}}
