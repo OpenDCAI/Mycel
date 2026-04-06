@@ -1263,12 +1263,29 @@ function LeasesPage() {
 function LeaseDetailPage() {
   const { leaseId } = useParams();
   const [data, setData] = React.useState<any>(null);
+  const [error, setError] = React.useState<string | null>(null);
 
   React.useEffect(() => {
-    fetchAPI(`/lease/${leaseId}`).then(setData);
+    setError(null);
+    fetchAPI(`/lease/${leaseId}`)
+      .then(setData)
+      .catch((e) => setError(e.message));
   }, [leaseId]);
 
-  if (!data) return <div>Loading...</div>;
+  if (error) {
+    return (
+      <div className="page">
+        <div className="page-error">Lease load failed: {error}</div>
+      </div>
+    );
+  }
+  if (!data) {
+    return (
+      <div className="page">
+        <div className="page-loading">Loading...</div>
+      </div>
+    );
+  }
 
   return (
     <div className="page">
@@ -1319,6 +1336,9 @@ function LeaseDetailPage() {
             </li>
           ))}
         </ul>
+        {data.related_threads.items.length === 0 && (
+          <p className="count">No threads linked to this lease.</p>
+        )}
       </section>
 
       <section>
@@ -1341,6 +1361,11 @@ function LeaseDetailPage() {
                 <td>{e.created_ago}</td>
               </tr>
             ))}
+            {data.lease_events.items.length === 0 && (
+              <tr>
+                <td colSpan={4}>No events recorded for this lease.</td>
+              </tr>
+            )}
           </tbody>
         </table>
       </section>
@@ -1452,12 +1477,29 @@ function EventsPage() {
 function EventDetailPage() {
   const { eventId } = useParams();
   const [data, setData] = React.useState<any>(null);
+  const [error, setError] = React.useState<string | null>(null);
 
   React.useEffect(() => {
-    fetchAPI(`/event/${eventId}`).then(setData);
+    setError(null);
+    fetchAPI(`/event/${eventId}`)
+      .then(setData)
+      .catch((e) => setError(e.message));
   }, [eventId]);
 
-  if (!data) return <div>Loading...</div>;
+  if (error) {
+    return (
+      <div className="page">
+        <div className="page-error">Event load failed: {error}</div>
+      </div>
+    );
+  }
+  if (!data) {
+    return (
+      <div className="page">
+        <div className="page-loading">Loading...</div>
+      </div>
+    );
+  }
 
   return (
     <div className="page">
