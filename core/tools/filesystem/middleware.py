@@ -13,7 +13,7 @@ All paths must be absolute. Workspace restrictions via hooks.
 
 from __future__ import annotations
 
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Mapping
 from pathlib import Path, PurePosixPath
 from typing import TYPE_CHECKING, Any
 
@@ -38,6 +38,21 @@ def _remote_path(path: str | Path) -> PurePosixPath:
     # POSIX paths even when tests run on Windows, so keep validation and
     # workspace comparisons in POSIX space instead of host-native path rules.
     return PurePosixPath(str(path).replace("\\", "/"))
+
+
+type ResolvedPath = Path | PurePosixPath
+
+
+def _require_resolved_path(resolved: ResolvedPath | None) -> ResolvedPath:
+    if resolved is None:
+        raise RuntimeError("Validated filesystem path unexpectedly missing")
+    return resolved
+
+
+def _require_local_path(resolved: ResolvedPath) -> Path:
+    if not isinstance(resolved, Path):
+        raise RuntimeError(f"Expected local filesystem path, got remote path: {resolved}")
+    return resolved
 
 
 class FileSystemMiddleware(AgentMiddleware):
@@ -87,7 +102,12 @@ class FileSystemMiddleware(AgentMiddleware):
             backend = LocalBackend()
 
         self.backend = backend
-        self.workspace_root = _remote_path(workspace_root) if backend.is_remote else Path(workspace_root).resolve()
+        if backend.is_remote:
+            self.workspace_root: ResolvedPath = _remote_path(workspace_root)
+        else:
+            local_workspace_root = Path(workspace_root).resolve()
+            local_workspace_root.mkdir(parents=True, exist_ok=True)
+            self.workspace_root = local_workspace_root
         self.max_file_size = max_file_size
         self.allowed_extensions = allowed_extensions
         self.hooks = hooks or []
@@ -102,9 +122,6 @@ class FileSystemMiddleware(AgentMiddleware):
         self.operation_recorder = operation_recorder
         self.verbose = verbose
         self.extra_allowed_paths = [_remote_path(p) if backend.is_remote else Path(p).resolve() for p in (extra_allowed_paths or [])]
-
-        if not backend.is_remote:
-            self.workspace_root.mkdir(parents=True, exist_ok=True)
 
         if verbose:
             backend_name = type(backend).__name__
@@ -232,6 +249,7 @@ class FileSystemMiddleware(AgentMiddleware):
         if not is_valid:
             return ReadResult(file_path=file_path, file_type=None, error=error)  # type: ignore[arg-type]
 
+        resolved = _require_resolved_path(resolved)
         file_size = self.backend.file_size(str(resolved))
 
         # Absolute limit — always reject (even with offset/limit)
@@ -275,7 +293,13 @@ class FileSystemMiddleware(AgentMiddleware):
 
         if isinstance(self.backend, LocalBackend):
             limits = ReadLimits()
-            result = read_file_dispatch(path=resolved, limits=limits, offset=offset if offset > 0 else None, limit=limit)
+            local_resolved = _require_local_path(resolved)
+            result = read_file_dispatch(
+                path=local_resolved,
+                limits=limits,
+                offset=offset if offset > 0 else None,
+                limit=limit,
+            )
             if not result.error:
                 self._update_file_tracking(resolved)
             return result
@@ -324,6 +348,7 @@ class FileSystemMiddleware(AgentMiddleware):
         if not is_valid:
             return error
 
+        resolved = _require_resolved_path(resolved)
         if self.backend.file_exists(str(resolved)):
             return f"File already exists: {file_path}\nUse edit_file to modify existing files"
 
@@ -352,6 +377,7 @@ class FileSystemMiddleware(AgentMiddleware):
         if not is_valid:
             return error
 
+        resolved = _require_resolved_path(resolved)
         if not self.backend.file_exists(str(resolved)):
             return f"File not found: {file_path}"
 
@@ -398,6 +424,7 @@ class FileSystemMiddleware(AgentMiddleware):
         if not is_valid:
             return error
 
+        resolved = _require_resolved_path(resolved)
         if not self.backend.file_exists(str(resolved)):
             return f"File not found: {file_path}"
 
@@ -445,6 +472,7 @@ class FileSystemMiddleware(AgentMiddleware):
         if not is_valid:
             return error
 
+        resolved = _require_resolved_path(resolved)
         if not self.backend.is_dir(str(resolved)):
             if self.backend.file_exists(str(resolved)):
                 return f"Not a directory: {directory_path}"
@@ -471,7 +499,7 @@ class FileSystemMiddleware(AgentMiddleware):
         except Exception as e:
             return f"Error listing directory: {e}"
 
-    def _get_tool_schemas(self) -> list[dict]:
+    def _get_tool_schemas(self) -> list[dict[str, Any]]:
         """获取文件系统工具 schema（sync/async 共享）"""
         return [
             {
@@ -612,7 +640,7 @@ class FileSystemMiddleware(AgentMiddleware):
         tools.extend(self._get_tool_schemas())
         return await handler(request.override(tools=tools))
 
-    def _handle_tool_call(self, tool_call: dict) -> ToolMessage | None:
+    def _handle_tool_call(self, tool_call: Mapping[str, Any]) -> ToolMessage | None:
         """Handle filesystem tool calls. Returns ToolMessage if handled, None otherwise."""
         tool_name = tool_call.get("name")
         args = tool_call.get("args", {})
