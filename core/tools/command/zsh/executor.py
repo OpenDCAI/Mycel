@@ -6,7 +6,7 @@ import asyncio
 import os
 import uuid
 
-from ..base import AsyncCommand, BaseExecutor, ExecuteResult
+from ..base import AsyncCommand, BaseExecutor, ExecuteResult, require_subprocess_pipe
 
 _RUNNING_COMMANDS: dict[str, AsyncCommand] = {}
 
@@ -35,8 +35,9 @@ class ZshExecutor(BaseExecutor):
                 cwd=self._current_cwd,
             )
             # Disable PS1 prompt
-            self._session.stdin.write(b"export PS1=''\n")
-            await self._session.stdin.drain()
+            stdin = require_subprocess_pipe(self._session.stdin, "stdin")
+            stdin.write(b"export PS1=''\n")
+            await stdin.drain()
         return self._session
 
     async def _send_command(self, proc: asyncio.subprocess.Process, command: str) -> tuple[str, str, int]:
@@ -44,14 +45,16 @@ class ZshExecutor(BaseExecutor):
         marker = f"__END_{uuid.uuid4().hex[:8]}__"
         full_cmd = f"{command}\necho {marker} $?\n"
 
-        proc.stdin.write(full_cmd.encode())
-        await proc.stdin.drain()
+        stdin = require_subprocess_pipe(proc.stdin, "stdin")
+        stdout = require_subprocess_pipe(proc.stdout, "stdout")
+        stdin.write(full_cmd.encode())
+        await stdin.drain()
 
         stdout_lines = []
         exit_code = 0
 
         while True:
-            line = await proc.stdout.readline()
+            line = await stdout.readline()
             if not line:
                 break
             line_str = line.decode("utf-8", errors="replace")
