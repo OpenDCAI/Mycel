@@ -1726,6 +1726,37 @@ section li {
   border-color: transparent;
 }
 
+.chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+/* @@@status-tone-chips - map session/lease status to chip colors so they read consistently across resources and eval pages */
+.status-running {
+  background: var(--success-soft);
+  color: var(--success);
+  border-color: transparent;
+}
+
+.status-paused {
+  background: var(--warning-soft);
+  color: var(--warning);
+  border-color: transparent;
+}
+
+.status-stopped {
+  background: var(--bg-muted);
+  color: var(--text-muted);
+  border-color: transparent;
+}
+
+.status-destroying {
+  background: var(--danger-soft);
+  color: var(--danger);
+  border-color: transparent;
+}
+
 .evaluation-flow,
 .evaluation-overview,
 .evaluation-notes {
@@ -1743,20 +1774,20 @@ section li {
   grid-column: span 6;
 }
 
-/* @@@eval-split-layout - sidebar (recessed status) + primary (table) side-by-side */
+/* @@@eval-split-layout - fixed sidebar width matching resource-rail for visual consistency */
 .eval-split-layout {
   display: grid;
-  grid-template-columns: repeat(12, minmax(0, 1fr));
+  grid-template-columns: 320px minmax(0, 1fr);
   gap: 1rem;
   align-items: start;
 }
 
 .eval-split-aside {
-  grid-column: span 4;
+  position: sticky;
+  top: 132px;
 }
 
 .eval-split-main {
-  grid-column: span 8;
 }
 
 .evaluation-meta-row {
@@ -2065,9 +2096,7 @@ section.eval-runtime-panel {
   .evaluation-column,
   .provider-lease-meta,
   .lease-cluster-grid > *,
-  .eval-operator-grid > *,
-  .eval-split-aside,
-  .eval-split-main {
+  .eval-operator-grid > * {
     grid-column: span 12;
   }
 
@@ -2080,8 +2109,13 @@ section.eval-runtime-panel {
     backdrop-filter: none;
   }
 
-  .resource-split-console {
+  .resource-split-console,
+  .eval-split-layout {
     grid-template-columns: 1fr;
+  }
+
+  .eval-split-aside {
+    position: static;
   }
 
   .resource-rail {
