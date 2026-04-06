@@ -13,25 +13,14 @@ from typing import Any
 from langchain_core.messages import HumanMessage, SystemMessage, ToolMessage
 from langchain_core.runnables import RunnableConfig
 
+from core.runtime.middleware import (
+    AgentMiddleware,
+    ModelCallResult,
+    ModelRequest,
+    ModelResponse,
+    ToolCallRequest,
+)
 from core.runtime.notifications import is_terminal_background_notification
-
-try:
-    from core.runtime.middleware import (
-        AgentMiddleware,
-        ModelCallResult,
-        ModelRequest,
-        ModelResponse,
-        ToolCallRequest,
-    )
-except ImportError:
-
-    class AgentMiddleware:
-        pass
-
-    ModelRequest = Any
-    ModelResponse = Any
-    ModelCallResult = Any
-    ToolCallRequest = Any
 
 from .manager import MessageQueueManager
 
