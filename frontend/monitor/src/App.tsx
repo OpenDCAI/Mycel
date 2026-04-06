@@ -3126,7 +3126,13 @@ function EventsPage() {
     fetchAPI("/events?limit=100").then(setData);
   }, []);
 
-  if (!data) return <div>Loading...</div>;
+  if (!data) {
+    return (
+      <div className="page">
+        <div className="page-loading">Loading...</div>
+      </div>
+    );
+  }
 
   return (
     <div className="page">
