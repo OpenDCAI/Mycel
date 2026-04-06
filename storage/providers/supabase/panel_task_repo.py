@@ -38,9 +38,12 @@ class SupabasePanelTaskRepo:
             row["tags"] = []
         return row
 
-    def list_all(self) -> list[dict[str, Any]]:
+    def list_all(self, owner_user_id: str | None = None) -> list[dict[str, Any]]:
+        query = self._table().select("*")
+        if owner_user_id is not None:
+            query = query.eq("owner_user_id", owner_user_id)
         rows = q.rows(
-            q.order(self._table().select("*"), "created_at", desc=True, repo=_REPO, operation="list_all").execute(),
+            q.order(query, "created_at", desc=True, repo=_REPO, operation="list_all").execute(),
             _REPO,
             "list_all",
         )
@@ -54,9 +57,12 @@ class SupabasePanelTaskRepo:
         )
         return self._deserialize(rows[0]) if rows else None
 
-    def get_highest_priority_pending(self) -> dict[str, Any] | None:
+    def get_highest_priority_pending(self, owner_user_id: str | None = None) -> dict[str, Any] | None:
+        query = self._table().select("*").eq("status", "pending")
+        if owner_user_id is not None:
+            query = query.eq("owner_user_id", owner_user_id)
         rows = q.rows(
-            self._table().select("*").eq("status", "pending").execute(),
+            query.execute(),
             _REPO,
             "get_highest_priority_pending",
         )
@@ -88,6 +94,7 @@ class SupabasePanelTaskRepo:
                 "started_at": fields.get("started_at", 0),
                 "completed_at": fields.get("completed_at", 0),
                 "tags": tags,
+                "owner_user_id": fields.get("owner_user_id", None),
             }
         ).execute()
         return self.get(task_id) or {}
@@ -108,6 +115,7 @@ class SupabasePanelTaskRepo:
             "started_at",
             "completed_at",
             "tags",
+            "owner_user_id",
         }
         updates = {k: v for k, v in fields.items() if k in allowed and v is not None}
         if not updates:
