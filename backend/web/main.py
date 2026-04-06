@@ -18,6 +18,7 @@ from backend.web.core.lifespan import lifespan  # noqa: E402
 from backend.web.routers import (  # noqa: E402
     auth,
     contacts,
+    conversations,  # noqa: E402
     entities,
     invite_codes,
     marketplace,
@@ -29,7 +30,6 @@ from backend.web.routers import (  # noqa: E402
     threads,
     webhooks,
 )
-from backend.web.routers import conversations  # noqa: E402
 from backend.web.routers import messaging as messaging_router  # noqa: E402
 from messaging.relationships.router import router as relationships_router  # noqa: E402
 

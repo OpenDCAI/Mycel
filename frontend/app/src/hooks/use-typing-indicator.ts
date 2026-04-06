@@ -48,7 +48,7 @@ export function useTypingIndicator({ chatId, userId, enabled = true }: UseTyping
     channelRef.current = channel;
 
     return () => {
-      void supabase.removeChannel(channel);
+      void supabase!.removeChannel(channel);
       channelRef.current = null;
       // Clear all timeouts
       for (const t of typingTimeoutsRef.current.values()) clearTimeout(t);
