@@ -16,6 +16,7 @@ from .contracts import (
     ProviderEventRepo,
     QueueRepo,
     RunEventRepo,
+    SandboxMonitorRepo,
     SandboxVolumeRepo,
     SummaryRepo,
     TerminalRepo,
@@ -37,6 +38,7 @@ _REPO_REGISTRY: dict[str, tuple[str, str]] = {
     "lease_repo": ("storage.providers.supabase.lease_repo", "SupabaseLeaseRepo"),
     "terminal_repo": ("storage.providers.supabase.terminal_repo", "SupabaseTerminalRepo"),
     "chat_session_repo": ("storage.providers.supabase.chat_session_repo", "SupabaseChatSessionRepo"),
+    "sandbox_monitor_repo": ("storage.providers.supabase.sandbox_monitor_repo", "SupabaseSandboxMonitorRepo"),
 }
 
 
@@ -56,6 +58,7 @@ class StorageContainer:
         "lease_repo",
         "terminal_repo",
         "chat_session_repo",
+        "sandbox_monitor_repo",
     )
 
     def __init__(
@@ -119,6 +122,9 @@ class StorageContainer:
 
     def chat_session_repo(self) -> ChatSessionRepo:
         return self._build_repo("chat_session_repo", self._sqlite_chat_session_repo)
+
+    def sandbox_monitor_repo(self) -> SandboxMonitorRepo:
+        return self._build_repo("sandbox_monitor_repo", self._sqlite_sandbox_monitor_repo)
 
     def purge_thread(self, thread_id: str) -> None:
         """Delete all data for a thread across all repos."""
@@ -194,7 +200,7 @@ class StorageContainer:
             if normalized not in cls._SUPPORTED_STRATEGIES:
                 supported = ", ".join(sorted(cls._SUPPORTED_STRATEGIES))
                 raise ValueError(f"Unsupported provider for {repo_name}: {provider!r}. Supported providers: {supported}")
-            resolved[repo_name] = normalized
+            resolved[repo_name] = "sqlite" if normalized == "sqlite" else "supabase"
         return resolved
 
     def _sqlite_checkpoint_repo(self):
@@ -251,3 +257,8 @@ class StorageContainer:
         from storage.providers.sqlite.chat_session_repo import SQLiteChatSessionRepo
 
         return SQLiteChatSessionRepo(db_path=self._sandbox_db)
+
+    def _sqlite_sandbox_monitor_repo(self):
+        from storage.providers.sqlite.sandbox_monitor_repo import SQLiteSandboxMonitorRepo
+
+        return SQLiteSandboxMonitorRepo(db_path=self._sandbox_db)

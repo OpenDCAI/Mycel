@@ -4,6 +4,7 @@ from .contracts import (
     EvalRepo,
     FileOperationRepo,
     RunEventRepo,
+    SandboxMonitorRepo,
     SummaryRepo,
 )
 
@@ -14,4 +15,5 @@ __all__ = [
     "FileOperationRepo",
     "SummaryRepo",
     "EvalRepo",
+    "SandboxMonitorRepo",
 ]
