@@ -149,13 +149,9 @@ function DashboardPage() {
 
   return (
     <div className="page" data-testid="page-dashboard">
-      <div className="section-row">
-        <div>
-          <h1>Dashboard</h1>
-          <p className="description">
-            Operator landing for resource health, workload pressure, and the
-            latest evaluation run.
-          </p>
+      <div className="section-row page-toolbar">
+        <div className="page-kicker">
+          <span className="count">Global health snapshot</span>
         </div>
         <button
           className="ghost-btn"
@@ -868,13 +864,9 @@ function MonitorResourcesPage() {
 
   return (
     <div className="page" data-testid="page-resources">
-      <div className="section-row">
-        <div>
-          <h1>Resources</h1>
-          <p className="description">
-            Global provider health and lease triage. Product resources stay
-            user-scoped; this page keeps the infra-wide lens.
-          </p>
+      <div className="section-row page-toolbar">
+        <div className="page-kicker">
+          <span className="count">Global provider health and lease triage</span>
         </div>
         <button
           className="ghost-btn"
@@ -3440,20 +3432,6 @@ function EvaluationPage() {
       "Use local for quick checks, daytona for infra parity",
     ],
   ];
-  const statusReference = [
-    ["queued", "Job is persisted and waiting for executor slots."],
-    ["running", "At least one thread is active and writing status updates."],
-    [
-      "provisional",
-      "Artifacts are incomplete (missing eval summary or eval error). Score is not final.",
-    ],
-    ["completed", "Runner finished and artifacts were written."],
-    [
-      "completed_with_errors",
-      "Runner finished, but summary reports failed items/errors.",
-    ],
-    ["error", "Runner failed; open detail page to inspect stderr and trace."],
-  ];
   const currentProgress = currentEval ? evalProgress(currentEval) : null;
 
   React.useEffect(() => {
@@ -3467,12 +3445,6 @@ function EvaluationPage() {
 
   return (
     <div className="page">
-      <h1>Evaluations</h1>
-      <p className="description">
-        One evaluation contains many threads. Start jobs from config panel,
-        track durable progress in list, then drill into thread trace.
-      </p>
-
       <section className="evaluation-overview">
         <div className="hint-box">
           <h2>Current Submission</h2>
@@ -3523,66 +3495,13 @@ function EvaluationPage() {
         </div>
       </section>
 
-      <details className="operator-notes-shell">
-        <summary>Operator guide</summary>
-        <section className="evaluation-flow">
-          <article className="hint-box">
-            <h2>1. Submit</h2>
-            <p className="description">
-              Open config, choose scope/profile/sandbox, then submit one batch
-              run.
-            </p>
-          </article>
-          <article className="hint-box">
-            <h2>2. Track</h2>
-            <p className="description">
-              List auto-refreshes every 5s and survives reload. Status is
-              backend-persisted.
-            </p>
-          </article>
-          <article className="hint-box">
-            <h2>3. Inspect</h2>
-            <p className="description">
-              Open evaluation detail to jump to per-thread trace and tool-call
-              timeline.
-            </p>
-          </article>
-        </section>
-
-        <section className="evaluation-notes">
-          <article className="hint-box">
-            <h2>Status Guide</h2>
-            <ul>
-              {statusReference.map((row) => (
-                <li key={row[0]}>
-                  <span className="mono">{row[0]}</span>: {row[1]}
-                </li>
-              ))}
-            </ul>
-          </article>
-          <article className="hint-box">
-            <h2>Field Guide</h2>
-            <ul>
-              {parameterReference.slice(0, 4).map((row) => (
-                <li key={row[0]}>
-                  <span className="mono">{row[0]}</span>: {row[1]}
-                </li>
-              ))}
-            </ul>
-          </article>
-        </section>
-      </details>
-
       <section>
         <div className="section-row">
           <h2>Evaluations ({evalPagination?.total ?? evaluations.length})</h2>
-          <button
-            className="ghost-btn"
-            onClick={() => setComposerOpen(true)}
-            disabled={runStatus === "starting"}
-          >
-            New Evaluation
-          </button>
+          <span className="count">
+            One evaluation contains many threads; stay here for durable
+            progress, then jump to detail when needed.
+          </span>
         </div>
         <p className="count">
           Auto refresh: 5s {runsLoading ? "| loading..." : ""} | page{" "}
@@ -4282,7 +4201,153 @@ function EvaluationDetailPage() {
   );
 }
 
-// Layout: Top navigation
+const SHELL_NAV = [
+  {
+    to: "/dashboard",
+    label: "Dashboard",
+    shortLabel: "DB",
+    testId: "nav-dashboard",
+  },
+  {
+    to: "/resources",
+    label: "Resources",
+    shortLabel: "RS",
+    testId: "nav-resources",
+  },
+  {
+    to: "/evaluation",
+    label: "Evaluations",
+    shortLabel: "EV",
+    testId: "nav-eval",
+  },
+  { to: "/threads", label: "Threads", shortLabel: "TH", testId: "nav-threads" },
+  { to: "/traces", label: "Traces", shortLabel: "TR", testId: "nav-traces" },
+  { to: "/leases", label: "Leases", shortLabel: "LS", testId: "nav-leases" },
+] as const;
+
+const GUIDE_SECTIONS = [
+  {
+    title: "Dashboard",
+    body: "Start here. Read provider health, live workload pressure, and the latest evaluation before drilling into detail.",
+  },
+  {
+    title: "Resources",
+    body: "Use the global resources page to inspect provider health, select a lease, and then narrow the session truth surface without losing the global contract.",
+  },
+  {
+    title: "Evaluations",
+    body: "Open config only when you are ready to submit. After that, stay in the list or jump into evaluation detail for artifacts, trace, and next-step diagnosis.",
+  },
+  {
+    title: "Threads / Traces / Leases",
+    body: "Treat these as truth surfaces. Use them when the dashboard or resources page tells you where to look, not as the first page you land on.",
+  },
+] as const;
+
+function shellMeta(pathname: string) {
+  // @@@shell-route-bucketing - detail routes should inherit the nearest console section rather than render as separate primary destinations.
+  if (pathname.startsWith("/resources") || pathname.startsWith("/lease")) {
+    return {
+      eyebrow: "Global compute surface",
+      title: "Resources",
+      description:
+        "Provider health, lease triage, and scoped session truth for all sandboxes.",
+    };
+  }
+  if (pathname.startsWith("/evaluation")) {
+    return {
+      eyebrow: "Evaluation operations",
+      title: "Evaluations",
+      description:
+        "Start runs, monitor durable progress, and inspect artifacts without losing operator context.",
+    };
+  }
+  if (pathname.startsWith("/threads") || pathname.startsWith("/thread")) {
+    return {
+      eyebrow: "Runtime index",
+      title: "Threads",
+      description:
+        "Global thread index and detail drill-down into sessions, leases, and trace surfaces.",
+    };
+  }
+  if (pathname.startsWith("/traces") || pathname.startsWith("/session")) {
+    return {
+      eyebrow: "Execution traces",
+      title: "Traces",
+      description:
+        "Sequence-level inspection for sessions, tool calls, and conversation surfaces.",
+    };
+  }
+  if (pathname.startsWith("/leases")) {
+    return {
+      eyebrow: "Lease truth",
+      title: "Leases",
+      description:
+        "Use grouped lease triage first, then drop into raw truth when you need exact runtime state.",
+    };
+  }
+  return {
+    eyebrow: "Global ops console",
+    title: "Dashboard",
+    description:
+      "Landing page for health, workload, and the fastest path into global resources or active evaluations.",
+  };
+}
+
+function OperatorGuideModal({
+  open,
+  onClose,
+}: {
+  open: boolean;
+  onClose: () => void;
+}) {
+  React.useEffect(() => {
+    if (!open) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [open, onClose]);
+
+  if (!open) return null;
+
+  return (
+    <div
+      className="shell-modal-backdrop"
+      onClick={onClose}
+      data-testid="operator-guide-modal"
+    >
+      <section
+        className="shell-modal-panel"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="section-row shell-modal-head">
+          <div>
+            <p className="shell-eyebrow">Operator Guide</p>
+            <h2>How to read this console</h2>
+          </div>
+          <button className="ghost-btn" onClick={onClose}>
+            Close
+          </button>
+        </div>
+        <p className="description">
+          This guide stays out of the main content column by default. Open it
+          when you need orientation, then go back to the live console surface.
+        </p>
+        <div className="shell-guide-grid">
+          {GUIDE_SECTIONS.map((section) => (
+            <article key={section.title} className="hint-box">
+              <h2>{section.title}</h2>
+              <p className="description">{section.body}</p>
+            </article>
+          ))}
+        </div>
+      </section>
+    </div>
+  );
+}
+
 function ScrollToTopOnRouteChange() {
   const { pathname } = useLocation();
   React.useEffect(() => {
@@ -4301,28 +4366,62 @@ function ScrollToTopOnRouteChange() {
 }
 
 function Layout({ children }: { children: React.ReactNode }) {
+  const { pathname } = useLocation();
+  const [guideOpen, setGuideOpen] = React.useState(false);
+  const meta = shellMeta(pathname);
+
   return (
-    <div className="app">
-      <nav className="top-nav" data-testid="monitor-nav">
-        <div className="top-nav-brand">
-          <h1 className="logo">Mycel Sandbox Monitor</h1>
+    <div className="console-app">
+      <aside className="console-sidebar" data-testid="monitor-nav">
+        <div className="console-brand">
+          <div className="console-brand-mark">M</div>
+          <div>
+            <strong className="logo">Mycel Monitor</strong>
+            <p className="console-brand-copy">Global sandbox ops console</p>
+          </div>
         </div>
-        <div className="nav-links">
-          <NavLink data-testid="nav-dashboard" to="/dashboard">
-            Dashboard
-          </NavLink>
-          <NavLink data-testid="nav-threads" to="/threads">
-            Threads
-          </NavLink>
-          <NavLink data-testid="nav-resources" to="/resources">
-            Resources
-          </NavLink>
-          <NavLink data-testid="nav-eval" to="/evaluation">
-            Eval
-          </NavLink>
+        <nav className="console-nav">
+          {SHELL_NAV.map((item) => (
+            <NavLink key={item.to} data-testid={item.testId} to={item.to}>
+              <span className="console-nav-mark" aria-hidden="true">
+                {item.shortLabel}
+              </span>
+              <span>{item.label}</span>
+            </NavLink>
+          ))}
+        </nav>
+        <div className="console-sidebar-foot">
+          <span className="shell-eyebrow">Mode</span>
+          <p>
+            Light-mode operator shell. Global truth first, drill-down second.
+          </p>
         </div>
-      </nav>
-      <main className="content">{children}</main>
+      </aside>
+      <div className="console-main">
+        <header className="console-header">
+          <div>
+            <p className="shell-eyebrow">{meta.eyebrow}</p>
+            <h1 className="console-title">{meta.title}</h1>
+            <p className="description console-description">
+              {meta.description}
+            </p>
+          </div>
+          <div className="console-header-actions">
+            <button
+              className="ghost-btn"
+              onClick={() => setGuideOpen(true)}
+              data-testid="operator-guide-trigger"
+            >
+              Operator Guide
+            </button>
+          </div>
+        </header>
+        <main className="content">{children}</main>
+      </div>
+      <OperatorGuideModal
+        open={guideOpen}
+        onClose={() => setGuideOpen(false)}
+      />
     </div>
   );
 }
