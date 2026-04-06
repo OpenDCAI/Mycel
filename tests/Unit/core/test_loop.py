@@ -6,6 +6,7 @@ import json
 import tempfile
 from pathlib import Path
 from types import SimpleNamespace
+from typing import Any, cast
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -16,6 +17,7 @@ from core.runtime.loop import QueryLoop, _StreamingToolExecutor
 from core.runtime.middleware import AgentMiddleware
 from core.runtime.middleware.memory import MemoryMiddleware
 from core.runtime.middleware.monitor import AgentState
+from core.runtime.permissions import ToolPermissionContext
 from core.runtime.registry import ToolEntry, ToolMode, ToolRegistry
 from core.runtime.state import AppState, BootstrapConfig, ToolPermissionState
 from storage.providers.sqlite.kernel import connect_sqlite_async
@@ -122,6 +124,28 @@ def make_inline_tool(name, handler, *, schema=None, is_concurrency_safe=True):
     )
 
 
+def _permission_context(*, is_read_only: bool = False, is_destructive: bool = False) -> ToolPermissionContext:
+    return ToolPermissionContext(is_read_only=is_read_only, is_destructive=is_destructive)
+
+
+def _require_request_permission(ctx) -> Any:
+    request_permission = ctx.request_permission
+    assert request_permission is not None
+    return request_permission
+
+
+def _require_consume_permission_resolution(ctx) -> Any:
+    consume_permission_resolution = ctx.consume_permission_resolution
+    assert consume_permission_resolution is not None
+    return consume_permission_resolution
+
+
+def _require_can_use_tool(ctx) -> Any:
+    can_use_tool = ctx.can_use_tool
+    assert can_use_tool is not None
+    return can_use_tool
+
+
 def test_tool_use_context_get_app_state_is_live_closure():
     app_state = AppState(turn_count=1)
     loop = make_loop(mock_model_no_tools(), app_state=app_state)
@@ -188,7 +212,13 @@ def test_tool_use_context_permission_request_surface_tracks_thread_pending_state
     ctx = loop._build_tool_use_context([], thread_id="thread-a")
     assert ctx is not None
 
-    request_id = ctx.request_permission("Write", {"path": "x"}, None, None, "needs approval")
+    request_id = _require_request_permission(ctx)(
+        "Write",
+        {"path": "x"},
+        _permission_context(),
+        None,
+        "needs approval",
+    )
 
     assert isinstance(request_id, str)
     assert app_state.pending_permission_requests[request_id]["thread_id"] == "thread-a"
@@ -212,8 +242,8 @@ def test_tool_use_context_consumes_resolved_permission_once():
     ctx = loop._build_tool_use_context([], thread_id="thread-a")
     assert ctx is not None
 
-    first = ctx.consume_permission_resolution("Write", {"path": "x"}, None, None)
-    second = ctx.consume_permission_resolution("Write", {"path": "x"}, None, None)
+    first = _require_consume_permission_resolution(ctx)("Write", {"path": "x"}, _permission_context(), None)
+    second = _require_consume_permission_resolution(ctx)("Write", {"path": "x"}, _permission_context(), None)
 
     assert first == {"decision": "allow", "message": "approved"}
     assert second is None
@@ -270,10 +300,10 @@ def test_tool_use_context_can_use_tool_reads_app_state_permission_rules():
     ctx = loop._build_tool_use_context([], thread_id="thread-a")
     assert ctx is not None
 
-    decision = ctx.can_use_tool(
+    decision = _require_can_use_tool(ctx)(
         "Write",
         {},
-        SimpleNamespace(is_read_only=False, is_destructive=False),
+        _permission_context(),
         None,
     )
 
@@ -301,10 +331,10 @@ def test_tool_use_context_fails_loud_when_ask_has_no_interactive_resolver():
     ctx = loop._build_tool_use_context([], thread_id="thread-a")
     assert ctx is not None
 
-    decision = ctx.can_use_tool(
+    decision = _require_can_use_tool(ctx)(
         "Write",
         {},
-        SimpleNamespace(is_read_only=False, is_destructive=False),
+        _permission_context(),
         None,
     )
 
@@ -729,7 +759,7 @@ async def test_query_loop_persists_cleared_permission_state_after_resolution_con
 
     ctx = loop._build_tool_use_context([], thread_id=thread_id)
     assert ctx is not None
-    assert ctx.consume_permission_resolution("AskUserQuestion", args, None, None) == {
+    assert _require_consume_permission_resolution(ctx)("AskUserQuestion", args, _permission_context(), None) == {
         "decision": "allow",
         "message": "Answer questions?",
     }
@@ -843,7 +873,7 @@ async def test_query_loop_astream_none_resumes_after_state_injection():
     )
 
     events = []
-    async for event in loop.astream(None, config=config):
+    async for event in loop.astream(cast(dict[str, Any], None), config=config):
         events.append(event)
 
     assert any(msg.content == "resumed answer" for event in events for msg in event.get("agent", {}).get("messages", []))
@@ -853,6 +883,7 @@ async def test_query_loop_astream_none_resumes_after_state_injection():
 async def test_query_loop_aclear_deletes_persisted_summary_for_thread():
     db_path = Path(tempfile.mkdtemp()) / "memory.db"
     mm = MemoryMiddleware(db_path=db_path)
+    assert mm.summary_store is not None
     mm.summary_store.save_summary(
         thread_id="clear-summary-thread",
         summary_text="STALE SUMMARY",
@@ -1710,6 +1741,7 @@ async def test_query_loop_syncs_compact_boundary_before_tool_execution():
 
     assert capture.messages is not None
     assert capture.boundary == app_state.compact_boundary_index
+    assert capture.boundary is not None
     assert capture.boundary > 0
 
 
@@ -1960,6 +1992,7 @@ async def test_handle_model_error_recovery_returns_typed_result_object():
 
     assert result is not None
     assert not isinstance(result, dict)
+    assert result.transition is not None
     assert result.transition.reason.value == "max_output_tokens_escalate"
     assert result.max_output_tokens_override == 64000
 

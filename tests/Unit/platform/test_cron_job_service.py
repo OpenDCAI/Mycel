@@ -5,6 +5,11 @@ import pytest
 from backend.web.services import cron_job_service
 
 
+def _require_job(job: dict | None) -> dict:
+    assert job is not None
+    return job
+
+
 @pytest.fixture(autouse=True)
 def _use_tmp_db(tmp_path, monkeypatch):
     """Redirect cron_job_service to a temporary SQLite database."""
@@ -118,22 +123,22 @@ class TestListCronJobs:
 class TestUpdateCronJob:
     def test_update_name(self):
         job = cron_job_service.create_cron_job(name="original", cron_expression="* * * * *")
-        updated = cron_job_service.update_cron_job(job["id"], name="renamed")
+        updated = _require_job(cron_job_service.update_cron_job(job["id"], name="renamed"))
         assert updated["name"] == "renamed"
 
     def test_update_cron_expression(self):
         job = cron_job_service.create_cron_job(name="expr", cron_expression="* * * * *")
-        updated = cron_job_service.update_cron_job(job["id"], cron_expression="0 0 * * *")
+        updated = _require_job(cron_job_service.update_cron_job(job["id"], cron_expression="0 0 * * *"))
         assert updated["cron_expression"] == "0 0 * * *"
 
     def test_update_enabled(self):
         job = cron_job_service.create_cron_job(name="toggle", cron_expression="* * * * *")
-        updated = cron_job_service.update_cron_job(job["id"], enabled=0)
+        updated = _require_job(cron_job_service.update_cron_job(job["id"], enabled=0))
         assert updated["enabled"] == 0
 
     def test_update_last_run_at(self):
         job = cron_job_service.create_cron_job(name="run tracker", cron_expression="* * * * *")
-        updated = cron_job_service.update_cron_job(job["id"], last_run_at=1234567890)
+        updated = _require_job(cron_job_service.update_cron_job(job["id"], last_run_at=1234567890))
         assert updated["last_run_at"] == 1234567890
 
     def test_update_nonexistent_returns_none(self):
@@ -187,7 +192,7 @@ class TestCRUDLifecycle:
         assert any(j["id"] == job_id for j in jobs)
 
         # Update
-        updated = cron_job_service.update_cron_job(job_id, name="updated name", enabled=0)
+        updated = _require_job(cron_job_service.update_cron_job(job_id, name="updated name", enabled=0))
         assert updated["name"] == "updated name"
         assert updated["enabled"] == 0
         assert updated["description"] == "every 6 hours"  # unchanged

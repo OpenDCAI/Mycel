@@ -40,15 +40,15 @@ class TestPublishToMarketplaceRequest:
 
     def test_invalid_type_raises(self):
         with pytest.raises(ValidationError):
-            PublishToMarketplaceRequest(member_id="ok", type="unknown")
+            PublishToMarketplaceRequest.model_validate({"member_id": "ok", "type": "unknown"})
 
     def test_invalid_bump_type_raises(self):
         with pytest.raises(ValidationError):
-            PublishToMarketplaceRequest(member_id="ok", bump_type="hotfix")
+            PublishToMarketplaceRequest.model_validate({"member_id": "ok", "bump_type": "hotfix"})
 
     def test_invalid_visibility_raises(self):
         with pytest.raises(ValidationError):
-            PublishToMarketplaceRequest(member_id="ok", visibility="unlisted")
+            PublishToMarketplaceRequest.model_validate({"member_id": "ok", "visibility": "unlisted"})
 
     def test_invalid_member_id_path_traversal(self):
         with pytest.raises(ValidationError):
@@ -77,7 +77,7 @@ class TestInstallFromMarketplaceRequest:
 
     def test_missing_item_id_raises(self):
         with pytest.raises(ValidationError):
-            InstallFromMarketplaceRequest()
+            InstallFromMarketplaceRequest.model_validate({})
 
 
 # ── CheckUpdatesRequest ──
@@ -102,7 +102,7 @@ class TestCheckUpdatesRequest:
     def test_default_items(self):
         # items is required (no default), so omitting should raise
         with pytest.raises(ValidationError):
-            CheckUpdatesRequest()
+            CheckUpdatesRequest.model_validate({})
 
 
 # ── UpgradeFromMarketplaceRequest ──
@@ -116,4 +116,4 @@ class TestUpgradeFromMarketplaceRequest:
 
     def test_missing_fields_raises(self):
         with pytest.raises(ValidationError):
-            UpgradeFromMarketplaceRequest(member_id="only-one")
+            UpgradeFromMarketplaceRequest.model_validate({"member_id": "only-one"})
