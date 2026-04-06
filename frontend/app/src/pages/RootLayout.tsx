@@ -482,8 +482,8 @@ function LoginStep({ onSubmit, onSwitch, error, setError, loading, setLoading }:
     <AuthCard>
       <AuthHeader title="Mycel" subtitle="登录你的账号" />
       <form onSubmit={handle} className="space-y-4">
-        <input type="text" placeholder="邮箱或 Mycel ID" value={identifier} onChange={e => setIdentifier(e.target.value)} className={inputCls} required autoComplete="username" />
-        <input type="password" placeholder="密码" value={password} onChange={e => setPassword(e.target.value)} className={inputCls} required autoComplete="current-password" />
+        <input type="text" name="identifier" aria-label="邮箱或 Mycel ID" placeholder="邮箱或 Mycel ID" value={identifier} onChange={e => setIdentifier(e.target.value)} className={inputCls} required autoComplete="username" />
+        <input type="password" name="password" aria-label="密码" placeholder="密码" value={password} onChange={e => setPassword(e.target.value)} className={inputCls} required autoComplete="current-password" />
         {error && <p className="text-xs text-destructive">{error}</p>}
         <button type="submit" disabled={loading} className={btnCls}>{loading ? "请稍候..." : "登录"}</button>
       </form>
@@ -516,10 +516,10 @@ function RegEmailStep({ onSubmit, onBack, error, setError, loading, setLoading }
     <AuthCard>
       <AuthHeader title="注册账号" subtitle="填写信息，发送验证码" />
       <form onSubmit={handle} className="space-y-4">
-        <input type="email" placeholder="邮箱" value={email} onChange={e => setEmail(e.target.value)} className={inputCls} required autoComplete="email" autoFocus />
-        <PasswordInput value={password} onChange={setPassword} placeholder="设置密码" autoComplete="new-password" />
-        <PasswordInput value={confirm} onChange={setConfirm} placeholder="确认密码" autoComplete="new-password" />
-        <input type="text" placeholder="邀请码" value={inviteCode} onChange={e => setInviteCode(e.target.value)} className={inputCls} autoComplete="off" required />
+        <input type="email" name="email" aria-label="邮箱" placeholder="邮箱" value={email} onChange={e => setEmail(e.target.value)} className={inputCls} required autoComplete="email" autoFocus />
+        <PasswordInput value={password} onChange={setPassword} placeholder="设置密码" autoComplete="new-password" name="register-password" ariaLabel="设置密码" />
+        <PasswordInput value={confirm} onChange={setConfirm} placeholder="确认密码" autoComplete="new-password" name="register-password-confirm" ariaLabel="确认密码" />
+        <input type="text" name="inviteCode" aria-label="邀请码" placeholder="邀请码" value={inviteCode} onChange={e => setInviteCode(e.target.value)} className={inputCls} autoComplete="off" required />
         {error && <p className="text-xs text-destructive">{error}</p>}
         <button type="submit" disabled={loading} className={btnCls}>{loading ? "发送中..." : "发送验证码"}</button>
       </form>
@@ -558,7 +558,7 @@ function RegOtpStep({ email, onSubmit, onResend, onBack, error, setError, loadin
       <AuthHeader title="验证邮箱" subtitle={`验证码已发送至 ${email}`} />
       <form onSubmit={handle} className="space-y-4">
         <input
-          type="text" inputMode="numeric" placeholder="6 位验证码"
+          type="text" name="otp" aria-label="6 位验证码" inputMode="numeric" placeholder="6 位验证码"
           value={otp} onChange={e => setOtp(e.target.value.replace(/\D/g, ""))}
           maxLength={6} autoComplete="one-time-code" autoFocus
           className={`${inputCls} text-center tracking-widest text-lg font-mono`}
@@ -579,18 +579,22 @@ function RegOtpStep({ email, onSubmit, onResend, onBack, error, setError, loadin
   );
 }
 
-function PasswordInput({ value, onChange, placeholder, autoFocus, autoComplete }: {
+function PasswordInput({ value, onChange, placeholder, autoFocus, autoComplete, name, ariaLabel }: {
   value: string;
   onChange: (v: string) => void;
   placeholder: string;
   autoFocus?: boolean;
   autoComplete?: string;
+  name?: string;
+  ariaLabel?: string;
 }) {
   const [visible, setVisible] = useState(false);
   return (
     <div className="relative">
       <input
         type={visible ? "text" : "password"}
+        name={name}
+        aria-label={ariaLabel ?? placeholder}
         placeholder={placeholder}
         value={value}
         onChange={e => onChange(e.target.value)}
@@ -648,6 +652,8 @@ function SetupNameStep({ userId, defaultName }: { userId: string; defaultName: s
       <form onSubmit={handleSubmit} className="space-y-4">
         <input
           type="text"
+          name="displayName"
+          aria-label="显示名称"
           value={name}
           onChange={e => setName(e.target.value)}
           className={inputCls}
