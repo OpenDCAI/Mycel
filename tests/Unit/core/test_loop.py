@@ -13,6 +13,7 @@ import pytest
 from langchain_core.messages import AIMessage, AIMessageChunk, HumanMessage, RemoveMessage, SystemMessage, ToolMessage
 from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 
+from core.runtime.checkpoint_store import ThreadCheckpointState
 from core.runtime.loop import ContinueReason, ContinueState, QueryLoop, StreamingToolExecutor, _ModelErrorRecoveryResult
 from core.runtime.middleware import AgentMiddleware
 from core.runtime.middleware.memory import MemoryMiddleware
@@ -89,6 +90,17 @@ class _VersionAwareBlobCheckpointer:
         }
         persisted["updated_channels"] = list(new_versions)
         self.store[cfg["configurable"]["thread_id"]] = persisted
+
+
+class _RecordingCheckpointStore:
+    def __init__(self):
+        self.saved: list[tuple[str, ThreadCheckpointState]] = []
+
+    async def load(self, thread_id: str) -> ThreadCheckpointState | None:
+        return None
+
+    async def save(self, thread_id: str, state: ThreadCheckpointState) -> None:
+        self.saved.append((thread_id, state))
 
 
 def mock_model_no_tools(text="Hello!"):
@@ -528,6 +540,22 @@ async def test_query_loop_save_messages_advances_versions_for_blob_style_savers(
 
     assert [msg.content for msg in reloaded] == ["persist me"]
     assert "messages" in checkpointer.store["blob-thread"]["channel_versions"]
+
+
+@pytest.mark.asyncio
+async def test_query_loop_saves_thread_state_via_checkpoint_store():
+    store = _RecordingCheckpointStore()
+    loop = make_loop(
+        model=mock_model_no_tools("unused"),
+        app_state=AppState(),
+    )
+    loop._checkpoint_store = store
+
+    await loop._save_messages("store-thread", [HumanMessage(content="persist me")])
+
+    assert len(store.saved) == 1
+    assert store.saved[0][0] == "store-thread"
+    assert [msg.content for msg in store.saved[0][1].messages] == ["persist me"]
 
 
 @pytest.mark.asyncio

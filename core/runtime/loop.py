@@ -24,7 +24,7 @@ from collections.abc import AsyncGenerator, Awaitable, Callable
 from dataclasses import dataclass
 from enum import StrEnum
 from types import SimpleNamespace
-from typing import Any, cast
+from typing import Any
 
 from langchain_core.messages import AIMessage, AIMessageChunk, HumanMessage, RemoveMessage, SystemMessage, ToolMessage
 
@@ -36,6 +36,8 @@ from core.runtime.middleware import (
 )
 
 from .abort import AbortController
+from .checkpoint_store import CheckpointStore, ThreadCheckpointState
+from .langgraph_checkpoint_store import LangGraphCheckpointStore
 from .permissions import ToolPermissionContext, evaluate_permission_rules
 from .registry import ToolMode, ToolRegistry
 from .state import AppState, BootstrapConfig, ToolPermissionState, ToolUseContext
@@ -332,6 +334,7 @@ class QueryLoop:
         self.system_prompt = system_prompt
         self.middleware = middleware
         self.checkpointer = checkpointer
+        self._checkpoint_store: CheckpointStore | None = LangGraphCheckpointStore(checkpointer) if checkpointer is not None else None
         self._registry = registry
         self._app_state = app_state
         self._runtime = runtime
@@ -1771,22 +1774,31 @@ class QueryLoop:
 
     async def _load_messages(self, thread_id: str) -> list:
         """Load message history from checkpointer (if available)."""
-        channel_values = await self._load_checkpoint_channel_values(thread_id)
-        return list(channel_values.get("messages", []))
+        state = await self._load_thread_checkpoint_state(thread_id)
+        return list(state.messages) if state is not None else []
 
-    async def _load_checkpoint_channel_values(self, thread_id: str) -> dict[str, Any]:
-        """Load raw channel values for one thread checkpoint."""
-        if self.checkpointer is None:
-            return {}
+    async def _load_thread_checkpoint_state(self, thread_id: str) -> ThreadCheckpointState | None:
+        if self._checkpoint_store is None:
+            return None
         try:
-            cfg = self._checkpoint_config(thread_id)
-            checkpoint = await self.checkpointer.aget(cfg)
-            if checkpoint is None:
-                return {}
-            return dict(checkpoint.get("channel_values", {}) or {})
+            return await self._checkpoint_store.load(thread_id)
         except Exception:
             logger.debug("QueryLoop: could not load checkpoint for thread %s", thread_id)
+            return None
+
+    async def _load_checkpoint_channel_values(self, thread_id: str) -> dict[str, Any]:
+        """Compatibility helper for tests and bridge callers that still inspect channel_values."""
+        state = await self._load_thread_checkpoint_state(thread_id)
+        if state is None:
             return {}
+        return {
+            "messages": list(state.messages),
+            "tool_permission_context": dict(state.tool_permission_context),
+            "pending_permission_requests": dict(state.pending_permission_requests),
+            "resolved_permission_requests": dict(state.resolved_permission_requests),
+            "memory_compaction_state": dict(state.memory_compaction_state),
+            "mcp_instruction_state": dict(state.mcp_instruction_state),
+        }
 
     def _thread_permission_state_snapshot(
         self,
@@ -1900,13 +1912,13 @@ class QueryLoop:
         self._app_state.announced_mcp_instruction_blocks = kept
 
     async def _hydrate_thread_state_from_checkpoint(self, thread_id: str) -> dict[str, Any]:
-        channel_values = await self._load_checkpoint_channel_values(thread_id)
-        messages = list(channel_values.get("messages", []))
-        permission_context = dict(channel_values.get("tool_permission_context", {}) or {})
-        pending = dict(channel_values.get("pending_permission_requests", {}) or {})
-        resolved = dict(channel_values.get("resolved_permission_requests", {}) or {})
-        memory_state = dict(channel_values.get("memory_compaction_state", {}) or {})
-        mcp_instruction_state = dict(channel_values.get("mcp_instruction_state", {}) or {})
+        checkpoint_state = await self._load_thread_checkpoint_state(thread_id)
+        messages = list(checkpoint_state.messages) if checkpoint_state is not None else []
+        permission_context = dict(checkpoint_state.tool_permission_context) if checkpoint_state is not None else {}
+        pending = dict(checkpoint_state.pending_permission_requests) if checkpoint_state is not None else {}
+        resolved = dict(checkpoint_state.resolved_permission_requests) if checkpoint_state is not None else {}
+        memory_state = dict(checkpoint_state.memory_compaction_state) if checkpoint_state is not None else {}
+        mcp_instruction_state = dict(checkpoint_state.mcp_instruction_state) if checkpoint_state is not None else {}
         turn_count = self._app_state.turn_count if self._app_state is not None else 0
         self._sync_app_state(messages=messages, turn_count=turn_count)
         self._restore_thread_permission_state(
@@ -1932,80 +1944,25 @@ class QueryLoop:
             "mcp_instruction_state": mcp_instruction_state,
         }
 
-    @staticmethod
-    def _normalize_checkpoint_for_write(raw_checkpoint: Any, empty_checkpoint_factory: Any) -> Any:
-        checkpoint = empty_checkpoint_factory()
-        if not isinstance(raw_checkpoint, dict):
-            return checkpoint
-        # @@@checkpoint-shape-normalization - local/simple savers often persist only
-        # channel_values, while LangGraph savers expect the full checkpoint shape.
-        # Normalize both into one writable base contract before versioning.
-        for key, default_value in checkpoint.items():
-            if key not in raw_checkpoint:
-                continue
-            value = raw_checkpoint[key]
-            if isinstance(default_value, dict):
-                checkpoint[key] = dict(value or {})
-            elif isinstance(default_value, list):
-                checkpoint[key] = list(value or [])
-            else:
-                checkpoint[key] = value
-        return checkpoint
-
     async def _save_messages(self, thread_id: str, messages: list) -> None:
         """Persist message history to checkpointer."""
-        if self.checkpointer is None:
+        if self._checkpoint_store is None:
             return
         try:
-            from langgraph.checkpoint.base import Checkpoint, CheckpointMetadata, create_checkpoint, empty_checkpoint
-
-            cfg = self._checkpoint_config(thread_id)
-            existing_checkpoint: Checkpoint | None = None
-            aget_tuple = getattr(self.checkpointer, "aget_tuple", None)
-            if callable(aget_tuple):
-                checkpoint_tuple_result = aget_tuple(cfg)
-                checkpoint_tuple = (
-                    await checkpoint_tuple_result if inspect.isawaitable(checkpoint_tuple_result) else checkpoint_tuple_result
-                )
-                checkpoint_value = getattr(checkpoint_tuple, "checkpoint", None)
-                if isinstance(checkpoint_value, dict):
-                    existing_checkpoint = cast(Checkpoint, checkpoint_value)
-            if existing_checkpoint is None:
-                aget = getattr(self.checkpointer, "aget", None)
-                if callable(aget):
-                    checkpoint_result = aget(cfg)
-                    checkpoint_value = await checkpoint_result if inspect.isawaitable(checkpoint_result) else checkpoint_result
-                    if isinstance(checkpoint_value, dict):
-                        existing_checkpoint = cast(Checkpoint, checkpoint_value)
-            checkpoint = create_checkpoint(
-                self._normalize_checkpoint_for_write(existing_checkpoint, empty_checkpoint),
-                None,
-                len(messages),
-            )
             permission_context, pending_requests, resolved_requests = self._thread_permission_state_snapshot(thread_id)
             memory_state = self._thread_memory_state_snapshot(thread_id)
             mcp_instruction_state = self._thread_mcp_instruction_state_snapshot(thread_id)
-            checkpoint["channel_values"] = {
-                "messages": messages,
-                "tool_permission_context": permission_context,
-                "pending_permission_requests": pending_requests,
-                "resolved_permission_requests": resolved_requests,
-                "memory_compaction_state": memory_state,
-                "mcp_instruction_state": mcp_instruction_state,
-            }
-            new_versions = {}
-            get_next_version = getattr(self.checkpointer, "get_next_version", None)
-            if callable(get_next_version):
-                current_versions = dict(checkpoint.get("channel_versions", {}) or {})
-                for channel_name in checkpoint["channel_values"]:
-                    new_versions[channel_name] = get_next_version(current_versions.get(channel_name), None)
-                checkpoint["channel_versions"] = {**current_versions, **new_versions}
-                checkpoint["updated_channels"] = list(new_versions)
-            metadata: CheckpointMetadata = {
-                "source": "loop",
-                "step": len(messages),
-            }
-            await self.checkpointer.aput(cfg, checkpoint, metadata, new_versions)
+            await self._checkpoint_store.save(
+                thread_id,
+                ThreadCheckpointState(
+                    messages=list(messages),
+                    tool_permission_context=permission_context,
+                    pending_permission_requests=pending_requests,
+                    resolved_permission_requests=resolved_requests,
+                    memory_compaction_state=memory_state,
+                    mcp_instruction_state=mcp_instruction_state,
+                ),
+            )
         except Exception:
             logger.debug("QueryLoop: could not save checkpoint for thread %s", thread_id, exc_info=True)
 
@@ -2075,13 +2032,6 @@ class QueryLoop:
         if isinstance(last_message, AIMessage) and self._ai_message_has_visible_content(last_message):
             return None
         return AIMessage(content=f"Error: {error_text}")
-
-    @staticmethod
-    def _checkpoint_config(thread_id: str) -> dict[str, Any]:
-        # @@@sa-03-real-checkpointer-config
-        # AsyncSqliteSaver requires checkpoint_ns even when we only use a
-        # single logical namespace; without it, aput() raises and replay dies.
-        return {"configurable": {"thread_id": thread_id, "checkpoint_ns": ""}}
 
     async def aclear(self, thread_id: str) -> None:
         """Clear turn-scoped state for a thread while preserving session accumulators."""
