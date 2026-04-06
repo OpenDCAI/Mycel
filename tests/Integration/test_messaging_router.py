@@ -75,9 +75,7 @@ async def test_get_chat_uses_access_helper(monkeypatch: pytest.MonkeyPatch):
     app = SimpleNamespace(
         state=SimpleNamespace(
             chat_repo=SimpleNamespace(
-                get_by_id=lambda _chat_id: (_ for _ in ()).throw(
-                    AssertionError("route should use helper, not chat_repo lookup directly")
-                )
+                get_by_id=lambda _chat_id: (_ for _ in ()).throw(AssertionError("route should use helper, not chat_repo lookup directly"))
             ),
             messaging_service=SimpleNamespace(list_chat_members=lambda _chat_id: []),
             member_repo=SimpleNamespace(get_by_id=lambda _member_id: None),
@@ -110,9 +108,7 @@ async def test_delete_chat_uses_access_helper(monkeypatch: pytest.MonkeyPatch):
     app = SimpleNamespace(
         state=SimpleNamespace(
             chat_repo=SimpleNamespace(
-                get_by_id=lambda _chat_id: (_ for _ in ()).throw(
-                    AssertionError("route should use helper, not chat_repo lookup directly")
-                ),
+                get_by_id=lambda _chat_id: (_ for _ in ()).throw(AssertionError("route should use helper, not chat_repo lookup directly")),
                 delete=lambda chat_id: seen.append(("delete", chat_id)),
             ),
         )
