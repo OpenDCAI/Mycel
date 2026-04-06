@@ -172,6 +172,13 @@ These are not vague “polish later” notes. They are concrete seams that now b
 - Required outcome:
   - provisional state must explain what exists now, what is still pending, where logs/artifacts live, and what the operator should do next.
   - this is a backend-first surface; if new fields are needed, add them to the payload instead of making the frontend guess from free-text notes.
+- Current landed phase:
+  - evaluation detail payload now includes `info.operator_surface`, built by a database-agnostic helper in `backend/web/services/monitor_service.py`
+  - the monitor eval detail page now opens with a dedicated `Operator Status` block instead of leading with a sparse provisional score grid
+  - the first screen now explains `runner exit before threads materialized`, surfaces `run_dir / manifest / stdout / stderr`, and gives explicit next-step guidance
+  - redundant provisional score metadata is still available, but collapsed behind `Score artifacts (provisional)` by default so the page reads like an operator surface instead of a failed report
+- Honest boundary:
+  - this phase explains one real provisional failure mode clearly, but it does not yet model every evaluation lifecycle branch as a richer typed contract
 
 ### Slice D3: Lease Semantics And Regrouping
 

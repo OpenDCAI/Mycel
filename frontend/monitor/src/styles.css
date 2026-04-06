@@ -1177,6 +1177,114 @@ section.eval-runtime-panel {
   white-space: normal;
 }
 
+.eval-operator-shell {
+  margin-top: 1rem;
+  margin-bottom: 1.5rem;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 1rem 1.1rem;
+  background: var(--panel);
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+}
+
+.eval-operator-warning {
+  background: linear-gradient(180deg, var(--panel) 0%, var(--warning-soft) 100%);
+}
+
+.eval-operator-danger {
+  background: linear-gradient(180deg, var(--panel) 0%, var(--danger-soft) 100%);
+}
+
+.eval-operator-success {
+  background: linear-gradient(180deg, var(--panel) 0%, var(--success-soft) 100%);
+}
+
+.eval-operator-hero {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.eval-operator-hero h2 {
+  margin: 0 0 0.35rem;
+}
+
+.eval-operator-headline {
+  font-size: 1.02rem;
+  color: var(--text);
+}
+
+.eval-operator-grid {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.eval-operator-grid > * {
+  grid-column: span 6;
+}
+
+.eval-operator-shell h3 {
+  margin: 0 0 0.6rem;
+  font-size: 0.95rem;
+}
+
+.eval-artifact-list,
+.eval-next-step-list {
+  margin: 0;
+  padding-left: 1.1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.eval-artifact-list li,
+.eval-next-step-list li {
+  color: var(--text-secondary);
+}
+
+.eval-raw-notes {
+  border-top: 1px solid var(--border);
+  padding-top: 0.8rem;
+}
+
+.eval-raw-notes summary {
+  cursor: pointer;
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.eval-raw-notes pre {
+  margin-top: 0.75rem;
+  padding: 0.85rem 0.95rem;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.72);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.eval-score-details {
+  margin: 1rem 0 0;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--panel);
+  padding: 0.85rem 1rem;
+}
+
+.eval-score-details summary {
+  cursor: pointer;
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.eval-score-details .info-grid {
+  margin-top: 1rem;
+}
+
 .eval-composer-backdrop {
   position: fixed;
   inset: 0;
@@ -1203,7 +1311,8 @@ section.eval-runtime-panel {
   .evaluation-notes > *,
   .evaluation-overview > *,
   .evaluation-column,
-  .lease-cluster-grid > * {
+  .lease-cluster-grid > *,
+  .eval-operator-grid > * {
     grid-column: span 12;
   }
 }

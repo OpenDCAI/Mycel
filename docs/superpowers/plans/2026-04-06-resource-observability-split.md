@@ -25,9 +25,13 @@
   - root lands on `/dashboard`
   - monitor `Resources` uses the global monitor contract and includes grouped lease triage
   - evaluation tutorial/reference sections are collapsed by default
+- `D2` now has a landed phase-1:
+  - evaluation detail payload includes backend-owned `info.operator_surface`
+  - provisional eval detail opens with `Operator Status`, artifact paths, and explicit next steps
+  - redundant provisional score metadata is folded behind `Score artifacts (provisional)` instead of occupying the first screen
 - next honest follow-up remains:
   - `D3` because lease regrouping has now moved onto a backend semantic contract, but the categories are still shallow and need stronger lifecycle meaning
-  - `D2` because provisional eval detail still needs a stronger operator-facing explanation and artifact/log next-step surface
+  - `D2` because the current operator surface only hardens the provisional/bootstrap-failure case and still lacks richer lifecycle typing for other eval states
 
 ---
 

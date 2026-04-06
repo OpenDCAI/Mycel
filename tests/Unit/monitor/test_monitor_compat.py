@@ -151,3 +151,40 @@ def test_list_leases_exposes_semantic_groups_and_summary(monkeypatch):
     assert by_id["lease-diverged"]["semantics"]["category"] == "diverged"
     assert by_id["lease-orphan-diverged"]["semantics"]["category"] == "orphan_diverged"
     assert by_id["lease-orphan"]["semantics"]["category"] == "orphan"
+
+
+def test_build_evaluation_operator_surface_flags_runner_exit_before_threads_materialize():
+    payload = monitor_service.build_evaluation_operator_surface(
+        status="provisional",
+        notes=(
+            "runner=direct rc=1 sandbox=local "
+            "run_dir=/tmp/eval stdout_log=/tmp/eval/out.log stderr_log=/tmp/eval/err.log"
+        ),
+        score={
+            "score_gate": "provisional",
+            "publishable": False,
+            "run_dir": "/tmp/eval",
+            "manifest_path": "/tmp/eval/run_manifest.json",
+            "eval_summary_path": None,
+            "trace_summaries_path": None,
+            "scored": False,
+        },
+        threads_total=0,
+        threads_running=0,
+        threads_done=0,
+    )
+
+    assert payload["tone"] == "danger"
+    assert payload["headline"] == "Runner exited before evaluation threads materialized."
+    assert "bootstrap failure" in payload["summary"]
+    assert payload["facts"][-2:] == [
+        {"label": "Runner", "value": "direct"},
+        {"label": "Exit code", "value": "1"},
+    ]
+    artifact_labels = {item["label"] for item in payload["artifacts"]}
+    assert artifact_labels == {
+        "Run directory",
+        "Run manifest",
+        "STDOUT log",
+        "STDERR log",
+    }

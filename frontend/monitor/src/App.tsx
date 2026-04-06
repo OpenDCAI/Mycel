@@ -2567,6 +2567,7 @@ function EvaluationDetailPage() {
   const publishable = Boolean(data.info?.score?.publishable ?? (scoreGate === 'final'));
   const scoreFinal = publishable;
   const summaryReady = !!data.info?.score?.eval_summary_path;
+  const operator = data.info?.operator_surface || {};
   const statusToneClass =
     data.info.status === 'completed'
       ? 'chip-success'
@@ -2602,6 +2603,55 @@ function EvaluationDetailPage() {
         </div>
       </section>
 
+      <section className={`eval-operator-shell eval-operator-${operator.tone || 'default'}`} data-testid="evaluation-operator-surface">
+        <div className="eval-operator-hero">
+          <div>
+            <h2>Operator Status</h2>
+            <p className="description">{operator.summary || 'Inspect the current evaluation state before judging score or trace coverage.'}</p>
+          </div>
+          <span className={`status-chip ${operator.tone === 'danger' ? 'chip-danger' : operator.tone === 'warning' ? 'chip-warning' : operator.tone === 'success' ? 'chip-success' : 'chip-muted'}`}>
+            {operator.tone || 'default'}
+          </span>
+        </div>
+        <strong className="eval-operator-headline">{operator.headline || 'Evaluation operator surface'}</strong>
+        <div className="eval-operator-grid">
+          <article className="hint-box">
+            <h3>Facts</h3>
+            <div className="info-grid info-grid-compact">
+              {(operator.facts || []).map((item: any) => (
+                <div key={`${item.label}:${item.value}`}>
+                  <strong>{item.label}:</strong> {item.value}
+                </div>
+              ))}
+            </div>
+          </article>
+          <article className="hint-box">
+            <h3>Artifacts</h3>
+            <ul className="eval-artifact-list">
+              {(operator.artifacts || []).map((item: any) => (
+                <li key={`${item.label}:${item.path}`}>
+                  <strong>{item.label}:</strong> <span className="mono">{item.path}</span>
+                </li>
+              ))}
+            </ul>
+          </article>
+        </div>
+        <article className="hint-box">
+          <h3>Next Step</h3>
+          <ol className="eval-next-step-list">
+            {(operator.next_steps || []).map((item: string) => (
+              <li key={item}>{item}</li>
+            ))}
+          </ol>
+        </article>
+        {operator.raw_notes ? (
+          <details className="eval-raw-notes">
+            <summary>Raw runner notes</summary>
+            <pre className="mono">{operator.raw_notes}</pre>
+          </details>
+        ) : null}
+      </section>
+
       <section>
         <h2>Config</h2>
         <div className="info-grid info-grid-compact">
@@ -2614,38 +2664,43 @@ function EvaluationDetailPage() {
         </div>
       </section>
 
-      <section>
-        <h2>Score</h2>
-        <div className="info-grid">
-          <div><strong>Score Gate:</strong> {scoreGate}</div>
-          <div><strong>Publishable:</strong> {String(publishable)}</div>
-          <div><strong>Summary:</strong> {summaryReady ? 'ready' : 'missing'}</div>
-          {scoreFinal ? (
-            <>
-              <div><strong>Resolved:</strong> {data.info.score?.resolved_instances ?? 0}/{data.info.score?.total_instances ?? 0}</div>
-              <div><strong>Resolved Rate:</strong> {formatPct(data.info.score?.resolved_rate_pct)}</div>
-              <div><strong>Completed:</strong> {data.info.score?.completed_instances ?? 0}/{data.info.score?.total_instances ?? 0}</div>
-              <div><strong>Completed Rate:</strong> {formatPct(data.info.score?.completed_rate_pct)}</div>
-              <div><strong>Non-empty Patch:</strong> {data.info.score?.non_empty_patch_instances ?? 0}/{data.info.score?.total_instances ?? 0}</div>
-              <div><strong>Non-empty Rate:</strong> {formatPct(data.info.score?.non_empty_patch_rate_pct)}</div>
-              <div><strong>Empty Patch:</strong> {data.info.score?.empty_patch_instances ?? 0}/{data.info.score?.total_instances ?? 0}</div>
-              <div><strong>Errors:</strong> {data.info.score?.error_instances ?? 0}</div>
-              <div><strong>Trace Active:</strong> {data.info.score?.active_trace_threads ?? 0}/{data.info.score?.total_instances ?? 0}</div>
-              <div><strong>Tool-call Threads:</strong> {data.info.score?.tool_call_threads ?? 0}/{data.info.score?.total_instances ?? 0}</div>
-              <div><strong>Tool-call Coverage:</strong> {formatPct(data.info.score?.tool_call_thread_rate_pct)}</div>
-              <div><strong>Tool Calls Total:</strong> {data.info.score?.tool_calls_total ?? 0}</div>
-              <div><strong>Avg Tool Calls(active):</strong> {data.info.score?.avg_tool_calls_per_active_thread ?? '-'}</div>
-              <div><strong>Recursion Cap Hits:</strong> {data.info.score?.recursion_cap_hits ?? 0}{data.info.score?.recursion_limit ? ` / cap ${data.info.score.recursion_limit}` : ''}</div>
-            </>
-          ) : (
-            <>
-              <div><strong>Final Score:</strong> blocked (provisional)</div>
-              <div><strong>Block Reason:</strong> {data.info.score?.manifest_eval_error ? 'manifest_eval_error' : 'missing_eval_summary'}</div>
-            </>
-          )}
-          <div><strong>Run Dir:</strong> <span className="mono">{data.info.score?.run_dir || '-'}</span></div>
-        </div>
-      </section>
+      {scoreFinal ? (
+        <section>
+          <h2>Score</h2>
+          <div className="info-grid">
+            <div><strong>Score Gate:</strong> {scoreGate}</div>
+            <div><strong>Publishable:</strong> {String(publishable)}</div>
+            <div><strong>Summary:</strong> {summaryReady ? 'ready' : 'missing'}</div>
+            <div><strong>Resolved:</strong> {data.info.score?.resolved_instances ?? 0}/{data.info.score?.total_instances ?? 0}</div>
+            <div><strong>Resolved Rate:</strong> {formatPct(data.info.score?.resolved_rate_pct)}</div>
+            <div><strong>Completed:</strong> {data.info.score?.completed_instances ?? 0}/{data.info.score?.total_instances ?? 0}</div>
+            <div><strong>Completed Rate:</strong> {formatPct(data.info.score?.completed_rate_pct)}</div>
+            <div><strong>Non-empty Patch:</strong> {data.info.score?.non_empty_patch_instances ?? 0}/{data.info.score?.total_instances ?? 0}</div>
+            <div><strong>Non-empty Rate:</strong> {formatPct(data.info.score?.non_empty_patch_rate_pct)}</div>
+            <div><strong>Empty Patch:</strong> {data.info.score?.empty_patch_instances ?? 0}/{data.info.score?.total_instances ?? 0}</div>
+            <div><strong>Errors:</strong> {data.info.score?.error_instances ?? 0}</div>
+            <div><strong>Trace Active:</strong> {data.info.score?.active_trace_threads ?? 0}/{data.info.score?.total_instances ?? 0}</div>
+            <div><strong>Tool-call Threads:</strong> {data.info.score?.tool_call_threads ?? 0}/{data.info.score?.total_instances ?? 0}</div>
+            <div><strong>Tool-call Coverage:</strong> {formatPct(data.info.score?.tool_call_thread_rate_pct)}</div>
+            <div><strong>Tool Calls Total:</strong> {data.info.score?.tool_calls_total ?? 0}</div>
+            <div><strong>Avg Tool Calls(active):</strong> {data.info.score?.avg_tool_calls_per_active_thread ?? '-'}</div>
+            <div><strong>Recursion Cap Hits:</strong> {data.info.score?.recursion_cap_hits ?? 0}{data.info.score?.recursion_limit ? ` / cap ${data.info.score.recursion_limit}` : ''}</div>
+            <div><strong>Run Dir:</strong> <span className="mono">{data.info.score?.run_dir || '-'}</span></div>
+          </div>
+        </section>
+      ) : (
+        <details className="eval-score-details">
+          <summary>Score artifacts (provisional)</summary>
+          <div className="info-grid">
+            <div><strong>Score Gate:</strong> {scoreGate}</div>
+            <div><strong>Publishable:</strong> {String(publishable)}</div>
+            <div><strong>Summary:</strong> {summaryReady ? 'ready' : 'missing'}</div>
+            <div><strong>Final Score:</strong> blocked (provisional)</div>
+            <div><strong>Block Reason:</strong> {data.info.score?.manifest_eval_error ? 'manifest_eval_error' : 'missing_eval_summary'}</div>
+            <div><strong>Run Dir:</strong> <span className="mono">{data.info.score?.run_dir || '-'}</span></div>
+          </div>
+        </details>
+      )}
 
       <section>
         <h2>{data.threads.title} ({data.threads.count})</h2>

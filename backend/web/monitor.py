@@ -20,6 +20,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 
 from backend.web.core.config import DB_PATH
+from backend.web.services.monitor_service import build_evaluation_operator_surface
 from storage.providers.sqlite.kernel import SQLiteDBRole, connect_sqlite, resolve_role_db_path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -1902,6 +1903,14 @@ def get_evaluation_detail(evaluation_id: str, request: Request, db: sqlite3.Conn
             "threads_started": threads_started,
             "progress_source": progress_source,
             "score": score,
+            "operator_surface": build_evaluation_operator_surface(
+                status=status,
+                notes=notes,
+                score=score,
+                threads_total=total,
+                threads_running=running_count,
+                threads_done=threads_done,
+            ),
         },
         "threads": {"title": "Evaluation Threads", "count": total, "items": thread_items},
     }
