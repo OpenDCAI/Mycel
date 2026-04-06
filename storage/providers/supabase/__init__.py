@@ -6,7 +6,6 @@ from .chat_session_repo import SupabaseChatSessionRepo
 from .checkpoint_repo import SupabaseCheckpointRepo
 from .contact_repo import SupabaseContactRepo
 from .cron_job_repo import SupabaseCronJobRepo
-from .entity_repo import SupabaseEntityRepo
 from .eval_repo import SupabaseEvalRepo
 from .file_operation_repo import SupabaseFileOperationRepo
 from .invite_code_repo import SupabaseInviteCodeRepo
@@ -38,7 +37,6 @@ __all__ = [
     "SupabaseCheckpointRepo",
     "SupabaseContactRepo",
     "SupabaseCronJobRepo",
-    "SupabaseEntityRepo",
     "SupabaseEvalRepo",
     "SupabaseFileOperationRepo",
     "SupabaseInviteCodeRepo",

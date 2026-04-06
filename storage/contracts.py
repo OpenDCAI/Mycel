@@ -100,7 +100,7 @@ class ChatSessionRepo(Protocol):
 
 
 # ---------------------------------------------------------------------------
-# Entity-Chat — enums + row types
+# Member-Chat — enums + row types
 # ---------------------------------------------------------------------------
 
 
@@ -118,6 +118,7 @@ class MemberRow(BaseModel):
     description: str | None = None
     config_dir: str | None = None
     owner_user_id: str | None = None
+    main_thread_id: str | None = None
     next_entity_seq: int = 0
     created_at: float
     updated_at: float | None = None
@@ -131,16 +132,6 @@ class AccountRow(BaseModel):
     username: str
     password_hash: str | None = None
     api_key_hash: str | None = None
-    created_at: float
-
-
-class EntityRow(BaseModel):
-    id: str
-    type: str  # 'human' | 'agent'
-    member_id: str
-    name: str
-    avatar: str | None = None
-    thread_id: str | None = None
     created_at: float
 
 
@@ -347,7 +338,7 @@ class EvalRepo(Protocol):
 
 
 # ---------------------------------------------------------------------------
-# Entity-Chat — repo protocols
+# Member-Chat — repo protocols
 # ---------------------------------------------------------------------------
 
 
@@ -359,6 +350,7 @@ class MemberRepo(Protocol):
     def get_by_email(self, email: str) -> MemberRow | None: ...
     def get_by_mycel_id(self, mycel_id: int) -> MemberRow | None: ...
     def list_all(self) -> list[MemberRow]: ...
+    def list_by_type(self, member_type: str) -> list[MemberRow]: ...
     def list_by_owner_user_id(self, owner_user_id: str) -> list[MemberRow]: ...
     def update(self, member_id: str, **fields: Any) -> None: ...
     def increment_entity_seq(self, member_id: str) -> int: ...
@@ -372,17 +364,6 @@ class AccountRepo(Protocol):
     def get_by_user_id(self, user_id: str) -> AccountRow | None: ...
     def get_by_username(self, username: str) -> AccountRow | None: ...
     def delete(self, account_id: str) -> None: ...
-
-
-class EntityRepo(Protocol):
-    def close(self) -> None: ...
-    def create(self, row: EntityRow) -> None: ...
-    def get_by_id(self, id: str) -> EntityRow | None: ...
-    def get_by_member_id(self, member_id: str) -> list[EntityRow]: ...
-    def list_all(self) -> list[EntityRow]: ...
-    def list_by_type(self, entity_type: str) -> list[EntityRow]: ...
-    def update(self, id: str, **fields: Any) -> None: ...
-    def delete(self, id: str) -> None: ...
 
 
 class ChatRepo(Protocol):

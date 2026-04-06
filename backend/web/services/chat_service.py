@@ -16,8 +16,8 @@ from storage.contracts import (
     ChatRepo,
     ChatRow,
     DeliveryResolver,
-    EntityRepo,
     MemberRepo,
+    MemberType,
 )
 
 logger = logging.getLogger(__name__)
@@ -29,7 +29,6 @@ class ChatService:
         chat_repo: ChatRepo,
         chat_entity_repo: ChatEntityRepo,
         chat_message_repo: ChatMessageRepo,
-        entity_repo: EntityRepo,
         member_repo: MemberRepo,
         event_bus: Any = None,
         delivery_fn: Callable | None = None,
@@ -38,17 +37,13 @@ class ChatService:
         self._chats = chat_repo
         self._chat_entities = chat_entity_repo
         self._messages = chat_message_repo
-        self._entities = entity_repo
         self._members = member_repo
         self._event_bus = event_bus
         self._delivery_fn = delivery_fn
         self._delivery_resolver = delivery_resolver
 
     def _resolve_name(self, user_id: str) -> str:
-        """Resolve display name: entity_repo (agents) → member_repo (humans)."""
-        e = self._entities.get_by_id(user_id)
-        if e:
-            return e.name
+        """Resolve display name from member_repo."""
         m = self._members.get_by_id(user_id) if self._members else None
         return m.name if m else "unknown"
 
@@ -142,28 +137,21 @@ class ChatService:
         """For each non-sender agent participant in the chat, deliver to their brain thread."""
         mentions = set(mentioned_ids or [])
         participants = self._chat_entities.list_participants(chat_id)
-        sender_avatar_url = None
-        sender_mid = sender_id
-        sender_entity = self._entities.get_by_id(sender_id)
-        if sender_entity:
-            sender_mid = sender_entity.member_id
-        m = self._members.get_by_id(sender_mid) if self._members else None
-        sender_avatar_url = avatar_url(sender_mid, bool(m.avatar if m else None))
+        sender_member = self._members.get_by_id(sender_id) if self._members else None
+        sender_avatar_url = avatar_url(sender_id, bool(sender_member.avatar if sender_member else None))
 
         for ce in participants:
             if ce.user_id == sender_id:
                 continue
-            entity = self._entities.get_by_id(ce.user_id)
-            if not entity or entity.type != "agent" or not entity.thread_id:
+            member = self._members.get_by_id(ce.user_id) if self._members else None
+            if not member or member.type == MemberType.HUMAN or not member.main_thread_id:
                 logger.debug(
                     "[deliver] SKIP %s type=%s thread=%s",
                     ce.user_id,
-                    getattr(entity, "type", None),
-                    getattr(entity, "thread_id", None),
+                    getattr(member, "type", None),
+                    getattr(member, "main_thread_id", None),
                 )
                 continue
-            # @@@delivery-strategy-gate — check contact block/mute + chat mute
-            # @@@mention-override — mentioned entities skip mute (but not block)
             if self._delivery_resolver:
                 from storage.contracts import DeliveryAction
 
@@ -185,13 +173,13 @@ class ChatService:
                     )
                     continue
             if self._delivery_fn:
-                logger.debug("[deliver] → %s (thread=%s) from=%s", entity.id, entity.thread_id, sender_name)
+                logger.debug("[deliver] → %s (thread=%s) from=%s", member.id, member.main_thread_id, sender_name)
                 try:
-                    self._delivery_fn(entity, content, sender_name, chat_id, sender_id, sender_avatar_url, signal=signal)
+                    self._delivery_fn(member, content, sender_name, chat_id, sender_id, sender_avatar_url, signal=signal)
                 except Exception:
-                    logger.exception("Failed to deliver chat message to entity %s", entity.id)
+                    logger.exception("Failed to deliver chat message to member %s", member.id)
             else:
-                logger.warning("[deliver] NO delivery_fn for %s", entity.id)
+                logger.warning("[deliver] NO delivery_fn for %s", member.id)
 
     def set_delivery_fn(self, fn) -> None:
         self._delivery_fn = fn
@@ -207,28 +195,16 @@ class ChatService:
             participants = self._chat_entities.list_participants(cid)
             entities_info = []
             for p in participants:
-                e = self._entities.get_by_id(p.user_id)
-                if e:
-                    m = self._members.get_by_id(e.member_id) if self._members else None
+                m = self._members.get_by_id(p.user_id) if self._members else None
+                if m:
                     entities_info.append(
                         {
-                            "id": p.user_id,
-                            "name": e.name,
-                            "type": e.type,
-                            "avatar_url": avatar_url(e.member_id, bool(m.avatar if m else None)),
+                            "id": m.id,
+                            "name": m.name,
+                            "type": m.type.value if hasattr(m.type, "value") else str(m.type),
+                            "avatar_url": avatar_url(m.id, bool(m.avatar)),
                         }
                     )
-                else:
-                    m = self._members.get_by_id(p.user_id) if self._members else None
-                    if m:
-                        entities_info.append(
-                            {
-                                "id": p.user_id,
-                                "name": m.name,
-                                "type": "human",
-                                "avatar_url": avatar_url(m.id, bool(m.avatar)),
-                            }
-                        )
             msgs = self._messages.list_by_chat(cid, limit=1)
             last_msg = None
             if msgs:

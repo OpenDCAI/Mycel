@@ -140,19 +140,20 @@ async def get_chat(
     chat = app.state.chat_repo.get_by_id(chat_id)
     if not chat:
         raise HTTPException(404, "Chat not found")
-    members = _messaging(app)._members_repo.list_members(chat_id)
-    entities_info = []
-    for m in members:
+    members_list = _messaging(app)._members_repo.list_members(chat_id)
+    members_info = []
+    for m in members_list:
         uid = m.get("user_id")
-        e = app.state.entity_repo.get_by_id(uid) if uid else None
-        if e:
-            mem = app.state.member_repo.get_by_id(e.member_id)
-            entities_info.append(
+        if not uid:
+            continue
+        mem = app.state.member_repo.get_by_id(uid)
+        if mem:
+            members_info.append(
                 {
-                    "id": e.id,
-                    "name": e.name,
-                    "type": e.type,
-                    "avatar_url": avatar_url(e.member_id, bool(mem.avatar if mem else None)),
+                    "id": mem.id,
+                    "name": mem.name,
+                    "type": mem.type.value if hasattr(mem.type, "value") else str(mem.type),
+                    "avatar_url": avatar_url(mem.id, bool(mem.avatar)),
                 }
             )
     return {
@@ -160,7 +161,7 @@ async def get_chat(
         "title": chat.title,
         "status": chat.status,
         "created_at": chat.created_at,
-        "entities": entities_info,
+        "entities": members_info,
     }
 
 
@@ -199,7 +200,7 @@ async def send_message(
         signal=body.signal,
         message_type=body.message_type,
     )
-    return _msg_response(msg, app.state.entity_repo)
+    return _msg_response(msg, app.state.member_repo)
 
 
 @router.post("/{chat_id}/messages/{message_id}/retract")

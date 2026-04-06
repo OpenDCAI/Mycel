@@ -29,7 +29,6 @@ from core.runtime.permissions import ToolPermissionContext
 from core.runtime.registry import ToolEntry, ToolMode, ToolRegistry, make_tool_schema
 from core.runtime.state import BootstrapConfig, ToolUseContext
 from core.runtime.tool_result import tool_error, tool_permission_request, tool_success
-from storage.contracts import EntityRow
 
 logger = logging.getLogger(__name__)
 
@@ -416,7 +415,6 @@ class AgentService:
         shared_runs: dict[str, BackgroundRun] | None = None,
         background_progress_interval_s: float = 30.0,
         thread_repo: Any = None,
-        entity_repo: Any = None,
         member_repo: Any = None,
         web_app: Any = None,
         child_agent_factory: ChildAgentFactory | None = None,
@@ -427,7 +425,6 @@ class AgentService:
         self._queue_manager = queue_manager
         self._background_progress_interval_s = background_progress_interval_s
         self._thread_repo = thread_repo
-        self._entity_repo = entity_repo
         self._member_repo = member_repo
         self._web_app = web_app
         self._child_agent_factory = child_agent_factory or _resolve_default_child_agent_factory()
@@ -503,21 +500,10 @@ class AgentService:
         agent_name: str,
         model_name: str,
     ) -> None:
-        if self._thread_repo is None or self._entity_repo is None or self._member_repo is None or not parent_thread_id:
+        if self._thread_repo is None or self._member_repo is None or not parent_thread_id:
             return
         existing_thread = self._thread_repo.get_by_id(thread_id)
         if existing_thread is not None:
-            if self._entity_repo.get_by_thread_id(thread_id) is None:
-                self._entity_repo.create(
-                    EntityRow(
-                        id=thread_id,
-                        type="agent",
-                        member_id=existing_thread["member_id"],
-                        name=agent_name,
-                        thread_id=thread_id,
-                        created_at=time.time(),
-                    )
-                )
             return
 
         parent_thread = self._thread_repo.get_by_id(parent_thread_id)
@@ -543,18 +529,6 @@ class AgentService:
             is_main=False,
             branch_index=branch_index,
         )
-
-        if self._entity_repo.get_by_thread_id(thread_id) is None:
-            self._entity_repo.create(
-                EntityRow(
-                    id=thread_id,
-                    type="agent",
-                    member_id=member_id,
-                    name=agent_name,
-                    thread_id=thread_id,
-                    created_at=created_at,
-                )
-            )
 
     async def _handle_agent(
         self,

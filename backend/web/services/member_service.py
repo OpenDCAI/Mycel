@@ -22,7 +22,6 @@ from typing import Any
 import yaml
 
 from backend.web.core.paths import avatars_dir, members_dir
-from backend.web.services.thread_naming import canonical_entity_name
 from backend.web.utils.serializers import avatar_url
 from config.defaults.tool_catalog import TOOLS_BY_NAME, ToolDef
 from config.loader import AgentLoader
@@ -439,8 +438,6 @@ def create_member(name: str, description: str = "", owner_user_id: str | None = 
 def update_member(
     member_id: str,
     member_repo: Any = None,
-    entity_repo: Any = None,
-    thread_repo: Any = None,
     **fields: Any,
 ) -> dict[str, Any] | None:
     if member_id == "__leon__":
@@ -472,40 +469,12 @@ def update_member(
         meta["updated_at"] = int(time.time() * 1000)
         _write_json(member_dir / "meta.json", meta)
 
-        # Sync name to DB
         if "name" in updates:
             if member_repo is None:
                 from storage.providers.sqlite.member_repo import SQLiteMemberRepo
 
                 member_repo = SQLiteMemberRepo()
-            if entity_repo is None:
-                from storage.providers.sqlite.entity_repo import SQLiteEntityRepo
-
-                entity_repo = SQLiteEntityRepo()
-            if thread_repo is None:
-                from storage.providers.sqlite.thread_repo import SQLiteThreadRepo
-
-                thread_repo = SQLiteThreadRepo()
-
             member_repo.update(member_id, name=updates["name"])
-            member = member_repo.get_by_id(member_id)
-            if member is None:
-                raise ValueError(f"Member {member_id} not found after update")
-            for entity in entity_repo.get_by_member_id(member_id):
-                if entity.thread_id is None:
-                    entity_repo.update(entity.id, name=member.name)
-                    continue
-                thread = thread_repo.get_by_id(entity.thread_id)
-                if thread is None:
-                    raise ValueError(f"Entity {entity.id} references missing thread {entity.thread_id}")
-                entity_repo.update(
-                    entity.id,
-                    name=canonical_entity_name(
-                        member.name,
-                        is_main=bool(thread["is_main"]),
-                        branch_index=int(thread["branch_index"]),
-                    ),
-                )
 
     return get_member(member_id)
 

@@ -81,6 +81,14 @@ class SQLiteMemberRepo:
             rows = self._conn.execute("SELECT * FROM members ORDER BY created_at").fetchall()
             return [self._to_row(r) for r in rows]
 
+    def list_by_type(self, member_type: str) -> list[MemberRow]:
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT * FROM members WHERE type = ? ORDER BY created_at",
+                (member_type,),
+            ).fetchall()
+            return [self._to_row(r) for r in rows]
+
     def list_by_owner_user_id(self, owner_user_id: str) -> list[MemberRow]:
         with self._lock:
             rows = self._conn.execute(
@@ -90,7 +98,7 @@ class SQLiteMemberRepo:
             return [self._to_row(r) for r in rows]
 
     def update(self, member_id: str, **fields: Any) -> None:
-        allowed = {"name", "avatar", "description", "config_dir", "owner_user_id", "updated_at"}
+        allowed = {"name", "avatar", "description", "config_dir", "owner_user_id", "main_thread_id", "updated_at"}
         updates = {k: v for k, v in fields.items() if k in allowed}
         if not updates:
             return
@@ -135,6 +143,7 @@ class SQLiteMemberRepo:
             created_at=r[7],
             updated_at=r[8],
             next_entity_seq=r[9] if len(r) > 9 else 0,
+            main_thread_id=r[10] if len(r) > 10 else None,
         )
 
     def _ensure_table(self) -> None:
@@ -157,6 +166,8 @@ class SQLiteMemberRepo:
         cols = {row[1] for row in self._conn.execute("PRAGMA table_info(members)").fetchall()}
         if "owner_user_id" not in cols:
             raise RuntimeError("members table missing owner_user_id; reset ~/.leon/leon.db for the new schema")
+        if "main_thread_id" not in cols:
+            self._conn.execute("ALTER TABLE members ADD COLUMN main_thread_id TEXT")
         self._conn.commit()
 
 

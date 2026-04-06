@@ -158,7 +158,6 @@ class LeonAgent:
         sandbox: Any = None,
         storage_container: StorageContainer | None = None,
         thread_repo: Any = None,
-        entity_repo: Any = None,
         member_repo: Any = None,
         queue_manager: MessageQueueManager | None = None,
         chat_repos: dict | None = None,
@@ -184,7 +183,6 @@ class LeonAgent:
             enable_web_tools: Whether to enable web search and content fetching tools
             sandbox: Sandbox instance, name string, or None for local
             thread_repo: Optional thread metadata repo for backend-integrated subagent registration
-            entity_repo: Optional entity repo for backend-integrated subagent registration
             member_repo: Optional member repo for backend-integrated subagent registration
             queue_manager: Shared MessageQueueManager instance (created if not provided)
             permission_resolver_scope: Permission request surface for this agent ("none" or "thread")
@@ -196,7 +194,6 @@ class LeonAgent:
         self.queue_manager = queue_manager or MessageQueueManager()
         self._chat_repos: dict | None = chat_repos
         self._thread_repo = thread_repo
-        self._entity_repo = entity_repo
         self._member_repo = member_repo
         self._web_app = web_app
         self._session_started = False
@@ -333,6 +330,27 @@ class LeonAgent:
         # Inject bootstrap into AgentService so sub-agents can fork from it
         if hasattr(self, "_agent_service"):
             self._agent_service._parent_bootstrap = self._bootstrap
+
+        # @@@entity-identity — inject chat identity so agent knows who it is in the social layer
+        if self._chat_repos:
+            repos = self._chat_repos
+            uid = repos.get("user_id")
+            owner_uid = repos.get("owner_user_id", "")
+            if uid:
+                member_repo = repos.get("member_repo")
+                me = member_repo.get_by_id(uid) if member_repo else None
+                owner_row = member_repo.get_by_id(owner_uid) if member_repo and owner_uid else None
+                name = me.name if me else uid
+                owner_name = owner_row.name if owner_row else "unknown"
+                self.system_prompt += (
+                    f"\n\n**Chat Identity:**\n"
+                    f"- Your name: {name}\n"
+                    f"- Your user_id: {uid}\n"
+                    f"- Your owner: {owner_name} (user_id: {owner_uid})\n"
+                    f"- When you receive a chat notification, READ the message with chat_read(), "
+                    f"then REPLY with chat_send(). Your text output goes to your owner's thread, "
+                    f"not to the chat — only chat_send() delivers to the other party.\n"
+                )
 
         # Create agent via QueryLoop (replaces LangGraph create_agent)
         self.agent = QueryLoop(
@@ -1216,7 +1234,6 @@ class LeonAgent:
             workspace_root=self.workspace_root,
             model_name=self.model_name,
             thread_repo=self._thread_repo,
-            entity_repo=self._entity_repo,
             member_repo=self._member_repo,
             queue_manager=self.queue_manager,
             shared_runs=self._background_runs,
@@ -1252,7 +1269,6 @@ class LeonAgent:
                     registry=self._tool_registry,
                     user_id=user_id,
                     owner_user_id=owner_user_id,
-                    entity_repo=repos.get("entity_repo"),
                     chat_service=repos.get("chat_service"),
                     chat_entity_repo=repos.get("chat_entity_repo"),
                     chat_message_repo=repos.get("chat_message_repo"),
@@ -1408,18 +1424,16 @@ class LeonAgent:
         if custom_prompt:
             prompt += f"\n\n**Custom Instructions:**\n{custom_prompt}"
 
-        # @@@entity-identity — inject chat identity so agent knows who it is in the social layer
+        # @@@chat-identity — inject chat identity so agent knows who it is in the social layer
         if self._chat_repos:
             repos = self._chat_repos
             uid = repos.get("user_id")
             owner_uid = repos.get("owner_user_id", "")
             if uid:
-                entity_repo = repos.get("entity_repo")
                 member_repo = repos.get("member_repo")
-                entity = entity_repo.get_by_id(uid) if entity_repo else None
-                self_member = member_repo.get_by_id(uid) if member_repo and not entity else None
+                self_member = member_repo.get_by_id(uid) if member_repo else None
                 owner_row = member_repo.get_by_id(owner_uid) if member_repo and owner_uid else None
-                name = entity.name if entity else (self_member.name if self_member else uid)
+                name = self_member.name if self_member else uid
                 owner_name = owner_row.name if owner_row else "unknown"
                 prompt += (
                     f"\n\n**Chat Identity:**\n"

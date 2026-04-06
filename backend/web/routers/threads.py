@@ -41,7 +41,7 @@ from backend.web.services.thread_launch_config_service import (
     save_last_confirmed_config,
     save_last_successful_config,
 )
-from backend.web.services.thread_naming import canonical_entity_name, sidebar_label
+from backend.web.services.thread_naming import sidebar_label
 from backend.web.services.thread_state_service import (
     get_lease_status,
     get_sandbox_info,
@@ -55,7 +55,6 @@ from sandbox.config import MountSpec
 from sandbox.manager import bind_thread_to_existing_lease
 from sandbox.recipes import normalize_recipe_snapshot, provider_type_from_name
 from sandbox.thread_context import set_current_thread_id
-from storage.contracts import EntityRow
 
 logger = logging.getLogger(__name__)
 
@@ -289,15 +288,14 @@ def _thread_payload(app: Any, thread_id: str, sandbox_type: str) -> dict[str, An
     if thread is None:
         raise HTTPException(404, "Thread not found")
     member = app.state.member_repo.get_by_id(thread["member_id"])
-    entity = app.state.entity_repo.get_by_id(thread["member_id"])
-    if member is None or entity is None:
-        raise HTTPException(500, f"Thread {thread_id} missing member/entity")
+    if member is None:
+        raise HTTPException(500, f"Thread {thread_id} missing member")
     return {
         "thread_id": thread_id,
         "sandbox": sandbox_type,
         "member_id": member.id,
         "member_name": member.name,
-        "entity_name": entity.name,
+        "entity_name": member.name,
         "branch_index": thread["branch_index"],
         "sidebar_label": sidebar_label(is_main=thread["is_main"], branch_index=thread["branch_index"]),
         "avatar_url": avatar_url(member.id, bool(member.avatar)),
@@ -576,28 +574,9 @@ def _create_owned_thread(
         branch_index=branch_index,
     )
 
-    # @@@entity-name-convention - entity display names derive from member + thread role, never sandbox strings.
-    entity_name = canonical_entity_name(agent_member.name, is_main=resolved_is_main, branch_index=branch_index)
-
-    # @@@entity-id-is-member-id - agent entity id = member_id (per-agent, not per-thread).
-    # thread_id field on the entity points to the current main thread.
-    # If entity already exists, update thread_id (main thread changed); otherwise create.
-    existing_entity = app.state.entity_repo.get_by_id(agent_member_id)
-    if existing_entity is not None:
-        if resolved_is_main:
-            app.state.entity_repo.update(agent_member_id, thread_id=new_thread_id, name=entity_name)
-        # Branch threads don't update the entity — it represents the main identity
-    else:
-        app.state.entity_repo.create(
-            EntityRow(
-                id=agent_member_id,
-                type="agent",
-                member_id=agent_member_id,
-                name=entity_name,
-                thread_id=new_thread_id if resolved_is_main else None,
-                created_at=time.time(),
-            )
-        )
+    # Update member's main_thread_id when creating a main thread
+    if resolved_is_main:
+        app.state.member_repo.update(agent_member_id, main_thread_id=new_thread_id)
 
     # Set thread state
     app.state.thread_sandbox[new_thread_id] = sandbox_type
@@ -650,7 +629,7 @@ def _create_owned_thread(
         "sandbox": sandbox_type,
         "member_id": agent_member_id,
         "member_name": agent_member.name,
-        "entity_name": entity_name,
+        "entity_name": agent_member.name,
         "branch_index": branch_index,
         "sidebar_label": sidebar_label(is_main=resolved_is_main, branch_index=branch_index),
         "avatar_url": avatar_url(agent_member_id, bool(agent_member.avatar)),
@@ -840,13 +819,12 @@ async def delete_thread(
         thread_data = app.state.thread_repo.get_by_id(thread_id)
         member_id = thread_data["member_id"] if thread_data else None
         app.state.thread_repo.delete(thread_id)
-        # Entity is keyed by member_id (shared across threads) — update its thread_id
-        # to the next main thread, or clear it if no threads remain
+        # Update member's main_thread_id if the deleted thread was the main one
         if member_id:
-            entity = app.state.entity_repo.get_by_id(member_id)
-            if entity and entity.thread_id == thread_id:
+            member = app.state.member_repo.get_by_id(member_id)
+            if member and member.main_thread_id == thread_id:
                 next_main = app.state.thread_repo.get_main_thread(member_id)
-                app.state.entity_repo.update(member_id, thread_id=next_main["id"] if next_main else None)
+                app.state.member_repo.update(member_id, main_thread_id=next_main["id"] if next_main else None)
 
     # Clean up thread-specific state
     app.state.thread_sandbox.pop(thread_id, None)

@@ -88,7 +88,6 @@ class ChatToolService:
         user_id: str,
         owner_id: str,
         *,
-        entity_repo: Any = None,
         messaging_service: Any = None,  # MessagingService (new)
         chat_member_repo: Any = None,  # SupabaseChatMemberRepo
         messages_repo: Any = None,  # SupabaseMessagesRepo
@@ -97,7 +96,6 @@ class ChatToolService:
     ) -> None:
         self._user_id = user_id
         self._owner_id = owner_id
-        self._entities = entity_repo
         self._messaging = messaging_service
         self._chat_members = chat_member_repo
         self._messages = messages_repo
@@ -115,7 +113,7 @@ class ChatToolService:
     def _format_msgs(self, msgs: list[dict], eid: str) -> str:
         lines = []
         for m in msgs:
-            sender = self._entities.get_by_id(m.get("sender_id", ""))
+            sender = self._member_repo.get_by_id(m.get("sender_id", ""))
             name = sender.name if sender else "unknown"
             tag = "you" if m.get("sender_id") == eid else name
             content = m.get("content", "")
@@ -198,7 +196,7 @@ class ChatToolService:
             elif entity_id:
                 chat_id = self._chat_members.find_chat_between(eid, entity_id)
                 if not chat_id:
-                    target = self._entities.get_by_id(entity_id)
+                    target = self._member_repo.get_by_id(entity_id)
                     name = target.name if target else entity_id
                     return f"No chat history with {name}."
             else:
@@ -278,7 +276,7 @@ class ChatToolService:
             elif entity_id:
                 if entity_id == eid:
                     raise RuntimeError("Cannot send a message to yourself.")
-                target = self._entities.get_by_id(entity_id)
+                target = self._member_repo.get_by_id(entity_id)
                 if not target:
                     raise RuntimeError(f"Entity not found: {entity_id}")
                 target_name = target.name
@@ -345,7 +343,7 @@ class ChatToolService:
                 return f"No messages matching '{query}'."
             lines = []
             for m in results:
-                sender = self._entities.get_by_id(m.get("sender_id", ""))
+                sender = self._member_repo.get_by_id(m.get("sender_id", ""))
                 name = sender.name if sender else "unknown"
                 lines.append(f"[{name}] {m.get('content', '')[:100]}")
             return "\n".join(lines)
@@ -378,7 +376,7 @@ class ChatToolService:
         eid = self._user_id
 
         def handle(search: str | None = None, type: str | None = None) -> str:
-            all_entities = self._entities.list_all()
+            all_entities = self._member_repo.list_all()
             entities = [e for e in all_entities if e.id != eid]
             if type:
                 entities = [e for e in entities if e.type == type]
@@ -386,19 +384,16 @@ class ChatToolService:
                 q = search.lower()
                 entities = [e for e in entities if q in e.name.lower()]
 
-            # Privacy filter: only show entities with a relationship (VISIT or HIRE)
-            # or entities owned by the same user (owner_id)
+            # Privacy filter: only show members with a relationship (VISIT or HIRE)
+            # or members owned by the same user (owner_id)
             if self._relationships:
+                owner_member = self._member_repo.get_by_id(self._owner_id) if self._member_repo else None
+                my_owner_id = getattr(owner_member, "owner_user_id", None) if owner_member else None
 
-                def _is_visible(e) -> bool:
-                    # Same owner → always visible
-                    if hasattr(e, "member_id"):
-                        mem = self._member_repo.get_by_id(e.member_id) if self._member_repo else None
-                        if mem and getattr(mem, "owner_user_id", None) == getattr(
-                            self._entities.get_by_id(self._owner_id), "member_id", None
-                        ):
-                            return True
-                    rel = self._relationships.get(eid, e.id)
+                def _is_visible(m) -> bool:
+                    if getattr(m, "owner_user_id", None) == my_owner_id:
+                        return True
+                    rel = self._relationships.get(eid, m.id)
                     if rel and rel.get("state") in ("visit", "hire"):
                         return True
                     return False
@@ -406,16 +401,16 @@ class ChatToolService:
                 entities = [e for e in entities if _is_visible(e)]
 
             if not entities:
-                return "No entities found."
+                return "No members found."
             lines = []
             for e in entities:
-                member = self._member_repo.get_by_id(e.member_id) if self._member_repo else None
                 owner_info = ""
-                if e.type == "agent" and member and getattr(member, "owner_user_id", None):
-                    owner_member = self._member_repo.get_by_id(member.owner_user_id)
+                if getattr(e, "owner_user_id", None):
+                    owner_member = self._member_repo.get_by_id(e.owner_user_id)
                     if owner_member:
                         owner_info = f" (owner: {owner_member.name})"
-                lines.append(f"- {e.name} [{e.type}] entity_id={e.id}{owner_info}")
+                mtype = e.type.value if hasattr(e.type, "value") else str(e.type)
+                lines.append(f"- {e.name} [{mtype}] user_id={e.id}{owner_info}")
             return "\n".join(lines)
 
         registry.register(
