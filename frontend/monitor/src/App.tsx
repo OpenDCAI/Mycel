@@ -4077,28 +4077,29 @@ function EvaluationDetailPage() {
   );
 }
 
-const SHELL_NAV = [
+// @@@nav-information-architecture - grouped rail: overview → infra → workload. Section headers add hierarchy without adding pages.
+const SHELL_NAV_GROUPS = [
   {
-    to: "/dashboard",
-    label: "Dashboard",
-    shortLabel: "DB",
-    testId: "nav-dashboard",
+    label: "Overview",
+    items: [
+      { to: "/dashboard", label: "Dashboard", shortLabel: "DB", testId: "nav-dashboard" },
+    ],
   },
   {
-    to: "/resources",
-    label: "Resources",
-    shortLabel: "RS",
-    testId: "nav-resources",
+    label: "Infrastructure",
+    items: [
+      { to: "/resources", label: "Resources", shortLabel: "RS", testId: "nav-resources" },
+      { to: "/leases", label: "Leases", shortLabel: "LS", testId: "nav-leases" },
+    ],
   },
   {
-    to: "/evaluation",
-    label: "Evaluations",
-    shortLabel: "EV",
-    testId: "nav-eval",
+    label: "Workload",
+    items: [
+      { to: "/evaluation", label: "Evaluations", shortLabel: "EV", testId: "nav-eval" },
+      { to: "/threads", label: "Threads", shortLabel: "TH", testId: "nav-threads" },
+      { to: "/traces", label: "Traces", shortLabel: "TR", testId: "nav-traces" },
+    ],
   },
-  { to: "/threads", label: "Threads", shortLabel: "TH", testId: "nav-threads" },
-  { to: "/traces", label: "Traces", shortLabel: "TR", testId: "nav-traces" },
-  { to: "/leases", label: "Leases", shortLabel: "LS", testId: "nav-leases" },
 ] as const;
 
 const GUIDE_SECTIONS = [
@@ -4225,13 +4226,18 @@ function Layout({ children }: { children: React.ReactNode }) {
           </div>
         </div>
         <nav className="console-nav">
-          {SHELL_NAV.map((item) => (
-            <NavLink key={item.to} data-testid={item.testId} to={item.to}>
-              <span className="console-nav-mark" aria-hidden="true">
-                {item.shortLabel}
-              </span>
-              <span>{item.label}</span>
-            </NavLink>
+          {SHELL_NAV_GROUPS.map((group) => (
+            <div key={group.label} className="console-nav-group">
+              <span className="console-nav-group-label">{group.label}</span>
+              {group.items.map((item) => (
+                <NavLink key={item.to} data-testid={item.testId} to={item.to}>
+                  <span className="console-nav-mark" aria-hidden="true">
+                    {item.shortLabel}
+                  </span>
+                  <span>{item.label}</span>
+                </NavLink>
+              ))}
+            </div>
           ))}
         </nav>
         <div className="console-sidebar-foot">
