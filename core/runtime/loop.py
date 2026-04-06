@@ -20,7 +20,7 @@ import json
 import logging
 import re
 import uuid
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncGenerator, Awaitable, Callable
 from dataclasses import dataclass
 from enum import StrEnum
 from types import SimpleNamespace
@@ -107,6 +107,187 @@ class _TrackedTool:
     status: str = "queued"
     task: asyncio.Task[ToolMessage] | None = None
     result: ToolMessage | None = None
+
+
+class StreamingToolExecutor:
+    def __init__(
+        self,
+        *,
+        execute_tool: Callable[[dict[str, Any], ToolUseContext | None], Awaitable[ToolMessage]],
+        is_concurrency_safe: Callable[[dict[str, Any]], bool],
+        lookup_tool: Callable[[str], Any | None],
+        tool_context: ToolUseContext | None,
+    ):
+        self._execute_tool = execute_tool
+        self._is_concurrency_safe = is_concurrency_safe
+        self._lookup_tool = lookup_tool
+        self._tool_context = tool_context
+        self._tracked: list[_TrackedTool] = []
+        self._discarded = False
+
+    def _tool_name(self, tool_call: dict[str, Any]) -> str:
+        return tool_call.get("name") or tool_call.get("function", {}).get("name", "")
+
+    async def add_tool(self, tool_call: dict[str, Any]) -> None:
+        if self._discarded:
+            return
+        name = self._tool_name(tool_call)
+        if self._lookup_tool(name) is None:
+            self._tracked.append(
+                _TrackedTool(
+                    order=len(self._tracked),
+                    tool_call=tool_call,
+                    is_concurrency_safe=False,
+                    status="completed",
+                    result=self._tool_error(tool_call, f"Tool '{name}' not found"),
+                )
+            )
+            return
+        tracked = _TrackedTool(
+            order=len(self._tracked),
+            tool_call=tool_call,
+            is_concurrency_safe=self._is_concurrency_safe(tool_call),
+        )
+        self._tracked.append(tracked)
+        self._process_queue()
+
+    async def get_completed_results(self) -> list[ToolMessage]:
+        await asyncio.sleep(0)
+        self._process_queue()
+        ready: list[ToolMessage] = []
+        for tracked in self._tracked:
+            if tracked.status == "yielded":
+                continue
+            if tracked.status == "completed" and tracked.result is not None:
+                tracked.status = "yielded"
+                ready.append(tracked.result)
+                continue
+            break
+        return ready
+
+    async def drain_remaining(self) -> list[ToolMessage]:
+        while True:
+            self._process_queue()
+            running = [tracked.task for tracked in self._tracked if tracked.status == "executing" and tracked.task is not None]
+            if not running:
+                break
+            await asyncio.wait(running, return_when=asyncio.FIRST_COMPLETED)
+        self._process_queue()
+        remaining: list[ToolMessage] = []
+        for tracked in self._tracked:
+            if tracked.status == "yielded":
+                continue
+            if tracked.status == "completed" and tracked.result is not None:
+                tracked.status = "yielded"
+                remaining.append(tracked.result)
+        return remaining
+
+    async def discard(self, reason: str) -> list[ToolMessage]:
+        # @@@streaming-tool-discard
+        # ql-05 must not leave orphaned tool tasks behind when streaming exits
+        # early. Synthetic error emission is still a later hardening pass, but
+        # task cleanup itself must happen now.
+        self._discarded = True
+        running: list[asyncio.Task[ToolMessage]] = []
+        for tracked in self._tracked:
+            if tracked.status == "queued":
+                tracked.status = "completed"
+                tracked.result = self._synthetic_error(tracked.tool_call, reason)
+                continue
+            if tracked.status == "executing" and tracked.task is not None:
+                tracked.task.cancel()
+                running.append(tracked.task)
+        if running:
+            await asyncio.gather(*running, return_exceptions=True)
+        for tracked in self._tracked:
+            if tracked.status == "executing":
+                tracked.status = "completed"
+                tracked.result = self._synthetic_error(tracked.tool_call, reason)
+        return await self.drain_remaining()
+
+    def _process_queue(self) -> None:
+        if self._discarded:
+            return
+        for tracked in self._tracked:
+            if tracked.status != "queued":
+                continue
+            if not self._can_execute(tracked):
+                break
+            tracked.status = "executing"
+            tracked.task = asyncio.create_task(self._run_tool(tracked))
+
+    def _can_execute(self, tracked: _TrackedTool) -> bool:
+        executing = [item for item in self._tracked if item.status == "executing"]
+        if not executing:
+            return True
+        if not tracked.is_concurrency_safe:
+            return False
+        return all(item.is_concurrency_safe for item in executing)
+
+    async def _run_tool(self, tracked: _TrackedTool) -> None:
+        # @@@streaming-tool-task-exit
+        # ql-05 cannot let middleware-level exceptions disappear into a dead
+        # task. Every tool_use must resolve to a ToolMessage, and queue
+        # progression must re-run immediately when a task exits.
+        try:
+            tracked.result = await self._execute_tool(tracked.tool_call, self._tool_context)
+            tracked.status = "completed"
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            tracked.result = self._tool_error(tracked.tool_call, str(exc))
+            tracked.status = "completed"
+        finally:
+            if self._should_abort_siblings(tracked):
+                await self._abort_siblings(
+                    excluding=tracked,
+                    reason="sibling aborted after bash error",
+                )
+            if not self._discarded:
+                self._process_queue()
+
+    def _should_abort_siblings(self, tracked: _TrackedTool) -> bool:
+        if tracked.result is None:
+            return False
+        return self._tool_name(tracked.tool_call).lower() == "bash" and "<tool_use_error>" in tracked.result.content
+
+    async def _abort_siblings(self, *, excluding: _TrackedTool, reason: str) -> None:
+        # @@@bash-sibling-abort
+        # Claude Code only fan-outs this abort for bash failures. Keep it
+        # local to the current executor iteration so the parent loop survives
+        # and later turns can continue with explicit tool errors.
+        self._discarded = True
+        running: list[asyncio.Task[ToolMessage]] = []
+        for tracked in self._tracked:
+            if tracked is excluding or tracked.status in {"completed", "yielded"}:
+                continue
+            if tracked.status == "queued":
+                tracked.status = "completed"
+                tracked.result = self._tool_error(tracked.tool_call, reason)
+                continue
+            if tracked.status == "executing" and tracked.task is not None:
+                tracked.task.cancel()
+                running.append(tracked.task)
+        if running:
+            await asyncio.gather(*running, return_exceptions=True)
+        for tracked in self._tracked:
+            if tracked is excluding or tracked.status != "executing":
+                continue
+            tracked.status = "completed"
+            tracked.result = self._tool_error(tracked.tool_call, reason)
+
+    def _synthetic_error(self, tool_call: dict[str, Any], reason: str) -> ToolMessage:
+        return self._tool_error(
+            tool_call,
+            f"streaming discarded: {reason}",
+        )
+
+    def _tool_error(self, tool_call: dict[str, Any], error_text: str) -> ToolMessage:
+        return ToolMessage(
+            content=f"<tool_use_error>{error_text}</tool_use_error>",
+            tool_call_id=tool_call.get("id", ""),
+            name=self._tool_name(tool_call),
+        )
 
 
 class QueryLoop:
@@ -692,7 +873,12 @@ class QueryLoop:
             call_messages.append(prepared_request.system_message)
         call_messages.extend(prepared_request.messages)
 
-        executor = _StreamingToolExecutor(loop=self, tool_context=tool_context)
+        executor = StreamingToolExecutor(
+            execute_tool=self._execute_single_tool,
+            is_concurrency_safe=self._tool_is_concurrency_safe,
+            lookup_tool=self._registry.get,
+            tool_context=tool_context,
+        )
         aggregate: AIMessageChunk | None = None
         seen_tool_ids: set[str] = set()
         streamed_tool_calls: list[dict[str, Any]] = []
@@ -1957,175 +2143,13 @@ class QueryLoop:
         return AIMessage(content=reply)
 
 
-class _StreamingToolExecutor:
+class _StreamingToolExecutor(StreamingToolExecutor):
     def __init__(self, loop: QueryLoop, tool_context: ToolUseContext | None):
-        self._loop = loop
-        self._tool_context = tool_context
-        self._tracked: list[_TrackedTool] = []
-        self._discarded = False
-
-    async def add_tool(self, tool_call: dict[str, Any]) -> None:
-        if self._discarded:
-            return
-        name = tool_call.get("name") or tool_call.get("function", {}).get("name", "")
-        if self._loop._registry.get(name) is None:
-            self._tracked.append(
-                _TrackedTool(
-                    order=len(self._tracked),
-                    tool_call=tool_call,
-                    is_concurrency_safe=False,
-                    status="completed",
-                    result=self._tool_error(tool_call, f"Tool '{name}' not found"),
-                )
-            )
-            return
-        tracked = _TrackedTool(
-            order=len(self._tracked),
-            tool_call=tool_call,
-            is_concurrency_safe=self._loop._tool_is_concurrency_safe(tool_call),
-        )
-        self._tracked.append(tracked)
-        self._process_queue()
-
-    async def get_completed_results(self) -> list[ToolMessage]:
-        await asyncio.sleep(0)
-        self._process_queue()
-        ready: list[ToolMessage] = []
-        for tracked in self._tracked:
-            if tracked.status == "yielded":
-                continue
-            if tracked.status == "completed" and tracked.result is not None:
-                tracked.status = "yielded"
-                ready.append(tracked.result)
-                continue
-            break
-        return ready
-
-    async def drain_remaining(self) -> list[ToolMessage]:
-        while True:
-            self._process_queue()
-            running = [tracked.task for tracked in self._tracked if tracked.status == "executing" and tracked.task is not None]
-            if not running:
-                break
-            await asyncio.wait(running, return_when=asyncio.FIRST_COMPLETED)
-        self._process_queue()
-        remaining: list[ToolMessage] = []
-        for tracked in self._tracked:
-            if tracked.status == "yielded":
-                continue
-            if tracked.status == "completed" and tracked.result is not None:
-                tracked.status = "yielded"
-                remaining.append(tracked.result)
-        return remaining
-
-    async def discard(self, reason: str) -> list[ToolMessage]:
-        # @@@streaming-tool-discard
-        # ql-05 must not leave orphaned tool tasks behind when streaming exits
-        # early. Synthetic error emission is still a later hardening pass, but
-        # task cleanup itself must happen now.
-        self._discarded = True
-        running: list[asyncio.Task[ToolMessage]] = []
-        for tracked in self._tracked:
-            if tracked.status == "queued":
-                tracked.status = "completed"
-                tracked.result = self._synthetic_error(tracked.tool_call, reason)
-                continue
-            if tracked.status == "executing" and tracked.task is not None:
-                tracked.task.cancel()
-                running.append(tracked.task)
-        if running:
-            await asyncio.gather(*running, return_exceptions=True)
-        for tracked in self._tracked:
-            if tracked.status == "executing":
-                tracked.status = "completed"
-                tracked.result = self._synthetic_error(tracked.tool_call, reason)
-        return await self.drain_remaining()
-
-    def _process_queue(self) -> None:
-        if self._discarded:
-            return
-        for tracked in self._tracked:
-            if tracked.status != "queued":
-                continue
-            if not self._can_execute(tracked):
-                break
-            tracked.status = "executing"
-            tracked.task = asyncio.create_task(self._run_tool(tracked))
-
-    def _can_execute(self, tracked: _TrackedTool) -> bool:
-        executing = [item for item in self._tracked if item.status == "executing"]
-        if not executing:
-            return True
-        if not tracked.is_concurrency_safe:
-            return False
-        return all(item.is_concurrency_safe for item in executing)
-
-    async def _run_tool(self, tracked: _TrackedTool) -> None:
-        # @@@streaming-tool-task-exit
-        # ql-05 cannot let middleware-level exceptions disappear into a dead
-        # task. Every tool_use must resolve to a ToolMessage, and queue
-        # progression must re-run immediately when a task exits.
-        try:
-            tracked.result = await self._loop._execute_single_tool(tracked.tool_call, self._tool_context)
-            tracked.status = "completed"
-        except asyncio.CancelledError:
-            raise
-        except Exception as exc:
-            tracked.result = self._tool_error(tracked.tool_call, str(exc))
-            tracked.status = "completed"
-        finally:
-            if self._should_abort_siblings(tracked):
-                await self._abort_siblings(
-                    excluding=tracked,
-                    reason="sibling aborted after bash error",
-                )
-            if not self._discarded:
-                self._process_queue()
-
-    def _should_abort_siblings(self, tracked: _TrackedTool) -> bool:
-        if tracked.result is None:
-            return False
-        name = tracked.tool_call.get("name") or tracked.tool_call.get("function", {}).get("name", "")
-        return name.lower() == "bash" and "<tool_use_error>" in tracked.result.content
-
-    async def _abort_siblings(self, *, excluding: _TrackedTool, reason: str) -> None:
-        # @@@bash-sibling-abort
-        # Claude Code only fan-outs this abort for bash failures. Keep it
-        # local to the current executor iteration so the parent loop survives
-        # and later turns can continue with explicit tool errors.
-        self._discarded = True
-        running: list[asyncio.Task[ToolMessage]] = []
-        for tracked in self._tracked:
-            if tracked is excluding or tracked.status in {"completed", "yielded"}:
-                continue
-            if tracked.status == "queued":
-                tracked.status = "completed"
-                tracked.result = self._tool_error(tracked.tool_call, reason)
-                continue
-            if tracked.status == "executing" and tracked.task is not None:
-                tracked.task.cancel()
-                running.append(tracked.task)
-        if running:
-            await asyncio.gather(*running, return_exceptions=True)
-        for tracked in self._tracked:
-            if tracked is excluding or tracked.status != "executing":
-                continue
-            tracked.status = "completed"
-            tracked.result = self._tool_error(tracked.tool_call, reason)
-
-    def _synthetic_error(self, tool_call: dict[str, Any], reason: str) -> ToolMessage:
-        return self._tool_error(
-            tool_call,
-            f"streaming discarded: {reason}",
-        )
-
-    def _tool_error(self, tool_call: dict[str, Any], error_text: str) -> ToolMessage:
-        name = tool_call.get("name") or tool_call.get("function", {}).get("name", "")
-        call_id = tool_call.get("id", "")
-        return ToolMessage(
-            content=f"<tool_use_error>{error_text}</tool_use_error>",
-            tool_call_id=call_id,
-            name=name,
+        super().__init__(
+            execute_tool=loop._execute_single_tool,
+            is_concurrency_safe=loop._tool_is_concurrency_safe,
+            lookup_tool=loop._registry.get,
+            tool_context=tool_context,
         )
 
 
