@@ -163,6 +163,22 @@ class TestSerializeMessage:
         assert result["display"] == {"showing": False}
 
 
+class TestOwnerVisibility:
+    def test_annotate_owner_visibility_preserves_explicit_hidden_display(self):
+        from core.runtime.visibility import annotate_owner_visibility
+
+        annotated, owner = annotate_owner_visibility(
+            [
+                {"type": "HumanMessage", "content": "hidden", "display": {"showing": False}},
+                {"type": "AIMessage", "content": "visible"},
+            ]
+        )
+
+        assert owner == "owner"
+        assert annotated[0]["display"] == {"showing": False}
+        assert annotated[1]["display"] == {"showing": True}
+
+
 # ---------------------------------------------------------------------------
 # RunEventBuffer + observe_run_events tests
 # ---------------------------------------------------------------------------
