@@ -30,7 +30,8 @@ router = APIRouter(prefix="/api/monitor")
 
 
 def get_db():
-    # @@@fastapi-threadpool-sqlite - sync endpoints may execute in worker threads; disable same-thread guard for shared request-scoped connection.
+    # @@@fastapi-threadpool-sqlite - sync endpoints may execute in worker
+    # threads; disable same-thread guard for shared request-scoped connection.
     db = connect_sqlite(SANDBOX_DB_PATH, row_factory=sqlite3.Row, check_same_thread=False)
     try:
         yield db
@@ -216,7 +217,9 @@ async def _run_evaluation_job(evaluation_id: str, payload: EvaluationCreateReque
     stdout_path = run_dir / "monitor_stdout.log"
     stderr_path = run_dir / "monitor_stderr.log"
     command = _build_run_slice_command(payload, evaluation_id)
-    # @@@monitor-eval-sandbox-env - pass sandbox selection via env so run_slice -> LeonAgent resolves non-local provider, and isolate sandbox state per evaluation run.
+    # @@@monitor-eval-sandbox-env - pass sandbox selection via env so
+    # run_slice -> LeonAgent resolves non-local provider, and isolate sandbox
+    # state per evaluation run.
     env = dict(os.environ)
     env["LEON_SANDBOX"] = payload.sandbox
     env["LEON_SANDBOX_DB_PATH"] = str(run_dir / "sandbox.db")
@@ -585,8 +588,11 @@ def _load_live_eval_session_progress(evaluation_id: str, cwd: str | None, notes:
     idle_minutes = float(row["idle_minutes"]) if row["idle_minutes"] is not None else None
     if total <= 0:
         return None
-    # @@@eval-progress-live-session - when thread mapping rows are not persisted yet, use per-run sandbox session states for true running/done counts.
-    # @@@eval-running-freshness - treat stale "active" sessions as non-running to avoid fake-running UI after runner exits unexpectedly.
+    # @@@eval-progress-live-session - when thread mapping rows are not
+    # persisted yet, use per-run sandbox session states for true running/done
+    # counts.
+    # @@@eval-running-freshness - treat stale "active" sessions as non-running
+    # to avoid fake-running UI after runner exits unexpectedly.
     stale_after_minutes = max(2.0, (idle_ttl_sec / 60.0) + 1.0)
     active_recent = bool(running > 0 and idle_minutes is not None and idle_minutes <= stale_after_minutes)
     running_effective = running if active_recent else 0
@@ -641,7 +647,9 @@ def _load_live_eval_sessions(evaluation_id: str, cwd: str | None, notes: str) ->
 
 
 def _is_eval_runner_alive(evaluation_id: str, notes: str) -> bool:
-    # @@@eval-runner-pid-liveness - after backend restart, task map is empty; use persisted runner pid as direct liveness source before session rows appear.
+    # @@@eval-runner-pid-liveness - after backend restart, task map is empty;
+    # use persisted runner pid as direct liveness source before session rows
+    # appear.
     m = re.search(r"\bpid=(\d+)\b", notes or "")
     if not m:
         return False
@@ -911,7 +919,9 @@ def _list_running_eval_checkpoint_threads() -> list[dict[str, str | None]]:
                 """
             ).fetchall()
         except sqlite3.OperationalError as exc:
-            # @@@compat-monitor-missing-eval-table - transplanted monitor must still render on databases that have never created evaluation tables.
+            # @@@compat-monitor-missing-eval-table - transplanted monitor must
+            # still render on databases that have never created evaluation
+            # tables.
             if "no such table: evaluation_jobs" in str(exc):
                 return []
             raise
@@ -1154,7 +1164,8 @@ def _load_checkpoint_events(thread_id: str, limit: int) -> tuple[list[dict], dic
             )
             counts["tool_result"] = counts.get("tool_result", 0) + 1
             seq += 1
-    # @@@checkpoint-trace-fallback - convert latest checkpoint messages into event-like rows so thread trace still renders when run_events are absent.
+    # @@@checkpoint-trace-fallback - convert latest checkpoint messages into
+    # event-like rows so thread trace still renders when run_events are absent.
     if limit > 0:
         events = events[-limit:]
     return events, counts
@@ -1271,28 +1282,21 @@ def list_threads(
         LEFT JOIN sandbox_leases sl ON cs.lease_id = sl.lease_id
         GROUP BY cs.thread_id
         ORDER BY MAX(cs.last_active_at) DESC
-        LIMIT ? OFFSET ?
     """,
-        (limit, offset),
     ).fetchall()
 
-    items = []
     seen_thread_ids = {str(row["thread_id"]) for row in rows if row["thread_id"]}
     checkpoint_threads = [row for row in _list_running_eval_checkpoint_threads() if row["thread_id"] not in seen_thread_ids]
     total = session_total + len(checkpoint_threads)
 
-    # @@@threads-pagination-mode-map - only load mode metadata for current page to keep list endpoint lightweight on large thread sets.
-    mode_map = load_thread_mode_map([row["thread_id"] for row in rows if row["thread_id"]])
     items = []
     for row in rows:
-        badge = make_badge(row["desired_state"], row["observed_state"])
-        mode_info = mode_map.get(row["thread_id"], {"thread_mode": "normal", "keep_full_trace": False})
         items.append(
             {
                 "thread_id": row["thread_id"],
                 "thread_url": f"/thread/{row['thread_id']}",
-                "thread_mode": mode_info["thread_mode"],
-                "keep_full_trace": mode_info["keep_full_trace"],
+                "thread_mode": "normal",
+                "keep_full_trace": False,
                 "session_count": row["session_count"],
                 "last_active": row["last_active"],
                 "last_active_ago": format_time_ago(row["last_active"]),
@@ -1302,7 +1306,7 @@ def list_threads(
                     "provider": row["provider_name"],
                     "instance_id": row["current_instance_id"],
                 },
-                "state_badge": badge,
+                "state_badge": make_badge(row["desired_state"], row["observed_state"]),
             }
         )
 
@@ -1334,6 +1338,18 @@ def list_threads(
 
     items.sort(key=lambda item: str(item.get("last_active") or ""), reverse=True)
     items = items[offset : offset + limit]
+
+    # @@@threads-pagination-mode-map - now that session threads and checkpoint threads share one sort order,
+    # load thread mode only for the current page instead of pre-paginating twice.
+    mode_map = load_thread_mode_map(
+        [str(item["thread_id"]) for item in items if item.get("thread_mode") != "evaluation" and item.get("thread_id")]
+    )
+    for item in items:
+        if item.get("thread_mode") == "evaluation":
+            continue
+        mode_info = mode_map.get(str(item["thread_id"]), {"thread_mode": "normal", "keep_full_trace": False})
+        item["thread_mode"] = mode_info["thread_mode"]
+        item["keep_full_trace"] = mode_info["keep_full_trace"]
 
     page = (offset // limit) + 1
     return {
@@ -1539,7 +1555,9 @@ def list_evaluations(
         for row in jobs:
             notes = row["notes"] or ""
             status = str(row["status"] or "pending")
-            # @@@monitor-eval-orphan-reconcile - if backend restarted and task map no longer tracks a running job, mark it error to avoid permanent fake-running rows.
+            # @@@monitor-eval-orphan-reconcile - if backend restarted and task
+            # map no longer tracks a running job, mark it error to avoid
+            # permanent fake-running rows.
             if status == "running" and row["evaluation_id"] not in running_jobs:
                 if _is_eval_runner_alive(str(row["evaluation_id"]), notes):
                     if "runner_lost_pid_alive:" not in notes:
@@ -1592,7 +1610,9 @@ def list_evaluations(
             threads_started = running_count
             live_session_progress = _load_live_eval_session_progress(str(row["evaluation_id"]), row["cwd"], notes)
             if status == "running":
-                # @@@eval-live-progress-from-checkpoints - thread rows are ingested after runner exits; use live checkpoint thread ids for in-flight progress.
+                # @@@eval-live-progress-from-checkpoints - thread rows are
+                # ingested after runner exits; use live checkpoint thread ids
+                # for in-flight progress.
                 running_count = max(running_count, _count_live_eval_threads(str(row["evaluation_id"])))
                 threads_total = max(threads_total, running_count)
                 if live_session_progress:
@@ -1829,7 +1849,9 @@ def get_evaluation_detail(evaluation_id: str, request: Request, db: sqlite3.Conn
 
     total = len(thread_items)
     if status == "running":
-        # @@@eval-live-progress-from-checkpoints - evaluation thread mappings are persisted at the end, so derive interim running count from live checkpoint data.
+        # @@@eval-live-progress-from-checkpoints - evaluation thread mappings
+        # are persisted at the end, so derive interim running count from live
+        # checkpoint data.
         checkpoint_started = _count_live_eval_threads(evaluation_id)
         running_count = max(running_count, checkpoint_started)
         total = max(total, running_count)

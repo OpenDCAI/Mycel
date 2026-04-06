@@ -10,6 +10,8 @@
 
 **Execution note:** `#209` remains useful transplant material for the resource split, but active continuation moved to `#210` because the correct monitor baseline is the compat monitor from `PR #182`, not the reduced dev monitor shell. The frontend scope here stays bounded: keep the full compat operator surface, switch it to a lighter and clearer ops shell, and prove it with real Playwright traces instead of a component-only pass.
 
+**Additional sequencing note after live operator review:** before this branch is mergeable as a monitor base, the next follow-up cuts must address four honesty seams now visible in the real UI: `D1` threads pagination contract, `D2` provisional evaluation detail as an operator surface, `D3` lease orphan/diverged regrouping, and `D4` dashboard + global resources entry.
+
 ---
 
 ### Task 1: Lock Storage Abstraction For Monitor Reads

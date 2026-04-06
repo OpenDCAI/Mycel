@@ -148,3 +148,48 @@ This design chooses option 1 in architecture, but decomposes the implementation 
   - visible proof: monitor shell/logo plus leases table headers
   - trace proof: browser requests include `/api/monitor/leases` and exclude `/api/resources/*`
 - Small frontend testability improvements are allowed when they are selector-only changes, especially `data-testid` markers on product resource page elements and provider cards.
+
+## Newly Surfaced Defects And Follow-up Slices
+
+These are not vague “polish later” notes. They are concrete seams that now block an honest first merge of the monitor base.
+
+### Slice D1: Threads Pagination Honesty
+
+- Current defect:
+  - `/api/monitor/threads?offset=50&limit=50` returns `items=[]` while still reporting `total=74`, `page=2`, and `has_next=true`.
+  - The page therefore shows impossible copy like `Showing 51-50 of 74`.
+- Root cause:
+  - `backend/web/monitor.py::list_threads()` paginates once in SQL, appends checkpoint-only evaluation threads, then slices again with `items[offset:offset+limit]`.
+- Required outcome:
+  - single pagination semantic
+  - truthful `has_next/next_offset`
+  - no inverted count labels
+
+### Slice D2: Evaluation Provisional Operator Surface
+
+- Current defect:
+  - real provisional eval detail technically renders, but operator-facing meaning is weak enough that the page reads like “nothing is there”.
+- Required outcome:
+  - provisional state must explain what exists now, what is still pending, where logs/artifacts live, and what the operator should do next.
+  - this is a backend-first surface; if new fields are needed, add them to the payload instead of making the frontend guess from free-text notes.
+
+### Slice D3: Lease Semantics And Regrouping
+
+- Current defect:
+  - `/leases` currently dumps raw orphan/diverged rows with minimal explanation.
+  - operator cannot tell whether they are seeing stale history, expected cleanup lag, or a real infrastructure problem.
+- Required outcome:
+  - keep raw/global truth available
+  - add explicit categorization/regrouping for active, diverged, orphan, and historical leases
+  - reduce “system looks broken” confusion without hiding the raw facts
+
+### Slice D4: Dashboard Entry And Global Resources Surface
+
+- Current defect:
+  - monitor still drops operators straight into a list page
+  - monitor has no first-class global resources surface even though `/api/monitor/resources` already exists
+  - the current top-nav caption is redundant and should be removed
+- Required outcome:
+  - add a dashboard landing page
+  - add a monitor resources entry, likely by transplanting/reusing the existing `ResourcesPage` visual structure against the global monitor contract
+  - keep product `/resources` on the user-scoped contract and keep monitor resources global
