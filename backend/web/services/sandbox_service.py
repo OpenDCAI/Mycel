@@ -74,6 +74,7 @@ def list_user_leases(
                     "recipe": row.get("recipe_json"),
                     "observed_state": row.get("observed_state"),
                     "desired_state": row.get("desired_state"),
+                    "created_at": row.get("created_at"),
                     "cwd": row.get("cwd"),
                     "thread_ids": [],
                     "agents": [],

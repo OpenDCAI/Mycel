@@ -45,6 +45,7 @@ def test_list_user_leases_hides_subagent_threads_and_deduplicates_visible_agents
             "recipe_json": None,
             "observed_state": "running",
             "desired_state": "running",
+            "created_at": "2026-04-07T10:00:00Z",
             "cwd": "/home/daytona/files/app",
             "thread_id": "thread-parent",
         },
@@ -55,6 +56,7 @@ def test_list_user_leases_hides_subagent_threads_and_deduplicates_visible_agents
             "recipe_json": None,
             "observed_state": "running",
             "desired_state": "running",
+            "created_at": "2026-04-07T10:00:00Z",
             "cwd": "/home/daytona/files/app",
             "thread_id": "subagent-deadbeef",
         },
@@ -103,6 +105,7 @@ def test_list_user_leases_hides_subagent_threads_and_deduplicates_visible_agents
             },
             "observed_state": "running",
             "desired_state": "running",
+            "created_at": "2026-04-07T10:00:00Z",
             "cwd": "/home/daytona/files/app",
             "thread_ids": ["thread-parent"],
             "agents": [
