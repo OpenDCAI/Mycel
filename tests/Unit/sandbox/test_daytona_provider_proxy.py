@@ -1,5 +1,9 @@
 """Unit tests for Daytona local toolbox URL normalization."""
 
+import sys
+from types import ModuleType
+from typing import Any, cast
+
 import pytest
 
 from sandbox.providers.daytona import DaytonaProvider
@@ -24,16 +28,23 @@ def test_daytona_provider_leaves_remote_toolbox_proxy_url_unchanged():
 
 
 def test_daytona_provider_passes_target_through_sdk_config(monkeypatch: pytest.MonkeyPatch):
-    import daytona_sdk
-
     captured: dict[str, object] = {}
 
+    class FakeConfig:
+        def __init__(self, *, api_key: str, api_url: str, target: str) -> None:
+            self.api_key = api_key
+            self.api_url = api_url
+            self.target = target
+
     class FakeClient:
-        def __init__(self, config):
+        def __init__(self, config: FakeConfig) -> None:
             captured["config"] = config
             self._get_proxy_toolbox_url = lambda sandbox_id, region_id: "http://proxy/toolbox"
 
-    monkeypatch.setattr(daytona_sdk, "Daytona", FakeClient)
+    fake_module = cast(Any, ModuleType("daytona_sdk"))
+    fake_module.Daytona = FakeClient
+    fake_module.DaytonaConfig = FakeConfig
+    monkeypatch.setitem(sys.modules, "daytona_sdk", fake_module)
 
     provider = DaytonaProvider(api_key="test-key", api_url="http://daytona.test/api", target="self-host")
 
