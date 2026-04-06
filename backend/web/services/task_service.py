@@ -42,10 +42,10 @@ def _enrich_task_thread_members(tasks: list[dict[str, Any]]) -> list[dict[str, A
     return enriched
 
 
-def get_task(task_id: str) -> dict[str, Any] | None:
+def get_task(task_id: str, owner_user_id: str | None = None) -> dict[str, Any] | None:
     repo = _repo()
     try:
-        return repo.get(task_id)
+        return repo.get(task_id, owner_user_id=owner_user_id)
     finally:
         repo.close()
 
@@ -66,33 +66,33 @@ def create_task(**fields: Any) -> dict[str, Any]:
         repo.close()
 
 
-def update_task(task_id: str, **fields: Any) -> dict[str, Any] | None:
+def update_task(task_id: str, owner_user_id: str | None = None, **fields: Any) -> dict[str, Any] | None:
     repo = _repo()
     try:
-        return repo.update(task_id, **fields)
+        return repo.update(task_id, owner_user_id=owner_user_id, **fields)
     finally:
         repo.close()
 
 
-def delete_task(task_id: str) -> bool:
+def delete_task(task_id: str, owner_user_id: str | None = None) -> bool:
     repo = _repo()
     try:
-        return repo.delete(task_id)
+        return repo.delete(task_id, owner_user_id=owner_user_id)
     finally:
         repo.close()
 
 
-def bulk_delete_tasks(ids: list[str]) -> int:
+def bulk_delete_tasks(ids: list[str], owner_user_id: str | None = None) -> int:
     repo = _repo()
     try:
-        return repo.bulk_delete(ids)
+        return repo.bulk_delete(ids, owner_user_id=owner_user_id)
     finally:
         repo.close()
 
 
-def bulk_update_task_status(ids: list[str], status: str) -> int:
+def bulk_update_task_status(ids: list[str], status: str, owner_user_id: str | None = None) -> int:
     repo = _repo()
     try:
-        return repo.bulk_update_status(ids, status)
+        return repo.bulk_update_status(ids, status, owner_user_id=owner_user_id)
     finally:
         repo.close()

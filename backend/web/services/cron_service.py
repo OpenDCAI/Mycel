@@ -52,13 +52,13 @@ class CronService:
             self._task = None
         logger.info("[cron-service] stopped")
 
-    async def trigger_job(self, job_id: str) -> dict[str, Any] | None:
+    async def trigger_job(self, job_id: str, owner_user_id: str | None = None) -> dict[str, Any] | None:
         """Manually trigger a cron job. Creates a task from template.
 
         Returns the created task dict, or None if the job doesn't exist,
         is disabled, or has an invalid template.
         """
-        job = await asyncio.to_thread(cron_job_service.get_cron_job, job_id)
+        job = await asyncio.to_thread(cron_job_service.get_cron_job, job_id, owner_user_id=owner_user_id)
         if job is None:
             return None
         if not job.get("enabled"):
@@ -76,12 +76,18 @@ class CronService:
         task_fields: dict[str, Any] = {k: v for k, v in template.items() if k in _ALLOWED_TEMPLATE_KEYS}
         task_fields["source"] = "cron"
         task_fields["cron_job_id"] = job_id
+        task_fields["owner_user_id"] = job.get("owner_user_id")
 
         task = await asyncio.to_thread(task_service.create_task, **task_fields)
 
         # Update last_run_at on the cron job
         now_ms = int(time.time() * 1000)
-        await asyncio.to_thread(cron_job_service.update_cron_job, job_id, last_run_at=now_ms)
+        await asyncio.to_thread(
+            cron_job_service.update_cron_job,
+            job_id,
+            owner_user_id=job.get("owner_user_id"),
+            last_run_at=now_ms,
+        )
 
         logger.info("[cron-service] triggered job %s → task %s", job_id, task.get("id"))
         return task

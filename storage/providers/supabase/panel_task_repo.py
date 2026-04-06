@@ -49,9 +49,12 @@ class SupabasePanelTaskRepo:
         )
         return [self._deserialize(r) for r in rows]
 
-    def get(self, task_id: str) -> dict[str, Any] | None:
+    def get(self, task_id: str, owner_user_id: str | None = None) -> dict[str, Any] | None:
+        query = self._table().select("*").eq("id", task_id)
+        if owner_user_id is not None:
+            query = query.eq("owner_user_id", owner_user_id)
         rows = q.rows(
-            self._table().select("*").eq("id", task_id).execute(),
+            query.execute(),
             _REPO,
             "get",
         )
@@ -99,7 +102,7 @@ class SupabasePanelTaskRepo:
         ).execute()
         return self.get(task_id) or {}
 
-    def update(self, task_id: str, **fields: Any) -> dict[str, Any] | None:
+    def update(self, task_id: str, owner_user_id: str | None = None, **fields: Any) -> dict[str, Any] | None:
         allowed = {
             "title",
             "description",
@@ -119,29 +122,38 @@ class SupabasePanelTaskRepo:
         }
         updates = {k: v for k, v in fields.items() if k in allowed and v is not None}
         if not updates:
-            return self.get(task_id)
-        self._table().update(updates).eq("id", task_id).execute()
-        return self.get(task_id)
+            return self.get(task_id, owner_user_id=owner_user_id)
+        query = self._table().update(updates).eq("id", task_id)
+        if owner_user_id is not None:
+            query = query.eq("owner_user_id", owner_user_id)
+        query.execute()
+        return self.get(task_id, owner_user_id=owner_user_id)
 
-    def delete(self, task_id: str) -> bool:
+    def delete(self, task_id: str, owner_user_id: str | None = None) -> bool:
+        query = self._table().delete().eq("id", task_id)
+        if owner_user_id is not None:
+            query = query.eq("owner_user_id", owner_user_id)
         rows = q.rows(
-            self._table().delete().eq("id", task_id).execute(),
+            query.execute(),
             _REPO,
             "delete",
         )
         return len(rows) > 0
 
-    def bulk_delete(self, ids: list[str]) -> int:
+    def bulk_delete(self, ids: list[str], owner_user_id: str | None = None) -> int:
         if not ids:
             return 0
+        query = q.in_(self._table().delete(), "id", ids, _REPO, "bulk_delete")
+        if owner_user_id is not None:
+            query = query.eq("owner_user_id", owner_user_id)
         rows = q.rows(
-            q.in_(self._table().delete(), "id", ids, _REPO, "bulk_delete").execute(),
+            query.execute(),
             _REPO,
             "bulk_delete",
         )
         return len(rows)
 
-    def bulk_update_status(self, ids: list[str], status: str) -> int:
+    def bulk_update_status(self, ids: list[str], status: str, owner_user_id: str | None = None) -> int:
         if not ids:
             return 0
         updates: dict[str, Any] = {"status": status}
@@ -149,8 +161,11 @@ class SupabasePanelTaskRepo:
             updates["progress"] = 100
         elif status == "pending":
             updates["progress"] = 0
+        query = q.in_(self._table().update(updates), "id", ids, _REPO, "bulk_update_status")
+        if owner_user_id is not None:
+            query = query.eq("owner_user_id", owner_user_id)
         rows = q.rows(
-            q.in_(self._table().update(updates), "id", ids, _REPO, "bulk_update_status").execute(),
+            query.execute(),
             _REPO,
             "bulk_update_status",
         )

@@ -195,7 +195,7 @@ async def bulk_update_status(
     req: BulkTaskStatusRequest,
     user_id: Annotated[str, Depends(get_current_user_id)],
 ) -> dict[str, Any]:
-    count = await asyncio.to_thread(task_service.bulk_update_task_status, req.ids, req.status)
+    count = await asyncio.to_thread(task_service.bulk_update_task_status, req.ids, req.status, owner_user_id=user_id)
     return {"updated": count}
 
 
@@ -204,7 +204,7 @@ async def bulk_delete_tasks(
     req: BulkDeleteTasksRequest,
     user_id: Annotated[str, Depends(get_current_user_id)],
 ) -> dict[str, Any]:
-    count = await asyncio.to_thread(task_service.bulk_delete_tasks, req.ids)
+    count = await asyncio.to_thread(task_service.bulk_delete_tasks, req.ids, owner_user_id=user_id)
     return {"deleted": count}
 
 
@@ -214,7 +214,7 @@ async def update_task(
     req: UpdateTaskRequest,
     user_id: Annotated[str, Depends(get_current_user_id)],
 ) -> dict[str, Any]:
-    item = await asyncio.to_thread(task_service.update_task, task_id, **req.model_dump())
+    item = await asyncio.to_thread(task_service.update_task, task_id, owner_user_id=user_id, **req.model_dump())
     if not item:
         raise HTTPException(404, "Task not found")
     return item
@@ -225,7 +225,7 @@ async def delete_task(
     task_id: str,
     user_id: Annotated[str, Depends(get_current_user_id)],
 ) -> dict[str, Any]:
-    ok = await asyncio.to_thread(task_service.delete_task, task_id)
+    ok = await asyncio.to_thread(task_service.delete_task, task_id, owner_user_id=user_id)
     if not ok:
         raise HTTPException(404, "Task not found")
     return {"success": True}
@@ -268,7 +268,7 @@ async def update_cron_job(
     fields = req.model_dump(exclude_none=True)
     if "enabled" in fields:
         fields["enabled"] = int(fields["enabled"])
-    job = await asyncio.to_thread(cron_job_service.update_cron_job, job_id, **fields)
+    job = await asyncio.to_thread(cron_job_service.update_cron_job, job_id, owner_user_id=user_id, **fields)
     if not job:
         raise HTTPException(404, "Cron job not found")
     return {"item": job}
@@ -279,7 +279,7 @@ async def delete_cron_job(
     job_id: str,
     user_id: Annotated[str, Depends(get_current_user_id)],
 ) -> dict[str, Any]:
-    ok = await asyncio.to_thread(cron_job_service.delete_cron_job, job_id)
+    ok = await asyncio.to_thread(cron_job_service.delete_cron_job, job_id, owner_user_id=user_id)
     if not ok:
         raise HTTPException(404, "Cron job not found")
     return {"ok": True}
@@ -294,7 +294,7 @@ async def trigger_cron_job(
     cron_service = getattr(request.app.state, "cron_service", None)
     if not cron_service:
         raise HTTPException(503, "Cron service not available")
-    task = await cron_service.trigger_job(job_id)
+    task = await cron_service.trigger_job(job_id, owner_user_id=user_id)
     if not task:
         raise HTTPException(404, "Cron job not found or disabled")
     return {"item": task}
