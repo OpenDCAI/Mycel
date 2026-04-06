@@ -1086,8 +1086,8 @@ function MonitorResourcesPage() {
                       {selectedLeaseGroup == null
                         ? "full provider truth surface"
                         : effectiveSessionScope === "provider"
-                        ? "full provider truth surface"
-                        : "scoped to selected lease"}
+                          ? "full provider truth surface"
+                          : "scoped to selected lease"}
                     </p>
                   </div>
                   {selectedLeaseGroup ? (
@@ -1715,7 +1715,8 @@ function ThreadDetailPage() {
   );
   const visibleRelatedLeases = Array.isArray(data?.related_leases?.items)
     ? data.related_leases.items.filter(
-        (lease: any) => !sessionLeaseIds.has(String(lease?.lease_id || "").trim()),
+        (lease: any) =>
+          !sessionLeaseIds.has(String(lease?.lease_id || "").trim()),
       )
     : [];
 
@@ -1775,7 +1776,8 @@ function ThreadDetailPage() {
         </table>
       </section>
 
-      {(visibleRelatedLeases.length > 0 || data.related_leases.items.length === 0) && (
+      {(visibleRelatedLeases.length > 0 ||
+        data.related_leases.items.length === 0) && (
         <section>
           <h2>{data.related_leases.title}</h2>
           <ul>
