@@ -317,6 +317,15 @@ class QueryLoop:
     The checkpointer attribute is set post-construction (mirrors create_agent pattern).
     """
 
+    @property
+    def checkpointer(self) -> Any:
+        return self._checkpointer
+
+    @checkpointer.setter
+    def checkpointer(self, value: Any) -> None:
+        self._checkpointer = value
+        self._checkpoint_store = LangGraphCheckpointStore(value) if value is not None else None
+
     def __init__(
         self,
         model: Any,
@@ -334,7 +343,7 @@ class QueryLoop:
         self.system_prompt = system_prompt
         self.middleware = middleware
         self.checkpointer = checkpointer
-        self._checkpoint_store: CheckpointStore | None = LangGraphCheckpointStore(checkpointer) if checkpointer is not None else None
+        self._checkpoint_store: CheckpointStore | None
         self._registry = registry
         self._app_state = app_state
         self._runtime = runtime

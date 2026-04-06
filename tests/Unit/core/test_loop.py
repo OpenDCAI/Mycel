@@ -559,6 +559,21 @@ async def test_query_loop_saves_thread_state_via_checkpoint_store():
 
 
 @pytest.mark.asyncio
+async def test_query_loop_rebuilds_checkpoint_store_when_checkpointer_is_set_later():
+    checkpointer = _MemoryCheckpointer()
+    loop = make_loop(
+        model=mock_model_no_tools("unused"),
+        app_state=AppState(),
+        checkpointer=None,
+    )
+
+    loop.checkpointer = checkpointer
+    await loop._save_messages("late-store-thread", [HumanMessage(content="persist me")])
+
+    assert checkpointer.store["late-store-thread"]["channel_values"]["messages"][0].content == "persist me"
+
+
+@pytest.mark.asyncio
 async def test_query_loop_aclear_wipes_real_async_sqlite_saver_history():
     db_path = Path(tempfile.mkdtemp()) / "checkpoints.db"
     conn = await connect_sqlite_async(db_path)
