@@ -33,6 +33,11 @@ class SQLiteRunEventRepo:
         if self._own_conn:
             self._conn.close()
 
+    def _require_lastrowid(self, row_id: int | None) -> int:
+        if row_id is None:
+            raise RuntimeError("SQLite run event repo insert returned no rowid")
+        return int(row_id)
+
     def append_event(
         self,
         thread_id: str,
@@ -51,7 +56,7 @@ class SQLiteRunEventRepo:
                 (thread_id, run_id, event_type, payload, message_id),
             )
             self._conn.commit()
-            return int(cursor.lastrowid)
+            return self._require_lastrowid(cursor.lastrowid)
 
     def list_events(
         self,

@@ -44,6 +44,12 @@ def _get_lease(store, lease_id):
     return lease_from_row(row, store.db_path)
 
 
+def _require_instance(lease):
+    instance = lease.get_instance()
+    assert instance is not None
+    return instance
+
+
 class TestSandboxInstance:
     """Test SandboxInstance dataclass."""
 
@@ -84,6 +90,12 @@ class TestLeaseRepo:
         assert lease.get_instance() is None
         assert lease.needs_refresh is False
         assert lease.refresh_hint_at is None
+
+    def test_create_lease_fails_loudly_if_post_create_reload_missing(self, store, monkeypatch):
+        monkeypatch.setattr(store, "get", lambda _lease_id: None)
+
+        with pytest.raises(RuntimeError, match="failed to load lease after create"):
+            store.create(lease_id="lease-123", provider_name="e2b")
 
     def test_get_lease(self, store):
         """Test retrieving lease by lease_id."""
@@ -157,6 +169,26 @@ class TestLeaseRepo:
         assert found_row is not None
         assert found_row["lease_id"] == "lease-1"
 
+    def test_adopt_instance_fails_loudly_if_missing_lease_still_cannot_be_loaded(self, store, monkeypatch):
+        rows = iter([None, None])
+
+        monkeypatch.setattr(store, "get", lambda _lease_id: next(rows))
+        monkeypatch.setattr(
+            store,
+            "create",
+            lambda **_kwargs: {
+                "lease_id": "lease-1",
+                "provider_name": "test-provider",
+            },
+        )
+
+        with pytest.raises(RuntimeError, match="failed to load lease after adopt_instance bootstrap"):
+            store.adopt_instance(
+                lease_id="lease-1",
+                provider_name="test-provider",
+                instance_id="inst-123",
+            )
+
 
 class TestSQLiteLease:
     """Test SQLiteLease instance management."""
@@ -214,7 +246,7 @@ class TestSQLiteLease:
 
         mock_provider.pause_session.return_value = True
         lease.pause_instance(mock_provider)
-        assert lease.get_instance().status == "paused"
+        assert _require_instance(lease).status == "paused"
 
         mock_provider.get_session_status.return_value = "running"
         instance = lease.ensure_active_instance(mock_provider)
@@ -222,8 +254,7 @@ class TestSQLiteLease:
 
         reloaded = _get_lease(store, "lease-1")
         assert reloaded is not None
-        assert reloaded.get_instance() is not None
-        assert reloaded.get_instance().status == "running"
+        assert _require_instance(reloaded).status == "running"
 
     def test_invalidation_forces_refresh_even_when_snapshot_fresh(self, store, mock_provider):
         lease = _create_lease(store, "lease-1", "test-provider")
@@ -289,7 +320,7 @@ class TestSQLiteLease:
         result = lease.pause_instance(mock_provider)
 
         assert result is True
-        assert lease.get_instance().status == "paused"
+        assert _require_instance(lease).status == "paused"
         mock_provider.pause_session.assert_called_once_with("inst-123")
 
     def test_resume_instance(self, store, mock_provider):
@@ -311,7 +342,7 @@ class TestSQLiteLease:
         result = lease.resume_instance(mock_provider)
 
         assert result is True
-        assert lease.get_instance().status == "running"
+        assert _require_instance(lease).status == "running"
         mock_provider.resume_session.assert_called_once_with("inst-123")
 
     def test_instance_persists_across_retrieval(self, store, mock_provider):
@@ -397,12 +428,12 @@ class TestLeaseIntegration:
         # Pause
         mock_provider.pause_session.return_value = True
         lease.pause_instance(mock_provider)
-        assert lease.get_instance().status == "paused"
+        assert _require_instance(lease).status == "paused"
 
         # Resume
         mock_provider.resume_session.return_value = True
         lease.resume_instance(mock_provider)
-        assert lease.get_instance().status == "running"
+        assert _require_instance(lease).status == "running"
 
         # Destroy
         lease.destroy_instance(mock_provider)

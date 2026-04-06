@@ -72,16 +72,24 @@ class SQLitePanelTaskRepo:
         if row is None:
             return None
         data = dict(row)
-        data["status"] = TASK_STATUS_ALIASES.get(data.get("status"), data.get("status"))
+        raw_status = data.get("status")
+        if isinstance(raw_status, str):
+            data["status"] = TASK_STATUS_ALIASES.get(raw_status, raw_status)
         try:
-            data["tags"] = json.loads(data.get("tags") or "[]")
+            raw_tags = data.get("tags")
+            data["tags"] = json.loads(raw_tags) if isinstance(raw_tags, str) and raw_tags else []
         except (json.JSONDecodeError, TypeError):
             data["tags"] = []
         return data
 
     def list_all(self) -> list[dict[str, Any]]:
         rows = self._conn.execute("SELECT * FROM panel_tasks ORDER BY created_at DESC").fetchall()
-        return [self._deserialize(row) for row in rows if row is not None]
+        items: list[dict[str, Any]] = []
+        for row in rows:
+            item = self._deserialize(row)
+            if item is not None:
+                items.append(item)
+        return items
 
     def get(self, task_id: str) -> dict[str, Any] | None:
         row = self._conn.execute("SELECT * FROM panel_tasks WHERE id = ?", (task_id,)).fetchone()

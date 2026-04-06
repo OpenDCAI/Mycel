@@ -24,6 +24,11 @@ class SupabaseLeaseRepo:
     def close(self) -> None:
         return None
 
+    def _require_lease(self, row: dict[str, Any] | None, *, lease_id: str, operation: str) -> dict[str, Any]:
+        if row is None:
+            raise RuntimeError(f"Supabase lease repo failed to load lease after {operation}: {lease_id}")
+        return row
+
     def _leases(self) -> Any:
         return self._client.table(_LEASES_TABLE)
 
@@ -94,10 +99,7 @@ class SupabaseLeaseRepo:
                 "updated_at": now,
             }
         ).execute()
-        result = self.get(lease_id)
-        if result is None:
-            raise RuntimeError(f"Supabase lease repo failed to load lease after create: {lease_id}")
-        return result
+        return self._require_lease(self.get(lease_id), lease_id=lease_id, operation="create")
 
     def find_by_instance(self, *, provider_name: str, instance_id: str) -> dict[str, Any] | None:
         rows = q.rows(
@@ -127,7 +129,11 @@ class SupabaseLeaseRepo:
         existing = self.get(lease_id)
         if existing is None:
             self.create(lease_id=lease_id, provider_name=provider_name)
-            existing = self.get(lease_id)
+            existing = self._require_lease(
+                self.get(lease_id),
+                lease_id=lease_id,
+                operation="adopt_instance bootstrap",
+            )
 
         if existing["provider_name"] != provider_name:
             raise RuntimeError(f"Lease provider mismatch during adopt: lease={existing['provider_name']}, requested={provider_name}")
@@ -166,10 +172,7 @@ class SupabaseLeaseRepo:
             }
         ).execute()
 
-        adopted = self.get(lease_id)
-        if adopted is None:
-            raise RuntimeError(f"Supabase lease repo failed to load adopted lease: {lease_id}")
-        return adopted
+        return self._require_lease(self.get(lease_id), lease_id=lease_id, operation="adopt_instance")
 
     def mark_needs_refresh(self, lease_id: str, hint_at: Any = None) -> bool:
         from datetime import datetime as _dt

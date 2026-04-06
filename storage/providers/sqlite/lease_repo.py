@@ -44,6 +44,11 @@ class SQLiteLeaseRepo:
         if self._own_conn:
             self._conn.close()
 
+    def _require_lease(self, row: dict[str, Any] | None, *, lease_id: str, operation: str) -> dict[str, Any]:
+        if row is None:
+            raise RuntimeError(f"SQLite lease repo failed to load lease after {operation}: {lease_id}")
+        return row
+
     def get(self, lease_id: str) -> dict[str, Any] | None:
         with self._lock:
             self._conn.row_factory = sqlite3.Row
@@ -127,7 +132,7 @@ class SQLiteLeaseRepo:
                 ),
             )
             self._conn.commit()
-        return self.get(lease_id)  # type: ignore[return-value]
+        return self._require_lease(self.get(lease_id), lease_id=lease_id, operation="create")
 
     def find_by_instance(self, *, provider_name: str, instance_id: str) -> dict[str, Any] | None:
         with self._lock:
@@ -157,7 +162,11 @@ class SQLiteLeaseRepo:
         existing = self.get(lease_id)
         if existing is None:
             self.create(lease_id=lease_id, provider_name=provider_name)
-            existing = self.get(lease_id)
+            existing = self._require_lease(
+                self.get(lease_id),
+                lease_id=lease_id,
+                operation="adopt_instance bootstrap",
+            )
         if existing["provider_name"] != provider_name:
             raise RuntimeError(f"Lease provider mismatch during adopt: lease={existing['provider_name']}, requested={provider_name}")
 
