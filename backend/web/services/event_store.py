@@ -10,7 +10,7 @@ from storage.runtime import build_storage_container
 _default_run_event_repo: RunEventRepo | None = None
 
 
-def _resolve_run_event_repo(run_event_repo: RunEventRepo | None) -> RunEventRepo:
+def _resolve_run_event_repo(run_event_repo: RunEventRepo | None) -> RunEventRepo | None:
     if run_event_repo is not None:
         return run_event_repo
 
@@ -18,10 +18,16 @@ def _resolve_run_event_repo(run_event_repo: RunEventRepo | None) -> RunEventRepo
     if _default_run_event_repo is not None:
         return _default_run_event_repo
 
-    container = build_storage_container()
+    try:
+        container = build_storage_container()
+    except RuntimeError:
+        return None
     # @@@event-store-single-path - keep one persistence boundary; when caller omits repo, resolve default repo from storage container.
     _default_run_event_repo = container.run_event_repo()
     return _default_run_event_repo
+
+
+_noop_seq = 0
 
 
 async def append_event(
@@ -33,6 +39,10 @@ async def append_event(
 ) -> int:
     """Persist one SSE event and return its sequence number."""
     repo = _resolve_run_event_repo(run_event_repo)
+    if repo is None:
+        global _noop_seq
+        _noop_seq += 1
+        return _noop_seq
     payload = _event_payload_to_dict(event)
     return int(
         await asyncio.to_thread(
@@ -54,6 +64,8 @@ async def read_events_after(
 ) -> list[dict[str, Any]]:
     """Return events with seq > after_seq for the given run."""
     repo = _resolve_run_event_repo(run_event_repo)
+    if repo is None:
+        return []
     rows = await asyncio.to_thread(
         repo.list_events,
         thread_id,
@@ -75,18 +87,24 @@ async def read_events_after(
 async def get_last_seq(thread_id: str, run_event_repo: RunEventRepo | None = None) -> int:
     """Return the highest seq for a thread, or 0."""
     repo = _resolve_run_event_repo(run_event_repo)
+    if repo is None:
+        return 0
     return int(await asyncio.to_thread(repo.latest_seq, thread_id))
 
 
 async def get_run_start_seq(thread_id: str, run_id: str, run_event_repo: RunEventRepo | None = None) -> int:
     """Return the first seq for a specific run, or 0."""
     repo = _resolve_run_event_repo(run_event_repo)
+    if repo is None:
+        return 0
     return int(await asyncio.to_thread(repo.run_start_seq, thread_id, run_id))
 
 
 async def get_latest_run_id(thread_id: str, run_event_repo: RunEventRepo | None = None) -> str | None:
     """Return the run_id of the most recent run for a thread, or None."""
     repo = _resolve_run_event_repo(run_event_repo)
+    if repo is None:
+        return None
     return await asyncio.to_thread(repo.latest_run_id, thread_id)
 
 
@@ -97,6 +115,8 @@ async def cleanup_old_runs(
 ) -> int:
     """Delete all but the N most recent runs for a thread. Returns deleted count."""
     repo = _resolve_run_event_repo(run_event_repo)
+    if repo is None:
+        return 0
     run_ids = await asyncio.to_thread(repo.list_run_ids, thread_id)
     if len(run_ids) <= keep_latest:
         return 0
@@ -111,6 +131,8 @@ async def cleanup_old_runs(
 async def cleanup_thread(thread_id: str, run_event_repo: RunEventRepo | None = None) -> int:
     """Delete all events for a thread. Returns deleted count."""
     repo = _resolve_run_event_repo(run_event_repo)
+    if repo is None:
+        return 0
     return int(await asyncio.to_thread(repo.delete_thread_events, thread_id))
 
 
