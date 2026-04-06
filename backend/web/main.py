@@ -83,6 +83,7 @@ from backend.web.core.lifespan import lifespan  # noqa: E402
 from backend.web.routers import (  # noqa: E402
     auth,
     chats,
+    contacts,
     entities,
     invite_codes,
     marketplace,
@@ -94,6 +95,8 @@ from backend.web.routers import (  # noqa: E402
     threads,
     webhooks,
 )
+from backend.web.routers import messaging as messaging_router  # noqa: E402
+from messaging.relationships.router import router as relationships_router  # noqa: E402
 
 # Create FastAPI app
 app = FastAPI(title="Leon Web Backend", lifespan=lifespan)
@@ -112,6 +115,9 @@ app.include_router(auth.router)
 app.include_router(invite_codes.router)
 app.include_router(threads.router)
 app.include_router(chats.router)
+app.include_router(messaging_router.router)
+app.include_router(contacts.router)
+app.include_router(relationships_router)
 app.include_router(entities.router)
 app.include_router(entities.members_router)
 app.include_router(sandbox.router)
@@ -154,5 +160,5 @@ if __name__ == "__main__":
         host="0.0.0.0",
         port=port,
         reload=True,
-        reload_dirs=["backend", "core", "config", "storage", "sandbox"],
+        reload_dirs=["backend", "core", "config", "storage", "sandbox", "messaging"],
     )

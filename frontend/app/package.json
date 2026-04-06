@@ -56,6 +56,7 @@
     "react-resizable-panels": "^4.2.2",
     "react-router-dom": "^7.13.0",
     "recharts": "^2.15.4",
+    "@supabase/supabase-js": "^2.49.8",
     "sonner": "^2.0.7",
     "streamdown": "^2.4.0",
     "tailwind-merge": "^3.4.0",
