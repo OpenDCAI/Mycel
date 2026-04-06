@@ -10,7 +10,6 @@ None — callers must handle this gracefully.
 from __future__ import annotations
 
 import logging
-from functools import lru_cache
 from typing import Any
 
 logger = logging.getLogger(__name__)

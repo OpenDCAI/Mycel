@@ -2,7 +2,6 @@
 
 from contextvars import ContextVar
 from dataclasses import dataclass
-from pathlib import Path
 
 from storage.models import FileOperationRow
 
