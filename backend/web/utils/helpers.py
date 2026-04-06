@@ -5,19 +5,16 @@ from typing import Any
 
 from fastapi import HTTPException
 
-from backend.web.core.config import DB_PATH
 from sandbox.sync.state import SyncState
 from storage.container import StorageContainer
 from storage.providers.sqlite.chat_session_repo import SQLiteChatSessionRepo
 from storage.providers.sqlite.kernel import SQLiteDBRole, resolve_role_db_path
 from storage.providers.sqlite.terminal_repo import SQLiteTerminalRepo
-from storage.runtime import build_storage_container
+from storage.runtime import build_storage_container, build_thread_repo
 
 SANDBOX_DB_PATH = resolve_role_db_path(SQLiteDBRole.SANDBOX)
 
-# @@@cached-container - reuse a single StorageContainer across helper calls to avoid per-call rebuild.
 _cached_container: StorageContainer | None = None
-_cached_container_db_path: Path | None = None
 
 
 def is_virtual_thread_id(thread_id: str | None) -> bool:
@@ -71,11 +68,10 @@ def extract_webhook_instance_id(payload: dict[str, Any]) -> str | None:
 
 
 def _get_container() -> StorageContainer:
-    global _cached_container, _cached_container_db_path
-    if _cached_container is not None and _cached_container_db_path == DB_PATH:
+    global _cached_container
+    if _cached_container is not None:
         return _cached_container
-    _cached_container = build_storage_container(main_db_path=DB_PATH)
-    _cached_container_db_path = DB_PATH
+    _cached_container = build_storage_container()
     return _cached_container
 
 
@@ -89,9 +85,7 @@ def _get_thread_repo(thread_repo=None):
     global _cached_thread_repo
     if _cached_thread_repo is not None:
         return _cached_thread_repo
-    from storage.providers.sqlite.thread_repo import SQLiteThreadRepo
-
-    _cached_thread_repo = SQLiteThreadRepo(DB_PATH)
+    _cached_thread_repo = build_thread_repo()
     return _cached_thread_repo
 
 

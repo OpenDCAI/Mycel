@@ -169,5 +169,3 @@ class SQLiteMemberRepo:
         if "main_thread_id" not in cols:
             self._conn.execute("ALTER TABLE members ADD COLUMN main_thread_id TEXT")
         self._conn.commit()
-
-

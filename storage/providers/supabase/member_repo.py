@@ -11,7 +11,6 @@ _MEMBER_REPO = "member repo"
 _MEMBER_TABLE = "members"
 
 
-
 class SupabaseMemberRepo:
     def __init__(self, client: Any) -> None:
         self._client = q.validate_client(client, _MEMBER_REPO)
@@ -131,5 +130,3 @@ class SupabaseMemberRepo:
 
     def _t(self) -> Any:
         return self._client.table(_MEMBER_TABLE)
-
-
