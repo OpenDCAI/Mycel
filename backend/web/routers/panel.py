@@ -164,35 +164,60 @@ async def delete_member(
 
 @router.get("/tasks")
 async def list_tasks(
+    request: Request,
     user_id: Annotated[str, Depends(get_current_user_id)],
 ) -> dict[str, Any]:
-    items = await asyncio.to_thread(task_service.list_tasks, owner_user_id=user_id)
+    items = await asyncio.to_thread(
+        task_service.list_tasks,
+        owner_user_id=user_id,
+        repo=request.app.state.panel_task_repo,
+        thread_repo=request.app.state.thread_repo,
+    )
     return {"items": items}
 
 
 @router.post("/tasks")
 async def create_task(
     req: CreateTaskRequest,
+    request: Request,
     user_id: Annotated[str, Depends(get_current_user_id)],
 ) -> dict[str, Any]:
-    return await asyncio.to_thread(task_service.create_task, owner_user_id=user_id, **req.model_dump())
+    return await asyncio.to_thread(
+        task_service.create_task,
+        owner_user_id=user_id,
+        repo=request.app.state.panel_task_repo,
+        **req.model_dump(),
+    )
 
 
 @router.put("/tasks/bulk-status")
 async def bulk_update_status(
     req: BulkTaskStatusRequest,
+    request: Request,
     user_id: Annotated[str, Depends(get_current_user_id)],
 ) -> dict[str, Any]:
-    count = await asyncio.to_thread(task_service.bulk_update_task_status, req.ids, req.status, owner_user_id=user_id)
+    count = await asyncio.to_thread(
+        task_service.bulk_update_task_status,
+        req.ids,
+        req.status,
+        owner_user_id=user_id,
+        repo=request.app.state.panel_task_repo,
+    )
     return {"updated": count}
 
 
 @router.post("/tasks/bulk-delete")
 async def bulk_delete_tasks(
     req: BulkDeleteTasksRequest,
+    request: Request,
     user_id: Annotated[str, Depends(get_current_user_id)],
 ) -> dict[str, Any]:
-    count = await asyncio.to_thread(task_service.bulk_delete_tasks, req.ids, owner_user_id=user_id)
+    count = await asyncio.to_thread(
+        task_service.bulk_delete_tasks,
+        req.ids,
+        owner_user_id=user_id,
+        repo=request.app.state.panel_task_repo,
+    )
     return {"deleted": count}
 
 
@@ -200,9 +225,16 @@ async def bulk_delete_tasks(
 async def update_task(
     task_id: str,
     req: UpdateTaskRequest,
+    request: Request,
     user_id: Annotated[str, Depends(get_current_user_id)],
 ) -> dict[str, Any]:
-    item = await asyncio.to_thread(task_service.update_task, task_id, owner_user_id=user_id, **req.model_dump())
+    item = await asyncio.to_thread(
+        task_service.update_task,
+        task_id,
+        owner_user_id=user_id,
+        repo=request.app.state.panel_task_repo,
+        **req.model_dump(),
+    )
     if not item:
         raise HTTPException(404, "Task not found")
     return item
@@ -211,9 +243,15 @@ async def update_task(
 @router.delete("/tasks/{task_id}")
 async def delete_task(
     task_id: str,
+    request: Request,
     user_id: Annotated[str, Depends(get_current_user_id)],
 ) -> dict[str, Any]:
-    ok = await asyncio.to_thread(task_service.delete_task, task_id, owner_user_id=user_id)
+    ok = await asyncio.to_thread(
+        task_service.delete_task,
+        task_id,
+        owner_user_id=user_id,
+        repo=request.app.state.panel_task_repo,
+    )
     if not ok:
         raise HTTPException(404, "Task not found")
     return {"success": True}
@@ -224,21 +262,28 @@ async def delete_task(
 
 @router.get("/cron-jobs")
 async def list_cron_jobs(
+    request: Request,
     user_id: Annotated[str, Depends(get_current_user_id)],
 ) -> dict[str, Any]:
-    items = await asyncio.to_thread(cron_job_service.list_cron_jobs, owner_user_id=user_id)
+    items = await asyncio.to_thread(
+        cron_job_service.list_cron_jobs,
+        owner_user_id=user_id,
+        repo=request.app.state.cron_job_repo,
+    )
     return {"items": items}
 
 
 @router.post("/cron-jobs")
 async def create_cron_job(
     req: CreateCronJobRequest,
+    request: Request,
     user_id: Annotated[str, Depends(get_current_user_id)],
 ) -> dict[str, Any]:
     job = await asyncio.to_thread(
         cron_job_service.create_cron_job,
         name=req.name,
         cron_expression=req.cron_expression,
+        repo=request.app.state.cron_job_repo,
         description=req.description,
         task_template=req.task_template,
         enabled=int(req.enabled),
@@ -251,12 +296,19 @@ async def create_cron_job(
 async def update_cron_job(
     job_id: str,
     req: UpdateCronJobRequest,
+    request: Request,
     user_id: Annotated[str, Depends(get_current_user_id)],
 ) -> dict[str, Any]:
     fields = req.model_dump(exclude_none=True)
     if "enabled" in fields:
         fields["enabled"] = int(fields["enabled"])
-    job = await asyncio.to_thread(cron_job_service.update_cron_job, job_id, owner_user_id=user_id, **fields)
+    job = await asyncio.to_thread(
+        cron_job_service.update_cron_job,
+        job_id,
+        owner_user_id=user_id,
+        repo=request.app.state.cron_job_repo,
+        **fields,
+    )
     if not job:
         raise HTTPException(404, "Cron job not found")
     return {"item": job}
@@ -265,9 +317,15 @@ async def update_cron_job(
 @router.delete("/cron-jobs/{job_id}")
 async def delete_cron_job(
     job_id: str,
+    request: Request,
     user_id: Annotated[str, Depends(get_current_user_id)],
 ) -> dict[str, Any]:
-    ok = await asyncio.to_thread(cron_job_service.delete_cron_job, job_id, owner_user_id=user_id)
+    ok = await asyncio.to_thread(
+        cron_job_service.delete_cron_job,
+        job_id,
+        owner_user_id=user_id,
+        repo=request.app.state.cron_job_repo,
+    )
     if not ok:
         raise HTTPException(404, "Cron job not found")
     return {"ok": True}

@@ -10,15 +10,17 @@ def _repo() -> Any:
     return make_panel_task_repo()
 
 
-def list_tasks(owner_user_id: str | None = None) -> list[dict[str, Any]]:
-    repo = _repo()
+def list_tasks(owner_user_id: str | None = None, repo: Any = None, thread_repo: Any = None) -> list[dict[str, Any]]:
+    own_repo = repo is None
+    repo = repo or _repo()
     try:
-        return _enrich_task_thread_members(repo.list_all(owner_user_id=owner_user_id))
+        return _enrich_task_thread_members(repo.list_all(owner_user_id=owner_user_id), thread_repo=thread_repo)
     finally:
-        repo.close()
+        if own_repo:
+            repo.close()
 
 
-def _enrich_task_thread_members(tasks: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _enrich_task_thread_members(tasks: list[dict[str, Any]], thread_repo: Any = None) -> list[dict[str, Any]]:
     thread_ids = [str(task.get("thread_id") or "").strip() for task in tasks]
     thread_ids = [thread_id for thread_id in dict.fromkeys(thread_ids) if thread_id]
     if not thread_ids:
@@ -26,11 +28,13 @@ def _enrich_task_thread_members(tasks: list[dict[str, Any]]) -> list[dict[str, A
 
     # @@@task-thread-member-enrichment - panel tasks persist thread_id only, so enrich member_id
     # from canonical thread metadata before frontend deep-links are rendered.
-    thread_repo = build_thread_repo()
+    own_thread_repo = thread_repo is None
+    thread_repo = thread_repo or build_thread_repo()
     try:
         member_ids = {thread_id: (thread_repo.get_by_id(thread_id) or {}).get("member_id") for thread_id in thread_ids}
     finally:
-        thread_repo.close()
+        if own_thread_repo:
+            thread_repo.close()
 
     enriched: list[dict[str, Any]] = []
     for task in tasks:
@@ -42,57 +46,71 @@ def _enrich_task_thread_members(tasks: list[dict[str, Any]]) -> list[dict[str, A
     return enriched
 
 
-def get_task(task_id: str, owner_user_id: str | None = None) -> dict[str, Any] | None:
-    repo = _repo()
+def get_task(task_id: str, owner_user_id: str | None = None, repo: Any = None) -> dict[str, Any] | None:
+    own_repo = repo is None
+    repo = repo or _repo()
     try:
         return repo.get(task_id, owner_user_id=owner_user_id)
     finally:
-        repo.close()
+        if own_repo:
+            repo.close()
 
 
-def get_highest_priority_pending_task(owner_user_id: str | None = None) -> dict[str, Any] | None:
-    repo = _repo()
+def get_highest_priority_pending_task(owner_user_id: str | None = None, repo: Any = None) -> dict[str, Any] | None:
+    own_repo = repo is None
+    repo = repo or _repo()
     try:
         return repo.get_highest_priority_pending(owner_user_id=owner_user_id)
     finally:
-        repo.close()
+        if own_repo:
+            repo.close()
 
 
-def create_task(**fields: Any) -> dict[str, Any]:
-    repo = _repo()
+def create_task(repo: Any = None, **fields: Any) -> dict[str, Any]:
+    own_repo = repo is None
+    repo = repo or _repo()
     try:
         return repo.create(**fields)
     finally:
-        repo.close()
+        if own_repo:
+            repo.close()
 
 
-def update_task(task_id: str, owner_user_id: str | None = None, **fields: Any) -> dict[str, Any] | None:
-    repo = _repo()
+def update_task(task_id: str, owner_user_id: str | None = None, repo: Any = None, **fields: Any) -> dict[str, Any] | None:
+    own_repo = repo is None
+    repo = repo or _repo()
     try:
         return repo.update(task_id, owner_user_id=owner_user_id, **fields)
     finally:
-        repo.close()
+        if own_repo:
+            repo.close()
 
 
-def delete_task(task_id: str, owner_user_id: str | None = None) -> bool:
-    repo = _repo()
+def delete_task(task_id: str, owner_user_id: str | None = None, repo: Any = None) -> bool:
+    own_repo = repo is None
+    repo = repo or _repo()
     try:
         return repo.delete(task_id, owner_user_id=owner_user_id)
     finally:
-        repo.close()
+        if own_repo:
+            repo.close()
 
 
-def bulk_delete_tasks(ids: list[str], owner_user_id: str | None = None) -> int:
-    repo = _repo()
+def bulk_delete_tasks(ids: list[str], owner_user_id: str | None = None, repo: Any = None) -> int:
+    own_repo = repo is None
+    repo = repo or _repo()
     try:
         return repo.bulk_delete(ids, owner_user_id=owner_user_id)
     finally:
-        repo.close()
+        if own_repo:
+            repo.close()
 
 
-def bulk_update_task_status(ids: list[str], status: str, owner_user_id: str | None = None) -> int:
-    repo = _repo()
+def bulk_update_task_status(ids: list[str], status: str, owner_user_id: str | None = None, repo: Any = None) -> int:
+    own_repo = repo is None
+    repo = repo or _repo()
     try:
         return repo.bulk_update_status(ids, status, owner_user_id=owner_user_id)
     finally:
-        repo.close()
+        if own_repo:
+            repo.close()

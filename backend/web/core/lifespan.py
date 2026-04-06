@@ -56,6 +56,8 @@ async def lifespan(app: FastAPI):
     app.state.invite_code_repo = storage_container.invite_code_repo()
     app.state.user_settings_repo = storage_container.user_settings_repo()
     app.state.agent_config_repo = storage_container.agent_config_repo()
+    app.state.panel_task_repo = storage_container.panel_task_repo()
+    app.state.cron_job_repo = storage_container.cron_job_repo()
     app.state._supabase_client = _supabase_client
     app.state._supabase_auth_client_factory = create_supabase_auth_client
     app.state._storage_container = storage_container
@@ -151,7 +153,10 @@ async def lifespan(app: FastAPI):
         # Start cron scheduler
         from backend.web.services.cron_service import CronService
 
-        cron_svc = CronService()
+        cron_svc = CronService(
+            cron_job_repo=app.state.cron_job_repo,
+            task_repo=app.state.panel_task_repo,
+        )
         await cron_svc.start()
         app.state.cron_service = cron_svc
 

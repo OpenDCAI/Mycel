@@ -57,6 +57,12 @@ class _FakeContainer:
     def contact_repo(self) -> _FakeRepo:
         return self.contact_repo_value
 
+    def panel_task_repo(self) -> _FakeRepo:
+        return _FakeRepo()
+
+    def cron_job_repo(self) -> _FakeRepo:
+        return _FakeRepo()
+
 
 class _FakeMessagingService:
     def __init__(self, **_: object) -> None:
@@ -67,6 +73,9 @@ class _FakeMessagingService:
 
 
 class _FakeCronService:
+    def __init__(self, **_: object) -> None:
+        return None
+
     async def start(self) -> None:
         return None
 

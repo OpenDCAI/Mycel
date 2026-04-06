@@ -1,11 +1,18 @@
 from __future__ import annotations
 
 from types import SimpleNamespace
-from typing import Any
+from typing import Any, cast
 
 import pytest
 
-from backend.web.models.panel import BulkDeleteTasksRequest, BulkTaskStatusRequest, UpdateCronJobRequest, UpdateTaskRequest
+from backend.web.models.panel import (
+    BulkDeleteTasksRequest,
+    BulkTaskStatusRequest,
+    CreateCronJobRequest,
+    CreateTaskRequest,
+    UpdateCronJobRequest,
+    UpdateTaskRequest,
+)
 from backend.web.routers import panel as panel_router
 from backend.web.services import cron_job_service, task_service
 from backend.web.services.cron_service import CronService
@@ -14,21 +21,22 @@ from backend.web.services.cron_service import CronService
 @pytest.mark.asyncio
 async def test_panel_task_mutations_forward_owner_scope(monkeypatch: pytest.MonkeyPatch):
     seen: dict[str, Any] = {}
+    request = cast(Any, SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(panel_task_repo=object()))))
 
-    def fake_bulk_update(ids: list[str], status: str, owner_user_id: str | None = None) -> int:
-        seen["bulk_status"] = (ids, status, owner_user_id)
+    def fake_bulk_update(ids: list[str], status: str, owner_user_id: str | None = None, repo: Any = None) -> int:
+        seen["bulk_status"] = (ids, status, owner_user_id, repo)
         return len(ids)
 
-    def fake_bulk_delete(ids: list[str], owner_user_id: str | None = None) -> int:
-        seen["bulk_delete"] = (ids, owner_user_id)
+    def fake_bulk_delete(ids: list[str], owner_user_id: str | None = None, repo: Any = None) -> int:
+        seen["bulk_delete"] = (ids, owner_user_id, repo)
         return len(ids)
 
-    def fake_update(task_id: str, owner_user_id: str | None = None, **fields: Any) -> dict[str, Any]:
-        seen["update"] = (task_id, owner_user_id, fields)
+    def fake_update(task_id: str, owner_user_id: str | None = None, repo: Any = None, **fields: Any) -> dict[str, Any]:
+        seen["update"] = (task_id, owner_user_id, repo, fields)
         return {"id": task_id, **fields}
 
-    def fake_delete(task_id: str, owner_user_id: str | None = None) -> bool:
-        seen["delete"] = (task_id, owner_user_id)
+    def fake_delete(task_id: str, owner_user_id: str | None = None, repo: Any = None) -> bool:
+        seen["delete"] = (task_id, owner_user_id, repo)
         return True
 
     monkeypatch.setattr(panel_router.task_service, "bulk_update_task_status", fake_bulk_update)
@@ -36,28 +44,28 @@ async def test_panel_task_mutations_forward_owner_scope(monkeypatch: pytest.Monk
     monkeypatch.setattr(panel_router.task_service, "update_task", fake_update)
     monkeypatch.setattr(panel_router.task_service, "delete_task", fake_delete)
 
-    await panel_router.bulk_update_status(BulkTaskStatusRequest(ids=["t-1"], status="completed"), user_id="user-1")
-    await panel_router.bulk_delete_tasks(BulkDeleteTasksRequest(ids=["t-2"]), user_id="user-1")
-    await panel_router.update_task("t-3", UpdateTaskRequest(title="new"), user_id="user-1")
-    await panel_router.delete_task("t-4", user_id="user-1")
+    await panel_router.bulk_update_status(BulkTaskStatusRequest(ids=["t-1"], status="completed"), request=request, user_id="user-1")
+    await panel_router.bulk_delete_tasks(BulkDeleteTasksRequest(ids=["t-2"]), request=request, user_id="user-1")
+    await panel_router.update_task("t-3", UpdateTaskRequest(title="new"), request=request, user_id="user-1")
+    await panel_router.delete_task("t-4", request=request, user_id="user-1")
 
-    assert seen["bulk_status"] == (["t-1"], "completed", "user-1")
-    assert seen["bulk_delete"] == (["t-2"], "user-1")
+    assert seen["bulk_status"][0:3] == (["t-1"], "completed", "user-1")
+    assert seen["bulk_delete"][0:2] == (["t-2"], "user-1")
     assert seen["update"][0:2] == ("t-3", "user-1")
-    assert seen["update"][2]["title"] == "new"
-    assert seen["delete"] == ("t-4", "user-1")
+    assert seen["update"][3]["title"] == "new"
+    assert seen["delete"][0:2] == ("t-4", "user-1")
 
 
 @pytest.mark.asyncio
 async def test_panel_cron_mutations_forward_owner_scope(monkeypatch: pytest.MonkeyPatch):
     seen: dict[str, Any] = {}
 
-    def fake_update(job_id: str, owner_user_id: str | None = None, **fields: Any) -> dict[str, Any]:
-        seen["update"] = (job_id, owner_user_id, fields)
+    def fake_update(job_id: str, owner_user_id: str | None = None, repo: Any = None, **fields: Any) -> dict[str, Any]:
+        seen["update"] = (job_id, owner_user_id, repo, fields)
         return {"id": job_id, **fields}
 
-    def fake_delete(job_id: str, owner_user_id: str | None = None) -> bool:
-        seen["delete"] = (job_id, owner_user_id)
+    def fake_delete(job_id: str, owner_user_id: str | None = None, repo: Any = None) -> bool:
+        seen["delete"] = (job_id, owner_user_id, repo)
         return True
 
     class _FakeCronService:
@@ -68,21 +76,25 @@ async def test_panel_cron_mutations_forward_owner_scope(monkeypatch: pytest.Monk
     monkeypatch.setattr(panel_router.cron_job_service, "update_cron_job", fake_update)
     monkeypatch.setattr(panel_router.cron_job_service, "delete_cron_job", fake_delete)
 
-    request = SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(cron_service=_FakeCronService())))
+    request = cast(
+        Any,
+        SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(cron_service=_FakeCronService(), cron_job_repo=object()))),
+    )
 
-    await panel_router.update_cron_job("job-1", UpdateCronJobRequest(description="desc"), user_id="user-1")
-    await panel_router.delete_cron_job("job-2", user_id="user-1")
+    await panel_router.update_cron_job("job-1", UpdateCronJobRequest(description="desc"), request=request, user_id="user-1")
+    await panel_router.delete_cron_job("job-2", request=request, user_id="user-1")
     result = await panel_router.trigger_cron_job("job-3", request=request, user_id="user-1")
 
-    assert seen["update"] == ("job-1", "user-1", {"description": "desc"})
-    assert seen["delete"] == ("job-2", "user-1")
+    assert seen["update"][0:2] == ("job-1", "user-1")
+    assert seen["update"][3] == {"description": "desc"}
+    assert seen["delete"][0:2] == ("job-2", "user-1")
     assert seen["trigger"] == ("job-3", "user-1")
     assert result["item"]["owner_user_id"] == "user-1"
 
 
 @pytest.mark.asyncio
 async def test_cron_trigger_copies_job_owner_to_created_task(monkeypatch: pytest.MonkeyPatch):
-    def fake_get(job_id: str, owner_user_id: str | None = None) -> dict[str, Any]:
+    def fake_get(job_id: str, owner_user_id: str | None = None, repo: Any = None) -> dict[str, Any]:
         return {
             "id": job_id,
             "enabled": 1,
@@ -96,7 +108,7 @@ async def test_cron_trigger_copies_job_owner_to_created_task(monkeypatch: pytest
         created.update(fields)
         return {"id": "task-1", **fields}
 
-    def fake_update_job(job_id: str, owner_user_id: str | None = None, **fields: Any) -> dict[str, Any]:
+    def fake_update_job(job_id: str, owner_user_id: str | None = None, repo: Any = None, **fields: Any) -> dict[str, Any]:
         return {"id": job_id, "owner_user_id": owner_user_id, **fields}
 
     monkeypatch.setattr("backend.web.services.cron_service.cron_job_service.get_cron_job", fake_get)
@@ -153,6 +165,46 @@ def test_task_service_forwards_owner_scope_to_repo(monkeypatch: pytest.MonkeyPat
     assert seen["bulk_status"] == (["t-5"], "completed", "user-1")
 
 
+def test_task_service_prefers_injected_repos_over_storage_factory(monkeypatch: pytest.MonkeyPatch):
+    seen: dict[str, Any] = {}
+
+    class _FakeRepo:
+        def close(self) -> None:
+            return None
+
+        def list_all(self, owner_user_id: str | None = None) -> list[dict[str, Any]]:
+            seen["list_all"] = owner_user_id
+            return [{"id": "t-1", "thread_id": "thread-1"}]
+
+        def get(self, task_id: str, owner_user_id: str | None = None) -> dict[str, Any]:
+            seen["get"] = (task_id, owner_user_id)
+            return {"id": task_id}
+
+    class _FakeThreadRepo:
+        def close(self) -> None:
+            return None
+
+        def get_by_id(self, thread_id: str) -> dict[str, Any]:
+            seen["thread_lookup"] = thread_id
+            return {"member_id": "member-1"}
+
+    monkeypatch.setattr(task_service, "_repo", lambda: (_ for _ in ()).throw(AssertionError("unexpected storage factory repo")))
+    monkeypatch.setattr(
+        task_service,
+        "build_thread_repo",
+        lambda: (_ for _ in ()).throw(AssertionError("unexpected runtime thread repo builder")),
+    )
+
+    items = task_service.list_tasks(owner_user_id="user-1", repo=_FakeRepo(), thread_repo=_FakeThreadRepo())
+    item = task_service.get_task("t-1", owner_user_id="user-1", repo=_FakeRepo())
+
+    assert seen["list_all"] == "user-1"
+    assert seen["thread_lookup"] == "thread-1"
+    assert items[0]["member_id"] == "member-1"
+    assert seen["get"] == ("t-1", "user-1")
+    assert item == {"id": "t-1"}
+
+
 def test_cron_job_service_forwards_owner_scope_to_repo(monkeypatch: pytest.MonkeyPatch):
     seen: dict[str, Any] = {}
 
@@ -181,3 +233,88 @@ def test_cron_job_service_forwards_owner_scope_to_repo(monkeypatch: pytest.Monke
     assert seen["get"] == ("job-1", "user-1")
     assert seen["update"] == ("job-2", "user-1", {"description": "desc"})
     assert seen["delete"] == ("job-3", "user-1")
+
+
+def test_cron_job_service_prefers_injected_repo_over_storage_factory(monkeypatch: pytest.MonkeyPatch):
+    seen: dict[str, Any] = {}
+
+    class _FakeRepo:
+        def close(self) -> None:
+            return None
+
+        def list_all(self, owner_user_id: str | None = None) -> list[dict[str, Any]]:
+            seen["list_all"] = owner_user_id
+            return [{"id": "job-1"}]
+
+        def create(self, *, name: str, cron_expression: str, **fields: Any) -> dict[str, Any]:
+            seen["create"] = (name, cron_expression, fields)
+            return {"id": "job-1", "name": name}
+
+    monkeypatch.setattr(cron_job_service, "_repo", lambda: (_ for _ in ()).throw(AssertionError("unexpected storage factory repo")))
+
+    jobs = cron_job_service.list_cron_jobs(owner_user_id="user-1", repo=_FakeRepo())
+    created = cron_job_service.create_cron_job(
+        name="Nightly",
+        cron_expression="0 0 * * *",
+        owner_user_id="user-1",
+        repo=_FakeRepo(),
+    )
+
+    assert seen["list_all"] == "user-1"
+    assert jobs == [{"id": "job-1"}]
+    assert seen["create"] == ("Nightly", "0 0 * * *", {"owner_user_id": "user-1"})
+    assert created == {"id": "job-1", "name": "Nightly"}
+
+
+@pytest.mark.asyncio
+async def test_panel_routes_pass_app_state_repos_to_task_and_cron_services(monkeypatch: pytest.MonkeyPatch):
+    seen: dict[str, Any] = {}
+
+    def fake_list_tasks(*, owner_user_id: str | None = None, repo: Any = None, thread_repo: Any = None) -> list[dict[str, Any]]:
+        seen["task_list"] = (owner_user_id, repo, thread_repo)
+        return []
+
+    def fake_create_task(*, owner_user_id: str | None = None, repo: Any = None, **fields: Any) -> dict[str, Any]:
+        seen["task_create"] = (owner_user_id, repo, fields)
+        return {"id": "task-1"}
+
+    def fake_list_cron_jobs(*, owner_user_id: str | None = None, repo: Any = None) -> list[dict[str, Any]]:
+        seen["cron_list"] = (owner_user_id, repo)
+        return []
+
+    def fake_create_cron_job(
+        *, name: str, cron_expression: str, owner_user_id: str | None = None, repo: Any = None, **fields: Any
+    ) -> dict[str, Any]:
+        seen["cron_create"] = (name, cron_expression, owner_user_id, repo, fields)
+        return {"id": "job-1"}
+
+    monkeypatch.setattr(panel_router.task_service, "list_tasks", fake_list_tasks)
+    monkeypatch.setattr(panel_router.task_service, "create_task", fake_create_task)
+    monkeypatch.setattr(panel_router.cron_job_service, "list_cron_jobs", fake_list_cron_jobs)
+    monkeypatch.setattr(panel_router.cron_job_service, "create_cron_job", fake_create_cron_job)
+
+    panel_task_repo = object()
+    thread_repo = object()
+    cron_job_repo = object()
+    request = cast(
+        Any,
+        SimpleNamespace(
+            app=SimpleNamespace(
+                state=SimpleNamespace(panel_task_repo=panel_task_repo, thread_repo=thread_repo, cron_job_repo=cron_job_repo)
+            )
+        ),
+    )
+
+    await panel_router.list_tasks(request=request, user_id="user-1")
+    await panel_router.create_task(CreateTaskRequest(title="hello"), request=request, user_id="user-1")
+    await panel_router.list_cron_jobs(request=request, user_id="user-1")
+    await panel_router.create_cron_job(
+        CreateCronJobRequest(name="Nightly", cron_expression="0 0 * * *", enabled=True, task_template="{}"),
+        request=request,
+        user_id="user-1",
+    )
+
+    assert seen["task_list"] == ("user-1", panel_task_repo, thread_repo)
+    assert seen["task_create"][0:2] == ("user-1", panel_task_repo)
+    assert seen["cron_list"] == ("user-1", cron_job_repo)
+    assert seen["cron_create"][0:4] == ("Nightly", "0 0 * * *", "user-1", cron_job_repo)

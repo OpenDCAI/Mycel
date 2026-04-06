@@ -26,9 +26,11 @@ _ALLOWED_TEMPLATE_KEYS = {"title", "description", "priority", "assignee_id", "de
 class CronService:
     """Background cron scheduler that creates panel_tasks from cron job templates."""
 
-    def __init__(self) -> None:
+    def __init__(self, *, cron_job_repo: Any = None, task_repo: Any = None) -> None:
         self._running = False
         self._task: asyncio.Task | None = None
+        self._cron_job_repo = cron_job_repo
+        self._task_repo = task_repo
 
     # -- public API ----------------------------------------------------------
 
@@ -58,7 +60,12 @@ class CronService:
         Returns the created task dict, or None if the job doesn't exist,
         is disabled, or has an invalid template.
         """
-        job = await asyncio.to_thread(cron_job_service.get_cron_job, job_id, owner_user_id=owner_user_id)
+        job = await asyncio.to_thread(
+            cron_job_service.get_cron_job,
+            job_id,
+            owner_user_id=owner_user_id,
+            repo=self._cron_job_repo,
+        )
         if job is None:
             return None
         if not job.get("enabled"):
@@ -78,7 +85,7 @@ class CronService:
         task_fields["cron_job_id"] = job_id
         task_fields["owner_user_id"] = job.get("owner_user_id")
 
-        task = await asyncio.to_thread(task_service.create_task, **task_fields)
+        task = await asyncio.to_thread(task_service.create_task, repo=self._task_repo, **task_fields)
 
         # Update last_run_at on the cron job
         now_ms = int(time.time() * 1000)
@@ -86,6 +93,7 @@ class CronService:
             cron_job_service.update_cron_job,
             job_id,
             owner_user_id=job.get("owner_user_id"),
+            repo=self._cron_job_repo,
             last_run_at=now_ms,
         )
 
@@ -135,7 +143,7 @@ class CronService:
 
     async def _check_and_trigger(self) -> None:
         """Check all enabled cron jobs and trigger those that are due."""
-        jobs = await asyncio.to_thread(cron_job_service.list_cron_jobs)
+        jobs = await asyncio.to_thread(cron_job_service.list_cron_jobs, repo=self._cron_job_repo)
         for job in jobs:
             if self.is_due(job):
                 try:
