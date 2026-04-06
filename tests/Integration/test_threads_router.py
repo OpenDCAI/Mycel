@@ -34,9 +34,12 @@ class _FakeMemberRepo:
     def get_by_id(self, member_id: str):
         return self._members.get(member_id)
 
-    def increment_entity_seq(self, member_id: str) -> int:
+    def increment_thread_seq(self, member_id: str) -> int:
         self._seq[member_id] += 1
         return self._seq[member_id]
+
+    def update(self, member_id: str, **kwargs):
+        pass
 
 
 class _FakeThreadRepo:
@@ -61,25 +64,6 @@ class _FakeThreadRepo:
 
     def create(self, **kwargs):
         self.rows[kwargs["thread_id"]] = dict(kwargs)
-
-
-class _FakeEntityRepo:
-    def __init__(self) -> None:
-        self.rows = []
-
-    def create(self, row):
-        self.rows.append(row)
-
-    def get_by_id(self, entity_id: str):
-        for row in self.rows:
-            if row.id == entity_id:
-                return row
-        return None
-
-    def update_thread_id(self, entity_id: str, thread_id: str):
-        row = self.get_by_id(entity_id)
-        if row is not None:
-            row.thread_id = thread_id
 
 
 class _FakeAuthService:
@@ -291,14 +275,12 @@ def _make_threads_app(
     *,
     member_repo=None,
     thread_repo=None,
-    entity_repo=None,
     **state_overrides,
 ):
     return SimpleNamespace(
         state=SimpleNamespace(
             member_repo=member_repo or _FakeMemberRepo(),
             thread_repo=thread_repo or _FakeThreadRepo(),
-            entity_repo=entity_repo or _FakeEntityRepo(),
             **state_overrides,
         )
     )
@@ -370,7 +352,8 @@ async def test_resolve_main_thread_returns_null_for_orphaned_main_thread_metadat
         is_main=True,
         branch_index=0,
     )
-    app = _make_threads_app(thread_repo=thread_repo)
+    empty_member_repo = SimpleNamespace(get_by_id=lambda _mid: None)
+    app = _make_threads_app(thread_repo=thread_repo, member_repo=empty_member_repo)
 
     payload = threads_router.ResolveMainThreadRequest(member_id="member-1")
 
@@ -441,7 +424,6 @@ async def test_list_threads_hides_internal_subagent_threads():
                     "sandbox_type": "local",
                     "member_name": "Toad",
                     "member_id": "member-1",
-                    "entity_name": "Toad",
                     "branch_index": 0,
                     "is_main": True,
                     "member_avatar": None,
@@ -451,7 +433,6 @@ async def test_list_threads_hides_internal_subagent_threads():
                     "sandbox_type": "local",
                     "member_name": "Toad",
                     "member_id": "member-1",
-                    "entity_name": "worker-1",
                     "branch_index": 1,
                     "is_main": False,
                     "member_avatar": None,

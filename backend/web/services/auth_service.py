@@ -178,7 +178,7 @@ class AuthService:
         }
 
     def verify_token(self, token: str) -> dict:
-        """Verify Supabase JWT. Returns {user_id, entity_id}."""
+        """Verify Supabase JWT. Returns {user_id}."""
         auth_client = self._sb_auth_factory() if self._sb_auth_factory is not None else self._sb_auth
         if auth_client is not None:
             auth_api = self._auth_api(auth_client)
@@ -188,7 +188,7 @@ class AuthService:
                 raise ValueError(f"Token 无效: {e}") from e
             if user_resp is None or getattr(user_resp, "user", None) is None:
                 raise ValueError("Token 无效: user not found")
-            return {"user_id": str(user_resp.user.id), "entity_id": None}
+            return {"user_id": str(user_resp.user.id)}
         jwt_secret = os.getenv("SUPABASE_JWT_SECRET")
         if not jwt_secret:
             raise RuntimeError("SUPABASE_JWT_SECRET env var required for token verification.")

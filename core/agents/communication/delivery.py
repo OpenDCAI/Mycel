@@ -47,13 +47,13 @@ def make_chat_delivery_fn(app: Any):
     return _deliver
 
 
-def _log_delivery_result(entity_id: str, f: Any) -> None:
+def _log_delivery_result(member_id: str, f: Any) -> None:
     """Done-callback for async delivery futures."""
     exc = f.exception()
     if exc:
-        logger.error("[delivery] async delivery failed for %s: %s", entity_id, exc, exc_info=exc)
+        logger.error("[delivery] async delivery failed for %s: %s", member_id, exc, exc_info=exc)
     else:
-        logger.info("[delivery] async delivery completed for %s", entity_id)
+        logger.info("[delivery] async delivery completed for %s", member_id)
 
 
 async def _async_deliver(

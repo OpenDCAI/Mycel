@@ -26,8 +26,6 @@ from core.runtime.state import AppState, BootstrapConfig, ToolUseContext
 from sandbox.manager import SandboxManager
 from sandbox.providers.local import LocalSessionProvider
 from sandbox.thread_context import get_current_thread_id, set_current_messages, set_current_thread_id
-from storage.contracts import EntityRow
-
 
 class _FakeRegistry:
     def register(self, entry):
@@ -73,17 +71,6 @@ class _FakeThreadRepo:
         }
         self.rows[thread_id] = row
         self.created.append(row)
-
-
-class _FakeEntityRepo:
-    def __init__(self):
-        self.rows_by_thread: dict[str, EntityRow] = {}
-
-    def create(self, row: EntityRow):
-        self.rows_by_thread[row.thread_id] = row
-
-    def get_by_thread_id(self, thread_id: str):
-        return self.rows_by_thread.get(thread_id)
 
 
 class _FakeMemberRepo:
@@ -1225,12 +1212,10 @@ async def test_handle_agent_registers_subagent_thread_metadata_before_return(mon
             }
         }
     )
-    entity_repo = _FakeEntityRepo()
     member_repo = _FakeMemberRepo({"member-1": "Toad"})
     service = _make_service(
         tmp_path,
         thread_repo=thread_repo,
-        entity_repo=entity_repo,
         member_repo=member_repo,
     )
 
@@ -1245,7 +1230,6 @@ async def test_handle_agent_registers_subagent_thread_metadata_before_return(mon
         child_thread_id = payload["thread_id"]
 
         child_thread = thread_repo.get_by_id(child_thread_id)
-        child_entity = entity_repo.get_by_thread_id(child_thread_id)
 
         assert child_thread is not None
         assert child_thread["member_id"] == "member-1"
@@ -1253,10 +1237,6 @@ async def test_handle_agent_registers_subagent_thread_metadata_before_return(mon
         assert child_thread["cwd"] == "/home/daytona"
         assert child_thread["is_main"] is False
         assert child_thread["branch_index"] == 1
-        assert child_entity is not None
-        assert child_entity.id == child_thread_id
-        assert child_entity.member_id == "member-1"
-        assert child_entity.name == "worker-1"
     finally:
         await service.cleanup_background_runs()
         set_current_thread_id("")
@@ -1293,17 +1273,6 @@ async def test_handle_agent_reuses_existing_completed_child_thread_for_same_pare
             },
         }
     )
-    entity_repo = _FakeEntityRepo()
-    entity_repo.create(
-        EntityRow(
-            id="subagent-existing",
-            member_id="member-1",
-            thread_id="subagent-existing",
-            name="worker-1",
-            type="agent",
-            created_at=2.0,
-        )
-    )
     registry = _FakeAgentRegistry()
     registry._latest_by_name_parent[("worker-1", "parent-thread")] = SimpleNamespace(
         agent_id="old-agent",
@@ -1317,7 +1286,6 @@ async def test_handle_agent_reuses_existing_completed_child_thread_for_same_pare
         tmp_path,
         agent_registry=registry,
         thread_repo=thread_repo,
-        entity_repo=entity_repo,
         member_repo=_FakeMemberRepo({"member-1": "Toad"}),
     )
 
