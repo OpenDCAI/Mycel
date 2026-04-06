@@ -14,7 +14,7 @@ import shlex
 import time
 import uuid
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 from urllib.parse import urlparse, urlunparse
 
 import httpx
@@ -41,7 +41,15 @@ def _daytona_state_to_status(state: str) -> str:
 
 logger = logging.getLogger(__name__)
 
+
+def _daytona_state_value(sandbox: Any) -> str | None:
+    state = getattr(sandbox, "state", None)
+    return getattr(state, "value", None)
+
+
 if TYPE_CHECKING:
+    from daytona_sdk._sync.sandbox import Sandbox as DaytonaSandbox
+
     from sandbox.lease import SandboxLease
     from sandbox.runtime import PhysicalTerminalRuntime
     from sandbox.terminal import AbstractTerminal
@@ -95,7 +103,7 @@ class DaytonaProvider(SandboxProvider):
         bind_mounts: list[MountSpec] | None = None,
         provider_name: str | None = None,
     ):
-        from daytona_sdk import Daytona
+        from daytona_sdk import Daytona, DaytonaConfig
 
         if provider_name:
             self.name = provider_name
@@ -107,7 +115,8 @@ class DaytonaProvider(SandboxProvider):
 
         os.environ["DAYTONA_API_KEY"] = api_key
         os.environ["DAYTONA_API_URL"] = api_url
-        self.client = Daytona()
+        os.environ["DAYTONA_TARGET"] = target
+        self.client = Daytona(DaytonaConfig(api_key=api_key, api_url=api_url, target=target))
         original_get_proxy_toolbox_url = self.client._get_proxy_toolbox_url
 
         def _wrapped_get_proxy_toolbox_url(sandbox_id: str, region_id: str) -> str:
@@ -162,7 +171,6 @@ class DaytonaProvider(SandboxProvider):
             volume_name, vol_mount_path = self._volume_mounts.pop(thread_id)
             vol = self.client.volume.get(volume_name)
             params = CreateSandboxFromSnapshotParams(
-                target=self.target,
                 auto_stop_interval=0,
                 volumes=[VolumeMount(volume_id=vol.id, mount_path=vol_mount_path)],
             )
@@ -191,7 +199,7 @@ class DaytonaProvider(SandboxProvider):
             self._wait_until_started(sandbox_id)
             sb = self.client.find_one(sandbox_id)
         else:
-            params = CreateSandboxFromSnapshotParams(target=self.target, auto_stop_interval=0)
+            params = CreateSandboxFromSnapshotParams(auto_stop_interval=0)
             sb = self.client.create(params)
 
         for source, target in copy_mounts:
@@ -254,7 +262,7 @@ class DaytonaProvider(SandboxProvider):
             # @@@status-refresh - Always refetch sandbox before reading state to avoid stale cached status.
             sb = self.client.find_one(session_id)
             self._sandboxes[session_id] = sb
-            return _daytona_state_to_status(sb.state.value)
+            return _daytona_state_to_status(_daytona_state_value(sb) or "")
         except Exception:
             logger.exception("[DaytonaProvider] get_session_status failed for %s", session_id)
             return "unknown"
@@ -305,7 +313,10 @@ class DaytonaProvider(SandboxProvider):
 
     def list_provider_sessions(self) -> list[SessionInfo]:
         result = self.client.list()
-        return [SessionInfo(session_id=sb.id, provider=self.name, status=_daytona_state_to_status(sb.state.value)) for sb in result.items]
+        return [
+            SessionInfo(session_id=sb.id, provider=self.name, status=_daytona_state_to_status(_daytona_state_value(sb) or ""))
+            for sb in result.items
+        ]
 
     # ==================== Inspection ====================
 
@@ -325,7 +336,7 @@ class DaytonaProvider(SandboxProvider):
         memory_total_mb = float(memory_gib) * 1024.0 if memory_gib else None
         disk_total_gb = float(disk_gib) if disk_gib else None
 
-        is_running = getattr(sb, "state", None) and sb.state.value == "started"
+        is_running = _daytona_state_value(sb) == "started"
         if not is_running:
             return Metrics(memory_total_mb=memory_total_mb, disk_total_gb=disk_total_gb)
 
@@ -560,10 +571,13 @@ class DaytonaSessionRuntime(_RemoteRuntimeBase):
         if not self._bound_instance_id:
             return
         try:
-            sandbox = self._provider_sandbox(self._bound_instance_id)
+            sandbox = self._runtime_sandbox(self._bound_instance_id)
             sandbox.process.kill_pty_session(self._pty_session_id)
         except Exception:
             pass
+
+    def _runtime_sandbox(self, instance_id: str) -> DaytonaSandbox:
+        return cast("DaytonaSandbox", self._provider_sandbox(instance_id))
 
     @staticmethod
     def _read_pty_chunk_sync(handle, wait_sec: float) -> bytes | None:
@@ -640,7 +654,7 @@ class DaytonaSessionRuntime(_RemoteRuntimeBase):
             self._baseline_env = None
             self._hydrated = False
 
-        sandbox = self._provider_sandbox(instance.instance_id)
+        sandbox = self._runtime_sandbox(instance.instance_id)
         effective_cwd, effective_env = self._sanitize_terminal_snapshot()
         if self._pty_handle is None:
             from daytona_sdk.common.pty import PtySize
@@ -662,8 +676,8 @@ class DaytonaSessionRuntime(_RemoteRuntimeBase):
                     if "fork/exec" in message and "no such file" in message:
                         # Diagnose: check if working directory exists
                         try:
-                            result = sandbox.process.exec_sync(f"test -d {effective_cwd} && echo y || echo n", timeout=5)
-                            if "n" in result.stdout:
+                            result = sandbox.process.exec(f"test -d {effective_cwd} && echo y || echo n", timeout=5)
+                            if "n" in result.result:
                                 raise RuntimeError(
                                     f"PTY bootstrap failed: working directory '{effective_cwd}' does not exist. "
                                     f"Update config 'cwd' to an existing directory (e.g., /home/daytona)."
