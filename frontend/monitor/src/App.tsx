@@ -2560,7 +2560,7 @@ function ThreadTraceSection({
                     className={`trace-filter-btn ${eventFilter === kind ? "is-active" : ""}`}
                     onClick={() => setEventFilter(kind)}
                   >
-                    {kind}
+                    {kind[0].toUpperCase() + kind.slice(1)}
                   </button>
                 ),
               )}
@@ -2573,21 +2573,21 @@ function ThreadTraceSection({
             className={`trace-filter-btn ${traceView === "conversation" ? "is-active" : ""}`}
             onClick={() => setTraceView("conversation")}
           >
-            conversation
+            Conversation
           </button>
           <button
             type="button"
             className={`trace-filter-btn ${traceView === "events" ? "is-active" : ""}`}
             onClick={() => setTraceView("events")}
           >
-            events
+            Events
           </button>
           <button
             type="button"
             className={`trace-filter-btn ${traceView === "steps" ? "is-active" : ""}`}
             onClick={() => setTraceView("steps")}
           >
-            steps
+            Steps
           </button>
         </div>
         <label className="trace-raw-toggle">
@@ -2596,7 +2596,7 @@ function ThreadTraceSection({
             checked={showRawTable}
             onChange={(e) => setShowRawTable(e.target.checked)}
           />
-          raw table
+          Raw Table
         </label>
         <label className="trace-raw-toggle">
           <input
@@ -2604,7 +2604,7 @@ function ThreadTraceSection({
             checked={autoRefresh}
             onChange={(e) => setAutoRefresh(e.target.checked)}
           />
-          auto refresh
+          Auto Refresh
         </label>
         <button
           type="button"
@@ -2614,7 +2614,7 @@ function ThreadTraceSection({
             loadConversation();
           }}
         >
-          refresh
+          Refresh
         </button>
       </div>
       {traceView === "conversation" ? (
