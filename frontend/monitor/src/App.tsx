@@ -1,5 +1,5 @@
 import React from 'react';
-import { BrowserRouter, Routes, Route, Link, NavLink, useLocation, useParams } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Link, NavLink, Navigate, useLocation, useParams } from 'react-router-dom';
 import './styles.css';
 
 const API_BASE = '/api/monitor';
@@ -92,8 +92,9 @@ function ThreadsPage() {
   const page = Number(pagination.page || 1);
 
   return (
-    <div className="page">
+    <div className="page" data-testid="page-threads">
       <h1>{data.title}</h1>
+      <p className="description">Global thread index. Start here to find the active run, then drill into session, lease, and trace detail.</p>
       <p className="count">Showing {from}-{to} of {total} | page {page}</p>
       <section>
         <div className="pagination-bar">
@@ -196,8 +197,9 @@ function TracesPage() {
   const page = Number(pagination.page || 1);
 
   return (
-    <div className="page">
+    <div className="page" data-testid="page-traces">
       <h1>{data.title}</h1>
+      <p className="description">Run-level trace index for debugging tool calls, checkpoints, and runtime transitions across monitored threads.</p>
       <p className="count">Showing {from}-{to} of {total} | page {page}</p>
       <section>
         <div className="pagination-bar">
@@ -336,7 +338,11 @@ function ThreadDetailPage() {
         </ul>
       </section>
 
-      <ThreadTraceSection threadId={data.thread_id} autoRefreshEnabled={threadIsActive} initialRunId={initialRunId} />
+      <section className="trace-section-shell">
+        <h2>Live Trace</h2>
+        <p className="description">Conversation, event stream, and grouped steps for the selected run. Use this after locating the right session or lease above.</p>
+        <ThreadTraceSection threadId={data.thread_id} autoRefreshEnabled={threadIsActive} initialRunId={initialRunId} />
+      </section>
     </div>
   );
 }
@@ -1164,18 +1170,30 @@ function SessionDetailPage() {
 
 // Page: Leases List
 function LeasesPage() {
+  const location = useLocation();
   const [data, setData] = React.useState<any>(null);
+  const divergedOnly = new URLSearchParams(location.search).get('diverged') === '1';
 
   React.useEffect(() => {
     fetchAPI('/leases').then(setData);
   }, []);
 
   if (!data) return <div>Loading...</div>;
+  const items = divergedOnly
+    ? data.items.filter((item: any) => item.state_badge?.desired !== item.state_badge?.observed)
+    : data.items;
 
   return (
-    <div className="page">
+    <div className="page" data-testid="page-leases">
       <h1>{data.title}</h1>
-      <p className="count">Total: {data.count}</p>
+      <p className="description">Global sandbox lease table. Treat this as the infrastructure lens; filtered divergence and raw event history branch out from here.</p>
+      <p className="count">Total: {items.length}{divergedOnly ? ` / ${data.count} (diverged only)` : ''}</p>
+      <div className="page-tools">
+        <Link className="quick-link" to={divergedOnly ? '/leases' : '/leases?diverged=1'}>
+          {divergedOnly ? 'Show all leases' : 'Only diverged leases'}
+        </Link>
+        <Link className="quick-link" to="/events">Lease event timeline</Link>
+      </div>
       <table>
         <thead>
           <tr>
@@ -1189,7 +1207,7 @@ function LeasesPage() {
           </tr>
         </thead>
         <tbody>
-          {data.items.map((item: any) => (
+          {items.map((item: any) => (
             <tr key={item.lease_id}>
               <td><Link to={item.lease_url}>{item.lease_id}</Link></td>
               <td>{item.provider}</td>
@@ -1492,7 +1510,7 @@ function EvaluationPage() {
     void loadEvaluations();
     const timer = window.setInterval(() => {
       void loadEvaluations();
-    }, 2500);
+    }, 5000);
     return () => window.clearInterval(timer);
   }, [loadEvaluations]);
 
@@ -1572,7 +1590,7 @@ function EvaluationPage() {
 
   return (
     <div className="page">
-      <h1>Evaluation</h1>
+      <h1>Evaluations</h1>
       <p className="description">One evaluation contains many threads. Start jobs from config panel, track durable progress in list, then drill into thread trace.</p>
 
       <section className="evaluation-flow">
@@ -1582,7 +1600,7 @@ function EvaluationPage() {
         </article>
         <article className="hint-box">
           <h2>2. Track</h2>
-          <p className="description">List auto-refreshes every 2.5s and survives reload. Status is backend-persisted.</p>
+          <p className="description">List auto-refreshes every 5s and survives reload. Status is backend-persisted.</p>
         </article>
         <article className="hint-box">
           <h2>3. Inspect</h2>
@@ -1632,7 +1650,7 @@ function EvaluationPage() {
           </button>
         </div>
         <p className="count">
-          Auto refresh: 2.5s {runsLoading ? '| loading...' : ''}
+          Auto refresh: 5s {runsLoading ? '| loading...' : ''}
           {' '}| page {evalPagination?.page ?? 1}
         </p>
         <p className="description">Evaluation = one batch run. Progress shows total/completed/started-or-running/pending. Click Evaluation ID for detail trace and thread links.</p>
@@ -2037,15 +2055,16 @@ function ScrollToTopOnRouteChange() {
 function Layout({ children }: { children: React.ReactNode }) {
   return (
     <div className="app">
-      <nav className="top-nav">
-        <h1 className="logo">Mycel Sandbox Monitor</h1>
+      <nav className="top-nav" data-testid="monitor-nav">
+        <div className="top-nav-brand">
+          <h1 className="logo">Mycel Sandbox Monitor</h1>
+          <p className="nav-caption">Global ops surface for threads, traces, leases, and eval runs.</p>
+        </div>
         <div className="nav-links">
-          <NavLink to="/threads">Threads</NavLink>
-          <NavLink to="/traces">Trace</NavLink>
-          <NavLink to="/leases">Leases</NavLink>
-          <NavLink to="/diverged">Diverged</NavLink>
-          <NavLink to="/events">Events</NavLink>
-          <NavLink to="/evaluation">Evaluation</NavLink>
+          <NavLink data-testid="nav-threads" to="/threads">Threads</NavLink>
+          <NavLink data-testid="nav-traces" to="/traces">Traces</NavLink>
+          <NavLink data-testid="nav-leases" to="/leases">Leases</NavLink>
+          <NavLink data-testid="nav-eval" to="/evaluation">Eval</NavLink>
         </div>
       </nav>
       <main className="content">
@@ -2062,14 +2081,14 @@ export default function App() {
       <ScrollToTopOnRouteChange />
       <Layout>
         <Routes>
-          <Route path="/" element={<DivergedPage />} />
+          <Route path="/" element={<Navigate to="/threads" replace />} />
           <Route path="/threads" element={<ThreadsPage />} />
           <Route path="/traces" element={<TracesPage />} />
           <Route path="/thread/:threadId" element={<ThreadDetailPage />} />
           <Route path="/session/:sessionId" element={<SessionDetailPage />} />
           <Route path="/leases" element={<LeasesPage />} />
           <Route path="/lease/:leaseId" element={<LeaseDetailPage />} />
-          <Route path="/diverged" element={<DivergedPage />} />
+          <Route path="/diverged" element={<Navigate to="/leases?diverged=1" replace />} />
           <Route path="/events" element={<EventsPage />} />
           <Route path="/event/:eventId" element={<EventDetailPage />} />
           <Route path="/evaluation" element={<EvaluationPage />} />

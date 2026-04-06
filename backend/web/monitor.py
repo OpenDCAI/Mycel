@@ -14,9 +14,8 @@ import time
 import uuid
 from datetime import datetime
 from pathlib import Path
-from subprocess import PIPE
-
 from typing import Any
+
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 
@@ -235,10 +234,7 @@ async def _run_evaluation_job(evaluation_id: str, payload: EvaluationCreateReque
         _update_evaluation_job_status(
             evaluation_id,
             "running",
-            (
-                f"runner=direct pid={proc.pid} sandbox={payload.sandbox} run_dir={run_dir} "
-                f"stdout_log={stdout_path} stderr_log={stderr_path}"
-            ),
+            (f"runner=direct pid={proc.pid} sandbox={payload.sandbox} run_dir={run_dir} stdout_log={stdout_path} stderr_log={stderr_path}"),
         )
         # @@@monitor-eval-hard-timeout-budget - wall-time must include both solve budget and harness scoring budget for batch runs.
         solve_budget_sec = payload.timeout_sec * payload.count
@@ -246,7 +242,7 @@ async def _run_evaluation_job(evaluation_id: str, payload: EvaluationCreateReque
         hard_timeout_sec = solve_budget_sec + eval_budget_sec + 180
         try:
             await asyncio.wait_for(proc.wait(), timeout=hard_timeout_sec)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             proc.kill()
             await proc.wait()
             notes = (
@@ -281,10 +277,7 @@ async def _run_evaluation_job(evaluation_id: str, payload: EvaluationCreateReque
         final_status = _derive_evaluation_status("completed", score)
         _update_evaluation_job_status(evaluation_id, final_status, notes)
     except Exception as exc:
-        notes = (
-            f"runner=direct error={exc} sandbox={payload.sandbox} run_dir={run_dir} "
-            f"stdout_log={stdout_path} stderr_log={stderr_path}"
-        )
+        notes = f"runner=direct error={exc} sandbox={payload.sandbox} run_dir={run_dir} stdout_log={stdout_path} stderr_log={stderr_path}"
         _update_evaluation_job_status(evaluation_id, "error", notes)
 
 
@@ -377,7 +370,7 @@ def _note_value(notes: str, key: str) -> str | None:
     prefix = f"{key}="
     for token in (notes or "").split():
         if token.startswith(prefix):
-            return token[len(prefix):]
+            return token[len(prefix) :]
     return None
 
 
@@ -908,14 +901,20 @@ def _list_running_eval_checkpoint_threads() -> list[dict[str, str | None]]:
     seen: set[str] = set()
     with sqlite3.connect(str(DB_PATH)) as conn:
         conn.row_factory = sqlite3.Row
-        jobs = conn.execute(
-            """
-            SELECT evaluation_id, status, created_at, updated_at
-            FROM evaluation_jobs
-            WHERE status = 'running'
-            ORDER BY created_at DESC
-            """
-        ).fetchall()
+        try:
+            jobs = conn.execute(
+                """
+                SELECT evaluation_id, status, created_at, updated_at
+                FROM evaluation_jobs
+                WHERE status = 'running'
+                ORDER BY created_at DESC
+                """
+            ).fetchall()
+        except sqlite3.OperationalError as exc:
+            # @@@compat-monitor-missing-eval-table - transplanted monitor must still render on databases that have never created evaluation tables.
+            if "no such table: evaluation_jobs" in str(exc):
+                return []
+            raise
         for job in jobs:
             for thread_id in _list_checkpoint_threads_for_evaluation(str(job["evaluation_id"])):
                 if thread_id in seen:
@@ -1257,7 +1256,8 @@ def list_threads(
         """
     ).fetchone()
     session_total = int(total_row["total_threads"] if total_row else 0)
-    rows = db.execute("""
+    rows = db.execute(
+        """
         SELECT
             cs.thread_id,
             COUNT(DISTINCT cs.chat_session_id) as session_count,
@@ -1272,7 +1272,9 @@ def list_threads(
         GROUP BY cs.thread_id
         ORDER BY MAX(cs.last_active_at) DESC
         LIMIT ? OFFSET ?
-    """, (limit, offset)).fetchall()
+    """,
+        (limit, offset),
+    ).fetchall()
 
     items = []
     seen_thread_ids = {str(row["thread_id"]) for row in rows if row["thread_id"]}
@@ -1532,7 +1534,7 @@ def list_evaluations(
             LIMIT ? OFFSET ?
             """,
             (limit, offset),
-            ).fetchall()
+        ).fetchall()
         items = []
         for row in jobs:
             notes = row["notes"] or ""
@@ -1818,7 +1820,9 @@ def get_evaluation_detail(evaluation_id: str, request: Request, db: sqlite3.Conn
                     if session_row and session_row["last_active_at"]
                     else None,
                 },
-                "status": "running" if running else (session_row["status"] if session_row else ("running" if status == "running" else "idle")),
+                "status": "running"
+                if running
+                else (session_row["status"] if session_row else ("running" if status == "running" else "idle")),
                 "running": running,
             }
         )
@@ -1879,6 +1883,7 @@ def get_evaluation_detail(evaluation_id: str, request: Request, db: sqlite3.Conn
         },
         "threads": {"title": "Evaluation Threads", "count": total, "items": thread_items},
     }
+
 
 @router.get("/session/{session_id}")
 def get_session(session_id: str, db: sqlite3.Connection = Depends(get_db)):
