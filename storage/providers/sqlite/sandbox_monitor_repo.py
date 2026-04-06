@@ -149,7 +149,16 @@ class SQLiteSandboxMonitorRepo:
                     SELECT at.thread_id
                     FROM abstract_terminals at
                     WHERE at.lease_id = sl.lease_id
-                    ORDER BY at.created_at DESC
+                    -- @@@visible-thread-preference - subagent terminals can be newer than the
+                    -- parent binding on the same lease. Resource/lease surfaces should prefer
+                    -- the newest user-visible thread when one exists.
+                    ORDER BY
+                        CASE
+                            WHEN at.thread_id LIKE 'subagent-%' THEN 1
+                            WHEN at.thread_id LIKE '(%' AND at.thread_id LIKE '%)' THEN 1
+                            ELSE 0
+                        END,
+                        at.created_at DESC
                     LIMIT 1
                 ) as thread_id
             FROM sandbox_leases sl
@@ -308,15 +317,30 @@ class SQLiteSandboxMonitorRepo:
                     sl.desired_state AS desired_state,
                     sl.created_at AS created_at,
                     NULL AS session_id,
-                    at.thread_id AS thread_id
+                    (
+                        SELECT at2.thread_id
+                        FROM abstract_terminals at2
+                        WHERE at2.lease_id = sl.lease_id
+                        ORDER BY
+                            CASE
+                                WHEN at2.thread_id LIKE 'subagent-%' THEN 1
+                                WHEN at2.thread_id LIKE '(%' AND at2.thread_id LIKE '%)' THEN 1
+                                ELSE 0
+                            END,
+                            at2.created_at DESC
+                        LIMIT 1
+                    ) AS thread_id
                 FROM sandbox_leases sl
-                JOIN abstract_terminals at
-                    ON sl.lease_id = at.lease_id
                 WHERE NOT EXISTS (
                     SELECT 1
                     FROM chat_sessions cs
                     WHERE cs.lease_id = sl.lease_id
                       AND cs.status != 'closed'
+                )
+                  AND EXISTS (
+                    SELECT 1
+                    FROM abstract_terminals at
+                    WHERE at.lease_id = sl.lease_id
                 )
             ),
             recent_session_fallback AS (
@@ -331,7 +355,13 @@ class SQLiteSandboxMonitorRepo:
                         SELECT cs.thread_id
                         FROM chat_sessions cs
                         WHERE cs.lease_id = sl.lease_id
-                        ORDER BY cs.started_at DESC
+                        ORDER BY
+                            CASE
+                                WHEN cs.thread_id LIKE 'subagent-%' THEN 1
+                                WHEN cs.thread_id LIKE '(%' AND cs.thread_id LIKE '%)' THEN 1
+                                ELSE 0
+                            END,
+                            cs.started_at DESC
                         LIMIT 1
                     ) AS thread_id
                 FROM sandbox_leases sl
