@@ -126,14 +126,6 @@ class MemberRow(BaseModel):
     mycel_id: int | None = None
 
 
-class AccountRow(BaseModel):
-    id: str
-    user_id: str
-    username: str
-    password_hash: str | None = None
-    api_key_hash: str | None = None
-    created_at: float
-
 
 class ChatRow(BaseModel):
     id: str
@@ -357,14 +349,6 @@ class MemberRepo(Protocol):
     def increment_thread_seq(self, member_id: str) -> int: ...
     def delete(self, member_id: str) -> None: ...
 
-
-class AccountRepo(Protocol):
-    def close(self) -> None: ...
-    def create(self, row: AccountRow) -> None: ...
-    def get_by_id(self, account_id: str) -> AccountRow | None: ...
-    def get_by_user_id(self, user_id: str) -> AccountRow | None: ...
-    def get_by_username(self, username: str) -> AccountRow | None: ...
-    def delete(self, account_id: str) -> None: ...
 
 
 class ChatRepo(Protocol):
