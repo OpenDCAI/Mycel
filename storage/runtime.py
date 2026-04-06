@@ -45,6 +45,45 @@ def build_member_repo(
     return SupabaseMemberRepo(client)
 
 
+def build_tool_task_repo(
+    *,
+    supabase_client: Any | None = None,
+    supabase_client_factory: str | None = None,
+    **kwargs: Any,
+):
+    return build_storage_container(
+        supabase_client=supabase_client,
+        supabase_client_factory=supabase_client_factory,
+        **kwargs,
+    ).tool_task_repo()
+
+
+def build_agent_registry_repo(
+    *,
+    supabase_client: Any | None = None,
+    supabase_client_factory: str | None = None,
+    **kwargs: Any,
+):
+    return build_storage_container(
+        supabase_client=supabase_client,
+        supabase_client_factory=supabase_client_factory,
+        **kwargs,
+    ).agent_registry_repo()
+
+
+def build_sync_file_repo(
+    *,
+    supabase_client: Any | None = None,
+    supabase_client_factory: str | None = None,
+    **kwargs: Any,
+):
+    return build_storage_container(
+        supabase_client=supabase_client,
+        supabase_client_factory=supabase_client_factory,
+        **kwargs,
+    ).sync_file_repo()
+
+
 def _resolve_supabase_client(
     client: Any | None = None,
     factory_ref: str | None = None,

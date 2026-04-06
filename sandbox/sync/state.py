@@ -1,7 +1,7 @@
 import hashlib
 from pathlib import Path
 
-from backend.web.core.storage_factory import make_sync_file_repo
+from storage.runtime import build_sync_file_repo
 
 
 def _calculate_checksum(file_path: Path) -> str:
@@ -14,8 +14,8 @@ def _calculate_checksum(file_path: Path) -> str:
 
 
 class SyncState:
-    def __init__(self):
-        self._repo = make_sync_file_repo()
+    def __init__(self, repo=None):
+        self._repo = repo or build_sync_file_repo()
 
     def close(self) -> None:
         self._repo.close()

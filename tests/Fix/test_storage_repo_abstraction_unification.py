@@ -6,6 +6,10 @@ import pytest
 from fastapi import FastAPI
 
 from backend.web.core import lifespan as lifespan_module
+from core.agents.registry import AgentRegistry
+from core.runtime.registry import ToolRegistry
+from core.tools.task.service import TaskService
+from sandbox.sync.state import SyncState
 from storage.container import StorageContainer
 
 
@@ -61,6 +65,15 @@ class _FakeContainer:
         return _FakeRepo()
 
     def cron_job_repo(self) -> _FakeRepo:
+        return _FakeRepo()
+
+    def tool_task_repo(self) -> _FakeRepo:
+        return _FakeRepo()
+
+    def agent_registry_repo(self) -> _FakeRepo:
+        return _FakeRepo()
+
+    def sync_file_repo(self) -> _FakeRepo:
         return _FakeRepo()
 
 
@@ -193,3 +206,44 @@ async def test_lifespan_wires_member_and_thread_repos_from_storage_container(
     async with lifespan_module.lifespan(app):
         assert app.state.member_repo is container.member_repo_value
         assert app.state.thread_repo is container.thread_repo_value
+
+
+def test_runtime_services_default_to_storage_runtime_container(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
+    class _FakeRuntimeContainer:
+        def __init__(self) -> None:
+            self.tool_task_repo_value = object()
+            self.agent_registry_repo_value = object()
+            self.sync_file_repo_value = object()
+
+        def tool_task_repo(self) -> object:
+            return self.tool_task_repo_value
+
+        def agent_registry_repo(self) -> object:
+            return self.agent_registry_repo_value
+
+        def sync_file_repo(self) -> object:
+            return self.sync_file_repo_value
+
+    container = _FakeRuntimeContainer()
+
+    monkeypatch.setattr(
+        "backend.web.core.storage_factory.make_tool_task_repo",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("unexpected web storage factory tool repo")),
+    )
+    monkeypatch.setattr(
+        "backend.web.core.storage_factory.make_agent_registry_repo",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("unexpected web storage factory agent repo")),
+    )
+    monkeypatch.setattr(
+        "backend.web.core.storage_factory.make_sync_file_repo",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("unexpected web storage factory sync repo")),
+    )
+    monkeypatch.setattr("storage.runtime.build_storage_container", lambda **_kwargs: container)
+
+    task_service = TaskService(registry=ToolRegistry(), db_path=tmp_path / "test.db")
+    agent_registry = AgentRegistry()
+    sync_state = SyncState()
+
+    assert task_service._repo is container.tool_task_repo_value
+    assert agent_registry._repo is container.agent_registry_repo_value
+    assert sync_state._repo is container.sync_file_repo_value

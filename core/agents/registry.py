@@ -10,7 +10,7 @@ import asyncio
 from dataclasses import dataclass
 from typing import Any
 
-from backend.web.core.storage_factory import make_agent_registry_repo
+from storage.runtime import build_agent_registry_repo
 
 
 @dataclass
@@ -58,7 +58,7 @@ class AgentRegistry:
 
     def __init__(self, repo: Any = None):
         self._lock = asyncio.Lock()
-        self._repo = repo or make_agent_registry_repo()
+        self._repo = repo or build_agent_registry_repo()
 
     async def register(self, entry: AgentEntry) -> None:
         async with self._lock:

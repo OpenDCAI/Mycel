@@ -2157,7 +2157,7 @@ class TestToolModeFromConfig:
         reg = ToolRegistry()
         from core.tools.task.service import TaskService
 
-        _svc = TaskService(registry=reg, db_path=tmp_path / "test.db")
+        _svc = TaskService(registry=reg, db_path=tmp_path / "test.db", repo=object())
         # TaskCreate/TaskUpdate/TaskList/TaskGet should be DEFERRED
         for tool_name in ["TaskCreate", "TaskGet", "TaskList", "TaskUpdate"]:
             entry = reg.get(tool_name)
@@ -2178,7 +2178,7 @@ class TestToolModeFromConfig:
         reg = ToolRegistry()
         from core.tools.task.service import TaskService
 
-        _svc = TaskService(registry=reg, db_path=tmp_path / "test.db")
+        _svc = TaskService(registry=reg, db_path=tmp_path / "test.db", repo=object())
 
         for tool_name in ["TaskGet", "TaskList"]:
             entry = reg.get(tool_name)
