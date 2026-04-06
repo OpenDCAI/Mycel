@@ -269,7 +269,7 @@ function ChatConversationInner({ chatId }: { chatId: string }) {
     return (
       <div className="h-full flex flex-col items-center justify-center gap-2">
         <p className="text-sm text-destructive">{error}</p>
-        <Link to="/chats" className="text-xs text-primary hover:underline">返回对话列表</Link>
+        <Link to="/chat" className="text-xs text-primary hover:underline">返回对话列表</Link>
       </div>
     );
   }
