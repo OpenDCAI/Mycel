@@ -269,9 +269,24 @@ The dashboard is a switchboard, not a full destination page. It should answer â€
   - grouped lease health sections (`Diverged`, `Orphans`, `All leases`)
 - evaluation guidance is no longer sprayed across the first screen; tutorial/reference sections are now collapsed by default behind an operator-guide `<details>` block
 
+### Current D4 Phase-2 Landing
+
+- monitor provider cards are now much closer to the product `ResourcesPage` family:
+  - status light in the title row
+  - compact metric cells instead of plain text-only stats
+  - capability strip
+  - session status dot strip
+  - unavailable providers still stay selectable in monitor so ops can inspect them, even though product cards disable that path
+- selected provider detail is now a true panel instead of a loose stack:
+  - provider header + status/type context
+  - overview pill strip
+  - capability strip reused in the detail pane
+  - global session table kept below as the monitor-only truth surface
+- monitor-side null telemetry now stays `--` instead of being accidentally coerced into `0.0`, which was misleading for unavailable providers
+
 ### D4 Remaining Gaps
 
-- provider detail is now useful, but it is still lighter than the original product `ResourcesPage` family
+- monitor provider/detail surface is now close to the product resources page in interaction quality, but still lacks the richer sandbox-card drill-down family the product page has
 - lease regrouping exists, but backend-side semantic categorization is still shallow and belongs to `D3`
 - dashboard is currently a compact switchboard; it does not yet expose richer error drill-down or resource anomaly timelines
 

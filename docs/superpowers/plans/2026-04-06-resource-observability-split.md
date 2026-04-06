@@ -25,6 +25,10 @@
   - root lands on `/dashboard`
   - monitor `Resources` uses the global monitor contract and includes grouped lease triage
   - evaluation tutorial/reference sections are collapsed by default
+- `D4` now has a landed phase-2:
+  - monitor provider cards now expose a product-like status light, metric cells, capability strip, and session dots
+  - selected provider detail now reads like a real panel instead of a loose stats stack
+  - null telemetry in monitor resources no longer renders as fake `0.0` values
 - `D2` now has a landed phase-1:
   - evaluation detail payload includes backend-owned `info.operator_surface`
   - provisional eval detail opens with `Operator Status`, artifact paths, and explicit next steps

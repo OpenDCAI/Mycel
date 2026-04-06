@@ -248,6 +248,99 @@ function DashboardPage() {
   );
 }
 
+const CAPABILITY_LABELS: Record<string, string> = {
+  filesystem: "FS",
+  terminal: "TERM",
+  metrics: "METRICS",
+  screenshot: "SHOT",
+  web: "WEB",
+  process: "PROC",
+  hooks: "HOOKS",
+  mount: "MOUNT",
+};
+
+function formatMonitorMetric(value: any, suffix = '', digits = 1): string {
+  if (value == null) return '--';
+  const num = Number(value);
+  if (!Number.isFinite(num)) return '--';
+  return `${num.toFixed(digits)}${suffix}`;
+}
+
+function ProviderStatusLight({ status }: { status: string }) {
+  const className =
+    status === 'active'
+      ? 'provider-status-light is-active'
+      : status === 'ready'
+        ? 'provider-status-light is-ready'
+        : 'provider-status-light is-unavailable';
+  return <span className={className} aria-hidden="true" />;
+}
+
+function ProviderMiniMetric({
+  label,
+  value,
+  note,
+}: {
+  label: string;
+  value: React.ReactNode;
+  note?: React.ReactNode;
+}) {
+  return (
+    <div className="provider-mini-metric">
+      <span className="provider-mini-label">{label}</span>
+      <strong className="provider-mini-value">{value}</strong>
+      {note ? <span className="provider-mini-note">{note}</span> : null}
+    </div>
+  );
+}
+
+function CapabilityStrip({ capabilities }: { capabilities: Record<string, boolean> | null | undefined }) {
+  const enabled = Object.entries(capabilities || {}).filter(([, value]) => Boolean(value));
+  if (enabled.length === 0) {
+    return <div className="provider-capability-strip"><span className="provider-capability-chip is-muted">No capabilities</span></div>;
+  }
+  return (
+    <div className="provider-capability-strip">
+      {enabled.slice(0, 5).map(([name]) => (
+        <span key={name} className="provider-capability-chip">
+          {CAPABILITY_LABELS[name] || name}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+function SessionDotStrip({ sessions }: { sessions: any[] }) {
+  if (!sessions.length) {
+    return <div className="provider-session-strip provider-session-empty">No active or historical sessions</div>;
+  }
+  const sorted = [...sessions].sort((a, b) => {
+    const order = { running: 0, destroying: 1, paused: 2, stopped: 3 } as Record<string, number>;
+    return (order[a.status] ?? 4) - (order[b.status] ?? 4);
+  });
+  const running = sessions.filter((session) => session.status === 'running').length;
+  const paused = sessions.filter((session) => session.status === 'paused').length;
+  const stopped = sessions.filter((session) => session.status === 'stopped').length;
+  return (
+    <div className="provider-session-strip">
+      <div className="provider-session-dots">
+        {sorted.slice(0, 6).map((session) => (
+          <span
+            key={session.id}
+            className={`provider-session-dot status-${session.status || 'unknown'}`}
+            title={`${session.id} · ${session.status}`}
+          />
+        ))}
+      </div>
+      <span className="provider-session-copy">
+        {running} running
+        {paused ? ` · ${paused} paused` : ''}
+        {stopped ? ` · ${stopped} stopped` : ''}
+      </span>
+    </div>
+  );
+}
+
 function MonitorResourcesPage() {
   const [resourceData, setResourceData] = React.useState<any>(null);
   const [leaseData, setLeaseData] = React.useState<any>(null);
@@ -361,6 +454,8 @@ function MonitorResourcesPage() {
           {providers.map((provider: any) => {
             const sessions = Array.isArray(provider.sessions) ? provider.sessions : [];
             const runningCount = sessions.filter((session: any) => session.status === 'running').length;
+            const pausedCount = sessions.filter((session: any) => session.status === 'paused').length;
+            const stoppedCount = sessions.filter((session: any) => session.status === 'stopped').length;
             const unavailable = provider.status === 'unavailable';
             const cpuUsed = provider.cardCpu?.used;
             const memoryUsed = provider.telemetry?.memory?.used;
@@ -374,17 +469,27 @@ function MonitorResourcesPage() {
               >
                 <div className="monitor-provider-header">
                   <div>
-                    <strong>{provider.name}</strong>
+                    <div className="monitor-provider-title">
+                      <ProviderStatusLight status={provider.status} />
+                      <strong>{provider.name}</strong>
+                    </div>
                     <p>{provider.type} {provider.vendor ? `· ${provider.vendor}` : ''}</p>
                   </div>
                   <span className={`status-chip ${unavailable ? 'chip-danger' : provider.status === 'active' ? 'chip-success' : 'chip-muted'}`}>
                     {provider.status}
                   </span>
                 </div>
+                <div className="provider-card-divider" />
                 <div className="monitor-provider-metrics">
-                  <DashboardMetric label="Sessions" value={sessions.length} note={`${runningCount} running`} />
-                  <DashboardMetric label="CPU" value={cpuUsed == null ? '--' : `${Number(cpuUsed).toFixed(1)}%`} note={provider.cardCpu?.freshness || 'no signal'} />
-                  <DashboardMetric label="Memory" value={memoryUsed == null ? '--' : `${Number(memoryUsed).toFixed(1)} GB`} note={provider.telemetry?.memory?.freshness || 'no signal'} />
+                  <ProviderMiniMetric label="Sessions" value={sessions.length} note={`${runningCount} running`} />
+                  <ProviderMiniMetric label="CPU" value={formatMonitorMetric(cpuUsed, '%')} note={provider.cardCpu?.freshness || 'no signal'} />
+                  <ProviderMiniMetric label="Memory" value={formatMonitorMetric(memoryUsed, ' GB')} note={provider.telemetry?.memory?.freshness || 'no signal'} />
+                </div>
+                <CapabilityStrip capabilities={provider.capabilities} />
+                <SessionDotStrip sessions={sessions} />
+                <div className="provider-card-footer">
+                  <span>{pausedCount} paused</span>
+                  <span>{stoppedCount} stopped</span>
                 </div>
                 {provider.unavailableReason || provider.error ? (
                   <p className="provider-inline-error">{provider.unavailableReason || provider.error}</p>
@@ -397,59 +502,70 @@ function MonitorResourcesPage() {
 
       {selectedProvider ? (
         <section className="resource-section-shell">
-          <div className="section-row">
-            <div>
-              <h2>{selectedProvider.name}</h2>
-              <p className="description">{selectedProvider.description || 'No provider description.'}</p>
+          <div className="provider-detail-shell">
+            <div className="section-row">
+              <div>
+                <div className="provider-detail-heading">
+                  <ProviderStatusLight status={selectedProvider.status} />
+                  <h2>{selectedProvider.name}</h2>
+                </div>
+                <p className="description">{selectedProvider.description || 'No provider description.'}</p>
+              </div>
+              <div className="provider-detail-actions">
+                <span className={`status-chip ${selectedProvider.status === 'active' ? 'chip-success' : selectedProvider.status === 'unavailable' ? 'chip-danger' : 'chip-muted'}`}>
+                  {selectedProvider.type}{selectedProvider.vendor ? ` · ${selectedProvider.vendor}` : ''}
+                </span>
+                {selectedProvider.consoleUrl ? (
+                  <a className="quick-link" href={selectedProvider.consoleUrl} target="_blank" rel="noreferrer">
+                    Open console
+                  </a>
+                ) : null}
+              </div>
             </div>
-            {selectedProvider.consoleUrl ? (
-              <a className="quick-link" href={selectedProvider.consoleUrl} target="_blank" rel="noreferrer">
-                Open console
-              </a>
-            ) : null}
-          </div>
-          <div className="resource-overview-strip">
-            <span className="resource-overview-pill">
-              <span className="resource-overview-label">status</span>
-              <strong>{selectedProvider.status}</strong>
-            </span>
-            <span className="resource-overview-pill">
-              <span className="resource-overview-label">running</span>
-              <strong>{selectedRunning}</strong>
-            </span>
-            <span className="resource-overview-pill">
-              <span className="resource-overview-label">paused</span>
-              <strong>{selectedPaused}</strong>
-            </span>
-            <span className="resource-overview-pill">
-              <span className="resource-overview-label">stopped</span>
-              <strong>{selectedStopped}</strong>
-            </span>
-          </div>
-          <div className="info-grid info-grid-compact">
-            <div>
-              <strong>Provider</strong>
-              <span>{selectedProvider.type}{selectedProvider.vendor ? ` · ${selectedProvider.vendor}` : ''}</span>
+            <div className="resource-overview-strip">
+              <span className="resource-overview-pill">
+                <span className="resource-overview-label">status</span>
+                <strong>{selectedProvider.status}</strong>
+              </span>
+              <span className="resource-overview-pill">
+                <span className="resource-overview-label">running</span>
+                <strong>{selectedRunning}</strong>
+              </span>
+              <span className="resource-overview-pill">
+                <span className="resource-overview-label">paused</span>
+                <strong>{selectedPaused}</strong>
+              </span>
+              <span className="resource-overview-pill">
+                <span className="resource-overview-label">stopped</span>
+                <strong>{selectedStopped}</strong>
+              </span>
             </div>
-            <div>
-              <strong>Capabilities</strong>
-              <span>{Object.entries(selectedProvider.capabilities || {}).filter(([, enabled]) => Boolean(enabled)).map(([name]) => name).join(', ') || '-'}</span>
-            </div>
-            <div>
-              <strong>CPU</strong>
-              <span>{selectedProvider.telemetry?.cpu?.used == null ? '--' : `${Number(selectedProvider.telemetry.cpu.used).toFixed(1)}%`}</span>
-            </div>
-            <div>
-              <strong>Memory</strong>
-              <span>{selectedProvider.telemetry?.memory?.used == null ? '--' : `${Number(selectedProvider.telemetry.memory.used).toFixed(1)} / ${selectedProvider.telemetry?.memory?.limit ?? '--'} GB`}</span>
-            </div>
-            <div>
-              <strong>Disk</strong>
-              <span>{selectedProvider.telemetry?.disk?.used == null ? '--' : `${Number(selectedProvider.telemetry.disk.used).toFixed(1)} / ${selectedProvider.telemetry?.disk?.limit ?? '--'} GB`}</span>
-            </div>
-            <div>
-              <strong>Reason</strong>
-              <span>{selectedProvider.unavailableReason || selectedProvider.error || 'healthy'}</span>
+            <CapabilityStrip capabilities={selectedProvider.capabilities} />
+            <div className="info-grid info-grid-compact">
+              <div>
+                <strong>Provider</strong>
+                <span>{selectedProvider.type}{selectedProvider.vendor ? ` · ${selectedProvider.vendor}` : ''}</span>
+              </div>
+              <div>
+                <strong>CPU</strong>
+                <span>{selectedProvider.telemetry?.cpu?.used == null ? '--' : `${Number(selectedProvider.telemetry.cpu.used).toFixed(1)}%`}</span>
+              </div>
+              <div>
+                <strong>Memory</strong>
+                <span>{selectedProvider.telemetry?.memory?.used == null ? '--' : `${Number(selectedProvider.telemetry.memory.used).toFixed(1)} / ${selectedProvider.telemetry?.memory?.limit ?? '--'} GB`}</span>
+              </div>
+              <div>
+                <strong>Disk</strong>
+                <span>{selectedProvider.telemetry?.disk?.used == null ? '--' : `${Number(selectedProvider.telemetry.disk.used).toFixed(1)} / ${selectedProvider.telemetry?.disk?.limit ?? '--'} GB`}</span>
+              </div>
+              <div>
+                <strong>Running metric</strong>
+                <span>{selectedProvider.telemetry?.running?.used == null ? '--' : `${selectedProvider.telemetry.running.used} / ${selectedProvider.telemetry?.running?.limit ?? '--'} ${selectedProvider.telemetry?.running?.unit || ''}`}</span>
+              </div>
+              <div>
+                <strong>Reason</strong>
+                <span>{selectedProvider.unavailableReason || selectedProvider.error || 'healthy'}</span>
+              </div>
             </div>
           </div>
           <div className="resource-session-shell">
