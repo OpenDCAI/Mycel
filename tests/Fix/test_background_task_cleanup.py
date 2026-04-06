@@ -5,12 +5,13 @@ import json
 import shutil
 import sys
 from pathlib import Path
+from typing import cast
 
 import pytest
 from langchain_core.messages import AIMessage
 
 from core.agents.registry import AgentEntry, AgentRegistry
-from core.agents.service import AgentService
+from core.agents.service import AgentService, BackgroundRun, _BashBackgroundRun, _RunningTask
 from core.runtime.middleware.queue import MessageQueueManager
 from core.runtime.middleware.queue.middleware import SteeringMiddleware
 from core.runtime.registry import ToolRegistry
@@ -25,6 +26,20 @@ class _FakeAgentRegistry:
 
     async def update_status(self, agent_id: str, status: str):
         self.last_status = (agent_id, status)
+
+
+def _fake_agent_registry() -> AgentRegistry:
+    return cast(AgentRegistry, _FakeAgentRegistry())
+
+
+def _require_bash_run(run: BackgroundRun) -> _BashBackgroundRun:
+    assert isinstance(run, _BashBackgroundRun)
+    return run
+
+
+def _require_running_task(run: BackgroundRun) -> _RunningTask:
+    assert isinstance(run, _RunningTask)
+    return run
 
 
 class _SlowChildAgent:
@@ -101,7 +116,7 @@ def _agent_tool_json(result) -> dict:
 def test_taskstop_terminates_real_background_bash_run(tmp_path):
     async def run():
         registry = ToolRegistry()
-        shared_runs: dict[str, object] = {}
+        shared_runs: dict[str, BackgroundRun] = {}
         executor = BashExecutor(default_cwd=str(tmp_path))
         command_service = CommandService(
             registry=registry,
@@ -111,7 +126,7 @@ def test_taskstop_terminates_real_background_bash_run(tmp_path):
         )
         agent_service = AgentService(
             tool_registry=registry,
-            agent_registry=_FakeAgentRegistry(),
+            agent_registry=_fake_agent_registry(),
             workspace_root=Path(tmp_path),
             model_name="gpt-test",
             shared_runs=shared_runs,
@@ -127,13 +142,14 @@ def test_taskstop_terminates_real_background_bash_run(tmp_path):
         assert len(shared_runs) == 1
 
         task_id, running = next(iter(shared_runs.items()))
+        bash_run = _require_bash_run(running)
         assert running.is_done is False
 
         stop_result = await agent_service._handle_task_stop(task_id)
 
         assert stop_result == f"Task {task_id} cancelled"
         assert task_id not in shared_runs
-        assert running._cmd.process.returncode is not None
+        assert bash_run._cmd.process.returncode is not None
 
     asyncio.run(run())
 
@@ -142,7 +158,7 @@ def test_sendmessage_search_hint_uses_queue_naming(tmp_path):
     registry = ToolRegistry()
     AgentService(
         tool_registry=registry,
-        agent_registry=_FakeAgentRegistry(),
+        agent_registry=_fake_agent_registry(),
         workspace_root=Path(tmp_path),
         model_name="gpt-test",
     )
@@ -284,7 +300,7 @@ async def test_background_agent_progress_notification_reaches_parent_next_turn(t
     queue_manager = MessageQueueManager(db_path=str(tmp_path / "queue.db"))
     service = AgentService(
         tool_registry=registry,
-        agent_registry=_FakeAgentRegistry(),
+        agent_registry=_fake_agent_registry(),
         workspace_root=Path(tmp_path),
         model_name="gpt-test",
         queue_manager=queue_manager,
@@ -331,7 +347,7 @@ async def test_background_agent_completion_notification_waits_for_followthrough_
     queue_manager = MessageQueueManager(db_path=str(tmp_path / "queue.db"))
     service = AgentService(
         tool_registry=registry,
-        agent_registry=_FakeAgentRegistry(),
+        agent_registry=_fake_agent_registry(),
         workspace_root=Path(tmp_path),
         model_name="gpt-test",
         queue_manager=queue_manager,
@@ -347,7 +363,7 @@ async def test_background_agent_completion_notification_waits_for_followthrough_
             run_in_background=True,
         )
         task_id = _agent_tool_json(raw)["task_id"]
-        running = service._tasks[task_id]
+        running = _require_running_task(service._tasks[task_id])
         await asyncio.wait_for(running.task, timeout=1)
 
         injected = SteeringMiddleware(queue_manager=queue_manager).before_model(
@@ -385,7 +401,7 @@ async def test_mixed_success_and_init_failure_background_agents_queue_both_termi
     queue_manager = MessageQueueManager(db_path=str(tmp_path / "queue.db"))
     service = AgentService(
         tool_registry=registry,
-        agent_registry=_FakeAgentRegistry(),
+        agent_registry=_fake_agent_registry(),
         workspace_root=Path(tmp_path),
         model_name="gpt-test",
         queue_manager=queue_manager,
@@ -406,9 +422,9 @@ async def test_mixed_success_and_init_failure_background_agents_queue_both_termi
             run_in_background=True,
         )
 
-        await asyncio.wait_for(service._tasks[_agent_tool_json(raw_good)["task_id"]].task, timeout=1)
+        await asyncio.wait_for(_require_running_task(service._tasks[_agent_tool_json(raw_good)["task_id"]]).task, timeout=1)
         with pytest.raises(RuntimeError, match="bad child init"):
-            await asyncio.wait_for(service._tasks[_agent_tool_json(raw_bad)["task_id"]].task, timeout=1)
+            await asyncio.wait_for(_require_running_task(service._tasks[_agent_tool_json(raw_bad)["task_id"]]).task, timeout=1)
 
         queued = queue_manager.list_queue("parent-thread")
 
