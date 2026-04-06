@@ -87,7 +87,7 @@ async def test_cron_trigger_copies_job_owner_to_created_task(monkeypatch: pytest
             "id": job_id,
             "enabled": 1,
             "owner_user_id": "owner-7",
-            "task_template": "{\"title\": \"From cron\"}",
+            "task_template": '{"title": "From cron"}',
         }
 
     created: dict[str, Any] = {}
