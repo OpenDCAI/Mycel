@@ -33,21 +33,21 @@ async function ensureResponseShape(response: Response): Promise<ResourceOverview
 
   const payload = (await response.json()) as ResourceOverviewResponse;
   if (!payload || !payload.summary || !Array.isArray(payload.providers)) {
-    throw new Error("Unexpected /api/monitor/resources response shape");
+    throw new Error("Unexpected /api/resources/overview response shape");
   }
   ensureProviderCardContract(payload.providers);
   return payload;
 }
 
 export async function fetchResourceProviders(): Promise<ResourceOverviewResponse> {
-  const response = await fetch("/api/monitor/resources", {
+  const response = await fetch("/api/resources/overview", {
     headers: { "Content-Type": "application/json" },
   });
   return ensureResponseShape(response);
 }
 
 export async function refreshResourceProviders(): Promise<ResourceOverviewResponse> {
-  const response = await fetch("/api/monitor/resources/refresh", {
+  const response = await fetch("/api/resources/overview/refresh", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
   });

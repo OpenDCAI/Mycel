@@ -10,6 +10,12 @@ from sandbox.providers.local import LocalSessionProvider
 from sandbox.volume_source import DaytonaVolume, HostVolume
 
 
+def _build_fake_supabase_client():
+    from tests.fakes.supabase import FakeSupabaseClient
+
+    return FakeSupabaseClient(tables={})
+
+
 class _FakeVolumeRepo:
     def __init__(self, source: dict[str, str]) -> None:
         self._source = source
@@ -520,13 +526,21 @@ def test_upgrade_to_daytona_volume_waits_when_reusing_existing_daytona_volume(mo
     ("strategy", "expected_class_name"),
     [
         ("sqlite", "SQLiteSandboxMonitorRepo"),
-        ("supabase", "SQLiteSandboxMonitorRepo"),
+        ("supabase", "SupabaseSandboxMonitorRepo"),
     ],
 )
 def test_make_sandbox_monitor_repo_uses_runtime_sandbox_db(monkeypatch, strategy, expected_class_name):
     from backend.web.core import storage_factory
 
     monkeypatch.setenv("LEON_STORAGE_STRATEGY", strategy)
+    if strategy == "supabase":
+        monkeypatch.setenv(
+            "LEON_SUPABASE_CLIENT_FACTORY",
+            "tests.Unit.sandbox.test_sandbox_manager_volume_repo:_build_fake_supabase_client",
+        )
+    else:
+        monkeypatch.delenv("LEON_SUPABASE_CLIENT_FACTORY", raising=False)
+    storage_factory._supabase_client.cache_clear()
     storage_factory.make_sandbox_monitor_repo.cache_clear() if hasattr(storage_factory.make_sandbox_monitor_repo, "cache_clear") else None
 
     repo = storage_factory.make_sandbox_monitor_repo()

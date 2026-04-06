@@ -115,3 +115,44 @@ def test_list_user_leases_hides_subagent_threads_and_deduplicates_visible_agents
             "recipe_name": "Daytona Default",
         }
     ]
+
+
+def test_list_user_leases_uses_runtime_repo_builders_when_repos_not_injected(monkeypatch):
+    rows = [
+        {
+            "lease_id": "lease-1",
+            "provider_name": "local",
+            "recipe_id": "local:default",
+            "recipe_json": None,
+            "observed_state": "running",
+            "desired_state": "running",
+            "cwd": "/workspace",
+            "thread_id": "thread-parent",
+        }
+    ]
+    thread_repo = _FakeThreadRepo({"thread-parent": {"member_id": "member-1"}})
+    member_repo = _FakeMemberRepo(
+        {
+            "member-1": SimpleNamespace(id="member-1", name="Morel", avatar=None, owner_user_id="owner-1"),
+        }
+    )
+    built: list[str] = []
+
+    monkeypatch.setattr(sandbox_service, "make_sandbox_monitor_repo", lambda: _FakeMonitorRepo(rows))
+    monkeypatch.setattr(
+        sandbox_service,
+        "build_thread_repo",
+        lambda **kwargs: built.append("thread") or thread_repo,
+        raising=False,
+    )
+    monkeypatch.setattr(
+        sandbox_service,
+        "build_member_repo",
+        lambda **kwargs: built.append("member") or member_repo,
+        raising=False,
+    )
+
+    leases = sandbox_service.list_user_leases("owner-1")
+
+    assert [lease["lease_id"] for lease in leases] == ["lease-1"]
+    assert built == ["thread", "member"]

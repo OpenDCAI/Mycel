@@ -35,6 +35,8 @@ export default function ProviderCard({ provider, selected, onSelect }: ProviderC
 
   return (
     <button
+      data-testid="provider-card"
+      data-provider-id={provider.id}
       onClick={onSelect}
       disabled={isUnavailable}
       className={[

@@ -17,8 +17,7 @@ from sandbox.manager import SandboxManager
 from sandbox.provider import ProviderCapability
 from sandbox.recipes import default_recipe_id, list_builtin_recipes, normalize_recipe_snapshot, provider_type_from_name
 from storage.providers.sqlite.kernel import SQLiteDBRole, resolve_role_db_path
-from storage.providers.sqlite.member_repo import SQLiteMemberRepo
-from storage.providers.sqlite.thread_repo import SQLiteThreadRepo
+from storage.runtime import build_member_repo, build_thread_repo
 
 logger = logging.getLogger(__name__)
 
@@ -55,9 +54,10 @@ def list_user_leases(
     sandbox_db_path: str | Path | None = None,
 ) -> list[dict[str, Any]]:
     monitor_repo = make_sandbox_monitor_repo()
-    _thread_repo = thread_repo or SQLiteThreadRepo(db_path=main_db_path)
-    _member_repo = member_repo or SQLiteMemberRepo(db_path=main_db_path)
-    own_repos = thread_repo is None  # only close if we created them
+    own_thread_repo = thread_repo is None
+    own_member_repo = member_repo is None
+    _thread_repo = thread_repo or build_thread_repo(main_db_path=main_db_path)
+    _member_repo = member_repo or build_member_repo(main_db_path=main_db_path)
     try:
         rows = monitor_repo.list_leases_with_threads()
         grouped: dict[str, dict[str, Any]] = {}
@@ -121,8 +121,9 @@ def list_user_leases(
             leases.append(lease)
         return leases
     finally:
-        if own_repos:
+        if own_member_repo:
             _member_repo.close()
+        if own_thread_repo:
             _thread_repo.close()
         monitor_repo.close()
 

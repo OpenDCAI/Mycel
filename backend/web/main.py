@@ -89,6 +89,7 @@ from backend.web.routers import (  # noqa: E402
     marketplace,
     monitor,
     panel,
+    resources,
     sandbox,
     settings,
     thread_files,
@@ -133,6 +134,7 @@ app.include_router(thread_files._public)
 app.include_router(settings.router)
 app.include_router(panel.router)
 app.include_router(monitor.router)
+app.include_router(resources.router)
 app.include_router(marketplace.router)
 
 

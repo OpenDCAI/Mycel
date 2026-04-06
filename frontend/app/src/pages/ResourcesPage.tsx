@@ -119,18 +119,18 @@ export default function ResourcesPage() {
   }
 
   return (
-    <div className="h-full flex flex-col bg-background">
+    <div data-testid="resources-page" className="h-full flex flex-col bg-background">
       {/* Header */}
       <div className="h-14 flex items-center justify-between px-4 md:px-6 border-b border-border bg-card/80 backdrop-blur-sm shrink-0">
         <div className="flex items-center gap-3">
-          <h2 className="text-sm font-semibold text-foreground">资源</h2>
+          <h2 data-testid="resources-header" className="text-sm font-semibold text-foreground">资源</h2>
           <div className="flex items-center gap-2 text-xs text-muted-foreground font-mono">
-            <span className="inline-flex items-center gap-1">
+            <span data-testid="active-count" className="inline-flex items-center gap-1">
               <span className="w-1.5 h-1.5 rounded-full bg-success animate-pulse-slow" />
               {activeCount} 活跃
             </span>
             <span>·</span>
-            <span>{totalSessions} 会话</span>
+            <span data-testid="session-count">{totalSessions} 会话</span>
             <span>·</span>
             <span className="inline-flex items-center gap-1">
               <span className={`w-1.5 h-1.5 rounded-full ${refreshDotClass}`} />
@@ -139,6 +139,7 @@ export default function ResourcesPage() {
           </div>
         </div>
         <button
+          data-testid="refresh-btn"
           type="button"
           onClick={() => {
             void refreshNow();

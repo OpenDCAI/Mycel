@@ -2,16 +2,16 @@
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from typing import Any
 
+from backend.web.core import storage_factory as _storage_factory
 from sandbox.provider import SandboxProvider
 from storage.providers.sqlite.kernel import SQLiteDBRole, resolve_role_db_path
-from storage.providers.sqlite.resource_snapshot_repo import (
-    ensure_resource_snapshot_table,
-    list_snapshots_by_lease_ids,
-    upsert_lease_resource_snapshot,
-)
+from storage.providers.sqlite.resource_snapshot_repo import ensure_resource_snapshot_table as _sqlite_ensure_resource_snapshot_table
+from storage.providers.sqlite.resource_snapshot_repo import list_snapshots_by_lease_ids as _sqlite_list_snapshots_by_lease_ids
+from storage.providers.sqlite.resource_snapshot_repo import upsert_lease_resource_snapshot as _sqlite_upsert_lease_resource_snapshot
 
 # Re-export storage functions for backward compatibility
 __all__ = [
@@ -20,6 +20,75 @@ __all__ = [
     "list_snapshots_by_lease_ids",
     "probe_and_upsert_for_instance",
 ]
+
+
+def _strategy() -> str:
+    return os.getenv("LEON_STORAGE_STRATEGY", "sqlite").strip().lower()
+
+
+def ensure_resource_snapshot_table(db_path: Path | None = None) -> None:
+    if _strategy() == "supabase":
+        return None
+    _sqlite_ensure_resource_snapshot_table(db_path)
+
+
+def upsert_lease_resource_snapshot(
+    *,
+    lease_id: str,
+    provider_name: str,
+    observed_state: str,
+    probe_mode: str,
+    cpu_used: float | None = None,
+    cpu_limit: float | None = None,
+    memory_used_mb: float | None = None,
+    memory_total_mb: float | None = None,
+    disk_used_gb: float | None = None,
+    disk_total_gb: float | None = None,
+    network_rx_kbps: float | None = None,
+    network_tx_kbps: float | None = None,
+    probe_error: str | None = None,
+    db_path: Path | None = None,
+) -> None:
+    if _strategy() == "supabase":
+        _storage_factory.upsert_resource_snapshot(
+            lease_id=lease_id,
+            provider_name=provider_name,
+            observed_state=observed_state,
+            probe_mode=probe_mode,
+            cpu_used=cpu_used,
+            cpu_limit=cpu_limit,
+            memory_used_mb=memory_used_mb,
+            memory_total_mb=memory_total_mb,
+            disk_used_gb=disk_used_gb,
+            disk_total_gb=disk_total_gb,
+            network_rx_kbps=network_rx_kbps,
+            network_tx_kbps=network_tx_kbps,
+            probe_error=probe_error,
+        )
+        return None
+
+    _sqlite_upsert_lease_resource_snapshot(
+        lease_id=lease_id,
+        provider_name=provider_name,
+        observed_state=observed_state,
+        probe_mode=probe_mode,
+        cpu_used=cpu_used,
+        cpu_limit=cpu_limit,
+        memory_used_mb=memory_used_mb,
+        memory_total_mb=memory_total_mb,
+        disk_used_gb=disk_used_gb,
+        disk_total_gb=disk_total_gb,
+        network_rx_kbps=network_rx_kbps,
+        network_tx_kbps=network_tx_kbps,
+        probe_error=probe_error,
+        db_path=db_path,
+    )
+
+
+def list_snapshots_by_lease_ids(lease_ids: list[str], db_path: Path | None = None) -> dict[str, dict[str, Any]]:
+    if _strategy() == "supabase":
+        return _storage_factory.list_resource_snapshots(lease_ids)
+    return _sqlite_list_snapshots_by_lease_ids(lease_ids, db_path)
 
 
 def _as_float(value: Any) -> float | None:

@@ -17,12 +17,12 @@ export function SandboxFileBrowser({ leaseId, providerType, className = "h-[300p
   const buildBrowseUrl = (path: string) =>
     isLocal
       ? `/api/settings/browse?path=${encodeURIComponent(path)}&include_files=true`
-      : `/api/monitor/sandbox/${leaseId}/browse?path=${encodeURIComponent(path)}`;
+      : `/api/resources/sandbox/${leaseId}/browse?path=${encodeURIComponent(path)}`;
 
   const buildReadUrl = (path: string) =>
     isLocal
       ? `/api/settings/read?path=${encodeURIComponent(path)}`
-      : `/api/monitor/sandbox/${leaseId}/read?path=${encodeURIComponent(path)}`;
+      : `/api/resources/sandbox/${leaseId}/read?path=${encodeURIComponent(path)}`;
 
   const { currentPath, parentPath, items, loading, error, loadPath } =
     useDirectoryBrowser(buildBrowseUrl, defaultPath);

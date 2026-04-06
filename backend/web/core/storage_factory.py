@@ -6,6 +6,7 @@ monitor_service, etc.) call these helpers to get the right provider.
 
 from __future__ import annotations
 
+import importlib
 import os
 from functools import lru_cache
 from typing import Any
@@ -17,6 +18,17 @@ def _strategy() -> str:
 
 @lru_cache(maxsize=1)
 def _supabase_client() -> Any:
+    factory_ref = os.getenv("LEON_SUPABASE_CLIENT_FACTORY")
+    if factory_ref:
+        module_name, sep, attr_name = factory_ref.partition(":")
+        if not sep or not module_name or not attr_name:
+            raise RuntimeError("Invalid LEON_SUPABASE_CLIENT_FACTORY format. Expected '<module>:<callable>'.")
+        module = importlib.import_module(module_name)
+        factory = getattr(module, attr_name)
+        if not callable(factory):
+            raise RuntimeError(f"Supabase client factory {factory_ref!r} must be callable.")
+        return factory()
+
     from backend.web.core.supabase_factory import create_supabase_client
 
     return create_supabase_client()
@@ -45,8 +57,10 @@ def make_cron_job_repo() -> Any:
 
 
 def make_sandbox_monitor_repo() -> Any:
-    # @@@sandbox-runtime-truth-stays-local - sandbox lifecycle facts still live in local sandbox.db.
-    # Auth/member/thread metadata can be Supabase-backed without moving lease/session/terminal monitoring there.
+    if _strategy() == "supabase":
+        from storage.providers.supabase.sandbox_monitor_repo import SupabaseSandboxMonitorRepo
+
+        return SupabaseSandboxMonitorRepo(_supabase_client())
     from storage.providers.sqlite.sandbox_monitor_repo import SQLiteSandboxMonitorRepo
 
     return SQLiteSandboxMonitorRepo()
