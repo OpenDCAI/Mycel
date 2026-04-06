@@ -70,6 +70,15 @@ def _verify_member_ownership(app: Any, member_id: str, user_id: str) -> None:
     raise HTTPException(403, "Member does not belong to you")
 
 
+def _get_accessible_chat_or_404(app: Any, chat_id: str, user_id: str) -> Any:
+    chat = app.state.chat_repo.get_by_id(chat_id)
+    if not chat:
+        raise HTTPException(404, "Chat not found")
+    if not _messaging(app).is_chat_member(chat_id, user_id):
+        raise HTTPException(403, "Not a participant of this chat")
+    return chat
+
+
 def _msg_response(m: dict[str, Any], member_repo: Any) -> dict[str, Any]:
     sender = member_repo.get_by_id(m.get("sender_id", ""))
     return {
@@ -131,11 +140,7 @@ async def get_chat(
     user_id: Annotated[str, Depends(get_current_user_id)],
     app: Annotated[Any, Depends(get_app)],
 ):
-    chat = app.state.chat_repo.get_by_id(chat_id)
-    if not chat:
-        raise HTTPException(404, "Chat not found")
-    if not _messaging(app).is_chat_member(chat_id, user_id):
-        raise HTTPException(403, "Not a participant of this chat")
+    chat = _get_accessible_chat_or_404(app, chat_id, user_id)
     members_list = _messaging(app).list_chat_members(chat_id)
     members_info = []
     for m in members_list:
@@ -246,11 +251,7 @@ async def delete_chat(
     user_id: Annotated[str, Depends(get_current_user_id)],
     app: Annotated[Any, Depends(get_app)],
 ):
-    chat = app.state.chat_repo.get_by_id(chat_id)
-    if not chat:
-        raise HTTPException(404, "Chat not found")
-    if not _messaging(app).is_chat_member(chat_id, user_id):
-        raise HTTPException(403, "Not a participant of this chat")
+    _get_accessible_chat_or_404(app, chat_id, user_id)
     app.state.chat_repo.delete(chat_id)
     return {"status": "deleted"}
 
