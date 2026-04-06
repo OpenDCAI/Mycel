@@ -194,6 +194,7 @@ These are not vague “polish later” notes. They are concrete seams that now b
   - the new `triage` layer separates `active_drift`, `detached_residue`, `orphan_cleanup`, and `healthy_capacity`
   - classification is still built from existing database-agnostic fields (`desired_state`, `observed_state`, `thread_id`, `updated_at`) rather than new SQLite-specific lookups
   - the monitor `Resources` page now reads that triage surface directly, so the live page can show `3 active drift + 26 detached residue` instead of one opaque `29 diverged`
+  - the legacy `/leases` page now also uses the triage surface for its first screen, so direct operators no longer land on a single flat alarming table by default
 - Honest boundary:
   - this is still a phase-2 heuristic, not a full lifecycle model; age-based detached residue is a better operator default, but not yet a richer typed runtime contract
 

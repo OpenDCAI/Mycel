@@ -2053,54 +2053,96 @@ function LeasesPage() {
   }, []);
 
   if (!data) return <div>Loading...</div>;
+  const triage = data.triage || {};
+  const triageSummary = triage.summary || {};
+  const triageGroups = Array.isArray(triage.groups) ? triage.groups : [];
   const items = divergedOnly
-    ? data.items.filter((item: any) => ['diverged', 'orphan_diverged'].includes(item.semantics?.category))
+    ? data.items.filter((item: any) => ['active_drift', 'detached_residue', 'orphan_cleanup'].includes(item.triage?.category))
     : data.items;
-  const summary = data.summary || {};
+  const visibleGroups = divergedOnly
+    ? triageGroups.filter((group: any) => ['active_drift', 'detached_residue', 'orphan_cleanup'].includes(group.key))
+    : triageGroups;
+
+  const renderLeaseTable = (rows: any[]) => (
+    <table>
+      <thead>
+        <tr>
+          <th>Lease ID</th>
+          <th>Provider</th>
+          <th>Instance ID</th>
+          <th>Thread</th>
+          <th>State</th>
+          <th>Updated</th>
+          <th>Error</th>
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map((item: any) => (
+          <tr key={item.lease_id}>
+            <td><Link to={item.lease_url}>{item.lease_id}</Link></td>
+            <td>{item.provider}</td>
+            <td className="mono">{item.instance_id?.slice(0, 12) || '-'}</td>
+            <td>
+              {item.thread.thread_id ? (
+                <Link to={item.thread.thread_url}>{item.thread.thread_id.slice(0, 8)}</Link>
+              ) : (
+                <span className="orphan">orphan</span>
+              )}
+            </td>
+            <td><StateBadge badge={item.state_badge} /></td>
+            <td>{item.updated_ago}</td>
+            <td className="error">{item.error || '-'}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
 
   return (
     <div className="page" data-testid="page-leases">
       <h1>{data.title}</h1>
-      <p className="description">Global sandbox lease table. Treat this as the infrastructure lens; backend semantics now distinguish healthy, diverged, orphan, and orphan-diverged rows.</p>
-      <p className="count">Total: {items.length}{divergedOnly ? ` / ${data.count} (diverged only)` : ''} · healthy {summary.healthy || 0} · orphan {summary.orphan || 0} · orphan+diverged {summary.orphan_diverged || 0}</p>
+      <p className="description">Legacy lease view, now backed by backend triage semantics. Use this when you want lease-only focus without losing the full raw table.</p>
+      <div className="resource-overview-strip">
+        <span className="resource-overview-pill">
+          <span className="resource-overview-label">total</span>
+          <strong>{items.length}{divergedOnly ? ` / ${data.count}` : ''}</strong>
+        </span>
+        <span className="resource-overview-pill">
+          <span className="resource-overview-label">active drift</span>
+          <strong>{triageSummary.active_drift || 0}</strong>
+        </span>
+        <span className="resource-overview-pill">
+          <span className="resource-overview-label">detached residue</span>
+          <strong>{triageSummary.detached_residue || 0}</strong>
+        </span>
+        <span className="resource-overview-pill">
+          <span className="resource-overview-label">cleanup</span>
+          <strong>{triageSummary.orphan_cleanup || 0}</strong>
+        </span>
+        <span className="resource-overview-pill">
+          <span className="resource-overview-label">healthy</span>
+          <strong>{triageSummary.healthy_capacity || 0}</strong>
+        </span>
+      </div>
       <div className="page-tools">
         <Link className="quick-link" to={divergedOnly ? '/leases' : '/leases?diverged=1'}>
-          {divergedOnly ? 'Show all leases' : 'Only diverged leases'}
+          {divergedOnly ? 'Show all leases' : 'Only attention buckets'}
         </Link>
-        <Link className="quick-link" to="/events">Lease event timeline</Link>
+        <Link className="quick-link" to="/resources">Open resources</Link>
       </div>
-      <table>
-        <thead>
-          <tr>
-            <th>Lease ID</th>
-            <th>Provider</th>
-            <th>Instance ID</th>
-            <th>Thread</th>
-            <th>State</th>
-            <th>Updated</th>
-            <th>Error</th>
-          </tr>
-        </thead>
-        <tbody>
-          {items.map((item: any) => (
-            <tr key={item.lease_id}>
-              <td><Link to={item.lease_url}>{item.lease_id}</Link></td>
-              <td>{item.provider}</td>
-              <td className="mono">{item.instance_id?.slice(0, 12) || '-'}</td>
-              <td>
-                {item.thread.thread_id ? (
-                  <Link to={item.thread.thread_url}>{item.thread.thread_id.slice(0, 8)}</Link>
-                ) : (
-                  <span className="orphan">orphan</span>
-                )}
-              </td>
-              <td><StateBadge badge={item.state_badge} /></td>
-              <td>{item.updated_ago}</td>
-              <td className="error">{item.error || '-'}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      {visibleGroups
+        .filter((group: any) => group.count > 0)
+        .map((group: any) => (
+          <section key={group.key}>
+            <h2>{group.title} ({group.count})</h2>
+            <p className="description">{group.description}</p>
+            {renderLeaseTable(group.items)}
+          </section>
+        ))}
+      <details className="lease-details-shell">
+        <summary>All leases ({items.length})</summary>
+        {renderLeaseTable(items)}
+      </details>
     </div>
   );
 }

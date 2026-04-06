@@ -40,6 +40,7 @@
   - `/api/monitor/leases` now adds backend-owned `triage.summary` and `triage.groups`
   - triage distinguishes `active_drift`, `detached_residue`, `orphan_cleanup`, and `healthy_capacity`
   - monitor `Resources` consumes that triage surface directly instead of flattening everything back into `diverged/orphan`
+  - legacy `/leases` also now leads with triage buckets before the collapsed raw table
 - next honest follow-up remains:
   - `D3` because lease regrouping is still heuristic and needs stronger lifecycle meaning than age-based detached residue alone
   - `D2` because the current operator surface only hardens the provisional/bootstrap-failure case and still lacks richer lifecycle typing for other eval states
