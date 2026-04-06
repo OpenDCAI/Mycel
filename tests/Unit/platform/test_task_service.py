@@ -9,6 +9,11 @@ import pytest
 from backend.web.services import task_service
 
 
+def _require_task(task: dict | None) -> dict:
+    assert task is not None
+    return task
+
+
 @pytest.fixture(autouse=True)
 def _use_tmp_db(tmp_path, monkeypatch):
     """Redirect task_service to a temporary SQLite database."""
@@ -73,35 +78,35 @@ class TestCreateTask:
 class TestUpdateTask:
     def test_update_title_and_status(self):
         task = task_service.create_task(title="original")
-        updated = task_service.update_task(task["id"], title="changed", status="in_progress")
+        updated = _require_task(task_service.update_task(task["id"], title="changed", status="in_progress"))
         assert updated["title"] == "changed"
         assert updated["status"] == "in_progress"
 
     def test_update_progress(self):
         task = task_service.create_task(title="progress test")
-        updated = task_service.update_task(task["id"], progress=50)
+        updated = _require_task(task_service.update_task(task["id"], progress=50))
         assert updated["progress"] == 50
 
     def test_update_thread_id(self):
         task = task_service.create_task(title="link thread")
-        updated = task_service.update_task(task["id"], thread_id="th_999")
+        updated = _require_task(task_service.update_task(task["id"], thread_id="th_999"))
         assert updated["thread_id"] == "th_999"
 
     def test_update_result(self):
         task = task_service.create_task(title="result test")
-        updated = task_service.update_task(task["id"], result="done: 3 files changed")
+        updated = _require_task(task_service.update_task(task["id"], result="done: 3 files changed"))
         assert updated["result"] == "done: 3 files changed"
 
     def test_update_started_at(self):
         task = task_service.create_task(title="timing test")
         now = int(time.time() * 1000)
-        updated = task_service.update_task(task["id"], started_at=now)
+        updated = _require_task(task_service.update_task(task["id"], started_at=now))
         assert updated["started_at"] == now
 
     def test_update_completed_at(self):
         task = task_service.create_task(title="timing test 2")
         now = int(time.time() * 1000)
-        updated = task_service.update_task(task["id"], completed_at=now)
+        updated = _require_task(task_service.update_task(task["id"], completed_at=now))
         assert updated["completed_at"] == now
 
     def test_update_nonexistent_returns_none(self):
