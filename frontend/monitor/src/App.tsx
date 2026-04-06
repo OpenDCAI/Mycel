@@ -1416,7 +1416,13 @@ function ThreadsPage() {
     void loadThreads();
   }, [loadThreads]);
 
-  if (!data) return <div>Loading...</div>;
+  if (!data) {
+    return (
+      <div className="page">
+        <div className="page-loading">Loading...</div>
+      </div>
+    );
+  }
   const pagination = data.pagination || {};
   const total = Number(pagination.total || data.count || 0);
   const currentCount = Number(data.count || 0);
@@ -1538,7 +1544,13 @@ function TracesPage() {
     void loadTraces();
   }, [loadTraces]);
 
-  if (!data) return <div>Loading...</div>;
+  if (!data) {
+    return (
+      <div className="page">
+        <div className="page-loading">Loading...</div>
+      </div>
+    );
+  }
   const pagination = data.pagination || {};
   const total = Number(pagination.total || data.count || 0);
   const currentCount = Number(data.count || 0);
@@ -1652,7 +1664,13 @@ function ThreadDetailPage() {
     fetchAPI(`/thread/${threadId}`).then(setData);
   }, [threadId]);
 
-  if (!data) return <div>Loading...</div>;
+  if (!data) {
+    return (
+      <div className="page">
+        <div className="page-loading">Loading...</div>
+      </div>
+    );
+  }
   const threadIsActive = Array.isArray(data?.sessions?.items)
     ? data.sessions.items.some((s: any) => s.status === "active")
     : false;
@@ -2792,7 +2810,13 @@ function LeasesPage() {
     fetchAPI("/leases").then(setData);
   }, []);
 
-  if (!data) return <div>Loading...</div>;
+  if (!data) {
+    return (
+      <div className="page">
+        <div className="page-loading">Loading...</div>
+      </div>
+    );
+  }
   const triage = data.triage || {};
   const triageSummary = triage.summary || {};
   const triageGroups = Array.isArray(triage.groups) ? triage.groups : [];
@@ -3040,7 +3064,13 @@ function DivergedPage() {
     fetchAPI("/diverged").then(setData);
   }, []);
 
-  if (!data) return <div>Loading...</div>;
+  if (!data) {
+    return (
+      <div className="page">
+        <div className="page-loading">Loading...</div>
+      </div>
+    );
+  }
 
   return (
     <div className="page">
