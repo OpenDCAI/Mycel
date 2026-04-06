@@ -21,7 +21,7 @@ def _triage_payload(category: str) -> dict:
 def test_resource_overview_cache_refresh_adds_metadata(monkeypatch):
     cache.clear_monitor_resource_overview_cache()
     monkeypatch.setattr(
-        cache.resource_service,
+        cache.resource_projection_service,
         "list_resource_providers",
         lambda: {
             "summary": {
@@ -31,7 +31,7 @@ def test_resource_overview_cache_refresh_adds_metadata(monkeypatch):
                 "unavailable_providers": 0,
                 "running_sessions": 2,
             },
-            "providers": [{"id": "local"}],
+            "providers": [{"id": "local", "cardCpu": {}}],
         },
     )
     monkeypatch.setattr(
@@ -55,7 +55,7 @@ def test_resource_overview_cache_refresh_adds_metadata(monkeypatch):
 def test_resource_overview_cache_keeps_last_snapshot_on_refresh_error(monkeypatch):
     cache.clear_monitor_resource_overview_cache()
     monkeypatch.setattr(
-        cache.resource_service,
+        cache.resource_projection_service,
         "list_resource_providers",
         lambda: {
             "summary": {
@@ -65,7 +65,7 @@ def test_resource_overview_cache_keeps_last_snapshot_on_refresh_error(monkeypatc
                 "unavailable_providers": 0,
                 "running_sessions": 1,
             },
-            "providers": [{"id": "docker"}],
+            "providers": [{"id": "docker", "cardCpu": {}}],
         },
     )
     monkeypatch.setattr(
@@ -79,7 +79,7 @@ def test_resource_overview_cache_keeps_last_snapshot_on_refresh_error(monkeypatc
     def _raise():
         raise RuntimeError("probe failed")
 
-    monkeypatch.setattr(cache.resource_service, "list_resource_providers", _raise)
+    monkeypatch.setattr(cache.resource_projection_service, "list_resource_providers", _raise)
     degraded = cache.refresh_monitor_resource_overview_sync()
     assert degraded["providers"][0]["id"] == "docker"
     assert degraded["summary"]["refresh_status"] == "error"
@@ -124,8 +124,12 @@ def test_resource_overview_cache_refreshes_when_live_session_counts_drift(monkey
     }
 
     calls = iter([stale_payload, fresh_payload])
-    monkeypatch.setattr(cache.resource_service, "list_resource_providers", lambda: next(calls))
-    monkeypatch.setattr(cache.resource_service, "visible_resource_session_stats", lambda: {"local": {"sessions": 1, "running": 1}})
+    monkeypatch.setattr(cache.resource_projection_service, "list_resource_providers", lambda: next(calls))
+    monkeypatch.setattr(
+        cache.resource_projection_service,
+        "visible_resource_session_stats",
+        lambda: {"local": {"sessions": 1, "running": 1}},
+    )
     monkeypatch.setattr(
         cache,
         "monitor_service",
