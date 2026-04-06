@@ -52,6 +52,127 @@ def _patch_env_api_key():
     return patch.dict(os.environ, {"ANTHROPIC_API_KEY": "sk-test-integration"})
 
 
+class _FakeToolTaskRepo:
+    def __init__(self) -> None:
+        self._rows: dict[str, dict[str, dict[str, Any]]] = {}
+
+    def close(self) -> None:
+        return None
+
+    def next_id(self, thread_id: str) -> str:
+        tasks = self._rows.get(thread_id, {})
+        if not tasks:
+            return "1"
+        return str(max(int(task_id) for task_id in tasks) + 1)
+
+    def get(self, thread_id: str, task_id: str) -> dict[str, Any] | None:
+        return self._rows.get(thread_id, {}).get(task_id)
+
+    def list_all(self, thread_id: str) -> list[dict[str, Any]]:
+        return list(self._rows.get(thread_id, {}).values())
+
+    def insert(self, thread_id: str, task: Any) -> None:
+        self._rows.setdefault(thread_id, {})[str(task.id)] = {"id": task.id, "task": task}
+
+    def update(self, thread_id: str, task: Any) -> None:
+        self._rows.setdefault(thread_id, {})[str(task.id)] = {"id": task.id, "task": task}
+
+    def delete(self, thread_id: str, task_id: str) -> None:
+        self._rows.get(thread_id, {}).pop(str(task_id), None)
+
+
+class _FakeAgentRegistryRepo:
+    def __init__(self) -> None:
+        self._rows: dict[str, tuple[str, str, str, str, str | None, str | None]] = {}
+
+    def close(self) -> None:
+        return None
+
+    def register(
+        self,
+        *,
+        agent_id: str,
+        name: str,
+        thread_id: str,
+        status: str,
+        parent_agent_id: str | None,
+        subagent_type: str | None,
+    ) -> None:
+        self._rows[agent_id] = (agent_id, name, thread_id, status, parent_agent_id, subagent_type)
+
+    def get_by_id(self, agent_id: str) -> tuple[str, str, str, str, str | None, str | None] | None:
+        return self._rows.get(agent_id)
+
+    def list_running_by_name(self, name: str) -> list[tuple[str, str, str, str, str | None, str | None]]:
+        return [row for row in self._rows.values() if row[1] == name and row[3] == "running"]
+
+    def update_status(self, agent_id: str, status: str) -> None:
+        row = self._rows.get(agent_id)
+        if row is None:
+            return
+        self._rows[agent_id] = (row[0], row[1], row[2], status, row[4], row[5])
+
+    def get_latest_by_name_and_parent(
+        self, name: str, parent_agent_id: str | None
+    ) -> tuple[str, str, str, str, str | None, str | None] | None:
+        matches = [row for row in self._rows.values() if row[1] == name and row[4] == parent_agent_id]
+        return matches[-1] if matches else None
+
+    def list_running(self) -> list[tuple[str, str, str, str, str | None, str | None]]:
+        return [row for row in self._rows.values() if row[3] == "running"]
+
+
+class _FakeSyncFileRepo:
+    def __init__(self) -> None:
+        self._rows: dict[str, dict[str, tuple[str, int]]] = {}
+
+    def close(self) -> None:
+        return None
+
+    def track_file(self, thread_id: str, relative_path: str, checksum: str, timestamp: int) -> None:
+        self._rows.setdefault(thread_id, {})[relative_path] = (checksum, timestamp)
+
+    def track_files_batch(self, thread_id: str, file_records: list[tuple[str, str, int]]) -> None:
+        for relative_path, checksum, timestamp in file_records:
+            self.track_file(thread_id, relative_path, checksum, timestamp)
+
+    def get_file_info(self, thread_id: str, relative_path: str) -> dict[str, Any] | None:
+        info = self._rows.get(thread_id, {}).get(relative_path)
+        if info is None:
+            return None
+        return {"checksum": info[0], "last_synced": info[1]}
+
+    def get_all_files(self, thread_id: str) -> dict[str, str]:
+        return {path: checksum for path, (checksum, _timestamp) in self._rows.get(thread_id, {}).items()}
+
+    def clear_thread(self, thread_id: str) -> int:
+        removed = len(self._rows.get(thread_id, {}))
+        self._rows.pop(thread_id, None)
+        return removed
+
+
+@pytest.fixture(autouse=True)
+def _patch_runtime_storage_container(monkeypatch: pytest.MonkeyPatch):
+    class _FakeRuntimeContainer:
+        def __init__(self) -> None:
+            self._tool_task_repo = _FakeToolTaskRepo()
+            self._agent_registry_repo = _FakeAgentRegistryRepo()
+            self._sync_file_repo = _FakeSyncFileRepo()
+
+        def tool_task_repo(self) -> _FakeToolTaskRepo:
+            return self._tool_task_repo
+
+        def agent_registry_repo(self) -> _FakeAgentRegistryRepo:
+            return self._agent_registry_repo
+
+        def sync_file_repo(self) -> _FakeSyncFileRepo:
+            return self._sync_file_repo
+
+    container = _FakeRuntimeContainer()
+    monkeypatch.setattr("storage.runtime.build_storage_container", lambda **_kwargs: container)
+    return container
+
+
 class _MemoryCheckpointer:
     def __init__(self):
         self.store = {}
