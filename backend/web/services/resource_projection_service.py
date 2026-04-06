@@ -5,7 +5,6 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import Any
 
-from backend.web.core.config import SANDBOXES_DIR
 from backend.web.services import resource_service, sandbox_service
 from sandbox.provider import RESOURCE_CAPABILITY_KEYS
 from storage.models import map_lease_to_session_status
@@ -30,12 +29,9 @@ def _empty_capabilities() -> dict[str, bool]:
 
 
 def _build_provider_card(config_name: str, leases: list[dict[str, Any]]) -> dict[str, Any]:
-    provider_name = resource_service.resolve_provider_name(config_name, sandboxes_dir=SANDBOXES_DIR)
-    catalog = resource_service._CATALOG.get(provider_name)
-    provider_type = resource_service._resolve_provider_type(provider_name, config_name, sandboxes_dir=SANDBOXES_DIR)
-    capabilities, capability_error = resource_service._resolve_instance_capabilities(config_name)
-    if capability_error:
-        capabilities = _empty_capabilities()
+    display = resource_service.get_provider_display_contract(config_name)
+    capabilities, capability_error = resource_service.get_provider_capability_contract(config_name)
+    provider_type = str(display["type"])
 
     sessions: list[dict[str, Any]] = []
     running_count = 0
@@ -46,17 +42,15 @@ def _build_provider_card(config_name: str, leases: list[dict[str, Any]]) -> dict
         if status == "running":
             running_count += 1
         sessions.append(
-            {
-                "id": f"{lease['lease_id']}:{thread_id}",
-                "leaseId": lease["lease_id"],
-                "threadId": thread_id,
-                "memberId": str(owner.get("member_id") or ""),
-                "memberName": str(owner.get("member_name") or "未绑定Agent"),
-                "avatarUrl": owner.get("avatar_url"),
-                "status": status,
-                "startedAt": "",
-                "metrics": None,
-            }
+            resource_service.build_resource_session_payload(
+                session_identity=f"{lease['lease_id']}:{thread_id}",
+                lease_id=str(lease["lease_id"]),
+                thread_id=thread_id,
+                owner=owner,
+                status=status,
+                started_at=str(lease.get("created_at") or ""),
+                metrics=None,
+            )
         )
 
     telemetry = {
@@ -75,8 +69,8 @@ def _build_provider_card(config_name: str, leases: list[dict[str, Any]]) -> dict
     return {
         "id": config_name,
         "name": config_name,
-        "description": catalog.description if catalog is not None else config_name,
-        "vendor": catalog.vendor if catalog is not None else None,
+        "description": display["description"],
+        "vendor": display["vendor"],
         "type": provider_type,
         "status": "active" if running_count > 0 else "ready",
         "unavailableReason": capability_error,
@@ -84,7 +78,7 @@ def _build_provider_card(config_name: str, leases: list[dict[str, Any]]) -> dict
         "capabilities": capabilities,
         "telemetry": telemetry,
         "cardCpu": dict(telemetry["cpu"]),
-        "consoleUrl": resource_service._resolve_console_url(provider_name, config_name, sandboxes_dir=SANDBOXES_DIR),
+        "consoleUrl": display["console_url"],
         "sessions": sessions,
     }
 

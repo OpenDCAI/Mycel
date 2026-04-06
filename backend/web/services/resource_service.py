@@ -83,6 +83,18 @@ def _resolve_console_url(provider_name: str, config_name: str, *, sandboxes_dir:
     return None
 
 
+def get_provider_display_contract(config_name: str) -> dict[str, Any]:
+    provider_name = resolve_provider_name(config_name, sandboxes_dir=SANDBOXES_DIR)
+    catalog = _CATALOG.get(provider_name) or _CatalogEntry(vendor=None, description=provider_name, provider_type="cloud")
+    return {
+        "provider_name": provider_name,
+        "description": catalog.description,
+        "vendor": catalog.vendor,
+        "type": _resolve_provider_type(provider_name, config_name, sandboxes_dir=SANDBOXES_DIR),
+        "console_url": _resolve_console_url(provider_name, config_name, sandboxes_dir=SANDBOXES_DIR),
+    }
+
+
 # ---------------------------------------------------------------------------
 # Capability helpers
 # ---------------------------------------------------------------------------
@@ -102,6 +114,13 @@ def _resolve_instance_capabilities(config_name: str) -> tuple[dict[str, bool], s
         return _empty_capabilities(), f"Failed to read provider capability: {config_name}: {exc}"
     # @@@capability-single-source - read from provider instance to stay aligned with runtime overrides.
     return {key: normalized[key] for key in RESOURCE_CAPABILITY_KEYS}, None
+
+
+def get_provider_capability_contract(config_name: str) -> tuple[dict[str, bool], str | None]:
+    capabilities, capability_error = _resolve_instance_capabilities(config_name)
+    if capability_error:
+        return _empty_capabilities(), capability_error
+    return capabilities, None
 
 
 # ---------------------------------------------------------------------------
@@ -368,6 +387,29 @@ def _resource_session_identity(session: dict[str, Any]) -> str:
     return f"{lease_id}:{thread_id or 'unbound'}"
 
 
+def build_resource_session_payload(
+    *,
+    session_identity: str,
+    lease_id: str,
+    thread_id: str,
+    owner: dict[str, Any],
+    status: str,
+    started_at: str,
+    metrics: dict[str, Any] | None,
+) -> dict[str, Any]:
+    return {
+        "id": session_identity,
+        "leaseId": lease_id,
+        "threadId": thread_id,
+        "memberId": str(owner.get("member_id") or ""),
+        "memberName": str(owner.get("member_name") or "未绑定Agent"),
+        "avatarUrl": owner.get("avatar_url"),
+        "status": status,
+        "startedAt": started_at,
+        "metrics": metrics,
+    }
+
+
 def _project_user_visible_resource_sessions(repo: Any, rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Project raw monitor rows into the user-visible resource surface.
 
@@ -438,9 +480,8 @@ def list_resource_providers() -> dict[str, Any]:
     for item in available_sandbox_types():
         config_name = str(item["name"])
         available = bool(item.get("available"))
-        provider_name = resolve_provider_name(config_name, sandboxes_dir=SANDBOXES_DIR)
-        catalog = _CATALOG.get(provider_name) or _CatalogEntry(vendor=None, description=provider_name, provider_type="cloud")
-        capabilities, capability_error = _resolve_instance_capabilities(config_name)
+        display = get_provider_display_contract(config_name)
+        capabilities, capability_error = get_provider_capability_contract(config_name)
         effective_available = available and capability_error is None
         unavailable_reason: str | None = None
         if not effective_available:
@@ -473,22 +514,18 @@ def list_resource_providers() -> dict[str, Any]:
                 continue
             seen_session_ids.add(session_identity)
             normalized_sessions.append(
-                {
-                    # @@@resource-session-identity - monitor rows can legitimately have empty chat session ids.
-                    # Use stable lease+thread identity so React keys do not collapse when one lease has multiple threads.
-                    "id": session_identity,
-                    "leaseId": lease_id,
-                    "threadId": thread_id,
-                    "memberId": str(owner.get("member_id") or ""),
-                    "memberName": str(owner.get("member_name") or "未绑定Agent"),
-                    "avatarUrl": owner.get("avatar_url"),
-                    "status": normalized,
-                    "startedAt": str(session.get("created_at") or ""),
-                    "metrics": session_metrics,
-                }
+                build_resource_session_payload(
+                    session_identity=session_identity,
+                    lease_id=lease_id,
+                    thread_id=thread_id,
+                    owner=owner,
+                    status=normalized,
+                    started_at=str(session.get("created_at") or ""),
+                    metrics=session_metrics,
+                )
             )
 
-        provider_type = _resolve_provider_type(provider_name, config_name, sandboxes_dir=SANDBOXES_DIR)
+        provider_type = str(display["type"])
         telemetry = _aggregate_provider_telemetry(
             provider_sessions=provider_sessions,
             running_count=running_count,
@@ -515,8 +552,8 @@ def list_resource_providers() -> dict[str, Any]:
             {
                 "id": config_name,
                 "name": config_name,
-                "description": catalog.description,
-                "vendor": catalog.vendor,
+                "description": display["description"],
+                "vendor": display["vendor"],
                 "type": provider_type,
                 "status": _to_resource_status(effective_available, running_count),
                 "unavailableReason": unavailable_reason,
@@ -524,7 +561,7 @@ def list_resource_providers() -> dict[str, Any]:
                 "capabilities": capabilities,
                 "telemetry": telemetry,
                 "cardCpu": _resolve_card_cpu_metric(provider_type, telemetry),
-                "consoleUrl": _resolve_console_url(provider_name, config_name, sandboxes_dir=SANDBOXES_DIR),
+                "consoleUrl": display["console_url"],
                 "sessions": normalized_sessions,
             }
         )

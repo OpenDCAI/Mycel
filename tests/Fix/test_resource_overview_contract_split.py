@@ -6,7 +6,7 @@ from fastapi.testclient import TestClient
 from backend.web.core.dependencies import get_current_user_id
 from backend.web.main import app
 from backend.web.routers import monitor as monitor_router
-from backend.web.services import resource_projection_service
+from backend.web.services import resource_projection_service, resource_service
 
 
 def test_resources_overview_route_exists() -> None:
@@ -60,29 +60,27 @@ def test_user_resource_projection_groups_visible_leases_into_provider_cards(monk
                 ],
                 "observed_state": "running",
                 "desired_state": "running",
+                "created_at": "2026-04-07T10:00:00Z",
             }
         ],
     )
-    monkeypatch.setattr(resource_projection_service.resource_service, "resolve_provider_name", lambda *_args, **_kwargs: "daytona")
     monkeypatch.setattr(
         resource_projection_service.resource_service,
-        "_resolve_provider_type",
-        lambda *_args, **_kwargs: "cloud",
+        "get_provider_display_contract",
+        lambda *_args, **_kwargs: {
+            "provider_name": "daytona",
+            "description": "Daytona",
+            "vendor": "Daytona",
+            "type": "cloud",
+            "console_url": "https://example.com/daytona",
+        },
+        raising=False,
     )
     monkeypatch.setattr(
         resource_projection_service.resource_service,
-        "_resolve_instance_capabilities",
+        "get_provider_capability_contract",
         lambda *_args, **_kwargs: (resource_projection_service._empty_capabilities(), None),
-    )
-    monkeypatch.setattr(
-        resource_projection_service.resource_service,
-        "_resolve_console_url",
-        lambda *_args, **_kwargs: "https://example.com/daytona",
-    )
-    monkeypatch.setattr(
-        resource_projection_service.resource_service,
-        "_CATALOG",
-        {"daytona": type("_Catalog", (), {"description": "Daytona", "vendor": "Daytona"})()},
+        raising=False,
     )
 
     payload = resource_projection_service.list_user_resource_providers(_App(), "owner-1")
@@ -90,6 +88,40 @@ def test_user_resource_projection_groups_visible_leases_into_provider_cards(monk
     assert payload["summary"]["total_providers"] == 1
     assert payload["summary"]["running_sessions"] == 1
     assert payload["providers"][0]["id"] == "daytona_selfhost"
+    assert payload["providers"][0]["description"] == "Daytona"
+    assert payload["providers"][0]["vendor"] == "Daytona"
+    assert payload["providers"][0]["type"] == "cloud"
+    assert payload["providers"][0]["consoleUrl"] == "https://example.com/daytona"
     assert payload["providers"][0]["sessions"][0]["leaseId"] == "lease-1"
     assert payload["providers"][0]["sessions"][0]["threadId"] == "thread-1"
     assert payload["providers"][0]["sessions"][0]["memberName"] == "Morel"
+    assert payload["providers"][0]["sessions"][0]["startedAt"] == "2026-04-07T10:00:00Z"
+
+
+def test_provider_display_contract_exposes_public_metadata(monkeypatch) -> None:
+    monkeypatch.setattr(resource_service, "resolve_provider_name", lambda *_args, **_kwargs: "daytona")
+    monkeypatch.setattr(
+        resource_service,
+        "_resolve_provider_type",
+        lambda *_args, **_kwargs: "cloud",
+    )
+    monkeypatch.setattr(
+        resource_service,
+        "_resolve_console_url",
+        lambda *_args, **_kwargs: "https://example.com/daytona",
+    )
+    monkeypatch.setattr(
+        resource_service,
+        "_CATALOG",
+        {"daytona": type("_Catalog", (), {"description": "Daytona", "vendor": "Daytona"})()},
+    )
+
+    payload = resource_service.get_provider_display_contract("daytona_selfhost")
+
+    assert payload == {
+        "provider_name": "daytona",
+        "description": "Daytona",
+        "vendor": "Daytona",
+        "type": "cloud",
+        "console_url": "https://example.com/daytona",
+    }
