@@ -7,6 +7,7 @@ import platform
 import shlex
 import subprocess
 import threading
+import time
 import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -171,6 +172,12 @@ class LocalSessionProvider(SandboxProvider):
         return items
 
     def get_metrics(self, session_id: str) -> Metrics | None:
+        if platform.system() == "Linux":
+            metrics = self._get_metrics_via_procfs()
+            if metrics is not None:
+                return metrics
+            return self.get_metrics_via_commands(session_id)
+
         if platform.system() != "Darwin":
             return self.get_metrics_via_commands(session_id)
 
@@ -221,6 +228,59 @@ class LocalSessionProvider(SandboxProvider):
             )
         except Exception:
             return None
+
+    def _get_metrics_via_procfs(self) -> Metrics | None:
+        try:
+            cpu_percent = self._sample_linux_cpu_percent()
+
+            meminfo: dict[str, int] = {}
+            with open("/proc/meminfo") as fh:
+                for line in fh:
+                    key, _, raw = line.partition(":")
+                    value = raw.strip().split()[0] if raw.strip() else ""
+                    if value.isdigit():
+                        meminfo[key] = int(value)
+
+            total_kb = meminfo.get("MemTotal")
+            available_kb = meminfo.get("MemAvailable")
+            memory_total_mb = (total_kb / 1024.0) if total_kb is not None else None
+            memory_used_mb = ((total_kb - available_kb) / 1024.0) if total_kb is not None and available_kb is not None else None
+
+            stat = os.statvfs("/")
+            total_bytes = stat.f_blocks * stat.f_frsize
+            free_bytes = stat.f_bavail * stat.f_frsize
+            disk_total_gb = total_bytes / (1024.0**3)
+            disk_used_gb = (total_bytes - free_bytes) / (1024.0**3)
+
+            return Metrics(
+                cpu_percent=cpu_percent,
+                memory_used_mb=memory_used_mb,
+                memory_total_mb=memory_total_mb,
+                disk_used_gb=disk_used_gb,
+                disk_total_gb=disk_total_gb,
+            )
+        except Exception:
+            return None
+
+    def _sample_linux_cpu_percent(self) -> float | None:
+        first_total, first_idle = self._read_linux_cpu_totals()
+        time.sleep(0.1)
+        second_total, second_idle = self._read_linux_cpu_totals()
+        total_delta = second_total - first_total
+        idle_delta = second_idle - first_idle
+        if total_delta <= 0:
+            return None
+        busy_delta = total_delta - idle_delta
+        return max(0.0, min(100.0, (busy_delta / total_delta) * 100.0))
+
+    def _read_linux_cpu_totals(self) -> tuple[int, int]:
+        with open("/proc/stat") as fh:
+            first = fh.readline().strip()
+        parts = first.split()
+        values = [int(value) for value in parts[1:9]]
+        total = sum(values)
+        idle = values[3] + values[4]
+        return total, idle
 
     def create_runtime(self, terminal: AbstractTerminal, lease: SandboxLease) -> PhysicalTerminalRuntime:
         from sandbox.providers.local import LocalPersistentShellRuntime
