@@ -227,6 +227,21 @@ def _format_ask_user_question_followup(
     )
 
 
+def _build_ask_user_question_answered_payload(
+    pending_request: dict[str, Any],
+    *,
+    answers: list[dict[str, Any]],
+    annotations: dict[str, Any] | None,
+) -> dict[str, Any]:
+    payload: dict[str, Any] = {
+        "questions": (pending_request.get("args") or {}).get("questions", []),
+        "answers": answers,
+    }
+    if annotations is not None:
+        payload["annotations"] = annotations
+    return payload
+
+
 def _serialize_permission_answers(payload: Any) -> list[dict[str, Any]] | None:
     raw_answers = getattr(payload, "answers", None)
     if raw_answers is None:
@@ -1069,6 +1084,12 @@ async def resolve_thread_permission_request(
     if is_ask_user_question and payload.decision == "allow" and pending_request is not None and answers is not None:
         from backend.web.services.message_routing import route_message_to_brain
 
+        answered_payload = _build_ask_user_question_answered_payload(
+            pending_request,
+            answers=answers,
+            annotations=getattr(payload, "annotations", None),
+        )
+
         followup = await route_message_to_brain(
             app,
             thread_id,
@@ -1078,6 +1099,7 @@ async def resolve_thread_permission_request(
                 annotations=getattr(payload, "annotations", None),
             ),
             source="internal",
+            message_metadata={"ask_user_question_answered": answered_payload},
         )
 
     response = {"ok": True, "thread_id": thread_id, "request_id": request_id}

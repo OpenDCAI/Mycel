@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams, useOutletContext, useLocation } from "react-router-dom";
 import { Check, ShieldAlert, X } from "lucide-react";
 import { toast } from "sonner";
-import AskUserQuestionDialog from "../components/AskUserQuestionDialog";
 import ChatArea from "../components/ChatArea";
 import type { AssistantTurn, AskUserAnswer, AskUserQuestionPrompt, PermissionRequest } from "../api";
 import { uploadSandboxFile } from "../api";
@@ -302,18 +301,6 @@ function ChatPageInner({ threadId }: { threadId: string }) {
         onToggleSidebar={() => setSidebarCollapsed(v => !v)}
         onModelChange={setCurrentModel}
       />
-      <AskUserQuestionDialog
-        open={isAskUserQuestionRequest(currentPermissionRequest)}
-        promptMessage={currentPermissionRequest?.message || "Leon 需要你的回答后才能继续当前任务。"}
-        prompts={questionPrompts}
-        selections={questionSelections}
-        resolving={resolvingId === currentPermissionRequest?.request_id}
-        canSubmit={canSubmitQuestionAnswers}
-        onSelect={handleQuestionSelection}
-        onSubmit={() => void handleSubmitQuestionAnswers()}
-        selectionKeyForIndex={askUserQuestionSelectionKey}
-      />
-
       <div className="flex-1 flex min-h-0">
         <div className="flex-1 flex flex-col min-w-[320px]">
           {currentPermissionRequest && !isAskUserQuestionRequest(currentPermissionRequest) && (
@@ -418,6 +405,21 @@ function ChatPageInner({ threadId }: { threadId: string }) {
               agentAvatarUrl={agentAvatarUrl}
               userName={userName}
               userAvatarUrl={userAvatarUrl}
+              askUserQuestion={
+                isAskUserQuestionRequest(currentPermissionRequest)
+                  ? {
+                      requestId: currentPermissionRequest.request_id,
+                      promptMessage: currentPermissionRequest.message || "Leon 需要你的回答后才能继续当前任务。",
+                      prompts: questionPrompts,
+                      selections: questionSelections,
+                      resolving: resolvingId === currentPermissionRequest.request_id,
+                      canSubmit: canSubmitQuestionAnswers,
+                      onSelect: handleQuestionSelection,
+                      onSubmit: () => void handleSubmitQuestionAnswers(),
+                      selectionKeyForIndex: askUserQuestionSelectionKey,
+                    }
+                  : undefined
+              }
             />
           </div>
           <TaskProgress

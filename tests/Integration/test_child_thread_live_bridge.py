@@ -381,6 +381,81 @@ def test_live_hidden_user_message_does_not_append_entry():
     assert builder.get_entries(thread_id) == []
 
 
+def test_live_hidden_ask_user_answer_message_appends_hidden_anchor_entry():
+    builder = DisplayBuilder()
+    thread_id = "hidden-ask-answer-thread"
+
+    delta = builder.apply_event(
+        thread_id,
+        "user_message",
+        {
+            "content": "",
+            "showing": False,
+            "ask_user_question_answered": {
+                "questions": [
+                    {
+                        "header": "Choice",
+                        "question": "Pick one",
+                        "options": [{"label": "Alpha", "description": "A"}],
+                    }
+                ],
+                "answers": [
+                    {
+                        "header": "Choice",
+                        "question": "Pick one",
+                        "selected_options": ["Alpha"],
+                    }
+                ],
+            },
+        },
+    )
+
+    assert delta is not None
+    assert delta["type"] == "append_entry"
+    entry = builder.get_entries(thread_id)[0]
+    assert entry["role"] == "user"
+    assert entry["showing"] is False
+    assert entry["ask_user_question_answered"]["answers"][0]["selected_options"] == ["Alpha"]
+
+
+def test_checkpoint_rebuild_preserves_hidden_ask_user_answer_anchor_entry():
+    builder = DisplayBuilder()
+    thread_id = "checkpoint-ask-answer-thread"
+    rebuilt = builder.build_from_checkpoint(
+        thread_id,
+        [
+            serialize_message(
+                HumanMessage(
+                    content="ignored",
+                    metadata={
+                        "source": "internal",
+                        "ask_user_question_answered": {
+                            "questions": [
+                                {
+                                    "header": "Choice",
+                                    "question": "Pick one",
+                                    "options": [{"label": "Alpha", "description": "A"}],
+                                }
+                            ],
+                            "answers": [
+                                {
+                                    "header": "Choice",
+                                    "question": "Pick one",
+                                    "selected_options": ["Alpha"],
+                                }
+                            ],
+                        },
+                    },
+                )
+            )
+        ],
+    )
+
+    assert len(rebuilt) == 1
+    assert rebuilt[0]["showing"] is False
+    assert rebuilt[0]["ask_user_question_answered"]["answers"][0]["selected_options"] == ["Alpha"]
+
+
 def test_task_start_can_patch_background_agent_after_tool_result_race():
     builder = DisplayBuilder()
     thread_id = "parent-thread"

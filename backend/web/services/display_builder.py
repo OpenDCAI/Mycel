@@ -134,6 +134,22 @@ def _build_subagent_stream(
     }
 
 
+def _build_hidden_ask_user_answer_entry(
+    *,
+    msg_id: str | None,
+    payload: dict[str, Any],
+    now: int,
+) -> dict[str, Any]:
+    return {
+        "id": msg_id or _make_id("hist-user"),
+        "role": "user",
+        "content": "",
+        "timestamp": now,
+        "showing": False,
+        "ask_user_question_answered": payload,
+    }
+
+
 # ---------------------------------------------------------------------------
 # ThreadDisplay — per-thread in-memory state
 # ---------------------------------------------------------------------------
@@ -279,6 +295,15 @@ class DisplayBuilder:
 
         # Hidden
         if display.get("showing") is False:
+            ask_answered = meta.get("ask_user_question_answered")
+            if isinstance(ask_answered, dict):
+                entries.append(
+                    _build_hidden_ask_user_answer_entry(
+                        msg_id=msg.get("id"),
+                        payload=ask_answered,
+                        now=now,
+                    )
+                )
             return None, None
 
         # System / external chat notification → notice
@@ -423,7 +448,16 @@ def _handle_user_message(td: ThreadDisplay, data: dict) -> dict | None:
     bottom while the agent keeps streaming above.
     """
     if data.get("showing") is False:
-        return None
+        ask_answered = data.get("ask_user_question_answered")
+        if not isinstance(ask_answered, dict):
+            return None
+        entry = _build_hidden_ask_user_answer_entry(
+            msg_id=None,
+            payload=ask_answered,
+            now=int(time.time() * 1000),
+        )
+        td.entries.append(entry)
+        return {"type": "append_entry", "entry": entry}
 
     content = data.get("content", "")
     entry: dict = {

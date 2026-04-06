@@ -737,6 +737,28 @@ async def test_resolve_ask_user_question_request_starts_followup_run_with_answer
     ]
     route_message.assert_awaited_once()
     assert route_message.await_args.kwargs["source"] == "internal"
+    assert route_message.await_args.kwargs["message_metadata"] == {
+        "ask_user_question_answered": {
+            "questions": [
+                {
+                    "header": "Style",
+                    "question": "Choose a style",
+                    "options": [
+                        {"label": "Minimal", "description": "Keep it simple"},
+                        {"label": "Bold", "description": "Make it loud"},
+                    ],
+                }
+            ],
+            "answers": [
+                {
+                    "header": "Style",
+                    "question": "Choose a style",
+                    "selected_options": ["Minimal"],
+                }
+            ],
+            "annotations": {"source": "ask-user-ui"},
+        }
+    }
     followup_message = route_message.await_args.args[2]
     assert "AskUserQuestion" in followup_message
     assert "Minimal" in followup_message

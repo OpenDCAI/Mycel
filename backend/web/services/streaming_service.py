@@ -830,7 +830,21 @@ async def _run_agent_to_buffer(
         # enqueue time (@@@steer-instant-feedback).
         # Note: is_steer is NOT persisted in queue, so check notification_type too.
         is_steer = meta.get("is_steer") or meta.get("notification_type") == "steer"
-        if (not src or src == "owner") and not is_steer:
+        if meta.get("ask_user_question_answered"):
+            await emit(
+                {
+                    "event": "user_message",
+                    "data": json.dumps(
+                        {
+                            "content": "",
+                            "showing": False,
+                            "ask_user_question_answered": meta["ask_user_question_answered"],
+                        },
+                        ensure_ascii=False,
+                    ),
+                }
+            )
+        elif (not src or src == "owner") and not is_steer:
             # @@@strip-for-display — agent sees full content (with system-reminder),
             # frontend sees clean text (tags stripped)
             from backend.web.utils.serializers import strip_system_tags

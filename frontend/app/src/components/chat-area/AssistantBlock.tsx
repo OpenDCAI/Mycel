@@ -1,4 +1,4 @@
-import { memo, useEffect, useState } from "react";
+import { memo } from "react";
 import { Loader2 } from "lucide-react";
 import type { AssistantTurn, NoticeSegment, NotificationType, RetrySegment, StreamStatus, ToolSegment, TurnSegment } from "../../api";
 import MarkdownContent from "../MarkdownContent";
@@ -8,6 +8,8 @@ import { InlineNotice } from "./NoticeBubble";
 import { ThinkingIndicator } from "./ThinkingIndicator";
 import { ToolDetailBox } from "./ToolDetailBox";
 import { formatTime } from "./utils";
+import { AskUserQuestionCard } from "./AskUserQuestionCard";
+import type { AskUserQuestionAnsweredPayload, AskUserQuestionPendingState } from "../../pages/ask-user-question";
 
 // --- Phase splitting: segments → content phases + notice dividers ---
 
@@ -40,29 +42,34 @@ function NoticeDivider({ content, notificationType }: { content: string; notific
 // --- Content phase rendering (tools + final text) ---
 
 function ContentPhaseBlock({
-  segments, allSegments, isStreaming, onFocusAgent,
+  segments, allSegments, isStreaming, onFocusAgent, askUserQuestion,
 }: {
   segments: TurnSegment[];
   /** All segments in the full turn (passed to DetailBoxModal). */
   allSegments?: TurnSegment[];
   isStreaming: boolean;
   onFocusAgent?: (taskId: string) => void;
+  askUserQuestion?: { mode: "pending"; pending: AskUserQuestionPendingState } | { mode: "answered"; answered: AskUserQuestionAnsweredPayload };
 }) {
   const toolSegs = segments.filter((s) => s.type === "tool") as ToolSegment[];
+  const visibleToolSegs = askUserQuestion
+    ? toolSegs.filter((segment) => segment.step.name !== "AskUserQuestion")
+    : toolSegs;
   const textSegs = segments.filter((s) => s.type === "text");
   const visibleText = textSegs.length > 0 ? textSegs[textSegs.length - 1] : null;
   const retrySeg = segments.find((s) => s.type === "retry") as RetrySegment | undefined;
 
   return (
     <>
-      {toolSegs.length > 0 && (
+      {visibleToolSegs.length > 0 && (
         <ToolDetailBox
-          toolSegments={toolSegs}
+          toolSegments={visibleToolSegs}
           isStreaming={isStreaming}
-          allSegments={allSegments}
+          allSegments={allSegments?.filter((segment) => segment.type !== "tool" || segment.step.name !== "AskUserQuestion")}
           onFocusAgent={onFocusAgent}
         />
       )}
+      {askUserQuestion ? <AskUserQuestionCard {...askUserQuestion} /> : null}
       {visibleText && visibleText.type === "text" && (
         <MarkdownContent content={visibleText.content} />
       )}
@@ -85,6 +92,7 @@ interface AssistantBlockProps {
   onFocusAgent?: (taskId: string) => void;
   agentName?: string;
   agentAvatarUrl?: string;
+  askUserQuestion?: { mode: "pending"; pending: AskUserQuestionPendingState } | { mode: "answered"; answered: AskUserQuestionAnsweredPayload };
 }
 
 function formatDuration(ms: number): string {
@@ -92,19 +100,11 @@ function formatDuration(ms: number): string {
   return `${Math.floor(ms / 60000)}m ${Math.round((ms % 60000) / 1000)}s`;
 }
 
-export const AssistantBlock = memo(function AssistantBlock({ entry, isStreamingThis, runtimeStatus, onFocusAgent, agentName, agentAvatarUrl }: AssistantBlockProps) {
+export const AssistantBlock = memo(function AssistantBlock({ entry, isStreamingThis, runtimeStatus, onFocusAgent, agentName, agentAvatarUrl, askUserQuestion }: AssistantBlockProps) {
   const displayName = agentName || "Agent";
   const hasNotice = entry.segments.some((s) => s.type === "notice");
 
-  const [elapsed, setElapsed] = useState<number | null>(() =>
-    entry.endTimestamp ? entry.endTimestamp - entry.timestamp : null
-  );
-
-  useEffect(() => {
-    if (entry.endTimestamp) {
-      setElapsed(entry.endTimestamp - entry.timestamp);
-    }
-  }, [entry.timestamp, entry.endTimestamp]);
+  const elapsed = entry.endTimestamp ? entry.endTimestamp - entry.timestamp : null;
 
   const fullText = entry.segments
     .filter((s) => s.type === "text")
@@ -146,6 +146,7 @@ export const AssistantBlock = memo(function AssistantBlock({ entry, isStreamingT
                   allSegments={entry.segments}
                   isStreaming={!!isStreamingThis}
                   onFocusAgent={onFocusAgent}
+                  askUserQuestion={askUserQuestion}
                 />
           )
         ) : (
@@ -155,6 +156,7 @@ export const AssistantBlock = memo(function AssistantBlock({ entry, isStreamingT
             allSegments={entry.segments}
             isStreaming={!!isStreamingThis}
             onFocusAgent={onFocusAgent}
+            askUserQuestion={askUserQuestion}
           />
         )}
 

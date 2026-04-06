@@ -243,6 +243,11 @@ export interface UserMessage {
   timestamp: number;
   /** Backend-computed: is this message visible to thread owner? */
   showing?: boolean;
+  ask_user_question_answered?: {
+    questions: AskUserQuestionPrompt[];
+    answers: AskUserAnswer[];
+    annotations?: Record<string, unknown>;
+  };
   senderName?: string;
   senderAvatarUrl?: string;
   attachments?: string[];
