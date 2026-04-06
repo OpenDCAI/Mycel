@@ -2,53 +2,25 @@
 
 import asyncio
 import json
-from pathlib import Path
 from typing import Any
 
 from storage.contracts import RunEventRepo
-from storage.providers.sqlite.kernel import SQLiteDBRole, resolve_role_db_path
 from storage.runtime import build_storage_container
 
-_DB_PATH = resolve_role_db_path(SQLiteDBRole.MAIN)
 _default_run_event_repo: RunEventRepo | None = None
-_default_run_event_repo_path: Path | None = None
-
-
-def init_event_store() -> None:
-    """Initialize run event storage for current provider strategy."""
-    global _default_run_event_repo, _default_run_event_repo_path
-    if _default_run_event_repo is not None:
-        _default_run_event_repo.close()
-    _default_run_event_repo = None
-    _default_run_event_repo_path = None
-
-    container = build_storage_container(main_db_path=_DB_PATH)
-    provider = container.provider_for("run_event_repo")
-    if provider != "sqlite":
-        return
-
-    # Connection factory in RunEventRepo already guarantees WAL + PRAGMA settings.
-    repo = container.run_event_repo()
-    repo.close()
 
 
 def _resolve_run_event_repo(run_event_repo: RunEventRepo | None) -> RunEventRepo:
     if run_event_repo is not None:
         return run_event_repo
 
-    global _default_run_event_repo, _default_run_event_repo_path
-    if _default_run_event_repo is not None and _default_run_event_repo_path == _DB_PATH:
+    global _default_run_event_repo
+    if _default_run_event_repo is not None:
         return _default_run_event_repo
 
-    if _default_run_event_repo is not None:
-        _default_run_event_repo.close()
-        _default_run_event_repo = None
-        _default_run_event_repo_path = None
-
-    container = build_storage_container(main_db_path=_DB_PATH)
+    container = build_storage_container()
     # @@@event-store-single-path - keep one persistence boundary; when caller omits repo, resolve default repo from storage container.
     _default_run_event_repo = container.run_event_repo()
-    _default_run_event_repo_path = _DB_PATH
     return _default_run_event_repo
 
 

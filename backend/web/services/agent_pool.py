@@ -2,7 +2,6 @@
 
 import asyncio
 import logging
-import os
 from pathlib import Path
 from typing import Any
 
@@ -36,10 +35,7 @@ def create_agent_sync(
     web_app: Any = None,
 ) -> Any:
     """Create a LeonAgent with the given sandbox. Runs in a thread."""
-    storage_container = build_storage_container(
-        main_db_path=os.getenv("LEON_DB_PATH"),
-        eval_db_path=os.getenv("LEON_EVAL_DB_PATH"),
-    )
+    storage_container = build_storage_container()
     # @@@web-file-ops-repo - inject storage-backed repo so file_operations route to correct provider.
     from core.operations import FileOperationRecorder, set_recorder
 

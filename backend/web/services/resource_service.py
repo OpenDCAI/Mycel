@@ -23,7 +23,6 @@ from sandbox.resource_snapshot import (
     probe_and_upsert_for_instance,
 )
 from storage.models import map_lease_to_session_status
-from storage.providers.sqlite.kernel import SQLiteDBRole, resolve_role_db_path
 from storage.runtime import build_member_repo, build_thread_repo
 
 _CONFIG_LOADER = SandboxConfigLoader(SANDBOXES_DIR)
@@ -222,7 +221,7 @@ def _member_meta_map(member_repo: Any = None) -> dict[str, dict[str, str | None]
     repo = member_repo
     own_repo = False
     if repo is None:
-        repo = build_member_repo(main_db_path=resolve_role_db_path(SQLiteDBRole.MAIN))
+        repo = build_member_repo()
         own_repo = True
     try:
         members = repo.list_all()
@@ -249,7 +248,7 @@ def _thread_agent_refs(thread_ids: list[str], thread_repo: Any = None) -> dict[s
     repo = thread_repo
     own_repo = False
     if repo is None:
-        repo = build_thread_repo(main_db_path=resolve_role_db_path(SQLiteDBRole.MAIN))
+        repo = build_thread_repo()
         own_repo = True
     try:
         refs: dict[str, str] = {}

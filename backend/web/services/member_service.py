@@ -345,15 +345,8 @@ def list_members(owner_user_id: str | None = None, member_repo: Any = None) -> l
     # @@@auth-scope — scoped by owner from DB, config from filesystem
     if owner_user_id:
         if member_repo is None:
-            from storage.providers.sqlite.member_repo import SQLiteMemberRepo
-
-            repo = SQLiteMemberRepo()
-            try:
-                agents = repo.list_by_owner_user_id(owner_user_id)
-            finally:
-                repo.close()
-        else:
-            agents = member_repo.list_by_owner_user_id(owner_user_id)
+            raise RuntimeError("member_repo is required when owner_user_id is provided")
+        agents = member_repo.list_by_owner_user_id(owner_user_id)
         results = []
         for agent in agents:
             agent_dir = MEMBERS_DIR / agent.id
@@ -392,7 +385,7 @@ def get_member(member_id: str) -> dict[str, Any] | None:
 
 def create_member(name: str, description: str = "", owner_user_id: str | None = None, member_repo: Any = None) -> dict[str, Any]:
     from storage.contracts import MemberRow, MemberType
-    from storage.providers.sqlite.member_repo import generate_member_id
+    from storage.utils import generate_member_id
 
     now = time.time()
     now_ms = int(now * 1000)
@@ -421,16 +414,9 @@ def create_member(name: str, description: str = "", owner_user_id: str | None = 
             owner_user_id=owner_user_id,
             created_at=now,
         )
-        if member_repo is not None:
-            member_repo.create(row)
-        else:
-            from storage.providers.sqlite.member_repo import SQLiteMemberRepo
-
-            repo = SQLiteMemberRepo()
-            try:
-                repo.create(row)
-            finally:
-                repo.close()
+        if member_repo is None:
+            raise RuntimeError("member_repo is required when owner_user_id is provided")
+        member_repo.create(row)
 
     return get_member(member_id)  # type: ignore
 
@@ -471,9 +457,7 @@ def update_member(
 
         if "name" in updates:
             if member_repo is None:
-                from storage.providers.sqlite.member_repo import SQLiteMemberRepo
-
-                member_repo = SQLiteMemberRepo()
+                raise RuntimeError("member_repo is required to update member name")
             member_repo.update(member_id, name=updates["name"])
 
     return get_member(member_id)
@@ -677,16 +661,9 @@ def delete_member(member_id: str, member_repo: Any = None) -> bool:
     shutil.rmtree(member_dir)
 
     # Also remove from DB
-    if member_repo is not None:
-        member_repo.delete(member_id)
-    else:
-        from storage.providers.sqlite.member_repo import SQLiteMemberRepo
-
-        repo = SQLiteMemberRepo()
-        try:
-            repo.delete(member_id)
-        finally:
-            repo.close()
+    if member_repo is None:
+        raise RuntimeError("member_repo is required to delete member")
+    member_repo.delete(member_id)
 
     return True
 
@@ -712,7 +689,7 @@ def install_from_snapshot(
 ) -> str:
     """Create or update a local member from a marketplace snapshot."""
     from storage.contracts import MemberRow, MemberType
-    from storage.providers.sqlite.member_repo import generate_member_id
+    from storage.utils import generate_member_id
 
     now = time.time()
     now_ms = int(now * 1000)
@@ -812,15 +789,8 @@ def install_from_snapshot(
             owner_user_id=owner_user_id,
             created_at=now,
         )
-        if member_repo is not None:
-            member_repo.create(row)
-        else:
-            from storage.providers.sqlite.member_repo import SQLiteMemberRepo
-
-            repo = SQLiteMemberRepo()
-            try:
-                repo.create(row)
-            finally:
-                repo.close()
+        if member_repo is None:
+            raise RuntimeError("member_repo is required to register new member from snapshot")
+        member_repo.create(row)
 
     return member_id
