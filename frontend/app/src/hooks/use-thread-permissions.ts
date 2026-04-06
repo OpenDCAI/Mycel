@@ -31,6 +31,11 @@ export interface ThreadPermissionsActions {
   removeSessionRule: (behavior: PermissionRuleBehavior, toolName: string) => Promise<void>;
 }
 
+function isActiveThreadRoute(threadId: string): boolean {
+  const path = window.location.pathname.replace(/\/+$/, "");
+  return path.startsWith("/threads/") && path.endsWith(`/${encodeURIComponent(threadId)}`);
+}
+
 export function useThreadPermissions(threadId: string | undefined): ThreadPermissionsState & ThreadPermissionsActions {
   const [requests, setRequests] = useState<PermissionRequest[]>([]);
   const [sessionRules, setSessionRules] = useState<ThreadPermissionRules>({ allow: [], deny: [], ask: [] });
@@ -64,6 +69,11 @@ export function useThreadPermissions(threadId: string | undefined): ThreadPermis
     } catch (err) {
       if (controller.signal.aborted) return;
       if (refreshGenerationRef.current !== generation) return;
+      // @@@permission-route-teardown - browser navigation can tear down the old
+      // thread page before React cleanup runs, which surfaces as a generic
+      // Failed to fetch from the abandoned route. Only log if this thread page
+      // is still the active route.
+      if (!isActiveThreadRoute(threadId)) return;
       console.error("[useThreadPermissions] Failed to load permissions:", err);
     } finally {
       if (requestAbortRef.current === controller) {

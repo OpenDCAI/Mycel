@@ -22,6 +22,7 @@ vi.mock("../api", async () => {
 
 afterEach(() => {
   vi.clearAllMocks();
+  window.history.replaceState({}, "", "/");
 });
 
 function Harness({ threadId }: { threadId?: string }) {
@@ -45,6 +46,24 @@ describe("useThreadPermissions", () => {
     const view = render(<Harness threadId="thread-1" />);
     view.unmount();
 
+    await Promise.resolve();
+
+    expect(consoleError).not.toHaveBeenCalled();
+    consoleError.mockRestore();
+  });
+
+  it("does not log a failed fetch once navigation already left the thread route", async () => {
+    window.history.replaceState({}, "", "/threads/member-1/thread-1");
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+    getThreadPermissions.mockImplementation(async () => {
+      window.history.replaceState({}, "", "/resources");
+      throw new TypeError("Failed to fetch");
+    });
+
+    render(<Harness threadId="thread-1" />);
+
+    await Promise.resolve();
     await Promise.resolve();
 
     expect(consoleError).not.toHaveBeenCalled();
