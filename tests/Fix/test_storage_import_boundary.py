@@ -4,7 +4,6 @@ from pathlib import Path
 
 FORBIDDEN = (
     "from core.runtime.middleware.memory.checkpoint_repo import",
-    "from core.runtime.middleware.memory.thread_config_repo import",
     "from core.runtime.middleware.memory.run_event_repo import",
     "from core.runtime.middleware.memory.file_operation_repo import",
     "from core.runtime.middleware.memory.summary_repo import",
