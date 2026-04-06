@@ -103,7 +103,11 @@ async def test_upload_avatar_route_uses_auth_shell(monkeypatch: pytest.MonkeyPat
         return _member(member_id, owner_user_id="user-1")
 
     monkeypatch.setattr(entities_router, "_get_owned_avatar_member_or_404", fake_helper)
-    monkeypatch.setattr(entities_router, "process_and_save_avatar", lambda data, member_id: seen.append(("save", (data, member_id))) or f"avatars/{member_id}.png")
+    monkeypatch.setattr(
+        entities_router,
+        "process_and_save_avatar",
+        lambda data, member_id: seen.append(("save", (data, member_id))) or f"avatars/{member_id}.png",
+    )
 
     fake_repo = SimpleNamespace(
         get_by_id=lambda _member_id: (_ for _ in ()).throw(AssertionError("route should use helper, not repo lookup directly")),
