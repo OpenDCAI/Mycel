@@ -60,7 +60,7 @@ export default function RelationshipPanel({ agentMemberId }: Props) {
     authFetch("/api/entities")
       .then(r => r.json())
       .then((entities: { id: string; member_id: string; type: string }[]) => {
-        const match = entities.find(e => e.member_id === agentMemberId && e.type === "agent");
+        const match = entities.find(e => e.id === agentMemberId && e.type.includes("agent"));
         setAgentUserId(match?.id ?? null);
       })
       .catch(() => setAgentUserId(null));

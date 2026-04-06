@@ -26,7 +26,7 @@ describe("LoginForm", () => {
           token: "token",
           user: { id: "u-1", name: "tester", type: "human", avatar: null },
           agent: null,
-              setupInfo: null,
+      setupInfo: null,
         });
       }),
       sendOtp: vi.fn(async () => undefined),

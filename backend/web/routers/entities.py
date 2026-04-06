@@ -205,6 +205,27 @@ async def list_entities(
     return items
 
 
+@router.get("/{user_id}/profile")
+async def get_entity_profile(
+    user_id: str,
+    app: Annotated[Any, Depends(get_app)],
+):
+    """Public agent profile. No auth required (frontend uses plain fetch)."""
+    member = app.state.member_repo.get_by_id(user_id)
+    if not member:
+        raise HTTPException(404, "Member not found")
+    member_type = member.type.value if hasattr(member.type, "value") else str(member.type)
+    if "agent" not in member_type:
+        raise HTTPException(404, "Profile not available for this member type")
+    return {
+        "id": member.id,
+        "name": member.name,
+        "type": member_type,
+        "avatar_url": avatar_url(member.id, bool(member.avatar)),
+        "description": member.description,
+    }
+
+
 @router.get("/{user_id}/agent-thread")
 async def get_agent_thread(
     user_id: str,

@@ -114,8 +114,14 @@ app.add_middleware(
 app.include_router(auth.router)
 app.include_router(invite_codes.router)
 app.include_router(threads.router)
-app.include_router(chats.router)
-app.include_router(messaging_router.router)
+
+# Chat router: Supabase mode uses messaging.py, SQLite mode uses chats.py
+_storage_strategy = os.getenv("LEON_STORAGE_STRATEGY", "sqlite")
+if _storage_strategy == "supabase":
+    app.include_router(messaging_router.router)
+else:
+    app.include_router(chats.router)
+
 app.include_router(contacts.router)
 app.include_router(relationships_router)
 app.include_router(entities.router)

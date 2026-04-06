@@ -31,7 +31,7 @@ export default function SearchModal({ isOpen, threads, onClose, onSelectThread }
           {threads.map((thread) => (
             <CommandItem
               key={thread.thread_id}
-              value={`${thread.thread_id} ${thread.sandbox ?? "local"} ${thread.member_name ?? ""} ${thread.member_name ?? ""} ${thread.sidebar_label ?? ""}`}
+              value={`${thread.thread_id} ${thread.sandbox ?? "local"} ${thread.member_name ?? ""} ${thread.sidebar_label ?? ""}`}
               onSelect={() => {
                 onSelectThread(thread.thread_id);
                 onClose();

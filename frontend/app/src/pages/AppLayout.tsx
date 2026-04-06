@@ -134,7 +134,7 @@ function MobileThreadList({ threads, loading, onNewChat, onDeleteThread, newChat
         ) : (
           threads.map(t => {
             const memberId = requireThreadMemberId(t);
-            const memberName = t.member_name || t.member_name || "Agent";
+            const memberName = t.member_name || "Agent";
             const subtitle = t.is_main ? "主线对话" : (t.sidebar_label || "分支对话");
             return (
               <div key={t.thread_id} className="flex items-center border-b border-border">
