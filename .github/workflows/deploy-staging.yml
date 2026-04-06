@@ -117,10 +117,21 @@ jobs:
       - name: Verify staging health contract
         run: |
           set -euo pipefail
-          body="$(curl -sS --fail-with-body "https://app.staging.mycel.nextmind.space/api/monitor/health")"
-          echo "$body"
-          printf '%s' "$body" | jq -e '.db.path == "/root/.leon/sandbox.db"' >/dev/null
-          printf '%s' "$body" | jq -e '.db.exists == true' >/dev/null
+          for attempt in $(seq 1 18); do
+            status="$(curl -sS -o /tmp/staging-health.json -w '%{http_code}' "https://app.staging.mycel.nextmind.space/api/monitor/health")"
+            echo "health attempt ${attempt}: status=${status}"
+            if [ "$status" = "200" ]; then
+              body="$(cat /tmp/staging-health.json)"
+              echo "$body"
+              printf '%s' "$body" | jq -e '.db.path == "/root/.leon/sandbox.db"' >/dev/null
+              printf '%s' "$body" | jq -e '.db.exists == true' >/dev/null
+              exit 0
+            fi
+            cat /tmp/staging-health.json || true
+            sleep 10
+          done
+          echo "Staging health contract did not become ready in time"
+          exit 1
 
       - name: Comment on PR with staging URL
         if: github.event_name == 'pull_request'
