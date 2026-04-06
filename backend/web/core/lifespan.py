@@ -45,31 +45,20 @@ async def lifespan(app: FastAPI):
     # ---- Member-Chat repos + services ----
     from backend.web.core.supabase_factory import create_supabase_auth_client, create_supabase_client
     from storage.container import StorageContainer
-    from storage.providers.supabase import (
-        SupabaseChatRepo,
-        SupabaseContactRepo,
-        SupabaseInviteCodeRepo,
-        SupabaseMemberRepo,
-        SupabaseRecipeRepo,
-        SupabaseThreadLaunchPrefRepo,
-        SupabaseThreadRepo,
-        SupabaseUserSettingsRepo,
-    )
 
     _supabase_client = create_supabase_client()
-    app.state.member_repo = SupabaseMemberRepo(_supabase_client)
-    app.state.thread_repo = SupabaseThreadRepo(_supabase_client)
-    app.state.thread_launch_pref_repo = SupabaseThreadLaunchPrefRepo(_supabase_client)
-    app.state.recipe_repo = SupabaseRecipeRepo(_supabase_client)
-    app.state.chat_repo = SupabaseChatRepo(_supabase_client)
-    app.state.invite_code_repo = SupabaseInviteCodeRepo(_supabase_client)
-    app.state.user_settings_repo = SupabaseUserSettingsRepo(_supabase_client)
-    from storage.providers.supabase.agent_config_repo import SupabaseAgentConfigRepo
-
-    app.state.agent_config_repo = SupabaseAgentConfigRepo(_supabase_client)
+    storage_container = StorageContainer(supabase_client=_supabase_client)
+    app.state.member_repo = storage_container.member_repo()
+    app.state.thread_repo = storage_container.thread_repo()
+    app.state.thread_launch_pref_repo = storage_container.thread_launch_pref_repo()
+    app.state.recipe_repo = storage_container.recipe_repo()
+    app.state.chat_repo = storage_container.chat_repo()
+    app.state.invite_code_repo = storage_container.invite_code_repo()
+    app.state.user_settings_repo = storage_container.user_settings_repo()
+    app.state.agent_config_repo = storage_container.agent_config_repo()
     app.state._supabase_client = _supabase_client
     app.state._supabase_auth_client_factory = create_supabase_auth_client
-    app.state._storage_container = StorageContainer(supabase_client=_supabase_client)
+    app.state._storage_container = storage_container
 
     from backend.web.services.auth_service import AuthService
 
@@ -86,7 +75,7 @@ async def lifespan(app: FastAPI):
     app.state.chat_event_bus = ChatEventBus()
     app.state.typing_tracker = TypingTracker(app.state.chat_event_bus)
 
-    app.state.contact_repo = SupabaseContactRepo(_supabase_client)
+    app.state.contact_repo = storage_container.contact_repo()
 
     # Wire chat delivery after event loop is available
     # ---- Messaging system (Supabase-backed, required) ----

@@ -6,17 +6,31 @@ import importlib
 from typing import Any
 
 from .contracts import (
+    AgentConfigRepo,
+    AgentRegistryRepo,
+    ChatRepo,
     ChatSessionRepo,
     CheckpointRepo,
+    ContactRepo,
+    CronJobRepo,
     EvalRepo,
     FileOperationRepo,
+    InviteCodeRepo,
     LeaseRepo,
+    MemberRepo,
+    PanelTaskRepo,
     ProviderEventRepo,
     QueueRepo,
+    RecipeRepo,
     RunEventRepo,
     SandboxVolumeRepo,
     SummaryRepo,
+    SyncFileRepo,
     TerminalRepo,
+    ThreadLaunchPrefRepo,
+    ThreadRepo,
+    ToolTaskRepo,
+    UserSettingsRepo,
 )
 
 _REPO_REGISTRY: dict[str, tuple[str, str]] = {
@@ -31,6 +45,20 @@ _REPO_REGISTRY: dict[str, tuple[str, str]] = {
     "lease_repo": ("storage.providers.supabase.lease_repo", "SupabaseLeaseRepo"),
     "terminal_repo": ("storage.providers.supabase.terminal_repo", "SupabaseTerminalRepo"),
     "chat_session_repo": ("storage.providers.supabase.chat_session_repo", "SupabaseChatSessionRepo"),
+    "panel_task_repo": ("storage.providers.supabase.panel_task_repo", "SupabasePanelTaskRepo"),
+    "cron_job_repo": ("storage.providers.supabase.cron_job_repo", "SupabaseCronJobRepo"),
+    "agent_registry_repo": ("storage.providers.supabase.agent_registry_repo", "SupabaseAgentRegistryRepo"),
+    "tool_task_repo": ("storage.providers.supabase.tool_task_repo", "SupabaseToolTaskRepo"),
+    "sync_file_repo": ("storage.providers.supabase.sync_file_repo", "SupabaseSyncFileRepo"),
+    "member_repo": ("storage.providers.supabase.member_repo", "SupabaseMemberRepo"),
+    "thread_repo": ("storage.providers.supabase.thread_repo", "SupabaseThreadRepo"),
+    "thread_launch_pref_repo": ("storage.providers.supabase.thread_launch_pref_repo", "SupabaseThreadLaunchPrefRepo"),
+    "recipe_repo": ("storage.providers.supabase.recipe_repo", "SupabaseRecipeRepo"),
+    "chat_repo": ("storage.providers.supabase.chat_repo", "SupabaseChatRepo"),
+    "invite_code_repo": ("storage.providers.supabase.invite_code_repo", "SupabaseInviteCodeRepo"),
+    "user_settings_repo": ("storage.providers.supabase.user_settings_repo", "SupabaseUserSettingsRepo"),
+    "agent_config_repo": ("storage.providers.supabase.agent_config_repo", "SupabaseAgentConfigRepo"),
+    "contact_repo": ("storage.providers.supabase.contact_repo", "SupabaseContactRepo"),
 }
 
 
@@ -79,6 +107,48 @@ class StorageContainer:
 
     def chat_session_repo(self) -> ChatSessionRepo:
         return self._build("chat_session_repo")
+
+    def panel_task_repo(self) -> PanelTaskRepo:
+        return self._build("panel_task_repo")
+
+    def cron_job_repo(self) -> CronJobRepo:
+        return self._build("cron_job_repo")
+
+    def agent_registry_repo(self) -> AgentRegistryRepo:
+        return self._build("agent_registry_repo")
+
+    def tool_task_repo(self) -> ToolTaskRepo:
+        return self._build("tool_task_repo")
+
+    def sync_file_repo(self) -> SyncFileRepo:
+        return self._build("sync_file_repo")
+
+    def member_repo(self) -> MemberRepo:
+        return self._build("member_repo")
+
+    def thread_repo(self) -> ThreadRepo:
+        return self._build("thread_repo")
+
+    def thread_launch_pref_repo(self) -> ThreadLaunchPrefRepo:
+        return self._build("thread_launch_pref_repo")
+
+    def recipe_repo(self) -> RecipeRepo:
+        return self._build("recipe_repo")
+
+    def chat_repo(self) -> ChatRepo:
+        return self._build("chat_repo")
+
+    def invite_code_repo(self) -> InviteCodeRepo:
+        return self._build("invite_code_repo")
+
+    def user_settings_repo(self) -> UserSettingsRepo:
+        return self._build("user_settings_repo")
+
+    def agent_config_repo(self) -> AgentConfigRepo:
+        return self._build("agent_config_repo")
+
+    def contact_repo(self) -> ContactRepo:
+        return self._build("contact_repo")
 
     def purge_thread(self, thread_id: str) -> None:
         """Delete all data for a thread across all repos."""
