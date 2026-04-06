@@ -851,6 +851,73 @@ def make_badge(desired, observed):
     }
 
 
+LEASE_SEMANTIC_ORDER = [
+    "orphan_diverged",
+    "diverged",
+    "orphan",
+    "healthy",
+]
+
+LEASE_SEMANTIC_META = {
+    "orphan_diverged": {
+        "title": "Orphaned + Diverged",
+        "description": "Lease lost thread binding while desired and observed state still disagree.",
+    },
+    "diverged": {
+        "title": "Diverged",
+        "description": "Lease is still attached to a thread, but runtime state has not converged.",
+    },
+    "orphan": {
+        "title": "Orphans",
+        "description": "Lease has no active thread binding. Usually cleanup or historical residue.",
+    },
+    "healthy": {
+        "title": "Healthy",
+        "description": "Lease has a thread binding and desired state matches observed state.",
+    },
+}
+
+
+def classify_lease_semantics(*, thread_id: str | None, badge: dict[str, Any]) -> dict[str, str]:
+    is_orphan = not bool(thread_id)
+    is_converged = bool(badge.get("converged"))
+    if is_orphan and not is_converged:
+        category = "orphan_diverged"
+    elif not is_converged:
+        category = "diverged"
+    elif is_orphan:
+        category = "orphan"
+    else:
+        category = "healthy"
+    meta = LEASE_SEMANTIC_META[category]
+    return {
+        "category": category,
+        "title": meta["title"],
+        "description": meta["description"],
+    }
+
+
+def _serialize_lease_row(row: sqlite3.Row) -> dict[str, Any]:
+    badge = make_badge(row["desired_state"], row["observed_state"])
+    semantics = classify_lease_semantics(thread_id=row["thread_id"], badge=badge)
+    return {
+        "lease_id": row["lease_id"],
+        "lease_url": f"/lease/{row['lease_id']}",
+        "provider": row["provider_name"],
+        "instance_id": row["current_instance_id"],
+        "thread": {
+            "thread_id": row["thread_id"],
+            "thread_url": f"/thread/{row['thread_id']}" if row["thread_id"] else None,
+            "is_orphan": not row["thread_id"],
+        },
+        "state_badge": badge,
+        "semantics": semantics,
+        "error": row["last_error"],
+        "updated_at": row["updated_at"],
+        "updated_ago": format_time_ago(row["updated_at"]),
+    }
+
+
 def load_thread_mode_map(thread_ids: list[str]) -> dict[str, dict]:
     """Load thread mode metadata from thread_config."""
     if not thread_ids or not DB_PATH.exists():
@@ -1988,27 +2055,32 @@ def list_leases(db: sqlite3.Connection = Depends(get_db)):
         ORDER BY sl.updated_at DESC
     """).fetchall()
 
-    items = []
-    for row in rows:
-        items.append(
+    items = [_serialize_lease_row(row) for row in rows]
+    summary = {key: 0 for key in LEASE_SEMANTIC_ORDER}
+    for item in items:
+        summary[item["semantics"]["category"]] += 1
+    summary["total"] = len(items)
+    groups = []
+    for key in LEASE_SEMANTIC_ORDER:
+        group_items = [item for item in items if item["semantics"]["category"] == key]
+        meta = LEASE_SEMANTIC_META[key]
+        groups.append(
             {
-                "lease_id": row["lease_id"],
-                "lease_url": f"/lease/{row['lease_id']}",
-                "provider": row["provider_name"],
-                "instance_id": row["current_instance_id"],
-                "thread": {
-                    "thread_id": row["thread_id"],
-                    "thread_url": f"/thread/{row['thread_id']}" if row["thread_id"] else None,
-                    "is_orphan": not row["thread_id"],
-                },
-                "state_badge": make_badge(row["desired_state"], row["observed_state"]),
-                "error": row["last_error"],
-                "updated_at": row["updated_at"],
-                "updated_ago": format_time_ago(row["updated_at"]),
+                "key": key,
+                "title": meta["title"],
+                "description": meta["description"],
+                "count": len(group_items),
+                "items": group_items,
             }
         )
 
-    return {"title": "All Leases", "count": len(items), "items": items}
+    return {
+        "title": "All Leases",
+        "count": len(items),
+        "summary": summary,
+        "groups": groups,
+        "items": items,
+    }
 
 
 @router.get("/lease/{lease_id}")

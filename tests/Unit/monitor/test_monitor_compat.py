@@ -77,3 +77,81 @@ def test_list_threads_second_page_is_not_sliced_empty_after_sql_pagination(tmp_p
     assert payload["pagination"]["has_prev"] is True
     assert payload["pagination"]["has_next"] is False
     assert payload["pagination"]["next_offset"] is None
+
+
+def test_list_leases_exposes_semantic_groups_and_summary(tmp_path):
+    db_path = tmp_path / "sandbox.db"
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+    conn.executescript(
+        """
+        CREATE TABLE sandbox_leases (
+            lease_id TEXT PRIMARY KEY,
+            provider_name TEXT,
+            desired_state TEXT,
+            observed_state TEXT,
+            current_instance_id TEXT,
+            last_error TEXT,
+            created_at TEXT,
+            updated_at TEXT
+        );
+
+        CREATE TABLE chat_sessions (
+            chat_session_id TEXT PRIMARY KEY,
+            thread_id TEXT,
+            lease_id TEXT,
+            status TEXT,
+            started_at TEXT,
+            last_active_at TEXT
+        );
+        """
+    )
+    conn.executemany(
+        """
+        INSERT INTO sandbox_leases (
+            lease_id, provider_name, desired_state, observed_state, current_instance_id, last_error, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        [
+            ("lease-healthy", "local", "running", "running", "inst-1", None, "2026-04-06T00:00:00", "2026-04-06T00:10:00"),
+            ("lease-diverged", "local", "running", "detached", "inst-2", "drift", "2026-04-06T00:00:00", "2026-04-06T00:11:00"),
+            ("lease-orphan-diverged", "local", "running", "detached", "inst-3", None, "2026-04-06T00:00:00", "2026-04-06T00:12:00"),
+            ("lease-orphan", "local", "stopped", "stopped", "inst-4", None, "2026-04-06T00:00:00", "2026-04-06T00:13:00"),
+        ],
+    )
+    conn.executemany(
+        """
+        INSERT INTO chat_sessions (
+            chat_session_id, thread_id, lease_id, status, started_at, last_active_at
+        ) VALUES (?, ?, ?, ?, ?, ?)
+        """,
+        [
+            ("sess-1", "thread-1", "lease-healthy", "running", "2026-04-06T00:01:00", "2026-04-06T00:10:00"),
+            ("sess-2", "thread-2", "lease-diverged", "running", "2026-04-06T00:02:00", "2026-04-06T00:11:00"),
+        ],
+    )
+    conn.commit()
+
+    try:
+        payload = monitor.list_leases(db=conn)
+    finally:
+        conn.close()
+
+    assert payload["summary"] == {
+        "total": 4,
+        "healthy": 1,
+        "diverged": 1,
+        "orphan": 1,
+        "orphan_diverged": 1,
+    }
+    assert [group["key"] for group in payload["groups"]] == [
+        "orphan_diverged",
+        "diverged",
+        "orphan",
+        "healthy",
+    ]
+    by_id = {item["lease_id"]: item for item in payload["items"]}
+    assert by_id["lease-healthy"]["semantics"]["category"] == "healthy"
+    assert by_id["lease-diverged"]["semantics"]["category"] == "diverged"
+    assert by_id["lease-orphan-diverged"]["semantics"]["category"] == "orphan_diverged"
+    assert by_id["lease-orphan"]["semantics"]["category"] == "orphan"

@@ -59,3 +59,15 @@ def test_monitor_dashboard_route_smoke():
     assert "infra" in payload
     assert "workload" in payload
     assert "latest_evaluation" in payload
+
+
+def test_monitor_leases_route_exposes_summary_and_groups():
+    with TestClient(app) as client:
+        response = client.get("/api/monitor/leases")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert "summary" in payload
+    assert "groups" in payload
+    assert set(payload["summary"]).issuperset({"total", "healthy", "diverged", "orphan", "orphan_diverged"})
+    assert isinstance(payload["groups"], list)

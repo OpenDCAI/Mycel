@@ -34,7 +34,7 @@ def dashboard_snapshot(request: Request):
     evaluations = list_evaluations(limit=5, offset=0, request=request)
 
     resource_summary = resources.get("summary") or {}
-    lease_items = leases.get("items") or []
+    lease_summary = leases.get("summary") or {}
     latest_eval = (evaluations.get("items") or [None])[0]
 
     latest_eval_summary = None
@@ -61,10 +61,10 @@ def dashboard_snapshot(request: Request):
         "infra": {
             "providers_active": int(resource_summary.get("active_providers") or 0),
             "providers_unavailable": int(resource_summary.get("unavailable_providers") or 0),
-            "leases_total": int(leases.get("count") or 0),
-            "leases_diverged": sum(1 for item in lease_items if not bool((item.get("state_badge") or {}).get("converged"))),
-            "leases_orphan": sum(1 for item in lease_items if bool((item.get("thread") or {}).get("is_orphan"))),
-            "leases_healthy": sum(1 for item in lease_items if bool((item.get("state_badge") or {}).get("converged"))),
+            "leases_total": int(lease_summary.get("total") or leases.get("count") or 0),
+            "leases_diverged": int(lease_summary.get("diverged") or 0) + int(lease_summary.get("orphan_diverged") or 0),
+            "leases_orphan": int(lease_summary.get("orphan") or 0) + int(lease_summary.get("orphan_diverged") or 0),
+            "leases_healthy": int(lease_summary.get("healthy") or 0),
         },
         "workload": {
             "db_sessions_total": int(((health.get("db") or {}).get("counts") or {}).get("chat_sessions") or 0),

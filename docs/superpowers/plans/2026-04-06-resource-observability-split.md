@@ -26,7 +26,7 @@
   - monitor `Resources` uses the global monitor contract and includes grouped lease triage
   - evaluation tutorial/reference sections are collapsed by default
 - next honest follow-up remains:
-  - `D3` because lease regrouping still relies on shallow frontend grouping over raw facts
+  - `D3` because lease regrouping has now moved onto a backend semantic contract, but the categories are still shallow and need stronger lifecycle meaning
   - `D2` because provisional eval detail still needs a stronger operator-facing explanation and artifact/log next-step surface
 
 ---

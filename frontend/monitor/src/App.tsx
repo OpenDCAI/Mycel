@@ -316,10 +316,13 @@ function MonitorResourcesPage() {
   const providers = Array.isArray(resourceData.providers) ? resourceData.providers : [];
   const summary = resourceData.summary || {};
   const leases = Array.isArray(leaseData.items) ? leaseData.items : [];
+  const leaseSummary = leaseData.summary || {};
+  const leaseGroups = Array.isArray(leaseData.groups) ? leaseData.groups : [];
   const selectedProvider = providers.find((provider: any) => provider.id === selectedId) || providers[0] || null;
-  const divergedLeases = leases.filter((item: any) => item.state_badge?.desired !== item.state_badge?.observed);
-  const orphanLeases = leases.filter((item: any) => Boolean(item.thread?.is_orphan));
-  const healthyLeases = leases.filter((item: any) => Boolean(item.state_badge?.converged));
+  const divergedLeases = (leaseGroups.find((group: any) => group.key === 'diverged')?.items || []) as any[];
+  const orphanDivergedLeases = (leaseGroups.find((group: any) => group.key === 'orphan_diverged')?.items || []) as any[];
+  const orphanLeases = (leaseGroups.find((group: any) => group.key === 'orphan')?.items || []) as any[];
+  const healthyLeases = (leaseGroups.find((group: any) => group.key === 'healthy')?.items || []) as any[];
   const refreshedAt = summary.last_refreshed_at || summary.snapshot_at;
   const selectedSessions = Array.isArray(selectedProvider?.sessions) ? selectedProvider.sessions : [];
   const selectedRunning = selectedSessions.filter((session: any) => session.status === 'running').length;
@@ -341,8 +344,8 @@ function MonitorResourcesPage() {
       <section className="resource-summary-grid">
         <DashboardMetric label="Providers" value={summary.total_providers || 0} note={`${summary.active_providers || 0} active · ${summary.unavailable_providers || 0} unavailable`} />
         <DashboardMetric label="Running sessions" value={summary.running_sessions || 0} note={refreshedAt ? `refreshed ${new Date(refreshedAt).toLocaleTimeString()}` : 'no timestamp'} />
-        <DashboardMetric label="Diverged leases" value={divergedLeases.length} note={`${orphanLeases.length} orphan`} tone={divergedLeases.length > 0 ? 'warning' : 'success'} />
-        <DashboardMetric label="Healthy leases" value={healthyLeases.length} note={`${leases.length} total`} tone={healthyLeases.length > 0 ? 'success' : 'danger'} />
+        <DashboardMetric label="Diverged leases" value={(leaseSummary.diverged || 0) + (leaseSummary.orphan_diverged || 0)} note={`${(leaseSummary.orphan || 0) + (leaseSummary.orphan_diverged || 0)} orphan`} tone={((leaseSummary.diverged || 0) + (leaseSummary.orphan_diverged || 0)) > 0 ? 'warning' : 'success'} />
+        <DashboardMetric label="Healthy leases" value={leaseSummary.healthy || 0} note={`${leaseSummary.total || leases.length} total`} tone={(leaseSummary.healthy || 0) > 0 ? 'success' : 'danger'} />
       </section>
 
       <section className="resource-section-shell">
@@ -491,7 +494,7 @@ function MonitorResourcesPage() {
         <div className="section-row">
           <div>
             <h2>Lease Health</h2>
-            <p className="description">Grouped triage surface. Diverged rows show state drift; orphan rows show leases no longer bound to a live thread.</p>
+            <p className="description">Grouped triage surface from backend lease semantics. Diverged rows show state drift; orphan rows show leases no longer bound to a live thread.</p>
           </div>
           <Link className="quick-link" to="/leases">
             Legacy flat table
@@ -499,8 +502,8 @@ function MonitorResourcesPage() {
         </div>
         <div className="lease-cluster-grid">
           <article className="hint-box">
-            <h2>Diverged ({divergedLeases.length})</h2>
-            <p className="description">Desired and observed states no longer match.</p>
+            <h2>Diverged ({divergedLeases.length + orphanDivergedLeases.length})</h2>
+            <p className="description">Desired and observed states no longer match, including leases that already lost thread binding.</p>
             <table>
               <thead>
                 <tr>
@@ -512,7 +515,7 @@ function MonitorResourcesPage() {
                 </tr>
               </thead>
               <tbody>
-                {divergedLeases.slice(0, 8).map((item: any) => (
+                {[...orphanDivergedLeases, ...divergedLeases].slice(0, 8).map((item: any) => (
                   <tr key={item.lease_id}>
                     <td><Link to={item.lease_url}>{shortId(item.lease_id, 12)}</Link></td>
                     <td>{item.provider}</td>
@@ -521,7 +524,7 @@ function MonitorResourcesPage() {
                     <td>{item.updated_ago}</td>
                   </tr>
                 ))}
-                {divergedLeases.length === 0 ? (
+                {divergedLeases.length + orphanDivergedLeases.length === 0 ? (
                   <tr>
                     <td colSpan={5}>No diverged leases.</td>
                   </tr>
@@ -1750,14 +1753,15 @@ function LeasesPage() {
 
   if (!data) return <div>Loading...</div>;
   const items = divergedOnly
-    ? data.items.filter((item: any) => item.state_badge?.desired !== item.state_badge?.observed)
+    ? data.items.filter((item: any) => ['diverged', 'orphan_diverged'].includes(item.semantics?.category))
     : data.items;
+  const summary = data.summary || {};
 
   return (
     <div className="page" data-testid="page-leases">
       <h1>{data.title}</h1>
-      <p className="description">Global sandbox lease table. Treat this as the infrastructure lens; filtered divergence and raw event history branch out from here.</p>
-      <p className="count">Total: {items.length}{divergedOnly ? ` / ${data.count} (diverged only)` : ''}</p>
+      <p className="description">Global sandbox lease table. Treat this as the infrastructure lens; backend semantics now distinguish healthy, diverged, orphan, and orphan-diverged rows.</p>
+      <p className="count">Total: {items.length}{divergedOnly ? ` / ${data.count} (diverged only)` : ''} · healthy {summary.healthy || 0} · orphan {summary.orphan || 0} · orphan+diverged {summary.orphan_diverged || 0}</p>
       <div className="page-tools">
         <Link className="quick-link" to={divergedOnly ? '/leases' : '/leases?diverged=1'}>
           {divergedOnly ? 'Show all leases' : 'Only diverged leases'}

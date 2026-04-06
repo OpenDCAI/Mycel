@@ -261,6 +261,24 @@ The dashboard is a switchboard, not a full destination page. It should answer â€
 - lease regrouping exists, but backend-side semantic categorization is still shallow and belongs to `D3`
 - dashboard is currently a compact switchboard; it does not yet expose richer error drill-down or resource anomaly timelines
 
+### Current D3 Phase-1 Landing
+
+- `/api/monitor/leases` now returns:
+  - flat `items`
+  - `summary`
+  - ordered semantic `groups`
+- each lease item now carries backend-owned `semantics`:
+  - `healthy`
+  - `diverged`
+  - `orphan`
+  - `orphan_diverged`
+- monitor dashboard and resources page now read those backend semantics instead of recomputing lease meaning from raw `thread.is_orphan` and `desired != observed`
+
+### D3 Remaining Gaps
+
+- semantics are still inferred from current lease row + thread binding only; they do not yet account for stronger lifecycle facts such as historical cleanup windows or explicit terminal/session shutdown markers
+- the legacy `/leases` flat table still exists as a drill-down/debug surface and has not been redesigned beyond consuming the new summary/category contract
+
 ### Why this IA
 
 - the backend already exposes `/api/monitor/resources`; the missing piece is a monitor entry surface, not another resource backend invention
