@@ -90,6 +90,15 @@ def _avatar_path(member_id: str) -> Path:
     return AVATARS_DIR / f"{safe_id}.png"
 
 
+def _get_owned_avatar_member_or_404(member_id: str, current_user_id: str, member_repo: Any) -> Any:
+    member = member_repo.get_by_id(member_id)
+    if not member:
+        raise HTTPException(404, "Member not found")
+    if member_id == current_user_id or member.owner_user_id == current_user_id:
+        return member
+    raise HTTPException(403, "Not authorized")
+
+
 @members_router.put("/{member_id}/avatar")
 async def upload_avatar(
     member_id: str,
@@ -99,11 +108,7 @@ async def upload_avatar(
 ) -> dict[str, str]:
     """Upload/replace avatar image. Resizes to 256x256 PNG."""
     repo = app.state.member_repo
-    member = repo.get_by_id(member_id)
-    if not member:
-        raise HTTPException(404, "Member not found")
-    if member_id != current_user_id and member.owner_user_id != current_user_id:
-        raise HTTPException(403, "Not authorized")
+    _get_owned_avatar_member_or_404(member_id, current_user_id, repo)
     ct = file.content_type or ""
     if ct not in ALLOWED_CONTENT_TYPES:
         raise HTTPException(400, f"Unsupported image type: {ct}")
@@ -138,11 +143,7 @@ async def delete_avatar(
 ) -> dict[str, str]:
     """Delete avatar."""
     repo = app.state.member_repo
-    member = repo.get_by_id(member_id)
-    if not member:
-        raise HTTPException(404, "Member not found")
-    if member_id != current_user_id and member.owner_user_id != current_user_id:
-        raise HTTPException(403, "Not authorized")
+    _get_owned_avatar_member_or_404(member_id, current_user_id, repo)
     path = _avatar_path(member_id)
     if path.exists():
         path.unlink()
