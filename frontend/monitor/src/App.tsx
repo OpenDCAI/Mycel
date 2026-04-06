@@ -323,6 +323,11 @@ function ThreadDetailPage() {
                 <td className="error">{s.error || '-'}</td>
               </tr>
             ))}
+            {data.sessions.items.length === 0 && (
+              <tr>
+                <td colSpan={7}>No sessions recorded for this thread.</td>
+              </tr>
+            )}
           </tbody>
         </table>
       </section>
@@ -335,6 +340,9 @@ function ThreadDetailPage() {
               <Link to={l.lease_url}>{l.lease_id}</Link>
             </li>
           ))}
+          {data.related_leases.items.length === 0 && (
+            <li className="empty-list">No related leases for this thread.</li>
+          )}
         </ul>
       </section>
 
@@ -694,10 +702,11 @@ function conversationText(content: any): string {
 
 function ConversationTraceCard({ message, index }: { message: any; index: number }) {
   const msgType = String(message?.type || 'Unknown');
+  const msgTypeKey = msgType.toLowerCase();
   const text = conversationText(message?.content);
   const toolCalls = Array.isArray(message?.tool_calls) ? message.tool_calls : [];
   return (
-    <article className="conversation-card">
+    <article className="conversation-card" data-msg-type={msgTypeKey}>
       <header className="trace-card-header">
         <div className="trace-card-meta">
           <span className="trace-step">[{index}]</span>
@@ -788,10 +797,7 @@ function TraceCard({ item }: { item: TraceItem }) {
         <pre className="trace-block">{item.summary}</pre>
       )}
 
-      <details
-        className="trace-details"
-        open={item.event_type === 'tool_call' || item.event_type === 'tool_result'}
-      >
+      <details className="trace-details">
         <summary>Raw payload</summary>
         <pre className="json-payload trace-payload">{JSON.stringify(item.payload, null, 2)}</pre>
       </details>

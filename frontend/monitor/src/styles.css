@@ -212,6 +212,18 @@ td {
   border-top: 1px solid var(--border);
 }
 
+.page[data-testid="page-traces"] td,
+.page[data-testid="page-threads"] td {
+  padding: 0.5rem 0.75rem;
+  font-size: 0.88rem;
+}
+
+.page[data-testid="page-traces"] th,
+.page[data-testid="page-threads"] th {
+  padding: 0.55rem 0.75rem;
+  font-size: 0.82rem;
+}
+
 tr:hover {
   background: #fcfcfc;
 }
@@ -456,8 +468,15 @@ section li {
 }
 
 .trace-section-shell {
-  border-top: 1px solid var(--border);
-  padding-top: 0.5rem;
+  margin-top: 1.5rem;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 1.2rem;
+}
+
+.trace-section-shell > h2 {
+  margin-top: 0;
 }
 
 .trace-summary {
@@ -508,7 +527,7 @@ section li {
   justify-content: flex-start;
   flex-wrap: wrap;
   align-items: center;
-  gap: 1rem;
+  gap: 0.55rem;
 }
 
 .trace-run-select {
@@ -528,11 +547,16 @@ section li {
 .trace-filters {
   display: flex;
   gap: 0.4rem;
+  padding-left: 0.55rem;
+  border-left: 1px solid var(--border);
 }
 
 .trace-view-switch {
   display: flex;
   gap: 0.4rem;
+  margin-left: auto;
+  padding-left: 0.55rem;
+  border-left: 1px solid var(--border);
 }
 
 .trace-filter-btn {
@@ -569,14 +593,18 @@ section li {
   margin-top: 0.8rem;
   display: flex;
   flex-direction: column;
-  gap: 0.8rem;
+  gap: 0.35rem;
 }
 
 .trace-card {
   border: 1px solid var(--border);
   background: var(--panel);
-  border-radius: 10px;
+  border-radius: 6px;
   padding: 0.7rem 0.8rem;
+}
+
+.trace-timeline > :nth-child(even) {
+  background: var(--bg-soft);
 }
 
 .trace-card-assistant {
@@ -644,16 +672,16 @@ section li {
   color: var(--text);
   white-space: pre-wrap;
   word-break: break-word;
-  max-height: 300px;
+  max-height: 160px;
   overflow: auto;
 }
 
 .trace-output {
-  max-height: 460px;
+  max-height: 220px;
 }
 
 .trace-assistant-text {
-  max-height: 340px;
+  max-height: 180px;
 }
 
 .trace-command {
@@ -675,15 +703,28 @@ section li {
   border: 1px solid var(--border);
   background: var(--panel);
   border-left: 4px solid #4f7fd8;
-  border-radius: 10px;
+  border-radius: 6px;
   padding: 0.8rem;
 }
 
 .conversation-card {
   border: 1px solid var(--border);
   background: var(--panel-strong);
-  border-radius: 10px;
+  border-radius: 6px;
   padding: 0.8rem;
+}
+
+.conversation-card[data-msg-type="assistant"] {
+  border-left: 3px solid #4f7fd8;
+}
+
+.conversation-card[data-msg-type="tool"] {
+  border-left: 3px solid #5f9446;
+}
+
+.conversation-card[data-msg-type="human"],
+.conversation-card[data-msg-type="user"] {
+  border-left: 3px solid var(--border-strong);
 }
 
 .trace-step-header {
@@ -720,6 +761,11 @@ section li {
   gap: 0.45rem;
   color: var(--text-secondary);
   font-size: 0.82rem;
+}
+
+.empty-list {
+  color: var(--text-muted);
+  font-style: italic;
 }
 
 .evaluation-flow,
@@ -875,5 +921,9 @@ section li {
 
   .eval-composer-panel {
     padding: 1rem;
+  }
+
+  .trace-view-switch {
+    margin-left: 0;
   }
 }
