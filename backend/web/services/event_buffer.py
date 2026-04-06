@@ -70,6 +70,9 @@ class ThreadEventBuffer:
     _ring: deque[dict] = field(default_factory=lambda: deque(maxlen=2000))
     _notify: asyncio.Condition = field(default_factory=asyncio.Condition)
     _total_count: int = 0  # monotonic counter (total events ever put)
+    # @@@thread-buffer-never-finishes - keep the same observer protocol surface
+    # as RunEventBuffer, but thread buffers never mark completion.
+    finished: asyncio.Event = field(default_factory=asyncio.Event)
 
     async def put(self, event: dict) -> None:
         self._ring.append(event)

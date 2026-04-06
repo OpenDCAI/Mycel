@@ -19,6 +19,8 @@ from storage.contracts import RunEventRepo
 
 logger = logging.getLogger(__name__)
 
+type SSEEvent = dict[str, str | int]
+
 _TERMINAL_FOLLOWTHROUGH_SYSTEM_NOTE = (
     "Terminal background completion notifications require an explicit assistant followthrough. "
     "Treat these notifications as fresh inputs that need a visible assistant reply. "
@@ -625,7 +627,7 @@ async def _emit_queued_terminal_followups(
 # ---------------------------------------------------------------------------
 
 
-async def _run_agent_to_buffer(
+async def _run_agent_to_buffer(  # pyright: ignore[reportGeneralTypeIssues]  # @@@nu59-complexity-honesty
     agent: Any,
     thread_id: str,
     message: str,
@@ -727,8 +729,8 @@ async def _run_agent_to_buffer(
                 obs_config = ObservationLoader().load()
 
                 if obs_provider == "langfuse":
-                    from langfuse import Langfuse
-                    from langfuse.langchain import CallbackHandler as LangfuseHandler
+                    from langfuse import Langfuse  # pyright: ignore[reportMissingImports]
+                    from langfuse.langchain import CallbackHandler as LangfuseHandler  # pyright: ignore[reportMissingImports]
 
                     cfg = obs_config.langfuse
                     if cfg.secret_key and cfg.public_key:
@@ -1300,7 +1302,7 @@ async def _run_agent_to_buffer(
         if obs_handler is not None:
             try:
                 if obs_active == "langfuse":
-                    from langfuse import get_client
+                    from langfuse import get_client  # pyright: ignore[reportMissingImports]
 
                     get_client().flush()
                 elif obs_active == "langsmith":
@@ -1488,7 +1490,7 @@ async def run_child_thread_live(
 async def observe_thread_events(
     thread_buf: ThreadEventBuffer,
     after: int = 0,
-) -> AsyncGenerator[dict[str, str], None]:
+) -> AsyncGenerator[SSEEvent, None]:
     """Consume events from a persistent ThreadEventBuffer. Yields SSE event dicts.
 
     Unlike observe_run_events, this never terminates on its own — the client
@@ -1506,7 +1508,7 @@ async def observe_thread_events(
 async def observe_run_events(
     buf: RunEventBuffer,
     after: int = 0,
-) -> AsyncGenerator[dict[str, str], None]:
+) -> AsyncGenerator[SSEEvent, None]:
     """Consume events from a RunEventBuffer (subagent streams only). Yields SSE event dicts."""
     async for event in _observe_sse_buffer(buf, after=after, stop_on_finish=True):
         yield event
@@ -1517,7 +1519,7 @@ async def _observe_sse_buffer(
     *,
     after: int,
     stop_on_finish: bool,
-) -> AsyncGenerator[dict[str, str], None]:
+) -> AsyncGenerator[SSEEvent, None]:
     """Shared SSE observer loop for thread and run buffers."""
     yield {"retry": 5000}
 
