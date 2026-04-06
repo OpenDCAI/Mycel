@@ -28,23 +28,21 @@ export default function ChatArea({ entries, runtimeStatus, loading, onFocusAgent
         <div className="max-w-3xl mx-auto px-5 space-y-3.5">
           {entries.map((entry) => {
             const isHidden = "showing" in entry && entry.showing === false;
+            if (isHidden) return null;
             if (entry.role === "notice") {
               return <NoticeBubble key={entry.id} entry={entry as NoticeMessage} onTaskNoticeClick={onTaskNoticeClick} />;
             }
             if (entry.role === "user") {
               return (
-                <div key={entry.id} className={isHidden ? "opacity-40" : ""}>
-                  {isHidden && entry.senderName && (
-                    <div className="text-2xs text-muted-foreground/70 mb-0.5 text-right mr-2">{entry.senderName}</div>
-                  )}
-                  <UserBubble entry={entry} userName={isHidden ? (entry.senderName || "external") : userName} avatarUrl={isHidden ? entry.senderAvatarUrl : userAvatarUrl} />
+                <div key={entry.id}>
+                  <UserBubble entry={entry} userName={userName} avatarUrl={userAvatarUrl} />
                 </div>
               );
             }
             const assistantEntry = entry as AssistantTurn;
             const isStreamingThis = assistantEntry.streaming === true;
             return (
-              <div key={entry.id} className={isHidden ? "opacity-40" : ""}>
+              <div key={entry.id}>
                 <AssistantBlock
                   entry={assistantEntry}
                   isStreamingThis={isStreamingThis}

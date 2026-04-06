@@ -422,6 +422,9 @@ def _handle_user_message(td: ThreadDisplay, data: dict) -> dict | None:
     run_start/run_done events.  This allows steers to appear at the
     bottom while the agent keeps streaming above.
     """
+    if data.get("showing") is False:
+        return None
+
     content = data.get("content", "")
     entry: dict = {
         "id": _make_id("user"),

@@ -152,6 +152,16 @@ class TestSerializeMessage:
         result = serialize_message(HumanMessage())
         assert result["id"] is None
 
+    def test_internal_human_message_hides_from_display(self):
+        from langchain_core.messages import HumanMessage
+
+        from backend.web.utils.serializers import serialize_message
+
+        result = serialize_message(HumanMessage(content="hidden", metadata={"source": "internal"}))
+
+        assert result["content"] == "hidden"
+        assert result["display"] == {"showing": False}
+
 
 # ---------------------------------------------------------------------------
 # RunEventBuffer + observe_run_events tests

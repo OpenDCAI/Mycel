@@ -71,4 +71,6 @@ def serialize_message(msg: Any) -> dict[str, Any]:
     }
     if metadata:
         result["metadata"] = metadata
+    if metadata.get("source") == "internal":
+        result["display"] = {"showing": False}
     return result

@@ -964,6 +964,8 @@ async def get_thread_history(
         cls = msg.__class__.__name__
         if cls == "HumanMessage":
             metadata = getattr(msg, "metadata", {}) or {}
+            if metadata.get("source") == "internal":
+                return []
             if metadata.get("source") == "system":
                 return [{"role": "notification", "text": _trunc(extract_text_content(msg.content))}]
             return [{"role": "human", "text": _trunc(extract_text_content(msg.content))}]
@@ -1075,7 +1077,7 @@ async def resolve_thread_permission_request(
                 answers=answers,
                 annotations=getattr(payload, "annotations", None),
             ),
-            source="owner",
+            source="internal",
         )
 
     response = {"ok": True, "thread_id": thread_id, "request_id": request_id}

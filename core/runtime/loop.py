@@ -372,6 +372,13 @@ class QueryLoop:
                 # Advance message history for next turn
                 messages.append(ai_msg)
                 messages.extend(tool_results)
+                if self._tool_results_include_permission_request(tool_results):
+                    terminal = TerminalState(
+                        reason=TerminalReason.completed,
+                        turn_count=turn,
+                    )
+                    self._sync_app_state(messages=messages, turn_count=turn)
+                    break
                 await self._refresh_tools_between_turns(tool_context)
                 transition = ContinueState(reason=ContinueReason.next_turn)
                 max_output_tokens_recovery_count = 0
@@ -1866,6 +1873,15 @@ class QueryLoop:
                     return True
             return False
         return bool(content)
+
+    @staticmethod
+    def _tool_results_include_permission_request(tool_results: list[ToolMessage]) -> bool:
+        for tool_result in tool_results:
+            additional_kwargs = getattr(tool_result, "additional_kwargs", None) or {}
+            meta = additional_kwargs.get("tool_result_meta")
+            if isinstance(meta, dict) and meta.get("kind") == "permission_request":
+                return True
+        return False
 
     @staticmethod
     def _get_terminal_followthrough_notice(messages: list[Any]) -> HumanMessage | None:

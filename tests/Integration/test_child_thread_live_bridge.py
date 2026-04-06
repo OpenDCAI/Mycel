@@ -364,6 +364,23 @@ def test_live_tool_result_restores_subagent_stream_from_blocking_agent_metadata(
     assert seg["step"]["subagent_stream"]["status"] == "completed"
 
 
+def test_live_hidden_user_message_does_not_append_entry():
+    builder = DisplayBuilder()
+    thread_id = "hidden-user-thread"
+
+    delta = builder.apply_event(
+        thread_id,
+        "user_message",
+        {
+            "content": "<ask_user_question_answers>{}</ask_user_question_answers>",
+            "showing": False,
+        },
+    )
+
+    assert delta is None
+    assert builder.get_entries(thread_id) == []
+
+
 def test_task_start_can_patch_background_agent_after_tool_result_race():
     builder = DisplayBuilder()
     thread_id = "parent-thread"

@@ -219,6 +219,40 @@ def test_tool_use_context_consumes_resolved_permission_once():
     assert app_state.resolved_permission_requests == {}
 
 
+@pytest.mark.asyncio
+async def test_query_stops_after_permission_request_tool_result():
+    model = mock_model_with_tool_call(tool_name="AskUserQuestion", args={"questions": []}, then_text="should not happen")
+    loop = make_loop(model, app_state=AppState())
+    loop._execute_tools = AsyncMock(
+        return_value=[
+            ToolMessage(
+                content="User input required to continue.",
+                tool_call_id="tc-1",
+                name="AskUserQuestion",
+                additional_kwargs={
+                    "tool_result_meta": {
+                        "kind": "permission_request",
+                        "request_id": "ask-1",
+                        "request_kind": "ask_user_question",
+                    }
+                },
+            )
+        ]
+    )
+
+    events = []
+    async for event in loop.query(
+        {"messages": [{"role": "user", "content": "ask me something"}]},
+        config={"configurable": {"thread_id": "thread-ask"}},
+    ):
+        events.append(event)
+
+    assert model.ainvoke.await_count == 1
+    assert any("tools" in event for event in events)
+    terminal = next(event["terminal"] for event in events if "terminal" in event)
+    assert terminal.reason.value == "completed"
+
+
 def test_tool_use_context_can_use_tool_reads_app_state_permission_rules():
     app_state = AppState()
     app_state.tool_permission_context.alwaysAskRules["session"] = ["Write"]
