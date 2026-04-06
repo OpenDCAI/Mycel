@@ -4287,7 +4287,7 @@ function Layout({ children }: { children: React.ReactNode }) {
           <div className="console-header-actions">
             {showEvalComposeAction ? (
               <Link className="primary-btn" to="/evaluation?new=1">
-                Open Config
+                Build Eval
               </Link>
             ) : null}
             <button
