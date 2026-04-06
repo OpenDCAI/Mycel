@@ -49,6 +49,34 @@ async function fetchJSON(path: string, init?: RequestInit) {
   return payload;
 }
 
+function formatCleanupError(error: any) {
+  const reason = String(error?.reason || "cleanup_failed");
+  const leaseId = String(error?.lease_id || "");
+  const prefix = leaseId ? `${shortId(leaseId, 12)}: ` : "";
+  if (reason === "category_mismatch") {
+    return `${prefix}lease no longer matches ${error?.expected_category || "expected category"}`;
+  }
+  if (reason === "live_sessions_present") {
+    return `${prefix}active sessions still attached`;
+  }
+  if (reason === "running_command_present") {
+    return `${prefix}running terminal command still attached`;
+  }
+  if (reason === "provider_unavailable") {
+    return `${prefix}provider unavailable for destroy`;
+  }
+  if (reason === "provider_destroy_unsupported") {
+    return `${prefix}provider does not support destroy`;
+  }
+  if (reason === "provider_destroy_failed") {
+    return `${prefix}${error?.detail || "provider destroy failed"}`;
+  }
+  if (reason === "lease_not_found") {
+    return `${prefix}lease no longer exists`;
+  }
+  return `${prefix}${reason}`;
+}
+
 // Component: Breadcrumb navigation
 function Breadcrumb({
   items,
@@ -703,6 +731,11 @@ function MonitorResourcesPage() {
   const [loading, setLoading] = React.useState(false);
   const [refreshing, setRefreshing] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+  const [cleanupBusyId, setCleanupBusyId] = React.useState("");
+  const [cleanupFeedback, setCleanupFeedback] = React.useState<{
+    tone: "success" | "error";
+    text: string;
+  } | null>(null);
 
   const loadResources = React.useCallback(async () => {
     setLoading(true);
@@ -745,6 +778,57 @@ function MonitorResourcesPage() {
       setRefreshing(false);
     }
   }, []);
+
+  const cleanupLease = React.useCallback(
+    async (
+      leaseId: string,
+      expectedCategory: "detached_residue" | "orphan_cleanup",
+    ) => {
+      setCleanupBusyId(leaseId);
+      setCleanupFeedback(null);
+      try {
+        const payload = await fetchJSON(`${API_BASE}/resources/cleanup`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "cleanup_residue",
+            lease_ids: [leaseId],
+            expected_category: expectedCategory,
+          }),
+        });
+        await refreshNow();
+        const cleanedCount = Array.isArray(payload.cleaned)
+          ? payload.cleaned.length
+          : 0;
+        const skippedCount = Array.isArray(payload.skipped)
+          ? payload.skipped.length
+          : 0;
+        const errorCount = Array.isArray(payload.errors)
+          ? payload.errors.length
+          : 0;
+        if (errorCount > 0) {
+          const firstError = payload.errors[0];
+          setCleanupFeedback({
+            tone: "error",
+            text: `Cleanup incomplete: ${cleanedCount} cleaned · ${skippedCount} skipped · ${errorCount} errors (${formatCleanupError(firstError)}).`,
+          });
+          return;
+        }
+        setCleanupFeedback({
+          tone: "success",
+          text: `Cleanup applied: ${cleanedCount} lease cleaned from ${expectedCategory}.`,
+        });
+      } catch (e: any) {
+        setCleanupFeedback({
+          tone: "error",
+          text: `Cleanup failed: ${e?.message || String(e)}`,
+        });
+      } finally {
+        setCleanupBusyId("");
+      }
+    },
+    [refreshNow],
+  );
 
   React.useEffect(() => {
     void loadResources();
@@ -1205,6 +1289,11 @@ function MonitorResourcesPage() {
             <strong>{healthyCapacityLeases.length}</strong>
           </span>
         </div>
+        {cleanupFeedback ? (
+          <div className={`cleanup-feedback is-${cleanupFeedback.tone}`}>
+            {cleanupFeedback.text}
+          </div>
+        ) : null}
         {hasPrimaryLeaseAttention ? (
           <div className="lease-cluster-grid">
             {activeDriftLeases.length > 0 ? (
@@ -1260,6 +1349,7 @@ function MonitorResourcesPage() {
                       <th>Thread</th>
                       <th>State</th>
                       <th>Updated</th>
+                      <th>Action</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1284,6 +1374,28 @@ function MonitorResourcesPage() {
                           <StateBadge badge={item.state_badge} />
                         </td>
                         <td>{item.updated_ago}</td>
+                        <td className="cleanup-action-cell">
+                          <button
+                            type="button"
+                            className="ghost-btn"
+                            disabled={
+                              cleanupBusyId === item.lease_id ||
+                              refreshing ||
+                              loading
+                            }
+                            onClick={() =>
+                              void cleanupLease(
+                                item.lease_id,
+                                "detached_residue",
+                              )
+                            }
+                            data-testid={`cleanup-${item.lease_id}`}
+                          >
+                            {cleanupBusyId === item.lease_id
+                              ? "Cleaning..."
+                              : "Cleanup"}
+                          </button>
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -1305,6 +1417,7 @@ function MonitorResourcesPage() {
                     <th>Instance</th>
                     <th>State</th>
                     <th>Updated</th>
+                    <th>Action</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1321,6 +1434,25 @@ function MonitorResourcesPage() {
                         <StateBadge badge={item.state_badge} />
                       </td>
                       <td>{item.updated_ago}</td>
+                      <td className="cleanup-action-cell">
+                        <button
+                          type="button"
+                          className="ghost-btn"
+                          disabled={
+                            cleanupBusyId === item.lease_id ||
+                            refreshing ||
+                            loading
+                          }
+                          onClick={() =>
+                            void cleanupLease(item.lease_id, "orphan_cleanup")
+                          }
+                          data-testid={`cleanup-${item.lease_id}`}
+                        >
+                          {cleanupBusyId === item.lease_id
+                            ? "Cleaning..."
+                            : "Cleanup"}
+                        </button>
+                      </td>
                     </tr>
                   ))}
                 </tbody>

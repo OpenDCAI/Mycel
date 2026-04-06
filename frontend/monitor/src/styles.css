@@ -533,6 +533,27 @@ h2 {
   background: var(--bg-muted);
 }
 
+.cleanup-feedback {
+  margin: 0.85rem 0 1rem;
+  padding: 0.75rem 0.95rem;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--bg-muted);
+  color: var(--text-secondary);
+}
+
+.cleanup-feedback.is-success {
+  border-color: rgba(5, 150, 105, 0.16);
+  background: var(--success-soft);
+  color: var(--success);
+}
+
+.cleanup-feedback.is-error {
+  border-color: rgba(220, 38, 38, 0.16);
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
 .resource-section-shell {
   margin-bottom: 1.25rem;
 }
@@ -1151,6 +1172,17 @@ td[colspan] {
   color: var(--text-muted);
   font-style: italic;
   padding: 2rem 1rem;
+}
+
+.cleanup-action-cell {
+  width: 1%;
+  white-space: nowrap;
+}
+
+.cleanup-action-cell .ghost-btn {
+  min-height: 2rem;
+  padding: 0.35rem 0.7rem;
+  font-size: 0.82rem;
 }
 
 .page[data-testid="page-traces"] td,

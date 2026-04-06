@@ -432,6 +432,18 @@ The dashboard is a switchboard, not a full destination page. It should answer â€
   - optional group-level `Cleanup visible residue`
 - success state must come from a re-fetch of monitor triage, not optimistic UI removal
 
+#### Landed Frontend Slice
+
+- monitor `Resources -> Lease Health` now exposes row-level `Cleanup` only inside:
+  - `Detached Residue`
+  - `Cleanup Backlog`
+- no cleanup action exists in provider detail or product `/resources`
+- current UI behavior:
+  - button triggers the backend cleanup contract with explicit `lease_ids`
+  - button disables while its request is in flight
+  - result is shown as a small success/error feedback banner
+  - post-action state still comes from re-fetch, not optimistic row removal
+
 ### Why this IA
 
 - the backend already exposes `/api/monitor/resources`; the missing piece is a monitor entry surface, not another resource backend invention

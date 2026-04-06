@@ -76,6 +76,13 @@
       - `uv run ruff check backend/web/services/monitor_service.py backend/web/routers/monitor.py tests/Unit/monitor/test_monitor_compat.py tests/Integration/test_monitor_resources_route.py` -> green
       - `uv run ruff format --check backend/web/services/monitor_service.py backend/web/routers/monitor.py tests/Unit/monitor/test_monitor_compat.py tests/Integration/test_monitor_resources_route.py` -> green
       - `uv run pyright backend/web/services/monitor_service.py backend/web/routers/monitor.py` -> `0 errors`
+  - landed monitor UI slice:
+    - monitor `Resources -> Lease Health` now exposes per-row `Cleanup` only for `detached_residue` and `orphan_cleanup`
+    - success/failure state is shown via explicit feedback banner, not optimistic disappearance
+    - focused proof:
+      - `cd frontend/monitor && npm run build` -> green
+      - Playwright caller-proof clicked a real cleanup button and the page returned explicit failure text instead of silently swallowing it:
+        - `Cleanup incomplete: 0 cleaned · 1 skipped · 1 errors (lease-39ab24: lease no longer exists).`
 - next honest follow-up remains:
   - `D3` because lease regrouping is still heuristic and needs stronger lifecycle meaning than age-based detached residue alone
 
