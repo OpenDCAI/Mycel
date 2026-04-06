@@ -128,22 +128,22 @@ async def get_or_create_agent(app_obj: FastAPI, sandbox_type: str, thread_id: st
             if member_dir.is_dir():
                 bundle_dir = member_dir.resolve()
 
-        # @@@chat-repos - construct chat_repos for ChatToolService if member system is available
+        # @@@chat-repos - construct chat_repos for ChatToolService (v2 messaging)
         chat_repos = None
         if hasattr(app_obj.state, "member_repo") and thread_data:
             member_repo = app_obj.state.member_repo
             agent_member_id = thread_data.get("member_id")
             agent_member = member_repo.get_by_id(agent_member_id) if agent_member_id else None
             if agent_member:
-                owner_user_id = agent_member.owner_user_id or ""
+                owner_id = agent_member.owner_user_id or ""
                 chat_repos = {
                     "user_id": agent_member.id,
-                    "owner_user_id": owner_user_id,
+                    "owner_id": owner_id,
                     "member_repo": member_repo,
-                    "chat_service": getattr(app_obj.state, "chat_service", None),
-                    "chat_participant_repo": getattr(app_obj.state, "chat_participant_repo", None),
-                    "chat_message_repo": getattr(app_obj.state, "chat_message_repo", None),
-                    "chat_event_bus": getattr(app_obj.state, "chat_event_bus", None),
+                    "messaging_service": getattr(app_obj.state, "messaging_service", None),
+                    "chat_member_repo": getattr(app_obj.state, "chat_member_repo", None),
+                    "messages_repo": getattr(app_obj.state, "messages_repo", None),
+                    "relationship_repo": getattr(app_obj.state, "relationship_repo", None),
                 }
 
         # @@@per-thread-file-access - ensure thread files are accessible from agent
