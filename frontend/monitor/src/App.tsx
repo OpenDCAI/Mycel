@@ -864,82 +864,43 @@ function MonitorResourcesPage() {
         </div>
       </div>
 
-      <section className="resource-section-shell depth-secondary">
-        <div className="section-row">
-          <h2>Providers</h2>
-          <button className="ghost-btn" onClick={() => void refreshNow()} disabled={refreshing || loading}>
-            {refreshing ? "Refreshing..." : "Refresh"}
-          </button>
-        </div>
-        <div className="monitor-provider-grid">
-          {providers.map((provider: any) => {
-            const sessions = Array.isArray(provider.sessions)
-              ? provider.sessions
-              : [];
-            const runningCount = sessions.filter(
-              (session: any) => session.status === "running",
-            ).length;
-            const unavailable = provider.status === "unavailable";
-            const cpuUsed = provider.cardCpu?.used;
-            const memoryUsed = provider.telemetry?.memory?.used;
-            return (
-              <button
-                key={provider.id}
-                type="button"
-                className={`monitor-provider-card${provider.id === selectedId ? " is-selected" : ""}${unavailable ? " is-unavailable" : ""}`}
-                onClick={() => setSelectedId(provider.id)}
-                data-provider-id={provider.id}
-              >
-                <div className="monitor-provider-header">
-                  <div>
-                    <div className="monitor-provider-title">
-                      <ProviderStatusLight status={provider.status} />
-                      <strong>{provider.name}</strong>
-                    </div>
-                    <p>
-                      {provider.type}{" "}
-                      {provider.vendor ? `· ${provider.vendor}` : ""}
-                    </p>
-                    {provider.unavailableReason || provider.error ? (
-                      <p className="provider-inline-error">
-                        {provider.unavailableReason || provider.error}
-                      </p>
-                    ) : null}
+      <section className="resource-split-console">
+        <div className="resource-rail">
+          <div className="section-row">
+            <h2>Providers</h2>
+            <button className="ghost-btn" onClick={() => void refreshNow()} disabled={refreshing || loading}>
+              {refreshing ? "..." : "Refresh"}
+            </button>
+          </div>
+          <div className="resource-rail-list">
+            {providers.map((provider: any) => {
+              const sessions = Array.isArray(provider.sessions) ? provider.sessions : [];
+              const runningCount = sessions.filter((s: any) => s.status === "running").length;
+              const unavailable = provider.status === "unavailable";
+              return (
+                <button
+                  key={provider.id}
+                  type="button"
+                  className={`resource-rail-item${provider.id === selectedId ? " is-selected" : ""}${unavailable ? " is-unavailable" : ""}`}
+                  onClick={() => setSelectedId(provider.id)}
+                  data-provider-id={provider.id}
+                >
+                  <div className="resource-rail-row">
+                    <ProviderStatusLight status={provider.status} />
+                    <strong>{provider.name}</strong>
                   </div>
-                  <span
-                    className={`status-chip ${unavailable ? "chip-danger" : provider.status === "active" ? "chip-success" : "chip-muted"}`}
-                  >
-                    {provider.status}
-                  </span>
-                </div>
-                <div className="provider-card-divider" />
-                <div className="monitor-provider-metrics">
-                  <ProviderMiniMetric
-                    label="Sessions"
-                    value={sessions.length}
-                    note={`${runningCount} running`}
-                  />
-                  <ProviderMiniMetric
-                    label="CPU"
-                    value={formatMonitorMetric(cpuUsed, "%")}
-                    note={provider.cardCpu?.freshness || "no signal"}
-                  />
-                  <ProviderMiniMetric
-                    label="Memory"
-                    value={formatMonitorMetric(memoryUsed, " GB")}
-                    note={provider.telemetry?.memory?.freshness || "no signal"}
-                  />
-                </div>
-                <CapabilityStrip capabilities={provider.capabilities} />
-                <SessionDotStrip sessions={sessions} />
-              </button>
-            );
-          })}
+                  <div className="resource-rail-meta">
+                    <span>{provider.type}</span>
+                    <span>{sessions.length} sess · {runningCount} run</span>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
         </div>
-      </section>
-
-      {selectedProvider ? (
-        <section className="resource-section-shell">
+        <div className="resource-detail">
+          {selectedProvider ? (
+          <>
           <div className="provider-detail-shell">
             <div className="section-row">
               <div>
@@ -1155,8 +1116,12 @@ function MonitorResourcesPage() {
               </tbody>
             </table>
           </div>
-        </section>
-      ) : null}
+          </>
+          ) : (
+            <div className="dashboard-empty">Select a provider from the list.</div>
+          )}
+        </div>
+      </section>
 
       <section className="resource-section-shell depth-secondary" id="lease-health">
         <div className="section-row">

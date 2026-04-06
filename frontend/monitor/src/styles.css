@@ -475,6 +475,99 @@ h2 {
   margin-bottom: 1.25rem;
 }
 
+.resource-split-console {
+  display: grid;
+  grid-template-columns: 320px minmax(0, 1fr);
+  gap: 1rem;
+  align-items: start;
+  margin-bottom: 1.25rem;
+}
+
+.resource-rail {
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.72);
+  padding: 0.95rem;
+  position: sticky;
+  top: 132px;
+}
+
+.resource-rail h2 {
+  margin: 0;
+}
+
+.resource-rail .section-row {
+  margin-bottom: 0.85rem;
+}
+
+.resource-rail-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  max-height: calc(100vh - 220px);
+  overflow: auto;
+  padding-right: 0.15rem;
+}
+
+.resource-rail-item {
+  border: 1px solid transparent;
+  border-radius: 14px;
+  background: var(--bg-soft);
+  padding: 0.8rem 0.9rem;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 0.42rem;
+  transition:
+    border-color 0.18s ease,
+    background 0.18s ease,
+    box-shadow 0.18s ease,
+    transform 0.18s ease;
+}
+
+.resource-rail-item:hover:not(:disabled) {
+  border-color: var(--border);
+  background: var(--panel);
+  transform: translateY(-1px);
+}
+
+.resource-rail-item.is-selected {
+  border-color: rgba(37, 99, 235, 0.22);
+  background: var(--panel);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.resource-rail-item.is-unavailable {
+  opacity: 0.82;
+}
+
+.resource-rail-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--text);
+}
+
+.resource-rail-row strong {
+  font-size: 0.93rem;
+}
+
+.resource-rail-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+}
+
+.resource-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  min-width: 0;
+}
+
 .monitor-provider-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
@@ -1876,6 +1969,7 @@ section.eval-runtime-panel {
   .dashboard-card,
   .dashboard-card-hero,
   .dashboard-sidebar-stack,
+  .resource-split-console,
   .evaluation-flow > *,
   .evaluation-notes > *,
   .evaluation-overview > *,
@@ -1896,6 +1990,20 @@ section.eval-runtime-panel {
     background: transparent;
     backdrop-filter: none;
   }
+
+  .resource-split-console {
+    grid-template-columns: 1fr;
+  }
+
+  .resource-rail {
+    position: static;
+  }
+
+  .resource-rail-list {
+    max-height: none;
+    overflow: visible;
+    padding-right: 0;
+  }
 }
 
 @media (max-width: 720px) {
@@ -1907,6 +2015,12 @@ section.eval-runtime-panel {
 
   .console-nav {
     grid-template-columns: 1fr 1fr;
+  }
+
+  .resource-rail-meta {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.2rem;
   }
 
   .console-header {
