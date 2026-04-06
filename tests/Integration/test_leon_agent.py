@@ -6,6 +6,7 @@ Uses mock model to verify the full astream pipeline without real API calls.
 import json
 import os
 from types import SimpleNamespace
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -60,6 +61,21 @@ class _MemoryCheckpointer:
 
     async def aput(self, cfg, checkpoint, metadata, new_versions):
         self.store[cfg["configurable"]["thread_id"]] = checkpoint
+
+
+def _set_agent_checkpointer(agent: object, checkpointer: object) -> None:
+    setattr(agent, "checkpointer", checkpointer)
+    setattr(getattr(agent, "agent"), "checkpointer", checkpointer)
+
+
+def _set_agent_runtime(agent: object, runtime: object) -> None:
+    setattr(agent, "runtime", runtime)
+
+
+def _require_tool_name(tool: dict[str, Any]) -> str:
+    name = tool.get("name")
+    assert isinstance(name, str)
+    return name
 
 
 class _DirectCompactionProbeModel:
@@ -376,8 +392,7 @@ async def test_leon_agent_announces_mcp_instruction_delta_once_and_reannounces_o
             api_key="sk-test-integration",
         )
         await agent.ainit()
-        agent.checkpointer = checkpointer
-        agent.agent.checkpointer = checkpointer
+        _set_agent_checkpointer(agent, checkpointer)
 
         await agent.ainvoke("first turn", thread_id="mcp-delta-thread")
         assert first_model.calls
@@ -410,8 +425,7 @@ async def test_leon_agent_announces_mcp_instruction_delta_once_and_reannounces_o
             api_key="sk-test-integration",
         )
         await agent.ainit()
-        agent.checkpointer = checkpointer
-        agent.agent.checkpointer = checkpointer
+        _set_agent_checkpointer(agent, checkpointer)
 
         await agent.ainvoke("third turn", thread_id="mcp-delta-thread")
         assert second_model.calls
@@ -655,7 +669,7 @@ class _DeferredDiscoveryProbeModel:
 
     def bind_tools(self, tools):
         self._tools = list(tools or [])
-        self.turn_tool_names.append([tool.get("name") for tool in self._tools if isinstance(tool, dict)])
+        self.turn_tool_names.append([_require_tool_name(tool) for tool in self._tools if isinstance(tool, dict)])
         return self
 
     def configurable_fields(self, **kwargs):
@@ -683,7 +697,7 @@ class _DeferredExecutionProbeModel:
 
     def bind_tools(self, tools):
         self._tools = list(tools or [])
-        self.turn_tool_names.append([tool.get("name") for tool in self._tools if isinstance(tool, dict)])
+        self.turn_tool_names.append([_require_tool_name(tool) for tool in self._tools if isinstance(tool, dict)])
         return self
 
     def configurable_fields(self, **kwargs):
@@ -722,7 +736,7 @@ class _DeferredCrossThreadProbeModel:
 
     def bind_tools(self, tools):
         self._tools = list(tools or [])
-        self.turn_tool_names.append([tool.get("name") for tool in self._tools if isinstance(tool, dict)])
+        self.turn_tool_names.append([_require_tool_name(tool) for tool in self._tools if isinstance(tool, dict)])
         return self
 
     def configurable_fields(self, **kwargs):
@@ -755,7 +769,7 @@ class _DeferredInlineSelectProbeModel:
 
     def bind_tools(self, tools):
         self._tools = list(tools or [])
-        self.turn_tool_names.append([tool.get("name") for tool in self._tools if isinstance(tool, dict)])
+        self.turn_tool_names.append([_require_tool_name(tool) for tool in self._tools if isinstance(tool, dict)])
         return self
 
     def configurable_fields(self, **kwargs):
@@ -782,7 +796,7 @@ class _DeferredResumeProbeModel:
 
     def bind_tools(self, tools):
         self._tools = list(tools or [])
-        self.turn_tool_names.append([tool.get("name") for tool in self._tools if isinstance(tool, dict)])
+        self.turn_tool_names.append([_require_tool_name(tool) for tool in self._tools if isinstance(tool, dict)])
         return self
 
     def configurable_fields(self, **kwargs):
@@ -929,8 +943,7 @@ async def test_leon_agent_restores_discovered_deferred_tools_after_restart(tmp_p
     ):
         agent = LeonAgent(workspace_root=str(tmp_path), api_key="sk-test-integration")
         await agent.ainit()
-        agent.checkpointer = checkpointer
-        agent.agent.checkpointer = checkpointer
+        _set_agent_checkpointer(agent, checkpointer)
 
         result = await agent.ainvoke("discover task tools", thread_id="resume-thread")
         assert result["reason"] == "completed"
@@ -945,8 +958,7 @@ async def test_leon_agent_restores_discovered_deferred_tools_after_restart(tmp_p
     ):
         agent = LeonAgent(workspace_root=str(tmp_path), api_key="sk-test-integration")
         await agent.ainit()
-        agent.checkpointer = checkpointer
-        agent.agent.checkpointer = checkpointer
+        _set_agent_checkpointer(agent, checkpointer)
 
         result = await agent.ainvoke("after restart", thread_id="resume-thread")
 
@@ -1056,7 +1068,7 @@ async def test_leon_agent_astream_can_enforce_max_budget_per_event(tmp_path):
             yield ("updates", {"agent": {"messages": [AIMessage(content="done")]}})
 
         agent.agent.astream = fake_stream
-        agent.runtime = SimpleNamespace(cost=0.75)
+        _set_agent_runtime(agent, SimpleNamespace(cost=0.75))
 
         chunks = []
         with pytest.raises(RuntimeError, match="max_budget_usd exceeded"):
@@ -1089,8 +1101,7 @@ async def test_leon_agent_aclear_thread_resets_thread_history(tmp_path):
     ):
         agent = LeonAgent(workspace_root=str(tmp_path), api_key="sk-test-integration")
         await agent.ainit()
-        agent.checkpointer = checkpointer
-        agent.agent.checkpointer = checkpointer
+        _set_agent_checkpointer(agent, checkpointer)
         agent.app_state.total_cost = 1.25
 
         await agent.ainvoke("hello", thread_id="clear-agent-thread")
@@ -1135,8 +1146,7 @@ async def test_leon_agent_aclear_thread_does_not_restore_stale_summary(tmp_path)
     ):
         agent = LeonAgent(workspace_root=str(tmp_path), api_key="sk-test-integration")
         await agent.ainit()
-        agent.checkpointer = checkpointer
-        agent.agent.checkpointer = checkpointer
+        _set_agent_checkpointer(agent, checkpointer)
 
         store = SummaryStore(tmp_path / "summary.db")
         agent._memory_middleware.summary_store = store
@@ -1159,6 +1169,7 @@ async def test_leon_agent_aclear_thread_does_not_restore_stale_summary(tmp_path)
         )
         result = await agent._memory_middleware.awrap_model_call(request, _handler)
 
+        assert result.request_messages is not None
         assert [msg.content for msg in result.request_messages] == ["fresh-1", "fresh-2"]
 
         agent.close()
@@ -1180,8 +1191,7 @@ async def test_leon_agent_persists_summary_store_after_second_turn_compaction(tm
     ):
         agent = LeonAgent(workspace_root=str(tmp_path), api_key="sk-test-integration")
         await agent.ainit()
-        agent.checkpointer = checkpointer
-        agent.agent.checkpointer = checkpointer
+        _set_agent_checkpointer(agent, checkpointer)
 
         store = SummaryStore(tmp_path / "summary.db")
         agent._memory_middleware.summary_store = store
