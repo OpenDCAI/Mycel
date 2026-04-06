@@ -44,9 +44,12 @@ class SupabaseCronJobRepo:
         )
         return [self._deserialize(r) for r in rows]
 
-    def get(self, job_id: str) -> dict[str, Any] | None:
+    def get(self, job_id: str, owner_user_id: str | None = None) -> dict[str, Any] | None:
+        query = self._table().select("*").eq("id", job_id)
+        if owner_user_id is not None:
+            query = query.eq("owner_user_id", owner_user_id)
         rows = q.rows(
-            self._table().select("*").eq("id", job_id).execute(),
+            query.execute(),
             _REPO,
             "get",
         )
@@ -79,7 +82,7 @@ class SupabaseCronJobRepo:
         ).execute()
         return self.get(job_id) or {}
 
-    def update(self, job_id: str, **fields: Any) -> dict[str, Any] | None:
+    def update(self, job_id: str, owner_user_id: str | None = None, **fields: Any) -> dict[str, Any] | None:
         allowed = {"name", "description", "cron_expression", "task_template", "enabled", "last_run_at", "next_run_at"}
         updates = {k: v for k, v in fields.items() if k in allowed and v is not None}
         if "task_template" in updates and isinstance(updates["task_template"], str):
@@ -90,13 +93,19 @@ class SupabaseCronJobRepo:
             except Exception:
                 updates["task_template"] = {}
         if not updates:
-            return self.get(job_id)
-        self._table().update(updates).eq("id", job_id).execute()
-        return self.get(job_id)
+            return self.get(job_id, owner_user_id=owner_user_id)
+        query = self._table().update(updates).eq("id", job_id)
+        if owner_user_id is not None:
+            query = query.eq("owner_user_id", owner_user_id)
+        query.execute()
+        return self.get(job_id, owner_user_id=owner_user_id)
 
-    def delete(self, job_id: str) -> bool:
+    def delete(self, job_id: str, owner_user_id: str | None = None) -> bool:
+        query = self._table().delete().eq("id", job_id)
+        if owner_user_id is not None:
+            query = query.eq("owner_user_id", owner_user_id)
         rows = q.rows(
-            self._table().delete().eq("id", job_id).execute(),
+            query.execute(),
             _REPO,
             "delete",
         )

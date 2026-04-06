@@ -17,10 +17,10 @@ def list_cron_jobs(owner_user_id: str | None = None) -> list[dict[str, Any]]:
         repo.close()
 
 
-def get_cron_job(job_id: str) -> dict[str, Any] | None:
+def get_cron_job(job_id: str, owner_user_id: str | None = None) -> dict[str, Any] | None:
     repo = _repo()
     try:
-        return repo.get(job_id)
+        return repo.get(job_id, owner_user_id=owner_user_id)
     finally:
         repo.close()
 
@@ -37,17 +37,17 @@ def create_cron_job(*, name: str, cron_expression: str, **fields: Any) -> dict[s
         repo.close()
 
 
-def update_cron_job(job_id: str, **fields: Any) -> dict[str, Any] | None:
+def update_cron_job(job_id: str, owner_user_id: str | None = None, **fields: Any) -> dict[str, Any] | None:
     repo = _repo()
     try:
-        return repo.update(job_id, **fields)
+        return repo.update(job_id, owner_user_id=owner_user_id, **fields)
     finally:
         repo.close()
 
 
-def delete_cron_job(job_id: str) -> bool:
+def delete_cron_job(job_id: str, owner_user_id: str | None = None) -> bool:
     repo = _repo()
     try:
-        return repo.delete(job_id)
+        return repo.delete(job_id, owner_user_id=owner_user_id)
     finally:
         repo.close()
