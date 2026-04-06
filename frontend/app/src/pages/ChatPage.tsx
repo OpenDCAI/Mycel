@@ -7,7 +7,7 @@ import type { AssistantTurn, AskUserAnswer, AskUserQuestionPrompt, PermissionReq
 import { uploadSandboxFile } from "../api";
 import { Alert, AlertDescription, AlertTitle } from "../components/ui/alert";
 import { Button } from "../components/ui/button";
-import ComputerPanel from "../components/ComputerPanel";
+import ComputerPanel from "../components/computer-panel";
 import { DragHandle } from "../components/DragHandle";
 import Header from "../components/Header";
 import InputBox from "../components/InputBox";
