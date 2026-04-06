@@ -37,6 +37,9 @@ async def lifespan(app: FastAPI):
     app.state.chat_repo = SupabaseChatRepo(_supabase_client)
     app.state.invite_code_repo = SupabaseInviteCodeRepo(_supabase_client)
     app.state.user_settings_repo = SupabaseUserSettingsRepo(_supabase_client)
+    from storage.providers.supabase.agent_config_repo import SupabaseAgentConfigRepo
+
+    app.state.agent_config_repo = SupabaseAgentConfigRepo(_supabase_client)
     app.state._supabase_client = _supabase_client
     app.state._supabase_auth_client_factory = create_supabase_auth_client
     app.state._storage_container = StorageContainer(supabase_client=_supabase_client)
