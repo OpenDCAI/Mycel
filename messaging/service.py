@@ -30,8 +30,7 @@ class MessagingService:
         chat_member_repo: Any,  # SupabaseChatMemberRepo or compatible
         messages_repo: Any,  # SupabaseMessagesRepo
         message_read_repo: Any,  # SupabaseMessageReadRepo
-        entity_repo: Any,  # EntityRepo (for sender lookup)
-        member_repo: Any,  # MemberRepo (for avatar)
+        member_repo: Any,  # MemberRepo (for name + avatar lookup)
         delivery_resolver: Any | None = None,
         delivery_fn: Callable | None = None,
         event_bus: Any | None = None,  # ChatEventBus or SupabaseRealtimeBridge (optional)
@@ -40,7 +39,6 @@ class MessagingService:
         self._members_repo = chat_member_repo
         self._messages = messages_repo
         self._reads = message_read_repo
-        self._entities = entity_repo
         self._member_repo = member_repo
         self._delivery_resolver = delivery_resolver
         self._delivery_fn = delivery_fn
@@ -120,7 +118,7 @@ class MessagingService:
         logger.debug("[messaging] send chat=%s sender=%s msg=%s type=%s", chat_id[:8], sender_id[:15], msg_id[:8], message_type)
 
         # Publish to event bus (SSE / Realtime bridge)
-        sender = self._entities.get_by_id(sender_id)
+        sender = self._member_repo.get_by_id(sender_id)
         sender_name = sender.name if sender else "unknown"
         if self._event_bus:
             self._event_bus.publish(
@@ -147,7 +145,7 @@ class MessagingService:
     ) -> None:
         mention_set = set(mentions)
         members = self._members_repo.list_members(chat_id)
-        sender_entity = self._entities.get_by_id(sender_id)
+        sender_entity = self._member_repo.get_by_id(sender_id)
         sender_name = sender_entity.name if sender_entity else "unknown"
         sender_avatar_url = None
         if sender_entity:
@@ -158,7 +156,7 @@ class MessagingService:
             uid = member.get("user_id")
             if not uid or uid == sender_id:
                 continue
-            entity = self._entities.get_by_id(uid)
+            entity = self._member_repo.get_by_id(uid)
             if not entity or entity.type != "agent" or not entity.thread_id:
                 continue
 
@@ -229,7 +227,7 @@ class MessagingService:
             entities_info = []
             for m in members:
                 uid = m.get("user_id")
-                e = self._entities.get_by_id(uid) if uid else None
+                e = self._member_repo.get_by_id(uid) if uid else None
                 if e:
                     mem = self._member_repo.get_by_id(e.member_id) if self._member_repo else None
                     entities_info.append(
@@ -244,7 +242,7 @@ class MessagingService:
             last_msg = None
             if msgs:
                 m = msgs[-1]
-                sender = self._entities.get_by_id(m.get("sender_id", ""))
+                sender = self._member_repo.get_by_id(m.get("sender_id", ""))
                 last_msg = {
                     "content": m.get("content", ""),
                     "sender_name": sender.name if sender else "unknown",

@@ -44,7 +44,6 @@ async def lifespan(app: FastAPI):
             SupabaseChatMessageRepo,
             SupabaseChatRepo,
             SupabaseContactRepo,
-            SupabaseEntityRepo,
             SupabaseInviteCodeRepo,
             SupabaseMemberRepo,
             SupabaseRecipeRepo,
@@ -56,7 +55,6 @@ async def lifespan(app: FastAPI):
         _supabase_client = create_supabase_client()
         app.state.member_repo = SupabaseMemberRepo(_supabase_client)
         app.state.account_repo = SupabaseAccountRepo(_supabase_client)
-        app.state.entity_repo = SupabaseEntityRepo(_supabase_client)
         app.state.thread_repo = SupabaseThreadRepo(_supabase_client)
         app.state.thread_launch_pref_repo = SupabaseThreadLaunchPrefRepo(_supabase_client)
         app.state.recipe_repo = SupabaseRecipeRepo(_supabase_client)
@@ -70,7 +68,6 @@ async def lifespan(app: FastAPI):
         app.state._storage_container = StorageContainer(strategy="supabase", supabase_client=_supabase_client)
     else:
         from storage.providers.sqlite.chat_repo import SQLiteChatEntityRepo, SQLiteChatMessageRepo, SQLiteChatRepo
-        from storage.providers.sqlite.entity_repo import SQLiteEntityRepo
         from storage.providers.sqlite.kernel import SQLiteDBRole, resolve_role_db_path
         from storage.providers.sqlite.member_repo import SQLiteAccountRepo, SQLiteMemberRepo
         from storage.providers.sqlite.recipe_repo import SQLiteRecipeRepo
@@ -82,7 +79,6 @@ async def lifespan(app: FastAPI):
 
         app.state.member_repo = SQLiteMemberRepo(db)
         app.state.account_repo = SQLiteAccountRepo(db)
-        app.state.entity_repo = SQLiteEntityRepo(db)
         app.state.thread_repo = SQLiteThreadRepo(db)
         app.state.thread_launch_pref_repo = SQLiteThreadLaunchPrefRepo(db)
         app.state.recipe_repo = SQLiteRecipeRepo(db)
@@ -96,7 +92,6 @@ async def lifespan(app: FastAPI):
         app.state.auth_service = AuthService(
             members=app.state.member_repo,
             accounts=app.state.account_repo,
-            entities=app.state.entity_repo,
             supabase_client=_supabase_client,
             supabase_auth_client_factory=create_supabase_auth_client,
             invite_codes=app.state.invite_code_repo,
@@ -105,8 +100,6 @@ async def lifespan(app: FastAPI):
         app.state.auth_service = AuthService(
             members=app.state.member_repo,
             accounts=app.state.account_repo,
-            entities=app.state.entity_repo,
-            supabase_client=None,
         )
 
     from backend.web.services.chat_events import ChatEventBus
@@ -132,7 +125,6 @@ async def lifespan(app: FastAPI):
         chat_repo=app.state.chat_repo,
         chat_entity_repo=app.state.chat_entity_repo,
         chat_message_repo=app.state.chat_message_repo,
-        entity_repo=app.state.entity_repo,
         member_repo=app.state.member_repo,
         event_bus=app.state.chat_event_bus,
         delivery_resolver=delivery_resolver,
@@ -168,7 +160,7 @@ async def lifespan(app: FastAPI):
 
         app.state.relationship_service = RelationshipService(
             app.state.relationship_repo,
-            entity_repo=app.state.entity_repo,
+            member_repo=app.state.member_repo,
         )
 
         _msg_delivery_resolver = HireVisitDeliveryResolver(
@@ -182,7 +174,6 @@ async def lifespan(app: FastAPI):
             chat_member_repo=_chat_member_repo,
             messages_repo=_messages_repo,
             message_read_repo=_message_read_repo,
-            entity_repo=app.state.entity_repo,
             member_repo=app.state.member_repo,
             event_bus=app.state.chat_event_bus,
             delivery_resolver=_msg_delivery_resolver,

@@ -15,9 +15,9 @@ logger = logging.getLogger(__name__)
 class RelationshipService:
     """Manages Hire/Visit relationships between users."""
 
-    def __init__(self, relationship_repo: Any, entity_repo: Any = None) -> None:
+    def __init__(self, relationship_repo: Any, member_repo: Any = None) -> None:
         self._repo = relationship_repo
-        self._entity_repo = entity_repo
+        self._member_repo = member_repo
 
     def apply_event(
         self,
@@ -65,13 +65,13 @@ class RelationshipService:
                 fields["hire_snapshot"] = hire_snapshot
         if new_state == "none" and current_state in ("hire", "visit"):
             fields["hire_revoked_at"] = now_iso()
-            if current_state == "hire" and self._entity_repo is not None:
+            if current_state == "hire" and self._member_repo is not None:
                 other_id = pb if actor_id == pa else pa
-                e = self._entity_repo.get_by_id(other_id)
+                m = self._member_repo.get_by_id(other_id)
                 fields["hire_snapshot"] = {
-                    "entity_id": other_id,
-                    "name": e.name if e else other_id,
-                    "thread_id": getattr(e, "thread_id", None),
+                    "user_id": other_id,
+                    "name": m.name if m else other_id,
+                    "main_thread_id": getattr(m, "main_thread_id", None),
                     "snapshot_at": now_iso(),
                 }
 

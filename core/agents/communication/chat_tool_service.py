@@ -100,7 +100,6 @@ class ChatToolService:
         user_id: str,
         owner_user_id: str,
         *,
-        entity_repo: Any = None,
         chat_service: Any = None,
         chat_entity_repo: Any = None,
         chat_message_repo: Any = None,
@@ -110,7 +109,6 @@ class ChatToolService:
     ) -> None:
         self._user_id = user_id
         self._owner_user_id = owner_user_id
-        self._entities = entity_repo
         self._chat_service = chat_service
         self._chat_entities = chat_entity_repo
         self._messages = chat_message_repo
@@ -152,12 +150,9 @@ class ChatToolService:
         return args
 
     def _resolve_name(self, user_id: str) -> str:
-        """Resolve display name: entity_repo (agents) → member_repo (humans)."""
-        entity = self._entities.get_by_id(user_id) if self._entities else None
-        if entity:
-            return entity.name
-        member = self._members.get_by_id(user_id) if self._members else None
-        return member.name if member else "unknown"
+        """Resolve display name from member_repo."""
+        m = self._members.get_by_id(user_id) if self._members else None
+        return m.name if m else "unknown"
 
     def _format_msgs(self, msgs: list, eid: str) -> str:
         lines = []

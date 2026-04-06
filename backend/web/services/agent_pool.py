@@ -29,7 +29,6 @@ def create_agent_sync(
     agent: str | None = None,
     bundle_dir: Path | None = None,
     thread_repo: Any = None,
-    entity_repo: Any = None,
     member_repo: Any = None,
     queue_manager: Any = None,
     chat_repos: dict | None = None,
@@ -52,7 +51,6 @@ def create_agent_sync(
         storage_container=storage_container,
         permission_resolver_scope="thread",
         thread_repo=thread_repo,
-        entity_repo=entity_repo,
         member_repo=member_repo,
         queue_manager=queue_manager,
         chat_repos=chat_repos,
@@ -130,27 +128,21 @@ async def get_or_create_agent(app_obj: FastAPI, sandbox_type: str, thread_id: st
             if member_dir.is_dir():
                 bundle_dir = member_dir.resolve()
 
-        # @@@chat-repos - construct chat_repos for ChatToolService if entity system is available
+        # @@@chat-repos - construct chat_repos for ChatToolService if member system is available
         chat_repos = None
-        if hasattr(app_obj.state, "entity_repo") and thread_data:
-            entity_repo = app_obj.state.entity_repo
-            member_repo = getattr(app_obj.state, "member_repo", None)
-            # Entity id = member_id in the new model; look up by member_id, not thread_id
+        if hasattr(app_obj.state, "member_repo") and thread_data:
+            member_repo = app_obj.state.member_repo
             agent_member_id = thread_data.get("member_id")
-            agent_entity = entity_repo.get_by_id(agent_member_id) if agent_member_id else None
-            if agent_entity:
-                # agent social identity = member_id
-                agent_member = member_repo.get_by_id(agent_entity.member_id) if member_repo else None
-                # owner social identity = owner's user_id (same as their member_id for humans)
-                owner_user_id = agent_member.owner_user_id if agent_member else ""
+            agent_member = member_repo.get_by_id(agent_member_id) if agent_member_id else None
+            if agent_member:
+                owner_user_id = agent_member.owner_user_id or ""
                 chat_repos = {
-                    "user_id": agent_entity.member_id,  # agent's social identity = member_id
+                    "user_id": agent_member.id,
                     "owner_user_id": owner_user_id,
-                    "entity_repo": entity_repo,
+                    "member_repo": member_repo,
                     "chat_service": getattr(app_obj.state, "chat_service", None),
                     "chat_entity_repo": getattr(app_obj.state, "chat_entity_repo", None),
                     "chat_message_repo": getattr(app_obj.state, "chat_message_repo", None),
-                    "member_repo": member_repo,
                     "chat_event_bus": getattr(app_obj.state, "chat_event_bus", None),
                 }
 
@@ -184,7 +176,6 @@ async def get_or_create_agent(app_obj: FastAPI, sandbox_type: str, thread_id: st
             agent=agent_name,
             bundle_dir=bundle_dir,
             thread_repo=getattr(app_obj.state, "thread_repo", None),
-            entity_repo=getattr(app_obj.state, "entity_repo", None),
             member_repo=getattr(app_obj.state, "member_repo", None),
             queue_manager=qm,
             chat_repos=chat_repos,

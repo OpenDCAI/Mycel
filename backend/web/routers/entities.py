@@ -12,6 +12,7 @@ from fastapi.responses import FileResponse
 from backend.web.core.dependencies import get_app, get_current_user_id
 from backend.web.core.paths import avatars_dir
 from backend.web.utils.serializers import avatar_url
+from storage.contracts import MemberType
 
 logger = logging.getLogger(__name__)
 
@@ -162,54 +163,45 @@ async def list_entities(
     """List chattable entities for discovery (New Chat picker).
     Humans are represented by their user_id; agents by their member_id.
     Excludes the current user (you don't chat with yourself)."""
-    entity_repo = app.state.entity_repo
     member_repo = app.state.member_repo
-
     members = member_repo.list_all()
     member_map = {m.id: m for m in members}
 
     items = []
 
-    # Human participants: all human members except self
     for m in members:
-        if m.type != "human" or m.id == user_id:
+        if m.id == user_id:
             continue
-        items.append(
-            {
-                "id": m.id,  # user_id IS the social identity for humans
-                "name": m.name,
-                "type": "human",
-                "avatar_url": avatar_url(m.id, bool(m.avatar)),
-                "owner_name": None,
-                "member_name": m.name,
-                "thread_id": None,
-                "is_main": None,
-                "branch_index": None,
-            }
-        )
-
-    # Agent participants: from entity_repo (agent entities have id = member_id)
-    all_entities = entity_repo.list_by_type("agent")
-    for entity in all_entities:
-        member = member_map.get(entity.member_id)
-        owner = member_map.get(member.owner_user_id) if member and member.owner_user_id else None
-        thread = app.state.thread_repo.get_by_id(entity.thread_id) if entity.thread_id else None
-        # @@@chat-discovery-surface - branch/subagent entities are runtime artifacts, not top-level chat picker entries.
-        if entity.type == "agent" and thread and not thread["is_main"]:
-            continue
-        items.append(
-            {
-                "id": entity.id,  # entity.id = member_id = social identity for agents
-                "name": entity.name,
-                "type": entity.type,
-                "avatar_url": avatar_url(entity.member_id, bool(member.avatar if member else None)),
-                "owner_name": owner.name if owner else None,
-                "member_name": member.name if member else None,
-                "thread_id": entity.thread_id,
-                "is_main": thread["is_main"] if thread else None,
-                "branch_index": thread["branch_index"] if thread else None,
-            }
-        )
+        if m.type == MemberType.HUMAN:
+            items.append(
+                {
+                    "id": m.id,
+                    "name": m.name,
+                    "type": "human",
+                    "avatar_url": avatar_url(m.id, bool(m.avatar)),
+                    "owner_name": None,
+                    "member_name": m.name,
+                    "thread_id": None,
+                    "is_main": None,
+                    "branch_index": None,
+                }
+            )
+        else:
+            owner = member_map.get(m.owner_user_id) if m.owner_user_id else None
+            thread = app.state.thread_repo.get_by_id(m.main_thread_id) if m.main_thread_id else None
+            items.append(
+                {
+                    "id": m.id,
+                    "name": m.name,
+                    "type": m.type.value if hasattr(m.type, "value") else str(m.type),
+                    "avatar_url": avatar_url(m.id, bool(m.avatar)),
+                    "owner_name": owner.name if owner else None,
+                    "member_name": m.name,
+                    "thread_id": m.main_thread_id,
+                    "is_main": thread["is_main"] if thread else None,
+                    "branch_index": thread["branch_index"] if thread else None,
+                }
+            )
     return items
 
 
@@ -220,9 +212,9 @@ async def get_agent_thread(
     app: Annotated[Any, Depends(get_app)],
 ):
     """Get the thread_id for an agent's main thread. user_id here is the agent's member_id."""
-    entity = app.state.entity_repo.get_by_id(user_id)
-    if not entity:
-        raise HTTPException(404, "Entity not found")
-    if entity.type == "agent" and entity.thread_id:
-        return {"user_id": user_id, "thread_id": entity.thread_id}
+    member = app.state.member_repo.get_by_id(user_id)
+    if not member:
+        raise HTTPException(404, "Member not found")
+    if member.type != MemberType.HUMAN and member.main_thread_id:
+        return {"user_id": user_id, "thread_id": member.main_thread_id}
     raise HTTPException(404, "No agent thread found")

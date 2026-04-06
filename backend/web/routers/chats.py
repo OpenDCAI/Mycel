@@ -66,38 +66,25 @@ async def get_chat(
     if not chat:
         raise HTTPException(404, "Chat not found")
     participants = app.state.chat_entity_repo.list_participants(chat_id)
-    entity_repo = app.state.entity_repo
     member_repo = app.state.member_repo
-    entities_info = []
+    members_info = []
     for p in participants:
-        e = entity_repo.get_by_id(p.user_id)
-        if e:
-            m = member_repo.get_by_id(e.member_id)
-            entities_info.append(
+        m = member_repo.get_by_id(p.user_id)
+        if m:
+            members_info.append(
                 {
-                    "id": p.user_id,
-                    "name": e.name,
-                    "type": e.type,
-                    "avatar_url": avatar_url(e.member_id, bool(m.avatar if m else None)),
+                    "id": m.id,
+                    "name": m.name,
+                    "type": m.type.value if hasattr(m.type, "value") else str(m.type),
+                    "avatar_url": avatar_url(m.id, bool(m.avatar)),
                 }
             )
-        else:
-            m = member_repo.get_by_id(p.user_id)
-            if m:
-                entities_info.append(
-                    {
-                        "id": p.user_id,
-                        "name": m.name,
-                        "type": "human",
-                        "avatar_url": avatar_url(m.id, bool(m.avatar)),
-                    }
-                )
     return {
         "id": chat.id,
         "title": chat.title,
         "status": chat.status,
         "created_at": chat.created_at,
-        "entities": entities_info,
+        "entities": members_info,
     }
 
 
@@ -111,17 +98,12 @@ async def list_messages(
 ):
     """List messages in a chat."""
     msgs = app.state.chat_message_repo.list_by_chat(chat_id, limit=limit, before=before)
-    entity_repo = app.state.entity_repo
     member_repo = app.state.member_repo
     sender_ids = {m.sender_id for m in msgs}
     sender_names: dict[str, str] = {}
     for sid in sender_ids:
-        e = entity_repo.get_by_id(sid)
-        if e:
-            sender_names[sid] = e.name
-        else:
-            m = member_repo.get_by_id(sid)
-            sender_names[sid] = m.name if m else "unknown"
+        m = member_repo.get_by_id(sid)
+        sender_names[sid] = m.name if m else "unknown"
     return [
         {
             "id": m.id,
