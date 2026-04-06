@@ -77,7 +77,7 @@ describe("ChatArea", () => {
       />,
     );
 
-    expect(screen.getByText("回答问题")).toBeTruthy();
+    expect(screen.getByText("等待回答")).toBeTruthy();
     expect(screen.getByText("选择一个方向")).toBeTruthy();
     expect(screen.getByRole("button", { name: "提交回答" })).toBeTruthy();
   });
@@ -118,8 +118,7 @@ describe("ChatArea", () => {
     );
 
     expect(screen.queryByText(/ask_user_question_answers/i)).toBeNull();
-    expect(screen.getByText("已回答问题")).toBeTruthy();
-    expect(screen.getByText("选择一个方向：B")).toBeTruthy();
+    expect(screen.getByText(/已回答 · 选择一个方向：B/)).toBeTruthy();
     expect(screen.queryByText("你希望我问什么？")).toBeNull();
 
     fireEvent.click(screen.getByRole("button", { name: "查看已回答详情" }));
@@ -181,7 +180,6 @@ describe("ChatArea", () => {
       />,
     );
 
-    expect(screen.getByText("已回答问题")).toBeTruthy();
-    expect(screen.getByText("选择一个方向：A")).toBeTruthy();
+    expect(screen.getByText(/已回答 · 选择一个方向：A/)).toBeTruthy();
   });
 });
