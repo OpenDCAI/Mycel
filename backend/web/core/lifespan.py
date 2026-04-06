@@ -6,6 +6,7 @@ from contextlib import asynccontextmanager
 from typing import Any, cast
 
 from fastapi import FastAPI
+from psycopg import AsyncConnection
 
 from backend.web.services.event_buffer import RunEventBuffer, ThreadEventBuffer
 from backend.web.services.idle_reaper import idle_reaper_loop
@@ -21,10 +22,25 @@ def _require_web_runtime_contract() -> None:
         raise RuntimeError("LEON_POSTGRES_URL is required for backend web runtime")
 
 
+async def _validate_web_checkpointer_contract() -> None:
+    pg_url = os.getenv("LEON_POSTGRES_URL")
+    if not pg_url:
+        raise RuntimeError("LEON_POSTGRES_URL is required for backend web runtime")
+
+    conn = await AsyncConnection.connect(pg_url)
+    try:
+        async with conn.cursor() as cursor:
+            await cursor.execute("SELECT 1")
+            await cursor.fetchone()
+    finally:
+        await conn.close()
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """FastAPI lifespan context manager for startup and shutdown."""
     _require_web_runtime_contract()
+    await _validate_web_checkpointer_contract()
 
     # ---- Member-Chat repos + services ----
     from backend.web.core.supabase_factory import create_supabase_auth_client, create_supabase_client
