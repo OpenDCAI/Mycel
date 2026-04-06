@@ -105,6 +105,7 @@ class SandboxLease(ABC):
         needs_refresh: bool = False,
         refresh_hint_at: datetime | None = None,
         volume_id: str | None = None,
+        bind_mounts: list[dict[str, str]] | None = None,
     ):
         self.lease_id = lease_id
         self.provider_name = provider_name
@@ -121,6 +122,7 @@ class SandboxLease(ABC):
         self.needs_refresh = needs_refresh
         self.refresh_hint_at = refresh_hint_at
         self.volume_id = volume_id
+        self.bind_mounts = bind_mounts
 
     # @@@compat-refresh-error - legacy callers still read refresh_error while storage canonicalized to last_error.
     @property
