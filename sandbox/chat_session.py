@@ -14,7 +14,7 @@ import threading
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from sandbox.lifecycle import (
     ChatSessionState,
@@ -78,6 +78,7 @@ class ChatSession:
         budget_json: str | None = None,
         ended_at: datetime | None = None,
         close_reason: str | None = None,
+        session_repo: Any | None = None,
     ):
         self.session_id = session_id
         self.thread_id = thread_id
@@ -94,6 +95,7 @@ class ChatSession:
         self.ended_at = ended_at
         self.close_reason = close_reason
         self._db_path = db_path or resolve_role_db_path(SQLiteDBRole.SANDBOX)
+        self._session_repo = session_repo
 
     def is_expired(self) -> bool:
         now = datetime.now()
@@ -111,6 +113,9 @@ class ChatSession:
                 reason="touch",
             )
             self.status = "active"
+        if self._session_repo is not None:
+            self._session_repo.touch(self.session_id, last_active_at=now.isoformat(), status=self.status)
+            return
         with _connect(self._db_path) as conn:
             conn.execute(
                 """
@@ -132,6 +137,9 @@ class ChatSession:
         self.status = "closed"
         self.ended_at = datetime.now()
         self.close_reason = reason
+        if self._session_repo is not None:
+            self._session_repo.delete_session(self.session_id, reason=self.close_reason)
+            return
         with _connect(self._db_path) as conn:
             conn.execute(
                 """
@@ -158,6 +166,8 @@ class ChatSessionManager:
         db_path: Path | None = None,
         default_policy: ChatSessionPolicy | None = None,
         chat_session_repo=None,
+        terminal_repo=None,
+        lease_repo=None,
     ):
         self.provider = provider
         self.db_path = db_path or resolve_role_db_path(SQLiteDBRole.SANDBOX)
@@ -169,6 +179,8 @@ class ChatSessionManager:
             from storage.providers.sqlite.chat_session_repo import SQLiteChatSessionRepo
 
             self._repo = SQLiteChatSessionRepo(db_path=db_path)
+        self._terminal_repo = terminal_repo
+        self._lease_repo = lease_repo
 
     def _close_runtime(self, session: ChatSession, reason: str) -> None:
         try:
@@ -203,22 +215,29 @@ class ChatSessionManager:
             from storage.providers.sqlite.terminal_repo import SQLiteTerminalRepo
 
             # @@@thread-get-back-compat - Legacy callers query by thread only; route to current active terminal.
-            _term_repo = SQLiteTerminalRepo(db_path=self.db_path)
+            _term_repo = self._terminal_repo
+            own_term_repo = _term_repo is None
+            if _term_repo is None:
+                _term_repo = SQLiteTerminalRepo(db_path=self.db_path)
             try:
                 _term_row = _term_repo.get_active(thread_id)
             finally:
-                _term_repo.close()
+                if own_term_repo:
+                    _term_repo.close()
             if _term_row is None:
                 return None
             terminal_id = _term_row["terminal_id"]
-        live = self._live_sessions.get(terminal_id)
+        if terminal_id is None:
+            return None
+        terminal_key = str(terminal_id)
+        live = self._live_sessions.get(terminal_key)
         if live:
             if live.is_expired():
                 self.delete(live.session_id, reason="expired")
                 return None
             return live
 
-        row = self._repo.get_session(thread_id, terminal_id)
+        row = self._repo.get_session(thread_id, terminal_key)
 
         if not row:
             return None
@@ -228,17 +247,25 @@ class ChatSessionManager:
         from storage.providers.sqlite.lease_repo import SQLiteLeaseRepo
         from storage.providers.sqlite.terminal_repo import SQLiteTerminalRepo
 
-        _term_repo = SQLiteTerminalRepo(db_path=self.db_path)
+        _term_repo = self._terminal_repo
+        own_term_repo = _term_repo is None
+        if _term_repo is None:
+            _term_repo = SQLiteTerminalRepo(db_path=self.db_path)
         try:
             _term_row = _term_repo.get_by_id(row["terminal_id"])
         finally:
-            _term_repo.close()
+            if own_term_repo:
+                _term_repo.close()
         terminal = terminal_from_row(_term_row, self.db_path) if _term_row else None
-        _lease_repo = SQLiteLeaseRepo(db_path=self.db_path)
+        _lease_repo = self._lease_repo
+        own_lease_repo = _lease_repo is None
+        if _lease_repo is None:
+            _lease_repo = SQLiteLeaseRepo(db_path=self.db_path)
         try:
             _lease_row = _lease_repo.get(row["lease_id"])
         finally:
-            _lease_repo.close()
+            if own_lease_repo:
+                _lease_repo.close()
         lease = lease_from_row(_lease_row, self.db_path) if _lease_row else None
         if not terminal or not lease:
             return None
@@ -261,12 +288,13 @@ class ChatSessionManager:
             budget_json=row["budget_json"],
             ended_at=datetime.fromisoformat(row["ended_at"]) if row["ended_at"] else None,
             close_reason=row["close_reason"],
+            session_repo=self._repo,
         )
         session.runtime.bind_session(session.session_id)
         if session.is_expired():
             self.delete(session.session_id, reason="expired")
             return None
-        self._live_sessions[terminal_id] = session
+        self._live_sessions[terminal_key] = session
         return session
 
     def create(
@@ -313,6 +341,7 @@ class ChatSessionManager:
             db_path=self.db_path,
             runtime_id=runtime_id,
             status="active",
+            session_repo=self._repo,
         )
         session.runtime.bind_session(session.session_id)
         self._live_sessions[terminal.terminal_id] = session

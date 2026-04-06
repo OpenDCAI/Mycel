@@ -16,6 +16,12 @@ def _strategy() -> str:
     return os.getenv("LEON_STORAGE_STRATEGY", "sqlite")
 
 
+def _sandbox_db_path() -> Any:
+    from storage.providers.sqlite.kernel import SQLiteDBRole, resolve_role_db_path
+
+    return resolve_role_db_path(SQLiteDBRole.SANDBOX)
+
+
 @lru_cache(maxsize=1)
 def _supabase_client() -> Any:
     factory_ref = os.getenv("LEON_SUPABASE_CLIENT_FACTORY")
@@ -64,6 +70,36 @@ def make_sandbox_monitor_repo() -> Any:
     from storage.providers.sqlite.sandbox_monitor_repo import SQLiteSandboxMonitorRepo
 
     return SQLiteSandboxMonitorRepo()
+
+
+def make_lease_repo(db_path: Any = None) -> Any:
+    if _strategy() == "supabase":
+        from storage.providers.supabase.lease_repo import SupabaseLeaseRepo
+
+        return SupabaseLeaseRepo(_supabase_client())
+    from storage.providers.sqlite.lease_repo import SQLiteLeaseRepo
+
+    return SQLiteLeaseRepo(db_path=db_path or _sandbox_db_path())
+
+
+def make_terminal_repo(db_path: Any = None) -> Any:
+    if _strategy() == "supabase":
+        from storage.providers.supabase.terminal_repo import SupabaseTerminalRepo
+
+        return SupabaseTerminalRepo(_supabase_client())
+    from storage.providers.sqlite.terminal_repo import SQLiteTerminalRepo
+
+    return SQLiteTerminalRepo(db_path=db_path or _sandbox_db_path())
+
+
+def make_chat_session_repo(db_path: Any = None) -> Any:
+    if _strategy() == "supabase":
+        from storage.providers.supabase.chat_session_repo import SupabaseChatSessionRepo
+
+        return SupabaseChatSessionRepo(_supabase_client())
+    from storage.providers.sqlite.chat_session_repo import SQLiteChatSessionRepo
+
+    return SQLiteChatSessionRepo(db_path=db_path or _sandbox_db_path())
 
 
 def make_agent_registry_repo() -> Any:

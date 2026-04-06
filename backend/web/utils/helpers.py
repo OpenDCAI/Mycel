@@ -6,11 +6,10 @@ from typing import Any
 from fastapi import HTTPException
 
 from backend.web.core.config import DB_PATH
+from backend.web.core.storage_factory import make_chat_session_repo, make_lease_repo, make_terminal_repo
 from sandbox.sync.state import SyncState
 from storage.container import StorageContainer
-from storage.providers.sqlite.chat_session_repo import SQLiteChatSessionRepo
 from storage.providers.sqlite.kernel import SQLiteDBRole, resolve_role_db_path
-from storage.providers.sqlite.terminal_repo import SQLiteTerminalRepo
 from storage.runtime import build_storage_container
 
 SANDBOX_DB_PATH = resolve_role_db_path(SQLiteDBRole.SANDBOX)
@@ -29,7 +28,7 @@ def get_terminal_timestamps(terminal_id: str) -> tuple[str | None, str | None]:
     """Get created_at and updated_at timestamps for a terminal."""
     if not SANDBOX_DB_PATH.exists():
         return None, None
-    repo = SQLiteTerminalRepo(db_path=SANDBOX_DB_PATH)
+    repo = make_terminal_repo(db_path=SANDBOX_DB_PATH)
     try:
         return repo.get_timestamps(terminal_id)
     finally:
@@ -38,11 +37,9 @@ def get_terminal_timestamps(terminal_id: str) -> tuple[str | None, str | None]:
 
 def get_lease_timestamps(lease_id: str) -> tuple[str | None, str | None]:
     """Get created_at and updated_at timestamps for a lease."""
-    from storage.providers.sqlite.lease_repo import SQLiteLeaseRepo
-
     if not SANDBOX_DB_PATH.exists():
         return None, None
-    repo = SQLiteLeaseRepo(db_path=SANDBOX_DB_PATH)
+    repo = make_lease_repo(db_path=SANDBOX_DB_PATH)
     try:
         row = repo.get(lease_id)
     finally:
@@ -163,8 +160,8 @@ def delete_thread_in_db(thread_id: str) -> None:
     if not SANDBOX_DB_PATH.exists():
         return
 
-    session_repo = SQLiteChatSessionRepo(db_path=SANDBOX_DB_PATH)
-    terminal_repo = SQLiteTerminalRepo(db_path=SANDBOX_DB_PATH)
+    session_repo = make_chat_session_repo(db_path=SANDBOX_DB_PATH)
+    terminal_repo = make_terminal_repo(db_path=SANDBOX_DB_PATH)
     sync_state = SyncState()
     try:
         session_repo.delete_by_thread(thread_id)
