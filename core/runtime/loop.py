@@ -967,9 +967,13 @@ class QueryLoop:
             before = getattr(mw, "before_model", None)
 
             if callable(abefore):
-                update = await abefore(state=state, runtime=None, config=config)
+                maybe_update = abefore(state=state, runtime=None, config=config)
+                if inspect.isawaitable(maybe_update):
+                    maybe_update = await maybe_update
+                update = maybe_update if isinstance(maybe_update, dict) else None
             elif callable(before):
-                update = before(state=state, runtime=None, config=config)
+                maybe_update = before(state=state, runtime=None, config=config)
+                update = maybe_update if isinstance(maybe_update, dict) else None
 
             if not update:
                 continue
@@ -1029,7 +1033,7 @@ class QueryLoop:
         if self._memory_middleware is None:
             return 0
         try:
-            boundary = int(self._memory_middleware.compact_boundary_index)
+            boundary = int(getattr(self._memory_middleware, "compact_boundary_index", 0))
         except Exception:
             return 0
         return max(boundary, 0)
@@ -1451,8 +1455,12 @@ class QueryLoop:
             return None
         signature = inspect.signature(compact)
         if "thread_id" in signature.parameters:
-            return await compact(messages, thread_id=thread_id)
-        return await compact(messages)
+            compacted = compact(messages, thread_id=thread_id)
+        else:
+            compacted = compact(messages)
+        if not inspect.isawaitable(compacted):
+            raise TypeError("compact_messages_for_recovery must return an awaitable")
+        return await compacted
 
     async def _recover_from_overflow(self, messages: list) -> dict[str, Any] | None:
         # @@@collapse-drain-single-shot
@@ -1517,13 +1525,15 @@ class QueryLoop:
                 return_exceptions=True,
             )
             for (idx, tool_call), result in zip(batch, batch_results):
-                if isinstance(result, Exception):
+                if isinstance(result, BaseException):
                     results[idx] = ToolMessage(
                         content=f"<tool_use_error>{result}</tool_use_error>",
                         tool_call_id=tool_call.get("id", ""),
                         name=tool_call.get("name", ""),
                     )
                     continue
+                if not isinstance(result, ToolMessage):
+                    raise TypeError(f"Tool executor returned unexpected result type: {type(result)!r}")
                 results[idx] = result
 
         safe_batch: list[tuple[int, dict]] = []
@@ -1896,12 +1906,14 @@ class QueryLoop:
         consume_many = getattr(self._memory_middleware, "consume_pending_notices", None)
         notices: list[dict[str, Any]] = []
         if callable(consume_many):
-            notices = list(consume_many() or [])
+            maybe_notices = consume_many()
+            if isinstance(maybe_notices, list):
+                notices = [notice for notice in maybe_notices if isinstance(notice, dict)]
         else:
             consume_one = getattr(self._memory_middleware, "consume_latest_compaction_notice", None)
             if callable(consume_one):
                 notice = consume_one()
-                if notice:
+                if isinstance(notice, dict):
                     notices = [notice]
         for notice in notices:
             pending_notices.append(
@@ -1978,13 +1990,13 @@ class QueryLoop:
                 # to wipe replayable compaction state, not just in-memory cache.
                 summary_store.delete_thread_summaries(thread_id)
             if hasattr(self._memory_middleware, "_cached_summary"):
-                self._memory_middleware._cached_summary = None
+                setattr(self._memory_middleware, "_cached_summary", None)
             if hasattr(self._memory_middleware, "_summary_restored"):
-                self._memory_middleware._summary_restored = False
+                setattr(self._memory_middleware, "_summary_restored", False)
             if hasattr(self._memory_middleware, "_summary_thread_id"):
-                self._memory_middleware._summary_thread_id = None
+                setattr(self._memory_middleware, "_summary_thread_id", None)
             if hasattr(self._memory_middleware, "_compact_up_to_index"):
-                self._memory_middleware._compact_up_to_index = 0
+                setattr(self._memory_middleware, "_compact_up_to_index", 0)
             clear_thread_state = getattr(self._memory_middleware, "clear_thread_state", None)
             if callable(clear_thread_state):
                 clear_thread_state(thread_id)
