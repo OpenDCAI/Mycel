@@ -1,6 +1,7 @@
 import json
 from pathlib import Path
 from types import SimpleNamespace
+from typing import Any, cast
 
 import pytest
 
@@ -17,7 +18,7 @@ class _FakeVolumeRepo:
         self.requested_ids: list[str] = []
         self.created: list[tuple[str, str | None]] = []
 
-    def get(self, volume_id: str):
+    def get(self, volume_id: str) -> dict[str, str] | None:
         self.requested_ids.append(volume_id)
         if self.created and volume_id == self.created[-1][0]:
             return {"source": json.dumps(self._source)}
@@ -114,8 +115,15 @@ class _FakeDaytonaProvider:
         self.ready_waits.append(volume_name)
 
 
+def _new_test_manager() -> Any:
+    # @@@nu59-sandbox-manager-harness - these tests intentionally bypass
+    # SandboxManager.__init__ and monkey-build partial instances. Treat that
+    # object as a test harness, not a fully typed production manager.
+    return cast(Any, object.__new__(SandboxManager))
+
+
 def test_setup_mounts_reads_volume_from_active_storage_repo(tmp_path):
-    manager = object.__new__(SandboxManager)
+    manager = _new_test_manager()
     manager.provider_capability = SimpleNamespace(runtime_kind="local")
     manager.volume = _FakeVolume()
     manager._get_active_terminal = lambda _thread_id: SimpleNamespace(lease_id="lease-1")
@@ -132,7 +140,7 @@ def test_setup_mounts_reads_volume_from_active_storage_repo(tmp_path):
 
 
 def test_resolve_volume_source_reads_volume_from_active_storage_repo(tmp_path):
-    manager = object.__new__(SandboxManager)
+    manager = _new_test_manager()
     manager.provider_capability = SimpleNamespace(runtime_kind="agentbay")
     manager._get_active_terminal = lambda _thread_id: SimpleNamespace(lease_id="lease-1")
     manager._get_lease = lambda _lease_id: SimpleNamespace(volume_id="volume-1")
@@ -147,7 +155,7 @@ def test_resolve_volume_source_reads_volume_from_active_storage_repo(tmp_path):
 
 
 def test_setup_mounts_provisions_missing_remote_volume_metadata(monkeypatch, tmp_path):
-    manager = object.__new__(SandboxManager)
+    manager = _new_test_manager()
     manager.provider_capability = SimpleNamespace(runtime_kind="agentbay")
     manager.volume = _FakeVolume()
     manager._get_active_terminal = lambda _thread_id: SimpleNamespace(lease_id="lease-1")
@@ -185,7 +193,7 @@ def test_setup_mounts_recreates_missing_remote_volume_row_for_existing_volume_id
             self._rows[volume_id] = {"source": source_json}
             self._source = json.loads(source_json)
 
-    manager = object.__new__(SandboxManager)
+    manager = _new_test_manager()
     manager.provider_capability = SimpleNamespace(runtime_kind="daytona_pty")
     manager.provider = _FakeDaytonaProvider()
     manager.volume = _FakeVolume()
@@ -215,7 +223,7 @@ def test_setup_mounts_recreates_missing_remote_volume_row_for_existing_volume_id
 
 
 def test_enforce_idle_timeouts_destroys_when_provider_cannot_pause(monkeypatch):
-    manager = object.__new__(SandboxManager)
+    manager = _new_test_manager()
     manager.provider = SimpleNamespace(
         name="agentbay",
         get_capability=lambda: SimpleNamespace(can_pause=False, can_destroy=True),
@@ -262,7 +270,7 @@ def test_enforce_idle_timeouts_destroys_when_provider_cannot_pause(monkeypatch):
 
 
 def test_destroy_thread_resources_skips_local_sync_when_lease_has_no_volume_id():
-    manager = object.__new__(SandboxManager)
+    manager = _new_test_manager()
     manager.provider_capability = SimpleNamespace(runtime_kind="local")
     manager.provider = SimpleNamespace(name="local")
     manager.volume = _FakeVolume()
@@ -308,7 +316,7 @@ def test_destroy_thread_resources_skips_local_sync_when_lease_has_no_volume_id()
 
 
 def test_sync_uploads_skips_local_volume_sync_when_lease_has_no_volume_id():
-    manager = object.__new__(SandboxManager)
+    manager = _new_test_manager()
     manager.provider_capability = SimpleNamespace(runtime_kind="local")
     manager.volume = _FakeVolume()
     manager._get_active_terminal = lambda _thread_id: SimpleNamespace(terminal_id="term-1", lease_id="lease-1")
@@ -340,7 +348,7 @@ def test_get_sandbox_local_provider_does_not_require_volume_bootstrap(tmp_path):
 
 
 def test_get_sandbox_auto_resumes_paused_lease_when_reconstructing_session():
-    manager = object.__new__(SandboxManager)
+    manager = _new_test_manager()
     manager.provider = SimpleNamespace(name="local")
     manager.provider_capability = SimpleNamespace(runtime_kind="local", eager_instance_binding=False)
     manager.volume = _FakeVolume()
@@ -374,7 +382,7 @@ def test_get_sandbox_auto_resumes_paused_lease_when_reconstructing_session():
 
 
 def test_get_sandbox_auto_resumes_live_session_when_lease_state_is_paused():
-    manager = object.__new__(SandboxManager)
+    manager = _new_test_manager()
     terminal = SimpleNamespace(
         terminal_id="term-1",
         lease_id="lease-1",
@@ -421,7 +429,7 @@ def test_get_sandbox_auto_resumes_live_session_when_lease_state_is_paused():
 
 
 def test_resume_session_rebinds_live_session_lease_after_resume():
-    manager = object.__new__(SandboxManager)
+    manager = _new_test_manager()
     terminal = SimpleNamespace(terminal_id="term-1", lease_id="lease-1")
     resumed_lease = SimpleNamespace(
         lease_id="lease-1",
@@ -456,7 +464,7 @@ def test_resume_session_rebinds_live_session_lease_after_resume():
 
 
 def test_upgrade_to_daytona_volume_uses_runtime_thread_repo_for_member_lookup(monkeypatch, tmp_path):
-    manager = object.__new__(SandboxManager)
+    manager = _new_test_manager()
     manager.provider = _FakeDaytonaProvider()
     update_repo = _FakeUpdateRepo()
     manager._sandbox_volume_repo = lambda: update_repo
@@ -485,7 +493,7 @@ def test_upgrade_to_daytona_volume_uses_runtime_thread_repo_for_member_lookup(mo
 
 
 def test_upgrade_to_daytona_volume_waits_when_reusing_existing_daytona_volume(monkeypatch, tmp_path):
-    manager = object.__new__(SandboxManager)
+    manager = _new_test_manager()
     provider = _FakeDaytonaProvider()
     update_repo = _FakeUpdateRepo()
     manager.provider = provider
@@ -527,7 +535,9 @@ def test_make_sandbox_monitor_repo_uses_runtime_sandbox_db(monkeypatch, strategy
     from backend.web.core import storage_factory
 
     monkeypatch.setenv("LEON_STORAGE_STRATEGY", strategy)
-    storage_factory.make_sandbox_monitor_repo.cache_clear() if hasattr(storage_factory.make_sandbox_monitor_repo, "cache_clear") else None
+    cache_clear = getattr(cast(Any, storage_factory.make_sandbox_monitor_repo), "cache_clear", None)
+    if callable(cache_clear):
+        cache_clear()
 
     repo = storage_factory.make_sandbox_monitor_repo()
     try:

@@ -11,7 +11,10 @@ from __future__ import annotations
 import asyncio
 import json
 import time
+from dataclasses import dataclass
+from pathlib import Path
 from types import SimpleNamespace
+from typing import Any, cast
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -132,35 +135,36 @@ def test_agent_middleware_tools_are_not_shared_mutable_state():
     first = AgentMiddleware()
     second = AgentMiddleware()
 
-    first.tools = ["x"]
+    first.__dict__["tools"] = ("x",)
 
     assert second.tools == ()
 
-    def test_inline_schemas_strip_runtime_only_schema_metadata(self):
-        reg = ToolRegistry()
-        reg.register(
-            ToolEntry(
-                name="ChatRead",
-                mode=ToolMode.INLINE,
-                schema={
-                    "name": "ChatRead",
-                    "description": "chat read",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "chat_id": {"type": "string"},
-                        },
-                        "x-leon-required-any-of": [["chat_id"]],
+
+def test_inline_schemas_strip_runtime_only_schema_metadata():
+    reg = ToolRegistry()
+    reg.register(
+        ToolEntry(
+            name="ChatRead",
+            mode=ToolMode.INLINE,
+            schema={
+                "name": "ChatRead",
+                "description": "chat read",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "chat_id": {"type": "string"},
                     },
+                    "x-leon-required-any-of": [["chat_id"]],
                 },
-                handler=lambda **_kwargs: "ok",
-                source="test",
-            )
+            },
+            handler=lambda **_kwargs: "ok",
+            source="test",
         )
+    )
 
-        [schema] = reg.get_inline_schemas()
+    [schema] = reg.get_inline_schemas()
 
-        assert "x-leon-required-any-of" not in schema["parameters"]
+    assert "x-leon-required-any-of" not in schema["parameters"]
 
 
 # ---------------------------------------------------------------------------
@@ -337,10 +341,31 @@ def _make_runner(entries: list[ToolEntry]) -> ToolRunner:
     return ToolRunner(registry=reg)
 
 
-def _make_tool_call_request(name: str, args: dict, call_id: str = "tc-1"):
-    req = MagicMock()
-    req.tool_call = {"name": name, "args": args, "id": call_id}
-    return req
+@dataclass
+class _ToolCallRequestHarness:
+    tool_call: dict[str, Any]
+    tool: Any = None
+    state: Any = None
+    runtime: Any = None
+
+    def override(self, **changes: Any) -> _ToolCallRequestHarness:
+        return _ToolCallRequestHarness(
+            tool_call=changes.get("tool_call", self.tool_call),
+            tool=changes.get("tool", self.tool),
+            state=changes.get("state", self.state),
+            runtime=changes.get("runtime", self.runtime),
+        )
+
+
+def _make_tool_call_request(name: str, args: dict, call_id: str = "tc-1") -> Any:
+    # @@@nu59-test-fixture-request-helper - tests often mutate req.state after
+    # creation; keep the runtime surface real but return a permissive harness object.
+    return cast(Any, _ToolCallRequestHarness(tool_call={"name": name, "args": args, "id": call_id}))
+
+
+def _require_text_content(content: str | list[str | dict[Any, Any]]) -> str:
+    assert isinstance(content, str)
+    return content
 
 
 class TestToolRunnerErrorNormalization:
@@ -446,7 +471,7 @@ class TestToolRunnerErrorNormalization:
         result = await runner.awrap_tool_call(req, AsyncMock())
 
         assert isinstance(result.content, list)
-        assert any(block.get("type") == "image" for block in result.content)
+        assert any(isinstance(block, dict) and block.get("type") == "image" for block in result.content)
         assert result.additional_kwargs["tool_result_meta"]["source"] == "local"
 
     @pytest.mark.asyncio
@@ -484,7 +509,7 @@ class TestToolRunnerErrorNormalization:
         registry = ToolRegistry()
         FileSystemService(
             registry=registry,
-            workspace_root="/workspace",
+            workspace_root=Path("/workspace"),
             backend=RemoteImageBackend(),
         )
 
@@ -495,7 +520,7 @@ class TestToolRunnerErrorNormalization:
         result = await runner.awrap_tool_call(req, AsyncMock())
 
         assert isinstance(result.content, list)
-        assert any(block.get("type") == "image" for block in result.content)
+        assert any(isinstance(block, dict) and block.get("type") == "image" for block in result.content)
         assert result.additional_kwargs["tool_result_meta"]["source"] == "local"
 
     @pytest.mark.asyncio
@@ -536,7 +561,7 @@ class TestToolRunnerErrorNormalization:
         registry = ToolRegistry()
         FileSystemService(
             registry=registry,
-            workspace_root="/workspace",
+            workspace_root=Path("/workspace"),
             backend=RemotePdfBackend(),
         )
 
@@ -580,7 +605,7 @@ class TestToolRunnerErrorNormalization:
         registry = ToolRegistry()
         FileSystemService(
             registry=registry,
-            workspace_root="/workspace",
+            workspace_root=Path("/workspace"),
             backend=RemoteLargePdfBackend(),
         )
 
@@ -590,8 +615,9 @@ class TestToolRunnerErrorNormalization:
 
         result = await runner.awrap_tool_call(req, AsyncMock())
 
-        assert "ToolValidationError" in result.content
-        assert "too large" in result.content.lower()
+        text = _require_text_content(result.content)
+        assert "ToolValidationError" in text
+        assert "too large" in text.lower()
         assert result.additional_kwargs["tool_result_meta"]["error_code"] == "FILE_TOO_LARGE"
 
     @pytest.mark.asyncio
@@ -869,7 +895,7 @@ class TestToolRunnerErrorNormalization:
         async def upstream(_request):
             return ToolResultEnvelope(kind="success", content="raw mcp result")
 
-        result = await runner.awrap_tool_call(req, upstream)
+        result = await runner.awrap_tool_call(req, cast(Any, upstream))
 
         assert seen == ["ToolResultEnvelope"]
         assert result.content == "hooked mcp result"
@@ -1194,8 +1220,9 @@ class TestToolRunnerErrorNormalization:
 
         result = await runner.awrap_tool_call(req, AsyncMock())
 
-        assert "ToolValidationError" in result.content
-        assert "outside workspace" in result.content.lower()
+        text = _require_text_content(result.content)
+        assert "ToolValidationError" in text
+        assert "outside workspace" in text.lower()
         assert result.additional_kwargs["tool_result_meta"]["error_type"] == "tool_input_validation"
         assert result.additional_kwargs["tool_result_meta"]["error_code"] == "PATH_OUTSIDE_WORKSPACE"
 
@@ -1243,8 +1270,9 @@ class TestToolRunnerErrorNormalization:
 
         result = await runner.awrap_tool_call(req, AsyncMock())
 
-        assert "ToolValidationError" in result.content
-        assert "too large" in result.content.lower()
+        text = _require_text_content(result.content)
+        assert "ToolValidationError" in text
+        assert "too large" in text.lower()
         assert result.additional_kwargs["tool_result_meta"]["error_type"] == "tool_input_validation"
         assert result.additional_kwargs["tool_result_meta"]["error_code"] == "FILE_TOO_LARGE"
         assert backend.read_calls == 0
@@ -1471,7 +1499,7 @@ class TestToolRunnerErrorNormalization:
 
         req.state.can_use_tool = can_use_tool
 
-        result = runner.wrap_tool_call(req, lambda _req: None)
+        result = runner.wrap_tool_call(req, lambda _req: MagicMock())
 
         meta = result.additional_kwargs["tool_result_meta"]
         assert result.content == "async deny sync-path"
@@ -1504,7 +1532,7 @@ class TestToolRunnerErrorNormalization:
 
         req.state.can_use_tool = can_use_tool
 
-        result = runner.wrap_tool_call(req, lambda _req: None)
+        result = runner.wrap_tool_call(req, lambda _req: MagicMock())
 
         meta = result.additional_kwargs["tool_result_meta"]
         assert result.content == "async deny nested-loop"
@@ -1538,7 +1566,7 @@ class TestToolRunnerErrorNormalization:
 
         req.state.post_tool_use = post_hook
 
-        result = runner.wrap_tool_call(req, lambda _req: None)
+        result = runner.wrap_tool_call(req, lambda _req: MagicMock())
 
         assert result.content == "plain success"
         assert seen == ["handler", "post-start", "post-end"]
@@ -1569,7 +1597,7 @@ class TestToolRunnerErrorNormalization:
 
         req.state.pre_tool_use = pre_hook
 
-        result = runner.wrap_tool_call(req, lambda _req: None)
+        result = runner.wrap_tool_call(req, lambda _req: MagicMock())
 
         assert result.content == "plain success"
         assert seen == ["pre-start", "pre-end", "handler"]
@@ -1636,7 +1664,7 @@ class TestToolRunnerErrorNormalization:
 
         req.state.post_tool_use = post_hook
 
-        result = runner.wrap_tool_call(req, lambda _req: None)
+        result = runner.wrap_tool_call(req, lambda _req: MagicMock())
 
         assert result.content == "plain success"
         assert seen == ["handler", "post-start", "post-end"]
@@ -1715,7 +1743,7 @@ class TestToolRunnerErrorNormalization:
         req.state.consume_permission_resolution = lambda *args, **kwargs: None
         req.state.permission_request_hooks = permission_request_hook
 
-        result = runner.wrap_tool_call(req, lambda _req: None)
+        result = runner.wrap_tool_call(req, lambda _req: MagicMock())
 
         meta = result.additional_kwargs["tool_result_meta"]
         assert result.content == "hook blocked"
@@ -1759,7 +1787,7 @@ class TestToolRunnerErrorNormalization:
         req.state.consume_permission_resolution = lambda *args, **kwargs: None
         req.state.permission_request_hooks = permission_request_hook
 
-        result = runner.wrap_tool_call(req, lambda _req: None)
+        result = runner.wrap_tool_call(req, lambda _req: MagicMock())
 
         assert result.content == "ok"
         assert seen == ["checker", "permission-request-hook", "handler"]
@@ -1856,7 +1884,7 @@ class TestToolRunnerErrorNormalization:
         req.state.request_permission = None
         req.state.consume_permission_resolution = lambda *args, **kwargs: None
 
-        result = runner.wrap_tool_call(req, lambda _req: None)
+        result = runner.wrap_tool_call(req, lambda _req: MagicMock())
 
         meta = result.additional_kwargs["tool_result_meta"]
         assert result.content == "Permission required by rule: Write. No interactive permission resolver is available for this run."
@@ -1968,7 +1996,7 @@ class TestToolRunnerErrorNormalization:
         req.state.consume_permission_resolution = consume_permission_resolution
         req.state.can_use_tool = can_use_tool
 
-        result = runner.wrap_tool_call(req, lambda _req: None)
+        result = runner.wrap_tool_call(req, lambda _req: MagicMock())
 
         meta = result.additional_kwargs["tool_result_meta"]
         assert result.content == "deny now"
@@ -2007,7 +2035,7 @@ class TestToolRunnerErrorNormalization:
         req = _make_tool_call_request("Agent", {})
         app_state = AppState()
         req.state = ToolUseContext(
-            bootstrap=BootstrapConfig(workspace_root="/tmp/workspace", model_name="gpt-test"),
+            bootstrap=BootstrapConfig(workspace_root=Path("/tmp/workspace"), model_name="gpt-test"),
             get_app_state=app_state.get_state,
             set_app_state=app_state.set_state,
         )
@@ -2036,7 +2064,7 @@ class TestToolRunnerErrorNormalization:
         req = _make_tool_call_request("NeedsCtx", {})
         app_state = AppState()
         req.state = ToolUseContext(
-            bootstrap=BootstrapConfig(workspace_root="/tmp/workspace", model_name="MODEL_X"),
+            bootstrap=BootstrapConfig(workspace_root=Path("/tmp/workspace"), model_name="MODEL_X"),
             get_app_state=app_state.get_state,
             set_app_state=app_state.set_state,
         )
@@ -2139,7 +2167,9 @@ class TestToolSearchService:
         reg = ToolRegistry()
         ToolSearchService(reg)
 
-        schema = reg.get("tool_search").get_schema()
+        entry = reg.get("tool_search")
+        assert entry is not None
+        schema = entry.get_schema()
 
         assert "deferred" in schema["description"].lower()
         assert "deferred" in schema["parameters"]["properties"]["query"]["description"].lower()
@@ -2147,7 +2177,7 @@ class TestToolSearchService:
     def _make_ctx(self) -> ToolUseContext:
         app = AppState()
         return ToolUseContext(
-            bootstrap=BootstrapConfig(workspace_root="/tmp", model_name="test-model"),
+            bootstrap=BootstrapConfig(workspace_root=Path("/tmp"), model_name="test-model"),
             get_app_state=lambda: app,
             set_app_state=lambda fn: None,
         )
@@ -2173,7 +2203,7 @@ class TestToolSearchService:
 
         result = runner.wrap_tool_call(req, lambda r: MagicMock())
 
-        payload = json.loads(result.content)
+        payload = json.loads(_require_text_content(result.content))
         assert len(payload) == 5
 
     def test_tool_search_excludes_inline_tools(self):
@@ -2206,7 +2236,7 @@ class TestToolSearchService:
 
         result = runner.wrap_tool_call(req, lambda r: MagicMock())
 
-        assert json.loads(result.content) == []
+        assert json.loads(_require_text_content(result.content)) == []
         assert ctx.discovered_tool_names == set()
 
     def test_tool_search_exact_select_fails_loudly_for_inline_tools(self):
@@ -2238,10 +2268,11 @@ class TestToolSearchService:
 
         result = runner.wrap_tool_call(req, lambda r: MagicMock())
 
-        assert "<tool_use_error>" in result.content
-        assert "Read" in result.content
-        assert "inline" in result.content.lower()
-        assert "TaskCreate" not in result.content
+        text = _require_text_content(result.content)
+        assert "<tool_use_error>" in text
+        assert "Read" in text
+        assert "inline" in text.lower()
+        assert "TaskCreate" not in text
 
 
 class TestWebToolRegistration:
@@ -2249,8 +2280,12 @@ class TestWebToolRegistration:
         reg = ToolRegistry()
         WebService(registry=reg)
 
-        assert reg.get("WebSearch").mode == ToolMode.DEFERRED
-        assert reg.get("WebFetch").mode == ToolMode.DEFERRED
+        web_search = reg.get("WebSearch")
+        web_fetch = reg.get("WebFetch")
+        assert web_search is not None
+        assert web_fetch is not None
+        assert web_search.mode == ToolMode.DEFERRED
+        assert web_fetch.mode == ToolMode.DEFERRED
         assert [schema["name"] for schema in reg.get_inline_schemas()] == []
 
     @pytest.mark.asyncio
@@ -2269,7 +2304,9 @@ class TestWebToolRegistration:
 
         service._searchers = [("fake", _FakeSearcher())]
 
-        schema = reg.get("WebSearch").schema
+        entry = reg.get("WebSearch")
+        assert entry is not None
+        schema = entry.get_schema()
         props = schema["parameters"]["properties"]
         assert "allowed_domains" in props
         assert "blocked_domains" in props
@@ -2290,7 +2327,9 @@ class TestWebToolRegistration:
         reg = ToolRegistry()
         WebService(registry=reg)
 
-        schema = reg.get("WebSearch").get_schema()
+        entry = reg.get("WebSearch")
+        assert entry is not None
+        schema = entry.get_schema()
         props = schema["parameters"]["properties"]
 
         assert props["query"]["minLength"] == 1
@@ -2315,7 +2354,9 @@ class TestWebToolRegistration:
         reg = ToolRegistry()
         WebService(registry=reg)
 
-        schema = reg.get("WebFetch").get_schema()
+        entry = reg.get("WebFetch")
+        assert entry is not None
+        schema = entry.get_schema()
         props = schema["parameters"]["properties"]
 
         assert props["url"]["minLength"] == 1
@@ -2328,7 +2369,9 @@ class TestWebToolRegistration:
             workspace_root=tmp_path,
         )
 
-        schema = reg.get("list_dir").schema
+        entry = reg.get("list_dir")
+        assert entry is not None
+        schema = entry.get_schema()
         props = schema["parameters"]["properties"]
         assert "path" in props
         assert "directory_path" not in props
@@ -2341,7 +2384,9 @@ class TestWebToolRegistration:
             workspace_root=tmp_path,
         )
 
-        schema = reg.get("Bash").get_schema()
+        entry = reg.get("Bash")
+        assert entry is not None
+        schema = entry.get_schema()
         props = schema["parameters"]["properties"]
 
         assert props["command"]["minLength"] == 1

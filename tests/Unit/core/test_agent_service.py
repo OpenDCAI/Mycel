@@ -6,10 +6,12 @@ import asyncio
 import json
 from pathlib import Path
 from types import SimpleNamespace
+from typing import Any
 from unittest.mock import AsyncMock
 
 import pytest
 
+from core.agents.registry import AgentEntry, AgentRegistry
 from core.agents.service import (
     AGENT_DISALLOWED,
     AGENT_SCHEMA,
@@ -20,7 +22,8 @@ from core.agents.service import (
     _BashBackgroundRun,
     _RunningTask,
 )
-from core.runtime.registry import ToolRegistry
+from core.runtime.middleware import ToolCallRequest
+from core.runtime.registry import ToolEntry, ToolRegistry
 from core.runtime.runner import ToolRunner
 from core.runtime.state import AppState, BootstrapConfig, ToolUseContext
 from sandbox.manager import SandboxManager
@@ -28,14 +31,19 @@ from sandbox.providers.local import LocalSessionProvider
 from sandbox.thread_context import get_current_thread_id, set_current_messages, set_current_thread_id
 
 
-class _FakeRegistry:
-    def register(self, entry):
-        self.last_entry = entry
-
-
-class _FakeAgentRegistry:
+class _CapturingRegistry(ToolRegistry):
     def __init__(self) -> None:
-        self._latest_by_name_parent: dict[tuple[str, str | None], object] = {}
+        super().__init__()
+        self.last_entry: ToolEntry | None = None
+
+    def register(self, entry: ToolEntry) -> None:
+        self.last_entry = entry
+        super().register(entry)
+
+
+class _FakeAgentRegistry(AgentRegistry):
+    def __init__(self) -> None:
+        self._latest_by_name_parent: dict[tuple[str, str | None], AgentEntry] = {}
 
     async def register(self, entry):
         self.entry = entry
@@ -171,8 +179,21 @@ def _make_parent_context(tmp_path: Path, model_name: str = "gpt-parent") -> Tool
     )
 
 
+def _make_tool_request(
+    name: str,
+    args: dict[str, object],
+    *,
+    state: ToolUseContext,
+    call_id: str = "tc-1",
+) -> ToolCallRequest:
+    return ToolCallRequest(
+        tool_call={"name": name, "args": args, "id": call_id},
+        state=state,
+    )
+
+
 def _make_service(tmp_path: Path, **kwargs) -> AgentService:
-    tool_registry = kwargs.pop("tool_registry", None) or _FakeRegistry()
+    tool_registry = kwargs.pop("tool_registry", None) or _CapturingRegistry()
     agent_registry = kwargs.pop("agent_registry", None) or _FakeAgentRegistry()
     model_name = kwargs.pop("model_name", "gpt-test")
     return AgentService(
@@ -184,8 +205,9 @@ def _make_service(tmp_path: Path, **kwargs) -> AgentService:
     )
 
 
-def _agent_tool_json(result) -> dict:
+def _agent_tool_json(result) -> dict[str, Any]:
     content = getattr(result, "content", result)
+    assert isinstance(content, str)
     return json.loads(content)
 
 
@@ -404,7 +426,7 @@ async def test_run_agent_uses_injected_child_agent_factory(tmp_path):
 
 @pytest.mark.asyncio
 async def test_agent_tool_fork_context_uses_parent_tool_context_messages(monkeypatch, tmp_path):
-    captured: dict[str, object] = {}
+    captured: dict[str, Any] = {}
 
     class _CapturingChild(_FakeChildAgent):
         async def _astream(self, payload, *args, **kwargs):
@@ -421,12 +443,9 @@ async def test_agent_tool_fork_context_uses_parent_tool_context_messages(monkeyp
     registry = ToolRegistry()
     _make_service(tmp_path, tool_registry=registry)
     runner = ToolRunner(registry=registry)
-    request = SimpleNamespace(
-        tool_call={
-            "name": "Agent",
-            "args": {"prompt": "inspect", "description": "inspect workspace", "fork_context": True},
-            "id": "tc-1",
-        },
+    request = _make_tool_request(
+        "Agent",
+        {"prompt": "inspect", "description": "inspect workspace", "fork_context": True},
         state=_make_parent_context(tmp_path),
     )
 
@@ -449,7 +468,7 @@ async def test_agent_tool_fork_context_uses_parent_tool_context_messages(monkeyp
 
 @pytest.mark.asyncio
 async def test_agent_tool_fork_context_treats_empty_parent_messages_as_authoritative(monkeypatch, tmp_path):
-    captured: dict[str, object] = {}
+    captured: dict[str, Any] = {}
 
     class _CapturingChild(_FakeChildAgent):
         async def _astream(self, payload, *args, **kwargs):
@@ -469,12 +488,9 @@ async def test_agent_tool_fork_context_treats_empty_parent_messages_as_authorita
     runner = ToolRunner(registry=registry)
     parent_context = _make_parent_context(tmp_path)
     parent_context.messages = []
-    request = SimpleNamespace(
-        tool_call={
-            "name": "Agent",
-            "args": {"prompt": "inspect", "description": "inspect workspace", "fork_context": True},
-            "id": "tc-1",
-        },
+    request = _make_tool_request(
+        "Agent",
+        {"prompt": "inspect", "description": "inspect workspace", "fork_context": True},
         state=parent_context,
     )
 
@@ -534,6 +550,7 @@ async def test_run_agent_rolls_child_bootstrap_costs_back_into_parent_bootstrap(
     assert result == "(Agent completed with no text output)"
     assert created[0]._bootstrap.total_cost_usd == 9.75
     assert created[0]._bootstrap.total_tool_duration_ms == 222
+    assert service._parent_bootstrap is not None
     assert service._parent_bootstrap.total_cost_usd == 9.75
     assert service._parent_bootstrap.total_tool_duration_ms == 222
 
@@ -544,6 +561,7 @@ async def test_run_agent_preserves_concurrent_parent_and_child_bootstrap_growth(
 
     class _ConcurrentCostChild(_FakeChildAgent):
         async def _astream(self, *args, **kwargs):
+            assert service._parent_bootstrap is not None
             service._parent_bootstrap.total_cost_usd = 2.0
             service._parent_bootstrap.total_tool_duration_ms = 20
             self._bootstrap.total_cost_usd = 1.5
@@ -599,8 +617,9 @@ async def test_agent_tool_live_runner_path_passes_isolated_tool_context_to_child
     _make_service(tmp_path, tool_registry=registry)
     runner = ToolRunner(registry=registry)
     parent_context = _make_parent_context(tmp_path)
-    request = SimpleNamespace(
-        tool_call={"name": "Agent", "args": {"prompt": "do work", "description": "do work"}, "id": "tc-1"},
+    request = _make_tool_request(
+        "Agent",
+        {"prompt": "do work", "description": "do work"},
         state=parent_context,
     )
 
@@ -616,7 +635,7 @@ async def test_agent_tool_live_runner_path_passes_isolated_tool_context_to_child
 
 @pytest.mark.asyncio
 async def test_run_agent_without_fork_context_does_not_inject_parent_messages(monkeypatch, tmp_path):
-    captured: dict[str, object] = {}
+    captured: dict[str, Any] = {}
 
     class _CapturingChild(_FakeChildAgent):
         async def _astream(self, payload, *args, **kwargs):
@@ -692,7 +711,7 @@ async def test_run_agent_child_tool_context_deep_clones_read_file_state(monkeypa
 
 @pytest.mark.asyncio
 async def test_agent_tool_live_runner_path_applies_role_specific_tool_filters(monkeypatch, tmp_path):
-    captured: dict[str, object] = {}
+    captured: dict[str, Any] = {}
 
     def fake_create_leon_agent(*, model_name, workspace_root, **kwargs):
         captured["model_name"] = model_name
@@ -705,12 +724,9 @@ async def test_agent_tool_live_runner_path_applies_role_specific_tool_filters(mo
     registry = ToolRegistry()
     _make_service(tmp_path, tool_registry=registry, model_name="gpt-parent")
     runner = ToolRunner(registry=registry)
-    request = SimpleNamespace(
-        tool_call={
-            "name": "Agent",
-            "args": {"prompt": "inspect", "description": "inspect workspace", "subagent_type": "explore"},
-            "id": "tc-1",
-        },
+    request = _make_tool_request(
+        "Agent",
+        {"prompt": "inspect", "description": "inspect workspace", "subagent_type": "explore"},
         state=_make_parent_context(tmp_path, model_name="gpt-parent"),
     )
 
@@ -731,7 +747,7 @@ async def test_agent_tool_model_priority_prefers_env_over_tool_frontmatter_and_p
         "---\nname: explore\nmodel: frontmatter-model\ntools:\n  - Read\n---\nfrontmatter prompt\n",
         encoding="utf-8",
     )
-    captured: dict[str, object] = {}
+    captured: dict[str, Any] = {}
 
     def fake_create_leon_agent(*, model_name, workspace_root, **kwargs):
         captured["model_name"] = model_name
@@ -744,16 +760,13 @@ async def test_agent_tool_model_priority_prefers_env_over_tool_frontmatter_and_p
     registry = ToolRegistry()
     _make_service(tmp_path, tool_registry=registry, model_name="parent-model")
     runner = ToolRunner(registry=registry)
-    request = SimpleNamespace(
-        tool_call={
-            "name": "Agent",
-            "args": {
-                "prompt": "inspect",
-                "description": "inspect workspace",
-                "subagent_type": "explore",
-                "model": "tool-model",
-            },
-            "id": "tc-1",
+    request = _make_tool_request(
+        "Agent",
+        {
+            "prompt": "inspect",
+            "description": "inspect workspace",
+            "subagent_type": "explore",
+            "model": "tool-model",
         },
         state=_make_parent_context(tmp_path, model_name="parent-model"),
     )
@@ -772,7 +785,7 @@ async def test_agent_tool_model_priority_prefers_tool_over_frontmatter_and_paren
         "---\nname: explore\nmodel: frontmatter-model\ntools:\n  - Read\n---\nfrontmatter prompt\n",
         encoding="utf-8",
     )
-    captured: dict[str, object] = {}
+    captured: dict[str, Any] = {}
 
     def fake_create_leon_agent(*, model_name, workspace_root, **kwargs):
         captured["model_name"] = model_name
@@ -784,16 +797,13 @@ async def test_agent_tool_model_priority_prefers_tool_over_frontmatter_and_paren
     registry = ToolRegistry()
     _make_service(tmp_path, tool_registry=registry, model_name="parent-model")
     runner = ToolRunner(registry=registry)
-    request = SimpleNamespace(
-        tool_call={
-            "name": "Agent",
-            "args": {
-                "prompt": "inspect",
-                "description": "inspect workspace",
-                "subagent_type": "explore",
-                "model": "tool-model",
-            },
-            "id": "tc-1",
+    request = _make_tool_request(
+        "Agent",
+        {
+            "prompt": "inspect",
+            "description": "inspect workspace",
+            "subagent_type": "explore",
+            "model": "tool-model",
         },
         state=_make_parent_context(tmp_path, model_name="parent-model"),
     )
@@ -806,7 +816,7 @@ async def test_agent_tool_model_priority_prefers_tool_over_frontmatter_and_paren
 
 @pytest.mark.asyncio
 async def test_agent_tool_model_default_literal_inherits_parent_model(monkeypatch, tmp_path):
-    captured: dict[str, object] = {}
+    captured: dict[str, Any] = {}
 
     def fake_create_leon_agent(*, model_name, workspace_root, **kwargs):
         captured["model_name"] = model_name
@@ -818,16 +828,13 @@ async def test_agent_tool_model_default_literal_inherits_parent_model(monkeypatc
     registry = ToolRegistry()
     _make_service(tmp_path, tool_registry=registry, model_name="parent-model")
     runner = ToolRunner(registry=registry)
-    request = SimpleNamespace(
-        tool_call={
-            "name": "Agent",
-            "args": {
-                "prompt": "inspect",
-                "description": "inspect workspace",
-                "subagent_type": "explore",
-                "model": "default",
-            },
-            "id": "tc-1",
+    request = _make_tool_request(
+        "Agent",
+        {
+            "prompt": "inspect",
+            "description": "inspect workspace",
+            "subagent_type": "explore",
+            "model": "default",
         },
         state=_make_parent_context(tmp_path, model_name="parent-model"),
     )
@@ -840,7 +847,7 @@ async def test_agent_tool_model_default_literal_inherits_parent_model(monkeypatc
 
 @pytest.mark.asyncio
 async def test_agent_tool_model_inherit_literal_inherits_parent_model(monkeypatch, tmp_path):
-    captured: dict[str, object] = {}
+    captured: dict[str, Any] = {}
 
     def fake_create_leon_agent(*, model_name, workspace_root, **kwargs):
         captured["model_name"] = model_name
@@ -852,16 +859,13 @@ async def test_agent_tool_model_inherit_literal_inherits_parent_model(monkeypatc
     registry = ToolRegistry()
     _make_service(tmp_path, tool_registry=registry, model_name="parent-model")
     runner = ToolRunner(registry=registry)
-    request = SimpleNamespace(
-        tool_call={
-            "name": "Agent",
-            "args": {
-                "prompt": "inspect",
-                "description": "inspect workspace",
-                "subagent_type": "explore",
-                "model": "inherit",
-            },
-            "id": "tc-1",
+    request = _make_tool_request(
+        "Agent",
+        {
+            "prompt": "inspect",
+            "description": "inspect workspace",
+            "subagent_type": "explore",
+            "model": "inherit",
         },
         state=_make_parent_context(tmp_path, model_name="parent-model"),
     )
@@ -874,7 +878,7 @@ async def test_agent_tool_model_inherit_literal_inherits_parent_model(monkeypatc
 
 @pytest.mark.asyncio
 async def test_agent_tool_inherited_default_bootstrap_model_uses_parent_service_model(monkeypatch, tmp_path):
-    captured: dict[str, object] = {}
+    captured: dict[str, Any] = {}
 
     def fake_create_leon_agent(*, model_name, workspace_root, **kwargs):
         captured["model_name"] = model_name
@@ -886,12 +890,9 @@ async def test_agent_tool_inherited_default_bootstrap_model_uses_parent_service_
     registry = ToolRegistry()
     _make_service(tmp_path, tool_registry=registry, model_name="parent-service-model")
     runner = ToolRunner(registry=registry)
-    request = SimpleNamespace(
-        tool_call={
-            "name": "Agent",
-            "args": {"prompt": "inspect", "description": "inspect workspace", "subagent_type": "explore"},
-            "id": "tc-1",
-        },
+    request = _make_tool_request(
+        "Agent",
+        {"prompt": "inspect", "description": "inspect workspace", "subagent_type": "explore"},
         state=_make_parent_context(tmp_path, model_name="default"),
     )
 
@@ -909,7 +910,7 @@ async def test_agent_tool_model_priority_prefers_frontmatter_over_parent(monkeyp
         "---\nname: explore\nmodel: frontmatter-model\ntools:\n  - Read\n---\nfrontmatter prompt\n",
         encoding="utf-8",
     )
-    captured: dict[str, object] = {}
+    captured: dict[str, Any] = {}
 
     def fake_create_leon_agent(*, model_name, workspace_root, **kwargs):
         captured["model_name"] = model_name
@@ -921,12 +922,9 @@ async def test_agent_tool_model_priority_prefers_frontmatter_over_parent(monkeyp
     registry = ToolRegistry()
     _make_service(tmp_path, tool_registry=registry, model_name="parent-model")
     runner = ToolRunner(registry=registry)
-    request = SimpleNamespace(
-        tool_call={
-            "name": "Agent",
-            "args": {"prompt": "inspect", "description": "inspect workspace", "subagent_type": "explore"},
-            "id": "tc-1",
-        },
+    request = _make_tool_request(
+        "Agent",
+        {"prompt": "inspect", "description": "inspect workspace", "subagent_type": "explore"},
         state=_make_parent_context(tmp_path, model_name="parent-model"),
     )
 
@@ -938,7 +936,7 @@ async def test_agent_tool_model_priority_prefers_frontmatter_over_parent(monkeyp
 
 @pytest.mark.asyncio
 async def test_agent_tool_model_priority_inherits_parent_when_no_env_tool_or_frontmatter(monkeypatch, tmp_path):
-    captured: dict[str, object] = {}
+    captured: dict[str, Any] = {}
 
     def fake_create_leon_agent(*, model_name, workspace_root, **kwargs):
         captured["model_name"] = model_name
@@ -950,12 +948,9 @@ async def test_agent_tool_model_priority_inherits_parent_when_no_env_tool_or_fro
     registry = ToolRegistry()
     _make_service(tmp_path, tool_registry=registry, model_name="service-model")
     runner = ToolRunner(registry=registry)
-    request = SimpleNamespace(
-        tool_call={
-            "name": "Agent",
-            "args": {"prompt": "inspect", "description": "inspect workspace", "subagent_type": "explore"},
-            "id": "tc-1",
-        },
+    request = _make_tool_request(
+        "Agent",
+        {"prompt": "inspect", "description": "inspect workspace", "subagent_type": "explore"},
         state=_make_parent_context(tmp_path, model_name="parent-model"),
     )
 
@@ -1092,7 +1087,9 @@ async def test_run_agent_reuses_parent_lease_for_child_thread_terminal(monkeypat
 
     class _LeaseCapturingChild(_FakeChildAgent):
         async def _astream(self, *args, **kwargs):
-            child_capability = manager.get_sandbox(get_current_thread_id())
+            current_thread_id = get_current_thread_id()
+            assert current_thread_id is not None
+            child_capability = manager.get_sandbox(current_thread_id)
             observed["child_terminal_id"] = child_capability._session.terminal.terminal_id
             observed["child_lease_id"] = child_capability._session.lease.lease_id
             if False:
@@ -1275,7 +1272,7 @@ async def test_handle_agent_reuses_existing_completed_child_thread_for_same_pare
         }
     )
     registry = _FakeAgentRegistry()
-    registry._latest_by_name_parent[("worker-1", "parent-thread")] = SimpleNamespace(
+    registry._latest_by_name_parent[("worker-1", "parent-thread")] = AgentEntry(
         agent_id="old-agent",
         name="worker-1",
         thread_id="subagent-existing",
@@ -1316,12 +1313,9 @@ async def test_agent_tool_blocking_result_preserves_child_identity_metadata(monk
     registry = ToolRegistry()
     _make_service(tmp_path, tool_registry=registry)
     runner = ToolRunner(registry=registry)
-    request = SimpleNamespace(
-        tool_call={
-            "name": "Agent",
-            "args": {"prompt": "inspect", "description": "inspect workspace"},
-            "id": "tc-1",
-        },
+    request = _make_tool_request(
+        "Agent",
+        {"prompt": "inspect", "description": "inspect workspace"},
         state=_make_parent_context(tmp_path),
     )
 
@@ -1334,7 +1328,7 @@ async def test_agent_tool_blocking_result_preserves_child_identity_metadata(monk
 
 @pytest.mark.asyncio
 async def test_run_agent_uses_live_child_thread_bridge_when_web_app_present(monkeypatch, tmp_path):
-    captured: dict[str, object] = {}
+    captured: dict[str, Any] = {}
 
     async def fake_run_child_thread_live(agent, thread_id, prompt, app, *, input_messages):
         captured["agent"] = agent
@@ -1378,7 +1372,7 @@ async def test_run_agent_uses_live_child_thread_bridge_when_web_app_present(monk
 
 @pytest.mark.asyncio
 async def test_run_agent_normalizes_workspace_suffix_in_child_prompt(monkeypatch, tmp_path):
-    captured: dict[str, object] = {}
+    captured: dict[str, Any] = {}
 
     async def fake_run_child_thread_live(agent, thread_id, prompt, app, *, input_messages):
         captured["prompt"] = prompt
@@ -1435,7 +1429,7 @@ async def test_ask_user_question_requests_structured_question_payload(tmp_path):
     _make_service(tmp_path, tool_registry=registry)
     runner = ToolRunner(registry=registry)
     app_state = AppState()
-    captured: dict[str, object] = {}
+    captured: dict[str, Any] = {}
 
     def request_permission(name, args, context, request, message):
         captured["name"] = name
@@ -1443,22 +1437,19 @@ async def test_ask_user_question_requests_structured_question_payload(tmp_path):
         captured["message"] = message
         return {"request_id": "ask-1"}
 
-    request = SimpleNamespace(
-        tool_call={
-            "name": "AskUserQuestion",
-            "args": {
-                "questions": [
-                    {
-                        "header": "Color",
-                        "question": "Which color should I use?",
-                        "options": [
-                            {"label": "Blue", "description": "Use blue"},
-                            {"label": "Green", "description": "Use green"},
-                        ],
-                    }
-                ]
-            },
-            "id": "tc-1",
+    request = _make_tool_request(
+        "AskUserQuestion",
+        {
+            "questions": [
+                {
+                    "header": "Color",
+                    "question": "Which color should I use?",
+                    "options": [
+                        {"label": "Blue", "description": "Use blue"},
+                        {"label": "Green", "description": "Use green"},
+                    ],
+                }
+            ]
         },
         state=ToolUseContext(
             bootstrap=BootstrapConfig(workspace_root=tmp_path, model_name="gpt-test"),
