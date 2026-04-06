@@ -63,7 +63,8 @@ async def create_member(
     agent_config_repo = getattr(request.app.state, "agent_config_repo", None)
     return await asyncio.to_thread(
         member_service.create_member,
-        req.name, req.description,
+        req.name,
+        req.description,
         owner_user_id=user_id,
         member_repo=member_repo,
         agent_config_repo=agent_config_repo,
@@ -109,7 +110,8 @@ async def update_member_config(
     agent_config_repo = getattr(request.app.state, "agent_config_repo", None)
     item = await asyncio.to_thread(
         member_service.update_member_config,
-        member_id, req.model_dump(),
+        member_id,
+        req.model_dump(),
         agent_config_repo=agent_config_repo,
     )
     if not item:
@@ -134,7 +136,8 @@ async def publish_member(
     agent_config_repo = getattr(request.app.state, "agent_config_repo", None)
     item = await asyncio.to_thread(
         member_service.publish_member,
-        member_id, req.bump_type,
+        member_id,
+        req.bump_type,
         agent_config_repo=agent_config_repo,
     )
     if not item:

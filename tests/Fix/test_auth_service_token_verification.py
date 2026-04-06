@@ -100,7 +100,6 @@ def _service(
 ) -> AuthService:
     return AuthService(
         members=member_repo or SimpleNamespace(),
-        accounts=SimpleNamespace(),
         supabase_client=supabase_client,
         supabase_auth_client=supabase_auth_client,
         supabase_auth_client_factory=supabase_auth_client_factory,
