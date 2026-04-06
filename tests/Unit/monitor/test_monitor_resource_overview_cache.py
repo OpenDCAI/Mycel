@@ -2,7 +2,7 @@ from backend.web.services import resource_cache as cache
 
 
 def test_resource_overview_cache_refresh_adds_metadata(monkeypatch):
-    cache.clear_resource_overview_cache()
+    cache.clear_monitor_resource_overview_cache()
     monkeypatch.setattr(
         cache.resource_service,
         "list_resource_providers",
@@ -18,17 +18,17 @@ def test_resource_overview_cache_refresh_adds_metadata(monkeypatch):
         },
     )
 
-    payload = cache.refresh_resource_overview_sync()
+    payload = cache.refresh_monitor_resource_overview_sync()
     assert payload["summary"]["refresh_status"] == "ok"
     assert payload["summary"]["refresh_error"] is None
     assert payload["summary"]["last_refreshed_at"] == "2026-03-03T00:00:00Z"
 
-    cached = cache.get_resource_overview_snapshot()
+    cached = cache.get_monitor_resource_overview_snapshot()
     assert cached["providers"][0]["id"] == "local"
 
 
 def test_resource_overview_cache_keeps_last_snapshot_on_refresh_error(monkeypatch):
-    cache.clear_resource_overview_cache()
+    cache.clear_monitor_resource_overview_cache()
     monkeypatch.setattr(
         cache.resource_service,
         "list_resource_providers",
@@ -43,20 +43,20 @@ def test_resource_overview_cache_keeps_last_snapshot_on_refresh_error(monkeypatc
             "providers": [{"id": "docker"}],
         },
     )
-    cache.refresh_resource_overview_sync()
+    cache.refresh_monitor_resource_overview_sync()
 
     def _raise():
         raise RuntimeError("probe failed")
 
     monkeypatch.setattr(cache.resource_service, "list_resource_providers", _raise)
-    degraded = cache.refresh_resource_overview_sync()
+    degraded = cache.refresh_monitor_resource_overview_sync()
     assert degraded["providers"][0]["id"] == "docker"
     assert degraded["summary"]["refresh_status"] == "error"
     assert degraded["summary"]["refresh_error"] == "probe failed"
 
 
 def test_resource_overview_cache_refreshes_when_live_session_counts_drift(monkeypatch):
-    cache.clear_resource_overview_cache()
+    cache.clear_monitor_resource_overview_cache()
 
     stale_payload = {
         "summary": {
@@ -95,8 +95,8 @@ def test_resource_overview_cache_refreshes_when_live_session_counts_drift(monkey
     monkeypatch.setattr(cache.resource_service, "list_resource_providers", lambda: next(calls))
     monkeypatch.setattr(cache.resource_service, "visible_resource_session_stats", lambda: {"local": {"sessions": 1, "running": 1}})
 
-    cache.refresh_resource_overview_sync()
-    payload = cache.get_resource_overview_snapshot()
+    cache.refresh_monitor_resource_overview_sync()
+    payload = cache.get_monitor_resource_overview_snapshot()
 
     assert payload["providers"][0]["telemetry"]["running"]["used"] == 1
     assert len(payload["providers"][0]["sessions"]) == 1

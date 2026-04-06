@@ -16,7 +16,7 @@ def test_resources_overview_route_exists() -> None:
 def test_monitor_resources_route_stays_global(monkeypatch) -> None:
     monkeypatch.setattr(
         monitor_router,
-        "get_resource_overview_snapshot",
+        "get_monitor_resource_overview_snapshot",
         lambda: {"summary": {"snapshot_at": "now"}, "providers": [{"id": "global-daytona"}]},
     )
 

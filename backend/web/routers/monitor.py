@@ -8,8 +8,8 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from backend.web.core.dependencies import get_current_user_id
 from backend.web.services import monitor_service
 from backend.web.services.resource_cache import (
-    get_resource_overview_snapshot,
-    refresh_resource_overview_sync,
+    get_monitor_resource_overview_snapshot,
+    refresh_monitor_resource_overview_sync,
 )
 
 router = APIRouter(prefix="/api/monitor")
@@ -66,13 +66,13 @@ def health_snapshot(user_id: Annotated[str, Depends(get_current_user_id)]):
 
 @router.get("/resources")
 def resources_overview(user_id: Annotated[str, Depends(get_current_user_id)]):
-    return get_resource_overview_snapshot()
+    return get_monitor_resource_overview_snapshot()
 
 
 @router.post("/resources/refresh")
 async def resources_refresh(user_id: Annotated[str, Depends(get_current_user_id)]):
     # @@@refresh-off-main-loop - provider I/O stays off event loop to avoid request head-of-line blocking.
-    return await asyncio.to_thread(refresh_resource_overview_sync)
+    return await asyncio.to_thread(refresh_monitor_resource_overview_sync)
 
 
 @router.get("/sandbox/{lease_id}/browse")

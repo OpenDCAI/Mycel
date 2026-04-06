@@ -27,7 +27,7 @@ async def route_message_to_brain(
     ACTIVE → enqueue as steer
     """
     from backend.web.services.agent_pool import get_or_create_agent, resolve_thread_sandbox
-    from backend.web.services.resource_cache import clear_resource_overview_cache
+    from backend.web.services.resource_cache import clear_monitor_resource_overview_cache
     from backend.web.services.streaming_service import start_agent_run
 
     sandbox_type = resolve_thread_sandbox(app, thread_id)
@@ -78,7 +78,7 @@ async def route_message_to_brain(
         if attachments:
             meta["attachments"] = attachments
         run_id = start_agent_run(agent, thread_id, run_content, app, message_metadata=meta)
-        # @@@resource-cache-run-start - a fresh run can create or resume a lease immediately.
-        # Drop the cached resource snapshot so the next Resources read reflects the live topology.
-        clear_resource_overview_cache()
+        # @@@monitor-resource-cache-run-start - a fresh run can create or resume a lease immediately.
+        # Drop the cached monitor snapshot so the next /api/monitor/resources read reflects the live topology.
+        clear_monitor_resource_overview_cache()
     return {"status": "started", "routing": "direct", "run_id": run_id, "thread_id": thread_id}

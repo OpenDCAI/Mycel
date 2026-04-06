@@ -10,7 +10,7 @@ from psycopg import AsyncConnection
 
 from backend.web.services.event_buffer import RunEventBuffer, ThreadEventBuffer
 from backend.web.services.idle_reaper import idle_reaper_loop
-from backend.web.services.resource_cache import resource_overview_refresh_loop
+from backend.web.services.resource_cache import monitor_resource_overview_refresh_loop
 from core.runtime.middleware.queue import MessageQueueManager
 
 
@@ -157,7 +157,7 @@ async def lifespan(app: FastAPI):
         app.state.idle_reaper_task = asyncio.create_task(idle_reaper_loop(app))
 
         # Start resource overview refresh loop
-        app.state.monitor_resources_task = asyncio.create_task(resource_overview_refresh_loop())
+        app.state.monitor_resources_task = asyncio.create_task(monitor_resource_overview_refresh_loop())
 
         # Start cron scheduler
         from backend.web.services.cron_service import CronService

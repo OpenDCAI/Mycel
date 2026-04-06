@@ -30,7 +30,7 @@ from backend.web.services import sandbox_service
 from backend.web.services.agent_pool import get_or_create_agent, resolve_thread_sandbox
 from backend.web.services.event_buffer import ThreadEventBuffer
 from backend.web.services.file_channel_service import get_file_channel_source
-from backend.web.services.resource_cache import clear_resource_overview_cache
+from backend.web.services.resource_cache import clear_monitor_resource_overview_cache
 from backend.web.services.sandbox_service import destroy_thread_resources_sync, init_providers_and_managers
 from backend.web.services.streaming_service import (
     get_or_create_thread_buffer,
@@ -76,9 +76,9 @@ def _is_internal_child_thread(thread_id: str) -> bool:
 
 
 def _invalidate_resource_overview_cache() -> None:
-    # @@@resource-overview-invalidation - thread/lease mutations change the monitor topology immediately.
+    # @@@monitor-resource-overview-invalidation - thread/lease mutations change the monitor topology immediately.
     # Clear the overview snapshot so the next /api/monitor/resources read reflects the fresh binding/state.
-    clear_resource_overview_cache()
+    clear_monitor_resource_overview_cache()
 
 
 def _find_owned_member(app: Any, member_id: str, owner_user_id: str) -> Any | None:

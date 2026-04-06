@@ -18,7 +18,7 @@ _snapshot_lock = threading.Lock()
 _snapshot_cache: dict[str, Any] | None = None
 
 
-def clear_resource_overview_cache() -> None:
+def clear_monitor_resource_overview_cache() -> None:
     with _snapshot_lock:
         global _snapshot_cache
         _snapshot_cache = None
@@ -72,8 +72,8 @@ def _snapshot_drifted_from_live_sessions(snapshot: dict[str, Any]) -> bool:
     return False
 
 
-def refresh_resource_overview_sync() -> dict[str, Any]:
-    """Refresh cached overview snapshot and return latest payload."""
+def refresh_monitor_resource_overview_sync() -> dict[str, Any]:
+    """Refresh cached monitor overview snapshot and return latest payload."""
     global _snapshot_cache
     started = time.perf_counter()
     try:
@@ -96,8 +96,8 @@ def refresh_resource_overview_sync() -> dict[str, Any]:
         return degraded
 
 
-def get_resource_overview_snapshot() -> dict[str, Any]:
-    """Return cached snapshot; perform one synchronous refresh on cold start."""
+def get_monitor_resource_overview_snapshot() -> dict[str, Any]:
+    """Return cached monitor snapshot; perform one synchronous refresh on cold start."""
     with _snapshot_lock:
         cached = copy.deepcopy(_snapshot_cache)
     if cached is not None:
@@ -105,14 +105,14 @@ def get_resource_overview_snapshot() -> dict[str, Any]:
         # starts; if the cached Resources snapshot no longer matches visible lease/session
         # counts, refresh synchronously instead of serving a stale zero-sandbox card.
         if _snapshot_drifted_from_live_sessions(cached):
-            return refresh_resource_overview_sync()
+            return refresh_monitor_resource_overview_sync()
         return cached
     # @@@cold-start-cache-fill - route fallback fills cache once to keep first call deterministic.
-    return refresh_resource_overview_sync()
+    return refresh_monitor_resource_overview_sync()
 
 
-async def resource_overview_refresh_loop() -> None:
-    """Continuously refresh resource overview snapshot."""
+async def monitor_resource_overview_refresh_loop() -> None:
+    """Continuously refresh the global monitor resource snapshot."""
     interval_sec = _read_refresh_interval_sec()
     while True:
         # @@@delayed-first-probe - avoid probe I/O at startup; keeps app boot and testclient deterministic.
@@ -131,7 +131,7 @@ async def resource_overview_refresh_loop() -> None:
 
         try:
             # @@@refresh-loop-timebox - provider SDK calls may block; timebox to keep shutdown responsive.
-            await asyncio.wait_for(asyncio.to_thread(refresh_resource_overview_sync), timeout=10.0)
+            await asyncio.wait_for(asyncio.to_thread(refresh_monitor_resource_overview_sync), timeout=10.0)
         except asyncio.CancelledError:
             raise
         except TimeoutError:
