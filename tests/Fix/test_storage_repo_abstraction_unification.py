@@ -11,6 +11,7 @@ from core.runtime.registry import ToolRegistry
 from core.tools.task.service import TaskService
 from sandbox import resource_snapshot as resource_snapshot_module
 from sandbox.sync.state import SyncState
+from storage import runtime as storage_runtime
 from storage.container import StorageContainer
 
 
@@ -305,3 +306,22 @@ def test_resource_snapshot_helpers_default_to_storage_runtime_container(monkeypa
         }
     ]
     assert snapshots == {"lease-1": {"lease_id": "lease-1", "cpu_used": 1.0}}
+
+
+def test_build_resource_snapshot_repo_defaults_to_web_supabase_factory(monkeypatch: pytest.MonkeyPatch) -> None:
+    recorded: dict[str, object] = {}
+
+    class _FakeRuntimeContainer:
+        def resource_snapshot_repo(self) -> object:
+            return object()
+
+    def _fake_build_storage_container(**kwargs: object) -> _FakeRuntimeContainer:
+        recorded.update(kwargs)
+        return _FakeRuntimeContainer()
+
+    monkeypatch.delenv("LEON_SUPABASE_CLIENT_FACTORY", raising=False)
+    monkeypatch.setattr("storage.runtime.build_storage_container", _fake_build_storage_container)
+
+    storage_runtime.build_resource_snapshot_repo()
+
+    assert recorded["supabase_client_factory"] == "backend.web.core.supabase_factory:create_supabase_client"

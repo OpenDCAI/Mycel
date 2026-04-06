@@ -9,6 +9,8 @@ from typing import Any
 
 from storage.container import StorageContainer
 
+_WEB_SUPABASE_CLIENT_FACTORY = "backend.web.core.supabase_factory:create_supabase_client"
+
 
 def build_storage_container(
     *,
@@ -92,7 +94,7 @@ def build_resource_snapshot_repo(
 ):
     return build_storage_container(
         supabase_client=supabase_client,
-        supabase_client_factory=supabase_client_factory,
+        supabase_client_factory=supabase_client_factory or _WEB_SUPABASE_CLIENT_FACTORY,
         **kwargs,
     ).resource_snapshot_repo()
 
