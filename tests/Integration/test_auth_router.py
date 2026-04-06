@@ -129,6 +129,96 @@ async def test_login_maps_value_error_to_unauthorized():
     assert "Invalid username or password" in str(exc_info.value.detail)
 
 
+@pytest.mark.asyncio
+async def test_call_auth_service_returns_service_result():
+    service = _FakeAuthService()
+    app = SimpleNamespace(state=SimpleNamespace(auth_service=service))
+
+    result = await auth_router._call_auth_service(
+        app,
+        400,
+        "verify_register_otp",
+        "fresh@example.com",
+        "123456",
+    )
+
+    assert result == {"temp_token": "temp-otp"}
+    assert service.verify_otp_calls == [("fresh@example.com", "123456")]
+
+
+@pytest.mark.asyncio
+async def test_call_auth_service_maps_value_error_to_given_status():
+    service = _FakeAuthService()
+    service.complete_register_error = ValueError("邀请码无效")
+    app = SimpleNamespace(state=SimpleNamespace(auth_service=service))
+
+    with pytest.raises(HTTPException) as exc_info:
+        await auth_router._call_auth_service(
+            app,
+            400,
+            "complete_register",
+            "temp-otp",
+            "invite-1",
+        )
+
+    assert exc_info.value.status_code == 400
+    assert exc_info.value.detail == "邀请码无效"
+
+
+@pytest.mark.asyncio
+async def test_send_otp_uses_auth_router_helper(monkeypatch: pytest.MonkeyPatch):
+    app = SimpleNamespace(state=SimpleNamespace(auth_service=_FakeAuthService()))
+    calls: list[tuple[object, int, str, tuple[object, ...]]] = []
+
+    async def _fake_call_auth_service(app_obj, status_code: int, method_name: str, *args: object):
+        calls.append((app_obj, status_code, method_name, args))
+        return None
+
+    monkeypatch.setattr(auth_router, "_call_auth_service", _fake_call_auth_service)
+
+    result = await auth_router.send_otp(
+        auth_router.SendOtpRequest(email="fresh@example.com", password="pass1234", invite_code="invite-1"),
+        app,
+    )
+
+    assert result == {"ok": True}
+    assert calls == [
+        (
+            app,
+            400,
+            "send_otp",
+            ("fresh@example.com", "pass1234", "invite-1"),
+        )
+    ]
+
+
+@pytest.mark.asyncio
+async def test_login_uses_auth_router_helper(monkeypatch: pytest.MonkeyPatch):
+    app = SimpleNamespace(state=SimpleNamespace(auth_service=_FakeAuthService()))
+    calls: list[tuple[object, int, str, tuple[object, ...]]] = []
+
+    async def _fake_call_auth_service(app_obj, status_code: int, method_name: str, *args: object):
+        calls.append((app_obj, status_code, method_name, args))
+        return {"token": "tok-helper"}
+
+    monkeypatch.setattr(auth_router, "_call_auth_service", _fake_call_auth_service)
+
+    result = await auth_router.login(
+        auth_router.LoginRequest(identifier="fresh@example.com", password="pass1234"),
+        app,
+    )
+
+    assert result == {"token": "tok-helper"}
+    assert calls == [
+        (
+            app,
+            401,
+            "login",
+            ("fresh@example.com", "pass1234"),
+        )
+    ]
+
+
 class _VerifyOnlyAuthService:
     def __init__(self) -> None:
         self.tokens: list[str] = []
