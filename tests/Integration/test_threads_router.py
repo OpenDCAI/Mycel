@@ -4,12 +4,14 @@ import json
 from contextlib import contextmanager
 from pathlib import Path
 from types import SimpleNamespace
+from typing import Any, cast
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from fastapi import Request
 from langchain_core.messages import HumanMessage, SystemMessage, ToolMessage
 
-from backend.web.models.requests import CreateThreadRequest
+from backend.web.models.requests import CreateThreadRequest, ResolvePermissionRequest, ThreadPermissionRuleRequest
 from backend.web.routers import threads as threads_router
 from core.runtime.loop import QueryLoop
 from core.runtime.middleware.monitor import AgentState
@@ -75,9 +77,44 @@ class _FakeAuthService:
         return {"user_id": "owner-1"}
 
 
-class _FakeRequest:
-    def __init__(self, headers: dict[str, str] | None = None) -> None:
-        self.headers = headers or {}
+def _make_request(headers: dict[str, str] | None = None) -> Request:
+    raw_headers = [(key.lower().encode("latin-1"), value.encode("latin-1")) for key, value in (headers or {}).items()]
+    scope = {
+        "type": "http",
+        "method": "GET",
+        "path": "/api/threads/thread-1/events",
+        "headers": raw_headers,
+    }
+    return Request(scope)
+
+
+def _decode_json_response(response: threads_router.JSONResponse) -> dict[str, Any]:
+    body = response.body
+    payload = body.tobytes() if isinstance(body, memoryview) else body
+    return cast(dict[str, Any], json.loads(payload.decode()))
+
+
+def _require_thread_result(result: dict[str, Any] | threads_router.JSONResponse) -> dict[str, Any]:
+    assert not isinstance(result, threads_router.JSONResponse)
+    return result
+
+
+def _require_app_state(loop: QueryLoop) -> AppState:
+    app_state = loop._app_state
+    assert app_state is not None
+    return app_state
+
+
+def _require_await_kwargs(mock: AsyncMock) -> dict[str, Any]:
+    await_args = mock.await_args
+    assert await_args is not None
+    return cast(dict[str, Any], await_args.kwargs)
+
+
+def _require_await_args(mock: AsyncMock) -> tuple[Any, ...]:
+    await_args = mock.await_args
+    assert await_args is not None
+    return cast(tuple[Any, ...], await_args.args)
 
 
 class _FakePermissionAgent:
@@ -198,13 +235,13 @@ class _LivePendingPermissionAgent:
         )
 
     def get_pending_permission_requests(self, thread_id: str | None = None):
-        requests = list(self.agent._app_state.pending_permission_requests.values())
+        requests = list(_require_app_state(self.agent).pending_permission_requests.values())
         if thread_id is None:
             return requests
         return [item for item in requests if item["thread_id"] == thread_id]
 
     def get_thread_permission_rules(self, thread_id: str) -> dict[str, object]:
-        state = self.agent._app_state.tool_permission_context
+        state = _require_app_state(self.agent).tool_permission_context
         return {
             "thread_id": thread_id,
             "scope": "session",
@@ -334,7 +371,7 @@ async def test_create_thread_route_preserves_legacy_sandbox_type_alias():
     )
 
     with _patch_create_thread_noop_guards():
-        result = await threads_router.create_thread(payload, "owner-1", app)
+        result = _require_thread_result(await threads_router.create_thread(payload, "owner-1", app))
 
     assert result["sandbox"] == "daytona_selfhost"
     assert app.state.thread_sandbox[result["thread_id"]] == "daytona_selfhost"
@@ -383,7 +420,7 @@ async def test_create_thread_route_uses_canonical_existing_lease_binding_helper(
         patch.object(threads_router, "_invalidate_resource_overview_cache", return_value=None),
         patch.object(threads_router, "save_last_successful_config", return_value=None),
     ):
-        result = await threads_router.create_thread(payload, "owner-1", app)
+        result = _require_thread_result(await threads_router.create_thread(payload, "owner-1", app))
 
     bind_helper.assert_called_once_with(
         result["thread_id"],
@@ -404,7 +441,7 @@ async def test_create_thread_route_passes_local_cwd_into_sandbox_bootstrap():
     )
 
     with _patch_create_thread_noop_guards() as create_resources:
-        result = await threads_router.create_thread(payload, "owner-1", app)
+        result = _require_thread_result(await threads_router.create_thread(payload, "owner-1", app))
 
     create_resources.assert_called_once_with(
         result["thread_id"],
@@ -463,7 +500,7 @@ async def test_create_thread_route_rejects_unavailable_provider():
 
     assert isinstance(result, threads_router.JSONResponse)
     assert result.status_code == 400
-    assert json.loads(result.body.decode()) == {
+    assert _decode_json_response(result) == {
         "error": "sandbox_provider_unavailable",
         "provider": "daytona",
     }
@@ -492,7 +529,7 @@ async def test_create_thread_route_rejects_unavailable_provider_for_existing_lea
 
     assert isinstance(result, threads_router.JSONResponse)
     assert result.status_code == 400
-    assert json.loads(result.body.decode()) == {
+    assert _decode_json_response(result) == {
         "error": "sandbox_provider_unavailable",
         "provider": "daytona",
     }
@@ -510,7 +547,7 @@ async def test_stream_thread_events_requires_token():
     with pytest.raises(threads_router.HTTPException) as exc_info:
         await threads_router.stream_thread_events(
             "thread-1",
-            request=_FakeRequest(),
+            request=_make_request(),
             token=None,
             app=app,
         )
@@ -531,7 +568,7 @@ async def test_stream_thread_events_verifies_token_before_owner_check():
 
     response = await threads_router.stream_thread_events(
         "thread-1",
-        request=_FakeRequest(),
+        request=_make_request(),
         token="tok-thread",
         app=app,
     )
@@ -573,6 +610,7 @@ async def test_get_thread_permissions_returns_thread_scoped_pending_requests():
 @pytest.mark.asyncio
 async def test_get_thread_permissions_does_not_clear_live_pending_requests_during_active_run():
     agent = _LivePendingPermissionAgent()
+    app_state = _require_app_state(agent.agent)
 
     result = await threads_router.get_thread_permissions(
         "thread-1",
@@ -598,7 +636,7 @@ async def test_get_thread_permissions_does_not_clear_live_pending_requests_durin
         },
         "managed_only": False,
     }
-    assert agent.agent._app_state.pending_permission_requests == {
+    assert app_state.pending_permission_requests == {
         "perm-live": {
             "request_id": "perm-live",
             "thread_id": "thread-1",
@@ -612,7 +650,8 @@ async def test_get_thread_permissions_does_not_clear_live_pending_requests_durin
 @pytest.mark.asyncio
 async def test_get_thread_history_does_not_clear_live_pending_requests_during_active_run():
     agent = _LivePendingPermissionAgent()
-    agent.agent._app_state.messages = [
+    app_state = _require_app_state(agent.agent)
+    app_state.messages = [
         HumanMessage(content="please run bash"),
         ToolMessage(content="Permission required by rule: Bash", tool_call_id="call-1", name="Bash"),
     ]
@@ -637,7 +676,7 @@ async def test_get_thread_history_does_not_clear_live_pending_requests_during_ac
         {"role": "human", "text": "please run bash"},
         {"role": "tool_result", "tool": "Bash", "text": "Permission required by rule: Bash"},
     ]
-    assert agent.agent._app_state.pending_permission_requests == {
+    assert app_state.pending_permission_requests == {
         "perm-live": {
             "request_id": "perm-live",
             "thread_id": "thread-1",
@@ -655,7 +694,7 @@ async def test_resolve_thread_permission_request_persists_resolution():
     result = await threads_router.resolve_thread_permission_request(
         "thread-1",
         "perm-1",
-        SimpleNamespace(decision="allow", message="go ahead"),
+        ResolvePermissionRequest(decision="allow", message="go ahead"),
         user_id="owner-1",
         agent=agent,
     )
@@ -669,17 +708,19 @@ async def test_resolve_thread_permission_request_persists_resolution():
 async def test_resolve_ask_user_question_request_starts_followup_run_with_answers():
     agent = _FakeAskUserQuestionAgent()
     app = SimpleNamespace()
-    payload = SimpleNamespace(
-        decision="allow",
-        message=None,
-        answers=[
-            {
-                "header": "Style",
-                "question": "Choose a style",
-                "selected_options": ["Minimal"],
-            }
-        ],
-        annotations={"source": "ask-user-ui"},
+    payload = ResolvePermissionRequest.model_validate(
+        {
+            "decision": "allow",
+            "message": None,
+            "answers": [
+                {
+                    "header": "Style",
+                    "question": "Choose a style",
+                    "selected_options": ["Minimal"],
+                }
+            ],
+            "annotations": {"source": "ask-user-ui"},
+        }
     )
 
     with patch(
@@ -717,8 +758,9 @@ async def test_resolve_ask_user_question_request_starts_followup_run_with_answer
         )
     ]
     route_message.assert_awaited_once()
-    assert route_message.await_args.kwargs["source"] == "internal"
-    assert route_message.await_args.kwargs["message_metadata"] == {
+    route_kwargs = _require_await_kwargs(route_message)
+    assert route_kwargs["source"] == "internal"
+    assert route_kwargs["message_metadata"] == {
         "ask_user_question_answered": {
             "questions": [
                 {
@@ -740,7 +782,7 @@ async def test_resolve_ask_user_question_request_starts_followup_run_with_answer
             "annotations": {"source": "ask-user-ui"},
         }
     }
-    followup_message = route_message.await_args.args[2]
+    followup_message = _require_await_args(route_message)[2]
     assert "AskUserQuestion" in followup_message
     assert "Minimal" in followup_message
     assert "Choose a style" in followup_message
@@ -757,7 +799,7 @@ async def test_resolve_ask_user_question_request_requires_answers_for_allow():
         await threads_router.resolve_thread_permission_request(
             "thread-1",
             "perm-ask",
-            SimpleNamespace(decision="allow", message=None, answers=None, annotations=None),
+            ResolvePermissionRequest(decision="allow", message=None, answers=None, annotations=None),
             user_id="owner-1",
             agent=agent,
             app=SimpleNamespace(),
@@ -776,7 +818,7 @@ async def test_resolve_thread_permission_request_404s_missing_request():
         await threads_router.resolve_thread_permission_request(
             "thread-1",
             "missing",
-            SimpleNamespace(decision="deny", message="no"),
+            ResolvePermissionRequest(decision="deny", message="no"),
             user_id="owner-1",
             agent=agent,
         )
@@ -792,7 +834,7 @@ async def test_add_thread_permission_rule_persists_session_rule():
 
     result = await threads_router.add_thread_permission_rule(
         "thread-1",
-        SimpleNamespace(behavior="allow", tool_name="Write"),
+        ThreadPermissionRuleRequest(behavior="allow", tool_name="Write"),
         user_id="owner-1",
         agent=agent,
     )
@@ -820,7 +862,7 @@ async def test_add_thread_permission_rule_fails_loud_when_managed_only():
     with pytest.raises(threads_router.HTTPException) as exc_info:
         await threads_router.add_thread_permission_rule(
             "thread-1",
-            SimpleNamespace(behavior="allow", tool_name="Write"),
+            ThreadPermissionRuleRequest(behavior="allow", tool_name="Write"),
             user_id="owner-1",
             agent=agent,
         )

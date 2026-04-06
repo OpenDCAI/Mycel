@@ -1,11 +1,13 @@
 """Tests for core.spill_buffer: spill_if_needed() and SpillBufferMiddleware."""
 
 import posixpath
-from types import SimpleNamespace
+from dataclasses import dataclass
+from typing import Any, cast
 from unittest.mock import MagicMock
 
-from langchain_core.messages import ToolMessage
+from langchain_core.messages import AIMessage, ToolMessage
 
+from core.runtime.middleware import ModelRequest, ModelResponse
 from core.runtime.middleware.spill_buffer.middleware import SKIP_TOOLS, SpillBufferMiddleware
 from core.runtime.middleware.spill_buffer.spill import PREVIEW_BYTES, spill_if_needed
 
@@ -21,9 +23,28 @@ def _make_fs_backend():
     return backend
 
 
+@dataclass
+class _ToolCallRequestHarness:
+    tool_call: dict[str, Any]
+
+
+@dataclass
+class _ModelRequestHarness:
+    messages: list[Any]
+
+
 def _make_request(tool_name: str, tool_call_id: str = "call_abc123"):
-    """Build a fake ToolCallRequest with a .tool_call dict."""
-    return SimpleNamespace(tool_call={"name": tool_name, "id": tool_call_id})
+    """Build a minimal request harness matching the middleware surface."""
+    return cast(Any, _ToolCallRequestHarness(tool_call={"name": tool_name, "id": tool_call_id}))
+
+
+def _make_model_request() -> ModelRequest:
+    return cast(ModelRequest, _ModelRequestHarness(messages=[]))
+
+
+def _require_text_content(message: ToolMessage) -> str:
+    assert isinstance(message.content, str)
+    return message.content
 
 
 # ===========================================================================
@@ -290,7 +311,7 @@ class TestSpillBufferMiddleware:
 
         handler.assert_called_once_with(request)
         assert result is original_msg
-        assert result.content == "small"
+        assert _require_text_content(result) == "small"
 
     def test_large_output_gets_spilled(self):
         """Tool output exceeding default threshold is replaced."""
@@ -303,8 +324,9 @@ class TestSpillBufferMiddleware:
         result = mw.wrap_tool_call(request, handler)
 
         handler.assert_called_once_with(request)
-        assert result.content != large_content
-        assert result.content.startswith("<persisted-output")
+        content = _require_text_content(result)
+        assert content != large_content
+        assert content.startswith("<persisted-output")
         assert result.tool_call_id == "call_2"
         fs.write_file.assert_called_once()
 
@@ -321,7 +343,7 @@ class TestSpillBufferMiddleware:
 
         result = mw.wrap_tool_call(request, handler)
 
-        assert result.content.startswith("<persisted-output")
+        assert _require_text_content(result).startswith("<persisted-output")
         fs.write_file.assert_called_once()
 
     def test_per_tool_threshold_not_triggered(self):
@@ -353,7 +375,7 @@ class TestSpillBufferMiddleware:
 
         result = mw.wrap_tool_call(request, handler)
 
-        assert result.content.startswith("<persisted-output")
+        assert _require_text_content(result).startswith("<persisted-output")
 
     def test_read_file_is_skipped(self):
         """read_file is in SKIP_TOOLS and must never be spilled."""
@@ -368,7 +390,7 @@ class TestSpillBufferMiddleware:
         result = mw.wrap_tool_call(request, handler)
 
         assert result is original_msg
-        assert result.content == large_content
+        assert _require_text_content(result) == large_content
         fs.write_file.assert_not_called()
 
     def test_non_toolmessage_passthrough(self):
@@ -387,7 +409,7 @@ class TestSpillBufferMiddleware:
         mw, _fs = self._make_middleware()
         sentinel = object()
         handler = MagicMock(return_value=sentinel)
-        request = {"messages": []}
+        request = _make_model_request()
 
         result = mw.wrap_model_call(request, handler)
 
@@ -414,7 +436,7 @@ class TestSpillBufferMiddleware:
         finally:
             loop.close()
 
-        assert result.content.startswith("<persisted-output")
+        assert _require_text_content(result).startswith("<persisted-output")
         assert result.tool_call_id == "call_async"
         fs.write_file.assert_called_once()
 
@@ -423,14 +445,14 @@ class TestSpillBufferMiddleware:
         import asyncio
 
         mw, _fs = self._make_middleware()
-        sentinel = object()
+        sentinel = ModelResponse(result=[AIMessage(content="done")], request_messages=[])
 
         async def async_handler(req):
             return sentinel
 
         loop = asyncio.new_event_loop()
         try:
-            result = loop.run_until_complete(mw.awrap_model_call({"messages": []}, async_handler))
+            result = loop.run_until_complete(mw.awrap_model_call(_make_model_request(), async_handler))
         finally:
             loop.close()
         assert result is sentinel
@@ -448,7 +470,7 @@ class TestSpillBufferMiddleware:
 
         expected_path = posixpath.join("/workspace", ".leon", "tool-results", f"{unique_id}.txt")
         fs.write_file.assert_called_once_with(expected_path, content)
-        assert expected_path in result.content
+        assert expected_path in _require_text_content(result)
 
     def test_whitespace_output_is_normalized(self):
         """Whitespace-only tool output becomes an explicit no-output marker."""
@@ -459,7 +481,7 @@ class TestSpillBufferMiddleware:
 
         result = mw.wrap_tool_call(request, handler)
 
-        assert result.content == "(run_command completed with no output)"
+        assert _require_text_content(result) == "(run_command completed with no output)"
         fs.write_file.assert_not_called()
 
     def test_spilled_tool_message_preserves_name_and_metadata(self):

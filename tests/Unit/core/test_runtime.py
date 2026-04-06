@@ -5,6 +5,7 @@ import re
 import sqlite3
 import sys
 import time
+from datetime import UTC, datetime
 from unittest.mock import MagicMock
 
 import pytest
@@ -13,8 +14,8 @@ from sandbox.chat_session import ChatSessionManager
 from sandbox.interfaces.executor import ExecuteResult
 from sandbox.lease import SandboxInstance, lease_from_row
 from sandbox.provider import ProviderExecResult
+from sandbox.providers.local import LocalPersistentShellRuntime
 from sandbox.runtime import (
-    LocalPersistentShellRuntime,
     RemoteWrappedRuntime,
     _extract_state_from_output,
     _normalize_pty_result,
@@ -88,6 +89,20 @@ def _wrap_remote_state_output(
     lines.extend(f"{k}={v}" for k, v in env_map.items())
     lines.append(end_match.group(0))
     return "\n".join(lines) + "\n"
+
+
+def _make_instance(
+    *,
+    instance_id: str = "inst-123",
+    provider_name: str = "test-provider",
+    status: str = "running",
+) -> SandboxInstance:
+    return SandboxInstance(
+        instance_id=instance_id,
+        provider_name=provider_name,
+        status=status,
+        created_at=datetime.now(UTC),
+    )
 
 
 def test_remote_runtime_treats_daytona_pty_1011_as_infra_error():
@@ -212,12 +227,7 @@ class TestRemoteWrappedRuntime:
         lease = lease_store.create("lease-1", "test-provider")
 
         # Mock lease to return instance
-        instance = SandboxInstance(
-            instance_id="inst-123",
-            provider_name="test-provider",
-            status="running",
-            created_at=None,
-        )
+        instance = _make_instance()
         lease.ensure_active_instance = MagicMock(return_value=instance)
 
         def mock_execute(_instance_id, wrapped_command, **_kwargs):
@@ -241,12 +251,7 @@ class TestRemoteWrappedRuntime:
         lease = lease_store.create("lease-1", "test-provider")
 
         # Mock lease to return instance
-        instance = SandboxInstance(
-            instance_id="inst-123",
-            provider_name="test-provider",
-            status="running",
-            created_at=None,
-        )
+        instance = _make_instance()
         lease.ensure_active_instance = MagicMock(return_value=instance)
 
         def mock_execute(_instance_id, wrapped_command, **_kwargs):
@@ -270,12 +275,7 @@ class TestRemoteWrappedRuntime:
         lease = lease_store.create("lease-1", "test-provider")
 
         # Mock lease to return instance
-        instance = SandboxInstance(
-            instance_id="inst-123",
-            provider_name="test-provider",
-            status="running",
-            created_at=None,
-        )
+        instance = _make_instance()
         lease.ensure_active_instance = MagicMock(return_value=instance)
 
         # Mock provider execute
@@ -314,12 +314,7 @@ class TestRemoteWrappedRuntime:
         terminal = terminal_from_row(terminal_store.create("term-1", "thread-1", "lease-1", "/root"), terminal_store.db_path)
         lease = lease_store.create("lease-1", "test-provider")
 
-        instance = SandboxInstance(
-            instance_id="inst-123",
-            provider_name="test-provider",
-            status="running",
-            created_at=None,
-        )
+        instance = _make_instance()
         lease.ensure_active_instance = MagicMock(return_value=instance)
         lease.refresh_instance_status = MagicMock(return_value="detached")
 
@@ -349,12 +344,7 @@ class TestRemoteWrappedRuntime:
         terminal = terminal_from_row(terminal_store.create("term-1", "thread-1", "lease-1", "/root"), terminal_store.db_path)
         lease = lease_store.create("lease-1", "test-provider")
 
-        instance = SandboxInstance(
-            instance_id="inst-123",
-            provider_name="test-provider",
-            status="running",
-            created_at=None,
-        )
+        instance = _make_instance()
         lease.ensure_active_instance = MagicMock(return_value=instance)
         lease.refresh_instance_status = MagicMock(return_value="running")
 
@@ -377,12 +367,7 @@ class TestRemoteWrappedRuntime:
         terminal = terminal_from_row(terminal_store.create("term-1", "thread-1", "lease-1", "/root"), terminal_store.db_path)
         lease = lease_store.create("lease-1", "test-provider")
 
-        instance = SandboxInstance(
-            instance_id="inst-123",
-            provider_name="test-provider",
-            status="running",
-            created_at=None,
-        )
+        instance = _make_instance()
         lease.ensure_active_instance = MagicMock(return_value=instance)
         lease.refresh_instance_status = MagicMock(return_value="running")
 
@@ -571,12 +556,7 @@ async def test_daytona_runtime_hydrates_once_per_pty_session(terminal_store, lea
     pytest.importorskip("daytona_sdk")
     terminal = terminal_from_row(terminal_store.create("term-3", "thread-3", "lease-3", "/tmp"), terminal_store.db_path)
     lease = lease_store.create("lease-3", "daytona")
-    instance = SandboxInstance(
-        instance_id="inst-daytona-test",
-        provider_name="daytona",
-        status="running",
-        created_at=None,
-    )
+    instance = _make_instance(instance_id="inst-daytona-test", provider_name="daytona")
     lease.ensure_active_instance = MagicMock(return_value=instance)  # type: ignore[method-assign]
 
     provider = MagicMock()
@@ -734,12 +714,7 @@ async def test_daytona_runtime_sanitizes_corrupted_terminal_state_before_create(
         )
     )
     lease = lease_store.create("lease-4", "daytona")
-    instance = SandboxInstance(
-        instance_id="inst-daytona-sanitize",
-        provider_name="daytona",
-        status="running",
-        created_at=None,
-    )
+    instance = _make_instance(instance_id="inst-daytona-sanitize", provider_name="daytona")
     lease.ensure_active_instance = MagicMock(return_value=instance)  # type: ignore[method-assign]
 
     provider = MagicMock()
