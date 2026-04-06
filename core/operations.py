@@ -5,7 +5,6 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from storage.models import FileOperationRow
-from storage.providers.sqlite.file_operation_repo import SQLiteFileOperationRepo
 
 # Context variable for tracking current thread (TUI only; web uses sandbox.thread_context)
 current_thread_id: ContextVar[str] = ContextVar("current_thread_id", default="")
@@ -32,15 +31,10 @@ class FileOperationRecorder:
     """Records file operations for time travel rollback"""
 
     def __init__(self, db_path: Path | str | None = None, repo=None):
-        # @@@repo-injection - web path injects Supabase repo; TUI falls back to SQLite via db_path.
-        if repo is not None:
-            self._repo = repo
-            return
-        if db_path is None:
-            db_path = Path.home() / ".leon" / "leon.db"
-        self.db_path = Path(db_path)
-        self.db_path.parent.mkdir(parents=True, exist_ok=True)
-        self._repo = SQLiteFileOperationRepo(self.db_path)
+        # @@@repo-injection - web path injects repo via injection.
+        if repo is None:
+            raise RuntimeError("FileOperationRecorder requires an injected repo")
+        self._repo = repo
 
     def record(
         self,

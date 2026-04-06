@@ -17,8 +17,6 @@ from sandbox.manager import SandboxManager
 from sandbox.provider import ProviderCapability
 from sandbox.recipes import default_recipe_id, list_builtin_recipes, normalize_recipe_snapshot, provider_type_from_name
 from storage.providers.sqlite.kernel import SQLiteDBRole, resolve_role_db_path
-from storage.providers.sqlite.member_repo import SQLiteMemberRepo
-from storage.providers.sqlite.thread_repo import SQLiteThreadRepo
 
 logger = logging.getLogger(__name__)
 
@@ -55,9 +53,11 @@ def list_user_leases(
     sandbox_db_path: str | Path | None = None,
 ) -> list[dict[str, Any]]:
     monitor_repo = make_sandbox_monitor_repo()
-    _thread_repo = thread_repo or SQLiteThreadRepo(db_path=main_db_path)
-    _member_repo = member_repo or SQLiteMemberRepo(db_path=main_db_path)
-    own_repos = thread_repo is None  # only close if we created them
+    if thread_repo is None or member_repo is None:
+        raise RuntimeError("thread_repo and member_repo are required for list_user_leases")
+    _thread_repo = thread_repo
+    _member_repo = member_repo
+    own_repos = False
     try:
         rows = monitor_repo.list_leases_with_threads()
         grouped: dict[str, dict[str, Any]] = {}

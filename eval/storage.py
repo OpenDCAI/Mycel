@@ -1,7 +1,4 @@
-"""SQLite storage for eval trajectories and metrics.
-
-Database: ~/.leon/eval.db (separate from main leon.db)
-"""
+"""Storage for eval trajectories and metrics."""
 
 from __future__ import annotations
 
@@ -9,28 +6,28 @@ import json
 from datetime import UTC
 from pathlib import Path
 
-from config.user_paths import user_home_path
 from eval.models import (
     ObjectiveMetrics,
     RunTrajectory,
     SystemMetrics,
 )
-from eval.repo import SQLiteEvalRepo
-
-_DEFAULT_DB_PATH = user_home_path("eval.db")
 
 
 class TrajectoryStore:
-    """SQLite-backed storage for eval trajectories and metrics."""
+    """Storage for eval trajectories and metrics."""
 
-    def __init__(self, db_path: str | Path | None = None):
-        self.db_path = Path(db_path) if db_path else _DEFAULT_DB_PATH
-        self.db_path.parent.mkdir(parents=True, exist_ok=True)
-        self._repo = SQLiteEvalRepo(self.db_path)
-        self._init_db()
+    def __init__(self, db_path: str | Path | None = None, eval_repo=None):
+        if eval_repo is not None:
+            self._repo = eval_repo
+        else:
+            from storage.runtime import build_storage_container
+
+            container = build_storage_container()
+            self._repo = container.eval_repo()
 
     def _init_db(self) -> None:
-        self._repo.ensure_schema()
+        if hasattr(self._repo, "ensure_schema"):
+            self._repo.ensure_schema()
 
     def save_trajectory(self, trajectory: RunTrajectory) -> str:
         """Save a trajectory and its LLM/tool call records. Returns run_id."""

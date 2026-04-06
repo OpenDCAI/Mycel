@@ -28,7 +28,6 @@ from typing import TYPE_CHECKING, Any
 
 from langchain.chat_models import init_chat_model
 from langchain_core.messages import SystemMessage
-from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 
 # Load .env file
 _env_file = Path(__file__).parent / ".env"
@@ -277,12 +276,12 @@ class LeonAgent:
 
         # Initialize checkpointer and MCP tools
         self.checkpointer = None
-        self._aiosqlite_conn, mcp_tools = self._init_async_components()
+        _conn, mcp_tools = self._init_async_components()
 
         # If in async context (running loop detected), _init_async_components
         # skips init and returns (None, []). Distinguish from Postgres path
         # which also returns conn=None but DID initialize successfully.
-        self._needs_async_init = self._aiosqlite_conn is None and self.checkpointer is None
+        self._needs_async_init = self.checkpointer is None
 
         # Set checkpointer to None if in async context (will be initialized later)
         if self._needs_async_init:
@@ -408,7 +407,7 @@ class LeonAgent:
         """
         if self.checkpointer is None:
             # Initialize async components
-            self._aiosqlite_conn = await self._init_checkpointer()
+            await self._init_checkpointer()
             _mcp_tools = await self._init_mcp_tools()
             self._register_mcp_tools(_mcp_tools)
 
@@ -446,12 +445,10 @@ class LeonAgent:
             self._event_loop = loop
 
             # Initialize components
-            conn = loop.run_until_complete(self._init_checkpointer())
+            loop.run_until_complete(self._init_checkpointer())
             mcp_tools = loop.run_until_complete(self._init_mcp_tools())
 
-            # DON'T close the loop - let it persist for aiosqlite
-            # The loop will be cleaned up when Python exits
-            return conn, mcp_tools
+            return None, mcp_tools
 
     def _has_middleware_tools(self, middleware: list) -> bool:
         """Check if any middleware has BaseTool instances."""
@@ -984,15 +981,7 @@ class LeonAgent:
         self._mcp_client = None
 
     def _cleanup_sqlite_connection(self) -> None:
-        """Clean up SQLite connection."""
-        if not hasattr(self, "_aiosqlite_conn") or not self._aiosqlite_conn:
-            return
-        conn = self._aiosqlite_conn
-        self._aiosqlite_conn = None
-        try:
-            self._run_async_cleanup(conn.close, "SQLite connection")
-        except Exception:
-            pass
+        """No-op: SQLite checkpointer removed; Postgres cleanup handled by _pg_saver_ctx."""
 
     def __del__(self):
         self.close()
@@ -1341,31 +1330,20 @@ class LeonAgent:
     async def _init_checkpointer(self):
         """Initialize async checkpointer for conversation persistence.
 
-        Uses Postgres (via Supabase) when LEON_STORAGE_STRATEGY=supabase,
-        otherwise falls back to local SQLite.
+        Requires LEON_POSTGRES_URL to be set (Supabase Postgres).
         """
-        strategy = os.getenv("LEON_STORAGE_STRATEGY", "sqlite")
         pg_url = os.getenv("LEON_POSTGRES_URL")
+        if not pg_url:
+            raise RuntimeError("LEON_POSTGRES_URL is required for checkpointer initialization")
 
-        if strategy == "supabase" and pg_url:
-            from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
+        from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 
-            # from_conn_string is an async context manager; enter it and keep
-            # the reference so the connection pool stays open for the agent's lifetime.
-            self._pg_saver_ctx = AsyncPostgresSaver.from_conn_string(pg_url)
-            self.checkpointer = await self._pg_saver_ctx.__aenter__()
-            await self.checkpointer.setup()
-            return None  # no SQLite conn to track
-        else:
-            from storage.providers.sqlite.kernel import connect_sqlite_async
-
-            db_path = self.db_path
-            db_path.parent.mkdir(parents=True, exist_ok=True)
-            conn = await connect_sqlite_async(db_path)
-            self.checkpointer = AsyncSqliteSaver(conn)
-            await self.checkpointer.setup()
-            return conn
-            return conn
+        # from_conn_string is an async context manager; enter it and keep
+        # the reference so the connection pool stays open for the agent's lifetime.
+        self._pg_saver_ctx = AsyncPostgresSaver.from_conn_string(pg_url)
+        self.checkpointer = await self._pg_saver_ctx.__aenter__()
+        await self.checkpointer.setup()
+        return None  # no SQLite conn to track
 
     def _is_tool_allowed(self, tool) -> bool:
         # Extract original tool name without mcp__ prefix

@@ -231,7 +231,7 @@ class AuthService:
         from pathlib import Path
 
         from backend.web.services.member_service import MEMBERS_DIR, _write_agent_md, _write_json
-        from storage.providers.sqlite.member_repo import generate_member_id
+        from storage.utils import generate_member_id
 
         initial_agents = [
             {"name": "Toad", "description": "Curious and energetic assistant", "avatar": "toad.jpeg"},
