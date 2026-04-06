@@ -2676,9 +2676,34 @@ function ThreadTraceSection({
                 index={idx}
               />
             ))}
-            {conversationTail.length === 0 && (
-              <div className="trace-empty">No conversation messages yet.</div>
-            )}
+            {conversationTail.length === 0 &&
+              (traceTail.length > 0 ? (
+                <div className="trace-empty trace-guided-empty">
+                  <p>No conversation messages were captured for this run.</p>
+                  <p className="count">
+                    Trace events still exist. Switch to the lower-level views to
+                    inspect the run directly.
+                  </p>
+                  <div className="trace-guided-actions">
+                    <button
+                      type="button"
+                      className="trace-filter-btn"
+                      onClick={() => setTraceView("events")}
+                    >
+                      Open Events
+                    </button>
+                    <button
+                      type="button"
+                      className="trace-filter-btn"
+                      onClick={() => setTraceView("steps")}
+                    >
+                      Open Steps
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="trace-empty">No conversation messages yet.</div>
+              ))}
           </>
         ) : traceView === "events" ? (
           <>

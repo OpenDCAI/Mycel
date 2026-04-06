@@ -1691,6 +1691,21 @@ section li {
   padding: 1rem;
 }
 
+.trace-guided-empty {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.trace-guided-empty p {
+  margin: 0;
+}
+
+.trace-guided-actions {
+  display: flex;
+  gap: 0.65rem;
+  flex-wrap: wrap;
+}
+
 .trace-surface-error {
   border-style: solid;
   border-color: rgba(220, 38, 38, 0.18);
