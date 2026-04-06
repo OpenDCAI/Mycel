@@ -1,7 +1,7 @@
 """Chat delivery — enqueues lightweight notifications for agent threads.
 
-v3: no full message text injected. Agent must read_messages to see content.
-ChatService._deliver_to_agents calls the delivery function for each
+v3: no full message text injected. Agent must chat_read to see content.
+MessagingService._deliver_to_agents calls the delivery function for each
 non-sender agent member.
 """
 
@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 
 def make_chat_delivery_fn(app: Any):
-    """Create a delivery callback for ChatService.
+    """Create a delivery callback for MessagingService.
 
     Uses qm.enqueue() + wake_handler to route notifications.
     No more route_fn injection from backend layer.
