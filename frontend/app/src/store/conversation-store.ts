@@ -5,9 +5,7 @@ import { authFetch } from "./auth-store";
 interface ConversationState {
   conversations: ConversationItem[];
   loading: boolean;
-  activeId: string | null;
   fetchConversations: () => Promise<void>;
-  setActive: (id: string | null) => void;
 }
 
 let inflight: Promise<void> | null = null;
@@ -15,7 +13,6 @@ let inflight: Promise<void> | null = null;
 export const useConversationStore = create<ConversationState>((set, get) => ({
   conversations: [],
   loading: false,
-  activeId: null,
 
   fetchConversations: async () => {
     if (inflight) return;
@@ -40,6 +37,4 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
     inflight = pending;
     await pending;
   },
-
-  setActive: (id) => set({ activeId: id }),
 }));

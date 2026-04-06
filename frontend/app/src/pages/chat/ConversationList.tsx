@@ -32,8 +32,13 @@ export default function ConversationList() {
 
   useEffect(() => {
     void fetchConversations();
-    const timer = setInterval(() => void fetchConversations(), 5000);
-    return () => clearInterval(timer);
+    let timer: ReturnType<typeof setInterval> | null = null;
+    const start = () => { if (!timer) timer = setInterval(() => void useConversationStore.getState().fetchConversations(), 5000); };
+    const stop = () => { if (timer) { clearInterval(timer); timer = null; } };
+    const onVis = () => document.visibilityState === "visible" ? start() : stop();
+    start();
+    document.addEventListener("visibilitychange", onVis);
+    return () => { stop(); document.removeEventListener("visibilitychange", onVis); };
   }, [fetchConversations]);
 
   const filtered = search
@@ -110,11 +115,7 @@ export default function ConversationList() {
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-1.5">
-                    <span
-                      className={`text-sm font-medium truncate ${
-                        isActive ? "text-foreground" : "text-foreground"
-                      }`}
-                    >
+                    <span className="text-sm font-medium truncate text-foreground">
                       {item.title}
                     </span>
                   </div>
