@@ -43,8 +43,11 @@ class SupabaseMemberRepo:
             return None
         return MemberRow.model_validate(self._normalize(rows[0]))
 
-    def get_by_name(self, name: str) -> MemberRow | None:
-        response = self._t().select("*").eq("name", name).execute()
+    def get_by_name(self, name: str, owner_user_id: str | None = None) -> MemberRow | None:
+        query = self._t().select("*").eq("name", name)
+        if owner_user_id is not None:
+            query = query.eq("owner_user_id", owner_user_id)
+        response = query.execute()
         rows = q.rows(response, _MEMBER_REPO, "get_by_name")
         if not rows:
             return None

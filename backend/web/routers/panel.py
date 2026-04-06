@@ -60,7 +60,14 @@ async def create_member(
     request: Request,
 ) -> dict[str, Any]:
     member_repo = getattr(request.app.state, "member_repo", None)
-    return await asyncio.to_thread(member_service.create_member, req.name, req.description, owner_user_id=user_id, member_repo=member_repo)
+    agent_config_repo = getattr(request.app.state, "agent_config_repo", None)
+    return await asyncio.to_thread(
+        member_service.create_member,
+        req.name, req.description,
+        owner_user_id=user_id,
+        member_repo=member_repo,
+        agent_config_repo=agent_config_repo,
+    )
 
 
 @router.put("/members/{member_id}")
@@ -91,6 +98,7 @@ async def update_member(
 async def update_member_config(
     member_id: str,
     req: MemberConfigPayload,
+    request: Request,
     user_id: Annotated[str, Depends(get_current_user_id)],
 ) -> dict[str, Any]:
     existing = await asyncio.to_thread(member_service.get_member, member_id)
@@ -98,7 +106,12 @@ async def update_member_config(
         raise HTTPException(404, "Member not found")
     if existing.get("owner_user_id") != user_id:
         raise HTTPException(403, "Forbidden")
-    item = await asyncio.to_thread(member_service.update_member_config, member_id, req.model_dump())
+    agent_config_repo = getattr(request.app.state, "agent_config_repo", None)
+    item = await asyncio.to_thread(
+        member_service.update_member_config,
+        member_id, req.model_dump(),
+        agent_config_repo=agent_config_repo,
+    )
     if not item:
         raise HTTPException(404, "Member not found")
     return item
@@ -108,6 +121,7 @@ async def update_member_config(
 async def publish_member(
     member_id: str,
     req: PublishMemberRequest,
+    request: Request,
     user_id: Annotated[str, Depends(get_current_user_id)],
 ) -> dict[str, Any]:
     if member_id == "__leon__":
@@ -117,7 +131,12 @@ async def publish_member(
         raise HTTPException(404, "Member not found")
     if existing.get("owner_user_id") != user_id:
         raise HTTPException(403, "Forbidden")
-    item = await asyncio.to_thread(member_service.publish_member, member_id, req.bump_type)
+    agent_config_repo = getattr(request.app.state, "agent_config_repo", None)
+    item = await asyncio.to_thread(
+        member_service.publish_member,
+        member_id, req.bump_type,
+        agent_config_repo=agent_config_repo,
+    )
     if not item:
         raise HTTPException(404, "Member not found")
     return item
@@ -137,7 +156,13 @@ async def delete_member(
     if existing.get("owner_user_id") != user_id:
         raise HTTPException(403, "Forbidden")
     member_repo = getattr(request.app.state, "member_repo", None)
-    ok = await asyncio.to_thread(member_service.delete_member, member_id, member_repo=member_repo)
+    agent_config_repo = getattr(request.app.state, "agent_config_repo", None)
+    ok = await asyncio.to_thread(
+        member_service.delete_member,
+        member_id,
+        member_repo=member_repo,
+        agent_config_repo=agent_config_repo,
+    )
     if not ok:
         raise HTTPException(404, "Member not found")
     return {"success": True}
@@ -150,7 +175,7 @@ async def delete_member(
 async def list_tasks(
     user_id: Annotated[str, Depends(get_current_user_id)],
 ) -> dict[str, Any]:
-    items = await asyncio.to_thread(task_service.list_tasks)
+    items = await asyncio.to_thread(task_service.list_tasks, owner_user_id=user_id)
     return {"items": items}
 
 
@@ -210,7 +235,7 @@ async def delete_task(
 async def list_cron_jobs(
     user_id: Annotated[str, Depends(get_current_user_id)],
 ) -> dict[str, Any]:
-    items = await asyncio.to_thread(cron_job_service.list_cron_jobs)
+    items = await asyncio.to_thread(cron_job_service.list_cron_jobs, owner_user_id=user_id)
     return {"items": items}
 
 

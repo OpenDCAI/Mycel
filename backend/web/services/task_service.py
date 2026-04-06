@@ -10,10 +10,10 @@ def _repo() -> Any:
     return make_panel_task_repo()
 
 
-def list_tasks() -> list[dict[str, Any]]:
+def list_tasks(owner_user_id: str | None = None) -> list[dict[str, Any]]:
     repo = _repo()
     try:
-        return _enrich_task_thread_members(repo.list_all())
+        return _enrich_task_thread_members(repo.list_all(owner_user_id=owner_user_id))
     finally:
         repo.close()
 
@@ -50,10 +50,10 @@ def get_task(task_id: str) -> dict[str, Any] | None:
         repo.close()
 
 
-def get_highest_priority_pending_task() -> dict[str, Any] | None:
+def get_highest_priority_pending_task(owner_user_id: str | None = None) -> dict[str, Any] | None:
     repo = _repo()
     try:
-        return repo.get_highest_priority_pending()
+        return repo.get_highest_priority_pending(owner_user_id=owner_user_id)
     finally:
         repo.close()
 

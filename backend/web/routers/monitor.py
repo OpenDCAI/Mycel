@@ -17,6 +17,9 @@ router = APIRouter(prefix="/api/monitor")
 
 @router.get("/threads")
 def list_threads(user_id: Annotated[str, Depends(get_current_user_id)]):
+    # TODO(multi-tenant): threads are stored in SQLite (sandbox DB) and linked to members via
+    # chat_sessions.member_id → members.owner_user_id. Filtering requires a JOIN-capable repo
+    # method. Add owner filtering once monitor_repo exposes query_threads(owner_user_id=...).
     return monitor_service.list_threads()
 
 

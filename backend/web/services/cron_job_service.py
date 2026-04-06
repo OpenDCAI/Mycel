@@ -9,10 +9,10 @@ def _repo() -> Any:
     return make_cron_job_repo()
 
 
-def list_cron_jobs() -> list[dict[str, Any]]:
+def list_cron_jobs(owner_user_id: str | None = None) -> list[dict[str, Any]]:
     repo = _repo()
     try:
-        return repo.list_all()
+        return repo.list_all(owner_user_id=owner_user_id)
     finally:
         repo.close()
 

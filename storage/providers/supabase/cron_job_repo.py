@@ -33,9 +33,12 @@ class SupabaseCronJobRepo:
                 row["task_template"] = {}
         return row
 
-    def list_all(self) -> list[dict[str, Any]]:
+    def list_all(self, owner_user_id: str | None = None) -> list[dict[str, Any]]:
+        query = self._table().select("*")
+        if owner_user_id is not None:
+            query = query.eq("owner_user_id", owner_user_id)
         rows = q.rows(
-            q.order(self._table().select("*"), "created_at", desc=True, repo=_REPO, operation="list_all").execute(),
+            q.order(query, "created_at", desc=True, repo=_REPO, operation="list_all").execute(),
             _REPO,
             "list_all",
         )
@@ -71,6 +74,7 @@ class SupabaseCronJobRepo:
                 "last_run_at": fields.get("last_run_at", 0),
                 "next_run_at": fields.get("next_run_at", 0),
                 "created_at": now,
+                "owner_user_id": fields.get("owner_user_id", None),
             }
         ).execute()
         return self.get(job_id) or {}
