@@ -230,7 +230,9 @@ git commit -m "feat: split global monitor resources from product resources api"
 **Files:**
 - Modify: `frontend/app/src/pages/resources/api.ts`
 - Modify: `frontend/app/src/pages/ResourcesPage.tsx`
+- Modify: `frontend/app/src/pages/resources/ProviderCard.tsx`
 - Test: `frontend/app/src/pages/resources/api.test.ts`
+- Test: Playwright CLI product trace on `/resources`
 
 - [ ] **Step 1: Write the failing test**
 
@@ -254,15 +256,42 @@ export async function fetchResourcesOverview() {
 }
 ```
 
+```tsx
+<div data-testid="resources-page" className="h-full flex flex-col bg-background">
+```
+
+```tsx
+<h2 data-testid="resources-header" className="text-sm font-semibold text-foreground">资源</h2>
+```
+
+```tsx
+<span data-testid="active-count" className="inline-flex items-center gap-1">...</span>
+```
+
+```tsx
+<span data-testid="session-count">{totalSessions} 会话</span>
+```
+
+```tsx
+<button data-testid="refresh-btn" type="button" ...>
+```
+
+```tsx
+<button data-testid="provider-card" data-provider-id={provider.id} ...>
+```
+
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `cd frontend/app && npm test -- api.test.ts`
 Expected: PASS
 
+Run: `npx playwright test <product-resources-spec>`
+Expected: `/resources` renders, provider cards are visible, and real network traces show `/api/resources/overview` with no `/api/monitor/resources`
+
 - [ ] **Step 5: Commit**
 
 ```bash
-git add frontend/app/src/pages/resources/api.ts frontend/app/src/pages/ResourcesPage.tsx frontend/app/src/pages/resources/api.test.ts
+git add frontend/app/src/pages/resources/api.ts frontend/app/src/pages/ResourcesPage.tsx frontend/app/src/pages/resources/ProviderCard.tsx frontend/app/src/pages/resources/api.test.ts
 git commit -m "feat: point resources page at user-scoped resources api"
 ```
 
@@ -272,6 +301,8 @@ git commit -m "feat: point resources page at user-scoped resources api"
 - Modify: `docs/superpowers/specs/2026-04-06-resource-observability-split-design.md`
 - Modify: `README.md`
 - Test: `tests/Integration/test_monitor_resources_route.py`
+- Test: Playwright CLI probe against product resources route
+- Test: Playwright CLI probe against global monitor resources route
 
 - [ ] **Step 1: Write the failing test**
 
@@ -300,7 +331,15 @@ else:
 Run: `uv run pytest -q tests/Integration/test_monitor_resources_route.py -k health`
 Expected: PASS
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 5: Run Playwright CLI verification**
+
+Run: `npx playwright test <product-resources-spec>`
+Expected: product resources UI loads from `/resources`, uses the user-scoped route, and does not rely on `/api/monitor/resources`
+
+Run: `npx playwright test <monitor-resources-spec>`
+Expected: monitor `/leases` UI still loads from the global monitor contract and never falls through to `/api/resources/*`
+
+- [ ] **Step 6: Commit**
 
 ```bash
 git add backend/web/services/monitor_service.py tests/Integration/test_monitor_resources_route.py docs/superpowers/specs/2026-04-06-resource-observability-split-design.md README.md

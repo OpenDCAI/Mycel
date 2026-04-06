@@ -122,4 +122,12 @@ This design chooses option 1 in architecture, but decomposes the implementation 
 - Backend proof that global monitor resources still work.
 - Backend proof that user-scoped resources no longer read `/api/monitor/resources`.
 - Explicit proof of where truth is written under Supabase mode.
-- Minimal frontend proof only after backend boundaries are correct.
+- Playwright CLI proof for the product resources surface after the API split:
+  - page path: app `/resources`
+  - visible proof: resources header, active/session counters, refresh button, at least one provider card
+  - trace proof: browser requests include `/api/resources/overview` and exclude `/api/monitor/resources`
+- Playwright CLI proof for the global monitor surface so the global contract is not accidentally broken while fixing the product page:
+  - page path: monitor `/leases`
+  - visible proof: monitor shell/logo plus leases table headers
+  - trace proof: browser requests include `/api/monitor/leases` and exclude `/api/resources/*`
+- Small frontend testability improvements are allowed when they are selector-only changes, especially `data-testid` markers on product resource page elements and provider cards.
