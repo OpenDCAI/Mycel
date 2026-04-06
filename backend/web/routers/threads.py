@@ -81,6 +81,20 @@ def _invalidate_resource_overview_cache() -> None:
     clear_resource_overview_cache()
 
 
+def _find_owned_member(app: Any, member_id: str, owner_user_id: str) -> Any | None:
+    member = app.state.member_repo.get_by_id(member_id)
+    if not member or member.owner_user_id != owner_user_id:
+        return None
+    return member
+
+
+def _require_owned_member(app: Any, member_id: str, owner_user_id: str) -> Any:
+    member = _find_owned_member(app, member_id, owner_user_id)
+    if member is None:
+        raise HTTPException(403, "Not authorized")
+    return member
+
+
 async def _prepare_attachment_message(
     thread_id: str,
     sandbox_type: str,
@@ -655,8 +669,8 @@ async def resolve_main_thread(
     app: Annotated[Any, Depends(get_app)] = None,
 ) -> dict[str, Any]:
     """Return the main thread for a member, or null when none exists."""
-    agent_member = app.state.member_repo.get_by_id(payload.member_id)
-    if not agent_member or agent_member.owner_user_id != user_id:
+    agent_member = _find_owned_member(app, payload.member_id, user_id)
+    if agent_member is None:
         # Return null instead of 403 — member may not exist yet (stale client state)
         # or belong to another user (harmless to reveal "no thread")
         return {"thread": None}
@@ -681,9 +695,7 @@ async def get_default_thread_config(
     user_id: Annotated[str, Depends(get_current_user_id)],
     app: Annotated[Any, Depends(get_app)] = None,
 ) -> dict[str, Any]:
-    agent_member = app.state.member_repo.get_by_id(member_id)
-    if not agent_member or agent_member.owner_user_id != user_id:
-        raise HTTPException(403, "Not authorized")
+    _require_owned_member(app, member_id, user_id)
     return resolve_default_config(app, user_id, member_id)
 
 
@@ -693,9 +705,7 @@ async def save_default_thread_config(
     user_id: Annotated[str, Depends(get_current_user_id)],
     app: Annotated[Any, Depends(get_app)] = None,
 ) -> dict[str, Any]:
-    agent_member = app.state.member_repo.get_by_id(payload.member_id)
-    if not agent_member or agent_member.owner_user_id != user_id:
-        raise HTTPException(403, "Not authorized")
+    _require_owned_member(app, payload.member_id, user_id)
     save_last_confirmed_config(app, user_id, payload.member_id, payload.model_dump())
     return {"ok": True}
 
