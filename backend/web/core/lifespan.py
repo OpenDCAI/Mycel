@@ -40,8 +40,8 @@ async def lifespan(app: FastAPI):
         from storage.container import StorageContainer
         from storage.providers.supabase import (
             SupabaseAccountRepo,
-            SupabaseChatParticipantRepo,
             SupabaseChatMessageRepo,
+            SupabaseChatParticipantRepo,
             SupabaseChatRepo,
             SupabaseContactRepo,
             SupabaseInviteCodeRepo,
@@ -67,7 +67,7 @@ async def lifespan(app: FastAPI):
         app.state._supabase_auth_client_factory = create_supabase_auth_client
         app.state._storage_container = StorageContainer(strategy="supabase", supabase_client=_supabase_client)
     else:
-        from storage.providers.sqlite.chat_repo import SQLiteChatParticipantRepo, SQLiteChatMessageRepo, SQLiteChatRepo
+        from storage.providers.sqlite.chat_repo import SQLiteChatMessageRepo, SQLiteChatParticipantRepo, SQLiteChatRepo
         from storage.providers.sqlite.kernel import SQLiteDBRole, resolve_role_db_path
         from storage.providers.sqlite.member_repo import SQLiteAccountRepo, SQLiteMemberRepo
         from storage.providers.sqlite.recipe_repo import SQLiteRecipeRepo
