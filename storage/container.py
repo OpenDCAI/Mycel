@@ -194,7 +194,7 @@ class StorageContainer:
             if normalized not in cls._SUPPORTED_STRATEGIES:
                 supported = ", ".join(sorted(cls._SUPPORTED_STRATEGIES))
                 raise ValueError(f"Unsupported provider for {repo_name}: {provider!r}. Supported providers: {supported}")
-            resolved[repo_name] = normalized
+            resolved[repo_name] = "sqlite" if normalized == "sqlite" else "supabase"
         return resolved
 
     def _sqlite_checkpoint_repo(self):

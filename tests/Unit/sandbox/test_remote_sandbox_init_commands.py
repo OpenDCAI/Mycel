@@ -1,4 +1,5 @@
 from types import SimpleNamespace
+from typing import Any, cast
 
 import pytest
 
@@ -18,7 +19,7 @@ class _RecordingCommand:
 @pytest.mark.asyncio
 async def test_run_init_commands_avoids_same_loop_threadsafe_wait(monkeypatch: pytest.MonkeyPatch):
     command = _RecordingCommand()
-    capability = SimpleNamespace(command=command)
+    capability = cast(Any, SimpleNamespace(command=command))
     sandbox = RemoteSandbox.__new__(RemoteSandbox)
     sandbox._config = SandboxConfig(init_commands=["echo init"])
 

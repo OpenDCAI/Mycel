@@ -50,6 +50,13 @@ def _connect(db_path: Path) -> sqlite3.Connection:
     return connect_sqlite(db_path)
 
 
+def _require_row_text(row: dict[str, object], key: str) -> str:
+    value = row.get(key)
+    if not isinstance(value, str) or not value:
+        raise RuntimeError(f"Chat session row missing required text field: {key}")
+    return value
+
+
 @dataclass
 class ChatSessionPolicy:
     """Policy configuration for ChatSession lifecycle."""
@@ -210,7 +217,7 @@ class ChatSessionManager:
                 _term_repo.close()
             if _term_row is None:
                 return None
-            terminal_id = _term_row["terminal_id"]
+            terminal_id = _require_row_text(dict(_term_row), "terminal_id")
         live = self._live_sessions.get(terminal_id)
         if live:
             if live.is_expired():
@@ -266,7 +273,7 @@ class ChatSessionManager:
         if session.is_expired():
             self.delete(session.session_id, reason="expired")
             return None
-        self._live_sessions[terminal_id] = session
+        self._live_sessions[session.terminal.terminal_id] = session
         return session
 
     def create(

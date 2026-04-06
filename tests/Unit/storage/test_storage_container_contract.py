@@ -3,6 +3,7 @@ from pathlib import Path
 import pytest
 
 from storage import StorageContainer
+from storage.container import StorageStrategy
 from storage.providers.sqlite.checkpoint_repo import SQLiteCheckpointRepo
 from storage.providers.sqlite.eval_repo import SQLiteEvalRepo
 from storage.providers.supabase.checkpoint_repo import SupabaseCheckpointRepo
@@ -40,7 +41,7 @@ def test_storage_container_supabase_strategy_builds_concrete_repos() -> None:
     ],
 )
 def test_storage_container_repo_level_overrides(
-    strategy: str,
+    strategy: StorageStrategy,
     repo_providers: dict[str, str],
     repo_method: str,
     expected_type: type,
