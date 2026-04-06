@@ -7,7 +7,7 @@ import json
 import logging
 import threading
 from collections.abc import Awaitable, Callable
-from typing import Any
+from typing import Any, cast
 
 from langchain_core.messages import ToolMessage
 
@@ -95,28 +95,6 @@ class ToolRunner(AgentMiddleware):
         if isinstance(hook, list):
             return hook
         return hook if callable(hook) else None
-
-    @staticmethod
-    def _apply_result_hooks_sync(
-        hook_or_hooks,
-        payload: ToolMessage | ToolResultEnvelope,
-        request: ToolCallRequest,
-    ) -> ToolMessage | ToolResultEnvelope:
-        if hook_or_hooks is None:
-            return payload
-        hooks = hook_or_hooks if isinstance(hook_or_hooks, list) else [hook_or_hooks]
-        current = payload
-        for hook in hooks:
-            updated = hook(current, request)
-            if asyncio.iscoroutine(updated):
-                updated = ToolRunner._await_async_hook_with_timeout_sync(
-                    request,
-                    updated,
-                    hook_name=getattr(hook, "__name__", type(hook).__name__),
-                )
-            if updated is not None:
-                current = updated
-        return current
 
     @staticmethod
     async def _apply_result_hooks(
@@ -324,26 +302,6 @@ class ToolRunner(AgentMiddleware):
             return None
         return state.get(name) if isinstance(state, dict) else getattr(state, name, None)
 
-    def _consume_permission_resolution_sync(
-        self,
-        request: ToolCallRequest,
-        *,
-        name: str,
-        args: dict,
-        entry,
-    ) -> tuple[str | None, str | None]:
-        consumer = self._get_state_callable(request, "consume_permission_resolution")
-        if not callable(consumer):
-            return None, None
-        permission_context = ToolPermissionContext(
-            is_read_only=bool(getattr(entry, "is_read_only", False)),
-            is_destructive=bool(getattr(entry, "is_destructive", False)),
-        )
-        result = consumer(name, args, permission_context, request)
-        if asyncio.iscoroutine(result):
-            result = self._run_awaitable_sync(result)
-        return self._coerce_permission_response(result)
-
     async def _consume_permission_resolution_async(
         self,
         request: ToolCallRequest,
@@ -363,30 +321,6 @@ class ToolRunner(AgentMiddleware):
         if asyncio.iscoroutine(result):
             result = await result
         return self._coerce_permission_response(result)
-
-    def _request_permission_sync(
-        self,
-        request: ToolCallRequest,
-        *,
-        name: str,
-        args: dict,
-        entry,
-        message: str | None,
-    ) -> str | None:
-        requester = self._get_state_callable(request, "request_permission")
-        if not callable(requester):
-            return None
-        permission_context = ToolPermissionContext(
-            is_read_only=bool(getattr(entry, "is_read_only", False)),
-            is_destructive=bool(getattr(entry, "is_destructive", False)),
-        )
-        result = requester(name, args, permission_context, request, message)
-        if asyncio.iscoroutine(result):
-            result = self._run_awaitable_sync(result)
-        if isinstance(result, dict):
-            request_id = result.get("request_id")
-            return request_id if isinstance(request_id, str) else None
-        return result if isinstance(result, str) else None
 
     async def _request_permission_async(
         self,
@@ -412,22 +346,6 @@ class ToolRunner(AgentMiddleware):
             return request_id if isinstance(request_id, str) else None
         return result if isinstance(result, str) else None
 
-    def _run_tool_specific_validation_sync(self, entry, args: dict, request: ToolCallRequest) -> dict:
-        validator = getattr(entry, "validate_input", None)
-        if validator is None:
-            return args
-        result = validator(dict(args), request)
-        if result is None:
-            return args
-        if isinstance(result, dict):
-            if result.get("result") is False or result.get("ok") is False:
-                raise _ToolSpecificValidationError(
-                    result.get("message") or "Tool-specific validation failed",
-                    result.get("errorCode") or result.get("error_code"),
-                )
-            return result
-        raise InputValidationError(str(result))
-
     async def _run_tool_specific_validation_async(self, entry, args: dict, request: ToolCallRequest) -> dict:
         validator = getattr(entry, "validate_input", None)
         if validator is None:
@@ -445,37 +363,6 @@ class ToolRunner(AgentMiddleware):
                 )
             return result
         raise InputValidationError(str(result))
-
-    def _run_pre_tool_use_sync(self, request: ToolCallRequest, *, name: str, args: dict, entry) -> tuple[dict, str | None, str | None]:
-        hooks = self._get_request_hook(request, "pre_tool_use")
-        if hooks is None:
-            return args, None, None
-        payload = {"name": name, "args": dict(args), "entry": entry}
-        permission: str | None = None
-        message: str | None = None
-        hook_list = hooks if isinstance(hooks, list) else [hooks]
-        for hook in hook_list:
-            updated = hook(payload, request)
-            if asyncio.iscoroutine(updated):
-                updated = self._await_async_hook_with_timeout_sync(
-                    request,
-                    updated,
-                    hook_name=getattr(hook, "__name__", type(hook).__name__),
-                )
-            if updated is None:
-                continue
-            if isinstance(updated, dict):
-                if "args" in updated:
-                    payload["args"] = updated["args"]
-                if "name" in updated:
-                    payload["name"] = updated["name"]
-                if "entry" in updated:
-                    payload["entry"] = updated["entry"]
-                new_permission, new_message = self._coerce_permission_response(updated)
-                if new_permission is not None:
-                    permission = new_permission
-                    message = new_message
-        return payload["args"], permission, message
 
     async def _run_pre_tool_use_async(
         self,
@@ -533,39 +420,6 @@ class ToolRunner(AgentMiddleware):
                     message = new_message
         return payload["args"], permission, message
 
-    def _run_permission_request_hooks_sync(
-        self,
-        request: ToolCallRequest,
-        *,
-        name: str,
-        entry,
-        message: str | None,
-    ) -> tuple[str | None, str | None]:
-        hooks = self._get_request_hook(request, "permission_request_hooks")
-        if hooks is None:
-            return None, message
-        payload = {"name": name, "entry": entry, "message": message}
-        permission: str | None = None
-        hook_message = message
-        hook_list = hooks if isinstance(hooks, list) else [hooks]
-        for hook in hook_list:
-            updated = hook(payload, request)
-            if asyncio.iscoroutine(updated):
-                updated = self._await_async_hook_with_timeout_sync(
-                    request,
-                    updated,
-                    hook_name=getattr(hook, "__name__", type(hook).__name__),
-                )
-            if updated is None:
-                continue
-            if isinstance(updated, dict):
-                new_permission, new_message = self._coerce_permission_response(updated)
-                if new_permission is not None:
-                    permission = new_permission
-                if new_message is not None:
-                    hook_message = new_message
-        return permission, hook_message
-
     async def _run_permission_request_hooks_async(
         self,
         request: ToolCallRequest,
@@ -606,83 +460,6 @@ class ToolRunner(AgentMiddleware):
                 if new_message is not None:
                     hook_message = new_message
         return permission, hook_message
-
-    def _resolve_permission(
-        self,
-        request: ToolCallRequest,
-        *,
-        name: str,
-        args: dict,
-        entry,
-        hook_permission: str | None,
-        hook_message: str | None,
-    ) -> ToolResultEnvelope | None:
-        if hook_permission == "deny":
-            return self._permission_denied_result("deny", hook_message)
-
-        checker = self._get_state_callable(request, "can_use_tool")
-        rule_permission: str | None = None
-        rule_message: str | None = None
-        permission_context = ToolPermissionContext(
-            is_read_only=bool(getattr(entry, "is_read_only", False)),
-            is_destructive=bool(getattr(entry, "is_destructive", False)),
-        )
-        if callable(checker):
-            result = checker(name, args, permission_context, request)
-            if asyncio.iscoroutine(result):
-                result = self._run_awaitable_sync(result)
-            rule_permission, rule_message = self._coerce_permission_response(result)
-
-        # @@@permission-resolution-precedence - only consume one-shot approvals when current state still asks.
-        if rule_permission == "ask":
-            resolved_permission, resolved_message = self._consume_permission_resolution_sync(
-                request,
-                name=name,
-                args=args,
-                entry=entry,
-            )
-            if resolved_permission == "allow":
-                return None
-            if resolved_permission in {"deny", "ask"}:
-                return self._permission_denied_result(resolved_permission, resolved_message)
-            request_hook_permission, request_hook_message = self._run_permission_request_hooks_sync(
-                request,
-                name=name,
-                entry=entry,
-                message=rule_message,
-            )
-            if request_hook_permission == "allow":
-                return None
-            if request_hook_permission in {"deny", "ask"}:
-                return self._permission_denied_result(request_hook_permission, request_hook_message)
-            rule_message = request_hook_message
-
-        if hook_permission == "allow":
-            if rule_permission in {"deny", "ask"}:
-                if rule_permission == "ask":
-                    request_id = self._request_permission_sync(
-                        request,
-                        name=name,
-                        args=args,
-                        entry=entry,
-                        message=rule_message,
-                    )
-                    return self._materialize_permission_ask(request_id, rule_message)
-                return self._permission_denied_result(rule_permission, rule_message)
-            return None
-
-        if rule_permission in {"deny", "ask"}:
-            if rule_permission == "ask":
-                request_id = self._request_permission_sync(
-                    request,
-                    name=name,
-                    args=args,
-                    entry=entry,
-                    message=rule_message,
-                )
-                return self._materialize_permission_ask(request_id, rule_message)
-            return self._permission_denied_result(rule_permission, rule_message)
-        return None
 
     async def _resolve_permission_async(
         self,
@@ -797,6 +574,31 @@ class ToolRunner(AgentMiddleware):
             source=source,
         )
 
+    async def _finalize_tool_result_async(
+        self,
+        request: ToolCallRequest,
+        result: ToolMessage | ToolResultEnvelope,
+        *,
+        name: str,
+        call_id: str,
+        source: str,
+    ) -> ToolMessage:
+        if isinstance(result, ToolResultEnvelope):
+            hook_name = self._select_hook_name(result.kind)
+            hooks = self._get_request_hook(request, hook_name)
+            hooked = await self._apply_result_hooks(hooks, result, request)
+            if isinstance(hooked, ToolMessage):
+                return hooked
+            return self._materialize_result(hooked, name=name, call_id=call_id, source=source)
+
+        meta = result.additional_kwargs.get("tool_result_meta", {})
+        hook_name = self._select_hook_name(meta.get("kind"))
+        hooks = self._get_request_hook(request, hook_name)
+        hooked = await self._apply_result_hooks(hooks, result, request)
+        if isinstance(hooked, ToolMessage):
+            return hooked
+        return self._materialize_result(hooked, name=name, call_id=call_id, source=source)
+
     @staticmethod
     def _select_hook_name(kind: str) -> str:
         if kind == "error":
@@ -813,92 +615,6 @@ class ToolRunner(AgentMiddleware):
         if error.details:
             metadata["error_details"] = error.details
         return metadata
-
-    def _validate_and_run(self, request: ToolCallRequest, name: str, args: dict, call_id: str) -> ToolMessage | ToolResultEnvelope | None:
-        entry = self._registry.get(name)
-        if entry is None:
-            return None  # not our tool
-        source = self._entry_source(entry)
-
-        schema = entry.get_schema()
-        try:
-            self._validator.validate(schema, args)
-        except InputValidationError as e:
-            return self._finalize_registered_result(
-                tool_error(
-                    f"InputValidationError: {name} failed due to the following issue:\n{e}",
-                    metadata=self._input_validation_metadata(e),
-                ),
-                name=name,
-                call_id=call_id,
-                source=source,
-            )
-        try:
-            args = self._run_tool_specific_validation_sync(entry, args, request)
-        except _ToolSpecificValidationError as e:
-            return self._finalize_registered_result(
-                tool_error(
-                    f"ToolValidationError: {name} failed due to the following issue:\n{e}",
-                    metadata={"error_type": "tool_input_validation", "error_code": e.error_code},
-                ),
-                name=name,
-                call_id=call_id,
-                source=source,
-            )
-        except InputValidationError as e:
-            return self._finalize_registered_result(
-                tool_error(
-                    f"ToolValidationError: {name} failed due to the following issue:\n{e}",
-                    metadata={"error_type": "tool_input_validation"},
-                ),
-                name=name,
-                call_id=call_id,
-                source=source,
-            )
-        args, hook_permission, hook_message = self._run_pre_tool_use_sync(
-            request,
-            name=name,
-            args=args,
-            entry=entry,
-        )
-        permission_result = self._resolve_permission(
-            request,
-            name=name,
-            args=args,
-            entry=entry,
-            hook_permission=hook_permission,
-            hook_message=hook_message,
-        )
-        if permission_result is not None:
-            return self._finalize_registered_result(
-                permission_result,
-                name=name,
-                call_id=call_id,
-                source=source,
-            )
-
-        args = self._inject_handler_context(entry, args, request)
-        try:
-            result = entry.handler(**args)
-            if asyncio.iscoroutine(result):
-                result = asyncio.get_event_loop().run_until_complete(result)
-            return self._finalize_registered_result(
-                self._normalize_result(result),
-                name=name,
-                call_id=call_id,
-                source=source,
-            )
-        except Exception as e:
-            logger.exception("Tool %s execution failed", name)
-            return self._finalize_registered_result(
-                tool_error(
-                    f"<tool_use_error>{e}</tool_use_error>",
-                    metadata={"error_type": "tool_execution"},
-                ),
-                name=name,
-                call_id=call_id,
-                source=source,
-            )
 
     async def _validate_and_run_async(
         self,
@@ -1024,23 +740,23 @@ class ToolRunner(AgentMiddleware):
     ) -> ToolMessage:
         name, args, call_id = self._extract_call_info(request)
         entry = self._registry.get(name)
-        result = self._validate_and_run(request, name, args, call_id)
+        result: ToolMessage | ToolResultEnvelope | None = self._run_awaitable_sync(
+            self._validate_and_run_async(request, name, args, call_id)
+        )
         if result is not None:
             source = self._entry_source(entry) if entry is not None else "local"
-            if isinstance(result, ToolResultEnvelope):
-                hook_name = self._select_hook_name(result.kind)
-                hooks = self._get_request_hook(request, hook_name)
-                hooked = self._apply_result_hooks_sync(hooks, result, request) if hooks else result
-                if isinstance(hooked, ToolMessage):
-                    return hooked
-                return self._materialize_result(hooked, name=name, call_id=call_id, source=source)
-            kind = result.additional_kwargs.get("tool_result_meta", {}).get("kind")
-            hook_name = self._select_hook_name(kind)
-            hooks = self._get_request_hook(request, hook_name)
-            maybe_updated = self._apply_result_hooks_sync(hooks, result, request) if hooks else result
-            if isinstance(maybe_updated, ToolMessage):
-                return maybe_updated
-            return self._materialize_result(maybe_updated, name=name, call_id=call_id, source=source)
+            return cast(
+                ToolMessage,
+                self._run_awaitable_sync(
+                    self._finalize_tool_result_async(
+                        request,
+                        result,
+                        name=name,
+                        call_id=call_id,
+                        source=source,
+                    )
+                ),
+            )
         upstream = handler(request)
         return upstream
 
@@ -1058,20 +774,13 @@ class ToolRunner(AgentMiddleware):
             # te-02 keeps local tools materialize-first, but registered MCP
             # tools must stay envelope-first so post hooks can see and modify
             # structured output before final ToolMessage creation.
-            if isinstance(result, ToolResultEnvelope):
-                hook_name = self._select_hook_name(result.kind)
-                hooks = self._get_request_hook(request, hook_name)
-                hooked = await self._apply_result_hooks(hooks, result, request)
-                if isinstance(hooked, ToolMessage):
-                    return hooked
-                return self._materialize_result(hooked, name=name, call_id=call_id, source=source)
-            meta = result.additional_kwargs.get("tool_result_meta", {})
-            hook_name = self._select_hook_name(meta.get("kind"))
-            hooks = self._get_request_hook(request, hook_name)
-            hooked = await self._apply_result_hooks(hooks, result, request)
-            if isinstance(hooked, ToolMessage):
-                return hooked
-            return self._materialize_result(hooked, name=name, call_id=call_id, source=source)
+            return await self._finalize_tool_result_async(
+                request,
+                result,
+                name=name,
+                call_id=call_id,
+                source=source,
+            )
 
         upstream = await handler(request)
         post_tool_use = self._get_request_hook(request, "post_tool_use")

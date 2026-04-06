@@ -18,6 +18,7 @@ from typing import Any, cast
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from langchain_core.messages import ToolMessage
 from langchain_core.tools import tool
 
 from core.runtime.agent import _make_mcp_tool_entry
@@ -1506,6 +1507,30 @@ class TestToolRunnerErrorNormalization:
         assert meta["kind"] == "permission_denied"
         assert meta["decision"] == "deny"
         assert seen == ["checker"]
+
+    def test_sync_wrap_tool_call_uses_shared_async_core(self, monkeypatch):
+        entry = ToolEntry(
+            name="Write",
+            mode=ToolMode.INLINE,
+            schema={"name": "Write", "parameters": {"type": "object", "required": [], "properties": {}}},
+            handler=lambda: "sync-only fallback",
+            source="test",
+        )
+        runner = _make_runner([entry])
+        req = _make_tool_call_request("Write", {})
+        expected = ToolMessage(
+            content="from shared async core",
+            tool_call_id="tc-1",
+            name="Write",
+            additional_kwargs={"tool_result_meta": {"kind": "success", "source": "local"}},
+        )
+        shared_async_core = AsyncMock(return_value=expected)
+        monkeypatch.setattr(runner, "_validate_and_run_async", shared_async_core)
+
+        result = runner.wrap_tool_call(req, lambda _req: MagicMock())
+
+        assert result is expected
+        shared_async_core.assert_awaited_once_with(req, "Write", {}, "tc-1")
 
     @pytest.mark.asyncio
     async def test_sync_wrap_tool_call_awaits_async_permission_checker_inside_running_loop(self):
