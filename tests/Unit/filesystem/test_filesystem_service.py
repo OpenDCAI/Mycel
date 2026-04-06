@@ -5,6 +5,7 @@ import time
 from pathlib import Path, PurePosixPath
 
 from core.runtime.registry import ToolRegistry
+from core.runtime.tool_result import ToolResultEnvelope
 from core.tools.filesystem.service import FileSystemService, _ReadFileStateCache
 from sandbox.interfaces.filesystem import DirListResult, FileReadResult, FileSystemBackend, FileWriteResult
 
@@ -23,12 +24,17 @@ def _make_service(
     )
 
 
+def _require_text_result(result: str | ToolResultEnvelope) -> str:
+    assert isinstance(result, str)
+    return result
+
+
 def test_edit_rejects_if_last_read_was_partial_view(tmp_path: Path):
     service = _make_service(tmp_path)
     target = tmp_path / "sample.txt"
     target.write_text("alpha\nbeta\ngamma\n", encoding="utf-8")
 
-    read_result = service._read_file(str(target), offset=2, limit=1)
+    read_result = _require_text_result(service._read_file(str(target), offset=2, limit=1))
     assert "<file" in read_result
 
     edit_result = service._edit_file(
@@ -47,7 +53,7 @@ def test_edit_allows_read_that_covered_entire_file_with_offset_one(tmp_path: Pat
     target = tmp_path / "sample.txt"
     target.write_text("alpha\nbeta\n", encoding="utf-8")
 
-    read_result = service._read_file(str(target), offset=1, limit=2000)
+    read_result = _require_text_result(service._read_file(str(target), offset=1, limit=2000))
     assert "<file" in read_result
 
     edit_result = service._edit_file(
@@ -65,7 +71,7 @@ def test_edit_rejects_notebook_files_even_after_read(tmp_path: Path):
     target = tmp_path / "nb.ipynb"
     target.write_text('{"cells": [], "metadata": {}, "nbformat": 4, "nbformat_minor": 5}\n', encoding="utf-8")
 
-    read_result = service._read_file(str(target))
+    read_result = _require_text_result(service._read_file(str(target)))
     assert "nb.ipynb" in read_result
 
     edit_result = service._edit_file(
@@ -108,9 +114,9 @@ def test_read_tracking_lru_eviction_restores_read_before_edit_gate(tmp_path: Pat
     for path in (first, second, third):
         path.write_text(f"{path.stem}\n", encoding="utf-8")
 
-    assert "<file" in service._read_file(str(first))
-    assert "<file" in service._read_file(str(second))
-    assert "<file" in service._read_file(str(third))
+    assert "<file" in _require_text_result(service._read_file(str(first)))
+    assert "<file" in _require_text_result(service._read_file(str(second)))
+    assert "<file" in _require_text_result(service._read_file(str(third)))
 
     edit_result = service._edit_file(
         str(first),
@@ -128,7 +134,7 @@ def test_edit_preserves_crlf_line_endings(tmp_path: Path):
     target = tmp_path / "windows.txt"
     target.write_bytes(b"alpha\r\nbeta\r\n")
 
-    assert "<file" in service._read_file(str(target))
+    assert "<file" in _require_text_result(service._read_file(str(target)))
 
     edit_result = service._edit_file(
         str(target),
@@ -159,7 +165,7 @@ def test_edit_rejects_file_larger_than_edit_cap(tmp_path: Path):
     target = tmp_path / "large.txt"
     target.write_text("123456789\n", encoding="utf-8")
 
-    assert "<file" in service._read_file(str(target))
+    assert "<file" in _require_text_result(service._read_file(str(target)))
 
     edit_result = service._edit_file(
         str(target),

@@ -6,6 +6,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import pytest
+from fastapi import Request
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
 from backend.web.routers import threads as threads_router
@@ -89,6 +90,16 @@ class _BlockingChildAgent:
     def __init__(self) -> None:
         self.runtime = _FakeRuntime()
         self.agent = _BlockingChildGraph()
+
+
+def _make_request(app: SimpleNamespace) -> Request:
+    return Request({"type": "http", "headers": [], "app": app})
+
+
+def _require_entries(builder: DisplayBuilder, thread_id: str) -> list[dict]:
+    entries = builder.get_entries(thread_id)
+    assert entries is not None
+    return entries
 
 
 def _prime_agent_turn(
@@ -329,7 +340,7 @@ def test_live_tool_result_restores_subagent_stream_from_agent_background_json():
         },
     )
 
-    seg = builder.get_entries(thread_id)[0]["segments"][0]
+    seg = _require_entries(builder, thread_id)[0]["segments"][0]
     assert delta is not None
     assert seg["step"]["subagent_stream"]["task_id"] == "task-123"
     assert seg["step"]["subagent_stream"]["thread_id"] == "subagent-task-123"
@@ -357,7 +368,7 @@ def test_live_tool_result_restores_subagent_stream_from_blocking_agent_metadata(
         },
     )
 
-    seg = builder.get_entries(thread_id)[0]["segments"][0]
+    seg = _require_entries(builder, thread_id)[0]["segments"][0]
     assert delta is not None
     assert seg["step"]["subagent_stream"]["task_id"] == "task-456"
     assert seg["step"]["subagent_stream"]["thread_id"] == "subagent-task-456"
@@ -412,7 +423,7 @@ def test_live_hidden_ask_user_answer_message_appends_hidden_anchor_entry():
 
     assert delta is not None
     assert delta["type"] == "append_entry"
-    entry = builder.get_entries(thread_id)[0]
+    entry = _require_entries(builder, thread_id)[0]
     assert entry["role"] == "user"
     assert entry["showing"] is False
     assert entry["ask_user_question_answered"]["answers"][0]["selected_options"] == ["Alpha"]
@@ -487,7 +498,7 @@ def test_task_start_can_patch_background_agent_after_tool_result_race():
         },
     )
 
-    seg = builder.get_entries(thread_id)[0]["segments"][0]
+    seg = _require_entries(builder, thread_id)[0]["segments"][0]
     assert delta is not None
     assert seg["step"]["status"] == "done"
     assert seg["step"]["subagent_stream"]["task_id"] == "task-race"
@@ -536,7 +547,7 @@ def test_live_notice_reconciles_subagent_stream_status_from_terminal_notificatio
         },
     )
 
-    seg = builder.get_entries(thread_id)[0]["segments"][0]
+    seg = _require_entries(builder, thread_id)[0]["segments"][0]
     assert delta is not None
     assert seg["step"]["subagent_stream"]["task_id"] == "task-123"
     assert seg["step"]["subagent_stream"]["thread_id"] == "subagent-task-123"
@@ -571,9 +582,9 @@ def test_checkpoint_rebuild_reconciles_subagent_stream_status_from_terminal_noti
             "  <result>CHILD_DONE</result>\n"
             "</task-notification>\n"
             "</system-reminder>"
-        )
+        ),
+        metadata={"source": "system", "notification_type": "agent"},
     )
-    notice.metadata = {"source": "system", "notification_type": "agent"}
 
     entries = builder.build_from_checkpoint(
         thread_id,
@@ -635,7 +646,7 @@ async def test_list_tasks_includes_subagent_stream_from_display_entries():
     monkeypatch = pytest.MonkeyPatch()
     app = _make_router_app(builder, thread_id, monkeypatch)
 
-    tasks = await threads_router.list_tasks(thread_id, request=SimpleNamespace(app=app))
+    tasks = await threads_router.list_tasks(thread_id, request=_make_request(app))
 
     assert tasks == [
         {
@@ -666,7 +677,7 @@ async def test_get_task_returns_subagent_stream_result_from_display_entries():
     monkeypatch = pytest.MonkeyPatch()
     app = _make_router_app(builder, thread_id, monkeypatch)
 
-    task = await threads_router.get_task(thread_id, "task-123", request=SimpleNamespace(app=app))
+    task = await threads_router.get_task(thread_id, "task-123", request=_make_request(app))
 
     assert task == {
         "task_id": "task-123",
@@ -694,8 +705,8 @@ async def test_blocking_subagent_done_state_overrides_stale_running_stream_on_de
     app = _make_router_app(builder, thread_id, monkeypatch)
 
     detail = await threads_router.get_thread_messages(thread_id, user_id="owner-1", app=app)
-    tasks = await threads_router.list_tasks(thread_id, request=SimpleNamespace(app=app))
-    task = await threads_router.get_task(thread_id, "task-stale-completed", request=SimpleNamespace(app=app))
+    tasks = await threads_router.list_tasks(thread_id, request=_make_request(app))
+    task = await threads_router.get_task(thread_id, "task-stale-completed", request=_make_request(app))
 
     stream = detail["entries"][1]["segments"][0]["step"]["subagent_stream"]
     assert stream["status"] == "completed"
@@ -718,8 +729,8 @@ async def test_blocking_subagent_error_overrides_stale_running_stream_on_detail_
     app = _make_router_app(builder, thread_id, monkeypatch)
 
     detail = await threads_router.get_thread_messages(thread_id, user_id="owner-1", app=app)
-    tasks = await threads_router.list_tasks(thread_id, request=SimpleNamespace(app=app))
-    task = await threads_router.get_task(thread_id, "task-stale-error", request=SimpleNamespace(app=app))
+    tasks = await threads_router.list_tasks(thread_id, request=_make_request(app))
+    task = await threads_router.get_task(thread_id, "task-stale-error", request=_make_request(app))
 
     stream = detail["entries"][1]["segments"][0]["step"]["subagent_stream"]
     assert stream["status"] == "error"

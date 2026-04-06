@@ -6,6 +6,7 @@ import asyncio
 import json
 from pathlib import Path
 from types import SimpleNamespace
+from typing import Any, cast
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -546,9 +547,9 @@ async def test_get_thread_history_skips_empty_ai_messages_after_notifications():
     checkpointer = _MemoryCheckpointer()
     loop = _make_loop(checkpointer=checkpointer)
     system_notice = HumanMessage(
-        content="<system-reminder><task-notification><status>error</status><result>Agent failed</result></task-notification></system-reminder>"
+        content="<system-reminder><task-notification><status>error</status><result>Agent failed</result></task-notification></system-reminder>",
+        metadata={"source": "system"},
     )
-    system_notice.metadata = {"source": "system"}
     checkpointer.store["history-empty-ai-thread"] = {
         "channel_values": {
             "messages": [
@@ -683,9 +684,9 @@ async def test_query_loop_persists_visible_terminal_followthrough_when_system_no
     checkpointer = _MemoryCheckpointer()
     loop = _make_loop(text="", checkpointer=checkpointer)
     system_notice = HumanMessage(
-        content="<system-reminder><task-notification><status>error</status><result>Agent failed</result></task-notification></system-reminder>"
+        content="<system-reminder><task-notification><status>error</status><result>Agent failed</result></task-notification></system-reminder>",
+        metadata={"source": "system", "notification_type": "agent"},
     )
-    system_notice.metadata = {"source": "system", "notification_type": "agent"}
     checkpointer.store["resume-empty-ai-thread"] = {
         "channel_values": {
             "messages": [
@@ -696,7 +697,7 @@ async def test_query_loop_persists_visible_terminal_followthrough_when_system_no
     }
 
     async for _ in loop.query(
-        None,
+        cast(dict[str, Any], None),
         config={"configurable": {"thread_id": "resume-empty-ai-thread"}},
     ):
         pass
@@ -742,7 +743,7 @@ async def test_query_loop_persists_midrun_steer_message_into_checkpoint_state(tm
         }
     }
 
-    async for _ in loop.query(None, config={"configurable": {"thread_id": "steer-persist-thread"}}):
+    async for _ in loop.query(cast(dict[str, Any], None), config={"configurable": {"thread_id": "steer-persist-thread"}}):
         pass
 
     state = await loop.aget_state({"configurable": {"thread_id": "steer-persist-thread"}})
@@ -791,7 +792,7 @@ async def test_get_thread_history_rebuilds_persisted_midrun_steer_message(tmp_pa
         }
     }
 
-    async for _ in loop.query(None, config={"configurable": {"thread_id": "steer-history-thread"}}):
+    async for _ in loop.query(cast(dict[str, Any], None), config={"configurable": {"thread_id": "steer-history-thread"}}):
         pass
 
     fake_agent = SimpleNamespace(agent=loop)
@@ -849,7 +850,7 @@ async def test_query_loop_adds_non_preemptive_steer_contract_before_terminal_rep
         }
     }
 
-    async for _ in loop.query(None, config={"configurable": {"thread_id": "steer-stop-honesty-thread"}}):
+    async for _ in loop.query(cast(dict[str, Any], None), config={"configurable": {"thread_id": "steer-stop-honesty-thread"}}):
         pass
 
     state = await loop.aget_state({"configurable": {"thread_id": "steer-stop-honesty-thread"}})
@@ -1204,9 +1205,9 @@ async def test_get_thread_messages_idle_rebuild_keeps_terminal_subagent_stream_s
             f"  <result>{result_text}</result>\n"
             "</task-notification>\n"
             "</system-reminder>"
-        )
+        ),
+        metadata={"source": "system", "notification_type": "agent"},
     )
-    notice.metadata = {"source": "system", "notification_type": "agent"}
 
     fake_agent = SimpleNamespace(
         agent=SimpleNamespace(aget_state=AsyncMock(return_value=SimpleNamespace(values={"messages": [ai, tool, notice]}))),
