@@ -412,10 +412,14 @@ def create_member(
     # Dual-write to Supabase repo
     if agent_config_repo:
         _save_config_to_repo(
-            agent_config_repo, member_id,
-            name=name, description=description,
-            status="draft", version="0.1.0",
-            created_at=now_ms, updated_at=now_ms,
+            agent_config_repo,
+            member_id,
+            name=name,
+            description=description,
+            status="draft",
+            version="0.1.0",
+            created_at=now_ms,
+            updated_at=now_ms,
         )
 
     # Persist to members table so list_members finds it
@@ -523,7 +527,8 @@ def update_member_config(member_id: str, config_patch: dict[str, Any], agent_con
         try:
             bundle = AgentLoader().load_bundle(member_dir)
             _save_config_to_repo(
-                agent_config_repo, member_id,
+                agent_config_repo,
+                member_id,
                 name=bundle.agent.name,
                 description=bundle.agent.description,
                 model=bundle.agent.model,
@@ -544,7 +549,8 @@ def update_member_config(member_id: str, config_patch: dict[str, Any], agent_con
                 if agent_cfg.source_dir and agent_cfg.source_dir.resolve() == _SYSTEM_AGENTS_DIR:
                     continue  # skip builtins
                 agent_config_repo.save_sub_agent(
-                    member_id, agent_cfg.name,
+                    member_id,
+                    agent_cfg.name,
                     description=agent_cfg.description,
                     model=agent_cfg.model,
                     tools=agent_cfg.tools,
@@ -583,19 +589,22 @@ def _save_config_to_repo(
 ) -> None:
     """Save agent config to Supabase repo. Best-effort — logs errors but doesn't raise."""
     try:
-        agent_config_repo.save_config(member_id, {
-            "name": name,
-            "description": description,
-            "model": model,
-            "tools": tools or ["*"],
-            "system_prompt": system_prompt,
-            "status": status,
-            "version": version,
-            "created_at": created_at,
-            "updated_at": updated_at,
-            "runtime": runtime or {},
-            "mcp": mcp or {},
-        })
+        agent_config_repo.save_config(
+            member_id,
+            {
+                "name": name,
+                "description": description,
+                "model": model,
+                "tools": tools or ["*"],
+                "system_prompt": system_prompt,
+                "status": status,
+                "version": version,
+                "created_at": created_at,
+                "updated_at": updated_at,
+                "runtime": runtime or {},
+                "mcp": mcp or {},
+            },
+        )
     except Exception:
         logger.warning("Failed to save config to repo for member %s", member_id, exc_info=True)
 
@@ -749,12 +758,15 @@ def publish_member(member_id: str, bump_type: str = "patch", agent_config_repo: 
         try:
             config = agent_config_repo.get_config(member_id)
             if config:
-                agent_config_repo.save_config(member_id, {
-                    **config,
-                    "version": meta["version"],
-                    "status": "active",
-                    "updated_at": meta["updated_at"],
-                })
+                agent_config_repo.save_config(
+                    member_id,
+                    {
+                        **config,
+                        "version": meta["version"],
+                        "status": "active",
+                        "updated_at": meta["updated_at"],
+                    },
+                )
         except Exception:
             logger.warning("Failed to update repo for publish of %s", member_id, exc_info=True)
 
@@ -914,8 +926,10 @@ def install_from_snapshot(
     # Dual-write to Supabase repo
     if agent_config_repo:
         _save_config_to_repo(
-            agent_config_repo, member_id,
-            name=name, description=description,
+            agent_config_repo,
+            member_id,
+            name=name,
+            description=description,
             status=meta["status"],
             version=meta["version"],
             created_at=meta["created_at"],

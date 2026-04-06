@@ -462,14 +462,16 @@ def load_bundle_from_repo(agent_config_repo: Any, member_id: str) -> AgentBundle
     sub_agent_rows = agent_config_repo.list_sub_agents(member_id)
     agents = []
     for sa in sub_agent_rows:
-        agents.append(AgentConfig(
-            name=sa.get("name", ""),
-            description=sa.get("description", ""),
-            tools=sa.get("tools", ["*"]),
-            system_prompt=sa.get("system_prompt", ""),
-            model=sa.get("model"),
-            source_dir=None,
-        ))
+        agents.append(
+            AgentConfig(
+                name=sa.get("name", ""),
+                description=sa.get("description", ""),
+                tools=sa.get("tools", ["*"]),
+                system_prompt=sa.get("system_prompt", ""),
+                model=sa.get("model"),
+                source_dir=None,
+            )
+        )
 
     # Skills from agent_skills table
     skill_rows = agent_config_repo.list_skills(member_id)

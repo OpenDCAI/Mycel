@@ -46,21 +46,19 @@ async def list_conversations(
         if agent and hasattr(agent, "runtime"):
             running = agent.runtime.current_state == AgentState.ACTIVE
         last_active = app.state.thread_last_active.get(tid)
-        updated_at = (
-            datetime.fromtimestamp(last_active, tz=UTC).isoformat()
-            if last_active
-            else None
+        updated_at = datetime.fromtimestamp(last_active, tz=UTC).isoformat() if last_active else None
+        items.append(
+            {
+                "id": tid,
+                "type": "hire",
+                "title": t.get("member_name") or "Agent",
+                "member_id": t.get("member_id"),
+                "avatar_url": avatar_url(t.get("member_id"), bool(t.get("member_avatar"))),
+                "updated_at": updated_at,
+                "unread_count": 0,
+                "running": running,
+            }
         )
-        items.append({
-            "id": tid,
-            "type": "hire",
-            "title": t.get("member_name") or "Agent",
-            "member_id": t.get("member_id"),
-            "avatar_url": avatar_url(t.get("member_id"), bool(t.get("member_avatar"))),
-            "updated_at": updated_at,
-            "unread_count": 0,
-            "running": running,
-        })
 
     # ── Visit chats ──
     messaging = getattr(app.state, "messaging_service", None)
@@ -122,16 +120,18 @@ async def list_conversations(
             if messages_repo:
                 unread = messages_repo.count_unread(chat_id, user_id)
 
-            items.append({
-                "id": chat_id,
-                "type": "visit",
-                "title": title,
-                "member_id": None,
-                "avatar_url": chat_avatar,
-                "updated_at": getattr(chat_obj, "updated_at", None) or getattr(chat_obj, "created_at", None),
-                "unread_count": unread,
-                "running": False,
-            })
+            items.append(
+                {
+                    "id": chat_id,
+                    "type": "visit",
+                    "title": title,
+                    "member_id": None,
+                    "avatar_url": chat_avatar,
+                    "updated_at": getattr(chat_obj, "updated_at", None) or getattr(chat_obj, "created_at", None),
+                    "unread_count": unread,
+                    "running": False,
+                }
+            )
 
     # Sort by updated_at descending (None goes last)
     items.sort(key=lambda x: x.get("updated_at") or "", reverse=True)
