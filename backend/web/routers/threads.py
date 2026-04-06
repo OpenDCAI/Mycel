@@ -1259,12 +1259,9 @@ async def get_thread_terminal_status(
 async def get_thread_lease_status(
     thread_id: str,
     agent: Annotated[Any, Depends(get_thread_agent)] = None,
-) -> dict[str, Any]:
+) -> dict[str, Any] | None:
     """Get SandboxLease status for a thread."""
-    try:
-        return await get_lease_status(agent, thread_id)
-    except ValueError as e:
-        raise HTTPException(404, str(e)) from e
+    return await get_lease_status(agent, thread_id)
 
 
 # SSE response headers: disable proxy buffering for real-time streaming

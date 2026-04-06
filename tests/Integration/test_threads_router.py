@@ -360,6 +360,15 @@ def _patch_local_clear_thread_agent(agent):
 
 
 @pytest.mark.asyncio
+async def test_get_thread_lease_status_returns_null_when_thread_has_no_lease():
+    with patch.object(threads_router, "get_lease_status", AsyncMock(return_value=None)) as get_lease_status:
+        result = await threads_router.get_thread_lease_status("thread-1", agent=object())
+
+    get_lease_status.assert_awaited_once()
+    assert result is None
+
+
+@pytest.mark.asyncio
 async def test_create_thread_route_preserves_legacy_sandbox_type_alias():
     app = _make_threads_app(thread_sandbox={}, thread_cwd={})
     payload = CreateThreadRequest.model_validate(

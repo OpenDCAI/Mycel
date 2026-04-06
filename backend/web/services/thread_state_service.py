@@ -132,14 +132,14 @@ async def get_terminal_status(agent: Any, thread_id: str) -> dict[str, Any]:
     }
 
 
-async def get_lease_status(agent: Any, thread_id: str) -> dict[str, Any]:
+async def get_lease_status(agent: Any, thread_id: str) -> dict[str, Any] | None:
     """Get SandboxLease status for a thread.
 
     Returns:
         Dict with lease_id, provider_name, states, instance info, timestamps
 
     Raises:
-        ValueError: If no lease found for thread
+        None: If no lease found for thread
     """
 
     def _get_lease():
@@ -154,7 +154,7 @@ async def get_lease_status(agent: Any, thread_id: str) -> dict[str, Any]:
 
     lease = await asyncio.to_thread(_get_lease)
     if not lease:
-        raise ValueError(f"No lease found for thread {thread_id}")
+        return None
 
     instance = lease.get_instance()
     created_at, updated_at = await asyncio.to_thread(get_lease_timestamps, lease.lease_id)
