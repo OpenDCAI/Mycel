@@ -1,6 +1,7 @@
 """Unit tests for core.runtime.loop QueryLoop."""
 
 import asyncio
+import importlib
 import json
 import tempfile
 from pathlib import Path
@@ -2492,6 +2493,66 @@ async def test_streaming_executor_missing_tool_is_immediately_completed():
     ]
     assert executor._tracked[0].result is not None
     assert "Tool 'missing_tool' not found" in executor._tracked[0].result.content
+
+
+@pytest.mark.asyncio
+async def test_streaming_executor_can_run_with_injected_dependencies_without_query_loop():
+    loop_module = importlib.import_module("core.runtime.loop")
+    executor_cls = getattr(loop_module, "StreamingToolExecutor")
+    seen_ids: list[str] = []
+
+    async def execute_tool(tool_call: dict[str, object], tool_context: object | None) -> ToolMessage:
+        seen_ids.append(str(tool_call["id"]))
+        return ToolMessage(
+            content="safe:s",
+            tool_call_id=str(tool_call["id"]),
+            name=str(tool_call["name"]),
+        )
+
+    executor = executor_cls(
+        execute_tool=execute_tool,
+        is_concurrency_safe=lambda tool_call: True,
+        lookup_tool=lambda name: object() if name == "safe" else None,
+        tool_context=None,
+    )
+
+    await executor.add_tool({"name": "safe", "args": {"message": "s"}, "id": "tc-safe"})
+    ready = await executor.drain_remaining()
+
+    assert [msg.tool_call_id for msg in ready] == ["tc-safe"]
+    assert seen_ids == ["tc-safe"]
+
+
+@pytest.mark.asyncio
+async def test_private_streaming_executor_adapter_still_executes_via_query_loop_dependencies():
+    executed: list[str] = []
+
+    async def safe_handler(message: str) -> str:
+        executed.append(message)
+        return f"safe:{message}"
+
+    safe_entry = ToolEntry(
+        name="safe",
+        mode=ToolMode.INLINE,
+        schema={"name": "safe", "description": "safe", "parameters": {}},
+        handler=safe_handler,
+        source="test",
+        is_concurrency_safe=True,
+    )
+    loop = make_loop(
+        mock_model_no_tools(),
+        registry=make_registry(safe_entry),
+        app_state=AppState(),
+        runtime=SimpleNamespace(cost=0.0),
+    )
+
+    executor = _StreamingToolExecutor(loop=loop, tool_context=None)
+    await executor.add_tool({"name": "safe", "args": {"message": "s"}, "id": "tc-safe"})
+    ready = await executor.drain_remaining()
+
+    assert [msg.tool_call_id for msg in ready] == ["tc-safe"]
+    assert ready[0].content == "safe:s"
+    assert executed == ["s"]
 
 
 @pytest.mark.asyncio
