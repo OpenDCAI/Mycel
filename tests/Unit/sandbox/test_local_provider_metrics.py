@@ -4,6 +4,7 @@ import builtins
 import io
 from types import SimpleNamespace
 
+from sandbox.providers import local as local_module
 from sandbox.providers.local import LocalSessionProvider
 
 
@@ -27,8 +28,10 @@ def test_local_provider_reads_linux_procfs_metrics_without_top_or_free(monkeypat
     monkeypatch.setattr("sandbox.providers.local.platform.system", lambda: "Linux")
     monkeypatch.setattr(builtins, "open", fake_open)
     monkeypatch.setattr(
-        "sandbox.providers.local.os.statvfs",
+        local_module.os,
+        "statvfs",
         lambda _path: SimpleNamespace(f_frsize=4096, f_blocks=262144, f_bavail=131072),
+        raising=False,
     )
 
     metrics = provider.get_metrics("host")
