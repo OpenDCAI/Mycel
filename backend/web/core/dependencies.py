@@ -43,7 +43,6 @@ async def get_current_user_id(request: Request) -> str:
     return user_id
 
 
-
 async def verify_thread_owner(
     thread_id: str,
     user_id: Annotated[str, Depends(get_current_user_id)],

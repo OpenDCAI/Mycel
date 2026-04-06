@@ -40,14 +40,10 @@ async def test_list_entities_excludes_current_user_and_returns_all_others():
 
     app = SimpleNamespace(
         state=SimpleNamespace(
-            member_repo=SimpleNamespace(
-                list_all=lambda: [current_user, other_human, main_agent, child_agent]
-            ),
+            member_repo=SimpleNamespace(list_all=lambda: [current_user, other_human, main_agent, child_agent]),
             thread_repo=SimpleNamespace(
                 get_by_id=lambda thread_id: (
-                    {"is_main": True, "branch_index": 0}
-                    if thread_id == "thread-main"
-                    else {"is_main": False, "branch_index": 1}
+                    {"is_main": True, "branch_index": 0} if thread_id == "thread-main" else {"is_main": False, "branch_index": 1}
                 )
             ),
         )
