@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 from core.tools.filesystem.read.types import FileType, ReadLimits, ReadResult
 
+_pymupdf: Any | None = None
+
 try:
-    import pymupdf
+    import pymupdf as _pymupdf
 
     HAS_PYMUPDF = True
 except ImportError:
@@ -34,6 +37,8 @@ def read_pdf(
     """
     if not HAS_PYMUPDF:
         return _no_pymupdf_result(path)
+    if _pymupdf is None:
+        raise RuntimeError("pymupdf import unexpectedly unavailable")
 
     stat = path.stat()
     result = ReadResult(
@@ -43,7 +48,7 @@ def read_pdf(
     )
 
     try:
-        doc = pymupdf.open(path)
+        doc = _pymupdf.open(path)
     except Exception as e:
         result.error = f"Error opening PDF: {e}"
         return result

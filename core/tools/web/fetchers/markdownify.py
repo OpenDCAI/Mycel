@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Callable
+from typing import Any
 
 import httpx
 
 from core.tools.web.fetchers.base import BaseFetcher
 from core.tools.web.types import ContentChunk, FetchLimits, FetchResult
 
+md: Callable[..., str] | None = None
 try:
     from markdownify import markdownify as md
 
@@ -16,6 +19,7 @@ try:
 except ImportError:
     HAS_MARKDOWNIFY = False
 
+BeautifulSoup: Any | None = None
 try:
     from bs4 import BeautifulSoup
 
@@ -112,7 +116,11 @@ class MarkdownifyFetcher(BaseFetcher):
 
     def _markdownify_html(self, html: str, result: FetchResult) -> str:
         """Convert HTML to Markdown using markdownify."""
+        if md is None:
+            raise RuntimeError("markdownify import unexpectedly unavailable")
         if self.has_bs4:
+            if BeautifulSoup is None:
+                raise RuntimeError("BeautifulSoup import unexpectedly unavailable")
             soup = BeautifulSoup(html, "html.parser")
 
             title_tag = soup.find("title")
@@ -145,6 +153,8 @@ class MarkdownifyFetcher(BaseFetcher):
 
     def _bs4_extract(self, html: str, result: FetchResult) -> str:
         """Extract text using BeautifulSoup."""
+        if BeautifulSoup is None:
+            raise RuntimeError("BeautifulSoup import unexpectedly unavailable")
         soup = BeautifulSoup(html, "html.parser")
 
         title_tag = soup.find("title")

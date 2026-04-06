@@ -126,6 +126,12 @@ markers = [
     "e2e: marks tests as end-to-end (require provider secrets; skipped in unit CI)",
 ]
 
+[tool.pyright]
+pythonVersion = "3.12"
+typeCheckingMode = "basic"
+stubPath = "typings"
+reportMissingModuleSource = "none"
+
 [tool.ruff]
 line-length = 140
 target-version = "py312"
