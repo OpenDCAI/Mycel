@@ -1700,6 +1700,18 @@ function ThreadDetailPage() {
   const threadIsActive = Array.isArray(data?.sessions?.items)
     ? data.sessions.items.some((s: any) => s.status === "active")
     : false;
+  const sessionLeaseIds = new Set(
+    Array.isArray(data?.sessions?.items)
+      ? data.sessions.items
+          .map((session: any) => String(session?.lease?.lease_id || "").trim())
+          .filter(Boolean)
+      : [],
+  );
+  const visibleRelatedLeases = Array.isArray(data?.related_leases?.items)
+    ? data.related_leases.items.filter(
+        (lease: any) => !sessionLeaseIds.has(String(lease?.lease_id || "").trim()),
+      )
+    : [];
 
   return (
     <div className="page">
@@ -1757,19 +1769,21 @@ function ThreadDetailPage() {
         </table>
       </section>
 
-      <section>
-        <h2>{data.related_leases.title}</h2>
-        <ul>
-          {data.related_leases.items.map((l: any) => (
-            <li key={l.lease_id}>
-              <Link to={l.lease_url}>{l.lease_id}</Link>
-            </li>
-          ))}
-          {data.related_leases.items.length === 0 && (
-            <li className="empty-list">No related leases for this thread.</li>
-          )}
-        </ul>
-      </section>
+      {(visibleRelatedLeases.length > 0 || data.related_leases.items.length === 0) && (
+        <section>
+          <h2>{data.related_leases.title}</h2>
+          <ul>
+            {visibleRelatedLeases.map((l: any) => (
+              <li key={l.lease_id}>
+                <Link to={l.lease_url}>{l.lease_id}</Link>
+              </li>
+            ))}
+            {data.related_leases.items.length === 0 && (
+              <li className="empty-list">No related leases for this thread.</li>
+            )}
+          </ul>
+        </section>
+      )}
 
       <section className="trace-section-shell">
         <h2>Live Trace</h2>
