@@ -10,7 +10,7 @@ import time
 from datetime import UTC, datetime
 from typing import Any
 
-from backend.web.services import resource_service
+from backend.web.services import resource_projection_service, resource_service
 
 _DEFAULT_REFRESH_INTERVAL_SEC = 90.0
 
@@ -56,7 +56,7 @@ def _with_refresh_metadata(
 
 
 def _snapshot_drifted_from_live_sessions(snapshot: dict[str, Any]) -> bool:
-    live_stats = resource_service.visible_resource_session_stats()
+    live_stats = resource_projection_service.visible_resource_session_stats()
     for provider in snapshot.get("providers") or []:
         provider_id = str(provider.get("id") or "")
         current = live_stats.get(provider_id, {"sessions": 0, "running": 0})
@@ -77,7 +77,7 @@ def refresh_resource_overview_sync() -> dict[str, Any]:
     global _snapshot_cache
     started = time.perf_counter()
     try:
-        payload = resource_service.list_resource_providers()
+        payload = resource_projection_service.list_resource_providers()
         duration_ms = (time.perf_counter() - started) * 1000
         payload = _with_refresh_metadata(payload, duration_ms=duration_ms, status="ok", error=None)
         with _snapshot_lock:

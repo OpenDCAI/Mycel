@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import os
 from pathlib import Path
 from typing import Any
 
@@ -22,12 +21,8 @@ __all__ = [
 ]
 
 
-def _strategy() -> str:
-    return os.getenv("LEON_STORAGE_STRATEGY", "sqlite").strip().lower()
-
-
 def ensure_resource_snapshot_table(db_path: Path | None = None) -> None:
-    if _strategy() == "supabase":
+    if _storage_factory._strategy() == "supabase":
         return None
     _sqlite_ensure_resource_snapshot_table(db_path)
 
@@ -49,7 +44,7 @@ def upsert_lease_resource_snapshot(
     probe_error: str | None = None,
     db_path: Path | None = None,
 ) -> None:
-    if _strategy() == "supabase":
+    if _storage_factory._strategy() == "supabase":
         _storage_factory.upsert_resource_snapshot(
             lease_id=lease_id,
             provider_name=provider_name,
@@ -86,7 +81,7 @@ def upsert_lease_resource_snapshot(
 
 
 def list_snapshots_by_lease_ids(lease_ids: list[str], db_path: Path | None = None) -> dict[str, dict[str, Any]]:
-    if _strategy() == "supabase":
+    if _storage_factory._strategy() == "supabase":
         return _storage_factory.list_resource_snapshots(lease_ids)
     return _sqlite_list_snapshots_by_lease_ids(lease_ids, db_path)
 
