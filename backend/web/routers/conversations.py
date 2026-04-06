@@ -21,6 +21,10 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/conversations", tags=["conversations"])
 
 
+def _is_internal_child_thread(thread_id: str) -> bool:
+    return thread_id.startswith("subagent-")
+
+
 @router.get("")
 async def list_conversations(
     user_id: Annotated[str, Depends(get_current_user_id)],
@@ -34,7 +38,7 @@ async def list_conversations(
     pool = app.state.agent_pool
     for t in raw_threads:
         tid = t["id"]
-        if tid.startswith("subagent-"):
+        if _is_internal_child_thread(tid):
             continue
         sandbox_type = t.get("sandbox_type", "local")
         running = False
@@ -64,37 +68,60 @@ async def list_conversations(
         chats = messaging.list_chats_for_user(user_id)
         member_repo = app.state.member_repo
         messages_repo = getattr(app.state, "messages_repo", None)
-        for chat in chats:
-            chat_id = chat["id"] if isinstance(chat, dict) else chat
+
+        # Pre-fetch all member data to avoid N+1 per-member lookups
+        all_member_ids: set[str] = set()
+        chat_members_cache: dict[str, list[dict[str, Any]]] = {}
+        chat_obj_cache: dict[str, Any] = {}
+
+        chat_ids = [c["id"] if isinstance(c, dict) else c for c in chats]
+        for chat_id in chat_ids:
             chat_obj = app.state.chat_repo.get_by_id(chat_id) if hasattr(app.state, "chat_repo") else None
             if not chat_obj:
                 continue
-            # Determine display name
-            title = getattr(chat_obj, "title", None) or ""
-            if not title:
-                members_list = messaging.list_chat_members(chat_id)
-                names = []
-                for m in members_list:
-                    uid = m.get("user_id")
-                    if uid and uid != user_id:
-                        mem = member_repo.get_by_id(uid)
-                        if mem:
-                            names.append(mem.name)
-                title = ", ".join(names) or "Chat"
-            # Avatar from first other member
-            chat_avatar = None
+            chat_obj_cache[chat_id] = chat_obj
             members_list = messaging.list_chat_members(chat_id)
+            chat_members_cache[chat_id] = members_list
             for m in members_list:
                 uid = m.get("user_id")
                 if uid and uid != user_id:
-                    mem = member_repo.get_by_id(uid)
-                    if mem:
-                        chat_avatar = avatar_url(mem.id, bool(mem.avatar))
-                        break
+                    all_member_ids.add(uid)
+
+        # Batch resolve members
+        member_cache: dict[str, Any] = {}
+        for uid in all_member_ids:
+            mem = member_repo.get_by_id(uid)
+            if mem:
+                member_cache[uid] = mem
+
+        for chat_id in chat_ids:
+            chat_obj = chat_obj_cache.get(chat_id)
+            if not chat_obj:
+                continue
+            members_list = chat_members_cache[chat_id]
+
+            # Determine display name + avatar in single pass
+            title = getattr(chat_obj, "title", None) or ""
+            chat_avatar = None
+            other_names: list[str] = []
+            for m in members_list:
+                uid = m.get("user_id")
+                if not uid or uid == user_id:
+                    continue
+                mem = member_cache.get(uid)
+                if not mem:
+                    continue
+                other_names.append(mem.name)
+                if chat_avatar is None:
+                    chat_avatar = avatar_url(mem.id, bool(mem.avatar))
+            if not title:
+                title = ", ".join(other_names) or "Chat"
+
             # Unread count
             unread = 0
             if messages_repo:
                 unread = messages_repo.count_unread(chat_id, user_id)
+
             items.append({
                 "id": chat_id,
                 "type": "visit",
