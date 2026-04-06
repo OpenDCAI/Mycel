@@ -10,6 +10,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from backend.web.core.storage_factory import make_lease_repo, make_terminal_repo
 from config.user_paths import user_home_path
 from sandbox.capability import SandboxCapability
 from sandbox.chat_session import ChatSessionManager, ChatSessionPolicy
@@ -35,39 +36,59 @@ def resolve_provider_cwd(provider) -> str:
     return "/home/user"
 
 
-def lookup_sandbox_for_thread(thread_id: str, db_path: Path | None = None) -> str | None:
+def lookup_sandbox_for_thread(
+    thread_id: str,
+    db_path: Path | None = None,
+    *,
+    terminal_repo: Any | None = None,
+    lease_repo: Any | None = None,
+) -> str | None:
     target_db = db_path or resolve_role_db_path(SQLiteDBRole.SANDBOX)
-    if not target_db.exists():
+    if terminal_repo is None and lease_repo is None and not target_db.exists():
         return None
 
-    terminal_repo = SQLiteTerminalRepo(db_path=target_db)
-    lease_repo = SQLiteLeaseRepo(db_path=target_db)
+    _terminal_repo = terminal_repo
+    own_terminal_repo = _terminal_repo is None
+    if _terminal_repo is None:
+        _terminal_repo = make_terminal_repo(db_path=target_db)
+    _lease_repo = lease_repo
+    own_lease_repo = _lease_repo is None
+    if _lease_repo is None:
+        _lease_repo = make_lease_repo(db_path=target_db)
     try:
-        terminals = terminal_repo.list_by_thread(thread_id)
+        terminals = _terminal_repo.list_by_thread(thread_id)
         if not terminals:
             return None
         lease_id = str(terminals[0]["lease_id"])
-        lease = lease_repo.get(lease_id)
+        lease = _lease_repo.get(lease_id)
         return str(lease["provider_name"]) if lease else None
     finally:
-        terminal_repo.close()
-        lease_repo.close()
+        if own_terminal_repo:
+            _terminal_repo.close()
+        if own_lease_repo:
+            _lease_repo.close()
 
 
 def resolve_existing_lease_cwd(
     lease_id: str,
     fallback_cwd: str | None = None,
     db_path: Path | None = None,
+    *,
+    terminal_repo: Any | None = None,
 ) -> str:
     if fallback_cwd:
         return fallback_cwd
 
     target_db = db_path or resolve_role_db_path(SQLiteDBRole.SANDBOX)
-    terminal_repo = SQLiteTerminalRepo(db_path=target_db)
+    _terminal_repo = terminal_repo
+    own_terminal_repo = _terminal_repo is None
+    if _terminal_repo is None:
+        _terminal_repo = make_terminal_repo(db_path=target_db)
     try:
-        row = terminal_repo.get_latest_by_lease(lease_id)
+        row = _terminal_repo.get_latest_by_lease(lease_id)
     finally:
-        terminal_repo.close()
+        if own_terminal_repo:
+            _terminal_repo.close()
     if row and row.get("cwd"):
         return str(row["cwd"])
     return str(Path.home())
@@ -79,15 +100,19 @@ def bind_thread_to_existing_lease(
     *,
     cwd: str | None = None,
     db_path: Path | None = None,
+    terminal_repo: Any | None = None,
 ) -> str:
     target_db = db_path or resolve_role_db_path(SQLiteDBRole.SANDBOX)
-    terminal_repo = SQLiteTerminalRepo(db_path=target_db)
+    _terminal_repo = terminal_repo
+    own_terminal_repo = _terminal_repo is None
+    if _terminal_repo is None:
+        _terminal_repo = make_terminal_repo(db_path=target_db)
     try:
-        existing = terminal_repo.get_active(thread_id)
+        existing = _terminal_repo.get_active(thread_id)
         if existing is not None:
             return str(existing["cwd"])
-        initial_cwd = resolve_existing_lease_cwd(lease_id, cwd, db_path=target_db)
-        terminal_repo.create(
+        initial_cwd = resolve_existing_lease_cwd(lease_id, cwd, db_path=target_db, terminal_repo=_terminal_repo)
+        _terminal_repo.create(
             terminal_id=f"term-{uuid.uuid4().hex[:12]}",
             thread_id=thread_id,
             lease_id=lease_id,
@@ -95,7 +120,8 @@ def bind_thread_to_existing_lease(
         )
         return initial_cwd
     finally:
-        terminal_repo.close()
+        if own_terminal_repo:
+            _terminal_repo.close()
 
 
 def bind_thread_to_existing_thread_lease(
@@ -104,13 +130,18 @@ def bind_thread_to_existing_thread_lease(
     *,
     cwd: str | None = None,
     db_path: Path | None = None,
+    terminal_repo: Any | None = None,
 ) -> str | None:
     target_db = db_path or resolve_role_db_path(SQLiteDBRole.SANDBOX)
-    terminal_repo = SQLiteTerminalRepo(db_path=target_db)
+    _terminal_repo = terminal_repo
+    own_terminal_repo = _terminal_repo is None
+    if _terminal_repo is None:
+        _terminal_repo = make_terminal_repo(db_path=target_db)
     try:
-        source_terminal = terminal_repo.get_active(source_thread_id)
+        source_terminal = _terminal_repo.get_active(source_thread_id)
     finally:
-        terminal_repo.close()
+        if own_terminal_repo:
+            _terminal_repo.close()
     if source_terminal is None:
         return None
     # @@@subagent-lease-reuse
@@ -121,6 +152,7 @@ def bind_thread_to_existing_thread_lease(
         str(source_terminal["lease_id"]),
         cwd=cwd,
         db_path=target_db,
+        terminal_repo=terminal_repo,
     )
 
 
@@ -144,6 +176,8 @@ class SandboxManager:
             db_path=self.db_path,
             default_policy=ChatSessionPolicy(),
             chat_session_repo=SQLiteChatSessionRepo(db_path=self.db_path),
+            terminal_repo=self.terminal_store,
+            lease_repo=self.lease_store,
         )
 
         from sandbox.volume import SandboxVolume
@@ -914,11 +948,15 @@ class SandboxManager:
                     }
                 )
 
-        try:
-            provider_sessions = self.provider.list_provider_sessions() or []
-        except Exception:
-            logger.warning("Failed to list provider sessions for %s", self.provider.name, exc_info=True)
-            provider_sessions = []
+        list_provider_sessions = getattr(self.provider, "list_provider_sessions", None)
+        provider_sessions = []
+        if callable(list_provider_sessions):
+            try:
+                raw_provider_sessions = list_provider_sessions()
+                provider_sessions = raw_provider_sessions if isinstance(raw_provider_sessions, list) else []
+            except Exception:
+                logger.warning("Failed to list provider sessions for %s", self.provider.name, exc_info=True)
+                provider_sessions = []
 
         for ps in provider_sessions:
             instance_id = getattr(ps, "session_id", None)
