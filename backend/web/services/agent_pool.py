@@ -140,6 +140,7 @@ async def get_or_create_agent(app_obj: FastAPI, sandbox_type: str, thread_id: st
                     "chat_member_repo": getattr(app_obj.state, "chat_member_repo", None),
                     "messages_repo": getattr(app_obj.state, "messages_repo", None),
                     "relationship_repo": getattr(app_obj.state, "relationship_repo", None),
+                    "agent_config_repo": getattr(app_obj.state, "agent_config_repo", None),
                 }
 
         # @@@per-thread-file-access - ensure thread files are accessible from agent

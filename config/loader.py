@@ -422,3 +422,72 @@ def load_config(
 ) -> LeonSettings:
     """Convenience function to load runtime configuration."""
     return AgentLoader(workspace_root=workspace_root).load(cli_overrides=cli_overrides)
+
+
+def load_bundle_from_repo(agent_config_repo: Any, member_id: str) -> AgentBundle | None:
+    """Load agent bundle from Supabase agent_config tables. Returns None if no config found."""
+    config = agent_config_repo.get_config(member_id)
+    if not config:
+        return None
+
+    # Parse agent identity from config
+    agent = AgentConfig(
+        name=config.get("name", ""),
+        description=config.get("description", ""),
+        tools=config.get("tools", ["*"]),
+        system_prompt=config.get("system_prompt", ""),
+        model=config.get("model"),
+        source_dir=None,
+    )
+
+    meta = {
+        "status": config.get("status", "draft"),
+        "version": config.get("version", "0.1.0"),
+        "created_at": config.get("created_at", 0),
+        "updated_at": config.get("updated_at", 0),
+    }
+
+    # Runtime from config
+    runtime_data = config.get("runtime") or {}
+    runtime = {}
+    for rname, rcfg in runtime_data.items():
+        if isinstance(rcfg, dict):
+            runtime[rname] = RuntimeResourceConfig(**rcfg)
+
+    # Rules from agent_rules table
+    rule_rows = agent_config_repo.list_rules(member_id)
+    rules = [{"name": r.get("filename", "").replace(".md", ""), "content": r.get("content", "")} for r in rule_rows]
+
+    # Sub-agents from agent_sub_agents table
+    sub_agent_rows = agent_config_repo.list_sub_agents(member_id)
+    agents = []
+    for sa in sub_agent_rows:
+        agents.append(AgentConfig(
+            name=sa.get("name", ""),
+            description=sa.get("description", ""),
+            tools=sa.get("tools", ["*"]),
+            system_prompt=sa.get("system_prompt", ""),
+            model=sa.get("model"),
+            source_dir=None,
+        ))
+
+    # Skills from agent_skills table
+    skill_rows = agent_config_repo.list_skills(member_id)
+    skills = [{"name": s.get("name", ""), "content": s.get("content", "")} for s in skill_rows]
+
+    # MCP from config
+    mcp_data = config.get("mcp") or {}
+    mcp = {}
+    for mname, mcfg in mcp_data.items():
+        if isinstance(mcfg, dict):
+            mcp[mname] = McpServerConfig(**{k: v for k, v in mcfg.items() if k in McpServerConfig.model_fields})
+
+    return AgentBundle(
+        agent=agent,
+        meta=meta,
+        runtime=runtime,
+        rules=rules,
+        agents=agents,
+        skills=skills,
+        mcp=mcp,
+    )
