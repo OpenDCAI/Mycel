@@ -2681,7 +2681,7 @@ function ThreadTraceSection({
       </div>
 
       {showRawTable && traceView !== "conversation" && (
-        <details className="trace-raw-table" open>
+        <details className="trace-raw-table">
           <summary>Raw trace table</summary>
           <table>
             <thead>
