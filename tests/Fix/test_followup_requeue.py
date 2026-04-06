@@ -8,7 +8,6 @@ Covers the _consume_followup_queue function:
 - Retry success: re-enqueued message can be processed on next attempt
 """
 
-import asyncio
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
@@ -54,157 +53,128 @@ def mock_agent():
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.asyncio
 class TestConsumeFollowupQueue:
     """Tests for _consume_followup_queue re-enqueue logic."""
 
-    def test_no_followup_does_nothing(self, mock_agent, mock_app):
+    async def test_no_followup_does_nothing(self, mock_agent, mock_app):
         """When queue is empty, nothing happens."""
+        from backend.web.services.streaming_service import _consume_followup_queue
 
-        async def _run():
-            from backend.web.services.streaming_service import _consume_followup_queue
+        await _consume_followup_queue(mock_agent, "thread-1", mock_app)
+        # Queue is still empty
+        assert mock_app.state.queue_manager.dequeue("thread-1") is None
+        # Runtime transition was never called
+        mock_agent.runtime.transition.assert_not_called()
 
-            await _consume_followup_queue(mock_agent, "thread-1", mock_app)
-            # Queue is still empty
-            assert mock_app.state.queue_manager.dequeue("thread-1") is None
-            # Runtime transition was never called
-            mock_agent.runtime.transition.assert_not_called()
-
-        asyncio.run(_run())
-
-    def test_successful_followup_consumes_message(self, mock_agent, mock_app, queue_manager):
+    async def test_successful_followup_consumes_message(self, mock_agent, mock_app, queue_manager):
         """When followup succeeds, message is consumed and not re-enqueued."""
         queue_manager.enqueue("do something", "thread-1")
+        from backend.web.services.streaming_service import _consume_followup_queue
 
-        async def _run():
-            from backend.web.services.streaming_service import _consume_followup_queue
+        with patch("backend.web.services.streaming_service.start_agent_run") as mock_start:
+            mock_start.return_value = "run-123"  # start_agent_run returns str run_id
 
-            with patch("backend.web.services.streaming_service.start_agent_run") as mock_start:
-                mock_start.return_value = "run-123"  # start_agent_run returns str run_id
+            await _consume_followup_queue(mock_agent, "thread-1", mock_app)
 
-                await _consume_followup_queue(mock_agent, "thread-1", mock_app)
+            mock_start.assert_called_once_with(
+                mock_agent,
+                "thread-1",
+                "do something",
+                mock_app,
+                message_metadata={
+                    "source": "system",
+                    "notification_type": "steer",
+                    "sender_name": None,
+                    "sender_avatar_url": None,
+                    "is_steer": False,
+                },
+            )
+        # Message was consumed, queue is empty
+        assert queue_manager.dequeue("thread-1") is None
 
-                mock_start.assert_called_once_with(
-                    mock_agent,
-                    "thread-1",
-                    "do something",
-                    mock_app,
-                    message_metadata={
-                        "source": "system",
-                        "notification_type": "steer",
-                        "sender_name": None,
-                        "sender_avatar_url": None,
-                        "is_steer": False,
-                    },
-                )
-            # Message was consumed, queue is empty
-            assert queue_manager.dequeue("thread-1") is None
-
-        asyncio.run(_run())
-
-    def test_exception_re_enqueues_message(self, mock_agent, mock_app, queue_manager):
+    async def test_exception_re_enqueues_message(self, mock_agent, mock_app, queue_manager):
         """When start_agent_run raises, the dequeued message is re-enqueued."""
         queue_manager.enqueue("important followup", "thread-1")
+        from backend.web.services.streaming_service import _consume_followup_queue
 
-        async def _run():
-            from backend.web.services.streaming_service import _consume_followup_queue
+        with patch("backend.web.services.streaming_service.start_agent_run", side_effect=RuntimeError("boom")):
+            await _consume_followup_queue(mock_agent, "thread-1", mock_app)
 
-            with patch("backend.web.services.streaming_service.start_agent_run", side_effect=RuntimeError("boom")):
-                await _consume_followup_queue(mock_agent, "thread-1", mock_app)
+        # Message was re-enqueued — it should be available again
+        item = queue_manager.dequeue("thread-1")
+        assert item is not None
+        assert item.content == "important followup"
 
-            # Message was re-enqueued — it should be available again
-            item = queue_manager.dequeue("thread-1")
-            assert item is not None
-            assert item.content == "important followup"
-
-        asyncio.run(_run())
-
-    def test_re_enqueued_message_succeeds_on_retry(self, mock_agent, mock_app, queue_manager):
+    async def test_re_enqueued_message_succeeds_on_retry(self, mock_agent, mock_app, queue_manager):
         """A re-enqueued message can be successfully processed on the next attempt."""
         queue_manager.enqueue("retry me", "thread-1")
+        from backend.web.services.streaming_service import _consume_followup_queue
 
-        async def _run():
-            from backend.web.services.streaming_service import _consume_followup_queue
+        # First attempt: fails
+        with patch("backend.web.services.streaming_service.start_agent_run", side_effect=RuntimeError("temporary failure")):
+            await _consume_followup_queue(mock_agent, "thread-1", mock_app)
 
-            # First attempt: fails
-            with patch("backend.web.services.streaming_service.start_agent_run", side_effect=RuntimeError("temporary failure")):
-                await _consume_followup_queue(mock_agent, "thread-1", mock_app)
+        # Verify message was re-enqueued
+        assert queue_manager.peek("thread-1") is True
 
-            # Verify message was re-enqueued
-            assert queue_manager.peek("thread-1") is True
+        # Second attempt: succeeds
+        with patch("backend.web.services.streaming_service.start_agent_run") as mock_start:
+            mock_start.return_value = "run-456"  # start_agent_run returns str run_id
 
-            # Second attempt: succeeds
-            with patch("backend.web.services.streaming_service.start_agent_run") as mock_start:
-                mock_start.return_value = "run-456"  # start_agent_run returns str run_id
+            await _consume_followup_queue(mock_agent, "thread-1", mock_app)
 
-                await _consume_followup_queue(mock_agent, "thread-1", mock_app)
+            mock_start.assert_called_once_with(
+                mock_agent,
+                "thread-1",
+                "retry me",
+                mock_app,
+                message_metadata={
+                    "source": "system",
+                    "notification_type": "steer",
+                    "sender_name": None,
+                    "sender_avatar_url": None,
+                    "is_steer": False,
+                },
+            )
 
-                mock_start.assert_called_once_with(
-                    mock_agent,
-                    "thread-1",
-                    "retry me",
-                    mock_app,
-                    message_metadata={
-                        "source": "system",
-                        "notification_type": "steer",
-                        "sender_name": None,
-                        "sender_avatar_url": None,
-                        "is_steer": False,
-                    },
-                )
+        # Queue is now empty
+        assert queue_manager.dequeue("thread-1") is None
 
-            # Queue is now empty
-            assert queue_manager.dequeue("thread-1") is None
-
-        asyncio.run(_run())
-
-    def test_no_re_enqueue_when_dequeue_returns_none(self, mock_agent, mock_app, queue_manager):
+    async def test_no_re_enqueue_when_dequeue_returns_none(self, mock_agent, mock_app, queue_manager):
         """If dequeue itself raises, followup is None so re-enqueue is skipped."""
+        from backend.web.services.streaming_service import _consume_followup_queue
 
-        async def _run():
-            from backend.web.services.streaming_service import _consume_followup_queue
+        # Make dequeue raise — followup stays None, no re-enqueue attempted
+        with patch.object(queue_manager, "dequeue", side_effect=RuntimeError("db error")):
+            await _consume_followup_queue(mock_agent, "thread-1", mock_app)
 
-            # Make dequeue raise — followup stays None, no re-enqueue attempted
-            with patch.object(queue_manager, "dequeue", side_effect=RuntimeError("db error")):
-                await _consume_followup_queue(mock_agent, "thread-1", mock_app)
+        # enqueue was never called for re-enqueue (followup was None)
+        # Queue is still empty
+        assert queue_manager.dequeue("thread-1") is None
 
-            # enqueue was never called for re-enqueue (followup was None)
-            # Queue is still empty
-            assert queue_manager.dequeue("thread-1") is None
-
-        asyncio.run(_run())
-
-    def test_re_enqueue_failure_logs_error(self, mock_agent, mock_app, queue_manager):
+    async def test_re_enqueue_failure_logs_error(self, mock_agent, mock_app, queue_manager):
         """When both start_agent_run AND re-enqueue fail, error is logged (message lost)."""
         queue_manager.enqueue("doomed message", "thread-1")
+        from backend.web.services.streaming_service import _consume_followup_queue
 
-        async def _run():
-            from backend.web.services.streaming_service import _consume_followup_queue
+        with patch("backend.web.services.streaming_service.start_agent_run", side_effect=RuntimeError("start failed")):
+            with patch.object(queue_manager, "enqueue", side_effect=RuntimeError("enqueue failed")):
+                await _consume_followup_queue(mock_agent, "thread-1", mock_app)
 
-            with patch("backend.web.services.streaming_service.start_agent_run", side_effect=RuntimeError("start failed")):
-                # Also make re-enqueue fail
-                _original_enqueue = queue_manager.enqueue
-                with patch.object(queue_manager, "enqueue", side_effect=RuntimeError("enqueue failed")):
-                    await _consume_followup_queue(mock_agent, "thread-1", mock_app)
+        # Message is truly lost — queue is empty
+        assert queue_manager.dequeue("thread-1") is None
 
-            # Message is truly lost — queue is empty
-            assert queue_manager.dequeue("thread-1") is None
-
-        asyncio.run(_run())
-
-    def test_transition_failure_skips_start(self, mock_agent, mock_app, queue_manager):
+    async def test_transition_failure_skips_start(self, mock_agent, mock_app, queue_manager):
         """When runtime.transition returns False, followup stays queued."""
         queue_manager.enqueue("wont run", "thread-1")
         mock_agent.runtime.transition.return_value = False
+        from backend.web.services.streaming_service import _consume_followup_queue
 
-        async def _run():
-            from backend.web.services.streaming_service import _consume_followup_queue
+        with patch("backend.web.services.streaming_service.start_agent_run") as mock_start:
+            await _consume_followup_queue(mock_agent, "thread-1", mock_app)
+            mock_start.assert_not_called()
 
-            with patch("backend.web.services.streaming_service.start_agent_run") as mock_start:
-                await _consume_followup_queue(mock_agent, "thread-1", mock_app)
-                mock_start.assert_not_called()
-
-            item = queue_manager.dequeue("thread-1")
-            assert item is not None
-            assert item.content == "wont run"
-
-        asyncio.run(_run())
+        item = queue_manager.dequeue("thread-1")
+        assert item is not None
+        assert item.content == "wont run"
