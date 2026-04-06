@@ -5,14 +5,14 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from storage.contracts import ChatEntityRow, ChatMessageRow, ChatRow
+from storage.contracts import ChatParticipantRow, ChatMessageRow, ChatRow
 from storage.providers.supabase import _query as q
 
 _REPO_CHAT = "chat repo"
 _TABLE_CHATS = "chats"
 
-_REPO_ENTITY = "chat entity repo"
-_TABLE_CHAT_ENTITIES = "chat_entities"
+_REPO_PARTICIPANT = "chat participant repo"
+_TABLE_CHAT_ENTITIES = "chat_participants"
 
 _REPO_MSG = "chat message repo"
 _TABLE_CHAT_MESSAGES = "chat_messages"
@@ -59,11 +59,11 @@ class SupabaseChatRepo:
         return self._client.table(_TABLE_CHATS)
 
 
-class SupabaseChatEntityRepo:
-    """Chat entity membership backed by Supabase."""
+class SupabaseChatParticipantRepo:
+    """Chat participant membership backed by Supabase."""
 
     def __init__(self, client: Any) -> None:
-        self._client = q.validate_client(client, _REPO_ENTITY)
+        self._client = q.validate_client(client, _REPO_PARTICIPANT)
 
     def close(self) -> None:
         return None
@@ -79,19 +79,19 @@ class SupabaseChatEntityRepo:
             ignore_duplicates=True,
         ).execute()
 
-    def list_participants(self, chat_id: str) -> list[ChatEntityRow]:
+    def list_participants(self, chat_id: str) -> list[ChatParticipantRow]:
         response = self._t().select("*").eq("chat_id", chat_id).execute()
-        raw = q.rows(response, _REPO_ENTITY, "list_participants")
-        return [self._to_entity_row(r) for r in raw]
+        raw = q.rows(response, _REPO_PARTICIPANT, "list_participants")
+        return [self._to_participant_row(r) for r in raw]
 
     def list_chats_for_user(self, user_id: str) -> list[str]:
         response = self._t().select("chat_id").eq("user_id", user_id).execute()
-        raw = q.rows(response, _REPO_ENTITY, "list_chats_for_user")
+        raw = q.rows(response, _REPO_PARTICIPANT, "list_chats_for_user")
         return [r["chat_id"] for r in raw]
 
     def is_participant_in_chat(self, chat_id: str, user_id: str) -> bool:
         response = self._t().select("chat_id").eq("chat_id", chat_id).eq("user_id", user_id).execute()
-        raw = q.rows(response, _REPO_ENTITY, "is_participant_in_chat")
+        raw = q.rows(response, _REPO_PARTICIPANT, "is_participant_in_chat")
         return len(raw) > 0
 
     def update_last_read(self, chat_id: str, user_id: str, last_read_at: float) -> None:
@@ -103,12 +103,12 @@ class SupabaseChatEntityRepo:
     def find_chat_between(self, user_a: str, user_b: str) -> str | None:
         # Two queries, intersect the chat_id sets, then verify exactly 2 members.
         resp_a = self._t().select("chat_id").eq("user_id", user_a).execute()
-        chats_a = {r["chat_id"] for r in q.rows(resp_a, _REPO_ENTITY, "find_chat_between(a)")}
+        chats_a = {r["chat_id"] for r in q.rows(resp_a, _REPO_PARTICIPANT, "find_chat_between(a)")}
         if not chats_a:
             return None
 
         resp_b = self._t().select("chat_id").eq("user_id", user_b).execute()
-        chats_b = {r["chat_id"] for r in q.rows(resp_b, _REPO_ENTITY, "find_chat_between(b)")}
+        chats_b = {r["chat_id"] for r in q.rows(resp_b, _REPO_PARTICIPANT, "find_chat_between(b)")}
 
         shared = chats_a & chats_b
         if not shared:
@@ -117,13 +117,13 @@ class SupabaseChatEntityRepo:
         # Among shared chats, find one that has exactly 2 members.
         for chat_id in shared:
             resp_count = self._t().select("user_id").eq("chat_id", chat_id).execute()
-            members = q.rows(resp_count, _REPO_ENTITY, "find_chat_between(count)")
+            members = q.rows(resp_count, _REPO_PARTICIPANT, "find_chat_between(count)")
             if len(members) == 2:
                 return chat_id
         return None
 
-    def _to_entity_row(self, r: dict[str, Any]) -> ChatEntityRow:
-        return ChatEntityRow(
+    def _to_participant_row(self, r: dict[str, Any]) -> ChatParticipantRow:
+        return ChatParticipantRow(
             chat_id=r["chat_id"],
             user_id=r["user_id"],
             joined_at=float(r["joined_at"]),

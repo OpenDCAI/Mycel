@@ -65,7 +65,7 @@ async def get_chat(
     chat = app.state.chat_repo.get_by_id(chat_id)
     if not chat:
         raise HTTPException(404, "Chat not found")
-    participants = app.state.chat_entity_repo.list_participants(chat_id)
+    participants = app.state.chat_participant_repo.list_participants(chat_id)
     member_repo = app.state.member_repo
     members_info = []
     for p in participants:
@@ -127,7 +127,7 @@ async def mark_read(
     """Mark all messages in this chat as read for the current user."""
     import time
 
-    app.state.chat_entity_repo.update_last_read(chat_id, user_id, time.time())
+    app.state.chat_participant_repo.update_last_read(chat_id, user_id, time.time())
     return {"status": "ok"}
 
 
@@ -274,8 +274,8 @@ async def mute_chat(
 ):
     """Mute/unmute a chat for the current user."""
     _verify_participant_ownership(app, body.user_id, user_id)
-    chat_entity_repo = app.state.chat_entity_repo
-    chat_entity_repo.update_mute(chat_id, body.user_id, body.muted, body.mute_until)
+    chat_participant_repo = app.state.chat_participant_repo
+    chat_participant_repo.update_mute(chat_id, body.user_id, body.muted, body.mute_until)
     return {"status": "ok", "muted": body.muted}
 
 
@@ -289,7 +289,7 @@ async def delete_chat(
     chat = app.state.chat_repo.get_by_id(chat_id)
     if not chat:
         raise HTTPException(404, "Chat not found")
-    if not app.state.chat_entity_repo.is_participant_in_chat(chat_id, user_id):
+    if not app.state.chat_participant_repo.is_participant_in_chat(chat_id, user_id):
         raise HTTPException(403, "Not a participant of this chat")
     app.state.chat_repo.delete(chat_id)
     return {"status": "deleted"}

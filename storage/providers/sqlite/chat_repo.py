@@ -6,7 +6,7 @@ import sqlite3
 import threading
 from pathlib import Path
 
-from storage.contracts import ChatEntityRow, ChatMessageRow, ChatRow
+from storage.contracts import ChatParticipantRow, ChatMessageRow, ChatRow
 from storage.providers.sqlite.connection import create_connection
 from storage.providers.sqlite.kernel import SQLiteDBRole, resolve_role_db_path
 from storage.providers.sqlite.kernel import retry_on_locked as _retry_on_locked
@@ -67,7 +67,7 @@ class SQLiteChatRepo:
         self._conn.commit()
 
 
-class SQLiteChatEntityRepo:
+class SQLiteChatParticipantRepo:
     def __init__(self, db_path: str | Path | None = None, conn: sqlite3.Connection | None = None) -> None:
         self._own_conn = conn is None
         self._lock = threading.Lock()
@@ -86,19 +86,19 @@ class SQLiteChatEntityRepo:
     def add_participant(self, chat_id: str, user_id: str, joined_at: float) -> None:
         with self._lock:
             self._conn.execute(
-                "INSERT OR IGNORE INTO chat_entities (chat_id, user_id, joined_at) VALUES (?, ?, ?)",
+                "INSERT OR IGNORE INTO chat_participants (chat_id, user_id, joined_at) VALUES (?, ?, ?)",
                 (chat_id, user_id, joined_at),
             )
             self._conn.commit()
 
-    def list_participants(self, chat_id: str) -> list[ChatEntityRow]:
+    def list_participants(self, chat_id: str) -> list[ChatParticipantRow]:
         with self._lock:
             rows = self._conn.execute(
-                "SELECT chat_id, user_id, joined_at, last_read_at, muted, mute_until FROM chat_entities WHERE chat_id = ?",
+                "SELECT chat_id, user_id, joined_at, last_read_at, muted, mute_until FROM chat_participants WHERE chat_id = ?",
                 (chat_id,),
             ).fetchall()
             return [
-                ChatEntityRow(
+                ChatParticipantRow(
                     chat_id=r[0],
                     user_id=r[1],
                     joined_at=r[2],
@@ -112,7 +112,7 @@ class SQLiteChatEntityRepo:
     def list_chats_for_user(self, user_id: str) -> list[str]:
         with self._lock:
             rows = self._conn.execute(
-                "SELECT chat_id FROM chat_entities WHERE user_id = ?",
+                "SELECT chat_id FROM chat_participants WHERE user_id = ?",
                 (user_id,),
             ).fetchall()
             return [r[0] for r in rows]
@@ -120,7 +120,7 @@ class SQLiteChatEntityRepo:
     def is_participant_in_chat(self, chat_id: str, user_id: str) -> bool:
         with self._lock:
             row = self._conn.execute(
-                "SELECT 1 FROM chat_entities WHERE chat_id = ? AND user_id = ? LIMIT 1",
+                "SELECT 1 FROM chat_participants WHERE chat_id = ? AND user_id = ? LIMIT 1",
                 (chat_id, user_id),
             ).fetchone()
             return row is not None
@@ -128,7 +128,7 @@ class SQLiteChatEntityRepo:
     def update_last_read(self, chat_id: str, user_id: str, last_read_at: float) -> None:
         with self._lock:
             self._conn.execute(
-                "UPDATE chat_entities SET last_read_at = ? WHERE chat_id = ? AND user_id = ?",
+                "UPDATE chat_participants SET last_read_at = ? WHERE chat_id = ? AND user_id = ?",
                 (last_read_at, chat_id, user_id),
             )
             self._conn.commit()
@@ -137,7 +137,7 @@ class SQLiteChatEntityRepo:
         def _do():
             with self._lock:
                 self._conn.execute(
-                    "UPDATE chat_entities SET muted = ?, mute_until = ? WHERE chat_id = ? AND user_id = ?",
+                    "UPDATE chat_participants SET muted = ?, mute_until = ? WHERE chat_id = ? AND user_id = ?",
                     (int(muted), mute_until, chat_id, user_id),
                 )
                 self._conn.commit()
@@ -149,10 +149,10 @@ class SQLiteChatEntityRepo:
     def find_chat_between(self, user_a: str, user_b: str) -> str | None:
         with self._lock:
             row = self._conn.execute(
-                "SELECT ce1.chat_id FROM chat_entities ce1"
-                " JOIN chat_entities ce2 ON ce1.chat_id = ce2.chat_id"
+                "SELECT ce1.chat_id FROM chat_participants ce1"
+                " JOIN chat_participants ce2 ON ce1.chat_id = ce2.chat_id"
                 " WHERE ce1.user_id = ? AND ce2.user_id = ?"
-                " AND (SELECT COUNT(*) FROM chat_entities ce3"
+                " AND (SELECT COUNT(*) FROM chat_participants ce3"
                 "      WHERE ce3.chat_id = ce1.chat_id) = 2",
                 (user_a, user_b),
             ).fetchone()
@@ -161,7 +161,7 @@ class SQLiteChatEntityRepo:
     def _ensure_table(self) -> None:
         self._conn.execute(
             """
-            CREATE TABLE IF NOT EXISTS chat_entities (
+            CREATE TABLE IF NOT EXISTS chat_participants (
                 chat_id TEXT NOT NULL REFERENCES chats(id),
                 user_id TEXT NOT NULL,
                 joined_at REAL NOT NULL,
@@ -178,16 +178,16 @@ class SQLiteChatEntityRepo:
             self._conn.execute("ALTER TABLE chat_entities RENAME COLUMN entity_id TO user_id")
         except sqlite3.OperationalError:
             pass  # column already named user_id, or table is new
-        # @@@chat-entity-migration - add muted/mute_until if table already exists
+        # @@@chat-participant-migration - add muted/mute_until if table already exists
         try:
-            self._conn.execute("ALTER TABLE chat_entities ADD COLUMN muted INTEGER NOT NULL DEFAULT 0")
+            self._conn.execute("ALTER TABLE chat_participants ADD COLUMN muted INTEGER NOT NULL DEFAULT 0")
         except sqlite3.OperationalError:
             pass  # column already exists
         try:
-            self._conn.execute("ALTER TABLE chat_entities ADD COLUMN mute_until REAL")
+            self._conn.execute("ALTER TABLE chat_participants ADD COLUMN mute_until REAL")
         except sqlite3.OperationalError:
             pass
-        # @@@chat-entity-index — speeds up find_chat_between and list_chats_for_user
+        # @@@chat-participant-index — speeds up find_chat_between and list_chats_for_user
         self._conn.execute("CREATE INDEX IF NOT EXISTS idx_chat_entities_user ON chat_entities(user_id, chat_id)")
         self._conn.commit()
 
@@ -256,7 +256,7 @@ class SQLiteChatMessageRepo:
         """Return unread messages (after last_read_at, excluding own) in chronological order."""
         with self._lock:
             cursor_row = self._conn.execute(
-                "SELECT last_read_at FROM chat_entities WHERE chat_id = ? AND user_id = ?",
+                "SELECT last_read_at FROM chat_participants WHERE chat_id = ? AND user_id = ?",
                 (chat_id, user_id),
             ).fetchone()
             last_read = cursor_row[0] if cursor_row else None
@@ -303,7 +303,7 @@ class SQLiteChatMessageRepo:
     def count_unread(self, chat_id: str, user_id: str) -> int:
         with self._lock:
             cursor_row = self._conn.execute(
-                "SELECT last_read_at FROM chat_entities WHERE chat_id = ? AND user_id = ?",
+                "SELECT last_read_at FROM chat_participants WHERE chat_id = ? AND user_id = ?",
                 (chat_id, user_id),
             ).fetchone()
             if cursor_row is None:
@@ -325,7 +325,7 @@ class SQLiteChatMessageRepo:
         """Check if there are unread messages that @mention this user."""
         with self._lock:
             cursor_row = self._conn.execute(
-                "SELECT last_read_at FROM chat_entities WHERE chat_id = ? AND user_id = ?",
+                "SELECT last_read_at FROM chat_participants WHERE chat_id = ? AND user_id = ?",
                 (chat_id, user_id),
             ).fetchone()
             last_read = cursor_row[0] if cursor_row else None

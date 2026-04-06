@@ -3,7 +3,7 @@ import { Link, Outlet, useParams, useNavigate } from "react-router-dom";
 import { Check, Plus, Search, Users, X } from "lucide-react";
 import MemberAvatar from "../components/MemberAvatar";
 import { authFetch, useAuthStore } from "../store/auth-store";
-import type { ChatEntity, ChatSummary } from "../api/types";
+import type { ChatMember, ChatSummary } from "../api/types";
 
 function formatTime(ts: number): string {
   const d = new Date(ts * 1000);
@@ -21,9 +21,9 @@ function chatDisplayName(chat: ChatSummary, myUserId: string | null): string {
   return others.map(e => e.name).join(", ") || "Chat";
 }
 
-// @@@new-chat-dialog — entity picker with multi-select for 1:1 and group chat
+// @@@new-chat-dialog — member picker with multi-select for 1:1 and group chat
 function NewChatDialog({ onClose, onCreated }: { onClose: () => void; onCreated: (chatId: string) => void }) {
-  const [entities, setEntities] = useState<ChatEntity[]>([]);
+  const [members, setMembers] = useState<ChatMember[]>([]);
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [title, setTitle] = useState("");
@@ -33,7 +33,7 @@ function NewChatDialog({ onClose, onCreated }: { onClose: () => void; onCreated:
   useEffect(() => {
     authFetch("/api/entities")
       .then(r => r.json())
-      .then((data: ChatEntity[]) => setEntities(data))
+      .then((data: ChatMember[]) => setMembers(data))
       .catch(console.error);
   }, []);
 
@@ -190,14 +190,14 @@ function ChatSearchModal({ chats, myUserId, onSelect, onClose }: {
             <p className="text-xs text-muted-foreground text-center py-6">无结果</p>
           ) : filtered.map(chat => {
             const name = chatDisplayName(chat, myUserId);
-            const otherEntity = chat.entities.find(e => e.id !== myUserId);
+            const otherMember = chat.entities.find(e => e.id !== myUserId);
             return (
               <button
                 key={chat.id}
                 onClick={() => { onSelect(chat.id); onClose(); }}
                 className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-muted transition-colors duration-fast text-left"
               >
-                <MemberAvatar name={name} avatarUrl={otherEntity?.avatar_url} type={otherEntity?.type} size="sm" />
+                <MemberAvatar name={name} avatarUrl={otherMember?.avatar_url} type={otherMember?.type} size="sm" />
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-medium truncate">{name}</p>
                   {chat.last_message && (

@@ -32,7 +32,7 @@ async def lifespan(app: FastAPI):
     ensure_members_dir()
     ensure_library_dir()
 
-    # ---- Entity-Chat repos + services ----
+    # ---- Member-Chat repos + services ----
     _storage_strategy = os.getenv("LEON_STORAGE_STRATEGY", "sqlite")
 
     if _storage_strategy == "supabase":
@@ -40,7 +40,7 @@ async def lifespan(app: FastAPI):
         from storage.container import StorageContainer
         from storage.providers.supabase import (
             SupabaseAccountRepo,
-            SupabaseChatEntityRepo,
+            SupabaseChatParticipantRepo,
             SupabaseChatMessageRepo,
             SupabaseChatRepo,
             SupabaseContactRepo,
@@ -59,7 +59,7 @@ async def lifespan(app: FastAPI):
         app.state.thread_launch_pref_repo = SupabaseThreadLaunchPrefRepo(_supabase_client)
         app.state.recipe_repo = SupabaseRecipeRepo(_supabase_client)
         app.state.chat_repo = SupabaseChatRepo(_supabase_client)
-        app.state.chat_entity_repo = SupabaseChatEntityRepo(_supabase_client)
+        app.state.chat_participant_repo = SupabaseChatParticipantRepo(_supabase_client)
         app.state.chat_message_repo = SupabaseChatMessageRepo(_supabase_client)
         app.state.invite_code_repo = SupabaseInviteCodeRepo(_supabase_client)
         app.state.user_settings_repo = SupabaseUserSettingsRepo(_supabase_client)
@@ -67,7 +67,7 @@ async def lifespan(app: FastAPI):
         app.state._supabase_auth_client_factory = create_supabase_auth_client
         app.state._storage_container = StorageContainer(strategy="supabase", supabase_client=_supabase_client)
     else:
-        from storage.providers.sqlite.chat_repo import SQLiteChatEntityRepo, SQLiteChatMessageRepo, SQLiteChatRepo
+        from storage.providers.sqlite.chat_repo import SQLiteChatParticipantRepo, SQLiteChatMessageRepo, SQLiteChatRepo
         from storage.providers.sqlite.kernel import SQLiteDBRole, resolve_role_db_path
         from storage.providers.sqlite.member_repo import SQLiteAccountRepo, SQLiteMemberRepo
         from storage.providers.sqlite.recipe_repo import SQLiteRecipeRepo
@@ -83,7 +83,7 @@ async def lifespan(app: FastAPI):
         app.state.thread_launch_pref_repo = SQLiteThreadLaunchPrefRepo(db)
         app.state.recipe_repo = SQLiteRecipeRepo(db)
         app.state.chat_repo = SQLiteChatRepo(chat_db)
-        app.state.chat_entity_repo = SQLiteChatEntityRepo(chat_db)
+        app.state.chat_participant_repo = SQLiteChatParticipantRepo(chat_db)
         app.state.chat_message_repo = SQLiteChatMessageRepo(chat_db)
 
     from backend.web.services.auth_service import AuthService
@@ -117,13 +117,13 @@ async def lifespan(app: FastAPI):
 
         app.state.contact_repo = SQLiteContactRepo(chat_db)
 
-    delivery_resolver = DefaultDeliveryResolver(app.state.contact_repo, app.state.chat_entity_repo)
+    delivery_resolver = DefaultDeliveryResolver(app.state.contact_repo, app.state.chat_participant_repo)
 
     from backend.web.services.chat_service import ChatService
 
     app.state.chat_service = ChatService(
         chat_repo=app.state.chat_repo,
-        chat_entity_repo=app.state.chat_entity_repo,
+        chat_participant_repo=app.state.chat_participant_repo,
         chat_message_repo=app.state.chat_message_repo,
         member_repo=app.state.member_repo,
         event_bus=app.state.chat_event_bus,

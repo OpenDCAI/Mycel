@@ -106,7 +106,7 @@ class HireVisitDeliveryResolver:
         try:
             members = self._chat_members.list_members(chat_id)
         except AttributeError:
-            # Fallback for old ChatEntityRepo interface
+            # Fallback for old ChatParticipantRepo interface
             try:
                 members = self._chat_members.list_entities(chat_id)
             except Exception:

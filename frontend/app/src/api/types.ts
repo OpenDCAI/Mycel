@@ -30,8 +30,8 @@ export interface ThreadSummary {
   running?: boolean;
   member_id?: string;
   member_name?: string;
-  /** Canonical thread/entity display name. Main: {member}. Child: {member} · 分身N */
-  entity_name?: string;
+  /** Canonical thread/member display name. Main: {member}. Child: {member} · 分身N */
+  member_name?: string;
   branch_index?: number;
   sidebar_label?: string | null;
   avatar_url?: string;
@@ -327,7 +327,7 @@ export interface SandboxFileResult {
   size: number;
 }
 
-// --- Entity Chat types ---
+// --- Chat types ---
 
 export interface ChatMember {
   id: string;

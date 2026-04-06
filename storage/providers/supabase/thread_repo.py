@@ -145,23 +145,7 @@ class SupabaseThreadRepo:
         )
         thread_rows = q.rows(query.execute(), _REPO, "list_by_owner_user_id:threads")
 
-        # Step 3: enrich with member_name, member_avatar; entity_name via entities table
-        # Entity id = member_id in the new model, so look up entities by member_id
-        member_ids = list({r["member_id"] for r in thread_rows if r.get("member_id")})
-        entity_map: dict[str, str] = {}
-        if member_ids:
-            ent_response = q.in_(
-                self._client.table("entities").select("id, name"),
-                "id",
-                member_ids,
-                _REPO,
-                "list_by_owner_user_id:entities",
-            ).execute()
-            ent_rows = q.rows(ent_response, _REPO, "list_by_owner_user_id:entities")
-            for er in ent_rows:
-                if er.get("id"):
-                    entity_map[er["id"]] = er.get("name", "")
-
+        # Step 3: enrich with member_name, member_avatar from member_map
         result: list[dict[str, Any]] = []
         for raw in thread_rows:
             d = _to_dict(raw)
@@ -169,7 +153,6 @@ class SupabaseThreadRepo:
             member_info = member_map.get(mid, {})
             d["member_name"] = member_info.get("name")
             d["member_avatar"] = member_info.get("avatar")
-            d["entity_name"] = entity_map.get(mid)
             result.append(d)
         return result
 

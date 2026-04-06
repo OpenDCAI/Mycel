@@ -556,7 +556,7 @@ def _create_owned_thread(
             raise HTTPException(403, "Lease not authorized")
         sandbox_type = str(owned_lease["provider_name"] or sandbox_type)
 
-    # @@@non-atomic-create - these 3 steps (seq++, thread, entity) are not atomic.
+    # @@@non-atomic-create - these 3 steps (seq++, thread) are not atomic.
     seq = app.state.member_repo.increment_thread_seq(agent_member_id)
     new_thread_id = f"{agent_member_id}-{seq}"
     has_main = app.state.thread_repo.get_main_thread(agent_member_id) is not None
@@ -815,7 +815,7 @@ async def delete_thread(
         except Exception as exc:
             logger.warning("Failed to destroy sandbox resources for thread %s: %s", thread_id, exc)
         await asyncio.to_thread(delete_thread_in_db, thread_id)
-        # Also delete from threads table (entity-chat addition)
+        # Also delete from threads table (member-chat addition)
         thread_data = app.state.thread_repo.get_by_id(thread_id)
         member_id = thread_data["member_id"] if thread_data else None
         app.state.thread_repo.delete(thread_id)

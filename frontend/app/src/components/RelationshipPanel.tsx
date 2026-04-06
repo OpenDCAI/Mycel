@@ -1,7 +1,7 @@
 /**
  * RelationshipPanel — Hire/Visit relationship management for an agent.
  *
- * Shows on AgentDetailPage. Uses entity_id (not member_id) for relationships.
+ * Shows on AgentDetailPage. Uses user_id for relationships.
  * Supports: request Visit, approve/reject pending, upgrade to Hire, revoke.
  */
 
@@ -55,7 +55,7 @@ export default function RelationshipPanel({ agentMemberId }: Props) {
     fn: () => void;
   } | null>(null);
 
-  // Resolve agent entity_id from member_id
+  // Resolve agent user_id
   useEffect(() => {
     authFetch("/api/entities")
       .then(r => r.json())

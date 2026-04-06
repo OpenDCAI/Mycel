@@ -361,7 +361,7 @@ class ChatToolService:
                             "query": {"type": "string", "description": "Search query"},
                             "user_id": {
                                 "type": "string",
-                                "description": "Optional: only search in chat with this entity",
+                                "description": "Optional: only search in chat with this user",
                             },
                         },
                         "required": ["query"],
@@ -419,7 +419,7 @@ class ChatToolService:
                 mode=ToolMode.INLINE,
                 schema={
                     "name": "directory",
-                    "description": "Browse the entity directory. Shows entities with Visit/Hire relationships. Returns user_ids for chat_send.",  # noqa: E501
+                    "description": "Browse the member directory. Shows members with Visit/Hire relationships. Returns user_ids for chat_send.",  # noqa: E501
                     "parameters": {
                         "type": "object",
                         "properties": {
