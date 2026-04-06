@@ -28,7 +28,9 @@ class SupabaseToolTaskRepo:
             _REPO,
             "next_id",
         )
-        return str(len(rows) + 1)
+        if not rows:
+            return "1"
+        return str(max(int(str(row["task_id"])) for row in rows) + 1)
 
     def get(self, thread_id: str, task_id: str) -> Task | None:
         rows = q.rows(
