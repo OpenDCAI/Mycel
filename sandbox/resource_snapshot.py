@@ -5,15 +5,22 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+from backend.web.core.storage_factory import list_resource_snapshots, upsert_resource_snapshot
 from sandbox.provider import SandboxProvider
-from storage.providers.sqlite.kernel import SQLiteDBRole, resolve_role_db_path
-from storage.providers.sqlite.resource_snapshot_repo import (
-    ensure_resource_snapshot_table,
-    list_snapshots_by_lease_ids,
-    upsert_lease_resource_snapshot,
-)
 
-# Re-export storage functions for backward compatibility
+
+def ensure_resource_snapshot_table() -> None:
+    """Noop — Supabase tables managed via migrations."""
+
+
+def upsert_lease_resource_snapshot(**kwargs) -> None:  # type: ignore[no-untyped-def]
+    upsert_resource_snapshot(**kwargs)
+
+
+def list_snapshots_by_lease_ids(lease_ids: list[str], **kwargs) -> dict:  # type: ignore[no-untyped-def,type-arg]
+    return list_resource_snapshots(lease_ids, **kwargs)
+
+
 __all__ = [
     "ensure_resource_snapshot_table",
     "upsert_lease_resource_snapshot",
@@ -45,10 +52,9 @@ def probe_and_upsert_for_instance(
     probe_mode: str,
     provider: SandboxProvider,
     instance_id: str,
-    db_path: Path | None = None,
+    db_path: Path | None = None,  # deprecated, ignored
 ) -> dict[str, Any]:
     """Probe provider metrics and persist to storage."""
-    db_path = db_path or resolve_role_db_path(SQLiteDBRole.SANDBOX)
     metrics = None
     cpu_used = None
     cpu_limit = None
