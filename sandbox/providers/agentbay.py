@@ -87,6 +87,20 @@ class AgentBayProvider(SandboxProvider):
         can_resume = self.CAPABILITY.can_resume if supports_resume is None else supports_resume
         self._capability = replace(self.CAPABILITY, can_pause=can_pause, can_resume=can_resume)
 
+    @staticmethod
+    def _require_sdk_session(result: Any, context: str) -> Any:
+        session = getattr(result, "session", None)
+        if session is None:
+            raise RuntimeError(f"AgentBay {context} succeeded without a session payload")
+        return session
+
+    @staticmethod
+    def _require_sdk_context(result: Any, context_id: str) -> Any:
+        context = getattr(result, "context", None)
+        if context is None:
+            raise RuntimeError(f"AgentBay context lookup succeeded without a context payload: {context_id}")
+        return context
+
     def create_session(self, context_id: str | None = None, thread_id: str | None = None) -> SessionInfo:
         from agentbay import ContextSync, CreateSessionParams
 
@@ -99,13 +113,14 @@ class AgentBayProvider(SandboxProvider):
             ctx_result = self.client.context.get(context_id, create=True)
             if not ctx_result.success:
                 raise RuntimeError(f"Failed to get/create context '{context_id}': {ctx_result.error_message}")
-            params.context_syncs = [ContextSync.new(ctx_result.context.id, self.default_context_path)]
+            ctx = self._require_sdk_context(ctx_result, context_id)
+            params.context_syncs = [ContextSync.new(ctx.id, self.default_context_path)]
 
         result = self.client.create(params)
         if not result.success:
             raise RuntimeError(f"Failed to create session: {result.error_message}")
 
-        session = self._hydrate_direct_call_session(result.session)
+        session = self._hydrate_direct_call_session(self._require_sdk_session(result, "create"))
         self._sessions[session.session_id] = session
 
         return SessionInfo(
@@ -127,7 +142,7 @@ class AgentBayProvider(SandboxProvider):
     def pause_session(self, session_id: str) -> bool:
         session = self._get_session(session_id)
         # @@@agentbay-benefit-level - Some AgentBay accounts reject pause/resume with BenefitLevel.NotSupport; keep fail-loud and do not fallback.  # noqa: E501
-        result = self.client.pause(session)
+        result = session.beta_pause()
         if result.success:
             return True
         message = str(getattr(result, "error_message", "") or getattr(result, "message", "") or "unknown error")
@@ -135,20 +150,20 @@ class AgentBayProvider(SandboxProvider):
 
     def resume_session(self, session_id: str) -> bool:
         session = self._get_session(session_id)
-        result = self.client.resume(session)
+        result = session.beta_resume()
         if not result.success:
             message = str(getattr(result, "error_message", "") or getattr(result, "message", "") or "unknown error")
             raise RuntimeError(f"AgentBay resume failed for {session_id}: {message}")
         get_result = self.client.get(session_id)
         if get_result.success:
-            self._sessions[session_id] = get_result.session
+            self._sessions[session_id] = self._require_sdk_session(get_result, "resume refresh")
         return True
 
     def get_session_status(self, session_id: str) -> str:
         try:
             result = self.client.get(session_id)
             if result.success:
-                status_result = result.session.get_status()
+                status_result = self._require_sdk_session(result, "status lookup").get_status()
                 if status_result.success:
                     return status_result.status.lower()
             else:
@@ -287,7 +302,7 @@ class AgentBayProvider(SandboxProvider):
         session = self._get_session(session_id)
         result = session.computer.list_visible_apps()
         if result.success:
-            return [{"pid": app.pid, "name": app.name, "cmd": app.cmd} for app in (result.data or [])]
+            return [{"pid": app.pid, "name": app.pname, "cmd": app.cmdline} for app in (result.data or [])]
         return []
 
     def get_web_url(self, session_id: str) -> str | None:
@@ -295,19 +310,19 @@ class AgentBayProvider(SandboxProvider):
         session = self._get_session(session_id)
         return getattr(session, "resource_url", None)
 
-    def _get_session(self, session_id: str):
+    def _get_session(self, session_id: str) -> Any:
         """Get session object, fetching from API if not cached."""
         if session_id not in self._sessions:
             result = self.client.get(session_id)
             if not result.success:
                 raise RuntimeError(f"Session not found: {session_id}")
-            self._sessions[session_id] = result.session
+            self._sessions[session_id] = self._require_sdk_session(result, "get")
         cached = self._sessions[session_id]
         hydrated = self._hydrate_direct_call_session(cached)
         self._sessions[session_id] = hydrated
         return hydrated
 
-    def _hydrate_direct_call_session(self, session: Any):
+    def _hydrate_direct_call_session(self, session: Any) -> Any:
         """Ensure cached session carries LinkUrl/token/tool metadata for direct shell calls."""
         if not self._session_needs_direct_call_refresh(session):
             return session
@@ -317,7 +332,7 @@ class AgentBayProvider(SandboxProvider):
         refreshed = self.client.get(session_id)
         if not refreshed.success:
             raise RuntimeError(f"Failed to hydrate AgentBay session {session_id}: {refreshed.error_message}")
-        hydrated = refreshed.session
+        hydrated = self._require_sdk_session(refreshed, "hydrate")
         if self._session_needs_direct_call_refresh(hydrated):
             metadata = self._fetch_direct_call_metadata(session_id)
             self._apply_direct_call_metadata(hydrated, metadata)

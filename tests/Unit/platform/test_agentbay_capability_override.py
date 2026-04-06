@@ -1,13 +1,14 @@
 import sys
 import types
+from typing import Any, cast
 
 from sandbox.providers.agentbay import AgentBayProvider
 
 
 def _install_fake_agentbay_module(monkeypatch) -> None:
-    fake_mod = types.ModuleType("agentbay")
-    fake_api_mod = types.ModuleType("agentbay.api")
-    fake_api_models_mod = types.ModuleType("agentbay.api.models")
+    fake_mod = cast(Any, types.ModuleType("agentbay"))
+    fake_api_mod = cast(Any, types.ModuleType("agentbay.api"))
+    fake_api_models_mod = cast(Any, types.ModuleType("agentbay.api.models"))
 
     class FakeAgentBay:
         def __init__(self, api_key: str):

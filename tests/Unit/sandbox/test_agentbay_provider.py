@@ -3,14 +3,15 @@ import sys
 import types
 from dataclasses import replace
 from types import SimpleNamespace
+from typing import Any, cast
 
 from sandbox.providers.agentbay import AgentBayProvider
 
 
 def _install_fake_agentbay_module(monkeypatch) -> None:
-    fake_mod = types.ModuleType("agentbay")
-    fake_api_mod = types.ModuleType("agentbay.api")
-    fake_api_models_mod = types.ModuleType("agentbay.api.models")
+    fake_mod = cast(Any, types.ModuleType("agentbay"))
+    fake_api_mod = cast(Any, types.ModuleType("agentbay.api"))
+    fake_api_models_mod = cast(Any, types.ModuleType("agentbay.api.models"))
 
     class FakeCreateSessionParams:
         def __init__(self):
@@ -102,6 +103,39 @@ def test_destroy_session_skips_sync_when_pause_capability_is_disabled():
     assert provider.destroy_session("sess-123") is True
     assert calls == [False]
     assert "sess-123" not in provider._sessions
+
+
+def test_pause_and_resume_session_use_current_session_sdk_methods():
+    calls: list[str] = []
+
+    class _Result:
+        success = True
+        error_message = ""
+        message = ""
+
+    class _Session:
+        def __init__(self) -> None:
+            self.session_id = "sess-123"
+            self.token = "tok"
+            self.link_url = "https://link"
+            self.mcpTools = [object()]
+
+        def beta_pause(self):
+            calls.append("pause")
+            return _Result()
+
+        def beta_resume(self):
+            calls.append("resume")
+            return _Result()
+
+    session = _Session()
+    fake_client = SimpleNamespace(get=lambda _session_id: SimpleNamespace(success=True, session=session, error_message=""))
+    provider = _provider_with_fake_client(fake_client)
+    provider._sessions["sess-123"] = session
+
+    assert provider.pause_session("sess-123") is True
+    assert provider.resume_session("sess-123") is True
+    assert calls == ["pause", "resume"]
 
 
 def test_execute_prefers_link_url_shell_path_when_session_has_direct_call_metadata():
@@ -233,6 +267,28 @@ def test_execute_prefers_link_url_shell_path_for_sdk_shape_session():
             },
         )
     ]
+
+
+def test_list_processes_uses_current_sdk_process_field_names():
+    class _Result:
+        success = True
+        data = [SimpleNamespace(pid=101, pname="python", cmdline="python app.py")]
+
+    class _Computer:
+        def list_visible_apps(self):
+            return _Result()
+
+    session = SimpleNamespace(
+        session_id="sess-123",
+        token="tok",
+        link_url="https://link",
+        mcpTools=[object()],
+        computer=_Computer(),
+    )
+    provider = _provider_with_fake_client(SimpleNamespace())
+    provider._sessions["sess-123"] = session
+
+    assert provider.list_processes("sess-123") == [{"pid": 101, "name": "python", "cmd": "python app.py"}]
 
 
 def test_resolve_shell_server_falls_back_to_mcp_tools_when_sdk_resolver_raises():
