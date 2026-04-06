@@ -799,14 +799,11 @@ h2 {
 
 .monitor-lease-detail-shell {
   margin-bottom: 1rem;
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-strong);
   border-radius: 16px;
-  background: linear-gradient(
-    180deg,
-    var(--panel) 0%,
-    var(--panel-strong) 100%
-  );
-  padding: 1rem;
+  background: var(--panel);
+  padding: 1rem 1.05rem 1.05rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
 }
 
 .monitor-lease-detail-id {
@@ -814,8 +811,47 @@ h2 {
   font-size: 0.88rem;
 }
 
+.monitor-lease-context-bar {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.6rem;
+  margin-bottom: 0.8rem;
+}
+
+.monitor-lease-context-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.18rem;
+  padding: 0.7rem 0.78rem;
+  border-radius: 12px;
+  background: var(--bg-muted);
+  border: 1px solid var(--border);
+}
+
+.monitor-lease-context-item strong {
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.monitor-lease-context-item span {
+  font-size: 0.84rem;
+  color: var(--text);
+}
+
 .monitor-lease-session-table {
   margin-top: 0.25rem;
+}
+
+.resource-table-dense th {
+  padding: 0.55rem 0.7rem;
+  font-size: 0.8rem;
+}
+
+.resource-table-dense td {
+  padding: 0.5rem 0.7rem;
+  font-size: 0.85rem;
 }
 
 .provider-lease-grid {
@@ -2004,6 +2040,10 @@ section.eval-runtime-panel {
     overflow: visible;
     padding-right: 0;
   }
+
+  .monitor-lease-context-bar {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 @media (max-width: 720px) {
@@ -2021,6 +2061,10 @@ section.eval-runtime-panel {
     flex-direction: column;
     align-items: flex-start;
     gap: 0.2rem;
+  }
+
+  .monitor-lease-context-bar {
+    grid-template-columns: 1fr;
   }
 
   .console-header {

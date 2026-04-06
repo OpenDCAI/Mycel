@@ -563,10 +563,6 @@ function MonitorLeaseDetailPanel({ group }: { group: any }) {
               {group.leaseId || "ephemeral"}
             </span>
           </div>
-          <p className="description">
-            Monitor-side lease drill-down. Use this layer before dropping into
-            the full provider session truth table.
-          </p>
         </div>
         <div className="provider-detail-actions">
           {group.leaseId ? (
@@ -599,18 +595,18 @@ function MonitorLeaseDetailPanel({ group }: { group: any }) {
           <strong>{stopped}</strong>
         </span>
       </div>
-      <div className="info-grid info-grid-compact">
-        <div>
+      <div className="monitor-lease-context-bar">
+        <div className="monitor-lease-context-item">
           <strong>Member</strong>
           <span>{group.memberName}</span>
         </div>
-        <div>
+        <div className="monitor-lease-context-item">
           <strong>Thread</strong>
           <span>
             {group.threadId ? shortId(group.threadId, 14) : "no thread binding"}
           </span>
         </div>
-        <div>
+        <div className="monitor-lease-context-item">
           <strong>Started</strong>
           <span>
             {group.startedAt
@@ -618,12 +614,12 @@ function MonitorLeaseDetailPanel({ group }: { group: any }) {
               : "--"}
           </span>
         </div>
-        <div>
+        <div className="monitor-lease-context-item">
           <strong>Status</strong>
           <span>{group.status}</span>
         </div>
       </div>
-      <table className="monitor-lease-session-table">
+      <table className="monitor-lease-session-table resource-table-dense">
         <thead>
           <tr>
             <th>Session</th>
@@ -1040,6 +1036,11 @@ function MonitorResourcesPage() {
                     : scopedSessions.length}
                   )
                 </h2>
+                <p className="count">
+                  {sessionScope === "provider"
+                    ? "full provider truth surface"
+                    : "scoped to selected lease"}
+                </p>
               </div>
               <div
                 className="segmented-toggle"
@@ -1062,7 +1063,7 @@ function MonitorResourcesPage() {
                 </button>
               </div>
             </div>
-            <table>
+            <table className="resource-table-dense">
               <thead>
                 <tr>
                   <th>Session</th>
