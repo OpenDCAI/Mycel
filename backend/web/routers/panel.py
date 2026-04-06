@@ -41,10 +41,15 @@ async def list_members(
 
 
 @router.get("/members/{member_id}")
-async def get_member(member_id: str) -> dict[str, Any]:
+async def get_member(
+    member_id: str,
+    user_id: Annotated[str, Depends(get_current_user_id)],
+) -> dict[str, Any]:
     item = await asyncio.to_thread(member_service.get_member, member_id)
     if not item:
         raise HTTPException(404, "Member not found")
+    if item.get("owner_user_id") != user_id:
+        raise HTTPException(403, "Forbidden")
     return item
 
 
@@ -59,8 +64,18 @@ async def create_member(
 
 
 @router.put("/members/{member_id}")
-async def update_member(member_id: str, req: UpdateMemberRequest, request: Request) -> dict[str, Any]:
+async def update_member(
+    member_id: str,
+    req: UpdateMemberRequest,
+    request: Request,
+    user_id: Annotated[str, Depends(get_current_user_id)],
+) -> dict[str, Any]:
     member_repo = getattr(request.app.state, "member_repo", None)
+    existing = await asyncio.to_thread(member_service.get_member, member_id)
+    if not existing:
+        raise HTTPException(404, "Member not found")
+    if existing.get("owner_user_id") != user_id:
+        raise HTTPException(403, "Forbidden")
     item = await asyncio.to_thread(
         member_service.update_member,
         member_id,
@@ -73,7 +88,16 @@ async def update_member(member_id: str, req: UpdateMemberRequest, request: Reque
 
 
 @router.put("/members/{member_id}/config")
-async def update_member_config(member_id: str, req: MemberConfigPayload) -> dict[str, Any]:
+async def update_member_config(
+    member_id: str,
+    req: MemberConfigPayload,
+    user_id: Annotated[str, Depends(get_current_user_id)],
+) -> dict[str, Any]:
+    existing = await asyncio.to_thread(member_service.get_member, member_id)
+    if not existing:
+        raise HTTPException(404, "Member not found")
+    if existing.get("owner_user_id") != user_id:
+        raise HTTPException(403, "Forbidden")
     item = await asyncio.to_thread(member_service.update_member_config, member_id, req.model_dump())
     if not item:
         raise HTTPException(404, "Member not found")
@@ -81,9 +105,18 @@ async def update_member_config(member_id: str, req: MemberConfigPayload) -> dict
 
 
 @router.put("/members/{member_id}/publish")
-async def publish_member(member_id: str, req: PublishMemberRequest) -> dict[str, Any]:
+async def publish_member(
+    member_id: str,
+    req: PublishMemberRequest,
+    user_id: Annotated[str, Depends(get_current_user_id)],
+) -> dict[str, Any]:
     if member_id == "__leon__":
         raise HTTPException(403, "Cannot publish builtin member")
+    existing = await asyncio.to_thread(member_service.get_member, member_id)
+    if not existing:
+        raise HTTPException(404, "Member not found")
+    if existing.get("owner_user_id") != user_id:
+        raise HTTPException(403, "Forbidden")
     item = await asyncio.to_thread(member_service.publish_member, member_id, req.bump_type)
     if not item:
         raise HTTPException(404, "Member not found")
@@ -91,9 +124,18 @@ async def publish_member(member_id: str, req: PublishMemberRequest) -> dict[str,
 
 
 @router.delete("/members/{member_id}")
-async def delete_member(member_id: str, request: Request) -> dict[str, Any]:
+async def delete_member(
+    member_id: str,
+    request: Request,
+    user_id: Annotated[str, Depends(get_current_user_id)],
+) -> dict[str, Any]:
     if member_id == "__leon__":
         raise HTTPException(403, "Cannot delete builtin member")
+    existing = await asyncio.to_thread(member_service.get_member, member_id)
+    if not existing:
+        raise HTTPException(404, "Member not found")
+    if existing.get("owner_user_id") != user_id:
+        raise HTTPException(403, "Forbidden")
     member_repo = getattr(request.app.state, "member_repo", None)
     ok = await asyncio.to_thread(member_service.delete_member, member_id, member_repo=member_repo)
     if not ok:
@@ -105,30 +147,45 @@ async def delete_member(member_id: str, request: Request) -> dict[str, Any]:
 
 
 @router.get("/tasks")
-async def list_tasks() -> dict[str, Any]:
+async def list_tasks(
+    user_id: Annotated[str, Depends(get_current_user_id)],
+) -> dict[str, Any]:
     items = await asyncio.to_thread(task_service.list_tasks)
     return {"items": items}
 
 
 @router.post("/tasks")
-async def create_task(req: CreateTaskRequest) -> dict[str, Any]:
+async def create_task(
+    req: CreateTaskRequest,
+    user_id: Annotated[str, Depends(get_current_user_id)],
+) -> dict[str, Any]:
     return await asyncio.to_thread(task_service.create_task, **req.model_dump())
 
 
 @router.put("/tasks/bulk-status")
-async def bulk_update_status(req: BulkTaskStatusRequest) -> dict[str, Any]:
+async def bulk_update_status(
+    req: BulkTaskStatusRequest,
+    user_id: Annotated[str, Depends(get_current_user_id)],
+) -> dict[str, Any]:
     count = await asyncio.to_thread(task_service.bulk_update_task_status, req.ids, req.status)
     return {"updated": count}
 
 
 @router.post("/tasks/bulk-delete")
-async def bulk_delete_tasks(req: BulkDeleteTasksRequest) -> dict[str, Any]:
+async def bulk_delete_tasks(
+    req: BulkDeleteTasksRequest,
+    user_id: Annotated[str, Depends(get_current_user_id)],
+) -> dict[str, Any]:
     count = await asyncio.to_thread(task_service.bulk_delete_tasks, req.ids)
     return {"deleted": count}
 
 
 @router.put("/tasks/{task_id}")
-async def update_task(task_id: str, req: UpdateTaskRequest) -> dict[str, Any]:
+async def update_task(
+    task_id: str,
+    req: UpdateTaskRequest,
+    user_id: Annotated[str, Depends(get_current_user_id)],
+) -> dict[str, Any]:
     item = await asyncio.to_thread(task_service.update_task, task_id, **req.model_dump())
     if not item:
         raise HTTPException(404, "Task not found")
@@ -136,7 +193,10 @@ async def update_task(task_id: str, req: UpdateTaskRequest) -> dict[str, Any]:
 
 
 @router.delete("/tasks/{task_id}")
-async def delete_task(task_id: str) -> dict[str, Any]:
+async def delete_task(
+    task_id: str,
+    user_id: Annotated[str, Depends(get_current_user_id)],
+) -> dict[str, Any]:
     ok = await asyncio.to_thread(task_service.delete_task, task_id)
     if not ok:
         raise HTTPException(404, "Task not found")
@@ -147,13 +207,18 @@ async def delete_task(task_id: str) -> dict[str, Any]:
 
 
 @router.get("/cron-jobs")
-async def list_cron_jobs() -> dict[str, Any]:
+async def list_cron_jobs(
+    user_id: Annotated[str, Depends(get_current_user_id)],
+) -> dict[str, Any]:
     items = await asyncio.to_thread(cron_job_service.list_cron_jobs)
     return {"items": items}
 
 
 @router.post("/cron-jobs")
-async def create_cron_job(req: CreateCronJobRequest) -> dict[str, Any]:
+async def create_cron_job(
+    req: CreateCronJobRequest,
+    user_id: Annotated[str, Depends(get_current_user_id)],
+) -> dict[str, Any]:
     job = await asyncio.to_thread(
         cron_job_service.create_cron_job,
         name=req.name,
@@ -166,7 +231,11 @@ async def create_cron_job(req: CreateCronJobRequest) -> dict[str, Any]:
 
 
 @router.put("/cron-jobs/{job_id}")
-async def update_cron_job(job_id: str, req: UpdateCronJobRequest) -> dict[str, Any]:
+async def update_cron_job(
+    job_id: str,
+    req: UpdateCronJobRequest,
+    user_id: Annotated[str, Depends(get_current_user_id)],
+) -> dict[str, Any]:
     fields = req.model_dump(exclude_none=True)
     if "enabled" in fields:
         fields["enabled"] = int(fields["enabled"])
@@ -177,7 +246,10 @@ async def update_cron_job(job_id: str, req: UpdateCronJobRequest) -> dict[str, A
 
 
 @router.delete("/cron-jobs/{job_id}")
-async def delete_cron_job(job_id: str) -> dict[str, Any]:
+async def delete_cron_job(
+    job_id: str,
+    user_id: Annotated[str, Depends(get_current_user_id)],
+) -> dict[str, Any]:
     ok = await asyncio.to_thread(cron_job_service.delete_cron_job, job_id)
     if not ok:
         raise HTTPException(404, "Cron job not found")
@@ -185,7 +257,11 @@ async def delete_cron_job(job_id: str) -> dict[str, Any]:
 
 
 @router.post("/cron-jobs/{job_id}/run")
-async def trigger_cron_job(job_id: str, request: Request) -> dict[str, Any]:
+async def trigger_cron_job(
+    job_id: str,
+    request: Request,
+    user_id: Annotated[str, Depends(get_current_user_id)],
+) -> dict[str, Any]:
     cron_service = getattr(request.app.state, "cron_service", None)
     if not cron_service:
         raise HTTPException(503, "Cron service not available")
@@ -320,5 +396,8 @@ async def get_profile(
 
 
 @router.put("/profile")
-async def update_profile(req: UpdateProfileRequest) -> dict[str, Any]:
+async def update_profile(
+    req: UpdateProfileRequest,
+    user_id: Annotated[str, Depends(get_current_user_id)],
+) -> dict[str, Any]:
     return await asyncio.to_thread(profile_service.update_profile, **req.model_dump())

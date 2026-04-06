@@ -6,11 +6,12 @@ User preferences (workspace, default model) are stored in ~/.leon/preferences.js
 
 import json
 from pathlib import Path
-from typing import Any
+from typing import Annotated, Any
 
-from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel
 
+from backend.web.core.dependencies import get_current_user_id
 from config.models_loader import ModelsLoader
 from config.models_schema import ModelsConfig
 from config.user_paths import user_home_path, user_home_read_candidates
@@ -233,7 +234,11 @@ async def read_local_file(path: str = Query(...)) -> dict[str, Any]:
 
 
 @router.post("/workspace")
-async def set_default_workspace(request: WorkspaceRequest, req: Request) -> dict[str, Any]:
+async def set_default_workspace(
+    request: WorkspaceRequest,
+    req: Request,
+    user_id: Annotated[str, Depends(get_current_user_id)],
+) -> dict[str, Any]:
     """Set default workspace path."""
     workspace_path = Path(request.workspace).expanduser().resolve()
     if not workspace_path.exists():
@@ -244,7 +249,6 @@ async def set_default_workspace(request: WorkspaceRequest, req: Request) -> dict
     workspace_str = str(workspace_path)
 
     repo = _get_settings_repo(req)
-    user_id = _try_get_user_id(req) if repo else None
     if repo and user_id:
         repo.set_default_workspace(user_id, workspace_str)
     else:
@@ -260,7 +264,11 @@ async def set_default_workspace(request: WorkspaceRequest, req: Request) -> dict
 
 
 @router.post("/workspace/recent")
-async def add_recent_workspace(request: WorkspaceRequest, req: Request) -> dict[str, Any]:
+async def add_recent_workspace(
+    request: WorkspaceRequest,
+    req: Request,
+    user_id: Annotated[str, Depends(get_current_user_id)],
+) -> dict[str, Any]:
     """Add a workspace to recent list."""
     workspace_path = Path(request.workspace).expanduser().resolve()
     if not workspace_path.exists() or not workspace_path.is_dir():
@@ -269,7 +277,6 @@ async def add_recent_workspace(request: WorkspaceRequest, req: Request) -> dict[
     workspace_str = str(workspace_path)
 
     repo = _get_settings_repo(req)
-    user_id = _try_get_user_id(req) if repo else None
     if repo and user_id:
         repo.add_recent_workspace(user_id, workspace_str)
     else:
@@ -288,10 +295,13 @@ class DefaultModelRequest(BaseModel):
 
 
 @router.post("/default-model")
-async def set_default_model(request: DefaultModelRequest, req: Request) -> dict[str, Any]:
+async def set_default_model(
+    request: DefaultModelRequest,
+    req: Request,
+    user_id: Annotated[str, Depends(get_current_user_id)],
+) -> dict[str, Any]:
     """Set default virtual model preference."""
     repo = _get_settings_repo(req)
-    user_id = _try_get_user_id(req) if repo else None
     if repo and user_id:
         repo.set_default_model(user_id, request.model)
     else:
@@ -406,10 +416,13 @@ class ModelMappingRequest(BaseModel):
 
 
 @router.post("/model-mapping")
-async def update_model_mapping(request: ModelMappingRequest, req: Request) -> dict[str, Any]:
+async def update_model_mapping(
+    request: ModelMappingRequest,
+    req: Request,
+    user_id: Annotated[str, Depends(get_current_user_id)],
+) -> dict[str, Any]:
     """Update virtual model mapping → models config."""
     repo = _get_settings_repo(req)
-    user_id = _try_get_user_id(req) if repo else None
     data = _load_models_for_user(repo, user_id)
     mapping = data.get("mapping", {})
     for name, spec in request.mapping.items():
@@ -434,10 +447,13 @@ class ModelToggleRequest(BaseModel):
 
 
 @router.post("/models/toggle")
-async def toggle_model(request: ModelToggleRequest, req: Request) -> dict[str, Any]:
+async def toggle_model(
+    request: ModelToggleRequest,
+    req: Request,
+    user_id: Annotated[str, Depends(get_current_user_id)],
+) -> dict[str, Any]:
     """Enable or disable a model."""
     repo = _get_settings_repo(req)
-    user_id = _try_get_user_id(req) if repo else None
     data = _load_models_for_user(repo, user_id)
     pool = data.setdefault("pool", {"enabled": [], "custom": []})
     enabled = pool.setdefault("enabled", [])
@@ -461,10 +477,13 @@ class CustomModelRequest(BaseModel):
 
 
 @router.post("/models/custom")
-async def add_custom_model(request: CustomModelRequest, req: Request) -> dict[str, Any]:
+async def add_custom_model(
+    request: CustomModelRequest,
+    req: Request,
+    user_id: Annotated[str, Depends(get_current_user_id)],
+) -> dict[str, Any]:
     """Add a custom model + auto-enable."""
     repo = _get_settings_repo(req)
-    user_id = _try_get_user_id(req) if repo else None
     data = _load_models_for_user(repo, user_id)
     pool = data.setdefault("pool", {"enabled": [], "custom": []})
     custom = pool.setdefault("custom", [])
@@ -617,10 +636,13 @@ class ProviderRequest(BaseModel):
 
 
 @router.post("/providers")
-async def update_provider(request: ProviderRequest, req: Request) -> dict[str, Any]:
+async def update_provider(
+    request: ProviderRequest,
+    req: Request,
+    user_id: Annotated[str, Depends(get_current_user_id)],
+) -> dict[str, Any]:
     """Update provider config, then reload all agents."""
     repo = _get_settings_repo(req)
-    user_id = _try_get_user_id(req) if repo else None
     data = _load_models_for_user(repo, user_id)
     providers = data.setdefault("providers", {})
     provider_data: dict[str, Any] = {}

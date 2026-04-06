@@ -134,6 +134,8 @@ async def get_chat(
     chat = app.state.chat_repo.get_by_id(chat_id)
     if not chat:
         raise HTTPException(404, "Chat not found")
+    if not _messaging(app).is_chat_member(chat_id, user_id):
+        raise HTTPException(403, "Not a participant of this chat")
     members_list = _messaging(app).list_chat_members(chat_id)
     members_info = []
     for m in members_list:
@@ -172,6 +174,8 @@ async def list_messages(
     limit: int = Query(50, ge=1, le=200),
     before: str | None = Query(None),
 ):
+    if not _messaging(app).is_chat_member(chat_id, user_id):
+        raise HTTPException(403, "Not a participant of this chat")
     msgs = _messaging(app).list_messages(chat_id, limit=limit, before=before, viewer_id=user_id)
     return [_msg_response(m, app.state.member_repo) for m in msgs]
 
