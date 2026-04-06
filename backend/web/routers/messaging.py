@@ -266,14 +266,12 @@ async def stream_chat_events(
     token: str | None = None,
     app: Annotated[Any, Depends(get_app)] = None,
 ):
-    auth_service = getattr(app.state, "auth_service", None)
-    if auth_service is not None:
-        if not token:
-            raise HTTPException(401, "Missing token")
-        try:
-            auth_service.verify_token(token)
-        except ValueError as e:
-            raise HTTPException(401, str(e))
+    if not token:
+        raise HTTPException(401, "Missing token")
+    try:
+        app.state.auth_service.verify_token(token)
+    except ValueError as e:
+        raise HTTPException(401, str(e))
 
     from fastapi.responses import StreamingResponse
 
@@ -295,59 +293,6 @@ async def stream_chat_events(
             event_bus.unsubscribe(chat_id, queue)
 
     return StreamingResponse(event_generator(), media_type="text/event-stream")
-
-
-# ---------------------------------------------------------------------------
-# Chat mute
-# ---------------------------------------------------------------------------
-
-
-# ---------------------------------------------------------------------------
-# Contact management (block/mute)
-# ---------------------------------------------------------------------------
-
-
-class SetContactBody(BaseModel):
-    owner_id: str
-    target_id: str
-    relation: str  # "normal" | "blocked" | "muted"
-
-
-@router.post("/contacts")
-async def set_contact(
-    body: SetContactBody,
-    user_id: Annotated[str, Depends(get_current_user_id)],
-    app: Annotated[Any, Depends(get_app)],
-):
-    _verify_member_ownership(app, body.owner_id, user_id)
-    import time
-
-    from storage.contracts import ContactRow
-
-    contact_repo = app.state.contact_repo
-    contact_repo.upsert(
-        ContactRow(
-            owner_id=body.owner_id,
-            target_id=body.target_id,
-            relation=body.relation,
-            created_at=time.time(),
-            updated_at=time.time(),
-        )
-    )
-    return {"status": "ok", "relation": body.relation}
-
-
-@router.delete("/contacts/{owner_id}/{target_id}")
-async def delete_contact(
-    owner_id: str,
-    target_id: str,
-    user_id: Annotated[str, Depends(get_current_user_id)],
-    app: Annotated[Any, Depends(get_app)],
-):
-    _verify_member_ownership(app, owner_id, user_id)
-    contact_repo = app.state.contact_repo
-    contact_repo.delete(owner_id, target_id)
-    return {"status": "deleted"}
 
 
 # ---------------------------------------------------------------------------
