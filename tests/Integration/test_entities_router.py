@@ -11,6 +11,7 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 import pytest
+from fastapi import HTTPException
 
 from backend.web.routers import entities as entities_router
 from storage.contracts import MemberRow, MemberType
@@ -97,3 +98,95 @@ async def test_get_agent_thread_reads_main_thread_from_thread_repo():
     result = await entities_router.get_agent_thread("a-main", current_user_id="u2", app=app)
 
     assert result == {"user_id": "a-main", "thread_id": "thread-main"}
+
+
+def test_get_member_or_404_returns_member():
+    now = 1_775_223_756.0
+    agent = MemberRow(
+        id="a-main",
+        name="Toad",
+        type=MemberType.MYCEL_AGENT,
+        owner_user_id="u2",
+        created_at=now,
+    )
+    app = SimpleNamespace(
+        state=SimpleNamespace(
+            member_repo=SimpleNamespace(get_by_id=lambda member_id: agent if member_id == "a-main" else None),
+        )
+    )
+
+    result = entities_router._get_member_or_404(app, "a-main")
+
+    assert result is agent
+
+
+def test_get_member_or_404_raises_for_missing_member():
+    app = SimpleNamespace(
+        state=SimpleNamespace(
+            member_repo=SimpleNamespace(get_by_id=lambda _member_id: None),
+        )
+    )
+
+    with pytest.raises(HTTPException) as exc_info:
+        entities_router._get_member_or_404(app, "missing")
+
+    assert exc_info.value.status_code == 404
+    assert exc_info.value.detail == "Member not found"
+
+
+@pytest.mark.asyncio
+async def test_get_entity_profile_uses_member_lookup_helper(monkeypatch: pytest.MonkeyPatch):
+    now = 1_775_223_756.0
+    agent = MemberRow(
+        id="a-main",
+        name="Toad",
+        type=MemberType.MYCEL_AGENT,
+        owner_user_id="u2",
+        created_at=now,
+    )
+    app = SimpleNamespace(state=SimpleNamespace())
+    calls: list[tuple[object, str]] = []
+
+    def _fake_get_member_or_404(app_obj, user_id: str):
+        calls.append((app_obj, user_id))
+        return agent
+
+    monkeypatch.setattr(entities_router, "_get_member_or_404", _fake_get_member_or_404)
+
+    result = await entities_router.get_entity_profile("a-main", app)
+
+    assert result["id"] == "a-main"
+    assert calls == [(app, "a-main")]
+
+
+@pytest.mark.asyncio
+async def test_get_agent_thread_uses_member_lookup_helper(monkeypatch: pytest.MonkeyPatch):
+    now = 1_775_223_756.0
+    agent = MemberRow(
+        id="a-main",
+        name="Toad",
+        type=MemberType.MYCEL_AGENT,
+        owner_user_id="u2",
+        created_at=now,
+    )
+    app = SimpleNamespace(
+        state=SimpleNamespace(
+            thread_repo=SimpleNamespace(
+                get_main_thread=lambda member_id: (
+                    {"id": "thread-main", "is_main": True, "branch_index": 0} if member_id == "a-main" else None
+                )
+            ),
+        )
+    )
+    calls: list[tuple[object, str]] = []
+
+    def _fake_get_member_or_404(app_obj, user_id: str):
+        calls.append((app_obj, user_id))
+        return agent
+
+    monkeypatch.setattr(entities_router, "_get_member_or_404", _fake_get_member_or_404)
+
+    result = await entities_router.get_agent_thread("a-main", current_user_id="u2", app=app)
+
+    assert result == {"user_id": "a-main", "thread_id": "thread-main"}
+    assert calls == [(app, "a-main")]

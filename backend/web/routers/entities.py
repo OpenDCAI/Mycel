@@ -212,9 +212,7 @@ async def get_entity_profile(
     app: Annotated[Any, Depends(get_app)],
 ):
     """Public agent profile. No auth required (frontend uses plain fetch)."""
-    member = app.state.member_repo.get_by_id(user_id)
-    if not member:
-        raise HTTPException(404, "Member not found")
+    member = _get_member_or_404(app, user_id)
     member_type = member.type.value if hasattr(member.type, "value") else str(member.type)
     if "agent" not in member_type:
         raise HTTPException(404, "Profile not available for this member type")
@@ -234,10 +232,15 @@ async def get_agent_thread(
     app: Annotated[Any, Depends(get_app)],
 ):
     """Get the thread_id for an agent's main thread. user_id here is the agent's member_id."""
-    member = app.state.member_repo.get_by_id(user_id)
-    if not member:
-        raise HTTPException(404, "Member not found")
+    member = _get_member_or_404(app, user_id)
     thread = app.state.thread_repo.get_main_thread(user_id)
     if member.type != MemberType.HUMAN and thread is not None:
         return {"user_id": user_id, "thread_id": thread["id"]}
     raise HTTPException(404, "No agent thread found")
+
+
+def _get_member_or_404(app: Any, user_id: str) -> Any:
+    member = app.state.member_repo.get_by_id(user_id)
+    if not member:
+        raise HTTPException(404, "Member not found")
+    return member
