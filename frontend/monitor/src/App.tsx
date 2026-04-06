@@ -3658,9 +3658,14 @@ function EvaluationPage() {
 
       {composerOpen && (
         // @@@evaluation-composer-modal - keep config editing in a fixed layer to avoid "tail jump" in long list pages.
-        <div className="eval-composer-backdrop" onClick={closeComposer}>
+        <div
+          className="eval-composer-backdrop"
+          data-testid="evaluation-composer-backdrop"
+          onClick={closeComposer}
+        >
           <section
             className="eval-composer-panel"
+            data-testid="evaluation-composer-modal"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="section-row">
