@@ -308,9 +308,21 @@ The dashboard is a switchboard, not a full destination page. It should answer â€
   - `healthy_capacity` is collapsed behind a details shell instead of competing with active failure buckets
 - the net effect is not a new contract; it is a first-screen density cut so operators land on attention surfaces before passive inventory
 
+### Current D4 Phase-5 Landing
+
+- selected provider lease cards now drive a dedicated monitor-side `Lease Detail` panel before the global session truth table
+- this is the smallest local equivalent of the product sandbox-sheet layer:
+  - click a lease group card
+  - inspect lease/thread quick links, member, started time, and per-session status rows
+  - only then fall through to the noisier full provider session table
+- the interaction stays frontend-local and contract-preserving:
+  - no new backend fields
+  - no import of product sandbox components
+  - only existing provider/session/lease payload data is reused
+
 ### D4 Remaining Gaps
 
-- monitor provider/detail surface is now close to the product resources page in interaction quality, but still lacks the richer sandbox-sheet / deep drill-down family the product page has
+- monitor provider/detail surface is now close to the product resources page in interaction quality, but still lacks the richer sandbox-sheet capabilities such as file browsing or per-session live metrics
 - lease regrouping exists, but backend-side semantic categorization is still shallow and belongs to `D3`
 - dashboard is currently a compact switchboard; it does not yet expose richer error drill-down or resource anomaly timelines
 

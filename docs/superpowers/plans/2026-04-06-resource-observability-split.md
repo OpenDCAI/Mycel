@@ -36,6 +36,10 @@
   - dashboard `Diverged leases` and `Orphans` metrics now jump straight to `resources#lease-health`
   - provider cards are tighter because duplicated paused/stopped footer counts were removed
   - lease-health now only renders non-empty attention buckets by default and collapses healthy capacity behind a details shell
+- `D4` now has a landed phase-5:
+  - selected lease cards now open a dedicated `Lease Detail` panel before the full provider session table
+  - the panel reuses existing payload data only: lease/thread links, member, started time, and grouped session rows
+  - this gives monitor resources a local deep-drill layer without changing backend contracts
 - `D2` now has a landed phase-2:
   - evaluation detail payload includes backend-owned `info.operator_surface`
   - provisional eval detail opens with `Operator Status`, artifact paths, and explicit next steps
