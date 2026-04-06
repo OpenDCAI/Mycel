@@ -21,7 +21,14 @@ class _FakeMemberRepo:
                 type=MemberType.MYCEL_AGENT,
                 owner_user_id="owner-1",
                 created_at=1.0,
-            )
+            ),
+            "member-2": MemberRow(
+                id="member-2",
+                name="Dryad",
+                type=MemberType.MYCEL_AGENT,
+                owner_user_id="owner-2",
+                created_at=2.0,
+            ),
         }
         self._seq = {"member-1": 0}
 
@@ -309,6 +316,24 @@ def test_resolve_default_config_skips_invalid_successful_and_uses_confirmed() ->
     }
 
 
+def test_find_owned_member_returns_none_for_foreign_member() -> None:
+    app = _make_threads_app()
+
+    result = threads_router._find_owned_member(app, "member-2", "owner-1")
+
+    assert result is None
+
+
+def test_require_owned_member_raises_for_foreign_member() -> None:
+    app = _make_threads_app()
+
+    with pytest.raises(threads_router.HTTPException) as excinfo:
+        threads_router._require_owned_member(app, "member-2", "owner-1")
+
+    assert excinfo.value.status_code == 403
+    assert excinfo.value.detail == "Not authorized"
+
+
 @pytest.mark.asyncio
 async def test_create_thread_persists_existing_lease_successful_config() -> None:
     app = _make_threads_app()
@@ -354,6 +379,71 @@ async def test_create_thread_persists_existing_lease_successful_config() -> None
             "workspace": "/workspace/reused",
         },
     )
+
+
+@pytest.mark.asyncio
+async def test_resolve_main_thread_uses_owned_member_lookup(monkeypatch: pytest.MonkeyPatch) -> None:
+    app = _make_threads_app()
+    payload = threads_router.ResolveMainThreadRequest(member_id="member-2")
+    calls: list[tuple[object, str, str]] = []
+
+    def _fake_find_owned_member(app_obj, member_id: str, owner_user_id: str):
+        calls.append((app_obj, member_id, owner_user_id))
+        return None
+
+    monkeypatch.setattr(threads_router, "_find_owned_member", _fake_find_owned_member)
+
+    result = await threads_router.resolve_main_thread(payload, "owner-1", app)
+
+    assert result == {"thread": None}
+    assert calls == [(app, "member-2", "owner-1")]
+
+
+@pytest.mark.asyncio
+async def test_get_default_thread_config_uses_strict_member_gate(monkeypatch: pytest.MonkeyPatch) -> None:
+    app = _make_threads_app()
+    calls: list[tuple[object, str, str]] = []
+
+    def _fake_require_owned_member(app_obj, member_id: str, owner_user_id: str):
+        calls.append((app_obj, member_id, owner_user_id))
+        raise threads_router.HTTPException(403, "Not authorized")
+
+    monkeypatch.setattr(threads_router, "_require_owned_member", _fake_require_owned_member)
+
+    with pytest.raises(threads_router.HTTPException) as excinfo:
+        await threads_router.get_default_thread_config("member-2", "owner-1", app)
+
+    assert excinfo.value.status_code == 403
+    assert excinfo.value.detail == "Not authorized"
+    assert calls == [(app, "member-2", "owner-1")]
+
+
+@pytest.mark.asyncio
+async def test_save_default_thread_config_uses_strict_member_gate(monkeypatch: pytest.MonkeyPatch) -> None:
+    app = _make_threads_app()
+    payload = threads_router.SaveThreadLaunchConfigRequest(
+        member_id="member-2",
+        create_mode="new",
+        provider_config="local",
+        recipe=None,
+        lease_id=None,
+        model="gpt-5.4-mini",
+        workspace="/tmp/demo",
+    )
+    calls: list[tuple[object, str, str]] = []
+
+    def _fake_require_owned_member(app_obj, member_id: str, owner_user_id: str):
+        calls.append((app_obj, member_id, owner_user_id))
+        raise threads_router.HTTPException(403, "Not authorized")
+
+    monkeypatch.setattr(threads_router, "_require_owned_member", _fake_require_owned_member)
+
+    with pytest.raises(threads_router.HTTPException) as excinfo:
+        await threads_router.save_default_thread_config(payload, "owner-1", app)
+
+    assert excinfo.value.status_code == 403
+    assert excinfo.value.detail == "Not authorized"
+    assert calls == [(app, "member-2", "owner-1")]
 
 
 @pytest.mark.asyncio
