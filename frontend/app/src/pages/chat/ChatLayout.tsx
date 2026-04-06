@@ -9,7 +9,7 @@ export default function ChatLayout() {
   const hasActiveConversation = Boolean(params.threadId || params.chatId || params.memberId);
   const tm = useThreadManager();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [sessionsOpen, setSessionsOpen] = useState(false);
+  const [, setSessionsOpen] = useState(false);
 
   const outletContext = useMemo(
     () => ({ tm, sidebarCollapsed, setSidebarCollapsed, setSessionsOpen }),
