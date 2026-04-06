@@ -2631,10 +2631,12 @@ function ThreadTraceSection({
         </div>
       )}
       {traceError && (
-        <div className="error">Trace load failed: {traceError}</div>
+        <div className="trace-empty trace-surface-error">
+          Trace load failed: {traceError}
+        </div>
       )}
       {conversationError && (
-        <div className="error">
+        <div className="trace-empty trace-surface-error">
           Conversation load failed: {conversationError}
         </div>
       )}

@@ -1673,6 +1673,13 @@ section li {
   padding: 1rem;
 }
 
+.trace-surface-error {
+  border-style: solid;
+  border-color: rgba(220, 38, 38, 0.18);
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
 .trace-raw-table {
   margin-top: 1rem;
 }
