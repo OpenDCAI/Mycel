@@ -329,7 +329,7 @@ export interface SandboxFileResult {
 
 // --- Entity Chat types ---
 
-export interface ChatEntity {
+export interface ChatMember {
   id: string;
   name: string;
   type: string;
@@ -344,7 +344,7 @@ export interface ChatEntity {
 export interface ChatSummary {
   id: string;
   title: string | null;
-  entities: ChatEntity[];
+  entities: ChatMember[];
   last_message?: { content: string; sender_name: string; created_at: number };
   unread_count: number;
   has_mention: boolean;
@@ -355,7 +355,7 @@ export interface ChatDetail {
   title: string | null;
   status: string;
   created_at: number;
-  entities: ChatEntity[];
+  entities: ChatMember[];
 }
 
 export interface ChatMessage {

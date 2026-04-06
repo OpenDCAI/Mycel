@@ -1,4 +1,4 @@
-"""Chat API router — entity-to-entity communication."""
+"""Chat API router — user-to-user communication."""
 
 import asyncio
 import json

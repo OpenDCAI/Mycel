@@ -12,50 +12,50 @@ import { toast } from "sonner";
 import type { AgentProfile, Relationship } from "@/api/types";
 
 interface AgentProfileSheetProps {
-  entityId: string | null;
+  userId: string | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }
 
-export default function AgentProfileSheet({ entityId, open, onOpenChange }: AgentProfileSheetProps) {
-  const myEntityId = useAuthStore(s => s.entityId);
+export default function AgentProfileSheet({ userId, open, onOpenChange }: AgentProfileSheetProps) {
+  const myUserId = useAuthStore(s => s.userId);
   const navigate = useNavigate();
   const [profile, setProfile] = useState<AgentProfile | null>(null);
   const [relationship, setRelationship] = useState<Relationship | null>(null);
   const [acting, setActing] = useState(false);
 
   const fetchData = () => {
-    if (!entityId || !open) return;
-    fetch(`/api/entities/${entityId}/profile`)
+    if (!userId || !open) return;
+    fetch(`/api/entities/${userId}/profile`)
       .then(r => r.ok ? r.json() : null)
       .then(setProfile)
       .catch(() => setProfile(null));
 
-    if (myEntityId) {
+    if (myUserId) {
       authFetch("/api/relationships")
         .then(r => r.json())
         .then((rels: Relationship[]) => {
-          setRelationship(rels.find(r => r.other_user_id === entityId) ?? null);
+          setRelationship(rels.find(r => r.other_user_id === userId) ?? null);
         })
         .catch(() => {});
     }
   };
 
-  useEffect(() => { fetchData(); }, [entityId, open, myEntityId]);
+  useEffect(() => { fetchData(); }, [userId, open, myUserId]);
 
   const handleRequest = async () => {
-    if (!entityId) return;
+    if (!userId) return;
     setActing(true);
     try {
       const res = await authFetch("/api/relationships/request", {
         method: "POST",
-        body: JSON.stringify({ target_user_id: entityId }),
+        body: JSON.stringify({ target_user_id: userId }),
       });
       if (!res.ok) { toast.error("申请失败"); return; }
       toast.success("已发送 Visit 申请");
       // Refresh
       const rels: Relationship[] = await authFetch("/api/relationships").then(r => r.json());
-      setRelationship(rels.find(r => r.other_user_id === entityId) ?? null);
+      setRelationship(rels.find(r => r.other_user_id === userId) ?? null);
     } catch { toast.error("网络错误"); }
     finally { setActing(false); }
   };

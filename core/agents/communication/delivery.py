@@ -2,7 +2,7 @@
 
 v3: no full message text injected. Agent must read_messages to see content.
 ChatService._deliver_to_agents calls the delivery function for each
-non-sender agent entity.
+non-sender agent member.
 """
 
 from __future__ import annotations

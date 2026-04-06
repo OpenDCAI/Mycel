@@ -110,15 +110,15 @@ class SQLiteMemberRepo:
             )
             self._conn.commit()
 
-    def increment_entity_seq(self, member_id: str) -> int:
-        """Atomically increment next_entity_seq and return the new value."""
+    def increment_thread_seq(self, member_id: str) -> int:
+        """Atomically increment next_thread_seq and return the new value."""
         with self._lock:
             self._conn.execute(
-                "UPDATE members SET next_entity_seq = next_entity_seq + 1 WHERE id = ?",
+                "UPDATE members SET next_thread_seq = next_thread_seq + 1 WHERE id = ?",
                 (member_id,),
             )
             row = self._conn.execute(
-                "SELECT next_entity_seq FROM members WHERE id = ?",
+                "SELECT next_thread_seq FROM members WHERE id = ?",
                 (member_id,),
             ).fetchone()
             self._conn.commit()
@@ -142,7 +142,7 @@ class SQLiteMemberRepo:
             owner_user_id=r[6],
             created_at=r[7],
             updated_at=r[8],
-            next_entity_seq=r[9] if len(r) > 9 else 0,
+            next_thread_seq=r[9] if len(r) > 9 else 0,
             main_thread_id=r[10] if len(r) > 10 else None,
         )
 
@@ -159,7 +159,7 @@ class SQLiteMemberRepo:
                 owner_user_id TEXT,
                 created_at REAL NOT NULL,
                 updated_at REAL,
-                next_entity_seq INTEGER NOT NULL DEFAULT 0
+                next_thread_seq INTEGER NOT NULL DEFAULT 0
             )
             """
         )

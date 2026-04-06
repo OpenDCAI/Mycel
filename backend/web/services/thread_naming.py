@@ -1,4 +1,4 @@
-"""Canonical thread/entity naming helpers."""
+"""Canonical thread naming helpers."""
 
 from __future__ import annotations
 

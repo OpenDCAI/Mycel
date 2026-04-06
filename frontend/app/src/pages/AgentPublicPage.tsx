@@ -1,6 +1,6 @@
 /**
  * AgentPublicPage — public agent profile page, no auth required.
- * Route: /a/:entityId
+ * Route: /a/:userId
  */
 
 import { useEffect, useState } from "react";
@@ -11,7 +11,7 @@ import { toast } from "sonner";
 import type { AgentProfile } from "@/api/types";
 
 export default function AgentPublicPage() {
-  const { entityId } = useParams<{ entityId: string }>();
+  const { userId } = useParams<{ userId: string }>();
   const navigate = useNavigate();
   const token = useAuthStore(s => s.token);
   const [profile, setProfile] = useState<AgentProfile | null>(null);
@@ -19,8 +19,8 @@ export default function AgentPublicPage() {
   const [applying, setApplying] = useState(false);
 
   useEffect(() => {
-    if (!entityId) return;
-    fetch(`/api/entities/${entityId}/profile`)
+    if (!userId) return;
+    fetch(`/api/entities/${userId}/profile`)
       .then(r => {
         if (!r.ok) throw new Error("Agent not found");
         return r.json();
@@ -28,22 +28,22 @@ export default function AgentPublicPage() {
       .then(setProfile)
       .catch(() => setProfile(null))
       .finally(() => setLoading(false));
-  }, [entityId]);
+  }, [userId]);
 
   const handleApply = async () => {
     if (!token) {
-      navigate(`/?redirect=/a/${entityId}`);
+      navigate(`/?redirect=/a/${userId}`);
       return;
     }
-    if (!entityId) return;
+    if (!userId) return;
     setApplying(true);
     try {
       const res = await authFetch("/api/relationships/request", {
         method: "POST",
-        body: JSON.stringify({ target_user_id: entityId }),
+        body: JSON.stringify({ target_user_id: userId }),
       });
       if (res.status === 401) {
-        navigate(`/?redirect=/a/${entityId}`);
+        navigate(`/?redirect=/a/${userId}`);
         return;
       }
       if (!res.ok) {

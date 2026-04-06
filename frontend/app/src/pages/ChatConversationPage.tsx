@@ -4,7 +4,7 @@ import { PanelLeft, Send } from "lucide-react";
 import { authFetch, useAuthStore } from "../store/auth-store";
 import { UserBubble } from "../components/chat-area/UserBubble";
 import { ChatBubble } from "../components/chat-area/ChatBubble";
-import type { ChatEntity, ChatMessage, ChatDetail } from "../api/types";
+import type { ChatMember, ChatMessage, ChatDetail } from "../api/types";
 
 // @@@time-gap — only show timestamp when gap >= 5 minutes
 function shouldShowTime(prev: ChatMessage | null, curr: ChatMessage): boolean {
@@ -38,7 +38,7 @@ function ChatConversationInner({ chatId }: { chatId: string }) {
   }, [_refreshRaw]);
   useEffect(() => () => { if (refreshTimer.current) clearTimeout(refreshTimer.current); }, []);
 
-  const myEntityId = useAuthStore(s => s.entityId);
+  const myUserId = useAuthStore(s => s.userId);
   const myName = useAuthStore(s => s.user?.name) || "You";
   const [chat, setChat] = useState<ChatDetail | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -51,8 +51,8 @@ function ChatConversationInner({ chatId }: { chatId: string }) {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const isAtBottomRef = useRef(true);
 
-  const entityMap = useMemo(() => {
-    const m = new Map<string, ChatEntity>();
+  const memberMap = useMemo(() => {
+    const m = new Map<string, ChatMember>();
     chat?.entities.forEach(e => m.set(e.id, e));
     return m;
   }, [chat?.entities]);
@@ -178,7 +178,7 @@ function ChatConversationInner({ chatId }: { chatId: string }) {
   // Send message
   const handleSend = useCallback(async () => {
     const text = input.trim();
-    if (!text || !myEntityId || sending) return;
+    if (!text || !myUserId || sending) return;
 
     setInput("");
     setSending(true);
@@ -187,7 +187,7 @@ function ChatConversationInner({ chatId }: { chatId: string }) {
     const optimisticMsg: ChatMessage = {
       id: `optimistic-${Date.now()}`,
       chat_id: chatId,
-      sender_id: myEntityId,
+      sender_id: myUserId,
       sender_name: useAuthStore.getState().user?.name || "me",
       content: text,
       mentioned_ids: [],
@@ -201,7 +201,7 @@ function ChatConversationInner({ chatId }: { chatId: string }) {
         method: "POST",
         body: JSON.stringify({
           content: text,
-          sender_id: myEntityId,
+          sender_id: myUserId,
         }),
       });
       if (!res.ok) {
@@ -226,7 +226,7 @@ function ChatConversationInner({ chatId }: { chatId: string }) {
       setSending(false);
       refreshChatList(); // update last_message in sidebar
     }
-  }, [input, myEntityId, sending, chatId, scrollToBottom, refreshChatList]);
+  }, [input, myUserId, sending, chatId, scrollToBottom, refreshChatList]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -237,7 +237,7 @@ function ChatConversationInner({ chatId }: { chatId: string }) {
 
   // Typing indicator display — works for both 1:1 and group
   const typingNames = [...typingEntities]
-    .map(id => entityMap.get(id)?.name)
+    .map(id => memberMap.get(id)?.name)
     .filter(Boolean);
   const typingDisplay = typingEntities.size > 0 ? (
     <div className="flex items-center gap-2 px-4 py-1">
@@ -254,7 +254,7 @@ function ChatConversationInner({ chatId }: { chatId: string }) {
 
   // Display name for header
   const chatName = chat
-    ? chat.title || chat.entities.filter(e => e.id !== myEntityId).map(e => e.name).join(", ") || "聊天"
+    ? chat.title || chat.entities.filter(e => e.id !== myUserId).map(e => e.name).join(", ") || "聊天"
     : "聊天";
 
   if (loading) {
@@ -309,10 +309,10 @@ function ChatConversationInner({ chatId }: { chatId: string }) {
         ) : (
           <div className="max-w-3xl mx-auto space-y-3.5">
             {messages.map((msg, i) => {
-              const isMine = msg.sender_id === myEntityId;
+              const isMine = msg.sender_id === myUserId;
               const prev = i > 0 ? messages[i - 1] : null;
               const showTime = shouldShowTime(prev, msg);
-              const entity = entityMap.get(msg.sender_id);
+              const member = memberMap.get(msg.sender_id);
               const ts = msg.created_at * 1000;
 
               return (
@@ -325,13 +325,13 @@ function ChatConversationInner({ chatId }: { chatId: string }) {
                     </div>
                   )}
                   {isMine ? (
-                    <UserBubble content={msg.content} timestamp={ts} userName={myName} avatarUrl={entityMap.get(myEntityId!)?.avatar_url} />
+                    <UserBubble content={msg.content} timestamp={ts} userName={myName} avatarUrl={memberMap.get(myUserId!)?.avatar_url} />
                   ) : (
                     <ChatBubble
                       content={msg.content}
                       senderName={msg.sender_name}
-                      avatarUrl={entity?.avatar_url}
-                      entityType={entity?.type}
+                      avatarUrl={member?.avatar_url}
+                      memberType={member?.type}
                       timestamp={ts}
                       showName
                     />

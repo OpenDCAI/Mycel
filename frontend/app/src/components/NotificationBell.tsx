@@ -15,7 +15,7 @@ import type { Relationship } from "@/api/types";
 
 interface PendingItem {
   relId: string;
-  entityId: string;
+  userId: string;
 }
 
 interface NotificationBellProps {
@@ -23,36 +23,36 @@ interface NotificationBellProps {
 }
 
 export default function NotificationBell({ showLabel }: NotificationBellProps) {
-  const myEntityId = useAuthStore(s => s.entityId);
+  const myUserId = useAuthStore(s => s.userId);
   const navigate = useNavigate();
   const [pending, setPending] = useState<PendingItem[]>([]);
   const [open, setOpen] = useState(false);
   const [acting, setActing] = useState<string | null>(null);
 
   const fetchPending = useCallback(async () => {
-    if (!myEntityId) return;
+    if (!myUserId) return;
     try {
       const res = await authFetch("/api/relationships");
       if (!res.ok) return;
       const rels: Relationship[] = await res.json();
       const items = rels
         .filter(r => !r.is_requester && r.state.startsWith("pending"))
-        .map(r => ({ relId: r.id, entityId: r.other_user_id }));
+        .map(r => ({ relId: r.id, userId: r.other_user_id }));
       setPending(items);
     } catch { /* silent */ }
-  }, [myEntityId]);
+  }, [myUserId]);
 
   useEffect(() => { fetchPending(); }, [fetchPending]);
 
   useEffect(() => {
-    if (!supabase || !myEntityId) return;
+    if (!supabase || !myUserId) return;
     const channel = supabase
-      .channel(`notifications:${myEntityId}`)
-      .on("postgres_changes", { event: "*", schema: "public", table: "relationships", filter: `principal_a=eq.${myEntityId}` }, fetchPending)
-      .on("postgres_changes", { event: "*", schema: "public", table: "relationships", filter: `principal_b=eq.${myEntityId}` }, fetchPending)
+      .channel(`notifications:${myUserId}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "relationships", filter: `principal_a=eq.${myUserId}` }, fetchPending)
+      .on("postgres_changes", { event: "*", schema: "public", table: "relationships", filter: `principal_b=eq.${myUserId}` }, fetchPending)
       .subscribe();
     return () => { supabase?.removeChannel(channel); };
-  }, [myEntityId, fetchPending]);
+  }, [myUserId, fetchPending]);
 
   const handleApprove = async (relId: string) => {
     setActing(relId);
@@ -103,9 +103,9 @@ export default function NotificationBell({ showLabel }: NotificationBellProps) {
           <div className="divide-y divide-border">
             {pending.map(item => (
               <div key={item.relId} className="flex items-center gap-2 px-3 py-2.5">
-                <MemberAvatar name={item.entityId.slice(0, 2)} size="sm" type="agent" />
+                <MemberAvatar name={item.userId.slice(0, 2)} size="sm" type="agent" />
                 <div className="flex-1 min-w-0">
-                  <p className="text-xs text-foreground truncate">{item.entityId.slice(0, 12)}… 请求 Visit</p>
+                  <p className="text-xs text-foreground truncate">{item.userId.slice(0, 12)}… 请求 Visit</p>
                 </div>
                 <div className="flex gap-1.5 shrink-0">
                   <button

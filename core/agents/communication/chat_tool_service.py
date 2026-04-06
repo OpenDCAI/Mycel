@@ -1,4 +1,4 @@
-"""Chat tool service — Mycel-native tools for entity-to-entity communication.
+"""Chat tool service — Mycel-native tools for user-to-user communication.
 
 Tools use user_ids as parameters (human = Supabase auth UUID, agent = member_id).
 Two users share at most one chat; the system auto-resolves user_id → chat.
@@ -396,7 +396,7 @@ class ChatToolService:
                         "mentions": {
                             "type": "array",
                             "items": {"type": "string"},
-                            "description": "Entity IDs to @mention (overrides mute for these recipients)",
+                            "description": "User IDs to @mention (overrides mute for these recipients)",
                         },
                     },
                     required=["content"],
