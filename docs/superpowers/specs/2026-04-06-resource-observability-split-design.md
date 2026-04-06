@@ -30,6 +30,12 @@
   - `sandbox/lease.py` persists lease state via `connect_sqlite`
   - `backend/web/utils/helpers.py`, `backend/web/routers/threads.py`, `backend/web/routers/webhooks.py` still directly hit SQLite sandbox repos
 
+### Active branch facts
+
+- Active continuation is `#210`, not `#209`.
+- `#210` uses `PR #182` as the monitor baseline by transplanting the compat monitor onto a current resource-split branch instead of building on the reduced dev monitor shell.
+- This branch keeps the full compat operator surface (`threads`, `traces`, `leases`, `evaluation`) and applies a bounded light-theme cleanup so operators are not dropped into a dark, overloaded console.
+
 ## Proposal Comparison
 
 ### Proposal A: Read-path-only split
@@ -128,6 +134,10 @@ This design chooses option 1 in architecture, but decomposes the implementation 
 - Backend proof that global monitor resources still work.
 - Backend proof that user-scoped resources no longer read `/api/monitor/resources`.
 - Explicit proof of where truth is written under Supabase mode.
+- Playwright CLI proof for the compat monitor shell itself after the `PR #182` transplant:
+  - page paths: monitor `/threads`, `/evaluation`, `/evaluation?new=1`, `/leases?diverged=1`
+  - visible proof: light-theme shell, focused top nav (`Threads / Traces / Leases / Eval`), usable evaluation config modal, and preserved rich operator flows
+  - trace proof: `/api/monitor/threads`, `/api/monitor/evaluations`, and `/api/monitor/leases` still answer on the transplanted branch
 - Playwright CLI proof for the product resources surface after the API split:
   - page path: app `/resources`
   - visible proof: resources header, active/session counters, refresh button, at least one provider card

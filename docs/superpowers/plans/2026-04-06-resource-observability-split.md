@@ -8,6 +8,8 @@
 
 **Tech Stack:** Python, FastAPI, Supabase-backed storage providers, existing storage contract/container abstractions, pytest, ruff
 
+**Execution note:** `#209` remains useful transplant material for the resource split, but active continuation moved to `#210` because the correct monitor baseline is the compat monitor from `PR #182`, not the reduced dev monitor shell. The frontend scope here stays bounded: keep the full compat operator surface, switch it to a lighter and clearer ops shell, and prove it with real Playwright traces instead of a component-only pass.
+
 ---
 
 ### Task 1: Lock Storage Abstraction For Monitor Reads
