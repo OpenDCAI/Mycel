@@ -9,7 +9,7 @@ import asyncio
 import json
 import logging
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from langchain.agents.middleware import AgentMiddleware, AgentState
 from langchain.agents.middleware.types import ModelRequest, ModelResponse
@@ -319,7 +319,7 @@ class CommandMiddleware(AgentMiddleware[CommandState]):
     async def _inject_command_notification(
         self,
         command_id: str,
-        status: str,
+        status: Literal["completed", "failed"],
         exit_code: int,
         command_line: str,
         output: str,

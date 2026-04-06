@@ -414,6 +414,35 @@ def mutate_sandbox_session(
     }
 
 
+def get_session_metrics(session_id: str, provider_hint: str | None = None) -> dict[str, Any]:
+    """Load one session's provider metrics through the current manager inventory."""
+    _, managers = init_providers_and_managers()
+    sessions = load_all_sessions(managers)
+    session, manager = find_session_and_manager(sessions, managers, session_id, provider_name=provider_hint)
+    if not session:
+        raise RuntimeError(f"Session not found: {session_id}")
+    if manager is None:
+        raise RuntimeError(f"Provider manager unavailable: {session.get('provider')}")
+
+    target_session_id = str(session.get("instance_id") or session.get("session_id") or session_id)
+    metrics = manager.provider.get_metrics(target_session_id)
+    if metrics is None:
+        return {"session_id": target_session_id, "provider": session.get("provider"), "metrics": None}
+    return {
+        "session_id": target_session_id,
+        "provider": session.get("provider"),
+        "metrics": {
+            "cpu_percent": metrics.cpu_percent,
+            "memory_used_mb": metrics.memory_used_mb,
+            "memory_total_mb": metrics.memory_total_mb,
+            "disk_used_gb": metrics.disk_used_gb,
+            "disk_total_gb": metrics.disk_total_gb,
+            "network_rx_kbps": metrics.network_rx_kbps,
+            "network_tx_kbps": metrics.network_tx_kbps,
+        },
+    }
+
+
 def build_provider_from_config_name(name: str, *, sandboxes_dir: Path | None = None) -> Any | None:
     """Build one provider instance from sandbox config name. Used by resource_service for per-session ops."""
     providers, _ = init_providers_and_managers()

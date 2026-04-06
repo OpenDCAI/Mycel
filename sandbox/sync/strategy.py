@@ -237,8 +237,10 @@ class IncrementalSyncStrategy(SyncStrategy):
     def clear_state(self, state_key: str):
         self.state.clear_thread(state_key)
 
-    def _update_checksums_after_download(self, state_key: str, source_path: Path):
+    def _update_checksums_after_download(self, state_key: str | None, source_path: Path):
         """Update checksum DB to match downloaded files, preventing redundant re-uploads on resume."""
+        if not state_key:
+            return
         if not source_path.exists():
             return
         from sandbox.sync.state import _calculate_checksum

@@ -85,7 +85,7 @@ class SQLiteThreadRepo:
     _SELECT = ", ".join(_COLS)
 
     def _to_dict(self, r: tuple) -> dict[str, Any]:
-        data = dict(zip(self._COLS, r))
+        data: dict[str, Any] = dict(zip(self._COLS, r))
         data["is_main"] = bool(data["is_main"])
         data["branch_index"] = int(data["branch_index"])
         return data

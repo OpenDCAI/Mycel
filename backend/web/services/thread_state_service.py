@@ -21,7 +21,14 @@ def _resolve_thread_sandbox_instance(mgr: Any, lease: Any) -> Any | None:
 
 def _display_sandbox_status(lease: Any, instance: Any) -> str:
     observed = getattr(lease, "observed_state", None)
-    return instance.status if observed in {None, "", "detached"} else observed
+    if observed in {None, "", "detached"}:
+        status = getattr(instance, "status", None)
+        if not isinstance(status, str) or not status:
+            raise RuntimeError("Sandbox instance missing status")
+        return status
+    if not isinstance(observed, str):
+        raise RuntimeError("Lease observed_state must be a string when present")
+    return observed
 
 
 def get_sandbox_info(agent: Any, thread_id: str, sandbox_type: str) -> dict[str, Any]:

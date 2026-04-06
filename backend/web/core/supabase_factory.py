@@ -6,7 +6,7 @@ import os
 
 import httpx
 from supabase import ClientOptions, create_client
-from supabase_auth import SyncGoTrueClient
+from supabase_auth._sync.gotrue_client import SyncGoTrueClient
 
 
 def _resolve_supabase_url() -> str:

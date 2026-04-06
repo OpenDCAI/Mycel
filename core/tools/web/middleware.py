@@ -304,7 +304,8 @@ class WebMiddleware(AgentMiddleware):
         tool_call = request.tool_call
         tool_name = tool_call.get("name")
         args = tool_call.get("args", {})
-        tool_call_id = tool_call.get("id", "")
+        raw_tool_call_id = tool_call.get("id", "")
+        tool_call_id = raw_tool_call_id if isinstance(raw_tool_call_id, str) else ""
 
         result = await self._handle_tool_call(tool_name, args, tool_call_id)
         if result is not None:

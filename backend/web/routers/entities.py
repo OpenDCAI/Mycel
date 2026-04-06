@@ -41,7 +41,7 @@ def process_and_save_avatar(source: Path | bytes, member_id: str) -> str:
     img = ImageOps.exif_transpose(img)
     if img.mode not in ("RGB", "RGBA"):
         img = img.convert("RGB")
-    img = ImageOps.fit(img, (AVATAR_SIZE, AVATAR_SIZE), method=Image.LANCZOS)
+    img = ImageOps.fit(img, (AVATAR_SIZE, AVATAR_SIZE), method=Image.Resampling.LANCZOS)
     AVATARS_DIR.mkdir(parents=True, exist_ok=True)
     img.save(AVATARS_DIR / f"{member_id}.png", format="PNG", optimize=True)
     return f"avatars/{member_id}.png"

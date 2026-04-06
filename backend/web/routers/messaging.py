@@ -262,13 +262,12 @@ async def stream_chat_events(
     token: str | None = None,
     app: Annotated[Any, Depends(get_app)] = None,
 ):
-    from backend.web.core.dependencies import _DEV_SKIP_AUTH
-
-    if not _DEV_SKIP_AUTH:
+    auth_service = getattr(app.state, "auth_service", None)
+    if auth_service is not None:
         if not token:
             raise HTTPException(401, "Missing token")
         try:
-            app.state.auth_service.verify_token(token)
+            auth_service.verify_token(token)
         except ValueError as e:
             raise HTTPException(401, str(e))
 

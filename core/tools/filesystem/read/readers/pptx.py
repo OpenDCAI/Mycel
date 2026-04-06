@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any, cast
 
 from core.tools.filesystem.read.types import FileType, ReadLimits, ReadResult
 
@@ -43,7 +44,9 @@ def read_pptx(
     )
 
     try:
-        prs = Presentation(path)
+        # @@@pptx-callable-seam - python-pptx exports Presentation as a factory function at runtime,
+        # but pyright sees a module-like surface here. Keep the third-party seam local.
+        prs = cast(Any, Presentation)(str(path))
     except Exception as e:
         result.error = f"Error opening PPTX: {e}"
         return result
