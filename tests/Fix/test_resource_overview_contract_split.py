@@ -98,6 +98,58 @@ def test_user_resource_projection_groups_visible_leases_into_provider_cards(monk
     assert payload["providers"][0]["sessions"][0]["startedAt"] == "2026-04-07T10:00:00Z"
 
 
+def test_user_resource_projection_marks_provider_unavailable_when_capability_probe_fails(monkeypatch) -> None:
+    class _State:
+        thread_repo = object()
+        member_repo = object()
+
+    class _App:
+        state = _State()
+
+    monkeypatch.setattr(
+        resource_projection_service.sandbox_service,
+        "list_user_leases",
+        lambda owner_user_id, **_kwargs: [
+            {
+                "lease_id": "lease-1",
+                "provider_name": "daytona_selfhost",
+                "thread_ids": ["thread-1"],
+                "agents": [{"member_id": "member-1", "member_name": "Morel", "avatar_url": None}],
+                "observed_state": "paused",
+                "desired_state": "paused",
+                "created_at": "2026-04-07T10:00:00Z",
+            }
+        ],
+    )
+    monkeypatch.setattr(
+        resource_projection_service.resource_service,
+        "get_provider_display_contract",
+        lambda *_args, **_kwargs: {
+            "provider_name": "daytona",
+            "description": "Daytona",
+            "vendor": "Daytona",
+            "type": "cloud",
+            "console_url": "https://example.com/daytona",
+        },
+        raising=False,
+    )
+    monkeypatch.setattr(
+        resource_projection_service.resource_service,
+        "get_provider_capability_contract",
+        lambda *_args, **_kwargs: (resource_projection_service._empty_capabilities(), "provider unavailable"),
+        raising=False,
+    )
+
+    payload = resource_projection_service.list_user_resource_providers(_App(), "owner-1")
+
+    assert payload["providers"][0]["status"] == "unavailable"
+    assert payload["providers"][0]["unavailableReason"] == "provider unavailable"
+    assert payload["providers"][0]["error"] == {
+        "code": "PROVIDER_UNAVAILABLE",
+        "message": "provider unavailable",
+    }
+
+
 def test_provider_display_contract_exposes_public_metadata(monkeypatch) -> None:
     monkeypatch.setattr(resource_service, "resolve_provider_name", lambda *_args, **_kwargs: "daytona")
     monkeypatch.setattr(

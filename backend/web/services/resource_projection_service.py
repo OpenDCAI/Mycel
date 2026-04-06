@@ -65,6 +65,11 @@ def _build_provider_card(config_name: str, leases: list[dict[str, Any]]) -> dict
         "memory": _empty_metric("GB"),
         "disk": _empty_metric("GB"),
     }
+    availability = resource_service.build_provider_availability_payload(
+        available=capability_error is None,
+        running_count=running_count,
+        unavailable_reason=capability_error,
+    )
 
     return {
         "id": config_name,
@@ -72,9 +77,7 @@ def _build_provider_card(config_name: str, leases: list[dict[str, Any]]) -> dict
         "description": display["description"],
         "vendor": display["vendor"],
         "type": provider_type,
-        "status": "active" if running_count > 0 else "ready",
-        "unavailableReason": capability_error,
-        "error": ({"code": "PROVIDER_UNAVAILABLE", "message": capability_error} if capability_error else None),
+        **availability,
         "capabilities": capabilities,
         "telemetry": telemetry,
         "cardCpu": dict(telemetry["cpu"]),

@@ -134,6 +134,14 @@ def _to_resource_status(available: bool, running_count: int) -> str:
     return "active" if running_count > 0 else "ready"
 
 
+def build_provider_availability_payload(*, available: bool, running_count: int, unavailable_reason: str | None) -> dict[str, Any]:
+    return {
+        "status": _to_resource_status(available, running_count),
+        "unavailableReason": unavailable_reason,
+        "error": ({"code": "PROVIDER_UNAVAILABLE", "message": unavailable_reason} if unavailable_reason else None),
+    }
+
+
 def _to_metric_freshness(collected_at: str | None) -> str:
     if not collected_at:
         return "stale"
@@ -548,6 +556,11 @@ def list_resource_providers() -> dict[str, Any]:
                     ),
                     "disk": _metric(host_m.disk_used_gb, host_m.disk_total_gb, "GB", "direct", "live"),
                 }
+        availability = build_provider_availability_payload(
+            available=effective_available,
+            running_count=running_count,
+            unavailable_reason=unavailable_reason,
+        )
         providers.append(
             {
                 "id": config_name,
@@ -555,9 +568,7 @@ def list_resource_providers() -> dict[str, Any]:
                 "description": display["description"],
                 "vendor": display["vendor"],
                 "type": provider_type,
-                "status": _to_resource_status(effective_available, running_count),
-                "unavailableReason": unavailable_reason,
-                "error": ({"code": "PROVIDER_UNAVAILABLE", "message": unavailable_reason} if unavailable_reason else None),
+                **availability,
                 "capabilities": capabilities,
                 "telemetry": telemetry,
                 "cardCpu": _resolve_card_cpu_metric(provider_type, telemetry),
