@@ -10,23 +10,35 @@ interface ConversationState {
   setActive: (id: string | null) => void;
 }
 
-export const useConversationStore = create<ConversationState>((set) => ({
+let inflight: Promise<void> | null = null;
+
+export const useConversationStore = create<ConversationState>((set, get) => ({
   conversations: [],
   loading: false,
   activeId: null,
 
   fetchConversations: async () => {
+    if (inflight) return;
     set({ loading: true });
-    try {
-      const res = await authFetch("/api/conversations");
-      if (!res.ok) throw new Error(`${res.status}`);
-      const data: ConversationItem[] = await res.json();
-      set({ conversations: data });
-    } catch (err) {
-      console.error("[ConversationStore] fetch failed:", err);
-    } finally {
-      set({ loading: false });
-    }
+    const pending = (async () => {
+      try {
+        const res = await authFetch("/api/conversations");
+        if (!res.ok) throw new Error(`${res.status}`);
+        const data: ConversationItem[] = await res.json();
+        // Skip no-op update to avoid unnecessary re-renders
+        const prev = get().conversations;
+        if (prev.length !== data.length || JSON.stringify(prev) !== JSON.stringify(data)) {
+          set({ conversations: data });
+        }
+      } catch (err) {
+        console.error("[ConversationStore] fetch failed:", err);
+      } finally {
+        inflight = null;
+        set({ loading: false });
+      }
+    })();
+    inflight = pending;
+    await pending;
   },
 
   setActive: (id) => set({ activeId: id }),
