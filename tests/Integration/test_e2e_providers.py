@@ -5,11 +5,13 @@ Tests terminal persistence architecture through the agent interface.
 Simulates all frontend interactions programmatically.
 """
 
+import asyncio
 import os
 
 import pytest
 
 from agent import create_leon_agent
+from sandbox import RemoteSandbox
 from sandbox.thread_context import set_current_thread_id
 
 
@@ -28,6 +30,30 @@ def temp_workspace(tmp_path):
     return str(workspace)
 
 
+def _require_remote_sandbox(agent) -> RemoteSandbox:
+    sandbox = agent.sandbox
+    assert isinstance(sandbox, RemoteSandbox)
+    return sandbox
+
+
+def _run_shell(agent, command: str):
+    executor = agent.sandbox.shell()
+    assert executor is not None
+    return asyncio.run(executor.execute(command))
+
+
+def _read_file(agent, path: str) -> str:
+    fs = agent.sandbox.fs()
+    assert fs is not None
+    return fs.read_file(path).content
+
+
+def _list_names(agent, path: str) -> list[str]:
+    fs = agent.sandbox.fs()
+    assert fs is not None
+    return [entry.name for entry in fs.list_dir(path).entries]
+
+
 class TestAgentBayE2E:
     """End-to-end tests with AgentBay provider."""
 
@@ -40,7 +66,7 @@ class TestAgentBayE2E:
         agent = create_leon_agent(sandbox="agentbay", db_path=test_db_path)
 
         # Execute command through agent
-        result = agent.sandbox.shell().execute("echo 'AgentBay Test'")
+        result = _run_shell(agent, "echo 'AgentBay Test'")
         assert result.exit_code == 0
         assert "AgentBay Test" in result.stdout
 
@@ -55,13 +81,13 @@ class TestAgentBayE2E:
         agent = create_leon_agent(sandbox="agentbay", db_path=test_db_path)
 
         # Change directory
-        agent.sandbox.shell().execute("cd /tmp")
-        result = agent.sandbox.shell().execute("pwd")
+        _run_shell(agent, "cd /tmp")
+        result = _run_shell(agent, "pwd")
         assert "/tmp" in result.stdout
 
         # Set environment variable
-        agent.sandbox.shell().execute("export AGENTBAY_VAR=test123")
-        result = agent.sandbox.shell().execute("echo $AGENTBAY_VAR")
+        _run_shell(agent, "export AGENTBAY_VAR=test123")
+        result = _run_shell(agent, "echo $AGENTBAY_VAR")
         assert "test123" in result.stdout
 
         agent.close()
@@ -76,14 +102,14 @@ class TestAgentBayE2E:
 
         # Create file
         test_content = "AgentBay file test"
-        agent.sandbox.shell().execute(f"echo '{test_content}' > /tmp/agentbay_test.txt")
+        _run_shell(agent, f"echo '{test_content}' > /tmp/agentbay_test.txt")
 
         # Read file
-        content = agent.sandbox.fs().read_file("/tmp/agentbay_test.txt")
+        content = _read_file(agent, "/tmp/agentbay_test.txt")
         assert test_content in content
 
         # List directory
-        files = agent.sandbox.fs().list_dir("/tmp")
+        files = _list_names(agent, "/tmp")
         assert "agentbay_test.txt" in files
 
         agent.close()
@@ -100,7 +126,7 @@ class TestE2BE2E:
 
         agent = create_leon_agent(sandbox="e2b", db_path=test_db_path)
 
-        result = agent.sandbox.shell().execute("echo 'E2B Test'")
+        result = _run_shell(agent, "echo 'E2B Test'")
         assert result.exit_code == 0
         assert "E2B Test" in result.stdout
 
@@ -114,13 +140,13 @@ class TestE2BE2E:
         agent = create_leon_agent(sandbox="e2b", db_path=test_db_path)
 
         # Change directory
-        agent.sandbox.shell().execute("cd /tmp")
-        result = agent.sandbox.shell().execute("pwd")
+        _run_shell(agent, "cd /tmp")
+        result = _run_shell(agent, "pwd")
         assert "/tmp" in result.stdout
 
         # Set env var
-        agent.sandbox.shell().execute("export E2B_VAR=test123")
-        result = agent.sandbox.shell().execute("echo $E2B_VAR")
+        _run_shell(agent, "export E2B_VAR=test123")
+        result = _run_shell(agent, "echo $E2B_VAR")
         assert "test123" in result.stdout
 
         agent.close()
@@ -134,10 +160,10 @@ class TestE2BE2E:
 
         # Create file
         test_content = "E2B file test"
-        agent.sandbox.shell().execute(f"echo '{test_content}' > /tmp/e2b_test.txt")
+        _run_shell(agent, f"echo '{test_content}' > /tmp/e2b_test.txt")
 
         # Read file
-        content = agent.sandbox.fs().read_file("/tmp/e2b_test.txt")
+        content = _read_file(agent, "/tmp/e2b_test.txt")
         assert test_content in content
 
         agent.close()
@@ -150,17 +176,18 @@ class TestE2BE2E:
         agent = create_leon_agent(sandbox="e2b", db_path=test_db_path)
 
         # Set state
-        agent.sandbox.shell().execute("cd /tmp")
-        agent.sandbox.shell().execute("export PAUSE_VAR=preserved")
+        sandbox = _require_remote_sandbox(agent)
+        _run_shell(agent, "cd /tmp")
+        _run_shell(agent, "export PAUSE_VAR=preserved")
 
         # Pause session
-        agent.sandbox.manager.pause_session(thread_id)
+        sandbox.manager.pause_session(thread_id)
 
         # Resume by getting sandbox again
-        result = agent.sandbox.shell().execute("pwd")
+        result = _run_shell(agent, "pwd")
         assert "/tmp" in result.stdout
 
-        result = agent.sandbox.shell().execute("echo $PAUSE_VAR")
+        result = _run_shell(agent, "echo $PAUSE_VAR")
         assert "preserved" in result.stdout
 
         agent.close()
@@ -177,7 +204,7 @@ class TestDaytonaE2E:
 
         agent = create_leon_agent(sandbox="daytona", db_path=test_db_path)
 
-        result = agent.sandbox.shell().execute("echo 'Daytona Test'")
+        result = _run_shell(agent, "echo 'Daytona Test'")
         assert result.exit_code == 0
         assert "Daytona Test" in result.stdout
 
@@ -191,13 +218,13 @@ class TestDaytonaE2E:
         agent = create_leon_agent(sandbox="daytona", db_path=test_db_path)
 
         # Change directory
-        agent.sandbox.shell().execute("cd /tmp")
-        result = agent.sandbox.shell().execute("pwd")
+        _run_shell(agent, "cd /tmp")
+        result = _run_shell(agent, "pwd")
         assert "/tmp" in result.stdout
 
         # Set env var
-        agent.sandbox.shell().execute("export DAYTONA_VAR=test456")
-        result = agent.sandbox.shell().execute("echo $DAYTONA_VAR")
+        _run_shell(agent, "export DAYTONA_VAR=test456")
+        result = _run_shell(agent, "echo $DAYTONA_VAR")
         assert "test456" in result.stdout
 
         agent.close()

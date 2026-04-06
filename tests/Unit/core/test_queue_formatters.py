@@ -5,6 +5,17 @@ import xml.etree.ElementTree as ET
 from core.runtime.middleware.queue.formatters import format_chat_notification, format_command_notification
 
 
+def _require_child(parent: ET.Element, tag: str) -> ET.Element:
+    child = parent.find(tag)
+    assert child is not None
+    return child
+
+
+def _require_text(element: ET.Element) -> str:
+    assert element.text is not None
+    return element.text
+
+
 class TestFormatChatNotification:
     def test_includes_explicit_read_messages_and_send_message_instructions(self):
         result = format_chat_notification(
@@ -39,11 +50,11 @@ class TestFormatCommandNotification:
         # Check CommandNotification structure
         notif = root.find("CommandNotification")
         assert notif is not None
-        assert notif.find("CommandId").text == "cmd-123"
-        assert notif.find("Status").text == "completed"
-        assert notif.find("ExitCode").text == "0"
-        assert notif.find("CommandLine").text == "echo hello"
-        assert notif.find("Output").text == "hello\n"
+        assert _require_text(_require_child(notif, "CommandId")) == "cmd-123"
+        assert _require_text(_require_child(notif, "Status")) == "completed"
+        assert _require_text(_require_child(notif, "ExitCode")) == "0"
+        assert _require_text(_require_child(notif, "CommandLine")) == "echo hello"
+        assert _require_text(_require_child(notif, "Output")) == "hello\n"
 
     def test_failed_status(self):
         """Test failed command notification."""
@@ -56,9 +67,9 @@ class TestFormatCommandNotification:
         )
 
         root = ET.fromstring(result)
-        notif = root.find("CommandNotification")
-        assert notif.find("Status").text == "failed"
-        assert notif.find("ExitCode").text == "1"
+        notif = _require_child(root, "CommandNotification")
+        assert _require_text(_require_child(notif, "Status")) == "failed"
+        assert _require_text(_require_child(notif, "ExitCode")) == "1"
 
     def test_output_truncation(self):
         """Test output is truncated to 1000 characters."""
@@ -72,8 +83,8 @@ class TestFormatCommandNotification:
         )
 
         root = ET.fromstring(result)
-        notif = root.find("CommandNotification")
-        output_text = notif.find("Output").text
+        notif = _require_child(root, "CommandNotification")
+        output_text = _require_text(_require_child(notif, "Output"))
         assert len(output_text) == 1000
         assert output_text == "x" * 1000
 
@@ -88,8 +99,8 @@ class TestFormatCommandNotification:
         )
 
         root = ET.fromstring(result)
-        notif = root.find("CommandNotification")
-        output_elem = notif.find("Output")
+        notif = _require_child(root, "CommandNotification")
+        output_elem = _require_child(notif, "Output")
         assert output_elem.text is None or output_elem.text == ""
 
     def test_xml_special_characters_escaped(self):
@@ -104,14 +115,14 @@ class TestFormatCommandNotification:
 
         # Should parse without error
         root = ET.fromstring(result)
-        notif = root.find("CommandNotification")
+        notif = _require_child(root, "CommandNotification")
 
         # Check escaped content is preserved
-        cmd_line = notif.find("CommandLine").text
+        cmd_line = _require_text(_require_child(notif, "CommandLine"))
         assert "<tag>" in cmd_line
         assert "&" in cmd_line
 
-        output = notif.find("Output").text
+        output = _require_text(_require_child(notif, "Output"))
         assert "<output>" in output
         assert "&" in output
 
@@ -126,8 +137,8 @@ class TestFormatCommandNotification:
         )
 
         root = ET.fromstring(result)
-        notif = root.find("CommandNotification")
-        output = notif.find("Output").text
+        notif = _require_child(root, "CommandNotification")
+        output = _require_text(_require_child(notif, "Output"))
         assert "line1" in output
         assert "line2" in output
         assert "line3" in output

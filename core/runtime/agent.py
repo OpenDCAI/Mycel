@@ -24,7 +24,7 @@ import inspect
 import logging
 import os
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from langchain.chat_models import init_chat_model
 from langchain_core.messages import SystemMessage
@@ -89,6 +89,9 @@ from core.tools.web.service import WebService  # noqa: E402
 from storage.container import StorageContainer  # noqa: E402
 
 logger = logging.getLogger(__name__)
+
+if TYPE_CHECKING:
+    from sandbox import Sandbox
 
 # @@@langchain-anthropic-streaming-usage-regression
 apply_usage_patches()
@@ -370,6 +373,12 @@ class LeonAgent:
         # Mark agent as ready (checkpointer is None when async init still pending)
         if self.checkpointer is not None:
             self._monitor_middleware.mark_ready()
+
+    @property
+    def sandbox(self) -> "Sandbox":
+        # @@@public-sandbox-surface - integration callers already drive fs/shell through
+        # agent.sandbox; make that contract explicit instead of relying on a private attr.
+        return self._sandbox
 
     def apply_forked_child_context(
         self,

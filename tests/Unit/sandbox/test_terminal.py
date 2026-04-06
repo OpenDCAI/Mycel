@@ -108,6 +108,7 @@ class TestTerminalStore:
             ),
         )
 
+        assert terminal is not None
         assert terminal.terminal_id == "term-123"
         assert terminal.thread_id == "thread-456"
         assert terminal.lease_id == "lease-789"
@@ -252,6 +253,7 @@ class TestSQLiteTerminal:
         """Test that update_state increments state_version."""
         terminal = _wrap(store, store.create("term-1", "thread-1", "lease-1", "/home/user"))
 
+        assert terminal is not None
         assert terminal.get_state().state_version == 0
 
         # Update state
@@ -266,6 +268,7 @@ class TestSQLiteTerminal:
         """Test that update_state persists to database."""
         terminal = _wrap(store, store.create("term-1", "thread-1", "lease-1", "/home/user"))
 
+        assert terminal is not None
         # Update state
         new_state = TerminalState(
             cwd="/home/user/project",
@@ -291,6 +294,7 @@ class TestSQLiteTerminal:
         """Test that state persists when terminal is retrieved again."""
         terminal = _wrap(store, store.create("term-1", "thread-1", "lease-1", "/home/user"))
 
+        assert terminal is not None
         # Update state
         new_state = TerminalState(cwd="/home/user/project", env_delta={"FOO": "bar"})
         terminal.update_state(new_state)
@@ -306,6 +310,7 @@ class TestSQLiteTerminal:
         """Test multiple state updates increment version correctly."""
         terminal = _wrap(store, store.create("term-1", "thread-1", "lease-1", "/home/user"))
 
+        assert terminal is not None
         # Update 1
         terminal.update_state(TerminalState(cwd="/home/user/project1"))
         assert terminal.get_state().state_version == 1
@@ -332,6 +337,7 @@ class TestTerminalIntegration:
         """Test complete terminal lifecycle: create → update → retrieve → delete."""
         # Create
         terminal = _wrap(store, store.create("term-1", "thread-1", "lease-1", "/home/user"))
+        assert terminal is not None
         assert terminal.get_state().cwd == "/home/user"
 
         # Update state multiple times
@@ -355,6 +361,9 @@ class TestTerminalIntegration:
         term2 = _wrap(store, store.create("term-2", "thread-2", "lease-2", "/home/user2"))
         term3 = _wrap(store, store.create("term-3", "thread-3", "lease-1", "/home/user3"))
 
+        assert term1 is not None
+        assert term2 is not None
+        assert term3 is not None
         # Verify all created
         assert store.get_active("thread-1") is not None
         assert store.get_active("thread-2") is not None
@@ -370,11 +379,13 @@ class TestTerminalIntegration:
         term1 = _wrap(store, store.create("term-1", "thread-1", "lease-1", "/home/user1"))
         _term2 = _wrap(store, store.create("term-2", "thread-2", "lease-1", "/home/user2"))
 
+        assert term1 is not None
         # Update term1 state
         term1.update_state(TerminalState(cwd="/home/user1/project", env_delta={"FOO": "bar"}))
 
         # Verify term2 state unchanged
         term2_retrieved = _wrap(store, store.get_active("thread-2"))
+        assert term2_retrieved is not None
         assert term2_retrieved.get_state().cwd == "/home/user2"
         assert term2_retrieved.get_state().env_delta == {}
         assert term2_retrieved.get_state().state_version == 0
