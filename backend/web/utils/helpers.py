@@ -89,26 +89,9 @@ def _get_thread_repo(thread_repo=None):
     return _cached_thread_repo
 
 
-def save_thread_config(thread_id: str, thread_repo=None, **fields: Any) -> None:
-    """Update specific fields of thread config."""
-    allowed = {"sandbox_type", "cwd", "model", "observation_provider"}
-    updates = {k: v for k, v in fields.items() if k in allowed}
-    if not updates:
-        return
-    _get_thread_repo(thread_repo).update(thread_id, **updates)
-
-
 def load_thread_config(thread_id: str, thread_repo=None) -> dict[str, Any] | None:
     """Load thread data. Returns dict or None."""
     return _get_thread_repo(thread_repo).get_by_id(thread_id)
-
-
-def get_active_observation_provider() -> str | None:
-    """Read global observation config and return the active provider name."""
-    from config.observation_loader import ObservationLoader
-
-    config = ObservationLoader().load()
-    return config.active if config.active else None
 
 
 def resolve_local_workspace_path(
