@@ -2823,6 +2823,12 @@ function SessionDetailPage() {
           </Link>
         )}
       </div>
+
+      {/* @@@session-trace-reuse - the compat session contract does not expose a dedicated run id, so reuse the thread trace surface here instead of inventing a deeper API seam. */}
+      <ThreadTraceSection
+        threadId={data.thread_id}
+        autoRefreshEnabled={false}
+      />
     </div>
   );
 }
