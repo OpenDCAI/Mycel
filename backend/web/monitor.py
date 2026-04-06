@@ -1987,69 +1987,14 @@ def list_leases():
 
 
 @router.get("/lease/{lease_id}")
-def get_lease(lease_id: str, db: sqlite3.Connection = Depends(get_db)):
-    lease = db.execute(
-        """
-        SELECT * FROM sandbox_leases WHERE lease_id = ?
-    """,
-        (lease_id,),
-    ).fetchone()
+def get_lease(lease_id: str):
+    from backend.web.services import monitor_service
 
-    if not lease:
-        raise HTTPException(status_code=404, detail="Lease not found")
-
-    threads = db.execute(
-        """
-        SELECT DISTINCT thread_id FROM chat_sessions WHERE lease_id = ?
-    """,
-        (lease_id,),
-    ).fetchall()
-
-    # Get lease events
-    events = db.execute(
-        """
-        SELECT * FROM lease_events
-        WHERE lease_id = ?
-        ORDER BY created_at DESC
-    """,
-        (lease_id,),
-    ).fetchall()
-
-    badge = make_badge(lease["desired_state"], lease["observed_state"])
-    badge["error"] = lease["last_error"]
-
-    return {
-        "lease_id": lease_id,
-        "breadcrumb": [{"label": "Leases", "url": "/leases"}, {"label": lease_id, "url": f"/lease/{lease_id}"}],
-        "info": {
-            "provider": lease["provider_name"],
-            "instance_id": lease["current_instance_id"],
-            "created_at": lease["created_at"],
-            "created_ago": format_time_ago(lease["created_at"]),
-            "updated_at": lease["updated_at"],
-            "updated_ago": format_time_ago(lease["updated_at"]),
-        },
-        "state": badge,
-        "related_threads": {
-            "title": "Related Threads",
-            "items": [{"thread_id": t["thread_id"], "thread_url": f"/thread/{t['thread_id']}"} for t in threads],
-        },
-        "lease_events": {
-            "title": "Lease Events",
-            "count": len(events),
-            "items": [
-                {
-                    "event_id": e["event_id"],
-                    "event_url": f"/event/{e['event_id']}",
-                    "event_type": e["event_type"],
-                    "source": e["source"],
-                    "created_at": e["created_at"],
-                    "created_ago": format_time_ago(e["created_at"]),
-                }
-                for e in events
-            ],
-        },
-    }
+    try:
+        return monitor_service.get_lease(lease_id)
+    except KeyError as exc:
+        detail = exc.args[0] if exc.args else "Lease not found"
+        raise HTTPException(status_code=404, detail=detail) from exc
 
 
 @router.get("/diverged")

@@ -210,6 +210,50 @@ def test_list_leases_marks_old_detached_running_rows_as_detached_residue(monkeyp
     assert payload["triage"]["summary"]["detached_residue"] == 1
 
 
+def test_get_lease_falls_back_to_historical_session_rows(monkeypatch):
+    class FakeRepo:
+        def query_lease(self, lease_id):
+            return None
+
+        def query_lease_threads(self, lease_id):
+            return []
+
+        def query_lease_events(self, lease_id):
+            return []
+
+        def query_lease_sessions(self, lease_id):
+            return [
+                {
+                    "chat_session_id": "sess-old",
+                    "thread_id": "thread-historical",
+                    "status": "closed",
+                    "started_at": "2026-04-06T10:00:00",
+                    "ended_at": "2026-04-06T10:05:00",
+                    "close_reason": "expired",
+                    "lease_id": lease_id,
+                    "provider_name": None,
+                    "desired_state": None,
+                    "observed_state": None,
+                    "current_instance_id": None,
+                    "last_error": None,
+                }
+            ]
+
+        def close(self):
+            return None
+
+    monkeypatch.setattr(monitor_service, "make_sandbox_monitor_repo", lambda: FakeRepo())
+
+    payload = monitor_service.get_lease("lease-historical")
+
+    assert payload["lease_id"] == "lease-historical"
+    assert payload["info"]["provider"] == "unknown"
+    assert payload["state"]["text"] == "destroyed"
+    assert payload["related_threads"]["items"] == [
+        {"thread_id": "thread-historical", "thread_url": "/thread/thread-historical"}
+    ]
+
+
 def test_build_evaluation_operator_surface_flags_runner_exit_before_threads_materialize():
     payload = monitor_service.build_evaluation_operator_surface(
         status="provisional",

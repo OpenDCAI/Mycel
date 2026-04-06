@@ -545,6 +545,49 @@ def _map_lease_detail(
     }
 
 
+def _historical_lease_detail(
+    lease_id: str,
+    sessions: list[dict[str, Any]],
+    events: list[dict[str, Any]],
+) -> dict[str, Any] | None:
+    if not sessions and not events:
+        return None
+
+    created_candidates = [
+        str(value)
+        for value in [*(row.get("started_at") for row in sessions), *(row.get("created_at") for row in events)]
+        if value
+    ]
+    updated_candidates = [
+        str(value)
+        for value in [
+            *(row.get("ended_at") or row.get("started_at") for row in sessions),
+            *(row.get("created_at") for row in events),
+        ]
+        if value
+    ]
+    first_session = sessions[0] if sessions else {}
+    thread_ids: list[str] = []
+    seen_threads: set[str] = set()
+    for row in sessions:
+        thread_id = str(row.get("thread_id") or "").strip()
+        if thread_id and thread_id not in seen_threads:
+            seen_threads.add(thread_id)
+            thread_ids.append(thread_id)
+
+    lease = {
+        "provider_name": first_session.get("provider_name") or "unknown",
+        "current_instance_id": first_session.get("current_instance_id"),
+        "created_at": min(created_candidates) if created_candidates else None,
+        "updated_at": max(updated_candidates) if updated_candidates else None,
+        "desired_state": first_session.get("desired_state"),
+        "observed_state": first_session.get("observed_state"),
+        "last_error": first_session.get("last_error"),
+    }
+    threads = [{"thread_id": thread_id} for thread_id in thread_ids]
+    return _map_lease_detail(lease_id, lease, threads, events)
+
+
 def _map_diverged(rows: list[dict[str, Any]]) -> dict[str, Any]:
     items = [
         {
@@ -654,12 +697,16 @@ def get_lease(lease_id: str) -> dict[str, Any]:
     repo = make_sandbox_monitor_repo()
     try:
         lease = repo.query_lease(lease_id)
-        if not lease:
-            raise KeyError("Lease not found")
         threads = repo.query_lease_threads(lease_id)
         events = repo.query_lease_events(lease_id)
+        sessions = repo.query_lease_sessions(lease_id)
     finally:
         repo.close()
+    if not lease:
+        fallback = _historical_lease_detail(lease_id, sessions, events)
+        if fallback:
+            return fallback
+        raise KeyError("Lease not found")
     return _map_lease_detail(lease_id, lease, threads, events)
 
 

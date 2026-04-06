@@ -206,6 +206,31 @@ class SQLiteSandboxMonitorRepo:
         ).fetchone()
         return _row_to_dict(row) if row else None
 
+    def query_lease_sessions(self, lease_id: str) -> list[dict]:
+        rows = self._conn.execute(
+            """
+            SELECT
+                cs.chat_session_id,
+                cs.thread_id,
+                cs.status,
+                cs.started_at,
+                cs.ended_at,
+                cs.close_reason,
+                cs.lease_id,
+                sl.provider_name,
+                sl.desired_state,
+                sl.observed_state,
+                sl.current_instance_id,
+                sl.last_error
+            FROM chat_sessions cs
+            LEFT JOIN sandbox_leases sl ON cs.lease_id = sl.lease_id
+            WHERE cs.lease_id = ?
+            ORDER BY cs.started_at DESC
+            """,
+            (lease_id,),
+        ).fetchall()
+        return [_row_to_dict(r) for r in rows]
+
     def query_lease_threads(self, lease_id: str) -> list[dict]:
         rows = self._conn.execute(
             """

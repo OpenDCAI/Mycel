@@ -181,6 +181,39 @@ class SupabaseSandboxMonitorRepo:
         )
         return dict(rows[0]) if rows else None
 
+    def query_lease_sessions(self, lease_id: str) -> list[dict]:
+        sessions = q.rows(
+            q.order(
+                self._client.table("chat_sessions")
+                .select("chat_session_id,thread_id,status,started_at,ended_at,close_reason,lease_id")
+                .eq("lease_id", lease_id),
+                "started_at",
+                desc=True,
+                repo=_REPO,
+                operation="query_lease_sessions",
+            ).execute(),
+            _REPO,
+            "query_lease_sessions",
+        )
+        lease = self.query_lease(lease_id)
+        return [
+            {
+                "chat_session_id": session.get("chat_session_id"),
+                "thread_id": session.get("thread_id"),
+                "status": session.get("status"),
+                "started_at": session.get("started_at"),
+                "ended_at": session.get("ended_at"),
+                "close_reason": session.get("close_reason"),
+                "lease_id": session.get("lease_id"),
+                "provider_name": lease.get("provider_name") if lease else None,
+                "desired_state": lease.get("desired_state") if lease else None,
+                "observed_state": lease.get("observed_state") if lease else None,
+                "current_instance_id": lease.get("current_instance_id") if lease else None,
+                "last_error": lease.get("last_error") if lease else None,
+            }
+            for session in sessions
+        ]
+
     def query_lease_threads(self, lease_id: str) -> list[dict]:
         rows = q.rows(
             q.order(
