@@ -212,8 +212,16 @@ export async function getThreadTerminal(threadId: string): Promise<TerminalStatu
   return request(`/api/threads/${encodeURIComponent(threadId)}/terminal`);
 }
 
-export async function getThreadLease(threadId: string): Promise<LeaseStatus> {
-  return request(`/api/threads/${encodeURIComponent(threadId)}/lease`);
+export async function getThreadLease(threadId: string): Promise<LeaseStatus | null> {
+  const response = await authFetch(`/api/threads/${encodeURIComponent(threadId)}/lease`);
+  if (response.status === 404) {
+    return null;
+  }
+  if (!response.ok) {
+    const body = await response.text();
+    throw new Error(`API ${response.status}: ${body || response.statusText}`);
+  }
+  return (await response.json()) as LeaseStatus;
 }
 
 // --- Sandbox Files API ---

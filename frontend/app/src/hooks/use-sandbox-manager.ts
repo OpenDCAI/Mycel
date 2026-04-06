@@ -24,6 +24,9 @@ export function useSandboxManager(deps: SandboxManagerDeps): void {
       try {
         const lease = await getThreadLease(threadId);
         if (cancelled) return;
+        if (!lease) {
+          return;
+        }
         const status = lease.instance?.state ?? null;
         setActiveSandbox((prev) => {
           if (!prev) return prev;
