@@ -174,11 +174,11 @@ export default function MembersPage() {
               const isBuiltin = member.builtin === true;
               const canDelete = !isBuiltin && filtered.length > 1;
               const handleCardClick = () => {
-                navigate(`/members/${member.id}`);
+                navigate(`/contacts/agents/${member.id}`);
               };
               const handleStartChat = (e: React.MouseEvent) => {
                 e.stopPropagation();
-                navigate(`/threads/${member.id}`);
+                navigate(`/chat/hire/${member.id}`);
               };
               const handleCopy = async (e: React.MouseEvent) => {
                 e.stopPropagation();
