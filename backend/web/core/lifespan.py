@@ -143,6 +143,56 @@ async def lifespan(app: FastAPI):
 
     app.state.chat_service.set_delivery_fn(make_chat_delivery_fn(app))
 
+    # ---- Messaging system (Supabase-backed) ----
+    _msg_supabase_url = os.getenv("SUPABASE_INTERNAL_URL") or os.getenv("SUPABASE_PUBLIC_URL")
+    _msg_supabase_key = os.getenv("LEON_SUPABASE_ANON_KEY") or os.getenv("LEON_SUPABASE_SERVICE_ROLE_KEY")
+    _messaging_available = bool(_msg_supabase_url and _msg_supabase_key)
+
+    if _messaging_available:
+        from backend.web.core.supabase_factory import create_messaging_supabase_client
+        from messaging.delivery.resolver import HireVisitDeliveryResolver
+        from messaging.relationships.service import RelationshipService
+        from messaging.service import MessagingService
+        from storage.providers.supabase.messaging_repo import (
+            SupabaseChatMemberRepo,
+            SupabaseMessageReadRepo,
+            SupabaseMessagesRepo,
+            SupabaseRelationshipRepo,
+        )
+
+        _msg_supabase = create_messaging_supabase_client()
+        _chat_member_repo = SupabaseChatMemberRepo(_msg_supabase)
+        _messages_repo = SupabaseMessagesRepo(_msg_supabase)
+        _message_read_repo = SupabaseMessageReadRepo(_msg_supabase)
+        app.state.relationship_repo = SupabaseRelationshipRepo(_msg_supabase)
+
+        app.state.relationship_service = RelationshipService(
+            app.state.relationship_repo,
+            entity_repo=app.state.entity_repo,
+        )
+
+        _msg_delivery_resolver = HireVisitDeliveryResolver(
+            contact_repo=app.state.contact_repo,
+            chat_member_repo=_chat_member_repo,
+            relationship_repo=app.state.relationship_repo,
+        )
+
+        app.state.messaging_service = MessagingService(
+            chat_repo=app.state.chat_repo,
+            chat_member_repo=_chat_member_repo,
+            messages_repo=_messages_repo,
+            message_read_repo=_message_read_repo,
+            entity_repo=app.state.entity_repo,
+            member_repo=app.state.member_repo,
+            event_bus=app.state.chat_event_bus,
+            delivery_resolver=_msg_delivery_resolver,
+        )
+        app.state.messaging_service.set_delivery_fn(make_chat_delivery_fn(app))
+    else:
+        app.state.relationship_repo = None
+        app.state.relationship_service = None
+        app.state.messaging_service = None
+
     # ---- Existing state ----
     app.state.queue_manager = MessageQueueManager()
     app.state.agent_pool: dict[str, Any] = {}

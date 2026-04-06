@@ -56,3 +56,18 @@ def create_supabase_auth_client():
         # @@@direct-gotrue - local auth may bypass Kong and hit GoTrue directly at /token.
         return SyncGoTrueClient(url=auth_url, headers={"apikey": key}, http_client=http_client)
     return create_client(url, key, options=ClientOptions(httpx_client=http_client))
+
+
+def create_messaging_supabase_client():
+    """Build a supabase-py client for messaging repos using anon key.
+
+    The anon key works for messaging tables which have no RLS policies
+    in the current self-hosted setup.
+    """
+    url = _resolve_supabase_url()
+    key = os.getenv("SUPABASE_ANON_KEY")
+    if not key:
+        raise RuntimeError("SUPABASE_ANON_KEY is required for messaging.")
+    timeout = httpx.Timeout(30.0, connect=10.0)
+    http_client = httpx.Client(timeout=timeout, trust_env=False)
+    return create_client(url, key, options=ClientOptions(httpx_client=http_client))
