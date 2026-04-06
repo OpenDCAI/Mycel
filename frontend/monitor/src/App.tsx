@@ -128,7 +128,6 @@ function DashboardPage() {
   if (error) {
     return (
       <div className="page" data-testid="page-dashboard">
-        <h1>Dashboard</h1>
         <div className="page-error">Dashboard load failed: {error}</div>
       </div>
     );
@@ -149,31 +148,16 @@ function DashboardPage() {
 
   return (
     <div className="page" data-testid="page-dashboard">
-      <div className="section-row page-toolbar">
-        <div className="page-kicker">
-          <span className="count">Global health snapshot</span>
-        </div>
-        <button
-          className="ghost-btn"
-          onClick={() => void loadDashboard()}
-          disabled={loading}
-        >
-          {loading ? "Refreshing..." : "Refresh"}
-        </button>
-      </div>
-
       <section className="dashboard-grid">
-        <article className="hint-box dashboard-card">
+        <article className="depth-primary dashboard-card dashboard-card-hero">
           <div className="section-row dashboard-card-head">
-            <div>
-              <h2>Infra Health</h2>
-              <p className="description">
-                Global provider and lease state from the monitor backend.
-              </p>
+            <h2>Infra Health</h2>
+            <div className="console-header-actions">
+              <button className="ghost-btn" onClick={() => void loadDashboard()} disabled={loading}>
+                {loading ? "Refreshing..." : "Refresh"}
+              </button>
+              <Link className="quick-link" to="/resources">Resources</Link>
             </div>
-            <Link className="quick-link" to="/resources">
-              Open resources
-            </Link>
           </div>
           <div className="dashboard-metric-grid">
             <DashboardMetric
@@ -215,86 +199,71 @@ function DashboardPage() {
           </div>
         </article>
 
-        <article className="hint-box dashboard-card">
-          <div className="section-row dashboard-card-head">
-            <div>
+        <div className="dashboard-sidebar-stack">
+          <article className="depth-secondary dashboard-card">
+            <div className="section-row dashboard-card-head">
               <h2>Active Workload</h2>
-              <p className="description">
-                How much monitored runtime is currently alive across DB
-                sessions, providers, and evaluations.
-              </p>
+              <Link className="quick-link" to="/threads">
+                Threads
+              </Link>
             </div>
-            <Link className="quick-link" to="/threads">
-              Open threads
-            </Link>
-          </div>
-          <div className="dashboard-metric-grid">
-            <DashboardMetric
-              label="DB sessions"
-              value={workload.db_sessions_total || 0}
-              note="durable chat sessions"
-            />
-            <DashboardMetric
-              label="Provider sessions"
-              value={workload.provider_sessions_total || 0}
-              note="reported by providers"
-            />
-            <DashboardMetric
-              label="Running sessions"
-              value={workload.running_sessions || 0}
-              note={`${workload.evaluations_running || 0} eval jobs running`}
-              tone={
-                (workload.running_sessions || 0) > 0 ? "default" : "warning"
-              }
-            />
-          </div>
-        </article>
+            <div className="dashboard-metric-grid">
+              <DashboardMetric
+                label="DB sessions"
+                value={workload.db_sessions_total || 0}
+                note="durable chat sessions"
+              />
+              <DashboardMetric
+                label="Provider sessions"
+                value={workload.provider_sessions_total || 0}
+                note="reported by providers"
+              />
+              <DashboardMetric
+                label="Running"
+                value={workload.running_sessions || 0}
+                note={`${workload.evaluations_running || 0} eval jobs`}
+                tone={
+                  (workload.running_sessions || 0) > 0 ? "default" : "warning"
+                }
+              />
+            </div>
+          </article>
 
-        <article className="hint-box dashboard-card dashboard-card-eval">
-          <div className="section-row dashboard-card-head">
-            <div>
+          <article className="depth-secondary dashboard-card dashboard-card-eval">
+            <div className="section-row dashboard-card-head">
               <h2>Latest Eval</h2>
-              <p className="description">
-                Most recent evaluation known to the monitor. Use this as the
-                fastest jump into detail.
-              </p>
+              <Link
+                className="quick-link"
+                to={latestEval?.evaluation_url || "/evaluation"}
+              >
+                {latestEval ? "Detail" : "Eval list"}
+              </Link>
             </div>
-            <Link
-              className="quick-link"
-              to={latestEval?.evaluation_url || "/evaluation"}
-            >
-              {latestEval ? "Open latest eval" : "Open eval list"}
-            </Link>
-          </div>
-          {latestEval ? (
-            <div className="dashboard-eval-body">
-              <div className="chip-row">
-                <span
-                  className={`status-chip ${latestEval.status === "provisional" ? "chip-warning" : latestEval.status === "error" ? "chip-danger" : "chip-muted"}`}
-                >
-                  {latestEval.status}
-                </span>
-                <span
-                  className={`status-chip ${latestEval.publishable ? "chip-success" : "chip-warning"}`}
-                >
-                  publishable={String(Boolean(latestEval.publishable))}
-                </span>
-              </div>
-              <div className="mono dashboard-eval-id">
-                {latestEval.evaluation_id}
-              </div>
-              <div className="eval-progress-track">
-                <div
-                  className="eval-progress-fill"
-                  style={{ width: `${Number(latestEval.progress_pct || 0)}%` }}
-                />
-              </div>
-              <div className="mono eval-progress-line">
-                {latestEval.threads_done || 0}/{latestEval.threads_total || 0}{" "}
-                threads · {formatPct(latestEval.progress_pct || 0)} · updated{" "}
-                {latestEval.updated_ago || "-"}
-              </div>
-              <div className="dashboard-eval-footer">
+            {latestEval ? (
+              <div className="dashboard-eval-body">
+                <div className="chip-row">
+                  <span
+                    className={`status-chip ${latestEval.status === "provisional" ? "chip-warning" : latestEval.status === "error" ? "chip-danger" : "chip-muted"}`}
+                  >
+                    {latestEval.status}
+                  </span>
+                  <span
+                    className={`status-chip ${latestEval.publishable ? "chip-success" : "chip-warning"}`}
+                  >
+                    publishable={String(Boolean(latestEval.publishable))}
+                  </span>
+                </div>
+                <div className="eval-progress-track">
+                  <div
+                    className="eval-progress-fill"
+                    style={{ width: `${Number(latestEval.progress_pct || 0)}%` }}
+                  />
+                </div>
+                <div className="mono eval-progress-line">
+                  {latestEval.threads_done || 0}/{latestEval.threads_total || 0}{" "}
+                  threads · {formatPct(latestEval.progress_pct || 0)} · updated{" "}
+                  {latestEval.updated_ago || "-"}
+                </div>
                 <DashboardMetric
                   label="Primary score"
                   value={
@@ -302,25 +271,16 @@ function DashboardPage() {
                       ? "provisional"
                       : formatPct(latestEval.primary_score_pct)
                   }
-                  note={
-                    latestEval.primary_score_pct == null
-                      ? "score blocked until summary lands"
-                      : "publishable score"
-                  }
                   tone={
                     latestEval.primary_score_pct == null ? "warning" : "success"
                   }
                 />
               </div>
-            </div>
-          ) : (
-            <div className="dashboard-empty">
-              <p className="description">
-                No evaluation rows yet. Open Eval to submit a minimal run.
-              </p>
-            </div>
-          )}
-        </article>
+            ) : (
+              <p className="count">No evaluations yet</p>
+            )}
+          </article>
+        </div>
       </section>
     </div>
   );
@@ -794,7 +754,6 @@ function MonitorResourcesPage() {
   if (error) {
     return (
       <div className="page" data-testid="page-resources">
-        <h1>Resources</h1>
         <div className="page-error">Resource load failed: {error}</div>
       </div>
     );
@@ -864,20 +823,8 @@ function MonitorResourcesPage() {
 
   return (
     <div className="page" data-testid="page-resources">
-      <div className="section-row page-toolbar">
-        <div className="page-kicker">
-          <span className="count">Global provider health and lease triage</span>
-        </div>
-        <button
-          className="ghost-btn"
-          onClick={() => void refreshNow()}
-          disabled={refreshing || loading}
-        >
-          {refreshing ? "Refreshing..." : "Refresh"}
-        </button>
-      </div>
-
-      <section className="resource-summary-grid">
+      <div className="sticky-context">
+        <div className="resource-summary-grid">
         <DashboardMetric
           label="Providers"
           value={summary.total_providers || 0}
@@ -914,17 +861,15 @@ function MonitorResourcesPage() {
             (triageSummary.healthy_capacity || 0) > 0 ? "success" : "danger"
           }
         />
-      </section>
+        </div>
+      </div>
 
-      <section className="resource-section-shell">
+      <section className="resource-section-shell depth-secondary">
         <div className="section-row">
-          <div>
-            <h2>Providers</h2>
-            <p className="description">
-              Same provider surface as the product page, but backed by the
-              global monitor contract.
-            </p>
-          </div>
+          <h2>Providers</h2>
+          <button className="ghost-btn" onClick={() => void refreshNow()} disabled={refreshing || loading}>
+            {refreshing ? "Refreshing..." : "Refresh"}
+          </button>
         </div>
         <div className="monitor-provider-grid">
           {providers.map((provider: any) => {
@@ -1098,15 +1043,10 @@ function MonitorResourcesPage() {
               </div>
             </div>
           </div>
-          <div className="resource-session-shell">
+          <div className="resource-session-shell depth-recessed">
             <div className="section-row">
               <div>
                 <h2>Leases ({selectedLeaseGroups.length})</h2>
-                <p className="description">
-                  Monitor-side lease grouping for this provider. This is the
-                  closest equivalent to the product sandbox cards, but still
-                  grounded in global monitor truth.
-                </p>
               </div>
             </div>
             <div className="provider-lease-grid">
@@ -1139,11 +1079,6 @@ function MonitorResourcesPage() {
                     : scopedSessions.length}
                   )
                 </h2>
-                <p className="description">
-                  {sessionScope === "provider"
-                    ? "Global session rows currently attached to this provider. This is the full monitor-side truth surface."
-                    : "Session rows for the selected lease group. Switch back to all provider sessions when you need the noisier truth table."}
-                </p>
               </div>
               <div
                 className="segmented-toggle"
@@ -1223,15 +1158,10 @@ function MonitorResourcesPage() {
         </section>
       ) : null}
 
-      <section className="resource-section-shell" id="lease-health">
+      <section className="resource-section-shell depth-secondary" id="lease-health">
         <div className="section-row">
           <div>
             <h2>Lease Health</h2>
-            <p className="description">
-              Backend-owned lease lifecycle triage. Separate live drift from
-              stale detached residue before assuming the whole system is on
-              fire.
-            </p>
           </div>
           <Link className="quick-link" to="/leases">
             Legacy flat table
@@ -1258,12 +1188,8 @@ function MonitorResourcesPage() {
         {hasPrimaryLeaseAttention ? (
           <div className="lease-cluster-grid">
             {activeDriftLeases.length > 0 ? (
-              <article className="hint-box">
+              <article className="depth-primary">
                 <h2>Active Drift ({activeDriftLeases.length})</h2>
-                <p className="description">
-                  Recent desired/observed mismatch. These rows deserve live
-                  operator attention before they age into residue.
-                </p>
                 <table>
                   <thead>
                     <tr>
@@ -1304,12 +1230,8 @@ function MonitorResourcesPage() {
             ) : null}
 
             {detachedResidueLeases.length > 0 ? (
-              <article className="hint-box">
+              <article className="depth-primary">
                 <h2>Detached Residue ({detachedResidueLeases.length})</h2>
-                <p className="description">
-                  Detached rows that still want `running` long after the runtime
-                  stopped moving. Usually cleanup debt, not fresh pressure.
-                </p>
                 <table>
                   <thead>
                     <tr>
@@ -1353,13 +1275,8 @@ function MonitorResourcesPage() {
 
         {hasSecondaryLeaseAttention ? (
           <div className="lease-cluster-grid">
-            <article className="hint-box">
+            <article className="depth-recessed">
               <h2>Cleanup Backlog ({orphanCleanupLeases.length})</h2>
-              <p className="description">
-                Rows that already lost thread binding. Keep them visible for
-                cleanup honesty, but do not confuse them with live compute
-                pressure.
-              </p>
               <table>
                 <thead>
                   <tr>
@@ -1393,7 +1310,7 @@ function MonitorResourcesPage() {
         ) : null}
 
         {healthyCapacityLeases.length > 0 ? (
-          <details className="lease-details-shell">
+          <details className="lease-details-shell depth-recessed">
             <summary>Healthy Capacity ({healthyCapacityLeases.length})</summary>
             <table>
               <thead>
@@ -1440,7 +1357,7 @@ function MonitorResourcesPage() {
           <div className="dashboard-empty">No lease groups reported yet.</div>
         ) : null}
 
-        <details className="lease-details-shell">
+        <details className="lease-details-shell depth-recessed">
           <summary>All leases ({leases.length})</summary>
           <table>
             <thead>
@@ -1521,7 +1438,6 @@ function ThreadsPage() {
 
   return (
     <div className="page" data-testid="page-threads">
-      <h1>{data.title}</h1>
       <p className="description">
         Global thread index. Start here to find the active run, then drill into
         session, lease, and trace detail.
@@ -1644,7 +1560,6 @@ function TracesPage() {
 
   return (
     <div className="page" data-testid="page-traces">
-      <h1>{data.title}</h1>
       <p className="description">
         Run-level trace index for debugging tool calls, checkpoints, and runtime
         transitions across monitored threads.
@@ -2951,7 +2866,6 @@ function LeasesPage() {
 
   return (
     <div className="page" data-testid="page-leases">
-      <h1>{data.title}</h1>
       <p className="description">
         Legacy lease view, now backed by backend triage semantics. Use this when
         you want lease-only focus without losing the full raw table.
@@ -3142,7 +3056,6 @@ function DivergedPage() {
 
   return (
     <div className="page">
-      <h1>{data.title}</h1>
       <p className="description">{data.description}</p>
       <p className="count">Total: {data.count}</p>
       <table>
@@ -3199,7 +3112,6 @@ function EventsPage() {
 
   return (
     <div className="page">
-      <h1>{data.title}</h1>
       <p className="description">{data.description}</p>
       <p className="count">Total: {data.count}</p>
       <table>
@@ -3445,12 +3357,9 @@ function EvaluationPage() {
 
   return (
     <div className="page">
-      <section className="evaluation-overview">
-        <div className="hint-box">
+      <section className="eval-split-layout">
+        <div className="eval-split-aside depth-recessed">
           <h2>Current Submission</h2>
-          <p className="description">
-            Latest evaluation submitted from this page.
-          </p>
           <div className="mono">evaluation: {evaluationId || "-"}</div>
           <p className="count">status: {currentEval?.status || runStatus}</p>
           {currentEval && currentProgress && (
@@ -3478,40 +3387,16 @@ function EvaluationPage() {
             </p>
           )}
         </div>
-
-        <div className="hint-box">
-          <h2>Start New Evaluation</h2>
-          <p className="description">
-            Open a focused config panel. After submit, track progress in the
-            evaluation list below.
-          </p>
-          <button
-            className="primary-btn"
-            onClick={() => setComposerOpen(true)}
-            disabled={runStatus === "starting"}
-          >
-            {runStatus === "starting" ? "Starting..." : "Open Config"}
-          </button>
-        </div>
-      </section>
-
-      <section>
+        <section className="eval-split-main depth-primary">
         <div className="section-row">
           <h2>Evaluations ({evalPagination?.total ?? evaluations.length})</h2>
-          <span className="count">
-            One evaluation contains many threads; stay here for durable
-            progress, then jump to detail when needed.
-          </span>
+          <span className="count">Auto refresh 5s</span>
         </div>
-        <p className="count">
-          Auto refresh: 5s {runsLoading ? "| loading..." : ""} | page{" "}
-          {evalPagination?.page ?? 1}
-        </p>
-        <p className="description">
-          Evaluation = one batch run. Progress shows
-          total/completed/started-or-running/pending. Click Evaluation ID for
-          detail trace and thread links.
-        </p>
+        <div className="count evaluation-meta-row">
+          <span>{evalPagination?.total ?? evaluations.length} evaluations</span>
+          <span>{runsLoading ? "loading..." : "idle"}</span>
+          <span>page {evalPagination?.page ?? 1}</span>
+        </div>
         <table>
           <thead>
             <tr>
@@ -3634,6 +3519,7 @@ function EvaluationPage() {
             Next
           </button>
         </div>
+        </section>
       </section>
 
       {composerOpen && (
@@ -4278,6 +4164,14 @@ function shellMeta(pathname: string) {
         "Sequence-level inspection for sessions, tool calls, and conversation surfaces.",
     };
   }
+  if (pathname.startsWith("/events") || pathname.startsWith("/event")) {
+    return {
+      eyebrow: "Execution traces",
+      title: "Events",
+      description:
+        "Lease and runtime event history for debugging sequence, source, and error surfaces.",
+    };
+  }
   if (pathname.startsWith("/leases")) {
     return {
       eyebrow: "Lease truth",
@@ -4369,6 +4263,7 @@ function Layout({ children }: { children: React.ReactNode }) {
   const { pathname } = useLocation();
   const [guideOpen, setGuideOpen] = React.useState(false);
   const meta = shellMeta(pathname);
+  const showEvalComposeAction = pathname === "/evaluation";
 
   return (
     <div className="console-app">
@@ -4407,6 +4302,11 @@ function Layout({ children }: { children: React.ReactNode }) {
             </p>
           </div>
           <div className="console-header-actions">
+            {showEvalComposeAction ? (
+              <Link className="primary-btn" to="/evaluation?new=1">
+                Open Config
+              </Link>
+            ) : null}
             <button
               className="ghost-btn"
               onClick={() => setGuideOpen(true)}

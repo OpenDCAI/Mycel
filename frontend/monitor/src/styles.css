@@ -207,12 +207,58 @@ body {
   gap: 0.75rem;
 }
 
+/* @@@depth-system - 3 visual layers to break flatness: primary (look here), secondary (interact here), recessed (reference/debug) */
+.depth-primary {
+  background: var(--panel);
+  border: 1px solid var(--border-strong);
+  border-radius: 16px;
+  padding: 1.15rem 1.2rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+.depth-secondary {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 1rem;
+}
+
+.depth-recessed {
+  background: var(--bg-muted);
+  border: 1px solid transparent;
+  border-radius: 12px;
+  padding: 0.85rem 1rem;
+}
+
+.depth-recessed h2 {
+  font-size: 0.95rem;
+  color: var(--text-secondary);
+}
+
+.depth-recessed .description {
+  font-size: 0.82rem;
+}
+
+.depth-recessed table {
+  background: var(--bg-muted);
+}
+
+.sticky-context {
+  position: sticky;
+  top: 72px;
+  z-index: 10;
+  background: rgba(250, 250, 250, 0.92);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--border);
+  padding: 0.6rem 2rem;
+  margin: 0 -2rem 1rem;
+}
+
 .content {
   flex: 1;
   padding: 2rem;
-  max-width: 1600px;
+  max-width: 1280px;
   width: 100%;
-  margin: 0 auto;
 }
 
 .page {
@@ -311,6 +357,7 @@ h2 {
   display: grid;
   grid-template-columns: repeat(12, minmax(0, 1fr));
   gap: 1rem;
+  align-items: start;
 }
 
 .dashboard-card {
@@ -320,8 +367,19 @@ h2 {
   gap: 1rem;
 }
 
+.dashboard-card-hero {
+  grid-column: span 8;
+}
+
 .dashboard-card-eval {
   grid-column: span 4;
+}
+
+.dashboard-sidebar-stack {
+  grid-column: span 4;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
 }
 
 .dashboard-card-head h2 {
@@ -424,28 +482,29 @@ h2 {
 }
 
 .monitor-provider-card {
-  border: 1px solid var(--border);
-  background: linear-gradient(
-    180deg,
-    var(--panel) 0%,
-    var(--panel-strong) 100%
-  );
-  border-radius: 16px;
+  border: 1px solid transparent;
+  background: var(--bg-soft);
+  border-radius: 14px;
   padding: 1rem;
   text-align: left;
   display: flex;
   flex-direction: column;
   gap: 0.9rem;
+  transition:
+    border-color 0.18s ease,
+    background 0.18s ease,
+    box-shadow 0.18s ease;
 }
 
 .monitor-provider-card:hover:not(:disabled) {
-  border-color: var(--border-strong);
-  background: var(--bg-soft);
+  border-color: var(--border);
+  background: var(--panel);
 }
 
 .monitor-provider-card.is-selected {
   border-color: rgba(37, 99, 235, 0.24);
-  box-shadow: inset 0 0 0 1px rgba(37, 99, 235, 0.1);
+  background: var(--panel);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
 }
 
 .monitor-provider-card.is-unavailable {
@@ -616,15 +675,12 @@ h2 {
 }
 
 .provider-detail-shell {
-  border: 1px solid var(--border);
-  border-radius: 18px;
-  background: linear-gradient(
-    180deg,
-    var(--panel) 0%,
-    var(--panel-strong) 100%
-  );
-  padding: 1rem 1rem 1.15rem;
+  border: 1px solid var(--border-strong);
+  border-radius: 16px;
+  background: var(--panel);
+  padding: 1rem 1.2rem 1.15rem;
   margin-top: 1rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
 }
 
 .provider-detail-heading {
@@ -1537,6 +1593,29 @@ section li {
   grid-column: span 6;
 }
 
+/* @@@eval-split-layout - sidebar (recessed status) + primary (table) side-by-side */
+.eval-split-layout {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: 1rem;
+  align-items: start;
+}
+
+.eval-split-aside {
+  grid-column: span 4;
+}
+
+.eval-split-main {
+  grid-column: span 8;
+}
+
+.evaluation-meta-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.8rem;
+  margin: 0.35rem 0 0.85rem;
+}
+
 .evaluation-overview .hint-box,
 .evaluation-flow .hint-box,
 .evaluation-notes .hint-box {
@@ -1795,14 +1874,27 @@ section.eval-runtime-panel {
 
   .shell-guide-grid > *,
   .dashboard-card,
+  .dashboard-card-hero,
+  .dashboard-sidebar-stack,
   .evaluation-flow > *,
   .evaluation-notes > *,
   .evaluation-overview > *,
   .evaluation-column,
   .provider-lease-meta,
   .lease-cluster-grid > *,
-  .eval-operator-grid > * {
+  .eval-operator-grid > *,
+  .eval-split-aside,
+  .eval-split-main {
     grid-column: span 12;
+  }
+
+  .sticky-context {
+    position: static;
+    margin: 0 0 1rem;
+    padding: 0.6rem 0;
+    border-bottom: 1px solid var(--border);
+    background: transparent;
+    backdrop-filter: none;
   }
 }
 
