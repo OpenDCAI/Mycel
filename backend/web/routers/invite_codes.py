@@ -22,6 +22,23 @@ def _get_invite_code_repo(app: Any):
     return repo
 
 
+async def _call_invite_code_repo(
+    request: Request,
+    error_prefix: str,
+    method_name: str,
+    *args: Any,
+    **kwargs: Any,
+) -> Any:
+    repo = _get_invite_code_repo(request.app)
+    try:
+        method = getattr(repo, method_name)
+        return await asyncio.to_thread(method, *args, **kwargs)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(500, f"{error_prefix}{e}") from e
+
+
 # ── List all invite codes ────────────────────────────────────────────────────
 
 
@@ -30,14 +47,8 @@ async def list_invite_codes(
     request: Request,
     user_id: Annotated[str, Depends(get_current_user_id)],
 ) -> dict:
-    repo = _get_invite_code_repo(request.app)
-    try:
-        codes = await asyncio.to_thread(repo.list_all)
-        return {"codes": codes}
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(500, f"获取邀请码列表失败：{e}") from e
+    codes = await _call_invite_code_repo(request, "获取邀请码列表失败：", "list_all")
+    return {"codes": codes}
 
 
 # ── Generate a new invite code ───────────────────────────────────────────────
@@ -53,18 +64,13 @@ async def generate_invite_code(
     request: Request,
     user_id: Annotated[str, Depends(get_current_user_id)],
 ) -> dict:
-    repo = _get_invite_code_repo(request.app)
-    try:
-        code = await asyncio.to_thread(
-            repo.generate,
-            created_by=user_id,
-            expires_days=payload.expires_days,
-        )
-        return code
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(500, f"生成邀请码失败：{e}") from e
+    return await _call_invite_code_repo(
+        request,
+        "生成邀请码失败：",
+        "generate",
+        created_by=user_id,
+        expires_days=payload.expires_days,
+    )
 
 
 # ── Revoke (delete) an invite code ──────────────────────────────────────────
@@ -76,16 +82,10 @@ async def revoke_invite_code(
     request: Request,
     user_id: Annotated[str, Depends(get_current_user_id)],
 ) -> dict:
-    repo = _get_invite_code_repo(request.app)
-    try:
-        ok = await asyncio.to_thread(repo.revoke, code)
-        if not ok:
-            raise HTTPException(404, "邀请码不存在")
-        return {"ok": True}
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(500, f"吊销邀请码失败：{e}") from e
+    ok = await _call_invite_code_repo(request, "吊销邀请码失败：", "revoke", code)
+    if not ok:
+        raise HTTPException(404, "邀请码不存在")
+    return {"ok": True}
 
 
 # ── Validate an invite code (no auth required) ───────────────────────────────
@@ -93,11 +93,5 @@ async def revoke_invite_code(
 
 @router.get("/validate/{code}")
 async def validate_invite_code(code: str, request: Request) -> dict:
-    repo = _get_invite_code_repo(request.app)
-    try:
-        valid = await asyncio.to_thread(repo.is_valid, code)
-        return {"valid": valid}
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(500, f"校验邀请码失败：{e}") from e
+    valid = await _call_invite_code_repo(request, "校验邀请码失败：", "is_valid", code)
+    return {"valid": valid}
