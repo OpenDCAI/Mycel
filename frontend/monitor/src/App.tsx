@@ -4384,7 +4384,7 @@ function OperatorGuideModal({
 }
 
 function ScrollToTopOnRouteChange() {
-  const { pathname } = useLocation();
+  const { pathname, hash } = useLocation();
   React.useEffect(() => {
     // @@@history-scroll-restore-disable - browser may restore stale scroll offsets and make user land at page tail.
     const prev = window.history.scrollRestoration;
@@ -4396,7 +4396,26 @@ function ScrollToTopOnRouteChange() {
   React.useEffect(() => {
     // @@@route-scroll-reset - switch tabs/details should always start from top to avoid "tail landing" confusion.
     window.scrollTo({ top: 0, left: 0, behavior: "auto" });
-  }, [pathname]);
+    if (!hash) return;
+
+    // @@@hash-deeplink-retry - lease health and similar sections appear after async data load, so retry briefly instead of pretending the hash already landed.
+    const targetId = decodeURIComponent(hash.slice(1));
+    let attempts = 0;
+    const maxAttempts = 40;
+    const timer = window.setInterval(() => {
+      const target = document.getElementById(targetId);
+      if (target) {
+        target.scrollIntoView({ block: "start", inline: "nearest" });
+        window.clearInterval(timer);
+        return;
+      }
+      attempts += 1;
+      if (attempts >= maxAttempts) {
+        window.clearInterval(timer);
+      }
+    }, 50);
+    return () => window.clearInterval(timer);
+  }, [pathname, hash]);
   return null;
 }
 
