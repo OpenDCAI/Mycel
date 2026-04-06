@@ -102,8 +102,8 @@ export async function getThread(threadId: string): Promise<ThreadDetail> {
   return request(`/api/threads/${encodeURIComponent(threadId)}`);
 }
 
-export async function getThreadPermissions(threadId: string): Promise<ThreadPermissions> {
-  return request(`/api/threads/${encodeURIComponent(threadId)}/permissions`);
+export async function getThreadPermissions(threadId: string, signal?: AbortSignal): Promise<ThreadPermissions> {
+  return request(`/api/threads/${encodeURIComponent(threadId)}/permissions`, { signal });
 }
 
 export async function resolveThreadPermission(

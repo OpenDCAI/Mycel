@@ -10,18 +10,6 @@ import {
   type PermissionRuleBehavior,
 } from "../api";
 
-const threadPermissionsInflight = new Map<string, ReturnType<typeof getThreadPermissions>>();
-
-function loadThreadPermissions(threadId: string) {
-  const existing = threadPermissionsInflight.get(threadId);
-  if (existing) return existing;
-  const pending = getThreadPermissions(threadId).finally(() => {
-    threadPermissionsInflight.delete(threadId);
-  });
-  threadPermissionsInflight.set(threadId, pending);
-  return pending;
-}
-
 export interface ThreadPermissionsState {
   requests: PermissionRequest[];
   sessionRules: ThreadPermissionRules;
@@ -50,6 +38,7 @@ export function useThreadPermissions(threadId: string | undefined): ThreadPermis
   const [loading, setLoading] = useState(false);
   const [resolvingId, setResolvingId] = useState<string | null>(null);
   const refreshGenerationRef = useRef(0);
+  const requestAbortRef = useRef<AbortController | null>(null);
 
   const refreshPermissions = useCallback(async () => {
     if (!threadId) {
@@ -62,17 +51,24 @@ export function useThreadPermissions(threadId: string | undefined): ThreadPermis
     // permissions fetch resolving after the chat page has already unmounted.
     // Only the latest in-scope refresh is allowed to touch state or logs.
     const generation = ++refreshGenerationRef.current;
+    requestAbortRef.current?.abort();
+    const controller = new AbortController();
+    requestAbortRef.current = controller;
     setLoading(true);
     try {
-      const payload = await loadThreadPermissions(threadId);
+      const payload = await getThreadPermissions(threadId, controller.signal);
       if (refreshGenerationRef.current !== generation) return;
       setRequests(payload.requests ?? []);
       setSessionRules(payload.session_rules ?? { allow: [], deny: [], ask: [] });
       setManagedOnly(payload.managed_only ?? false);
     } catch (err) {
+      if (controller.signal.aborted) return;
       if (refreshGenerationRef.current !== generation) return;
       console.error("[useThreadPermissions] Failed to load permissions:", err);
     } finally {
+      if (requestAbortRef.current === controller) {
+        requestAbortRef.current = null;
+      }
       if (refreshGenerationRef.current === generation) {
         setLoading(false);
       }
@@ -137,6 +133,8 @@ export function useThreadPermissions(threadId: string | undefined): ThreadPermis
     }, 2000);
     return () => {
       refreshGenerationRef.current += 1;
+      requestAbortRef.current?.abort();
+      requestAbortRef.current = null;
       window.clearInterval(timer);
     };
   }, [threadId, refreshPermissions]);
