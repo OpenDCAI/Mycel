@@ -50,6 +50,13 @@ class _FakeThreadRepo:
     def create(self, **kwargs):
         self.rows[kwargs["thread_id"]] = dict(kwargs)
 
+    def list_by_member(self, member_id: str):
+        return [
+            {"id": thread_id, **row}
+            for thread_id, row in self.rows.items()
+            if row["member_id"] == member_id
+        ]
+
 
 class _FakeThreadLaunchPrefRepo:
     def __init__(self) -> None:
@@ -78,6 +85,17 @@ def _make_threads_app():
 def _require_thread_result(result: dict[str, object] | threads_router.JSONResponse) -> dict[str, object]:
     assert not isinstance(result, threads_router.JSONResponse)
     return result
+
+
+def _recipe_library_entry(provider_type: str) -> dict[str, object]:
+    recipe = default_recipe_snapshot(provider_type)
+    return {
+        **recipe,
+        "type": "recipe",
+        "available": True,
+        "created_at": 0,
+        "updated_at": 0,
+    }
 
 
 def test_save_last_confirmed_config_normalizes_payload() -> None:
@@ -162,6 +180,136 @@ def test_build_new_launch_config_normalizes_recipe_snapshot() -> None:
         "lease_id": None,
         "model": "gpt-5.4-mini",
         "workspace": "/tmp/custom",
+    }
+
+
+def test_resolve_default_config_prefers_last_successful_over_last_confirmed() -> None:
+    app = SimpleNamespace(
+        state=SimpleNamespace(
+            thread_launch_pref_repo=SimpleNamespace(
+                get=lambda _owner_user_id, _member_id: {
+                    "last_successful": {
+                        "create_mode": "existing",
+                        "provider_config": "local",
+                        "recipe": {"id": "stale"},
+                        "lease_id": "lease-1",
+                        "model": "gpt-5.4",
+                        "workspace": "/workspace/stale",
+                    },
+                    "last_confirmed": {
+                        "create_mode": "new",
+                        "provider_config": "local",
+                        "recipe": default_recipe_snapshot("local"),
+                        "lease_id": None,
+                        "model": "gpt-4.1",
+                        "workspace": "/tmp/draft",
+                    },
+                }
+            ),
+            thread_repo=_FakeThreadRepo(),
+            member_repo=_FakeMemberRepo(),
+            recipe_repo=object(),
+        )
+    )
+
+    with (
+        patch.object(
+            thread_launch_config_service.sandbox_service,
+            "list_user_leases",
+            return_value=[
+                {
+                    "lease_id": "lease-1",
+                    "provider_name": "local",
+                    "recipe": default_recipe_snapshot("local"),
+                    "cwd": "/workspace/reused",
+                    "thread_ids": [],
+                }
+            ],
+        ),
+        patch.object(
+            thread_launch_config_service.sandbox_service,
+            "available_sandbox_types",
+            return_value=[{"name": "local", "available": True}],
+        ),
+        patch.object(
+            thread_launch_config_service,
+            "list_library",
+            return_value=[_recipe_library_entry("local")],
+        ),
+    ):
+        result = thread_launch_config_service.resolve_default_config(app, "owner-1", "member-1")
+
+    assert result == {
+        "source": "last_successful",
+        "config": {
+            "create_mode": "existing",
+            "provider_config": "local",
+            "recipe": default_recipe_snapshot("local"),
+            "lease_id": "lease-1",
+            "model": "gpt-5.4",
+            "workspace": "/workspace/reused",
+        },
+    }
+
+
+def test_resolve_default_config_skips_invalid_successful_and_uses_confirmed() -> None:
+    app = SimpleNamespace(
+        state=SimpleNamespace(
+            thread_launch_pref_repo=SimpleNamespace(
+                get=lambda _owner_user_id, _member_id: {
+                    "last_successful": {
+                        "create_mode": "existing",
+                        "provider_config": "local",
+                        "recipe": None,
+                        "lease_id": "missing-lease",
+                        "model": "gpt-5.4",
+                        "workspace": "/workspace/missing",
+                    },
+                    "last_confirmed": {
+                        "create_mode": "new",
+                        "provider_config": "local",
+                        "recipe": default_recipe_snapshot("local"),
+                        "lease_id": None,
+                        "model": "gpt-4.1",
+                        "workspace": "/tmp/draft",
+                    },
+                }
+            ),
+            thread_repo=_FakeThreadRepo(),
+            member_repo=_FakeMemberRepo(),
+            recipe_repo=object(),
+        )
+    )
+
+    with (
+        patch.object(
+            thread_launch_config_service.sandbox_service,
+            "list_user_leases",
+            return_value=[],
+        ),
+        patch.object(
+            thread_launch_config_service.sandbox_service,
+            "available_sandbox_types",
+            return_value=[{"name": "local", "available": True}],
+        ),
+        patch.object(
+            thread_launch_config_service,
+            "list_library",
+            return_value=[_recipe_library_entry("local")],
+        ),
+    ):
+        result = thread_launch_config_service.resolve_default_config(app, "owner-1", "member-1")
+
+    assert result == {
+        "source": "last_confirmed",
+        "config": {
+            "create_mode": "new",
+            "provider_config": "local",
+            "recipe": default_recipe_snapshot("local"),
+            "lease_id": None,
+            "model": "gpt-4.1",
+            "workspace": "/tmp/draft",
+        },
     }
 
 
