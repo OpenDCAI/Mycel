@@ -1,4 +1,4 @@
-import { createBrowserRouter, Navigate } from 'react-router-dom';
+import { createBrowserRouter, Navigate, useParams } from 'react-router-dom';
 import RootLayout from './pages/RootLayout';
 import SettingsPage from './pages/SettingsPage';
 import MarketplacePage from './pages/MarketplacePage';
@@ -15,11 +15,19 @@ import NewChatPage from './pages/NewChatPage';
 import ChatConversationPage from './pages/ChatConversationPage';
 import AgentDetailPage from './pages/AgentDetailPage';
 import MembersPage from './pages/MembersPage';
+import ThreadsIndexRedirect from './pages/ThreadsIndexRedirect';
+
+/** Redirect /threads/:memberId/:threadId → /chat/hire/:memberId/:threadId */
+function ThreadsLegacyRedirect() {
+  const params = useParams();
+  const rest = params['*'] || '';
+  return <Navigate to={`/chat/hire/${rest}`} replace />;
+}
 
 export const router = createBrowserRouter([
-  // Legacy redirects
-  { path: '/threads', element: <Navigate to="/chat" replace /> },
-  { path: '/threads/*', element: <Navigate to="/chat" replace /> },
+  // Legacy redirects — preserve path segments
+  { path: '/threads', element: <ThreadsIndexRedirect /> },
+  { path: '/threads/*', element: <ThreadsLegacyRedirect /> },
   { path: '/chats', element: <Navigate to="/chat" replace /> },
   { path: '/chats/*', element: <Navigate to="/chat" replace /> },
   { path: '/members', element: <Navigate to="/contacts" replace /> },

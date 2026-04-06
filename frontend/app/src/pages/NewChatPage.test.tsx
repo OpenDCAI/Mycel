@@ -161,10 +161,10 @@ describe("NewChatPage", () => {
 
   it("does not block the create-chat UI on a pending default-config fetch once main thread resolves null", async () => {
     render(
-      <MemoryRouter initialEntries={["/threads/m_xVuNpKJNxblZ"]}>
+      <MemoryRouter initialEntries={["/chat/hire/m_xVuNpKJNxblZ"]}>
         <Routes>
           <Route element={<ContextOutlet />}>
-            <Route path="/threads/:memberId" element={<NewChatPage />} />
+            <Route path="/chat/hire/:memberId" element={<NewChatPage />} />
           </Route>
         </Routes>
       </MemoryRouter>,

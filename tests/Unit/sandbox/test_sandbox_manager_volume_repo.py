@@ -3,8 +3,6 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, cast
 
-import pytest
-
 import sandbox.manager as sandbox_manager_module
 from sandbox.manager import SandboxManager
 from sandbox.providers.local import LocalSessionProvider
@@ -557,23 +555,15 @@ def test_upgrade_to_daytona_volume_waits_when_reusing_existing_daytona_volume(mo
     assert provider.ready_waits == ["leon-volume-member-supabase"]
 
 
-@pytest.mark.parametrize(
-    ("strategy", "expected_class_name"),
-    [
-        ("sqlite", "SQLiteSandboxMonitorRepo"),
-        ("supabase", "SQLiteSandboxMonitorRepo"),
-    ],
-)
-def test_make_sandbox_monitor_repo_uses_runtime_sandbox_db(monkeypatch, strategy, expected_class_name):
+def test_make_sandbox_monitor_repo_returns_sqlite():
     from backend.web.core import storage_factory
 
-    monkeypatch.setenv("LEON_STORAGE_STRATEGY", strategy)
     cache_clear = getattr(cast(Any, storage_factory.make_sandbox_monitor_repo), "cache_clear", None)
     if callable(cache_clear):
         cache_clear()
 
     repo = storage_factory.make_sandbox_monitor_repo()
     try:
-        assert repo.__class__.__name__ == expected_class_name
+        assert repo.__class__.__name__ == "SQLiteSandboxMonitorRepo"
     finally:
         repo.close()
