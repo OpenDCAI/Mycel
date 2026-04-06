@@ -145,19 +145,16 @@ class MessagingService:
     ) -> None:
         mention_set = set(mentions)
         members = self._members_repo.list_members(chat_id)
-        sender_entity = self._member_repo.get_by_id(sender_id)
-        sender_name = sender_entity.name if sender_entity else "unknown"
-        sender_avatar_url = None
-        if sender_entity:
-            m = self._member_repo.get_by_id(sender_entity.member_id) if self._member_repo else None
-            sender_avatar_url = avatar_url(sender_entity.member_id, bool(m.avatar if m else None))
+        sender_member = self._member_repo.get_by_id(sender_id)
+        sender_name = sender_member.name if sender_member else "unknown"
+        sender_avatar_url = avatar_url(sender_id, bool(sender_member.avatar if sender_member else None))
 
         for member in members:
             uid = member.get("user_id")
             if not uid or uid == sender_id:
                 continue
-            entity = self._member_repo.get_by_id(uid)
-            if not entity or entity.type != "agent" or not entity.thread_id:
+            m = self._member_repo.get_by_id(uid)
+            if not m or m.type == "human" or not m.main_thread_id:
                 continue
 
             from messaging.delivery.actions import DeliveryAction
@@ -171,9 +168,9 @@ class MessagingService:
 
             if self._delivery_fn:
                 try:
-                    self._delivery_fn(entity, content, sender_name, chat_id, sender_id, sender_avatar_url, signal=signal)
+                    self._delivery_fn(m, content, sender_name, chat_id, sender_id, sender_avatar_url, signal=signal)
                 except Exception:
-                    logger.exception("[messaging] delivery failed for entity %s", uid)
+                    logger.exception("[messaging] delivery failed for member %s", uid)
 
     # ------------------------------------------------------------------
     # Lifecycle operations

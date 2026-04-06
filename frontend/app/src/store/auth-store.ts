@@ -25,7 +25,7 @@ interface AuthState {
   token: string | null;
   user: AuthIdentity | null;
   agent: AuthIdentity | null;
-  entityId: string | null;
+  userId: string | null;
   setupInfo: { userId: string; defaultName: string } | null;
 
   login: (identifier: string, password: string) => Promise<void>;
@@ -63,7 +63,7 @@ export const useAuthStore = create<AuthState>()(
       token: null,
       user: null,
       agent: null,
-      entityId: null,
+      userId: DEV_SKIP_AUTH ? "dev-user" : null,
       setupInfo: null,
 
       login: async (identifier, password) => {
@@ -72,7 +72,7 @@ export const useAuthStore = create<AuthState>()(
           token: data.token,
           user: data.user,
           agent: data.agent,
-          entityId: data.user?.id ?? null,
+          userId: data.user?.id ?? null,
         });
       },
 
@@ -94,7 +94,7 @@ export const useAuthStore = create<AuthState>()(
           token: data.token,
           user: data.user,
           agent: data.agent ?? null,
-          entityId: data.user?.id ?? null,
+          userId: data.user?.id ?? null,
           setupInfo: { userId: data.user.id, defaultName: data.user.name },
         });
       },
@@ -104,7 +104,7 @@ export const useAuthStore = create<AuthState>()(
       },
 
       logout: () => {
-        set({ token: null, user: null, agent: null, entityId: null, setupInfo: null });
+        set({ token: null, user: null, agent: null, userId: null, setupInfo: null });
       },
     }),
     {

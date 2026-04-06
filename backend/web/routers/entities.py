@@ -1,4 +1,4 @@
-"""Entity & Member endpoints — new entity-chat system."""
+"""Member endpoints — social identity discovery and agent thread lookup."""
 
 import io
 import logging

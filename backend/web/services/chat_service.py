@@ -1,4 +1,4 @@
-"""Chat service — entity-to-entity communication."""
+"""Chat service — user-to-user communication."""
 
 from __future__ import annotations
 

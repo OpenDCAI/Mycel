@@ -15,9 +15,9 @@ function formatTime(ts: number): string {
   return `${d.getMonth() + 1}/${d.getDate()}`;
 }
 
-function chatDisplayName(chat: ChatSummary, myEntityId: string | null): string {
+function chatDisplayName(chat: ChatSummary, myUserId: string | null): string {
   if (chat.title) return chat.title;
-  const others = chat.entities.filter(e => e.id !== myEntityId);
+  const others = chat.entities.filter(e => e.id !== myUserId);
   return others.map(e => e.name).join(", ") || "Chat";
 }
 
@@ -28,7 +28,7 @@ function NewChatDialog({ onClose, onCreated }: { onClose: () => void; onCreated:
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [title, setTitle] = useState("");
   const [creating, setCreating] = useState(false);
-  const myEntityId = useAuthStore(s => s.entityId);
+  const myUserId = useAuthStore(s => s.userId);
 
   useEffect(() => {
     authFetch("/api/entities")
@@ -56,10 +56,10 @@ function NewChatDialog({ onClose, onCreated }: { onClose: () => void; onCreated:
   const selectedEntities = entities.filter(e => selected.has(e.id));
 
   const handleCreate = useCallback(async () => {
-    if (!myEntityId || selected.size === 0 || creating) return;
+    if (!myUserId || selected.size === 0 || creating) return;
     setCreating(true);
     try {
-      const body: Record<string, unknown> = { user_ids: [myEntityId, ...selected] };
+      const body: Record<string, unknown> = { user_ids: [myUserId, ...selected] };
       if (isGroup && title.trim()) body.title = title.trim();
       const res = await authFetch("/api/chats", {
         method: "POST",
@@ -75,7 +75,7 @@ function NewChatDialog({ onClose, onCreated }: { onClose: () => void; onCreated:
       console.error("[NewChat] error:", err);
       setCreating(false);
     }
-  }, [myEntityId, selected, isGroup, title, creating, onCreated]);
+  }, [myUserId, selected, isGroup, title, creating, onCreated]);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onClose}>
@@ -153,15 +153,15 @@ function NewChatDialog({ onClose, onCreated }: { onClose: () => void; onCreated:
 }
 
 // @@@chat-search-modal — same pattern as Threads SearchModal
-function ChatSearchModal({ chats, myEntityId, onSelect, onClose }: {
+function ChatSearchModal({ chats, myUserId, onSelect, onClose }: {
   chats: ChatSummary[];
-  myEntityId: string | null;
+  myUserId: string | null;
   onSelect: (chatId: string) => void;
   onClose: () => void;
 }) {
   const [query, setQuery] = useState("");
   const filtered = query
-    ? chats.filter(c => chatDisplayName(c, myEntityId).toLowerCase().includes(query.toLowerCase()))
+    ? chats.filter(c => chatDisplayName(c, myUserId).toLowerCase().includes(query.toLowerCase()))
     : chats;
 
   useEffect(() => {
@@ -189,8 +189,8 @@ function ChatSearchModal({ chats, myEntityId, onSelect, onClose }: {
           {filtered.length === 0 ? (
             <p className="text-xs text-muted-foreground text-center py-6">无结果</p>
           ) : filtered.map(chat => {
-            const name = chatDisplayName(chat, myEntityId);
-            const otherEntity = chat.entities.find(e => e.id !== myEntityId);
+            const name = chatDisplayName(chat, myUserId);
+            const otherEntity = chat.entities.find(e => e.id !== myUserId);
             return (
               <button
                 key={chat.id}
@@ -216,7 +216,7 @@ function ChatSearchModal({ chats, myEntityId, onSelect, onClose }: {
 export default function ChatsLayout() {
   const { chatId } = useParams<{ chatId?: string }>();
   const navigate = useNavigate();
-  const myEntityId = useAuthStore(s => s.entityId);
+  const myUserId = useAuthStore(s => s.userId);
   const [chats, setChats] = useState<ChatSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [showNewChat, setShowNewChat] = useState(false);
@@ -325,8 +325,8 @@ export default function ChatsLayout() {
               </div>
             ) : sorted.map(chat => {
               const isActive = chatId === chat.id;
-              const name = chatDisplayName(chat, myEntityId);
-              const others = chat.entities.filter(e => e.id !== myEntityId);
+              const name = chatDisplayName(chat, myUserId);
+              const others = chat.entities.filter(e => e.id !== myUserId);
               const isGroupChat = others.length > 1;
               return (
                 <div key={chat.id} className={`group/item flex items-center rounded-lg transition-colors duration-fast ${
@@ -392,7 +392,7 @@ export default function ChatsLayout() {
       {showSearch && (
         <ChatSearchModal
           chats={chats}
-          myEntityId={myEntityId}
+          myUserId={myUserId}
           onSelect={(id) => navigate(`/chats/${id}`)}
           onClose={() => setShowSearch(false)}
         />

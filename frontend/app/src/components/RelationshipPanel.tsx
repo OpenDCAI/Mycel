@@ -44,8 +44,8 @@ const STATE_COLOR: Record<RelationshipState, string> = {
 };
 
 export default function RelationshipPanel({ agentMemberId }: Props) {
-  const myEntityId = useAuthStore(s => s.entityId);
-  const [agentEntityId, setAgentEntityId] = useState<string | null>(null);
+  const myUserId = useAuthStore(s => s.userId);
+  const [agentUserId, setAgentUserId] = useState<string | null>(null);
   const [relationship, setRelationship] = useState<Relationship | null>(null);
   const [loading, setLoading] = useState(true);
   const [acting, setActing] = useState(false);
@@ -61,44 +61,44 @@ export default function RelationshipPanel({ agentMemberId }: Props) {
       .then(r => r.json())
       .then((entities: { id: string; member_id: string; type: string }[]) => {
         const match = entities.find(e => e.member_id === agentMemberId && e.type === "agent");
-        setAgentEntityId(match?.id ?? null);
+        setAgentUserId(match?.id ?? null);
       })
-      .catch(() => setAgentEntityId(null));
+      .catch(() => setAgentUserId(null));
   }, [agentMemberId]);
 
   const fetchRelationship = useCallback(() => {
-    if (!agentEntityId || !myEntityId) { setLoading(false); return; }
+    if (!agentUserId || !myUserId) { setLoading(false); return; }
     authFetch("/api/relationships")
       .then(r => r.json())
       .then((rows: Relationship[]) => {
-        const rel = rows.find(r => r.other_user_id === agentEntityId) ?? null;
+        const rel = rows.find(r => r.other_user_id === agentUserId) ?? null;
         setRelationship(rel);
       })
       .catch(() => setRelationship(null))
       .finally(() => setLoading(false));
-  }, [agentEntityId, myEntityId]);
+  }, [agentUserId, myUserId]);
 
   useEffect(() => { fetchRelationship(); }, [fetchRelationship]);
 
   // Realtime: subscribe to relationship changes for instant approval notifications
   useEffect(() => {
-    if (!supabase || !myEntityId) return;
+    if (!supabase || !myUserId) return;
     // Filter by principal_a to avoid reacting to unrelated relationship changes
     const channel = supabase
-      .channel(`relationships_watch:${myEntityId}`)
+      .channel(`relationships_watch:${myUserId}`)
       .on(
         "postgres_changes",
-        { event: "*", schema: "public", table: "relationships", filter: `principal_a=eq.${myEntityId}` },
+        { event: "*", schema: "public", table: "relationships", filter: `principal_a=eq.${myUserId}` },
         () => { fetchRelationship(); },
       )
       .on(
         "postgres_changes",
-        { event: "*", schema: "public", table: "relationships", filter: `principal_b=eq.${myEntityId}` },
+        { event: "*", schema: "public", table: "relationships", filter: `principal_b=eq.${myUserId}` },
         () => { fetchRelationship(); },
       )
       .subscribe();
     return () => { supabase?.removeChannel(channel); };
-  }, [myEntityId, fetchRelationship]);
+  }, [myUserId, fetchRelationship]);
 
   const act = useCallback(async (action: () => Promise<Response>, successMsg: string) => {
     setActing(true);
@@ -120,7 +120,7 @@ export default function RelationshipPanel({ agentMemberId }: Props) {
 
   const handleRequest = () =>
     act(
-      () => authFetch("/api/relationships/request", { method: "POST", body: JSON.stringify({ target_user_id: agentEntityId }) }),
+      () => authFetch("/api/relationships/request", { method: "POST", body: JSON.stringify({ target_user_id: agentUserId }) }),
       "已发送 Visit 申请",
     );
 
@@ -154,7 +154,7 @@ export default function RelationshipPanel({ agentMemberId }: Props) {
       "已降级为 Visit",
     );
 
-  if (!myEntityId || !agentEntityId) return null;
+  if (!myUserId || !agentUserId) return null;
   if (loading) {
     return (
       <div className="p-4 text-xs text-muted-foreground">加载关系状态...</div>
@@ -164,8 +164,8 @@ export default function RelationshipPanel({ agentMemberId }: Props) {
   const state: RelationshipState = relationship?.state ?? "none";
   // Determine if current user is the "approver" (other side of a pending request)
   const isPendingIncoming = (
-    (state === "pending_a_to_b" && relationship?.direction === "a_to_b" && agentEntityId < myEntityId) ||
-    (state === "pending_b_to_a" && relationship?.direction === "b_to_a" && agentEntityId > myEntityId)
+    (state === "pending_a_to_b" && relationship?.direction === "a_to_b" && agentUserId < myUserId) ||
+    (state === "pending_b_to_a" && relationship?.direction === "b_to_a" && agentUserId > myUserId)
   );
 
   return (

@@ -190,17 +190,17 @@ class ChatToolService:
     def _register_chat_read(self, registry: ToolRegistry) -> None:
         eid = self._user_id
 
-        def handle(entity_id: str | None = None, chat_id: str | None = None, range: str | None = None) -> str:
+        def handle(user_id: str | None = None, chat_id: str | None = None, range: str | None = None) -> str:
             if chat_id:
                 pass
-            elif entity_id:
-                chat_id = self._chat_members.find_chat_between(eid, entity_id)
+            elif user_id:
+                chat_id = self._chat_members.find_chat_between(eid, user_id)
                 if not chat_id:
-                    target = self._member_repo.get_by_id(entity_id)
-                    name = target.name if target else entity_id
+                    target = self._member_repo.get_by_id(user_id)
+                    name = target.name if target else user_id
                     return f"No chat history with {name}."
             else:
-                return "Provide entity_id or chat_id."
+                return "Provide user_id or chat_id."
 
             if range:
                 try:
@@ -243,7 +243,7 @@ class ChatToolService:
                     "parameters": {
                         "type": "object",
                         "properties": {
-                            "entity_id": {"type": "string", "description": "Entity_id for 1:1 chat history"},
+                            "user_id": {"type": "string", "description": "User_id for 1:1 chat history"},
                             "chat_id": {"type": "string", "description": "Chat_id for group chat history"},
                             "range": {
                                 "type": "string",
@@ -262,7 +262,7 @@ class ChatToolService:
 
         def handle(
             content: str,
-            entity_id: str | None = None,
+            user_id: str | None = None,
             chat_id: str | None = None,
             signal: str = "open",
             mentions: list[str] | None = None,
@@ -273,17 +273,17 @@ class ChatToolService:
             if chat_id:
                 if not self._chat_members.is_member(chat_id, eid):
                     raise RuntimeError(f"You are not a member of chat {chat_id}")
-            elif entity_id:
-                if entity_id == eid:
+            elif user_id:
+                if user_id == eid:
                     raise RuntimeError("Cannot send a message to yourself.")
-                target = self._member_repo.get_by_id(entity_id)
+                target = self._member_repo.get_by_id(user_id)
                 if not target:
-                    raise RuntimeError(f"Entity not found: {entity_id}")
+                    raise RuntimeError(f"User not found: {user_id}")
                 target_name = target.name
-                chat = self._messaging.find_or_create_chat([eid, entity_id])
+                chat = self._messaging.find_or_create_chat([eid, user_id])
                 resolved_chat_id = chat["id"]
             else:
-                raise RuntimeError("Provide entity_id (for 1:1) or chat_id (for group)")
+                raise RuntimeError("Provide user_id (for 1:1) or chat_id (for group)")
 
             unread = self._messaging.count_unread(resolved_chat_id, eid)
             if unread > 0:
@@ -303,7 +303,7 @@ class ChatToolService:
                 schema={
                     "name": "chat_send",
                     "description": (
-                        "Send a message. Use entity_id for 1:1 chats, chat_id for group chats.\n\n"
+                        "Send a message. Use user_id for 1:1 chats, chat_id for group chats.\n\n"
                         "You MUST call chat_read() first if you have unread messages — sending will fail otherwise.\n\n"
                         "Signal protocol:\n"
                         "  (no tag) = I expect a reply from you\n"
@@ -314,13 +314,13 @@ class ChatToolService:
                         "type": "object",
                         "properties": {
                             "content": {"type": "string", "description": "Message content"},
-                            "entity_id": {"type": "string", "description": "Target entity_id (for 1:1 chat)"},
+                            "user_id": {"type": "string", "description": "Target user_id (for 1:1 chat)"},
                             "chat_id": {"type": "string", "description": "Target chat_id (for group chat)"},
                             "signal": {"type": "string", "enum": ["open", "yield", "close"], "default": "open"},
                             "mentions": {
                                 "type": "array",
                                 "items": {"type": "string"},
-                                "description": "Entity IDs to @mention",
+                                "description": "User IDs to @mention",
                             },
                         },
                         "required": ["content"],
@@ -334,10 +334,10 @@ class ChatToolService:
     def _register_chat_search(self, registry: ToolRegistry) -> None:
         eid = self._user_id
 
-        def handle(query: str, entity_id: str | None = None) -> str:
+        def handle(query: str, user_id: str | None = None) -> str:
             chat_id = None
-            if entity_id:
-                chat_id = self._chat_members.find_chat_between(eid, entity_id)
+            if user_id:
+                chat_id = self._chat_members.find_chat_between(eid, user_id)
             results = self._messaging.search_messages(query, chat_id=chat_id)
             if not results:
                 return f"No messages matching '{query}'."
@@ -354,12 +354,12 @@ class ChatToolService:
                 mode=ToolMode.INLINE,
                 schema={
                     "name": "chat_search",
-                    "description": "Search messages. Optionally filter by entity_id.",
+                    "description": "Search messages. Optionally filter by user_id.",
                     "parameters": {
                         "type": "object",
                         "properties": {
                             "query": {"type": "string", "description": "Search query"},
-                            "entity_id": {
+                            "user_id": {
                                 "type": "string",
                                 "description": "Optional: only search in chat with this entity",
                             },

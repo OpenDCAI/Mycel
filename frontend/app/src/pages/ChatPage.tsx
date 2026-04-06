@@ -56,7 +56,7 @@ function ChatPageInner({ threadId }: { threadId: string }) {
 
   // Derive avatar URLs from thread data
   const currentThread = tm.threads.find(t => t.thread_id === threadId);
-  const agentName = currentThread?.entity_name ?? currentThread?.member_name;
+  const agentName = currentThread?.member_name ?? currentThread?.member_name;
   const agentAvatarUrl = currentThread?.avatar_url;
   const userAvatarUrl = userHasAvatar && userId ? `/api/members/${userId}/avatar` : undefined;
   const [attachedFiles, setAttachedFiles] = useState<File[]>([]);
@@ -295,7 +295,7 @@ function ChatPageInner({ threadId }: { threadId: string }) {
     <>
       <Header
         activeThreadId={threadId}
-        threadTitle={currentThread?.entity_name ?? null}
+        threadTitle={currentThread?.member_name ?? null}
         sandboxInfo={activeSandbox}
         currentModel={effectiveModel}
         onToggleSidebar={() => setSidebarCollapsed(v => !v)}
