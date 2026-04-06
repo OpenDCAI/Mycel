@@ -29,7 +29,6 @@ from .tool_task_repo import SupabaseToolTaskRepo
 from .user_settings_repo import SupabaseUserSettingsRepo
 
 __all__ = [
-
     "SupabaseAgentConfigRepo",
     "SupabaseAgentRegistryRepo",
     "SupabaseChatRepo",

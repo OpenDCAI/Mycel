@@ -126,14 +126,12 @@ class MemberRow(BaseModel):
     mycel_id: int | None = None
 
 
-
 class ChatRow(BaseModel):
     id: str
     title: str | None = None
     status: str = "active"
     created_at: float
     updated_at: float | None = None
-
 
 
 # ---------------------------------------------------------------------------
@@ -333,13 +331,11 @@ class MemberRepo(Protocol):
     def delete(self, member_id: str) -> None: ...
 
 
-
 class ChatRepo(Protocol):
     def close(self) -> None: ...
     def create(self, row: ChatRow) -> None: ...
     def get_by_id(self, chat_id: str) -> ChatRow | None: ...
     def delete(self, chat_id: str) -> None: ...
-
 
 
 class ThreadRepo(Protocol):
