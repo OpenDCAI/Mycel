@@ -4120,62 +4120,21 @@ const GUIDE_SECTIONS = [
   },
 ] as const;
 
-function shellMeta(pathname: string) {
-  // @@@shell-route-bucketing - detail routes should inherit the nearest console section rather than render as separate primary destinations.
-  if (pathname.startsWith("/resources") || pathname.startsWith("/lease")) {
-    return {
-      eyebrow: "Global compute surface",
-      title: "Resources",
-      description:
-        "Provider health, lease triage, and scoped session truth for all sandboxes.",
-    };
-  }
-  if (pathname.startsWith("/evaluation")) {
-    return {
-      eyebrow: "Evaluation operations",
-      title: "Evaluations",
-      description:
-        "Start runs, monitor durable progress, and inspect artifacts without losing operator context.",
-    };
-  }
-  if (pathname.startsWith("/threads") || pathname.startsWith("/thread")) {
-    return {
-      eyebrow: "Runtime index",
-      title: "Threads",
-      description:
-        "Global thread index and detail drill-down into sessions, leases, and trace surfaces.",
-    };
-  }
-  if (pathname.startsWith("/traces") || pathname.startsWith("/session")) {
-    return {
-      eyebrow: "Execution traces",
-      title: "Traces",
-      description:
-        "Sequence-level inspection for sessions, tool calls, and conversation surfaces.",
-    };
-  }
-  if (pathname.startsWith("/events") || pathname.startsWith("/event")) {
-    return {
-      eyebrow: "Execution traces",
-      title: "Events",
-      description:
-        "Lease and runtime event history for debugging sequence, source, and error surfaces.",
-    };
-  }
-  if (pathname.startsWith("/leases")) {
-    return {
-      eyebrow: "Lease truth",
-      title: "Leases",
-      description:
-        "Use grouped lease triage first, then drop into raw truth when you need exact runtime state.",
-    };
-  }
-  return {
-    eyebrow: "Global ops console",
-    title: "Dashboard",
-    description:
-      "Landing page for health, workload, and the fastest path into global resources or active evaluations.",
-  };
+function shellMeta(pathname: string): { title: string; subtitle: string } {
+  // @@@shell-route-bucketing - detail routes inherit the nearest console section.
+  if (pathname.startsWith("/resources") || pathname.startsWith("/lease"))
+    return { title: "Resources", subtitle: "Provider health · lease triage · session truth" };
+  if (pathname.startsWith("/evaluation"))
+    return { title: "Evaluations", subtitle: "Submit · track · inspect artifacts" };
+  if (pathname.startsWith("/threads") || pathname.startsWith("/thread"))
+    return { title: "Threads", subtitle: "Global thread index · session and trace drill-down" };
+  if (pathname.startsWith("/traces") || pathname.startsWith("/session"))
+    return { title: "Traces", subtitle: "Sequence-level session and tool-call inspection" };
+  if (pathname.startsWith("/events") || pathname.startsWith("/event"))
+    return { title: "Events", subtitle: "Lease and runtime event history" };
+  if (pathname.startsWith("/leases"))
+    return { title: "Leases", subtitle: "Grouped triage · raw truth fallback" };
+  return { title: "Dashboard", subtitle: "Health · workload · latest evaluation" };
 }
 
 function OperatorGuideModal({
@@ -4262,7 +4221,7 @@ function Layout({ children }: { children: React.ReactNode }) {
           <div className="console-brand-mark">M</div>
           <div>
             <strong className="logo">Mycel Monitor</strong>
-            <p className="console-brand-copy">Global sandbox ops console</p>
+            <p className="console-brand-copy">Sandbox Console</p>
           </div>
         </div>
         <nav className="console-nav">
@@ -4276,20 +4235,18 @@ function Layout({ children }: { children: React.ReactNode }) {
           ))}
         </nav>
         <div className="console-sidebar-foot">
-          <span className="shell-eyebrow">Mode</span>
-          <p>
-            Light-mode operator shell. Global truth first, drill-down second.
-          </p>
+          <div className="console-foot-row">
+            <span className="console-foot-dot" />
+            <span>Monitor</span>
+          </div>
+          <span className="console-foot-meta">global · light · v0</span>
         </div>
       </aside>
       <div className="console-main">
         <header className="console-header">
           <div>
-            <p className="shell-eyebrow">{meta.eyebrow}</p>
             <h1 className="console-title">{meta.title}</h1>
-            <p className="description console-description">
-              {meta.description}
-            </p>
+            <p className="console-subtitle">{meta.subtitle}</p>
           </div>
           <div className="console-header-actions">
             {showEvalComposeAction ? (
