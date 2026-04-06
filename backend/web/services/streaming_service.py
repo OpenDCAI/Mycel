@@ -4,7 +4,6 @@ import asyncio
 import json
 import logging
 import random
-import traceback
 import uuid as _uuid
 from collections.abc import AsyncGenerator
 from typing import Any
@@ -30,6 +29,13 @@ _TERMINAL_FOLLOWTHROUGH_SYSTEM_NOTE = (
     "If no further tool is truly needed, answer directly in natural language "
     "and briefly acknowledge the completion, failure, or cancellation honestly."
 )
+
+
+def _log_captured_exception(message: str, err: BaseException) -> None:
+    logger.error(
+        message,
+        exc_info=(type(err), err, err.__traceback__),
+    )
 
 
 def _resolve_run_event_repo(agent: Any) -> RunEventRepo | None:
@@ -1220,7 +1226,10 @@ async def _run_agent_to_buffer(  # pyright: ignore[reportGeneralTypeIssues]  # @
                 await stream_gen.aclose()
                 await asyncio.sleep(wait)
             else:
-                traceback.print_exc()
+                _log_captured_exception(
+                    f"[streaming] stream failed for thread {thread_id}",
+                    stream_err,
+                )
                 await emit({"event": "error", "data": json.dumps({"error": str(stream_err)}, ensure_ascii=False)})
                 break
 
@@ -1284,7 +1293,10 @@ async def _run_agent_to_buffer(  # pyright: ignore[reportGeneralTypeIssues]  # @
         await emit({"event": "run_done", "data": json.dumps({"thread_id": thread_id, "run_id": run_id})})
         return ""
     except Exception as e:
-        traceback.print_exc()
+        _log_captured_exception(
+            f"[streaming] run failed for thread {thread_id}",
+            e,
+        )
         await emit({"event": "error", "data": json.dumps({"error": str(e)}, ensure_ascii=False)})
         await emit({"event": "run_done", "data": json.dumps({"thread_id": thread_id, "run_id": run_id})})
         return ""

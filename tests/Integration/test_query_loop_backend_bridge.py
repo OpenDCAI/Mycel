@@ -31,6 +31,7 @@ from core.runtime.middleware.queue.middleware import SteeringMiddleware
 from core.runtime.registry import ToolEntry, ToolMode, ToolRegistry
 from core.runtime.state import AppState, BootstrapConfig
 from core.tools.tool_search.service import ToolSearchService
+from storage.contracts import NotificationType
 
 
 class _MemoryCheckpointer:
@@ -278,6 +279,16 @@ class _NoResumeGraphAgent(_StreamingGraphAgent):
         if False:
             yield None
         return
+
+
+class _BrokenStreamGraphAgent(_StreamingGraphAgent):
+    def __init__(self, error: Exception | None = None) -> None:
+        self._error = error or RuntimeError("stream boom")
+
+    async def astream(self, *_args, **_kwargs):
+        if False:
+            yield None
+        raise self._error
 
 
 class _StreamingRuntime:
@@ -1717,7 +1728,7 @@ async def test_queue_wake_handler_starts_terminal_followthrough_run(
     tmp_path,
     thread_id: str,
     message: str,
-    notification_type: str,
+    notification_type: NotificationType,
     expected_notice: str,
     expected_text: str,
 ):
@@ -1894,6 +1905,46 @@ async def test_run_agent_to_buffer_tags_display_delta_with_source_seq(monkeypatc
     display_deltas = [json.loads(event["data"]) for event in events if event.get("event") == "display_delta"]
     assert display_deltas
     assert all(isinstance(delta.get("_seq"), int) for delta in display_deltas)
+
+
+@pytest.mark.asyncio
+async def test_run_agent_to_buffer_logs_real_stream_error_without_none_traceback_noise(monkeypatch, tmp_path, capsys):
+    _patch_direct_streaming(monkeypatch)
+
+    agent = SimpleNamespace(
+        agent=_BrokenStreamGraphAgent(RuntimeError("stream blew up")),
+        runtime=_StreamingRuntime(),
+        storage_container=None,
+    )
+    app = SimpleNamespace(
+        state=SimpleNamespace(
+            display_builder=DisplayBuilder(),
+            thread_tasks={},
+            thread_event_buffers={},
+            subagent_buffers={},
+            queue_manager=MessageQueueManager(db_path=str(tmp_path / "queue.db")),
+            thread_last_active={},
+            typing_tracker=None,
+        )
+    )
+    thread_buf = ThreadEventBuffer()
+
+    await _run_agent_to_buffer(
+        agent,
+        "thread-stream-error",
+        "hello",
+        app,
+        False,
+        thread_buf,
+        "run-stream-error",
+    )
+
+    events, _ = await thread_buf.read_with_timeout(0, timeout=0.01)
+    assert events is not None
+    error_events = [json.loads(event["data"]) for event in events if event.get("event") == "error"]
+    assert len(error_events) == 1
+    assert error_events[0]["error"] == "stream blew up"
+    assert "NoneType: None" not in capsys.readouterr().err
 
 
 @pytest.mark.asyncio
