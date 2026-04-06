@@ -187,7 +187,7 @@ async def create_task(
     req: CreateTaskRequest,
     user_id: Annotated[str, Depends(get_current_user_id)],
 ) -> dict[str, Any]:
-    return await asyncio.to_thread(task_service.create_task, **req.model_dump())
+    return await asyncio.to_thread(task_service.create_task, owner_user_id=user_id, **req.model_dump())
 
 
 @router.put("/tasks/bulk-status")
@@ -254,6 +254,7 @@ async def create_cron_job(
         description=req.description,
         task_template=req.task_template,
         enabled=int(req.enabled),
+        owner_user_id=user_id,
     )
     return {"item": job}
 
