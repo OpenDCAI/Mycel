@@ -71,6 +71,25 @@ def _try_get_user_id(request: Request) -> str | None:
         return None
 
 
+def _load_models_for_user(repo, user_id: str | None) -> dict[str, Any]:
+    """Load models config: Supabase first, filesystem fallback."""
+    if repo and user_id:
+        data = repo.get_models_config(user_id)
+        if data is not None:
+            return data
+    return _load_user_json("models.json")
+
+
+def _save_models_for_user(repo, user_id: str | None, data: dict[str, Any]) -> None:
+    """Save models config: Supabase if available, else filesystem."""
+    if repo and user_id:
+        repo.set_models_config(user_id, data)
+    else:
+        MODELS_FILE.parent.mkdir(parents=True, exist_ok=True)
+        with open(MODELS_FILE, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2, ensure_ascii=False)
+
+
 # ============================================================================
 # Models config (models.json)
 # ============================================================================
@@ -149,7 +168,7 @@ async def get_settings(request: Request) -> UserSettings:
     # Build compat view
     mapping = {k: v.model for k, v in models.mapping.items()}
     providers = {k: ProviderConfig(api_key=v.api_key, base_url=v.base_url) for k, v in models.providers.items()}
-    raw = load_models()
+    raw = _load_models_for_user(repo, user_id)
     custom_config = raw.get("pool", {}).get("custom_config", {})
 
     return UserSettings(
@@ -387,9 +406,11 @@ class ModelMappingRequest(BaseModel):
 
 
 @router.post("/model-mapping")
-async def update_model_mapping(request: ModelMappingRequest) -> dict[str, Any]:
-    """Update virtual model mapping → models.json."""
-    data = load_models()
+async def update_model_mapping(request: ModelMappingRequest, req: Request) -> dict[str, Any]:
+    """Update virtual model mapping → models config."""
+    repo = _get_settings_repo(req)
+    user_id = _try_get_user_id(req) if repo else None
+    data = _load_models_for_user(repo, user_id)
     mapping = data.get("mapping", {})
     for name, spec in request.mapping.items():
         if isinstance(spec, dict):
@@ -398,7 +419,7 @@ async def update_model_mapping(request: ModelMappingRequest) -> dict[str, Any]:
             else:
                 mapping[name] = spec
     data["mapping"] = mapping
-    save_models(data)
+    _save_models_for_user(repo, user_id, data)
     return {"success": True, "model_mapping": request.mapping}
 
 
@@ -413,9 +434,11 @@ class ModelToggleRequest(BaseModel):
 
 
 @router.post("/models/toggle")
-async def toggle_model(request: ModelToggleRequest) -> dict[str, Any]:
-    """Enable or disable a model → models.json pool.enabled."""
-    data = load_models()
+async def toggle_model(request: ModelToggleRequest, req: Request) -> dict[str, Any]:
+    """Enable or disable a model."""
+    repo = _get_settings_repo(req)
+    user_id = _try_get_user_id(req) if repo else None
+    data = _load_models_for_user(repo, user_id)
     pool = data.setdefault("pool", {"enabled": [], "custom": []})
     enabled = pool.setdefault("enabled", [])
 
@@ -426,7 +449,7 @@ async def toggle_model(request: ModelToggleRequest) -> dict[str, Any]:
         if request.model_id in enabled:
             enabled.remove(request.model_id)
 
-    save_models(data)
+    _save_models_for_user(repo, user_id, data)
     return {"success": True, "enabled_models": enabled}
 
 
@@ -438,9 +461,11 @@ class CustomModelRequest(BaseModel):
 
 
 @router.post("/models/custom")
-async def add_custom_model(request: CustomModelRequest) -> dict[str, Any]:
-    """Add a custom model → models.json pool.custom + auto-enable."""
-    data = load_models()
+async def add_custom_model(request: CustomModelRequest, req: Request) -> dict[str, Any]:
+    """Add a custom model + auto-enable."""
+    repo = _get_settings_repo(req)
+    user_id = _try_get_user_id(req) if repo else None
+    data = _load_models_for_user(repo, user_id)
     pool = data.setdefault("pool", {"enabled": [], "custom": []})
     custom = pool.setdefault("custom", [])
     enabled = pool.setdefault("enabled", [])
@@ -463,7 +488,7 @@ async def add_custom_model(request: CustomModelRequest) -> dict[str, Any]:
             cfg["context_limit"] = request.context_limit
         custom_config[request.model_id] = cfg
 
-    save_models(data)
+    _save_models_for_user(repo, user_id, data)
     return {"success": True, "custom_models": custom, "enabled_models": enabled}
 
 
@@ -528,9 +553,11 @@ async def test_model(request: ModelTestRequest) -> dict[str, Any]:
 
 
 @router.delete("/models/custom")
-async def remove_custom_model(model_id: str = Query(...)) -> dict[str, Any]:
-    """Remove a custom model from models.json pool.custom + pool.enabled."""
-    data = load_models()
+async def remove_custom_model(req: Request, model_id: str = Query(...)) -> dict[str, Any]:
+    """Remove a custom model."""
+    repo = _get_settings_repo(req)
+    user_id = _try_get_user_id(req) if repo else None
+    data = _load_models_for_user(repo, user_id)
     pool = data.setdefault("pool", {"enabled": [], "custom": []})
     custom = pool.setdefault("custom", [])
     enabled = pool.setdefault("enabled", [])
@@ -546,7 +573,7 @@ async def remove_custom_model(model_id: str = Query(...)) -> dict[str, Any]:
     custom_config = pool.get("custom_config", {})
     custom_config.pop(model_id, None)
 
-    save_models(data)
+    _save_models_for_user(repo, user_id, data)
     return {"success": True, "custom_models": custom}
 
 
@@ -558,9 +585,11 @@ class CustomModelConfigRequest(BaseModel):
 
 
 @router.post("/models/custom/config")
-async def update_custom_model_config(request: CustomModelConfigRequest) -> dict[str, Any]:
+async def update_custom_model_config(request: CustomModelConfigRequest, req: Request) -> dict[str, Any]:
     """Update based_on/context_limit/provider for a custom model."""
-    data = load_models()
+    repo = _get_settings_repo(req)
+    user_id = _try_get_user_id(req) if repo else None
+    data = _load_models_for_user(repo, user_id)
     pool = data.setdefault("pool", {})
     custom_config = pool.setdefault("custom_config", {})
     cfg: dict[str, Any] = custom_config.get(request.model_id, {})
@@ -572,7 +601,7 @@ async def update_custom_model_config(request: CustomModelConfigRequest) -> dict[
     if request.provider:
         custom_providers = pool.setdefault("custom_providers", {})
         custom_providers[request.model_id] = request.provider
-    save_models(data)
+    _save_models_for_user(repo, user_id, data)
     return {"success": True, "custom_config": custom_config}
 
 
@@ -589,8 +618,10 @@ class ProviderRequest(BaseModel):
 
 @router.post("/providers")
 async def update_provider(request: ProviderRequest, req: Request) -> dict[str, Any]:
-    """Update provider config → models.json providers, then reload all agents."""
-    data = load_models()
+    """Update provider config, then reload all agents."""
+    repo = _get_settings_repo(req)
+    user_id = _try_get_user_id(req) if repo else None
+    data = _load_models_for_user(repo, user_id)
     providers = data.setdefault("providers", {})
     provider_data: dict[str, Any] = {}
     if request.api_key is not None:
@@ -598,7 +629,7 @@ async def update_provider(request: ProviderRequest, req: Request) -> dict[str, A
     if request.base_url is not None:
         provider_data["base_url"] = request.base_url
     providers[request.provider] = provider_data
-    save_models(data)
+    _save_models_for_user(repo, user_id, data)
 
     # @@@reload-agents-on-key-change — hot-reload all cached agents so they pick up new API keys
     pool = getattr(req.app.state, "agent_pool", {})
@@ -633,8 +664,14 @@ class ObservationRequest(BaseModel):
 
 
 @router.get("/observation")
-async def get_observation_settings() -> dict[str, Any]:
+async def get_observation_settings(req: Request) -> dict[str, Any]:
     """Get observation provider configuration."""
+    repo = _get_settings_repo(req)
+    user_id = _try_get_user_id(req) if repo else None
+    if repo and user_id:
+        data = repo.get_observation_config(user_id)
+        if data is not None:
+            return data
     from config.observation_loader import ObservationLoader
 
     config = ObservationLoader().load()
@@ -642,13 +679,19 @@ async def get_observation_settings() -> dict[str, Any]:
 
 
 @router.post("/observation")
-async def update_observation_settings(request: ObservationRequest) -> dict[str, Any]:
-    """Update observation provider config (persists to observation.json).
+async def update_observation_settings(request: ObservationRequest, req: Request) -> dict[str, Any]:
+    """Update observation provider config.
 
     New threads will pick up the active provider at creation time.
     Existing threads keep their locked provider — only credentials are read live.
     """
-    data = _load_user_json("observation.json")
+    repo = _get_settings_repo(req)
+    user_id = _try_get_user_id(req) if repo else None
+
+    if repo and user_id:
+        data = repo.get_observation_config(user_id) or {}
+    else:
+        data = _load_user_json("observation.json")
 
     data["active"] = request.active
     if request.langfuse is not None:
@@ -660,9 +703,12 @@ async def update_observation_settings(request: ObservationRequest) -> dict[str, 
         existing.update(request.langsmith)
         data["langsmith"] = existing
 
-    OBSERVATION_FILE.parent.mkdir(parents=True, exist_ok=True)
-    with open(OBSERVATION_FILE, "w", encoding="utf-8") as f:
-        json.dump(data, f, indent=2, ensure_ascii=False)
+    if repo and user_id:
+        repo.set_observation_config(user_id, data)
+    else:
+        OBSERVATION_FILE.parent.mkdir(parents=True, exist_ok=True)
+        with open(OBSERVATION_FILE, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2, ensure_ascii=False)
 
     return {"success": True, "active": data.get("active")}
 
@@ -740,8 +786,15 @@ class SandboxConfigRequest(BaseModel):
 
 
 @router.get("/sandboxes")
-async def list_sandbox_configs() -> dict[str, Any]:
-    """List all sandbox configurations from ~/.leon/sandboxes/."""
+async def list_sandbox_configs(req: Request) -> dict[str, Any]:
+    """List all sandbox configurations."""
+    repo = _get_settings_repo(req)
+    user_id = _try_get_user_id(req) if repo else None
+    if repo and user_id:
+        data = repo.get_sandbox_configs(user_id)
+        if data is not None:
+            return {"sandboxes": data}
+    # Filesystem fallback
     sandboxes: dict[str, Any] = {}
     seen: set[Path] = set()
     for root in user_home_read_candidates("sandboxes"):
@@ -760,13 +813,23 @@ async def list_sandbox_configs() -> dict[str, Any]:
 
 
 @router.post("/sandboxes")
-async def save_sandbox_config(request: SandboxConfigRequest) -> dict[str, Any]:
-    """Save a sandbox configuration to ~/.leon/sandboxes/<name>.json."""
+async def save_sandbox_config(request: SandboxConfigRequest, req: Request) -> dict[str, Any]:
+    """Save a sandbox configuration."""
+    repo = _get_settings_repo(req)
+    user_id = _try_get_user_id(req) if repo else None
+
     from sandbox.config import SandboxConfig
 
     try:
         cfg = SandboxConfig(**request.config)
-        path = cfg.save(request.name)
-        return {"success": True, "path": str(path)}
+        if repo and user_id:
+            # Save to Supabase
+            existing = repo.get_sandbox_configs(user_id) or {}
+            existing[request.name] = cfg.model_dump()
+            repo.set_sandbox_configs(user_id, existing)
+            return {"success": True, "path": f"supabase://user_settings/{user_id}/sandbox_configs/{request.name}"}
+        else:
+            path = cfg.save(request.name)
+            return {"success": True, "path": str(path)}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))

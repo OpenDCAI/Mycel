@@ -62,6 +62,45 @@ class SupabaseUserSettingsRepo:
     def set_default_model(self, user_id: str, model: str) -> None:
         self._upsert(user_id, {"default_model": model})
 
+    # ------------------------------------------------------------------
+    # Models config (JSONB)
+    # ------------------------------------------------------------------
+
+    def get_models_config(self, user_id: str) -> dict[str, Any] | None:
+        rows = q.rows(self._table().select("models_config").eq("user_id", user_id).execute(), _REPO, "get_models_config")
+        if not rows:
+            return None
+        return rows[0].get("models_config")
+
+    def set_models_config(self, user_id: str, config: dict[str, Any]) -> None:
+        self._upsert(user_id, {"models_config": config})
+
+    # ------------------------------------------------------------------
+    # Observation config (JSONB)
+    # ------------------------------------------------------------------
+
+    def get_observation_config(self, user_id: str) -> dict[str, Any] | None:
+        rows = q.rows(self._table().select("observation_config").eq("user_id", user_id).execute(), _REPO, "get_observation_config")
+        if not rows:
+            return None
+        return rows[0].get("observation_config")
+
+    def set_observation_config(self, user_id: str, config: dict[str, Any]) -> None:
+        self._upsert(user_id, {"observation_config": config})
+
+    # ------------------------------------------------------------------
+    # Sandbox configs (JSONB)
+    # ------------------------------------------------------------------
+
+    def get_sandbox_configs(self, user_id: str) -> dict[str, Any] | None:
+        rows = q.rows(self._table().select("sandbox_configs").eq("user_id", user_id).execute(), _REPO, "get_sandbox_configs")
+        if not rows:
+            return None
+        return rows[0].get("sandbox_configs")
+
+    def set_sandbox_configs(self, user_id: str, configs: dict[str, Any]) -> None:
+        self._upsert(user_id, {"sandbox_configs": configs})
+
     def _upsert(self, user_id: str, updates: dict[str, Any]) -> None:
         now = datetime.now(UTC).isoformat()
         self._table().upsert({"user_id": user_id, "updated_at": now, **updates}).execute()
