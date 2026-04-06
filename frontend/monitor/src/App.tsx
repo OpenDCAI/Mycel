@@ -103,6 +103,28 @@ function DashboardMetric({
   );
 }
 
+function evaluationStatusTone(item: any): string {
+  const status = String(item?.status || "").toLowerCase();
+  const publishable = Boolean(
+    item?.score?.publishable ?? item?.score?.score_gate === "final",
+  );
+  if (status === "error" || status === "completed_with_errors") {
+    return "chip-danger";
+  }
+  if (publishable) return "chip-success";
+  if (status === "provisional" || status === "running" || status === "queued") {
+    return "chip-warning";
+  }
+  return "chip-muted";
+}
+
+function evaluationScoreTone(item: any): string {
+  const publishable = Boolean(
+    item?.score?.publishable ?? item?.score?.score_gate === "final",
+  );
+  return publishable ? "chip-success" : "chip-warning";
+}
+
 function DashboardPage() {
   const [data, setData] = React.useState<any>(null);
   const [loading, setLoading] = React.useState(false);
@@ -3326,8 +3348,12 @@ function EvaluationPage() {
       <section className="eval-split-layout">
         <div className="eval-split-aside depth-recessed">
           <h2>Current Submission</h2>
+          <div className="chip-row">
+            <span className={`status-chip ${currentEval ? evaluationStatusTone(currentEval) : "chip-muted"}`}>
+              {String(currentEval?.status || runStatus || "idle").toUpperCase()}
+            </span>
+          </div>
           <div className="mono">evaluation: {evaluationId || "-"}</div>
-          <p className="count">status: {currentEval?.status || runStatus}</p>
           {currentEval && currentProgress && (
             <div className="eval-runtime-panel">
               <div className="mono">
@@ -3356,7 +3382,7 @@ function EvaluationPage() {
         <section className="eval-split-main depth-primary">
         <div className="section-row">
           <h2>Evaluations ({evalPagination?.total ?? evaluations.length})</h2>
-          <span className="count">Auto refresh 5s</span>
+          <span className="count">auto refresh 5s</span>
         </div>
         <div className="count evaluation-meta-row">
           <span>{evalPagination?.total ?? evaluations.length} evaluations</span>
@@ -3397,19 +3423,19 @@ function EvaluationPage() {
                 </td>
                 <td>
                   {(() => {
-                    // @@@publishable-preferred - publishable is the canonical release gate; score_gate stays as compatibility fallback.
-                    const publishable =
-                      item.score?.publishable ??
-                      item.score?.score_gate === "final";
                     return (
-                      <>
-                        <div className="mono">
+                      <div className="eval-status-stack">
+                        <span className={`status-chip ${evaluationStatusTone(item)}`}>
                           {String(item.status || "-").toUpperCase()}
-                        </div>
-                        <div className="mono">
-                          publishable: {publishable ? "TRUE" : "FALSE"}
-                        </div>
-                      </>
+                        </span>
+                        <span
+                          className={`status-chip ${Boolean(item.score?.publishable ?? item.score?.score_gate === "final") ? "chip-success" : "chip-muted"}`}
+                        >
+                          {Boolean(item.score?.publishable ?? item.score?.score_gate === "final")
+                            ? "publishable"
+                            : "provisional"}
+                        </span>
+                      </div>
                     );
                   })()}
                 </td>
@@ -3432,21 +3458,17 @@ function EvaluationPage() {
                   })()}
                 </td>
                 <td className="mono">
-                  {(item.score?.publishable ??
-                  item.score?.score_gate === "final") ? (
-                    <>
-                      <div>R {formatResolvedScore(item)}</div>
-                      <div>
-                        C {formatPct(item.score?.completed_rate_pct)} | T{" "}
-                        {formatPct(item.score?.tool_call_thread_rate_pct)}
-                      </div>
-                    </>
-                  ) : (
-                    <>
-                      <div>R PROVISIONAL</div>
-                      <div>C - | T -</div>
-                    </>
-                  )}
+                  <div className="eval-score-stack">
+                    <span className={`status-chip ${evaluationScoreTone(item)}`}>
+                      {(item.score?.publishable ?? item.score?.score_gate === "final")
+                        ? `R ${formatResolvedScore(item)}`
+                        : "R PROVISIONAL"}
+                    </span>
+                    <div>
+                      C {formatPct(item.score?.completed_rate_pct)} | T{" "}
+                      {formatPct(item.score?.tool_call_thread_rate_pct)}
+                    </div>
+                  </div>
                 </td>
                 <td>{item.updated_ago || "-"}</td>
               </tr>
@@ -3458,32 +3480,34 @@ function EvaluationPage() {
             )}
           </tbody>
         </table>
-        <div className="section-row" style={{ marginTop: 12 }}>
-          <button
-            className="ghost-btn"
-            onClick={() =>
-              setEvalOffset(Math.max(evalPagination?.prev_offset ?? 0, 0))
-            }
-            disabled={!evalPagination?.has_prev || runsLoading}
-          >
-            Prev
-          </button>
-          <p className="count">
+        <div className="evaluation-pagination-row">
+          <div className="count evaluation-pagination-copy">
             offset={evalPagination?.offset ?? 0} | limit=
             {evalPagination?.limit ?? evalLimit} | total=
             {evalPagination?.total ?? evaluations.length}
-          </p>
-          <button
-            className="ghost-btn"
-            onClick={() =>
-              setEvalOffset(
-                evalPagination?.next_offset ?? evalOffset + evalLimit,
-              )
-            }
-            disabled={!evalPagination?.has_next || runsLoading}
-          >
-            Next
-          </button>
+          </div>
+          <div className="evaluation-pagination-actions">
+            <button
+              className="ghost-btn"
+              onClick={() =>
+                setEvalOffset(Math.max(evalPagination?.prev_offset ?? 0, 0))
+              }
+              disabled={!evalPagination?.has_prev || runsLoading}
+            >
+              Prev
+            </button>
+            <button
+              className="ghost-btn"
+              onClick={() =>
+                setEvalOffset(
+                  evalPagination?.next_offset ?? evalOffset + evalLimit,
+                )
+              }
+              disabled={!evalPagination?.has_next || runsLoading}
+            >
+              Next
+            </button>
+          </div>
         </div>
         </section>
       </section>
