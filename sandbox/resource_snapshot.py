@@ -106,6 +106,5 @@ def probe_and_upsert_for_instance(
         network_rx_kbps=network_rx_kbps,
         network_tx_kbps=network_tx_kbps,
         probe_error=probe_error,
-        db_path=db_path,
     )
     return {"ok": probe_error is None, "error": probe_error}
