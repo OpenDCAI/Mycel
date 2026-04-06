@@ -16,6 +16,7 @@ from sandbox.config import SandboxConfig
 from sandbox.manager import SandboxManager
 from sandbox.provider import ProviderCapability
 from sandbox.recipes import default_recipe_id, list_builtin_recipes, normalize_recipe_snapshot, provider_type_from_name
+from storage.models import map_lease_to_session_status
 from storage.providers.sqlite.kernel import SQLiteDBRole, resolve_role_db_path
 
 logger = logging.getLogger(__name__)
@@ -108,6 +109,8 @@ def list_user_leases(
             lease.pop("_seen_member_ids", None)
             if not lease["thread_ids"]:
                 continue
+            if not _is_user_visible_lease_state(lease):
+                continue
             provider_name = lease["provider_name"]
             provider_type = provider_type_from_name(provider_name)
             if lease["recipe"]:
@@ -137,6 +140,14 @@ def _is_user_visible_lease_thread(thread_id: str | None) -> bool:
     if is_virtual_thread_id(raw):
         return False
     return True
+
+
+def _is_user_visible_lease_state(lease: dict[str, Any]) -> bool:
+    # @@@user-visible-lease-scope - product-facing lease surfaces should only
+    # expose leases the user can still act on, not historical stopped/destroying
+    # residue from monitor storage.
+    status = map_lease_to_session_status(lease.get("observed_state"), lease.get("desired_state"))
+    return status in {"running", "paused"}
 
 
 def available_sandbox_types() -> list[dict[str, Any]]:

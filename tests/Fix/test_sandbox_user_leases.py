@@ -118,3 +118,75 @@ def test_list_user_leases_hides_subagent_threads_and_deduplicates_visible_agents
             "recipe_name": "Daytona Default",
         }
     ]
+
+
+def test_list_user_leases_hides_stopped_and_destroying_leases(monkeypatch):
+    rows = [
+        {
+            "lease_id": "lease-running",
+            "provider_name": "local",
+            "recipe_id": "local:default",
+            "recipe_json": None,
+            "observed_state": "running",
+            "desired_state": "running",
+            "created_at": "2026-04-07T10:00:00Z",
+            "cwd": "/tmp/running",
+            "thread_id": "thread-running",
+        },
+        {
+            "lease_id": "lease-paused",
+            "provider_name": "daytona_selfhost",
+            "recipe_id": "daytona:default",
+            "recipe_json": None,
+            "observed_state": "paused",
+            "desired_state": "paused",
+            "created_at": "2026-04-07T10:01:00Z",
+            "cwd": "/home/daytona/app",
+            "thread_id": "thread-paused",
+        },
+        {
+            "lease_id": "lease-detached",
+            "provider_name": "local",
+            "recipe_id": "local:default",
+            "recipe_json": None,
+            "observed_state": "detached",
+            "desired_state": "running",
+            "created_at": "2026-04-07T10:02:00Z",
+            "cwd": "/tmp/stale",
+            "thread_id": "thread-detached",
+        },
+        {
+            "lease_id": "lease-destroying",
+            "provider_name": "local",
+            "recipe_id": "local:default",
+            "recipe_json": None,
+            "observed_state": "paused",
+            "desired_state": "destroyed",
+            "created_at": "2026-04-07T10:03:00Z",
+            "cwd": "/tmp/destroying",
+            "thread_id": "thread-destroying",
+        },
+    ]
+    thread_repo = _FakeThreadRepo(
+        {
+            "thread-running": {"member_id": "member-1"},
+            "thread-paused": {"member_id": "member-1"},
+            "thread-detached": {"member_id": "member-1"},
+            "thread-destroying": {"member_id": "member-1"},
+        }
+    )
+    member_repo = _FakeMemberRepo(
+        {
+            "member-1": SimpleNamespace(id="member-1", name="Morel", avatar="x", owner_user_id="owner-1"),
+        }
+    )
+
+    monkeypatch.setattr(sandbox_service, "make_sandbox_monitor_repo", lambda: _FakeMonitorRepo(rows))
+
+    leases = sandbox_service.list_user_leases(
+        "owner-1",
+        thread_repo=thread_repo,
+        member_repo=member_repo,
+    )
+
+    assert [lease["lease_id"] for lease in leases] == ["lease-running", "lease-paused"]
