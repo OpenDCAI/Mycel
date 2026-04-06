@@ -72,6 +72,17 @@ class SupabaseMemberRepo:
         rows = q.rows(query.execute(), _MEMBER_REPO, "list_all")
         return [MemberRow.model_validate(self._normalize(r)) for r in rows]
 
+    def list_by_type(self, member_type: str) -> list[MemberRow]:
+        query = q.order(
+            self._t().select("*").eq("type", member_type),
+            "created_at",
+            desc=False,
+            repo=_MEMBER_REPO,
+            operation="list_by_type",
+        )
+        rows = q.rows(query.execute(), _MEMBER_REPO, "list_by_type")
+        return [MemberRow.model_validate(self._normalize(r)) for r in rows]
+
     def list_by_owner_user_id(self, owner_user_id: str) -> list[MemberRow]:
         query = q.order(
             self._t().select("*").eq("owner_user_id", owner_user_id),
