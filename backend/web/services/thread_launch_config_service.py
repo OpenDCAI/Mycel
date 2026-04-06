@@ -6,7 +6,7 @@ from typing import Any
 
 from backend.web.services import sandbox_service
 from backend.web.services.library_service import list_library
-from sandbox.recipes import provider_type_from_name
+from sandbox.recipes import normalize_recipe_snapshot, provider_type_from_name
 
 
 def normalize_launch_config_payload(payload: dict[str, Any]) -> dict[str, Any]:
@@ -20,20 +20,49 @@ def normalize_launch_config_payload(payload: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def save_last_confirmed_config(app: Any, owner_user_id: str, member_id: str, payload: dict[str, Any]) -> None:
-    app.state.thread_launch_pref_repo.save_confirmed(
-        owner_user_id,
-        member_id,
-        normalize_launch_config_payload(payload),
+def build_existing_launch_config(
+    *,
+    lease: dict[str, Any],
+    model: str | None,
+    workspace: str | None,
+) -> dict[str, Any]:
+    return normalize_launch_config_payload(
+        {
+            "create_mode": "existing",
+            "provider_config": lease.get("provider_name"),
+            "recipe": lease.get("recipe"),
+            "lease_id": lease.get("lease_id"),
+            "model": model,
+            "workspace": workspace,
+        }
     )
+
+
+def build_new_launch_config(
+    *,
+    provider_config: str,
+    recipe: dict[str, Any] | None,
+    model: str | None,
+    workspace: str | None,
+) -> dict[str, Any]:
+    return normalize_launch_config_payload(
+        {
+            "create_mode": "new",
+            "provider_config": provider_config,
+            "recipe": normalize_recipe_snapshot(provider_type_from_name(provider_config), recipe),
+            "lease_id": None,
+            "model": model,
+            "workspace": workspace,
+        }
+    )
+
+
+def save_last_confirmed_config(app: Any, owner_user_id: str, member_id: str, payload: dict[str, Any]) -> None:
+    _save_launch_config(app.state.thread_launch_pref_repo.save_confirmed, owner_user_id, member_id, payload)
 
 
 def save_last_successful_config(app: Any, owner_user_id: str, member_id: str, payload: dict[str, Any]) -> None:
-    app.state.thread_launch_pref_repo.save_successful(
-        owner_user_id,
-        member_id,
-        normalize_launch_config_payload(payload),
-    )
+    _save_launch_config(app.state.thread_launch_pref_repo.save_successful, owner_user_id, member_id, payload)
 
 
 def resolve_default_config(app: Any, owner_user_id: str, member_id: str) -> dict[str, Any]:
@@ -117,6 +146,14 @@ def _validate_saved_config(
         "model": config.get("model"),
         "workspace": config.get("workspace"),
     }
+
+
+def _save_launch_config(save_fn: Any, owner_user_id: str, member_id: str, payload: dict[str, Any]) -> None:
+    save_fn(
+        owner_user_id,
+        member_id,
+        normalize_launch_config_payload(payload),
+    )
 
 
 def _derive_default_config(

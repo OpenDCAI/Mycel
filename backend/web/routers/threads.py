@@ -37,6 +37,8 @@ from backend.web.services.streaming_service import (
     observe_thread_events,
 )
 from backend.web.services.thread_launch_config_service import (
+    build_existing_launch_config,
+    build_new_launch_config,
     resolve_default_config,
     save_last_confirmed_config,
     save_last_successful_config,
@@ -597,26 +599,18 @@ def _create_owned_thread(
         )
 
     if selected_lease_id and owned_lease is not None:
-        successful_config = {
-            "create_mode": "existing",
-            "provider_config": sandbox_type,
-            "recipe": owned_lease.get("recipe"),
-            "lease_id": owned_lease["lease_id"],
-            "model": payload.model,
-            "workspace": app.state.thread_cwd.get(new_thread_id),
-        }
+        successful_config = build_existing_launch_config(
+            lease=owned_lease,
+            model=payload.model,
+            workspace=app.state.thread_cwd.get(new_thread_id),
+        )
     else:
-        successful_config = {
-            "create_mode": "new",
-            "provider_config": sandbox_type,
-            "recipe": normalize_recipe_snapshot(
-                provider_type_from_name(sandbox_type),
-                payload.recipe.model_dump() if payload.recipe else None,
-            ),
-            "lease_id": None,
-            "model": payload.model,
-            "workspace": app.state.thread_cwd.get(new_thread_id) or payload.cwd,
-        }
+        successful_config = build_new_launch_config(
+            provider_config=sandbox_type,
+            recipe=payload.recipe.model_dump() if payload.recipe else None,
+            model=payload.model,
+            workspace=app.state.thread_cwd.get(new_thread_id) or payload.cwd,
+        )
     save_last_successful_config(app, owner_user_id, agent_member_id, successful_config)
 
     return {
