@@ -2524,6 +2524,38 @@ async def test_streaming_executor_can_run_with_injected_dependencies_without_que
 
 
 @pytest.mark.asyncio
+async def test_private_streaming_executor_adapter_still_executes_via_query_loop_dependencies():
+    executed: list[str] = []
+
+    async def safe_handler(message: str) -> str:
+        executed.append(message)
+        return f"safe:{message}"
+
+    safe_entry = ToolEntry(
+        name="safe",
+        mode=ToolMode.INLINE,
+        schema={"name": "safe", "description": "safe", "parameters": {}},
+        handler=safe_handler,
+        source="test",
+        is_concurrency_safe=True,
+    )
+    loop = make_loop(
+        mock_model_no_tools(),
+        registry=make_registry(safe_entry),
+        app_state=AppState(),
+        runtime=SimpleNamespace(cost=0.0),
+    )
+
+    executor = _StreamingToolExecutor(loop=loop, tool_context=None)
+    await executor.add_tool({"name": "safe", "args": {"message": "s"}, "id": "tc-safe"})
+    ready = await executor.drain_remaining()
+
+    assert [msg.tool_call_id for msg in ready] == ["tc-safe"]
+    assert ready[0].content == "safe:s"
+    assert executed == ["s"]
+
+
+@pytest.mark.asyncio
 async def test_execute_tools_preserves_order_blocking_for_safe_after_unsafe():
     model = MagicMock()
     model.bind_tools.return_value = model
