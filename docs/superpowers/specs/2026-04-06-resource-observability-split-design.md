@@ -296,6 +296,18 @@ The dashboard is a switchboard, not a full destination page. It should answer â€
   - keeps the full raw session table below instead of replacing it
 - the monitor page still does not import product frontend components directly; it mirrors the interaction shape locally so the contract boundary remains clean
 
+### Current D4 Phase-4 Landing
+
+- dashboard infra metrics now deep-link directly into monitor lease-health instead of stopping at the top of the resources page
+- provider cards are tighter:
+  - duplicated paused/stopped footer counts were removed
+  - unavailable/error reason now lives in the header block instead of stretching card height
+- lease-health now defaults to the non-empty attention buckets:
+  - `active_drift` and `detached_residue` stay first-class
+  - `orphan_cleanup` only renders when present
+  - `healthy_capacity` is collapsed behind a details shell instead of competing with active failure buckets
+- the net effect is not a new contract; it is a first-screen density cut so operators land on attention surfaces before passive inventory
+
 ### D4 Remaining Gaps
 
 - monitor provider/detail surface is now close to the product resources page in interaction quality, but still lacks the richer sandbox-sheet / deep drill-down family the product page has
@@ -319,7 +331,7 @@ The dashboard is a switchboard, not a full destination page. It should answer â€
 ### D3 Remaining Gaps
 
 - semantics are still inferred from current lease row + thread binding only; they do not yet account for stronger lifecycle facts such as historical cleanup windows or explicit terminal/session shutdown markers
-- the legacy `/leases` flat table still exists as a drill-down/debug surface and has not been redesigned beyond consuming the new summary/category contract
+- the legacy `/leases` flat table still exists as a drill-down/debug surface, though the monitor resources page now gives a better default entry by rendering only non-empty attention groups and collapsing healthy capacity
 
 ### Why this IA
 

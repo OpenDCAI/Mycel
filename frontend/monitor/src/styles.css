@@ -205,6 +205,15 @@ h2 {
   color: var(--text);
 }
 
+.dashboard-inline-link {
+  color: inherit;
+  text-decoration: none;
+}
+
+.dashboard-inline-link:hover {
+  color: var(--accent);
+}
+
 .dashboard-metric-note {
   font-size: 0.82rem;
   color: var(--text-secondary);
@@ -432,22 +441,16 @@ h2 {
   background: var(--danger);
 }
 
-.provider-session-copy,
-.provider-card-footer {
+.provider-session-copy {
   font-size: 0.78rem;
   color: var(--text-secondary);
 }
 
-.provider-card-footer {
-  display: flex;
-  gap: 0.75rem;
-  flex-wrap: wrap;
-}
-
 .provider-inline-error {
+  margin-top: 0.32rem;
   color: var(--danger);
-  font-size: 0.84rem;
-  line-height: 1.45;
+  font-size: 0.76rem;
+  line-height: 1.35;
 }
 
 .provider-detail-shell {

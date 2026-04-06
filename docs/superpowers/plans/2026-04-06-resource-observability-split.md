@@ -32,6 +32,10 @@
 - `D4` now has a landed phase-3:
   - selected provider detail now shows a lease card grid before the raw session table
   - monitor keeps the raw session table for truth, but no longer forces operators to start from the noisiest surface
+- `D4` now has a landed phase-4:
+  - dashboard `Diverged leases` and `Orphans` metrics now jump straight to `resources#lease-health`
+  - provider cards are tighter because duplicated paused/stopped footer counts were removed
+  - lease-health now only renders non-empty attention buckets by default and collapses healthy capacity behind a details shell
 - `D2` now has a landed phase-2:
   - evaluation detail payload includes backend-owned `info.operator_surface`
   - provisional eval detail opens with `Operator Status`, artifact paths, and explicit next steps
