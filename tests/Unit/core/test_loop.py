@@ -13,7 +13,7 @@ import pytest
 from langchain_core.messages import AIMessage, AIMessageChunk, HumanMessage, RemoveMessage, SystemMessage, ToolMessage
 from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 
-from core.runtime.loop import QueryLoop, StreamingToolExecutor
+from core.runtime.loop import ContinueReason, ContinueState, QueryLoop, StreamingToolExecutor, _ModelErrorRecoveryResult
 from core.runtime.middleware import AgentMiddleware
 from core.runtime.middleware.memory import MemoryMiddleware
 from core.runtime.middleware.monitor import AgentState
@@ -2044,6 +2044,49 @@ async def test_handle_model_error_recovery_returns_typed_result_object():
     assert result.transition is not None
     assert result.transition.reason.value == "max_output_tokens_escalate"
     assert result.max_output_tokens_override == 64000
+
+
+@pytest.mark.asyncio
+async def test_handle_model_error_recovery_uses_ordered_strategy_chain(monkeypatch):
+    loop = make_loop(mock_model_no_tools(), app_state=AppState(), runtime=SimpleNamespace(cost=0.0))
+    calls: list[str] = []
+
+    async def first(_ctx):
+        calls.append("first")
+        return None
+
+    async def second(_ctx):
+        calls.append("second")
+        return _ModelErrorRecoveryResult(
+            messages=[HumanMessage(content="from-second")],
+            transition=ContinueState(reason=ContinueReason.api_retry),
+            max_output_tokens_recovery_count=7,
+            has_attempted_reactive_compact=True,
+            max_output_tokens_override=1234,
+            transient_api_retry_count=9,
+            terminal=None,
+        )
+
+    monkeypatch.setattr(loop, "_model_error_recovery_strategies", lambda: (first, second), raising=False)
+
+    result = await loop._handle_model_error_recovery(
+        exc=RuntimeError("max_output_tokens exceeded"),
+        thread_id="thread-a",
+        messages=[HumanMessage(content="start")],
+        turn=1,
+        transition=None,
+        max_output_tokens_recovery_count=0,
+        has_attempted_reactive_compact=False,
+        max_output_tokens_override=None,
+        transient_api_retry_count=0,
+    )
+
+    assert calls == ["first", "second"]
+    assert result is not None
+    assert result.messages[-1].content == "from-second"
+    assert result.transition is not None
+    assert result.transition.reason is ContinueReason.api_retry
+    assert result.max_output_tokens_override == 1234
 
 
 @pytest.mark.asyncio

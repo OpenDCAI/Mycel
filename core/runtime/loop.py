@@ -99,6 +99,20 @@ class _ModelErrorRecoveryResult:
     terminal: TerminalState | None
 
 
+@dataclass(frozen=True)
+class _ModelErrorContext:
+    exc: Exception
+    error_text: str
+    thread_id: str
+    messages: list
+    turn: int
+    transition: ContinueState | None
+    max_output_tokens_recovery_count: int
+    has_attempted_reactive_compact: bool
+    max_output_tokens_override: int | None
+    transient_api_retry_count: int
+
+
 @dataclass
 class _TrackedTool:
     order: int
@@ -1245,118 +1259,161 @@ class QueryLoop:
         max_output_tokens_override: int | None,
         transient_api_retry_count: int,
     ) -> _ModelErrorRecoveryResult | None:
-        error_message = str(exc)
-        error_text = error_message.lower()
-
-        parsed_overflow = self._parse_context_overflow_override(error_message)
-        if parsed_overflow is not None:
-            return _ModelErrorRecoveryResult(
-                messages=messages,
-                transition=ContinueState(reason=ContinueReason.max_output_tokens_escalate),
-                max_output_tokens_recovery_count=max_output_tokens_recovery_count,
-                has_attempted_reactive_compact=has_attempted_reactive_compact,
-                max_output_tokens_override=parsed_overflow,
-                transient_api_retry_count=transient_api_retry_count,
-                terminal=None,
-            )
-
-        if self._is_transient_api_error(exc, error_text):
-            if transient_api_retry_count >= _TRANSIENT_API_MAX_RETRIES:
-                return None
-            delay_seconds = self._retry_delay_seconds(exc, transient_api_retry_count)
-            if delay_seconds > 0:
-                await asyncio.sleep(delay_seconds)
-            return _ModelErrorRecoveryResult(
-                messages=messages,
-                transition=ContinueState(reason=ContinueReason.api_retry),
-                max_output_tokens_recovery_count=max_output_tokens_recovery_count,
-                has_attempted_reactive_compact=has_attempted_reactive_compact,
-                max_output_tokens_override=max_output_tokens_override,
-                transient_api_retry_count=transient_api_retry_count + 1,
-                terminal=None,
-            )
-
-        if "max_output_tokens" in error_text:
-            if max_output_tokens_override is None:
-                return _ModelErrorRecoveryResult(
-                    messages=messages,
-                    transition=ContinueState(reason=ContinueReason.max_output_tokens_escalate),
-                    max_output_tokens_recovery_count=max_output_tokens_recovery_count,
-                    has_attempted_reactive_compact=has_attempted_reactive_compact,
-                    max_output_tokens_override=_ESCALATED_MAX_OUTPUT_TOKENS,
-                    transient_api_retry_count=transient_api_retry_count,
-                    terminal=None,
-                )
-            if max_output_tokens_recovery_count < 3:
-                recovered_messages = list(messages)
-                recovered_messages.append(
-                    HumanMessage(
-                        content="Output token limit hit. Resume directly with no apology or recap.",
-                    )
-                )
-                return _ModelErrorRecoveryResult(
-                    messages=recovered_messages,
-                    transition=ContinueState(reason=ContinueReason.max_output_tokens_recovery),
-                    max_output_tokens_recovery_count=max_output_tokens_recovery_count + 1,
-                    has_attempted_reactive_compact=has_attempted_reactive_compact,
-                    max_output_tokens_override=max_output_tokens_override,
-                    transient_api_retry_count=transient_api_retry_count,
-                    terminal=None,
-                )
-            return _ModelErrorRecoveryResult(
-                messages=messages,
-                transition=ContinueState(reason=ContinueReason.max_output_tokens_recovery),
-                max_output_tokens_recovery_count=max_output_tokens_recovery_count,
-                has_attempted_reactive_compact=has_attempted_reactive_compact,
-                max_output_tokens_override=max_output_tokens_override,
-                transient_api_retry_count=transient_api_retry_count,
-                terminal=TerminalState(
-                    reason=TerminalReason.model_error,
-                    turn_count=turn,
-                    error=str(exc),
-                ),
-            )
-
-        if self._is_prompt_too_long_error(error_text):
-            if transition is None or transition.reason is not ContinueReason.collapse_drain_retry:
-                drained = await self._recover_from_overflow(messages)
-                if drained is not None and drained["committed"] > 0:
-                    return _ModelErrorRecoveryResult(
-                        messages=drained["messages"],
-                        transition=ContinueState(reason=ContinueReason.collapse_drain_retry),
-                        max_output_tokens_recovery_count=max_output_tokens_recovery_count,
-                        has_attempted_reactive_compact=has_attempted_reactive_compact,
-                        max_output_tokens_override=max_output_tokens_override,
-                        transient_api_retry_count=transient_api_retry_count,
-                        terminal=None,
-                    )
-            if not has_attempted_reactive_compact:
-                compacted = await self._force_reactive_compact(messages, thread_id=thread_id)
-                if compacted is not None:
-                    return _ModelErrorRecoveryResult(
-                        messages=compacted,
-                        transition=ContinueState(reason=ContinueReason.reactive_compact_retry),
-                        max_output_tokens_recovery_count=max_output_tokens_recovery_count,
-                        has_attempted_reactive_compact=True,
-                        max_output_tokens_override=max_output_tokens_override,
-                        transient_api_retry_count=transient_api_retry_count,
-                        terminal=None,
-                    )
-            return _ModelErrorRecoveryResult(
-                messages=messages,
-                transition=transition,
-                max_output_tokens_recovery_count=max_output_tokens_recovery_count,
-                has_attempted_reactive_compact=has_attempted_reactive_compact,
-                max_output_tokens_override=max_output_tokens_override,
-                transient_api_retry_count=transient_api_retry_count,
-                terminal=TerminalState(
-                    reason=TerminalReason.prompt_too_long,
-                    turn_count=turn,
-                    error=str(exc),
-                ),
-            )
-
+        ctx = _ModelErrorContext(
+            exc=exc,
+            error_text=str(exc).lower(),
+            thread_id=thread_id,
+            messages=messages,
+            turn=turn,
+            transition=transition,
+            max_output_tokens_recovery_count=max_output_tokens_recovery_count,
+            has_attempted_reactive_compact=has_attempted_reactive_compact,
+            max_output_tokens_override=max_output_tokens_override,
+            transient_api_retry_count=transient_api_retry_count,
+        )
+        for strategy in self._model_error_recovery_strategies():
+            result = await strategy(ctx)
+            if result is not None:
+                return result
         return None
+
+    def _model_error_recovery_strategies(self) -> tuple[Callable[[_ModelErrorContext], Awaitable[_ModelErrorRecoveryResult | None]], ...]:
+        return (
+            self._try_context_overflow_escalate,
+            self._try_transient_api_retry,
+            self._try_max_output_tokens_recovery,
+            self._try_prompt_too_long_collapse_drain,
+            self._try_prompt_too_long_reactive_compact,
+            self._try_prompt_too_long_terminal,
+        )
+
+    async def _try_context_overflow_escalate(self, ctx: _ModelErrorContext) -> _ModelErrorRecoveryResult | None:
+        parsed_overflow = self._parse_context_overflow_override(str(ctx.exc))
+        if parsed_overflow is None:
+            return None
+        return _ModelErrorRecoveryResult(
+            messages=ctx.messages,
+            transition=ContinueState(reason=ContinueReason.max_output_tokens_escalate),
+            max_output_tokens_recovery_count=ctx.max_output_tokens_recovery_count,
+            has_attempted_reactive_compact=ctx.has_attempted_reactive_compact,
+            max_output_tokens_override=parsed_overflow,
+            transient_api_retry_count=ctx.transient_api_retry_count,
+            terminal=None,
+        )
+
+    async def _try_transient_api_retry(self, ctx: _ModelErrorContext) -> _ModelErrorRecoveryResult | None:
+        if not self._is_transient_api_error(ctx.exc, ctx.error_text):
+            return None
+        if ctx.transient_api_retry_count >= _TRANSIENT_API_MAX_RETRIES:
+            return None
+        delay_seconds = self._retry_delay_seconds(ctx.exc, ctx.transient_api_retry_count)
+        if delay_seconds > 0:
+            await asyncio.sleep(delay_seconds)
+        return _ModelErrorRecoveryResult(
+            messages=ctx.messages,
+            transition=ContinueState(reason=ContinueReason.api_retry),
+            max_output_tokens_recovery_count=ctx.max_output_tokens_recovery_count,
+            has_attempted_reactive_compact=ctx.has_attempted_reactive_compact,
+            max_output_tokens_override=ctx.max_output_tokens_override,
+            transient_api_retry_count=ctx.transient_api_retry_count + 1,
+            terminal=None,
+        )
+
+    async def _try_max_output_tokens_recovery(self, ctx: _ModelErrorContext) -> _ModelErrorRecoveryResult | None:
+        if "max_output_tokens" not in ctx.error_text:
+            return None
+        if ctx.max_output_tokens_override is None:
+            return _ModelErrorRecoveryResult(
+                messages=ctx.messages,
+                transition=ContinueState(reason=ContinueReason.max_output_tokens_escalate),
+                max_output_tokens_recovery_count=ctx.max_output_tokens_recovery_count,
+                has_attempted_reactive_compact=ctx.has_attempted_reactive_compact,
+                max_output_tokens_override=_ESCALATED_MAX_OUTPUT_TOKENS,
+                transient_api_retry_count=ctx.transient_api_retry_count,
+                terminal=None,
+            )
+        if ctx.max_output_tokens_recovery_count < 3:
+            recovered_messages = list(ctx.messages)
+            recovered_messages.append(
+                HumanMessage(
+                    content="Output token limit hit. Resume directly with no apology or recap.",
+                )
+            )
+            return _ModelErrorRecoveryResult(
+                messages=recovered_messages,
+                transition=ContinueState(reason=ContinueReason.max_output_tokens_recovery),
+                max_output_tokens_recovery_count=ctx.max_output_tokens_recovery_count + 1,
+                has_attempted_reactive_compact=ctx.has_attempted_reactive_compact,
+                max_output_tokens_override=ctx.max_output_tokens_override,
+                transient_api_retry_count=ctx.transient_api_retry_count,
+                terminal=None,
+            )
+        return _ModelErrorRecoveryResult(
+            messages=ctx.messages,
+            transition=ContinueState(reason=ContinueReason.max_output_tokens_recovery),
+            max_output_tokens_recovery_count=ctx.max_output_tokens_recovery_count,
+            has_attempted_reactive_compact=ctx.has_attempted_reactive_compact,
+            max_output_tokens_override=ctx.max_output_tokens_override,
+            transient_api_retry_count=ctx.transient_api_retry_count,
+            terminal=TerminalState(
+                reason=TerminalReason.model_error,
+                turn_count=ctx.turn,
+                error=str(ctx.exc),
+            ),
+        )
+
+    async def _try_prompt_too_long_collapse_drain(self, ctx: _ModelErrorContext) -> _ModelErrorRecoveryResult | None:
+        if not self._is_prompt_too_long_error(ctx.error_text):
+            return None
+        if ctx.transition is not None and ctx.transition.reason is ContinueReason.collapse_drain_retry:
+            return None
+        drained = await self._recover_from_overflow(ctx.messages)
+        if drained is None or drained["committed"] <= 0:
+            return None
+        return _ModelErrorRecoveryResult(
+            messages=drained["messages"],
+            transition=ContinueState(reason=ContinueReason.collapse_drain_retry),
+            max_output_tokens_recovery_count=ctx.max_output_tokens_recovery_count,
+            has_attempted_reactive_compact=ctx.has_attempted_reactive_compact,
+            max_output_tokens_override=ctx.max_output_tokens_override,
+            transient_api_retry_count=ctx.transient_api_retry_count,
+            terminal=None,
+        )
+
+    async def _try_prompt_too_long_reactive_compact(self, ctx: _ModelErrorContext) -> _ModelErrorRecoveryResult | None:
+        if not self._is_prompt_too_long_error(ctx.error_text):
+            return None
+        if ctx.has_attempted_reactive_compact:
+            return None
+        compacted = await self._force_reactive_compact(ctx.messages, thread_id=ctx.thread_id)
+        if compacted is None:
+            return None
+        return _ModelErrorRecoveryResult(
+            messages=compacted,
+            transition=ContinueState(reason=ContinueReason.reactive_compact_retry),
+            max_output_tokens_recovery_count=ctx.max_output_tokens_recovery_count,
+            has_attempted_reactive_compact=True,
+            max_output_tokens_override=ctx.max_output_tokens_override,
+            transient_api_retry_count=ctx.transient_api_retry_count,
+            terminal=None,
+        )
+
+    async def _try_prompt_too_long_terminal(self, ctx: _ModelErrorContext) -> _ModelErrorRecoveryResult | None:
+        if not self._is_prompt_too_long_error(ctx.error_text):
+            return None
+        return _ModelErrorRecoveryResult(
+            messages=ctx.messages,
+            transition=ctx.transition,
+            max_output_tokens_recovery_count=ctx.max_output_tokens_recovery_count,
+            has_attempted_reactive_compact=ctx.has_attempted_reactive_compact,
+            max_output_tokens_override=ctx.max_output_tokens_override,
+            transient_api_retry_count=ctx.transient_api_retry_count,
+            terminal=TerminalState(
+                reason=TerminalReason.prompt_too_long,
+                turn_count=ctx.turn,
+                error=str(ctx.exc),
+            ),
+        )
 
     @staticmethod
     def _parse_context_overflow_override(error_message: str) -> int | None:
