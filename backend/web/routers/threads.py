@@ -556,7 +556,7 @@ def _create_owned_thread(
         sandbox_type = str(owned_lease["provider_name"] or sandbox_type)
 
     # @@@non-atomic-create - these 3 steps (seq++, thread) are not atomic.
-    seq = app.state.member_repo.increment_thread_seq(agent_member_id)
+    seq = app.state.member_repo.increment_entity_seq(agent_member_id)
     new_thread_id = f"{agent_member_id}-{seq}"
     has_main = app.state.thread_repo.get_main_thread(agent_member_id) is not None
     resolved_is_main = is_main or not has_main
@@ -572,10 +572,6 @@ def _create_owned_thread(
         is_main=resolved_is_main,
         branch_index=branch_index,
     )
-
-    # Update member's main_thread_id when creating a main thread
-    if resolved_is_main:
-        app.state.member_repo.update(agent_member_id, main_thread_id=new_thread_id)
 
     # Set thread state
     app.state.thread_sandbox[new_thread_id] = sandbox_type
@@ -813,15 +809,7 @@ async def delete_thread(
             logger.warning("Failed to destroy sandbox resources for thread %s: %s", thread_id, exc)
         await asyncio.to_thread(delete_thread_in_db, thread_id)
         # Also delete from threads table (member-chat addition)
-        thread_data = app.state.thread_repo.get_by_id(thread_id)
-        member_id = thread_data["member_id"] if thread_data else None
         app.state.thread_repo.delete(thread_id)
-        # Update member's main_thread_id if the deleted thread was the main one
-        if member_id:
-            member = app.state.member_repo.get_by_id(member_id)
-            if member and member.main_thread_id == thread_id:
-                next_main = app.state.thread_repo.get_main_thread(member_id)
-                app.state.member_repo.update(member_id, main_thread_id=next_main["id"] if next_main else None)
 
     # Clean up thread-specific state
     app.state.thread_sandbox.pop(thread_id, None)

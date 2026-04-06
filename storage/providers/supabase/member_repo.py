@@ -28,7 +28,7 @@ class SupabaseMemberRepo:
                 "description": row.description,
                 "config_dir": row.config_dir,
                 "owner_user_id": row.owner_user_id,
-                "next_thread_seq": row.next_thread_seq,
+                "next_entity_seq": row.next_entity_seq,
                 "email": row.email,
                 "mycel_id": row.mycel_id,
                 "created_at": row.created_at,
@@ -101,10 +101,10 @@ class SupabaseMemberRepo:
             return
         self._t().update(updates).eq("id", member_id).execute()
 
-    def increment_thread_seq(self, member_id: str) -> int:
-        """Atomically increment next_thread_seq and return the new value via RPC."""
+    def increment_entity_seq(self, member_id: str) -> int:
+        """Atomically increment next_entity_seq and return the new value via RPC."""
         response = self._client.rpc(
-            "increment_member_thread_seq",
+            "increment_member_entity_seq",
             {"p_member_id": member_id},
         ).execute()
         # RPC returns scalar; supabase-py wraps it in data
@@ -114,13 +114,13 @@ class SupabaseMemberRepo:
             data = getattr(response, "data", None)
         if data is None:
             raise RuntimeError(
-                f"Supabase {_MEMBER_REPO} expected data from increment_member_thread_seq RPC. "
+                f"Supabase {_MEMBER_REPO} expected data from increment_member_entity_seq RPC. "
                 "Check the function exists and member_id is valid."
             )
         # data may be a list with one element (scalar), or an int directly
         if isinstance(data, list):
             if not data:
-                raise RuntimeError(f"Supabase {_MEMBER_REPO} increment_thread_seq returned empty list for member {member_id}.")
+                raise RuntimeError(f"Supabase {_MEMBER_REPO} increment_entity_seq returned empty list for member {member_id}.")
             return int(data[0])
         return int(data)
 

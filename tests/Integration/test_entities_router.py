@@ -13,28 +13,26 @@ from types import SimpleNamespace
 import pytest
 
 from backend.web.routers import entities as entities_router
-from storage.contracts import MemberRow
+from storage.contracts import MemberRow, MemberType
 
 
 @pytest.mark.asyncio
 async def test_list_entities_excludes_current_user_and_returns_all_others():
     now = 1_775_223_756.0
-    current_user = MemberRow(id="u1", name="owner", type="human", created_at=now)
-    other_human = MemberRow(id="u2", name="other", type="human", created_at=now)
+    current_user = MemberRow(id="u1", name="owner", type=MemberType.HUMAN, created_at=now)
+    other_human = MemberRow(id="u2", name="other", type=MemberType.HUMAN, created_at=now)
     main_agent = MemberRow(
         id="a-main",
         name="Toad",
-        type="mycel_agent",
+        type=MemberType.MYCEL_AGENT,
         owner_user_id="u2",
-        main_thread_id="thread-main",
         created_at=now,
     )
     child_agent = MemberRow(
         id="a-child",
         name="Toad Branch",
-        type="mycel_agent",
+        type=MemberType.MYCEL_AGENT,
         owner_user_id="u2",
-        main_thread_id="thread-child",
         created_at=now,
     )
 
@@ -42,8 +40,10 @@ async def test_list_entities_excludes_current_user_and_returns_all_others():
         state=SimpleNamespace(
             member_repo=SimpleNamespace(list_all=lambda: [current_user, other_human, main_agent, child_agent]),
             thread_repo=SimpleNamespace(
-                get_by_id=lambda thread_id: (
-                    {"is_main": True, "branch_index": 0} if thread_id == "thread-main" else {"is_main": False, "branch_index": 1}
+                get_main_thread=lambda member_id: (
+                    {"id": "thread-main", "is_main": True, "branch_index": 0}
+                    if member_id == "a-main"
+                    else {"id": "thread-child", "is_main": False, "branch_index": 1}
                 )
             ),
         )
@@ -71,3 +71,29 @@ async def test_list_entities_excludes_current_user_and_returns_all_others():
     assert child_item["thread_id"] == "thread-child"
     assert child_item["is_main"] is False
     assert child_item["branch_index"] == 1
+
+
+@pytest.mark.asyncio
+async def test_get_agent_thread_reads_main_thread_from_thread_repo():
+    now = 1_775_223_756.0
+    agent = MemberRow(
+        id="a-main",
+        name="Toad",
+        type=MemberType.MYCEL_AGENT,
+        owner_user_id="u2",
+        created_at=now,
+    )
+    app = SimpleNamespace(
+        state=SimpleNamespace(
+            member_repo=SimpleNamespace(get_by_id=lambda member_id: agent if member_id == "a-main" else None),
+            thread_repo=SimpleNamespace(
+                get_main_thread=lambda member_id: (
+                    {"id": "thread-main", "is_main": True, "branch_index": 0} if member_id == "a-main" else None
+                )
+            ),
+        )
+    )
+
+    result = await entities_router.get_agent_thread("a-main", current_user_id="u2", app=app)
+
+    assert result == {"user_id": "a-main", "thread_id": "thread-main"}

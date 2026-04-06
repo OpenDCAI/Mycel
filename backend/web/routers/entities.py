@@ -188,7 +188,7 @@ async def list_entities(
             )
         else:
             owner = member_map.get(m.owner_user_id) if m.owner_user_id else None
-            thread = app.state.thread_repo.get_by_id(m.main_thread_id) if m.main_thread_id else None
+            thread = app.state.thread_repo.get_main_thread(m.id)
             items.append(
                 {
                     "id": m.id,
@@ -197,7 +197,7 @@ async def list_entities(
                     "avatar_url": avatar_url(m.id, bool(m.avatar)),
                     "owner_name": owner.name if owner else None,
                     "member_name": m.name,
-                    "thread_id": m.main_thread_id,
+                    "thread_id": thread["id"] if thread else None,
                     "is_main": thread["is_main"] if thread else None,
                     "branch_index": thread["branch_index"] if thread else None,
                 }
@@ -236,6 +236,7 @@ async def get_agent_thread(
     member = app.state.member_repo.get_by_id(user_id)
     if not member:
         raise HTTPException(404, "Member not found")
-    if member.type != MemberType.HUMAN and member.main_thread_id:
-        return {"user_id": user_id, "thread_id": member.main_thread_id}
+    thread = app.state.thread_repo.get_main_thread(user_id)
+    if member.type != MemberType.HUMAN and thread is not None:
+        return {"user_id": user_id, "thread_id": thread["id"]}
     raise HTTPException(404, "No agent thread found")

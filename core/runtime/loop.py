@@ -1872,6 +1872,26 @@ class QueryLoop:
             "mcp_instruction_state": mcp_instruction_state,
         }
 
+    @staticmethod
+    def _normalize_checkpoint_for_write(raw_checkpoint: Any, empty_checkpoint_factory: Any) -> Any:
+        checkpoint = empty_checkpoint_factory()
+        if not isinstance(raw_checkpoint, dict):
+            return checkpoint
+        # @@@checkpoint-shape-normalization - local/simple savers often persist only
+        # channel_values, while LangGraph savers expect the full checkpoint shape.
+        # Normalize both into one writable base contract before versioning.
+        for key, default_value in checkpoint.items():
+            if key not in raw_checkpoint:
+                continue
+            value = raw_checkpoint[key]
+            if isinstance(default_value, dict):
+                checkpoint[key] = dict(value or {})
+            elif isinstance(default_value, list):
+                checkpoint[key] = list(value or [])
+            else:
+                checkpoint[key] = value
+        return checkpoint
+
     async def _save_messages(self, thread_id: str, messages: list) -> None:
         """Persist message history to checkpointer."""
         if self.checkpointer is None:
@@ -1897,7 +1917,11 @@ class QueryLoop:
                     checkpoint_value = await checkpoint_result if inspect.isawaitable(checkpoint_result) else checkpoint_result
                     if isinstance(checkpoint_value, dict):
                         existing_checkpoint = cast(Checkpoint, checkpoint_value)
-            checkpoint = create_checkpoint(existing_checkpoint or empty_checkpoint(), None, len(messages))
+            checkpoint = create_checkpoint(
+                self._normalize_checkpoint_for_write(existing_checkpoint, empty_checkpoint),
+                None,
+                len(messages),
+            )
             permission_context, pending_requests, resolved_requests = self._thread_permission_state_snapshot(thread_id)
             memory_state = self._thread_memory_state_snapshot(thread_id)
             mcp_instruction_state = self._thread_mcp_instruction_state_snapshot(thread_id)

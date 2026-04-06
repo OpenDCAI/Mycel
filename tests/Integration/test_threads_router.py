@@ -36,7 +36,7 @@ class _FakeMemberRepo:
     def get_by_id(self, member_id: str):
         return self._members.get(member_id)
 
-    def increment_thread_seq(self, member_id: str) -> int:
+    def increment_entity_seq(self, member_id: str) -> int:
         self._seq[member_id] += 1
         return self._seq[member_id]
 

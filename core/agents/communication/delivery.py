@@ -16,6 +16,13 @@ from storage.contracts import MemberRow
 logger = logging.getLogger(__name__)
 
 
+def _resolve_member_main_thread_id(app: Any, member_id: str) -> str | None:
+    thread = app.state.thread_repo.get_main_thread(member_id)
+    if thread is None:
+        return None
+    return thread["id"]
+
+
 def make_chat_delivery_fn(app: Any):
     """Create a delivery callback for MessagingService.
 
@@ -36,7 +43,7 @@ def make_chat_delivery_fn(app: Any):
         sender_avatar_url: str | None = None,
         signal: str | None = None,
     ) -> None:
-        logger.info("[delivery] _deliver called: member=%s, thread=%s", member.id, member.main_thread_id)
+        logger.info("[delivery] _deliver called: member=%s", member.id)
         future = asyncio.run_coroutine_threadsafe(
             _async_deliver(app, member, sender_name, chat_id, sender_id, sender_avatar_url, signal=signal),
             loop,
@@ -73,14 +80,13 @@ async def _async_deliver(
 
     var_child_runnable_config.set(None)
 
-    logger.info("[delivery] _async_deliver: member=%s thread=%s from=%s", member.id, member.main_thread_id, sender_name)
+    thread_id = _resolve_member_main_thread_id(app, member.id)
+    logger.info("[delivery] _async_deliver: member=%s thread=%s from=%s", member.id, thread_id, sender_name)
     from core.runtime.middleware.queue.formatters import format_chat_notification
 
-    if not member.main_thread_id:
-        logger.warning("Member %s has no main_thread_id, skipping delivery", member.id)
+    if not thread_id:
+        logger.warning("Member %s has no main thread, skipping delivery", member.id)
         return
-
-    thread_id = member.main_thread_id
 
     from backend.web.services.agent_pool import get_or_create_agent, resolve_thread_sandbox
     from backend.web.services.streaming_service import _ensure_thread_handlers
