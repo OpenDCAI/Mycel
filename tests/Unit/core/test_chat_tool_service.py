@@ -5,18 +5,7 @@ from langchain_core.messages import HumanMessage
 from core.agents.communication.chat_tool_service import ChatToolService
 from core.runtime.agent import LeonAgent
 from core.runtime.registry import ToolRegistry
-from storage.contracts import EntityRow, MemberRow, MemberType
-
-
-class _EntityRepo:
-    def __init__(self, entities: list[EntityRow]) -> None:
-        self._entities = {entity.id: entity for entity in entities}
-
-    def list_all(self) -> list[EntityRow]:
-        return list(self._entities.values())
-
-    def get_by_id(self, entity_id: str) -> EntityRow | None:
-        return self._entities.get(entity_id)
+from storage.contracts import MemberRow, MemberType
 
 
 class _MemberRepo:
@@ -36,9 +25,7 @@ def test_chat_tool_registry_exposes_only_canonical_chat_surface() -> None:
         registry,
         user_id="m_agent",
         owner_user_id="u_owner",
-        entity_repo=_EntityRepo([]),
         chat_service=SimpleNamespace(),
-        chat_entity_repo=SimpleNamespace(),
         chat_message_repo=SimpleNamespace(),
         member_repo=_MemberRepo([]),
         chat_event_bus=SimpleNamespace(),
@@ -55,14 +42,10 @@ def test_chat_tool_registry_exposes_only_canonical_chat_surface() -> None:
 
 
 def test_compose_system_prompt_hardens_chat_reply_contract() -> None:
-    owner_entity = EntityRow(id="e_owner", type="human", member_id="u_owner", name="Owner", created_at=1.0)
-    agent_entity = EntityRow(id="e_agent", type="agent", member_id="m_agent", name="Helper", created_at=2.0)
-
     agent = LeonAgent.__new__(LeonAgent)
     agent._chat_repos = {
         "user_id": "m_agent",
         "owner_user_id": "u_owner",
-        "entity_repo": _EntityRepo([owner_entity, agent_entity]),
         "member_repo": _MemberRepo(
             [
                 MemberRow(id="u_owner", name="Owner", type=MemberType.HUMAN, created_at=1.0),
@@ -88,9 +71,7 @@ def test_read_messages_validate_input_fills_missing_chat_id_from_latest_notifica
         registry,
         user_id="m_agent",
         owner_user_id="u_owner",
-        entity_repo=_EntityRepo([]),
         chat_service=SimpleNamespace(),
-        chat_entity_repo=SimpleNamespace(),
         chat_message_repo=SimpleNamespace(),
         member_repo=_MemberRepo([]),
         chat_event_bus=SimpleNamespace(),
@@ -127,9 +108,7 @@ def test_send_message_validate_input_fills_missing_chat_id_from_latest_notificat
         registry,
         user_id="m_agent",
         owner_user_id="u_owner",
-        entity_repo=_EntityRepo([]),
         chat_service=SimpleNamespace(),
-        chat_entity_repo=SimpleNamespace(),
         chat_message_repo=SimpleNamespace(),
         member_repo=_MemberRepo([]),
         chat_event_bus=SimpleNamespace(),

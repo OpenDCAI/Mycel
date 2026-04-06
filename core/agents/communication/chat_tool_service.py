@@ -409,7 +409,7 @@ class ChatToolService:
                 ),
                 handler=self._handle_send_message,
                 source="chat",
-                search_hint="send message reply chat entity",
+                search_hint="send message reply chat user",
                 validate_input=self._fill_missing_chat_target,
             )
         )

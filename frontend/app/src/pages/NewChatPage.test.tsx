@@ -86,7 +86,7 @@ describe("NewChatPage", () => {
       token: "token",
       user: { id: "u-1", name: "tester", type: "human", avatar: null },
       agent: null,
-      entityId: "u-1",
+
       setupInfo: null,
       login: vi.fn(),
       sendOtp: vi.fn(),

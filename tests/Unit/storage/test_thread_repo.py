@@ -2,8 +2,7 @@ import sqlite3
 
 import pytest
 
-from storage.contracts import EntityRow, MemberRow, MemberType
-from storage.providers.sqlite.entity_repo import SQLiteEntityRepo
+from storage.contracts import MemberRow, MemberType
 from storage.providers.sqlite.member_repo import SQLiteMemberRepo
 from storage.providers.sqlite.thread_repo import SQLiteThreadRepo
 
@@ -94,7 +93,6 @@ def test_rejects_duplicate_branch_index_for_same_member(tmp_path):
 def test_list_by_owner_user_id_includes_main_flag(tmp_path):
     db_path = tmp_path / "leon.db"
     member_repo = SQLiteMemberRepo(db_path)
-    entity_repo = SQLiteEntityRepo(db_path)
     thread_repo = SQLiteThreadRepo(db_path)
     try:
         member_repo.create(
@@ -114,16 +112,6 @@ def test_list_by_owner_user_id_includes_main_flag(tmp_path):
                 created_at=2.0,
             )
         )
-        entity_repo.create(
-            EntityRow(
-                id="agent-1",
-                type="agent",
-                member_id="member-1",
-                name="Toad",
-                thread_id="agent-1",
-                created_at=3.0,
-            )
-        )
         thread_repo.create(
             thread_id="agent-1",
             member_id="member-1",
@@ -139,5 +127,4 @@ def test_list_by_owner_user_id_includes_main_flag(tmp_path):
         assert rows[0]["branch_index"] == 0
     finally:
         thread_repo.close()
-        entity_repo.close()
         member_repo.close()

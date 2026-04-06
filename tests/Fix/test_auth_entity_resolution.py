@@ -20,24 +20,6 @@ class _Request:
 
 
 @pytest.mark.asyncio
-async def test_get_current_entity_id_derives_human_entity_when_jwt_has_no_entity_id():
-    request = _Request(token="tok-1", payload={"user_id": "user-123"})
-
-    entity_id = await dependencies.get_current_entity_id(request)
-
-    assert entity_id == "user-123-1"
-
-
-@pytest.mark.asyncio
-async def test_get_current_entity_id_keeps_explicit_entity_id_when_present():
-    request = _Request(token="tok-1", payload={"user_id": "user-123", "entity_id": "custom-entity"})
-
-    entity_id = await dependencies.get_current_entity_id(request)
-
-    assert entity_id == "custom-entity"
-
-
-@pytest.mark.asyncio
 async def test_get_current_user_id_still_rejects_deleted_user():
     request = _Request(token="tok-1", payload={"user_id": "ghost-user"}, member_exists=False)
 

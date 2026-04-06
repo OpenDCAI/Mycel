@@ -23,7 +23,7 @@ def _get_auth_service(app: FastAPI):
 
 
 def _extract_jwt_payload(request: Request) -> dict:
-    """Extract and verify JWT payload from Bearer token. Returns {user_id, entity_id}."""
+    """Extract and verify JWT payload from Bearer token. Returns {user_id}."""
     auth_header = request.headers.get("Authorization", "")
     if not auth_header.startswith("Bearer "):
         raise HTTPException(401, "Missing or invalid Authorization header")
@@ -42,22 +42,6 @@ async def get_current_user_id(request: Request) -> str:
         raise HTTPException(401, "User no longer exists — please re-login")
     return user_id
 
-
-async def get_current_entity_id(request: Request) -> str:
-    """Derive entity_id for the authenticated human user.
-
-    Supabase JWTs may omit custom entity claims, so keep the older
-    direct-claim path when present and otherwise derive the stable
-    human entity convention: f"{user_id}-1".
-    """
-    payload = _extract_jwt_payload(request)
-    entity_id = payload.get("entity_id")
-    if entity_id:
-        return entity_id
-    user_id = payload.get("user_id")
-    if not user_id:
-        raise HTTPException(401, "Token missing user_id")
-    return f"{user_id}-1"
 
 
 async def verify_thread_owner(
