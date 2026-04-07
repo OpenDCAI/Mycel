@@ -4,6 +4,7 @@ import { Plus, Search } from "lucide-react";
 import MemberAvatar from "@/components/MemberAvatar";
 import { useConversationStore } from "@/store/conversation-store";
 import type { ConversationItem } from "@/types/conversation";
+import type { ThreadSummary } from "@/api";
 import NewChatDialog from "@/components/NewChatDialog";
 
 function formatTime(dateStr: string | null): string {
@@ -25,7 +26,13 @@ function conversationHref(item: ConversationItem): string {
   return `/chat/visit/${encodeURIComponent(item.id)}`;
 }
 
-export default function ConversationList() {
+function conversationTitle(item: ConversationItem, threads: ThreadSummary[]): string {
+  if (item.type !== "hire") return item.title;
+  const thread = threads.find((entry) => entry.thread_id === item.id);
+  return thread?.sidebar_label || item.title;
+}
+
+export default function ConversationList({ threads }: { threads: ThreadSummary[] }) {
   const { conversations, loading, fetchConversations } = useConversationStore();
   const [search, setSearch] = useState("");
   const [newChatOpen, setNewChatOpen] = useState(false);
@@ -105,7 +112,7 @@ export default function ConversationList() {
               >
                 <div className="relative">
                   <MemberAvatar
-                    name={item.title}
+                    name={conversationTitle(item, threads)}
                     avatarUrl={item.avatar_url ?? undefined}
                     type={item.type === "hire" ? "mycel_agent" : "human"}
                     size="sm"
@@ -117,7 +124,7 @@ export default function ConversationList() {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-1.5">
                     <span className="text-sm font-medium truncate text-foreground">
-                      {item.title}
+                      {conversationTitle(item, threads)}
                     </span>
                   </div>
                   {item.updated_at && (
