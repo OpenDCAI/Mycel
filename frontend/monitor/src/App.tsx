@@ -1008,13 +1008,22 @@ function MonitorResourcesPage() {
           <DashboardMetric
             label="Active drift"
             value={triageSummary.active_drift || 0}
-            note="needs operator attention"
+            note={
+              (triageSummary.active_drift || 0) > 0
+                ? "needs operator attention"
+                : "no active drift"
+            }
             tone={(triageSummary.active_drift || 0) > 0 ? "warning" : "success"}
           />
           <DashboardMetric
             label="Detached residue"
             value={triageSummary.detached_residue || 0}
-            note={`${triageSummary.orphan_cleanup || 0} cleanup backlog`}
+            note={
+              (triageSummary.detached_residue || 0) > 0 ||
+              (triageSummary.orphan_cleanup || 0) > 0
+                ? `${triageSummary.orphan_cleanup || 0} cleanup backlog`
+                : "no cleanup backlog"
+            }
             tone={
               (triageSummary.detached_residue || 0) > 0 ? "danger" : "success"
             }
