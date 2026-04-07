@@ -133,13 +133,3 @@ export async function authFetch(url: string, init?: RequestInit): Promise<Respon
   }
   return res;
 }
-
-export async function authRequest<T>(url: string, init?: RequestInit): Promise<T> {
-  const res = await authFetch(url, init);
-  if (!res.ok) {
-    const body = await res.text();
-    throw new Error(`API ${res.status}: ${body || res.statusText}`);
-  }
-  if (res.status === 204) return undefined as T;
-  return res.json();
-}
