@@ -95,6 +95,17 @@ function formatDuration(ms: number): string {
   return `${seconds}秒`;
 }
 
+function initials(name: string): string {
+  const trimmed = name.trim();
+  if (!trimmed) return "?";
+  return trimmed
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase() ?? "")
+    .join("")
+    .slice(0, 2);
+}
+
 function capabilityTags(capabilities: ProviderCapabilities): string[] {
   const labels: Array<[keyof ProviderCapabilities, string]> = [
     ["filesystem", "FS"],
@@ -490,6 +501,14 @@ function InlineMetric({ label, value }: { label: string; value: string }) {
 function SandboxCard({ group, onOpen }: { group: LeaseGroup; onOpen: () => void }) {
   const duration = group.startedAt ? formatDuration(calculateDuration(group.startedAt)) : "--";
   const names = group.sessions.map((session) => session.memberName || "未绑定").join(", ");
+  const metrics = group.metrics;
+  const hasMetrics =
+    metrics != null &&
+    (metrics.cpu != null ||
+      metrics.memory != null ||
+      metrics.memoryLimit != null ||
+      metrics.disk != null ||
+      metrics.diskLimit != null);
 
   return (
     <button type="button" className={`sandbox-card sandbox-card--${group.status}`} onClick={onOpen}>
@@ -501,7 +520,17 @@ function SandboxCard({ group, onOpen }: { group: LeaseGroup; onOpen: () => void 
         <span className="sandbox-card__duration">{duration}</span>
       </div>
       <div className="sandbox-card__body">
-        <div className="sandbox-card__names">{names}</div>
+        <div className="sandbox-card__agent-row">
+          <div className="sandbox-card__avatar-stack">
+            {group.sessions.slice(0, 3).map((session) => (
+              <div key={session.id} className="sandbox-avatar" title={session.memberName || "未绑定"}>
+                {session.avatarUrl ? <img src={session.avatarUrl} alt="" /> : initials(session.memberName || "未绑定")}
+              </div>
+            ))}
+            {group.sessions.length > 3 && <div className="sandbox-avatar sandbox-avatar--count">+{group.sessions.length - 3}</div>}
+          </div>
+          <div className="sandbox-card__names">{names}</div>
+        </div>
         <div className="sandbox-card__thread-list">
           {group.sessions.slice(0, 2).map((session) => (
             <div key={session.id} className="sandbox-card__thread">
@@ -510,11 +539,11 @@ function SandboxCard({ group, onOpen }: { group: LeaseGroup; onOpen: () => void 
           ))}
         </div>
       </div>
-      {group.metrics && (
+      {hasMetrics && (
         <div className="sandbox-card__metrics">
-          <span>CPU {formatMetric(group.metrics.cpu, "%")}</span>
-          <span>RAM {formatMetric(group.metrics.memory, "GB")}</span>
-          <span>Disk {formatMetric(group.metrics.disk, "GB")}</span>
+          <span>CPU {formatMetric(metrics?.cpu, "%")}</span>
+          <span>RAM {formatMetric(metrics?.memory, "GB")}</span>
+          <span>Disk {formatMetric(metrics?.disk, "GB")}</span>
         </div>
       )}
       <div className="sandbox-card__lease">{group.leaseId || "local"}</div>
@@ -555,22 +584,30 @@ function SandboxInspector({
             <h3>{group.leaseId || "local"}</h3>
           </div>
           <button type="button" className="sandbox-modal__close" onClick={onClose}>
-            Close
+            关闭
           </button>
         </div>
 
         <div className="sandbox-modal__section">
-          <h4>Sessions</h4>
+          <h4>成员</h4>
           <div className="sandbox-session-list">
             {group.sessions.map((session) => (
               <div key={session.id} className="sandbox-session-row">
-                <div>
-                  <div className="sandbox-session-row__name">{session.memberName || "未绑定"}</div>
-                  <Link className="sandbox-link" to={`/thread/${session.threadId}`}>
-                    {session.threadId}
-                  </Link>
+                <div className="sandbox-session-row__identity">
+                  <div className="sandbox-avatar sandbox-avatar--lg" title={session.memberName || "未绑定"}>
+                    {session.avatarUrl ? <img src={session.avatarUrl} alt="" /> : initials(session.memberName || "未绑定")}
+                  </div>
+                  <div>
+                    <div className="sandbox-session-row__name">{session.memberName || "未绑定"}</div>
+                    <Link className="sandbox-link" to={`/thread/${session.threadId}`}>
+                      {session.threadId}
+                    </Link>
+                  </div>
                 </div>
-                <span className={`provider-status-dot provider-status-dot--${session.status}`} />
+                <div className="sandbox-session-row__status">
+                  <span className={`provider-status-dot provider-status-dot--${session.status}`} />
+                  <span>{STATUS_LABEL[session.status]}</span>
+                </div>
               </div>
             ))}
           </div>
@@ -578,7 +615,7 @@ function SandboxInspector({
 
         {group.metrics && (
           <div className="sandbox-modal__section">
-            <h4>Metrics</h4>
+            <h4>指标</h4>
             <div className="sandbox-metric-grid">
               <MetricBlock label="CPU" value={formatMetric(group.metrics.cpu, "%")} />
               <MetricBlock
@@ -595,9 +632,9 @@ function SandboxInspector({
           </div>
         )}
 
-        <div className="sandbox-modal__section">
+        <div className="sandbox-modal__section sandbox-modal__section--fill">
           <div className="sandbox-modal__section-header">
-            <h4>Links</h4>
+            <h4>文件</h4>
             {group.leaseId && (
               <Link className="sandbox-link" to={`/lease/${group.leaseId}`}>
                 打开 lease
