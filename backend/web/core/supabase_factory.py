@@ -24,11 +24,11 @@ def _resolve_supabase_auth_url() -> str:
 
 
 def create_supabase_client():
-    """Build a supabase-py client from runtime environment.
+    """Build a service-role supabase-py client from runtime environment.
 
-    Uses SUPABASE_INTERNAL_URL when available (direct server-side access, e.g. same-host
-    or SSH tunnel), falling back to SUPABASE_PUBLIC_URL.  trust_env=False ensures the
-    httpx client never routes through any system/VPN proxy.
+    Reads SUPABASE_URL (standard). Legacy fallback: SUPABASE_INTERNAL_URL, then
+    SUPABASE_PUBLIC_URL (kept for environments not yet migrated to SUPABASE_URL).
+    trust_env=False ensures httpx never routes through system/VPN proxy.
     """
     # Prefer internal URL (same-host direct connection) over public tunnel URL.
     url = _resolve_supabase_url()
