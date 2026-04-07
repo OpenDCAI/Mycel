@@ -712,8 +712,10 @@ def test_leon_agent_chat_identity_prompt_uses_honest_legacy_wording():
     agent._chat_repos = {
         "user_id": "agent-member-1",
         "owner_id": "human-user-1",
-        "member_repo": SimpleNamespace(
-            get_by_id=lambda uid: SimpleNamespace(id=uid, name="Toad") if uid == "agent-member-1" else SimpleNamespace(id=uid, name="Owner")
+        "user_repo": SimpleNamespace(
+            get_by_id=lambda uid: (
+                SimpleNamespace(id=uid, display_name="Toad") if uid == "agent-member-1" else SimpleNamespace(id=uid, display_name="Owner")
+            )
         ),
     }
 
@@ -734,9 +736,11 @@ def test_leon_agent_chat_identity_prompt_accepts_chat_identity_id_without_legacy
     agent._chat_repos = {
         "chat_identity_id": "agent-member-2",
         "owner_id": "human-user-2",
-        "member_repo": SimpleNamespace(
+        "user_repo": SimpleNamespace(
             get_by_id=lambda uid: (
-                SimpleNamespace(id=uid, name="Morel") if uid == "agent-member-2" else SimpleNamespace(id=uid, name="Owner 2")
+                SimpleNamespace(id=uid, display_name="Morel")
+                if uid == "agent-member-2"
+                else SimpleNamespace(id=uid, display_name="Owner 2")
             )
         ),
     }
@@ -754,18 +758,18 @@ def test_leon_agent_chat_identity_prompt_resolves_thread_user_name_via_member() 
     agent._build_system_prompt = lambda: "BASE"
     cast(Any, agent).config = SimpleNamespace(system_prompt=None)
     agent._thread_repo = SimpleNamespace(
-        get_by_user_id=lambda uid: {"id": "thread-1", "member_id": "member-agent-3"} if uid == "thread-user-3" else None
+        get_by_user_id=lambda uid: {"id": "thread-1", "agent_user_id": "member-agent-3"} if uid == "thread-user-3" else None
     )
     agent._chat_repos = {
         "chat_identity_id": "thread-user-3",
         "owner_id": "human-user-3",
-        "member_repo": SimpleNamespace(
+        "user_repo": SimpleNamespace(
             get_by_id=lambda uid: (
                 None
                 if uid == "thread-user-3"
-                else SimpleNamespace(id=uid, name="Truffle")
+                else SimpleNamespace(id=uid, display_name="Truffle")
                 if uid == "member-agent-3"
-                else SimpleNamespace(id=uid, name="Owner 3")
+                else SimpleNamespace(id=uid, display_name="Owner 3")
             )
         ),
     }

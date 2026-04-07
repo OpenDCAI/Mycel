@@ -160,7 +160,7 @@ class LeonAgent:
         sandbox: Any = None,
         storage_container: StorageContainer | None = None,
         thread_repo: Any = None,
-        member_repo: Any = None,
+        user_repo: Any = None,
         queue_manager: MessageQueueManager | None = None,
         chat_repos: dict | None = None,
         web_app: Any = None,
@@ -185,7 +185,7 @@ class LeonAgent:
             enable_web_tools: Whether to enable web search and content fetching tools
             sandbox: Sandbox instance, name string, or None for local
             thread_repo: Optional thread metadata repo for backend-integrated subagent registration
-            member_repo: Optional member repo for backend-integrated subagent registration
+            user_repo: Optional user repo for backend-integrated subagent registration
             queue_manager: Shared MessageQueueManager instance (created if not provided)
             permission_resolver_scope: Permission request surface for this agent ("none" or "thread")
             verbose: Whether to output detailed logs (default False)
@@ -196,7 +196,7 @@ class LeonAgent:
         self.queue_manager = queue_manager or MessageQueueManager()
         self._chat_repos: dict | None = chat_repos
         self._thread_repo = thread_repo
-        self._member_repo = member_repo
+        self._user_repo = user_repo
         self._web_app = web_app
         self._session_started = False
         self._session_ended = False
@@ -1216,7 +1216,7 @@ class LeonAgent:
             workspace_root=self.workspace_root,
             model_name=self.model_name,
             thread_repo=self._thread_repo,
-            member_repo=self._member_repo,
+            user_repo=self._user_repo,
             queue_manager=self.queue_manager,
             shared_runs=self._background_runs,
             web_app=self._web_app,

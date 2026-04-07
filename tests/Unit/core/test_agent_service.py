@@ -63,15 +63,14 @@ class _FakeThreadRepo:
     def get_by_id(self, thread_id: str):
         return self.rows.get(thread_id)
 
-    def get_next_branch_index(self, member_id: str) -> int:
-        branch_indexes = [int(row["branch_index"]) for row in self.rows.values() if row["member_id"] == member_id]
+    def get_next_branch_index(self, agent_user_id: str) -> int:
+        branch_indexes = [int(row["branch_index"]) for row in self.rows.values() if row["agent_user_id"] == agent_user_id]
         return (max(branch_indexes) if branch_indexes else 0) + 1
 
     def create(
         self,
         thread_id: str,
-        member_id: str,
-        user_id: str,
+        agent_user_id: str,
         sandbox_type: str,
         cwd: str | None,
         created_at: float,
@@ -79,8 +78,7 @@ class _FakeThreadRepo:
     ):
         row = {
             "id": thread_id,
-            "member_id": member_id,
-            "user_id": user_id,
+            "agent_user_id": agent_user_id,
             "sandbox_type": sandbox_type,
             "cwd": cwd,
             "model": extra.get("model"),
@@ -92,15 +90,15 @@ class _FakeThreadRepo:
         self.created.append(row)
 
 
-class _FakeMemberRepo:
+class _FakeUserRepo:
     def __init__(self, names: dict[str, str]):
         self._names = names
 
-    def get_by_id(self, member_id: str):
-        name = self._names.get(member_id)
+    def get_by_id(self, user_id: str):
+        name = self._names.get(user_id)
         if name is None:
             return None
-        return SimpleNamespace(id=member_id, name=name, avatar=None)
+        return SimpleNamespace(id=user_id, display_name=name, avatar=None)
 
 
 class _FakeChildAgent:
@@ -1210,7 +1208,7 @@ async def test_handle_agent_registers_subagent_thread_metadata_before_return(mon
         rows={
             "parent-thread": {
                 "id": "parent-thread",
-                "member_id": "member-1",
+                "agent_user_id": "member-1",
                 "sandbox_type": "daytona_selfhost",
                 "cwd": "/home/daytona",
                 "model": "gpt-parent",
@@ -1220,11 +1218,11 @@ async def test_handle_agent_registers_subagent_thread_metadata_before_return(mon
             }
         }
     )
-    member_repo = _FakeMemberRepo({"member-1": "Toad"})
+    user_repo = _FakeUserRepo({"member-1": "Toad"})
     service = _make_service(
         tmp_path,
         thread_repo=thread_repo,
-        member_repo=member_repo,
+        user_repo=user_repo,
     )
 
     set_current_thread_id("parent-thread")
@@ -1240,8 +1238,7 @@ async def test_handle_agent_registers_subagent_thread_metadata_before_return(mon
         child_thread = thread_repo.get_by_id(child_thread_id)
 
         assert child_thread is not None
-        assert child_thread["member_id"] == "member-1"
-        assert child_thread["user_id"] == child_thread_id
+        assert child_thread["agent_user_id"] == "member-1"
         assert child_thread["sandbox_type"] == "daytona_selfhost"
         assert child_thread["cwd"] == "/home/daytona"
         assert child_thread["is_main"] is False
@@ -1262,7 +1259,7 @@ async def test_handle_agent_reuses_existing_completed_child_thread_for_same_pare
         rows={
             "parent-thread": {
                 "id": "parent-thread",
-                "member_id": "member-1",
+                "agent_user_id": "member-1",
                 "sandbox_type": "daytona_selfhost",
                 "cwd": "/home/daytona",
                 "model": "gpt-parent",
@@ -1272,7 +1269,7 @@ async def test_handle_agent_reuses_existing_completed_child_thread_for_same_pare
             },
             "subagent-existing": {
                 "id": "subagent-existing",
-                "member_id": "member-1",
+                "agent_user_id": "member-1",
                 "sandbox_type": "daytona_selfhost",
                 "cwd": "/home/daytona",
                 "model": "gpt-test",
@@ -1295,7 +1292,7 @@ async def test_handle_agent_reuses_existing_completed_child_thread_for_same_pare
         tmp_path,
         agent_registry=registry,
         thread_repo=thread_repo,
-        member_repo=_FakeMemberRepo({"member-1": "Toad"}),
+        user_repo=_FakeUserRepo({"member-1": "Toad"}),
     )
 
     set_current_thread_id("parent-thread")

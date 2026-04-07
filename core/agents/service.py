@@ -415,7 +415,7 @@ class AgentService:
         shared_runs: dict[str, BackgroundRun] | None = None,
         background_progress_interval_s: float = 30.0,
         thread_repo: Any = None,
-        member_repo: Any = None,
+        user_repo: Any = None,
         web_app: Any = None,
         child_agent_factory: ChildAgentFactory | None = None,
     ):
@@ -425,7 +425,7 @@ class AgentService:
         self._queue_manager = queue_manager
         self._background_progress_interval_s = background_progress_interval_s
         self._thread_repo = thread_repo
-        self._member_repo = member_repo
+        self._user_repo = user_repo
         self._web_app = web_app
         self._child_agent_factory = child_agent_factory or _resolve_default_child_agent_factory()
         self._parent_bootstrap: BootstrapConfig | None = None
@@ -500,7 +500,7 @@ class AgentService:
         agent_name: str,
         model_name: str,
     ) -> None:
-        if self._thread_repo is None or self._member_repo is None or not parent_thread_id:
+        if self._thread_repo is None or self._user_repo is None or not parent_thread_id:
             return
         existing_thread = self._thread_repo.get_by_id(thread_id)
         if existing_thread is not None:
@@ -510,19 +510,20 @@ class AgentService:
         if parent_thread is None:
             return
 
-        member_id = parent_thread["member_id"]
-        member = self._member_repo.get_by_id(member_id)
-        if member is None:
+        agent_user_id = parent_thread.get("agent_user_id")
+        if not agent_user_id:
+            return
+        agent_user = self._user_repo.get_by_id(agent_user_id)
+        if agent_user is None:
             return
 
         created_at = time.time()
-        branch_index = self._thread_repo.get_next_branch_index(member_id)
+        branch_index = self._thread_repo.get_next_branch_index(agent_user_id)
         sandbox_type = parent_thread.get("sandbox_type") or "local"
         cwd = parent_thread.get("cwd")
         self._thread_repo.create(
             thread_id=thread_id,
-            member_id=member_id,
-            user_id=thread_id,
+            agent_user_id=agent_user_id,
             sandbox_type=sandbox_type,
             cwd=cwd,
             created_at=created_at,
