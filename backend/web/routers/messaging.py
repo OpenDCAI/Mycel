@@ -76,8 +76,24 @@ def _get_accessible_chat_or_404(app: Any, chat_id: str, user_id: str) -> Any:
     return chat
 
 
-def _msg_response(m: dict[str, Any], member_repo: Any) -> dict[str, Any]:
-    sender = member_repo.get_by_id(m.get("sender_id", ""))
+def _resolve_display_member(app: Any, social_user_id: str) -> Any | None:
+    member = app.state.member_repo.get_by_id(social_user_id)
+    if member is not None:
+        return member
+    thread_repo = getattr(app.state, "thread_repo", None)
+    if thread_repo is None:
+        return None
+    thread = thread_repo.get_by_user_id(social_user_id)
+    if thread is None:
+        return None
+    member_id = thread.get("member_id")
+    if not member_id:
+        return None
+    return app.state.member_repo.get_by_id(member_id)
+
+
+def _msg_response(m: dict[str, Any], app: Any) -> dict[str, Any]:
+    sender = _resolve_display_member(app, m.get("sender_id", ""))
     return {
         "id": m["id"],
         "chat_id": m["chat_id"],
@@ -144,7 +160,7 @@ async def get_chat(
         uid = m.get("user_id")
         if not uid:
             continue
-        mem = app.state.member_repo.get_by_id(uid)
+        mem = _resolve_display_member(app, uid)
         if mem:
             members_info.append(
                 {
@@ -179,7 +195,7 @@ async def list_messages(
     if not _messaging(app).is_chat_member(chat_id, user_id):
         raise HTTPException(403, "Not a participant of this chat")
     msgs = _messaging(app).list_messages(chat_id, limit=limit, before=before, viewer_id=user_id)
-    return [_msg_response(m, app.state.member_repo) for m in msgs]
+    return [_msg_response(m, app) for m in msgs]
 
 
 @router.post("/{chat_id}/messages")
@@ -200,7 +216,7 @@ async def send_message(
         signal=body.signal,
         message_type=body.message_type,
     )
-    return _msg_response(msg, app.state.member_repo)
+    return _msg_response(msg, app)
 
 
 @router.post("/{chat_id}/messages/{message_id}/retract")

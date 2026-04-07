@@ -6,6 +6,7 @@ import pytest
 from fastapi import HTTPException
 
 from backend.web.routers import messaging as messaging_router
+from backend.web.utils.serializers import avatar_url
 
 
 def _chat(chat_id: str) -> SimpleNamespace:
@@ -120,4 +121,95 @@ async def test_delete_chat_uses_access_helper(monkeypatch: pytest.MonkeyPatch):
     assert seen == [
         ("helper", (app, "chat-1", "user-1")),
         ("delete", "chat-1"),
+    ]
+
+
+@pytest.mark.asyncio
+async def test_get_chat_resolves_thread_user_participant_via_thread_repo(monkeypatch: pytest.MonkeyPatch):
+    chat = _chat("chat-1")
+
+    monkeypatch.setattr(messaging_router, "_get_accessible_chat_or_404", lambda _app, _chat_id, _user_id: chat)
+
+    app = SimpleNamespace(
+        state=SimpleNamespace(
+            messaging_service=SimpleNamespace(
+                list_chat_members=lambda _chat_id: [
+                    {"user_id": "human-user-1"},
+                    {"user_id": "thread-user-1"},
+                ]
+            ),
+            member_repo=SimpleNamespace(
+                get_by_id=lambda uid: (
+                    None
+                    if uid == "thread-user-1"
+                    else SimpleNamespace(id=uid, name="Toad", type="mycel_agent", avatar=None)
+                    if uid == "member-agent-1"
+                    else None
+                )
+            ),
+            thread_repo=SimpleNamespace(
+                get_by_user_id=lambda uid: {"id": "thread-1", "member_id": "member-agent-1"} if uid == "thread-user-1" else None
+            ),
+        )
+    )
+
+    result = await messaging_router.get_chat("chat-1", user_id="human-user-1", app=app)
+
+    assert result["entities"] == [
+        {
+            "id": "member-agent-1",
+            "name": "Toad",
+            "type": "mycel_agent",
+            "avatar_url": avatar_url("member-agent-1", False),
+        }
+    ]
+
+
+@pytest.mark.asyncio
+async def test_list_messages_resolves_thread_user_sender_name_via_thread_repo():
+    app = SimpleNamespace(
+        state=SimpleNamespace(
+            messaging_service=SimpleNamespace(
+                is_chat_member=lambda _chat_id, _user_id: True,
+                list_messages=lambda _chat_id, **_kwargs: [
+                    {
+                        "id": "msg-1",
+                        "chat_id": "chat-1",
+                        "sender_id": "thread-user-1",
+                        "content": "hello",
+                        "message_type": "human",
+                        "created_at": "2026-04-07T00:00:00Z",
+                    }
+                ],
+            ),
+            member_repo=SimpleNamespace(
+                get_by_id=lambda uid: (
+                    None
+                    if uid == "thread-user-1"
+                    else SimpleNamespace(id=uid, name="Toad", type="mycel_agent", avatar=None)
+                    if uid == "member-agent-1"
+                    else None
+                )
+            ),
+            thread_repo=SimpleNamespace(
+                get_by_user_id=lambda uid: {"id": "thread-1", "member_id": "member-agent-1"} if uid == "thread-user-1" else None
+            ),
+        )
+    )
+
+    result = await messaging_router.list_messages("chat-1", user_id="human-user-1", app=app)
+
+    assert result == [
+        {
+            "id": "msg-1",
+            "chat_id": "chat-1",
+            "sender_id": "thread-user-1",
+            "sender_name": "Toad",
+            "content": "hello",
+            "message_type": "human",
+            "mentioned_ids": [],
+            "signal": None,
+            "retracted_at": None,
+            "created_at": "2026-04-07T00:00:00Z",
+        }
     ]

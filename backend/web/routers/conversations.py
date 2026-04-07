@@ -22,6 +22,19 @@ def _is_internal_child_thread(thread_id: str) -> bool:
     return thread_id.startswith("subagent-")
 
 
+def _resolve_display_member(app: Any, social_user_id: str) -> Any | None:
+    member = app.state.member_repo.get_by_id(social_user_id)
+    if member is not None:
+        return member
+    thread = app.state.thread_repo.get_by_user_id(social_user_id)
+    if thread is None:
+        return None
+    member_id = thread.get("member_id")
+    if not member_id:
+        return None
+    return app.state.member_repo.get_by_id(member_id)
+
+
 @router.get("")
 async def list_conversations(
     user_id: Annotated[str, Depends(get_current_user_id)],
@@ -61,7 +74,6 @@ async def list_conversations(
     messaging = getattr(app.state, "messaging_service", None)
     if messaging:
         chats = messaging.list_chats_for_user(user_id)
-        member_repo = app.state.member_repo
         messages_repo = getattr(app.state, "messages_repo", None)
 
         # Pre-fetch all member data to avoid N+1 per-member lookups
@@ -85,7 +97,7 @@ async def list_conversations(
         # Batch resolve members
         member_cache: dict[str, Any] = {}
         for uid in all_member_ids:
-            mem = member_repo.get_by_id(uid)
+            mem = _resolve_display_member(app, uid)
             if mem:
                 member_cache[uid] = mem
 
