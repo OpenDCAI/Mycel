@@ -803,7 +803,7 @@ export default function NewChatPage({ mode = "member" }: { mode?: "member" | "ne
                                     <div className="flex -space-x-2">
                                       {lease.agents.slice(0, 4).map((agent) => (
                                         <MemberAvatar
-                                          key={agent.member_id}
+                                          key={agent.thread_id}
                                           name={agent.member_name}
                                           avatarUrl={agent.avatar_url ?? undefined}
                                           type="mycel_agent"

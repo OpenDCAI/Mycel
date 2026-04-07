@@ -110,13 +110,73 @@ def test_list_user_leases_hides_subagent_threads_and_deduplicates_visible_agents
             "thread_ids": ["thread-parent"],
             "agents": [
                 {
-                    "member_id": "member-1",
+                    "thread_id": "thread-parent",
                     "member_name": "Morel",
                     "avatar_url": "/api/members/member-1/avatar",
                 }
             ],
             "recipe_name": "Daytona Default",
         }
+    ]
+
+
+def test_list_user_leases_keeps_distinct_visible_threads_even_for_same_member(monkeypatch):
+    rows = [
+        {
+            "lease_id": "lease-1",
+            "provider_name": "local",
+            "recipe_id": "local:default",
+            "recipe_json": None,
+            "observed_state": "running",
+            "desired_state": "running",
+            "created_at": "2026-04-07T10:00:00Z",
+            "cwd": "/tmp/app",
+            "thread_id": "thread-a",
+        },
+        {
+            "lease_id": "lease-1",
+            "provider_name": "local",
+            "recipe_id": "local:default",
+            "recipe_json": None,
+            "observed_state": "running",
+            "desired_state": "running",
+            "created_at": "2026-04-07T10:00:00Z",
+            "cwd": "/tmp/app",
+            "thread_id": "thread-b",
+        },
+    ]
+    thread_repo = _FakeThreadRepo(
+        {
+            "thread-a": {"member_id": "member-1"},
+            "thread-b": {"member_id": "member-1"},
+        }
+    )
+    member_repo = _FakeMemberRepo(
+        {
+            "member-1": SimpleNamespace(id="member-1", name="Morel", avatar="x", owner_user_id="owner-1"),
+        }
+    )
+
+    monkeypatch.setattr(sandbox_service, "make_sandbox_monitor_repo", lambda: _FakeMonitorRepo(rows))
+
+    leases = sandbox_service.list_user_leases(
+        "owner-1",
+        thread_repo=thread_repo,
+        member_repo=member_repo,
+    )
+
+    assert leases[0]["thread_ids"] == ["thread-a", "thread-b"]
+    assert leases[0]["agents"] == [
+        {
+            "thread_id": "thread-a",
+            "member_name": "Morel",
+            "avatar_url": "/api/members/member-1/avatar",
+        },
+        {
+            "thread_id": "thread-b",
+            "member_name": "Morel",
+            "avatar_url": "/api/members/member-1/avatar",
+        },
     ]
 
 

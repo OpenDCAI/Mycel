@@ -153,9 +153,9 @@ export interface UserLeaseSummary {
   cwd?: string | null;
   thread_ids: string[];
   agents: Array<{
-    /** Template entry bound to the lease; not an actor thread id. */
-    member_id: string;
-    /** Template-facing label for the lease summary card. */
+    /** Runtime actor identity for this visible lease participant. */
+    thread_id: string;
+    /** Display label resolved from the actor's backing member shell. */
     member_name: string;
     avatar_url?: string | null;
   }>;

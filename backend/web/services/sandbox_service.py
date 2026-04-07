@@ -79,7 +79,6 @@ def list_user_leases(
                     "cwd": row.get("cwd"),
                     "thread_ids": [],
                     "agents": [],
-                    "_seen_member_ids": set(),
                 },
             )
             thread_id = str(row.get("thread_id") or "").strip()
@@ -92,21 +91,18 @@ def list_user_leases(
             if member is None or member.owner_user_id != user_id:
                 continue
             group["thread_ids"].append(thread_id)
-            if member.id not in group["_seen_member_ids"]:
-                group["_seen_member_ids"].add(member.id)
-                group["agents"].append(
-                    {
-                        "member_id": member.id,
-                        "member_name": member.name,
-                        "avatar_url": avatar_url(member.id, bool(member.avatar)),
-                    }
-                )
+            group["agents"].append(
+                {
+                    "thread_id": thread_id,
+                    "member_name": member.name,
+                    "avatar_url": avatar_url(member.id, bool(member.avatar)),
+                }
+            )
             if not group["cwd"] and row.get("cwd"):
                 group["cwd"] = row.get("cwd")
 
         leases: list[dict[str, Any]] = []
         for lease in grouped.values():
-            lease.pop("_seen_member_ids", None)
             if not lease["thread_ids"]:
                 continue
             if not _is_user_visible_lease_state(lease):
