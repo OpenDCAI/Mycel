@@ -3959,7 +3959,9 @@ function EvaluationPage() {
               ))}
               {evaluations.length === 0 && (
                 <tr>
-                  <td colSpan={8}>No evaluations yet.</td>
+                  <td colSpan={8}>
+                    {runError ? "Unable to load evaluations." : "No evaluations yet."}
+                  </td>
                 </tr>
               )}
             </tbody>
