@@ -24,8 +24,11 @@ class SupabaseChatRepo:
         self._t().insert(
             {
                 "id": row.id,
+                "type": row.type,
+                "created_by_user_id": row.created_by_user_id,
                 "title": row.title,
                 "status": row.status,
+                "next_message_seq": row.next_message_seq,
                 "created_at": row.created_at,
                 "updated_at": row.updated_at,
             }
@@ -39,8 +42,11 @@ class SupabaseChatRepo:
         r = rows[0]
         return ChatRow(
             id=r["id"],
+            type=r["type"],
+            created_by_user_id=r["created_by_user_id"],
             title=r.get("title"),
             status=r.get("status", "active"),
+            next_message_seq=int(r.get("next_message_seq", 0)),
             created_at=float(r["created_at"]),
             updated_at=float(r["updated_at"]) if r.get("updated_at") is not None else None,
         )

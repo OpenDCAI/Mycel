@@ -10,12 +10,12 @@ Wraps Supabase messaging repos with business rules:
 from __future__ import annotations
 
 import logging
+import time
 import uuid
 from collections.abc import Callable
 from typing import Any
 
 from backend.web.utils.serializers import avatar_url
-from messaging._utils import now_iso
 from messaging.contracts import ContentType, MessageType
 
 logger = logging.getLogger(__name__)
@@ -39,12 +39,21 @@ class MessagingService:
         self._chats = chat_repo
         self._members_repo = chat_member_repo
         self._messages = messages_repo
-        self._reads = message_read_repo
         self._user_repo = user_repo
         self._thread_repo = thread_repo
         self._delivery_resolver = delivery_resolver
         self._delivery_fn = delivery_fn
         self._event_bus = event_bus
+        self._reads = message_read_repo
+
+    def _normalize_message_row(self, row: dict[str, Any]) -> dict[str, Any]:
+        return {
+            **row,
+            "sender_id": row.get("sender_id") or row.get("sender_user_id"),
+            "mentioned_ids": row.get("mentioned_ids") or row.get("mentions") or row.get("mentions_json") or [],
+            "reply_to": row.get("reply_to") or row.get("reply_to_message_id"),
+            "ai_metadata": row.get("ai_metadata") or row.get("ai_metadata_json") or {},
+        }
 
     def _resolve_display_user(self, social_user_id: str) -> Any | None:
         user = self._user_repo.get_by_id(social_user_id)
@@ -83,13 +92,20 @@ class MessagingService:
         return self._create_chat(user_ids, chat_type="group", title=title)
 
     def _create_chat(self, user_ids: list[str], *, chat_type: str, title: str | None) -> dict[str, Any]:
-        import time
-
         from storage.contracts import ChatRow
 
         chat_id = str(uuid.uuid4())
         now = time.time()
-        self._chats.create(ChatRow(id=chat_id, title=title, status="active", created_at=now))
+        self._chats.create(
+            ChatRow(
+                id=chat_id,
+                type=chat_type,
+                created_by_user_id=user_ids[0],
+                title=title,
+                status="active",
+                created_at=now,
+            )
+        )
         for uid in user_ids:
             self._members_repo.add_member(chat_id, uid)
         return {"id": chat_id, "title": title, "status": "active", "created_at": now}
@@ -116,21 +132,21 @@ class MessagingService:
         row: dict[str, Any] = {
             "id": msg_id,
             "chat_id": chat_id,
-            "sender_id": sender_id,
+            "sender_user_id": sender_id,
             "content": content,
             "content_type": content_type,
             "message_type": message_type,
-            "mentions": mentions or [],
-            "created_at": now_iso(),
+            "mentions_json": mentions or [],
+            "created_at": time.time(),
         }
         if signal in ("open", "yield", "close"):
             row["signal"] = signal
         if reply_to:
-            row["reply_to"] = reply_to
+            row["reply_to_message_id"] = reply_to
         if ai_metadata:
-            row["ai_metadata"] = ai_metadata
+            row["ai_metadata_json"] = ai_metadata
 
-        created = self._messages.create(row)
+        created = self._normalize_message_row(self._messages.create(row))
         logger.debug("[messaging] send chat=%s sender=%s msg=%s type=%s", chat_id[:8], sender_id[:15], msg_id[:8], message_type)
 
         # Publish to event bus (SSE / Realtime bridge)
@@ -217,15 +233,9 @@ class MessagingService:
 
     def mark_read(self, chat_id: str, user_id: str) -> None:
         """Mark all messages in a chat as read for user."""
-        self._members_repo.update_last_read(chat_id, user_id)
-        # Also write per-message reads for recent messages
-        msgs = self._messages.list_by_chat(chat_id, limit=50, viewer_id=user_id)
-        msg_ids = [m["id"] for m in msgs if m.get("sender_id") != user_id]
-        if msg_ids:
-            self._reads.mark_chat_read(chat_id, user_id, msg_ids)
-
-    def mark_message_read(self, message_id: str, user_id: str) -> None:
-        self._reads.mark_read(message_id, user_id)
+        msgs = self._messages.list_by_chat(chat_id, limit=1, viewer_id=user_id)
+        last_read_seq = int(msgs[-1].get("seq") or 0) if msgs else 0
+        self._members_repo.update_last_read(chat_id, user_id, last_read_seq)
 
     # ------------------------------------------------------------------
     # Queries
@@ -234,10 +244,16 @@ class MessagingService:
     def list_messages(
         self, chat_id: str, *, limit: int = 50, before: str | None = None, viewer_id: str | None = None
     ) -> list[dict[str, Any]]:
-        return self._messages.list_by_chat(chat_id, limit=limit, before=before, viewer_id=viewer_id)
+        rows = self._messages.list_by_chat(
+            chat_id,
+            limit=limit,
+            before=before,
+            viewer_id=viewer_id,
+        )
+        return [self._normalize_message_row(row) for row in rows]
 
     def list_unread(self, chat_id: str, user_id: str) -> list[dict[str, Any]]:
-        return self._messages.list_unread(chat_id, user_id)
+        return [self._normalize_message_row(row) for row in self._messages.list_unread(chat_id, user_id)]
 
     def count_unread(self, chat_id: str, user_id: str) -> int:
         return self._messages.count_unread(chat_id, user_id)
@@ -279,7 +295,7 @@ class MessagingService:
             msgs = self._messages.list_by_chat(cid, limit=1)
             last_msg = None
             if msgs:
-                m = msgs[-1]
+                m = self._normalize_message_row(msgs[-1])
                 sender = self._resolve_display_user(m.get("sender_id", ""))
                 last_msg = {
                     "content": m.get("content", ""),
