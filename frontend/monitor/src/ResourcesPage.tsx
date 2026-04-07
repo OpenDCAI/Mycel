@@ -183,8 +183,34 @@ export default function ResourcesPage() {
   }, []);
 
   const loadSnapshot = React.useCallback(async () => {
-    const payload = await fetchMonitorResources();
-    applyPayload(payload);
+    try {
+      const payload = await fetchMonitorResources();
+      applyPayload(payload);
+    } catch (exc) {
+      const message = exc instanceof Error ? exc.message : "资源刷新失败";
+      setSummary((prev) => (
+        prev
+          ? {
+              ...prev,
+              refresh_status: "error",
+              refresh_error: message,
+            }
+          : prev
+      ));
+    }
+  }, [applyPayload]);
+
+  const retryLoad = React.useCallback(async () => {
+    setRefreshing(true);
+    try {
+      const payload = await fetchMonitorResources();
+      applyPayload(payload);
+      setError(null);
+    } catch (exc) {
+      setError(exc instanceof Error ? exc.message : "资源加载失败");
+    } finally {
+      setRefreshing(false);
+    }
   }, [applyPayload]);
 
   const refreshNow = React.useCallback(async () => {
@@ -194,11 +220,24 @@ export default function ResourcesPage() {
       applyPayload(payload);
       setError(null);
     } catch (exc) {
-      setError(exc instanceof Error ? exc.message : "资源刷新失败");
+      const message = exc instanceof Error ? exc.message : "资源刷新失败";
+      if (providers.length > 0) {
+        setSummary((prev) => (
+          prev
+            ? {
+                ...prev,
+                refresh_status: "error",
+                refresh_error: message,
+              }
+            : prev
+        ));
+      } else {
+        setError(message);
+      }
     } finally {
       setRefreshing(false);
     }
-  }, [applyPayload]);
+  }, [applyPayload, providers.length]);
 
   React.useEffect(() => {
     let cancelled = false;
@@ -230,7 +269,7 @@ export default function ResourcesPage() {
 
   React.useEffect(() => {
     const timer = window.setInterval(() => {
-      void loadSnapshot().catch(() => {});
+      void loadSnapshot();
     }, 30000);
     return () => window.clearInterval(timer);
   }, [loadSnapshot]);
@@ -239,6 +278,7 @@ export default function ResourcesPage() {
   const refreshedAt = summary?.last_refreshed_at
     ? new Date(summary.last_refreshed_at).toLocaleTimeString()
     : "--:--:--";
+  const refreshError = summary?.refresh_error ?? null;
 
   if (loading) {
     return (
@@ -254,7 +294,7 @@ export default function ResourcesPage() {
         <div className="resources-error-card">
           <h2>资源加载失败</h2>
           <p>{error}</p>
-          <button type="button" className="resources-action-button" onClick={() => void refreshNow()}>
+          <button type="button" className="resources-action-button" onClick={() => void retryLoad()}>
             重试
           </button>
         </div>
@@ -304,6 +344,7 @@ export default function ResourcesPage() {
             {refreshing ? "刷新中..." : "刷新"}
           </button>
         </div>
+        {refreshError && <p className="resources-refresh-error">刷新失败: {refreshError}</p>}
       </header>
 
       <div className="resources-provider-grid">
@@ -725,16 +766,9 @@ function MonitorFileBrowser({
     setFileError(null);
   }, [disabled, leaseId, loadPath]);
 
-  const openFile = React.useCallback(
+  const loadFile = React.useCallback(
     async (path: string) => {
       if (!leaseId) return;
-      if (selectedFile === path) {
-        setSelectedFile(null);
-        setFileContent(null);
-        setFileError(null);
-        return;
-      }
-      setSelectedFile(path);
       setFileContent(null);
       setFileError(null);
       setFileLoading(true);
@@ -750,7 +784,22 @@ function MonitorFileBrowser({
         setFileLoading(false);
       }
     },
-    [leaseId, selectedFile],
+    [leaseId],
+  );
+
+  const openFile = React.useCallback(
+    async (path: string) => {
+      if (!leaseId) return;
+      if (selectedFile === path) {
+        setSelectedFile(null);
+        setFileContent(null);
+        setFileError(null);
+        return;
+      }
+      setSelectedFile(path);
+      await loadFile(path);
+    },
+    [leaseId, selectedFile, loadFile],
   );
 
   if (!leaseId) {
@@ -778,7 +827,14 @@ function MonitorFileBrowser({
             </button>
           )}
           {loading && <p className="file-browser__empty">加载中...</p>}
-          {error && <p className="file-browser__error">{error}</p>}
+          {error && (
+            <div className="file-browser__error-stack">
+              <p className="file-browser__error">{error}</p>
+              <button type="button" className="file-browser__retry" onClick={() => void loadPath(currentPath)}>
+                重试
+              </button>
+            </div>
+          )}
           {!loading && !error && items.length === 0 && <p className="file-browser__empty">此目录为空</p>}
           {!loading &&
             !error &&
@@ -806,7 +862,20 @@ function MonitorFileBrowser({
             </div>
             <div className="file-browser__content">
               {fileLoading && <p className="file-browser__empty">读取中...</p>}
-              {!fileLoading && fileError && !fileContent && <p className="file-browser__error">{fileError}</p>}
+              {!fileLoading && fileError && !fileContent && (
+                <div className="file-browser__error-stack">
+                  <p className="file-browser__error">{fileError}</p>
+                  <button
+                    type="button"
+                    className="file-browser__retry"
+                    onClick={() => {
+                      if (selectedFile) void loadFile(selectedFile);
+                    }}
+                  >
+                    重试
+                  </button>
+                </div>
+              )}
               {fileContent != null && <pre>{fileContent}</pre>}
               {fileContent != null && fileError && <p className="file-browser__note">{fileError}</p>}
             </div>
