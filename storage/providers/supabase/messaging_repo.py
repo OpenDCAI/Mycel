@@ -128,18 +128,14 @@ class SupabaseMessagesRepo:
         result = {cid: 0 for cid in chat_ids}
         if not chat_ids:
             return result
-        try:
-            res = self._client.rpc(
-                "count_unread_per_chat",
-                {"p_user_id": user_id, "p_chat_ids": list(chat_ids)},
-            ).execute()
-            for row in res.data or []:
-                cid = row.get("chat_id")
-                if cid:
-                    result[cid] = int(row.get("unread_count", 0))
-        except Exception:
-            # Fallback: return zeros if RPC unavailable
-            pass
+        res = self._client.rpc(
+            "count_unread_per_chat",
+            {"p_user_id": user_id, "p_chat_ids": list(chat_ids)},
+        ).execute()
+        for row in res.data or []:
+            cid = row.get("chat_id")
+            if cid:
+                result[cid] = int(row.get("unread_count", 0))
         return result
 
     def list_by_chat(
@@ -201,12 +197,9 @@ class SupabaseMessagesRepo:
             return False
         created = msg.get("created_at")
         if created:
-            try:
-                created_dt = datetime.fromisoformat(created.replace("Z", "+00:00"))
-                if datetime.now(tz=UTC) - created_dt > timedelta(minutes=2):
-                    return False
-            except (ValueError, AttributeError):
-                pass
+            created_dt = datetime.fromisoformat(created.replace("Z", "+00:00"))
+            if datetime.now(tz=UTC) - created_dt > timedelta(minutes=2):
+                return False
         self._client.table("messages").update({"retracted_at": now_iso(), "content": "[已撤回]"}).eq("id", message_id).execute()
         return True
 
