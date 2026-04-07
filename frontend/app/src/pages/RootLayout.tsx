@@ -26,6 +26,23 @@ const mobileNavItems = [
 export default function RootLayout() {
   const token = useAuthStore(s => s.token);
   const setupInfo = useAuthStore(s => s.setupInfo);
+
+  // Detect Supabase recovery hash (#type=recovery&access_token=...)
+  const [recoveryToken, setRecoveryToken] = useState<string | null>(() => {
+    const hash = window.location.hash;
+    if (hash.includes("type=recovery")) {
+      const params = new URLSearchParams(hash.slice(1));
+      return params.get("access_token");
+    }
+    return null;
+  });
+
+  const clearRecovery = useCallback(() => {
+    setRecoveryToken(null);
+    window.history.replaceState(null, "", window.location.pathname);
+  }, []);
+
+  if (recoveryToken) return <ResetPasswordForm accessToken={recoveryToken} onDone={clearRecovery} />;
   if (!token) return <LoginForm />;
   if (setupInfo) return <SetupNameStep userId={setupInfo.userId} defaultName={setupInfo.defaultName} />;
   return <AuthenticatedLayout />;
@@ -365,6 +382,7 @@ function CreateDropdown({
 // ── Auth form states ──────────────────────────────────────────────────────
 type AuthStep =
   | { type: "login" }
+  | { type: "forgot_password" }
   | { type: "reg_email" }
   | { type: "reg_otp"; email: string; password: string; inviteCode: string };
 
@@ -396,6 +414,7 @@ export function LoginForm() {
   const sendOtp = useAuthStore(s => s.sendOtp);
   const verifyOtp = useAuthStore(s => s.verifyOtp);
   const completeRegister = useAuthStore(s => s.completeRegister);
+  const forgotPassword = useAuthStore(s => s.forgotPassword);
 
   function reset(t: AuthStep) { setStep(t); setError(null); }
 
@@ -407,6 +426,19 @@ export function LoginForm() {
         navigate("/chat", { replace: true });
       }}
       onSwitch={() => reset({ type: "reg_email" })}
+      onForgot={() => reset({ type: "forgot_password" })}
+      error={error} setError={setError}
+      loading={loading} setLoading={setLoading}
+    />;
+  }
+
+  // ── Step: Forgot password ──
+  if (step.type === "forgot_password") {
+    return <ForgotPasswordStep
+      onSubmit={async (email) => {
+        await forgotPassword(email);
+      }}
+      onBack={() => reset({ type: "login" })}
       error={error} setError={setError}
       loading={loading} setLoading={setLoading}
     />;
@@ -448,9 +480,10 @@ export function LoginForm() {
 const inputCls = "w-full px-4 py-2.5 rounded-lg border border-border bg-card text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50";
 const btnCls = "w-full py-2.5 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 disabled:opacity-50";
 
-function LoginStep({ onSubmit, onSwitch, error, setError, loading, setLoading }: {
+function LoginStep({ onSubmit, onSwitch, onForgot, error, setError, loading, setLoading }: {
   onSubmit: (id: string, pw: string) => Promise<void>;
   onSwitch: () => void;
+  onForgot: () => void;
   error: string | null; setError: (e: string | null) => void;
   loading: boolean; setLoading: (v: boolean) => void;
 }) {
@@ -474,6 +507,88 @@ function LoginStep({ onSubmit, onSwitch, error, setError, loading, setLoading }:
       <p className="text-center text-xs text-muted-foreground mt-4">
         没有账号？<button onClick={onSwitch} className="text-primary hover:underline">注册</button>
       </p>
+    </AuthCard>
+  );
+}
+
+function ForgotPasswordStep({ onSubmit, onBack, error, setError, loading, setLoading }: {
+  onSubmit: (email: string) => Promise<void>;
+  onBack: () => void;
+  error: string | null; setError: (e: string | null) => void;
+  loading: boolean; setLoading: (v: boolean) => void;
+}) {
+  const [email, setEmail] = useState("");
+  const [sent, setSent] = useState(false);
+  async function handle(e: React.FormEvent) {
+    e.preventDefault(); setError(null); setLoading(true);
+    try { await onSubmit(email); setSent(true); }
+    catch (err) { setError(err instanceof Error ? err.message : "发送失败"); }
+    finally { setLoading(false); }
+  }
+  if (sent) {
+    return (
+      <AuthCard>
+        <AuthHeader title="邮件已发送" subtitle={`重置密码链接已发送至 ${email}`} />
+        <p className="text-sm text-muted-foreground text-center mb-6">请查收邮件并点击链接重置密码。如未收到，请检查垃圾邮件箱。</p>
+        <button onClick={onBack} className={btnCls}>返回登录</button>
+      </AuthCard>
+    );
+  }
+  return (
+    <AuthCard>
+      <AuthHeader title="重置密码" subtitle="输入账号邮箱，我们将发送重置链接" />
+      <form onSubmit={handle} className="space-y-4">
+        <input type="email" placeholder="邮箱" value={email} onChange={e => setEmail(e.target.value)} className={inputCls} required autoFocus autoComplete="email" />
+        {error && <p className="text-xs text-destructive">{error}</p>}
+        <button type="submit" disabled={loading} className={btnCls}>{loading ? "发送中..." : "发送重置邮件"}</button>
+      </form>
+      <p className="text-center text-xs text-muted-foreground mt-4">
+        <button onClick={onBack} className="text-primary hover:underline">返回登录</button>
+      </p>
+    </AuthCard>
+  );
+}
+
+function ResetPasswordForm({ accessToken, onDone }: { accessToken: string; onDone: () => void }) {
+  const [password, setPassword] = useState("");
+  const [confirm, setConfirm] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [done, setDone] = useState(false);
+  const updatePassword = useAuthStore(s => s.updatePassword);
+
+  async function handle(e: React.FormEvent) {
+    e.preventDefault();
+    if (password !== confirm) { setError("两次输入的密码不一致"); return; }
+    setError(null); setLoading(true);
+    try {
+      await updatePassword(accessToken, password);
+      setDone(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "重置失败");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  if (done) {
+    return (
+      <AuthCard>
+        <AuthHeader title="密码已重置" subtitle="新密码设置成功，请重新登录" />
+        <button onClick={onDone} className={btnCls}>去登录</button>
+      </AuthCard>
+    );
+  }
+
+  return (
+    <AuthCard>
+      <AuthHeader title="设置新密码" subtitle="请输入你的新密码" />
+      <form onSubmit={handle} className="space-y-4">
+        <PasswordInput value={password} onChange={setPassword} placeholder="新密码" autoComplete="new-password" autoFocus />
+        <PasswordInput value={confirm} onChange={setConfirm} placeholder="确认新密码" autoComplete="new-password" />
+        {error && <p className="text-xs text-destructive">{error}</p>}
+        <button type="submit" disabled={loading} className={btnCls}>{loading ? "请稍候..." : "确认重置"}</button>
+      </form>
     </AuthCard>
   );
 }
