@@ -262,6 +262,125 @@ def _member_to_dict(member_dir: Path) -> dict[str, Any] | None:
     }
 
 
+def _tools_from_repo(config: dict[str, Any]) -> list[dict[str, Any]]:
+    catalog = _load_tools_catalog()
+    runtime = config.get("runtime", {}) if isinstance(config.get("runtime"), dict) else {}
+    enabled_tools = config.get("tools") or ["*"]
+    is_all = enabled_tools == ["*"]
+    tools_list = []
+    for tool_name, tool_info in catalog.items():
+        runtime_key = f"tools:{tool_name}"
+        override = runtime.get(runtime_key, {}) if isinstance(runtime.get(runtime_key), dict) else {}
+        tools_list.append(
+            {
+                "name": tool_name,
+                "enabled": bool(override.get("enabled", is_all or tool_name in enabled_tools)),
+                "desc": override.get("desc") or tool_info.desc,
+                "group": tool_info.group,
+            }
+        )
+    return tools_list
+
+
+def _skills_from_repo(agent_config_id: str, config: dict[str, Any], agent_config_repo: Any) -> list[dict[str, Any]]:
+    runtime = config.get("runtime", {}) if isinstance(config.get("runtime"), dict) else {}
+    skills_list = []
+    for row in agent_config_repo.list_skills(agent_config_id):
+        runtime_key = f"skills:{row['name']}"
+        override = runtime.get(runtime_key, {}) if isinstance(runtime.get(runtime_key), dict) else {}
+        desc = override.get("desc")
+        if not desc:
+            from backend.web.services.library_service import get_library_skill_desc
+
+            desc = get_library_skill_desc(str(row["name"]))
+        skills_list.append(
+            {
+                "name": row["name"],
+                "enabled": bool(override.get("enabled", True)),
+                "desc": desc or "",
+            }
+        )
+    return skills_list
+
+
+def _rules_from_repo(agent_config_id: str, agent_config_repo: Any) -> list[dict[str, Any]]:
+    rules = []
+    for row in agent_config_repo.list_rules(agent_config_id):
+        filename = str(row.get("filename") or "")
+        name = filename[:-3] if filename.endswith(".md") else filename
+        rules.append({"name": name, "content": row.get("content", "")})
+    return rules
+
+
+def _sub_agents_from_repo(agent_config_id: str, agent_config_repo: Any) -> list[dict[str, Any]]:
+    catalog = _load_tools_catalog()
+    sub_agents = []
+    for row in agent_config_repo.list_sub_agents(agent_config_id):
+        raw_tools = row.get("tools_json") or row.get("tools") or ["*"]
+        is_all = raw_tools == ["*"]
+        tools = [
+            {
+                "name": name,
+                "enabled": bool(is_all or name in raw_tools),
+                "desc": info.desc,
+                "group": info.group,
+            }
+            for name, info in catalog.items()
+        ]
+        sub_agents.append(
+            {
+                "name": row["name"],
+                "desc": row.get("description", ""),
+                "tools": tools,
+                "system_prompt": row.get("system_prompt", ""),
+                "builtin": False,
+            }
+        )
+    return sub_agents
+
+
+def _mcps_from_repo(config: dict[str, Any]) -> list[dict[str, Any]]:
+    raw = config.get("mcp", {}) if isinstance(config.get("mcp"), dict) else {}
+    return [
+        {
+            "name": name,
+            "command": item.get("command", ""),
+            "args": item.get("args", []),
+            "env": item.get("env", {}),
+            "disabled": item.get("disabled", False),
+        }
+        for name, item in raw.items()
+        if isinstance(item, dict)
+    ]
+
+
+def _member_from_repos(user: Any, agent_config_repo: Any) -> dict[str, Any]:
+    if user.agent_config_id is None:
+        raise RuntimeError(f"Agent user {user.id} is missing agent_config_id")
+    config = agent_config_repo.get_config(user.agent_config_id)
+    if config is None:
+        raise RuntimeError(f"Agent config {user.agent_config_id} is missing for {user.id}")
+    return {
+        "id": user.id,
+        "name": config.get("name") or user.display_name,
+        "description": config.get("description", ""),
+        "model": config.get("model"),
+        "status": config.get("status", "draft"),
+        "version": config.get("version", "0.1.0"),
+        "avatar_url": avatar_url(user.id, bool(user.avatar)),
+        "config": {
+            "prompt": config.get("system_prompt", ""),
+            "rules": _rules_from_repo(user.agent_config_id, agent_config_repo),
+            "tools": _tools_from_repo(config),
+            "mcps": _mcps_from_repo(config),
+            "skills": _skills_from_repo(user.agent_config_id, config, agent_config_repo),
+            "subAgents": _sub_agents_from_repo(user.agent_config_id, agent_config_repo),
+        },
+        "created_at": config.get("created_at", 0),
+        "updated_at": config.get("updated_at", 0),
+    }
+
+
 # ── Leon builtin ──
 
 
@@ -331,7 +450,7 @@ def _ensure_leon_dir() -> Path:
 # ── CRUD operations ──
 
 
-def list_members(owner_user_id: str | None = None, user_repo: Any = None) -> list[dict[str, Any]]:
+def list_members(owner_user_id: str | None = None, user_repo: Any = None, agent_config_repo: Any = None) -> list[dict[str, Any]]:
     """List agent members. If owner_user_id given, only that user's agents (no builtin Leon).
 
     Args:
@@ -340,17 +459,10 @@ def list_members(owner_user_id: str | None = None, user_repo: Any = None) -> lis
     """
     # @@@auth-scope — scoped by owner from DB, config from filesystem
     if owner_user_id:
-        if user_repo is None:
-            raise RuntimeError("user_repo is required when owner_user_id is provided")
+        if user_repo is None or agent_config_repo is None:
+            raise RuntimeError("user_repo and agent_config_repo are required when owner_user_id is provided")
         agents = user_repo.list_by_owner_user_id(owner_user_id)
-        results = []
-        for agent in agents:
-            agent_dir = MEMBERS_DIR / agent.id
-            if agent_dir.is_dir() and (agent_dir / "agent.md").exists():
-                item = _member_to_dict(agent_dir)
-                if item:
-                    results.append(item)
-        return results
+        return [_member_from_repos(agent, agent_config_repo) for agent in agents]
 
     # Unscoped: return all (legacy/unauthenticated)
     leon = get_member("__leon__")
@@ -364,7 +476,7 @@ def list_members(owner_user_id: str | None = None, user_repo: Any = None) -> lis
     return results
 
 
-def get_member(member_id: str) -> dict[str, Any] | None:
+def get_member(member_id: str, *, user_repo: Any = None, agent_config_repo: Any = None) -> dict[str, Any] | None:
     if member_id == "__leon__":
         leon_dir = MEMBERS_DIR / "__leon__"
         if leon_dir.is_dir() and (leon_dir / "agent.md").exists():
@@ -373,10 +485,12 @@ def get_member(member_id: str) -> dict[str, Any] | None:
                 item["builtin"] = True
                 return item
         return _leon_builtin()
-    member_dir = MEMBERS_DIR / member_id
-    if not member_dir.is_dir():
+    if user_repo is None or agent_config_repo is None:
+        raise RuntimeError("user_repo and agent_config_repo are required for agent member reads")
+    user = user_repo.get_by_id(member_id)
+    if user is None:
         return None
-    return _member_to_dict(member_dir)
+    return _member_from_repos(user, agent_config_repo)
 
 
 def create_member(
@@ -436,12 +550,13 @@ def create_member(
             updated_at=now_ms,
         )
 
-    return get_member(agent_user_id)  # type: ignore
+    return get_member(agent_user_id, user_repo=user_repo, agent_config_repo=agent_config_repo)  # type: ignore
 
 
 def update_member(
     member_id: str,
     user_repo: Any = None,
+    agent_config_repo: Any = None,
     **fields: Any,
 ) -> dict[str, Any] | None:
     if member_id == "__leon__":
@@ -453,7 +568,7 @@ def update_member(
     allowed = {"name", "description", "status"}
     updates = {k: v for k, v in fields.items() if k in allowed and v is not None}
     if not updates:
-        return get_member(member_id)
+        return get_member(member_id, user_repo=user_repo, agent_config_repo=agent_config_repo)
     if "status" in updates:
         meta = _read_json(member_dir / "meta.json", {})
         meta["status"] = updates["status"]
@@ -478,7 +593,7 @@ def update_member(
                 raise RuntimeError("user_repo is required to update member name")
             user_repo.update(member_id, display_name=updates["name"])
 
-    return get_member(member_id)
+    return get_member(member_id, user_repo=user_repo, agent_config_repo=agent_config_repo)
 
 
 def update_member_config(
@@ -575,7 +690,7 @@ def update_member_config(
         except Exception:
             logger.warning("Failed to sync config to repo for member %s", member_id, exc_info=True)
 
-    return get_member(member_id)
+    return get_member(member_id, user_repo=user_repo, agent_config_repo=agent_config_repo)
 
 
 # ── Supabase repo dual-write helper ──
@@ -783,7 +898,7 @@ def publish_member(member_id: str, bump_type: str = "patch", user_repo: Any = No
         except Exception:
             logger.warning("Failed to update repo for publish of %s", member_id, exc_info=True)
 
-    return get_member(member_id)
+    return get_member(member_id, user_repo=user_repo, agent_config_repo=agent_config_repo)
 
 
 def delete_member(member_id: str, user_repo: Any = None, agent_config_repo: Any = None) -> bool:

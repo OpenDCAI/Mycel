@@ -33,7 +33,16 @@ def _get_owned_member_or_404(member_id: str, user_id: str, user_repo: Any) -> di
         raise HTTPException(404, "Member not found")
     if user.owner_user_id != user_id:
         raise HTTPException(403, "Forbidden")
-    item = member_service.get_member(member_id)
+    return {"id": user.id}
+
+
+def _get_owned_member_or_404_with_config(member_id: str, user_id: str, user_repo: Any, agent_config_repo: Any) -> dict[str, Any]:
+    user = user_repo.get_by_id(member_id)
+    if user is None or user.type.value != "agent":
+        raise HTTPException(404, "Member not found")
+    if user.owner_user_id != user_id:
+        raise HTTPException(403, "Forbidden")
+    item = member_service.get_member(member_id, user_repo=user_repo, agent_config_repo=agent_config_repo)
     if not item:
         raise HTTPException(404, "Member not found")
     return item
@@ -48,7 +57,8 @@ async def list_members(
     request: Request,
 ) -> dict[str, Any]:
     user_repo = request.app.state.user_repo
-    items = await asyncio.to_thread(member_service.list_members, user_id, user_repo=user_repo)
+    agent_config_repo = getattr(request.app.state, "agent_config_repo", None)
+    items = await asyncio.to_thread(member_service.list_members, user_id, user_repo=user_repo, agent_config_repo=agent_config_repo)
     return {"items": items}
 
 
@@ -58,7 +68,13 @@ async def get_member(
     request: Request,
     user_id: Annotated[str, Depends(get_current_user_id)],
 ) -> dict[str, Any]:
-    return await asyncio.to_thread(_get_owned_member_or_404, member_id, user_id, request.app.state.user_repo)
+    return await asyncio.to_thread(
+        _get_owned_member_or_404_with_config,
+        member_id,
+        user_id,
+        request.app.state.user_repo,
+        getattr(request.app.state, "agent_config_repo", None),
+    )
 
 
 @router.post("/members")
@@ -87,11 +103,13 @@ async def update_member(
     user_id: Annotated[str, Depends(get_current_user_id)],
 ) -> dict[str, Any]:
     user_repo = request.app.state.user_repo
+    agent_config_repo = getattr(request.app.state, "agent_config_repo", None)
     await asyncio.to_thread(_get_owned_member_or_404, member_id, user_id, user_repo)
     item = await asyncio.to_thread(
         member_service.update_member,
         member_id,
         user_repo=user_repo,
+        agent_config_repo=agent_config_repo,
         **req.model_dump(),
     )
     if not item:
@@ -443,6 +461,7 @@ async def get_used_by(
         resource_name,
         user_id,
         user_repo=request.app.state.user_repo,
+        agent_config_repo=getattr(request.app.state, "agent_config_repo", None),
     )
     return {"count": len(users), "users": users}
 

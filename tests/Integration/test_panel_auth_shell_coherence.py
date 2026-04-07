@@ -23,38 +23,40 @@ async def test_panel_members_uses_injected_user_repo_for_owner_scope(monkeypatch
         created_at=1.0,
     )
     seen: list[str] = []
-    monkeypatch.setattr(
-        member_service,
-        "_member_to_dict",
-        lambda _member_dir: {
-            "id": "agent-1",
-            "name": "Toad",
-            "avatar_url": "avatars/agent-1.png",
-            "config": {},
-        },
-    )
-    member_dir = tmp_path / "agent-1"
-    member_dir.mkdir()
-    (member_dir / "agent.md").write_text("stub", encoding="utf-8")
-    monkeypatch.setattr(member_service, "MEMBERS_DIR", tmp_path)
-
     fake_repo = SimpleNamespace(
         list_by_owner_user_id=lambda owner_user_id: seen.append(owner_user_id) or [agent],
+    )
+    fake_agent_config_repo = SimpleNamespace(
+        get_config=lambda agent_config_id: {
+            "id": agent_config_id,
+            "name": "Toad",
+            "description": "",
+            "tools": ["*"],
+            "system_prompt": "hello",
+            "status": "draft",
+            "version": "0.1.0",
+            "runtime": {},
+            "mcp": {},
+            "created_at": 1,
+            "updated_at": 2,
+        },
+        list_rules=lambda _agent_config_id: [],
+        list_skills=lambda _agent_config_id: [],
+        list_sub_agents=lambda _agent_config_id: [],
     )
 
     result = await panel_router.list_members(
         user_id="user-1",
-        request=SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(user_repo=fake_repo))),
+        request=SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(user_repo=fake_repo, agent_config_repo=fake_agent_config_repo))),
     )
 
     assert seen == ["user-1"]
-    assert result["items"] == [{"id": "agent-1", "name": "Toad", "avatar_url": "avatars/agent-1.png", "config": {}}]
+    assert result["items"][0]["id"] == "agent-1"
+    assert result["items"][0]["name"] == "Toad"
+    assert result["items"][0]["config"]["prompt"] == "hello"
 
 
 def test_owned_member_helper_returns_member_for_owner(monkeypatch: pytest.MonkeyPatch):
-    member = {"id": "agent-1", "name": "Toad"}
-    monkeypatch.setattr(member_service, "get_member", lambda member_id: member if member_id == "agent-1" else None)
-
     result = panel_router._get_owned_member_or_404(
         "agent-1",
         "user-1",
@@ -63,7 +65,7 @@ def test_owned_member_helper_returns_member_for_owner(monkeypatch: pytest.Monkey
         ),
     )
 
-    assert result == member
+    assert result == {"id": "agent-1"}
 
 
 def test_owned_member_helper_raises_404_for_missing_member(monkeypatch: pytest.MonkeyPatch):
@@ -251,8 +253,8 @@ def test_library_service_get_resource_used_by_scopes_to_owner(monkeypatch: pytes
     monkeypatch.setattr(
         member_service,
         "list_members",
-        lambda owner_user_id=None, user_repo=None: (
-            seen.append((owner_user_id, user_repo))
+        lambda owner_user_id=None, user_repo=None, agent_config_repo=None: (
+            seen.append((owner_user_id, user_repo, agent_config_repo))
             or [
                 {"id": "agent-1", "name": "Toad", "config": {"skills": [{"name": "skill-a"}]}},
                 {"id": "agent-2", "name": "Dryad", "config": {"skills": [{"name": "skill-b"}]}},
@@ -260,10 +262,10 @@ def test_library_service_get_resource_used_by_scopes_to_owner(monkeypatch: pytes
         ),
     )
 
-    result = library_service.get_resource_used_by("skill", "skill-a", "user-1", user_repo="repo-1")
+    result = library_service.get_resource_used_by("skill", "skill-a", "user-1", user_repo="repo-1", agent_config_repo="cfg-repo")
 
     assert result == ["Toad"]
-    assert seen == [("user-1", "repo-1")]
+    assert seen == [("user-1", "repo-1", "cfg-repo")]
 
 
 @pytest.mark.asyncio
@@ -273,13 +275,14 @@ async def test_panel_library_used_by_route_uses_user_scope(monkeypatch: pytest.M
     monkeypatch.setattr(
         library_service,
         "get_resource_used_by",
-        lambda resource_type, resource_name, owner_user_id, user_repo=None: (
+        lambda resource_type, resource_name, owner_user_id, user_repo=None, agent_config_repo=None: (
             seen.update(
                 {
                     "resource_type": resource_type,
                     "resource_name": resource_name,
                     "owner_user_id": owner_user_id,
                     "user_repo": user_repo,
+                    "agent_config_repo": agent_config_repo,
                 }
             )
             or ["Toad"]
@@ -287,10 +290,13 @@ async def test_panel_library_used_by_route_uses_user_scope(monkeypatch: pytest.M
     )
 
     fake_user_repo = SimpleNamespace()
+    fake_agent_config_repo = SimpleNamespace()
     result = await panel_router.get_used_by(
         "skill",
         "skill-a",
-        request=SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(user_repo=fake_user_repo))),
+        request=SimpleNamespace(
+            app=SimpleNamespace(state=SimpleNamespace(user_repo=fake_user_repo, agent_config_repo=fake_agent_config_repo))
+        ),
         user_id="user-1",
     )
 
@@ -300,6 +306,7 @@ async def test_panel_library_used_by_route_uses_user_scope(monkeypatch: pytest.M
         "resource_name": "skill-a",
         "owner_user_id": "user-1",
         "user_repo": fake_user_repo,
+        "agent_config_repo": fake_agent_config_repo,
     }
 
 

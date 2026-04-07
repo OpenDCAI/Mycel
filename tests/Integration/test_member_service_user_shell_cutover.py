@@ -42,13 +42,20 @@ class _FakeAgentConfigRepo:
         self.saved_sub_agents: list[tuple[str, str, dict[str, object]]] = []
         self.get_calls: list[str] = []
         self.deleted: list[str] = []
+        self.configs: dict[str, dict[str, object]] = {}
+        self.rules: dict[str, list[dict[str, object]]] = {}
+        self.skills: dict[str, list[dict[str, object]]] = {}
+        self.sub_agents: dict[str, list[dict[str, object]]] = {}
 
     def save_config(self, agent_config_id: str, data: dict[str, object]) -> None:
         self.saved_configs.append((agent_config_id, data))
+        self.configs[agent_config_id] = {"id": agent_config_id, **data}
 
     def save_rule(self, agent_config_id: str, filename: str, content: str, rule_id: str | None = None) -> dict[str, object]:
         self.saved_rules.append((agent_config_id, filename, content))
-        return {"id": rule_id or "rule-1", "agent_config_id": agent_config_id, "filename": filename, "content": content}
+        payload = {"id": rule_id or "rule-1", "agent_config_id": agent_config_id, "filename": filename, "content": content}
+        self.rules.setdefault(agent_config_id, []).append(payload)
+        return payload
 
     def save_skill(
         self,
@@ -59,7 +66,9 @@ class _FakeAgentConfigRepo:
         skill_id: str | None = None,
     ) -> dict[str, object]:
         self.saved_skills.append((agent_config_id, name, content))
-        return {"id": skill_id or "skill-1", "agent_config_id": agent_config_id, "name": name, "content": content}
+        payload = {"id": skill_id or "skill-1", "agent_config_id": agent_config_id, "name": name, "content": content}
+        self.skills.setdefault(agent_config_id, []).append(payload)
+        return payload
 
     def save_sub_agent(
         self,
@@ -68,11 +77,22 @@ class _FakeAgentConfigRepo:
         **fields: object,
     ) -> dict[str, object]:
         self.saved_sub_agents.append((agent_config_id, name, fields))
-        return {"id": "sub-1", "agent_config_id": agent_config_id, "name": name, **fields}
+        payload = {"id": "sub-1", "agent_config_id": agent_config_id, "name": name, **fields}
+        self.sub_agents.setdefault(agent_config_id, []).append(payload)
+        return payload
 
     def get_config(self, agent_config_id: str) -> dict[str, object] | None:
         self.get_calls.append(agent_config_id)
-        return {"id": agent_config_id, "name": "Toad", "version": "0.1.0", "status": "draft"}
+        return self.configs.get(agent_config_id) or {"id": agent_config_id, "name": "Toad", "version": "0.1.0", "status": "draft"}
+
+    def list_rules(self, agent_config_id: str) -> list[dict[str, object]]:
+        return list(self.rules.get(agent_config_id, []))
+
+    def list_skills(self, agent_config_id: str) -> list[dict[str, object]]:
+        return list(self.skills.get(agent_config_id, []))
+
+    def list_sub_agents(self, agent_config_id: str) -> list[dict[str, object]]:
+        return list(self.sub_agents.get(agent_config_id, []))
 
     def delete_config(self, agent_config_id: str) -> None:
         self.deleted.append(agent_config_id)
@@ -117,13 +137,67 @@ def _write_member_shell(member_dir: Path, *, name: str = "Toad", description: st
 
 def test_list_members_uses_user_repo_owner_scope(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     monkeypatch.setattr(member_service, "MEMBERS_DIR", tmp_path)
-    _write_member_shell(tmp_path / "agent-1")
     user_repo = _FakeUserRepo(rows={"agent-1": _agent_user()})
+    agent_config_repo = _FakeAgentConfigRepo()
+    agent_config_repo.save_config(
+        "cfg-1",
+        {
+            "agent_user_id": "agent-1",
+            "name": "Toad",
+            "description": "helper",
+            "tools": ["*"],
+            "system_prompt": "hello",
+            "status": "draft",
+            "version": "0.1.0",
+            "runtime": {},
+            "mcp": {},
+            "created_at": 1,
+            "updated_at": 2,
+        },
+    )
 
-    items = member_service.list_members("owner-1", user_repo=user_repo)
+    items = member_service.list_members("owner-1", user_repo=user_repo, agent_config_repo=agent_config_repo)
 
     assert user_repo.owner_queries == ["owner-1"]
     assert [item["id"] for item in items] == ["agent-1"]
+    assert items[0]["name"] == "Toad"
+    assert items[0]["config"]["prompt"] == "hello"
+
+
+def test_get_member_reads_agent_shell_from_repos_not_filesystem(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    monkeypatch.setattr(member_service, "MEMBERS_DIR", tmp_path)
+    user_repo = _FakeUserRepo(rows={"agent-1": _agent_user()})
+    agent_config_repo = _FakeAgentConfigRepo()
+    agent_config_repo.save_config(
+        "cfg-1",
+        {
+            "agent_user_id": "agent-1",
+            "name": "Toad",
+            "description": "helper",
+            "tools": ["send_message"],
+            "system_prompt": "hello",
+            "status": "draft",
+            "version": "0.1.0",
+            "runtime": {"skills:search": {"enabled": True, "desc": "Search skill"}},
+            "mcp": {"filesystem": {"command": "npx", "args": ["-y"], "env": {}, "disabled": False}},
+            "created_at": 1,
+            "updated_at": 2,
+        },
+    )
+    agent_config_repo.save_rule("cfg-1", "guard.md", "be careful")
+    agent_config_repo.save_skill("cfg-1", "search", "# Search")
+    agent_config_repo.save_sub_agent("cfg-1", "Scout", description="helper", tools=["send_message"], system_prompt="go")
+
+    item = member_service.get_member("agent-1", user_repo=user_repo, agent_config_repo=agent_config_repo)
+
+    assert item is not None
+    assert item["id"] == "agent-1"
+    assert item["name"] == "Toad"
+    assert item["config"]["prompt"] == "hello"
+    assert item["config"]["rules"] == [{"name": "guard", "content": "be careful"}]
+    assert item["config"]["skills"][0]["name"] == "search"
+    assert item["config"]["mcps"][0]["name"] == "filesystem"
+    assert item["config"]["subAgents"][0]["name"] == "Scout"
 
 
 def test_create_member_creates_agent_user_and_saves_config_by_agent_config_id(
@@ -216,7 +290,7 @@ def test_publish_member_reads_and_writes_repo_by_agent_config_id(monkeypatch: py
 
     member_service.publish_member("agent-1", user_repo=user_repo, agent_config_repo=agent_config_repo)
 
-    assert agent_config_repo.get_calls == ["cfg-1"]
+    assert agent_config_repo.get_calls == ["cfg-1", "cfg-1"]
     assert agent_config_repo.saved_configs[-1][0] == "cfg-1"
 
 
