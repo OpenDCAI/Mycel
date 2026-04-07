@@ -75,7 +75,8 @@ export const useChatStore = create<ChatStore>((set, get) => ({
   },
 
   markRead: async (chatId: string) => {
-    await authFetch(`/api/chats/${chatId}/read`, { method: "POST" });
+    const res = await authFetch(`/api/chats/${chatId}/read`, { method: "POST" });
+    if (!res.ok) return;
     set(s => ({
       chats: s.chats.map(c => c.id === chatId ? { ...c, unread_count: 0 } : c),
       totalUnread: Math.max(0, s.totalUnread - (s.chats.find(c => c.id === chatId)?.unread_count ?? 0)),

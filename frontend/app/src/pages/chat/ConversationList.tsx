@@ -25,7 +25,6 @@ import { useAuthStore } from "@/store/auth-store";
 import { supabase } from "@/lib/supabase";
 import type { ChatSummary } from "@/store/chat-store";
 import type { ConversationItem } from "@/types/conversation";
-import type { ThreadSummary } from "@/api";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -374,8 +373,7 @@ function NewChatWrapper({ onClose }: { onClose: (newChatId?: string) => void }) 
 // Main component
 // ---------------------------------------------------------------------------
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-export default function ConversationList(_props: { threads?: ThreadSummary[] } = {}) {
+export default function ConversationList() {
   const { conversations, fetchConversations } = useConversationStore();
   const { chats, fetchChats } = useChatStore();
   const myUserId = useAuthStore(s => s.userId);

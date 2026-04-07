@@ -237,7 +237,8 @@ def test_messaging_service_list_chats_exposes_thread_user_participant_id() -> No
 
     service = MessagingService(
         chat_repo=SimpleNamespace(
-            get_by_id=lambda chat_id: SimpleNamespace(id=chat_id, title=None, status="active", created_at="2026-04-07T00:00:00Z")
+            get_by_id=lambda chat_id: SimpleNamespace(id=chat_id, title=None, status="active", created_at="2026-04-07T00:00:00Z"),
+            get_by_ids=lambda chat_ids: {cid: SimpleNamespace(id=cid, title=None, status="active", created_at="2026-04-07T00:00:00Z") for cid in chat_ids},
         ),
         chat_member_repo=SimpleNamespace(
             list_chats_for_user=lambda _user_id: ["chat-1"],

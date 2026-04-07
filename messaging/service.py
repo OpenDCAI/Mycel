@@ -264,8 +264,8 @@ class MessagingService:
             return []
 
         # 1. Batch fetch all chat rows
-        all_chats = {cid: self._chats.get_by_id(cid) for cid in chat_ids}
-        active_ids = [cid for cid, c in all_chats.items() if c and c.status == "active"]
+        all_chats = self._chats.get_by_ids(chat_ids)
+        active_ids = [cid for cid, c in all_chats.items() if c.status == "active"]
         if not active_ids:
             return []
 

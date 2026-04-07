@@ -7,7 +7,7 @@ export interface RelationshipItem {
   other_name: string;
   other_mycel_id: number | null;
   other_avatar_url: string | null;
-  state: string;
+  state: "pending" | "accepted" | "rejected" | "revoked";
   is_requester: boolean;
   created_at: string;
 }
@@ -32,6 +32,10 @@ interface RelationshipStore {
   remove(relationshipId: string): Promise<void>;
   searchUsers(q: string): Promise<void>;
   clearSearch(): void;
+}
+
+async function _action(id: string, verb: string): Promise<void> {
+  await authFetch(`/api/relationships/${id}/${verb}`, { method: "POST" });
 }
 
 export const useRelationshipStore = create<RelationshipStore>((set, get) => ({
@@ -96,17 +100,17 @@ export const useRelationshipStore = create<RelationshipStore>((set, get) => ({
   },
 
   approve: async (relationshipId: string) => {
-    await authFetch(`/api/relationships/${relationshipId}/approve`, { method: "POST" });
+    await _action(relationshipId, "approve");
     await get().fetchRelationships();
   },
 
   reject: async (relationshipId: string) => {
-    await authFetch(`/api/relationships/${relationshipId}/reject`, { method: "POST" });
+    await _action(relationshipId, "reject");
     await get().fetchRelationships();
   },
 
   remove: async (relationshipId: string) => {
-    await authFetch(`/api/relationships/${relationshipId}/remove`, { method: "POST" });
+    await _action(relationshipId, "remove");
     await get().fetchRelationships();
   },
 

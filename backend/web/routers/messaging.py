@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import asyncio
 import json
-import time
 from datetime import UTC, datetime
 from typing import Annotated, Any
 
@@ -19,21 +18,6 @@ from backend.web.core.dependencies import get_app, get_current_user_id
 from backend.web.utils.serializers import avatar_url
 
 router = APIRouter(prefix="/api/chats", tags=["chats"])
-
-# Simple TTL member cache: {member_id: (member_obj, expire_ts)}
-_member_cache: dict[str, tuple[Any, float]] = {}
-_MEMBER_CACHE_TTL = 60.0  # seconds
-
-
-def _get_member_cached(member_repo: Any, member_id: str) -> Any:
-    """Get member with 60s in-process cache to avoid repeated Supabase roundtrips."""
-    now = time.monotonic()
-    cached = _member_cache.get(member_id)
-    if cached and cached[1] > now:
-        return cached[0]
-    member = member_repo.get_by_id(member_id)
-    _member_cache[member_id] = (member, now + _MEMBER_CACHE_TTL)
-    return member
 
 
 # ---------------------------------------------------------------------------
