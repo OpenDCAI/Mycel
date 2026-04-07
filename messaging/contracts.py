@@ -1,7 +1,8 @@
 """messaging/contracts.py — canonical types for the messaging module.
 
 All types are Pydantic v2, strict=True, frozen=True.
-User is the first-class social identity (the social identity).
+These types expose the current messaging social-id slot.
+The long-term agent social-handle split is still pending.
 """
 
 from __future__ import annotations
@@ -12,14 +13,14 @@ from typing import Any, Literal, Protocol
 from pydantic import BaseModel, ConfigDict
 
 # ---------------------------------------------------------------------------
-# User — social identity first-class citizen
+# User — current messaging social-id record
 # ---------------------------------------------------------------------------
 
 
 class User(BaseModel):
     model_config = ConfigDict(strict=True, frozen=True)
 
-    id: str  # member_id
+    id: str  # current social-id slot; agent handle source still pending
     name: str
     avatar_url: str | None = None
     type: Literal["human", "agent"]
@@ -27,7 +28,7 @@ class User(BaseModel):
 
 
 class UserRepo(Protocol):
-    """Resolve a User by user_id. Reads from member table."""
+    """Resolve the current messaging social-id record. Reads from member-backed storage today."""
 
     def get_user(self, user_id: str) -> User | None: ...
     def list_users(self) -> list[User]: ...

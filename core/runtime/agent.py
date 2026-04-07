@@ -1406,8 +1406,9 @@ class LeonAgent:
                 prompt += (
                     f"\n\n**Chat Identity:**\n"
                     f"- Your name: {name}\n"
-                    f"- Your user_id: {uid}\n"
-                    f"- Your owner: {owner_name} (user_id: {owner_uid})\n"
+                    f"- Your chat identity id: {uid}\n"
+                    f"- The chat tools still use the parameter name user_id for legacy reasons.\n"
+                    f"- Your owner: {owner_name} (human user_id: {owner_uid})\n"
                     f"- When you receive a chat notification, you MUST read it with chat_read() before deciding what to do.\n"
                     f"- If that notification already gives you a chat_id, prefer using that exact chat_id directly.\n"
                     f"- If you reply to the other party, you MUST call chat_send(). Never claim you replied unless chat_send() succeeded.\n"

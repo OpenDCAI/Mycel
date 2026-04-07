@@ -6,7 +6,7 @@ Uses mock model to verify the full astream pipeline without real API calls.
 import json
 import os
 from types import SimpleNamespace
-from typing import Any
+from typing import Any, cast
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -701,6 +701,28 @@ def test_build_rules_section_unifies_core_risk_and_tool_preferences():
         "Examples: deleting files, force-pushing, dropping tables, killing unfamiliar processes, modifying shared infrastructure." in rules
     )
     assert "Background Task Description" not in rules
+
+
+def test_leon_agent_chat_identity_prompt_uses_honest_legacy_wording():
+    from core.runtime.agent import LeonAgent
+
+    agent = object.__new__(LeonAgent)
+    agent._build_system_prompt = lambda: "BASE"
+    cast(Any, agent).config = SimpleNamespace(system_prompt=None)
+    agent._chat_repos = {
+        "user_id": "agent-member-1",
+        "owner_id": "human-user-1",
+        "member_repo": SimpleNamespace(
+            get_by_id=lambda uid: SimpleNamespace(id=uid, name="Toad") if uid == "agent-member-1" else SimpleNamespace(id=uid, name="Owner")
+        ),
+    }
+
+    prompt = LeonAgent._compose_system_prompt(agent)
+
+    assert "- Your chat identity id: agent-member-1" in prompt
+    assert "- The chat tools still use the parameter name user_id for legacy reasons." in prompt
+    assert "- Your owner: Owner (human user_id: human-user-1)" in prompt
+    assert "- Your user_id:" not in prompt
 
 
 def test_build_rules_section_includes_function_result_clearing_guidance_when_spill_buffer_enabled():
