@@ -130,8 +130,8 @@ function AuthenticatedLayout() {
       .subscribe();
 
     return () => {
-      void supabase.removeChannel(relSub);
-      void supabase.removeChannel(msgSub);
+      void supabase!.removeChannel(relSub);
+      void supabase!.removeChannel(msgSub);
     };
   }, [authUser?.id, fetchRelationships, fetchChats, navigate]);
 

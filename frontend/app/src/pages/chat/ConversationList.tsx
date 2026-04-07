@@ -17,11 +17,11 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { MoreHorizontal, Pencil, Pin, PinOff, Bell, BellOff, LogOut, Trash2, Plus, Search, Users, X, Check } from "lucide-react";
+import { MoreHorizontal, Pencil, Pin, PinOff, Bell, BellOff, LogOut, Trash2, Plus, Search, Users, X } from "lucide-react";
 import MemberAvatar from "@/components/MemberAvatar";
 import { useConversationStore } from "@/store/conversation-store";
 import { useChatStore } from "@/store/chat-store";
-import { useAuthStore, authFetch } from "@/store/auth-store";
+import { useAuthStore } from "@/store/auth-store";
 import { supabase } from "@/lib/supabase";
 import type { ChatSummary } from "@/store/chat-store";
 import type { ConversationItem } from "@/types/conversation";
@@ -48,20 +48,6 @@ function formatTime(dateStr: string | number | null | undefined): string {
   if (diffMs < 3_600_000) return `${Math.floor(diffMs / 60_000)}m`;
   if (diffMs < 86_400_000) return `${Math.floor(diffMs / 3_600_000)}h`;
   return `${d.getMonth() + 1}/${d.getDate()}`;
-}
-
-function conversationHref(item: ConversationItem): string {
-  const templateMemberId = item.member_id;
-  if (item.type === "hire" && templateMemberId) {
-    return `/chat/hire/${encodeURIComponent(templateMemberId)}/${encodeURIComponent(item.id)}`;
-  }
-  return `/chat/visit/${encodeURIComponent(item.id)}`;
-}
-
-function conversationTitle(item: ConversationItem, threads: ThreadSummary[]): string {
-  if (item.type !== "hire") return item.title;
-  const thread = threads.find((entry) => entry.thread_id === item.id);
-  return thread?.sidebar_label || item.title;
 }
 
 function chatDisplayName(chat: ChatSummary, myUserId: string | null): string {
@@ -422,7 +408,7 @@ export default function ConversationList(_props: { threads?: ThreadSummary[] } =
         void useChatStore.getState().fetchChats();
       })
       .subscribe();
-    return () => { void supabase.removeChannel(sub); };
+    return () => { void supabase!.removeChannel(sub); };
   }, []);
 
   // ---------------------------------------------------------------------------

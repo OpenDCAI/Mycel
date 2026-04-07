@@ -176,7 +176,7 @@ function ChatConversationInner({ chatId }: { chatId: string }) {
       .subscribe();
 
     return () => {
-      void supabase.removeChannel(sub);
+      void supabase!.removeChannel(sub);
       refreshChatList();
     };
   }, [chatId, scrollToBottom, refreshChatList]);
@@ -253,7 +253,7 @@ function ChatConversationInner({ chatId }: { chatId: string }) {
         }
       )
       .subscribe();
-    return () => { void supabase.removeChannel(sub); };
+    return () => { void supabase!.removeChannel(sub); };
   }, [chatId]);
 
 

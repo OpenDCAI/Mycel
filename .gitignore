@@ -111,3 +111,4 @@ ops
 # Auto-generated
 .playwright-mcp/
 /supabase/
+.claude/settings.json

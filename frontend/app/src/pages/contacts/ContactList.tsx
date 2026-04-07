@@ -5,6 +5,7 @@ import MemberAvatar from "@/components/MemberAvatar";
 import { useAppStore } from "@/store/app-store";
 import CreateMemberDialog from "@/components/CreateMemberDialog";
 import { useRelationshipStore } from "@/store/relationship-store";
+import type { RelationshipItem } from "@/store/relationship-store";
 import { useAuthStore } from "@/store/auth-store";
 import { authFetch } from "@/store/auth-store";
 import {
@@ -23,8 +24,8 @@ const statusDot: Record<string, string> = {
   inactive: "bg-muted-foreground opacity-50",
 };
 
-function groupByFirstLetter(items: { other_name: string; [key: string]: unknown }[]) {
-  const groups: Record<string, typeof items> = {};
+function groupByFirstLetter(items: RelationshipItem[]) {
+  const groups: Record<string, RelationshipItem[]> = {};
   for (const item of items) {
     const first = item.other_name?.[0]?.toUpperCase() ?? "#";
     const key = /[A-Z]/.test(first) ? first : "#";
@@ -261,7 +262,7 @@ export default function ContactList() {
                     <span className="text-xs font-semibold text-muted-foreground">{letter}</span>
                   </div>
                   {contacts.map(contact => {
-                    const r = contact as typeof filteredContacts[0];
+                    const r = contact;
                     return (
                       <div key={r.id} className="flex items-center gap-2.5 px-3 py-2 rounded-lg hover:bg-muted transition-colors duration-fast group">
                         <MemberAvatar name={r.other_name} avatarUrl={r.other_avatar_url ?? undefined} type="human" size="sm" />

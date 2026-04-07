@@ -364,6 +364,9 @@ export interface ChatMessage {
   content: string;
   mentioned_ids: string[];
   created_at: number;
+  message_type?: string;
+  signal?: string | null;
+  retracted_at?: string | null;
 }
 
 export interface SandboxUploadResult {
