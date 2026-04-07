@@ -8,6 +8,7 @@ import pytest
 from backend.web.utils.serializers import avatar_url
 from core.agents.communication import delivery as delivery_module
 from core.runtime.registry import ToolRegistry
+from messaging.delivery.actions import DeliveryAction
 from messaging.delivery.resolver import HireVisitDeliveryResolver
 from messaging.relationships.service import RelationshipService
 from messaging.service import MessagingService
@@ -481,6 +482,48 @@ def test_same_owner_group_chat_kickoff_delivers_without_relationship() -> None:
     service._deliver_to_agents("chat-1", "human-user-1", "hello", [])
 
     assert delivered == [("thread-user-1", "agent-user-1"), ("thread-user-2", "agent-user-2")]
+
+
+def test_delivery_resolver_drops_when_new_contact_edge_is_blocked() -> None:
+    resolver = HireVisitDeliveryResolver(
+        contact_repo=SimpleNamespace(
+            get=lambda _owner_id, _target_id: {
+                "source_user_id": "thread-user-1",
+                "target_user_id": "human-user-1",
+                "kind": "normal",
+                "state": "active",
+                "blocked": True,
+                "muted": False,
+            }
+        ),
+        chat_member_repo=SimpleNamespace(list_members=lambda _chat_id: []),
+        relationship_repo=None,
+    )
+
+    action = resolver.resolve("thread-user-1", "chat-1", "human-user-1")
+
+    assert action is DeliveryAction.DROP
+
+
+def test_delivery_resolver_notifies_when_new_contact_edge_is_muted() -> None:
+    resolver = HireVisitDeliveryResolver(
+        contact_repo=SimpleNamespace(
+            get=lambda _owner_id, _target_id: {
+                "source_user_id": "thread-user-1",
+                "target_user_id": "human-user-1",
+                "kind": "normal",
+                "state": "active",
+                "blocked": False,
+                "muted": True,
+            }
+        ),
+        chat_member_repo=SimpleNamespace(list_members=lambda _chat_id: []),
+        relationship_repo=None,
+    )
+
+    action = resolver.resolve("thread-user-1", "chat-1", "human-user-1")
+
+    assert action is DeliveryAction.NOTIFY
 
 
 def test_same_owner_agent_turn_delivers_to_sibling_actor_without_relationship() -> None:
