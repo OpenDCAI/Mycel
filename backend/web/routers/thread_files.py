@@ -21,6 +21,17 @@ router = APIRouter(
 _public = APIRouter(prefix="/api/threads/{thread_id}/files", tags=["thread-files"])
 
 
+async def _call_channel_file_service(method, *args, missing_status: int | None = None, **kwargs):
+    try:
+        return await asyncio.to_thread(method, *args, **kwargs)
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
+    except FileNotFoundError as e:
+        if missing_status is None:
+            raise
+        raise HTTPException(missing_status, str(e)) from e
+
+
 @router.get("/list")
 async def list_workspace_path(
     thread_id: str,
@@ -185,16 +196,12 @@ async def download_file(
     path: str = Query(...),
 ) -> FileResponse:
     """Download a file from thread-scoped files directory."""
-    try:
-        target = await asyncio.to_thread(
-            file_channel_service.resolve_channel_file,
-            thread_id=thread_id,
-            relative_path=path,
-        )
-    except ValueError as e:
-        raise HTTPException(400, str(e)) from e
-    except FileNotFoundError as e:
-        raise HTTPException(404, str(e)) from e
+    target = await _call_channel_file_service(
+        file_channel_service.resolve_channel_file,
+        thread_id=thread_id,
+        relative_path=path,
+        missing_status=404,
+    )
     return FileResponse(path=str(target), filename=target.name, media_type="application/octet-stream")
 
 
@@ -204,16 +211,12 @@ async def delete_workspace_file(
     path: str = Query(...),
 ) -> dict[str, Any]:
     """Delete a file from workspace."""
-    try:
-        await asyncio.to_thread(
-            file_channel_service.delete_channel_file,
-            thread_id=thread_id,
-            relative_path=path,
-        )
-    except ValueError as e:
-        raise HTTPException(400, str(e)) from e
-    except FileNotFoundError as e:
-        raise HTTPException(404, str(e)) from e
+    await _call_channel_file_service(
+        file_channel_service.delete_channel_file,
+        thread_id=thread_id,
+        relative_path=path,
+        missing_status=404,
+    )
     return {"ok": True, "path": path}
 
 
@@ -222,11 +225,8 @@ async def list_channel_files(
     thread_id: str,
 ) -> dict[str, Any]:
     """List files under thread-scoped files directory."""
-    try:
-        entries = await asyncio.to_thread(
-            file_channel_service.list_channel_files,
-            thread_id=thread_id,
-        )
-    except ValueError as e:
-        raise HTTPException(400, str(e)) from e
+    entries = await _call_channel_file_service(
+        file_channel_service.list_channel_files,
+        thread_id=thread_id,
+    )
     return {"thread_id": thread_id, "entries": entries}
