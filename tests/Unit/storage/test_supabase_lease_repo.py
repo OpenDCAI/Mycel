@@ -84,3 +84,15 @@ def test_supabase_lease_repo_create_persists_integer_refresh_flag():
     refresh_flag = client.tables["sandbox_leases"].insert_payload["needs_refresh"]
     assert refresh_flag == 0
     assert type(refresh_flag) is int
+
+
+def test_supabase_lease_repo_create_persists_utc_timestamps():
+    client = _FakeClient()
+    repo = SupabaseLeaseRepo(client)
+
+    repo.create("lease-1", "local")
+
+    payload = client.tables["sandbox_leases"].insert_payload
+    assert payload["created_at"].endswith("+00:00")
+    assert payload["updated_at"].endswith("+00:00")
+    assert payload["observed_at"].endswith("+00:00")
