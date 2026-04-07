@@ -3,15 +3,39 @@ import { BrowserRouter, Routes, Route, Link, useParams, useNavigate } from 'reac
 import './styles.css';
 
 const API_BASE = '/api/monitor';
+const MONITOR_TOKEN_KEY = 'leon-monitor-token';
 
 type MonitorFetchError = Error & {
   status?: number;
   payload?: unknown;
 };
 
+function readStoredToken(): string | null {
+  if (typeof window === 'undefined') return null;
+
+  const explicit = window.localStorage.getItem(MONITOR_TOKEN_KEY)?.trim();
+  if (explicit) return explicit;
+
+  const rawAuth = window.localStorage.getItem('leon-auth');
+  if (!rawAuth) return null;
+
+  try {
+    const parsed = JSON.parse(rawAuth) as { state?: { token?: unknown } };
+    return typeof parsed.state?.token === 'string' && parsed.state.token.trim()
+      ? parsed.state.token.trim()
+      : null;
+  } catch {
+    return null;
+  }
+}
+
 // Utility: Fetch JSON from API
 async function fetchAPI<T>(path: string): Promise<T> {
-  const res = await fetch(`${API_BASE}${path}`);
+  const headers: HeadersInit = {};
+  const token = readStoredToken();
+  if (token) headers.Authorization = `Bearer ${token}`;
+
+  const res = await fetch(`${API_BASE}${path}`, { headers });
   const text = await res.text();
   const payload = text ? JSON.parse(text) : null;
 
@@ -59,11 +83,49 @@ function useMonitorData<T>(path: string) {
 }
 
 function ErrorState({ title, error }: { title: string; error: MonitorFetchError }) {
+  const [token, setToken] = React.useState(() => readStoredToken() ?? '');
   const heading = error.status === 401 ? `${title}: Unauthorized` : `${title}: Request failed`;
+
+  function saveToken() {
+    const trimmed = token.trim();
+    if (!trimmed || typeof window === 'undefined') return;
+    // @@@monitor-token-bridge - same-origin deployments can auto-read leon-auth.
+    // Cross-origin local dev cannot, so keep a monitor-local token slot.
+    window.localStorage.setItem(MONITOR_TOKEN_KEY, trimmed);
+    window.location.reload();
+  }
+
+  function clearToken() {
+    if (typeof window === 'undefined') return;
+    window.localStorage.removeItem(MONITOR_TOKEN_KEY);
+    window.location.reload();
+  }
+
   return (
     <div className="page">
       <h1>{heading}</h1>
       <p className="error">{error.message}</p>
+      {error.status === 401 && (
+        <div className="info-grid">
+          <label>
+            <strong>Bearer token</strong>
+            <input
+              type="password"
+              value={token}
+              onChange={(e) => setToken(e.target.value)}
+              placeholder="Paste JWT token"
+            />
+          </label>
+          <div>
+            <button onClick={saveToken} disabled={!token.trim()}>
+              Save token and retry
+            </button>
+            <button onClick={clearToken} style={{ marginLeft: 8 }}>
+              Clear saved token
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
