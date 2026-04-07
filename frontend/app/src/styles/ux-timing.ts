@@ -8,6 +8,3 @@ export const FEEDBACK_BRIEF = 1500;
 
 /** Normal feedback display: toast, status message */
 export const FEEDBACK_NORMAL = 2000;
-
-/** Delay before closing a dropdown on blur (prevents click-through) */
-export const BLUR_CLOSE_DELAY = 150;
