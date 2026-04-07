@@ -181,6 +181,39 @@ class SupabaseSandboxMonitorRepo:
         )
         return dict(rows[0]) if rows else None
 
+    def query_lease_sessions(self, lease_id: str) -> list[dict]:
+        sessions = q.rows(
+            q.order(
+                self._client.table("chat_sessions")
+                .select("chat_session_id,thread_id,status,started_at,ended_at,close_reason,lease_id")
+                .eq("lease_id", lease_id),
+                "started_at",
+                desc=True,
+                repo=_REPO,
+                operation="query_lease_sessions",
+            ).execute(),
+            _REPO,
+            "query_lease_sessions",
+        )
+        lease = self.query_lease(lease_id)
+        return [
+            {
+                "chat_session_id": session.get("chat_session_id"),
+                "thread_id": session.get("thread_id"),
+                "status": session.get("status"),
+                "started_at": session.get("started_at"),
+                "ended_at": session.get("ended_at"),
+                "close_reason": session.get("close_reason"),
+                "lease_id": session.get("lease_id"),
+                "provider_name": lease.get("provider_name") if lease else None,
+                "desired_state": lease.get("desired_state") if lease else None,
+                "observed_state": lease.get("observed_state") if lease else None,
+                "current_instance_id": lease.get("current_instance_id") if lease else None,
+                "last_error": lease.get("last_error") if lease else None,
+            }
+            for session in sessions
+        ]
+
     def query_lease_threads(self, lease_id: str) -> list[dict]:
         rows = q.rows(
             q.order(
@@ -303,7 +336,6 @@ class SupabaseSandboxMonitorRepo:
         return counts
 
     def list_sessions_with_leases(self) -> list[dict]:
-        # Active sessions joined with leases
         active_sessions = q.rows(
             self._client.table("chat_sessions").select("chat_session_id,thread_id,lease_id,started_at").neq("status", "closed").execute(),
             _REPO,
@@ -318,20 +350,30 @@ class SupabaseSandboxMonitorRepo:
         )
         lease_map = {le["lease_id"]: le for le in leases}
 
-        # Terminals for fallback
         all_terminals = q.rows(
             self._client.table("abstract_terminals").select("lease_id,thread_id,created_at").execute(),
             _REPO,
             "list_sessions_with_leases terminals",
         )
-        term_map: dict[str, str] = {}
-        for t in sorted(all_terminals, key=lambda x: x.get("created_at") or ""):
-            term_map[t["lease_id"]] = t["thread_id"]
+        terminal_rows_by_lease: dict[str, list[dict[str, Any]]] = {}
+        for row in all_terminals:
+            terminal_rows_by_lease.setdefault(str(row.get("lease_id") or ""), []).append(dict(row))
+
+        all_sessions = q.rows(
+            self._client.table("chat_sessions").select("chat_session_id,thread_id,lease_id,status,started_at").execute(),
+            _REPO,
+            "list_sessions_with_leases all_sessions",
+        )
+        latest_session_thread_by_lease: dict[str, str] = {}
+        for row in sorted(all_sessions, key=lambda x: x.get("started_at") or ""):
+            lease_id = str(row.get("lease_id") or "")
+            thread_id = str(row.get("thread_id") or "")
+            if lease_id and thread_id:
+                latest_session_thread_by_lease[lease_id] = thread_id
 
         result = []
         seen_leases: set[str] = set()
 
-        # Active sessions
         for s in active_sessions:
             lease = lease_map.get(s.get("lease_id") or "")
             if not lease:
@@ -349,17 +391,31 @@ class SupabaseSandboxMonitorRepo:
                 }
             )
 
-        # Terminal fallback for leases with no active session
         for lease in leases:
             lid = lease["lease_id"]
             if lid in seen_leases:
                 continue
-            thread_id = term_map.get(lid)
+            terminal_rows = terminal_rows_by_lease.get(lid, [])
+            if terminal_rows:
+                for terminal_row in terminal_rows:
+                    result.append(
+                        {
+                            "provider": lease.get("provider_name") or "local",
+                            "session_id": None,
+                            "thread_id": terminal_row.get("thread_id"),
+                            "lease_id": lid,
+                            "observed_state": lease.get("observed_state"),
+                            "desired_state": lease.get("desired_state"),
+                            "created_at": lease.get("created_at"),
+                        }
+                    )
+                continue
+
             result.append(
                 {
                     "provider": lease.get("provider_name") or "local",
                     "session_id": None,
-                    "thread_id": thread_id,
+                    "thread_id": latest_session_thread_by_lease.get(lid),
                     "lease_id": lid,
                     "observed_state": lease.get("observed_state"),
                     "desired_state": lease.get("desired_state"),

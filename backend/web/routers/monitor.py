@@ -1,82 +1,91 @@
-"""Sandbox Monitor API - thin router over monitor core."""
+"""Monitor router compatibility layer.
+
+Expose the richer monitor implementation from ``backend.web.monitor`` while
+preserving the newer resource/health helper endpoints added on main.
+"""
 
 import asyncio
-from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import HTTPException, Query
+from pydantic import BaseModel, Field
 
-from backend.web.core.dependencies import get_current_user_id
+from backend.web.monitor import list_leases, router
 from backend.web.services import monitor_service
 from backend.web.services.resource_cache import (
     get_monitor_resource_overview_snapshot,
     refresh_monitor_resource_overview_sync,
 )
 
-router = APIRouter(prefix="/api/monitor")
 
-
-@router.get("/threads")
-def list_threads(user_id: Annotated[str, Depends(get_current_user_id)]):
-    # TODO(multi-tenant): threads are stored in SQLite (sandbox DB) and linked to members via
-    # chat_sessions.member_id → members.owner_user_id. Filtering requires a JOIN-capable repo
-    # method. Add owner filtering once monitor_repo exposes query_threads(owner_user_id=...).
-    return monitor_service.list_threads()
-
-
-@router.get("/thread/{thread_id}")
-def get_thread(thread_id: str, user_id: Annotated[str, Depends(get_current_user_id)]):
-    return monitor_service.get_thread(thread_id)
-
-
-@router.get("/leases")
-def list_leases(user_id: Annotated[str, Depends(get_current_user_id)]):
-    return monitor_service.list_leases()
-
-
-@router.get("/lease/{lease_id}")
-def get_lease(lease_id: str, user_id: Annotated[str, Depends(get_current_user_id)]):
-    try:
-        return monitor_service.get_lease(lease_id)
-    except KeyError as e:
-        raise HTTPException(status_code=404, detail=str(e)) from e
-
-
-@router.get("/diverged")
-def list_diverged(user_id: Annotated[str, Depends(get_current_user_id)]):
-    return monitor_service.list_diverged()
-
-
-@router.get("/events")
-def list_events(user_id: Annotated[str, Depends(get_current_user_id)], limit: int = 100):
-    return monitor_service.list_events(limit=limit)
-
-
-@router.get("/event/{event_id}")
-def get_event(event_id: str, user_id: Annotated[str, Depends(get_current_user_id)]):
-    try:
-        return monitor_service.get_event(event_id)
-    except KeyError as e:
-        raise HTTPException(status_code=404, detail=str(e)) from e
+class ResourceCleanupRequest(BaseModel):
+    action: str = Field(default="cleanup_residue")
+    lease_ids: list[str]
+    expected_category: str
 
 
 @router.get("/health")
-def health_snapshot(user_id: Annotated[str, Depends(get_current_user_id)]):
+def health_snapshot():
     return monitor_service.runtime_health_snapshot()
 
 
+@router.get("/dashboard")
+def dashboard_snapshot():
+    health = monitor_service.runtime_health_snapshot()
+    resources = get_monitor_resource_overview_snapshot()
+    leases = list_leases()
+
+    resource_summary = resources.get("summary") or {}
+    lease_summary = leases.get("summary") or {}
+
+    return {
+        "snapshot_at": health.get("snapshot_at"),
+        "resources_summary": resource_summary,
+        "infra": {
+            "providers_active": int(resource_summary.get("active_providers") or 0),
+            "providers_unavailable": int(resource_summary.get("unavailable_providers") or 0),
+            "leases_total": int(lease_summary.get("total") or leases.get("count") or 0),
+            "leases_diverged": int(lease_summary.get("diverged") or 0) + int(lease_summary.get("orphan_diverged") or 0),
+            "leases_orphan": int(lease_summary.get("orphan") or 0) + int(lease_summary.get("orphan_diverged") or 0),
+            "leases_healthy": int(lease_summary.get("healthy") or 0),
+        },
+        "workload": {
+            "db_sessions_total": int(((health.get("db") or {}).get("counts") or {}).get("chat_sessions") or 0),
+            "provider_sessions_total": int(((health.get("sessions") or {}).get("total")) or 0),
+            "running_sessions": int(resource_summary.get("running_sessions") or 0),
+            "evaluations_running": 0,
+        },
+        "latest_evaluation": None,
+    }
+
+
 @router.get("/resources")
-def resources_overview(user_id: Annotated[str, Depends(get_current_user_id)]):
+def resources_overview():
     return get_monitor_resource_overview_snapshot()
 
 
 @router.post("/resources/refresh")
-async def resources_refresh(user_id: Annotated[str, Depends(get_current_user_id)]):
+async def resources_refresh():
     # @@@refresh-off-main-loop - provider I/O stays off event loop to avoid request head-of-line blocking.
     return await asyncio.to_thread(refresh_monitor_resource_overview_sync)
 
 
+@router.post("/resources/cleanup")
+async def resources_cleanup(payload: ResourceCleanupRequest):
+    from backend.web.services import monitor_service
+
+    try:
+        return await asyncio.to_thread(
+            monitor_service.cleanup_resource_leases,
+            action=payload.action,
+            lease_ids=payload.lease_ids,
+            expected_category=payload.expected_category,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
 @router.get("/sandbox/{lease_id}/browse")
-async def sandbox_browse(lease_id: str, user_id: Annotated[str, Depends(get_current_user_id)], path: str = Query(default="/")):
+async def sandbox_browse(lease_id: str, path: str = Query(default="/")):
     from backend.web.services.resource_service import sandbox_browse as _browse
 
     try:
@@ -88,7 +97,7 @@ async def sandbox_browse(lease_id: str, user_id: Annotated[str, Depends(get_curr
 
 
 @router.get("/sandbox/{lease_id}/read")
-async def sandbox_read_file(lease_id: str, user_id: Annotated[str, Depends(get_current_user_id)], path: str = Query(...)):
+async def sandbox_read_file(lease_id: str, path: str = Query(...)):
     from backend.web.services.resource_service import sandbox_read as _read
 
     try:
