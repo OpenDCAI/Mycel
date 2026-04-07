@@ -312,9 +312,12 @@ class ChatToolService:
             else:
                 raise RuntimeError("Provide user_id (for 1:1) or chat_id (for group)")
 
-            unread = self._messaging.count_unread(resolved_chat_id, eid)
-            if unread > 0:
-                raise RuntimeError(f"You have {unread} unread message(s). Call read_messages(chat_id='{resolved_chat_id}') first.")
+            # @@@group-reply-unread-gate - direct chats use unread as a turn-taking gate,
+            # but group chats must still allow concurrent replies after other actors speak.
+            if not chat_id:
+                unread = self._messaging.count_unread(resolved_chat_id, eid)
+                if unread > 0:
+                    raise RuntimeError(f"You have {unread} unread message(s). Call read_messages(chat_id='{resolved_chat_id}') first.")
 
             effective_signal = signal if signal in ("yield", "close") else None
             if effective_signal:
@@ -332,7 +335,8 @@ class ChatToolService:
                     "description": (
                         "Send a message. Use user_id for 1:1 chats and chat_id for group chats.\n"
                         "The user_id parameter name is legacy.\n\n"
-                        "You MUST call read_messages() first if you have unread messages — sending will fail otherwise.\n\n"
+                        "For direct chats, you MUST call read_messages() first if you have unread messages.\n"
+                        "Sending will fail otherwise.\n\n"
                         "Signal protocol:\n"
                         "  (no tag) = I expect a reply from you\n"
                         "  ::yield = I'm done with my turn; reply only if you want to\n"

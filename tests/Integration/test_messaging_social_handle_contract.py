@@ -485,6 +485,44 @@ def test_chat_tool_send_appends_yield_signal_to_content_and_payload() -> None:
     ]
 
 
+def test_chat_tool_send_allows_group_reply_even_with_peer_unread() -> None:
+    registry = ToolRegistry()
+    sent: list[dict[str, object]] = []
+    ChatToolService(
+        registry=registry,
+        chat_identity_id="thread-user-1",
+        owner_id="owner-user-1",
+        chat_member_repo=SimpleNamespace(is_member=lambda _chat_id, _user_id: True),
+        messaging_service=SimpleNamespace(
+            count_unread=lambda _chat_id, _user_id: 1,
+            send=lambda chat_id, sender_id, content, **kwargs: sent.append(
+                {
+                    "chat_id": chat_id,
+                    "sender_id": sender_id,
+                    "content": content,
+                    **kwargs,
+                }
+            ),
+        ),
+    )
+
+    send_message = registry.get("send_message")
+    assert send_message is not None
+
+    result = send_message.handler(content="GROUP_READ_OK", chat_id="chat-1")
+
+    assert result == "Message sent to chat."
+    assert sent == [
+        {
+            "chat_id": "chat-1",
+            "sender_id": "thread-user-1",
+            "content": "GROUP_READ_OK",
+            "mentions": None,
+            "signal": None,
+        }
+    ]
+
+
 def test_read_messages_uses_thread_user_target_name_on_no_history() -> None:
     registry = ToolRegistry()
     ChatToolService(
