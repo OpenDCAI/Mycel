@@ -67,6 +67,7 @@ async def lifespan(app: FastAPI):
 
     app.state.auth_service = AuthService(
         users=app.state.user_repo,
+        agent_configs=app.state.agent_config_repo,
         members=app.state.member_repo,
         supabase_client=_supabase_client,
         supabase_auth_client_factory=create_supabase_auth_client,

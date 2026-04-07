@@ -9,7 +9,7 @@ from collections.abc import Callable
 
 import jwt
 
-from storage.contracts import InviteCodeRepo, MemberRepo, MemberRow, MemberType, UserRepo
+from storage.contracts import InviteCodeRepo, MemberRepo, UserRepo, UserRow, UserType
 
 logger = logging.getLogger(__name__)
 
@@ -20,6 +20,7 @@ class AuthService:
     def __init__(
         self,
         users: UserRepo,
+        agent_configs=None,
         members: MemberRepo | None = None,
         supabase_client=None,
         supabase_auth_client=None,
@@ -27,6 +28,7 @@ class AuthService:
         invite_codes: InviteCodeRepo | None = None,
     ) -> None:
         self._users = users
+        self._agent_configs = agent_configs
         self._members = members
         self._sb = supabase_client  # storage/service-role client
         self._sb_auth = supabase_auth_client  # end-user auth client
@@ -73,11 +75,9 @@ class AuthService:
         return {"temp_token": resp.session.access_token}
 
     def complete_register(self, temp_token: str, invite_code: str) -> dict:
-        """Complete registration: validate invite code, create member records."""
+        """Complete registration: validate invite code, create unified user records."""
         if self._sb is None:
             raise RuntimeError("Supabase client required.")
-        if self._members is None:
-            raise RuntimeError("Member repo required for complete_register during schema cutover.")
 
         # 1. Decode temp_token to get user_id
         jwt_secret = os.getenv("SUPABASE_JWT_SECRET")
@@ -93,20 +93,20 @@ class AuthService:
         if self._invite_codes is None or not self._invite_codes.is_valid(invite_code):
             raise ValueError("邀请码无效或已过期")
 
-        # 3. Create member records (idempotent guard)
+        # 3. Create unified user records (idempotent guard)
         email_from_payload = payload.get("email", "")
-        existing = self._members.get_by_id(auth_user_id)
+        existing = self._users.get_by_id(auth_user_id)
         if existing is None:
             mycel_id = self._sb.rpc("next_mycel_id").execute().data
             now = time.time()
             display_name = email_from_payload.split("@")[0]
 
-            # Create member row
-            self._members.create(
-                MemberRow(
+            # Create human user row
+            self._users.create(
+                UserRow(
                     id=auth_user_id,
-                    name=display_name,
-                    type=MemberType.HUMAN,
+                    type=UserType.HUMAN,
+                    display_name=display_name,
                     email=email_from_payload,
                     mycel_id=mycel_id,
                     created_at=now,
@@ -116,12 +116,13 @@ class AuthService:
             # Initial agents
             first_agent_info = self._create_initial_agents(auth_user_id, now)
         else:
-            display_name = existing.name
+            display_name = existing.display_name
             mycel_id = existing.mycel_id
-            owned_agents = self._members.list_by_owner_user_id(auth_user_id)
-            first_agent_info = (
-                {"id": owned_agents[0].id, "name": owned_agents[0].name, "type": "mycel_agent", "avatar": None} if owned_agents else None
-            )
+            owned_agents = self._users.list_by_owner_user_id(auth_user_id)
+            first_agent_info = None
+            if owned_agents:
+                agent = owned_agents[0]
+                first_agent_info = {"id": agent.id, "name": agent.display_name, "type": agent.type.value, "avatar": agent.avatar}
 
         # 4. Mark invite code used (atomic via repo)
         if self._invite_codes is not None:
@@ -232,12 +233,12 @@ class AuthService:
 
     def _create_initial_agents(self, owner_user_id: str, now: float) -> dict | None:
         """Create Toad and Morel agents for a new user. Returns first agent info."""
-        if self._members is None:
-            raise RuntimeError("Member repo required for initial agent creation during schema cutover.")
+        if self._agent_configs is None:
+            raise RuntimeError("Agent config repo required for initial agent creation during schema cutover.")
         from pathlib import Path
 
         from backend.web.services.member_service import MEMBERS_DIR, _write_agent_md, _write_json
-        from storage.utils import generate_member_id
+        from storage.utils import generate_agent_config_id, generate_member_id
 
         initial_agents = [
             {"name": "Toad", "description": "Curious and energetic assistant", "avatar": "toad.jpeg"},
@@ -248,6 +249,7 @@ class AuthService:
 
         for i, agent_def in enumerate(initial_agents):
             agent_id = generate_member_id()
+            agent_config_id = generate_agent_config_id()
             agent_dir = MEMBERS_DIR / agent_id
             agent_dir.mkdir(parents=True, exist_ok=True)
             _write_agent_md(agent_dir / "agent.md", name=agent_def["name"], description=agent_def["description"])
@@ -255,16 +257,26 @@ class AuthService:
                 agent_dir / "meta.json",
                 {"status": "active", "version": "1.0.0", "created_at": int(now * 1000), "updated_at": int(now * 1000)},
             )
-            self._members.create(
-                MemberRow(
+            self._users.create(
+                UserRow(
                     id=agent_id,
-                    name=agent_def["name"],
-                    type=MemberType.MYCEL_AGENT,
-                    description=agent_def["description"],
-                    config_dir=str(agent_dir),
+                    type=UserType.AGENT,
+                    display_name=agent_def["name"],
                     owner_user_id=owner_user_id,
+                    agent_config_id=agent_config_id,
                     created_at=now,
                 )
+            )
+            self._agent_configs.save_config(
+                agent_config_id,
+                {
+                    "name": agent_def["name"],
+                    "description": agent_def["description"],
+                    "status": "active",
+                    "version": "1.0.0",
+                    "created_at": int(now * 1000),
+                    "updated_at": int(now * 1000),
+                },
             )
             src_avatar = assets_dir / agent_def["avatar"]
             if src_avatar.exists():
@@ -272,10 +284,10 @@ class AuthService:
                     from backend.web.routers.entities import process_and_save_avatar
 
                     avatar_path = process_and_save_avatar(src_avatar, agent_id)
-                    self._members.update(agent_id, avatar=avatar_path, updated_at=now)
+                    self._users.update(agent_id, avatar=avatar_path, updated_at=now)
                 except Exception as e:
                     logger.warning("Avatar copy failed for %s: %s", agent_def["name"], e)
             if i == 0:
-                first_agent_info = {"id": agent_id, "name": agent_def["name"], "type": "mycel_agent", "avatar": None}
+                first_agent_info = {"id": agent_id, "name": agent_def["name"], "type": "agent", "avatar": None}
 
         return first_agent_info
