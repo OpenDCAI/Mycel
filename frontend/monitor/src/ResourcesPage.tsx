@@ -79,8 +79,14 @@ function formatMetricRange(metric: UsageMetric): string {
   return `limit ${formatMetric(metric.limit, metric.unit)}`;
 }
 
-function calculateDuration(createdAt: string): number {
-  return Date.now() - new Date(createdAt).getTime();
+function calculateDuration(createdAt: string): number | null {
+  const startedAt = new Date(createdAt).getTime();
+  if (Number.isNaN(startedAt)) {
+    return null;
+  }
+
+  const elapsed = Date.now() - startedAt;
+  return elapsed >= 0 ? elapsed : null;
 }
 
 function formatDuration(ms: number): string {
@@ -93,6 +99,15 @@ function formatDuration(ms: number): string {
   if (hours > 0) return `${hours}小时${minutes % 60}分`;
   if (minutes > 0) return `${minutes}分${seconds % 60}秒`;
   return `${seconds}秒`;
+}
+
+function formatStartedAtDuration(createdAt: string | null | undefined): string {
+  if (!createdAt) {
+    return "--";
+  }
+
+  const elapsed = calculateDuration(createdAt);
+  return elapsed == null ? "时间异常" : formatDuration(elapsed);
 }
 
 function initials(name: string): string {
@@ -499,7 +514,7 @@ function InlineMetric({ label, value }: { label: string; value: string }) {
 }
 
 function SandboxCard({ group, onOpen }: { group: LeaseGroup; onOpen: () => void }) {
-  const duration = group.startedAt ? formatDuration(calculateDuration(group.startedAt)) : "--";
+  const duration = formatStartedAtDuration(group.startedAt);
   const names = group.sessions.map((session) => session.memberName || "未绑定").join(", ");
   const metrics = group.metrics;
   const hasMetrics =
@@ -579,7 +594,7 @@ function SandboxInspector({
         <div className="sandbox-modal__header">
           <div>
             <p className="sandbox-modal__eyebrow">
-              {STATUS_LABEL[group.status]} · {group.startedAt ? formatDuration(calculateDuration(group.startedAt)) : "--"}
+              {STATUS_LABEL[group.status]} · {formatStartedAtDuration(group.startedAt)}
             </p>
             <h3>{group.leaseId || "local"}</h3>
           </div>

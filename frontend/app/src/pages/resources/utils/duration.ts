@@ -10,6 +10,21 @@ export function formatDuration(ms: number): string {
   return `${seconds}秒`;
 }
 
-export function calculateDuration(createdAt: string): number {
-  return Date.now() - new Date(createdAt).getTime();
+export function calculateDuration(createdAt: string): number | null {
+  const startedAt = new Date(createdAt).getTime();
+  if (Number.isNaN(startedAt)) {
+    return null;
+  }
+
+  const elapsed = Date.now() - startedAt;
+  return elapsed >= 0 ? elapsed : null;
+}
+
+export function formatStartedAtDuration(createdAt: string | null | undefined): string | null {
+  if (!createdAt) {
+    return null;
+  }
+
+  const elapsed = calculateDuration(createdAt);
+  return elapsed == null ? "时间异常" : formatDuration(elapsed);
 }
