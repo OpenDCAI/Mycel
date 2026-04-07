@@ -104,6 +104,7 @@ async def lifespan(app: FastAPI):
     app.state.relationship_service = RelationshipService(
         app.state.relationship_repo,
         member_repo=app.state.member_repo,
+        thread_repo=app.state.thread_repo,
     )
 
     _msg_delivery_resolver = HireVisitDeliveryResolver(

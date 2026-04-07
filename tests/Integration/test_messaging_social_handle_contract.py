@@ -78,6 +78,36 @@ def test_relationship_hire_snapshot_drops_main_thread_id():
     assert "main_thread_id" not in row.hire_snapshot
 
 
+def test_relationship_hire_snapshot_resolves_thread_user_name_via_member() -> None:
+    repo = _FakeRelationshipRepo()
+    repo._existing[("human-user-1", "thread-user-1")] = {
+        "id": "rel-2",
+        "principal_a": "human-user-1",
+        "principal_b": "thread-user-1",
+        "state": "hire",
+        "direction": "b_to_a",
+        "created_at": "2026-04-07T00:00:00Z",
+        "updated_at": "2026-04-07T00:00:00Z",
+    }
+    service = RelationshipService(
+        relationship_repo=repo,
+        member_repo=SimpleNamespace(
+            get_by_id=lambda user_id: (
+                None if user_id == "thread-user-1" else SimpleNamespace(id=user_id, name="Toad") if user_id == "member-agent-1" else None
+            )
+        ),
+        thread_repo=SimpleNamespace(
+            get_by_user_id=lambda user_id: {"id": "thread-1", "member_id": "member-agent-1"} if user_id == "thread-user-1" else None
+        ),
+    )
+
+    row = service.revoke("human-user-1", "thread-user-1")
+
+    assert row.hire_snapshot is not None
+    assert row.hire_snapshot["user_id"] == "thread-user-1"
+    assert row.hire_snapshot["name"] == "Toad"
+
+
 def test_chat_tool_directory_uses_neutral_id_label() -> None:
     registry = ToolRegistry()
     ChatToolService(

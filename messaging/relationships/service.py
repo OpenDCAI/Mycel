@@ -15,9 +15,24 @@ logger = logging.getLogger(__name__)
 class RelationshipService:
     """Manages Hire/Visit relationships between users."""
 
-    def __init__(self, relationship_repo: Any, member_repo: Any = None) -> None:
+    def __init__(self, relationship_repo: Any, member_repo: Any = None, thread_repo: Any = None) -> None:
         self._repo = relationship_repo
         self._member_repo = member_repo
+        self._thread_repo = thread_repo
+
+    def _resolve_display_member(self, social_user_id: str) -> Any | None:
+        member = self._member_repo.get_by_id(social_user_id) if self._member_repo is not None else None
+        if member is not None:
+            return member
+        if self._thread_repo is None or self._member_repo is None:
+            return None
+        thread = self._thread_repo.get_by_user_id(social_user_id)
+        if thread is None:
+            return None
+        member_id = thread.get("member_id")
+        if not member_id:
+            return None
+        return self._member_repo.get_by_id(member_id)
 
     def apply_event(
         self,
@@ -67,7 +82,9 @@ class RelationshipService:
             fields["hire_revoked_at"] = now_iso()
             if current_state == "hire" and self._member_repo is not None:
                 other_id = pb if actor_id == pa else pa
-                m = self._member_repo.get_by_id(other_id)
+                # @@@thread-user-hire-snapshot - relationship principals can now be thread-owned
+                # social user_ids, so the snapshot name must resolve back through thread -> member.
+                m = self._resolve_display_member(other_id)
                 fields["hire_snapshot"] = {
                     "user_id": other_id,
                     "name": m.name if m else other_id,
