@@ -4,7 +4,7 @@ from collections.abc import Awaitable, Callable
 from copy import deepcopy
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, NotRequired, Required, TypedDict, Unpack
+from typing import Any, NotRequired, Required, TypedDict
 
 from core.runtime.tool_result import ToolResultEnvelope
 
@@ -74,12 +74,6 @@ TOOL_DEFAULTS: _ToolEntryDefaults = {
     "context_schema": None,
     "validate_input": None,
 }
-
-
-def build_tool(**kwargs: Unpack[_ToolEntryBuildArgs]) -> ToolEntry:
-    """Factory that fills in safety defaults. Fail-closed: assumes write + non-concurrent."""
-    merged: _ToolEntryBuildArgs = {**TOOL_DEFAULTS, **kwargs}
-    return ToolEntry(**merged)
 
 
 def make_tool_schema(
