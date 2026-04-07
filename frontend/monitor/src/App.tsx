@@ -4584,6 +4584,8 @@ function OperatorGuideModal({
   open: boolean;
   onClose: () => void;
 }) {
+  const panelRef = React.useRef<HTMLElement | null>(null);
+
   React.useEffect(() => {
     if (!open) return;
     const onKeyDown = (event: KeyboardEvent) => {
@@ -4592,6 +4594,12 @@ function OperatorGuideModal({
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [open, onClose]);
+
+  React.useEffect(() => {
+    if (!open) return;
+    // @@@modal-focus-handshake - focus the panel itself so keyboard users land inside the active surface instead of staying on the trigger behind the backdrop.
+    panelRef.current?.focus();
+  }, [open]);
 
   if (!open) return null;
 
@@ -4602,13 +4610,18 @@ function OperatorGuideModal({
       data-testid="operator-guide-modal"
     >
       <section
+        ref={panelRef}
         className="shell-modal-panel"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="operator-guide-title"
+        tabIndex={-1}
         onClick={(event) => event.stopPropagation()}
       >
         <div className="section-row shell-modal-head">
           <div>
             <p className="shell-eyebrow">Operator Guide</p>
-            <h2>How to read this console</h2>
+            <h2 id="operator-guide-title">How to read this console</h2>
           </div>
           <button className="ghost-btn" onClick={onClose}>
             Close
