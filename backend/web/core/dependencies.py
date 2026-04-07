@@ -37,8 +37,8 @@ def _extract_jwt_payload(request: Request) -> dict:
 async def get_current_user_id(request: Request) -> str:
     """Extract user_id from JWT and verify user exists. Returns 401 if user was deleted (e.g. DB reset)."""
     user_id = _extract_jwt_payload(request)["user_id"]
-    member_repo = getattr(request.app.state, "member_repo", None)
-    if member_repo and member_repo.get_by_id(user_id) is None:
+    user_repo = getattr(request.app.state, "user_repo", None)
+    if user_repo and user_repo.get_by_id(user_id) is None:
         raise HTTPException(401, "User no longer exists — please re-login")
     return user_id
 
