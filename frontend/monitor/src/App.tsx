@@ -4,10 +4,68 @@ import './styles.css';
 
 const API_BASE = '/api/monitor';
 
+type MonitorFetchError = Error & {
+  status?: number;
+  payload?: unknown;
+};
+
 // Utility: Fetch JSON from API
-async function fetchAPI(path: string) {
+async function fetchAPI<T>(path: string): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`);
-  return res.json();
+  const text = await res.text();
+  const payload = text ? JSON.parse(text) : null;
+
+  // @@@monitor-http-contract - monitor pages only accept shaped payloads on 2xx.
+  // Unauthorized or backend errors must stay as explicit page errors, not crash into .map.
+  if (!res.ok) {
+    const detail =
+      payload && typeof payload === 'object' && 'detail' in payload
+        ? String((payload as { detail?: unknown }).detail ?? `Request failed (${res.status})`)
+        : `Request failed (${res.status})`;
+    const error = new Error(detail) as MonitorFetchError;
+    error.status = res.status;
+    error.payload = payload;
+    throw error;
+  }
+
+  return payload as T;
+}
+
+function useMonitorData<T>(path: string) {
+  const [data, setData] = React.useState<T | null>(null);
+  const [error, setError] = React.useState<MonitorFetchError | null>(null);
+
+  React.useEffect(() => {
+    let cancelled = false;
+    setData(null);
+    setError(null);
+
+    fetchAPI<T>(path)
+      .then((result) => {
+        if (!cancelled) setData(result);
+      })
+      .catch((err: unknown) => {
+        if (!cancelled) {
+          setError(err instanceof Error ? (err as MonitorFetchError) : new Error(String(err)));
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [path]);
+
+  return { data, error };
+}
+
+function ErrorState({ title, error }: { title: string; error: MonitorFetchError }) {
+  const heading = error.status === 401 ? `${title}: Unauthorized` : `${title}: Request failed`;
+  return (
+    <div className="page">
+      <h1>{heading}</h1>
+      <p className="error">{error.message}</p>
+    </div>
+  );
 }
 
 // Component: Breadcrumb navigation
@@ -39,12 +97,9 @@ function StateBadge({ badge }: { badge: any }) {
 
 // Page: Threads List
 function ThreadsPage() {
-  const [data, setData] = React.useState<any>(null);
+  const { data, error } = useMonitorData<any>('/threads');
 
-  React.useEffect(() => {
-    fetchAPI('/threads').then(setData);
-  }, []);
-
+  if (error) return <ErrorState title="Threads" error={error} />;
   if (!data) return <div>Loading...</div>;
 
   return (
@@ -86,12 +141,9 @@ function ThreadsPage() {
 // Page: Thread Detail
 function ThreadDetailPage() {
   const { threadId } = useParams();
-  const [data, setData] = React.useState<any>(null);
+  const { data, error } = useMonitorData<any>(`/thread/${threadId}`);
 
-  React.useEffect(() => {
-    fetchAPI(`/thread/${threadId}`).then(setData);
-  }, [threadId]);
-
+  if (error) return <ErrorState title="Thread detail" error={error} />;
   if (!data) return <div>Loading...</div>;
 
   return (
@@ -149,12 +201,9 @@ function ThreadDetailPage() {
 
 // Page: Leases List
 function LeasesPage() {
-  const [data, setData] = React.useState<any>(null);
+  const { data, error } = useMonitorData<any>('/leases');
 
-  React.useEffect(() => {
-    fetchAPI('/leases').then(setData);
-  }, []);
-
+  if (error) return <ErrorState title="Leases" error={error} />;
   if (!data) return <div>Loading...</div>;
 
   return (
@@ -200,12 +249,9 @@ function LeasesPage() {
 // Page: Lease Detail
 function LeaseDetailPage() {
   const { leaseId } = useParams();
-  const [data, setData] = React.useState<any>(null);
+  const { data, error } = useMonitorData<any>(`/lease/${leaseId}`);
 
-  React.useEffect(() => {
-    fetchAPI(`/lease/${leaseId}`).then(setData);
-  }, [leaseId]);
-
+  if (error) return <ErrorState title="Lease detail" error={error} />;
   if (!data) return <div>Loading...</div>;
 
   return (
@@ -288,12 +334,9 @@ function LeaseDetailPage() {
 
 // Page: Diverged Leases
 function DivergedPage() {
-  const [data, setData] = React.useState<any>(null);
+  const { data, error } = useMonitorData<any>('/diverged');
 
-  React.useEffect(() => {
-    fetchAPI('/diverged').then(setData);
-  }, []);
-
+  if (error) return <ErrorState title="Diverged leases" error={error} />;
   if (!data) return <div>Loading...</div>;
 
   return (
@@ -341,12 +384,9 @@ function DivergedPage() {
 
 // Page: Events List
 function EventsPage() {
-  const [data, setData] = React.useState<any>(null);
+  const { data, error } = useMonitorData<any>('/events?limit=100');
 
-  React.useEffect(() => {
-    fetchAPI('/events?limit=100').then(setData);
-  }, []);
-
+  if (error) return <ErrorState title="Events" error={error} />;
   if (!data) return <div>Loading...</div>;
 
   return (
@@ -389,12 +429,9 @@ function EventsPage() {
 // Page: Event Detail
 function EventDetailPage() {
   const { eventId } = useParams();
-  const [data, setData] = React.useState<any>(null);
+  const { data, error } = useMonitorData<any>(`/event/${eventId}`);
 
-  React.useEffect(() => {
-    fetchAPI(`/event/${eventId}`).then(setData);
-  }, [eventId]);
-
+  if (error) return <ErrorState title="Event detail" error={error} />;
   if (!data) return <div>Loading...</div>;
 
   return (
