@@ -365,15 +365,6 @@ export interface ChatMessage {
   created_at: number;
 }
 
-// @@@channel-kind - string union used directly as a selector, not an object
-export type SandboxChannelKind = "upload" | "download";
-
-export interface SandboxChannelFileEntry {
-  relative_path: string;
-  size_bytes: number;
-  updated_at: string;
-}
-
 export interface SandboxUploadResult {
   thread_id: string;
   relative_path: string;
@@ -381,32 +372,3 @@ export interface SandboxUploadResult {
   size_bytes: number;
   sha256: string;
 }
-
-// --- Social / Relationship types ---
-
-export type RelationshipState =
-  | "none" | "pending_a_to_b" | "pending_b_to_a" | "visit" | "hire";
-
-export interface Relationship {
-  id: string;
-  other_user_id: string;
-  state: RelationshipState;
-  direction: "a_to_b" | "b_to_a" | null;
-  is_requester: boolean;
-  hire_granted_at: string | null;
-  hire_revoked_at: string | null;
-  created_at: string;
-  updated_at: string;
-}
-
-export type ContactRelation = "normal" | "blocked" | "muted";
-
-export interface Contact {
-  owner_user_id: string;
-  target_user_id: string;
-  relation: ContactRelation;
-  created_at: string;
-  updated_at: string | null;
-}
-
-export type MessageType = "human" | "ai" | "ai_process" | "system" | "notification";
