@@ -1,6 +1,7 @@
 import {
   Sheet,
   SheetContent,
+  SheetDescription,
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
@@ -69,6 +70,9 @@ export default function SandboxDetailSheet({
           <SheetTitle className="text-sm font-mono text-foreground">
             {group.leaseId || "local"}
           </SheetTitle>
+          <SheetDescription className="sr-only">
+            查看 {group.leaseId || "local"} 的成员、指标和文件浏览详情。
+          </SheetDescription>
         </SheetHeader>
 
         {/* Agents + Metrics — scrollable middle section */}
