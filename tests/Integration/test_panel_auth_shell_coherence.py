@@ -8,7 +8,7 @@ from fastapi import HTTPException
 
 from backend.web.models.panel import PublishMemberRequest, UpdateMemberRequest, UpdateProfileRequest
 from backend.web.routers import panel as panel_router
-from backend.web.services import member_service, profile_service
+from backend.web.services import library_service, member_service, profile_service
 from storage.contracts import UserRow, UserType
 
 
@@ -243,6 +243,64 @@ async def test_update_profile_route_uses_user_repo_instead_of_config_file():
 
     assert seen == [("user-1", {"display_name": "renamed", "email": "renamed@example.com"})]
     assert result == {"name": "renamed", "initials": "RE", "email": "renamed@example.com"}
+
+
+def test_library_service_get_resource_used_by_scopes_to_owner(monkeypatch: pytest.MonkeyPatch):
+    seen: list[tuple[str, object]] = []
+
+    monkeypatch.setattr(
+        member_service,
+        "list_members",
+        lambda owner_user_id=None, user_repo=None: (
+            seen.append((owner_user_id, user_repo))
+            or [
+                {"id": "agent-1", "name": "Toad", "config": {"skills": [{"name": "skill-a"}]}},
+                {"id": "agent-2", "name": "Dryad", "config": {"skills": [{"name": "skill-b"}]}},
+            ]
+        ),
+    )
+
+    result = library_service.get_resource_used_by("skill", "skill-a", "user-1", user_repo="repo-1")
+
+    assert result == ["Toad"]
+    assert seen == [("user-1", "repo-1")]
+
+
+@pytest.mark.asyncio
+async def test_panel_library_used_by_route_uses_user_scope(monkeypatch: pytest.MonkeyPatch):
+    seen: dict[str, object] = {}
+
+    monkeypatch.setattr(
+        library_service,
+        "get_resource_used_by",
+        lambda resource_type, resource_name, owner_user_id, user_repo=None: (
+            seen.update(
+                {
+                    "resource_type": resource_type,
+                    "resource_name": resource_name,
+                    "owner_user_id": owner_user_id,
+                    "user_repo": user_repo,
+                }
+            )
+            or ["Toad"]
+        ),
+    )
+
+    fake_user_repo = SimpleNamespace()
+    result = await panel_router.get_used_by(
+        "skill",
+        "skill-a",
+        request=SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(user_repo=fake_user_repo))),
+        user_id="user-1",
+    )
+
+    assert result == {"count": 1, "members": ["Toad"]}
+    assert seen == {
+        "resource_type": "skill",
+        "resource_name": "skill-a",
+        "owner_user_id": "user-1",
+        "user_repo": fake_user_repo,
+    }
 
 
 def test_builtin_member_surface_exposes_chat_tools():
