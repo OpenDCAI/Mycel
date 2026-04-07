@@ -27,21 +27,21 @@ def test_list_user_leases_exposes_thread_identity_not_member_id(monkeypatch) -> 
             return None
 
     monkeypatch.setattr(sandbox_service, "make_sandbox_monitor_repo", lambda: _FakeMonitorRepo())
-    thread_repo = SimpleNamespace(get_by_id=lambda thread_id: {"id": thread_id, "member_id": "member-1"})
-    member_repo = SimpleNamespace(
-        get_by_id=lambda member_id: (
+    thread_repo = SimpleNamespace(get_by_id=lambda thread_id: {"id": thread_id, "agent_user_id": "agent-1"})
+    user_repo = SimpleNamespace(
+        get_by_id=lambda user_id: (
             SimpleNamespace(
-                id=member_id,
-                name="Morel",
+                id=user_id,
+                display_name="Morel",
                 avatar="avatars/morel.png",
                 owner_user_id="owner-1",
             )
-            if member_id == "member-1"
+            if user_id == "agent-1"
             else None
         )
     )
 
-    result = sandbox_service.list_user_leases("owner-1", thread_repo=thread_repo, member_repo=member_repo)
+    result = sandbox_service.list_user_leases("owner-1", thread_repo=thread_repo, user_repo=user_repo)
 
     assert len(result) == 1
     lease = result[0]
@@ -56,7 +56,7 @@ def test_list_user_leases_exposes_thread_identity_not_member_id(monkeypatch) -> 
         {
             "thread_id": "thread-1",
             "member_name": "Morel",
-            "avatar_url": avatar_url("member-1", True),
+            "avatar_url": avatar_url("agent-1", True),
         }
     ]
     assert "member_id" not in lease["agents"][0]
@@ -65,7 +65,7 @@ def test_list_user_leases_exposes_thread_identity_not_member_id(monkeypatch) -> 
 def test_resource_projection_sessions_do_not_leak_member_ids(monkeypatch) -> None:
     class _State:
         thread_repo = object()
-        member_repo = object()
+        user_repo = object()
 
     class _App:
         state = _State()

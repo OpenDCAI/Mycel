@@ -49,15 +49,15 @@ def list_user_leases(
     user_id: str,
     *,
     thread_repo: Any = None,
-    member_repo: Any = None,
+    user_repo: Any = None,
     main_db_path: str | Path | None = None,
     sandbox_db_path: str | Path | None = None,
 ) -> list[dict[str, Any]]:
     monitor_repo = make_sandbox_monitor_repo()
-    if thread_repo is None or member_repo is None:
-        raise RuntimeError("thread_repo and member_repo are required for list_user_leases")
+    if thread_repo is None or user_repo is None:
+        raise RuntimeError("thread_repo and user_repo are required for list_user_leases")
     _thread_repo = thread_repo
-    _member_repo = member_repo
+    _user_repo = user_repo
     own_repos = False
     try:
         rows = monitor_repo.list_leases_with_threads()
@@ -87,15 +87,15 @@ def list_user_leases(
             thread = _thread_repo.get_by_id(thread_id)
             if thread is None:
                 continue
-            member = _member_repo.get_by_id(thread["member_id"])
-            if member is None or member.owner_user_id != user_id:
+            agent_user = _user_repo.get_by_id(thread["agent_user_id"])
+            if agent_user is None or agent_user.owner_user_id != user_id:
                 continue
             group["thread_ids"].append(thread_id)
             group["agents"].append(
                 {
                     "thread_id": thread_id,
-                    "member_name": member.name,
-                    "avatar_url": avatar_url(member.id, bool(member.avatar)),
+                    "member_name": agent_user.display_name,
+                    "avatar_url": avatar_url(agent_user.id, bool(agent_user.avatar)),
                 }
             )
             if not group["cwd"] and row.get("cwd"):
@@ -122,7 +122,7 @@ def list_user_leases(
         return leases
     finally:
         if own_repos:
-            _member_repo.close()
+            _user_repo.close()
             _thread_repo.close()
         monitor_repo.close()
 

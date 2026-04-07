@@ -38,3 +38,20 @@ async def test_get_current_user_id_uses_user_repo_instead_of_member_repo():
     request = _Request(token="tok-1", payload={"user_id": "user-1"}, user_exists=True)
 
     assert await dependencies.get_current_user_id(request) == "user-1"
+
+
+@pytest.mark.asyncio
+async def test_verify_thread_owner_uses_agent_user_row_not_member_repo():
+    request_app = SimpleNamespace(
+        state=SimpleNamespace(
+            thread_repo=SimpleNamespace(get_by_id=lambda _thread_id: {"agent_user_id": "agent-1"}),
+            user_repo=SimpleNamespace(
+                get_by_id=lambda user_id: SimpleNamespace(id=user_id, owner_user_id="owner-1") if user_id == "agent-1" else None
+            ),
+            member_repo=SimpleNamespace(
+                get_by_id=lambda _user_id: (_ for _ in ()).throw(AssertionError("member_repo should not gate thread ownership"))
+            ),
+        )
+    )
+
+    assert await dependencies.verify_thread_owner("thread-1", "owner-1", request_app) == "owner-1"

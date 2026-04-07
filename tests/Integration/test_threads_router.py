@@ -317,6 +317,7 @@ def _make_threads_app(
     return SimpleNamespace(
         state=SimpleNamespace(
             member_repo=member_repo or _FakeMemberRepo(),
+            user_repo=state_overrides.pop("user_repo", SimpleNamespace()),
             thread_repo=thread_repo or _FakeThreadRepo(),
             **state_overrides,
         )

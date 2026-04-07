@@ -88,14 +88,14 @@ def _build_provider_card(config_name: str, leases: list[dict[str, Any]]) -> dict
 
 def list_user_resource_providers(app: Any, owner_user_id: str) -> dict[str, Any]:
     thread_repo = getattr(app.state, "thread_repo", None)
-    member_repo = getattr(app.state, "member_repo", None)
-    if thread_repo is None or member_repo is None:
-        raise RuntimeError("thread_repo and member_repo are required")
+    user_repo = getattr(app.state, "user_repo", None)
+    if thread_repo is None or user_repo is None:
+        raise RuntimeError("thread_repo and user_repo are required")
 
     leases = sandbox_service.list_user_leases(
         owner_user_id,
         thread_repo=thread_repo,
-        member_repo=member_repo,
+        user_repo=user_repo,
     )
 
     leases_by_provider: dict[str, list[dict[str, Any]]] = {}

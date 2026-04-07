@@ -57,7 +57,7 @@ class _FakeThreadRepo:
     def create(self, **kwargs):
         self.rows[kwargs["thread_id"]] = dict(kwargs)
 
-    def list_by_member(self, member_id: str):
+    def list_by_agent_user(self, member_id: str):
         return [{"id": thread_id, **row} for thread_id, row in self.rows.items() if row["member_id"] == member_id]
 
 
@@ -77,6 +77,7 @@ def _make_threads_app():
     return SimpleNamespace(
         state=SimpleNamespace(
             member_repo=_FakeMemberRepo(),
+            user_repo=SimpleNamespace(),
             thread_repo=_FakeThreadRepo(),
             thread_launch_pref_repo=_FakeThreadLaunchPrefRepo(),
             thread_sandbox={},
@@ -211,6 +212,7 @@ def test_resolve_default_config_prefers_last_successful_over_last_confirmed() ->
             ),
             thread_repo=_FakeThreadRepo(),
             member_repo=_FakeMemberRepo(),
+            user_repo=SimpleNamespace(),
             recipe_repo=object(),
         )
     )
@@ -280,6 +282,7 @@ def test_resolve_default_config_skips_invalid_successful_and_uses_confirmed() ->
             ),
             thread_repo=_FakeThreadRepo(),
             member_repo=_FakeMemberRepo(),
+            user_repo=SimpleNamespace(),
             recipe_repo=object(),
         )
     )

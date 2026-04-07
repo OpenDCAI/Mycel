@@ -276,7 +276,15 @@ def _validate_sandbox_provider_gate(app: Any, owner_user_id: str, payload: Creat
     sandbox_type = payload.sandbox or "local"
     if payload.lease_id:
         owned_lease = next(
-            (lease for lease in sandbox_service.list_user_leases(owner_user_id) if lease["lease_id"] == payload.lease_id),
+            (
+                lease
+                for lease in sandbox_service.list_user_leases(
+                    owner_user_id,
+                    thread_repo=app.state.thread_repo,
+                    user_repo=app.state.user_repo,
+                )
+                if lease["lease_id"] == payload.lease_id
+            ),
             None,
         )
         if owned_lease is not None:
@@ -561,7 +569,7 @@ def _create_owned_thread(
                 for lease in sandbox_service.list_user_leases(
                     owner_user_id,
                     thread_repo=app.state.thread_repo,
-                    member_repo=app.state.member_repo,
+                    user_repo=app.state.user_repo,
                 )
                 if lease["lease_id"] == selected_lease_id
             ),

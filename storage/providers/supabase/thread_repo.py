@@ -12,7 +12,7 @@ _TABLE = "threads"
 _COLS = (
     "id",
     "user_id",
-    "member_id",
+    "agent_user_id",
     "sandbox_type",
     "model",
     "cwd",
@@ -49,7 +49,7 @@ class SupabaseThreadRepo:
     def create(
         self,
         thread_id: str,
-        member_id: str,
+        agent_user_id: str,
         user_id: str,
         sandbox_type: str,
         cwd: str | None = None,
@@ -63,7 +63,7 @@ class SupabaseThreadRepo:
             {
                 "id": thread_id,
                 "user_id": user_id,
-                "member_id": member_id,
+                "agent_user_id": agent_user_id,
                 "sandbox_type": sandbox_type,
                 "cwd": cwd,
                 "model": extra.get("model"),
@@ -90,60 +90,55 @@ class SupabaseThreadRepo:
             return None
         return _to_dict(rows[0])
 
-    def get_default_thread(self, member_id: str) -> dict[str, Any] | None:
+    def get_default_thread(self, agent_user_id: str) -> dict[str, Any] | None:
         select = ", ".join(_COLS)
-        response = self._t().select(select).eq("member_id", member_id).eq("is_main", 1).execute()
+        response = self._t().select(select).eq("agent_user_id", agent_user_id).eq("is_main", 1).execute()
         rows = q.rows(response, _REPO, "get_default_thread")
         if not rows:
             return None
         return _to_dict(rows[0])
 
-    def get_next_branch_index(self, member_id: str) -> int:
-        response = self._t().select("branch_index").eq("member_id", member_id).execute()
+    def get_next_branch_index(self, agent_user_id: str) -> int:
+        response = self._t().select("branch_index").eq("agent_user_id", agent_user_id).execute()
         rows = q.rows(response, _REPO, "get_next_branch_index")
         if not rows:
             return 1
         max_idx = max((int(r["branch_index"]) for r in rows if r.get("branch_index") is not None), default=0)
         return max_idx + 1
 
-    def list_by_member(self, member_id: str) -> list[dict[str, Any]]:
+    def list_by_agent_user(self, agent_user_id: str) -> list[dict[str, Any]]:
         select = ", ".join(_COLS)
         query = q.order(
             q.order(
-                self._t().select(select).eq("member_id", member_id),
+                self._t().select(select).eq("agent_user_id", agent_user_id),
                 "branch_index",
                 desc=False,
                 repo=_REPO,
-                operation="list_by_member",
+                operation="list_by_agent_user",
             ),
             "created_at",
             desc=False,
             repo=_REPO,
-            operation="list_by_member",
+            operation="list_by_agent_user",
         )
-        rows = q.rows(query.execute(), _REPO, "list_by_member")
+        rows = q.rows(query.execute(), _REPO, "list_by_agent_user")
         return [_to_dict(r) for r in rows]
 
     def list_by_owner_user_id(self, owner_user_id: str) -> list[dict[str, Any]]:
-        """Return all threads owned by this user via a two-step query (members JOIN threads).
-
-        Supabase PostgREST foreign-table embed syntax is used to avoid raw SQL.
-        We query members for the owner, then fetch threads for those member IDs.
-        """
-        # Step 1: get member IDs for this owner
-        mem_response = self._client.table("members").select("id, name, avatar").eq("owner_user_id", owner_user_id).execute()
-        member_rows = q.rows(mem_response, _REPO, "list_by_owner_user_id:members")
-        if not member_rows:
+        """Return all threads owned by this user via a two-step query (users JOIN threads)."""
+        user_response = self._client.table("users").select("id, display_name, avatar").eq("owner_user_id", owner_user_id).execute()
+        user_rows = q.rows(user_response, _REPO, "list_by_owner_user_id:users")
+        if not user_rows:
             return []
 
-        member_map: dict[str, dict[str, Any]] = {r["id"]: r for r in member_rows}
-        member_ids = list(member_map.keys())
+        user_map: dict[str, dict[str, Any]] = {r["id"]: r for r in user_rows}
+        agent_user_ids = list(user_map.keys())
 
-        # Step 2: get threads for those members
+        # Step 2: get threads for those agent users
         thread_cols = ", ".join(_COLS)
         query = q.order(
             q.order(
-                q.in_(self._t().select(thread_cols), "member_id", member_ids, _REPO, "list_by_owner_user_id"),
+                q.in_(self._t().select(thread_cols), "agent_user_id", agent_user_ids, _REPO, "list_by_owner_user_id"),
                 "is_main",
                 desc=True,
                 repo=_REPO,
@@ -156,14 +151,14 @@ class SupabaseThreadRepo:
         )
         thread_rows = q.rows(query.execute(), _REPO, "list_by_owner_user_id:threads")
 
-        # Step 3: enrich with member_name, member_avatar from member_map
+        # Step 3: enrich with agent display data from user_map
         result: list[dict[str, Any]] = []
         for raw in thread_rows:
             d = _to_dict(raw)
-            mid = d["member_id"]
-            member_info = member_map.get(mid, {})
-            d["member_name"] = member_info.get("name")
-            d["member_avatar"] = member_info.get("avatar")
+            agent_user_id = d["agent_user_id"]
+            agent_info = user_map.get(agent_user_id, {})
+            d["member_name"] = agent_info.get("display_name")
+            d["member_avatar"] = agent_info.get("avatar")
             result.append(d)
         return result
 
