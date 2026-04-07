@@ -1,0 +1,755 @@
+import React from "react";
+import { Link } from "react-router-dom";
+
+import {
+  browseMonitorSandbox,
+  fetchMonitorResources,
+  readMonitorSandboxFile,
+  refreshMonitorResources,
+} from "./resources/api";
+import type {
+  BrowseItem,
+  ProviderCapabilities,
+  ProviderInfo,
+  ResourceOverviewResponse,
+  ResourceSession,
+  SessionMetrics,
+  UsageMetric,
+} from "./resources/types";
+
+const PROVIDER_TYPE_LABEL = {
+  local: "本地",
+  cloud: "云端",
+  container: "容器",
+} as const;
+
+const STATUS_LABEL = {
+  active: "活跃",
+  ready: "就绪",
+  unavailable: "未就绪",
+  running: "运行中",
+  paused: "已暂停",
+  stopped: "已结束",
+  destroying: "销毁中",
+} as const;
+
+const SESSION_STATUS_ORDER: Record<ResourceSession["status"], number> = {
+  running: 0,
+  destroying: 1,
+  paused: 2,
+  stopped: 3,
+};
+
+interface LeaseGroup {
+  leaseId: string;
+  status: ResourceSession["status"];
+  sessions: ResourceSession[];
+  startedAt: string;
+  metrics: SessionMetrics | null;
+}
+
+function formatNumber(value: number | null | undefined, nullText: string = "--"): string {
+  if (value == null) {
+    return nullText;
+  }
+  if (Number.isInteger(value)) {
+    return String(value);
+  }
+  return value.toFixed(1).replace(/\.0$/, "");
+}
+
+function formatMetric(value: number | null | undefined, unit: string): string {
+  if (value == null) return "--";
+  if (unit === "GB" && value > 0 && value < 1) {
+    return `${Math.round(value * 1024)}MB`;
+  }
+  return `${formatNumber(value)}${unit}`;
+}
+
+function formatMetricRange(metric: UsageMetric): string {
+  if (metric.used == null && metric.limit == null) {
+    return "--";
+  }
+  if (metric.used != null && metric.limit != null) {
+    return `${formatMetric(metric.used, metric.unit)} / ${formatMetric(metric.limit, metric.unit)}`;
+  }
+  if (metric.used != null) {
+    return formatMetric(metric.used, metric.unit);
+  }
+  return `limit ${formatMetric(metric.limit, metric.unit)}`;
+}
+
+function calculateDuration(createdAt: string): number {
+  return Date.now() - new Date(createdAt).getTime();
+}
+
+function formatDuration(ms: number): string {
+  const seconds = Math.floor(ms / 1000);
+  const minutes = Math.floor(seconds / 60);
+  const hours = Math.floor(minutes / 60);
+  const days = Math.floor(hours / 24);
+
+  if (days > 0) return `${days}天${hours % 24}小时`;
+  if (hours > 0) return `${hours}小时${minutes % 60}分`;
+  if (minutes > 0) return `${minutes}分${seconds % 60}秒`;
+  return `${seconds}秒`;
+}
+
+function capabilityTags(capabilities: ProviderCapabilities): string[] {
+  const labels: Array<[keyof ProviderCapabilities, string]> = [
+    ["filesystem", "FS"],
+    ["terminal", "TERM"],
+    ["metrics", "METRIC"],
+    ["web", "WEB"],
+    ["screenshot", "SHOT"],
+    ["mount", "MOUNT"],
+  ];
+  return labels.filter(([key]) => capabilities[key]).map(([, label]) => label);
+}
+
+function groupByLease(sessions: ResourceSession[]): LeaseGroup[] {
+  const map = new Map<string, ResourceSession[]>();
+  for (const session of sessions) {
+    const key = session.leaseId || session.id;
+    const rows = map.get(key) ?? [];
+    rows.push(session);
+    map.set(key, rows);
+  }
+
+  return Array.from(map.values())
+    .map((group) => {
+      const sorted = [...group].sort(
+        (left, right) => (SESSION_STATUS_ORDER[left.status] ?? 4) - (SESSION_STATUS_ORDER[right.status] ?? 4),
+      );
+      const best = sorted[0];
+      const earliest = group.reduce(
+        (min, session) => (session.startedAt < min ? session.startedAt : min),
+        group[0].startedAt,
+      );
+      return {
+        leaseId: group[0].leaseId ?? "",
+        status: best.status,
+        sessions: sorted,
+        startedAt: earliest,
+        metrics: best.metrics ?? null,
+      } satisfies LeaseGroup;
+    })
+    .sort((left, right) => (SESSION_STATUS_ORDER[left.status] ?? 4) - (SESSION_STATUS_ORDER[right.status] ?? 4));
+}
+
+export default function ResourcesPage() {
+  const [providers, setProviders] = React.useState<ProviderInfo[]>([]);
+  const [selectedId, setSelectedId] = React.useState("");
+  const [summary, setSummary] = React.useState<ResourceOverviewResponse["summary"] | null>(null);
+  const [loading, setLoading] = React.useState(true);
+  const [refreshing, setRefreshing] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
+
+  const applyPayload = React.useCallback((payload: ResourceOverviewResponse) => {
+    setProviders(payload.providers);
+    setSummary(payload.summary);
+    setSelectedId((previous) => {
+      if (payload.providers.some((provider) => provider.id === previous)) {
+        return previous;
+      }
+      return payload.providers[0]?.id ?? "";
+    });
+  }, []);
+
+  const loadSnapshot = React.useCallback(async () => {
+    const payload = await fetchMonitorResources();
+    applyPayload(payload);
+  }, [applyPayload]);
+
+  const refreshNow = React.useCallback(async () => {
+    setRefreshing(true);
+    try {
+      const payload = await refreshMonitorResources();
+      applyPayload(payload);
+      setError(null);
+    } catch (exc) {
+      setError(exc instanceof Error ? exc.message : "资源刷新失败");
+    } finally {
+      setRefreshing(false);
+    }
+  }, [applyPayload]);
+
+  React.useEffect(() => {
+    let cancelled = false;
+
+    async function loadInitial() {
+      setLoading(true);
+      setError(null);
+      try {
+        const payload = await fetchMonitorResources();
+        if (!cancelled) {
+          applyPayload(payload);
+        }
+      } catch (exc) {
+        if (!cancelled) {
+          setError(exc instanceof Error ? exc.message : "资源加载失败");
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    }
+
+    void loadInitial();
+    return () => {
+      cancelled = true;
+    };
+  }, [applyPayload]);
+
+  React.useEffect(() => {
+    const timer = window.setInterval(() => {
+      void loadSnapshot().catch(() => {});
+    }, 30000);
+    return () => window.clearInterval(timer);
+  }, [loadSnapshot]);
+
+  const selected = providers.find((provider) => provider.id === selectedId) ?? null;
+  const refreshedAt = summary?.last_refreshed_at
+    ? new Date(summary.last_refreshed_at).toLocaleTimeString()
+    : "--:--:--";
+
+  if (loading) {
+    return (
+      <div className="page resources-shell resources-shell--centered">
+        <p className="resources-empty-text">加载资源中...</p>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="page resources-shell resources-shell--centered">
+        <div className="resources-error-card">
+          <h2>资源加载失败</h2>
+          <p>{error}</p>
+          <button type="button" className="resources-action-button" onClick={() => void refreshNow()}>
+            重试
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!selected) {
+    return (
+      <div className="page resources-shell resources-shell--centered">
+        <p className="resources-empty-text">暂无已配置的提供商</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="page resources-shell">
+      <header className="resources-hero">
+        <div>
+          <p className="resources-eyebrow">Global Resource Surface</p>
+          <h1>Resources</h1>
+          <p className="resources-hero-copy">
+            沿用旧资源页的卡片式布局，但直接接到 monitor 的全局资源面。这里看 provider 级概览，再下钻到 lease/sandbox。
+          </p>
+        </div>
+        <div className="resources-summary-strip">
+          <div className="resources-summary-pill">
+            <span className="resources-summary-dot resources-summary-dot--ok" />
+            {summary?.active_providers ?? 0} 活跃 provider
+          </div>
+          <div className="resources-summary-pill">{summary?.running_sessions ?? 0} 运行会话</div>
+          <div className="resources-summary-pill">
+            <span
+              className={[
+                "resources-summary-dot",
+                summary?.refresh_status === "error" ? "resources-summary-dot--warn" : "resources-summary-dot--ok",
+              ].join(" ")}
+            />
+            刷新 {refreshedAt}
+          </div>
+          <button
+            type="button"
+            className="resources-refresh-button"
+            disabled={refreshing}
+            onClick={() => void refreshNow()}
+          >
+            {refreshing ? "刷新中..." : "刷新"}
+          </button>
+        </div>
+      </header>
+
+      <div className="resources-provider-grid">
+        {providers.map((provider) => (
+          <ProviderCard
+            key={provider.id}
+            provider={provider}
+            selected={provider.id === selectedId}
+            onSelect={() => setSelectedId(provider.id)}
+          />
+        ))}
+      </div>
+
+      <ProviderDetail provider={selected} />
+    </div>
+  );
+}
+
+function ProviderCard({
+  provider,
+  selected,
+  onSelect,
+}: {
+  provider: ProviderInfo;
+  selected: boolean;
+  onSelect: () => void;
+}) {
+  const runningCount = provider.sessions.filter((session) => session.status === "running").length;
+  const pausedCount = provider.sessions.filter((session) => session.status === "paused").length;
+  const stoppedCount = provider.sessions.filter((session) => session.status === "stopped").length;
+  const capabilityList = capabilityTags(provider.capabilities);
+
+  return (
+    <button
+      type="button"
+      className={[
+        "provider-card",
+        selected ? "provider-card--selected" : "",
+        provider.status === "unavailable" ? "provider-card--unavailable" : "",
+      ].join(" ")}
+      onClick={onSelect}
+    >
+      <div className="provider-card__header">
+        <div className="provider-card__title">
+          <span className={`provider-status-dot provider-status-dot--${provider.status}`} />
+          <span>{provider.name}</span>
+        </div>
+        <span className="provider-card__kind">{PROVIDER_TYPE_LABEL[provider.type]}</span>
+      </div>
+
+      <div className="provider-card__metric-row">
+        <MetricOrb label="运行数" metric={provider.telemetry.running} />
+        <MetricOrb label="CPU" metric={provider.cardCpu} />
+      </div>
+
+      <div className="provider-card__footer">
+        <span>{runningCount} 占用中</span>
+        {pausedCount > 0 && <span>{pausedCount} 暂停</span>}
+        {stoppedCount > 0 && <span>{stoppedCount} 已结束</span>}
+      </div>
+
+      {capabilityList.length > 0 && (
+        <div className="provider-card__capabilities">
+          {capabilityList.map((capability) => (
+            <span key={capability} className="provider-capability-chip">
+              {capability}
+            </span>
+          ))}
+        </div>
+      )}
+    </button>
+  );
+}
+
+function MetricOrb({ label, metric }: { label: string; metric: UsageMetric }) {
+  return (
+    <div className="metric-orb" title={metric.error || undefined}>
+      <div className="metric-orb__value">
+        {metric.used != null ? `${formatNumber(metric.used)}${metric.unit === "%" ? "%" : ""}` : "--"}
+      </div>
+      <div className="metric-orb__label">{label}</div>
+      {metric.limit != null && <div className="metric-orb__sub">{formatMetric(metric.limit, metric.unit)}</div>}
+    </div>
+  );
+}
+
+function ProviderDetail({ provider }: { provider: ProviderInfo }) {
+  const [selectedGroup, setSelectedGroup] = React.useState<LeaseGroup | null>(null);
+  const groups = React.useMemo(() => groupByLease(provider.sessions), [provider.sessions]);
+  const runningCount = provider.sessions.filter((session) => session.status === "running").length;
+  const pausedCount = provider.sessions.filter((session) => session.status === "paused").length;
+  const stoppedCount = provider.sessions.filter((session) => session.status === "stopped").length;
+  const isLocal = provider.type === "local";
+  const showUnavailableBanner = provider.status === "unavailable";
+  const hardUnavailable = provider.status === "unavailable" && provider.sessions.length === 0;
+
+  return (
+    <>
+      <section className="provider-detail-card">
+        <div className="provider-detail__header">
+          <div>
+            <div className="provider-detail__title-row">
+              <h2>{provider.name}</h2>
+              <span className={`provider-detail__status provider-detail__status--${provider.status}`}>
+                {STATUS_LABEL[provider.status]}
+              </span>
+            </div>
+            <p className="provider-detail__description">
+              {provider.description}
+              {provider.vendor ? ` · ${provider.vendor}` : ""}
+            </p>
+          </div>
+          <div className="provider-detail__meta">
+            <span>{PROVIDER_TYPE_LABEL[provider.type]}</span>
+            {provider.consoleUrl && (
+              <a href={provider.consoleUrl} target="_blank" rel="noreferrer">
+                控制台
+              </a>
+            )}
+          </div>
+        </div>
+
+        {hardUnavailable ? (
+          <div className="provider-unavailable-panel">
+            <h3>{provider.unavailableReason || "Provider unavailable"}</h3>
+            <p>当前进程里这个 provider 没有起来，所以这里只保留卡片，不假装它能正常使用。</p>
+          </div>
+        ) : (
+          <>
+            {showUnavailableBanner && (
+              // @@@unavailable-with-sessions - monitor truth differs from the old app resource tab:
+              // an unavailable provider can still carry historical/live lease rows, so keep the detail
+              // surface inspectable instead of hard-disabling the whole card.
+              <div className="provider-warning-banner">
+                {provider.unavailableReason || "Provider unavailable"}。但当前仍有 {provider.sessions.length} 条关联 session，可继续检查。
+              </div>
+            )}
+
+            <div className="provider-detail__overview">
+              {isLocal ? (
+                <div className="provider-inline-metrics">
+                  <InlineMetric label="运行中" value={String(runningCount)} />
+                  <InlineMetric label="CPU" value={formatMetricRange(provider.cardCpu)} />
+                  <InlineMetric label="RAM" value={formatMetricRange(provider.telemetry.memory)} />
+                  <InlineMetric label="Disk" value={formatMetricRange(provider.telemetry.disk)} />
+                </div>
+              ) : (
+                <div className="provider-inline-metrics">
+                  <InlineMetric label="运行中" value={String(runningCount)} />
+                  <InlineMetric label="已暂停" value={String(pausedCount)} />
+                  <InlineMetric label="已结束" value={String(stoppedCount)} />
+                </div>
+              )}
+            </div>
+
+            <div className="provider-section">
+              <div className="provider-section__header">
+                <h3>Sandboxes</h3>
+                <span>{groups.length} 组</span>
+              </div>
+              {groups.length === 0 ? (
+                <p className="provider-empty-state">暂无沙盒</p>
+              ) : (
+                <div className="sandbox-grid">
+                  {groups.map((group) => (
+                    <SandboxCard
+                      key={group.leaseId || group.sessions.map((session) => session.id).join("|")}
+                      group={group}
+                      onOpen={() => setSelectedGroup(group)}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          </>
+        )}
+      </section>
+
+      <SandboxInspector
+        group={selectedGroup}
+        providerType={provider.type}
+        onClose={() => setSelectedGroup(null)}
+      />
+    </>
+  );
+}
+
+function InlineMetric({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="inline-metric">
+      <span className="inline-metric__label">{label}</span>
+      <span className="inline-metric__value">{value}</span>
+    </div>
+  );
+}
+
+function SandboxCard({ group, onOpen }: { group: LeaseGroup; onOpen: () => void }) {
+  const duration = group.startedAt ? formatDuration(calculateDuration(group.startedAt)) : "--";
+  const names = group.sessions.map((session) => session.memberName || "未绑定").join(", ");
+
+  return (
+    <button type="button" className={`sandbox-card sandbox-card--${group.status}`} onClick={onOpen}>
+      <div className="sandbox-card__top">
+        <div className="sandbox-card__status">
+          <span className={`provider-status-dot provider-status-dot--${group.status}`} />
+          {STATUS_LABEL[group.status]}
+        </div>
+        <span className="sandbox-card__duration">{duration}</span>
+      </div>
+      <div className="sandbox-card__body">
+        <div className="sandbox-card__names">{names}</div>
+        <div className="sandbox-card__thread-list">
+          {group.sessions.slice(0, 2).map((session) => (
+            <div key={session.id} className="sandbox-card__thread">
+              {session.threadId}
+            </div>
+          ))}
+        </div>
+      </div>
+      {group.metrics && (
+        <div className="sandbox-card__metrics">
+          <span>CPU {formatMetric(group.metrics.cpu, "%")}</span>
+          <span>RAM {formatMetric(group.metrics.memory, "GB")}</span>
+          <span>Disk {formatMetric(group.metrics.disk, "GB")}</span>
+        </div>
+      )}
+      <div className="sandbox-card__lease">{group.leaseId || "local"}</div>
+    </button>
+  );
+}
+
+function SandboxInspector({
+  group,
+  providerType,
+  onClose,
+}: {
+  group: LeaseGroup | null;
+  providerType: ProviderInfo["type"];
+  onClose: () => void;
+}) {
+  React.useEffect(() => {
+    if (!group) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        onClose();
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [group, onClose]);
+
+  if (!group) return null;
+
+  return (
+    <div className="sandbox-modal-backdrop" role="dialog" aria-modal="true" onClick={onClose}>
+      <div className="sandbox-modal" onClick={(event) => event.stopPropagation()}>
+        <div className="sandbox-modal__header">
+          <div>
+            <p className="sandbox-modal__eyebrow">
+              {STATUS_LABEL[group.status]} · {group.startedAt ? formatDuration(calculateDuration(group.startedAt)) : "--"}
+            </p>
+            <h3>{group.leaseId || "local"}</h3>
+          </div>
+          <button type="button" className="sandbox-modal__close" onClick={onClose}>
+            Close
+          </button>
+        </div>
+
+        <div className="sandbox-modal__section">
+          <h4>Sessions</h4>
+          <div className="sandbox-session-list">
+            {group.sessions.map((session) => (
+              <div key={session.id} className="sandbox-session-row">
+                <div>
+                  <div className="sandbox-session-row__name">{session.memberName || "未绑定"}</div>
+                  <Link className="sandbox-link" to={`/thread/${session.threadId}`}>
+                    {session.threadId}
+                  </Link>
+                </div>
+                <span className={`provider-status-dot provider-status-dot--${session.status}`} />
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {group.metrics && (
+          <div className="sandbox-modal__section">
+            <h4>Metrics</h4>
+            <div className="sandbox-metric-grid">
+              <MetricBlock label="CPU" value={formatMetric(group.metrics.cpu, "%")} />
+              <MetricBlock
+                label="RAM"
+                value={group.metrics.memory != null ? formatMetric(group.metrics.memory, "GB") : "--"}
+                sub={group.metrics.memoryLimit != null ? formatMetric(group.metrics.memoryLimit, "GB") : undefined}
+              />
+              <MetricBlock
+                label="Disk"
+                value={group.metrics.disk != null ? formatMetric(group.metrics.disk, "GB") : "--"}
+                sub={group.metrics.diskLimit != null ? formatMetric(group.metrics.diskLimit, "GB") : undefined}
+              />
+            </div>
+          </div>
+        )}
+
+        <div className="sandbox-modal__section">
+          <div className="sandbox-modal__section-header">
+            <h4>Links</h4>
+            {group.leaseId && (
+              <Link className="sandbox-link" to={`/lease/${group.leaseId}`}>
+                打开 lease
+              </Link>
+            )}
+          </div>
+          <MonitorFileBrowser
+            leaseId={group.leaseId}
+            providerType={providerType}
+            disabled={group.status === "stopped" || group.status === "destroying"}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function MetricBlock({ label, value, sub }: { label: string; value: string; sub?: string }) {
+  return (
+    <div className="sandbox-metric-block">
+      <div className="sandbox-metric-block__label">{label}</div>
+      <div className="sandbox-metric-block__value">
+        {value}
+        {sub ? <span className="sandbox-metric-block__sub"> / {sub}</span> : null}
+      </div>
+    </div>
+  );
+}
+
+function MonitorFileBrowser({
+  leaseId,
+  providerType,
+  disabled,
+}: {
+  leaseId: string;
+  providerType: ProviderInfo["type"];
+  disabled: boolean;
+}) {
+  const [currentPath, setCurrentPath] = React.useState("/");
+  const [parentPath, setParentPath] = React.useState<string | null>(null);
+  const [items, setItems] = React.useState<BrowseItem[]>([]);
+  const [loading, setLoading] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
+  const [selectedFile, setSelectedFile] = React.useState<string | null>(null);
+  const [fileContent, setFileContent] = React.useState<string | null>(null);
+  const [fileError, setFileError] = React.useState<string | null>(null);
+  const [fileLoading, setFileLoading] = React.useState(false);
+
+  const loadPath = React.useCallback(
+    async (path: string) => {
+      if (!leaseId) return;
+      setLoading(true);
+      setError(null);
+      try {
+        const data = await browseMonitorSandbox(leaseId, path);
+        setCurrentPath(data.current_path ?? path);
+        setParentPath(data.parent_path ?? null);
+        setItems(data.items ?? []);
+      } catch (exc) {
+        setError(exc instanceof Error ? exc.message : "浏览失败");
+      } finally {
+        setLoading(false);
+      }
+    },
+    [leaseId],
+  );
+
+  React.useEffect(() => {
+    if (!leaseId || disabled) return;
+    void loadPath("/");
+    setSelectedFile(null);
+    setFileContent(null);
+    setFileError(null);
+  }, [disabled, leaseId, loadPath]);
+
+  const openFile = React.useCallback(
+    async (path: string) => {
+      if (!leaseId) return;
+      if (selectedFile === path) {
+        setSelectedFile(null);
+        setFileContent(null);
+        setFileError(null);
+        return;
+      }
+      setSelectedFile(path);
+      setFileContent(null);
+      setFileError(null);
+      setFileLoading(true);
+      try {
+        const data = await readMonitorSandboxFile(leaseId, path);
+        setFileContent(data.content);
+        if (data.truncated) {
+          setFileError("内容已截断至 100 KB");
+        }
+      } catch (exc) {
+        setFileError(exc instanceof Error ? exc.message : "读取失败");
+      } finally {
+        setFileLoading(false);
+      }
+    },
+    [leaseId, selectedFile],
+  );
+
+  if (!leaseId) {
+    return <p className="file-browser__empty">当前沙盒没有 lease id，无法浏览文件。</p>;
+  }
+
+  if (disabled) {
+    return <p className="file-browser__empty">沙盒已停止，无法浏览文件。</p>;
+  }
+
+  return (
+    <div className="file-browser">
+      <div className="file-browser__column">
+        <div className="file-browser__pathbar">
+          <button type="button" onClick={() => void loadPath("/")}>
+            Root
+          </button>
+          <span>{providerType}</span>
+          <strong>{currentPath}</strong>
+        </div>
+        <div className="file-browser__list">
+          {parentPath && (
+            <button type="button" className="file-browser__item" onClick={() => void loadPath(parentPath)}>
+              .. (上一级)
+            </button>
+          )}
+          {loading && <p className="file-browser__empty">加载中...</p>}
+          {error && <p className="file-browser__error">{error}</p>}
+          {!loading && !error && items.length === 0 && <p className="file-browser__empty">此目录为空</p>}
+          {!loading &&
+            !error &&
+            items.map((item) => (
+              <button
+                key={item.path}
+                type="button"
+                className={[
+                  "file-browser__item",
+                  !item.is_dir && selectedFile === item.path ? "file-browser__item--selected" : "",
+                ].join(" ")}
+                onClick={() => (item.is_dir ? void loadPath(item.path) : void openFile(item.path))}
+              >
+                <span>{item.is_dir ? "DIR" : "FILE"}</span>
+                <span>{item.name}</span>
+              </button>
+            ))}
+        </div>
+      </div>
+      <div className="file-browser__column file-browser__column--content">
+        {selectedFile ? (
+          <>
+            <div className="file-browser__pathbar">
+              <strong>{selectedFile}</strong>
+            </div>
+            <div className="file-browser__content">
+              {fileLoading && <p className="file-browser__empty">读取中...</p>}
+              {!fileLoading && fileError && !fileContent && <p className="file-browser__error">{fileError}</p>}
+              {fileContent != null && <pre>{fileContent}</pre>}
+              {fileContent != null && fileError && <p className="file-browser__note">{fileError}</p>}
+            </div>
+          </>
+        ) : (
+          <div className="file-browser__content file-browser__content--empty">选择文件查看内容</div>
+        )}
+      </div>
+    </div>
+  );
+}

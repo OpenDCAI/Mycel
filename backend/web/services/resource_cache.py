@@ -18,6 +18,10 @@ _snapshot_lock = threading.Lock()
 _snapshot_cache: dict[str, Any] | None = None
 
 
+class ResourceOverviewContractError(RuntimeError):
+    """Raised when the product resource overview payload breaks its public contract."""
+
+
 def clear_resource_overview_cache() -> None:
     with _snapshot_lock:
         global _snapshot_cache
@@ -66,6 +70,22 @@ def _attach_monitor_triage(payload: dict[str, Any]) -> dict[str, Any]:
     return payload
 
 
+def _validate_resource_overview_payload(payload: dict[str, Any]) -> None:
+    summary = payload.get("summary")
+    providers = payload.get("providers")
+    if not isinstance(summary, dict):
+        raise ResourceOverviewContractError("Malformed /api/resources payload: summary must be an object")
+    if not isinstance(providers, list):
+        raise ResourceOverviewContractError("Malformed /api/resources payload: providers must be a list")
+    for index, provider in enumerate(providers):
+        if not isinstance(provider, dict):
+            raise ResourceOverviewContractError(f"Malformed /api/resources payload: provider[{index}] must be an object")
+        provider_id = str(provider.get("id") or f"index-{index}")
+        card_cpu = provider.get("cardCpu")
+        if not isinstance(card_cpu, dict):
+            raise ResourceOverviewContractError(f"Malformed /api/resources payload: provider '{provider_id}' missing cardCpu contract")
+
+
 def _snapshot_drifted_from_live_sessions(snapshot: dict[str, Any]) -> bool:
     live_stats = resource_projection_service.visible_resource_session_stats()
     for provider in snapshot.get("providers") or []:
@@ -90,12 +110,18 @@ def refresh_resource_overview_sync() -> dict[str, Any]:
     try:
         payload = resource_projection_service.list_resource_providers()
         payload = _attach_monitor_triage(payload)
+        _validate_resource_overview_payload(payload)
+        payload = _attach_monitor_triage(payload)
         duration_ms = (time.perf_counter() - started) * 1000
         payload = _with_refresh_metadata(payload, duration_ms=duration_ms, status="ok", error=None)
         with _snapshot_lock:
             _snapshot_cache = copy.deepcopy(payload)
         return payload
     except Exception as exc:
+        if isinstance(exc, ResourceOverviewContractError):
+            # @@@resource-contract-fails-loudly - bad product DTOs must 500 immediately instead of
+            # serving stale cached cards that hide the backend contract break from the app frontend.
+            raise
         duration_ms = (time.perf_counter() - started) * 1000
         error = str(exc)
         with _snapshot_lock:
@@ -117,6 +143,7 @@ def get_resource_overview_snapshot() -> dict[str, Any]:
     with _snapshot_lock:
         cached = copy.deepcopy(_snapshot_cache)
     if cached is not None:
+        _validate_resource_overview_payload(cached)
         # @@@resource-cache-live-drift - durable session truth lands in sandbox.db after a run
         # starts; if the cached Resources snapshot no longer matches visible lease/session
         # counts, refresh synchronously instead of serving a stale zero-sandbox card.

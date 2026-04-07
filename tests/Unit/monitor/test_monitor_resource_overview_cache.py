@@ -101,6 +101,7 @@ def test_resource_overview_cache_refreshes_when_live_session_counts_drift(monkey
         "providers": [
             {
                 "id": "local",
+                "cardCpu": {},
                 "sessions": [],
                 "telemetry": {"running": {"used": 0}},
             }
@@ -117,6 +118,7 @@ def test_resource_overview_cache_refreshes_when_live_session_counts_drift(monkey
         "providers": [
             {
                 "id": "local",
+                "cardCpu": {},
                 "sessions": [{"id": "lease-1:m_thread"}],
                 "telemetry": {"running": {"used": 1}},
             }
