@@ -11,7 +11,6 @@ from .eval_repo import SupabaseEvalRepo
 from .file_operation_repo import SupabaseFileOperationRepo
 from .invite_code_repo import SupabaseInviteCodeRepo
 from .lease_repo import SupabaseLeaseRepo
-from .member_repo import SupabaseMemberRepo
 from .panel_task_repo import SupabasePanelTaskRepo
 from .provider_event_repo import SupabaseProviderEventRepo
 from .queue_repo import SupabaseQueueRepo
@@ -26,8 +25,8 @@ from .terminal_repo import SupabaseTerminalRepo
 from .thread_launch_pref_repo import SupabaseThreadLaunchPrefRepo
 from .thread_repo import SupabaseThreadRepo
 from .tool_task_repo import SupabaseToolTaskRepo
-from .user_settings_repo import SupabaseUserSettingsRepo
 from .user_repo import SupabaseUserRepo
+from .user_settings_repo import SupabaseUserSettingsRepo
 
 __all__ = [
     "SupabaseAgentConfigRepo",
@@ -41,7 +40,6 @@ __all__ = [
     "SupabaseFileOperationRepo",
     "SupabaseInviteCodeRepo",
     "SupabaseLeaseRepo",
-    "SupabaseMemberRepo",
     "SupabasePanelTaskRepo",
     "SupabaseProviderEventRepo",
     "SupabaseQueueRepo",

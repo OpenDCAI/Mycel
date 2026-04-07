@@ -35,18 +35,6 @@ def build_thread_repo(
     return SupabaseThreadRepo(client)
 
 
-def build_member_repo(
-    *,
-    supabase_client: Any | None = None,
-    supabase_client_factory: str | None = None,
-    **_kwargs: Any,
-):
-    client = _resolve_supabase_client(supabase_client, supabase_client_factory)
-    from storage.providers.supabase.member_repo import SupabaseMemberRepo
-
-    return SupabaseMemberRepo(client)
-
-
 def build_user_repo(
     *,
     supabase_client: Any | None = None,

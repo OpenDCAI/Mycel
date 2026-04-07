@@ -193,6 +193,7 @@ def test_storage_container_exposes_bypass_repo_builders() -> None:
     container = StorageContainer(supabase_client=_FakeSupabaseClient())
 
     assert callable(container.user_repo)
+    assert not hasattr(container, "member_repo")
     assert callable(container.panel_task_repo)
     assert callable(container.cron_job_repo)
     assert callable(container.agent_registry_repo)

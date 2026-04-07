@@ -17,7 +17,6 @@ from .contracts import (
     FileOperationRepo,
     InviteCodeRepo,
     LeaseRepo,
-    MemberRepo,
     PanelTaskRepo,
     ProviderEventRepo,
     QueueRepo,
@@ -53,7 +52,6 @@ _REPO_REGISTRY: dict[str, tuple[str, str]] = {
     "tool_task_repo": ("storage.providers.supabase.tool_task_repo", "SupabaseToolTaskRepo"),
     "sync_file_repo": ("storage.providers.supabase.sync_file_repo", "SupabaseSyncFileRepo"),
     "resource_snapshot_repo": ("storage.providers.supabase.resource_snapshot_repo", "SupabaseResourceSnapshotRepo"),
-    "member_repo": ("storage.providers.supabase.member_repo", "SupabaseMemberRepo"),
     "user_repo": ("storage.providers.supabase.user_repo", "SupabaseUserRepo"),
     "thread_repo": ("storage.providers.supabase.thread_repo", "SupabaseThreadRepo"),
     "thread_launch_pref_repo": ("storage.providers.supabase.thread_launch_pref_repo", "SupabaseThreadLaunchPrefRepo"),
@@ -129,9 +127,6 @@ class StorageContainer:
 
     def resource_snapshot_repo(self) -> ResourceSnapshotRepo:
         return self._build("resource_snapshot_repo")
-
-    def member_repo(self) -> MemberRepo:
-        return self._build("member_repo")
 
     def user_repo(self) -> UserRepo:
         return self._build("user_repo")
