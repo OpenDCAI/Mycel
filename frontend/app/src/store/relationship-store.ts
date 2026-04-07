@@ -7,7 +7,7 @@ export interface RelationshipItem {
   other_name: string;
   other_mycel_id: number | null;
   other_avatar_url: string | null;
-  state: "pending" | "accepted" | "rejected" | "revoked";
+  state: "pending" | "accepted" | "rejected" | "revoked" | "visit" | "hire";
   is_requester: boolean;
   created_at: string;
 }

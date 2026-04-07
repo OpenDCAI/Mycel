@@ -20,7 +20,7 @@ export default function ChatLayout() {
 
   return (
     <SplitPaneLayout
-      sidebar={<ConversationList threads={tm.threads} />}
+      sidebar={<ConversationList />}
       hasDetail={hasActiveConversation}
       emptyMessage="选择一个对话开始"
       outletContext={outletContext}
