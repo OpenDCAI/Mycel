@@ -424,9 +424,9 @@ def load_config(
     return AgentLoader(workspace_root=workspace_root).load(cli_overrides=cli_overrides)
 
 
-def load_bundle_from_repo(agent_config_repo: Any, member_id: str) -> AgentBundle | None:
-    """Load agent bundle from Supabase agent_config tables. Returns None if no config found."""
-    config = agent_config_repo.get_config(member_id)
+def load_bundle_from_repo(agent_config_repo: Any, agent_config_id: str) -> AgentBundle | None:
+    """Load agent bundle from Supabase agent_config tables keyed by agent_config_id."""
+    config = agent_config_repo.get_config(agent_config_id)
     if not config:
         return None
 
@@ -455,11 +455,11 @@ def load_bundle_from_repo(agent_config_repo: Any, member_id: str) -> AgentBundle
             runtime[rname] = RuntimeResourceConfig(**rcfg)
 
     # Rules from agent_rules table
-    rule_rows = agent_config_repo.list_rules(member_id)
+    rule_rows = agent_config_repo.list_rules(agent_config_id)
     rules = [{"name": r.get("filename", "").replace(".md", ""), "content": r.get("content", "")} for r in rule_rows]
 
     # Sub-agents from agent_sub_agents table
-    sub_agent_rows = agent_config_repo.list_sub_agents(member_id)
+    sub_agent_rows = agent_config_repo.list_sub_agents(agent_config_id)
     agents = []
     for sa in sub_agent_rows:
         agents.append(
@@ -474,7 +474,7 @@ def load_bundle_from_repo(agent_config_repo: Any, member_id: str) -> AgentBundle
         )
 
     # Skills from agent_skills table
-    skill_rows = agent_config_repo.list_skills(member_id)
+    skill_rows = agent_config_repo.list_skills(agent_config_id)
     skills = [{"name": s.get("name", ""), "content": s.get("content", "")} for s in skill_rows]
 
     # MCP from config

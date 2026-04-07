@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from config.loader import AgentLoader, ConfigLoader, load_config
+from config.loader import AgentLoader, ConfigLoader, load_bundle_from_repo, load_config
 from config.schema import LeonSettings
 
 
@@ -221,3 +221,50 @@ def test_member_agent_retains_bundle_source_dir(tmp_path: Path, monkeypatch):
     agent = AgentLoader(workspace_root=tmp_path).load_all_agents()["alice"]
 
     assert agent.source_dir == member_dir.resolve()
+
+
+def test_load_bundle_from_repo_uses_agent_config_id_root_key() -> None:
+    seen: list[tuple[str, str]] = []
+
+    class _Repo:
+        def get_config(self, agent_config_id: str):
+            seen.append(("config", agent_config_id))
+            return {
+                "id": agent_config_id,
+                "name": "Toad",
+                "description": "test config",
+                "tools": ["search"],
+                "system_prompt": "be helpful",
+                "status": "active",
+                "version": "1.0.0",
+                "created_at": 1,
+                "updated_at": 2,
+                "runtime": {"tools:search": {"enabled": True, "desc": "Search"}},
+                "mcp": {},
+            }
+
+        def list_rules(self, agent_config_id: str):
+            seen.append(("rules", agent_config_id))
+            return [{"filename": "default.md", "content": "Be careful."}]
+
+        def list_sub_agents(self, agent_config_id: str):
+            seen.append(("sub_agents", agent_config_id))
+            return [{"name": "Scout", "description": "helper", "tools": ["search"], "system_prompt": "look around"}]
+
+        def list_skills(self, agent_config_id: str):
+            seen.append(("skills", agent_config_id))
+            return [{"name": "Search", "content": "search skill"}]
+
+    bundle = load_bundle_from_repo(_Repo(), "cfg-1")
+
+    assert bundle is not None
+    assert bundle.agent.name == "Toad"
+    assert bundle.rules == [{"name": "default", "content": "Be careful."}]
+    assert bundle.skills == [{"name": "Search", "content": "search skill"}]
+    assert [agent.name for agent in bundle.agents] == ["Scout"]
+    assert seen == [
+        ("config", "cfg-1"),
+        ("rules", "cfg-1"),
+        ("sub_agents", "cfg-1"),
+        ("skills", "cfg-1"),
+    ]
