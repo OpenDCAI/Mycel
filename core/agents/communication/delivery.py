@@ -16,8 +16,8 @@ from storage.contracts import MemberRow
 logger = logging.getLogger(__name__)
 
 
-def _resolve_member_main_thread_id(app: Any, member_id: str) -> str | None:
-    thread = app.state.thread_repo.get_main_thread(member_id)
+def _resolve_member_default_thread_id(app: Any, member_id: str) -> str | None:
+    thread = app.state.thread_repo.get_default_thread(member_id)
     if thread is None:
         return None
     return thread["id"]
@@ -80,7 +80,7 @@ async def _async_deliver(
 
     var_child_runnable_config.set(None)
 
-    thread_id = _resolve_member_main_thread_id(app, member.id)
+    thread_id = _resolve_member_default_thread_id(app, member.id)
     logger.info("[delivery] _async_deliver: member=%s thread=%s from=%s", member.id, thread_id, sender_name)
     from core.runtime.middleware.queue.formatters import format_chat_notification
 

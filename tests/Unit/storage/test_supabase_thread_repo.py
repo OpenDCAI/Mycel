@@ -60,6 +60,7 @@ def test_supabase_thread_repo_create_writes_integer_main_flag():
         branch_index=0,
     )
 
+    assert client.table_obj.insert_payload is not None
     assert client.table_obj.insert_payload["is_main"] == 1
 
 
@@ -71,4 +72,17 @@ def test_supabase_thread_repo_update_writes_integer_main_flag():
 
     repo.update("thread-1", is_main=False)
 
+    assert client.table_obj.update_payload is not None
     assert client.table_obj.update_payload["is_main"] == 0
+
+
+def test_supabase_thread_repo_get_default_thread_reads_by_member_and_main_flag():
+    client = _FakeClient()
+    repo = SupabaseThreadRepo(client)
+
+    result = repo.get_default_thread("member-1")
+
+    assert result is not None
+    assert result["id"] == "thread-1"
+    assert ("member_id", "member-1") in client.table_obj.eq_calls
+    assert ("is_main", 1) in client.table_obj.eq_calls

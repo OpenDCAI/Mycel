@@ -35,7 +35,7 @@ class _FakeMemberRepo:
     def get_by_id(self, member_id: str):
         return self._members.get(member_id)
 
-    def increment_entity_seq(self, member_id: str) -> int:
+    def increment_thread_seq(self, member_id: str) -> int:
         self._seq[member_id] += 1
         return self._seq[member_id]
 
@@ -44,7 +44,7 @@ class _FakeThreadRepo:
     def __init__(self) -> None:
         self.rows: dict[str, dict] = {}
 
-    def get_main_thread(self, member_id: str):
+    def get_default_thread(self, member_id: str):
         for row in self.rows.values():
             if row["member_id"] == member_id and row["is_main"]:
                 return {"id": row["thread_id"], **row}

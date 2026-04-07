@@ -79,10 +79,10 @@ class SupabaseThreadRepo:
             return None
         return _to_dict(rows[0])
 
-    def get_main_thread(self, member_id: str) -> dict[str, Any] | None:
+    def get_default_thread(self, member_id: str) -> dict[str, Any] | None:
         select = ", ".join(_COLS)
         response = self._t().select(select).eq("member_id", member_id).eq("is_main", 1).execute()
-        rows = q.rows(response, _REPO, "get_main_thread")
+        rows = q.rows(response, _REPO, "get_default_thread")
         if not rows:
             return None
         return _to_dict(rows[0])

@@ -41,7 +41,7 @@ async def test_list_entities_excludes_current_user_and_returns_all_others():
         state=SimpleNamespace(
             member_repo=SimpleNamespace(list_all=lambda: [current_user, other_human, main_agent, child_agent]),
             thread_repo=SimpleNamespace(
-                get_main_thread=lambda member_id: (
+                get_default_thread=lambda member_id: (
                     {"id": "thread-main", "is_main": True, "branch_index": 0}
                     if member_id == "a-main"
                     else {"id": "thread-child", "is_main": False, "branch_index": 1}
@@ -88,7 +88,7 @@ async def test_get_agent_thread_reads_main_thread_from_thread_repo():
         state=SimpleNamespace(
             member_repo=SimpleNamespace(get_by_id=lambda member_id: agent if member_id == "a-main" else None),
             thread_repo=SimpleNamespace(
-                get_main_thread=lambda member_id: (
+                get_default_thread=lambda member_id: (
                     {"id": "thread-main", "is_main": True, "branch_index": 0} if member_id == "a-main" else None
                 )
             ),
@@ -172,7 +172,7 @@ async def test_get_agent_thread_uses_member_lookup_helper(monkeypatch: pytest.Mo
     app = SimpleNamespace(
         state=SimpleNamespace(
             thread_repo=SimpleNamespace(
-                get_main_thread=lambda member_id: (
+                get_default_thread=lambda member_id: (
                     {"id": "thread-main", "is_main": True, "branch_index": 0} if member_id == "a-main" else None
                 )
             ),

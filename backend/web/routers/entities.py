@@ -189,7 +189,7 @@ async def list_entities(
             )
         else:
             owner = member_map.get(m.owner_user_id) if m.owner_user_id else None
-            thread = app.state.thread_repo.get_main_thread(m.id)
+            thread = app.state.thread_repo.get_default_thread(m.id)
             items.append(
                 {
                     "id": m.id,
@@ -231,9 +231,9 @@ async def get_agent_thread(
     current_user_id: Annotated[str, Depends(get_current_user_id)],
     app: Annotated[Any, Depends(get_app)],
 ):
-    """Get the thread_id for an agent's main thread. user_id here is the agent's member_id."""
+    """Get the thread_id for an agent's default representative thread. user_id here is the agent's member_id."""
     member = _get_member_or_404(app, user_id)
-    thread = app.state.thread_repo.get_main_thread(user_id)
+    thread = app.state.thread_repo.get_default_thread(user_id)
     if member.type != MemberType.HUMAN and thread is not None:
         return {"user_id": user_id, "thread_id": thread["id"]}
     raise HTTPException(404, "No agent thread found")

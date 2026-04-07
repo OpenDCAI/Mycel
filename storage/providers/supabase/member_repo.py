@@ -28,7 +28,8 @@ class SupabaseMemberRepo:
                 "description": row.description,
                 "config_dir": row.config_dir,
                 "owner_user_id": row.owner_user_id,
-                "next_entity_seq": row.next_entity_seq,
+                # @@@supabase-schema-legacy - remote members table still uses the old column name.
+                "next_entity_seq": row.next_thread_seq,
                 "email": row.email,
                 "mycel_id": row.mycel_id,
                 "created_at": row.created_at,
@@ -101,9 +102,10 @@ class SupabaseMemberRepo:
             return
         self._t().update(updates).eq("id", member_id).execute()
 
-    def increment_entity_seq(self, member_id: str) -> int:
-        """Atomically increment next_entity_seq and return the new value via RPC."""
+    def increment_thread_seq(self, member_id: str) -> int:
+        """Atomically increment the thread sequence and return the new value via RPC."""
         response = self._client.rpc(
+            # @@@supabase-rpc-legacy - the remote function name still carries the old storage term.
             "increment_member_entity_seq",
             {"p_member_id": member_id},
         ).execute()
@@ -120,7 +122,7 @@ class SupabaseMemberRepo:
         # data may be a list with one element (scalar), or an int directly
         if isinstance(data, list):
             if not data:
-                raise RuntimeError(f"Supabase {_MEMBER_REPO} increment_entity_seq returned empty list for member {member_id}.")
+                raise RuntimeError(f"Supabase {_MEMBER_REPO} increment_thread_seq returned empty list for member {member_id}.")
             return int(data[0])
         return int(data)
 
@@ -128,8 +130,12 @@ class SupabaseMemberRepo:
         self._t().delete().eq("id", member_id).execute()
 
     def _normalize(self, row: dict[str, Any]) -> dict[str, Any]:
-        """Ensure type is a MemberType-compatible value."""
-        return row
+        """Ensure storage rows satisfy the current MemberRow contract."""
+        normalized = dict(row)
+        if "next_thread_seq" not in normalized and "next_entity_seq" in normalized:
+            normalized["next_thread_seq"] = normalized["next_entity_seq"]
+        normalized.pop("next_entity_seq", None)
+        return normalized
 
     def _t(self) -> Any:
         return self._client.table(_MEMBER_TABLE)

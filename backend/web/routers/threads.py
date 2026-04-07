@@ -572,9 +572,9 @@ def _create_owned_thread(
         sandbox_type = str(owned_lease["provider_name"] or sandbox_type)
 
     # @@@non-atomic-create - these 3 steps (seq++, thread) are not atomic.
-    seq = app.state.member_repo.increment_entity_seq(agent_member_id)
+    seq = app.state.member_repo.increment_thread_seq(agent_member_id)
     new_thread_id = f"{agent_member_id}-{seq}"
-    has_main = app.state.thread_repo.get_main_thread(agent_member_id) is not None
+    has_main = app.state.thread_repo.get_default_thread(agent_member_id) is not None
     resolved_is_main = is_main or not has_main
     branch_index = 0 if resolved_is_main else app.state.thread_repo.get_next_branch_index(agent_member_id)
 
@@ -675,7 +675,7 @@ async def resolve_main_thread(
         # or belong to another user (harmless to reveal "no thread")
         return {"thread": None}
 
-    existing = app.state.thread_repo.get_main_thread(payload.member_id)
+    existing = app.state.thread_repo.get_default_thread(payload.member_id)
     if existing is None:
         return {"thread": None}
     try:
