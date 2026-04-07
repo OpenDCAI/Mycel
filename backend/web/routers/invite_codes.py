@@ -11,17 +11,6 @@ from backend.web.core.dependencies import get_current_user_id
 router = APIRouter(prefix="/api/invite-codes", tags=["invite-codes"])
 
 
-def _get_invite_code_repo(app: Any):
-    """Get SupabaseInviteCodeRepo from app state, or raise 503 if unavailable."""
-    sb_client = getattr(app.state, "_supabase_client", None)
-    if sb_client is None:
-        raise HTTPException(503, "邀请码服务不可用（当前为 SQLite 模式）")
-    repo = getattr(app.state, "invite_code_repo", None)
-    if repo is None:
-        raise HTTPException(503, "邀请码仓库未初始化")
-    return repo
-
-
 async def _call_invite_code_repo(
     request: Request,
     error_prefix: str,
@@ -29,7 +18,12 @@ async def _call_invite_code_repo(
     *args: Any,
     **kwargs: Any,
 ) -> Any:
-    repo = _get_invite_code_repo(request.app)
+    sb_client = getattr(request.app.state, "_supabase_client", None)
+    if sb_client is None:
+        raise HTTPException(503, "邀请码服务不可用（当前为 SQLite 模式）")
+    repo = getattr(request.app.state, "invite_code_repo", None)
+    if repo is None:
+        raise HTTPException(503, "邀请码仓库未初始化")
     try:
         method = getattr(repo, method_name)
         return await asyncio.to_thread(method, *args, **kwargs)
