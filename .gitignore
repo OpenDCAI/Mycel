@@ -102,6 +102,8 @@ worktrees/
 # Development artifacts — never commit
 docs/lessons/
 docs/plans/
+docs/superpowers/plans/
+docs/superpowers/specs/
 frontend/.vite/
 .playwright-cli/
 ops
