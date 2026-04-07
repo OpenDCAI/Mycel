@@ -287,3 +287,41 @@ async def test_get_or_create_agent_requires_thread_agent_user_id_for_chat_identi
 
     with pytest.raises(RuntimeError, match="thread.agent_user_id"):
         await agent_pool.get_or_create_agent(cast(Any, app), "local", thread_id="thread-6")
+
+
+@pytest.mark.asyncio
+async def test_get_or_create_agent_keys_registry_by_agent_user_id(monkeypatch: pytest.MonkeyPatch):
+    seen: dict[str, object] = {}
+
+    def _fake_create_agent_sync(**kwargs) -> object:
+        return SimpleNamespace()
+
+    def _fake_get_or_create_agent_id(**kwargs) -> str:
+        seen.update(kwargs)
+        return "agent-7"
+
+    class _ThreadRepo:
+        def get_by_id(self, thread_id: str):
+            return {
+                "id": thread_id,
+                "agent_user_id": "agent-user-7",
+                "cwd": None,
+                "model": "leon:large",
+            }
+
+    monkeypatch.setattr(agent_pool, "create_agent_sync", _fake_create_agent_sync)
+    monkeypatch.setattr(agent_pool, "get_or_create_agent_id", _fake_get_or_create_agent_id)
+
+    app = SimpleNamespace(
+        state=SimpleNamespace(
+            agent_pool={},
+            thread_repo=_ThreadRepo(),
+            thread_cwd={},
+            thread_sandbox={},
+        )
+    )
+
+    await agent_pool.get_or_create_agent(cast(Any, app), "local", thread_id="thread-7")
+
+    assert seen["user_id"] == "agent-user-7"
+    assert "member" not in seen

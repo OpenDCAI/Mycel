@@ -187,9 +187,11 @@ async def get_or_create_agent(app_obj: FastAPI, sandbox_type: str, thread_id: st
             extra_allowed_paths=extra_allowed_paths_or_none,
             web_app=app_obj,
         )
-        member = agent_name or "leon"
+        agent_identity_user_id = str(thread_data.get("agent_user_id") or "").strip() if thread_data else ""
+        if not agent_identity_user_id:
+            agent_identity_user_id = agent_name or "leon"
         agent_id = get_or_create_agent_id(
-            member=member,
+            user_id=agent_identity_user_id,
             thread_id=thread_id,
             sandbox_type=sandbox_type,
         )
