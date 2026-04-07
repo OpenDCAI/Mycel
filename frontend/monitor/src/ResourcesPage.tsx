@@ -729,7 +729,9 @@ function MonitorFileBrowser({
   providerType: ProviderInfo["type"];
   disabled: boolean;
 }) {
-  const [currentPath, setCurrentPath] = React.useState("/");
+  const isLocal = providerType === "local" || !leaseId;
+  const defaultPath = isLocal ? "~" : "/";
+  const [currentPath, setCurrentPath] = React.useState(defaultPath);
   const [parentPath, setParentPath] = React.useState<string | null>(null);
   const [items, setItems] = React.useState<BrowseItem[]>([]);
   const [loading, setLoading] = React.useState(false);
@@ -741,11 +743,25 @@ function MonitorFileBrowser({
 
   const loadPath = React.useCallback(
     async (path: string) => {
-      if (!leaseId) return;
       setLoading(true);
       setError(null);
       try {
-        const data = await browseMonitorSandbox(leaseId, path);
+        // @@@local-monitor-browse - local resource sessions are host-bound, not active-instance-bound.
+        // Reuse the same settings browse/read endpoints as the app resource surface.
+        const data = isLocal
+          ? await (async () => {
+              const response = await fetch(`/api/settings/browse?path=${encodeURIComponent(path)}&include_files=true`);
+              if (!response.ok) {
+                const body = await response.text();
+                throw new Error(`API ${response.status}: ${body || response.statusText}`);
+              }
+              return await response.json() as {
+                current_path?: string;
+                parent_path?: string | null;
+                items?: BrowseItem[];
+              };
+            })()
+          : await browseMonitorSandbox(leaseId, path);
         setCurrentPath(data.current_path ?? path);
         setParentPath(data.parent_path ?? null);
         setItems(data.items ?? []);
@@ -755,25 +771,33 @@ function MonitorFileBrowser({
         setLoading(false);
       }
     },
-    [leaseId],
+    [isLocal, leaseId],
   );
 
   React.useEffect(() => {
-    if (!leaseId || disabled) return;
-    void loadPath("/");
+    if (disabled) return;
+    void loadPath(defaultPath);
     setSelectedFile(null);
     setFileContent(null);
     setFileError(null);
-  }, [disabled, leaseId, loadPath]);
+  }, [defaultPath, disabled, loadPath]);
 
   const loadFile = React.useCallback(
     async (path: string) => {
-      if (!leaseId) return;
       setFileContent(null);
       setFileError(null);
       setFileLoading(true);
       try {
-        const data = await readMonitorSandboxFile(leaseId, path);
+        const data = isLocal
+          ? await (async () => {
+              const response = await fetch(`/api/settings/read?path=${encodeURIComponent(path)}`);
+              if (!response.ok) {
+                const body = await response.text();
+                throw new Error(`API ${response.status}: ${body || response.statusText}`);
+              }
+              return await response.json() as { content: string; truncated: boolean };
+            })()
+          : await readMonitorSandboxFile(leaseId, path);
         setFileContent(data.content);
         if (data.truncated) {
           setFileError("内容已截断至 100 KB");
@@ -784,7 +808,7 @@ function MonitorFileBrowser({
         setFileLoading(false);
       }
     },
-    [leaseId],
+    [isLocal, leaseId],
   );
 
   const openFile = React.useCallback(
@@ -802,7 +826,7 @@ function MonitorFileBrowser({
     [leaseId, selectedFile, loadFile],
   );
 
-  if (!leaseId) {
+  if (!leaseId && !isLocal) {
     return <p className="file-browser__empty">当前沙盒没有 lease id，无法浏览文件。</p>;
   }
 
@@ -814,7 +838,7 @@ function MonitorFileBrowser({
     <div className="file-browser">
       <div className="file-browser__column">
         <div className="file-browser__pathbar">
-          <button type="button" onClick={() => void loadPath("/")}>
+          <button type="button" onClick={() => void loadPath(defaultPath)}>
             Root
           </button>
           <span>{providerType}</span>
