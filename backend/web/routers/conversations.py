@@ -35,6 +35,23 @@ def _resolve_display_member(app: Any, social_user_id: str) -> Any | None:
     return app.state.member_repo.get_by_id(member_id)
 
 
+def _conversation_updated_at_key(item: dict[str, Any]) -> float:
+    raw = item.get("updated_at")
+    if raw is None:
+        return float("-inf")
+    if isinstance(raw, (int, float)):
+        return float(raw)
+    if isinstance(raw, str):
+        # @@@mixed-updated-at-sort - hire rows currently carry ISO strings while
+        # visit chats can still surface numeric timestamps from older chat storage.
+        # Normalize both before sorting so /api/conversations stays honest.
+        try:
+            return datetime.fromisoformat(raw.replace("Z", "+00:00")).timestamp()
+        except ValueError:
+            return float("-inf")
+    return float("-inf")
+
+
 @router.get("")
 async def list_conversations(
     user_id: Annotated[str, Depends(get_current_user_id)],
@@ -143,5 +160,5 @@ async def list_conversations(
             )
 
     # Sort by updated_at descending (None goes last)
-    items.sort(key=lambda x: x.get("updated_at") or "", reverse=True)
+    items.sort(key=_conversation_updated_at_key, reverse=True)
     return items
