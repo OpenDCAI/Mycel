@@ -305,6 +305,38 @@ async def test_create_chat_rejects_template_member_ids_for_group_participants() 
 
 
 @pytest.mark.asyncio
+async def test_create_chat_rejects_template_member_id_for_direct_participant() -> None:
+    called: list[tuple[list[str], str | None]] = []
+    app = SimpleNamespace(
+        state=SimpleNamespace(
+            user_repo=SimpleNamespace(
+                get_by_id=lambda uid: SimpleNamespace(id=uid, type="agent", owner_user_id="owner-user-1") if uid == "agent-user-1" else None
+            ),
+            thread_repo=SimpleNamespace(get_by_user_id=lambda _uid: None),
+            messaging_service=SimpleNamespace(
+                find_or_create_chat=lambda user_ids, title: (
+                    called.append((user_ids, title)) or {"id": "chat-1", "title": title, "status": "active", "created_at": 0}
+                )
+            ),
+        )
+    )
+
+    with pytest.raises(HTTPException) as exc_info:
+        await messaging_router.create_chat(
+            messaging_router.CreateChatBody(
+                user_ids=["human-user-1", "agent-user-1"],
+                title=None,
+            ),
+            user_id="human-user-1",
+            app=app,
+        )
+
+    assert exc_info.value.status_code == 400
+    assert "actor" in str(exc_info.value.detail).lower()
+    assert called == []
+
+
+@pytest.mark.asyncio
 async def test_create_chat_accepts_human_and_thread_social_user_ids_for_group_participants() -> None:
     called: list[tuple[list[str], str | None]] = []
     app = SimpleNamespace(
