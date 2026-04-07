@@ -34,21 +34,11 @@ export async function request<T>(url: string, init?: RequestInit): Promise<T> {
   return (await response.json()) as T;
 }
 
-function toThreads(payload: unknown): ThreadSummary[] {
-  if (payload && typeof payload === "object" && Array.isArray((payload as { threads?: unknown }).threads)) {
-    return (payload as { threads: ThreadSummary[] }).threads;
-  }
-  if (Array.isArray(payload)) {
-    return payload as ThreadSummary[];
-  }
-  throw new Error("Unexpected /api/threads response shape");
-}
-
 // --- Thread API ---
 
 export async function listThreads(): Promise<ThreadSummary[]> {
-  const payload = await request<unknown>("/api/threads");
-  return toThreads(payload);
+  const payload = await request<{ threads: ThreadSummary[] }>("/api/threads");
+  return payload.threads;
 }
 
 export interface CreateThreadOptions {
