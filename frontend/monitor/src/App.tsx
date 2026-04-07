@@ -131,11 +131,14 @@ function Breadcrumb({
 function StateBadge({ badge }: { badge: any }) {
   const className = `state-badge state-${badge.color}`;
   const text = badge.text || badge.observed;
+  // @@@badge-tooltip-historical - destroyed leases have no desired/observed; "Converged" is misleading for historical state.
   const tooltip = badge.hours_diverged
     ? `Diverged for ${badge.hours_diverged}h`
-    : badge.converged
-      ? "Converged"
-      : `${badge.observed} → ${badge.desired}`;
+    : !badge.desired && !badge.observed
+      ? "No active state"
+      : badge.converged
+        ? `${badge.observed} (converged)`
+        : `${badge.observed} → ${badge.desired}`;
 
   return (
     <span className={className} title={tooltip}>
@@ -1709,16 +1712,20 @@ function MonitorResourcesPage() {
 function ThreadsPage() {
   const [data, setData] = React.useState<any>(null);
   const [loading, setLoading] = React.useState<boolean>(false);
+  const [error, setError] = React.useState<string | null>(null);
   const [offset, setOffset] = React.useState<number>(0);
   const [limit, setLimit] = React.useState<number>(50);
 
   const loadThreads = React.useCallback(async () => {
     setLoading(true);
+    setError(null);
     try {
       const payload = await fetchAPI(
         `/threads?offset=${offset}&limit=${limit}`,
       );
       setData(payload);
+    } catch (e: any) {
+      setError(e?.message || String(e));
     } finally {
       setLoading(false);
     }
@@ -1728,6 +1735,13 @@ function ThreadsPage() {
     void loadThreads();
   }, [loadThreads]);
 
+  if (error) {
+    return (
+      <div className="page" data-testid="page-threads">
+        <div className="page-error">Threads load failed: {error}</div>
+      </div>
+    );
+  }
   if (!data) {
     return (
       <div className="page">
@@ -1839,14 +1853,18 @@ function ThreadsPage() {
 function TracesPage() {
   const [data, setData] = React.useState<any>(null);
   const [loading, setLoading] = React.useState<boolean>(false);
+  const [error, setError] = React.useState<string | null>(null);
   const [offset, setOffset] = React.useState<number>(0);
   const [limit, setLimit] = React.useState<number>(50);
 
   const loadTraces = React.useCallback(async () => {
     setLoading(true);
+    setError(null);
     try {
       const payload = await fetchAPI(`/traces?offset=${offset}&limit=${limit}`);
       setData(payload);
+    } catch (e: any) {
+      setError(e?.message || String(e));
     } finally {
       setLoading(false);
     }
@@ -1856,6 +1874,13 @@ function TracesPage() {
     void loadTraces();
   }, [loadTraces]);
 
+  if (error) {
+    return (
+      <div className="page" data-testid="page-traces">
+        <div className="page-error">Traces load failed: {error}</div>
+      </div>
+    );
+  }
   if (!data) {
     return (
       <div className="page">
@@ -1967,15 +1992,26 @@ function ThreadDetailPage() {
   const { threadId } = useParams();
   const location = useLocation();
   const [data, setData] = React.useState<any>(null);
+  const [error, setError] = React.useState<string | null>(null);
   const initialRunId = React.useMemo(
     () => new URLSearchParams(location.search).get("run") || "",
     [location.search],
   );
 
   React.useEffect(() => {
-    fetchAPI(`/thread/${threadId}`).then(setData);
+    setError(null);
+    fetchAPI(`/thread/${threadId}`)
+      .then(setData)
+      .catch((e) => setError(e?.message || String(e)));
   }, [threadId]);
 
+  if (error) {
+    return (
+      <div className="page">
+        <div className="page-error">Thread load failed: {error}</div>
+      </div>
+    );
+  }
   if (!data) {
     return (
       <div className="page">
@@ -3167,13 +3203,24 @@ function SessionDetailPage() {
 function LeasesPage() {
   const location = useLocation();
   const [data, setData] = React.useState<any>(null);
+  const [error, setError] = React.useState<string | null>(null);
   const divergedOnly =
     new URLSearchParams(location.search).get("diverged") === "1";
 
   React.useEffect(() => {
-    fetchAPI("/leases").then(setData);
+    setError(null);
+    fetchAPI("/leases")
+      .then(setData)
+      .catch((e) => setError(e?.message || String(e)));
   }, []);
 
+  if (error) {
+    return (
+      <div className="page" data-testid="page-leases">
+        <div className="page-error">Leases load failed: {error}</div>
+      </div>
+    );
+  }
   if (!data) {
     return (
       <div className="page">
@@ -3329,10 +3376,20 @@ function LeaseDetailPage() {
     );
   }
 
+  // @@@lease-historical-signal - detect historical fallback lease: no active desired/observed state, provider unknown.
+  const isHistorical = !data.state.desired && !data.state.observed;
+
   return (
     <div className="page">
       <Breadcrumb items={data.breadcrumb} />
       <h1>Lease: {data.lease_id}</h1>
+
+      {isHistorical && (
+        <p className="count">
+          Historical lease — reconstructed from session records. Provider and
+          state fields may be incomplete.
+        </p>
+      )}
 
       <section className="info-grid">
         <div>
@@ -3354,10 +3411,10 @@ function LeaseDetailPage() {
         <h2>State</h2>
         <div className="state-info">
           <div>
-            <strong>Desired:</strong> {data.state.desired}
+            <strong>Desired:</strong> {data.state.desired || "-"}
           </div>
           <div>
-            <strong>Observed:</strong> {data.state.observed}
+            <strong>Observed:</strong> {data.state.observed || "-"}
           </div>
           <div>
             <strong>Status:</strong> <StateBadge badge={data.state} />
@@ -3420,76 +3477,25 @@ function LeaseDetailPage() {
   );
 }
 
-// Page: Diverged Leases
-function DivergedPage() {
-  const [data, setData] = React.useState<any>(null);
-
-  React.useEffect(() => {
-    fetchAPI("/diverged").then(setData);
-  }, []);
-
-  if (!data) {
-    return (
-      <div className="page">
-        <div className="page-loading">Loading...</div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="page">
-      <p className="description">{data.description}</p>
-      <p className="count">Total: {data.count}</p>
-      <table>
-        <thead>
-          <tr>
-            <th>Lease ID</th>
-            <th>Provider</th>
-            <th>Thread</th>
-            <th>Desired</th>
-            <th>Observed</th>
-            <th>Hours Diverged</th>
-            <th>Error</th>
-          </tr>
-        </thead>
-        <tbody>
-          {data.items.map((item: any) => (
-            <tr key={item.lease_id}>
-              <td>
-                <Link to={item.lease_url}>{item.lease_id}</Link>
-              </td>
-              <td>{item.provider}</td>
-              <td>
-                {item.thread.thread_id ? (
-                  <Link to={item.thread.thread_url}>
-                    {item.thread.thread_id.slice(0, 8)}
-                  </Link>
-                ) : (
-                  <span className="orphan">orphan</span>
-                )}
-              </td>
-              <td>{item.state_badge.desired}</td>
-              <td>{item.state_badge.observed}</td>
-              <td className={item.state_badge.color === "red" ? "error" : ""}>
-                {item.state_badge.hours_diverged}h
-              </td>
-              <td className="error">{item.error || "-"}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
 // Page: Events List
 function EventsPage() {
   const [data, setData] = React.useState<any>(null);
+  const [error, setError] = React.useState<string | null>(null);
 
   React.useEffect(() => {
-    fetchAPI("/events?limit=100").then(setData);
+    setError(null);
+    fetchAPI("/events?limit=100")
+      .then(setData)
+      .catch((e) => setError(e?.message || String(e)));
   }, []);
 
+  if (error) {
+    return (
+      <div className="page">
+        <div className="page-error">Events load failed: {error}</div>
+      </div>
+    );
+  }
   if (!data) {
     return (
       <div className="page">
