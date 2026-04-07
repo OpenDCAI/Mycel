@@ -5,7 +5,7 @@ from __future__ import annotations
 from enum import StrEnum
 from typing import Any, Literal, Protocol
 
-from pydantic import BaseModel, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 NotificationType = Literal["steer", "command", "agent", "chat"]
 
@@ -180,6 +180,75 @@ class MemberRow(BaseModel):
     updated_at: float | None = None
     email: str | None = None
     mycel_id: int | None = None
+
+
+class AgentConfigRow(BaseModel):
+    id: str
+    agent_user_id: str
+    name: str
+    description: str = ""
+    model: str | None = None
+    tools: list[str] = Field(default_factory=list)
+    system_prompt: str = ""
+    status: str = "draft"
+    version: str = "0.1.0"
+    runtime: dict[str, Any] = Field(default_factory=dict)
+    mcp: dict[str, Any] = Field(default_factory=dict)
+    created_at: int
+    updated_at: int | None = None
+
+    @field_validator("id", "agent_user_id", "name")
+    @classmethod
+    def _validate_non_blank(cls, value: str, info: Any) -> str:
+        if not value.strip():
+            raise ValueError(f"agent_config.{info.field_name} must not be blank")
+        return value
+
+
+class AgentRuleRow(BaseModel):
+    id: str
+    agent_config_id: str
+    filename: str
+    content: str
+
+    @field_validator("id", "agent_config_id")
+    @classmethod
+    def _validate_identity_fields(cls, value: str, info: Any) -> str:
+        if not value.strip():
+            raise ValueError(f"agent_rule.{info.field_name} must not be blank")
+        return value
+
+
+class AgentSkillRow(BaseModel):
+    id: str
+    agent_config_id: str
+    name: str
+    content: str
+    meta: dict[str, Any] = Field(default_factory=dict)
+
+    @field_validator("id", "agent_config_id")
+    @classmethod
+    def _validate_identity_fields(cls, value: str, info: Any) -> str:
+        if not value.strip():
+            raise ValueError(f"agent_skill.{info.field_name} must not be blank")
+        return value
+
+
+class AgentSubAgentRow(BaseModel):
+    id: str
+    agent_config_id: str
+    name: str
+    description: str | None = None
+    model: str | None = None
+    tools: list[Any] = Field(default_factory=list)
+    system_prompt: str | None = None
+
+    @field_validator("id", "agent_config_id")
+    @classmethod
+    def _validate_identity_fields(cls, value: str, info: Any) -> str:
+        if not value.strip():
+            raise ValueError(f"agent_sub_agent.{info.field_name} must not be blank")
+        return value
 
 
 class ChatRow(BaseModel):
