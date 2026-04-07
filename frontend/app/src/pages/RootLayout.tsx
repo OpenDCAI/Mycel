@@ -500,7 +500,12 @@ function LoginStep({ onSubmit, onSwitch, onForgot, error, setError, loading, set
       <AuthHeader title="Mycel" subtitle="登录你的账号" />
       <form onSubmit={handle} className="space-y-4">
         <input type="text" name="identifier" aria-label="邮箱或 Mycel ID" placeholder="邮箱或 Mycel ID" value={identifier} onChange={e => setIdentifier(e.target.value)} className={inputCls} required autoComplete="username" />
-        <input type="password" name="password" aria-label="密码" placeholder="密码" value={password} onChange={e => setPassword(e.target.value)} className={inputCls} required autoComplete="current-password" />
+        <div className="relative">
+          <PasswordInput value={password} onChange={setPassword} placeholder="密码" autoComplete="current-password" />
+          <button type="button" onClick={onForgot} className="absolute right-9 top-1/2 -translate-y-1/2 text-xs text-muted-foreground hover:text-primary transition-colors duration-fast">
+            忘记密码
+          </button>
+        </div>
         {error && <p className="text-xs text-destructive">{error}</p>}
         <button type="submit" disabled={loading} className={btnCls}>{loading ? "请稍候..." : "登录"}</button>
       </form>
