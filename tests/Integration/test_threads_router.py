@@ -499,7 +499,6 @@ async def test_create_thread_route_passes_local_cwd_into_sandbox_bootstrap():
     )
 
 
-@pytest.mark.asyncio
 async def test_list_threads_hides_internal_subagent_threads():
     app = _make_threads_app(
         thread_repo=SimpleNamespace(
