@@ -216,7 +216,7 @@ class ChatToolService:
             elif user_id:
                 chat_id = self._chat_members.find_chat_between(eid, user_id)
                 if not chat_id:
-                    target = self._member_repo.get_by_id(user_id)
+                    target = self._resolve_display_member(user_id)
                     name = target.name if target else user_id
                     return f"No chat history with {name}."
             else:

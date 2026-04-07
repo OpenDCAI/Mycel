@@ -239,6 +239,36 @@ def test_chat_tool_send_accepts_thread_user_target_id() -> None:
     assert sent == [("chat-1", "human-user-1", "hello")]
 
 
+def test_chat_tool_read_uses_thread_user_target_name_on_no_history() -> None:
+    registry = ToolRegistry()
+    ChatToolService(
+        registry=registry,
+        chat_identity_id="human-user-1",
+        owner_id="owner-user-1",
+        member_repo=SimpleNamespace(
+            get_by_id=lambda uid: (
+                None
+                if uid == "thread-user-1"
+                else SimpleNamespace(id=uid, name="Toad", owner_user_id="owner-user-1")
+                if uid == "member-agent-1"
+                else None
+            ),
+        ),
+        thread_repo=SimpleNamespace(
+            get_by_user_id=lambda uid: {"id": "thread-1", "member_id": "member-agent-1"} if uid == "thread-user-1" else None
+        ),
+        chat_member_repo=SimpleNamespace(find_chat_between=lambda _eid, _user_id: None),
+        messaging_service=SimpleNamespace(),
+    )
+
+    chat_read = registry.get("chat_read")
+    assert chat_read is not None
+
+    result = chat_read.handler(user_id="thread-user-1")
+
+    assert result == "No chat history with Toad."
+
+
 def test_deliver_to_agents_routes_delivery_by_thread_user_id() -> None:
     delivered: list[tuple[str, str]] = []
     service = MessagingService(
