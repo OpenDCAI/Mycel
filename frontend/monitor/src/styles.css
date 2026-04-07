@@ -957,6 +957,30 @@ div:has(> :only-child:is(div:contains("Loading"))) {
   color: #ff8c83;
 }
 
+.file-browser__error-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.file-browser__retry {
+  width: fit-content;
+  padding: 0.45rem 0.8rem;
+  border: 1px solid #3c4454;
+  border-radius: 0.65rem;
+  background: transparent;
+  color: #dbe6ff;
+  cursor: pointer;
+}
+
+.resources-refresh-error {
+  margin-top: 0.8rem;
+  color: #ffbf7a;
+  font-family: "SF Mono", Monaco, monospace;
+  font-size: 0.78rem;
+  word-break: break-word;
+}
+
 .resources-error-card {
   max-width: 720px;
   padding: 1.25rem;
