@@ -1,5 +1,6 @@
 """Tests for marketplace_client business logic (publish/download)."""
 
+import importlib
 import json
 from unittest.mock import patch
 
@@ -35,6 +36,17 @@ class TestVersionBump:
 
     def test_initial_version(self):
         assert _bump_version("0.1.0", "patch") == "0.1.1"
+
+
+# ── Hub client contract ──
+
+
+def test_hub_client_disables_env_proxy_trust():
+    import backend.web.services.marketplace_client as marketplace_client
+
+    marketplace_client = importlib.reload(marketplace_client)
+
+    assert marketplace_client._hub_client._trust_env is False
 
 
 # ── Helpers ──
