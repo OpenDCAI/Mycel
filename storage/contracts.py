@@ -5,7 +5,7 @@ from __future__ import annotations
 from enum import StrEnum
 from typing import Any, Literal, Protocol
 
-from pydantic import BaseModel
+from pydantic import BaseModel, model_validator
 
 NotificationType = Literal["steer", "command", "agent", "chat"]
 
@@ -148,6 +148,23 @@ class UserRow(BaseModel):
     mycel_id: int | None = None
     created_at: float
     updated_at: float | None = None
+
+    @model_validator(mode="after")
+    def _validate_identity_shape(self) -> UserRow:
+        # @@@user-row-shape - users are the unified social identity surface, so
+        # human/agent optional fields must fail loudly instead of drifting into
+        # mixed half-valid rows.
+        if self.type is UserType.HUMAN:
+            if self.owner_user_id is not None:
+                raise ValueError("human users must not carry owner_user_id")
+            if self.agent_config_id is not None:
+                raise ValueError("human users must not carry agent_config_id")
+            return self
+        if self.owner_user_id is None:
+            raise ValueError("agent users require owner_user_id")
+        if self.agent_config_id is None:
+            raise ValueError("agent users require agent_config_id")
+        return self
 
 
 class MemberRow(BaseModel):
