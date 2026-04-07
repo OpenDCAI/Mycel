@@ -272,10 +272,128 @@ class ThreadRow(BaseModel):
 
 class ChatRow(BaseModel):
     id: str
+    type: str
+    created_by_user_id: str
     title: str | None = None
     status: str = "active"
+    next_message_seq: int = 0
     created_at: float
     updated_at: float | None = None
+
+    @field_validator("id", "type", "created_by_user_id")
+    @classmethod
+    def _validate_chat_identity_fields(cls, value: str, info: Any) -> str:
+        if not value.strip():
+            raise ValueError(f"chat.{info.field_name} must not be blank")
+        return value
+
+
+class ChatMemberRow(BaseModel):
+    chat_id: str
+    user_id: str
+    role: str = "member"
+    joined_at: float
+    last_read_seq: int = 0
+    muted: bool = False
+    mute_until: float | None = None
+    version: int = 0
+
+    @field_validator("chat_id", "user_id")
+    @classmethod
+    def _validate_chat_member_identity_fields(cls, value: str, info: Any) -> str:
+        if not value.strip():
+            raise ValueError(f"chat_member.{info.field_name} must not be blank")
+        return value
+
+    @field_validator("last_read_seq")
+    @classmethod
+    def _validate_last_read_seq(cls, value: int) -> int:
+        if value < 0:
+            raise ValueError("chat_member.last_read_seq must be >= 0")
+        return value
+
+
+class MessageRow(BaseModel):
+    id: str
+    chat_id: str
+    seq: int
+    sender_user_id: str
+    content: str
+    content_type: str = "text/plain"
+    message_type: str = "text"
+    signal: str | None = None
+    mentions: list[str] = Field(default_factory=list)
+    reply_to_message_id: str | None = None
+    ai_metadata: dict[str, Any] = Field(default_factory=dict)
+    created_at: float
+    delivered_at: float | None = None
+    edited_at: float | None = None
+    retracted_at: float | None = None
+    deleted_at: float | None = None
+
+    @field_validator("id", "chat_id", "sender_user_id")
+    @classmethod
+    def _validate_message_identity_fields(cls, value: str, info: Any) -> str:
+        if not value.strip():
+            raise ValueError(f"message.{info.field_name} must not be blank")
+        return value
+
+    @field_validator("seq")
+    @classmethod
+    def _validate_message_seq(cls, value: int) -> int:
+        if value < 1:
+            raise ValueError("message.seq must be >= 1")
+        return value
+
+
+class ContactEdgeRow(BaseModel):
+    source_user_id: str
+    target_user_id: str
+    kind: str = "normal"
+    state: str = "active"
+    alias: str | None = None
+    note: str | None = None
+    pinned: bool = False
+    muted: bool = False
+    archived: bool = False
+    blocked: bool = False
+    snapshot: dict[str, Any] = Field(default_factory=dict)
+    version: int = 0
+    created_at: float
+    updated_at: float | None = None
+
+    @field_validator("source_user_id", "target_user_id", "kind", "state")
+    @classmethod
+    def _validate_contact_identity_fields(cls, value: str, info: Any) -> str:
+        if not value.strip():
+            raise ValueError(f"contact.{info.field_name} must not be blank")
+        return value
+
+
+class RelationshipRow(BaseModel):
+    user_low: str
+    user_high: str
+    kind: str
+    state: str = "pending"
+    initiator_user_id: str
+    version: int = 0
+    created_at: float
+    updated_at: float | None = None
+
+    @field_validator("user_low", "user_high", "kind", "initiator_user_id")
+    @classmethod
+    def _validate_relationship_identity_fields(cls, value: str, info: Any) -> str:
+        if not value.strip():
+            raise ValueError(f"relationship.{info.field_name} must not be blank")
+        return value
+
+    @model_validator(mode="after")
+    def _validate_sorted_pair(self) -> RelationshipRow:
+        # @@@relationship-sorted-pair - symmetric edges must collapse to one
+        # canonical row, so the storage contract rejects unsorted user pairs.
+        if self.user_low >= self.user_high:
+            raise ValueError("relationship.user_low must be < relationship.user_high")
+        return self
 
 
 # ---------------------------------------------------------------------------
