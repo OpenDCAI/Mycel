@@ -37,10 +37,6 @@ def _load_tools_catalog() -> dict[str, ToolDef]:
     return TOOLS_BY_NAME
 
 
-def ensure_members_dir() -> None:
-    MEMBERS_DIR.mkdir(parents=True, exist_ok=True)
-
-
 # ── Low-level I/O helpers ──
 
 
