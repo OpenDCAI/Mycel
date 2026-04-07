@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from storage.contracts import ContactRow
+from storage.contracts import ContactEdgeRow
 from storage.providers.supabase import _query as q
 
 _REPO = "contact repo"
@@ -20,28 +20,31 @@ class SupabaseContactRepo:
     def close(self) -> None:
         return None
 
-    def upsert(self, row: ContactRow) -> None:
+    def upsert(self, row: ContactEdgeRow) -> None:
         self._t().upsert(
             {
-                "owner_id": row.owner_id,
-                "target_id": row.target_id,
-                "relation": row.relation,
+                "source_user_id": row.source_user_id,
+                "target_user_id": row.target_user_id,
+                "kind": row.kind,
+                "state": row.state,
+                "muted": int(row.muted),
+                "blocked": int(row.blocked),
                 "created_at": row.created_at,
                 "updated_at": row.updated_at,
             },
-            on_conflict="owner_id,target_id",
+            on_conflict="source_user_id,target_user_id",
         ).execute()
 
-    def get(self, owner_id: str, target_id: str) -> ContactRow | None:
-        response = self._t().select("*").eq("owner_id", owner_id).eq("target_id", target_id).execute()
+    def get(self, owner_id: str, target_id: str) -> ContactEdgeRow | None:
+        response = self._t().select("*").eq("source_user_id", owner_id).eq("target_user_id", target_id).execute()
         rows = q.rows(response, _REPO, "get")
         if not rows:
             return None
         return self._to_row(rows[0])
 
-    def list_for_user(self, owner_id: str) -> list[ContactRow]:
+    def list_for_user(self, owner_id: str) -> list[ContactEdgeRow]:
         query = q.order(
-            self._t().select("*").eq("owner_id", owner_id),
+            self._t().select("*").eq("source_user_id", owner_id),
             "created_at",
             desc=False,
             repo=_REPO,
@@ -51,13 +54,16 @@ class SupabaseContactRepo:
         return [self._to_row(r) for r in raw]
 
     def delete(self, owner_id: str, target_id: str) -> None:
-        self._t().delete().eq("owner_id", owner_id).eq("target_id", target_id).execute()
+        self._t().delete().eq("source_user_id", owner_id).eq("target_user_id", target_id).execute()
 
-    def _to_row(self, r: dict[str, Any]) -> ContactRow:
-        return ContactRow(
-            owner_id=r["owner_id"],
-            target_id=r["target_id"],
-            relation=r["relation"],
+    def _to_row(self, r: dict[str, Any]) -> ContactEdgeRow:
+        return ContactEdgeRow(
+            source_user_id=r["source_user_id"],
+            target_user_id=r["target_user_id"],
+            kind=r["kind"],
+            state=r["state"],
+            muted=bool(r.get("muted")),
+            blocked=bool(r.get("blocked")),
             created_at=float(r["created_at"]),
             updated_at=float(r["updated_at"]) if r.get("updated_at") is not None else None,
         )
