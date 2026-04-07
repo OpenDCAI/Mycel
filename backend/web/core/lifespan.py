@@ -14,16 +14,22 @@ from backend.web.services.resource_cache import monitor_resource_overview_refres
 from core.runtime.middleware.queue import MessageQueueManager
 
 
+def _get_pg_url() -> str | None:
+    # Accept both the new standard name and the legacy LEON_ name for backward
+    # compatibility with environments not yet migrated (e.g. docker-compose.yaml).
+    return os.getenv("DATABASE_URL") or os.getenv("LEON_POSTGRES_URL")
+
+
 def _require_web_runtime_contract() -> None:
     # @@@web-checkpointer-contract - web routes can create LeonAgent on first
     # message, so missing Postgres checkpointer config is a startup contract
     # violation, not a late per-request error.
-    if not os.getenv("DATABASE_URL"):
+    if not _get_pg_url():
         raise RuntimeError("DATABASE_URL is required for backend web runtime")
 
 
 async def _validate_web_checkpointer_contract() -> None:
-    pg_url = os.getenv("DATABASE_URL")
+    pg_url = _get_pg_url()
     if not pg_url:
         raise RuntimeError("DATABASE_URL is required for backend web runtime")
 

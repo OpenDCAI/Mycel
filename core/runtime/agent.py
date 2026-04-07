@@ -1338,7 +1338,7 @@ class LeonAgent:
 
         Requires DATABASE_URL to be set (Supabase Postgres).
         """
-        pg_url = os.getenv("DATABASE_URL")
+        pg_url = os.getenv("DATABASE_URL") or os.getenv("LEON_POSTGRES_URL")
         if not pg_url:
             raise RuntimeError("DATABASE_URL is required for checkpointer initialization")
 
