@@ -252,6 +252,73 @@ def test_get_lease_falls_back_to_historical_session_rows(monkeypatch):
     assert payload["related_threads"]["items"] == [{"thread_id": "thread-historical", "thread_url": "/thread/thread-historical"}]
 
 
+def test_monitor_route_get_lease_falls_back_to_compat_db_when_service_misses(tmp_path, monkeypatch):
+    db_path = tmp_path / "sandbox.db"
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+    conn.executescript(
+        """
+        CREATE TABLE chat_sessions (
+            chat_session_id TEXT PRIMARY KEY,
+            thread_id TEXT,
+            lease_id TEXT,
+            status TEXT,
+            started_at TEXT,
+            ended_at TEXT,
+            close_reason TEXT
+        );
+        CREATE TABLE sandbox_leases (
+            lease_id TEXT PRIMARY KEY,
+            provider_name TEXT,
+            desired_state TEXT,
+            observed_state TEXT,
+            current_instance_id TEXT,
+            last_error TEXT
+        );
+        CREATE TABLE lease_events (
+            event_id TEXT PRIMARY KEY,
+            lease_id TEXT,
+            event_type TEXT,
+            source TEXT,
+            payload_json TEXT,
+            error TEXT,
+            created_at TEXT
+        );
+        """
+    )
+    conn.execute(
+        """
+        INSERT INTO chat_sessions (
+            chat_session_id, thread_id, lease_id, status, started_at, ended_at, close_reason
+        ) VALUES (?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            "sess-local",
+            "thread-local",
+            "lease-local-history",
+            "closed",
+            "2026-04-07T01:25:18.632049",
+            "2026-04-07T01:27:19.554403",
+            "thread_deleted",
+        ),
+    )
+    conn.commit()
+
+    def _raise_keyerror(_lease_id: str):
+        raise KeyError("Lease not found")
+
+    monkeypatch.setattr(monitor_service, "get_lease", _raise_keyerror)
+
+    try:
+        payload = monitor.get_lease("lease-local-history", db=conn)
+    finally:
+        conn.close()
+
+    assert payload["lease_id"] == "lease-local-history"
+    assert payload["related_threads"]["items"] == [{"thread_id": "thread-local", "thread_url": "/thread/thread-local"}]
+    assert payload["state"]["text"] == "destroyed"
+
+
 def test_build_evaluation_operator_surface_flags_runner_exit_before_threads_materialize():
     payload = monitor_service.build_evaluation_operator_surface(
         status="provisional",

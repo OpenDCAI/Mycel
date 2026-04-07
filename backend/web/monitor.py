@@ -1986,13 +1986,61 @@ def list_leases():
     return monitor_service.list_leases()
 
 
+def _compat_historical_lease_detail(db: sqlite3.Connection, lease_id: str):
+    from backend.web.services import monitor_service
+
+    sessions = [
+        dict(row)
+        for row in db.execute(
+            """
+            SELECT
+                cs.chat_session_id,
+                cs.thread_id,
+                cs.status,
+                cs.started_at,
+                cs.ended_at,
+                cs.close_reason,
+                cs.lease_id,
+                sl.provider_name,
+                sl.desired_state,
+                sl.observed_state,
+                sl.current_instance_id,
+                sl.last_error
+            FROM chat_sessions cs
+            LEFT JOIN sandbox_leases sl ON cs.lease_id = sl.lease_id
+            WHERE cs.lease_id = ?
+            ORDER BY cs.started_at DESC
+            """,
+            (lease_id,),
+        ).fetchall()
+    ]
+    events = [
+        dict(row)
+        for row in db.execute(
+            """
+            SELECT event_id, lease_id, event_type, source, created_at
+            FROM lease_events
+            WHERE lease_id = ?
+            ORDER BY created_at DESC
+            """,
+            (lease_id,),
+        ).fetchall()
+    ]
+    # @@@compat-lease-fallback - thread/session detail still reads compat sqlite facts.
+    # When service-backed lease detail misses, keep linked historical leases navigable.
+    return monitor_service._historical_lease_detail(lease_id, sessions, events)
+
+
 @router.get("/lease/{lease_id}")
-def get_lease(lease_id: str):
+def get_lease(lease_id: str, db: sqlite3.Connection = Depends(get_db)):
     from backend.web.services import monitor_service
 
     try:
         return monitor_service.get_lease(lease_id)
     except KeyError as exc:
+        fallback = _compat_historical_lease_detail(db, lease_id)
+        if fallback:
+            return fallback
         detail = exc.args[0] if exc.args else "Lease not found"
         raise HTTPException(status_code=404, detail=detail) from exc
 
