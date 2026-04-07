@@ -14,4 +14,13 @@ describe("SandboxFileBrowser source", () => {
     expect(source).toContain("void loadPath(currentPath);");
     expect(source).toContain("重试");
   });
+
+  it("keeps a retry action for file read failures", () => {
+    const source = sourceModules["./SandboxFileBrowser.tsx"];
+
+    expect(source).toContain('data-testid="sandbox-file-retry"');
+    expect(source).toContain("async function loadFile(path: string)");
+    expect(source).toContain("void loadFile(selectedFile);");
+    expect(source).toContain("读取失败");
+  });
 });
