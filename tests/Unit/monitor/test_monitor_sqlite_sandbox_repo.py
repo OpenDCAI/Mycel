@@ -13,9 +13,12 @@ def _bootstrap_monitor_db(db_path):
             CREATE TABLE sandbox_leases (
                 lease_id TEXT PRIMARY KEY,
                 provider_name TEXT,
+                recipe_id TEXT,
+                recipe_json TEXT,
                 desired_state TEXT,
                 observed_state TEXT,
                 current_instance_id TEXT,
+                last_error TEXT,
                 created_at TEXT,
                 updated_at TEXT
             );
@@ -135,6 +138,136 @@ def test_query_threads_accepts_optional_thread_filter(tmp_path):
         repo.close()
 
     assert [row["thread_id"] for row in rows] == ["thread-2"]
+
+
+def test_supabase_query_threads_accepts_optional_thread_filter_matches_sqlite(tmp_path):
+    db_path = tmp_path / "sandbox.db"
+    _bootstrap_monitor_db(db_path)
+
+    conn = sqlite3.connect(db_path)
+    try:
+        conn.execute(
+            """
+            INSERT INTO sandbox_leases (
+                lease_id, provider_name, desired_state, observed_state, current_instance_id, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            ("lease-1", "local", "running", "running", "instance-1", "2026-04-05T10:00:00", "2026-04-05T10:00:00"),
+        )
+        conn.executemany(
+            """
+            INSERT INTO chat_sessions (chat_session_id, thread_id, lease_id, status, started_at, last_active_at)
+            VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            [
+                ("sess-1", "thread-1", "lease-1", "active", "2026-04-05T10:00:00", "2026-04-05T10:01:00"),
+                ("sess-2", "thread-2", "lease-1", "active", "2026-04-05T10:05:00", "2026-04-05T10:06:00"),
+            ],
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    sqlite_repo = SQLiteSandboxMonitorRepo(db_path=db_path)
+    try:
+        sqlite_rows = sqlite_repo.query_threads(thread_id="thread-2")
+    finally:
+        sqlite_repo.close()
+
+    supabase_tables = {
+        "sandbox_leases": [
+            {
+                "lease_id": "lease-1",
+                "provider_name": "local",
+                "desired_state": "running",
+                "observed_state": "running",
+                "current_instance_id": "instance-1",
+            }
+        ],
+        "chat_sessions": [
+            {
+                "chat_session_id": "sess-1",
+                "thread_id": "thread-1",
+                "lease_id": "lease-1",
+                "status": "active",
+                "started_at": "2026-04-05T10:00:00",
+                "last_active_at": "2026-04-05T10:01:00",
+            },
+            {
+                "chat_session_id": "sess-2",
+                "thread_id": "thread-2",
+                "lease_id": "lease-1",
+                "status": "active",
+                "started_at": "2026-04-05T10:05:00",
+                "last_active_at": "2026-04-05T10:06:00",
+            },
+        ],
+    }
+    supabase_repo = SupabaseSandboxMonitorRepo(FakeSupabaseClient(supabase_tables))
+
+    supabase_rows = supabase_repo.query_threads(thread_id="thread-2")
+
+    assert supabase_rows == sqlite_rows
+
+
+def test_supabase_query_leases_uses_latest_terminal_binding_matches_sqlite(tmp_path):
+    db_path = tmp_path / "sandbox.db"
+    _bootstrap_monitor_db(db_path)
+
+    conn = sqlite3.connect(db_path)
+    try:
+        conn.execute(
+            """
+            INSERT INTO sandbox_leases (
+                lease_id, provider_name, desired_state, observed_state, current_instance_id, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            ("lease-1", "daytona_selfhost", "paused", "paused", "instance-1", "2026-04-05T10:00:00", "2026-04-05T10:10:00"),
+        )
+        conn.executemany(
+            """
+            INSERT INTO abstract_terminals (terminal_id, lease_id, thread_id, cwd, created_at)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            [
+                ("term-old", "lease-1", "thread-old", "/workspace", "2026-04-05T10:01:00"),
+                ("term-new", "lease-1", "thread-new", "/workspace", "2026-04-05T10:02:00"),
+            ],
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    sqlite_repo = SQLiteSandboxMonitorRepo(db_path=db_path)
+    try:
+        sqlite_rows = sqlite_repo.query_leases()
+    finally:
+        sqlite_repo.close()
+
+    supabase_tables = {
+        "sandbox_leases": [
+            {
+                "lease_id": "lease-1",
+                "provider_name": "daytona_selfhost",
+                "desired_state": "paused",
+                "observed_state": "paused",
+                "current_instance_id": "instance-1",
+                "updated_at": "2026-04-05T10:10:00",
+                "recipe_id": None,
+                "recipe_json": None,
+                "last_error": None,
+            }
+        ],
+        "abstract_terminals": [
+            {"terminal_id": "term-old", "lease_id": "lease-1", "thread_id": "thread-old", "created_at": "2026-04-05T10:01:00"},
+            {"terminal_id": "term-new", "lease_id": "lease-1", "thread_id": "thread-new", "created_at": "2026-04-05T10:02:00"},
+        ],
+    }
+    supabase_repo = SupabaseSandboxMonitorRepo(FakeSupabaseClient(supabase_tables))
+
+    supabase_rows = supabase_repo.query_leases()
+
+    assert supabase_rows == sqlite_rows
 
 
 def test_supabase_list_sessions_with_leases_matches_sqlite_terminal_and_recent_session_fallback(tmp_path):
