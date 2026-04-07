@@ -229,7 +229,7 @@ export default function MembersPage() {
                             <MessageSquare className="w-3.5 h-3.5" />
                           </button>
                         </TooltipTrigger>
-                        <TooltipContent side="bottom"><p>打开线程</p></TooltipContent>
+                        <TooltipContent side="bottom"><p>打开默认线程</p></TooltipContent>
                       </Tooltip>
                       <Tooltip>
                         <TooltipTrigger asChild>

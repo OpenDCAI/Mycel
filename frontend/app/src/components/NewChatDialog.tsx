@@ -39,10 +39,10 @@ export default function NewChatDialog({ open, onOpenChange }: NewChatDialogProps
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md p-0 gap-0">
+        <DialogContent className="sm:max-w-md p-0 gap-0">
         <DialogHeader className="px-4 pt-4 pb-3">
-          <DialogTitle className="text-base">打开成员线程</DialogTitle>
-          <DialogDescription className="sr-only">选择成员打开专属线程</DialogDescription>
+          <DialogTitle className="text-base">打开成员默认线程</DialogTitle>
+          <DialogDescription className="sr-only">选择成员打开默认线程入口</DialogDescription>
         </DialogHeader>
         <div className="px-4 pb-3">
           <div className="relative">
