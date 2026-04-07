@@ -27,6 +27,8 @@ class _FakeTable:
         self.limit_calls: list[int] = []
         self.insert_payload = None
         self.update_payload = None
+        self.upsert_payload = None
+        self.on_conflict = None
         self.rows = []
         self.count = None
 
@@ -64,6 +66,11 @@ class _FakeTable:
 
     def insert(self, payload):
         self.insert_payload = payload
+        return self
+
+    def upsert(self, payload, on_conflict=None):
+        self.upsert_payload = payload
+        self.on_conflict = on_conflict
         return self
 
     def update(self, payload):
@@ -159,6 +166,20 @@ def test_supabase_chat_member_repo_updates_last_read_seq() -> None:
     assert ("user_id", "user-1") in table.eq_calls
 
 
+def test_supabase_chat_member_repo_add_member_persists_numeric_joined_at() -> None:
+    client = _FakeClient()
+    repo = SupabaseChatMemberRepo(client)
+
+    repo.add_member("chat-1", "user-1")
+
+    payload = client.tables["chat_members"].upsert_payload
+    assert payload is not None
+    assert payload["chat_id"] == "chat-1"
+    assert payload["user_id"] == "user-1"
+    assert client.tables["chat_members"].on_conflict == "chat_id,user_id"
+    assert isinstance(payload["joined_at"], float)
+
+
 def test_supabase_messages_repo_create_allocates_seq_and_uses_message_root_fields() -> None:
     client = _FakeClient()
     client.table("messages").rows = [
@@ -192,6 +213,39 @@ def test_supabase_messages_repo_create_allocates_seq_and_uses_message_root_field
     assert payload["sender_user_id"] == "user-1"
     assert "sender_id" not in payload
     assert row["seq"] == 7
+
+
+def test_supabase_messages_repo_create_accepts_scalar_rpc_seq() -> None:
+    client = _FakeClient()
+    client.rpc_data = 8
+    client.table("messages").rows = [
+        {
+            "id": "msg-2",
+            "chat_id": "chat-2",
+            "seq": 8,
+            "sender_user_id": "user-1",
+            "content": "hello",
+            "mentions_json": [],
+            "created_at": 123.0,
+        }
+    ]
+    repo = SupabaseMessagesRepo(client)
+
+    row = repo.create(
+        {
+            "id": "msg-2",
+            "chat_id": "chat-2",
+            "sender_user_id": "user-1",
+            "content": "hello",
+            "mentions_json": [],
+            "created_at": 123.0,
+        }
+    )
+
+    payload = client.tables["messages"].insert_payload
+    assert payload is not None
+    assert payload["seq"] == 8
+    assert row["seq"] == 8
 
 
 def test_supabase_messages_repo_list_by_chat_uses_seq_ordering() -> None:

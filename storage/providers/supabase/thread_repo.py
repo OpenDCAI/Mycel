@@ -11,15 +11,16 @@ _TABLE = "threads"
 
 _COLS = (
     "id",
-    "user_id",
     "agent_user_id",
     "sandbox_type",
     "model",
     "cwd",
-    "observation_provider",
+    "status",
     "is_main",
     "branch_index",
     "created_at",
+    "updated_at",
+    "last_active_at",
 )
 
 
@@ -50,7 +51,6 @@ class SupabaseThreadRepo:
         self,
         thread_id: str,
         agent_user_id: str,
-        user_id: str,
         sandbox_type: str,
         cwd: str | None = None,
         created_at: float = 0,
@@ -62,15 +62,16 @@ class SupabaseThreadRepo:
         self._t().insert(
             {
                 "id": thread_id,
-                "user_id": user_id,
                 "agent_user_id": agent_user_id,
                 "sandbox_type": sandbox_type,
                 "cwd": cwd,
                 "model": extra.get("model"),
-                "observation_provider": extra.get("observation_provider"),
+                "status": extra.get("status", "active"),
                 "is_main": int(is_main),
                 "branch_index": branch_index,
                 "created_at": created_at,
+                "updated_at": extra.get("updated_at"),
+                "last_active_at": extra.get("last_active_at"),
             }
         ).execute()
 
@@ -84,7 +85,9 @@ class SupabaseThreadRepo:
 
     def get_by_user_id(self, user_id: str) -> dict[str, Any] | None:
         select = ", ".join(_COLS)
-        response = self._t().select(select).eq("user_id", user_id).execute()
+        # @@@agent-user-thread-lookup - agent users are the stable social/runtime bridge now.
+        # get_by_user_id keeps the old name because higher layers still speak in social user ids.
+        response = self._t().select(select).eq("agent_user_id", user_id).execute()
         rows = q.rows(response, _REPO, "get_by_user_id")
         if not rows:
             return None
@@ -163,7 +166,7 @@ class SupabaseThreadRepo:
         return result
 
     def update(self, thread_id: str, **fields: Any) -> None:
-        allowed = {"sandbox_type", "model", "cwd", "observation_provider", "is_main", "branch_index"}
+        allowed = {"sandbox_type", "model", "cwd", "status", "is_main", "branch_index", "updated_at", "last_active_at"}
         updates = {k: v for k, v in fields.items() if k in allowed}
         if not updates:
             return

@@ -592,7 +592,6 @@ def _create_owned_thread(
     app.state.thread_repo.create(
         thread_id=new_thread_id,
         agent_user_id=agent_user_id,
-        user_id=new_thread_id,
         sandbox_type=sandbox_type,
         cwd=payload.cwd,
         created_at=time.time(),

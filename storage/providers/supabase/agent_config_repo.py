@@ -27,10 +27,24 @@ class SupabaseAgentConfigRepo:
             _REPO,
             "get_config",
         )
-        return dict(rows[0]) if rows else None
+        if not rows:
+            return None
+        row = dict(rows[0])
+        return {
+            **row,
+            "tools": row.get("tools_json", []),
+            "runtime": row.get("runtime_json", {}),
+            "mcp": row.get("mcp_json", {}),
+        }
 
     def save_config(self, agent_config_id: str, data: dict[str, Any]) -> None:
         payload = {"id": agent_config_id, **{k: v for k, v in data.items() if k != "id"}}
+        if "tools" in payload:
+            payload["tools_json"] = payload.pop("tools")
+        if "runtime" in payload:
+            payload["runtime_json"] = payload.pop("runtime")
+        if "mcp" in payload:
+            payload["mcp_json"] = payload.pop("mcp")
         self._client.table("agent_configs").upsert(payload).execute()
 
     def delete_config(self, agent_config_id: str) -> None:
@@ -75,7 +89,7 @@ class SupabaseAgentConfigRepo:
         sid = skill_id or str(uuid.uuid4())
         payload: dict[str, Any] = {"id": sid, "agent_config_id": agent_config_id, "name": name, "content": content}
         if meta:
-            payload["meta"] = meta
+            payload["meta_json"] = meta
         self._client.table("agent_skills").upsert(payload, on_conflict="agent_config_id,name").execute()
         return payload
 
@@ -112,7 +126,7 @@ class SupabaseAgentConfigRepo:
         if model is not None:
             payload["model"] = model
         if tools is not None:
-            payload["tools"] = tools
+            payload["tools_json"] = tools
         if system_prompt is not None:
             payload["system_prompt"] = system_prompt
         self._client.table("agent_sub_agents").upsert(payload, on_conflict="agent_config_id,name").execute()

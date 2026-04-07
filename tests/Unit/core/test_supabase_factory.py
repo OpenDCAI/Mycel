@@ -45,7 +45,7 @@ def test_create_messaging_supabase_client_uses_service_role_key(monkeypatch):
     assert captured["key"] == "service-role-key"
 
 
-def test_create_messaging_supabase_client_forces_public_schema(monkeypatch):
+def test_create_messaging_supabase_client_uses_runtime_schema(monkeypatch):
     captured: dict[str, object] = {}
 
     def fake_create_client(url, key, options=None):
@@ -59,4 +59,4 @@ def test_create_messaging_supabase_client_forces_public_schema(monkeypatch):
 
     create_messaging_supabase_client()
 
-    assert getattr(captured["options"], "schema", None) == "public"
+    assert getattr(captured["options"], "schema", None) == "staging"

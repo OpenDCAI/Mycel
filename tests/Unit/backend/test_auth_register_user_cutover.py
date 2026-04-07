@@ -99,6 +99,7 @@ def test_complete_register_creates_human_and_owned_agent_users(monkeypatch: pyte
     assert all(agent.type is UserType.AGENT for agent in owned_agents)
     assert all(agent.agent_config_id for agent in owned_agents)
     assert [saved[0] for saved in agent_config_repo.saved] == [agent.agent_config_id for agent in owned_agents]
+    assert [saved[1]["agent_user_id"] for saved in agent_config_repo.saved] == [agent.id for agent in owned_agents]
     assert invite_codes.used == [("invite-1", "user-1")]
 
 

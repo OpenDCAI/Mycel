@@ -129,13 +129,15 @@ async def get_or_create_agent(app_obj: FastAPI, sandbox_type: str, thread_id: st
         if hasattr(app_obj.state, "user_repo") and thread_data:
             user_repo = app_obj.state.user_repo
             agent_user_id = thread_data.get("agent_user_id")
+            if not agent_user_id:
+                raise RuntimeError(f"thread.agent_user_id is required for agent chat identity: {thread_id}")
             agent_user = user_repo.get_by_id(agent_user_id) if agent_user_id else None
             if agent_user:
-                chat_identity_id = thread_data.get("user_id")
-                # @@@thread-chat-identity-source - agent chat identity must come from the
-                # thread-owned dedicated user_id, never from the agent user id.
+                chat_identity_id = agent_user_id
+                # @@@thread-chat-identity-source - agent users are now the stable social
+                # identity root. Runtime threads no longer carry a second dedicated user_id.
                 if not chat_identity_id:
-                    raise RuntimeError(f"thread.user_id is required for agent chat identity: {thread_id}")
+                    raise RuntimeError(f"thread.agent_user_id is required for agent chat identity: {thread_id}")
                 owner_id = agent_user.owner_user_id or ""
                 chat_repos = {
                     "chat_identity_id": chat_identity_id,

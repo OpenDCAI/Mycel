@@ -270,6 +270,7 @@ class AuthService:
             self._agent_configs.save_config(
                 agent_config_id,
                 {
+                    "agent_user_id": agent_id,
                     "name": agent_def["name"],
                     "description": agent_def["description"],
                     "status": "active",

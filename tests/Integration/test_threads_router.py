@@ -455,7 +455,7 @@ async def test_resolve_main_thread_exposes_default_thread_identity_without_hidin
 
 
 @pytest.mark.asyncio
-async def test_create_thread_persists_dedicated_user_id_equal_to_thread_id():
+async def test_create_thread_persists_agent_user_id():
     app = _make_threads_app(thread_sandbox={}, thread_cwd={})
 
     with _patch_create_thread_noop_guards():
@@ -468,7 +468,7 @@ async def test_create_thread_persists_dedicated_user_id_equal_to_thread_id():
         )
 
     row = app.state.thread_repo.rows[created["thread_id"]]
-    assert row["user_id"] == created["thread_id"]
+    assert row["agent_user_id"] == "member-1"
 
 
 @pytest.mark.asyncio

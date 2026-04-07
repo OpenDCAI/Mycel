@@ -89,6 +89,11 @@ class _OrderCheckingAgentConfigRepo(_FakeAgentConfigRepo):
         super().save_config(agent_config_id, data)
 
 
+class _FailingAgentConfigRepo(_FakeAgentConfigRepo):
+    def save_config(self, agent_config_id: str, data: dict[str, object]) -> None:
+        raise RuntimeError("boom")
+
+
 def _agent_user(*, user_id: str = "agent-1", owner_user_id: str = "owner-1", agent_config_id: str = "cfg-1") -> UserRow:
     return UserRow(
         id=user_id,
@@ -145,6 +150,7 @@ def test_create_member_creates_agent_user_and_saves_config_by_agent_config_id(
     assert created is not None
     assert created["id"] == agent_user.id
     assert agent_config_repo.saved_configs[0][0] == agent_user.agent_config_id
+    assert agent_config_repo.saved_configs[0][1]["agent_user_id"] == agent_user.id
 
 
 def test_create_member_persists_agent_user_before_agent_config(
@@ -166,6 +172,24 @@ def test_create_member_persists_agent_user_before_agent_config(
     assert created is not None
     assert len(user_repo.created) == 1
     assert len(agent_config_repo.saved_configs) == 1
+
+
+def test_create_member_raises_when_agent_config_sync_fails(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setattr(member_service, "MEMBERS_DIR", tmp_path)
+    user_repo = _FakeUserRepo()
+    agent_config_repo = _FailingAgentConfigRepo()
+
+    with pytest.raises(RuntimeError, match="boom"):
+        member_service.create_member(
+            "Morel",
+            "analyst",
+            owner_user_id="owner-1",
+            user_repo=user_repo,
+            agent_config_repo=agent_config_repo,
+        )
 
 
 def test_update_member_config_syncs_repo_by_agent_config_id(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:

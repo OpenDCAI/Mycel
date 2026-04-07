@@ -180,8 +180,7 @@ async def test_get_or_create_agent_passes_member_bundle_dir(monkeypatch: pytest.
                 "id": thread_id,
                 "cwd": None,
                 "model": "leon:large",
-                "member_id": "member-1",
-                "member_name": "Toad",
+                "agent_user_id": "member-1",
             }
 
     monkeypatch.setattr(agent_pool, "create_agent_sync", _fake_create_agent_sync)
@@ -226,15 +225,14 @@ async def test_get_or_create_agent_uses_thread_user_id_for_chat_identity(monkeyp
         def get_by_id(self, thread_id: str):
             return {
                 "id": thread_id,
-                "user_id": "thread-user-5",
+                "agent_user_id": "agent-user-5",
                 "cwd": None,
                 "model": "leon:large",
-                "member_id": "member-5",
             }
 
-    class _MemberRepo:
-        def get_by_id(self, member_id: str):
-            return SimpleNamespace(id=member_id, owner_user_id="owner-5")
+    class _UserRepo:
+        def get_by_id(self, user_id: str):
+            return SimpleNamespace(id=user_id, owner_user_id="owner-5")
 
     monkeypatch.setattr(agent_pool, "create_agent_sync", _fake_create_agent_sync)
     monkeypatch.setattr(agent_pool, "get_or_create_agent_id", lambda **_: "agent-5")
@@ -243,7 +241,8 @@ async def test_get_or_create_agent_uses_thread_user_id_for_chat_identity(monkeyp
         state=SimpleNamespace(
             agent_pool={},
             thread_repo=_ThreadRepo(),
-            member_repo=_MemberRepo(),
+            user_repo=_UserRepo(),
+            member_repo=None,
             thread_cwd={},
             thread_sandbox={},
         )
@@ -252,13 +251,13 @@ async def test_get_or_create_agent_uses_thread_user_id_for_chat_identity(monkeyp
     await agent_pool.get_or_create_agent(cast(Any, app), "local", thread_id="thread-5")
 
     chat_repos = cast(dict[str, object], captured["chat_repos"])
-    assert chat_repos["chat_identity_id"] == "thread-user-5"
-    assert chat_repos["user_id"] == "thread-user-5"
+    assert chat_repos["chat_identity_id"] == "agent-user-5"
+    assert chat_repos["user_id"] == "agent-user-5"
     assert chat_repos["owner_id"] == "owner-5"
 
 
 @pytest.mark.asyncio
-async def test_get_or_create_agent_requires_thread_user_id_for_chat_identity(monkeypatch: pytest.MonkeyPatch):
+async def test_get_or_create_agent_requires_thread_agent_user_id_for_chat_identity(monkeypatch: pytest.MonkeyPatch):
     def _fake_create_agent_sync(**kwargs) -> object:
         return SimpleNamespace()
 
@@ -268,12 +267,11 @@ async def test_get_or_create_agent_requires_thread_user_id_for_chat_identity(mon
                 "id": thread_id,
                 "cwd": None,
                 "model": "leon:large",
-                "member_id": "member-6",
             }
 
-    class _MemberRepo:
-        def get_by_id(self, member_id: str):
-            return SimpleNamespace(id=member_id, owner_user_id="owner-6")
+    class _UserRepo:
+        def get_by_id(self, user_id: str):
+            return SimpleNamespace(id=user_id, owner_user_id="owner-6")
 
     monkeypatch.setattr(agent_pool, "create_agent_sync", _fake_create_agent_sync)
     monkeypatch.setattr(agent_pool, "get_or_create_agent_id", lambda **_: "agent-6")
@@ -282,11 +280,12 @@ async def test_get_or_create_agent_requires_thread_user_id_for_chat_identity(mon
         state=SimpleNamespace(
             agent_pool={},
             thread_repo=_ThreadRepo(),
-            member_repo=_MemberRepo(),
+            user_repo=_UserRepo(),
+            member_repo=None,
             thread_cwd={},
             thread_sandbox={},
         )
     )
 
-    with pytest.raises(RuntimeError, match="thread.user_id"):
+    with pytest.raises(RuntimeError, match="thread.agent_user_id"):
         await agent_pool.get_or_create_agent(cast(Any, app), "local", thread_id="thread-6")

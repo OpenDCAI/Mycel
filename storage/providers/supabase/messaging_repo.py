@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import time
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
@@ -22,7 +23,7 @@ class SupabaseChatMemberRepo:
 
     def add_member(self, chat_id: str, user_id: str) -> None:
         self._client.table("chat_members").upsert(
-            {"chat_id": chat_id, "user_id": user_id, "role": "member", "joined_at": now_iso()},
+            {"chat_id": chat_id, "user_id": user_id, "role": "member", "joined_at": time.time()},
             on_conflict="chat_id,user_id",
         ).execute()
 
@@ -74,8 +75,11 @@ class SupabaseMessagesRepo:
         seq_data = seq_response.data
         if not seq_data:
             raise RuntimeError("Supabase messages repo expected increment_chat_message_seq RPC data.")
-        seq_row = seq_data[0]
-        seq = seq_row["increment_chat_message_seq"] if isinstance(seq_row, dict) else seq_row
+        if isinstance(seq_data, int):
+            seq = seq_data
+        else:
+            seq_row = seq_data[0]
+            seq = seq_row["increment_chat_message_seq"] if isinstance(seq_row, dict) else seq_row
         payload = {**row, "seq": int(seq)}
         res = self._client.table("messages").insert(payload).execute()
         return res.data[0] if res.data else payload

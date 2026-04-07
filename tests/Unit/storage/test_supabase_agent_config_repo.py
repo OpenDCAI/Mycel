@@ -67,6 +67,9 @@ def test_supabase_agent_config_repo_save_config_uses_agent_config_id_payload() -
             "id": "cfg-1",
             "agent_user_id": "user-agent-1",
             "name": "Toad",
+            "tools": ["search"],
+            "runtime": {"tools:search": {"enabled": True}},
+            "mcp": {"demo": {"command": "npx"}},
         },
     )
 
@@ -74,18 +77,48 @@ def test_supabase_agent_config_repo_save_config_uses_agent_config_id_payload() -
     assert payload is not None
     assert payload["id"] == "cfg-1"
     assert "member_id" not in payload
+    assert payload["tools_json"] == ["search"]
+    assert payload["runtime_json"] == {"tools:search": {"enabled": True}}
+    assert payload["mcp_json"] == {"demo": {"command": "npx"}}
+    assert "tools" not in payload
+    assert "runtime" not in payload
+    assert "mcp" not in payload
+
+
+def test_supabase_agent_config_repo_get_config_normalizes_json_columns() -> None:
+    client = _FakeClient()
+    client.tables["agent_configs"] = _FakeTable()
+    client.tables["agent_configs"].rows = [
+        {
+            "id": "cfg-1",
+            "agent_user_id": "user-agent-1",
+            "name": "Toad",
+            "tools_json": ["search"],
+            "runtime_json": {"tools:search": {"enabled": True}},
+            "mcp_json": {"demo": {"command": "npx"}},
+        }
+    ]
+    repo = SupabaseAgentConfigRepo(client)
+
+    row = repo.get_config("cfg-1")
+
+    assert row is not None
+    assert row["tools"] == ["search"]
+    assert row["runtime"] == {"tools:search": {"enabled": True}}
+    assert row["mcp"] == {"demo": {"command": "npx"}}
 
 
 def test_supabase_agent_config_repo_save_skill_conflicts_on_agent_config_id_and_name() -> None:
     client = _FakeClient()
     repo = SupabaseAgentConfigRepo(client)
 
-    repo.save_skill("cfg-1", "Search", "search skill")
+    repo.save_skill("cfg-1", "Search", "search skill", meta={"enabled": True})
 
     table = client.tables["agent_skills"]
     assert table.upsert_payload is not None
     assert table.upsert_payload["agent_config_id"] == "cfg-1"
     assert table.upsert_conflict == "agent_config_id,name"
+    assert table.upsert_payload["meta_json"] == {"enabled": True}
 
 
 def test_supabase_agent_config_repo_list_rules_filters_on_agent_config_id() -> None:
@@ -96,3 +129,15 @@ def test_supabase_agent_config_repo_list_rules_filters_on_agent_config_id() -> N
 
     assert ("agent_config_id", "cfg-1") in client.tables["agent_rules"].eq_calls
     assert ("member_id", "cfg-1") not in client.tables["agent_rules"].eq_calls
+
+
+def test_supabase_agent_config_repo_save_sub_agent_uses_tools_json() -> None:
+    client = _FakeClient()
+    repo = SupabaseAgentConfigRepo(client)
+
+    repo.save_sub_agent("cfg-1", "Scout", tools=["search"])
+
+    table = client.tables["agent_sub_agents"]
+    assert table.upsert_payload is not None
+    assert table.upsert_payload["agent_config_id"] == "cfg-1"
+    assert table.upsert_payload["tools_json"] == ["search"]

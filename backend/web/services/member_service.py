@@ -427,6 +427,7 @@ def create_member(
         _save_config_to_repo(
             agent_config_repo,
             agent_config_id,
+            agent_user_id=agent_user_id,
             name=name,
             description=description,
             status="draft",
@@ -537,6 +538,7 @@ def update_member_config(
             _save_config_to_repo(
                 agent_config_repo,
                 user.agent_config_id,
+                agent_user_id=user.id,
                 name=bundle.agent.name,
                 description=bundle.agent.description,
                 model=bundle.agent.model,
@@ -583,6 +585,7 @@ def _save_config_to_repo(
     agent_config_repo: Any,
     agent_config_id: str,
     *,
+    agent_user_id: str,
     name: str,
     description: str = "",
     model: str | None = None,
@@ -595,26 +598,23 @@ def _save_config_to_repo(
     runtime: dict | None = None,
     mcp: dict | None = None,
 ) -> None:
-    """Save agent config to Supabase repo. Best-effort — logs errors but doesn't raise."""
-    try:
-        agent_config_repo.save_config(
-            agent_config_id,
-            {
-                "name": name,
-                "description": description,
-                "model": model,
-                "tools": tools or ["*"],
-                "system_prompt": system_prompt,
-                "status": status,
-                "version": version,
-                "created_at": created_at,
-                "updated_at": updated_at,
-                "runtime": runtime or {},
-                "mcp": mcp or {},
-            },
-        )
-    except Exception:
-        logger.warning("Failed to save config to repo for agent config %s", agent_config_id, exc_info=True)
+    agent_config_repo.save_config(
+        agent_config_id,
+        {
+            "agent_user_id": agent_user_id,
+            "name": name,
+            "description": description,
+            "model": model,
+            "tools": tools or ["*"],
+            "system_prompt": system_prompt,
+            "status": status,
+            "version": version,
+            "created_at": created_at,
+            "updated_at": updated_at,
+            "runtime": runtime or {},
+            "mcp": mcp or {},
+        },
+    )
 
 
 # ── Write helpers for config fields → file structure ──
