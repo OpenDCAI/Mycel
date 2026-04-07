@@ -11,6 +11,7 @@ _TABLE = "threads"
 
 _COLS = (
     "id",
+    "user_id",
     "member_id",
     "sandbox_type",
     "model",
@@ -49,6 +50,7 @@ class SupabaseThreadRepo:
         self,
         thread_id: str,
         member_id: str,
+        user_id: str,
         sandbox_type: str,
         cwd: str | None = None,
         created_at: float = 0,
@@ -60,6 +62,7 @@ class SupabaseThreadRepo:
         self._t().insert(
             {
                 "id": thread_id,
+                "user_id": user_id,
                 "member_id": member_id,
                 "sandbox_type": sandbox_type,
                 "cwd": cwd,
@@ -75,6 +78,14 @@ class SupabaseThreadRepo:
         select = ", ".join(_COLS)
         response = self._t().select(select).eq("id", thread_id).execute()
         rows = q.rows(response, _REPO, "get_by_id")
+        if not rows:
+            return None
+        return _to_dict(rows[0])
+
+    def get_by_user_id(self, user_id: str) -> dict[str, Any] | None:
+        select = ", ".join(_COLS)
+        response = self._t().select(select).eq("user_id", user_id).execute()
+        rows = q.rows(response, _REPO, "get_by_user_id")
         if not rows:
             return None
         return _to_dict(rows[0])

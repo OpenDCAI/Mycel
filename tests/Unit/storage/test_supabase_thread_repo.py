@@ -9,6 +9,7 @@ class _FakeTable:
         self.rows = [
             {
                 "id": "thread-1",
+                "user_id": "thread-1",
                 "member_id": "member-1",
                 "sandbox_type": "local",
                 "model": None,
@@ -54,6 +55,7 @@ def test_supabase_thread_repo_create_writes_integer_main_flag():
     repo.create(
         thread_id="thread-1",
         member_id="member-1",
+        user_id="thread-1",
         sandbox_type="local",
         created_at=1.0,
         is_main=True,
@@ -62,6 +64,24 @@ def test_supabase_thread_repo_create_writes_integer_main_flag():
 
     assert client.table_obj.insert_payload is not None
     assert client.table_obj.insert_payload["is_main"] == 1
+
+
+def test_supabase_thread_repo_create_persists_dedicated_user_id():
+    client = _FakeClient()
+    repo = SupabaseThreadRepo(client)
+
+    repo.create(
+        thread_id="thread-1",
+        member_id="member-1",
+        user_id="thread-1",
+        sandbox_type="local",
+        created_at=1.0,
+        is_main=True,
+        branch_index=0,
+    )
+
+    assert client.table_obj.insert_payload is not None
+    assert client.table_obj.insert_payload["user_id"] == "thread-1"
 
 
 def test_supabase_thread_repo_update_writes_integer_main_flag():
@@ -84,5 +104,18 @@ def test_supabase_thread_repo_get_default_thread_reads_by_member_and_main_flag()
 
     assert result is not None
     assert result["id"] == "thread-1"
+    assert result["user_id"] == "thread-1"
     assert ("member_id", "member-1") in client.table_obj.eq_calls
     assert ("is_main", 1) in client.table_obj.eq_calls
+
+
+def test_supabase_thread_repo_get_by_user_id_reads_thread_identity() -> None:
+    client = _FakeClient()
+    repo = SupabaseThreadRepo(client)
+
+    result = repo.get_by_user_id("thread-1")
+
+    assert result is not None
+    assert result["id"] == "thread-1"
+    assert result["user_id"] == "thread-1"
+    assert ("user_id", "thread-1") in client.table_obj.eq_calls

@@ -522,6 +522,7 @@ class AgentService:
         self._thread_repo.create(
             thread_id=thread_id,
             member_id=member_id,
+            user_id=thread_id,
             sandbox_type=sandbox_type,
             cwd=cwd,
             created_at=created_at,

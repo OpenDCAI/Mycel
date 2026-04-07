@@ -431,6 +431,23 @@ async def test_resolve_main_thread_exposes_default_thread_identity_without_hidin
 
 
 @pytest.mark.asyncio
+async def test_create_thread_persists_dedicated_user_id_equal_to_thread_id():
+    app = _make_threads_app(thread_sandbox={}, thread_cwd={})
+
+    with _patch_create_thread_noop_guards():
+        created = _require_thread_result(
+            await threads_router.create_thread(
+                payload=CreateThreadRequest(member_id="member-1"),
+                user_id="owner-1",
+                app=app,
+            )
+        )
+
+    row = app.state.thread_repo.rows[created["thread_id"]]
+    assert row["user_id"] == created["thread_id"]
+
+
+@pytest.mark.asyncio
 async def test_create_thread_route_uses_canonical_existing_lease_binding_helper():
     app = _make_threads_app(thread_sandbox={}, thread_cwd={})
     payload = CreateThreadRequest.model_validate(

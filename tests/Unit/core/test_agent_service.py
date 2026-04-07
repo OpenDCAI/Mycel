@@ -67,10 +67,20 @@ class _FakeThreadRepo:
         branch_indexes = [int(row["branch_index"]) for row in self.rows.values() if row["member_id"] == member_id]
         return (max(branch_indexes) if branch_indexes else 0) + 1
 
-    def create(self, thread_id: str, member_id: str, sandbox_type: str, cwd: str | None, created_at: float, **extra):
+    def create(
+        self,
+        thread_id: str,
+        member_id: str,
+        user_id: str,
+        sandbox_type: str,
+        cwd: str | None,
+        created_at: float,
+        **extra,
+    ):
         row = {
             "id": thread_id,
             "member_id": member_id,
+            "user_id": user_id,
             "sandbox_type": sandbox_type,
             "cwd": cwd,
             "model": extra.get("model"),
@@ -1231,6 +1241,7 @@ async def test_handle_agent_registers_subagent_thread_metadata_before_return(mon
 
         assert child_thread is not None
         assert child_thread["member_id"] == "member-1"
+        assert child_thread["user_id"] == child_thread_id
         assert child_thread["sandbox_type"] == "daytona_selfhost"
         assert child_thread["cwd"] == "/home/daytona"
         assert child_thread["is_main"] is False
