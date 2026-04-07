@@ -16,6 +16,7 @@ from pydantic import BaseModel
 
 from backend.web.core.dependencies import get_app, get_current_user_id
 from backend.web.utils.serializers import avatar_url
+from storage.contracts import MemberType
 
 router = APIRouter(prefix="/api/chats", tags=["chats"])
 
@@ -106,6 +107,14 @@ def _resolve_display_member(app: Any, social_user_id: str) -> Any | None:
 def _validate_chat_participant_ids(app: Any, participant_ids: list[str], requester_user_id: str) -> list[str]:
     member_repo = getattr(app.state, "member_repo", None)
     thread_repo = getattr(app.state, "thread_repo", None)
+    # @@@group-chat-actor-boundary - template member ids are display/config identities,
+    # not deliverable chat actors. Reject them loudly at ingress instead of guessing.
+    # Human members: member.id IS their social user ID — accept directly.
+    # Pre-fetch all members in one batch to avoid N+1 per participant.
+    known_members = (
+        member_repo.get_by_ids([p for p in participant_ids if p != requester_user_id])
+        if member_repo else {}
+    )
     validated: list[str] = []
     for participant_id in participant_ids:
         if participant_id == requester_user_id:
@@ -114,16 +123,10 @@ def _validate_chat_participant_ids(app: Any, participant_ids: list[str], request
         if thread_repo is not None and thread_repo.get_by_user_id(participant_id) is not None:
             validated.append(participant_id)
             continue
-        # @@@group-chat-actor-boundary - template member ids are display/config identities,
-        # not deliverable chat actors. Reject them loudly at ingress instead of guessing.
-        # Human members: member.id IS their social user ID — accept directly.
-        if member_repo is not None:
-            member = member_repo.get_by_id(participant_id)
-            if member is not None:
-                if getattr(member, "type", None) != "human":
-                    raise ValueError(f"Agent participant ids must be actor user_ids, not template member_id: {participant_id}")
-                validated.append(participant_id)
-                continue
+        member = known_members.get(participant_id)
+        if member is not None:
+            if member.type != MemberType.HUMAN:
+                raise ValueError(f"Agent participant ids must be actor user_ids, not template member_id: {participant_id}")
         validated.append(participant_id)
     return validated
 

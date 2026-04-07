@@ -12,6 +12,7 @@ from backend.web.core.dependencies import get_app, get_current_user_id
 from backend.web.utils.serializers import avatar_url
 from messaging.contracts import RelationshipRow
 from messaging.relationships.state_machine import TransitionError
+from storage.contracts import MemberRow
 
 logger = logging.getLogger(__name__)
 
@@ -49,7 +50,7 @@ def _resolve_parties(existing: dict, actor_id: str) -> tuple[str, str]:
     return requester_id, other_id
 
 
-def _row_to_dict(row: RelationshipRow, viewer_id: str, member: object | None = None) -> dict:
+def _row_to_dict(row: RelationshipRow, viewer_id: str, member: MemberRow | None = None) -> dict:
     other_id = row.principal_b if viewer_id == row.principal_a else row.principal_a
     # Determine who is the requester based on state direction
     if row.state == "pending_a_to_b":
@@ -61,9 +62,9 @@ def _row_to_dict(row: RelationshipRow, viewer_id: str, member: object | None = N
     return {
         "id": row.id,
         "other_user_id": other_id,
-        "other_name": member.name if member else "未知用户",  # type: ignore[union-attr]
-        "other_mycel_id": member.mycel_id if member else None,  # type: ignore[union-attr]
-        "other_avatar_url": avatar_url(other_id, bool(member.avatar)) if member else None,  # type: ignore[union-attr]
+        "other_name": member.name if member else "未知用户",
+        "other_mycel_id": member.mycel_id if member else None,
+        "other_avatar_url": avatar_url(other_id, bool(member.avatar)) if member else None,
         "state": row.state,
         "direction": row.direction,
         "is_requester": is_requester,
@@ -82,13 +83,10 @@ async def list_relationships(
     svc = _get_rel_service(app)
     rows = svc.list_for_user(user_id)
     # Batch-fetch member info to avoid N+1 per-relationship lookups
-    other_ids = [
-        (r.principal_b if user_id == r.principal_a else r.principal_a)
-        for r in rows
-    ]
+    other_ids = [r.principal_b if user_id == r.principal_a else r.principal_a for r in rows]
     member_repo = getattr(app.state, "member_repo", None)
     members = member_repo.get_by_ids(other_ids) if member_repo and other_ids else {}
-    return [_row_to_dict(r, user_id, members.get(r.principal_b if user_id == r.principal_a else r.principal_a)) for r in rows]
+    return [_row_to_dict(r, user_id, members.get(oid)) for r, oid in zip(rows, other_ids)]
 
 
 @router.post("/request")
