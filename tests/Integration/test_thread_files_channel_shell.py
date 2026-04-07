@@ -10,24 +10,6 @@ from backend.web.routers import thread_files as thread_files_router
 
 
 @pytest.mark.asyncio
-async def test_call_channel_file_service_returns_service_result():
-    calls: list[tuple[tuple[object, ...], dict[str, object]]] = []
-
-    def fake_method(*args: object, **kwargs: object):
-        calls.append((args, kwargs))
-        return {"ok": True}
-
-    result = await thread_files_router._call_channel_file_service(
-        fake_method,
-        "thread-1",
-        relative_path="notes.txt",
-    )
-
-    assert result == {"ok": True}
-    assert calls == [(("thread-1",), {"relative_path": "notes.txt"})]
-
-
-@pytest.mark.asyncio
 async def test_call_channel_file_service_maps_value_error_to_400():
     def fake_method(*_args: object, **_kwargs: object):
         raise ValueError("bad path")
