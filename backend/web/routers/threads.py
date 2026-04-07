@@ -694,11 +694,11 @@ async def resolve_main_thread(
             "thread": _thread_payload(app, default_thread["id"], default_thread.get("sandbox_type", "local")),
         }
     except HTTPException as exc:
-        # @@@orphan-main-thread - stale bootstrap data can leave the member pointing at a thread whose
-        # member rows are gone. Treat that as "no resolvable main thread" instead of surfacing a 500.
+        # @@@orphan-default-thread - stale bootstrap data can leave the member pointing at a thread whose
+        # member rows are gone. Treat that as "no resolvable default thread" instead of surfacing a 500.
         if exc.status_code == 500 and "missing member" in str(exc.detail):
             logger.warning(
-                "resolve_main_thread ignored orphaned main thread %s for member %s",
+                "resolve_main_thread ignored orphaned default thread %s for member %s",
                 default_thread["id"],
                 payload.member_id,
             )
