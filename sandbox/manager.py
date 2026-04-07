@@ -280,10 +280,10 @@ class SandboxManager:
         from sandbox.volume_source import DaytonaVolume
 
         try:
-            volume_name = self.provider.create_managed_volume(thread_id, remote_path)
+            volume_name = self.provider.create_managed_volume(volume_id, remote_path)
         except Exception as e:
             if "already exists" in str(e):
-                volume_name = f"leon-volume-{thread_id}"
+                volume_name = f"leon-volume-{volume_id}"
                 logger.info("Daytona volume already exists: %s, reusing", volume_name)
                 self.provider.wait_managed_volume_ready(volume_name)
             else:

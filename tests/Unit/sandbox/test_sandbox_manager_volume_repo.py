@@ -105,9 +105,9 @@ class _FakeDaytonaProvider:
         self.calls: list[tuple[str, str]] = []
         self.ready_waits: list[str] = []
 
-    def create_managed_volume(self, thread_id: str, mount_path: str) -> str:
-        self.calls.append((thread_id, mount_path))
-        return f"leon-volume-{thread_id}"
+    def create_managed_volume(self, volume_id: str, mount_path: str) -> str:
+        self.calls.append((volume_id, mount_path))
+        return f"leon-volume-{volume_id}"
 
     def wait_managed_volume_ready(self, volume_name: str) -> None:
         self.ready_waits.append(volume_name)
@@ -209,7 +209,7 @@ def test_setup_mounts_recreates_missing_remote_volume_row_for_existing_volume_id
     assert manager.lease_store.volume_updates == []
     assert repo.requested_ids == ["volume-missing", "volume-missing"]
     assert isinstance(result["source"], DaytonaVolume)
-    assert manager.provider.calls == [("thread-1", "/workspace")]
+    assert manager.provider.calls == [("volume-missing", "/workspace")]
 
 
 def test_enforce_idle_timeouts_destroys_when_provider_cannot_pause(monkeypatch):
@@ -486,7 +486,7 @@ def test_resume_session_rebinds_live_session_lease_after_resume():
     assert runtime.lease is resumed_lease
 
 
-def test_upgrade_to_daytona_volume_uses_runtime_thread_id_for_volume_naming(monkeypatch, tmp_path):
+def test_upgrade_to_daytona_volume_uses_volume_id_for_provider_backend_ref(monkeypatch, tmp_path):
     manager = _new_test_manager()
     manager.provider = _FakeDaytonaProvider()
     update_repo = _FakeUpdateRepo()
@@ -501,7 +501,7 @@ def test_upgrade_to_daytona_volume_uses_runtime_thread_id_for_volume_naming(monk
         "/workspace",
     )
 
-    assert manager.provider.calls == [("thread-supabase", "/workspace")]
+    assert manager.provider.calls == [("volume-1", "/workspace")]
     assert isinstance(new_source, DaytonaVolume)
     assert update_repo.closed is True
     assert update_repo.updated
@@ -514,8 +514,8 @@ def test_upgrade_to_daytona_volume_waits_when_reusing_existing_daytona_volume(mo
     manager.provider = provider
     manager._sandbox_volume_repo = lambda: update_repo
 
-    def _already_exists(thread_id: str, mount_path: str) -> str:
-        provider.calls.append((thread_id, mount_path))
+    def _already_exists(volume_id: str, mount_path: str) -> str:
+        provider.calls.append((volume_id, mount_path))
         raise RuntimeError("volume already exists")
 
     provider.create_managed_volume = _already_exists
@@ -528,7 +528,7 @@ def test_upgrade_to_daytona_volume_waits_when_reusing_existing_daytona_volume(mo
     )
 
     assert isinstance(new_source, DaytonaVolume)
-    assert provider.ready_waits == ["leon-volume-thread-supabase"]
+    assert provider.ready_waits == ["leon-volume-volume-1"]
 
 
 def test_make_sandbox_monitor_repo_returns_sqlite():

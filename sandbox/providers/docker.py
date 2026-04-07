@@ -114,9 +114,9 @@ class DockerProvider(SandboxProvider):
 
     # ==================== Managed Volume ====================
 
-    def create_managed_volume(self, thread_id: str, mount_path: str) -> str:
+    def create_managed_volume(self, volume_id: str, mount_path: str) -> str:
         """Create a host directory as managed volume. Returns host path as backend_ref."""
-        volume_dir = Path.home() / ".leon" / "managed_volumes" / thread_id
+        volume_dir = Path.home() / ".leon" / "managed_volumes" / volume_id
         volume_dir.mkdir(parents=True, exist_ok=True)
         logger.info("Created Docker managed volume: %s", volume_dir)
         return str(volume_dir)
