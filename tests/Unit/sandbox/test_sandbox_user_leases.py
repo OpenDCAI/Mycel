@@ -111,7 +111,7 @@ def test_list_user_leases_hides_subagent_threads_and_deduplicates_visible_agents
             "agents": [
                 {
                     "thread_id": "thread-parent",
-                    "member_name": "Morel",
+                    "agent_name": "Morel",
                     "avatar_url": "/api/members/agent-1/avatar",
                 }
             ],
@@ -169,12 +169,12 @@ def test_list_user_leases_keeps_distinct_visible_threads_even_for_same_member(mo
     assert leases[0]["agents"] == [
         {
             "thread_id": "thread-a",
-            "member_name": "Morel",
+            "agent_name": "Morel",
             "avatar_url": "/api/members/agent-1/avatar",
         },
         {
             "thread_id": "thread-b",
-            "member_name": "Morel",
+            "agent_name": "Morel",
             "avatar_url": "/api/members/agent-1/avatar",
         },
     ]

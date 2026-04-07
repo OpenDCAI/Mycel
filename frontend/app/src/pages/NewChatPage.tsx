@@ -804,7 +804,7 @@ export default function NewChatPage({ mode = "member" }: { mode?: "member" | "ne
                                       {lease.agents.slice(0, 4).map((agent) => (
                                         <MemberAvatar
                                           key={agent.thread_id}
-                                          name={agent.member_name}
+                                          name={agent.agent_name}
                                           avatarUrl={agent.avatar_url ?? undefined}
                                           type="mycel_agent"
                                           size="xs"

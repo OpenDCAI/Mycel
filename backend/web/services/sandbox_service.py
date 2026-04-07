@@ -94,7 +94,7 @@ def list_user_leases(
             group["agents"].append(
                 {
                     "thread_id": thread_id,
-                    "member_name": agent_user.display_name,
+                    "agent_name": agent_user.display_name,
                     "avatar_url": avatar_url(agent_user.id, bool(agent_user.avatar)),
                 }
             )

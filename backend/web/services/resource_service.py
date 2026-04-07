@@ -254,7 +254,7 @@ def _agent_user_meta_map(user_repo: Any = None) -> dict[str, dict[str, str | Non
         users = repo.list_all()
         return {
             user.id: {
-                "member_name": user.display_name,
+                "agent_name": user.display_name,
                 "avatar_url": avatar_url(user.id, bool(user.avatar)),
             }
             for user in users
@@ -294,17 +294,17 @@ def _thread_agent_refs(thread_ids: list[str], thread_repo: Any = None) -> dict[s
 
 def _thread_owners(thread_ids: list[str], user_repo: Any = None, thread_repo: Any = None) -> dict[str, dict[str, str | None]]:
     refs = _thread_agent_refs(thread_ids, thread_repo=thread_repo)
-    member_meta = _agent_user_meta_map(user_repo=user_repo)
+    agent_meta = _agent_user_meta_map(user_repo=user_repo)
     owners: dict[str, dict[str, str | None]] = {}
     for thread_id in thread_ids:
         agent_ref = refs.get(thread_id)
         if not agent_ref:
-            owners[thread_id] = {"member_name": "未绑定Agent", "avatar_url": None}
+            owners[thread_id] = {"agent_name": "未绑定Agent", "avatar_url": None}
             continue
         # @@@agent-name-resolution - thread_config.agent may be member id or direct display name.
-        meta = member_meta.get(agent_ref, {})
+        meta = agent_meta.get(agent_ref, {})
         owners[thread_id] = {
-            "member_name": meta.get("member_name") or agent_ref,
+            "agent_name": meta.get("agent_name") or agent_ref,
             "avatar_url": meta.get("avatar_url"),
         }
     return owners
@@ -408,7 +408,7 @@ def build_resource_session_payload(
         "id": session_identity,
         "leaseId": lease_id,
         "threadId": thread_id,
-        "memberName": str(owner.get("member_name") or "未绑定Agent"),
+        "agentName": str(owner.get("agent_name") or "未绑定Agent"),
         "avatarUrl": owner.get("avatar_url"),
         "status": status,
         "startedAt": started_at,
@@ -511,7 +511,7 @@ def list_resource_providers() -> dict[str, Any]:
                 running_count += 1
                 seen_running_leases.add(lease_id)
             session_metrics = _to_session_metrics(snapshot_by_lease.get(lease_id))
-            owner = owners.get(thread_id, {"member_name": "未绑定Agent"})
+            owner = owners.get(thread_id, {"agent_name": "未绑定Agent"})
             session_identity = _resource_session_identity(session)
             # @@@resource-session-dedup - terminal fallback can surface multiple
             # monitor rows for the same lease/thread binding. The overview

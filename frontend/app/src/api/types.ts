@@ -156,7 +156,7 @@ export interface UserLeaseSummary {
     /** Runtime actor identity for this visible lease participant. */
     thread_id: string;
     /** Display label resolved from the actor's backing member shell. */
-    member_name: string;
+    agent_name: string;
     avatar_url?: string | null;
   }>;
 }
