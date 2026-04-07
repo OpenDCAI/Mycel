@@ -671,6 +671,13 @@ div:has(> :only-child:is(div:contains("Loading"))) {
   text-align: left;
   color: inherit;
   cursor: pointer;
+  transition: transform 120ms ease, border-color 120ms ease, box-shadow 120ms ease, opacity 120ms ease;
+}
+
+.sandbox-card:hover {
+  transform: translateY(-1px);
+  border-color: #4a9eff55;
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.28);
 }
 
 .sandbox-card--running {
@@ -683,6 +690,7 @@ div:has(> :only-child:is(div:contains("Loading"))) {
 
 .sandbox-card--stopped {
   border-left: 3px solid #78808f;
+  opacity: 0.5;
 }
 
 .sandbox-card--destroying {
@@ -693,9 +701,61 @@ div:has(> :only-child:is(div:contains("Loading"))) {
   margin: 0.75rem 0;
 }
 
+.sandbox-card__agent-row,
+.sandbox-session-row__identity,
+.sandbox-session-row__status {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.sandbox-card__avatar-stack {
+  display: flex;
+  margin-right: 0.2rem;
+}
+
+.sandbox-avatar {
+  display: grid;
+  place-items: center;
+  width: 1.7rem;
+  height: 1.7rem;
+  margin-left: -0.35rem;
+  border-radius: 999px;
+  border: 2px solid #15171c;
+  background: linear-gradient(180deg, #3a4250, #252a34);
+  color: #eaf0ff;
+  font-size: 0.65rem;
+  font-weight: 700;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.sandbox-avatar:first-child {
+  margin-left: 0;
+}
+
+.sandbox-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.sandbox-avatar--count {
+  background: #222733;
+  color: #9ea8bd;
+}
+
+.sandbox-avatar--lg {
+  width: 2rem;
+  height: 2rem;
+  margin-left: 0;
+  font-size: 0.72rem;
+}
+
 .sandbox-card__names {
   font-weight: 700;
   margin-bottom: 0.35rem;
+  line-height: 1.35;
 }
 
 .sandbox-card__thread-list {
@@ -717,23 +777,25 @@ div:has(> :only-child:is(div:contains("Loading"))) {
 .sandbox-modal-backdrop {
   position: fixed;
   inset: 0;
-  display: grid;
-  place-items: center;
-  padding: 1.5rem;
-  background: rgba(0, 0, 0, 0.68);
+  display: flex;
+  justify-content: flex-end;
+  padding: 0;
+  background: rgba(0, 0, 0, 0.74);
   backdrop-filter: blur(6px);
   z-index: 50;
 }
 
 .sandbox-modal {
-  width: min(1040px, 100%);
-  max-height: 90vh;
-  overflow: auto;
-  padding: 1.25rem;
-  border-radius: 20px;
-  border: 1px solid #2c3340;
+  width: min(520px, 100%);
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 0;
+  border-left: 1px solid #2c3340;
+  border-radius: 0;
   background: linear-gradient(180deg, rgba(20, 22, 27, 0.98), rgba(12, 13, 17, 0.98));
-  box-shadow: 0 20px 64px rgba(0, 0, 0, 0.4);
+  box-shadow: -20px 0 64px rgba(0, 0, 0, 0.4);
 }
 
 .sandbox-modal__close,
@@ -770,6 +832,12 @@ div:has(> :only-child:is(div:contains("Loading"))) {
 
 .sandbox-session-row__name {
   font-weight: 700;
+}
+
+.sandbox-session-row__status {
+  color: #8f98aa;
+  font-size: 0.78rem;
+  flex-shrink: 0;
 }
 
 .sandbox-link {
@@ -899,6 +967,32 @@ div:has(> :only-child:is(div:contains("Loading"))) {
   color: #aab2c4;
 }
 
+.sandbox-modal__header,
+.sandbox-modal__section {
+  padding: 1rem 1.1rem;
+}
+
+.sandbox-modal__header {
+  border-bottom: 1px solid #2c3340;
+  flex-shrink: 0;
+}
+
+.sandbox-modal__section {
+  flex-shrink: 0;
+}
+
+.sandbox-modal__section--fill {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  flex-direction: column;
+}
+
+.sandbox-modal__section--fill .file-browser {
+  flex: 1;
+  min-height: 0;
+}
+
 @media (max-width: 900px) {
   .resources-hero,
   .file-browser {
@@ -912,6 +1006,6 @@ div:has(> :only-child:is(div:contains("Loading"))) {
   }
 
   .sandbox-modal {
-    padding: 1rem;
+    width: 100%;
   }
 }
