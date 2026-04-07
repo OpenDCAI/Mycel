@@ -1,10 +1,21 @@
+from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from backend.web.main import app
+from backend.web.core.dependencies import get_current_user_id
+from backend.web.routers import monitor, resources
+
+
+def _build_monitor_test_app(*, include_product_resources: bool = False) -> FastAPI:
+    app = FastAPI()
+    app.include_router(monitor.router)
+    if include_product_resources:
+        app.include_router(resources.router)
+        app.dependency_overrides[get_current_user_id] = lambda: "user-test"
+    return app
 
 
 def test_monitor_resources_route_smoke():
-    with TestClient(app) as client:
+    with TestClient(_build_monitor_test_app()) as client:
         response = client.get("/api/monitor/resources")
 
     assert response.status_code == 200
@@ -20,7 +31,7 @@ def test_monitor_resources_route_smoke():
 
 
 def test_monitor_resources_refresh_route_smoke():
-    with TestClient(app) as client:
+    with TestClient(_build_monitor_test_app()) as client:
         response = client.post("/api/monitor/resources/refresh")
 
     assert response.status_code == 200
@@ -33,8 +44,16 @@ def test_monitor_resources_refresh_route_smoke():
     assert set(payload["triage"]["summary"]).issuperset({"total", "active_drift", "detached_residue", "orphan_cleanup", "healthy_capacity"})
 
 
-def test_monitor_and_product_resource_routes_coexist_intentionally():
-    with TestClient(app) as client:
+def test_monitor_and_product_resource_routes_coexist_intentionally(monkeypatch):
+    from backend.web.services import resource_projection_service
+
+    monkeypatch.setattr(
+        resource_projection_service,
+        "list_user_resource_providers",
+        lambda *_args, **_kwargs: {"summary": {"snapshot_at": "now"}, "providers": []},
+    )
+
+    with TestClient(_build_monitor_test_app(include_product_resources=True)) as client:
         monitor_response = client.get("/api/monitor/resources")
         product_response = client.get("/api/resources/overview")
 
@@ -43,7 +62,7 @@ def test_monitor_and_product_resource_routes_coexist_intentionally():
 
 
 def test_monitor_health_route_smoke():
-    with TestClient(app) as client:
+    with TestClient(_build_monitor_test_app()) as client:
         response = client.get("/api/monitor/health")
 
     assert response.status_code == 200
@@ -54,7 +73,7 @@ def test_monitor_health_route_smoke():
 
 
 def test_monitor_dashboard_route_smoke():
-    with TestClient(app) as client:
+    with TestClient(_build_monitor_test_app()) as client:
         response = client.get("/api/monitor/dashboard")
 
     assert response.status_code == 200
@@ -67,7 +86,7 @@ def test_monitor_dashboard_route_smoke():
 
 
 def test_monitor_leases_route_exposes_summary_and_groups():
-    with TestClient(app) as client:
+    with TestClient(_build_monitor_test_app()) as client:
         response = client.get("/api/monitor/leases")
 
     assert response.status_code == 200
@@ -104,7 +123,7 @@ def test_monitor_resources_cleanup_route_forwards_structured_payload(monkeypatch
         },
     )
 
-    with TestClient(app) as client:
+    with TestClient(_build_monitor_test_app()) as client:
         response = client.post(
             "/api/monitor/resources/cleanup",
             json={

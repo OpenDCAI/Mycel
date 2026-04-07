@@ -7,13 +7,23 @@ import re
 from datetime import UTC, datetime
 from typing import Any
 
-from backend.web.core.storage_factory import make_chat_session_repo, make_lease_repo, make_sandbox_monitor_repo
+from backend.web.core.storage_factory import make_sandbox_monitor_repo
 from backend.web.services.sandbox_service import init_providers_and_managers, load_all_sessions
+from storage.providers.sqlite.chat_session_repo import SQLiteChatSessionRepo
 from storage.providers.sqlite.kernel import SQLiteDBRole, resolve_role_db_path
+from storage.providers.sqlite.lease_repo import SQLiteLeaseRepo
 
 # ---------------------------------------------------------------------------
 # Mapping helpers (private)
 # ---------------------------------------------------------------------------
+
+
+def make_chat_session_repo() -> SQLiteChatSessionRepo:
+    return SQLiteChatSessionRepo(db_path=resolve_role_db_path(SQLiteDBRole.SANDBOX))
+
+
+def make_lease_repo() -> SQLiteLeaseRepo:
+    return SQLiteLeaseRepo(db_path=resolve_role_db_path(SQLiteDBRole.SANDBOX))
 
 
 def _format_time_ago(iso_timestamp: str | None) -> str:

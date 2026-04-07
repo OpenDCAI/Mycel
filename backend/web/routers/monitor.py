@@ -6,10 +6,10 @@ preserving the newer resource/health helper endpoints added on main.
 
 import asyncio
 
-from fastapi import HTTPException, Query, Request
+from fastapi import HTTPException, Query
 from pydantic import BaseModel, Field
 
-from backend.web.monitor import list_evaluations, list_leases, router
+from backend.web.monitor import list_leases, router
 from backend.web.services import monitor_service
 from backend.web.services.resource_cache import (
     get_monitor_resource_overview_snapshot,
@@ -29,33 +29,13 @@ def health_snapshot():
 
 
 @router.get("/dashboard")
-def dashboard_snapshot(request: Request):
+def dashboard_snapshot():
     health = monitor_service.runtime_health_snapshot()
     resources = get_monitor_resource_overview_snapshot()
     leases = list_leases()
-    evaluations = list_evaluations(limit=5, offset=0, request=request)
 
     resource_summary = resources.get("summary") or {}
     lease_summary = leases.get("summary") or {}
-    latest_eval = (evaluations.get("items") or [None])[0]
-
-    latest_eval_summary = None
-    if latest_eval:
-        total = int(latest_eval.get("threads_total") or 0)
-        done = int(latest_eval.get("threads_done") or 0)
-        progress_pct = round((done / total) * 100, 1) if total > 0 else 0.0
-        score = latest_eval.get("score") or {}
-        latest_eval_summary = {
-            "evaluation_id": latest_eval.get("evaluation_id"),
-            "evaluation_url": latest_eval.get("evaluation_url"),
-            "status": latest_eval.get("status"),
-            "progress_pct": progress_pct,
-            "threads_done": done,
-            "threads_total": total,
-            "publishable": bool(score.get("publishable")),
-            "primary_score_pct": score.get("primary_score_pct"),
-            "updated_ago": latest_eval.get("updated_ago"),
-        }
 
     return {
         "snapshot_at": health.get("snapshot_at"),
@@ -72,9 +52,9 @@ def dashboard_snapshot(request: Request):
             "db_sessions_total": int(((health.get("db") or {}).get("counts") or {}).get("chat_sessions") or 0),
             "provider_sessions_total": int(((health.get("sessions") or {}).get("total")) or 0),
             "running_sessions": int(resource_summary.get("running_sessions") or 0),
-            "evaluations_running": sum(1 for item in (evaluations.get("items") or []) if item.get("status") == "running"),
+            "evaluations_running": 0,
         },
-        "latest_evaluation": latest_eval_summary,
+        "latest_evaluation": None,
     }
 
 
