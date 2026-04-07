@@ -251,6 +251,25 @@ class AgentSubAgentRow(BaseModel):
         return value
 
 
+class ThreadRow(BaseModel):
+    id: str
+    agent_user_id: str
+    sandbox_type: str
+    model: str | None = None
+    cwd: str | None = None
+    status: str = "active"
+    created_at: float
+    updated_at: float | None = None
+    last_active_at: float | None = None
+
+    @field_validator("id", "agent_user_id", "sandbox_type")
+    @classmethod
+    def _validate_non_blank(cls, value: str, info: Any) -> str:
+        if not value.strip():
+            raise ValueError(f"thread.{info.field_name} must not be blank")
+        return value
+
+
 class ChatRow(BaseModel):
     id: str
     title: str | None = None
