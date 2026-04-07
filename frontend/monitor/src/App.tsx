@@ -3664,6 +3664,11 @@ function EvaluationPage() {
   const [runsLoading, setRunsLoading] = React.useState(false);
   const [composerOpen, setComposerOpen] = React.useState(false);
   const composerPanelRef = React.useRef<HTMLElement | null>(null);
+  const listErrorRef = React.useRef<string | null>(null);
+
+  React.useEffect(() => {
+    listErrorRef.current = listError;
+  }, [listError]);
 
   const loadEvaluations = React.useCallback(async () => {
     setRunsLoading(true);
@@ -3686,11 +3691,14 @@ function EvaluationPage() {
     const timer = window.setInterval(() => {
       // @@@evaluation-list-poller - once the list has entered a hard backend error state,
       // stop the 5s loop and let the operator recover with an explicit retry.
-      if (listError) return;
+      if (listErrorRef.current) {
+        window.clearInterval(timer);
+        return;
+      }
       void loadEvaluations();
     }, 5000);
     return () => window.clearInterval(timer);
-  }, [listError, loadEvaluations]);
+  }, [loadEvaluations]);
 
   async function handleStart() {
     if (runStatus === "starting") return;
