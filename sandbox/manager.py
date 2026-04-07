@@ -21,7 +21,7 @@ from storage.providers.sqlite.chat_session_repo import SQLiteChatSessionRepo
 from storage.providers.sqlite.kernel import SQLiteDBRole, resolve_role_db_path
 from storage.providers.sqlite.lease_repo import SQLiteLeaseRepo
 from storage.providers.sqlite.terminal_repo import SQLiteTerminalRepo
-from storage.runtime import build_storage_container, build_thread_repo
+from storage.runtime import build_storage_container
 
 logger = logging.getLogger(__name__)
 
@@ -279,23 +279,11 @@ class SandboxManager:
 
         from sandbox.volume_source import DaytonaVolume
 
-        # @@@member-id-for-volume-naming - read from thread config in leon.db
-        member_id = "unknown"
-        thread_repo = build_thread_repo(main_db_path=resolve_role_db_path(SQLiteDBRole.MAIN))
         try:
-            row = thread_repo.get_by_id(thread_id)
-            if row:
-                member_id = str(row["member_id"])
-        except Exception:
-            pass
-        finally:
-            thread_repo.close()
-
-        try:
-            volume_name = self.provider.create_managed_volume(member_id, remote_path)
+            volume_name = self.provider.create_managed_volume(thread_id, remote_path)
         except Exception as e:
             if "already exists" in str(e):
-                volume_name = f"leon-volume-{member_id}"
+                volume_name = f"leon-volume-{thread_id}"
                 logger.info("Daytona volume already exists: %s, reusing", volume_name)
                 self.provider.wait_managed_volume_ready(volume_name)
             else:

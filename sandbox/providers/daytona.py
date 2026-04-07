@@ -134,9 +134,9 @@ class DaytonaProvider(SandboxProvider):
 
     # ==================== Managed Volume ====================
 
-    def create_managed_volume(self, member_id: str, mount_path: str) -> str:
+    def create_managed_volume(self, thread_id: str, mount_path: str) -> str:
         """Create a Daytona managed volume. Returns volume name as backend_ref."""
-        volume_name = f"leon-volume-{member_id}"
+        volume_name = f"leon-volume-{thread_id}"
         logger.info("Creating managed volume: %s", volume_name)
         # @@@volume-ready - volume transitions pending_create → ready (~6s)
         self.client.volume.create(volume_name)
