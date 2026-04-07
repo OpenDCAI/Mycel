@@ -189,6 +189,21 @@ function evaluationScoreTone(item: any): string {
   return publishable ? "chip-success" : "chip-warning";
 }
 
+function RetryablePageError({ message }: { message: string }) {
+  return (
+    <div className="page-error">
+      <div>{message}</div>
+      <button
+        className="ghost-btn"
+        type="button"
+        onClick={() => window.location.reload()}
+      >
+        Retry
+      </button>
+    </div>
+  );
+}
+
 function DashboardPage() {
   const [data, setData] = React.useState<any>(null);
   const [loading, setLoading] = React.useState(false);
@@ -214,7 +229,7 @@ function DashboardPage() {
   if (error) {
     return (
       <div className="page" data-testid="page-dashboard">
-        <div className="page-error">Dashboard load failed: {error}</div>
+        <RetryablePageError message={`Dashboard load failed: ${error}`} />
       </div>
     );
   }
@@ -918,7 +933,7 @@ function MonitorResourcesPage() {
   if (error) {
     return (
       <div className="page" data-testid="page-resources">
-        <div className="page-error">Resource load failed: {error}</div>
+        <RetryablePageError message={`Resource load failed: ${error}`} />
       </div>
     );
   }
@@ -1759,7 +1774,7 @@ function ThreadsPage() {
   if (error) {
     return (
       <div className="page" data-testid="page-threads">
-        <div className="page-error">Threads load failed: {error}</div>
+        <RetryablePageError message={`Threads load failed: ${error}`} />
       </div>
     );
   }
@@ -1898,7 +1913,7 @@ function TracesPage() {
   if (error) {
     return (
       <div className="page" data-testid="page-traces">
-        <div className="page-error">Traces load failed: {error}</div>
+        <RetryablePageError message={`Traces load failed: ${error}`} />
       </div>
     );
   }
@@ -2029,7 +2044,7 @@ function ThreadDetailPage() {
   if (error) {
     return (
       <div className="page">
-        <div className="page-error">Thread load failed: {error}</div>
+        <RetryablePageError message={`Thread load failed: ${error}`} />
       </div>
     );
   }
@@ -3161,7 +3176,7 @@ function SessionDetailPage() {
   if (error) {
     return (
       <div className="page">
-        <div className="page-error">Session load failed: {error}</div>
+        <RetryablePageError message={`Session load failed: ${error}`} />
       </div>
     );
   }
@@ -3238,7 +3253,7 @@ function LeasesPage() {
   if (error) {
     return (
       <div className="page" data-testid="page-leases">
-        <div className="page-error">Leases load failed: {error}</div>
+        <RetryablePageError message={`Leases load failed: ${error}`} />
       </div>
     );
   }
@@ -3385,7 +3400,7 @@ function LeaseDetailPage() {
   if (error) {
     return (
       <div className="page">
-        <div className="page-error">Lease load failed: {error}</div>
+        <RetryablePageError message={`Lease load failed: ${error}`} />
       </div>
     );
   }
@@ -3513,7 +3528,7 @@ function EventsPage() {
   if (error) {
     return (
       <div className="page">
-        <div className="page-error">Events load failed: {error}</div>
+        <RetryablePageError message={`Events load failed: ${error}`} />
       </div>
     );
   }
@@ -3581,7 +3596,7 @@ function EventDetailPage() {
   if (error) {
     return (
       <div className="page">
-        <div className="page-error">Event load failed: {error}</div>
+        <RetryablePageError message={`Event load failed: ${error}`} />
       </div>
     );
   }
@@ -4270,7 +4285,7 @@ function EvaluationDetailPage() {
   if (error) {
     return (
       <div className="page">
-        <div className="page-error">Evaluation load failed: {error}</div>
+        <RetryablePageError message={`Evaluation load failed: ${error}`} />
       </div>
     );
   }
