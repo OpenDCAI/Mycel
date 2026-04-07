@@ -180,27 +180,13 @@ def test_task_service_prefers_injected_repos_over_storage_factory(monkeypatch: p
             seen["get"] = (task_id, owner_user_id)
             return {"id": task_id}
 
-    class _FakeThreadRepo:
-        def close(self) -> None:
-            return None
-
-        def get_by_id(self, thread_id: str) -> dict[str, Any]:
-            seen["thread_lookup"] = thread_id
-            return {"member_id": "member-1"}
-
     monkeypatch.setattr(task_service, "_repo", lambda: (_ for _ in ()).throw(AssertionError("unexpected storage factory repo")))
-    monkeypatch.setattr(
-        task_service,
-        "build_thread_repo",
-        lambda: (_ for _ in ()).throw(AssertionError("unexpected runtime thread repo builder")),
-    )
-
-    items = task_service.list_tasks(owner_user_id="user-1", repo=_FakeRepo(), thread_repo=_FakeThreadRepo())
+    items = task_service.list_tasks(owner_user_id="user-1", repo=_FakeRepo())
     item = task_service.get_task("t-1", owner_user_id="user-1", repo=_FakeRepo())
 
     assert seen["list_all"] == "user-1"
-    assert seen["thread_lookup"] == "thread-1"
-    assert items[0]["member_id"] == "member-1"
+    assert "thread_lookup" not in seen
+    assert items == [{"id": "t-1", "thread_id": "thread-1"}]
     assert seen["get"] == ("t-1", "user-1")
     assert item == {"id": "t-1"}
 
@@ -270,8 +256,8 @@ def test_cron_job_service_prefers_injected_repo_over_storage_factory(monkeypatch
 async def test_panel_routes_pass_app_state_repos_to_task_and_cron_services(monkeypatch: pytest.MonkeyPatch):
     seen: dict[str, Any] = {}
 
-    def fake_list_tasks(*, owner_user_id: str | None = None, repo: Any = None, thread_repo: Any = None) -> list[dict[str, Any]]:
-        seen["task_list"] = (owner_user_id, repo, thread_repo)
+    def fake_list_tasks(*, owner_user_id: str | None = None, repo: Any = None) -> list[dict[str, Any]]:
+        seen["task_list"] = (owner_user_id, repo)
         return []
 
     def fake_create_task(*, owner_user_id: str | None = None, repo: Any = None, **fields: Any) -> dict[str, Any]:
@@ -294,19 +280,18 @@ async def test_panel_routes_pass_app_state_repos_to_task_and_cron_services(monke
     monkeypatch.setattr(panel_router.cron_job_service, "create_cron_job", fake_create_cron_job)
 
     panel_task_repo = object()
-    thread_repo = object()
     cron_job_repo = object()
     request = cast(
         Any,
-        SimpleNamespace(
-            app=SimpleNamespace(
-                state=SimpleNamespace(panel_task_repo=panel_task_repo, thread_repo=thread_repo, cron_job_repo=cron_job_repo)
-            )
-        ),
+        SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(panel_task_repo=panel_task_repo, cron_job_repo=cron_job_repo))),
     )
 
     await panel_router.list_tasks(request=request, user_id="user-1")
-    await panel_router.create_task(CreateTaskRequest(title="hello"), request=request, user_id="user-1")
+    await panel_router.create_task(
+        CreateTaskRequest(title="hello", thread_id="thread-123"),
+        request=request,
+        user_id="user-1",
+    )
     await panel_router.list_cron_jobs(request=request, user_id="user-1")
     await panel_router.create_cron_job(
         CreateCronJobRequest(name="Nightly", cron_expression="0 0 * * *", enabled=True, task_template="{}"),
@@ -314,7 +299,8 @@ async def test_panel_routes_pass_app_state_repos_to_task_and_cron_services(monke
         user_id="user-1",
     )
 
-    assert seen["task_list"] == ("user-1", panel_task_repo, thread_repo)
+    assert seen["task_list"] == ("user-1", panel_task_repo)
     assert seen["task_create"][0:2] == ("user-1", panel_task_repo)
+    assert seen["task_create"][2]["thread_id"] == "thread-123"
     assert seen["cron_list"] == ("user-1", cron_job_repo)
     assert seen["cron_create"][0:4] == ("Nightly", "0 0 * * *", "user-1", cron_job_repo)

@@ -171,7 +171,6 @@ async def list_tasks(
         task_service.list_tasks,
         owner_user_id=user_id,
         repo=request.app.state.panel_task_repo,
-        thread_repo=request.app.state.thread_repo,
     )
     return {"items": items}
 

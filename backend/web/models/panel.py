@@ -57,6 +57,7 @@ class CreateTaskRequest(BaseModel):
     title: str = "新任务"
     description: str = ""
     assignee_id: str = ""
+    thread_id: str = ""
     priority: Literal["high", "medium", "low"] = "medium"
     deadline: str = ""
     tags: list[str] = []
