@@ -79,7 +79,7 @@ async def test_get_chat_uses_access_helper(monkeypatch: pytest.MonkeyPatch):
                 get_by_id=lambda _chat_id: (_ for _ in ()).throw(AssertionError("route should use helper, not chat_repo lookup directly"))
             ),
             messaging_service=SimpleNamespace(list_chat_members=lambda _chat_id: []),
-            member_repo=SimpleNamespace(get_by_id=lambda _member_id: None),
+            user_repo=SimpleNamespace(get_by_id=lambda _user_id: None),
         )
     )
 
@@ -138,17 +138,17 @@ async def test_get_chat_resolves_thread_user_participant_via_thread_repo(monkeyp
                     {"user_id": "thread-user-1"},
                 ]
             ),
-            member_repo=SimpleNamespace(
+            user_repo=SimpleNamespace(
                 get_by_id=lambda uid: (
                     None
                     if uid == "thread-user-1"
-                    else SimpleNamespace(id=uid, name="Toad", type="mycel_agent", avatar=None)
-                    if uid == "member-agent-1"
+                    else SimpleNamespace(id=uid, display_name="Toad", type="agent", avatar=None)
+                    if uid == "agent-user-1"
                     else None
                 )
             ),
             thread_repo=SimpleNamespace(
-                get_by_user_id=lambda uid: {"id": "thread-1", "member_id": "member-agent-1"} if uid == "thread-user-1" else None
+                get_by_user_id=lambda uid: {"id": "thread-1", "agent_user_id": "agent-user-1"} if uid == "thread-user-1" else None
             ),
         )
     )
@@ -159,8 +159,8 @@ async def test_get_chat_resolves_thread_user_participant_via_thread_repo(monkeyp
         {
             "id": "thread-user-1",
             "name": "Toad",
-            "type": "mycel_agent",
-            "avatar_url": avatar_url("member-agent-1", False),
+            "type": "agent",
+            "avatar_url": avatar_url("agent-user-1", False),
         }
     ]
 
@@ -182,17 +182,17 @@ async def test_list_messages_resolves_thread_user_sender_name_via_thread_repo():
                     }
                 ],
             ),
-            member_repo=SimpleNamespace(
+            user_repo=SimpleNamespace(
                 get_by_id=lambda uid: (
                     None
                     if uid == "thread-user-1"
-                    else SimpleNamespace(id=uid, name="Toad", type="mycel_agent", avatar=None)
-                    if uid == "member-agent-1"
+                    else SimpleNamespace(id=uid, display_name="Toad", type="agent", avatar=None)
+                    if uid == "agent-user-1"
                     else None
                 )
             ),
             thread_repo=SimpleNamespace(
-                get_by_user_id=lambda uid: {"id": "thread-1", "member_id": "member-agent-1"} if uid == "thread-user-1" else None
+                get_by_user_id=lambda uid: {"id": "thread-1", "agent_user_id": "agent-user-1"} if uid == "thread-user-1" else None
             ),
         )
     )
@@ -220,17 +220,17 @@ async def test_send_message_accepts_owned_thread_user_sender_id_via_thread_repo(
     seen: list[tuple[str, str, str]] = []
     app = SimpleNamespace(
         state=SimpleNamespace(
-            member_repo=SimpleNamespace(
+            user_repo=SimpleNamespace(
                 get_by_id=lambda uid: (
                     None
                     if uid == "thread-user-1"
-                    else SimpleNamespace(id=uid, name="Toad", type="mycel_agent", avatar=None, owner_user_id="owner-user-1")
-                    if uid == "member-agent-1"
+                    else SimpleNamespace(id=uid, display_name="Toad", type="agent", avatar=None, owner_user_id="owner-user-1")
+                    if uid == "agent-user-1"
                     else None
                 )
             ),
             thread_repo=SimpleNamespace(
-                get_by_user_id=lambda uid: {"id": "thread-1", "member_id": "member-agent-1"} if uid == "thread-user-1" else None
+                get_by_user_id=lambda uid: {"id": "thread-1", "agent_user_id": "agent-user-1"} if uid == "thread-user-1" else None
             ),
             messaging_service=SimpleNamespace(
                 send=lambda chat_id, sender_id, content, **_kwargs: (
@@ -275,11 +275,9 @@ async def test_create_chat_rejects_template_member_ids_for_group_participants() 
     called: list[tuple[list[str], str | None]] = []
     app = SimpleNamespace(
         state=SimpleNamespace(
-            member_repo=SimpleNamespace(
+            user_repo=SimpleNamespace(
                 get_by_id=lambda uid: (
-                    SimpleNamespace(id=uid, type="mycel_agent", owner_user_id="owner-user-1")
-                    if uid in {"member-agent-1", "member-agent-2"}
-                    else None
+                    SimpleNamespace(id=uid, type="agent", owner_user_id="owner-user-1") if uid in {"agent-user-1", "agent-user-2"} else None
                 )
             ),
             thread_repo=SimpleNamespace(get_by_user_id=lambda _uid: None),
@@ -294,7 +292,7 @@ async def test_create_chat_rejects_template_member_ids_for_group_participants() 
     with pytest.raises(HTTPException) as exc_info:
         await messaging_router.create_chat(
             messaging_router.CreateChatBody(
-                user_ids=["human-user-1", "member-agent-1", "member-agent-2"],
+                user_ids=["human-user-1", "agent-user-1", "agent-user-2"],
                 title="bad-group",
             ),
             user_id="human-user-1",
@@ -311,10 +309,10 @@ async def test_create_chat_accepts_human_and_thread_social_user_ids_for_group_pa
     called: list[tuple[list[str], str | None]] = []
     app = SimpleNamespace(
         state=SimpleNamespace(
-            member_repo=SimpleNamespace(get_by_id=lambda _uid: None),
+            user_repo=SimpleNamespace(get_by_id=lambda _uid: None),
             thread_repo=SimpleNamespace(
                 get_by_user_id=lambda uid: (
-                    {"id": f"thread-{uid}", "member_id": "member-agent-1"} if uid in {"thread-user-1", "thread-user-2"} else None
+                    {"id": f"thread-{uid}", "agent_user_id": "agent-user-1"} if uid in {"thread-user-1", "thread-user-2"} else None
                 )
             ),
             messaging_service=SimpleNamespace(

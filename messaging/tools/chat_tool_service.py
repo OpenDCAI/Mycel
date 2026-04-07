@@ -91,7 +91,7 @@ class ChatToolService:
         messaging_service: Any = None,  # MessagingService (new)
         chat_member_repo: Any = None,  # SupabaseChatMemberRepo
         messages_repo: Any = None,  # SupabaseMessagesRepo
-        member_repo: Any = None,
+        user_repo: Any = None,
         thread_repo: Any = None,
         relationship_repo: Any = None,
     ) -> None:
@@ -103,24 +103,24 @@ class ChatToolService:
         self._messaging = messaging_service
         self._chat_members = chat_member_repo
         self._messages = messages_repo
-        self._member_repo = member_repo
+        self._user_repo = user_repo
         self._thread_repo = thread_repo
         self._relationships = relationship_repo
         self._register(registry)
 
-    def _resolve_display_member(self, social_user_id: str) -> Any | None:
-        member = self._member_repo.get_by_id(social_user_id) if self._member_repo else None
-        if member is not None:
-            return member
+    def _resolve_display_user(self, social_user_id: str) -> Any | None:
+        user = self._user_repo.get_by_id(social_user_id) if self._user_repo else None
+        if user is not None:
+            return user
         if self._thread_repo is None:
             return None
         thread = self._thread_repo.get_by_user_id(social_user_id)
         if thread is None:
             return None
-        member_id = thread.get("member_id")
-        if not member_id or self._member_repo is None:
+        agent_user_id = thread.get("agent_user_id")
+        if not agent_user_id or self._user_repo is None:
             return None
-        return self._member_repo.get_by_id(member_id)
+        return self._user_repo.get_by_id(agent_user_id)
 
     def _register(self, registry: ToolRegistry) -> None:
         self._register_list_chats(registry)
@@ -131,8 +131,8 @@ class ChatToolService:
     def _format_msgs(self, msgs: list[dict], eid: str) -> str:
         lines = []
         for m in msgs:
-            sender = self._resolve_display_member(m.get("sender_id", ""))
-            name = sender.name if sender else "unknown"
+            sender = self._resolve_display_user(m.get("sender_id", ""))
+            name = sender.display_name if sender else "unknown"
             tag = "you" if m.get("sender_id") == eid else name
             content = m.get("content", "")
             if m.get("retracted_at"):
@@ -214,8 +214,8 @@ class ChatToolService:
             elif user_id:
                 chat_id = self._chat_members.find_chat_between(eid, user_id)
                 if not chat_id:
-                    target = self._resolve_display_member(user_id)
-                    name = target.name if target else user_id
+                    target = self._resolve_display_user(user_id)
+                    name = target.display_name if target else user_id
                     return f"No chat history with {name}."
             else:
                 return "Provide user_id or chat_id."
@@ -303,10 +303,10 @@ class ChatToolService:
             elif user_id:
                 if user_id == eid:
                     raise RuntimeError("Cannot send a message to yourself.")
-                target = self._resolve_display_member(user_id)
+                target = self._resolve_display_user(user_id)
                 if not target:
                     raise RuntimeError(f"User not found: {user_id}")
-                target_name = target.name
+                target_name = target.display_name
                 chat = self._messaging.find_or_create_chat([eid, user_id])
                 resolved_chat_id = chat["id"]
             else:
@@ -376,16 +376,16 @@ class ChatToolService:
             if user_id:
                 chat_id = self._chat_members.find_chat_between(eid, user_id)
                 if not chat_id:
-                    target = self._resolve_display_member(user_id)
-                    name = target.name if target else user_id
+                    target = self._resolve_display_user(user_id)
+                    name = target.display_name if target else user_id
                     return f"No messages matching '{query}' with {name}."
             results = self._messaging.search_messages(query, chat_id=chat_id)
             if not results:
                 return f"No messages matching '{query}'."
             lines = []
             for m in results:
-                sender = self._resolve_display_member(m.get("sender_id", ""))
-                name = sender.name if sender else "unknown"
+                sender = self._resolve_display_user(m.get("sender_id", ""))
+                name = sender.display_name if sender else "unknown"
                 lines.append(f"[{name}] {m.get('content', '')[:100]}")
             return "\n".join(lines)
 

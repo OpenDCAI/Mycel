@@ -119,29 +119,29 @@ async def get_or_create_agent(app_obj: FastAPI, sandbox_type: str, thread_id: st
         # NOT an agent type name ("bash", "general", etc.). Never pass it to create_leon_agent.
         agent_name = agent  # explicit caller-provided type only; None → default Leon agent
         bundle_dir = None
-        if thread_data and thread_data.get("member_id"):
-            member_dir = preferred_existing_user_home_path("members", str(thread_data["member_id"]))
+        if thread_data and thread_data.get("agent_user_id"):
+            member_dir = preferred_existing_user_home_path("members", str(thread_data["agent_user_id"]))
             if member_dir.is_dir():
                 bundle_dir = member_dir.resolve()
 
         # @@@chat-repos - construct chat_repos for ChatToolService (v2 messaging)
         chat_repos = None
-        if hasattr(app_obj.state, "member_repo") and thread_data:
-            member_repo = app_obj.state.member_repo
-            agent_member_id = thread_data.get("member_id")
-            agent_member = member_repo.get_by_id(agent_member_id) if agent_member_id else None
-            if agent_member:
+        if hasattr(app_obj.state, "user_repo") and thread_data:
+            user_repo = app_obj.state.user_repo
+            agent_user_id = thread_data.get("agent_user_id")
+            agent_user = user_repo.get_by_id(agent_user_id) if agent_user_id else None
+            if agent_user:
                 chat_identity_id = thread_data.get("user_id")
                 # @@@thread-chat-identity-source - agent chat identity must come from the
-                # thread-owned dedicated user_id, never from the member template id.
+                # thread-owned dedicated user_id, never from the agent user id.
                 if not chat_identity_id:
                     raise RuntimeError(f"thread.user_id is required for agent chat identity: {thread_id}")
-                owner_id = agent_member.owner_user_id or ""
+                owner_id = agent_user.owner_user_id or ""
                 chat_repos = {
                     "chat_identity_id": chat_identity_id,
                     "user_id": chat_identity_id,
                     "owner_id": owner_id,
-                    "member_repo": member_repo,
+                    "user_repo": user_repo,
                     "messaging_service": getattr(app_obj.state, "messaging_service", None),
                     "chat_member_repo": getattr(app_obj.state, "chat_member_repo", None),
                     "messages_repo": getattr(app_obj.state, "messages_repo", None),

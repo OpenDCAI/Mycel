@@ -106,7 +106,7 @@ async def lifespan(app: FastAPI):
 
     app.state.relationship_service = RelationshipService(
         app.state.relationship_repo,
-        member_repo=app.state.member_repo,
+        user_repo=app.state.user_repo,
         thread_repo=app.state.thread_repo,
     )
 
@@ -121,7 +121,7 @@ async def lifespan(app: FastAPI):
         chat_member_repo=_chat_member_repo,
         messages_repo=_messages_repo,
         message_read_repo=_message_read_repo,
-        member_repo=app.state.member_repo,
+        user_repo=app.state.user_repo,
         thread_repo=app.state.thread_repo,
         event_bus=app.state.chat_event_bus,
         delivery_resolver=_msg_delivery_resolver,

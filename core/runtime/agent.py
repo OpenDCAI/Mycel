@@ -1252,7 +1252,7 @@ class LeonAgent:
                     messaging_service=repos.get("messaging_service"),
                     chat_member_repo=repos.get("chat_member_repo"),
                     messages_repo=repos.get("messages_repo"),
-                    member_repo=repos.get("member_repo"),
+                    user_repo=repos.get("user_repo"),
                     thread_repo=self._thread_repo,
                     relationship_repo=repos.get("relationship_repo"),
                 )
@@ -1399,16 +1399,16 @@ class LeonAgent:
             uid = repos.get("chat_identity_id") or repos.get("user_id")
             owner_uid = repos.get("owner_id", "")
             if uid:
-                member_repo = repos.get("member_repo")
-                self_member = member_repo.get_by_id(uid) if member_repo else None
-                if self_member is None and member_repo and self._thread_repo is not None:
+                user_repo = repos.get("user_repo")
+                self_member = user_repo.get_by_id(uid) if user_repo else None
+                if self_member is None and user_repo and self._thread_repo is not None:
                     thread = self._thread_repo.get_by_user_id(uid)
-                    member_id = thread.get("member_id") if thread else None
-                    if member_id:
-                        self_member = member_repo.get_by_id(member_id)
-                owner_row = member_repo.get_by_id(owner_uid) if member_repo and owner_uid else None
-                name = self_member.name if self_member else uid
-                owner_name = owner_row.name if owner_row else "unknown"
+                    agent_user_id = thread.get("agent_user_id") if thread else None
+                    if agent_user_id:
+                        self_member = user_repo.get_by_id(agent_user_id)
+                owner_row = user_repo.get_by_id(owner_uid) if user_repo and owner_uid else None
+                name = self_member.display_name if self_member else uid
+                owner_name = owner_row.display_name if owner_row else "unknown"
                 prompt += (
                     f"\n\n**Chat Identity:**\n"
                     f"- Your name: {name}\n"

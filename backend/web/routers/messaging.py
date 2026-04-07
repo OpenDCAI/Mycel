@@ -56,17 +56,17 @@ def _messaging(app: Any):
     return svc
 
 
-def _verify_member_ownership(app: Any, member_id: str, user_id: str) -> None:
+def _verify_user_ownership(app: Any, sender_id: str, user_id: str) -> None:
     # @@@thread-social-owner-check - sender_id can be a thread-owned social user_id, so
-    # ownership must resolve through the thread back to the template member before checking owner.
-    member = _resolve_display_member(app, member_id)
-    if not member:
-        raise HTTPException(403, "Member not found")
-    if member.id == user_id:
+    # ownership must resolve through the thread back to the owning agent user before checking owner.
+    sender = _resolve_display_user(app, sender_id)
+    if not sender:
+        raise HTTPException(403, "User not found")
+    if sender.id == user_id:
         return  # human member sending as themselves
-    if member.owner_user_id == user_id:
+    if sender.owner_user_id == user_id:
         return  # agent owned by current user
-    raise HTTPException(403, "Member does not belong to you")
+    raise HTTPException(403, "User does not belong to you")
 
 
 def _get_accessible_chat_or_404(app: Any, chat_id: str, user_id: str) -> Any:
@@ -78,24 +78,24 @@ def _get_accessible_chat_or_404(app: Any, chat_id: str, user_id: str) -> Any:
     return chat
 
 
-def _resolve_display_member(app: Any, social_user_id: str) -> Any | None:
-    member = app.state.member_repo.get_by_id(social_user_id)
-    if member is not None:
-        return member
+def _resolve_display_user(app: Any, social_user_id: str) -> Any | None:
+    user = app.state.user_repo.get_by_id(social_user_id)
+    if user is not None:
+        return user
     thread_repo = getattr(app.state, "thread_repo", None)
     if thread_repo is None:
         return None
     thread = thread_repo.get_by_user_id(social_user_id)
     if thread is None:
         return None
-    member_id = thread.get("member_id")
-    if not member_id:
+    agent_user_id = thread.get("agent_user_id")
+    if not agent_user_id:
         return None
-    return app.state.member_repo.get_by_id(member_id)
+    return app.state.user_repo.get_by_id(agent_user_id)
 
 
 def _validate_chat_participant_ids(app: Any, participant_ids: list[str], requester_user_id: str) -> list[str]:
-    member_repo = getattr(app.state, "member_repo", None)
+    user_repo = getattr(app.state, "user_repo", None)
     thread_repo = getattr(app.state, "thread_repo", None)
     validated: list[str] = []
     for participant_id in participant_ids:
@@ -107,19 +107,21 @@ def _validate_chat_participant_ids(app: Any, participant_ids: list[str], request
             continue
         # @@@group-chat-actor-boundary - template member ids are display/config identities,
         # not deliverable chat actors. Reject them loudly at ingress instead of guessing.
-        if member_repo is not None and member_repo.get_by_id(participant_id) is not None:
-            raise ValueError(f"Agent participant ids must be actor user_ids, not template member_id: {participant_id}")
+        if user_repo is not None:
+            candidate = user_repo.get_by_id(participant_id)
+            if candidate is not None and getattr(candidate, "owner_user_id", None) is not None:
+                raise ValueError(f"Agent participant ids must be actor user_ids, not agent_user_id: {participant_id}")
         validated.append(participant_id)
     return validated
 
 
 def _msg_response(m: dict[str, Any], app: Any) -> dict[str, Any]:
-    sender = _resolve_display_member(app, m.get("sender_id", ""))
+    sender = _resolve_display_user(app, m.get("sender_id", ""))
     return {
         "id": m["id"],
         "chat_id": m["chat_id"],
         "sender_id": m.get("sender_id"),
-        "sender_name": sender.name if sender else "unknown",
+        "sender_name": sender.display_name if sender else "unknown",
         "content": m["content"],
         "message_type": m.get("message_type", "human"),
         "mentioned_ids": m.get("mentioned_ids") or m.get("mentions") or [],
@@ -182,12 +184,12 @@ async def get_chat(
         uid = m.get("user_id")
         if not uid:
             continue
-        mem = _resolve_display_member(app, uid)
+        mem = _resolve_display_user(app, uid)
         if mem:
             members_info.append(
                 {
                     "id": uid,
-                    "name": mem.name,
+                    "name": mem.display_name,
                     "type": mem.type.value if hasattr(mem.type, "value") else str(mem.type),
                     "avatar_url": avatar_url(mem.id, bool(mem.avatar)),
                 }
@@ -229,7 +231,7 @@ async def send_message(
 ):
     if not body.content.strip():
         raise HTTPException(400, "Content cannot be empty")
-    _verify_member_ownership(app, body.sender_id, user_id)
+    _verify_user_ownership(app, body.sender_id, user_id)
     msg = _messaging(app).send(
         chat_id,
         body.sender_id,
@@ -343,7 +345,7 @@ async def mute_chat(
     user_id: Annotated[str, Depends(get_current_user_id)],
     app: Annotated[Any, Depends(get_app)],
 ):
-    _verify_member_ownership(app, body.user_id, user_id)
+    _verify_user_ownership(app, body.user_id, user_id)
     mute_until_iso = datetime.fromtimestamp(body.mute_until, tz=UTC).isoformat() if body.mute_until else None
     _messaging(app).update_mute(chat_id, body.user_id, body.muted, mute_until_iso)
     return {"status": "ok", "muted": body.muted}

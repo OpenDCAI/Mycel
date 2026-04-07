@@ -30,8 +30,8 @@ class MessagingService:
         chat_member_repo: Any,  # SupabaseChatMemberRepo or compatible
         messages_repo: Any,  # SupabaseMessagesRepo
         message_read_repo: Any,  # SupabaseMessageReadRepo
-        member_repo: Any,  # MemberRepo (for name + avatar lookup)
-        thread_repo: Any | None = None,  # ThreadRepo for thread-user-id -> member display lookup
+        user_repo: Any,  # UserRepo (for name + avatar lookup)
+        thread_repo: Any | None = None,  # ThreadRepo for thread-user-id -> agent-user display lookup
         delivery_resolver: Any | None = None,
         delivery_fn: Callable | None = None,
         event_bus: Any | None = None,  # ChatEventBus or SupabaseRealtimeBridge (optional)
@@ -40,25 +40,25 @@ class MessagingService:
         self._members_repo = chat_member_repo
         self._messages = messages_repo
         self._reads = message_read_repo
-        self._member_repo = member_repo
+        self._user_repo = user_repo
         self._thread_repo = thread_repo
         self._delivery_resolver = delivery_resolver
         self._delivery_fn = delivery_fn
         self._event_bus = event_bus
 
-    def _resolve_display_member(self, social_user_id: str) -> Any | None:
-        member = self._member_repo.get_by_id(social_user_id)
-        if member is not None:
-            return member
+    def _resolve_display_user(self, social_user_id: str) -> Any | None:
+        user = self._user_repo.get_by_id(social_user_id)
+        if user is not None:
+            return user
         if self._thread_repo is None:
             return None
         thread = self._thread_repo.get_by_user_id(social_user_id)
         if thread is None:
             return None
-        member_id = thread.get("member_id")
-        if not member_id:
+        agent_user_id = thread.get("agent_user_id")
+        if not agent_user_id:
             return None
-        return self._member_repo.get_by_id(member_id)
+        return self._user_repo.get_by_id(agent_user_id)
 
     def set_delivery_fn(self, fn: Callable) -> None:
         self._delivery_fn = fn
@@ -134,8 +134,8 @@ class MessagingService:
         logger.debug("[messaging] send chat=%s sender=%s msg=%s type=%s", chat_id[:8], sender_id[:15], msg_id[:8], message_type)
 
         # Publish to event bus (SSE / Realtime bridge)
-        sender = self._resolve_display_member(sender_id)
-        sender_name = sender.name if sender else "unknown"
+        sender = self._resolve_display_user(sender_id)
+        sender_name = sender.display_name if sender else "unknown"
         if self._event_bus:
             self._event_bus.publish(
                 chat_id,
@@ -161,22 +161,23 @@ class MessagingService:
     ) -> None:
         mention_set = set(mentions)
         members = self._members_repo.list_members(chat_id)
-        sender_member = self._resolve_display_member(sender_id)
-        sender_name = sender_member.name if sender_member else "unknown"
-        sender_avatar_url = avatar_url(sender_id, bool(sender_member.avatar if sender_member else None))
+        sender_user = self._resolve_display_user(sender_id)
+        sender_name = sender_user.display_name if sender_user else "unknown"
+        sender_avatar_url = avatar_url(sender_user.id if sender_user else sender_id, bool(sender_user.avatar if sender_user else None))
         sender_type = (
-            sender_member.type.value
-            if hasattr(sender_member, "type") and hasattr(sender_member.type, "value")
-            else getattr(sender_member, "type", None)
+            sender_user.type.value
+            if hasattr(sender_user, "type") and hasattr(sender_user.type, "value")
+            else getattr(sender_user, "type", None)
         )
-        sender_owner_id = sender_member.id if sender_type == "human" else getattr(sender_member, "owner_user_id", None)
+        sender_owner_id = sender_user.id if sender_type == "human" else getattr(sender_user, "owner_user_id", None)
 
         for member in members:
             uid = member.get("user_id")
             if not uid or uid == sender_id:
                 continue
-            m = self._resolve_display_member(uid)
-            if not m or m.type == "human":
+            m = self._resolve_display_user(uid)
+            member_type = m.type.value if hasattr(getattr(m, "type", None), "value") else getattr(m, "type", None)
+            if not m or member_type == "human":
                 continue
 
             # @@@same-owner-group-delivery - explicit group membership among the same owner
@@ -265,12 +266,12 @@ class MessagingService:
             entities_info = []
             for m in members:
                 uid = m.get("user_id")
-                e = self._resolve_display_member(uid) if uid else None
+                e = self._resolve_display_user(uid) if uid else None
                 if e:
                     entities_info.append(
                         {
                             "id": uid,
-                            "name": e.name,
+                            "name": e.display_name,
                             "type": e.type,
                             "avatar_url": avatar_url(e.id, bool(e.avatar)),
                         }
@@ -279,10 +280,10 @@ class MessagingService:
             last_msg = None
             if msgs:
                 m = msgs[-1]
-                sender = self._resolve_display_member(m.get("sender_id", ""))
+                sender = self._resolve_display_user(m.get("sender_id", ""))
                 last_msg = {
                     "content": m.get("content", ""),
-                    "sender_name": sender.name if sender else "unknown",
+                    "sender_name": sender.display_name if sender else "unknown",
                     "created_at": m.get("created_at"),
                 }
             unread = self.count_unread(cid, user_id)
