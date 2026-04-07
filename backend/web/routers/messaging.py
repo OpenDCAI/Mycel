@@ -116,8 +116,14 @@ def _validate_chat_participant_ids(app: Any, participant_ids: list[str], request
             continue
         # @@@group-chat-actor-boundary - template member ids are display/config identities,
         # not deliverable chat actors. Reject them loudly at ingress instead of guessing.
-        if member_repo is not None and member_repo.get_by_id(participant_id) is not None:
-            raise ValueError(f"Agent participant ids must be actor user_ids, not template member_id: {participant_id}")
+        # Human members: member.id IS their social user ID — accept directly.
+        if member_repo is not None:
+            member = member_repo.get_by_id(participant_id)
+            if member is not None:
+                if getattr(member, "type", None) != "human":
+                    raise ValueError(f"Agent participant ids must be actor user_ids, not template member_id: {participant_id}")
+                validated.append(participant_id)
+                continue
         validated.append(participant_id)
     return validated
 
