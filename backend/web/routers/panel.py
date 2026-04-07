@@ -23,6 +23,8 @@ from backend.web.models.panel import (
     UpdateTaskRequest,
 )
 from backend.web.services import cron_job_service, library_service, member_service, profile_service, task_service
+from backend.web.utils.serializers import avatar_url
+from storage.contracts import MemberType
 
 router = APIRouter(prefix="/api/panel", tags=["panel"])
 
@@ -494,7 +496,7 @@ async def get_current_user_info(
         "name": member.name,
         "mycel_id": member.mycel_id,
         "email": member.email,
-        "avatar_url": member.avatar,
+        "avatar_url": avatar_url(member.id, bool(member.avatar)),
     }
 
 
@@ -514,7 +516,7 @@ async def search_users(
             "id": r["id"],
             "name": r["name"],
             "mycel_id": r.get("mycel_id"),
-            "avatar_url": r.get("avatar"),
+            "avatar_url": avatar_url(r["id"], bool(r.get("avatar"))),
             "description": r.get("description"),
         }
         for r in raw
@@ -530,11 +532,11 @@ async def get_user_info(
 ) -> dict[str, Any]:
     """Public basic info for any human member."""
     member = await asyncio.to_thread(request.app.state.member_repo.get_by_id, target_user_id)
-    if not member or member.type != "human":
+    if not member or member.type != MemberType.HUMAN:
         raise HTTPException(404, "User not found")
     return {
         "id": member.id,
         "name": member.name,
         "mycel_id": member.mycel_id,
-        "avatar_url": member.avatar,
+        "avatar_url": avatar_url(member.id, bool(member.avatar)),
     }

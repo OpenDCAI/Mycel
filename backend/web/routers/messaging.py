@@ -183,6 +183,22 @@ async def create_chat(
 
 
 # ---------------------------------------------------------------------------
+# Message search
+# @@@route-order: must be registered before /{chat_id} dynamic routes
+# ---------------------------------------------------------------------------
+
+
+@router.get("/messages/search")
+async def search_messages(
+    q: str,
+    user_id: Annotated[str, Depends(get_current_user_id)],
+    app: Annotated[Any, Depends(get_app)],
+):
+    results = _messaging(app).search_messages(q)
+    return [_msg_response(m, app) for m in results]
+
+
+# ---------------------------------------------------------------------------
 # Chat detail
 # ---------------------------------------------------------------------------
 
@@ -310,9 +326,11 @@ async def update_chat(
     app: Annotated[Any, Depends(get_app)],
 ):
     """Rename a chat (title)."""
+    if not body.title or not body.title.strip():
+        raise HTTPException(400, "Title cannot be empty")
     _get_accessible_chat_or_404(app, chat_id, user_id)
-    app.state.chat_repo.update_title(chat_id, body.title)
-    return {"status": "ok", "title": body.title}
+    app.state.chat_repo.update_title(chat_id, body.title.strip())
+    return {"status": "ok", "title": body.title.strip()}
 
 
 @router.post("/{chat_id}/leave")
@@ -400,22 +418,6 @@ async def mute_chat(
     mute_until_iso = datetime.fromtimestamp(body.mute_until, tz=UTC).isoformat() if body.mute_until else None
     _messaging(app).update_mute(chat_id, body.user_id, body.muted, mute_until_iso)
     return {"status": "ok", "muted": body.muted}
-
-
-# ---------------------------------------------------------------------------
-# Message search
-# @@@route-order: must be registered before /{chat_id} dynamic routes
-# ---------------------------------------------------------------------------
-
-
-@router.get("/messages/search")
-async def search_messages(
-    q: str,
-    user_id: Annotated[str, Depends(get_current_user_id)],
-    app: Annotated[Any, Depends(get_app)],
-):
-    results = _messaging(app).search_messages(q)
-    return [_msg_response(m, app) for m in results]
 
 
 # ---------------------------------------------------------------------------
