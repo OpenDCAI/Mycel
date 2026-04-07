@@ -300,7 +300,7 @@ class MessagingService:
             entities_info = []
             for m in members:
                 uid = m.get("user_id")
-                e = member_profiles.get(uid) if uid else None
+                e = (member_profiles.get(uid) if uid else None) or (self._resolve_display_member(uid) if uid else None)
                 if e:
                     entities_info.append(
                         {
@@ -313,7 +313,8 @@ class MessagingService:
             raw = last_msgs.get(cid)
             last_msg = None
             if raw:
-                sender = member_profiles.get(raw.get("sender_id", ""))
+                sid = raw.get("sender_id", "")
+                sender = member_profiles.get(sid) or self._resolve_display_member(sid)
                 last_msg = {
                     "content": raw.get("content", ""),
                     "sender_name": sender.name if sender else "unknown",

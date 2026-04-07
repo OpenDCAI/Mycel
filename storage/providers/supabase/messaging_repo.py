@@ -40,7 +40,7 @@ class SupabaseChatMemberRepo:
             return {}
         res = self._client.table("chat_members").select("*").in_("chat_id", list(chat_ids)).execute()
         result: dict[str, list[dict]] = {}
-        for row in (res.data or []):
+        for row in res.data or []:
             cid = row.get("chat_id")
             if cid not in result:
                 result[cid] = []
@@ -116,16 +116,14 @@ class SupabaseMessagesRepo:
         )
         seen: set[str] = set()
         result: dict[str, dict] = {}
-        for row in (res.data or []):
+        for row in res.data or []:
             cid = row.get("chat_id")
             if cid and cid not in seen:
                 result[cid] = row
                 seen.add(cid)
         return result
 
-    def count_unread_for_chats(
-        self, chat_ids: list[str], user_id: str, last_read_map: dict[str, str | None]
-    ) -> dict[str, int]:
+    def count_unread_for_chats(self, chat_ids: list[str], user_id: str, last_read_map: dict[str, str | None]) -> dict[str, int]:
         """Count unread per chat via single RPC call (count_unread_per_chat SQL function)."""
         result = {cid: 0 for cid in chat_ids}
         if not chat_ids:
@@ -135,7 +133,7 @@ class SupabaseMessagesRepo:
                 "count_unread_per_chat",
                 {"p_user_id": user_id, "p_chat_ids": list(chat_ids)},
             ).execute()
-            for row in (res.data or []):
+            for row in res.data or []:
                 cid = row.get("chat_id")
                 if cid:
                     result[cid] = int(row.get("unread_count", 0))

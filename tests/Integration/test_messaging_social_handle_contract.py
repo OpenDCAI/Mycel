@@ -228,6 +228,13 @@ def test_messaging_service_resolves_sender_name_from_thread_user_id() -> None:
 
 
 def test_messaging_service_list_chats_exposes_thread_user_participant_id() -> None:
+    def _member_get_by_id(uid: str):
+        if uid == "human-user-1":
+            return SimpleNamespace(id=uid, name="Human", type="human", avatar=None)
+        if uid == "member-agent-1":
+            return SimpleNamespace(id=uid, name="Toad", type="mycel_agent", avatar=None)
+        return None
+
     service = MessagingService(
         chat_repo=SimpleNamespace(
             get_by_id=lambda chat_id: SimpleNamespace(id=chat_id, title=None, status="active", created_at="2026-04-07T00:00:00Z")
@@ -235,19 +242,20 @@ def test_messaging_service_list_chats_exposes_thread_user_participant_id() -> No
         chat_member_repo=SimpleNamespace(
             list_chats_for_user=lambda _user_id: ["chat-1"],
             list_members=lambda _chat_id: [{"user_id": "human-user-1"}, {"user_id": "thread-user-1"}],
+            list_members_for_chats=lambda _chat_ids: {
+                "chat-1": [{"user_id": "human-user-1", "last_read_at": None}, {"user_id": "thread-user-1", "last_read_at": None}]
+            },
         ),
-        messages_repo=SimpleNamespace(list_by_chat=lambda _chat_id, limit=1: [], count_unread=lambda _chat_id, _user_id: 0),
+        messages_repo=SimpleNamespace(
+            list_by_chat=lambda _chat_id, limit=1: [],
+            count_unread=lambda _chat_id, _user_id: 0,
+            get_last_for_chats=lambda _chat_ids: {},
+            count_unread_for_chats=lambda _chat_ids, _user_id, _read_map: {},
+        ),
         message_read_repo=SimpleNamespace(),
         member_repo=SimpleNamespace(
-            get_by_id=lambda uid: (
-                SimpleNamespace(id=uid, name="Human", type="human", avatar=None)
-                if uid == "human-user-1"
-                else None
-                if uid == "thread-user-1"
-                else SimpleNamespace(id=uid, name="Toad", type="mycel_agent", avatar=None)
-                if uid == "member-agent-1"
-                else None
-            )
+            get_by_id=_member_get_by_id,
+            get_by_ids=lambda uids: {uid: _member_get_by_id(uid) for uid in uids if _member_get_by_id(uid)},
         ),
         thread_repo=SimpleNamespace(
             get_by_user_id=lambda uid: {"id": "thread-1", "member_id": "member-agent-1"} if uid == "thread-user-1" else None

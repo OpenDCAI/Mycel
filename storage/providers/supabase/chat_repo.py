@@ -47,6 +47,7 @@ class SupabaseChatRepo:
 
     def update_title(self, chat_id: str, title: str | None) -> None:
         import time
+
         self._t().update({"title": title, "updated_at": time.time()}).eq("id", chat_id).execute()
 
     def delete(self, chat_id: str) -> None:

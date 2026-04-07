@@ -91,6 +91,7 @@ async def test_get_chat_uses_access_helper(monkeypatch: pytest.MonkeyPatch):
         "status": "active",
         "created_at": "2026-04-07T00:00:00Z",
         "entities": [],
+        "read_status": {},
     }
     assert seen == [("helper", (app, "chat-1", "user-1"))]
 
