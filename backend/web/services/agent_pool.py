@@ -131,10 +131,15 @@ async def get_or_create_agent(app_obj: FastAPI, sandbox_type: str, thread_id: st
             agent_member_id = thread_data.get("member_id")
             agent_member = member_repo.get_by_id(agent_member_id) if agent_member_id else None
             if agent_member:
+                chat_identity_id = thread_data.get("user_id")
+                # @@@thread-chat-identity-source - agent chat identity must come from the
+                # thread-owned dedicated user_id, never from the member template id.
+                if not chat_identity_id:
+                    raise RuntimeError(f"thread.user_id is required for agent chat identity: {thread_id}")
                 owner_id = agent_member.owner_user_id or ""
                 chat_repos = {
-                    "chat_identity_id": agent_member.id,
-                    "user_id": agent_member.id,
+                    "chat_identity_id": chat_identity_id,
+                    "user_id": chat_identity_id,
                     "owner_id": owner_id,
                     "member_repo": member_repo,
                     "messaging_service": getattr(app_obj.state, "messaging_service", None),
