@@ -36,32 +36,25 @@ def _get_existing(svc, relationship_id: str, user_id: str) -> dict:
     existing = svc.get_by_id(relationship_id)
     if not existing:
         raise HTTPException(404, "Relationship not found")
-    if user_id not in (existing["principal_a"], existing["principal_b"]):
+    if user_id not in (existing["user_low"], existing["user_high"]):
         raise HTTPException(403, "Not a party of this relationship")
     return existing
 
 
 def _resolve_parties(existing: dict, actor_id: str) -> tuple[str, str]:
     """Return (requester_id, other_id) from a relationship row and actor."""
-    requester_id = existing["principal_a"] if existing["state"] == "pending_a_to_b" else existing["principal_b"]
-    other_id = existing["principal_b"] if actor_id == existing["principal_a"] else existing["principal_a"]
+    requester_id = existing["initiator_user_id"]
+    other_id = existing["user_high"] if actor_id == existing["user_low"] else existing["user_low"]
     return requester_id, other_id
 
 
 def _row_to_dict(row: RelationshipRow, viewer_id: str) -> dict:
-    other_id = row.principal_b if viewer_id == row.principal_a else row.principal_a
-    # Determine who is the requester based on state direction
-    if row.state == "pending_a_to_b":
-        is_requester = viewer_id == row.principal_a
-    elif row.state == "pending_b_to_a":
-        is_requester = viewer_id == row.principal_b
-    else:
-        is_requester = False
+    other_id = row.user_high if viewer_id == row.user_low else row.user_low
+    is_requester = row.state == "pending" and viewer_id == row.initiator_user_id
     return {
         "id": row.id,
         "other_user_id": other_id,
         "state": row.state,
-        "direction": row.direction,
         "is_requester": is_requester,
         "hire_granted_at": row.hire_granted_at.isoformat() if row.hire_granted_at else None,
         "hire_revoked_at": row.hire_revoked_at.isoformat() if row.hire_revoked_at else None,

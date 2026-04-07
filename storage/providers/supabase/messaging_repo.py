@@ -213,30 +213,83 @@ class SupabaseRelationshipRepo:
     def _ordered(self, a: str, b: str) -> tuple[str, str]:
         return (a, b) if a < b else (b, a)
 
+    def _relationship_id(self, user_low: str, user_high: str, kind: str = "hire_visit") -> str:
+        return f"{kind}:{user_low}:{user_high}"
+
+    def _normalize(self, row: dict[str, Any] | None) -> dict[str, Any] | None:
+        if row is None:
+            return None
+        normalized = dict(row)
+        normalized.setdefault("kind", "hire_visit")
+        normalized.setdefault("id", self._relationship_id(normalized["user_low"], normalized["user_high"], normalized["kind"]))
+        return normalized
+
     def get(self, user_a: str, user_b: str) -> dict[str, Any] | None:
-        pa, pb = self._ordered(user_a, user_b)
-        res = self._client.table("relationships").select("*").eq("principal_a", pa).eq("principal_b", pb).limit(1).execute()
-        return res.data[0] if res.data else None
+        user_low, user_high = self._ordered(user_a, user_b)
+        res = (
+            self._client.table("relationships")
+            .select("*")
+            .eq("user_low", user_low)
+            .eq("user_high", user_high)
+            .eq("kind", "hire_visit")
+            .limit(1)
+            .execute()
+        )
+        return self._normalize(res.data[0] if res.data else None)
 
     def get_by_id(self, relationship_id: str) -> dict[str, Any] | None:
-        res = self._client.table("relationships").select("*").eq("id", relationship_id).limit(1).execute()
-        return res.data[0] if res.data else None
+        parts = relationship_id.split(":", 2)
+        if len(parts) != 3:
+            return None
+        kind, user_low, user_high = parts
+        res = (
+            self._client.table("relationships")
+            .select("*")
+            .eq("user_low", user_low)
+            .eq("user_high", user_high)
+            .eq("kind", kind)
+            .limit(1)
+            .execute()
+        )
+        return self._normalize(res.data[0] if res.data else None)
 
     def upsert(self, user_a: str, user_b: str, **fields: Any) -> dict[str, Any]:
-        pa, pb = self._ordered(user_a, user_b)
+        user_low, user_high = self._ordered(user_a, user_b)
         existing = self.get(user_a, user_b)
         now = now_iso()
         if existing:
-            res = self._client.table("relationships").update({"updated_at": now, **fields}).eq("id", existing["id"]).execute()
-            return res.data[0] if res.data else {**existing, "updated_at": now, **fields}
-        else:
-            import uuid
+            if fields.get("state") == "none":
+                (
+                    self._client.table("relationships")
+                    .delete()
+                    .eq("user_low", user_low)
+                    .eq("user_high", user_high)
+                    .eq("kind", "hire_visit")
+                    .execute()
+                )
+                return self._normalize({**existing, "updated_at": now, **fields})
+            res = (
+                self._client.table("relationships")
+                .update({"updated_at": now, **fields})
+                .eq("user_low", user_low)
+                .eq("user_high", user_high)
+                .eq("kind", "hire_visit")
+                .execute()
+            )
+            return self._normalize(res.data[0] if res.data else {**existing, "updated_at": now, **fields})
 
-            row = {"id": str(uuid.uuid4()), "principal_a": pa, "principal_b": pb, "updated_at": now, **fields}
-            res = self._client.table("relationships").insert(row).execute()
-            return res.data[0] if res.data else row
+        row = {
+            "user_low": user_low,
+            "user_high": user_high,
+            "kind": "hire_visit",
+            "created_at": now,
+            "updated_at": now,
+            **fields,
+        }
+        res = self._client.table("relationships").insert(row).execute()
+        return self._normalize(res.data[0] if res.data else row)
 
     def list_for_user(self, user_id: str) -> list[dict[str, Any]]:
         # Single query with OR filter
-        res = self._client.table("relationships").select("*").or_(f"principal_a.eq.{user_id},principal_b.eq.{user_id}").execute()
-        return res.data or []
+        res = self._client.table("relationships").select("*").or_(f"user_low.eq.{user_id},user_high.eq.{user_id}").execute()
+        return [row for raw in (res.data or []) if (row := self._normalize(raw)) is not None]

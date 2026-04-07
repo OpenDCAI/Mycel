@@ -19,11 +19,12 @@ class _FakeRelationshipRepo:
     def __init__(self) -> None:
         self._existing = {
             ("agent-user-1", "human-user-1"): {
-                "id": "rel-1",
-                "principal_a": "agent-user-1",
-                "principal_b": "human-user-1",
+                "id": "hire_visit:agent-user-1:human-user-1",
+                "user_low": "agent-user-1",
+                "user_high": "human-user-1",
+                "kind": "hire_visit",
                 "state": "hire",
-                "direction": "b_to_a",
+                "initiator_user_id": "human-user-1",
                 "created_at": "2026-04-07T00:00:00Z",
                 "updated_at": "2026-04-07T00:00:00Z",
             }
@@ -84,11 +85,12 @@ def test_relationship_hire_snapshot_drops_main_thread_id():
 def test_relationship_hire_snapshot_resolves_thread_user_name_via_member() -> None:
     repo = _FakeRelationshipRepo()
     repo._existing[("human-user-1", "thread-user-1")] = {
-        "id": "rel-2",
-        "principal_a": "human-user-1",
-        "principal_b": "thread-user-1",
+        "id": "hire_visit:human-user-1:thread-user-1",
+        "user_low": "human-user-1",
+        "user_high": "thread-user-1",
+        "kind": "hire_visit",
         "state": "hire",
-        "direction": "b_to_a",
+        "initiator_user_id": "human-user-1",
         "created_at": "2026-04-07T00:00:00Z",
         "updated_at": "2026-04-07T00:00:00Z",
     }
@@ -113,6 +115,30 @@ def test_relationship_hire_snapshot_resolves_thread_user_name_via_member() -> No
     assert row.hire_snapshot is not None
     assert row.hire_snapshot["user_id"] == "thread-user-1"
     assert row.hire_snapshot["name"] == "Toad"
+
+
+def test_relationship_request_uses_single_pending_state_and_initiator() -> None:
+    class _RequestRepo:
+        def get(self, _actor_id: str, _target_id: str):
+            return None
+
+        def upsert(self, _actor_id: str, _target_id: str, **fields: Any):
+            return {
+                "id": "hire_visit:agent-user-1:human-user-1",
+                "user_low": "agent-user-1",
+                "user_high": "human-user-1",
+                "kind": "hire_visit",
+                "created_at": "2026-04-07T00:00:00Z",
+                "updated_at": "2026-04-07T00:00:01Z",
+                **fields,
+            }
+
+    service = RelationshipService(_RequestRepo())
+
+    row = service.request("human-user-1", "agent-user-1")
+
+    assert row.state == "pending"
+    assert row.initiator_user_id == "human-user-1"
 
 
 def test_chat_tool_registry_exposes_final_contract_only() -> None:

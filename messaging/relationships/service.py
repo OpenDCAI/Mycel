@@ -47,23 +47,21 @@ class RelationshipService:
         Returns the updated RelationshipRow.
         Raises TransitionError on invalid transition.
         """
-        # Ensure canonical ordering
-        if actor_id < target_id:
-            pa, pb = actor_id, target_id
-            requester_is_a = True
-        else:
-            pa, pb = target_id, actor_id
-            requester_is_a = False
+        user_low, user_high = sorted((actor_id, target_id))
 
         existing = self._repo.get(actor_id, target_id)
         if existing is None:
             current_state: RelationshipState = "none"
-            current_direction = None
+            initiator_user_id = actor_id if event == "request" else None
         else:
             current_state = existing["state"]
-            current_direction = existing.get("direction")
+            initiator_user_id = existing.get("initiator_user_id")
 
-        new_state, new_direction = transition(current_state, current_direction, event, requester_is_a=requester_is_a)
+        new_state = transition(
+            current_state,
+            event,
+            actor_is_initiator=initiator_user_id is not None and actor_id == initiator_user_id,
+        )
         logger.info(
             "[relationship] %s + %s → %s (actor=%s event=%s)",
             current_state,
@@ -73,7 +71,10 @@ class RelationshipService:
             event,
         )
 
-        fields: dict[str, Any] = {"state": new_state, "direction": new_direction}
+        fields: dict[str, Any] = {
+            "state": new_state,
+            "initiator_user_id": initiator_user_id,
+        }
         if new_state == "hire" and current_state != "hire":
             fields["hire_granted_at"] = now_iso()
             if hire_snapshot:
@@ -81,7 +82,7 @@ class RelationshipService:
         if new_state == "none" and current_state in ("hire", "visit"):
             fields["hire_revoked_at"] = now_iso()
             if current_state == "hire" and self._user_repo is not None:
-                other_id = pb if actor_id == pa else pa
+                other_id = user_high if actor_id == user_low else user_low
                 # @@@thread-user-hire-snapshot - relationship principals can now be thread-owned
                 # social user_ids, so the snapshot name must resolve back through thread -> agent user.
                 m = self._resolve_display_user(other_id)
