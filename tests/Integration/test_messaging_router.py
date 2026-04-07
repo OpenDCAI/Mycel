@@ -274,14 +274,20 @@ async def test_send_message_accepts_owned_thread_user_sender_id_via_thread_repo(
 @pytest.mark.asyncio
 async def test_create_chat_rejects_template_member_ids_for_group_participants() -> None:
     called: list[tuple[list[str], str | None]] = []
+    _agent_ids = {"member-agent-1", "member-agent-2"}
     app = SimpleNamespace(
         state=SimpleNamespace(
             member_repo=SimpleNamespace(
                 get_by_id=lambda uid: (
                     SimpleNamespace(id=uid, type="mycel_agent", owner_user_id="owner-user-1")
-                    if uid in {"member-agent-1", "member-agent-2"}
+                    if uid in _agent_ids
                     else None
-                )
+                ),
+                get_by_ids=lambda uids: {
+                    uid: SimpleNamespace(id=uid, type="mycel_agent", owner_user_id="owner-user-1")
+                    for uid in uids
+                    if uid in _agent_ids
+                },
             ),
             thread_repo=SimpleNamespace(get_by_user_id=lambda _uid: None),
             messaging_service=SimpleNamespace(
@@ -312,7 +318,7 @@ async def test_create_chat_accepts_human_and_thread_social_user_ids_for_group_pa
     called: list[tuple[list[str], str | None]] = []
     app = SimpleNamespace(
         state=SimpleNamespace(
-            member_repo=SimpleNamespace(get_by_id=lambda _uid: None),
+            member_repo=SimpleNamespace(get_by_id=lambda _uid: None, get_by_ids=lambda _uids: {}),
             thread_repo=SimpleNamespace(
                 get_by_user_id=lambda uid: (
                     {"id": f"thread-{uid}", "member_id": "member-agent-1"} if uid in {"thread-user-1", "thread-user-2"} else None
