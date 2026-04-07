@@ -64,6 +64,23 @@ def _remember_recent_workspace(settings: "WorkspaceSettings", workspace_str: str
     settings.recent_workspaces = settings.recent_workspaces[:5]
 
 
+def _resolve_local_path_or_http(
+    path: str,
+    *,
+    missing_detail: str,
+    wrong_type_detail: str,
+    expect_dir: bool,
+) -> Path:
+    target = Path(path).expanduser().resolve()
+    if not target.exists():
+        raise HTTPException(status_code=404, detail=missing_detail)
+    if expect_dir and not target.is_dir():
+        raise HTTPException(status_code=400, detail=wrong_type_detail)
+    if not expect_dir and target.is_dir():
+        raise HTTPException(status_code=400, detail=wrong_type_detail)
+    return target
+
+
 def load_settings() -> WorkspaceSettings:
     try:
         data = _load_user_json("preferences.json")
@@ -209,11 +226,12 @@ async def get_settings(request: Request) -> UserSettings:
 async def browse_filesystem(path: str = Query(default="~"), include_files: bool = Query(default=False)) -> dict[str, Any]:
     """Browse filesystem directories (and optionally files)."""
     try:
-        target_path = Path(path).expanduser().resolve()
-        if not target_path.exists():
-            raise HTTPException(status_code=404, detail="Path does not exist")
-        if not target_path.is_dir():
-            raise HTTPException(status_code=400, detail="Path is not a directory")
+        target_path = _resolve_local_path_or_http(
+            path,
+            missing_detail="Path does not exist",
+            wrong_type_detail="Path is not a directory",
+            expect_dir=True,
+        )
 
         parent = str(target_path.parent) if target_path.parent != target_path else None
         items: list[DirectoryItem] = []
@@ -239,11 +257,12 @@ async def read_local_file(path: str = Query(...)) -> dict[str, Any]:
     """Read a local file's content (for SandboxBrowser in resources page)."""
     _read_max_bytes = 100 * 1024
     try:
-        target = Path(path).expanduser().resolve()
-        if not target.exists():
-            raise HTTPException(status_code=404, detail="File not found")
-        if target.is_dir():
-            raise HTTPException(status_code=400, detail="Path is a directory")
+        target = _resolve_local_path_or_http(
+            path,
+            missing_detail="File not found",
+            wrong_type_detail="Path is a directory",
+            expect_dir=False,
+        )
         raw = target.read_bytes()
         truncated = len(raw) > _read_max_bytes
         content = raw[:_read_max_bytes].decode(errors="replace")
