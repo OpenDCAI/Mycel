@@ -14,6 +14,7 @@ from storage.contracts import RecipeRepo
 
 LIBRARY_DIR = library_dir()
 
+
 def _read_json(path: Path, default: Any = None) -> Any:
     if not path.exists():
         return default if default is not None else {}
