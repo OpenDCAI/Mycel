@@ -31,14 +31,19 @@ async def _verify_member_ownership(member_id: str, user_id: str, member_repo: An
     await asyncio.to_thread(_check)
 
 
+async def _require_owned_member_repo(request: Request, member_id: str, user_id: str) -> Any:
+    member_repo = request.app.state.member_repo
+    await _verify_member_ownership(member_id, user_id, member_repo)
+    return member_repo
+
+
 @router.post("/publish")
 async def publish_to_marketplace(
     req: PublishToMarketplaceRequest,
     user_id: Annotated[str, Depends(get_current_user_id)],
     request: Request,
 ) -> dict[str, Any]:
-    member_repo = request.app.state.member_repo
-    await _verify_member_ownership(req.member_id, user_id, member_repo)
+    await _require_owned_member_repo(request, req.member_id, user_id)
 
     from backend.web.services.profile_service import get_profile
 
@@ -77,8 +82,7 @@ async def upgrade_from_marketplace(
     user_id: Annotated[str, Depends(get_current_user_id)],
     request: Request,
 ) -> dict[str, Any]:
-    member_repo = request.app.state.member_repo
-    await _verify_member_ownership(req.member_id, user_id, member_repo)
+    await _require_owned_member_repo(request, req.member_id, user_id)
 
     result = await asyncio.to_thread(
         marketplace_client.upgrade,
