@@ -9,7 +9,7 @@ from collections.abc import Callable
 
 import jwt
 
-from storage.contracts import InviteCodeRepo, MemberRepo, MemberRow, MemberType
+from storage.contracts import InviteCodeRepo, MemberRepo, MemberRow, MemberType, UserRepo
 
 logger = logging.getLogger(__name__)
 
@@ -19,12 +19,14 @@ SUPABASE_JWT_ALGORITHM = "HS256"
 class AuthService:
     def __init__(
         self,
-        members: MemberRepo,
+        users: UserRepo,
+        members: MemberRepo | None = None,
         supabase_client=None,
         supabase_auth_client=None,
         supabase_auth_client_factory: Callable[[], object] | None = None,
         invite_codes: InviteCodeRepo | None = None,
     ) -> None:
+        self._users = users
         self._members = members
         self._sb = supabase_client  # storage/service-role client
         self._sb_auth = supabase_auth_client  # end-user auth client
@@ -74,6 +76,8 @@ class AuthService:
         """Complete registration: validate invite code, create member records."""
         if self._sb is None:
             raise RuntimeError("Supabase client required.")
+        if self._members is None:
+            raise RuntimeError("Member repo required for complete_register during schema cutover.")
 
         # 1. Decode temp_token to get user_id
         jwt_secret = os.getenv("SUPABASE_JWT_SECRET")
@@ -151,26 +155,26 @@ class AuthService:
         token = resp.session.access_token
 
         # Load member info
-        member = self._members.get_by_id(auth_user_id)
-        if member is None:
+        user = self._users.get_by_id(auth_user_id)
+        if user is None:
             raise ValueError("账号数据异常，请联系支持")
 
         # Load entities + agents
-        owned_agents = self._members.list_by_owner_user_id(auth_user_id)
+        owned_agents = self._users.list_by_owner_user_id(auth_user_id)
         agent_info = None
         if owned_agents:
             a = owned_agents[0]
-            agent_info = {"id": a.id, "name": a.name, "type": a.type.value, "avatar": a.avatar}
+            agent_info = {"id": a.id, "name": a.display_name, "type": a.type.value, "avatar": a.avatar}
 
-        logger.info("Login: %s (mycel_id=%s)", email, member.mycel_id)
+        logger.info("Login: %s (mycel_id=%s)", email, user.mycel_id)
         return {
             "token": token,
             "user": {
                 "id": auth_user_id,
-                "name": member.name,
-                "mycel_id": member.mycel_id,
-                "email": member.email,
-                "avatar": member.avatar,
+                "name": user.display_name,
+                "mycel_id": user.mycel_id,
+                "email": user.email,
+                "avatar": user.avatar,
             },
             "agent": agent_info,
         }
@@ -210,10 +214,10 @@ class AuthService:
     def _resolve_email(self, identifier: str) -> str:
         """Turn mycel_id (numeric string) or email into email address."""
         if identifier.strip().lstrip("0123456789") == "" and identifier.strip().isdigit():
-            member = self._members.get_by_mycel_id(int(identifier.strip()))
-            if member is None or member.email is None:
+            user = self._users.get_by_mycel_id(int(identifier.strip()))
+            if user is None or user.email is None:
                 raise ValueError("用户不存在")
-            return member.email
+            return user.email
         return identifier.strip()
 
     def _require_auth_client(self):
@@ -228,6 +232,8 @@ class AuthService:
 
     def _create_initial_agents(self, owner_user_id: str, now: float) -> dict | None:
         """Create Toad and Morel agents for a new user. Returns first agent info."""
+        if self._members is None:
+            raise RuntimeError("Member repo required for initial agent creation during schema cutover.")
         from pathlib import Path
 
         from backend.web.services.member_service import MEMBERS_DIR, _write_agent_md, _write_json
