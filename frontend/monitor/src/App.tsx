@@ -3039,7 +3039,7 @@ function ThreadTraceSection({
               />
             ))}
             {conversationTail.length === 0 &&
-              (traceTail.length > 0 ? (
+              (conversationError ? null : traceTail.length > 0 ? (
                 <div className="trace-empty trace-guided-empty">
                   <p>No conversation messages were captured for this run.</p>
                   <p className="count">
