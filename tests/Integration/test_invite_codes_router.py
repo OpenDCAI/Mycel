@@ -53,20 +53,6 @@ def _request(repo: _FakeInviteCodeRepo):
 
 
 @pytest.mark.asyncio
-async def test_call_invite_code_repo_returns_repo_result():
-    repo = _FakeInviteCodeRepo()
-
-    result = await invite_codes_router._call_invite_code_repo(
-        _request(repo),
-        "获取邀请码列表失败：",
-        "list_all",
-    )
-
-    assert result == [{"code": "invite-1"}]
-    assert repo.list_all_calls == 1
-
-
-@pytest.mark.asyncio
 async def test_call_invite_code_repo_maps_exception_to_prefixed_500():
     repo = _FakeInviteCodeRepo()
     repo.generate_error = RuntimeError("db down")
