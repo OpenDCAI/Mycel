@@ -124,13 +124,11 @@ class ChatToolService:
         return self._member_repo.get_by_id(member_id)
 
     def _resolve_directory_social_id(self, member: Any) -> str:
-        if self._thread_repo is None:
-            # @@@fallback - standalone chat-tool tests can still construct ChatToolService
-            # without a thread repo; keep emitting the member id until those callers are removed.
-            return member.id
         member_type = member.type.value if hasattr(member.type, "value") else str(member.type)
         if member_type == "human":
             return member.id
+        if self._thread_repo is None:
+            raise RuntimeError("thread_repo is required to resolve agent directory ids")
         default_thread = self._thread_repo.get_default_thread(member.id)
         if default_thread is None or not default_thread.get("user_id"):
             raise RuntimeError(f"Default thread user_id is required for directory member: {member.id}")

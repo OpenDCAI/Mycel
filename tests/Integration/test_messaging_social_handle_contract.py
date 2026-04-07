@@ -123,6 +123,9 @@ def test_chat_tool_directory_uses_neutral_id_label() -> None:
                 SimpleNamespace(id=member_id, name="Owner", owner_user_id=None) if member_id == "owner-user-1" else None
             ),
         ),
+        thread_repo=SimpleNamespace(
+            get_default_thread=lambda member_id: {"id": "thread-1", "user_id": "thread-user-1"} if member_id == "agent-user-1" else None
+        ),
         relationship_repo=None,
     )
 
@@ -132,8 +135,8 @@ def test_chat_tool_directory_uses_neutral_id_label() -> None:
     result = directory.handler()
     assert isinstance(result, str)
 
-    assert "id=agent-user-1" in result
-    assert "user_id=agent-user-1" not in result
+    assert "id=thread-user-1" in result
+    assert "user_id=thread-user-1" not in result
 
 
 def test_chat_tool_send_schema_marks_user_id_name_as_legacy() -> None:
@@ -170,6 +173,9 @@ def test_chat_tool_service_accepts_chat_identity_id_without_legacy_user_id() -> 
                 SimpleNamespace(id=member_id, name="Owner", owner_user_id=None) if member_id == "owner-user-1" else None
             ),
         ),
+        thread_repo=SimpleNamespace(
+            get_default_thread=lambda member_id: {"id": "thread-2", "user_id": "thread-user-2"} if member_id == "agent-user-2" else None
+        ),
         relationship_repo=None,
     )
 
@@ -177,7 +183,7 @@ def test_chat_tool_service_accepts_chat_identity_id_without_legacy_user_id() -> 
     assert directory is not None
     result = directory.handler()
     assert isinstance(result, str)
-    assert "id=agent-user-2" in result
+    assert "id=thread-user-2" in result
 
 
 def test_chat_tool_directory_exposes_default_thread_user_id_for_agents() -> None:
