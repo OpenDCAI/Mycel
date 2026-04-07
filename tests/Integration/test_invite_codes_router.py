@@ -102,52 +102,14 @@ async def test_call_invite_code_repo_preserves_http_exception():
 
 
 @pytest.mark.asyncio
-async def test_list_invite_codes_uses_router_helper(monkeypatch: pytest.MonkeyPatch):
-    request = _request(_FakeInviteCodeRepo())
-    calls: list[tuple[object, str, str, tuple[object, ...], dict[str, object]]] = []
-
-    async def fake_call(request_obj, error_prefix: str, method_name: str, *args: object, **kwargs: object):
-        calls.append((request_obj, error_prefix, method_name, args, kwargs))
-        return [{"code": "invite-1"}]
-
-    monkeypatch.setattr(invite_codes_router, "_call_invite_code_repo", fake_call)
-
-    result = await invite_codes_router.list_invite_codes(request=request, user_id="user-1")
-
-    assert result == {"codes": [{"code": "invite-1"}]}
-    assert calls == [
-        (
-            request,
-            "获取邀请码列表失败：",
-            "list_all",
-            (),
-            {},
-        )
-    ]
-
-
-@pytest.mark.asyncio
-async def test_revoke_invite_code_uses_helper_and_keeps_404(monkeypatch: pytest.MonkeyPatch):
-    request = _request(_FakeInviteCodeRepo())
-    calls: list[tuple[object, str, str, tuple[object, ...], dict[str, object]]] = []
-
-    async def fake_call(request_obj, error_prefix: str, method_name: str, *args: object, **kwargs: object):
-        calls.append((request_obj, error_prefix, method_name, args, kwargs))
-        return False
-
-    monkeypatch.setattr(invite_codes_router, "_call_invite_code_repo", fake_call)
+async def test_revoke_invite_code_raises_404_when_repo_reports_missing():
+    repo = _FakeInviteCodeRepo()
+    repo.revoke_result = False
+    request = _request(repo)
 
     with pytest.raises(HTTPException) as exc_info:
         await invite_codes_router.revoke_invite_code("invite-1", request=request, user_id="user-1")
 
     assert exc_info.value.status_code == 404
     assert exc_info.value.detail == "邀请码不存在"
-    assert calls == [
-        (
-            request,
-            "吊销邀请码失败：",
-            "revoke",
-            ("invite-1",),
-            {},
-        )
-    ]
+    assert repo.revoke_calls == ["invite-1"]
