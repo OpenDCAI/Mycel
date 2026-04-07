@@ -13,16 +13,20 @@ from backend.web.services import resource_projection_service
 router = APIRouter(prefix="/api/resources", tags=["resources"])
 
 
+async def _list_user_resource_providers_or_500(method, *args, **kwargs) -> dict[str, Any]:
+    try:
+        return await asyncio.to_thread(method, *args, **kwargs)
+    except RuntimeError as exc:
+        raise HTTPException(500, str(exc)) from exc
+
+
 @router.get("/overview")
 async def resources_overview(
     user_id: Annotated[str, Depends(get_current_user_id)],
     request: Request,
 ) -> dict[str, Any]:
-    try:
-        return await asyncio.to_thread(
-            resource_projection_service.list_user_resource_providers,
-            request.app,
-            user_id,
-        )
-    except RuntimeError as exc:
-        raise HTTPException(500, str(exc)) from exc
+    return await _list_user_resource_providers_or_500(
+        resource_projection_service.list_user_resource_providers,
+        request.app,
+        user_id,
+    )
