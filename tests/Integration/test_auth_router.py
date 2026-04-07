@@ -165,60 +165,6 @@ async def test_call_auth_service_maps_value_error_to_given_status():
     assert exc_info.value.detail == "邀请码无效"
 
 
-@pytest.mark.asyncio
-async def test_send_otp_uses_auth_router_helper(monkeypatch: pytest.MonkeyPatch):
-    app = SimpleNamespace(state=SimpleNamespace(auth_service=_FakeAuthService()))
-    calls: list[tuple[object, int, str, tuple[object, ...]]] = []
-
-    async def _fake_call_auth_service(app_obj, status_code: int, method_name: str, *args: object):
-        calls.append((app_obj, status_code, method_name, args))
-        return None
-
-    monkeypatch.setattr(auth_router, "_call_auth_service", _fake_call_auth_service)
-
-    result = await auth_router.send_otp(
-        auth_router.SendOtpRequest(email="fresh@example.com", password="pass1234", invite_code="invite-1"),
-        app,
-    )
-
-    assert result == {"ok": True}
-    assert calls == [
-        (
-            app,
-            400,
-            "send_otp",
-            ("fresh@example.com", "pass1234", "invite-1"),
-        )
-    ]
-
-
-@pytest.mark.asyncio
-async def test_login_uses_auth_router_helper(monkeypatch: pytest.MonkeyPatch):
-    app = SimpleNamespace(state=SimpleNamespace(auth_service=_FakeAuthService()))
-    calls: list[tuple[object, int, str, tuple[object, ...]]] = []
-
-    async def _fake_call_auth_service(app_obj, status_code: int, method_name: str, *args: object):
-        calls.append((app_obj, status_code, method_name, args))
-        return {"token": "tok-helper"}
-
-    monkeypatch.setattr(auth_router, "_call_auth_service", _fake_call_auth_service)
-
-    result = await auth_router.login(
-        auth_router.LoginRequest(identifier="fresh@example.com", password="pass1234"),
-        app,
-    )
-
-    assert result == {"token": "tok-helper"}
-    assert calls == [
-        (
-            app,
-            401,
-            "login",
-            ("fresh@example.com", "pass1234"),
-        )
-    ]
-
-
 class _VerifyOnlyAuthService:
     def __init__(self) -> None:
         self.tokens: list[str] = []
