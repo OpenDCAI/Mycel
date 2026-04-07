@@ -99,7 +99,7 @@ def _get_owned_avatar_user_or_404(user_id: str, current_user_id: str, user_repo:
     raise HTTPException(403, "Not authorized")
 
 
-@members_router.put("/{member_id}/avatar")
+@members_router.put("/{user_id}/avatar")
 async def upload_avatar(
     user_id: str,
     file: UploadFile,
@@ -135,7 +135,7 @@ async def get_avatar(user_id: str) -> FileResponse:
     return FileResponse(path, media_type="image/png", headers={"Cache-Control": "public, max-age=300"})
 
 
-@members_router.delete("/{member_id}/avatar")
+@members_router.delete("/{user_id}/avatar")
 async def delete_avatar(
     user_id: str,
     current_user_id: Annotated[str, Depends(get_current_user_id)],

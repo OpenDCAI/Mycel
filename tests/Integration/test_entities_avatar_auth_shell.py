@@ -60,6 +60,15 @@ def test_avatar_user_helper_raises_403_for_unrelated_user():
     assert excinfo.value.detail == "Not authorized"
 
 
+def test_avatar_mutation_routes_use_user_id_path_param():
+    route_paths = {
+        (route.path, tuple(sorted(route.methods))) for route in entities_router.members_router.routes if getattr(route, "methods", None)
+    }
+
+    assert ("/api/members/{user_id}/avatar", ("PUT",)) in route_paths
+    assert ("/api/members/{user_id}/avatar", ("DELETE",)) in route_paths
+
+
 @pytest.mark.asyncio
 async def test_delete_avatar_route_uses_auth_shell(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
     seen: list[tuple[str, object]] = []
