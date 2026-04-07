@@ -138,4 +138,3 @@ def test_get_member_or_404_raises_for_missing_member():
 
     assert exc_info.value.status_code == 404
     assert exc_info.value.detail == "Member not found"
-
