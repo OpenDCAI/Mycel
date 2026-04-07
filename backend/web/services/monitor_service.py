@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 from datetime import UTC, datetime
 from typing import Any
@@ -912,16 +913,31 @@ def get_event(event_id: str) -> dict[str, Any]:
 
 def runtime_health_snapshot() -> dict[str, Any]:
     """Lightweight control-plane health snapshot."""
-    db_path = resolve_role_db_path(SQLiteDBRole.SANDBOX)
-    db_exists = db_path.exists()
     tables: dict[str, int] = {"chat_sessions": 0, "sandbox_leases": 0, "lease_events": 0}
+    storage_strategy = str(os.getenv("LEON_STORAGE_STRATEGY") or "sqlite").strip().lower()
 
-    if db_exists:
+    if storage_strategy == "supabase":
         repo = make_sandbox_monitor_repo()
         try:
             tables = repo.count_rows(list(tables))
         finally:
             repo.close()
+        db_payload: dict[str, Any] = {
+            "strategy": "supabase",
+            "schema": str(os.getenv("LEON_DB_SCHEMA") or "public"),
+            "counts": tables,
+        }
+    else:
+        db_path = resolve_role_db_path(SQLiteDBRole.SANDBOX)
+        db_exists = db_path.exists()
+        db_payload = {"path": str(db_path), "exists": db_exists, "counts": tables}
+        if db_exists:
+            repo = make_sandbox_monitor_repo()
+            try:
+                tables = repo.count_rows(list(tables))
+            finally:
+                repo.close()
+            db_payload["counts"] = tables
 
     _, managers = init_providers_and_managers()
     sessions = load_all_sessions(managers)
@@ -932,6 +948,6 @@ def runtime_health_snapshot() -> dict[str, Any]:
 
     return {
         "snapshot_at": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
-        "db": {"path": str(db_path), "exists": db_exists, "counts": tables},
+        "db": db_payload,
         "sessions": {"total": len(sessions), "providers": provider_counts},
     }

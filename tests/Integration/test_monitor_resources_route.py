@@ -5,6 +5,45 @@ from backend.web.core.dependencies import get_current_user_id
 from backend.web.routers import monitor, resources
 
 
+def _stub_monitor_health(monkeypatch):
+    payload = {
+        "snapshot_at": "2026-04-07T00:00:00Z",
+        "db": {
+            "strategy": "supabase",
+            "schema": "staging",
+            "counts": {"chat_sessions": 0, "sandbox_leases": 0, "lease_events": 0},
+        },
+        "sessions": {"total": 0, "providers": {}},
+    }
+    monkeypatch.setattr(monitor.monitor_service, "runtime_health_snapshot", lambda: payload)
+    return payload
+
+
+def _stub_monitor_leases(monkeypatch):
+    payload = {
+        "summary": {
+            "total": 0,
+            "healthy": 0,
+            "diverged": 0,
+            "orphan": 0,
+            "orphan_diverged": 0,
+        },
+        "groups": [],
+        "triage": {
+            "summary": {
+                "total": 0,
+                "active_drift": 0,
+                "detached_residue": 0,
+                "orphan_cleanup": 0,
+                "healthy_capacity": 0,
+            },
+            "groups": [],
+        },
+    }
+    monkeypatch.setattr(monitor.monitor_service, "list_leases", lambda: payload)
+    return payload
+
+
 def _build_monitor_test_app(*, include_product_resources: bool = False) -> FastAPI:
     app = FastAPI()
     app.include_router(monitor.router)
@@ -94,7 +133,9 @@ def test_monitor_and_product_resource_routes_coexist_intentionally(monkeypatch):
     assert product_response.status_code == 200
 
 
-def test_monitor_health_route_smoke():
+def test_monitor_health_route_smoke(monkeypatch):
+    _stub_monitor_health(monkeypatch)
+
     with TestClient(_build_monitor_test_app()) as client:
         response = client.get("/api/monitor/health")
 
@@ -107,6 +148,8 @@ def test_monitor_health_route_smoke():
 
 def test_monitor_dashboard_route_smoke(monkeypatch):
     _stub_monitor_resource_snapshot(monkeypatch)
+    _stub_monitor_health(monkeypatch)
+    _stub_monitor_leases(monkeypatch)
 
     with TestClient(_build_monitor_test_app()) as client:
         response = client.get("/api/monitor/dashboard")
@@ -120,7 +163,9 @@ def test_monitor_dashboard_route_smoke(monkeypatch):
     assert "latest_evaluation" in payload
 
 
-def test_monitor_leases_route_exposes_summary_and_groups():
+def test_monitor_leases_route_exposes_summary_and_groups(monkeypatch):
+    _stub_monitor_leases(monkeypatch)
+
     with TestClient(_build_monitor_test_app()) as client:
         response = client.get("/api/monitor/leases")
 
