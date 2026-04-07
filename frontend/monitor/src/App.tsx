@@ -566,7 +566,7 @@ export default function App() {
     <BrowserRouter>
       <Layout>
         <Routes>
-          <Route path="/" element={<ResourcesPage />} />
+          <Route path="/" element={<DivergedPage />} />
           <Route path="/resources" element={<ResourcesPage />} />
           <Route path="/threads" element={<ThreadsPage />} />
           <Route path="/thread/:threadId" element={<ThreadDetailPage />} />
