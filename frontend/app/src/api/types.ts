@@ -347,15 +347,6 @@ export interface ChatMember {
   branch_index?: number | null;
 }
 
-export interface ChatSummary {
-  id: string;
-  title: string | null;
-  entities: ChatMember[];
-  last_message?: { content: string; sender_name: string; created_at: number };
-  unread_count: number;
-  has_mention: boolean;
-}
-
 export interface ChatDetail {
   id: string;
   title: string | null;
@@ -374,14 +365,6 @@ export interface ChatMessage {
   created_at: number;
 }
 
-export interface TaskAgentRequest {
-  subagent_type: string;
-  prompt: string;
-  description?: string;
-  model?: string;
-  max_turns?: number;
-}
-
 // @@@channel-kind - string union used directly as a selector, not an object
 export type SandboxChannelKind = "upload" | "download";
 
@@ -389,12 +372,6 @@ export interface SandboxChannelFileEntry {
   relative_path: string;
   size_bytes: number;
   updated_at: string;
-}
-
-export interface SandboxChannelFilesResult {
-  thread_id: string;
-  channel: SandboxChannelKind;
-  entries: SandboxChannelFileEntry[];
 }
 
 export interface SandboxUploadResult {
@@ -431,15 +408,5 @@ export interface Contact {
   created_at: string;
   updated_at: string | null;
 }
-
-export interface AgentProfile {
-  id: string;
-  name: string;
-  type: "agent";
-  avatar_url?: string;
-  description?: string;
-}
-
-export type MessageStatus = "sending" | "sent" | "read";
 
 export type MessageType = "human" | "ai" | "ai_process" | "system" | "notification";
