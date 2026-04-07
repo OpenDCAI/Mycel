@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import logging
 import time
 from typing import Annotated, Any, Literal
 
@@ -11,8 +10,6 @@ from pydantic import BaseModel
 
 from backend.web.core.dependencies import get_app, get_current_user_id
 from storage.contracts import ContactRow
-
-logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/contacts", tags=["contacts"])
 
