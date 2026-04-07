@@ -127,12 +127,12 @@ async def list_my_leases(
     request: Request,
 ) -> dict[str, Any]:
     thread_repo = getattr(request.app.state, "thread_repo", None)
-    member_repo = getattr(request.app.state, "member_repo", None)
+    user_repo = getattr(request.app.state, "user_repo", None)
     leases = await asyncio.to_thread(
         sandbox_service.list_user_leases,
         user_id,
         thread_repo=thread_repo,
-        member_repo=member_repo,
+        user_repo=user_repo,
     )
     return {"leases": leases}
 
