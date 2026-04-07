@@ -34,6 +34,19 @@ class SupabaseChatMemberRepo:
         res = self._client.table("chat_members").select("*").eq("chat_id", chat_id).execute()
         return res.data or []
 
+    def list_members_for_chats(self, chat_ids: list[str]) -> dict[str, list[dict[str, Any]]]:
+        """Batch fetch all members for multiple chats in one query."""
+        if not chat_ids:
+            return {}
+        res = self._client.table("chat_members").select("*").in_("chat_id", list(chat_ids)).execute()
+        result: dict[str, list[dict]] = {}
+        for row in (res.data or []):
+            cid = row.get("chat_id")
+            if cid not in result:
+                result[cid] = []
+            result[cid].append(row)
+        return result
+
     def list_chats_for_user(self, user_id: str) -> list[str]:
         res = self._client.table("chat_members").select("chat_id").eq("user_id", user_id).execute()
         return [r["chat_id"] for r in (res.data or [])]
@@ -62,6 +75,12 @@ class SupabaseChatMemberRepo:
             "user_id", user_id
         ).execute()
 
+    def update_pinned(self, chat_id: str, user_id: str, pinned: bool) -> None:
+        self._client.table("chat_members").update({"pinned": pinned}).eq("chat_id", chat_id).eq("user_id", user_id).execute()
+
+    def remove_member(self, chat_id: str, user_id: str) -> None:
+        self._client.table("chat_members").delete().eq("chat_id", chat_id).eq("user_id", user_id).execute()
+
 
 class SupabaseMessagesRepo:
     """messages table — rich message model for Supabase backend."""
@@ -80,6 +99,50 @@ class SupabaseMessagesRepo:
     def get_by_id(self, message_id: str) -> dict[str, Any] | None:
         res = self._client.table("messages").select("*").eq("id", message_id).limit(1).execute()
         return res.data[0] if res.data else None
+
+    def get_last_for_chats(self, chat_ids: list[str]) -> dict[str, dict[str, Any]]:
+        """Get the most recent message for each chat in one query."""
+        if not chat_ids:
+            return {}
+        # Fetch enough recent messages, then pick the newest per chat
+        res = (
+            self._client.table("messages")
+            .select("*")
+            .in_("chat_id", list(chat_ids))
+            .is_("deleted_at", "null")
+            .order("created_at", desc=True)
+            .limit(len(chat_ids) * 5)
+            .execute()
+        )
+        seen: set[str] = set()
+        result: dict[str, dict] = {}
+        for row in (res.data or []):
+            cid = row.get("chat_id")
+            if cid and cid not in seen:
+                result[cid] = row
+                seen.add(cid)
+        return result
+
+    def count_unread_for_chats(
+        self, chat_ids: list[str], user_id: str, last_read_map: dict[str, str | None]
+    ) -> dict[str, int]:
+        """Count unread per chat via single RPC call (count_unread_per_chat SQL function)."""
+        result = {cid: 0 for cid in chat_ids}
+        if not chat_ids:
+            return result
+        try:
+            res = self._client.rpc(
+                "count_unread_per_chat",
+                {"p_user_id": user_id, "p_chat_ids": list(chat_ids)},
+            ).execute()
+            for row in (res.data or []):
+                cid = row.get("chat_id")
+                if cid:
+                    result[cid] = int(row.get("unread_count", 0))
+        except Exception:
+            # Fallback: return zeros if RPC unavailable
+            pass
+        return result
 
     def list_by_chat(
         self, chat_id: str, *, limit: int = 50, before: str | None = None, viewer_id: str | None = None

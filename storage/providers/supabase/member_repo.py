@@ -135,6 +135,24 @@ class SupabaseMemberRepo:
             return int(data[0])
         return int(data)
 
+    def get_by_ids(self, member_ids: list[str]) -> dict[str, MemberRow]:
+        """Batch fetch multiple members in a single IN query."""
+        if not member_ids:
+            return {}
+        response = self._t().select("*").in_("id", list(member_ids)).execute()
+        rows = q.rows(response, _MEMBER_REPO, "get_by_ids")
+        return {r["id"]: MemberRow.model_validate(self._normalize(r)) for r in rows}
+
+    def search_humans(self, query: str, exclude_user_id: str, limit: int = 20) -> list[dict]:
+        """搜索 human 类型 member，按 mycel_id 精确匹配或 name 模糊匹配。"""
+        base = self._t().select("id, name, mycel_id, avatar, description").eq("type", "human").neq("id", exclude_user_id)
+        if query.isdigit():
+            base = base.eq("mycel_id", int(query))
+        else:
+            base = base.ilike("name", f"%{query}%")
+        response = base.limit(limit).execute()
+        return q.rows(response, _MEMBER_REPO, "search_humans")
+
     def delete(self, member_id: str) -> None:
         self._t().delete().eq("id", member_id).execute()
 

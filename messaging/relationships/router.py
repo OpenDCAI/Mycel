@@ -174,3 +174,18 @@ async def downgrade_relationship(
         return _row_to_dict(svc.downgrade(user_id, other_id), user_id)
     except TransitionError as e:
         raise HTTPException(409, str(e))
+
+
+@router.post("/{relationship_id}/remove")
+async def remove_relationship(
+    relationship_id: str,
+    user_id: Annotated[str, Depends(get_current_user_id)],
+    app: Annotated[Any, Depends(get_app)],
+):
+    svc = _get_rel_service(app)
+    existing = _get_existing(svc, relationship_id, user_id)
+    _, other_id = _resolve_parties(existing, user_id)
+    try:
+        return _row_to_dict(svc.revoke(user_id, other_id), user_id)
+    except TransitionError as e:
+        raise HTTPException(409, str(e))

@@ -9,6 +9,9 @@ import NewChatDialog from "@/components/NewChatDialog";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useAppStore } from "@/store/app-store";
 import { useAuthStore } from "@/store/auth-store";
+import { useRelationshipStore } from "@/store/relationship-store";
+import { useChatStore } from "@/store/chat-store";
+import { supabase } from "@/lib/supabase";
 import { toast } from "sonner";
 
 const navItems = [
@@ -52,6 +55,14 @@ function AuthenticatedLayout() {
   const authUser = useAuthStore(s => s.user);
   const authLogout = useAuthStore(s => s.logout);
 
+  const navigate = useNavigate();
+  const fetchRelationships = useRelationshipStore(s => s.fetchRelationships);
+  const fetchChats = useChatStore(s => s.fetchChats);
+  const pendingIncoming = useRelationshipStore(s =>
+    s.relationships.filter(r => r.state.startsWith("pending") && !r.is_requester).length
+  );
+  const chatTotalUnread = useChatStore(s => s.totalUnread);
+
   const location = useLocation();
   const isMobile = useIsMobile();
   const [showCreate, setShowCreate] = useState(false);
@@ -91,6 +102,38 @@ function AuthenticatedLayout() {
     resetSessionData();
     void loadAll();
   }, [authUser?.id, loadAll, resetSessionData]);
+
+  // Realtime subscriptions for sidebar badges
+  useEffect(() => {
+    if (!supabase || !authUser?.id) return;
+
+    const relSub = supabase
+      .channel("root-relationships")
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "relationships" }, (payload: { new: Record<string, unknown> }) => {
+        const row = payload.new as { principal_a: string; principal_b: string };
+        if (row.principal_b === authUser.id || row.principal_a === authUser.id) {
+          void fetchRelationships();
+          if (row.principal_a !== authUser.id) {
+            toast("收到新好友申请", {
+              action: { label: "查看", onClick: () => navigate("/contacts") },
+            });
+          }
+        }
+      })
+      .subscribe();
+
+    const msgSub = supabase
+      .channel("root-messages")
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages" }, () => {
+        void fetchChats();
+      })
+      .subscribe();
+
+    return () => {
+      void supabase.removeChannel(relSub);
+      void supabase.removeChannel(msgSub);
+    };
+  }, [authUser?.id, fetchRelationships, fetchChats, navigate]);
 
   const [expanded, setExpanded] = useState(() => {
     const saved = localStorage.getItem("sidebar-expanded");
@@ -177,12 +220,25 @@ function AuthenticatedLayout() {
       {navItems.map((item) => {
         const isActive = location.pathname.startsWith(item.to);
         const labelsVisible = isMobile || showLabels;
+
+        // Badge counts per nav item
+        let badgeCount = 0;
+        if (item.to === "/chat") badgeCount = chatTotalUnread;
+        if (item.to === "/contacts") badgeCount = pendingIncoming;
+
         return (
           <NavLink key={item.to} to={item.to} onClick={closeMobile} className="group relative block overflow-visible">
             <div className={`flex items-center ${labelsVisible ? "px-3 gap-3" : "justify-center"} h-10 rounded-xl transition-all duration-fast ${
               isActive ? "bg-sidebar-accent text-sidebar-accent-foreground" : "text-sidebar-foreground hover:bg-muted hover:text-foreground"
             } ${labelsVisible ? "" : "w-10"}`}>
-              <item.icon className="w-[18px] h-[18px] shrink-0" />
+              <div className="relative">
+                <item.icon className="w-[18px] h-[18px] shrink-0" />
+                {badgeCount > 0 && (
+                  <span className="absolute -top-1.5 -right-1.5 min-w-3.5 h-3.5 rounded-full bg-destructive text-destructive-foreground text-2xs flex items-center justify-center px-0.5 leading-none">
+                    {badgeCount > 99 ? "99+" : badgeCount}
+                  </span>
+                )}
+              </div>
               {labelsVisible && <span className="text-sm truncate">{item.label}</span>}
             </div>
             {!labelsVisible && !isMobile && (
@@ -212,6 +268,9 @@ function AuthenticatedLayout() {
         <nav className="shrink-0 border-t border-border bg-card flex items-stretch" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
           {mobileNavItems.map((item) => {
             const isActive = location.pathname.startsWith(item.to);
+            let badgeCount = 0;
+            if (item.to === "/chat") badgeCount = chatTotalUnread;
+            if (item.to === "/contacts") badgeCount = pendingIncoming;
             return (
               <NavLink
                 key={item.to}
@@ -219,7 +278,14 @@ function AuthenticatedLayout() {
                 className="flex-1 flex flex-col items-center justify-center gap-0.5 py-2 transition-colors duration-fast"
                 aria-label={item.label}
               >
-                <item.icon className={`w-5 h-5 ${isActive ? "text-primary" : "text-muted-foreground"}`} />
+                <div className="relative">
+                  <item.icon className={`w-5 h-5 ${isActive ? "text-primary" : "text-muted-foreground"}`} />
+                  {badgeCount > 0 && (
+                    <span className="absolute -top-1.5 -right-1.5 min-w-3.5 h-3.5 rounded-full bg-destructive text-destructive-foreground text-2xs flex items-center justify-center px-0.5 leading-none">
+                      {badgeCount > 99 ? "99+" : badgeCount}
+                    </span>
+                  )}
+                </div>
                 <span className={`text-2xs leading-tight ${isActive ? "text-primary font-semibold" : "text-muted-foreground"}`}>
                   {item.label}
                 </span>

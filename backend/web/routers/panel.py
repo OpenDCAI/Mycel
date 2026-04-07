@@ -476,3 +476,65 @@ async def update_profile(
     user_id: Annotated[str, Depends(get_current_user_id)],
 ) -> dict[str, Any]:
     return await asyncio.to_thread(profile_service.update_profile, **req.model_dump())
+
+
+# ── Users ──
+
+
+@router.get("/users/me")
+async def get_current_user_info(
+    user_id: Annotated[str, Depends(get_current_user_id)],
+    request: Request,
+) -> dict[str, Any]:
+    member = await asyncio.to_thread(request.app.state.member_repo.get_by_id, user_id)
+    if not member:
+        raise HTTPException(404, "User not found")
+    return {
+        "id": member.id,
+        "name": member.name,
+        "mycel_id": member.mycel_id,
+        "email": member.email,
+        "avatar_url": member.avatar,
+    }
+
+
+@router.get("/users/search")
+async def search_users(
+    q: str,
+    user_id: Annotated[str, Depends(get_current_user_id)],
+    request: Request,
+) -> dict[str, Any]:
+    raw = await asyncio.to_thread(
+        request.app.state.member_repo.search_humans,
+        q,
+        user_id,
+    )
+    items = [
+        {
+            "id": r["id"],
+            "name": r["name"],
+            "mycel_id": r.get("mycel_id"),
+            "avatar_url": r.get("avatar"),
+            "description": r.get("description"),
+        }
+        for r in raw
+    ]
+    return {"items": items}
+
+
+@router.get("/users/{target_user_id}")
+async def get_user_info(
+    target_user_id: str,
+    user_id: Annotated[str, Depends(get_current_user_id)],
+    request: Request,
+) -> dict[str, Any]:
+    """Public basic info for any human member."""
+    member = await asyncio.to_thread(request.app.state.member_repo.get_by_id, target_user_id)
+    if not member or member.type != "human":
+        raise HTTPException(404, "User not found")
+    return {
+        "id": member.id,
+        "name": member.name,
+        "mycel_id": member.mycel_id,
+        "avatar_url": member.avatar,
+    }

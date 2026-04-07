@@ -3,6 +3,7 @@ import { useParams } from "react-router-dom";
 import SplitPaneLayout from "@/components/SplitPaneLayout";
 import ConversationList from "./ConversationList";
 import { useThreadManager } from "@/hooks/use-thread-manager";
+import { useChatStore } from "@/store/chat-store";
 
 export default function ChatLayout() {
   const params = useParams();
@@ -10,10 +11,11 @@ export default function ChatLayout() {
   const tm = useThreadManager();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [, setSessionsOpen] = useState(false);
+  const fetchChats = useChatStore(s => s.fetchChats);
 
   const outletContext = useMemo(
-    () => ({ tm, sidebarCollapsed, setSidebarCollapsed, setSessionsOpen }),
-    [tm, sidebarCollapsed],
+    () => ({ tm, sidebarCollapsed, setSidebarCollapsed, setSessionsOpen, refreshChatList: fetchChats }),
+    [tm, sidebarCollapsed, fetchChats],
   );
 
   return (

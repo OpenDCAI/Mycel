@@ -46,7 +46,7 @@ export const UserBubble = memo(function UserBubble(props: UserBubbleProps) {
           </div>
         )}
         <div className="rounded-xl rounded-br-sm px-3.5 py-2 bg-muted border border-border">
-          <p className="text-sm whitespace-pre-wrap leading-[1.55] text-foreground">
+          <p className="text-sm whitespace-pre-wrap break-all leading-[1.55] text-foreground">
             {displayContent}
           </p>
         </div>

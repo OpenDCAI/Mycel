@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, Link, useOutletContext } from "react-router-dom";
-import { PanelLeft, Send } from "lucide-react";
+import { PanelLeft } from "lucide-react";
 import { authFetch, useAuthStore } from "../store/auth-store";
 import { UserBubble } from "../components/chat-area/UserBubble";
 import { ChatBubble } from "../components/chat-area/ChatBubble";
+import { supabase } from "../lib/supabase";
+import InputBox from "../components/InputBox";
 import type { ChatMember, ChatMessage, ChatDetail } from "../api/types";
 
 // @@@time-gap — only show timestamp when gap >= 5 minutes
@@ -48,9 +50,9 @@ function ChatConversationInner({ chatId }: { chatId: string }) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
-  const [typingEntities, setTypingEntities] = useState<Set<string>>(new Set());
+  // read_status: {user_id → last_read_at ISO} for all members
+  const [readStatus, setReadStatus] = useState<Record<string, string | null>>({});
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const isAtBottomRef = useRef(true);
@@ -60,6 +62,9 @@ function ChatConversationInner({ chatId }: { chatId: string }) {
     chat?.entities.forEach(e => m.set(e.id, e));
     return m;
   }, [chat?.entities]);
+  // Stable ref so Realtime handler always sees latest memberMap without re-subscribing
+  const memberMapRef = useRef(memberMap);
+  useEffect(() => { memberMapRef.current = memberMap; }, [memberMap]);
   // Track if user is at bottom for sticky scroll
   const onScroll = useCallback(() => {
     const el = scrollContainerRef.current;
@@ -90,7 +95,15 @@ function ChatConversationInner({ chatId }: { chatId: string }) {
       .then(([chatData, msgsData]) => {
         if (cancelled) return;
         setChat(chatData);
-        setMessages(msgsData);
+        setReadStatus(chatData.read_status ?? {});
+        // Normalize created_at: API may return ISO string or Unix number
+        const normalizedMsgs = (msgsData as ChatMessage[]).map(m => ({
+          ...m,
+          created_at: typeof m.created_at === "string"
+            ? new Date(m.created_at).getTime() / 1000
+            : m.created_at,
+        }));
+        setMessages(normalizedMsgs);
         setLoading(false);
         // Mark read + refresh sidebar
         authFetch(`/api/chats/${chatId}/read`, { method: "POST" })
@@ -113,78 +126,64 @@ function ChatConversationInner({ chatId }: { chatId: string }) {
     }
   }, [loading, messages.length]);
 
-  // SSE for real-time messages
+  // Supabase Realtime for incoming DM messages
+  // SSE is for agent streaming only — human↔human chat uses Realtime directly
   useEffect(() => {
-    const token = useAuthStore.getState().token;
-    if (!token) return;
+    if (!supabase || !chatId) return;
 
-    const es = new EventSource(`/api/chats/${chatId}/events?token=${encodeURIComponent(token)}`);
-
-    // @@@sse-dedup — SSE message dedup: skip if real id exists, replace optimistic if content matches
-    es.addEventListener("message", (e) => {
-      try {
-        const msg: ChatMessage = JSON.parse(e.data);
-        setMessages(prev => {
-          // Skip if we already have this exact message id
-          if (prev.some(m => m.id === msg.id)) return prev;
-          // Replace optimistic message if sender+content matches
-          const optimisticIdx = prev.findIndex(
-            m => m.id.startsWith("optimistic-") && m.sender_id === msg.sender_id && m.content === msg.content,
-          );
-          if (optimisticIdx >= 0) {
-            const next = [...prev];
-            next[optimisticIdx] = msg;
-            return next;
+    const sub = supabase
+      .channel(`chat-messages-${chatId}`)
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "messages", filter: `chat_id=eq.${chatId}` },
+        (payload: { new: Record<string, unknown> }) => {
+          const raw = payload.new;
+          const senderId = String(raw.sender_id ?? "");
+          const senderName = memberMapRef.current.get(senderId)?.name ?? "未知";
+          const msg: ChatMessage = {
+            id: String(raw.id),
+            chat_id: String(raw.chat_id),
+            sender_id: senderId,
+            sender_name: senderName,
+            content: String(raw.content ?? ""),
+            message_type: String(raw.message_type ?? "human"),
+            mentioned_ids: (raw.mentions as string[]) ?? [],
+            signal: raw.signal ? String(raw.signal) : null,
+            retracted_at: raw.retracted_at ? String(raw.retracted_at) : null,
+            created_at: typeof raw.created_at === "string"
+              ? new Date(raw.created_at).getTime() / 1000
+              : Number(raw.created_at ?? Date.now() / 1000),
+          };
+          setMessages(prev => {
+            if (prev.some(m => m.id === msg.id)) return prev;
+            const optimisticIdx = prev.findIndex(
+              m => m.id.startsWith("optimistic-") && m.sender_id === msg.sender_id && m.content === msg.content,
+            );
+            if (optimisticIdx >= 0) {
+              const next = [...prev];
+              next[optimisticIdx] = msg;
+              return next;
+            }
+            return [...prev, msg];
+          });
+          if (isAtBottomRef.current) {
+            setTimeout(scrollToBottom, 50);
+            authFetch(`/api/chats/${chatId}/read`, { method: "POST" }).catch(() => {});
+            refreshChatList();
           }
-          return [...prev, msg];
-        });
-        if (isAtBottomRef.current) {
-          setTimeout(scrollToBottom, 50);
-          // User is viewing → mark read + refresh sidebar
-          authFetch(`/api/chats/${chatId}/read`, { method: "POST" }).catch(err => console.warn("[mark_read] failed:", err));
-          refreshChatList();
         }
-      } catch (err) {
-        console.error("[ChatSSE] parse error:", err);
-      }
-    });
-
-    es.addEventListener("typing_start", (e) => {
-      try {
-        const data = JSON.parse(e.data);
-        setTypingEntities(prev => new Set([...prev, data.user_id]));
-      } catch (err) { console.warn("[ChatSSE] typing_start parse error:", err); }
-    });
-
-    es.addEventListener("typing_stop", (e) => {
-      try {
-        const data = JSON.parse(e.data);
-        setTypingEntities(prev => {
-          const next = new Set(prev);
-          next.delete(data.user_id);
-          return next;
-        });
-      } catch (err) { console.warn("[ChatSSE] typing_stop parse error:", err); }
-    });
-
-    es.onerror = () => {
-      if (es.readyState === EventSource.CLOSED) {
-        console.error("[ChatSSE] connection permanently closed");
-      }
-    };
+      )
+      .subscribe();
 
     return () => {
-      es.close();
-      refreshChatList(); // refresh sidebar on leave
+      void supabase.removeChannel(sub);
+      refreshChatList();
     };
   }, [chatId, scrollToBottom, refreshChatList]);
 
-  // Send message
-  const handleSend = useCallback(async () => {
-    const text = input.trim();
-    if (!text || !myUserId || sending) return;
-
-    setInput("");
+  // Send message — text comes from InputBox, not internal state
+  const handleSend = useCallback(async (text: string) => {
+    if (!text.trim() || !myUserId || sending) return;
     setSending(true);
 
     // Optimistic insert
@@ -213,7 +212,13 @@ function ChatConversationInner({ chatId }: { chatId: string }) {
         // Remove optimistic message on failure
         setMessages(prev => prev.filter(m => m.id !== optimisticMsg.id));
       } else {
-        const real: ChatMessage = await res.json();
+        const rawReal = await res.json();
+        const real: ChatMessage = {
+          ...rawReal,
+          created_at: typeof rawReal.created_at === "string"
+            ? new Date(rawReal.created_at).getTime() / 1000
+            : rawReal.created_at,
+        };
         // Replace optimistic with real if it still exists (SSE might have already replaced it)
         setMessages(prev => {
           const hasOptimistic = prev.some(m => m.id === optimisticMsg.id);
@@ -230,31 +235,27 @@ function ChatConversationInner({ chatId }: { chatId: string }) {
       setSending(false);
       refreshChatList(); // update last_message in sidebar
     }
-  }, [input, myUserId, sending, chatId, scrollToBottom, refreshChatList]);
+  }, [myUserId, sending, chatId, scrollToBottom, refreshChatList]);
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      void handleSend();
-    }
-  };
+  // Realtime: update read_status when any member opens the chat
+  useEffect(() => {
+    if (!supabase || !chatId) return;
+    const sub = supabase
+      .channel(`chat-members-${chatId}`)
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "chat_members", filter: `chat_id=eq.${chatId}` },
+        (payload: { new: { user_id?: string; last_read_at?: string | null } }) => {
+          const row = payload.new;
+          if (row.user_id) {
+            setReadStatus(prev => ({ ...prev, [row.user_id!]: row.last_read_at ?? null }));
+          }
+        }
+      )
+      .subscribe();
+    return () => { void supabase.removeChannel(sub); };
+  }, [chatId]);
 
-  // Typing indicator display — works for both 1:1 and group
-  const typingNames = [...typingEntities]
-    .map(id => memberMap.get(id)?.name)
-    .filter(Boolean);
-  const typingDisplay = typingEntities.size > 0 ? (
-    <div className="flex items-center gap-2 px-4 py-1">
-      <div className="flex gap-1">
-        <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground/40 animate-bounce" style={{ animationDelay: "0ms" }} />
-        <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground/40 animate-bounce" style={{ animationDelay: "var(--duration-fast)" }} />
-        <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground/40 animate-bounce" style={{ animationDelay: "var(--duration-normal)" }} />
-      </div>
-      <span className="text-xs text-muted-foreground">
-        {typingNames.length > 0 ? `${typingNames.join("、")} 正在输入` : "正在输入"}
-      </span>
-    </div>
-  ) : null;
 
   // Display name for header
   const chatName = chat
@@ -292,7 +293,7 @@ function ChatConversationInner({ chatId }: { chatId: string }) {
           <span className="text-sm font-medium text-foreground truncate max-w-[200px]">
             {chatName}
           </span>
-          {chat && (
+          {chat && chat.entities.length > 2 && (
             <span className="text-2xs px-1.5 py-0.5 rounded-md font-medium border border-border text-muted-foreground bg-muted">
               {chat.entities.length} 位成员
             </span>
@@ -319,6 +320,15 @@ function ChatConversationInner({ chatId }: { chatId: string }) {
               const member = memberMap.get(msg.sender_id);
               const ts = msg.created_at * 1000;
 
+              // Read receipt: check if all other members have last_read_at >= this message
+              const isLastMine = isMine && messages.slice(i + 1).every(m => m.sender_id !== myUserId);
+              const otherMemberIds = chat?.entities.map(e => e.id).filter(id => id !== myUserId) ?? [];
+              const isRead = otherMemberIds.length > 0 && otherMemberIds.every(uid => {
+                const lra = readStatus[uid];
+                if (!lra) return false;
+                return new Date(lra).getTime() >= msg.created_at * 1000;
+              });
+
               return (
                 <div key={msg.id}>
                   {showTime && (
@@ -329,13 +339,20 @@ function ChatConversationInner({ chatId }: { chatId: string }) {
                     </div>
                   )}
                   {isMine ? (
-                    <UserBubble content={msg.content} timestamp={ts} userName={myName} avatarUrl={memberMap.get(myUserId!)?.avatar_url} />
+                    <div className="flex flex-col items-end gap-0.5">
+                      <UserBubble content={msg.content} timestamp={ts} userName={myName} avatarUrl={memberMap.get(myUserId!)?.avatar_url} />
+                      {isLastMine && (
+                        <span className={`text-2xs px-1 ${isRead ? "text-primary" : "text-muted-foreground/40"}`}>
+                          {isRead ? "已读" : "未读"}
+                        </span>
+                      )}
+                    </div>
                   ) : (
                     <ChatBubble
                       content={msg.content}
                       senderName={chatMemberDisplayName(member, msg.sender_name)}
                       avatarUrl={member?.avatar_url}
-                      memberType={member?.type}
+                      entityType={member?.type}
                       timestamp={ts}
                       showName
                     />
@@ -345,31 +362,15 @@ function ChatConversationInner({ chatId }: { chatId: string }) {
             })}
           </div>
         )}
-        {typingDisplay}
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Input */}
-      <div className="px-4 py-3 border-t border-border shrink-0">
-        <div className="max-w-3xl mx-auto flex items-end gap-2">
-          <textarea
-            value={input}
-            onChange={e => setInput(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder="输入消息..."
-            rows={1}
-            className="flex-1 resize-none px-3.5 py-2.5 rounded-xl border border-border bg-background text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-foreground/10 max-h-32"
-            style={{ minHeight: "38px" }}
-          />
-          <button
-            onClick={() => void handleSend()}
-            disabled={!input.trim() || sending}
-            className="w-9 h-9 rounded-xl bg-foreground text-white flex items-center justify-center hover:bg-foreground/80 disabled:opacity-30 transition-colors duration-fast shrink-0"
-          >
-            <Send className="w-4 h-4" />
-          </button>
-        </div>
-      </div>
+      {/* Input — same InputBox as Agent workspace */}
+      <InputBox
+        placeholder="输入消息..."
+        disabled={sending}
+        onSendMessage={handleSend}
+      />
     </div>
   );
 }

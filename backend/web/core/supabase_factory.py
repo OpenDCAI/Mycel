@@ -34,7 +34,8 @@ def create_supabase_client():
     if not key:
         raise RuntimeError("LEON_SUPABASE_SERVICE_ROLE_KEY is required for Supabase storage runtime.")
     timeout = httpx.Timeout(30.0, connect=10.0)
-    http_client = httpx.Client(timeout=timeout, trust_env=False)
+    limits = httpx.Limits(max_connections=20, max_keepalive_connections=10, keepalive_expiry=60.0)
+    http_client = httpx.Client(timeout=timeout, trust_env=False, limits=limits)
     return create_client(url, key, options=ClientOptions(httpx_client=http_client))
 
 
@@ -49,7 +50,8 @@ def create_supabase_auth_client():
     if not key:
         raise RuntimeError("SUPABASE_ANON_KEY is required for Supabase auth runtime.")
     timeout = httpx.Timeout(30.0, connect=10.0)
-    http_client = httpx.Client(timeout=timeout, trust_env=False)
+    limits = httpx.Limits(max_connections=10, max_keepalive_connections=5, keepalive_expiry=60.0)
+    http_client = httpx.Client(timeout=timeout, trust_env=False, limits=limits)
     auth_url = os.getenv("SUPABASE_AUTH_URL")
     if auth_url:
         # @@@direct-gotrue - local auth may bypass Kong and hit GoTrue directly at /token.
@@ -64,5 +66,6 @@ def create_messaging_supabase_client():
     if not key:
         raise RuntimeError("LEON_SUPABASE_SERVICE_ROLE_KEY is required for messaging.")
     timeout = httpx.Timeout(30.0, connect=10.0)
-    http_client = httpx.Client(timeout=timeout, trust_env=False)
+    limits = httpx.Limits(max_connections=20, max_keepalive_connections=10, keepalive_expiry=60.0)
+    http_client = httpx.Client(timeout=timeout, trust_env=False, limits=limits)
     return create_client(url, key, options=ClientOptions(httpx_client=http_client))

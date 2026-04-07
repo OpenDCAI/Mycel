@@ -73,7 +73,8 @@ class MessagingService:
         existing_id = self._members_repo.find_chat_between(user_ids[0], user_ids[1])
         if existing_id:
             chat = self._chats.get_by_id(existing_id)
-            return {"id": chat.id, "title": chat.title, "status": chat.status, "created_at": chat.created_at}
+            if chat and chat.status == "active":
+                return {"id": chat.id, "title": chat.title, "status": chat.status, "created_at": chat.created_at}
 
         return self._create_chat(user_ids, chat_type="direct", title=title)
 
@@ -254,18 +255,52 @@ class MessagingService:
         self._members_repo.update_mute(chat_id, user_id, muted, mute_until)
 
     def list_chats_for_user(self, user_id: str) -> list[dict[str, Any]]:
-        """List all active chats for user with summary info."""
+        """List all active chats for user with summary info.
+
+        Batched: 1+1+1+1+N queries instead of ~9N queries.
+        """
         chat_ids = self._members_repo.list_chats_for_user(user_id)
+        if not chat_ids:
+            return []
+
+        # 1. Batch fetch all chat rows
+        all_chats = {cid: self._chats.get_by_id(cid) for cid in chat_ids}
+        active_ids = [cid for cid, c in all_chats.items() if c and c.status == "active"]
+        if not active_ids:
+            return []
+
+        # 2. Batch fetch all chat_members for active chats
+        all_members = self._members_repo.list_members_for_chats(active_ids)
+
+        # 3. Batch fetch all unique member profiles
+        unique_uids: set[str] = set()
+        for rows in all_members.values():
+            for m in rows:
+                uid = m.get("user_id")
+                if uid:
+                    unique_uids.add(uid)
+        member_profiles = self._member_repo.get_by_ids(list(unique_uids))
+
+        # 4. Batch fetch last message per chat
+        last_msgs = self._messages.get_last_for_chats(active_ids)
+
+        # 5. Build last_read_at map for unread counts (already in chat_members data)
+        last_read_map: dict[str, str | None] = {}
+        for cid, rows in all_members.items():
+            me = next((r for r in rows if r.get("user_id") == user_id), None)
+            last_read_map[cid] = me.get("last_read_at") if me else None
+
+        # 6. Single RPC call for all unread counts (replaces N queries)
+        unread_counts = self._messages.count_unread_for_chats(active_ids, user_id, last_read_map)
+
         result = []
-        for cid in chat_ids:
-            chat = self._chats.get_by_id(cid)
-            if not chat or chat.status != "active":
-                continue
-            members = self._members_repo.list_members(cid)
+        for cid in active_ids:
+            chat = all_chats[cid]
+            members = all_members.get(cid, [])
             entities_info = []
             for m in members:
                 uid = m.get("user_id")
-                e = self._resolve_display_member(uid) if uid else None
+                e = member_profiles.get(uid) if uid else None
                 if e:
                     entities_info.append(
                         {
@@ -275,17 +310,15 @@ class MessagingService:
                             "avatar_url": avatar_url(e.id, bool(e.avatar)),
                         }
                     )
-            msgs = self._messages.list_by_chat(cid, limit=1)
+            raw = last_msgs.get(cid)
             last_msg = None
-            if msgs:
-                m = msgs[-1]
-                sender = self._resolve_display_member(m.get("sender_id", ""))
+            if raw:
+                sender = member_profiles.get(raw.get("sender_id", ""))
                 last_msg = {
-                    "content": m.get("content", ""),
+                    "content": raw.get("content", ""),
                     "sender_name": sender.name if sender else "unknown",
-                    "created_at": m.get("created_at"),
+                    "created_at": raw.get("created_at"),
                 }
-            unread = self.count_unread(cid, user_id)
             result.append(
                 {
                     "id": cid,
@@ -294,8 +327,8 @@ class MessagingService:
                     "created_at": chat.created_at,
                     "entities": entities_info,
                     "last_message": last_msg,
-                    "unread_count": unread,
-                    "has_mention": False,  # TODO: implement mention tracking
+                    "unread_count": unread_counts.get(cid, 0),
+                    "has_mention": False,
                 }
             )
         return result

@@ -353,6 +353,7 @@ export interface ChatDetail {
   status: string;
   created_at: number;
   entities: ChatMember[];
+  read_status: Record<string, string | null>;  // {user_id: last_read_at_iso}
 }
 
 export interface ChatMessage {

@@ -45,6 +45,10 @@ class SupabaseChatRepo:
             updated_at=float(r["updated_at"]) if r.get("updated_at") is not None else None,
         )
 
+    def update_title(self, chat_id: str, title: str | None) -> None:
+        import time
+        self._t().update({"title": title, "updated_at": time.time()}).eq("id", chat_id).execute()
+
     def delete(self, chat_id: str) -> None:
         self._t().delete().eq("id", chat_id).execute()
 

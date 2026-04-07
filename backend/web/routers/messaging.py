@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import time
 from datetime import UTC, datetime
 from typing import Annotated, Any
 
@@ -18,6 +19,21 @@ from backend.web.core.dependencies import get_app, get_current_user_id
 from backend.web.utils.serializers import avatar_url
 
 router = APIRouter(prefix="/api/chats", tags=["chats"])
+
+# Simple TTL member cache: {member_id: (member_obj, expire_ts)}
+_member_cache: dict[str, tuple[Any, float]] = {}
+_MEMBER_CACHE_TTL = 60.0  # seconds
+
+
+def _get_member_cached(member_repo: Any, member_id: str) -> Any:
+    """Get member with 60s in-process cache to avoid repeated Supabase roundtrips."""
+    now = time.monotonic()
+    cached = _member_cache.get(member_id)
+    if cached and cached[1] > now:
+        return cached[0]
+    member = member_repo.get_by_id(member_id)
+    _member_cache[member_id] = (member, now + _MEMBER_CACHE_TTL)
+    return member
 
 
 # ---------------------------------------------------------------------------
@@ -36,12 +52,21 @@ class SendMessageBody(BaseModel):
     mentioned_ids: list[str] | None = None
     message_type: str = "human"
     signal: str | None = None
+    reply_to: str | None = None
 
 
 class MuteChatBody(BaseModel):
     user_id: str
     muted: bool
     mute_until: float | None = None
+
+
+class PinChatBody(BaseModel):
+    pinned: bool
+
+
+class PatchChatBody(BaseModel):
+    title: str | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -178,10 +203,12 @@ async def get_chat(
     chat = _get_accessible_chat_or_404(app, chat_id, user_id)
     members_list = _messaging(app).list_chat_members(chat_id)
     members_info = []
+    read_status = {}
     for m in members_list:
         uid = m.get("user_id")
         if not uid:
             continue
+        read_status[uid] = m.get("last_read_at")
         mem = _resolve_display_member(app, uid)
         if mem:
             members_info.append(
@@ -198,6 +225,7 @@ async def get_chat(
         "status": chat.status,
         "created_at": chat.created_at,
         "entities": members_info,
+        "read_status": read_status,  # {user_id: last_read_at_iso}
     }
 
 
@@ -237,6 +265,7 @@ async def send_message(
         mentions=body.mentioned_ids,
         signal=body.signal,
         message_type=body.message_type,
+        reply_to=body.reply_to,
     )
     return _msg_response(msg, app)
 
@@ -278,6 +307,37 @@ async def mark_read(
 # ---------------------------------------------------------------------------
 # Delete chat
 # ---------------------------------------------------------------------------
+
+
+@router.patch("/{chat_id}")
+async def update_chat(
+    chat_id: str,
+    body: PatchChatBody,
+    user_id: Annotated[str, Depends(get_current_user_id)],
+    app: Annotated[Any, Depends(get_app)],
+):
+    """Rename a chat (title)."""
+    _get_accessible_chat_or_404(app, chat_id, user_id)
+    app.state.chat_repo.update_title(chat_id, body.title)
+    return {"status": "ok", "title": body.title}
+
+
+@router.post("/{chat_id}/leave")
+async def leave_chat(
+    chat_id: str,
+    user_id: Annotated[str, Depends(get_current_user_id)],
+    app: Annotated[Any, Depends(get_app)],
+):
+    """Leave a group chat (removes membership; 1:1 chats are deleted)."""
+    _get_accessible_chat_or_404(app, chat_id, user_id)
+    members = _messaging(app).list_chat_members(chat_id)
+    if len(members) <= 2:
+        # 1:1 — delete the chat entirely
+        app.state.chat_repo.delete(chat_id)
+        return {"status": "deleted"}
+    # Group — remove just this member
+    app.state.chat_member_repo.remove_member(chat_id, user_id)
+    return {"status": "left"}
 
 
 @router.delete("/{chat_id}")
@@ -347,3 +407,52 @@ async def mute_chat(
     mute_until_iso = datetime.fromtimestamp(body.mute_until, tz=UTC).isoformat() if body.mute_until else None
     _messaging(app).update_mute(chat_id, body.user_id, body.muted, mute_until_iso)
     return {"status": "ok", "muted": body.muted}
+
+
+# ---------------------------------------------------------------------------
+# Message search
+# ---------------------------------------------------------------------------
+
+
+@router.get("/messages/search")
+async def search_messages(
+    q: str,
+    user_id: Annotated[str, Depends(get_current_user_id)],
+    app: Annotated[Any, Depends(get_app)],
+):
+    results = _messaging(app).search_messages(q)
+    return [_msg_response(m, app) for m in results]
+
+
+# ---------------------------------------------------------------------------
+# Unread count
+# ---------------------------------------------------------------------------
+
+
+@router.get("/{chat_id}/unread")
+async def get_unread_count(
+    chat_id: str,
+    user_id: Annotated[str, Depends(get_current_user_id)],
+    app: Annotated[Any, Depends(get_app)],
+):
+    if not _messaging(app).is_chat_member(chat_id, user_id):
+        raise HTTPException(403, "Not a participant of this chat")
+    count = _messaging(app).count_unread(chat_id, user_id)
+    return {"count": count}
+
+
+# ---------------------------------------------------------------------------
+# Pin chat
+# ---------------------------------------------------------------------------
+
+
+@router.put("/{chat_id}/pin")
+async def pin_chat(
+    chat_id: str,
+    body: PinChatBody,
+    user_id: Annotated[str, Depends(get_current_user_id)],
+    app: Annotated[Any, Depends(get_app)],
+):
+    _get_accessible_chat_or_404(app, chat_id, user_id)
+    app.state.chat_member_repo.update_pinned(chat_id, user_id, body.pinned)
+    return {"status": "ok", "pinned": body.pinned}

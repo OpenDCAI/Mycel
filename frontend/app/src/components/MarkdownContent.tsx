@@ -14,7 +14,7 @@ export default function MarkdownContent({ content }: MarkdownContentProps) {
   const cleaned = useMemo(() => stripSystemReminders(content), [content]);
   if (!cleaned) return null;
   return (
-    <div className="markdown-content text-sm leading-[1.2] text-foreground-secondary">
+    <div className="markdown-content text-sm leading-[1.2] text-foreground-secondary break-all overflow-hidden">
       <Streamdown>{cleaned}</Streamdown>
     </div>
   );

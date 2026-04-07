@@ -1,5 +1,6 @@
 import { Box, Cpu, Activity, AlertCircle, RefreshCw, ChevronLeft, ChevronRight, Ticket, Plus, Trash2, Copy, Check, AlertTriangle, TicketX } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { authFetch } from "@/store/auth-store";
 import { useIsMobile } from "../hooks/use-mobile";
 import ModelMappingSection from "../components/ModelMappingSection";
 import ModelPoolSection from "../components/ModelPoolSection";
@@ -280,6 +281,23 @@ export default function SettingsPage() {
   const [observationConfig, setObservationConfig] = useState<Record<string, unknown>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [mycelId, setMycelId] = useState<number | null>(null);
+  const [idCopied, setIdCopied] = useState(false);
+
+  useEffect(() => {
+    void authFetch("/api/panel/users/me")
+      .then(r => r.json())
+      .then((data: { mycel_id?: number }) => setMycelId(data.mycel_id ?? null))
+      .catch(() => {});
+  }, []);
+
+  function copyMycelId() {
+    if (mycelId == null) return;
+    void navigator.clipboard.writeText(String(mycelId)).then(() => {
+      setIdCopied(true);
+      setTimeout(() => setIdCopied(false), 1500);
+    });
+  }
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -364,6 +382,24 @@ export default function SettingsPage() {
 
   const renderContent = () => (
     <div className="max-w-2xl mx-auto py-6 px-6 space-y-6">
+      {activeTab === "model" && (
+        <div className="mb-6 flex items-center justify-between px-6 py-4 rounded-xl bg-card border border-border">
+          <div>
+            <p className="text-xs text-muted-foreground mb-1">Mycel ID</p>
+            <p className="text-lg font-mono font-semibold text-foreground">
+              {mycelId != null ? `#${mycelId}` : "—"}
+            </p>
+          </div>
+          <button
+            onClick={copyMycelId}
+            disabled={mycelId == null}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs text-muted-foreground hover:text-foreground hover:bg-muted transition-colors duration-fast disabled:opacity-40"
+          >
+            {idCopied ? <Check className="w-3.5 h-3.5 text-success" /> : <Copy className="w-3.5 h-3.5" />}
+            {idCopied ? "已复制" : "复制"}
+          </button>
+        </div>
+      )}
       {activeTab === "model" && (
         <>
           <div className="space-y-2">
