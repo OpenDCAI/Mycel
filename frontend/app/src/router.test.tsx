@@ -14,11 +14,16 @@ function collectPaths(routes: readonly { path?: string; children?: readonly { pa
 }
 
 describe("router legacy contract", () => {
-  it("does not keep /members redirect routes alive", () => {
+  it("does not keep removed legacy redirect routes alive", () => {
     const routePaths = new Set(collectPaths(router.routes));
 
     expect(routePaths.has("/members")).toBe(false);
     expect(routePaths.has("/members/*")).toBe(false);
+    expect(routePaths.has("/chats")).toBe(false);
+    expect(routePaths.has("/chats/*")).toBe(false);
+    expect(routePaths.has("/tasks")).toBe(false);
+    expect(routePaths.has("/resources")).toBe(false);
+    expect(routePaths.has("/invite-codes")).toBe(false);
     expect(routePaths.has("contacts")).toBe(true);
   });
 });

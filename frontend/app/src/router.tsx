@@ -42,11 +42,6 @@ export const router = createBrowserRouter([
   // Legacy redirects — preserve path segments
   { path: '/threads', element: <ThreadsIndexRedirect /> },
   { path: '/threads/*', element: <ThreadsLegacyRedirect /> },
-  { path: '/chats', element: <Navigate to="/chat" replace /> },
-  { path: '/chats/*', element: <Navigate to="/chat" replace /> },
-  { path: '/tasks', element: <Navigate to="/chat" replace /> },
-  { path: '/resources', element: <Navigate to="/marketplace" replace /> },
-  { path: '/invite-codes', element: <Navigate to="/settings" replace /> },
   {
     path: '/',
     element: <RootLayout />,
