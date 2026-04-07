@@ -395,7 +395,11 @@ async def test_resolve_main_thread_uses_owned_member_lookup(monkeypatch: pytest.
 
     result = await threads_router.resolve_main_thread(payload, "owner-1", app)
 
-    assert result == {"thread": None}
+    assert result == {
+        "member_id": "member-2",
+        "default_thread_id": None,
+        "thread": None,
+    }
     assert calls == [(app, "member-2", "owner-1")]
 
 

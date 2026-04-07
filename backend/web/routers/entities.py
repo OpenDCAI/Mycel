@@ -162,8 +162,8 @@ async def list_entities(
     app: Annotated[Any, Depends(get_app)],
 ):
     """List chattable entities for discovery (New Chat picker).
-    Humans are represented by their user_id; agents by their member_id.
-    Excludes the current user (you don't chat with yourself)."""
+    Humans are keyed by user_id; agent templates are keyed by member_id plus
+    their default representative thread. Excludes the current user."""
     member_repo = app.state.member_repo
     members = member_repo.list_all()
     member_map = {m.id: m for m in members}
@@ -176,43 +176,43 @@ async def list_entities(
         if m.type == MemberType.HUMAN:
             items.append(
                 {
-                    "id": m.id,
+                    "user_id": m.id,
                     "name": m.name,
                     "type": "human",
                     "avatar_url": avatar_url(m.id, bool(m.avatar)),
                     "owner_name": None,
                     "member_name": m.name,
-                    "thread_id": None,
-                    "is_main": None,
+                    "default_thread_id": None,
+                    "is_default_thread": None,
                     "branch_index": None,
                 }
             )
         else:
             owner = member_map.get(m.owner_user_id) if m.owner_user_id else None
-            thread = app.state.thread_repo.get_default_thread(m.id)
+            default_thread = app.state.thread_repo.get_default_thread(m.id)
             items.append(
                 {
-                    "id": m.id,
+                    "member_id": m.id,
                     "name": m.name,
                     "type": m.type.value if hasattr(m.type, "value") else str(m.type),
                     "avatar_url": avatar_url(m.id, bool(m.avatar)),
                     "owner_name": owner.name if owner else None,
                     "member_name": m.name,
-                    "thread_id": thread["id"] if thread else None,
-                    "is_main": thread["is_main"] if thread else None,
-                    "branch_index": thread["branch_index"] if thread else None,
+                    "default_thread_id": default_thread["id"] if default_thread else None,
+                    "is_default_thread": default_thread["is_main"] if default_thread else None,
+                    "branch_index": default_thread["branch_index"] if default_thread else None,
                 }
             )
     return items
 
 
-@router.get("/{user_id}/profile")
+@router.get("/{member_id}/profile")
 async def get_entity_profile(
-    user_id: str,
+    member_id: str,
     app: Annotated[Any, Depends(get_app)],
 ):
     """Public agent profile. No auth required (frontend uses plain fetch)."""
-    member = _get_member_or_404(app, user_id)
+    member = _get_member_or_404(app, member_id)
     member_type = member.type.value if hasattr(member.type, "value") else str(member.type)
     if "agent" not in member_type:
         raise HTTPException(404, "Profile not available for this member type")
@@ -225,22 +225,22 @@ async def get_entity_profile(
     }
 
 
-@router.get("/{user_id}/agent-thread")
+@router.get("/{member_id}/agent-thread")
 async def get_agent_thread(
-    user_id: str,
+    member_id: str,
     current_user_id: Annotated[str, Depends(get_current_user_id)],
     app: Annotated[Any, Depends(get_app)],
 ):
-    """Get the thread_id for an agent's default representative thread. user_id here is the agent's member_id."""
-    member = _get_member_or_404(app, user_id)
-    thread = app.state.thread_repo.get_default_thread(user_id)
-    if member.type != MemberType.HUMAN and thread is not None:
-        return {"user_id": user_id, "thread_id": thread["id"]}
+    """Get the default representative thread for an agent template."""
+    member = _get_member_or_404(app, member_id)
+    default_thread = app.state.thread_repo.get_default_thread(member_id)
+    if member.type != MemberType.HUMAN and default_thread is not None:
+        return {"member_id": member_id, "default_thread_id": default_thread["id"]}
     raise HTTPException(404, "No agent thread found")
 
 
-def _get_member_or_404(app: Any, user_id: str) -> Any:
-    member = app.state.member_repo.get_by_id(user_id)
+def _get_member_or_404(app: Any, member_id: str) -> Any:
+    member = app.state.member_repo.get_by_id(member_id)
     if not member:
         raise HTTPException(404, "Member not found")
     return member

@@ -668,24 +668,44 @@ async def resolve_main_thread(
     user_id: Annotated[str, Depends(get_current_user_id)],
     app: Annotated[Any, Depends(get_app)] = None,
 ) -> dict[str, Any]:
-    """Return the main thread for a member, or null when none exists."""
+    """Return the default representative thread for a member template."""
     agent_member = _find_owned_member(app, payload.member_id, user_id)
     if agent_member is None:
         # Return null instead of 403 — member may not exist yet (stale client state)
         # or belong to another user (harmless to reveal "no thread")
-        return {"thread": None}
+        return {
+            "member_id": payload.member_id,
+            "default_thread_id": None,
+            "thread": None,
+        }
 
-    existing = app.state.thread_repo.get_default_thread(payload.member_id)
-    if existing is None:
-        return {"thread": None}
+    default_thread = app.state.thread_repo.get_default_thread(payload.member_id)
+    if default_thread is None:
+        return {
+            "member_id": payload.member_id,
+            "default_thread_id": None,
+            "thread": None,
+        }
     try:
-        return {"thread": _thread_payload(app, existing["id"], existing.get("sandbox_type", "local"))}
+        return {
+            "member_id": payload.member_id,
+            "default_thread_id": default_thread["id"],
+            "thread": _thread_payload(app, default_thread["id"], default_thread.get("sandbox_type", "local")),
+        }
     except HTTPException as exc:
         # @@@orphan-main-thread - stale bootstrap data can leave the member pointing at a thread whose
         # member rows are gone. Treat that as "no resolvable main thread" instead of surfacing a 500.
         if exc.status_code == 500 and "missing member" in str(exc.detail):
-            logger.warning("resolve_main_thread ignored orphaned main thread %s for member %s", existing["id"], payload.member_id)
-            return {"thread": None}
+            logger.warning(
+                "resolve_main_thread ignored orphaned main thread %s for member %s",
+                default_thread["id"],
+                payload.member_id,
+            )
+            return {
+                "member_id": payload.member_id,
+                "default_thread_id": None,
+                "thread": None,
+            }
         raise
 
 

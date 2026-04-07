@@ -405,7 +405,29 @@ async def test_resolve_main_thread_returns_null_for_orphaned_main_thread_metadat
 
     result = await threads_router.resolve_main_thread(payload, "owner-1", app)
 
-    assert result == {"thread": None}
+    assert result == {
+        "member_id": "member-1",
+        "default_thread_id": None,
+        "thread": None,
+    }
+
+
+@pytest.mark.asyncio
+async def test_resolve_main_thread_exposes_default_thread_identity_without_hiding_thread_payload():
+    app = _make_threads_app(thread_sandbox={}, thread_cwd={})
+    payload = threads_router.ResolveMainThreadRequest(member_id="member-1")
+
+    with _patch_create_thread_noop_guards():
+        created = _require_thread_result(
+            await threads_router.create_thread(payload=CreateThreadRequest(member_id="member-1"), user_id="owner-1", app=app)
+        )
+
+    result = await threads_router.resolve_main_thread(payload, "owner-1", app)
+
+    assert result["member_id"] == "member-1"
+    assert result["default_thread_id"] == created["thread_id"]
+    assert result["thread"]["thread_id"] == created["thread_id"]
+    assert result["thread"]["member_id"] == "member-1"
 
 
 @pytest.mark.asyncio

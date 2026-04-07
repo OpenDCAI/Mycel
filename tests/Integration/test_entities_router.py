@@ -53,24 +53,30 @@ async def test_list_entities_excludes_current_user_and_returns_all_others():
     result = await entities_router.list_entities(user_id="u1", app=app)
 
     # Current user (u1) is excluded; all other members are returned.
-    ids = [item["id"] for item in result]
-    assert ids == ["u2", "a-main", "a-child"]
+    identities = [(item["type"], item.get("user_id"), item.get("member_id")) for item in result]
+    assert identities == [
+        ("human", "u2", None),
+        ("mycel_agent", None, "a-main"),
+        ("mycel_agent", None, "a-child"),
+    ]
 
-    # Human entry has no thread metadata.
-    human_item = next(i for i in result if i["id"] == "u2")
+    # Human entry is keyed by social user identity, not a generic mixed id.
+    human_item = next(i for i in result if i["user_id"] == "u2")
     assert human_item["type"] == "human"
-    assert human_item["thread_id"] is None
+    assert "id" not in human_item
+    assert human_item["default_thread_id"] is None
 
-    # Main agent: thread metadata from thread_repo.
-    main_item = next(i for i in result if i["id"] == "a-main")
-    assert main_item["thread_id"] == "thread-main"
-    assert main_item["is_main"] is True
+    # Agent entry is keyed by member template plus explicit default thread.
+    main_item = next(i for i in result if i.get("member_id") == "a-main")
+    assert "id" not in main_item
+    assert main_item["default_thread_id"] == "thread-main"
+    assert main_item["is_default_thread"] is True
     assert main_item["branch_index"] == 0
 
     # Child agent: also returned (frontend decides whether to hide it).
-    child_item = next(i for i in result if i["id"] == "a-child")
-    assert child_item["thread_id"] == "thread-child"
-    assert child_item["is_main"] is False
+    child_item = next(i for i in result if i.get("member_id") == "a-child")
+    assert child_item["default_thread_id"] == "thread-child"
+    assert child_item["is_default_thread"] is False
     assert child_item["branch_index"] == 1
 
 
@@ -97,7 +103,7 @@ async def test_get_agent_thread_reads_main_thread_from_thread_repo():
 
     result = await entities_router.get_agent_thread("a-main", current_user_id="u2", app=app)
 
-    assert result == {"user_id": "a-main", "thread_id": "thread-main"}
+    assert result == {"member_id": "a-main", "default_thread_id": "thread-main"}
 
 
 def test_get_member_or_404_returns_member():
@@ -147,8 +153,8 @@ async def test_get_entity_profile_uses_member_lookup_helper(monkeypatch: pytest.
     app = SimpleNamespace(state=SimpleNamespace())
     calls: list[tuple[object, str]] = []
 
-    def _fake_get_member_or_404(app_obj, user_id: str):
-        calls.append((app_obj, user_id))
+    def _fake_get_member_or_404(app_obj, member_id: str):
+        calls.append((app_obj, member_id))
         return agent
 
     monkeypatch.setattr(entities_router, "_get_member_or_404", _fake_get_member_or_404)
@@ -180,13 +186,13 @@ async def test_get_agent_thread_uses_member_lookup_helper(monkeypatch: pytest.Mo
     )
     calls: list[tuple[object, str]] = []
 
-    def _fake_get_member_or_404(app_obj, user_id: str):
-        calls.append((app_obj, user_id))
+    def _fake_get_member_or_404(app_obj, member_id: str):
+        calls.append((app_obj, member_id))
         return agent
 
     monkeypatch.setattr(entities_router, "_get_member_or_404", _fake_get_member_or_404)
 
     result = await entities_router.get_agent_thread("a-main", current_user_id="u2", app=app)
 
-    assert result == {"user_id": "a-main", "thread_id": "thread-main"}
+    assert result == {"member_id": "a-main", "default_thread_id": "thread-main"}
     assert calls == [(app, "a-main")]
