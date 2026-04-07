@@ -22,17 +22,25 @@ def _is_internal_child_thread(thread_id: str) -> bool:
     return thread_id.startswith("subagent-")
 
 
-def _resolve_display_member(app: Any, social_user_id: str) -> Any | None:
-    member = app.state.member_repo.get_by_id(social_user_id)
-    if member is not None:
-        return member
+def _resolve_display_user(app: Any, social_user_id: str) -> Any | None:
+    user = app.state.user_repo.get_by_id(social_user_id)
+    if user is not None:
+        return user
     thread = app.state.thread_repo.get_by_user_id(social_user_id)
     if thread is None:
         return None
-    member_id = thread.get("member_id")
-    if not member_id:
+    agent_user_id = thread.get("agent_user_id")
+    if not agent_user_id:
         return None
-    return app.state.member_repo.get_by_id(member_id)
+    return app.state.user_repo.get_by_id(agent_user_id)
+
+
+def _display_name(user: Any) -> str | None:
+    return getattr(user, "display_name", None)
+
+
+def _display_avatar_url(user: Any) -> str | None:
+    return avatar_url(getattr(user, "id", None), bool(getattr(user, "avatar", None)))
 
 
 def _conversation_updated_at_key(item: dict[str, Any]) -> float:
@@ -78,8 +86,8 @@ async def list_conversations(
             {
                 "id": tid,
                 "type": "hire",
-                "title": t.get("member_name") or "Agent",
-                "avatar_url": avatar_url(t.get("member_id"), bool(t.get("member_avatar"))),
+                "title": t.get("agent_name") or "Agent",
+                "avatar_url": avatar_url(t.get("agent_user_id"), bool(t.get("agent_avatar"))),
                 "updated_at": updated_at,
                 "unread_count": 0,
                 "running": running,
@@ -93,7 +101,7 @@ async def list_conversations(
         messages_repo = getattr(app.state, "messages_repo", None)
 
         # Pre-fetch all member data to avoid N+1 per-member lookups
-        all_member_ids: set[str] = set()
+        all_other_user_ids: set[str] = set()
         chat_members_cache: dict[str, list[dict[str, Any]]] = {}
         chat_obj_cache: dict[str, Any] = {}
 
@@ -108,14 +116,14 @@ async def list_conversations(
             for m in members_list:
                 uid = m.get("user_id")
                 if uid and uid != user_id:
-                    all_member_ids.add(uid)
+                    all_other_user_ids.add(uid)
 
-        # Batch resolve members
-        member_cache: dict[str, Any] = {}
-        for uid in all_member_ids:
-            mem = _resolve_display_member(app, uid)
-            if mem:
-                member_cache[uid] = mem
+        # Batch resolve users so visit chats never reach back into template member shells.
+        user_cache: dict[str, Any] = {}
+        for uid in all_other_user_ids:
+            resolved_user = _resolve_display_user(app, uid)
+            if resolved_user:
+                user_cache[uid] = resolved_user
 
         for chat_id in chat_ids:
             chat_obj = chat_obj_cache.get(chat_id)
@@ -131,12 +139,14 @@ async def list_conversations(
                 uid = m.get("user_id")
                 if not uid or uid == user_id:
                     continue
-                mem = member_cache.get(uid)
-                if not mem:
+                resolved_user = user_cache.get(uid)
+                if not resolved_user:
                     continue
-                other_names.append(mem.name)
+                display_name = _display_name(resolved_user)
+                if display_name:
+                    other_names.append(display_name)
                 if chat_avatar is None:
-                    chat_avatar = avatar_url(mem.id, bool(mem.avatar))
+                    chat_avatar = _display_avatar_url(resolved_user)
             if not title:
                 title = ", ".join(other_names) or "Chat"
 
