@@ -213,10 +213,14 @@ class SupabaseMessagesRepo:
             deleted_for.append(user_id)
         self._client.table("messages").update({"deleted_for": deleted_for}).eq("id", message_id).execute()
 
-    def search(self, query: str, *, chat_id: str | None = None, limit: int = 50) -> list[dict[str, Any]]:
+    def search(self, query: str, *, chat_id: str | None = None, chat_ids: list[str] | None = None, limit: int = 50) -> list[dict[str, Any]]:
         q = self._client.table("messages").select("*").ilike("content", f"%{query}%").is_("deleted_at", "null")
         if chat_id is not None:
             q = q.eq("chat_id", chat_id)
+        elif chat_ids is not None:
+            if not chat_ids:
+                return []
+            q = q.in_("chat_id", chat_ids)
         res = q.order("created_at", desc=False).limit(limit).execute()
         return res.data or []
 

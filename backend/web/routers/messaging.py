@@ -194,7 +194,7 @@ async def search_messages(
     user_id: Annotated[str, Depends(get_current_user_id)],
     app: Annotated[Any, Depends(get_app)],
 ):
-    results = _messaging(app).search_messages(q)
+    results = _messaging(app).search_messages(q, user_id=user_id)
     return [_msg_response(m, app) for m in results]
 
 

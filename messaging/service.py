@@ -242,8 +242,14 @@ class MessagingService:
     def count_unread(self, chat_id: str, user_id: str) -> int:
         return self._messages.count_unread(chat_id, user_id)
 
-    def search_messages(self, query: str, *, chat_id: str | None = None) -> list[dict[str, Any]]:
-        return self._messages.search(query, chat_id=chat_id)
+    def search_messages(self, query: str, *, chat_id: str | None = None, user_id: str | None = None) -> list[dict[str, Any]]:
+        if chat_id is not None:
+            return self._messages.search(query, chat_id=chat_id)
+        if user_id is not None:
+            # Scope to chats the user is a member of — prevents cross-user data leak
+            chat_ids = self._members_repo.list_chats_for_user(user_id)
+            return self._messages.search(query, chat_ids=chat_ids)
+        return self._messages.search(query)
 
     def list_chat_members(self, chat_id: str) -> list[dict[str, Any]]:
         return self._members_repo.list_members(chat_id)

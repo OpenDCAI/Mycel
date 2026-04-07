@@ -7,8 +7,11 @@ import os
 import time
 from collections.abc import Callable
 
+import httpx
 import jwt
+from supabase_auth.errors import AuthApiError
 
+from backend.web.core.supabase_factory import resolve_supabase_url
 from storage.contracts import InviteCodeRepo, MemberRepo, MemberRow, MemberType
 
 logger = logging.getLogger(__name__)
@@ -43,8 +46,6 @@ class AuthService:
         auth_client = self._auth_api(self._require_auth_client())
         if self._invite_codes is None or not self._invite_codes.is_valid(invite_code):
             raise ValueError("邀请码无效或已过期")
-        from supabase_auth.errors import AuthApiError
-
         try:
             auth_client.sign_up({"email": email, "password": password})
         except AuthApiError as e:
@@ -56,8 +57,6 @@ class AuthService:
     def verify_register_otp(self, email: str, token: str) -> dict:
         """Verify signup OTP. Returns temp_token to be used in complete_register."""
         auth_client = self._auth_api(self._require_auth_client())
-        from supabase_auth.errors import AuthApiError
-
         try:
             resp = auth_client.verify_otp({"email": email, "token": token, "type": "signup"})
         except AuthApiError as e:
@@ -133,8 +132,6 @@ class AuthService:
         # Resolve email
         email = self._resolve_email(identifier)
 
-        from supabase_auth.errors import AuthApiError
-
         # Sign in via Supabase
         try:
             resp = auth_client.sign_in_with_password({"email": email, "password": password})
@@ -174,8 +171,6 @@ class AuthService:
     def verify_recovery_otp(self, email: str, token: str) -> dict:
         """Verify a password-recovery OTP. Returns access_token for use in update_password."""
         auth_client = self._auth_api(self._require_auth_client())
-        from supabase_auth.errors import AuthApiError
-
         try:
             resp = auth_client.verify_otp({"email": email, "token": token, "type": "recovery"})
         except AuthApiError as e:
@@ -187,8 +182,6 @@ class AuthService:
     def send_password_reset(self, email: str, redirect_to: str) -> None:
         """Send a password reset email via Supabase GoTrue."""
         auth_client = self._auth_api(self._require_auth_client())
-        from supabase_auth.errors import AuthApiError
-
         try:
             auth_client.reset_password_for_email(email, options={"redirect_to": redirect_to})
         except AuthApiError as e:
@@ -200,13 +193,8 @@ class AuthService:
         The access_token from verify_otp(type=recovery) is a valid user session.
         Call PUT /auth/v1/user with Bearer <access_token> — no admin/service-role key needed.
         """
-        from backend.web.core.supabase_factory import resolve_supabase_url
-
         supabase_url = resolve_supabase_url().rstrip("/")
         anon_key = os.getenv("SUPABASE_ANON_KEY", "")
-
-        import httpx
-
         try:
             resp = httpx.put(
                 f"{supabase_url}/auth/v1/user",
