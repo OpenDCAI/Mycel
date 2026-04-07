@@ -10,7 +10,7 @@ import time
 from datetime import UTC, datetime
 from typing import Any
 
-from backend.web.services import resource_projection_service, resource_service
+from backend.web.services import resource_service
 
 _DEFAULT_REFRESH_INTERVAL_SEC = 90.0
 
@@ -22,6 +22,10 @@ def clear_resource_overview_cache() -> None:
     with _snapshot_lock:
         global _snapshot_cache
         _snapshot_cache = None
+
+
+def clear_monitor_resource_overview_cache() -> None:
+    clear_resource_overview_cache()
 
 
 def _now_iso() -> str:
@@ -56,7 +60,7 @@ def _with_refresh_metadata(
 
 
 def _snapshot_drifted_from_live_sessions(snapshot: dict[str, Any]) -> bool:
-    live_stats = resource_projection_service.visible_resource_session_stats()
+    live_stats = resource_service.visible_resource_session_stats()
     for provider in snapshot.get("providers") or []:
         provider_id = str(provider.get("id") or "")
         current = live_stats.get(provider_id, {"sessions": 0, "running": 0})
@@ -77,7 +81,7 @@ def refresh_resource_overview_sync() -> dict[str, Any]:
     global _snapshot_cache
     started = time.perf_counter()
     try:
-        payload = resource_projection_service.list_resource_providers()
+        payload = resource_service.list_resource_providers()
         duration_ms = (time.perf_counter() - started) * 1000
         payload = _with_refresh_metadata(payload, duration_ms=duration_ms, status="ok", error=None)
         with _snapshot_lock:
@@ -96,6 +100,10 @@ def refresh_resource_overview_sync() -> dict[str, Any]:
         return degraded
 
 
+def refresh_monitor_resource_overview_sync() -> dict[str, Any]:
+    return refresh_resource_overview_sync()
+
+
 def get_resource_overview_snapshot() -> dict[str, Any]:
     """Return cached snapshot; perform one synchronous refresh on cold start."""
     with _snapshot_lock:
@@ -109,6 +117,10 @@ def get_resource_overview_snapshot() -> dict[str, Any]:
         return cached
     # @@@cold-start-cache-fill - route fallback fills cache once to keep first call deterministic.
     return refresh_resource_overview_sync()
+
+
+def get_monitor_resource_overview_snapshot() -> dict[str, Any]:
+    return get_resource_overview_snapshot()
 
 
 async def resource_overview_refresh_loop() -> None:
@@ -138,3 +150,7 @@ async def resource_overview_refresh_loop() -> None:
             print("[monitor] resource refresh loop timeout")
         except Exception as exc:
             print(f"[monitor] resource refresh loop error: {exc}")
+
+
+async def monitor_resource_overview_refresh_loop() -> None:
+    await resource_overview_refresh_loop()

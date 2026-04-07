@@ -4,7 +4,24 @@ from __future__ import annotations
 
 from typing import Any
 
+from backend.web.core.config import SANDBOXES_DIR
 from backend.web.core.storage_factory import make_sandbox_monitor_repo, upsert_resource_snapshot
+from backend.web.services import resource_projection_service
+from backend.web.services.resource_common import (
+    CATALOG as _CATALOG,
+)
+from backend.web.services.resource_common import (
+    resolve_console_url as _resolve_console_url,
+)
+from backend.web.services.resource_common import (
+    resolve_instance_capabilities as _resolve_instance_capabilities,
+)
+from backend.web.services.resource_common import (
+    resolve_provider_name,
+)
+from backend.web.services.resource_common import (
+    resolve_provider_type as _resolve_provider_type,
+)
 from backend.web.services.sandbox_service import build_provider_from_config_name
 from sandbox.resource_snapshot import (
     ensure_resource_snapshot_table,
@@ -14,6 +31,34 @@ from sandbox.resource_snapshot import (
 # ---------------------------------------------------------------------------
 # Public API: sandbox filesystem browse
 # ---------------------------------------------------------------------------
+
+
+def list_resource_providers() -> dict[str, Any]:
+    return resource_projection_service.list_resource_providers()
+
+
+def visible_resource_session_stats() -> dict[str, dict[str, int]]:
+    return resource_projection_service.visible_resource_session_stats()
+
+
+def get_provider_display_contract(config_name: str) -> dict[str, Any]:
+    provider_name = resolve_provider_name(config_name, sandboxes_dir=SANDBOXES_DIR)
+    catalog = _CATALOG.get(provider_name)
+    description = catalog.description if catalog else provider_name
+    vendor = catalog.vendor if catalog else None
+    provider_type = _resolve_provider_type(provider_name, config_name, sandboxes_dir=SANDBOXES_DIR)
+    console_url = _resolve_console_url(provider_name, config_name, sandboxes_dir=SANDBOXES_DIR)
+    return {
+        "provider_name": provider_name,
+        "description": description,
+        "vendor": vendor,
+        "type": provider_type,
+        "console_url": console_url,
+    }
+
+
+def get_provider_capability_contract(config_name: str) -> tuple[dict[str, bool], str | None]:
+    return _resolve_instance_capabilities(config_name)
 
 
 def sandbox_browse(lease_id: str, path: str) -> dict[str, Any]:

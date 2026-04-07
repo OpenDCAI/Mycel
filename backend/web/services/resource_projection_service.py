@@ -7,6 +7,7 @@ from typing import Any
 
 from backend.web.core.config import SANDBOXES_DIR
 from backend.web.core.storage_factory import list_resource_snapshots, make_sandbox_monitor_repo
+from backend.web.services import sandbox_service
 from backend.web.services.resource_common import (
     CATALOG as _CATALOG,
 )
@@ -47,6 +48,21 @@ from backend.web.services.resource_common import (
 from backend.web.services.sandbox_service import available_sandbox_types
 from sandbox.providers.local import LocalSessionProvider
 from storage.models import map_lease_to_session_status
+
+
+class _ResourceServiceCompat:
+    def get_provider_display_contract(self, config_name: str) -> dict[str, Any]:
+        from backend.web.services import resource_service as resource_service_module
+
+        return resource_service_module.get_provider_display_contract(config_name)
+
+    def get_provider_capability_contract(self, config_name: str) -> tuple[dict[str, bool], str | None]:
+        from backend.web.services import resource_service as resource_service_module
+
+        return resource_service_module.get_provider_capability_contract(config_name)
+
+
+resource_service = _ResourceServiceCompat()
 
 
 def _empty_capabilities() -> dict[str, bool]:
@@ -248,3 +264,76 @@ def visible_resource_session_stats() -> dict[str, dict[str, int]]:
             provider_stats["running"] += 1
 
     return stats
+
+
+def list_user_resource_providers(app: Any, owner_user_id: str) -> dict[str, Any]:
+    thread_repo = getattr(getattr(app, "state", None), "thread_repo", None)
+    member_repo = getattr(getattr(app, "state", None), "member_repo", None)
+    leases = sandbox_service.list_user_leases(
+        owner_user_id,
+        thread_repo=thread_repo,
+        member_repo=member_repo,
+    )
+
+    grouped: dict[str, list[dict[str, Any]]] = {}
+    for lease in leases:
+        provider_instance = str(lease.get("provider_name") or "local")
+        grouped.setdefault(provider_instance, []).append(dict(lease))
+
+    providers: list[dict[str, Any]] = []
+    running_sessions = 0
+    for config_name, provider_leases in grouped.items():
+        display = resource_service.get_provider_display_contract(config_name)
+        capabilities, capability_error = resource_service.get_provider_capability_contract(config_name)
+        running_count = 0
+        sessions: list[dict[str, Any]] = []
+        for lease in provider_leases:
+            normalized = map_lease_to_session_status(lease.get("observed_state"), lease.get("desired_state"))
+            if normalized == "running":
+                running_count += 1
+                running_sessions += 1
+            agents = lease.get("agents") or []
+            owner = agents[0] if agents else {}
+            for thread_id in lease.get("thread_ids") or []:
+                sessions.append(
+                    {
+                        "id": f"{lease['lease_id']}:{thread_id}",
+                        "leaseId": str(lease.get("lease_id") or ""),
+                        "threadId": str(thread_id or ""),
+                        "memberId": str(owner.get("member_id") or ""),
+                        "memberName": str(owner.get("member_name") or "未绑定Agent"),
+                        "avatarUrl": owner.get("avatar_url"),
+                        "status": normalized,
+                        "startedAt": str(lease.get("created_at") or ""),
+                        "metrics": None,
+                    }
+                )
+
+        provider_status = "unavailable" if capability_error else _to_resource_status(True, running_count)
+        unavailable_reason = str(capability_error or "").strip() or None
+        providers.append(
+            {
+                "id": config_name,
+                "name": config_name,
+                "description": display["description"],
+                "vendor": display["vendor"],
+                "type": display["type"],
+                "status": provider_status,
+                "unavailableReason": unavailable_reason,
+                "error": ({"code": "PROVIDER_UNAVAILABLE", "message": unavailable_reason} if unavailable_reason else None),
+                "capabilities": capabilities,
+                "telemetry": {"running": {"used": running_count, "limit": None, "unit": "sandbox"}},
+                "cardCpu": None,
+                "consoleUrl": display["console_url"],
+                "sessions": sessions,
+            }
+        )
+
+    summary = {
+        "snapshot_at": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
+        "total_providers": len(providers),
+        "active_providers": len([p for p in providers if p.get("status") == "active"]),
+        "unavailable_providers": len([p for p in providers if p.get("status") == "unavailable"]),
+        "running_sessions": running_sessions,
+    }
+    return {"summary": summary, "providers": providers}
