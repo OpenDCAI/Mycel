@@ -831,24 +831,24 @@ def install_from_snapshot(
     marketplace_item_id: str,
     installed_version: str,
     owner_user_id: str,
-    existing_member_id: str | None = None,
+    existing_user_id: str | None = None,
     user_repo: Any = None,
     agent_config_repo: Any = None,
 ) -> str:
-    """Create or update a local member from a marketplace snapshot."""
+    """Create or update a local agent user from a marketplace snapshot."""
     from storage.contracts import UserRow, UserType
     from storage.utils import generate_agent_config_id, generate_member_id
 
     now = time.time()
     now_ms = int(now * 1000)
 
-    if existing_member_id:
-        member_id = existing_member_id
-        member_dir = MEMBERS_DIR / member_id
+    if existing_user_id:
+        user_id = existing_user_id
+        member_dir = MEMBERS_DIR / user_id
         agent_config_id = None
     else:
-        member_id = generate_member_id()
-        member_dir = MEMBERS_DIR / member_id
+        user_id = generate_member_id()
+        member_dir = MEMBERS_DIR / user_id
         member_dir.mkdir(parents=True, exist_ok=True)
         agent_config_id = generate_agent_config_id()
 
@@ -917,7 +917,7 @@ def install_from_snapshot(
     meta = {
         "status": "active",
         "version": installed_version,
-        "created_at": now_ms if not existing_member_id else _read_json(member_dir / "meta.json", {}).get("created_at", now_ms),
+        "created_at": now_ms if not existing_user_id else _read_json(member_dir / "meta.json", {}).get("created_at", now_ms),
         "updated_at": now_ms,
         "source": {
             "marketplace_item_id": marketplace_item_id,
@@ -929,9 +929,9 @@ def install_from_snapshot(
     _write_json(member_dir / "meta.json", meta)
 
     # Register in users table (new installs only)
-    if not existing_member_id and owner_user_id:
+    if not existing_user_id and owner_user_id:
         row = UserRow(
-            id=member_id,
+            id=user_id,
             type=UserType.AGENT,
             display_name=name,
             owner_user_id=owner_user_id,
@@ -939,23 +939,24 @@ def install_from_snapshot(
             created_at=now,
         )
         if user_repo is None:
-            raise RuntimeError("user_repo is required to register new member from snapshot")
+            raise RuntimeError("user_repo is required to register new agent user from snapshot")
         user_repo.create(row)
 
     # Dual-write to Supabase repo
     if agent_config_repo:
-        if existing_member_id:
+        if existing_user_id:
             if user_repo is None:
                 raise RuntimeError("user_repo is required to resolve existing agent_config_id")
-            user = user_repo.get_by_id(member_id)
+            user = user_repo.get_by_id(user_id)
             if user is None or user.agent_config_id is None:
-                raise RuntimeError(f"Agent user {member_id} is missing agent_config_id")
+                raise RuntimeError(f"Agent user {user_id} is missing agent_config_id")
             agent_config_id = user.agent_config_id
         if agent_config_id is None:
             raise RuntimeError("agent_config_id is required to install marketplace snapshot")
         _save_config_to_repo(
             agent_config_repo,
             agent_config_id,
+            agent_user_id=user_id,
             name=name,
             description=description,
             status=meta["status"],
@@ -971,13 +972,13 @@ def install_from_snapshot(
             try:
                 agent_config_repo.save_rule(agent_config_id, f"{rule_name}.md", rule.get("content", ""))
             except Exception:
-                logger.warning("Failed to save snapshot rule %s for member %s", rule_name, member_id, exc_info=True)
+                logger.warning("Failed to save snapshot rule %s for user %s", rule_name, user_id, exc_info=True)
         # Sync skills from snapshot
         for skill in snapshot.get("skills", []):
             skill_name = _sanitize_name(skill.get("name", "default"))
             try:
                 agent_config_repo.save_skill(agent_config_id, skill_name, skill.get("content", ""))
             except Exception:
-                logger.warning("Failed to save snapshot skill %s for member %s", skill_name, member_id, exc_info=True)
+                logger.warning("Failed to save snapshot skill %s for user %s", skill_name, user_id, exc_info=True)
 
-    return member_id
+    return user_id

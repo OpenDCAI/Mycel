@@ -214,3 +214,26 @@ def test_upgrade_returns_user_id_contract(monkeypatch):
         result = upgrade(user_id="agent-user-1", item_id="item-u2", owner_user_id="owner-1")
 
     assert result == {"user_id": "agent-user-1", "version": "2.0.0"}
+
+
+def test_upgrade_passes_existing_user_id_to_snapshot_install(monkeypatch):
+    seen: dict[str, object] = {}
+
+    def fake_install_from_snapshot(**kwargs):
+        seen.update(kwargs)
+        return "agent-user-1"
+
+    monkeypatch.setattr(
+        "backend.web.services.member_service.install_from_snapshot",
+        fake_install_from_snapshot,
+    )
+
+    with patch(
+        "backend.web.services.marketplace_client._hub_api", return_value=_make_hub_response("member", "agent-user", version="2.0.0")
+    ):
+        from backend.web.services.marketplace_client import upgrade
+
+        upgrade(user_id="agent-user-1", item_id="item-u2", owner_user_id="owner-1")
+
+    assert seen["existing_user_id"] == "agent-user-1"
+    assert "existing_member_id" not in seen

@@ -280,7 +280,7 @@ def upgrade(user_id: str, item_id: str, owner_user_id: str) -> dict:
         marketplace_item_id=item_id,
         installed_version=installed_version,
         owner_user_id=owner_user_id,
-        existing_member_id=user_id,
+        existing_user_id=user_id,
     )
 
     return {"user_id": user_id, "version": installed_version}

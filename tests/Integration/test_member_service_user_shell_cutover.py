@@ -231,3 +231,54 @@ def test_delete_member_deletes_user_and_agent_config_by_agent_config_id(monkeypa
     assert ok is True
     assert agent_config_repo.deleted == ["cfg-1"]
     assert user_repo.deleted == ["agent-1"]
+
+
+def test_install_from_snapshot_creates_agent_user_before_syncing_agent_config(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setattr(member_service, "MEMBERS_DIR", tmp_path)
+    user_repo = _FakeUserRepo()
+    agent_config_repo = _OrderCheckingAgentConfigRepo(user_repo)
+
+    installed_user_id = member_service.install_from_snapshot(
+        snapshot={"agent_md": "---\nname: Toad\n---\n\nhello\n"},
+        name="Toad",
+        description="helper",
+        marketplace_item_id="item-1",
+        installed_version="1.2.3",
+        owner_user_id="owner-1",
+        user_repo=user_repo,
+        agent_config_repo=agent_config_repo,
+    )
+
+    assert installed_user_id == user_repo.created[0].id
+    assert agent_config_repo.saved_configs[0][0] == user_repo.created[0].agent_config_id
+    assert agent_config_repo.saved_configs[0][1]["agent_user_id"] == installed_user_id
+
+
+def test_install_from_snapshot_updates_existing_user_via_existing_user_id(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setattr(member_service, "MEMBERS_DIR", tmp_path)
+    existing_user = _agent_user(user_id="agent-1", agent_config_id="cfg-1")
+    _write_member_shell(tmp_path / "agent-1")
+    user_repo = _FakeUserRepo(rows={"agent-1": existing_user})
+    agent_config_repo = _FakeAgentConfigRepo()
+
+    installed_user_id = member_service.install_from_snapshot(
+        snapshot={"agent_md": "---\nname: Toad\n---\n\nupdated\n"},
+        name="Toad",
+        description="helper",
+        marketplace_item_id="item-1",
+        installed_version="1.2.3",
+        owner_user_id="owner-1",
+        existing_user_id="agent-1",
+        user_repo=user_repo,
+        agent_config_repo=agent_config_repo,
+    )
+
+    assert installed_user_id == "agent-1"
+    assert agent_config_repo.saved_configs[0][0] == "cfg-1"
+    assert agent_config_repo.saved_configs[0][1]["agent_user_id"] == "agent-1"
