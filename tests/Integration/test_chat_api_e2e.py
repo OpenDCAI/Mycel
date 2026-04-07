@@ -1,6 +1,6 @@
 """End-to-end integration tests for chat API.
 
-Requires real Supabase connection (SUPABASE_PUBLIC_URL or SUPABASE_INTERNAL_URL).
+Requires real Supabase connection (SUPABASE_URL).
 Calls route functions directly with real repos — no HTTP overhead, no mocked
 business logic.  All created chats are deleted in finally-blocks.
 """
@@ -19,8 +19,8 @@ ALICE_ID = "8b71de74-4007-4acf-a223-e47d8cf87455"
 BOB_ID = "c113d5d0-2381-4a9a-bc88-2208f42912b1"
 
 pytestmark = pytest.mark.skipif(
-    not (os.getenv("SUPABASE_PUBLIC_URL") or os.getenv("SUPABASE_INTERNAL_URL")),
-    reason="Supabase env vars not set — skipping e2e tests",
+    not (os.getenv("SUPABASE_URL") or os.getenv("SUPABASE_INTERNAL_URL") or os.getenv("SUPABASE_PUBLIC_URL")),
+    reason="SUPABASE_URL not set — skipping e2e tests",
 )
 
 

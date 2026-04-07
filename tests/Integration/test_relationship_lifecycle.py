@@ -1,6 +1,6 @@
 """Integration tests for relationship state machine.
 
-Requires real Supabase connection (SUPABASE_PUBLIC_URL or SUPABASE_INTERNAL_URL).
+Requires real Supabase connection (SUPABASE_URL).
 Uses the existing Alice↔Bob visit relationship (ID is stable across test runs).
 State is always restored: upgrade → hire, then downgrade → visit.
 """
@@ -21,8 +21,8 @@ BOB_ID = "c113d5d0-2381-4a9a-bc88-2208f42912b1"
 ALICE_BOB_REL_ID = "31c683f8-33b3-43ae-bfc9-3d632fb022f7"
 
 pytestmark = pytest.mark.skipif(
-    not (os.getenv("SUPABASE_PUBLIC_URL") or os.getenv("SUPABASE_INTERNAL_URL")),
-    reason="Supabase env vars not set — skipping e2e tests",
+    not (os.getenv("SUPABASE_URL") or os.getenv("SUPABASE_INTERNAL_URL") or os.getenv("SUPABASE_PUBLIC_URL")),
+    reason="SUPABASE_URL not set — skipping e2e tests",
 )
 
 

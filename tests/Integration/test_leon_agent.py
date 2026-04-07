@@ -333,8 +333,7 @@ async def test_leon_agent_ainit_pushes_late_checkpointer_into_memory_middleware(
         patch.dict(
             os.environ,
             {
-                "SUPABASE_PUBLIC_URL": "http://127.0.0.1:54320",
-                "SUPABASE_INTERNAL_URL": "http://127.0.0.1:54320",
+                "SUPABASE_URL": "http://127.0.0.1:54320",
                 "SUPABASE_SERVICE_ROLE_KEY": "dummy",
                 "SUPABASE_ANON_KEY": "dummy",
             },

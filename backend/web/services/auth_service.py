@@ -206,7 +206,7 @@ class AuthService:
         The access_token from verify_otp(type=recovery) is a valid user session.
         Call PUT /auth/v1/user with Bearer <access_token> — no admin/service-role key needed.
         """
-        supabase_url = (os.getenv("SUPABASE_INTERNAL_URL") or os.getenv("SUPABASE_PUBLIC_URL", "")).rstrip("/")
+        supabase_url = (os.getenv("SUPABASE_URL") or os.getenv("SUPABASE_INTERNAL_URL") or os.getenv("SUPABASE_PUBLIC_URL", "")).rstrip("/")
         anon_key = os.getenv("SUPABASE_ANON_KEY", "")
 
         import httpx

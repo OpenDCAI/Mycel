@@ -10,9 +10,11 @@ from supabase_auth._sync.gotrue_client import SyncGoTrueClient
 
 
 def _resolve_supabase_url() -> str:
-    url = os.getenv("SUPABASE_INTERNAL_URL") or os.getenv("SUPABASE_PUBLIC_URL")
+    # Prefer SUPABASE_URL (new standard). Fall back to legacy split vars for
+    # environments not yet migrated (e.g. Coolify production — see Step 7).
+    url = os.getenv("SUPABASE_URL") or os.getenv("SUPABASE_INTERNAL_URL") or os.getenv("SUPABASE_PUBLIC_URL")
     if not url:
-        raise RuntimeError("SUPABASE_INTERNAL_URL or SUPABASE_PUBLIC_URL is required.")
+        raise RuntimeError("SUPABASE_URL is required.")
     return url
 
 
