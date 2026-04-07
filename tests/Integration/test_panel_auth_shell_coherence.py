@@ -12,6 +12,23 @@ from backend.web.services import library_service, member_service, profile_servic
 from storage.contracts import UserRow, UserType
 
 
+def test_panel_router_exposes_agents_routes_not_members_routes():
+    route_paths = {
+        (route.path, tuple(sorted(route.methods or [])))
+        for route in panel_router.router.routes
+    }
+
+    assert ("/api/panel/agents", ("GET",)) in route_paths
+    assert ("/api/panel/agents/{member_id}", ("GET",)) in route_paths
+    assert ("/api/panel/agents", ("POST",)) in route_paths
+    assert ("/api/panel/agents/{member_id}", ("PUT",)) in route_paths
+    assert ("/api/panel/agents/{member_id}/config", ("PUT",)) in route_paths
+    assert ("/api/panel/agents/{member_id}/publish", ("PUT",)) in route_paths
+    assert ("/api/panel/agents/{member_id}", ("DELETE",)) in route_paths
+    assert ("/api/panel/members", ("GET",)) not in route_paths
+    assert ("/api/panel/members/{member_id}", ("GET",)) not in route_paths
+
+
 @pytest.mark.asyncio
 async def test_panel_members_uses_injected_user_repo_for_owner_scope(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
     agent = UserRow(

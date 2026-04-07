@@ -1,4 +1,4 @@
-"""Panel API router — Members, Tasks, Library, Profile."""
+"""Panel API router — Agents, Tasks, Library, Profile."""
 
 import asyncio
 from typing import Annotated, Any
@@ -48,10 +48,10 @@ def _get_owned_member_or_404_with_config(member_id: str, user_id: str, user_repo
     return item
 
 
-# ── Members ──
+# ── Agents ──
 
 
-@router.get("/members")
+@router.get("/agents")
 async def list_members(
     user_id: Annotated[str, Depends(get_current_user_id)],
     request: Request,
@@ -62,7 +62,7 @@ async def list_members(
     return {"items": items}
 
 
-@router.get("/members/{member_id}")
+@router.get("/agents/{member_id}")
 async def get_member(
     member_id: str,
     request: Request,
@@ -77,7 +77,7 @@ async def get_member(
     )
 
 
-@router.post("/members")
+@router.post("/agents")
 async def create_member(
     req: CreateMemberRequest,
     user_id: Annotated[str, Depends(get_current_user_id)],
@@ -95,7 +95,7 @@ async def create_member(
     )
 
 
-@router.put("/members/{member_id}")
+@router.put("/agents/{member_id}")
 async def update_member(
     member_id: str,
     req: UpdateMemberRequest,
@@ -117,7 +117,7 @@ async def update_member(
     return item
 
 
-@router.put("/members/{member_id}/config")
+@router.put("/agents/{member_id}/config")
 async def update_member_config(
     member_id: str,
     req: MemberConfigPayload,
@@ -139,7 +139,7 @@ async def update_member_config(
     return item
 
 
-@router.put("/members/{member_id}/publish")
+@router.put("/agents/{member_id}/publish")
 async def publish_member(
     member_id: str,
     req: PublishMemberRequest,
@@ -163,7 +163,7 @@ async def publish_member(
     return item
 
 
-@router.delete("/members/{member_id}")
+@router.delete("/agents/{member_id}")
 async def delete_member(
     member_id: str,
     request: Request,

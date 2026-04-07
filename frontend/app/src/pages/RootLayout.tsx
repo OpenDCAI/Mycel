@@ -618,7 +618,7 @@ function SetupNameStep({ userId, defaultName }: { userId: string; defaultName: s
     setLoading(true);
     try {
       if (name.trim() && name.trim() !== defaultName) {
-        await fetch(`/api/panel/members/${userId}`, {
+        await fetch(`/api/panel/agents/${userId}`, {
           method: "PUT",
           headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
           body: JSON.stringify({ name: name.trim() }),

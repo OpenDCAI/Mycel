@@ -164,14 +164,14 @@ export const useAppStore = create<AppState>()((set, get) => ({
     set(emptySessionState());
   },
 
-  // ── Members ──
+  // ── Agents ──
   fetchMembers: async () => {
-    const data = await api<{ items: Member[] }>("/members");
+    const data = await api<{ items: Member[] }>("/agents");
     set({ memberList: data.items });
   },
 
   addMember: async (name, description = "") => {
-    const member = await api<Member>("/members", {
+    const member = await api<Member>("/agents", {
       method: "POST",
       body: JSON.stringify({ name, description }),
     });
@@ -180,7 +180,7 @@ export const useAppStore = create<AppState>()((set, get) => ({
   },
 
   updateMember: async (id, fields) => {
-    const updated = await api<Member>(`/members/${id}`, {
+    const updated = await api<Member>(`/agents/${id}`, {
       method: "PUT",
       body: JSON.stringify(fields),
     });
@@ -188,7 +188,7 @@ export const useAppStore = create<AppState>()((set, get) => ({
   },
 
   updateMemberConfig: async (id, patch) => {
-    const updated = await api<Member>(`/members/${id}/config`, {
+    const updated = await api<Member>(`/agents/${id}/config`, {
       method: "PUT",
       body: JSON.stringify(patch),
     });
@@ -196,7 +196,7 @@ export const useAppStore = create<AppState>()((set, get) => ({
   },
 
   publishMember: async (id, bumpType) => {
-    const updated = await api<Member>(`/members/${id}/publish`, {
+    const updated = await api<Member>(`/agents/${id}/publish`, {
       method: "PUT",
       body: JSON.stringify({ bump_type: bumpType }),
     });
@@ -205,7 +205,7 @@ export const useAppStore = create<AppState>()((set, get) => ({
   },
 
   deleteMember: async (id) => {
-    await api(`/members/${id}`, { method: "DELETE" });
+    await api(`/agents/${id}`, { method: "DELETE" });
     set((s) => ({ memberList: s.memberList.filter((x) => x.id !== id) }));
   },
 
