@@ -47,6 +47,18 @@ def build_member_repo(
     return SupabaseMemberRepo(client)
 
 
+def build_user_repo(
+    *,
+    supabase_client: Any | None = None,
+    supabase_client_factory: str | None = None,
+    **_kwargs: Any,
+):
+    client = _resolve_supabase_client(supabase_client, supabase_client_factory)
+    from storage.providers.supabase.user_repo import SupabaseUserRepo
+
+    return SupabaseUserRepo(client)
+
+
 def build_tool_task_repo(
     *,
     supabase_client: Any | None = None,

@@ -23,7 +23,7 @@ from sandbox.resource_snapshot import (
     probe_and_upsert_for_instance,
 )
 from storage.models import map_lease_to_session_status
-from storage.runtime import build_member_repo, build_resource_snapshot_repo, build_thread_repo
+from storage.runtime import build_resource_snapshot_repo, build_thread_repo, build_user_repo
 
 _CONFIG_LOADER = SandboxConfigLoader(SANDBOXES_DIR)
 
@@ -243,22 +243,22 @@ def _to_session_metrics(snapshot: dict[str, Any] | None) -> dict[str, Any] | Non
 # ---------------------------------------------------------------------------
 
 
-def _member_meta_map(member_repo: Any = None) -> dict[str, dict[str, str | None]]:
-    """Build member_id → display metadata map from DB."""
-    repo = member_repo
+def _agent_user_meta_map(user_repo: Any = None) -> dict[str, dict[str, str | None]]:
+    """Build agent_user_id → display metadata map from DB."""
+    repo = user_repo
     own_repo = False
     if repo is None:
-        repo = build_member_repo()
+        repo = build_user_repo()
         own_repo = True
     try:
-        members = repo.list_all()
+        users = repo.list_all()
         return {
-            m.id: {
-                "member_name": m.name,
-                "avatar_url": avatar_url(m.id, bool(m.avatar)),
+            user.id: {
+                "member_name": user.display_name,
+                "avatar_url": avatar_url(user.id, bool(user.avatar)),
             }
-            for m in members
-            if m.id and m.name
+            for user in users
+            if user.id and user.display_name
         }
     except Exception:
         return {}
@@ -268,7 +268,7 @@ def _member_meta_map(member_repo: Any = None) -> dict[str, dict[str, str | None]
 
 
 def _thread_agent_refs(thread_ids: list[str], thread_repo: Any = None) -> dict[str, str]:
-    """Batch lookup agent refs from threads table."""
+    """Batch lookup agent user ids from threads table."""
     unique = sorted({tid for tid in thread_ids if tid})
     if not unique:
         return {}
@@ -281,7 +281,7 @@ def _thread_agent_refs(thread_ids: list[str], thread_repo: Any = None) -> dict[s
         refs: dict[str, str] = {}
         for tid in unique:
             data = repo.get_by_id(tid)
-            agent_ref = str(data.get("member_id") or "").strip() if data else ""
+            agent_ref = str(data.get("agent_user_id") or "").strip() if data else ""
             if agent_ref:
                 refs[tid] = agent_ref
         return refs
@@ -292,9 +292,9 @@ def _thread_agent_refs(thread_ids: list[str], thread_repo: Any = None) -> dict[s
             repo.close()
 
 
-def _thread_owners(thread_ids: list[str], member_repo: Any = None, thread_repo: Any = None) -> dict[str, dict[str, str | None]]:
+def _thread_owners(thread_ids: list[str], user_repo: Any = None, thread_repo: Any = None) -> dict[str, dict[str, str | None]]:
     refs = _thread_agent_refs(thread_ids, thread_repo=thread_repo)
-    member_meta = _member_meta_map(member_repo=member_repo)
+    member_meta = _agent_user_meta_map(user_repo=user_repo)
     owners: dict[str, dict[str, str | None]] = {}
     for thread_id in thread_ids:
         agent_ref = refs.get(thread_id)
