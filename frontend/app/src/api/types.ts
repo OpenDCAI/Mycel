@@ -28,10 +28,12 @@ export interface ThreadSummary {
   preview?: string;
   updated_at?: string;
   running?: boolean;
+  /** Template entry id for this thread; actor identity still lives in `thread_id`. */
   member_id?: string;
-  /** Canonical thread/member display name. Main: {member}. Child: {member} · 分身N */
+  /** Template-facing secondary label; child threads should prefer `sidebar_label` when present. */
   member_name?: string;
   branch_index?: number;
+  /** Canonical actor-facing label for sidebar/header surfaces. */
   sidebar_label?: string | null;
   avatar_url?: string;
   is_main?: boolean;
@@ -151,7 +153,9 @@ export interface UserLeaseSummary {
   cwd?: string | null;
   thread_ids: string[];
   agents: Array<{
+    /** Template entry bound to the lease; not an actor thread id. */
     member_id: string;
+    /** Template-facing label for the lease summary card. */
     member_name: string;
     avatar_url?: string | null;
   }>;

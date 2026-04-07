@@ -67,6 +67,7 @@ export interface Task {
   created_at: number;
   // New fields
   thread_id: string;
+  /** Optional template shell for the task owner; actor identity still lives in `thread_id`. */
   member_id?: string;
   source: TaskSource;
   cron_job_id: string;
