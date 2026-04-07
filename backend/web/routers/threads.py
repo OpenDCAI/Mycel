@@ -82,7 +82,7 @@ def _invalidate_resource_overview_cache() -> None:
 
 
 def _find_owned_member(app: Any, member_id: str, owner_user_id: str) -> Any | None:
-    member = app.state.member_repo.get_by_id(member_id)
+    member = app.state.user_repo.get_by_id(member_id)
     if not member or member.owner_user_id != owner_user_id:
         return None
     return member
@@ -311,14 +311,14 @@ def _thread_payload(app: Any, thread_id: str, sandbox_type: str) -> dict[str, An
     thread = app.state.thread_repo.get_by_id(thread_id)
     if thread is None:
         raise HTTPException(404, "Thread not found")
-    member = app.state.member_repo.get_by_id(thread["member_id"])
+    member = app.state.user_repo.get_by_id(thread["agent_user_id"])
     if member is None:
-        raise HTTPException(500, f"Thread {thread_id} missing member")
+        raise HTTPException(500, f"Thread {thread_id} missing agent user")
     return {
         "thread_id": thread_id,
         "sandbox": sandbox_type,
-        "member_id": member.id,
-        "member_name": member.name,
+        "agent_user_id": member.id,
+        "agent_name": member.display_name,
         "branch_index": thread["branch_index"],
         "sidebar_label": sidebar_label(is_main=thread["is_main"], branch_index=thread["branch_index"]),
         "avatar_url": avatar_url(member.id, bool(member.avatar)),
@@ -555,7 +555,7 @@ def _create_owned_thread(
     import time
 
     sandbox_type = payload.sandbox or "local"
-    agent_member_id = payload.member_id
+    agent_member_id = payload.agent_user_id
     agent_member = app.state.member_repo.get_by_id(agent_member_id)
     if not agent_member or agent_member.owner_user_id != owner_user_id:
         raise HTTPException(403, "Not authorized")
@@ -588,7 +588,7 @@ def _create_owned_thread(
 
     app.state.thread_repo.create(
         thread_id=new_thread_id,
-        member_id=agent_member_id,
+        agent_user_id=agent_member_id,
         user_id=new_thread_id,
         sandbox_type=sandbox_type,
         cwd=payload.cwd,
@@ -639,8 +639,8 @@ def _create_owned_thread(
     return {
         "thread_id": new_thread_id,
         "sandbox": sandbox_type,
-        "member_id": agent_member_id,
-        "member_name": agent_member.name,
+        "agent_user_id": agent_member_id,
+        "agent_name": agent_member.name,
         "branch_index": branch_index,
         "sidebar_label": sidebar_label(is_main=resolved_is_main, branch_index=branch_index),
         "avatar_url": avatar_url(agent_member_id, bool(agent_member.avatar)),
@@ -677,41 +677,42 @@ async def resolve_main_thread(
     user_id: Annotated[str, Depends(get_current_user_id)],
     app: Annotated[Any, Depends(get_app)] = None,
 ) -> dict[str, Any]:
-    """Return the default representative thread for a member template."""
-    agent_member = _find_owned_member(app, payload.member_id, user_id)
+    """Return the default representative thread for an agent user."""
+    agent_user_id = payload.agent_user_id
+    agent_member = _find_owned_member(app, agent_user_id, user_id)
     if agent_member is None:
         # Return null instead of 403 — member may not exist yet (stale client state)
         # or belong to another user (harmless to reveal "no thread")
         return {
-            "member_id": payload.member_id,
+            "agent_user_id": agent_user_id,
             "default_thread_id": None,
             "thread": None,
         }
 
-    default_thread = app.state.thread_repo.get_default_thread(payload.member_id)
+    default_thread = app.state.thread_repo.get_default_thread(agent_user_id)
     if default_thread is None:
         return {
-            "member_id": payload.member_id,
+            "agent_user_id": agent_user_id,
             "default_thread_id": None,
             "thread": None,
         }
     try:
         return {
-            "member_id": payload.member_id,
+            "agent_user_id": agent_user_id,
             "default_thread_id": default_thread["id"],
             "thread": _thread_payload(app, default_thread["id"], default_thread.get("sandbox_type", "local")),
         }
     except HTTPException as exc:
         # @@@orphan-default-thread - stale bootstrap data can leave the member pointing at a thread whose
         # member rows are gone. Treat that as "no resolvable default thread" instead of surfacing a 500.
-        if exc.status_code == 500 and "missing member" in str(exc.detail):
+        if exc.status_code == 500 and "missing agent user" in str(exc.detail):
             logger.warning(
-                "resolve_main_thread ignored orphaned default thread %s for member %s",
+                "resolve_main_thread ignored orphaned default thread %s for agent user %s",
                 default_thread["id"],
-                payload.member_id,
+                agent_user_id,
             )
             return {
-                "member_id": payload.member_id,
+                "agent_user_id": agent_user_id,
                 "default_thread_id": None,
                 "thread": None,
             }
@@ -720,12 +721,12 @@ async def resolve_main_thread(
 
 @router.get("/default-config")
 async def get_default_thread_config(
-    member_id: str,
+    agent_user_id: str,
     user_id: Annotated[str, Depends(get_current_user_id)],
     app: Annotated[Any, Depends(get_app)] = None,
 ) -> dict[str, Any]:
-    _require_owned_member(app, member_id, user_id)
-    return resolve_default_config(app, user_id, member_id)
+    _require_owned_member(app, agent_user_id, user_id)
+    return resolve_default_config(app, user_id, agent_user_id)
 
 
 @router.post("/default-config")
@@ -734,8 +735,8 @@ async def save_default_thread_config(
     user_id: Annotated[str, Depends(get_current_user_id)],
     app: Annotated[Any, Depends(get_app)] = None,
 ) -> dict[str, Any]:
-    _require_owned_member(app, payload.member_id, user_id)
-    save_last_confirmed_config(app, user_id, payload.member_id, payload.model_dump())
+    _require_owned_member(app, payload.agent_user_id, user_id)
+    save_last_confirmed_config(app, user_id, payload.agent_user_id, payload.model_dump())
     return {"ok": True}
 
 
@@ -770,14 +771,14 @@ async def list_threads(
             {
                 "thread_id": tid,
                 "sandbox": t.get("sandbox_type", "local"),
-                "member_name": t.get("member_name"),
-                "member_id": t.get("member_id"),
+                "agent_name": t.get("agent_name"),
+                "agent_user_id": t.get("agent_user_id"),
                 "branch_index": t.get("branch_index"),
                 "sidebar_label": sidebar_label(
                     is_main=bool(t.get("is_main", False)),
                     branch_index=int(t.get("branch_index", 0)),
                 ),
-                "avatar_url": avatar_url(t.get("member_id"), bool(t.get("member_avatar"))),
+                "avatar_url": avatar_url(t.get("agent_user_id"), bool(t.get("agent_avatar"))),
                 "is_main": t.get("is_main", False),
                 "running": running,
                 "updated_at": updated_at,
@@ -1315,7 +1316,7 @@ async def stream_thread_events(
     thread = app.state.thread_repo.get_by_id(thread_id)
     if not thread:
         raise HTTPException(404, "Thread not found")
-    agent_member = app.state.member_repo.get_by_id(thread["member_id"])
+    agent_member = app.state.user_repo.get_by_id(thread["agent_user_id"])
     if not agent_member or agent_member.owner_user_id != sse_user_id:
         raise HTTPException(403, "Not authorized")
 

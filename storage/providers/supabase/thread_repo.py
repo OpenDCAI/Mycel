@@ -157,8 +157,8 @@ class SupabaseThreadRepo:
             d = _to_dict(raw)
             agent_user_id = d["agent_user_id"]
             agent_info = user_map.get(agent_user_id, {})
-            d["member_name"] = agent_info.get("display_name")
-            d["member_avatar"] = agent_info.get("avatar")
+            d["agent_name"] = agent_info.get("display_name")
+            d["agent_avatar"] = agent_info.get("avatar")
             result.append(d)
         return result
 
