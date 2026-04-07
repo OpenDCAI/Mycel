@@ -213,3 +213,58 @@ async def test_list_messages_resolves_thread_user_sender_name_via_thread_repo():
             "created_at": "2026-04-07T00:00:00Z",
         }
     ]
+
+
+@pytest.mark.asyncio
+async def test_send_message_accepts_owned_thread_user_sender_id_via_thread_repo():
+    seen: list[tuple[str, str, str]] = []
+    app = SimpleNamespace(
+        state=SimpleNamespace(
+            member_repo=SimpleNamespace(
+                get_by_id=lambda uid: (
+                    None
+                    if uid == "thread-user-1"
+                    else SimpleNamespace(id=uid, name="Toad", type="mycel_agent", avatar=None, owner_user_id="owner-user-1")
+                    if uid == "member-agent-1"
+                    else None
+                )
+            ),
+            thread_repo=SimpleNamespace(
+                get_by_user_id=lambda uid: {"id": "thread-1", "member_id": "member-agent-1"} if uid == "thread-user-1" else None
+            ),
+            messaging_service=SimpleNamespace(
+                send=lambda chat_id, sender_id, content, **_kwargs: (
+                    seen.append((chat_id, sender_id, content))
+                    or {
+                        "id": "msg-1",
+                        "chat_id": chat_id,
+                        "sender_id": sender_id,
+                        "content": content,
+                        "message_type": "human",
+                        "created_at": "2026-04-07T00:00:00Z",
+                    }
+                )
+            ),
+        )
+    )
+
+    result = await messaging_router.send_message(
+        "chat-1",
+        messaging_router.SendMessageBody(content="hello", sender_id="thread-user-1"),
+        user_id="owner-user-1",
+        app=app,
+    )
+
+    assert seen == [("chat-1", "thread-user-1", "hello")]
+    assert result == {
+        "id": "msg-1",
+        "chat_id": "chat-1",
+        "sender_id": "thread-user-1",
+        "sender_name": "Toad",
+        "content": "hello",
+        "message_type": "human",
+        "mentioned_ids": [],
+        "signal": None,
+        "retracted_at": None,
+        "created_at": "2026-04-07T00:00:00Z",
+    }

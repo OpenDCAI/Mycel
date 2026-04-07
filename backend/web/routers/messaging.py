@@ -57,7 +57,9 @@ def _messaging(app: Any):
 
 
 def _verify_member_ownership(app: Any, member_id: str, user_id: str) -> None:
-    member = app.state.member_repo.get_by_id(member_id)
+    # @@@thread-social-owner-check - sender_id can be a thread-owned social user_id, so
+    # ownership must resolve through the thread back to the template member before checking owner.
+    member = _resolve_display_member(app, member_id)
     if not member:
         raise HTTPException(403, "Member not found")
     if member.id == user_id:
