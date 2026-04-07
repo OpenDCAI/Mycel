@@ -11,9 +11,12 @@ def test_monitor_resources_route_smoke():
     payload = response.json()
     assert "summary" in payload
     assert "providers" in payload
+    assert "triage" in payload
     assert "snapshot_at" in payload["summary"]
     assert "running_sessions" in payload["summary"]
     assert isinstance(payload["providers"], list)
+    assert set(payload["triage"]["summary"]).issuperset({"total", "active_drift", "detached_residue", "orphan_cleanup", "healthy_capacity"})
+    assert isinstance(payload["triage"]["groups"], list)
 
 
 def test_monitor_resources_refresh_route_smoke():
@@ -24,8 +27,10 @@ def test_monitor_resources_refresh_route_smoke():
     payload = response.json()
     assert "summary" in payload
     assert "providers" in payload
+    assert "triage" in payload
     assert "last_refreshed_at" in payload["summary"]
     assert "refresh_status" in payload["summary"]
+    assert set(payload["triage"]["summary"]).issuperset({"total", "active_drift", "detached_residue", "orphan_cleanup", "healthy_capacity"})
 
 
 def test_monitor_and_product_resource_routes_coexist_intentionally():

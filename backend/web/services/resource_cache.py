@@ -10,7 +10,7 @@ import time
 from datetime import UTC, datetime
 from typing import Any
 
-from backend.web.services import resource_service
+from backend.web.services import monitor_service, resource_service
 
 _DEFAULT_REFRESH_INTERVAL_SEC = 90.0
 
@@ -59,6 +59,13 @@ def _with_refresh_metadata(
     return payload
 
 
+def _attach_monitor_triage(payload: dict[str, Any]) -> dict[str, Any]:
+    lease_payload = monitor_service.list_leases()
+    triage = lease_payload.get("triage") or {"summary": {}, "groups": []}
+    payload["triage"] = triage
+    return payload
+
+
 def _snapshot_drifted_from_live_sessions(snapshot: dict[str, Any]) -> bool:
     live_stats = resource_service.visible_resource_session_stats()
     for provider in snapshot.get("providers") or []:
@@ -82,6 +89,7 @@ def refresh_resource_overview_sync() -> dict[str, Any]:
     started = time.perf_counter()
     try:
         payload = resource_service.list_resource_providers()
+        payload = _attach_monitor_triage(payload)
         duration_ms = (time.perf_counter() - started) * 1000
         payload = _with_refresh_metadata(payload, duration_ms=duration_ms, status="ok", error=None)
         with _snapshot_lock:

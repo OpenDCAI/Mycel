@@ -122,6 +122,16 @@ def _route_smoke_app_harness(request: pytest.FixtureRequest, monkeypatch: pytest
             "refresh_status": "fresh",
         },
         "providers": [{"id": "local"}],
+        "triage": {
+            "summary": {
+                "total": 1,
+                "active_drift": 0,
+                "detached_residue": 0,
+                "orphan_cleanup": 0,
+                "healthy_capacity": 1,
+            },
+            "groups": [],
+        },
     }
     lease_payload = {
         "summary": {"total": 1, "healthy": 1, "diverged": 0, "orphan": 0, "orphan_diverged": 0},
