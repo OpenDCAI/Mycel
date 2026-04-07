@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { render } from "@testing-library/react";
+import { act, render } from "@testing-library/react";
 import { useEffect } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { useThreadPermissions } from "./use-thread-permissions";
@@ -22,6 +22,7 @@ vi.mock("../api", async () => {
 
 afterEach(() => {
   vi.clearAllMocks();
+  vi.useRealTimers();
   window.history.replaceState({}, "", "/");
 });
 
@@ -35,13 +36,20 @@ function Harness({ threadId }: { threadId?: string }) {
 
 describe("useThreadPermissions", () => {
   it("does not log an error when an in-flight permissions request is aborted on unmount", async () => {
-    const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const consoleError = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => undefined);
 
-    getThreadPermissions.mockImplementation((_threadId: string, signal?: AbortSignal) => new Promise((_, reject) => {
-      signal?.addEventListener("abort", () => {
-        reject(new DOMException("The user aborted a request.", "AbortError"));
-      });
-    }));
+    getThreadPermissions.mockImplementation(
+      (_threadId: string, signal?: AbortSignal) =>
+        new Promise((_, reject) => {
+          signal?.addEventListener("abort", () => {
+            reject(
+              new DOMException("The user aborted a request.", "AbortError"),
+            );
+          });
+        }),
+    );
 
     const view = render(<Harness threadId="thread-1" />);
     view.unmount();
@@ -54,7 +62,9 @@ describe("useThreadPermissions", () => {
 
   it("does not log a failed fetch once navigation already left the thread route", async () => {
     window.history.replaceState({}, "", "/chat/hire/member-1/thread-1");
-    const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const consoleError = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => undefined);
 
     getThreadPermissions.mockImplementation(async () => {
       window.history.replaceState({}, "", "/resources");
@@ -67,6 +77,40 @@ describe("useThreadPermissions", () => {
     await Promise.resolve();
 
     expect(consoleError).not.toHaveBeenCalled();
+    consoleError.mockRestore();
+  });
+
+  it("stops polling permissions after an active-route terminal error", async () => {
+    vi.useFakeTimers();
+    window.history.replaceState({}, "", "/chat/hire/member-1/thread-1");
+    const consoleError = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => undefined);
+
+    getThreadPermissions.mockRejectedValue(
+      new Error(
+        'API 503: {"detail":"Sandbox agent init failed for daytona_selfhost: No module named \'daytona_sdk\'"}',
+      ),
+    );
+
+    render(<Harness threadId="thread-1" />);
+
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(getThreadPermissions).toHaveBeenCalledTimes(1);
+    expect(consoleError).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      vi.advanceTimersByTime(6000);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(getThreadPermissions).toHaveBeenCalledTimes(1);
+    expect(consoleError).toHaveBeenCalledTimes(1);
     consoleError.mockRestore();
   });
 });
