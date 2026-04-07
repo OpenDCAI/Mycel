@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 from types import SimpleNamespace
-from typing import cast
+from typing import Any, cast
 
+import pytest
+
+from core.agents.communication import delivery as delivery_module
 from core.runtime.registry import ToolRegistry
 from messaging.relationships.service import RelationshipService
 from messaging.service import MessagingService
@@ -37,7 +40,7 @@ class _FakeRelationshipRepo:
 
 
 def test_deliver_to_agents_does_not_require_main_thread_id():
-    delivered: list[str] = []
+    delivered: list[tuple[str, str]] = []
     service = MessagingService(
         chat_repo=SimpleNamespace(),
         chat_member_repo=SimpleNamespace(list_members=lambda _chat_id: [{"user_id": "agent-user-1"}]),
@@ -50,12 +53,12 @@ def test_deliver_to_agents_does_not_require_main_thread_id():
                 else SimpleNamespace(id=uid, name="Human", type="human", avatar=None)
             )
         ),
-        delivery_fn=lambda member, *_args, **_kwargs: delivered.append(member.id),
+        delivery_fn=lambda recipient_id, member, *_args, **_kwargs: delivered.append((recipient_id, member.id)),
     )
 
     service._deliver_to_agents("chat-1", "human-user-1", "hello", [])
 
-    assert delivered == ["agent-user-1"]
+    assert delivered == [("agent-user-1", "agent-user-1")]
 
 
 def test_relationship_hire_snapshot_drops_main_thread_id():
@@ -198,3 +201,77 @@ def test_chat_tool_formats_thread_user_id_sender_as_agent_name() -> None:
     rendered = service._format_msgs([{"sender_id": "thread-user-1", "content": "hello"}], "human-user-1")
 
     assert "[Toad]: hello" in rendered
+
+
+def test_deliver_to_agents_routes_delivery_by_thread_user_id() -> None:
+    delivered: list[tuple[str, str]] = []
+    service = MessagingService(
+        chat_repo=SimpleNamespace(),
+        chat_member_repo=SimpleNamespace(list_members=lambda _chat_id: [{"user_id": "thread-user-1"}]),
+        messages_repo=SimpleNamespace(),
+        message_read_repo=SimpleNamespace(),
+        member_repo=SimpleNamespace(
+            get_by_id=lambda uid: (
+                None
+                if uid == "thread-user-1"
+                else SimpleNamespace(id=uid, name="Toad", type="mycel_agent", avatar=None)
+                if uid == "member-agent-1"
+                else SimpleNamespace(id=uid, name="Human", type="human", avatar=None)
+            )
+        ),
+        thread_repo=SimpleNamespace(
+            get_by_user_id=lambda uid: {"id": "thread-1", "member_id": "member-agent-1"} if uid == "thread-user-1" else None
+        ),
+        delivery_fn=lambda recipient_id, member, *_args, **_kwargs: delivered.append((recipient_id, member.id)),
+    )
+
+    service._deliver_to_agents("chat-1", "human-user-1", "hello", [])
+
+    assert delivered == [("thread-user-1", "member-agent-1")]
+
+
+@pytest.mark.asyncio
+async def test_async_deliver_uses_recipient_social_user_id_for_thread_lookup_and_unread(monkeypatch: pytest.MonkeyPatch) -> None:
+    started: list[tuple[str, str, str]] = []
+    unread_calls: list[tuple[str, str]] = []
+    enqueued: list[tuple[str, str, str | None, str | None]] = []
+
+    async def _fake_get_or_create_agent(_app, _sandbox_type: str, *, thread_id: str):
+        return SimpleNamespace(id=f"agent-for-{thread_id}")
+
+    monkeypatch.setattr("backend.web.services.agent_pool.get_or_create_agent", _fake_get_or_create_agent)
+    monkeypatch.setattr("backend.web.services.agent_pool.resolve_thread_sandbox", lambda _app, _thread_id: "local")
+    monkeypatch.setattr("backend.web.services.streaming_service._ensure_thread_handlers", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(
+        "core.runtime.middleware.queue.formatters.format_chat_notification",
+        lambda sender_name, chat_id, unread_count, signal=None: f"{sender_name}|{chat_id}|{unread_count}|{signal}",
+    )
+
+    app = SimpleNamespace(
+        state=SimpleNamespace(
+            thread_repo=SimpleNamespace(
+                get_by_user_id=lambda uid: {"id": "thread-1", "member_id": "member-agent-1"} if uid == "thread-user-1" else None
+            ),
+            typing_tracker=SimpleNamespace(start_chat=lambda thread_id, chat_id, user_id: started.append((thread_id, chat_id, user_id))),
+            messaging_service=SimpleNamespace(count_unread=lambda chat_id, user_id: unread_calls.append((chat_id, user_id)) or 7),
+            queue_manager=SimpleNamespace(
+                enqueue=lambda content, thread_id, notification_type, **meta: enqueued.append(
+                    (content, thread_id, meta.get("sender_id"), meta.get("sender_name"))
+                )
+            ),
+        )
+    )
+
+    await delivery_module._async_deliver(
+        app,
+        "thread-user-1",
+        cast(Any, SimpleNamespace(id="member-agent-1", name="Toad", type="mycel_agent", avatar=None)),
+        "Human",
+        "chat-1",
+        "human-user-1",
+        signal="ping",
+    )
+
+    assert started == [("thread-1", "chat-1", "thread-user-1")]
+    assert unread_calls == [("chat-1", "thread-user-1")]
+    assert enqueued == [("Human|chat-1|7|ping", "thread-1", "human-user-1", "Human")]

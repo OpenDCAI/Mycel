@@ -16,8 +16,8 @@ from storage.contracts import MemberRow
 logger = logging.getLogger(__name__)
 
 
-def _resolve_member_default_thread_id(app: Any, member_id: str) -> str | None:
-    thread = app.state.thread_repo.get_default_thread(member_id)
+def _resolve_recipient_thread_id(app: Any, recipient_id: str) -> str | None:
+    thread = app.state.thread_repo.get_by_user_id(recipient_id)
     if thread is None:
         return None
     return thread["id"]
@@ -35,6 +35,7 @@ def make_chat_delivery_fn(app: Any):
     logger.info("[delivery] make_chat_delivery_fn: loop=%s", loop)
 
     def _deliver(
+        recipient_id: str,
         member: MemberRow,
         content: str,
         sender_name: str,
@@ -43,13 +44,13 @@ def make_chat_delivery_fn(app: Any):
         sender_avatar_url: str | None = None,
         signal: str | None = None,
     ) -> None:
-        logger.info("[delivery] _deliver called: member=%s", member.id)
+        logger.info("[delivery] _deliver called: recipient=%s member=%s", recipient_id, member.id)
         future = asyncio.run_coroutine_threadsafe(
-            _async_deliver(app, member, sender_name, chat_id, sender_id, sender_avatar_url, signal=signal),
+            _async_deliver(app, recipient_id, member, sender_name, chat_id, sender_id, sender_avatar_url, signal=signal),
             loop,
         )
 
-        future.add_done_callback(functools.partial(_log_delivery_result, member.id))
+        future.add_done_callback(functools.partial(_log_delivery_result, recipient_id))
 
     return _deliver
 
@@ -65,6 +66,7 @@ def _log_delivery_result(member_id: str, f: Any) -> None:
 
 async def _async_deliver(
     app: Any,
+    recipient_id: str,
     member: MemberRow,
     sender_name: str,
     chat_id: str,
@@ -80,12 +82,14 @@ async def _async_deliver(
 
     var_child_runnable_config.set(None)
 
-    thread_id = _resolve_member_default_thread_id(app, member.id)
-    logger.info("[delivery] _async_deliver: member=%s thread=%s from=%s", member.id, thread_id, sender_name)
+    # @@@thread-delivery-route - delivery target must come from the recipient social handle,
+    # never from the template default-thread shortcut.
+    thread_id = _resolve_recipient_thread_id(app, recipient_id)
+    logger.info("[delivery] _async_deliver: recipient=%s member=%s thread=%s from=%s", recipient_id, member.id, thread_id, sender_name)
     from core.runtime.middleware.queue.formatters import format_chat_notification
 
     if not thread_id:
-        logger.warning("Member %s has no main thread, skipping delivery", member.id)
+        logger.warning("Recipient %s has no thread, skipping delivery", recipient_id)
         return
 
     from backend.web.services.agent_pool import get_or_create_agent, resolve_thread_sandbox
@@ -97,9 +101,9 @@ async def _async_deliver(
 
     typing_tracker = getattr(app.state, "typing_tracker", None)
     if typing_tracker is not None:
-        typing_tracker.start_chat(thread_id, chat_id, member.id)
+        typing_tracker.start_chat(thread_id, chat_id, recipient_id)
 
-    unread_count = app.state.messaging_service.count_unread(chat_id, member.id)
+    unread_count = app.state.messaging_service.count_unread(chat_id, recipient_id)
 
     formatted = format_chat_notification(sender_name, chat_id, unread_count, signal=signal)
 

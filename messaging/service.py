@@ -169,7 +169,7 @@ class MessagingService:
             uid = member.get("user_id")
             if not uid or uid == sender_id:
                 continue
-            m = self._member_repo.get_by_id(uid)
+            m = self._resolve_display_member(uid)
             if not m or m.type == "human":
                 continue
 
@@ -184,7 +184,7 @@ class MessagingService:
 
             if self._delivery_fn:
                 try:
-                    self._delivery_fn(m, content, sender_name, chat_id, sender_id, sender_avatar_url, signal=signal)
+                    self._delivery_fn(uid, m, content, sender_name, chat_id, sender_id, sender_avatar_url, signal=signal)
                 except Exception:
                     logger.exception("[messaging] delivery failed for member %s", uid)
 
