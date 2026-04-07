@@ -555,9 +555,9 @@ def _create_owned_thread(
     import time
 
     sandbox_type = payload.sandbox or "local"
-    agent_member_id = payload.agent_user_id
-    agent_member = app.state.member_repo.get_by_id(agent_member_id)
-    if not agent_member or agent_member.owner_user_id != owner_user_id:
+    agent_user_id = payload.agent_user_id
+    agent_user = app.state.user_repo.get_by_id(agent_user_id)
+    if not agent_user or agent_user.owner_user_id != owner_user_id:
         raise HTTPException(403, "Not authorized")
 
     selected_lease_id = payload.lease_id
@@ -580,15 +580,18 @@ def _create_owned_thread(
         sandbox_type = str(owned_lease["provider_name"] or sandbox_type)
 
     # @@@non-atomic-create - these 3 steps (seq++, thread) are not atomic.
-    seq = app.state.member_repo.increment_thread_seq(agent_member_id)
-    new_thread_id = f"{agent_member_id}-{seq}"
-    has_main = app.state.thread_repo.get_default_thread(agent_member_id) is not None
+    # @@@user-owned-thread-seq - thread ids are now allocated from the unified
+    # user identity root, so create-path sequencing must fail loudly through
+    # user_repo instead of silently reaching back into member_repo.
+    seq = app.state.user_repo.increment_thread_seq(agent_user_id)
+    new_thread_id = f"{agent_user_id}-{seq}"
+    has_main = app.state.thread_repo.get_default_thread(agent_user_id) is not None
     resolved_is_main = is_main or not has_main
-    branch_index = 0 if resolved_is_main else app.state.thread_repo.get_next_branch_index(agent_member_id)
+    branch_index = 0 if resolved_is_main else app.state.thread_repo.get_next_branch_index(agent_user_id)
 
     app.state.thread_repo.create(
         thread_id=new_thread_id,
-        agent_user_id=agent_member_id,
+        agent_user_id=agent_user_id,
         user_id=new_thread_id,
         sandbox_type=sandbox_type,
         cwd=payload.cwd,
@@ -634,16 +637,16 @@ def _create_owned_thread(
             model=payload.model,
             workspace=app.state.thread_cwd.get(new_thread_id) or payload.cwd,
         )
-    save_last_successful_config(app, owner_user_id, agent_member_id, successful_config)
+    save_last_successful_config(app, owner_user_id, agent_user_id, successful_config)
 
     return {
         "thread_id": new_thread_id,
         "sandbox": sandbox_type,
-        "agent_user_id": agent_member_id,
-        "agent_name": agent_member.name,
+        "agent_user_id": agent_user_id,
+        "agent_name": agent_user.display_name,
         "branch_index": branch_index,
         "sidebar_label": sidebar_label(is_main=resolved_is_main, branch_index=branch_index),
-        "avatar_url": avatar_url(agent_member_id, bool(agent_member.avatar)),
+        "avatar_url": avatar_url(agent_user_id, bool(agent_user.avatar)),
         "is_main": resolved_is_main,
     }
 

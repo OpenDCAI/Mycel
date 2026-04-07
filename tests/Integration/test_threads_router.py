@@ -57,9 +57,14 @@ class _FakeUserRepo:
                 created_at=1.0,
             )
         }
+        self._seq = {"member-1": 0}
 
     def get_by_id(self, user_id: str):
         return self._users.get(user_id)
+
+    def increment_thread_seq(self, user_id: str) -> int:
+        self._seq[user_id] += 1
+        return self._seq[user_id]
 
 
 class _FakeThreadRepo:

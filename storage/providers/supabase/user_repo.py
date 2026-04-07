@@ -15,6 +15,7 @@ _COLS = (
     "display_name",
     "owner_user_id",
     "agent_config_id",
+    "next_thread_seq",
     "avatar",
     "email",
     "mycel_id",
@@ -38,6 +39,7 @@ class SupabaseUserRepo:
                 "display_name": row.display_name,
                 "owner_user_id": row.owner_user_id,
                 "agent_config_id": row.agent_config_id,
+                "next_thread_seq": row.next_thread_seq,
                 "avatar": row.avatar,
                 "email": row.email,
                 "mycel_id": row.mycel_id,
@@ -88,6 +90,22 @@ class SupabaseUserRepo:
         if not updates:
             return
         self._t().update(updates).eq("id", user_id).execute()
+
+    def increment_thread_seq(self, user_id: str) -> int:
+        response = self._client.rpc("increment_user_thread_seq", {"p_user_id": user_id}).execute()
+        if isinstance(response, dict):
+            data = response.get("data")
+        else:
+            data = getattr(response, "data", None)
+        if data is None:
+            raise RuntimeError(
+                f"Supabase {_USER_REPO} expected data from increment_user_thread_seq RPC. Check the function exists and user_id is valid."
+            )
+        if isinstance(data, list):
+            if not data:
+                raise RuntimeError(f"Supabase {_USER_REPO} increment_thread_seq returned empty list for user {user_id}.")
+            return int(data[0])
+        return int(data)
 
     def delete(self, user_id: str) -> None:
         self._t().delete().eq("id", user_id).execute()

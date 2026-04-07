@@ -61,3 +61,17 @@ def test_agent_user_row_accepts_owner_and_agent_config() -> None:
     assert row.type is UserType.AGENT
     assert row.owner_user_id == "owner-1"
     assert row.agent_config_id == "cfg-1"
+
+
+def test_user_row_accepts_next_thread_seq() -> None:
+    row = UserRow(
+        id="user-1",
+        type=UserType.AGENT,
+        display_name="Toad",
+        owner_user_id="owner-1",
+        agent_config_id="cfg-1",
+        next_thread_seq=7,
+        created_at=1.0,
+    )
+
+    assert row.next_thread_seq == 7
