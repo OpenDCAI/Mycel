@@ -472,6 +472,12 @@ async def get_profile(
 @router.put("/profile")
 async def update_profile(
     req: UpdateProfileRequest,
+    request: Request,
     user_id: Annotated[str, Depends(get_current_user_id)],
 ) -> dict[str, Any]:
-    return await asyncio.to_thread(profile_service.update_profile, **req.model_dump())
+    return await asyncio.to_thread(
+        profile_service.update_profile,
+        user_repo=request.app.state.user_repo,
+        user_id=user_id,
+        **req.model_dump(),
+    )

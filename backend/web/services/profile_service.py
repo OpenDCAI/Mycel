@@ -51,14 +51,13 @@ def get_profile(user: UserRow | None = None) -> dict[str, Any]:
     }
 
 
-def update_profile(**fields: Any) -> dict[str, Any]:
-    allowed = {"name", "initials", "email"}
-    updates = {k: v for k, v in fields.items() if k in allowed and v is not None}
+def update_profile(*, user_repo: Any, user_id: str, **fields: Any) -> dict[str, Any]:
+    updates: dict[str, Any] = {}
+    if fields.get("name") is not None:
+        updates["display_name"] = fields["name"]
+    if fields.get("email") is not None:
+        updates["email"] = fields["email"]
     if not updates:
-        return get_profile()
-    cfg = _read_json(preferred_existing_user_home_path("config.json"), {})
-    profile = cfg.get("profile", {})
-    profile.update(updates)
-    cfg["profile"] = profile
-    _write_json(CONFIG_PATH, cfg)
-    return get_profile()
+        return get_profile(user_repo.get_by_id(user_id))
+    user_repo.update(user_id, **updates)
+    return get_profile(user_repo.get_by_id(user_id))

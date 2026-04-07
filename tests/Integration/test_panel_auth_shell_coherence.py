@@ -6,7 +6,7 @@ from types import SimpleNamespace
 import pytest
 from fastapi import HTTPException
 
-from backend.web.models.panel import PublishMemberRequest, UpdateMemberRequest
+from backend.web.models.panel import PublishMemberRequest, UpdateMemberRequest, UpdateProfileRequest
 from backend.web.routers import panel as panel_router
 from backend.web.services import member_service, profile_service
 from storage.contracts import MemberRow, MemberType, UserRow, UserType
@@ -176,6 +176,67 @@ async def test_profile_route_uses_user_repo_instead_of_member_repo():
     )
 
     assert result == {"name": "codex", "initials": "CO", "email": "codex@example.com"}
+
+
+def test_profile_service_updates_user_repo_shell_fields_only():
+    seen: list[tuple[str, dict[str, object]]] = []
+
+    class _UserRepo:
+        def update(self, user_id: str, **fields):
+            seen.append((user_id, fields))
+
+        def get_by_id(self, user_id: str):
+            if user_id != "user-1":
+                return None
+            return UserRow(
+                id="user-1",
+                type=UserType.HUMAN,
+                display_name="renamed",
+                email="renamed@example.com",
+                created_at=1.0,
+                updated_at=2.0,
+            )
+
+    profile = profile_service.update_profile(
+        user_repo=_UserRepo(),
+        user_id="user-1",
+        name="renamed",
+        initials="RN",
+        email="renamed@example.com",
+    )
+
+    assert seen == [("user-1", {"display_name": "renamed", "email": "renamed@example.com"})]
+    assert profile == {"name": "renamed", "initials": "RE", "email": "renamed@example.com"}
+
+
+@pytest.mark.asyncio
+async def test_update_profile_route_uses_user_repo_instead_of_config_file():
+    seen: list[tuple[str, dict[str, object]]] = []
+
+    class _UserRepo:
+        def update(self, user_id: str, **fields):
+            seen.append((user_id, fields))
+
+        def get_by_id(self, user_id: str):
+            if user_id != "user-1":
+                return None
+            return UserRow(
+                id="user-1",
+                type=UserType.HUMAN,
+                display_name="renamed",
+                email="renamed@example.com",
+                created_at=1.0,
+                updated_at=2.0,
+            )
+
+    result = await panel_router.update_profile(
+        UpdateProfileRequest(name="renamed", initials="RN", email="renamed@example.com"),
+        request=SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(user_repo=_UserRepo()))),
+        user_id="user-1",
+    )
+
+    assert seen == [("user-1", {"display_name": "renamed", "email": "renamed@example.com"})]
+    assert result == {"name": "renamed", "initials": "RE", "email": "renamed@example.com"}
 
 
 def test_builtin_member_surface_exposes_chat_tools():
