@@ -1,14 +1,14 @@
 import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { getMainThread } from "../api/client";
+import { getDefaultThread } from "../api/client";
 import { useAuthStore } from "../store/auth-store";
 
-const defaultThreadInflight = new Map<string, Promise<Awaited<ReturnType<typeof getMainThread>>>>();
+const defaultThreadInflight = new Map<string, Promise<Awaited<ReturnType<typeof getDefaultThread>>>>();
 
 function loadDefaultThread(memberId: string) {
   const existing = defaultThreadInflight.get(memberId);
   if (existing) return existing;
-  const pending = getMainThread(memberId).finally(() => {
+  const pending = getDefaultThread(memberId).finally(() => {
     defaultThreadInflight.delete(memberId);
   });
   defaultThreadInflight.set(memberId, pending);

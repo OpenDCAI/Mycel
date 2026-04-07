@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import {
   createThread,
   deleteThread,
-  getMainThread,
+  getDefaultThread,
   listSandboxTypes,
   listThreads,
   type RecipeSnapshot,
@@ -34,7 +34,7 @@ export interface ThreadManagerActions {
     leaseId?: string,
     recipe?: RecipeSnapshot,
   ) => Promise<string>;
-  handleGetMainThread: (memberId: string, signal?: AbortSignal) => Promise<ThreadSummary | null>;
+  handleGetDefaultThread: (memberId: string, signal?: AbortSignal) => Promise<ThreadSummary | null>;
   handleDeleteThread: (threadId: string) => Promise<void>;
 }
 
@@ -109,8 +109,8 @@ export function useThreadManager(): ThreadManagerState & ThreadManagerActions {
 
   // @@@template-default-thread-entry - this hook resolves a template entry to its
   // current default thread without changing the existing backend wire name yet.
-  const handleGetMainThread = useCallback(async (memberId: string, signal?: AbortSignal): Promise<ThreadSummary | null> => {
-    const thread = await getMainThread(memberId, signal);
+  const handleGetDefaultThread = useCallback(async (memberId: string, signal?: AbortSignal): Promise<ThreadSummary | null> => {
+    const thread = await getDefaultThread(memberId, signal);
     if (thread) {
       setThreads((prev) => upsertThread(prev, thread));
     }
@@ -128,6 +128,6 @@ export function useThreadManager(): ThreadManagerState & ThreadManagerActions {
   return {
     threads, sandboxTypes, selectedSandbox, loading,
     setSelectedSandbox, setThreads,
-    refreshThreads, handleCreateThread, handleGetMainThread, handleDeleteThread,
+    refreshThreads, handleCreateThread, handleGetDefaultThread, handleDeleteThread,
   };
 }

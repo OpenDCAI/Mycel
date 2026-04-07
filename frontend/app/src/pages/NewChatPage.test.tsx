@@ -7,7 +7,7 @@ import NewChatPage from "./NewChatPage";
 import { useAuthStore } from "../store/auth-store";
 import { useAppStore } from "../store/app-store";
 
-const handleGetMainThread = vi.fn();
+const handleGetDefaultThread = vi.fn();
 
 vi.mock("zustand/middleware", async () => {
   const actual = await vi.importActual<typeof import("zustand/middleware")>("zustand/middleware");
@@ -66,7 +66,7 @@ function ContextOutlet() {
           setThreads: vi.fn(),
           refreshThreads: vi.fn(),
           handleCreateThread: vi.fn(),
-          handleGetMainThread,
+          handleGetDefaultThread,
           handleDeleteThread: vi.fn(),
         },
         sidebarCollapsed: false,
@@ -79,8 +79,8 @@ function ContextOutlet() {
 
 describe("NewChatPage", () => {
   beforeEach(() => {
-    handleGetMainThread.mockReset();
-    handleGetMainThread.mockResolvedValue(null);
+    handleGetDefaultThread.mockReset();
+    handleGetDefaultThread.mockResolvedValue(null);
 
     useAuthStore.setState({
       token: "token",
@@ -178,8 +178,8 @@ describe("NewChatPage", () => {
   });
 
   it("uses default-thread wording while resolving the template entry", async () => {
-    handleGetMainThread.mockReset();
-    handleGetMainThread.mockImplementation(() => new Promise(() => {}));
+    handleGetDefaultThread.mockReset();
+    handleGetDefaultThread.mockImplementation(() => new Promise(() => {}));
 
     render(
       <MemoryRouter initialEntries={["/chat/hire/m_xVuNpKJNxblZ"]}>

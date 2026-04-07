@@ -117,12 +117,12 @@ export default function NewChatPage({ mode = "member" }: { mode?: "member" | "ne
   const navigate = useNavigate();
   const { memberId } = useParams<{ memberId: string }>();
   const { tm } = useOutletContext<OutletContext>();
-  const { sandboxTypes, selectedSandbox, handleCreateThread, handleGetMainThread } = tm;
+  const { sandboxTypes, selectedSandbox, handleCreateThread, handleGetDefaultThread } = tm;
   const { settings, loading, hasWorkspace, refreshSettings, setDefaultWorkspace } = useWorkspaceSettings();
-  const shouldResolveMain = mode === "member";
+  const shouldResolveDefaultThread = mode === "member";
   const [error, setError] = useState<string | null>(null);
   const [resolveState, setResolveState] = useState<"resolving" | "ready" | "error">(
-    shouldResolveMain ? "resolving" : "ready",
+    shouldResolveDefaultThread ? "resolving" : "ready",
   );
   const [showWorkspaceSetup, setShowWorkspaceSetup] = useState(false);
   const [createMode, setCreateMode] = useState<"new" | "existing">("new");
@@ -150,12 +150,12 @@ export default function NewChatPage({ mode = "member" }: { mode?: "member" | "ne
   const memberAvatarUrl = resolvedMember?.avatar_url;
 
   useEffect(() => {
-    if (!shouldResolveMain) return;
+    if (!shouldResolveDefaultThread) return;
 
     let cancelled = false;
     const ac = new AbortController();
 
-    async function resolveMainThread() {
+    async function resolveDefaultThread() {
       if (!decodedMemberId) {
         setError("Missing member ID");
         setResolveState("error");
@@ -163,7 +163,7 @@ export default function NewChatPage({ mode = "member" }: { mode?: "member" | "ne
       }
 
       try {
-        const thread = await handleGetMainThread(decodedMemberId, ac.signal);
+        const thread = await handleGetDefaultThread(decodedMemberId, ac.signal);
         if (cancelled) return;
         if (thread) {
           navigate(`/chat/hire/${encodeURIComponent(decodedMemberId)}/${thread.thread_id}`, { replace: true });
@@ -180,12 +180,12 @@ export default function NewChatPage({ mode = "member" }: { mode?: "member" | "ne
       }
     }
 
-    void resolveMainThread();
+    void resolveDefaultThread();
     return () => {
       cancelled = true;
       ac.abort();
     };
-  }, [decodedMemberId, handleGetMainThread, navigate, shouldResolveMain]);
+  }, [decodedMemberId, handleGetDefaultThread, navigate, shouldResolveDefaultThread]);
 
   useEffect(() => {
     let cancelled = false;

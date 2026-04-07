@@ -61,7 +61,7 @@ export async function createThread(opts: CreateThreadOptions): Promise<ThreadSum
   return request<ThreadSummary>("/api/threads", { method: "POST", body: JSON.stringify(body) });
 }
 
-export async function getMainThread(memberId: string, signal?: AbortSignal): Promise<ThreadSummary | null> {
+export async function getDefaultThread(memberId: string, signal?: AbortSignal): Promise<ThreadSummary | null> {
   // @@@default-thread-wire-legacy - frontend now treats this as a template ->
   // default-thread resolver, but the backend endpoint name stays `/threads/main`
   // until the route contract is renamed in a later slice.
