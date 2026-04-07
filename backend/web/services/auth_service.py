@@ -175,6 +175,39 @@ class AuthService:
             "agent": agent_info,
         }
 
+    def send_password_reset(self, email: str, redirect_to: str) -> None:
+        """Send a password reset email via Supabase GoTrue."""
+        if self._sb is None:
+            raise RuntimeError("Supabase client required.")
+        from supabase_auth.errors import AuthApiError
+
+        try:
+            self._sb.auth.reset_password_for_email(email, options={"redirect_to": redirect_to})
+        except AuthApiError as e:
+            raise ValueError(f"发送失败: {e.message}") from e
+
+    def update_password(self, access_token: str, new_password: str) -> None:
+        """Update user password using a recovery access token."""
+        if self._sb is None:
+            raise RuntimeError("Supabase client required.")
+        jwt_secret = os.getenv("SUPABASE_JWT_SECRET")
+        if not jwt_secret:
+            raise RuntimeError("SUPABASE_JWT_SECRET not set.")
+        try:
+            payload = jwt.decode(
+                access_token, jwt_secret, algorithms=[SUPABASE_JWT_ALGORITHM], options={"verify_aud": False}
+            )
+        except jwt.InvalidTokenError as e:
+            raise ValueError("重置链接已过期，请重新申请") from e
+        user_id = payload["sub"]
+        from supabase_auth.errors import AuthApiError
+
+        try:
+            self._sb.auth.admin.update_user_by_id(user_id, {"password": new_password})
+        except AuthApiError as e:
+            raise ValueError(f"密码更新失败: {e.message}") from e
+        logger.info("Password updated for user %s", user_id)
+
     def verify_token(self, token: str) -> dict:
         """Verify Supabase JWT. Returns {user_id}."""
         auth_client = self._sb_auth_factory() if self._sb_auth_factory is not None else self._sb_auth

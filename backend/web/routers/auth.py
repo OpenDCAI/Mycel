@@ -72,3 +72,31 @@ class LoginRequest(BaseModel):
 @router.post("/login")
 async def login(payload: LoginRequest, app: Annotated[Any, Depends(get_app)]) -> dict:
     return await _call_auth_service(app, 401, "login", payload.identifier, payload.password)
+
+
+# ── Forgot password ──────────────────────────────────────────────────────────
+
+
+class ForgotPasswordRequest(BaseModel):
+    email: str
+    redirect_to: str
+
+
+@router.post("/forgot-password")
+async def forgot_password(payload: ForgotPasswordRequest, app: Annotated[Any, Depends(get_app)]) -> dict:
+    await _call_auth_service(app, 400, "send_password_reset", payload.email, payload.redirect_to)
+    return {"ok": True}
+
+
+# ── Reset password ───────────────────────────────────────────────────────────
+
+
+class UpdatePasswordRequest(BaseModel):
+    access_token: str
+    new_password: str
+
+
+@router.post("/update-password")
+async def update_password(payload: UpdatePasswordRequest, app: Annotated[Any, Depends(get_app)]) -> dict:
+    await _call_auth_service(app, 400, "update_password", payload.access_token, payload.new_password)
+    return {"ok": True}

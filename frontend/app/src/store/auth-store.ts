@@ -34,6 +34,8 @@ interface AuthState {
   completeRegister: (tempToken: string, inviteCode: string) => Promise<void>;
   clearSetupInfo: () => void;
   logout: () => void;
+  forgotPassword: (email: string) => Promise<void>;
+  updatePassword: (accessToken: string, newPassword: string) => Promise<void>;
 }
 
 async function apiPost(endpoint: string, body: Record<string, string>) {
@@ -105,6 +107,14 @@ export const useAuthStore = create<AuthState>()(
 
       logout: () => {
         set({ token: null, user: null, agent: null, userId: null, setupInfo: null });
+      },
+
+      forgotPassword: async (email) => {
+        await apiPost("forgot-password", { email, redirect_to: window.location.origin });
+      },
+
+      updatePassword: async (accessToken, newPassword) => {
+        await apiPost("update-password", { access_token: accessToken, new_password: newPassword });
       },
     }),
     {
