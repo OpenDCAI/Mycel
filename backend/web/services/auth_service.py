@@ -201,7 +201,12 @@ class AuthService:
             raise ValueError(f"发送失败: {e.message}") from e
 
     def update_password(self, access_token: str, new_password: str) -> None:
-        """Update user password using a recovery access token."""
+        """Update user password using a recovery access token.
+
+        Calls the GoTrue admin REST API directly with the service role key to avoid
+        supabase-py session state contamination (verify_otp sets a user session on the
+        shared client, which would cause admin.update_user_by_id to use the wrong JWT).
+        """
         if self._sb is None:
             raise RuntimeError("Supabase client required.")
         jwt_secret = os.getenv("SUPABASE_JWT_SECRET")
@@ -214,12 +219,29 @@ class AuthService:
         except jwt.InvalidTokenError as e:
             raise ValueError("重置链接已过期，请重新申请") from e
         user_id = payload["sub"]
-        from supabase_auth.errors import AuthApiError
+
+        supabase_url = (os.getenv("SUPABASE_INTERNAL_URL") or os.getenv("SUPABASE_PUBLIC_URL", "")).rstrip("/")
+        service_role_key = os.getenv("LEON_SUPABASE_SERVICE_ROLE_KEY", "")
+
+        import httpx
 
         try:
-            self._sb.auth.admin.update_user_by_id(user_id, {"password": new_password})
-        except AuthApiError as e:
-            raise ValueError(f"密码更新失败: {e.message}") from e
+            resp = httpx.put(
+                f"{supabase_url}/auth/v1/admin/users/{user_id}",
+                json={"password": new_password},
+                headers={
+                    "Authorization": f"Bearer {service_role_key}",
+                    "apikey": service_role_key,
+                },
+                timeout=10.0,
+            )
+        except httpx.RequestError as e:
+            raise ValueError(f"网络错误: {e}") from e
+
+        if not resp.is_success:
+            body = resp.json() if "application/json" in resp.headers.get("content-type", "") else {}
+            raise ValueError(body.get("message") or body.get("msg") or "密码更新失败")
+
         logger.info("Password updated for user %s", user_id)
 
     def verify_token(self, token: str) -> dict:
