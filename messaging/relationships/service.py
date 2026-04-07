@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 import logging
+import time
 from typing import Any
 
-from messaging._utils import now_iso
 from messaging.contracts import RelationshipEvent, RelationshipRow, RelationshipState
 from messaging.relationships.state_machine import transition
 
@@ -76,11 +76,11 @@ class RelationshipService:
             "initiator_user_id": initiator_user_id,
         }
         if new_state == "hire" and current_state != "hire":
-            fields["hire_granted_at"] = now_iso()
+            fields["hire_granted_at"] = time.time()
             if hire_snapshot:
                 fields["hire_snapshot"] = hire_snapshot
         if new_state == "none" and current_state in ("hire", "visit"):
-            fields["hire_revoked_at"] = now_iso()
+            fields["hire_revoked_at"] = time.time()
             if current_state == "hire" and self._user_repo is not None:
                 other_id = user_high if actor_id == user_low else user_low
                 # @@@thread-user-hire-snapshot - relationship principals can now be thread-owned
@@ -89,7 +89,7 @@ class RelationshipService:
                 fields["hire_snapshot"] = {
                     "user_id": other_id,
                     "name": m.display_name if m else other_id,
-                    "snapshot_at": now_iso(),
+                    "snapshot_at": time.time(),
                 }
 
         row = self._repo.upsert(actor_id, target_id, **fields)

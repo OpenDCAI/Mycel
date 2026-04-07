@@ -260,7 +260,7 @@ class SupabaseRelationshipRepo:
     def upsert(self, user_a: str, user_b: str, **fields: Any) -> dict[str, Any]:
         user_low, user_high = self._ordered(user_a, user_b)
         existing = self.get(user_a, user_b)
-        now = now_iso()
+        now = time.time()
         if existing:
             if fields.get("state") == "none":
                 (

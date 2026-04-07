@@ -85,6 +85,8 @@ def test_supabase_relationship_repo_upsert_writes_pair_initiator_and_kind() -> N
     assert client.table_obj.insert_payload["user_high"] == "human-user-1"
     assert client.table_obj.insert_payload["kind"] == "hire_visit"
     assert client.table_obj.insert_payload["initiator_user_id"] == "human-user-1"
+    assert isinstance(client.table_obj.insert_payload["created_at"], float)
+    assert isinstance(client.table_obj.insert_payload["updated_at"], float)
     assert "principal_a" not in client.table_obj.insert_payload
     assert "principal_b" not in client.table_obj.insert_payload
     assert row["id"] == "hire_visit:agent-user-1:human-user-1"
