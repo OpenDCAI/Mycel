@@ -309,6 +309,10 @@ function ProviderCard({
   const pausedCount = provider.sessions.filter((session) => session.status === "paused").length;
   const stoppedCount = provider.sessions.filter((session) => session.status === "stopped").length;
   const capabilityList = capabilityTags(provider.capabilities);
+  const showCpuMetric = provider.cardCpu.used != null || provider.cardCpu.limit != null;
+  const unavailableHint =
+    provider.unavailableReason ||
+    (provider.type === "container" ? "需要容器运行时" : "当前进程未安装对应 SDK");
 
   return (
     <button
@@ -328,10 +332,19 @@ function ProviderCard({
         <span className="provider-card__kind">{PROVIDER_TYPE_LABEL[provider.type]}</span>
       </div>
 
-      <div className="provider-card__metric-row">
-        <MetricOrb label="运行数" metric={provider.telemetry.running} />
-        <MetricOrb label="CPU" metric={provider.cardCpu} />
-      </div>
+      {provider.status === "unavailable" ? (
+        // @@@unavailable-card-truth - monitor cards must say when a provider is unavailable;
+        // showing a neutral `-- CPU` card hides the real operator actionability.
+        <div className="provider-card__unavailable">
+          <div className="provider-card__unavailable-label">未就绪</div>
+          <div className="provider-card__unavailable-reason">{unavailableHint}</div>
+        </div>
+      ) : (
+        <div className="provider-card__metric-row">
+          <MetricOrb label="运行数" metric={provider.telemetry.running} />
+          {showCpuMetric && <MetricOrb label="CPU" metric={provider.cardCpu} />}
+        </div>
+      )}
 
       <div className="provider-card__footer">
         <span>{runningCount} 占用中</span>

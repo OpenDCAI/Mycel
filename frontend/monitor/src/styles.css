@@ -452,6 +452,33 @@ div:has(> :only-child:is(div:contains("Loading"))) {
   margin: 1rem 0 0.9rem;
 }
 
+.provider-card__unavailable {
+  display: grid;
+  place-items: center;
+  gap: 0.3rem;
+  min-height: 98px;
+  margin: 1rem 0 0.9rem;
+  padding: 0.9rem 0.8rem;
+  border-radius: 16px;
+  border: 1px solid rgba(249, 112, 102, 0.18);
+  background: rgba(249, 112, 102, 0.08);
+  text-align: center;
+}
+
+.provider-card__unavailable-label {
+  color: #ffd4cf;
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.provider-card__unavailable-reason {
+  color: #c3cad7;
+  font-size: 0.75rem;
+  line-height: 1.45;
+}
+
 .metric-orb {
   min-width: 72px;
   text-align: center;
