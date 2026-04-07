@@ -3,8 +3,10 @@ from __future__ import annotations
 from types import SimpleNamespace
 from typing import cast
 
+from core.runtime.registry import ToolRegistry
 from messaging.relationships.service import RelationshipService
 from messaging.service import MessagingService
+from messaging.tools.chat_tool_service import ChatToolService
 
 
 class _FakeRelationshipRepo:
@@ -71,3 +73,50 @@ def test_relationship_hire_snapshot_drops_main_thread_id():
     assert row.hire_snapshot["user_id"] == "agent-user-1"
     assert row.hire_snapshot["name"] == "Toad"
     assert "main_thread_id" not in row.hire_snapshot
+
+
+def test_chat_tool_directory_uses_neutral_id_label() -> None:
+    registry = ToolRegistry()
+    ChatToolService(
+        registry=registry,
+        user_id="owner-user-1",
+        owner_id="owner-user-1",
+        member_repo=SimpleNamespace(
+            list_all=lambda: [
+                SimpleNamespace(id="agent-user-1", name="Toad", type="mycel_agent", owner_user_id="owner-user-1"),
+            ],
+            get_by_id=lambda member_id: (
+                SimpleNamespace(id=member_id, name="Owner", owner_user_id=None) if member_id == "owner-user-1" else None
+            ),
+        ),
+        relationship_repo=None,
+    )
+
+    directory = registry.get("directory")
+    assert directory is not None
+
+    result = directory.handler()
+    assert isinstance(result, str)
+
+    assert "id=agent-user-1" in result
+    assert "user_id=agent-user-1" not in result
+
+
+def test_chat_tool_send_schema_marks_user_id_name_as_legacy() -> None:
+    registry = ToolRegistry()
+    ChatToolService(
+        registry=registry,
+        user_id="agent-user-1",
+        owner_id="owner-user-1",
+    )
+
+    chat_send = registry.get("chat_send")
+    directory = registry.get("directory")
+    assert chat_send is not None
+    assert directory is not None
+
+    chat_send_schema = chat_send.get_schema()
+    directory_schema = directory.get_schema()
+
+    assert "legacy" in chat_send_schema["parameters"]["properties"]["user_id"]["description"].lower()
+    assert "chat_send(user_id" in directory_schema["description"]

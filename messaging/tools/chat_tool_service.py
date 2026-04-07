@@ -169,7 +169,7 @@ class ChatToolService:
                 mode=ToolMode.INLINE,
                 schema={
                     "name": "chats",
-                    "description": "List your chats. Returns chat summaries with user_ids of participants.",
+                    "description": "List your chats. Returns chat summaries with participant ids from the current social-id slot.",
                     "parameters": {
                         "type": "object",
                         "properties": {
@@ -243,7 +243,10 @@ class ChatToolService:
                     "parameters": {
                         "type": "object",
                         "properties": {
-                            "user_id": {"type": "string", "description": "User_id for 1:1 chat history"},
+                            "user_id": {
+                                "type": "string",
+                                "description": "Participant id for 1:1 chat history. Parameter name is legacy.",
+                            },
                             "chat_id": {"type": "string", "description": "Chat_id for group chat history"},
                             "range": {
                                 "type": "string",
@@ -303,7 +306,8 @@ class ChatToolService:
                 schema={
                     "name": "chat_send",
                     "description": (
-                        "Send a message. Use user_id for 1:1 chats, chat_id for group chats.\n\n"
+                        "Send a message. Use the directory-listed id for 1:1 chats and chat_id for group chats.\n"
+                        "The user_id parameter name is legacy.\n\n"
                         "You MUST call chat_read() first if you have unread messages — sending will fail otherwise.\n\n"
                         "Signal protocol:\n"
                         "  (no tag) = I expect a reply from you\n"
@@ -314,7 +318,12 @@ class ChatToolService:
                         "type": "object",
                         "properties": {
                             "content": {"type": "string", "description": "Message content"},
-                            "user_id": {"type": "string", "description": "Target user_id (for 1:1 chat)"},
+                            "user_id": {
+                                "type": "string",
+                                "description": (
+                                    "Target participant id for 1:1 chat. Parameter name is legacy; pass the id shown by directory."
+                                ),
+                            },
                             "chat_id": {"type": "string", "description": "Target chat_id (for group chat)"},
                             "signal": {"type": "string", "enum": ["open", "yield", "close"], "default": "open"},
                             "mentions": {
@@ -361,7 +370,7 @@ class ChatToolService:
                             "query": {"type": "string", "description": "Search query"},
                             "user_id": {
                                 "type": "string",
-                                "description": "Optional: only search in chat with this user",
+                                "description": "Optional: only search in chat with this participant id. Parameter name is legacy.",
                             },
                         },
                         "required": ["query"],
@@ -410,7 +419,7 @@ class ChatToolService:
                     if owner_member:
                         owner_info = f" (owner: {owner_member.name})"
                 mtype = e.type.value if hasattr(e.type, "value") else str(e.type)
-                lines.append(f"- {e.name} [{mtype}] user_id={e.id}{owner_info}")
+                lines.append(f"- {e.name} [{mtype}] id={e.id}{owner_info}")
             return "\n".join(lines)
 
         registry.register(
@@ -419,7 +428,7 @@ class ChatToolService:
                 mode=ToolMode.INLINE,
                 schema={
                     "name": "directory",
-                    "description": "Browse the member directory. Shows members with Visit/Hire relationships. Returns user_ids for chat_send.",  # noqa: E501
+                    "description": "Browse the member directory. Shows members with Visit/Hire relationships. Returns ids for chat_send(user_id=...).",  # noqa: E501
                     "parameters": {
                         "type": "object",
                         "properties": {
