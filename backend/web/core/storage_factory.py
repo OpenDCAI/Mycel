@@ -12,6 +12,12 @@ from typing import Any
 
 @lru_cache(maxsize=1)
 def _supabase_client() -> Any:
+    # @@@lru-cache-lifecycle: This client is created once per process and reused
+    # by panel_task / cron_job / resource_snapshot services.  It is intentionally
+    # separate from the lifespan-managed client in lifespan.py — both use the same
+    # credentials but have independent connection pools.  Do not rely on this client
+    # for request-scoped state; prefer app.state._supabase_client inside FastAPI
+    # request handlers.
     from backend.web.core.supabase_factory import create_supabase_client
 
     return create_supabase_client()
