@@ -46,13 +46,13 @@ export interface CreateThreadOptions {
   recipe?: RecipeSnapshot;
   leaseId?: string;
   cwd?: string;
-  memberId: string;
+  agentUserId: string;
   model?: string;
   agent?: string;
 }
 
 export async function createThread(opts: CreateThreadOptions): Promise<ThreadSummary> {
-  const body: Record<string, unknown> = { sandbox: opts.sandbox, member_id: opts.memberId };
+  const body: Record<string, unknown> = { sandbox: opts.sandbox, agent_user_id: opts.agentUserId };
   if (opts.recipe) body.recipe = opts.recipe;
   if (opts.leaseId) body.lease_id = opts.leaseId;
   if (opts.cwd) body.cwd = opts.cwd;
@@ -61,29 +61,29 @@ export async function createThread(opts: CreateThreadOptions): Promise<ThreadSum
   return request<ThreadSummary>("/api/threads", { method: "POST", body: JSON.stringify(body) });
 }
 
-export async function getDefaultThread(memberId: string, signal?: AbortSignal): Promise<ThreadSummary | null> {
+export async function getDefaultThread(agentUserId: string, signal?: AbortSignal): Promise<ThreadSummary | null> {
   // @@@default-thread-wire-legacy - frontend now treats this as a template ->
   // default-thread resolver, but the backend endpoint name stays `/threads/main`
   // until the route contract is renamed in a later slice.
   const payload = await request<{ thread: ThreadSummary | null }>("/api/threads/main", {
     method: "POST",
-    body: JSON.stringify({ member_id: memberId }),
+    body: JSON.stringify({ agent_user_id: agentUserId }),
     signal,
   });
   return payload.thread ?? null;
 }
 
-export async function getDefaultThreadConfig(memberId: string, signal?: AbortSignal): Promise<ThreadLaunchConfigResponse> {
-  return request(`/api/threads/default-config?member_id=${encodeURIComponent(memberId)}`, { signal });
+export async function getDefaultThreadConfig(agentUserId: string, signal?: AbortSignal): Promise<ThreadLaunchConfigResponse> {
+  return request(`/api/threads/default-config?agent_user_id=${encodeURIComponent(agentUserId)}`, { signal });
 }
 
 export async function saveDefaultThreadConfig(
-  memberId: string,
+  agentUserId: string,
   config: ThreadLaunchConfig,
 ): Promise<void> {
   await request("/api/threads/default-config", {
     method: "POST",
-    body: JSON.stringify({ member_id: memberId, ...config }),
+    body: JSON.stringify({ agent_user_id: agentUserId, ...config }),
   });
 }
 

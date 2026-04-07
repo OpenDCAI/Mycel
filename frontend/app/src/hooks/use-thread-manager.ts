@@ -29,12 +29,12 @@ export interface ThreadManagerActions {
   handleCreateThread: (
     sandbox?: string,
     cwd?: string,
-    memberId?: string,
+    agentUserId?: string,
     model?: string,
     leaseId?: string,
     recipe?: RecipeSnapshot,
   ) => Promise<string>;
-  handleGetDefaultThread: (memberId: string, signal?: AbortSignal) => Promise<ThreadSummary | null>;
+  handleGetDefaultThread: (agentUserId: string, signal?: AbortSignal) => Promise<ThreadSummary | null>;
   handleDeleteThread: (threadId: string) => Promise<void>;
 }
 
@@ -95,13 +95,13 @@ export function useThreadManager(): ThreadManagerState & ThreadManagerActions {
   const handleCreateThread = useCallback(async (
     sandbox?: string,
     cwd?: string,
-    memberId?: string,
+    agentUserId?: string,
     model?: string,
     leaseId?: string,
     recipe?: RecipeSnapshot,
   ): Promise<string> => {
     const type = sandbox ?? selectedSandbox;
-    const thread = await createThread({ sandbox: type, cwd, memberId: memberId ?? "", model, leaseId, recipe });
+    const thread = await createThread({ sandbox: type, cwd, agentUserId: agentUserId ?? "", model, leaseId, recipe });
     setThreads((prev) => upsertThread(prev, thread));
     setSelectedSandbox(type);
     return thread.thread_id;
@@ -109,8 +109,8 @@ export function useThreadManager(): ThreadManagerState & ThreadManagerActions {
 
   // @@@template-default-thread-entry - this hook resolves a template entry to its
   // current default thread without changing the existing backend wire name yet.
-  const handleGetDefaultThread = useCallback(async (memberId: string, signal?: AbortSignal): Promise<ThreadSummary | null> => {
-    const thread = await getDefaultThread(memberId, signal);
+  const handleGetDefaultThread = useCallback(async (agentUserId: string, signal?: AbortSignal): Promise<ThreadSummary | null> => {
+    const thread = await getDefaultThread(agentUserId, signal);
     if (thread) {
       setThreads((prev) => upsertThread(prev, thread));
     }

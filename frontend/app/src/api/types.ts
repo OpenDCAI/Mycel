@@ -28,10 +28,10 @@ export interface ThreadSummary {
   preview?: string;
   updated_at?: string;
   running?: boolean;
-  /** Template entry id for this thread; actor identity still lives in `thread_id`. */
-  member_id?: string;
-  /** Template-facing secondary label; child threads should prefer `sidebar_label` when present. */
-  member_name?: string;
+  /** Actor user backing this thread. */
+  agent_user_id?: string;
+  /** Thread-facing display label when `sidebar_label` is absent. */
+  agent_name?: string;
   branch_index?: number;
   /** Canonical actor-facing label for sidebar/header surfaces. */
   sidebar_label?: string | null;
