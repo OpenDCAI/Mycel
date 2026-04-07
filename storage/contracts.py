@@ -98,6 +98,7 @@ class ChatSessionRepo(Protocol):
     def list_all(self) -> list[dict[str, Any]]: ...
     def cleanup_expired(self) -> list[str]: ...
 
+
 class SandboxMonitorRepo(Protocol):
     """Read-only monitor queries over sandbox/session/lease state."""
 
@@ -118,6 +119,8 @@ class SandboxMonitorRepo(Protocol):
     def list_sessions_with_leases(self) -> list[dict[str, Any]]: ...
     def list_probe_targets(self) -> list[dict[str, Any]]: ...
     def query_lease_instance_id(self, lease_id: str) -> str | None: ...
+
+
 # ---------------------------------------------------------------------------
 # Member-Chat — enums + row types
 # ---------------------------------------------------------------------------

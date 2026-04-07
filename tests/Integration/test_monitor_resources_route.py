@@ -14,7 +14,37 @@ def _build_monitor_test_app(*, include_product_resources: bool = False) -> FastA
     return app
 
 
-def test_monitor_resources_route_smoke():
+def _stub_monitor_resource_snapshot(monkeypatch):
+    snapshot = {
+        "summary": {
+            "snapshot_at": "2026-04-07T00:00:00Z",
+            "last_refreshed_at": "2026-04-07T00:00:00Z",
+            "refresh_status": "fresh",
+            "running_sessions": 0,
+            "active_providers": 0,
+            "unavailable_providers": 0,
+        },
+        "providers": [],
+        "triage": {
+            "summary": {
+                "total": 0,
+                "active_drift": 0,
+                "detached_residue": 0,
+                "orphan_cleanup": 0,
+                "healthy_capacity": 0,
+            },
+            "groups": [],
+        },
+    }
+
+    monkeypatch.setattr(monitor, "get_monitor_resource_overview_snapshot", lambda: snapshot)
+    monkeypatch.setattr(monitor, "refresh_monitor_resource_overview_sync", lambda: snapshot)
+    return snapshot
+
+
+def test_monitor_resources_route_smoke(monkeypatch):
+    _stub_monitor_resource_snapshot(monkeypatch)
+
     with TestClient(_build_monitor_test_app()) as client:
         response = client.get("/api/monitor/resources")
 
@@ -30,7 +60,9 @@ def test_monitor_resources_route_smoke():
     assert isinstance(payload["triage"]["groups"], list)
 
 
-def test_monitor_resources_refresh_route_smoke():
+def test_monitor_resources_refresh_route_smoke(monkeypatch):
+    _stub_monitor_resource_snapshot(monkeypatch)
+
     with TestClient(_build_monitor_test_app()) as client:
         response = client.post("/api/monitor/resources/refresh")
 
@@ -47,6 +79,7 @@ def test_monitor_resources_refresh_route_smoke():
 def test_monitor_and_product_resource_routes_coexist_intentionally(monkeypatch):
     from backend.web.services import resource_projection_service
 
+    _stub_monitor_resource_snapshot(monkeypatch)
     monkeypatch.setattr(
         resource_projection_service,
         "list_user_resource_providers",
@@ -72,7 +105,9 @@ def test_monitor_health_route_smoke():
     assert "sessions" in payload
 
 
-def test_monitor_dashboard_route_smoke():
+def test_monitor_dashboard_route_smoke(monkeypatch):
+    _stub_monitor_resource_snapshot(monkeypatch)
+
     with TestClient(_build_monitor_test_app()) as client:
         response = client.get("/api/monitor/dashboard")
 
