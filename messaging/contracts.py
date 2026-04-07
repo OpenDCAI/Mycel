@@ -8,7 +8,7 @@ The long-term agent social-handle split is still pending.
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Literal, Protocol
+from typing import Literal, Protocol
 
 from pydantic import BaseModel, ConfigDict
 
@@ -142,9 +142,6 @@ class RelationshipRow(BaseModel):
     kind: str = "hire_visit"
     state: RelationshipState = "none"
     initiator_user_id: str | None = None
-    hire_granted_at: datetime | None = None
-    hire_revoked_at: datetime | None = None
-    hire_snapshot: dict[str, Any] | None = None
     created_at: datetime
     updated_at: datetime
 

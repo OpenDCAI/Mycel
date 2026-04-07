@@ -65,56 +65,14 @@ def test_deliver_to_agents_does_not_require_main_thread_id():
     assert delivered == [("agent-user-1", "agent-user-1")]
 
 
-def test_relationship_hire_snapshot_drops_main_thread_id():
+def test_relationship_revoke_deletes_hire_without_snapshot_side_channel() -> None:
     repo = _FakeRelationshipRepo()
-    service = RelationshipService(
-        relationship_repo=repo,
-        user_repo=SimpleNamespace(
-            get_by_id=lambda user_id: SimpleNamespace(id=user_id, display_name="Toad") if user_id == "agent-user-1" else None
-        ),
-    )
+    service = RelationshipService(repo)
 
     row = service.revoke("human-user-1", "agent-user-1")
 
-    assert row.hire_snapshot is not None
-    assert row.hire_snapshot["user_id"] == "agent-user-1"
-    assert row.hire_snapshot["name"] == "Toad"
-    assert "main_thread_id" not in row.hire_snapshot
-
-
-def test_relationship_hire_snapshot_resolves_thread_user_name_via_member() -> None:
-    repo = _FakeRelationshipRepo()
-    repo._existing[("human-user-1", "thread-user-1")] = {
-        "id": "hire_visit:human-user-1:thread-user-1",
-        "user_low": "human-user-1",
-        "user_high": "thread-user-1",
-        "kind": "hire_visit",
-        "state": "hire",
-        "initiator_user_id": "human-user-1",
-        "created_at": "2026-04-07T00:00:00Z",
-        "updated_at": "2026-04-07T00:00:00Z",
-    }
-    service = RelationshipService(
-        relationship_repo=repo,
-        user_repo=SimpleNamespace(
-            get_by_id=lambda user_id: (
-                None
-                if user_id == "thread-user-1"
-                else SimpleNamespace(id=user_id, display_name="Toad")
-                if user_id == "agent-user-1"
-                else None
-            )
-        ),
-        thread_repo=SimpleNamespace(
-            get_by_user_id=lambda user_id: {"id": "thread-1", "agent_user_id": "agent-user-1"} if user_id == "thread-user-1" else None
-        ),
-    )
-
-    row = service.revoke("human-user-1", "thread-user-1")
-
-    assert row.hire_snapshot is not None
-    assert row.hire_snapshot["user_id"] == "thread-user-1"
-    assert row.hire_snapshot["name"] == "Toad"
+    assert row.state == "none"
+    assert "hire_snapshot" not in repo._existing[("agent-user-1", "human-user-1")]
 
 
 def test_relationship_request_uses_single_pending_state_and_initiator() -> None:
@@ -139,6 +97,44 @@ def test_relationship_request_uses_single_pending_state_and_initiator() -> None:
 
     assert row.state == "pending"
     assert row.initiator_user_id == "human-user-1"
+
+
+def test_relationship_upgrade_does_not_write_removed_hire_timestamp_columns() -> None:
+    captured: dict[str, Any] = {}
+
+    class _UpgradeRepo:
+        def get(self, _actor_id: str, _target_id: str):
+            return {
+                "id": "hire_visit:agent-user-1:human-user-1",
+                "user_low": "agent-user-1",
+                "user_high": "human-user-1",
+                "kind": "hire_visit",
+                "state": "visit",
+                "initiator_user_id": "human-user-1",
+                "created_at": "2026-04-07T00:00:00Z",
+                "updated_at": "2026-04-07T00:00:01Z",
+            }
+
+        def upsert(self, _actor_id: str, _target_id: str, **fields: Any):
+            captured.update(fields)
+            return {
+                "id": "hire_visit:agent-user-1:human-user-1",
+                "user_low": "agent-user-1",
+                "user_high": "human-user-1",
+                "kind": "hire_visit",
+                "created_at": "2026-04-07T00:00:00Z",
+                "updated_at": "2026-04-07T00:00:02Z",
+                **fields,
+            }
+
+    service = RelationshipService(_UpgradeRepo())
+
+    row = service.upgrade("human-user-1", "agent-user-1")
+
+    assert row.state == "hire"
+    assert "hire_granted_at" not in captured
+    assert "hire_revoked_at" not in captured
+    assert "hire_snapshot" not in captured
 
 
 def test_chat_tool_registry_exposes_final_contract_only() -> None:
