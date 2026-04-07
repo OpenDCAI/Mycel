@@ -66,18 +66,24 @@ async def test_list_entities_excludes_current_user_and_returns_all_others():
     human_item = next(i for i in result if i["user_id"] == "u2")
     assert human_item["type"] == "human"
     assert "id" not in human_item
+    assert human_item["agent_name"] == "other"
+    assert "member_name" not in human_item
     assert human_item["default_thread_id"] is None
 
     # Agent entry is keyed by unified user identity plus explicit default thread.
     main_item = next(i for i in result if i.get("user_id") == "a-main")
     assert "id" not in main_item
     assert "member_id" not in main_item
+    assert main_item["agent_name"] == "Toad"
+    assert "member_name" not in main_item
     assert main_item["default_thread_id"] == "thread-main"
     assert main_item["is_default_thread"] is True
     assert main_item["branch_index"] == 0
 
     # Child agent: also returned (frontend decides whether to hide it).
     child_item = next(i for i in result if i.get("user_id") == "a-child")
+    assert child_item["agent_name"] == "Toad Branch"
+    assert "member_name" not in child_item
     assert child_item["default_thread_id"] == "thread-child"
     assert child_item["is_default_thread"] is False
     assert child_item["branch_index"] == 1

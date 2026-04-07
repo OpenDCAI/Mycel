@@ -340,7 +340,7 @@ export interface ChatMember {
   avatar_url?: string;
   owner_name?: string | null;
   /** Template-facing auxiliary label when this chat member is thread-backed. */
-  member_name?: string | null;
+  agent_name?: string | null;
   /** Actor thread backing this participant when applicable. */
   thread_id?: string | null;
   is_main?: boolean | null;
