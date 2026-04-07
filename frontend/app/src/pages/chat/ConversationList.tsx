@@ -18,8 +18,9 @@ function formatTime(dateStr: string | null): string {
 }
 
 function conversationHref(item: ConversationItem): string {
-  if (item.type === "hire" && item.member_id) {
-    return `/chat/hire/${encodeURIComponent(item.member_id)}/${encodeURIComponent(item.id)}`;
+  const templateMemberId = item.member_id;
+  if (item.type === "hire" && templateMemberId) {
+    return `/chat/hire/${encodeURIComponent(templateMemberId)}/${encodeURIComponent(item.id)}`;
   }
   return `/chat/visit/${encodeURIComponent(item.id)}`;
 }
