@@ -97,7 +97,17 @@ export function SandboxFileBrowser({ leaseId, providerType, className = "h-[300p
                   <div className="text-center py-6 text-muted-foreground">加载中...</div>
                 )}
                 {error && (
-                  <div className="text-center py-6 text-destructive text-xs">{error}</div>
+                  <div className="flex flex-col items-center gap-2 py-6">
+                    <div className="text-center text-destructive text-xs">{error}</div>
+                    <button
+                      data-testid="sandbox-browser-retry"
+                      type="button"
+                      onClick={() => { void loadPath(currentPath); }}
+                      className="h-7 px-2.5 rounded border border-border text-2xs text-foreground hover:bg-muted/50"
+                    >
+                      重试
+                    </button>
+                  </div>
                 )}
 
                 {!loading && !error && items.length === 0 && (
