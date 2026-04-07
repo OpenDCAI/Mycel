@@ -294,7 +294,7 @@ async def test_panel_library_used_by_route_uses_user_scope(monkeypatch: pytest.M
         user_id="user-1",
     )
 
-    assert result == {"count": 1, "members": ["Toad"]}
+    assert result == {"count": 1, "users": ["Toad"]}
     assert seen == {
         "resource_type": "skill",
         "resource_name": "skill-a",

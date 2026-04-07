@@ -437,14 +437,14 @@ async def get_used_by(
     request: Request,
     user_id: Annotated[str, Depends(get_current_user_id)],
 ) -> dict[str, Any]:
-    members = await asyncio.to_thread(
+    users = await asyncio.to_thread(
         library_service.get_resource_used_by,
         resource_type,
         resource_name,
         user_id,
         user_repo=request.app.state.user_repo,
     )
-    return {"count": len(members), "members": members}
+    return {"count": len(users), "users": users}
 
 
 @router.get("/library/{resource_type}/{resource_id}/content")
