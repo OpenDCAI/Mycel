@@ -53,7 +53,7 @@ describe("useThreadPermissions", () => {
   });
 
   it("does not log a failed fetch once navigation already left the thread route", async () => {
-    window.history.replaceState({}, "", "/chat/hire/member-1/thread-1");
+    window.history.replaceState({}, "", "/chat/hire/thread/thread-1");
     const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
 
     getThreadPermissions.mockImplementation(async () => {

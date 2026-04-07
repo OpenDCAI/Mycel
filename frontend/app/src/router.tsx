@@ -17,11 +17,25 @@ import AgentDetailPage from './pages/AgentDetailPage';
 import MembersPage from './pages/MembersPage';
 import ThreadsIndexRedirect from './pages/ThreadsIndexRedirect';
 
-/** Redirect /threads/:memberId/:threadId → /chat/hire/:memberId/:threadId */
+/** Redirect legacy /threads paths onto the split template-entry/runtime hire routes. */
 function ThreadsLegacyRedirect() {
   const params = useParams();
   const rest = params['*'] || '';
-  return <Navigate to={`/chat/hire/${rest}`} replace />;
+  const parts = rest.split('/').filter(Boolean);
+  if (parts.length >= 2) {
+    return <Navigate to={`/chat/hire/thread/${encodeURIComponent(parts[parts.length - 1]!)}`} replace />;
+  }
+  if (parts.length === 1) {
+    return <Navigate to={`/chat/hire/${encodeURIComponent(parts[0]!)}`} replace />;
+  }
+  return <Navigate to="/chat" replace />;
+}
+
+/** Redirect /chat/hire/:memberId/:threadId → /chat/hire/thread/:threadId */
+function HireThreadLegacyRedirect() {
+  const { threadId } = useParams<{ memberId: string; threadId: string }>();
+  if (!threadId) return <Navigate to="/chat" replace />;
+  return <Navigate to={`/chat/hire/thread/${encodeURIComponent(threadId)}`} replace />;
 }
 
 export const router = createBrowserRouter([
@@ -45,7 +59,8 @@ export const router = createBrowserRouter([
         element: <ChatLayout />,
         children: [
           { index: true, element: null },
-          { path: 'hire/:memberId/:threadId', element: <ChatPage /> },
+          { path: 'hire/thread/:threadId', element: <ChatPage /> },
+          { path: 'hire/:memberId/:threadId', element: <HireThreadLegacyRedirect /> },
           { path: 'hire/:memberId', element: <NewChatPage /> },
           { path: 'visit/:chatId', element: <ChatConversationPage /> },
         ],

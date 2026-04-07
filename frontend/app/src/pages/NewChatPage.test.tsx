@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { render, screen, waitFor } from "@testing-library/react";
-import { MemoryRouter, Outlet, Route, Routes } from "react-router-dom";
+import { MemoryRouter, Outlet, Route, Routes, useParams } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import NewChatPage from "./NewChatPage";
 import { useAuthStore } from "../store/auth-store";
@@ -75,6 +75,11 @@ function ContextOutlet() {
       }}
     />
   );
+}
+
+function ThreadRouteProbe() {
+  const { threadId } = useParams<{ threadId: string }>();
+  return <div>{`thread-route:${threadId}`}</div>;
 }
 
 describe("NewChatPage", () => {
@@ -193,5 +198,24 @@ describe("NewChatPage", () => {
 
     expect(await screen.findByText("正在检查 Morel 的默认线程")).toBeTruthy();
     expect(screen.getByText("如果没有默认线程，这里会进入创建界面。")).toBeTruthy();
+  });
+
+  it("navigates resolved default threads through the thread-only hire route", async () => {
+    handleGetDefaultThread.mockResolvedValue({ thread_id: "thread-42" });
+
+    render(
+      <MemoryRouter initialEntries={["/chat/hire/m_xVuNpKJNxblZ"]}>
+        <Routes>
+          <Route element={<ContextOutlet />}>
+            <Route path="/chat/hire/:memberId" element={<NewChatPage />} />
+            <Route path="/chat/hire/thread/:threadId" element={<ThreadRouteProbe />} />
+          </Route>
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText("thread-route:thread-42")).toBeTruthy();
+    });
   });
 });

@@ -166,7 +166,7 @@ export default function NewChatPage({ mode = "member" }: { mode?: "member" | "ne
         const thread = await handleGetDefaultThread(decodedMemberId, ac.signal);
         if (cancelled) return;
         if (thread) {
-          navigate(`/chat/hire/${encodeURIComponent(decodedMemberId)}/${thread.thread_id}`, { replace: true });
+          navigate(`/chat/hire/thread/${thread.thread_id}`, { replace: true });
           return;
         }
         setResolveState("ready");
@@ -368,7 +368,7 @@ export default function NewChatPage({ mode = "member" }: { mode?: "member" | "ne
     postRun(threadId, message, undefined, model ? { model } : undefined).catch(err => {
       console.error("[NewChatPage] postRun failed:", err);
     });
-    navigate(`/chat/hire/${encodeURIComponent(decodedMemberId)}/${threadId}`, {
+    navigate(`/chat/hire/thread/${threadId}`, {
       state: { selectedModel: model, runStarted: true, message },
     });
   }

@@ -37,7 +37,7 @@ export default function ThreadsIndexRedirect() {
         if (cancelled) return;
         navigate(
           thread
-            ? `/chat/hire/${memberId}/${encodeURIComponent(thread.thread_id)}`
+            ? `/chat/hire/thread/${encodeURIComponent(thread.thread_id)}`
             : `/chat/hire/${memberId}`,
           { replace: true },
         );

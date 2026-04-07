@@ -48,7 +48,6 @@ async def test_list_conversations_resolves_thread_user_participant_title_and_ava
             "id": "chat-1",
             "type": "visit",
             "title": "Toad",
-            "member_id": None,
             "avatar_url": avatar_url("member-agent-1", False),
             "updated_at": "2026-04-07T00:00:00Z",
             "unread_count": 3,
@@ -100,3 +99,41 @@ async def test_list_conversations_sorts_mixed_updated_at_types_without_type_erro
     result = await conversations_router.list_conversations("human-user-1", app=app)
 
     assert [item["id"] for item in result] == ["chat-1", "thread-1"]
+
+
+@pytest.mark.asyncio
+async def test_list_conversations_hire_entries_do_not_leak_template_member_ids() -> None:
+    app = SimpleNamespace(
+        state=SimpleNamespace(
+            thread_repo=SimpleNamespace(
+                list_by_owner_user_id=lambda _user_id: [
+                    {
+                        "id": "thread-1",
+                        "member_id": "member-agent-1",
+                        "member_name": "Morel",
+                        "member_avatar": "avatars/morel.png",
+                        "sandbox_type": "local",
+                    }
+                ],
+                get_by_user_id=lambda _uid: None,
+            ),
+            agent_pool={},
+            thread_last_active={},
+            messaging_service=None,
+        )
+    )
+
+    result = await conversations_router.list_conversations("human-user-1", app=app)
+
+    assert result == [
+        {
+            "id": "thread-1",
+            "type": "hire",
+            "title": "Morel",
+            "avatar_url": avatar_url("member-agent-1", True),
+            "updated_at": None,
+            "unread_count": 0,
+            "running": False,
+        }
+    ]
+    assert "member_id" not in result[0]
