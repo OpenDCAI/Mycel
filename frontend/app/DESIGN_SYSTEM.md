@@ -186,7 +186,6 @@ These are **not** motion tokens. Import from `@/styles/ux-timing`.
 |----------|-------|-------|
 | `FEEDBACK_BRIEF` | 1500ms | Copy confirmation, save flash |
 | `FEEDBACK_NORMAL` | 2000ms | Toast display, status message |
-| `BLUR_CLOSE_DELAY` | 150ms | Dropdown close delay on blur |
 
 ### Rules
 
