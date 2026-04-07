@@ -3600,6 +3600,7 @@ function EvaluationPage() {
   const [evalPagination, setEvalPagination] = React.useState<any>(null);
   const [runsLoading, setRunsLoading] = React.useState(false);
   const [composerOpen, setComposerOpen] = React.useState(false);
+  const composerPanelRef = React.useRef<HTMLElement | null>(null);
 
   const loadEvaluations = React.useCallback(async () => {
     setRunsLoading(true);
@@ -3708,6 +3709,12 @@ function EvaluationPage() {
     const query = new URLSearchParams(location.search);
     setComposerOpen(query.get("new") === "1");
   }, [location.search]);
+
+  React.useEffect(() => {
+    if (!composerOpen) return;
+    // @@@composer-modal-focus - focus the config panel itself so keyboard users land inside the active layer instead of remaining on the shell behind it.
+    composerPanelRef.current?.focus();
+  }, [composerOpen]);
 
   // @@@evaluation-query-close - clear the query flag on close so the shell CTA can reopen the composer on the next click.
   function closeComposer() {
@@ -3912,12 +3919,17 @@ function EvaluationPage() {
           onClick={closeComposer}
         >
           <section
+            ref={composerPanelRef}
             className="eval-composer-panel"
             data-testid="evaluation-composer-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="evaluation-composer-title"
+            tabIndex={-1}
             onClick={(e) => e.stopPropagation()}
           >
             <div className="section-row">
-              <h2>New Evaluation Config</h2>
+              <h2 id="evaluation-composer-title">New Evaluation Config</h2>
               <button
                 className="ghost-btn"
                 onClick={closeComposer}
