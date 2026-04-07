@@ -157,7 +157,7 @@ async def test_get_chat_resolves_thread_user_participant_via_thread_repo(monkeyp
 
     assert result["entities"] == [
         {
-            "id": "member-agent-1",
+            "id": "thread-user-1",
             "name": "Toad",
             "type": "mycel_agent",
             "avatar_url": avatar_url("member-agent-1", False),

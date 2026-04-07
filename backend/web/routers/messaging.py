@@ -166,7 +166,7 @@ async def get_chat(
         if mem:
             members_info.append(
                 {
-                    "id": mem.id,
+                    "id": uid,
                     "name": mem.name,
                     "type": mem.type.value if hasattr(mem.type, "value") else str(mem.type),
                     "avatar_url": avatar_url(mem.id, bool(mem.avatar)),
