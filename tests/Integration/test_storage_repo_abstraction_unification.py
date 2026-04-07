@@ -232,18 +232,6 @@ def test_runtime_services_default_to_storage_runtime_container(monkeypatch: pyte
 
     container = _FakeRuntimeContainer()
 
-    monkeypatch.setattr(
-        "backend.web.core.storage_factory.make_tool_task_repo",
-        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("unexpected web storage factory tool repo")),
-    )
-    monkeypatch.setattr(
-        "backend.web.core.storage_factory.make_agent_registry_repo",
-        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("unexpected web storage factory agent repo")),
-    )
-    monkeypatch.setattr(
-        "backend.web.core.storage_factory.make_sync_file_repo",
-        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("unexpected web storage factory sync repo")),
-    )
     monkeypatch.setattr("storage.runtime.build_storage_container", lambda **_kwargs: container)
 
     task_service = TaskService(registry=ToolRegistry(), db_path=tmp_path / "test.db")
@@ -279,10 +267,6 @@ def test_resource_snapshot_helpers_default_to_storage_runtime_container(monkeypa
 
     container = _FakeRuntimeContainer()
 
-    monkeypatch.setattr(
-        "backend.web.core.storage_factory.upsert_resource_snapshot",
-        lambda **_kwargs: (_ for _ in ()).throw(AssertionError("unexpected web storage factory resource upsert")),
-    )
     monkeypatch.setattr(
         "backend.web.core.storage_factory.list_resource_snapshots",
         lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("unexpected web storage factory resource list")),

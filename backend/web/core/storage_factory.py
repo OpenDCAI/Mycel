@@ -35,30 +35,6 @@ def make_sandbox_monitor_repo() -> Any:
     return SQLiteSandboxMonitorRepo()
 
 
-def make_agent_registry_repo() -> Any:
-    from storage.providers.supabase.agent_registry_repo import SupabaseAgentRegistryRepo
-
-    return SupabaseAgentRegistryRepo(_supabase_client())
-
-
-def make_tool_task_repo(db_path: Any = None) -> Any:
-    from storage.providers.supabase.tool_task_repo import SupabaseToolTaskRepo
-
-    return SupabaseToolTaskRepo(_supabase_client())
-
-
-def make_sync_file_repo() -> Any:
-    from storage.providers.supabase.sync_file_repo import SupabaseSyncFileRepo
-
-    return SupabaseSyncFileRepo(_supabase_client())
-
-
-def upsert_resource_snapshot(**kwargs: Any) -> None:
-    from storage.providers.supabase.resource_snapshot_repo import upsert_lease_resource_snapshot
-
-    upsert_lease_resource_snapshot(**kwargs, client=_supabase_client())
-
-
 def list_resource_snapshots(lease_ids: list[str]) -> dict[str, Any]:
     from storage.providers.supabase.resource_snapshot_repo import list_snapshots_by_lease_ids
 
