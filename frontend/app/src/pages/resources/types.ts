@@ -85,17 +85,3 @@ export interface ProviderInfo {
   latencyMs?: number;
   sessions: ResourceSession[];
 }
-
-/** An atomic resource allocated to an agent via a provider session */
-export type ResourceType = keyof ProviderCapabilities;
-
-export interface AllocatedResource {
-  resourceType: ResourceType;
-  providerId: string;
-  providerName: string;
-  threadId: string;
-  memberId: string;
-  memberName: string;
-  sessionId: string;
-  sessionStatus: ResourceSession["status"];
-}
