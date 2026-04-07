@@ -144,3 +144,57 @@ def test_chat_tool_service_accepts_chat_identity_id_without_legacy_user_id() -> 
     result = directory.handler()
     assert isinstance(result, str)
     assert "id=agent-user-2" in result
+
+
+def test_messaging_service_resolves_sender_name_from_thread_user_id() -> None:
+    published: list[dict[str, object]] = []
+    service = MessagingService(
+        chat_repo=SimpleNamespace(),
+        chat_member_repo=SimpleNamespace(list_members=lambda _chat_id: []),
+        messages_repo=SimpleNamespace(create=lambda row: row),
+        message_read_repo=SimpleNamespace(),
+        member_repo=SimpleNamespace(
+            get_by_id=lambda uid: (
+                None
+                if uid == "thread-user-1"
+                else SimpleNamespace(id=uid, name="Toad", type="mycel_agent", avatar=None)
+                if uid == "member-agent-1"
+                else None
+            )
+        ),
+        thread_repo=SimpleNamespace(
+            get_by_user_id=lambda uid: {"id": "thread-1", "member_id": "member-agent-1"} if uid == "thread-user-1" else None
+        ),
+        event_bus=SimpleNamespace(publish=lambda _chat_id, payload: published.append(payload)),
+    )
+
+    service.send("chat-1", "thread-user-1", "hello")
+
+    payload = cast(dict[str, object], published[0])
+    data = cast(dict[str, object], payload["data"])
+    assert data["sender_name"] == "Toad"
+
+
+def test_chat_tool_formats_thread_user_id_sender_as_agent_name() -> None:
+    registry = ToolRegistry()
+    service = ChatToolService(
+        registry=registry,
+        chat_identity_id="human-user-1",
+        owner_id="owner-user-1",
+        member_repo=SimpleNamespace(
+            get_by_id=lambda uid: (
+                None
+                if uid == "thread-user-1"
+                else SimpleNamespace(id=uid, name="Toad", owner_user_id="owner-user-1")
+                if uid == "member-agent-1"
+                else None
+            ),
+        ),
+        thread_repo=SimpleNamespace(
+            get_by_user_id=lambda uid: {"id": "thread-1", "member_id": "member-agent-1"} if uid == "thread-user-1" else None
+        ),
+    )
+
+    rendered = service._format_msgs([{"sender_id": "thread-user-1", "content": "hello"}], "human-user-1")
+
+    assert "[Toad]: hello" in rendered

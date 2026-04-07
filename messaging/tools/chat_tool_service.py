@@ -93,6 +93,7 @@ class ChatToolService:
         chat_member_repo: Any = None,  # SupabaseChatMemberRepo
         messages_repo: Any = None,  # SupabaseMessagesRepo
         member_repo: Any = None,
+        thread_repo: Any = None,
         relationship_repo: Any = None,  # for directory privacy filter
     ) -> None:
         identity_id = chat_identity_id or user_id
@@ -104,8 +105,23 @@ class ChatToolService:
         self._chat_members = chat_member_repo
         self._messages = messages_repo
         self._member_repo = member_repo
+        self._thread_repo = thread_repo
         self._relationships = relationship_repo
         self._register(registry)
+
+    def _resolve_display_member(self, social_user_id: str) -> Any | None:
+        member = self._member_repo.get_by_id(social_user_id) if self._member_repo else None
+        if member is not None:
+            return member
+        if self._thread_repo is None:
+            return None
+        thread = self._thread_repo.get_by_user_id(social_user_id)
+        if thread is None:
+            return None
+        member_id = thread.get("member_id")
+        if not member_id or self._member_repo is None:
+            return None
+        return self._member_repo.get_by_id(member_id)
 
     def _register(self, registry: ToolRegistry) -> None:
         self._register_chats(registry)
@@ -117,7 +133,7 @@ class ChatToolService:
     def _format_msgs(self, msgs: list[dict], eid: str) -> str:
         lines = []
         for m in msgs:
-            sender = self._member_repo.get_by_id(m.get("sender_id", ""))
+            sender = self._resolve_display_member(m.get("sender_id", ""))
             name = sender.name if sender else "unknown"
             tag = "you" if m.get("sender_id") == eid else name
             content = m.get("content", "")
@@ -356,7 +372,7 @@ class ChatToolService:
                 return f"No messages matching '{query}'."
             lines = []
             for m in results:
-                sender = self._member_repo.get_by_id(m.get("sender_id", ""))
+                sender = self._resolve_display_member(m.get("sender_id", ""))
                 name = sender.name if sender else "unknown"
                 lines.append(f"[{name}] {m.get('content', '')[:100]}")
             return "\n".join(lines)

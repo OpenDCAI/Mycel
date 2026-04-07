@@ -31,6 +31,7 @@ class MessagingService:
         messages_repo: Any,  # SupabaseMessagesRepo
         message_read_repo: Any,  # SupabaseMessageReadRepo
         member_repo: Any,  # MemberRepo (for name + avatar lookup)
+        thread_repo: Any | None = None,  # ThreadRepo for thread-user-id -> member display lookup
         delivery_resolver: Any | None = None,
         delivery_fn: Callable | None = None,
         event_bus: Any | None = None,  # ChatEventBus or SupabaseRealtimeBridge (optional)
@@ -40,9 +41,24 @@ class MessagingService:
         self._messages = messages_repo
         self._reads = message_read_repo
         self._member_repo = member_repo
+        self._thread_repo = thread_repo
         self._delivery_resolver = delivery_resolver
         self._delivery_fn = delivery_fn
         self._event_bus = event_bus
+
+    def _resolve_display_member(self, social_user_id: str) -> Any | None:
+        member = self._member_repo.get_by_id(social_user_id)
+        if member is not None:
+            return member
+        if self._thread_repo is None:
+            return None
+        thread = self._thread_repo.get_by_user_id(social_user_id)
+        if thread is None:
+            return None
+        member_id = thread.get("member_id")
+        if not member_id:
+            return None
+        return self._member_repo.get_by_id(member_id)
 
     def set_delivery_fn(self, fn: Callable) -> None:
         self._delivery_fn = fn
@@ -118,7 +134,7 @@ class MessagingService:
         logger.debug("[messaging] send chat=%s sender=%s msg=%s type=%s", chat_id[:8], sender_id[:15], msg_id[:8], message_type)
 
         # Publish to event bus (SSE / Realtime bridge)
-        sender = self._member_repo.get_by_id(sender_id)
+        sender = self._resolve_display_member(sender_id)
         sender_name = sender.name if sender else "unknown"
         if self._event_bus:
             self._event_bus.publish(
@@ -145,7 +161,7 @@ class MessagingService:
     ) -> None:
         mention_set = set(mentions)
         members = self._members_repo.list_members(chat_id)
-        sender_member = self._member_repo.get_by_id(sender_id)
+        sender_member = self._resolve_display_member(sender_id)
         sender_name = sender_member.name if sender_member else "unknown"
         sender_avatar_url = avatar_url(sender_id, bool(sender_member.avatar if sender_member else None))
 
@@ -233,7 +249,7 @@ class MessagingService:
             entities_info = []
             for m in members:
                 uid = m.get("user_id")
-                e = self._member_repo.get_by_id(uid) if uid else None
+                e = self._resolve_display_member(uid) if uid else None
                 if e:
                     entities_info.append(
                         {
@@ -247,7 +263,7 @@ class MessagingService:
             last_msg = None
             if msgs:
                 m = msgs[-1]
-                sender = self._member_repo.get_by_id(m.get("sender_id", ""))
+                sender = self._resolve_display_member(m.get("sender_id", ""))
                 last_msg = {
                     "content": m.get("content", ""),
                     "sender_name": sender.name if sender else "unknown",

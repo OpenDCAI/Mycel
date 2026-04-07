@@ -1253,6 +1253,7 @@ class LeonAgent:
                     chat_member_repo=repos.get("chat_member_repo"),
                     messages_repo=repos.get("messages_repo"),
                     member_repo=repos.get("member_repo"),
+                    thread_repo=self._thread_repo,
                     relationship_repo=repos.get("relationship_repo"),
                 )
 

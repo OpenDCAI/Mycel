@@ -118,6 +118,7 @@ async def lifespan(app: FastAPI):
         messages_repo=_messages_repo,
         message_read_repo=_message_read_repo,
         member_repo=app.state.member_repo,
+        thread_repo=app.state.thread_repo,
         event_bus=app.state.chat_event_bus,
         delivery_resolver=_msg_delivery_resolver,
     )
