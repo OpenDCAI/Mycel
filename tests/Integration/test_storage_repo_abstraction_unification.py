@@ -123,11 +123,6 @@ def _install_lifespan_noop_dependencies(monkeypatch: pytest.MonkeyPatch) -> None
         "backend.web.core.supabase_factory.create_supabase_auth_client",
         lambda *_args, **_kwargs: object(),
     )
-    monkeypatch.setattr(
-        "backend.web.core.supabase_factory.create_messaging_supabase_client",
-        lambda: _FakeSupabaseClient(),
-    )
-
     monkeypatch.setattr("storage.providers.supabase.SupabaseMemberRepo", _fake_repo_factory)
     monkeypatch.setattr("storage.providers.supabase.SupabaseThreadRepo", _fake_repo_factory)
     monkeypatch.setattr("storage.providers.supabase.SupabaseThreadLaunchPrefRepo", _fake_repo_factory)

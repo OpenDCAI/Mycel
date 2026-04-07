@@ -28,19 +28,15 @@ pytestmark = pytest.mark.skipif(
 
 @pytest.fixture(scope="module")
 def rel_app():
-    from backend.web.core.supabase_factory import (
-        create_messaging_supabase_client,
-        create_supabase_client,
-    )
+    from backend.web.core.supabase_factory import create_supabase_client
     from messaging.relationships.service import RelationshipService
     from storage.container import StorageContainer
     from storage.providers.supabase.messaging_repo import SupabaseRelationshipRepo
 
     _supabase = create_supabase_client()
-    _msg_supabase = create_messaging_supabase_client()
     container = StorageContainer(supabase_client=_supabase)
 
-    relationship_repo = SupabaseRelationshipRepo(_msg_supabase)
+    relationship_repo = SupabaseRelationshipRepo(_supabase)
     member_repo = container.member_repo()
     thread_repo = container.thread_repo()
 

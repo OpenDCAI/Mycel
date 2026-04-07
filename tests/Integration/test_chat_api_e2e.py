@@ -26,10 +26,7 @@ pytestmark = pytest.mark.skipif(
 
 @pytest.fixture(scope="module")
 def real_app():
-    from backend.web.core.supabase_factory import (
-        create_messaging_supabase_client,
-        create_supabase_client,
-    )
+    from backend.web.core.supabase_factory import create_supabase_client
     from messaging.service import MessagingService
     from storage.container import StorageContainer
     from storage.providers.supabase.messaging_repo import (
@@ -39,12 +36,11 @@ def real_app():
     )
 
     _supabase = create_supabase_client()
-    _msg_supabase = create_messaging_supabase_client()
     container = StorageContainer(supabase_client=_supabase)
 
-    chat_member_repo = SupabaseChatMemberRepo(_msg_supabase)
-    messages_repo = SupabaseMessagesRepo(_msg_supabase)
-    message_read_repo = SupabaseMessageReadRepo(_msg_supabase)
+    chat_member_repo = SupabaseChatMemberRepo(_supabase)
+    messages_repo = SupabaseMessagesRepo(_supabase)
+    message_read_repo = SupabaseMessageReadRepo(_supabase)
     member_repo = container.member_repo()
     thread_repo = container.thread_repo()
     chat_repo = container.chat_repo()
