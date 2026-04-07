@@ -49,8 +49,9 @@ export default function ConversationList({ threads }: { threads: ThreadSummary[]
     return () => { stop(); document.removeEventListener("visibilitychange", onVis); };
   }, [fetchConversations]);
 
-  const filtered = search
-    ? conversations.filter((c) => c.title.toLowerCase().includes(search.toLowerCase()))
+  const searchQuery = search.trim().toLowerCase();
+  const filtered = searchQuery
+    ? conversations.filter((c) => conversationTitle(c, threads).toLowerCase().includes(searchQuery))
     : conversations;
 
   return (
@@ -99,6 +100,7 @@ export default function ConversationList({ threads }: { threads: ThreadSummary[]
         ) : (
           filtered.map((item) => {
             const href = conversationHref(item);
+            const title = conversationTitle(item, threads);
             const isActive =
               location.pathname === href ||
               location.pathname.startsWith(href + "/");
@@ -112,7 +114,7 @@ export default function ConversationList({ threads }: { threads: ThreadSummary[]
               >
                 <div className="relative">
                   <MemberAvatar
-                    name={conversationTitle(item, threads)}
+                    name={title}
                     avatarUrl={item.avatar_url ?? undefined}
                     type={item.type === "hire" ? "mycel_agent" : "human"}
                     size="sm"
@@ -124,7 +126,7 @@ export default function ConversationList({ threads }: { threads: ThreadSummary[]
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-1.5">
                     <span className="text-sm font-medium truncate text-foreground">
-                      {conversationTitle(item, threads)}
+                      {title}
                     </span>
                   </div>
                   {item.updated_at && (
