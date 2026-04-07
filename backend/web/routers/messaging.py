@@ -395,6 +395,7 @@ async def mute_chat(
 
 # ---------------------------------------------------------------------------
 # Message search
+# @@@route-order: must be registered before /{chat_id} dynamic routes
 # ---------------------------------------------------------------------------
 
 

@@ -49,40 +49,8 @@ export const useRelationshipStore = create<RelationshipStore>((set, get) => ({
     try {
       const res = await authFetch("/api/relationships");
       if (!res.ok) throw new Error(`${res.status}`);
-      const rows: Array<{
-        id: string;
-        other_user_id: string;
-        state: string;
-        is_requester: boolean;
-        created_at: string;
-      }> = await res.json();
-
-      // Enrich each relationship with member info
-      const enriched = await Promise.all(
-        rows.map(async (row) => {
-          try {
-            const memberRes = await authFetch(`/api/panel/users/${row.other_user_id}`);
-            if (memberRes.ok) {
-              const member = await memberRes.json();
-              return {
-                ...row,
-                other_name: member.name ?? "未知用户",
-                other_mycel_id: member.mycel_id ?? null,
-                other_avatar_url: member.avatar_url ?? null,
-              } as RelationshipItem;
-            }
-          } catch {
-            // ignore
-          }
-          return {
-            ...row,
-            other_name: "未知用户",
-            other_mycel_id: null,
-            other_avatar_url: null,
-          } as RelationshipItem;
-        })
-      );
-      set({ relationships: enriched });
+      const rows = await res.json() as RelationshipItem[];
+      set({ relationships: rows });
     } catch (err) {
       console.error("[RelationshipStore] fetch failed:", err);
     } finally {
