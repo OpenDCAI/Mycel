@@ -299,6 +299,40 @@ def test_chat_tool_read_uses_thread_user_target_name_on_no_history() -> None:
     assert result == "No chat history with Toad."
 
 
+def test_chat_tool_search_does_not_fall_back_to_global_search_for_thread_user_target() -> None:
+    registry = ToolRegistry()
+    search_calls: list[tuple[str, str | None]] = []
+    ChatToolService(
+        registry=registry,
+        chat_identity_id="human-user-1",
+        owner_id="owner-user-1",
+        member_repo=SimpleNamespace(
+            get_by_id=lambda uid: (
+                None
+                if uid == "thread-user-1"
+                else SimpleNamespace(id=uid, name="Toad", owner_user_id="owner-user-1")
+                if uid == "member-agent-1"
+                else None
+            ),
+        ),
+        thread_repo=SimpleNamespace(
+            get_by_user_id=lambda uid: {"id": "thread-1", "member_id": "member-agent-1"} if uid == "thread-user-1" else None
+        ),
+        chat_member_repo=SimpleNamespace(find_chat_between=lambda _eid, _user_id: None),
+        messaging_service=SimpleNamespace(
+            search_messages=lambda query, *, chat_id=None: search_calls.append((query, chat_id)) or [{"content": "wrong"}]
+        ),
+    )
+
+    chat_search = registry.get("chat_search")
+    assert chat_search is not None
+
+    result = chat_search.handler(query="hello", user_id="thread-user-1")
+
+    assert result == "No messages matching 'hello' with Toad."
+    assert search_calls == []
+
+
 def test_deliver_to_agents_routes_delivery_by_thread_user_id() -> None:
     delivered: list[tuple[str, str]] = []
     service = MessagingService(

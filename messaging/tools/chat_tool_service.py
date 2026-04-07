@@ -367,6 +367,10 @@ class ChatToolService:
             chat_id = None
             if user_id:
                 chat_id = self._chat_members.find_chat_between(eid, user_id)
+                if not chat_id:
+                    target = self._resolve_display_member(user_id)
+                    name = target.name if target else user_id
+                    return f"No messages matching '{query}' with {name}."
             results = self._messaging.search_messages(query, chat_id=chat_id)
             if not results:
                 return f"No messages matching '{query}'."
