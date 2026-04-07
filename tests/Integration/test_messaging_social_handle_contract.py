@@ -222,6 +222,36 @@ def test_chat_tool_directory_exposes_default_thread_user_id_for_agents() -> None
     assert seen_relationship_targets == ["thread-user-1"]
 
 
+def test_chat_tool_directory_keeps_same_owner_agents_visible_without_relationship() -> None:
+    registry = ToolRegistry()
+    seen_relationship_targets: list[str] = []
+    ChatToolService(
+        registry=registry,
+        chat_identity_id="thread-user-self",
+        owner_id="owner-user-1",
+        member_repo=SimpleNamespace(
+            list_all=lambda: [
+                SimpleNamespace(id="member-agent-2", name="Morel", type="mycel_agent", owner_user_id="owner-user-1"),
+            ],
+            get_by_id=lambda member_id: (
+                SimpleNamespace(id=member_id, name="Owner", owner_user_id=None) if member_id == "owner-user-1" else None
+            ),
+        ),
+        thread_repo=SimpleNamespace(
+            get_default_thread=lambda member_id: {"id": "thread-2", "user_id": "thread-user-2"} if member_id == "member-agent-2" else None
+        ),
+        relationship_repo=SimpleNamespace(get=lambda _actor_id, target_id: seen_relationship_targets.append(target_id) or None),
+    )
+
+    directory = registry.get("directory")
+    assert directory is not None
+
+    result = directory.handler()
+
+    assert result == "- Morel [mycel_agent] id=thread-user-2 (owner: Owner)"
+    assert seen_relationship_targets == []
+
+
 def test_messaging_service_resolves_sender_name_from_thread_user_id() -> None:
     published: list[dict[str, object]] = []
     service = MessagingService(

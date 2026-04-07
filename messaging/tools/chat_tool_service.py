@@ -432,11 +432,9 @@ class ChatToolService:
             # Privacy filter: only show members with a relationship (VISIT or HIRE)
             # or members owned by the same user (owner_id)
             if self._relationships:
-                owner_member = self._member_repo.get_by_id(self._owner_id) if self._member_repo else None
-                my_owner_id = getattr(owner_member, "owner_user_id", None) if owner_member else None
 
                 def _is_visible(m) -> bool:
-                    if getattr(m, "owner_user_id", None) == my_owner_id:
+                    if getattr(m, "owner_user_id", None) == self._owner_id:
                         return True
                     rel = self._relationships.get(eid, directory_ids[m.id])
                     if rel and rel.get("state") in ("visit", "hire"):
