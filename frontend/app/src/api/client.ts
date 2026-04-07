@@ -308,9 +308,8 @@ export interface InviteCode {
 }
 
 export async function fetchInviteCodes(): Promise<InviteCode[]> {
-  const payload = await request<{ codes: InviteCode[] } | InviteCode[]>("/api/invite-codes");
-  if (Array.isArray(payload)) return payload;
-  return (payload as { codes: InviteCode[] }).codes;
+  const payload = await request<{ codes: InviteCode[] }>("/api/invite-codes");
+  return payload.codes;
 }
 
 export async function generateInviteCode(expiresDays = 7): Promise<InviteCode> {

@@ -10,24 +10,15 @@ from backend.web.routers import invite_codes as invite_codes_router
 
 class _FakeInviteCodeRepo:
     def __init__(self) -> None:
-        self.list_all_calls = 0
         self.generate_calls: list[tuple[str, int | None]] = []
         self.revoke_calls: list[str] = []
         self.is_valid_calls: list[str] = []
-        self.list_all_result = [{"code": "invite-1"}]
         self.generate_result = {"code": "invite-2"}
         self.revoke_result = True
         self.is_valid_result = True
-        self.list_all_error: Exception | None = None
         self.generate_error: Exception | None = None
         self.revoke_error: Exception | None = None
         self.is_valid_error: Exception | None = None
-
-    def list_all(self):
-        self.list_all_calls += 1
-        if self.list_all_error is not None:
-            raise self.list_all_error
-        return self.list_all_result
 
     def generate(self, *, created_by: str, expires_days: int | None):
         self.generate_calls.append((created_by, expires_days))
