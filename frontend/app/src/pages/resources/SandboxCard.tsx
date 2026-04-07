@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import MemberAvatar from "@/components/MemberAvatar";
 import type { LeaseGroup } from "./session-list-utils";
-import { calculateDuration, formatDuration } from "./utils/duration";
+import { calculateDuration, formatDuration, formatStartedAtDuration } from "./utils/duration";
 import { formatMetric } from "./utils/format";
 
 const STATUS_CONFIG = {
@@ -52,6 +52,11 @@ export default function SandboxCard({ group, onClick }: SandboxCardProps) {
 
   const cfg = STATUS_CONFIG[group.status] ?? STATUS_CONFIG.stopped;
   const isStopped = group.status === "stopped";
+  const durationLabel = group.startedAt
+    ? duration == null
+      ? formatStartedAtDuration(group.startedAt)
+      : formatDuration(duration)
+    : null;
   const m = group.metrics;
   const hasMetrics =
     m != null &&
@@ -78,9 +83,9 @@ export default function SandboxCard({ group, onClick }: SandboxCardProps) {
             {cfg.label}
           </span>
         </div>
-        {duration != null && (
+        {durationLabel && (
           <span className="text-2xs font-mono text-muted-foreground/50 shrink-0">
-            {formatDuration(duration)}
+            {durationLabel}
           </span>
         )}
       </div>
