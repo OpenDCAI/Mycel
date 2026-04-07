@@ -3684,10 +3684,13 @@ function EvaluationPage() {
   React.useEffect(() => {
     void loadEvaluations();
     const timer = window.setInterval(() => {
+      // @@@evaluation-list-poller - once the list has entered a hard backend error state,
+      // stop the 5s loop and let the operator recover with an explicit retry.
+      if (listError) return;
       void loadEvaluations();
     }, 5000);
     return () => window.clearInterval(timer);
-  }, [loadEvaluations]);
+  }, [listError, loadEvaluations]);
 
   async function handleStart() {
     if (runStatus === "starting") return;
@@ -3868,7 +3871,18 @@ function EvaluationPage() {
             </span>
             <span>page {evalPagination?.page ?? 1}</span>
           </div>
-          {listError && <div className="error">list error: {listError}</div>}
+          {listError && (
+            <div className="error section-row">
+              <span>list error: {listError}</span>
+              <button
+                className="ghost-btn"
+                onClick={() => void loadEvaluations()}
+                disabled={runsLoading}
+              >
+                Retry
+              </button>
+            </div>
+          )}
           <table>
             <thead>
               <tr>
