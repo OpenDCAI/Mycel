@@ -5,9 +5,9 @@ from dataclasses import dataclass
 from typing import Any, cast
 from unittest.mock import MagicMock
 
-from langchain_core.messages import AIMessage, ToolMessage
+from langchain_core.messages import ToolMessage
 
-from core.runtime.middleware import ModelRequest, ModelResponse
+from core.runtime.middleware import ModelRequest
 from core.runtime.middleware.spill_buffer.middleware import SKIP_TOOLS, SpillBufferMiddleware
 from core.runtime.middleware.spill_buffer.spill import PREVIEW_BYTES, spill_if_needed
 
@@ -404,18 +404,6 @@ class TestSpillBufferMiddleware:
 
         assert result == non_tool_result
 
-    def test_wrap_model_call_passthrough(self):
-        """wrap_model_call simply delegates to handler."""
-        mw, _fs = self._make_middleware()
-        sentinel = object()
-        handler = MagicMock(return_value=sentinel)
-        request = _make_model_request()
-
-        result = mw.wrap_model_call(request, handler)
-
-        handler.assert_called_once_with(request)
-        assert result is sentinel
-
     def test_awrap_tool_call_delegates_to_maybe_spill(self):
         """awrap_tool_call uses the same _maybe_spill logic (sync mock)."""
         mw, fs = self._make_middleware(default_threshold=50)
@@ -439,23 +427,6 @@ class TestSpillBufferMiddleware:
         assert _require_text_content(result).startswith("<persisted-output")
         assert result.tool_call_id == "call_async"
         fs.write_file.assert_called_once()
-
-    def test_awrap_model_call_passthrough(self):
-        """awrap_model_call simply awaits handler."""
-        import asyncio
-
-        mw, _fs = self._make_middleware()
-        sentinel = ModelResponse(result=[AIMessage(content="done")], request_messages=[])
-
-        async def async_handler(req):
-            return sentinel
-
-        loop = asyncio.new_event_loop()
-        try:
-            result = loop.run_until_complete(mw.awrap_model_call(_make_model_request(), async_handler))
-        finally:
-            loop.close()
-        assert result is sentinel
 
     def test_spill_path_uses_tool_call_id(self):
         """Verify the spill file name is derived from tool_call_id."""
