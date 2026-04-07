@@ -15,19 +15,6 @@ from storage.contracts import RecipeRepo
 LIBRARY_DIR = library_dir()
 
 
-def ensure_library_dir() -> None:
-    LIBRARY_DIR.mkdir(parents=True, exist_ok=True)
-    (LIBRARY_DIR / "skills").mkdir(exist_ok=True)
-    (LIBRARY_DIR / "agents").mkdir(exist_ok=True)
-    legacy_recipe_dir = LIBRARY_DIR / "recipes"
-    # @@@recipe-storage-cutover - recipes now live in SQLite only; delete the dead file tree so it cannot masquerade as live state.
-    if legacy_recipe_dir.exists():
-        if legacy_recipe_dir.is_dir():
-            shutil.rmtree(legacy_recipe_dir)
-        else:
-            legacy_recipe_dir.unlink()
-
-
 def _read_json(path: Path, default: Any = None) -> Any:
     if not path.exists():
         return default if default is not None else {}
