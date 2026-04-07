@@ -2817,7 +2817,9 @@ function ThreadTraceSection({
     if (!threadId || !autoRefreshEnabled || !autoRefresh) return;
     const timer = window.setInterval(() => {
       loadTrace(selectedRunId);
-      loadConversation();
+      if (!conversationError) {
+        loadConversation();
+      }
     }, 2000);
     return () => window.clearInterval(timer);
   }, [
@@ -2827,6 +2829,7 @@ function ThreadTraceSection({
     selectedRunId,
     loadTrace,
     loadConversation,
+    conversationError,
   ]);
 
   const traceTail = traceEvents.slice(-300);
