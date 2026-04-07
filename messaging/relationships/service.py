@@ -71,7 +71,6 @@ class RelationshipService:
                 fields["hire_snapshot"] = {
                     "user_id": other_id,
                     "name": m.name if m else other_id,
-                    "main_thread_id": getattr(m, "main_thread_id", None),
                     "snapshot_at": now_iso(),
                 }
 

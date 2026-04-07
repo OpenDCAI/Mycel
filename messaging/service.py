@@ -154,7 +154,7 @@ class MessagingService:
             if not uid or uid == sender_id:
                 continue
             m = self._member_repo.get_by_id(uid)
-            if not m or m.type == "human" or not m.main_thread_id:
+            if not m or m.type == "human":
                 continue
 
             from messaging.delivery.actions import DeliveryAction

@@ -385,7 +385,7 @@ class QueueItem(BaseModel):
     content: str
     notification_type: NotificationType
     source: str | None = None  # "owner" | "external" | "system"
-    sender_id: str | None = None  # social identity: user_id for humans, member_id for agents
+    sender_id: str | None = None  # social identity slot; full agent-handle split still pending
     sender_name: str | None = None
     sender_avatar_url: str | None = None
     is_steer: bool = False
