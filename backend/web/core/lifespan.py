@@ -48,6 +48,7 @@ async def lifespan(app: FastAPI):
 
     _supabase_client = create_supabase_client()
     storage_container = StorageContainer(supabase_client=_supabase_client)
+    app.state.user_repo = storage_container.user_repo()
     app.state.member_repo = storage_container.member_repo()
     app.state.thread_repo = storage_container.thread_repo()
     app.state.thread_launch_pref_repo = storage_container.thread_launch_pref_repo()

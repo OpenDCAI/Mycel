@@ -26,6 +26,7 @@ class _FakeRepo:
 
 class _FakeContainer:
     def __init__(self) -> None:
+        self.user_repo_value = _FakeRepo()
         self.member_repo_value = _FakeRepo()
         self.thread_repo_value = _FakeRepo()
         self.thread_launch_pref_repo_value = _FakeRepo()
@@ -35,6 +36,9 @@ class _FakeContainer:
         self.user_settings_repo_value = _FakeRepo()
         self.agent_config_repo_value = _FakeRepo()
         self.contact_repo_value = _FakeRepo()
+
+    def user_repo(self) -> _FakeRepo:
+        return self.user_repo_value
 
     def member_repo(self) -> _FakeRepo:
         return self.member_repo_value
@@ -129,6 +133,7 @@ def _install_lifespan_noop_dependencies(monkeypatch: pytest.MonkeyPatch) -> None
     )
 
     monkeypatch.setattr("storage.providers.supabase.SupabaseMemberRepo", _fake_repo_factory)
+    monkeypatch.setattr("storage.providers.supabase.SupabaseUserRepo", _fake_repo_factory)
     monkeypatch.setattr("storage.providers.supabase.SupabaseThreadRepo", _fake_repo_factory)
     monkeypatch.setattr("storage.providers.supabase.SupabaseThreadLaunchPrefRepo", _fake_repo_factory)
     monkeypatch.setattr("storage.providers.supabase.SupabaseRecipeRepo", _fake_repo_factory)
@@ -192,6 +197,7 @@ def _install_lifespan_noop_dependencies(monkeypatch: pytest.MonkeyPatch) -> None
 def test_storage_container_exposes_bypass_repo_builders() -> None:
     container = StorageContainer(supabase_client=_FakeSupabaseClient())
 
+    assert callable(container.user_repo)
     assert callable(container.panel_task_repo)
     assert callable(container.cron_job_repo)
     assert callable(container.agent_registry_repo)
@@ -210,6 +216,7 @@ async def test_lifespan_wires_member_and_thread_repos_from_storage_container(
     monkeypatch.setattr("storage.container.StorageContainer", lambda **_: container)
 
     async with lifespan_module.lifespan(app):
+        assert app.state.user_repo is container.user_repo_value
         assert app.state.member_repo is container.member_repo_value
         assert app.state.thread_repo is container.thread_repo_value
 

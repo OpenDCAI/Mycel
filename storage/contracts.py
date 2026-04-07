@@ -132,6 +132,24 @@ class MemberType(StrEnum):
     OPENCLAW_AGENT = "openclaw_agent"
 
 
+class UserType(StrEnum):
+    HUMAN = "human"
+    AGENT = "agent"
+
+
+class UserRow(BaseModel):
+    id: str
+    type: UserType
+    display_name: str
+    owner_user_id: str | None = None
+    agent_config_id: str | None = None
+    avatar: str | None = None
+    email: str | None = None
+    mycel_id: int | None = None
+    created_at: float
+    updated_at: float | None = None
+
+
 class MemberRow(BaseModel):
     id: str
     name: str
@@ -470,6 +488,19 @@ class MemberRepo(Protocol):
     def update(self, member_id: str, **fields: Any) -> None: ...
     def increment_thread_seq(self, member_id: str) -> int: ...
     def delete(self, member_id: str) -> None: ...
+
+
+class UserRepo(Protocol):
+    def close(self) -> None: ...
+    def create(self, row: UserRow) -> None: ...
+    def get_by_id(self, user_id: str) -> UserRow | None: ...
+    def get_by_email(self, email: str) -> UserRow | None: ...
+    def get_by_mycel_id(self, mycel_id: int) -> UserRow | None: ...
+    def list_all(self) -> list[UserRow]: ...
+    def list_by_type(self, user_type: str) -> list[UserRow]: ...
+    def list_by_owner_user_id(self, owner_user_id: str) -> list[UserRow]: ...
+    def update(self, user_id: str, **fields: Any) -> None: ...
+    def delete(self, user_id: str) -> None: ...
 
 
 class ChatRepo(Protocol):
