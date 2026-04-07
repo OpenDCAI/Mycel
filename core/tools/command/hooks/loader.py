@@ -39,13 +39,3 @@ def load_hooks(
     hooks.sort(key=lambda h: h.priority)
     print(f"[BashHooks] Total {len(hooks)} hooks loaded")
     return hooks
-
-
-def discover_hooks() -> list[str]:
-    """Discover all available hook plugins without loading them."""
-    hooks_dir = Path(__file__).parent
-    return [
-        py_file.stem
-        for py_file in hooks_dir.glob("*.py")
-        if not py_file.name.startswith("_") and py_file.name not in ["base.py", "loader.py"]
-    ]
