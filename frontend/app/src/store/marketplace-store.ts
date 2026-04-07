@@ -93,9 +93,21 @@ interface MarketplaceState {
 }
 
 async function hubApi<T = any>(path: string): Promise<T> {
-  const res = await fetch(`${HUB_URL}/api/v1${path}`);
-  if (!res.ok) throw new Error(`Hub API error: ${res.status}`);
-  return res.json();
+  try {
+    const res = await fetch(`${HUB_URL}/api/v1${path}`);
+    if (!res.ok) {
+      if (res.status >= 502) {
+        throw new Error("Marketplace Hub unavailable");
+      }
+      throw new Error(`Hub API error: ${res.status}`);
+    }
+    return res.json();
+  } catch (e) {
+    if (e instanceof TypeError) {
+      throw new Error("Marketplace Hub unavailable");
+    }
+    throw e;
+  }
 }
 
 async function backendApi<T = any>(path: string, opts?: RequestInit): Promise<T> {
