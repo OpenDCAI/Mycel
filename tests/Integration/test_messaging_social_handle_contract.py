@@ -8,6 +8,7 @@ import pytest
 from backend.web.utils.serializers import avatar_url
 from core.agents.communication import delivery as delivery_module
 from core.runtime.registry import ToolRegistry
+from messaging.delivery.resolver import HireVisitDeliveryResolver
 from messaging.relationships.service import RelationshipService
 from messaging.service import MessagingService
 from messaging.tools.chat_tool_service import ChatToolService
@@ -109,7 +110,7 @@ def test_relationship_hire_snapshot_resolves_thread_user_name_via_member() -> No
     assert row.hire_snapshot["name"] == "Toad"
 
 
-def test_chat_tool_directory_uses_neutral_id_label() -> None:
+def test_chat_tool_registry_exposes_final_contract_only() -> None:
     registry = ToolRegistry()
     ChatToolService(
         registry=registry,
@@ -129,17 +130,14 @@ def test_chat_tool_directory_uses_neutral_id_label() -> None:
         relationship_repo=None,
     )
 
-    directory = registry.get("directory")
-    assert directory is not None
+    for tool_name in ("list_chats", "read_messages", "send_message", "search_messages"):
+        assert registry.get(tool_name) is not None
 
-    result = directory.handler()
-    assert isinstance(result, str)
-
-    assert "id=thread-user-1" in result
-    assert "user_id=thread-user-1" not in result
+    for removed_name in ("chats", "chat_search", "directory", "wechat_send", "wechat_contacts"):
+        assert registry.get(removed_name) is None
 
 
-def test_chat_tool_send_schema_marks_user_id_name_as_legacy() -> None:
+def test_send_message_schema_marks_user_id_name_as_legacy() -> None:
     registry = ToolRegistry()
     ChatToolService(
         registry=registry,
@@ -147,16 +145,32 @@ def test_chat_tool_send_schema_marks_user_id_name_as_legacy() -> None:
         owner_id="owner-user-1",
     )
 
-    chat_send = registry.get("chat_send")
-    directory = registry.get("directory")
-    assert chat_send is not None
-    assert directory is not None
+    send_message = registry.get("send_message")
+    assert send_message is not None
 
-    chat_send_schema = chat_send.get_schema()
-    directory_schema = directory.get_schema()
+    send_message_schema = send_message.get_schema()
 
-    assert "legacy" in chat_send_schema["parameters"]["properties"]["user_id"]["description"].lower()
-    assert "chat_send(user_id" in directory_schema["description"]
+    assert "legacy" in send_message_schema["parameters"]["properties"]["user_id"]["description"].lower()
+    assert "directory" not in send_message_schema["description"].lower()
+    assert send_message_schema["parameters"]["x-leon-required-any-of"] == [["user_id"], ["chat_id"]]
+
+
+def test_read_messages_schema_requires_non_empty_chat_or_user_identifier() -> None:
+    registry = ToolRegistry()
+    ChatToolService(
+        registry=registry,
+        user_id="agent-user-1",
+        owner_id="owner-user-1",
+    )
+
+    read_messages = registry.get("read_messages")
+    assert read_messages is not None
+
+    params = read_messages.get_schema()["parameters"]
+
+    assert params["x-leon-required-any-of"] == [["user_id"], ["chat_id"]]
+    assert params["properties"]["user_id"]["minLength"] == 1
+    assert params["properties"]["chat_id"]["minLength"] == 1
 
 
 def test_chat_tool_service_accepts_chat_identity_id_without_legacy_user_id() -> None:
@@ -179,77 +193,7 @@ def test_chat_tool_service_accepts_chat_identity_id_without_legacy_user_id() -> 
         relationship_repo=None,
     )
 
-    directory = registry.get("directory")
-    assert directory is not None
-    result = directory.handler()
-    assert isinstance(result, str)
-    assert "id=thread-user-2" in result
-
-
-def test_chat_tool_directory_exposes_default_thread_user_id_for_agents() -> None:
-    registry = ToolRegistry()
-    seen_relationship_targets: list[str] = []
-    ChatToolService(
-        registry=registry,
-        chat_identity_id="human-user-1",
-        owner_id="owner-user-1",
-        member_repo=SimpleNamespace(
-            list_all=lambda: [
-                SimpleNamespace(id="member-agent-1", name="Toad", type="mycel_agent", owner_user_id="owner-user-9"),
-            ],
-            get_by_id=lambda member_id: (
-                SimpleNamespace(id=member_id, name="Owner", owner_user_id="owner-user-1") if member_id == "owner-user-1" else None
-            ),
-        ),
-        thread_repo=SimpleNamespace(
-            get_default_thread=lambda member_id: {"id": "thread-1", "user_id": "thread-user-1"} if member_id == "member-agent-1" else None
-        ),
-        relationship_repo=SimpleNamespace(
-            get=lambda actor_id, target_id: (
-                seen_relationship_targets.append(target_id) or {"state": "hire"}
-                if actor_id == "human-user-1" and target_id == "thread-user-1"
-                else None
-            )
-        ),
-    )
-
-    directory = registry.get("directory")
-    assert directory is not None
-
-    result = directory.handler()
-
-    assert result == "- Toad [mycel_agent] id=thread-user-1"
-    assert seen_relationship_targets == ["thread-user-1"]
-
-
-def test_chat_tool_directory_keeps_same_owner_agents_visible_without_relationship() -> None:
-    registry = ToolRegistry()
-    seen_relationship_targets: list[str] = []
-    ChatToolService(
-        registry=registry,
-        chat_identity_id="thread-user-self",
-        owner_id="owner-user-1",
-        member_repo=SimpleNamespace(
-            list_all=lambda: [
-                SimpleNamespace(id="member-agent-2", name="Morel", type="mycel_agent", owner_user_id="owner-user-1"),
-            ],
-            get_by_id=lambda member_id: (
-                SimpleNamespace(id=member_id, name="Owner", owner_user_id=None) if member_id == "owner-user-1" else None
-            ),
-        ),
-        thread_repo=SimpleNamespace(
-            get_default_thread=lambda member_id: {"id": "thread-2", "user_id": "thread-user-2"} if member_id == "member-agent-2" else None
-        ),
-        relationship_repo=SimpleNamespace(get=lambda _actor_id, target_id: seen_relationship_targets.append(target_id) or None),
-    )
-
-    directory = registry.get("directory")
-    assert directory is not None
-
-    result = directory.handler()
-
-    assert result == "- Morel [mycel_agent] id=thread-user-2 (owner: Owner)"
-    assert seen_relationship_targets == []
+    assert registry.get("list_chats") is not None
 
 
 def test_messaging_service_resolves_sender_name_from_thread_user_id() -> None:
@@ -380,16 +324,16 @@ def test_chat_tool_send_accepts_thread_user_target_id() -> None:
         ),
     )
 
-    chat_send = registry.get("chat_send")
-    assert chat_send is not None
+    send_message = registry.get("send_message")
+    assert send_message is not None
 
-    result = chat_send.handler(content="hello", user_id="thread-user-1")
+    result = send_message.handler(content="hello", user_id="thread-user-1")
 
     assert result == "Message sent to Toad."
     assert sent == [("chat-1", "human-user-1", "hello")]
 
 
-def test_chat_tool_read_uses_thread_user_target_name_on_no_history() -> None:
+def test_read_messages_uses_thread_user_target_name_on_no_history() -> None:
     registry = ToolRegistry()
     ChatToolService(
         registry=registry,
@@ -411,10 +355,10 @@ def test_chat_tool_read_uses_thread_user_target_name_on_no_history() -> None:
         messaging_service=SimpleNamespace(),
     )
 
-    chat_read = registry.get("chat_read")
-    assert chat_read is not None
+    read_messages = registry.get("read_messages")
+    assert read_messages is not None
 
-    result = chat_read.handler(user_id="thread-user-1")
+    result = read_messages.handler(user_id="thread-user-1")
 
     assert result == "No chat history with Toad."
 
@@ -444,10 +388,10 @@ def test_chat_tool_search_does_not_fall_back_to_global_search_for_thread_user_ta
         ),
     )
 
-    chat_search = registry.get("chat_search")
-    assert chat_search is not None
+    search_messages = registry.get("search_messages")
+    assert search_messages is not None
 
-    result = chat_search.handler(query="hello", user_id="thread-user-1")
+    result = search_messages.handler(query="hello", user_id="thread-user-1")
 
     assert result == "No messages matching 'hello' with Toad."
     assert search_calls == []
@@ -478,6 +422,116 @@ def test_deliver_to_agents_routes_delivery_by_thread_user_id() -> None:
     service._deliver_to_agents("chat-1", "human-user-1", "hello", [])
 
     assert delivered == [("thread-user-1", "member-agent-1")]
+
+
+def test_same_owner_group_chat_kickoff_delivers_without_relationship() -> None:
+    delivered: list[tuple[str, str]] = []
+    resolver = HireVisitDeliveryResolver(
+        contact_repo=SimpleNamespace(get=lambda _owner_id, _target_id: None),
+        chat_member_repo=SimpleNamespace(
+            list_members=lambda _chat_id: [
+                {"user_id": "human-user-1"},
+                {"user_id": "thread-user-1"},
+                {"user_id": "thread-user-2"},
+            ]
+        ),
+        relationship_repo=SimpleNamespace(get=lambda _a, _b: None),
+    )
+    service = MessagingService(
+        chat_repo=SimpleNamespace(),
+        chat_member_repo=SimpleNamespace(
+            list_members=lambda _chat_id: [
+                {"user_id": "human-user-1"},
+                {"user_id": "thread-user-1"},
+                {"user_id": "thread-user-2"},
+            ]
+        ),
+        messages_repo=SimpleNamespace(),
+        message_read_repo=SimpleNamespace(),
+        member_repo=SimpleNamespace(
+            get_by_id=lambda uid: (
+                SimpleNamespace(id=uid, name="Human", type="human", avatar=None, owner_user_id=None)
+                if uid == "human-user-1"
+                else None
+                if uid in {"thread-user-1", "thread-user-2"}
+                else SimpleNamespace(id=uid, name="Morel", type="mycel_agent", avatar=None, owner_user_id="human-user-1")
+                if uid == "member-agent-1"
+                else SimpleNamespace(id=uid, name="Toad", type="mycel_agent", avatar=None, owner_user_id="human-user-1")
+                if uid == "member-agent-2"
+                else None
+            )
+        ),
+        thread_repo=SimpleNamespace(
+            get_by_user_id=lambda uid: (
+                {"id": "thread-1", "member_id": "member-agent-1"}
+                if uid == "thread-user-1"
+                else {"id": "thread-2", "member_id": "member-agent-2"}
+                if uid == "thread-user-2"
+                else None
+            )
+        ),
+        delivery_resolver=resolver,
+        delivery_fn=lambda recipient_id, member, *_args, **_kwargs: delivered.append((recipient_id, member.id)),
+    )
+
+    service._deliver_to_agents("chat-1", "human-user-1", "hello", [])
+
+    assert delivered == [("thread-user-1", "member-agent-1"), ("thread-user-2", "member-agent-2")]
+
+
+def test_same_owner_agent_turn_delivers_to_sibling_actor_without_relationship() -> None:
+    delivered: list[tuple[str, str]] = []
+    resolver = HireVisitDeliveryResolver(
+        contact_repo=SimpleNamespace(get=lambda _owner_id, _target_id: None),
+        chat_member_repo=SimpleNamespace(
+            list_members=lambda _chat_id: [
+                {"user_id": "human-user-1"},
+                {"user_id": "thread-user-1"},
+                {"user_id": "thread-user-2"},
+            ]
+        ),
+        relationship_repo=SimpleNamespace(get=lambda _a, _b: None),
+    )
+    service = MessagingService(
+        chat_repo=SimpleNamespace(),
+        chat_member_repo=SimpleNamespace(
+            list_members=lambda _chat_id: [
+                {"user_id": "human-user-1"},
+                {"user_id": "thread-user-1"},
+                {"user_id": "thread-user-2"},
+            ]
+        ),
+        messages_repo=SimpleNamespace(),
+        message_read_repo=SimpleNamespace(),
+        member_repo=SimpleNamespace(
+            get_by_id=lambda uid: (
+                SimpleNamespace(id=uid, name="Human", type="human", avatar=None, owner_user_id=None)
+                if uid == "human-user-1"
+                else None
+                if uid in {"thread-user-1", "thread-user-2"}
+                else SimpleNamespace(id=uid, name="Morel", type="mycel_agent", avatar=None, owner_user_id="human-user-1")
+                if uid == "member-agent-1"
+                else SimpleNamespace(id=uid, name="Toad", type="mycel_agent", avatar=None, owner_user_id="human-user-1")
+                if uid == "member-agent-2"
+                else None
+            )
+        ),
+        thread_repo=SimpleNamespace(
+            get_by_user_id=lambda uid: (
+                {"id": "thread-1", "member_id": "member-agent-1"}
+                if uid == "thread-user-1"
+                else {"id": "thread-2", "member_id": "member-agent-2"}
+                if uid == "thread-user-2"
+                else None
+            )
+        ),
+        delivery_resolver=resolver,
+        delivery_fn=lambda recipient_id, member, *_args, **_kwargs: delivered.append((recipient_id, member.id)),
+    )
+
+    service._deliver_to_agents("chat-1", "thread-user-1", "hello", [])
+
+    assert delivered == [("thread-user-2", "member-agent-2")]
 
 
 @pytest.mark.asyncio

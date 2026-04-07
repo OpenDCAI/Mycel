@@ -21,6 +21,7 @@ def format_chat_notification(sender_name: str, chat_id: str, unread_count: int, 
         "<system-reminder>\n"
         f"New message from {sender_name} in chat {chat_id} ({unread_count} unread).{signal_hint}\n"
         f'Read it with read_messages(chat_id="{chat_id}").\n'
+        f'Do not call send_message(chat_id="{chat_id}", ...) before read_messages(chat_id="{chat_id}") succeeds.\n'
         f'Reply with send_message(chat_id="{chat_id}", content="...").\n'
         "Prefer using this exact chat_id directly.\n"
         "Do not treat your normal assistant text as a chat reply.\n"

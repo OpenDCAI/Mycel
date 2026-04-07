@@ -259,6 +259,29 @@ class TestToolValidator:
         result = v.validate(schema, {"chat_id": "chat-1"})
         assert result.ok
 
+    def test_required_any_of_rejects_empty_string_placeholder(self):
+        v = ToolValidator()
+        schema = {
+            "name": "ChatRead",
+            "parameters": {
+                "type": "object",
+                "required": [],
+                "properties": {
+                    "user_id": {"type": "string"},
+                    "chat_id": {"type": "string"},
+                },
+                "x-leon-required-any-of": [
+                    ["user_id"],
+                    ["chat_id"],
+                ],
+            },
+        }
+
+        with pytest.raises(InputValidationError) as exc_info:
+            v.validate(schema, {"user_id": ""})
+
+        assert exc_info.value.error_code == "REQUIRED_SET_UNSATISFIED"
+
     def test_string_constraints_raise_layer1(self):
         v = ToolValidator()
         schema = {

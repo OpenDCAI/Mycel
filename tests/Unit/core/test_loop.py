@@ -1579,6 +1579,51 @@ class _SplitAnyOfStreamingToolModel:
         yield AIMessageChunk(content="final answer")
 
 
+class _SplitAnyOfStreamingIdentifierCompletionModel:
+    def __init__(self):
+        self.calls = 0
+
+    def bind_tools(self, tools):
+        return self
+
+    async def astream(self, messages):
+        self.calls += 1
+        if self.calls == 1:
+            yield AIMessageChunk(
+                content="",
+                tool_calls=[
+                    {
+                        "name": "read_messages",
+                        "args": {"user_id": "", "range": "-10:"},
+                        "id": "tc-chat-read",
+                    }
+                ],
+                tool_call_chunks=[
+                    {
+                        "name": "read_messages",
+                        "args": '{"user_id":"","range":"-10:",',
+                        "id": "tc-chat-read",
+                        "index": 0,
+                    }
+                ],
+            )
+            yield AIMessageChunk(
+                content="",
+                tool_call_chunks=[
+                    {
+                        "name": None,
+                        "args": '"chat_id":"chat-1"}',
+                        "id": "tc-chat-read",
+                        "index": 0,
+                    }
+                ],
+            )
+            await asyncio.sleep(0.01)
+            yield AIMessageChunk(content="done")
+            return
+        yield AIMessageChunk(content="final answer")
+
+
 class _TwoToolStreamingModel:
     def __init__(self):
         self.calls = 0
@@ -3107,6 +3152,58 @@ async def test_streaming_overlap_waits_for_anyof_tool_args_before_execution():
     assert not any(msg.content == "Provide entity_id or chat_id." for msg in tool_messages)
 
 
+@pytest.mark.asyncio
+async def test_streaming_overlap_waits_for_non_empty_anyof_identifier_before_execution():
+    model = _SplitAnyOfStreamingIdentifierCompletionModel()
+    seen_calls = []
+
+    def read_messages_handler(user_id: str | None = None, chat_id: str | None = None, range: str | None = None) -> str:
+        seen_calls.append({"user_id": user_id, "chat_id": chat_id, "range": range})
+        if chat_id:
+            return f"chat:{chat_id}"
+        if user_id:
+            return f"user:{user_id}"
+        return "Provide user_id or chat_id."
+
+    entry = ToolEntry(
+        name="read_messages",
+        mode=ToolMode.INLINE,
+        schema={
+            "name": "read_messages",
+            "description": "read chat",
+            "parameters": {
+                "type": "object",
+                "required": [],
+                "properties": {
+                    "user_id": {"type": "string"},
+                    "chat_id": {"type": "string"},
+                    "range": {"type": "string"},
+                },
+                "x-leon-required-any-of": [
+                    ["user_id"],
+                    ["chat_id"],
+                ],
+            },
+        },
+        handler=read_messages_handler,
+        source="test",
+        is_concurrency_safe=True,
+    )
+    loop = make_loop(
+        model,
+        registry=make_registry(entry),
+        app_state=AppState(),
+        runtime=SimpleNamespace(cost=0.0),
+    )
+
+    result = await loop.ainvoke({"messages": [{"role": "user", "content": "read chat"}]})
+
+    tool_messages = [msg for msg in result["messages"] if isinstance(msg, ToolMessage)]
+    assert seen_calls == [{"user_id": "", "chat_id": "chat-1", "range": "-10:"}]
+    assert any(msg.tool_call_id == "tc-chat-read" and msg.content == "chat:chat-1" for msg in tool_messages)
+    assert not any(msg.content == "Provide user_id or chat_id." for msg in tool_messages)
+
+
 def test_normalize_stream_tool_call_keeps_aggregate_args_when_chunk_args_are_empty():
     entry = ToolEntry(
         name="read_messages",
@@ -3146,5 +3243,60 @@ def test_normalize_stream_tool_call_keeps_aggregate_args_when_chunk_args_are_emp
     assert normalized == {
         "name": "read_messages",
         "args": {"chat_id": "chat-1"},
+        "id": "tc-chat-read",
+    }
+
+
+def test_normalize_stream_tool_call_keeps_aggregate_args_when_raw_chunks_are_partial():
+    entry = ToolEntry(
+        name="read_messages",
+        mode=ToolMode.INLINE,
+        schema={
+            "name": "read_messages",
+            "description": "read chat",
+            "parameters": {
+                "type": "object",
+                "required": [],
+                "properties": {
+                    "user_id": {"type": "string"},
+                    "chat_id": {"type": "string"},
+                    "range": {"type": "string"},
+                },
+                "x-leon-required-any-of": [
+                    ["user_id"],
+                    ["chat_id"],
+                ],
+            },
+        },
+        handler=lambda **_kwargs: "ok",
+        source="test",
+        is_concurrency_safe=True,
+    )
+    loop = make_loop(
+        mock_model_no_tools(),
+        registry=make_registry(entry),
+        app_state=AppState(),
+        runtime=SimpleNamespace(cost=0.0),
+    )
+
+    normalized = loop._normalize_stream_tool_call(
+        {
+            "name": "read_messages",
+            "args": {"chat_id": "chat-1", "user_id": "", "range": "-10:"},
+            "id": "tc-chat-read",
+        },
+        [
+            {
+                "name": "read_messages",
+                "args": '{"user_id":"","range":"-10:"}',
+                "id": "tc-chat-read",
+                "index": 0,
+            }
+        ],
+    )
+
+    assert normalized == {
+        "name": "read_messages",
+        "args": {"chat_id": "chat-1", "user_id": "", "range": "-10:"},
         "id": "tc-chat-read",
     }

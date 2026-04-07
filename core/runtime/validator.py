@@ -19,9 +19,20 @@ def _required_sets(parameters: dict, key: str) -> list[list[str]]:
     return sets
 
 
+def _arg_counts_as_present(args: dict, field: str) -> bool:
+    if field not in args:
+        return False
+    value = args[field]
+    if value is None:
+        return False
+    if isinstance(value, str) and value == "":
+        return False
+    return True
+
+
 def _required_sets_match(parameters: dict, args: dict) -> bool:
     required = parameters.get("required", [])
-    if any(field not in args for field in required):
+    if any(not _arg_counts_as_present(args, field) for field in required):
         return False
 
     # @@@required-set-contract - some tools need one of several identifier sets
@@ -30,11 +41,11 @@ def _required_sets_match(parameters: dict, args: dict) -> bool:
     # anyOf/oneOf schema to live providers.
     any_of = _required_sets(parameters, "x-leon-required-any-of") or _required_sets(parameters, "anyOf")
     if any_of:
-        return any(all(field in args for field in required) for required in any_of)
+        return any(all(_arg_counts_as_present(args, field) for field in required) for required in any_of)
 
     one_of = _required_sets(parameters, "x-leon-required-one-of") or _required_sets(parameters, "oneOf")
     if one_of:
-        matches = [required for required in one_of if all(field in args for field in required)]
+        matches = [required for required in one_of if all(_arg_counts_as_present(args, field) for field in required)]
         return len(matches) == 1
 
     return True

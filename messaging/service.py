@@ -164,6 +164,12 @@ class MessagingService:
         sender_member = self._resolve_display_member(sender_id)
         sender_name = sender_member.name if sender_member else "unknown"
         sender_avatar_url = avatar_url(sender_id, bool(sender_member.avatar if sender_member else None))
+        sender_type = (
+            sender_member.type.value
+            if hasattr(sender_member, "type") and hasattr(sender_member.type, "value")
+            else getattr(sender_member, "type", None)
+        )
+        sender_owner_id = sender_member.id if sender_type == "human" else getattr(sender_member, "owner_user_id", None)
 
         for member in members:
             uid = member.get("user_id")
@@ -171,6 +177,16 @@ class MessagingService:
                 continue
             m = self._resolve_display_member(uid)
             if not m or m.type == "human":
+                continue
+
+            # @@@same-owner-group-delivery - explicit group membership among the same owner
+            # must reach sibling actors even when no relationship row exists yet.
+            if sender_owner_id and getattr(m, "owner_user_id", None) == sender_owner_id:
+                if self._delivery_fn:
+                    try:
+                        self._delivery_fn(uid, m, content, sender_name, chat_id, sender_id, sender_avatar_url, signal=signal)
+                    except Exception:
+                        logger.exception("[messaging] delivery failed for member %s", uid)
                 continue
 
             from messaging.delivery.actions import DeliveryAction

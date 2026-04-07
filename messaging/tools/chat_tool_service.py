@@ -1,7 +1,6 @@
 """Chat tool service (messaging module version).
 
-Provides 5 tools: chats, chat_read, chat_send, chat_search, directory.
-directory includes privacy filter: only shows entities with existing relationships.
+Provides 4 tools: list_chats, read_messages, send_message, search_messages.
 """
 
 from __future__ import annotations
@@ -80,7 +79,7 @@ def _float_ts(ts: Any) -> float | None:
 
 
 class ChatToolService:
-    """Registers 5 chat tools into ToolRegistry (messaging module version)."""
+    """Registers 4 chat tools into ToolRegistry (messaging module version)."""
 
     def __init__(
         self,
@@ -94,7 +93,7 @@ class ChatToolService:
         messages_repo: Any = None,  # SupabaseMessagesRepo
         member_repo: Any = None,
         thread_repo: Any = None,
-        relationship_repo: Any = None,  # for directory privacy filter
+        relationship_repo: Any = None,
     ) -> None:
         identity_id = chat_identity_id or user_id
         if not identity_id:
@@ -123,23 +122,11 @@ class ChatToolService:
             return None
         return self._member_repo.get_by_id(member_id)
 
-    def _resolve_directory_social_id(self, member: Any) -> str:
-        member_type = member.type.value if hasattr(member.type, "value") else str(member.type)
-        if member_type == "human":
-            return member.id
-        if self._thread_repo is None:
-            raise RuntimeError("thread_repo is required to resolve agent directory ids")
-        default_thread = self._thread_repo.get_default_thread(member.id)
-        if default_thread is None or not default_thread.get("user_id"):
-            raise RuntimeError(f"Default thread user_id is required for directory member: {member.id}")
-        return default_thread["user_id"]
-
     def _register(self, registry: ToolRegistry) -> None:
-        self._register_chats(registry)
+        self._register_list_chats(registry)
         self._register_chat_read(registry)
         self._register_chat_send(registry)
-        self._register_chat_search(registry)
-        self._register_directory(registry)
+        self._register_search_messages(registry)
 
     def _format_msgs(self, msgs: list[dict], eid: str) -> str:
         lines = []
@@ -167,7 +154,7 @@ class ChatToolService:
             before_iso = datetime.fromtimestamp(parsed["before"], tz=UTC).isoformat() if parsed.get("before") else None
             return self._messages.list_by_time_range(chat_id, after=after_iso, before=before_iso)
 
-    def _register_chats(self, registry: ToolRegistry) -> None:
+    def _register_list_chats(self, registry: ToolRegistry) -> None:
         eid = self._chat_identity_id
 
         def handle(unread_only: bool = False, limit: int = 20) -> str:
@@ -196,10 +183,10 @@ class ChatToolService:
 
         registry.register(
             ToolEntry(
-                name="chats",
+                name="list_chats",
                 mode=ToolMode.INLINE,
                 schema={
-                    "name": "chats",
+                    "name": "list_chats",
                     "description": "List your chats. Returns chat summaries with participant ids from the current social-id slot.",
                     "parameters": {
                         "type": "object",
@@ -260,10 +247,10 @@ class ChatToolService:
 
         registry.register(
             ToolEntry(
-                name="chat_read",
+                name="read_messages",
                 mode=ToolMode.INLINE,
                 schema={
-                    "name": "chat_read",
+                    "name": "read_messages",
                     "description": (
                         "Read chat messages. Returns unread messages by default.\n"
                         "If nothing unread, use range to read history:\n"
@@ -276,14 +263,20 @@ class ChatToolService:
                         "properties": {
                             "user_id": {
                                 "type": "string",
+                                "minLength": 1,
                                 "description": "Participant id for 1:1 chat history. Parameter name is legacy.",
                             },
-                            "chat_id": {"type": "string", "description": "Chat_id for group chat history"},
+                            "chat_id": {
+                                "type": "string",
+                                "minLength": 1,
+                                "description": "Chat_id for group chat history",
+                            },
                             "range": {
                                 "type": "string",
                                 "description": "History range. Negative index '-X:-Y' or time '-1h:', '2026-03-20:'.",
                             },
                         },
+                        "x-leon-required-any-of": [["user_id"], ["chat_id"]],
                     },
                 },
                 handler=handle,
@@ -321,7 +314,7 @@ class ChatToolService:
 
             unread = self._messaging.count_unread(resolved_chat_id, eid)
             if unread > 0:
-                raise RuntimeError(f"You have {unread} unread message(s). Call chat_read(chat_id='{resolved_chat_id}') first.")
+                raise RuntimeError(f"You have {unread} unread message(s). Call read_messages(chat_id='{resolved_chat_id}') first.")
 
             effective_signal = signal if signal in ("yield", "close") else None
             if effective_signal:
@@ -332,14 +325,14 @@ class ChatToolService:
 
         registry.register(
             ToolEntry(
-                name="chat_send",
+                name="send_message",
                 mode=ToolMode.INLINE,
                 schema={
-                    "name": "chat_send",
+                    "name": "send_message",
                     "description": (
-                        "Send a message. Use the directory-listed id for 1:1 chats and chat_id for group chats.\n"
+                        "Send a message. Use user_id for 1:1 chats and chat_id for group chats.\n"
                         "The user_id parameter name is legacy.\n\n"
-                        "You MUST call chat_read() first if you have unread messages — sending will fail otherwise.\n\n"
+                        "You MUST call read_messages() first if you have unread messages — sending will fail otherwise.\n\n"
                         "Signal protocol:\n"
                         "  (no tag) = I expect a reply from you\n"
                         "  ::yield = I'm done with my turn; reply only if you want to\n"
@@ -348,14 +341,17 @@ class ChatToolService:
                     "parameters": {
                         "type": "object",
                         "properties": {
-                            "content": {"type": "string", "description": "Message content"},
+                            "content": {"type": "string", "minLength": 1, "description": "Message content"},
                             "user_id": {
                                 "type": "string",
-                                "description": (
-                                    "Target participant id for 1:1 chat. Parameter name is legacy; pass the id shown by directory."
-                                ),
+                                "minLength": 1,
+                                "description": ("Target participant id for 1:1 chat. Parameter name is legacy."),
                             },
-                            "chat_id": {"type": "string", "description": "Target chat_id (for group chat)"},
+                            "chat_id": {
+                                "type": "string",
+                                "minLength": 1,
+                                "description": "Target chat_id (for group chat)",
+                            },
                             "signal": {"type": "string", "enum": ["open", "yield", "close"], "default": "open"},
                             "mentions": {
                                 "type": "array",
@@ -364,6 +360,7 @@ class ChatToolService:
                             },
                         },
                         "required": ["content"],
+                        "x-leon-required-any-of": [["user_id"], ["chat_id"]],
                     },
                 },
                 handler=handle,
@@ -371,7 +368,7 @@ class ChatToolService:
             )
         )
 
-    def _register_chat_search(self, registry: ToolRegistry) -> None:
+    def _register_search_messages(self, registry: ToolRegistry) -> None:
         eid = self._chat_identity_id
 
         def handle(query: str, user_id: str | None = None) -> str:
@@ -394,81 +391,22 @@ class ChatToolService:
 
         registry.register(
             ToolEntry(
-                name="chat_search",
+                name="search_messages",
                 mode=ToolMode.INLINE,
                 schema={
-                    "name": "chat_search",
+                    "name": "search_messages",
                     "description": "Search messages. Optionally filter by user_id.",
                     "parameters": {
                         "type": "object",
                         "properties": {
-                            "query": {"type": "string", "description": "Search query"},
+                            "query": {"type": "string", "minLength": 1, "description": "Search query"},
                             "user_id": {
                                 "type": "string",
+                                "minLength": 1,
                                 "description": "Optional: only search in chat with this participant id. Parameter name is legacy.",
                             },
                         },
                         "required": ["query"],
-                    },
-                },
-                handler=handle,
-                source="chat",
-            )
-        )
-
-    def _register_directory(self, registry: ToolRegistry) -> None:
-        eid = self._chat_identity_id
-
-        def handle(search: str | None = None, type: str | None = None) -> str:
-            all_entities = self._member_repo.list_all()
-            entities = [e for e in all_entities if e.id != eid]
-            if type:
-                entities = [e for e in entities if e.type == type]
-            if search:
-                q = search.lower()
-                entities = [e for e in entities if q in e.name.lower()]
-            directory_ids = {e.id: self._resolve_directory_social_id(e) for e in entities}
-
-            # Privacy filter: only show members with a relationship (VISIT or HIRE)
-            # or members owned by the same user (owner_id)
-            if self._relationships:
-
-                def _is_visible(m) -> bool:
-                    if getattr(m, "owner_user_id", None) == self._owner_id:
-                        return True
-                    rel = self._relationships.get(eid, directory_ids[m.id])
-                    if rel and rel.get("state") in ("visit", "hire"):
-                        return True
-                    return False
-
-                entities = [e for e in entities if _is_visible(e)]
-
-            if not entities:
-                return "No members found."
-            lines = []
-            for e in entities:
-                owner_info = ""
-                if getattr(e, "owner_user_id", None):
-                    owner_member = self._member_repo.get_by_id(e.owner_user_id)
-                    if owner_member:
-                        owner_info = f" (owner: {owner_member.name})"
-                mtype = e.type.value if hasattr(e.type, "value") else str(e.type)
-                lines.append(f"- {e.name} [{mtype}] id={directory_ids[e.id]}{owner_info}")
-            return "\n".join(lines)
-
-        registry.register(
-            ToolEntry(
-                name="directory",
-                mode=ToolMode.INLINE,
-                schema={
-                    "name": "directory",
-                    "description": "Browse the member directory. Shows members with Visit/Hire relationships. Returns ids for chat_send(user_id=...).",  # noqa: E501
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "search": {"type": "string", "description": "Search by name"},
-                            "type": {"type": "string", "description": "Filter by type: 'human' or 'agent'"},
-                        },
                     },
                 },
                 handler=handle,

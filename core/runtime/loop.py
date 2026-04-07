@@ -1768,9 +1768,17 @@ class QueryLoop:
             try:
                 import json as _json
 
-                args = _json.loads("".join(raw_arg_chunks))
+                chunk_args = _json.loads("".join(raw_arg_chunks))
             except Exception:
                 return None
+            # @@@stream-aggregate-args-precedence - some providers emit raw
+            # chunks that lag behind the aggregate tool_call args. Treat chunk
+            # args as incremental updates, not as authority that can erase a
+            # complete aggregate chat_id/user_id set.
+            if isinstance(args, dict) and isinstance(chunk_args, dict):
+                args = {**args, **chunk_args}
+            else:
+                args = chunk_args
 
         normalized = {"name": name, "args": args, "id": call_id}
         if not self._tool_call_is_ready(normalized):

@@ -25,6 +25,7 @@ class TestFormatChatNotification:
         )
 
         assert 'read_messages(chat_id="chat-123")' in result
+        assert 'Do not call send_message(chat_id="chat-123", ...) before read_messages(chat_id="chat-123") succeeds.' in result
         assert 'send_message(chat_id="chat-123", content="...")' in result
         assert "Prefer using this exact chat_id directly" in result
         assert "Do not treat your normal assistant text as a chat reply." in result

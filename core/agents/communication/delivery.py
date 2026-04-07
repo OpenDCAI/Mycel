@@ -1,6 +1,6 @@
 """Chat delivery — enqueues lightweight notifications for agent threads.
 
-v3: no full message text injected. Agent must chat_read to see content.
+v3: no full message text injected. Agent must read_messages to see content.
 MessagingService._deliver_to_agents calls the delivery function for each
 non-sender agent member.
 """

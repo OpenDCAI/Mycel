@@ -94,6 +94,25 @@ def _resolve_display_member(app: Any, social_user_id: str) -> Any | None:
     return app.state.member_repo.get_by_id(member_id)
 
 
+def _validate_chat_participant_ids(app: Any, participant_ids: list[str], requester_user_id: str) -> list[str]:
+    member_repo = getattr(app.state, "member_repo", None)
+    thread_repo = getattr(app.state, "thread_repo", None)
+    validated: list[str] = []
+    for participant_id in participant_ids:
+        if participant_id == requester_user_id:
+            validated.append(participant_id)
+            continue
+        if thread_repo is not None and thread_repo.get_by_user_id(participant_id) is not None:
+            validated.append(participant_id)
+            continue
+        # @@@group-chat-actor-boundary - template member ids are display/config identities,
+        # not deliverable chat actors. Reject them loudly at ingress instead of guessing.
+        if member_repo is not None and member_repo.get_by_id(participant_id) is not None:
+            raise ValueError(f"Agent participant ids must be actor user_ids, not template member_id: {participant_id}")
+        validated.append(participant_id)
+    return validated
+
+
 def _msg_response(m: dict[str, Any], app: Any) -> dict[str, Any]:
     sender = _resolve_display_member(app, m.get("sender_id", ""))
     return {
@@ -130,10 +149,11 @@ async def create_chat(
     app: Annotated[Any, Depends(get_app)],
 ):
     try:
-        if len(body.user_ids) >= 3:
-            chat = _messaging(app).create_group_chat(body.user_ids, body.title)
+        participant_ids = _validate_chat_participant_ids(app, body.user_ids, user_id)
+        if len(participant_ids) >= 3:
+            chat = _messaging(app).create_group_chat(participant_ids, body.title)
         else:
-            chat = _messaging(app).find_or_create_chat(body.user_ids, body.title)
+            chat = _messaging(app).find_or_create_chat(participant_ids, body.title)
         return {
             "id": chat["id"],
             "title": chat.get("title"),

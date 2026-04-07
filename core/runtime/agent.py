@@ -1415,10 +1415,10 @@ class LeonAgent:
                     f"- Your chat identity id: {uid}\n"
                     f"- The chat tools still use the parameter name user_id for legacy reasons.\n"
                     f"- Your owner: {owner_name} (human user_id: {owner_uid})\n"
-                    f"- When you receive a chat notification, you MUST read it with chat_read() before deciding what to do.\n"
+                    f"- When you receive a chat notification, you MUST read it with read_messages() before deciding what to do.\n"
                     f"- If that notification already gives you a chat_id, prefer using that exact chat_id directly.\n"
-                    f"- If you reply to the other party, you MUST call chat_send(). Never claim you replied unless chat_send() succeeded.\n"
-                    f"- Your normal text output goes to your owner's thread, not to the chat — only chat_send() delivers to the other party.\n"
+                    f"- If you reply to the other party, you MUST call send_message(). Never claim you replied unless send_message() succeeded.\n"
+                    f"- Your normal text output goes to your owner's thread, not to the chat — only send_message() delivers to the other party.\n"
                 )
         return prompt
 
