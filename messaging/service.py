@@ -253,7 +253,7 @@ class MessagingService:
                 if e:
                     entities_info.append(
                         {
-                            "id": e.id,
+                            "id": uid,
                             "name": e.name,
                             "type": e.type,
                             "avatar_url": avatar_url(e.id, bool(e.avatar)),

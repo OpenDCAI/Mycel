@@ -5,6 +5,7 @@ from typing import Any, cast
 
 import pytest
 
+from backend.web.utils.serializers import avatar_url
 from core.agents.communication import delivery as delivery_module
 from core.runtime.registry import ToolRegistry
 from messaging.relationships.service import RelationshipService
@@ -190,6 +191,8 @@ def test_messaging_service_resolves_sender_name_from_thread_user_id() -> None:
             get_by_id=lambda uid: (
                 None
                 if uid == "thread-user-1"
+                else SimpleNamespace(id=uid, name="Human", type="human", avatar=None)
+                if uid == "human-user-1"
                 else SimpleNamespace(id=uid, name="Toad", type="mycel_agent", avatar=None)
                 if uid == "member-agent-1"
                 else None
@@ -206,6 +209,51 @@ def test_messaging_service_resolves_sender_name_from_thread_user_id() -> None:
     payload = cast(dict[str, object], published[0])
     data = cast(dict[str, object], payload["data"])
     assert data["sender_name"] == "Toad"
+
+
+def test_messaging_service_list_chats_exposes_thread_user_participant_id() -> None:
+    service = MessagingService(
+        chat_repo=SimpleNamespace(
+            get_by_id=lambda chat_id: SimpleNamespace(id=chat_id, title=None, status="active", created_at="2026-04-07T00:00:00Z")
+        ),
+        chat_member_repo=SimpleNamespace(
+            list_chats_for_user=lambda _user_id: ["chat-1"],
+            list_members=lambda _chat_id: [{"user_id": "human-user-1"}, {"user_id": "thread-user-1"}],
+        ),
+        messages_repo=SimpleNamespace(list_by_chat=lambda _chat_id, limit=1: [], count_unread=lambda _chat_id, _user_id: 0),
+        message_read_repo=SimpleNamespace(),
+        member_repo=SimpleNamespace(
+            get_by_id=lambda uid: (
+                SimpleNamespace(id=uid, name="Human", type="human", avatar=None)
+                if uid == "human-user-1"
+                else None
+                if uid == "thread-user-1"
+                else SimpleNamespace(id=uid, name="Toad", type="mycel_agent", avatar=None)
+                if uid == "member-agent-1"
+                else None
+            )
+        ),
+        thread_repo=SimpleNamespace(
+            get_by_user_id=lambda uid: {"id": "thread-1", "member_id": "member-agent-1"} if uid == "thread-user-1" else None
+        ),
+    )
+
+    chats = service.list_chats_for_user("human-user-1")
+
+    assert chats[0]["entities"] == [
+        {
+            "id": "human-user-1",
+            "name": "Human",
+            "type": "human",
+            "avatar_url": avatar_url("human-user-1", False),
+        },
+        {
+            "id": "thread-user-1",
+            "name": "Toad",
+            "type": "mycel_agent",
+            "avatar_url": avatar_url("member-agent-1", False),
+        },
+    ]
 
 
 def test_chat_tool_formats_thread_user_id_sender_as_agent_name() -> None:
