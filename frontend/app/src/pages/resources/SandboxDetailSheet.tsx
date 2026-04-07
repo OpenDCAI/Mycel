@@ -9,7 +9,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { SandboxFileBrowser } from "@/components/SandboxFileBrowser";
 import type { LeaseGroup } from "./session-list-utils";
-import type { ResourceSession, SessionMetrics } from "./types";
+import type { ResourceSession } from "./types";
 import { calculateDuration, formatDuration } from "./utils/duration";
 import { formatMetric } from "./utils/format";
 
@@ -181,6 +181,3 @@ function MetricBlock({
     </div>
   );
 }
-
-// Re-export for consumers that only need the type
-export type { SessionMetrics };
