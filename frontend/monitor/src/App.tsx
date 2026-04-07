@@ -3656,6 +3656,7 @@ function EvaluationPage() {
   >("idle");
   const [evaluationId, setEvaluationId] = React.useState("");
   const [runError, setRunError] = React.useState<string | null>(null);
+  const [listError, setListError] = React.useState<string | null>(null);
   const [evaluations, setEvaluations] = React.useState<any[]>([]);
   const [evalOffset, setEvalOffset] = React.useState(0);
   const [evalLimit] = React.useState(30);
@@ -3672,9 +3673,9 @@ function EvaluationPage() {
       );
       setEvaluations(Array.isArray(payload?.items) ? payload.items : []);
       setEvalPagination(payload?.pagination || null);
-      setRunError(null);
+      setListError(null);
     } catch (e: any) {
-      setRunError(e?.message || String(e));
+      setListError(e?.message || String(e));
     } finally {
       setRunsLoading(false);
     }
@@ -3865,6 +3866,7 @@ function EvaluationPage() {
             <span>{runsLoading ? "loading..." : "idle"}</span>
             <span>page {evalPagination?.page ?? 1}</span>
           </div>
+          {listError && <div className="error">list error: {listError}</div>}
           <table>
             <thead>
               <tr>
@@ -3960,7 +3962,9 @@ function EvaluationPage() {
               {evaluations.length === 0 && (
                 <tr>
                   <td colSpan={8}>
-                    {runError ? "Unable to load evaluations." : "No evaluations yet."}
+                    {listError
+                      ? "Unable to load evaluations."
+                      : "No evaluations yet."}
                   </td>
                 </tr>
               )}
