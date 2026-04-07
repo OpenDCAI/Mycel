@@ -59,12 +59,10 @@ def _service(
     *,
     user_repo: _FakeUserRepo | None = None,
     agent_config_repo: _FakeAgentConfigRepo | None = None,
-    member_repo=None,
     invite_codes: _FakeInviteCodes | None = None,
 ) -> AuthService:
     return AuthService(
         users=user_repo or _FakeUserRepo(),
-        members=member_repo,
         agent_configs=agent_config_repo,
         supabase_client=_FakeSupabaseClient(),
         invite_codes=invite_codes or _FakeInviteCodes(),
@@ -85,7 +83,7 @@ def test_complete_register_creates_human_and_owned_agent_users(monkeypatch: pyte
     user_repo = _FakeUserRepo()
     agent_config_repo = _FakeAgentConfigRepo()
     invite_codes = _FakeInviteCodes()
-    service = _service(user_repo=user_repo, agent_config_repo=agent_config_repo, member_repo=None, invite_codes=invite_codes)
+    service = _service(user_repo=user_repo, agent_config_repo=agent_config_repo, invite_codes=invite_codes)
 
     result = service.complete_register("temp-1", "invite-1")
 
@@ -134,9 +132,6 @@ def test_complete_register_existing_user_path_uses_user_repo_not_member_repo(mon
     service = _service(
         user_repo=user_repo,
         agent_config_repo=_FakeAgentConfigRepo(),
-        member_repo=SimpleNamespace(
-            get_by_id=lambda _user_id: (_ for _ in ()).throw(AssertionError("member_repo must not back complete_register"))
-        ),
         invite_codes=invite_codes,
     )
 

@@ -49,7 +49,6 @@ async def lifespan(app: FastAPI):
     _supabase_client = create_supabase_client()
     storage_container = StorageContainer(supabase_client=_supabase_client)
     app.state.user_repo = storage_container.user_repo()
-    app.state.member_repo = storage_container.member_repo()
     app.state.thread_repo = storage_container.thread_repo()
     app.state.thread_launch_pref_repo = storage_container.thread_launch_pref_repo()
     app.state.recipe_repo = storage_container.recipe_repo()
@@ -68,7 +67,6 @@ async def lifespan(app: FastAPI):
     app.state.auth_service = AuthService(
         users=app.state.user_repo,
         agent_configs=app.state.agent_config_repo,
-        members=app.state.member_repo,
         supabase_client=_supabase_client,
         supabase_auth_client_factory=create_supabase_auth_client,
         invite_codes=app.state.invite_code_repo,

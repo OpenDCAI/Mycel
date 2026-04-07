@@ -27,7 +27,6 @@ class _FakeRepo:
 class _FakeContainer:
     def __init__(self) -> None:
         self.user_repo_value = _FakeRepo()
-        self.member_repo_value = _FakeRepo()
         self.thread_repo_value = _FakeRepo()
         self.thread_launch_pref_repo_value = _FakeRepo()
         self.recipe_repo_value = _FakeRepo()
@@ -39,9 +38,6 @@ class _FakeContainer:
 
     def user_repo(self) -> _FakeRepo:
         return self.user_repo_value
-
-    def member_repo(self) -> _FakeRepo:
-        return self.member_repo_value
 
     def thread_repo(self) -> _FakeRepo:
         return self.thread_repo_value
@@ -132,7 +128,6 @@ def _install_lifespan_noop_dependencies(monkeypatch: pytest.MonkeyPatch) -> None
         lambda: _FakeSupabaseClient(),
     )
 
-    monkeypatch.setattr("storage.providers.supabase.SupabaseMemberRepo", _fake_repo_factory)
     monkeypatch.setattr("storage.providers.supabase.SupabaseUserRepo", _fake_repo_factory)
     monkeypatch.setattr("storage.providers.supabase.SupabaseThreadRepo", _fake_repo_factory)
     monkeypatch.setattr("storage.providers.supabase.SupabaseThreadLaunchPrefRepo", _fake_repo_factory)
@@ -241,7 +236,7 @@ def test_make_sandbox_monitor_repo_uses_web_supabase_factory(monkeypatch: pytest
 
 
 @pytest.mark.asyncio
-async def test_lifespan_wires_member_and_thread_repos_from_storage_container(
+async def test_lifespan_wires_user_and_thread_repos_from_storage_container(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     container = _FakeContainer()
@@ -251,8 +246,8 @@ async def test_lifespan_wires_member_and_thread_repos_from_storage_container(
 
     async with lifespan_module.lifespan(app):
         assert app.state.user_repo is container.user_repo_value
-        assert app.state.member_repo is container.member_repo_value
         assert app.state.thread_repo is container.thread_repo_value
+        assert not hasattr(app.state, "member_repo")
 
 
 def test_runtime_services_default_to_storage_runtime_container(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
