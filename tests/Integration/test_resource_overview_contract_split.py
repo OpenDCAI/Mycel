@@ -1,16 +1,41 @@
 from __future__ import annotations
 
-from fastapi import FastAPI
+import asyncio
+
+import pytest
+from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
 
 from backend.web.core.dependencies import get_current_user_id
 from backend.web.main import app
 from backend.web.routers import monitor as monitor_router
+from backend.web.routers import resources as resources_router
 from backend.web.services import resource_projection_service, resource_service
 
 
 def test_resources_overview_route_exists() -> None:
     assert any(getattr(route, "path", None) == "/api/resources/overview" for route in app.routes)
+
+
+def test_resources_overview_maps_runtime_error_to_500(monkeypatch) -> None:
+    monkeypatch.setattr(
+        resource_projection_service,
+        "list_user_resource_providers",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("provider unavailable")),
+    )
+
+    request = type("_Request", (), {"app": object()})()
+
+    with pytest.raises(HTTPException) as exc_info:
+        asyncio.run(
+            resources_router.resources_overview(
+                user_id="user-1",
+                request=request,
+            )
+        )
+
+    assert exc_info.value.status_code == 500
+    assert exc_info.value.detail == "provider unavailable"
 
 
 def test_monitor_resources_route_stays_global(monkeypatch) -> None:
