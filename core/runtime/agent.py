@@ -89,6 +89,13 @@ from storage.container import StorageContainer  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
+
+def _get_pg_url() -> str | None:
+    # Accept both the new standard name and the legacy LEON_ name for backward
+    # compatibility with environments not yet migrated (e.g. docker-compose.yaml).
+    return os.getenv("DATABASE_URL") or os.getenv("LEON_POSTGRES_URL")
+
+
 if TYPE_CHECKING:
     from sandbox import Sandbox
 
@@ -1338,7 +1345,7 @@ class LeonAgent:
 
         Requires DATABASE_URL to be set (Supabase Postgres).
         """
-        pg_url = os.getenv("DATABASE_URL") or os.getenv("LEON_POSTGRES_URL")
+        pg_url = _get_pg_url()
         if not pg_url:
             raise RuntimeError("DATABASE_URL is required for checkpointer initialization")
 

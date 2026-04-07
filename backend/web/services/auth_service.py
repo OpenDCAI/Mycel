@@ -41,8 +41,6 @@ class AuthService:
     def send_otp(self, email: str, password: str, invite_code: str) -> None:
         """Validate invite code, create user via signUp (sends confirmation OTP to email)."""
         auth_client = self._auth_api(self._require_auth_client())
-        if self._sb is None:
-            raise RuntimeError("Supabase client required.")
         if self._invite_codes is None or not self._invite_codes.is_valid(invite_code):
             raise ValueError("邀请码无效或已过期")
         from supabase_auth.errors import AuthApiError
@@ -58,8 +56,6 @@ class AuthService:
     def verify_register_otp(self, email: str, token: str) -> dict:
         """Verify signup OTP. Returns temp_token to be used in complete_register."""
         auth_client = self._auth_api(self._require_auth_client())
-        if self._sb is None:
-            raise RuntimeError("Supabase client required.")
         from supabase_auth.errors import AuthApiError
 
         try:
@@ -204,7 +200,9 @@ class AuthService:
         The access_token from verify_otp(type=recovery) is a valid user session.
         Call PUT /auth/v1/user with Bearer <access_token> — no admin/service-role key needed.
         """
-        supabase_url = (os.getenv("SUPABASE_URL") or os.getenv("SUPABASE_INTERNAL_URL") or os.getenv("SUPABASE_PUBLIC_URL", "")).rstrip("/")
+        from backend.web.core.supabase_factory import resolve_supabase_url
+
+        supabase_url = resolve_supabase_url().rstrip("/")
         anon_key = os.getenv("SUPABASE_ANON_KEY", "")
 
         import httpx

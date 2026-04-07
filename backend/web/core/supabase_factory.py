@@ -9,7 +9,8 @@ from supabase import ClientOptions, create_client
 from supabase_auth._sync.gotrue_client import SyncGoTrueClient
 
 
-def _resolve_supabase_url() -> str:
+def resolve_supabase_url() -> str:
+    """Return the Supabase base URL from env, with legacy fallbacks."""
     # Prefer SUPABASE_URL (new standard). Fall back to legacy split vars for
     # environments not yet migrated (e.g. Coolify production — see Step 7).
     url = os.getenv("SUPABASE_URL") or os.getenv("SUPABASE_INTERNAL_URL") or os.getenv("SUPABASE_PUBLIC_URL")
@@ -19,7 +20,7 @@ def _resolve_supabase_url() -> str:
 
 
 def _resolve_supabase_auth_url() -> str:
-    url = os.getenv("SUPABASE_AUTH_URL") or _resolve_supabase_url()
+    url = os.getenv("SUPABASE_AUTH_URL") or resolve_supabase_url()
     return url
 
 
@@ -31,7 +32,7 @@ def create_supabase_client():
     trust_env=False ensures httpx never routes through system/VPN proxy.
     """
     # Prefer internal URL (same-host direct connection) over public tunnel URL.
-    url = _resolve_supabase_url()
+    url = resolve_supabase_url()
     key = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
     if not key:
         raise RuntimeError("SUPABASE_SERVICE_ROLE_KEY is required for Supabase storage runtime.")
