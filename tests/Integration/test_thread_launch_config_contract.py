@@ -98,11 +98,11 @@ class _FakeThreadLaunchPrefRepo:
         self.confirmed: list[tuple[str, str, dict[str, object]]] = []
         self.successful: list[tuple[str, str, dict[str, object]]] = []
 
-    def save_confirmed(self, owner_user_id: str, member_id: str, config: dict[str, object]) -> None:
-        self.confirmed.append((owner_user_id, member_id, config))
+    def save_confirmed(self, owner_user_id: str, agent_user_id: str, config: dict[str, object]) -> None:
+        self.confirmed.append((owner_user_id, agent_user_id, config))
 
-    def save_successful(self, owner_user_id: str, member_id: str, config: dict[str, object]) -> None:
-        self.successful.append((owner_user_id, member_id, config))
+    def save_successful(self, owner_user_id: str, agent_user_id: str, config: dict[str, object]) -> None:
+        self.successful.append((owner_user_id, agent_user_id, config))
 
 
 def _make_threads_app():
@@ -138,10 +138,10 @@ def test_save_last_confirmed_config_normalizes_payload() -> None:
     app = _make_threads_app()
 
     thread_launch_config_service.save_last_confirmed_config(
-        app,
-        "owner-1",
-        "member-1",
-        {
+        app=app,
+        owner_user_id="owner-1",
+        agent_user_id="member-1",
+        payload={
             "create_mode": "wat",
             "provider_config": "  local  ",
             "recipe": "nope",
@@ -223,7 +223,7 @@ def test_resolve_default_config_prefers_last_successful_over_last_confirmed() ->
     app = SimpleNamespace(
         state=SimpleNamespace(
             thread_launch_pref_repo=SimpleNamespace(
-                get=lambda _owner_user_id, _member_id: {
+                get=lambda _owner_user_id, _agent_user_id: {
                     "last_successful": {
                         "create_mode": "existing",
                         "provider_config": "local",
@@ -274,7 +274,11 @@ def test_resolve_default_config_prefers_last_successful_over_last_confirmed() ->
             return_value=[_recipe_library_entry("local")],
         ),
     ):
-        result = thread_launch_config_service.resolve_default_config(app, "owner-1", "member-1")
+        result = thread_launch_config_service.resolve_default_config(
+            app=app,
+            owner_user_id="owner-1",
+            agent_user_id="member-1",
+        )
 
     assert result == {
         "source": "last_successful",
@@ -293,7 +297,7 @@ def test_resolve_default_config_skips_invalid_successful_and_uses_confirmed() ->
     app = SimpleNamespace(
         state=SimpleNamespace(
             thread_launch_pref_repo=SimpleNamespace(
-                get=lambda _owner_user_id, _member_id: {
+                get=lambda _owner_user_id, _agent_user_id: {
                     "last_successful": {
                         "create_mode": "existing",
                         "provider_config": "local",
@@ -336,7 +340,11 @@ def test_resolve_default_config_skips_invalid_successful_and_uses_confirmed() ->
             return_value=[_recipe_library_entry("local")],
         ),
     ):
-        result = thread_launch_config_service.resolve_default_config(app, "owner-1", "member-1")
+        result = thread_launch_config_service.resolve_default_config(
+            app=app,
+            owner_user_id="owner-1",
+            agent_user_id="member-1",
+        )
 
     assert result == {
         "source": "last_confirmed",

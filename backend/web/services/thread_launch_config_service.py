@@ -1,4 +1,4 @@
-"""Resolve + persist per-member new-thread config defaults."""
+"""Resolve + persist per-agent new-thread config defaults."""
 
 from __future__ import annotations
 
@@ -57,16 +57,16 @@ def build_new_launch_config(
     )
 
 
-def save_last_confirmed_config(app: Any, owner_user_id: str, member_id: str, payload: dict[str, Any]) -> None:
-    _save_launch_config(app.state.thread_launch_pref_repo.save_confirmed, owner_user_id, member_id, payload)
+def save_last_confirmed_config(app: Any, owner_user_id: str, agent_user_id: str, payload: dict[str, Any]) -> None:
+    _save_launch_config(app.state.thread_launch_pref_repo.save_confirmed, owner_user_id, agent_user_id, payload)
 
 
-def save_last_successful_config(app: Any, owner_user_id: str, member_id: str, payload: dict[str, Any]) -> None:
-    _save_launch_config(app.state.thread_launch_pref_repo.save_successful, owner_user_id, member_id, payload)
+def save_last_successful_config(app: Any, owner_user_id: str, agent_user_id: str, payload: dict[str, Any]) -> None:
+    _save_launch_config(app.state.thread_launch_pref_repo.save_successful, owner_user_id, agent_user_id, payload)
 
 
-def resolve_default_config(app: Any, owner_user_id: str, member_id: str) -> dict[str, Any]:
-    prefs = app.state.thread_launch_pref_repo.get(owner_user_id, member_id) or {}
+def resolve_default_config(app: Any, owner_user_id: str, agent_user_id: str) -> dict[str, Any]:
+    prefs = app.state.thread_launch_pref_repo.get(owner_user_id, agent_user_id) or {}
     leases = sandbox_service.list_user_leases(
         owner_user_id,
         thread_repo=app.state.thread_repo,
@@ -74,10 +74,10 @@ def resolve_default_config(app: Any, owner_user_id: str, member_id: str) -> dict
     )
     providers = [item for item in sandbox_service.available_sandbox_types() if item.get("available")]
     recipes = list_library("recipe", owner_user_id=owner_user_id, recipe_repo=app.state.recipe_repo)
-    member_threads = app.state.thread_repo.list_by_agent_user(member_id)
+    agent_threads = app.state.thread_repo.list_by_agent_user(agent_user_id)
 
     # @@@thread-launch-default-precedence - prefer the last successful thread config, then the last confirmed draft,
-    # and only then derive from current leases/providers. This keeps defaults tied to actual member usage first.
+    # and only then derive from current leases/providers. This keeps defaults tied to actual agent usage first.
     successful = _validate_saved_config(prefs.get("last_successful"), leases=leases, providers=providers, recipes=recipes)
     if successful is not None:
         return {"source": "last_successful", "config": successful}
@@ -89,7 +89,7 @@ def resolve_default_config(app: Any, owner_user_id: str, member_id: str) -> dict
     return {
         "source": "derived",
         "config": _derive_default_config(
-            member_threads=member_threads,
+            agent_threads=agent_threads,
             leases=leases,
             providers=providers,
             recipes=recipes,
@@ -148,27 +148,27 @@ def _validate_saved_config(
     }
 
 
-def _save_launch_config(save_fn: Any, owner_user_id: str, member_id: str, payload: dict[str, Any]) -> None:
+def _save_launch_config(save_fn: Any, owner_user_id: str, agent_user_id: str, payload: dict[str, Any]) -> None:
     save_fn(
         owner_user_id,
-        member_id,
+        agent_user_id,
         normalize_launch_config_payload(payload),
     )
 
 
 def _derive_default_config(
     *,
-    member_threads: list[dict[str, Any]],
+    agent_threads: list[dict[str, Any]],
     leases: list[dict[str, Any]],
     providers: list[dict[str, Any]],
     recipes: list[dict[str, Any]],
 ) -> dict[str, Any]:
-    member_thread_ids = {str(item.get("id") or "").strip() for item in member_threads if item.get("id")}
-    member_leases = [
-        lease for lease in leases if any(str(thread_id or "").strip() in member_thread_ids for thread_id in lease.get("thread_ids") or [])
+    agent_thread_ids = {str(item.get("id") or "").strip() for item in agent_threads if item.get("id")}
+    agent_leases = [
+        lease for lease in leases if any(str(thread_id or "").strip() in agent_thread_ids for thread_id in lease.get("thread_ids") or [])
     ]
-    if member_leases:
-        lease = member_leases[0]
+    if agent_leases:
+        lease = agent_leases[0]
         return {
             "create_mode": "existing",
             "provider_config": lease["provider_name"],
