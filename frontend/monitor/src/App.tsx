@@ -1031,9 +1031,17 @@ function MonitorResourcesPage() {
           <DashboardMetric
             label="Healthy leases"
             value={triageSummary.healthy_capacity || 0}
-            note={`${triageSummary.total || leases.length} total`}
+            note={
+              (triageSummary.total || leases.length) > 0
+                ? `${triageSummary.total || leases.length} total`
+                : "no leases reported yet"
+            }
             tone={
-              (triageSummary.healthy_capacity || 0) > 0 ? "success" : "danger"
+              (triageSummary.total || leases.length) === 0
+                ? "default"
+                : (triageSummary.healthy_capacity || 0) > 0
+                  ? "success"
+                  : "danger"
             }
           />
         </div>
