@@ -3860,7 +3860,9 @@ function EvaluationPage() {
         <section className="eval-split-main depth-primary">
           <div className="section-row">
             <h2>Evaluations ({evalPagination?.total ?? evaluations.length})</h2>
-            <span className="count">auto refresh 5s</span>
+            <span className="count">
+              {listError ? "auto refresh paused" : "auto refresh 5s"}
+            </span>
           </div>
           <div className="count evaluation-meta-row">
             <span>
