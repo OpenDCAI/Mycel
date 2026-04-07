@@ -11,7 +11,7 @@ import functools
 import logging
 from typing import Any
 
-from storage.contracts import MemberRow
+from storage.contracts import UserRow
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +36,7 @@ def make_chat_delivery_fn(app: Any):
 
     def _deliver(
         recipient_id: str,
-        member: MemberRow,
+        member: UserRow,
         content: str,
         sender_name: str,
         chat_id: str,
@@ -67,7 +67,7 @@ def _log_delivery_result(member_id: str, f: Any) -> None:
 async def _async_deliver(
     app: Any,
     recipient_id: str,
-    member: MemberRow,
+    member: UserRow,
     sender_name: str,
     chat_id: str,
     sender_id: str,

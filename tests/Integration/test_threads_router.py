@@ -17,31 +17,7 @@ from core.runtime.loop import QueryLoop
 from core.runtime.middleware.monitor import AgentState
 from core.runtime.registry import ToolRegistry
 from core.runtime.state import AppState, BootstrapConfig, ToolPermissionState
-from storage.contracts import MemberRow, MemberType, UserRow, UserType
-
-
-class _FakeMemberRepo:
-    def __init__(self) -> None:
-        self._members = {
-            "member-1": MemberRow(
-                id="member-1",
-                name="Toad",
-                type=MemberType.MYCEL_AGENT,
-                owner_user_id="owner-1",
-                created_at=1.0,
-            )
-        }
-        self._seq = {"member-1": 0}
-
-    def get_by_id(self, member_id: str):
-        return self._members.get(member_id)
-
-    def increment_thread_seq(self, member_id: str) -> int:
-        self._seq[member_id] += 1
-        return self._seq[member_id]
-
-    def update(self, member_id: str, **kwargs):
-        pass
+from storage.contracts import UserRow, UserType
 
 
 class _FakeUserRepo:
@@ -333,13 +309,11 @@ class _FakeClearAgent:
 
 def _make_threads_app(
     *,
-    member_repo=None,
     thread_repo=None,
     **state_overrides,
 ):
     return SimpleNamespace(
         state=SimpleNamespace(
-            member_repo=member_repo or _FakeMemberRepo(),
             user_repo=state_overrides.pop("user_repo", _FakeUserRepo()),
             thread_repo=thread_repo or _FakeThreadRepo(),
             **state_overrides,

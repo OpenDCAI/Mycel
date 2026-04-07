@@ -9,35 +9,7 @@ from backend.web.models.requests import CreateThreadRequest
 from backend.web.routers import threads as threads_router
 from backend.web.services import thread_launch_config_service
 from sandbox.recipes import default_recipe_snapshot, normalize_recipe_snapshot
-from storage.contracts import MemberRow, MemberType, UserRow, UserType
-
-
-class _FakeMemberRepo:
-    def __init__(self) -> None:
-        self._members = {
-            "member-1": MemberRow(
-                id="member-1",
-                name="Toad",
-                type=MemberType.MYCEL_AGENT,
-                owner_user_id="owner-1",
-                created_at=1.0,
-            ),
-            "member-2": MemberRow(
-                id="member-2",
-                name="Dryad",
-                type=MemberType.MYCEL_AGENT,
-                owner_user_id="owner-2",
-                created_at=2.0,
-            ),
-        }
-        self._seq = {"member-1": 0}
-
-    def get_by_id(self, member_id: str):
-        return self._members.get(member_id)
-
-    def increment_thread_seq(self, member_id: str) -> int:
-        self._seq[member_id] += 1
-        return self._seq[member_id]
+from storage.contracts import UserRow, UserType
 
 
 class _FakeUserRepo:
@@ -108,7 +80,6 @@ class _FakeThreadLaunchPrefRepo:
 def _make_threads_app():
     return SimpleNamespace(
         state=SimpleNamespace(
-            member_repo=_FakeMemberRepo(),
             user_repo=_FakeUserRepo(),
             thread_repo=_FakeThreadRepo(),
             thread_launch_pref_repo=_FakeThreadLaunchPrefRepo(),
@@ -243,7 +214,6 @@ def test_resolve_default_config_prefers_last_successful_over_last_confirmed() ->
                 }
             ),
             thread_repo=_FakeThreadRepo(),
-            member_repo=_FakeMemberRepo(),
             user_repo=SimpleNamespace(),
             recipe_repo=object(),
         )
@@ -317,7 +287,6 @@ def test_resolve_default_config_skips_invalid_successful_and_uses_confirmed() ->
                 }
             ),
             thread_repo=_FakeThreadRepo(),
-            member_repo=_FakeMemberRepo(),
             user_repo=SimpleNamespace(),
             recipe_repo=object(),
         )
