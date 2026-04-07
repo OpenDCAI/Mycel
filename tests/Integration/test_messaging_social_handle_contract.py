@@ -299,6 +299,93 @@ def test_messaging_service_list_chats_exposes_thread_user_participant_id() -> No
     ]
 
 
+def test_messaging_service_mark_read_resets_unread_count_via_last_read_seq_watermark() -> None:
+    class _StatefulChatMemberRepo:
+        def __init__(self) -> None:
+            self._rows = {("chat-1", "human-user-1"): {"last_read_seq": 1}}
+
+        def list_chats_for_user(self, _user_id: str) -> list[str]:
+            return ["chat-1"]
+
+        def list_members(self, _chat_id: str) -> list[dict[str, Any]]:
+            return [{"user_id": "human-user-1"}, {"user_id": "thread-user-1"}]
+
+        def update_last_read(self, chat_id: str, user_id: str, last_read_seq: int) -> None:
+            self._rows[(chat_id, user_id)] = {"last_read_seq": last_read_seq}
+
+        def last_read_seq(self, chat_id: str, user_id: str) -> int:
+            return int(self._rows[(chat_id, user_id)]["last_read_seq"])
+
+    class _StatefulMessagesRepo:
+        def __init__(self, members_repo: _StatefulChatMemberRepo) -> None:
+            self._members_repo = members_repo
+            self._rows = [
+                {
+                    "id": "msg-1",
+                    "chat_id": "chat-1",
+                    "seq": 1,
+                    "sender_user_id": "human-user-1",
+                    "content": "ping",
+                    "created_at": "2026-04-07T00:00:00Z",
+                },
+                {
+                    "id": "msg-2",
+                    "chat_id": "chat-1",
+                    "seq": 2,
+                    "sender_user_id": "thread-user-1",
+                    "content": "READ_WATERMARK_OK",
+                    "created_at": "2026-04-07T00:00:01Z",
+                },
+            ]
+
+        def list_by_chat(self, _chat_id: str, limit: int = 50, viewer_id: str | None = None) -> list[dict[str, Any]]:
+            del viewer_id
+            return self._rows[-limit:]
+
+        def count_unread(self, chat_id: str, user_id: str) -> int:
+            last_read_seq = self._members_repo.last_read_seq(chat_id, user_id)
+            return sum(
+                1
+                for row in self._rows
+                if row["chat_id"] == chat_id and row["sender_user_id"] != user_id and int(row["seq"]) > last_read_seq
+            )
+
+    members_repo = _StatefulChatMemberRepo()
+    messages_repo = _StatefulMessagesRepo(members_repo)
+    service = MessagingService(
+        chat_repo=SimpleNamespace(
+            get_by_id=lambda chat_id: SimpleNamespace(id=chat_id, title=None, status="active", created_at="2026-04-07T00:00:00Z")
+        ),
+        chat_member_repo=members_repo,
+        messages_repo=messages_repo,
+        message_read_repo=SimpleNamespace(),
+        user_repo=SimpleNamespace(
+            get_by_id=lambda uid: (
+                SimpleNamespace(id=uid, display_name="Human", type="human", avatar=None)
+                if uid == "human-user-1"
+                else None
+                if uid == "thread-user-1"
+                else SimpleNamespace(id=uid, display_name="Toad", type="agent", avatar=None)
+                if uid == "agent-user-1"
+                else None
+            )
+        ),
+        thread_repo=SimpleNamespace(
+            get_by_user_id=lambda uid: {"id": "thread-1", "agent_user_id": "agent-user-1"} if uid == "thread-user-1" else None
+        ),
+    )
+
+    before = service.list_chats_for_user("human-user-1")
+
+    assert before[0]["unread_count"] == 1
+
+    service.mark_read("chat-1", "human-user-1")
+
+    after = service.list_chats_for_user("human-user-1")
+
+    assert after[0]["unread_count"] == 0
+
+
 def test_chat_tool_formats_thread_user_id_sender_as_agent_name() -> None:
     registry = ToolRegistry()
     service = ChatToolService(
