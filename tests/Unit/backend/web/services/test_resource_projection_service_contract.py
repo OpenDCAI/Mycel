@@ -125,3 +125,58 @@ def test_list_resource_providers_inherits_desired_state_for_detached_sessions(mo
 
     assert payload["providers"][0]["sessions"][0]["status"] == "running"
     assert payload["summary"]["running_sessions"] == 1
+
+
+def test_list_resource_providers_keeps_sessions_under_unavailable_provider(monkeypatch):
+    rows = [
+        {
+            "provider": "daytona_selfhost",
+            "session_id": None,
+            "thread_id": "thread-1",
+            "lease_id": "lease-1",
+            "observed_state": "detached",
+            "desired_state": "running",
+            "created_at": "2026-04-04T00:00:00",
+        },
+        {
+            "provider": "daytona_selfhost",
+            "session_id": None,
+            "thread_id": "thread-2",
+            "lease_id": "lease-2",
+            "observed_state": "paused",
+            "desired_state": "paused",
+            "created_at": "2026-04-04T00:00:01",
+        },
+    ]
+
+    monkeypatch.setattr(resource_projection_service, "make_sandbox_monitor_repo", lambda: _FakeRepo(rows))
+    monkeypatch.setattr(
+        resource_projection_service,
+        "available_sandbox_types",
+        lambda: [{"name": "daytona_selfhost", "available": False, "reason": "provider unavailable in current process"}],
+    )
+    monkeypatch.setattr(resource_projection_service, "resolve_provider_name", lambda *_args, **_kwargs: "daytona")
+    monkeypatch.setattr(resource_projection_service, "_resolve_console_url", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(
+        resource_projection_service,
+        "_resolve_instance_capabilities",
+        lambda _config_name: (_caps(metrics=False), None),
+    )
+    monkeypatch.setattr(
+        resource_projection_service,
+        "_thread_owners",
+        lambda thread_ids: {
+            tid: {"member_id": f"member-{tid}", "member_name": tid, "avatar_url": None} for tid in thread_ids
+        },
+    )
+    monkeypatch.setattr(resource_projection_service, "list_resource_snapshots", lambda _lease_ids: {})
+    monkeypatch.setattr(resource_projection_service.LocalSessionProvider, "get_metrics", lambda self, _session_id: None)
+
+    payload = resource_projection_service.list_resource_providers()
+    provider = payload["providers"][0]
+
+    assert provider["status"] == "unavailable"
+    assert provider["unavailableReason"] == "provider unavailable in current process"
+    assert [session["leaseId"] for session in provider["sessions"]] == ["lease-1", "lease-2"]
+    assert [session["status"] for session in provider["sessions"]] == ["running", "paused"]
+    assert payload["summary"]["running_sessions"] == 1
