@@ -44,8 +44,6 @@ export const router = createBrowserRouter([
   { path: '/threads/*', element: <ThreadsLegacyRedirect /> },
   { path: '/chats', element: <Navigate to="/chat" replace /> },
   { path: '/chats/*', element: <Navigate to="/chat" replace /> },
-  { path: '/members', element: <Navigate to="/contacts" replace /> },
-  { path: '/members/*', element: <Navigate to="/contacts" replace /> },
   { path: '/tasks', element: <Navigate to="/chat" replace /> },
   { path: '/resources', element: <Navigate to="/marketplace" replace /> },
   { path: '/invite-codes', element: <Navigate to="/settings" replace /> },
