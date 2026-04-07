@@ -465,8 +465,8 @@ async def get_profile(
     user_id: Annotated[str, Depends(get_current_user_id)],
     request: Request,
 ) -> dict[str, Any]:
-    member = request.app.state.member_repo.get_by_id(user_id)
-    return await asyncio.to_thread(profile_service.get_profile, member)
+    user = request.app.state.user_repo.get_by_id(user_id)
+    return await asyncio.to_thread(profile_service.get_profile, user)
 
 
 @router.put("/profile")

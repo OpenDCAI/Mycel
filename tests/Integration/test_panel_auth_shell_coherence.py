@@ -9,7 +9,7 @@ from fastapi import HTTPException
 from backend.web.models.panel import PublishMemberRequest, UpdateMemberRequest
 from backend.web.routers import panel as panel_router
 from backend.web.services import member_service, profile_service
-from storage.contracts import MemberRow, MemberType
+from storage.contracts import MemberRow, MemberType, UserRow, UserType
 
 
 @pytest.mark.asyncio
@@ -138,17 +138,44 @@ async def test_publish_member_route_keeps_builtin_guard_before_owner_lookup(monk
 
 
 def test_profile_service_prefers_authenticated_member_over_config_defaults():
-    member = MemberRow(
+    user = UserRow(
         id="user-1",
-        name="codex",
-        type=MemberType.HUMAN,
+        type=UserType.HUMAN,
+        display_name="codex",
         email="codex@example.com",
         created_at=1.0,
     )
 
-    profile = profile_service.get_profile(member=member)
+    profile = profile_service.get_profile(user=user)
 
     assert profile == {"name": "codex", "initials": "CO", "email": "codex@example.com"}
+
+
+@pytest.mark.asyncio
+async def test_profile_route_uses_user_repo_instead_of_member_repo():
+    user = UserRow(
+        id="user-1",
+        type=UserType.HUMAN,
+        display_name="codex",
+        email="codex@example.com",
+        created_at=1.0,
+    )
+
+    result = await panel_router.get_profile(
+        user_id="user-1",
+        request=SimpleNamespace(
+            app=SimpleNamespace(
+                state=SimpleNamespace(
+                    user_repo=SimpleNamespace(get_by_id=lambda seen_user_id: user if seen_user_id == "user-1" else None),
+                    member_repo=SimpleNamespace(
+                        get_by_id=lambda _user_id: (_ for _ in ()).throw(AssertionError("member_repo should not back profile shell"))
+                    ),
+                )
+            )
+        ),
+    )
+
+    assert result == {"name": "codex", "initials": "CO", "email": "codex@example.com"}
 
 
 def test_builtin_member_surface_exposes_chat_tools():
