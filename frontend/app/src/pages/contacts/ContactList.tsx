@@ -7,7 +7,7 @@ import CreateMemberDialog from "@/components/CreateMemberDialog";
 import { useRelationshipStore } from "@/store/relationship-store";
 import type { RelationshipItem } from "@/store/relationship-store";
 import { useAuthStore } from "@/store/auth-store";
-import { authFetch } from "@/store/auth-store";
+import { useChatStore } from "@/store/chat-store";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -52,6 +52,7 @@ export default function ContactList() {
   const myUserId = useAuthStore(s => s.userId);
 
   const { relationships, loading: relLoading, fetchRelationships, approve, reject, remove } = useRelationshipStore();
+  const openOrCreateDM = useChatStore(s => s.openOrCreateDM);
 
   useEffect(() => { void fetchMembers(); }, [fetchMembers]);
   useEffect(() => {
@@ -80,19 +81,12 @@ export default function ContactList() {
   const handleSendMessage = useCallback(async (otherUserId: string) => {
     if (!myUserId) return;
     try {
-      const res = await authFetch("/api/chats", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ user_ids: [myUserId, otherUserId] }),
-      });
-      if (res.ok) {
-        const data = await res.json();
-        navigate(`/chat/visit/${data.id}`);
-      }
+      const chatId = await openOrCreateDM(myUserId, otherUserId);
+      navigate(`/chat/visit/${chatId}`);
     } catch (err) {
       console.error("Failed to open chat:", err);
     }
-  }, [myUserId, navigate]);
+  }, [myUserId, navigate, openOrCreateDM]);
 
   return (
     <div className="h-full flex flex-col bg-card border-r border-border">

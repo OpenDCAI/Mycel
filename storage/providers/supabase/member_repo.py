@@ -141,7 +141,7 @@ class SupabaseMemberRepo:
             return {}
         response = self._t().select("*").in_("id", list(member_ids)).execute()
         rows = q.rows(response, _MEMBER_REPO, "get_by_ids")
-        return {r["id"]: MemberRow.model_validate(self._normalize(r)) for r in rows}
+        return {r["id"]: MemberRow.model_validate(r) for r in rows}
 
     def search_humans(self, query: str, exclude_user_id: str, limit: int = 20) -> list[dict]:
         """搜索 human 类型 member，按 mycel_id 精确匹配或 name 模糊匹配。"""
