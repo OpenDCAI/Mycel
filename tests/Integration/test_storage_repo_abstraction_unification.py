@@ -206,6 +206,40 @@ def test_storage_container_exposes_bypass_repo_builders() -> None:
     assert callable(container.resource_snapshot_repo)
 
 
+def test_make_sandbox_monitor_repo_uses_web_supabase_factory(monkeypatch: pytest.MonkeyPatch) -> None:
+    captured: dict[str, object] = {}
+
+    class _FakeMonitorRepo:
+        def __init__(self, client: object) -> None:
+            captured["client"] = client
+
+        def close(self) -> None:
+            return None
+
+    fake_client = _FakeSupabaseClient()
+    monkeypatch.setattr(
+        "backend.web.core.supabase_factory.create_supabase_client",
+        lambda: fake_client,
+    )
+    monkeypatch.setattr(
+        "storage.providers.supabase.sandbox_monitor_repo.SupabaseSandboxMonitorRepo",
+        _FakeMonitorRepo,
+    )
+
+    from backend.web.core import storage_factory
+
+    cache_clear = getattr(storage_factory.make_sandbox_monitor_repo, "cache_clear", None)
+    if callable(cache_clear):
+        cache_clear()
+
+    repo = storage_factory.make_sandbox_monitor_repo()
+    try:
+        assert isinstance(repo, _FakeMonitorRepo)
+        assert captured["client"] is fake_client
+    finally:
+        repo.close()
+
+
 @pytest.mark.asyncio
 async def test_lifespan_wires_member_and_thread_repos_from_storage_container(
     monkeypatch: pytest.MonkeyPatch,

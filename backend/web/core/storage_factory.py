@@ -30,9 +30,11 @@ def make_cron_job_repo() -> Any:
 
 
 def make_sandbox_monitor_repo() -> Any:
-    from storage.providers.sqlite.sandbox_monitor_repo import SQLiteSandboxMonitorRepo
+    from storage.providers.supabase.sandbox_monitor_repo import SupabaseSandboxMonitorRepo
 
-    return SQLiteSandboxMonitorRepo()
+    # @@@monitor-storage-single-world - resource probes read leases and write snapshots.
+    # In web runtime those reads/writes must hit the same Supabase schema or FK contracts explode.
+    return SupabaseSandboxMonitorRepo(_supabase_client())
 
 
 def list_resource_snapshots(lease_ids: list[str]) -> dict[str, Any]:
