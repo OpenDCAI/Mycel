@@ -77,6 +77,38 @@ function formatCleanupError(error: any) {
   return `${prefix}${reason}`;
 }
 
+function trapDialogTabKey(
+  event: KeyboardEvent,
+  panel: HTMLElement | null,
+): void {
+  if (event.key !== "Tab" || !panel) return;
+  // @@@dialog-focus-loop - keep keyboard focus inside the active modal so operators do not tab into the console shell behind it.
+  const focusables = Array.from(
+    panel.querySelectorAll<HTMLElement>(
+      'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])',
+    ),
+  ).filter((node) => !node.hasAttribute("disabled"));
+  if (focusables.length === 0) {
+    event.preventDefault();
+    panel.focus();
+    return;
+  }
+  const first = focusables[0];
+  const last = focusables[focusables.length - 1];
+  const active = document.activeElement as HTMLElement | null;
+  if (event.shiftKey) {
+    if (!active || active === first || !panel.contains(active)) {
+      event.preventDefault();
+      last.focus();
+    }
+    return;
+  }
+  if (!active || active === last || !panel.contains(active)) {
+    event.preventDefault();
+    first.focus();
+  }
+}
+
 // Component: Breadcrumb navigation
 function Breadcrumb({
   items,
@@ -3728,7 +3760,11 @@ function EvaluationPage() {
     if (!composerOpen) return;
     // @@@composer-escape-close - keep the config layer aligned with the guide modal so keyboard users can dismiss it without reaching for the mouse.
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") closeComposer();
+      if (event.key === "Escape") {
+        closeComposer();
+        return;
+      }
+      trapDialogTabKey(event, composerPanelRef.current);
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
@@ -4619,7 +4655,11 @@ function OperatorGuideModal({
   React.useEffect(() => {
     if (!open) return;
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
+      if (event.key === "Escape") {
+        onClose();
+        return;
+      }
+      trapDialogTabKey(event, panelRef.current);
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
