@@ -122,13 +122,6 @@ def load_models() -> dict[str, Any]:
     return _load_user_json("models.json")
 
 
-def save_models(data: dict[str, Any]) -> None:
-    """Save models.json to disk (user-level)."""
-    MODELS_FILE.parent.mkdir(parents=True, exist_ok=True)
-    with open(MODELS_FILE, "w", encoding="utf-8") as f:
-        json.dump(data, f, indent=2, ensure_ascii=False)
-
-
 def load_merged_models() -> ModelsConfig:
     """Load fully merged ModelsConfig (system + user)."""
     return ModelsLoader().load()
