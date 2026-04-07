@@ -27,12 +27,15 @@ from backend.web.services import cron_job_service, library_service, member_servi
 router = APIRouter(prefix="/api/panel", tags=["panel"])
 
 
-def _get_owned_member_or_404(member_id: str, user_id: str) -> dict[str, Any]:
+def _get_owned_member_or_404(member_id: str, user_id: str, user_repo: Any) -> dict[str, Any]:
+    user = user_repo.get_by_id(member_id)
+    if user is None or user.type.value != "agent":
+        raise HTTPException(404, "Member not found")
+    if user.owner_user_id != user_id:
+        raise HTTPException(403, "Forbidden")
     item = member_service.get_member(member_id)
     if not item:
         raise HTTPException(404, "Member not found")
-    if item.get("owner_user_id") != user_id:
-        raise HTTPException(403, "Forbidden")
     return item
 
 
@@ -44,17 +47,18 @@ async def list_members(
     user_id: Annotated[str, Depends(get_current_user_id)],
     request: Request,
 ) -> dict[str, Any]:
-    member_repo = getattr(request.app.state, "member_repo", None)
-    items = await asyncio.to_thread(member_service.list_members, user_id, member_repo=member_repo)
+    user_repo = request.app.state.user_repo
+    items = await asyncio.to_thread(member_service.list_members, user_id, user_repo=user_repo)
     return {"items": items}
 
 
 @router.get("/members/{member_id}")
 async def get_member(
     member_id: str,
+    request: Request,
     user_id: Annotated[str, Depends(get_current_user_id)],
 ) -> dict[str, Any]:
-    return await asyncio.to_thread(_get_owned_member_or_404, member_id, user_id)
+    return await asyncio.to_thread(_get_owned_member_or_404, member_id, user_id, request.app.state.user_repo)
 
 
 @router.post("/members")
@@ -63,14 +67,14 @@ async def create_member(
     user_id: Annotated[str, Depends(get_current_user_id)],
     request: Request,
 ) -> dict[str, Any]:
-    member_repo = getattr(request.app.state, "member_repo", None)
+    user_repo = request.app.state.user_repo
     agent_config_repo = getattr(request.app.state, "agent_config_repo", None)
     return await asyncio.to_thread(
         member_service.create_member,
         req.name,
         req.description,
         owner_user_id=user_id,
-        member_repo=member_repo,
+        user_repo=user_repo,
         agent_config_repo=agent_config_repo,
     )
 
@@ -82,12 +86,12 @@ async def update_member(
     request: Request,
     user_id: Annotated[str, Depends(get_current_user_id)],
 ) -> dict[str, Any]:
-    member_repo = getattr(request.app.state, "member_repo", None)
-    await asyncio.to_thread(_get_owned_member_or_404, member_id, user_id)
+    user_repo = request.app.state.user_repo
+    await asyncio.to_thread(_get_owned_member_or_404, member_id, user_id, user_repo)
     item = await asyncio.to_thread(
         member_service.update_member,
         member_id,
-        member_repo=member_repo,
+        user_repo=user_repo,
         **req.model_dump(),
     )
     if not item:
@@ -102,12 +106,14 @@ async def update_member_config(
     request: Request,
     user_id: Annotated[str, Depends(get_current_user_id)],
 ) -> dict[str, Any]:
-    await asyncio.to_thread(_get_owned_member_or_404, member_id, user_id)
+    user_repo = request.app.state.user_repo
+    await asyncio.to_thread(_get_owned_member_or_404, member_id, user_id, user_repo)
     agent_config_repo = getattr(request.app.state, "agent_config_repo", None)
     item = await asyncio.to_thread(
         member_service.update_member_config,
         member_id,
         req.model_dump(),
+        user_repo=user_repo,
         agent_config_repo=agent_config_repo,
     )
     if not item:
@@ -124,12 +130,14 @@ async def publish_member(
 ) -> dict[str, Any]:
     if member_id == "__leon__":
         raise HTTPException(403, "Cannot publish builtin member")
-    await asyncio.to_thread(_get_owned_member_or_404, member_id, user_id)
+    user_repo = request.app.state.user_repo
+    await asyncio.to_thread(_get_owned_member_or_404, member_id, user_id, user_repo)
     agent_config_repo = getattr(request.app.state, "agent_config_repo", None)
     item = await asyncio.to_thread(
         member_service.publish_member,
         member_id,
         req.bump_type,
+        user_repo=user_repo,
         agent_config_repo=agent_config_repo,
     )
     if not item:
@@ -145,13 +153,13 @@ async def delete_member(
 ) -> dict[str, Any]:
     if member_id == "__leon__":
         raise HTTPException(403, "Cannot delete builtin member")
-    await asyncio.to_thread(_get_owned_member_or_404, member_id, user_id)
-    member_repo = getattr(request.app.state, "member_repo", None)
+    user_repo = request.app.state.user_repo
+    await asyncio.to_thread(_get_owned_member_or_404, member_id, user_id, user_repo)
     agent_config_repo = getattr(request.app.state, "agent_config_repo", None)
     ok = await asyncio.to_thread(
         member_service.delete_member,
         member_id,
-        member_repo=member_repo,
+        user_repo=user_repo,
         agent_config_repo=agent_config_repo,
     )
     if not ok:
