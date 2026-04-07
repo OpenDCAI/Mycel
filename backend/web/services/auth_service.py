@@ -201,37 +201,23 @@ class AuthService:
             raise ValueError(f"发送失败: {e.message}") from e
 
     def update_password(self, access_token: str, new_password: str) -> None:
-        """Update user password using a recovery access token.
+        """Update user password using the recovery session token.
 
-        Calls the GoTrue admin REST API directly with the service role key to avoid
-        supabase-py session state contamination (verify_otp sets a user session on the
-        shared client, which would cause admin.update_user_by_id to use the wrong JWT).
+        The access_token from verify_otp(type=recovery) is a valid user session.
+        Call PUT /auth/v1/user with Bearer <access_token> — no admin/service-role key needed.
         """
-        if self._sb is None:
-            raise RuntimeError("Supabase client required.")
-        jwt_secret = os.getenv("SUPABASE_JWT_SECRET")
-        if not jwt_secret:
-            raise RuntimeError("SUPABASE_JWT_SECRET not set.")
-        try:
-            payload = jwt.decode(
-                access_token, jwt_secret, algorithms=[SUPABASE_JWT_ALGORITHM], options={"verify_aud": False}
-            )
-        except jwt.InvalidTokenError as e:
-            raise ValueError("重置链接已过期，请重新申请") from e
-        user_id = payload["sub"]
-
         supabase_url = (os.getenv("SUPABASE_INTERNAL_URL") or os.getenv("SUPABASE_PUBLIC_URL", "")).rstrip("/")
-        service_role_key = os.getenv("LEON_SUPABASE_SERVICE_ROLE_KEY", "")
+        anon_key = os.getenv("SUPABASE_ANON_KEY", "")
 
         import httpx
 
         try:
             resp = httpx.put(
-                f"{supabase_url}/auth/v1/admin/users/{user_id}",
+                f"{supabase_url}/auth/v1/user",
                 json={"password": new_password},
                 headers={
-                    "Authorization": f"Bearer {service_role_key}",
-                    "apikey": service_role_key,
+                    "Authorization": f"Bearer {access_token}",
+                    "apikey": anon_key,
                 },
                 timeout=10.0,
             )
@@ -242,7 +228,7 @@ class AuthService:
             body = resp.json() if "application/json" in resp.headers.get("content-type", "") else {}
             raise ValueError(body.get("message") or body.get("msg") or "密码更新失败")
 
-        logger.info("Password updated for user %s", user_id)
+        logger.info("Password updated via recovery session")
 
     def verify_token(self, token: str) -> dict:
         """Verify Supabase JWT. Returns {user_id}."""
