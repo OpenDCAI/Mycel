@@ -299,7 +299,7 @@ class ChatToolService:
             elif user_id:
                 if user_id == eid:
                     raise RuntimeError("Cannot send a message to yourself.")
-                target = self._member_repo.get_by_id(user_id)
+                target = self._resolve_display_member(user_id)
                 if not target:
                     raise RuntimeError(f"User not found: {user_id}")
                 target_name = target.name

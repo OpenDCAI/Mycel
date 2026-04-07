@@ -203,6 +203,42 @@ def test_chat_tool_formats_thread_user_id_sender_as_agent_name() -> None:
     assert "[Toad]: hello" in rendered
 
 
+def test_chat_tool_send_accepts_thread_user_target_id() -> None:
+    registry = ToolRegistry()
+    sent: list[tuple[str, str, str]] = []
+    ChatToolService(
+        registry=registry,
+        chat_identity_id="human-user-1",
+        owner_id="owner-user-1",
+        member_repo=SimpleNamespace(
+            get_by_id=lambda uid: (
+                None
+                if uid == "thread-user-1"
+                else SimpleNamespace(id=uid, name="Toad", owner_user_id="owner-user-1")
+                if uid == "member-agent-1"
+                else None
+            ),
+        ),
+        thread_repo=SimpleNamespace(
+            get_by_user_id=lambda uid: {"id": "thread-1", "member_id": "member-agent-1"} if uid == "thread-user-1" else None
+        ),
+        chat_member_repo=SimpleNamespace(is_member=lambda _chat_id, _user_id: True),
+        messaging_service=SimpleNamespace(
+            find_or_create_chat=lambda user_ids: {"id": "chat-1", "user_ids": user_ids},
+            count_unread=lambda _chat_id, _user_id: 0,
+            send=lambda chat_id, sender_id, content, **_kwargs: sent.append((chat_id, sender_id, content)),
+        ),
+    )
+
+    chat_send = registry.get("chat_send")
+    assert chat_send is not None
+
+    result = chat_send.handler(content="hello", user_id="thread-user-1")
+
+    assert result == "Message sent to Toad."
+    assert sent == [("chat-1", "human-user-1", "hello")]
+
+
 def test_deliver_to_agents_routes_delivery_by_thread_user_id() -> None:
     delivered: list[tuple[str, str]] = []
     service = MessagingService(
