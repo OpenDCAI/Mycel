@@ -334,11 +334,14 @@ export interface SandboxFileResult {
 
 export interface ChatMember {
   id: string;
+  /** Current chat-facing display label for this participant. */
   name: string;
   type: string;
   avatar_url?: string;
   owner_name?: string | null;
+  /** Template-facing auxiliary label when this chat member is thread-backed. */
   member_name?: string | null;
+  /** Actor thread backing this participant when applicable. */
   thread_id?: string | null;
   is_main?: boolean | null;
   branch_index?: number | null;

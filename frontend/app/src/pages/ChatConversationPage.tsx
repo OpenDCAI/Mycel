@@ -17,6 +17,10 @@ function formatMessageTime(ts: number): string {
   return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }
 
+function chatMemberDisplayName(member: ChatMember | undefined, defaultName: string): string {
+  return member?.name || defaultName;
+}
+
 export default function ChatConversationPage() {
   const { chatId } = useParams<{ chatId: string }>();
   if (!chatId) return null;
@@ -329,7 +333,7 @@ function ChatConversationInner({ chatId }: { chatId: string }) {
                   ) : (
                     <ChatBubble
                       content={msg.content}
-                      senderName={msg.sender_name}
+                      senderName={chatMemberDisplayName(member, msg.sender_name)}
                       avatarUrl={member?.avatar_url}
                       memberType={member?.type}
                       timestamp={ts}
