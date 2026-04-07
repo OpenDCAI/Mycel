@@ -336,7 +336,7 @@ def list_members(owner_user_id: str | None = None, member_repo: Any = None) -> l
 
     Args:
         owner_user_id: Filter to agents owned by this user.
-        member_repo: Injected MemberRepo (respects LEON_STORAGE_STRATEGY). Falls back to SQLite.
+        member_repo: Injected MemberRepo (respects STORAGE_STRATEGY). Falls back to SQLite.
     """
     # @@@auth-scope — scoped by owner from DB, config from filesystem
     if owner_user_id:

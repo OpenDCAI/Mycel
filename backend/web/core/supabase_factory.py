@@ -30,9 +30,9 @@ def create_supabase_client():
     """
     # Prefer internal URL (same-host direct connection) over public tunnel URL.
     url = _resolve_supabase_url()
-    key = os.getenv("LEON_SUPABASE_SERVICE_ROLE_KEY")
+    key = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
     if not key:
-        raise RuntimeError("LEON_SUPABASE_SERVICE_ROLE_KEY is required for Supabase storage runtime.")
+        raise RuntimeError("SUPABASE_SERVICE_ROLE_KEY is required for Supabase storage runtime.")
     timeout = httpx.Timeout(30.0, connect=10.0)
     limits = httpx.Limits(max_connections=20, max_keepalive_connections=10, keepalive_expiry=60.0)
     http_client = httpx.Client(timeout=timeout, trust_env=False, limits=limits)
@@ -62,9 +62,9 @@ def create_supabase_auth_client():
 def create_messaging_supabase_client():
     """Build a server-side Supabase client for messaging repos."""
     url = _resolve_supabase_url()
-    key = os.getenv("LEON_SUPABASE_SERVICE_ROLE_KEY")
+    key = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
     if not key:
-        raise RuntimeError("LEON_SUPABASE_SERVICE_ROLE_KEY is required for messaging.")
+        raise RuntimeError("SUPABASE_SERVICE_ROLE_KEY is required for messaging.")
     timeout = httpx.Timeout(30.0, connect=10.0)
     limits = httpx.Limits(max_connections=20, max_keepalive_connections=10, keepalive_expiry=60.0)
     http_client = httpx.Client(timeout=timeout, trust_env=False, limits=limits)

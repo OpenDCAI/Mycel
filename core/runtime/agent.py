@@ -1336,11 +1336,11 @@ class LeonAgent:
     async def _init_checkpointer(self):
         """Initialize async checkpointer for conversation persistence.
 
-        Requires LEON_POSTGRES_URL to be set (Supabase Postgres).
+        Requires DATABASE_URL to be set (Supabase Postgres).
         """
-        pg_url = os.getenv("LEON_POSTGRES_URL")
+        pg_url = os.getenv("DATABASE_URL")
         if not pg_url:
-            raise RuntimeError("LEON_POSTGRES_URL is required for checkpointer initialization")
+            raise RuntimeError("DATABASE_URL is required for checkpointer initialization")
 
         from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 

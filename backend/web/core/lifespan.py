@@ -18,14 +18,14 @@ def _require_web_runtime_contract() -> None:
     # @@@web-checkpointer-contract - web routes can create LeonAgent on first
     # message, so missing Postgres checkpointer config is a startup contract
     # violation, not a late per-request error.
-    if not os.getenv("LEON_POSTGRES_URL"):
-        raise RuntimeError("LEON_POSTGRES_URL is required for backend web runtime")
+    if not os.getenv("DATABASE_URL"):
+        raise RuntimeError("DATABASE_URL is required for backend web runtime")
 
 
 async def _validate_web_checkpointer_contract() -> None:
-    pg_url = os.getenv("LEON_POSTGRES_URL")
+    pg_url = os.getenv("DATABASE_URL")
     if not pg_url:
-        raise RuntimeError("LEON_POSTGRES_URL is required for backend web runtime")
+        raise RuntimeError("DATABASE_URL is required for backend web runtime")
 
     conn = await AsyncConnection.connect(pg_url)
     try:

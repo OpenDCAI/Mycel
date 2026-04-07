@@ -507,7 +507,7 @@ def test_upgrade_to_daytona_volume_uses_runtime_thread_repo_for_member_lookup(mo
         lambda **_kwargs: thread_repo,
         raising=False,
     )
-    monkeypatch.setenv("LEON_STORAGE_STRATEGY", "supabase")
+    monkeypatch.setenv("STORAGE_STRATEGY", "supabase")
 
     new_source = manager._upgrade_to_daytona_volume(
         "thread-supabase",

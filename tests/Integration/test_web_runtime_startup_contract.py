@@ -9,9 +9,9 @@ from backend.web.core import lifespan as lifespan_module
 
 
 def test_web_runtime_contract_requires_postgres_checkpointer_env(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.delenv("LEON_POSTGRES_URL", raising=False)
+    monkeypatch.delenv("DATABASE_URL", raising=False)
 
-    with pytest.raises(RuntimeError, match="LEON_POSTGRES_URL"):
+    with pytest.raises(RuntimeError, match="DATABASE_URL"):
         lifespan_module._require_web_runtime_contract()
 
 
@@ -19,7 +19,7 @@ def test_web_runtime_contract_requires_postgres_checkpointer_env(monkeypatch: py
 async def test_web_runtime_contract_fails_when_postgres_checkpointer_is_unreachable(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setenv("LEON_POSTGRES_URL", "postgresql://example")
+    monkeypatch.setenv("DATABASE_URL", "postgresql://example")
 
     async def _connect(_dsn: str):
         raise OperationalError("connection refused")

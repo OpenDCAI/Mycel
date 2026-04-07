@@ -44,7 +44,7 @@ jobs:
         # e2e tests self-skip via skipif when provider secrets are absent
         env:
           SUPABASE_PUBLIC_URL: ${{ secrets.SUPABASE_PUBLIC_URL }}
-          LEON_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
           SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
         run: uv run pytest tests/ --ignore=tests/test_e2e_providers.py --ignore=tests/test_sandbox_e2e.py --ignore=tests/test_daytona_e2e.py --ignore=tests/test_e2e_backend_api.py --ignore=tests/test_e2e_summary_persistence.py --ignore=tests/test_p3_e2e.py --maxfail=5 --timeout=60 -q
 

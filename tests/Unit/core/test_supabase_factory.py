@@ -35,8 +35,7 @@ def test_create_messaging_supabase_client_uses_service_role_key(monkeypatch):
         return object()
 
     monkeypatch.setenv("SUPABASE_INTERNAL_URL", "http://storage.example.test")
-    monkeypatch.setenv("LEON_SUPABASE_SERVICE_ROLE_KEY", "service-role-key")
-    monkeypatch.setenv("LEON_DB_SCHEMA", "staging")
+    monkeypatch.setenv("SUPABASE_SERVICE_ROLE_KEY", "service-role-key")
     monkeypatch.setattr("backend.web.core.supabase_factory.create_client", fake_create_client)
 
     create_messaging_supabase_client()
@@ -53,8 +52,7 @@ def test_create_messaging_supabase_client_forces_public_schema(monkeypatch):
         return object()
 
     monkeypatch.setenv("SUPABASE_INTERNAL_URL", "http://storage.example.test")
-    monkeypatch.setenv("LEON_SUPABASE_SERVICE_ROLE_KEY", "service-role-key")
-    monkeypatch.setenv("LEON_DB_SCHEMA", "staging")
+    monkeypatch.setenv("SUPABASE_SERVICE_ROLE_KEY", "service-role-key")
     monkeypatch.setattr("backend.web.core.supabase_factory.create_client", fake_create_client)
 
     create_messaging_supabase_client()
