@@ -3863,7 +3863,9 @@ function EvaluationPage() {
             <span>
               {evalPagination?.total ?? evaluations.length} evaluations
             </span>
-            <span>{runsLoading ? "loading..." : "idle"}</span>
+            <span>
+              {runsLoading ? "loading..." : listError ? "error" : "idle"}
+            </span>
             <span>page {evalPagination?.page ?? 1}</span>
           </div>
           {listError && <div className="error">list error: {listError}</div>}
