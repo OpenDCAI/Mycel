@@ -123,6 +123,19 @@ class ChatToolService:
             return None
         return self._member_repo.get_by_id(member_id)
 
+    def _resolve_directory_social_id(self, member: Any) -> str:
+        if self._thread_repo is None:
+            # @@@fallback - standalone chat-tool tests can still construct ChatToolService
+            # without a thread repo; keep emitting the member id until those callers are removed.
+            return member.id
+        member_type = member.type.value if hasattr(member.type, "value") else str(member.type)
+        if member_type == "human":
+            return member.id
+        default_thread = self._thread_repo.get_default_thread(member.id)
+        if default_thread is None or not default_thread.get("user_id"):
+            raise RuntimeError(f"Default thread user_id is required for directory member: {member.id}")
+        return default_thread["user_id"]
+
     def _register(self, registry: ToolRegistry) -> None:
         self._register_chats(registry)
         self._register_chat_read(registry)
@@ -416,6 +429,7 @@ class ChatToolService:
             if search:
                 q = search.lower()
                 entities = [e for e in entities if q in e.name.lower()]
+            directory_ids = {e.id: self._resolve_directory_social_id(e) for e in entities}
 
             # Privacy filter: only show members with a relationship (VISIT or HIRE)
             # or members owned by the same user (owner_id)
@@ -426,7 +440,7 @@ class ChatToolService:
                 def _is_visible(m) -> bool:
                     if getattr(m, "owner_user_id", None) == my_owner_id:
                         return True
-                    rel = self._relationships.get(eid, m.id)
+                    rel = self._relationships.get(eid, directory_ids[m.id])
                     if rel and rel.get("state") in ("visit", "hire"):
                         return True
                     return False
@@ -443,7 +457,7 @@ class ChatToolService:
                     if owner_member:
                         owner_info = f" (owner: {owner_member.name})"
                 mtype = e.type.value if hasattr(e.type, "value") else str(e.type)
-                lines.append(f"- {e.name} [{mtype}] id={e.id}{owner_info}")
+                lines.append(f"- {e.name} [{mtype}] id={directory_ids[e.id]}{owner_info}")
             return "\n".join(lines)
 
         registry.register(

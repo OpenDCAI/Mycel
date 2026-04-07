@@ -180,6 +180,42 @@ def test_chat_tool_service_accepts_chat_identity_id_without_legacy_user_id() -> 
     assert "id=agent-user-2" in result
 
 
+def test_chat_tool_directory_exposes_default_thread_user_id_for_agents() -> None:
+    registry = ToolRegistry()
+    seen_relationship_targets: list[str] = []
+    ChatToolService(
+        registry=registry,
+        chat_identity_id="human-user-1",
+        owner_id="owner-user-1",
+        member_repo=SimpleNamespace(
+            list_all=lambda: [
+                SimpleNamespace(id="member-agent-1", name="Toad", type="mycel_agent", owner_user_id="owner-user-9"),
+            ],
+            get_by_id=lambda member_id: (
+                SimpleNamespace(id=member_id, name="Owner", owner_user_id="owner-user-1") if member_id == "owner-user-1" else None
+            ),
+        ),
+        thread_repo=SimpleNamespace(
+            get_default_thread=lambda member_id: {"id": "thread-1", "user_id": "thread-user-1"} if member_id == "member-agent-1" else None
+        ),
+        relationship_repo=SimpleNamespace(
+            get=lambda actor_id, target_id: (
+                seen_relationship_targets.append(target_id) or {"state": "hire"}
+                if actor_id == "human-user-1" and target_id == "thread-user-1"
+                else None
+            )
+        ),
+    )
+
+    directory = registry.get("directory")
+    assert directory is not None
+
+    result = directory.handler()
+
+    assert result == "- Toad [mycel_agent] id=thread-user-1"
+    assert seen_relationship_targets == ["thread-user-1"]
+
+
 def test_messaging_service_resolves_sender_name_from_thread_user_id() -> None:
     published: list[dict[str, object]] = []
     service = MessagingService(
