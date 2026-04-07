@@ -9,6 +9,20 @@ from storage.providers.supabase import _query as q
 
 _MEMBER_REPO = "member repo"
 _MEMBER_TABLE = "members"
+_COLS = (
+    "id",
+    "name",
+    "type",
+    "avatar",
+    "description",
+    "config_dir",
+    "owner_user_id",
+    "created_at",
+    "updated_at",
+    "next_thread_seq",
+    "email",
+    "mycel_id",
+)
 
 
 class SupabaseMemberRepo:
@@ -28,8 +42,7 @@ class SupabaseMemberRepo:
                 "description": row.description,
                 "config_dir": row.config_dir,
                 "owner_user_id": row.owner_user_id,
-                # @@@supabase-schema-legacy - remote members table still uses the old column name.
-                "next_entity_seq": row.next_thread_seq,
+                "next_thread_seq": row.next_thread_seq,
                 "email": row.email,
                 "mycel_id": row.mycel_id,
                 "created_at": row.created_at,
@@ -38,62 +51,62 @@ class SupabaseMemberRepo:
         ).execute()
 
     def get_by_id(self, member_id: str) -> MemberRow | None:
-        response = self._t().select("*").eq("id", member_id).execute()
+        response = self._t().select(", ".join(_COLS)).eq("id", member_id).execute()
         rows = q.rows(response, _MEMBER_REPO, "get_by_id")
         if not rows:
             return None
-        return MemberRow.model_validate(self._normalize(rows[0]))
+        return MemberRow.model_validate(rows[0])
 
     def get_by_name(self, name: str, owner_user_id: str | None = None) -> MemberRow | None:
-        query = self._t().select("*").eq("name", name)
+        query = self._t().select(", ".join(_COLS)).eq("name", name)
         if owner_user_id is not None:
             query = query.eq("owner_user_id", owner_user_id)
         response = query.execute()
         rows = q.rows(response, _MEMBER_REPO, "get_by_name")
         if not rows:
             return None
-        return MemberRow.model_validate(self._normalize(rows[0]))
+        return MemberRow.model_validate(rows[0])
 
     def get_by_email(self, email: str) -> MemberRow | None:
-        response = self._t().select("*").eq("email", email).execute()
+        response = self._t().select(", ".join(_COLS)).eq("email", email).execute()
         rows = q.rows(response, _MEMBER_REPO, "get_by_email")
         if not rows:
             return None
-        return MemberRow.model_validate(self._normalize(rows[0]))
+        return MemberRow.model_validate(rows[0])
 
     def get_by_mycel_id(self, mycel_id: int) -> MemberRow | None:
-        response = self._t().select("*").eq("mycel_id", mycel_id).execute()
+        response = self._t().select(", ".join(_COLS)).eq("mycel_id", mycel_id).execute()
         rows = q.rows(response, _MEMBER_REPO, "get_by_mycel_id")
         if not rows:
             return None
-        return MemberRow.model_validate(self._normalize(rows[0]))
+        return MemberRow.model_validate(rows[0])
 
     def list_all(self) -> list[MemberRow]:
-        query = q.order(self._t().select("*"), "created_at", desc=False, repo=_MEMBER_REPO, operation="list_all")
+        query = q.order(self._t().select(", ".join(_COLS)), "created_at", desc=False, repo=_MEMBER_REPO, operation="list_all")
         rows = q.rows(query.execute(), _MEMBER_REPO, "list_all")
-        return [MemberRow.model_validate(self._normalize(r)) for r in rows]
+        return [MemberRow.model_validate(r) for r in rows]
 
     def list_by_type(self, member_type: str) -> list[MemberRow]:
         query = q.order(
-            self._t().select("*").eq("type", member_type),
+            self._t().select(", ".join(_COLS)).eq("type", member_type),
             "created_at",
             desc=False,
             repo=_MEMBER_REPO,
             operation="list_by_type",
         )
         rows = q.rows(query.execute(), _MEMBER_REPO, "list_by_type")
-        return [MemberRow.model_validate(self._normalize(r)) for r in rows]
+        return [MemberRow.model_validate(r) for r in rows]
 
     def list_by_owner_user_id(self, owner_user_id: str) -> list[MemberRow]:
         query = q.order(
-            self._t().select("*").eq("owner_user_id", owner_user_id),
+            self._t().select(", ".join(_COLS)).eq("owner_user_id", owner_user_id),
             "created_at",
             desc=False,
             repo=_MEMBER_REPO,
             operation="list_by_owner_user_id",
         )
         rows = q.rows(query.execute(), _MEMBER_REPO, "list_by_owner_user_id")
-        return [MemberRow.model_validate(self._normalize(r)) for r in rows]
+        return [MemberRow.model_validate(r) for r in rows]
 
     def update(self, member_id: str, **fields: Any) -> None:
         allowed = {"name", "avatar", "description", "config_dir", "owner_user_id", "updated_at"}
@@ -104,11 +117,7 @@ class SupabaseMemberRepo:
 
     def increment_thread_seq(self, member_id: str) -> int:
         """Atomically increment the thread sequence and return the new value via RPC."""
-        response = self._client.rpc(
-            # @@@supabase-rpc-legacy - the remote function name still carries the old storage term.
-            "increment_member_entity_seq",
-            {"p_member_id": member_id},
-        ).execute()
+        response = self._client.rpc("increment_member_thread_seq", {"p_member_id": member_id}).execute()
         # RPC returns scalar; supabase-py wraps it in data
         if isinstance(response, dict):
             data = response.get("data")
@@ -116,7 +125,7 @@ class SupabaseMemberRepo:
             data = getattr(response, "data", None)
         if data is None:
             raise RuntimeError(
-                f"Supabase {_MEMBER_REPO} expected data from increment_member_entity_seq RPC. "
+                f"Supabase {_MEMBER_REPO} expected data from increment_member_thread_seq RPC. "
                 "Check the function exists and member_id is valid."
             )
         # data may be a list with one element (scalar), or an int directly
@@ -128,14 +137,6 @@ class SupabaseMemberRepo:
 
     def delete(self, member_id: str) -> None:
         self._t().delete().eq("id", member_id).execute()
-
-    def _normalize(self, row: dict[str, Any]) -> dict[str, Any]:
-        """Ensure storage rows satisfy the current MemberRow contract."""
-        normalized = dict(row)
-        if "next_thread_seq" not in normalized and "next_entity_seq" in normalized:
-            normalized["next_thread_seq"] = normalized["next_entity_seq"]
-        normalized.pop("next_entity_seq", None)
-        return normalized
 
     def _t(self) -> Any:
         return self._client.table(_MEMBER_TABLE)
