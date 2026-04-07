@@ -6,7 +6,6 @@ ConversationList can render a unified sidebar.
 
 from __future__ import annotations
 
-import logging
 from datetime import UTC, datetime
 from typing import Annotated, Any
 
@@ -15,8 +14,6 @@ from fastapi import APIRouter, Depends
 from backend.web.core.dependencies import get_app, get_current_user_id
 from backend.web.utils.serializers import avatar_url
 from core.runtime.middleware.monitor import AgentState
-
-logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/conversations", tags=["conversations"])
 
