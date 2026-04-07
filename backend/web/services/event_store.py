@@ -128,14 +128,6 @@ async def cleanup_old_runs(
     return int(await asyncio.to_thread(repo.delete_runs, thread_id, old_ids))
 
 
-async def cleanup_thread(thread_id: str, run_event_repo: RunEventRepo | None = None) -> int:
-    """Delete all events for a thread. Returns deleted count."""
-    repo = _resolve_run_event_repo(run_event_repo)
-    if repo is None:
-        return 0
-    return int(await asyncio.to_thread(repo.delete_thread_events, thread_id))
-
-
 def _event_payload_to_dict(event: dict[str, Any]) -> dict[str, Any]:
     raw_data = event.get("data", {})
     if isinstance(raw_data, dict):
