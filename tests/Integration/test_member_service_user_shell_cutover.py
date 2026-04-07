@@ -78,6 +78,17 @@ class _FakeAgentConfigRepo:
         self.deleted.append(agent_config_id)
 
 
+class _OrderCheckingAgentConfigRepo(_FakeAgentConfigRepo):
+    def __init__(self, user_repo: _FakeUserRepo) -> None:
+        super().__init__()
+        self._user_repo = user_repo
+
+    def save_config(self, agent_config_id: str, data: dict[str, object]) -> None:
+        owner_rows = [row for row in self._user_repo.created if row.agent_config_id == agent_config_id]
+        assert owner_rows, "agent user must exist before agent_config save"
+        super().save_config(agent_config_id, data)
+
+
 def _agent_user(*, user_id: str = "agent-1", owner_user_id: str = "owner-1", agent_config_id: str = "cfg-1") -> UserRow:
     return UserRow(
         id=user_id,
@@ -134,6 +145,27 @@ def test_create_member_creates_agent_user_and_saves_config_by_agent_config_id(
     assert created is not None
     assert created["id"] == agent_user.id
     assert agent_config_repo.saved_configs[0][0] == agent_user.agent_config_id
+
+
+def test_create_member_persists_agent_user_before_agent_config(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setattr(member_service, "MEMBERS_DIR", tmp_path)
+    user_repo = _FakeUserRepo()
+    agent_config_repo = _OrderCheckingAgentConfigRepo(user_repo)
+
+    created = member_service.create_member(
+        "Morel",
+        "analyst",
+        owner_user_id="owner-1",
+        user_repo=user_repo,
+        agent_config_repo=agent_config_repo,
+    )
+
+    assert created is not None
+    assert len(user_repo.created) == 1
+    assert len(agent_config_repo.saved_configs) == 1
 
 
 def test_update_member_config_syncs_repo_by_agent_config_id(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:

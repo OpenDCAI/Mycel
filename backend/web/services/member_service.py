@@ -406,19 +406,6 @@ def create_member(
         },
     )
 
-    # Dual-write to Supabase repo
-    if agent_config_repo:
-        _save_config_to_repo(
-            agent_config_repo,
-            agent_config_id,
-            name=name,
-            description=description,
-            status="draft",
-            version="0.1.0",
-            created_at=now_ms,
-            updated_at=now_ms,
-        )
-
     # Persist to users table so panel/auth shells see a unified agent identity
     if owner_user_id:
         row = UserRow(
@@ -432,6 +419,21 @@ def create_member(
         if user_repo is None:
             raise RuntimeError("user_repo is required when owner_user_id is provided")
         user_repo.create(row)
+
+    # @@@agent-user-before-config - new schema roots agent_configs on agent_user_id.
+    # The user row must exist before the config write, otherwise live staging
+    # rejects the insert on the forward reference.
+    if agent_config_repo:
+        _save_config_to_repo(
+            agent_config_repo,
+            agent_config_id,
+            name=name,
+            description=description,
+            status="draft",
+            version="0.1.0",
+            created_at=now_ms,
+            updated_at=now_ms,
+        )
 
     return get_member(agent_user_id)  # type: ignore
 
