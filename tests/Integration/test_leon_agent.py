@@ -747,6 +747,36 @@ def test_leon_agent_chat_identity_prompt_accepts_chat_identity_id_without_legacy
     assert "- Your owner: Owner 2 (human user_id: human-user-2)" in prompt
 
 
+def test_leon_agent_chat_identity_prompt_resolves_thread_user_name_via_member() -> None:
+    from core.runtime.agent import LeonAgent
+
+    agent = object.__new__(LeonAgent)
+    agent._build_system_prompt = lambda: "BASE"
+    cast(Any, agent).config = SimpleNamespace(system_prompt=None)
+    agent._thread_repo = SimpleNamespace(
+        get_by_user_id=lambda uid: {"id": "thread-1", "member_id": "member-agent-3"} if uid == "thread-user-3" else None
+    )
+    agent._chat_repos = {
+        "chat_identity_id": "thread-user-3",
+        "owner_id": "human-user-3",
+        "member_repo": SimpleNamespace(
+            get_by_id=lambda uid: (
+                None
+                if uid == "thread-user-3"
+                else SimpleNamespace(id=uid, name="Truffle")
+                if uid == "member-agent-3"
+                else SimpleNamespace(id=uid, name="Owner 3")
+            )
+        ),
+    }
+
+    prompt = LeonAgent._compose_system_prompt(agent)
+
+    assert "- Your name: Truffle" in prompt
+    assert "- Your chat identity id: thread-user-3" in prompt
+    assert "- Your owner: Owner 3 (human user_id: human-user-3)" in prompt
+
+
 def test_build_rules_section_includes_function_result_clearing_guidance_when_spill_buffer_enabled():
     from core.runtime.prompts import build_rules_section
 

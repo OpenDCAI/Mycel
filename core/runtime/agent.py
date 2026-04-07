@@ -1401,6 +1401,11 @@ class LeonAgent:
             if uid:
                 member_repo = repos.get("member_repo")
                 self_member = member_repo.get_by_id(uid) if member_repo else None
+                if self_member is None and member_repo and self._thread_repo is not None:
+                    thread = self._thread_repo.get_by_user_id(uid)
+                    member_id = thread.get("member_id") if thread else None
+                    if member_id:
+                        self_member = member_repo.get_by_id(member_id)
                 owner_row = member_repo.get_by_id(owner_uid) if member_repo and owner_uid else None
                 name = self_member.name if self_member else uid
                 owner_name = owner_row.name if owner_row else "unknown"
