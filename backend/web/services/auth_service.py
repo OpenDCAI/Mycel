@@ -177,12 +177,11 @@ class AuthService:
 
     def verify_recovery_otp(self, email: str, token: str) -> dict:
         """Verify a password-recovery OTP. Returns access_token for use in update_password."""
-        if self._sb is None:
-            raise RuntimeError("Supabase client required.")
+        auth_client = self._auth_api(self._require_auth_client())
         from supabase_auth.errors import AuthApiError
 
         try:
-            resp = self._sb.auth.verify_otp({"email": email, "token": token, "type": "recovery"})
+            resp = auth_client.verify_otp({"email": email, "token": token, "type": "recovery"})
         except AuthApiError as e:
             raise ValueError(f"验证码错误: {e.message}") from e
         if resp.user is None or resp.session is None:
@@ -191,12 +190,11 @@ class AuthService:
 
     def send_password_reset(self, email: str, redirect_to: str) -> None:
         """Send a password reset email via Supabase GoTrue."""
-        if self._sb is None:
-            raise RuntimeError("Supabase client required.")
+        auth_client = self._auth_api(self._require_auth_client())
         from supabase_auth.errors import AuthApiError
 
         try:
-            self._sb.auth.reset_password_for_email(email, options={"redirect_to": redirect_to})
+            auth_client.reset_password_for_email(email, options={"redirect_to": redirect_to})
         except AuthApiError as e:
             raise ValueError(f"发送失败: {e.message}") from e
 
