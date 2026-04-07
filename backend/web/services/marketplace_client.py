@@ -50,9 +50,9 @@ def _write_json(path: Path, data: dict) -> None:
     path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
-def _serialize_member_snapshot(member_id: str) -> dict:
-    """Serialize a local member into a snapshot dict for Hub."""
-    member_dir = members_dir() / member_id
+def _serialize_user_snapshot(user_id: str) -> dict:
+    """Serialize a local agent user bundle into a snapshot dict for Hub."""
+    member_dir = members_dir() / user_id
 
     # Read raw files for faithful snapshot
     agent_md = (member_dir / "agent.md").read_text(encoding="utf-8")
@@ -105,7 +105,7 @@ def _serialize_member_snapshot(member_id: str) -> dict:
 
 
 def publish(
-    member_id: str,
+    user_id: str,
     type_: str,
     bump_type: str,
     release_notes: str,
@@ -114,8 +114,8 @@ def publish(
     publisher_user_id: str,
     publisher_username: str,
 ) -> dict:
-    """Publish a local member to the Hub."""
-    member_dir = members_dir() / member_id
+    """Publish a local agent user bundle to the Hub."""
+    member_dir = members_dir() / user_id
     meta = _read_json(member_dir / "meta.json")
 
     # Calculate new version
@@ -131,7 +131,7 @@ def publish(
     new_version = f"{major}.{minor}.{patch}"
 
     # Serialize snapshot
-    snapshot = _serialize_member_snapshot(member_id)
+    snapshot = _serialize_user_snapshot(user_id)
 
     # Get slug from agent name
     loader = AgentLoader()
@@ -248,10 +248,10 @@ def download(item_id: str, owner_user_id: str = "system") -> dict:
         return {"resource_id": slug, "type": "agent", "version": installed_version}
 
     elif item_type == "member":
-        # Members still get installed as full members
+        # Hub still emits "member" here; local v1 contract exposes unified users.
         from backend.web.services.member_service import install_from_snapshot
 
-        member_id = install_from_snapshot(
+        user_id = install_from_snapshot(
             snapshot=snapshot,
             name=item["name"],
             description=item.get("description", ""),
@@ -259,13 +259,13 @@ def download(item_id: str, owner_user_id: str = "system") -> dict:
             installed_version=installed_version,
             owner_user_id=owner_user_id,
         )
-        return {"resource_id": member_id, "type": "member", "version": installed_version}
+        return {"user_id": user_id, "type": "user", "version": installed_version}
 
     else:
         raise ValueError(f"Unsupported item type: {item_type}")
 
 
-def upgrade(member_id: str, item_id: str, owner_user_id: str) -> dict:
+def upgrade(user_id: str, item_id: str, owner_user_id: str) -> dict:
     """Upgrade a locally installed marketplace item."""
     result = _hub_api("POST", f"/items/{item_id}/download")
     snapshot = result["snapshot"]
@@ -280,10 +280,10 @@ def upgrade(member_id: str, item_id: str, owner_user_id: str) -> dict:
         marketplace_item_id=item_id,
         installed_version=installed_version,
         owner_user_id=owner_user_id,
-        existing_member_id=member_id,
+        existing_member_id=user_id,
     )
 
-    return {"member_id": member_id, "version": installed_version}
+    return {"user_id": user_id, "version": installed_version}
 
 
 def check_updates(items: list[dict]) -> dict:

@@ -34,7 +34,7 @@ async def test_publish_to_marketplace_uses_user_repo_not_member_repo(monkeypatch
     result = await marketplace_router.publish_to_marketplace(req=req, user_id="owner-1", request=request)
 
     assert result == {"ok": True}
-    assert seen["member_id"] == "agent-1"
+    assert seen["user_id"] == "agent-1"
     assert seen["publisher_user_id"] == "owner-1"
     assert seen["publisher_username"] == "owner-name"
 
@@ -59,7 +59,7 @@ async def test_upgrade_from_marketplace_uses_user_repo_not_member_repo(monkeypat
     result = await marketplace_router.upgrade_from_marketplace(req=req, user_id="owner-1", request=request)
 
     assert result == {"ok": True}
-    assert seen == {"member_id": "agent-1", "item_id": "item-1", "owner_user_id": "owner-1"}
+    assert seen == {"user_id": "agent-1", "item_id": "item-1", "owner_user_id": "owner-1"}
 
 
 @pytest.mark.asyncio

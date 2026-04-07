@@ -47,7 +47,7 @@ async def publish_to_marketplace(
 
     result = await asyncio.to_thread(
         marketplace_client.publish,
-        member_id=req.user_id,
+        user_id=req.user_id,
         type_=req.type,
         bump_type=req.bump_type,
         release_notes=req.release_notes,
@@ -82,7 +82,7 @@ async def upgrade_from_marketplace(
 
     result = await asyncio.to_thread(
         marketplace_client.upgrade,
-        member_id=req.user_id,
+        user_id=req.user_id,
         item_id=req.item_id,
         owner_user_id=user_id,
     )
