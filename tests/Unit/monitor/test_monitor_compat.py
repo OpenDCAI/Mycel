@@ -1,5 +1,3 @@
-import sqlite3
-
 from backend.web.services import monitor_service
 
 

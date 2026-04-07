@@ -189,6 +189,7 @@ class SQLiteSandboxMonitorRepo:
                 sl.recipe_json,
                 sl.desired_state,
                 sl.observed_state,
+                sl.created_at,
                 sl.updated_at,
                 at.thread_id,
                 at.cwd
