@@ -2886,12 +2886,21 @@ function ThreadTraceSection({
   }, [selectedRunId, loadTrace]);
 
   React.useEffect(() => {
-    if (!threadId || !autoRefreshEnabled || !autoRefresh) return;
+    // @@@trace-poll-stop-on-error - once trace or conversation has entered a
+    // hard backend error state, stop the 2s loop until the operator manually
+    // refreshes or the next successful load clears the error.
+    if (
+      !threadId ||
+      !autoRefreshEnabled ||
+      !autoRefresh ||
+      Boolean(traceError) ||
+      Boolean(conversationError)
+    ) {
+      return;
+    }
     const timer = window.setInterval(() => {
       loadTrace(selectedRunId);
-      if (!conversationError) {
-        loadConversation();
-      }
+      loadConversation();
     }, 2000);
     return () => window.clearInterval(timer);
   }, [
@@ -2901,6 +2910,7 @@ function ThreadTraceSection({
     selectedRunId,
     loadTrace,
     loadConversation,
+    traceError,
     conversationError,
   ]);
 
