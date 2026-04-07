@@ -173,8 +173,8 @@ export default function NewChatPage({ mode = "member" }: { mode?: "member" | "ne
       } catch (err) {
         if (cancelled) return;
         if (err instanceof DOMException && err.name === "AbortError") return;
-        const message = err instanceof Error ? err.message : "无法获取主对话";
-        console.error("[NewChatPage] resolve main thread failed:", err);
+        const message = err instanceof Error ? err.message : "无法获取默认线程";
+        console.error("[NewChatPage] resolve default thread failed:", err);
         setError(message);
         setResolveState("error");
       }
@@ -508,8 +508,8 @@ export default function NewChatPage({ mode = "member" }: { mode?: "member" | "ne
       <ResolveStateCard
         memberName={memberName}
         memberAvatarUrl={memberAvatarUrl ?? undefined}
-        title={`正在检查 ${memberName} 的主对话`}
-        description="如果没有主对话，这里会进入创建界面。"
+        title={`正在检查 ${memberName} 的默认线程`}
+        description="如果没有默认线程，这里会进入创建界面。"
       />
     );
   }
@@ -519,7 +519,7 @@ export default function NewChatPage({ mode = "member" }: { mode?: "member" | "ne
       <ResolveStateCard
         memberName={memberName}
         memberAvatarUrl={memberAvatarUrl ?? undefined}
-        title={`无法检查 ${memberName} 的主对话`}
+        title={`无法检查 ${memberName} 的默认线程`}
         description={error ?? "未知错误"}
         destructive
       />

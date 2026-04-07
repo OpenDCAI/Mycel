@@ -3,15 +3,15 @@ import { useNavigate } from "react-router-dom";
 import { getMainThread } from "../api/client";
 import { useAuthStore } from "../store/auth-store";
 
-const mainThreadInflight = new Map<string, Promise<Awaited<ReturnType<typeof getMainThread>>>>();
+const defaultThreadInflight = new Map<string, Promise<Awaited<ReturnType<typeof getMainThread>>>>();
 
-function loadMainThread(memberId: string) {
-  const existing = mainThreadInflight.get(memberId);
+function loadDefaultThread(memberId: string) {
+  const existing = defaultThreadInflight.get(memberId);
   if (existing) return existing;
   const pending = getMainThread(memberId).finally(() => {
-    mainThreadInflight.delete(memberId);
+    defaultThreadInflight.delete(memberId);
   });
-  mainThreadInflight.set(memberId, pending);
+  defaultThreadInflight.set(memberId, pending);
   return pending;
 }
 
@@ -28,12 +28,12 @@ export default function ThreadsIndexRedirect() {
     async function redirectToThread() {
       const memberId = encodeURIComponent(agentId);
       try {
-        // @@@threads-index-direct-main-route - /threads is a pure entrypoint; resolve the
-        // main thread here so login/setup flows do not bounce through NewChatPage first.
+        // @@@threads-index-direct-default-route - /threads is a pure entrypoint; resolve the
+        // default thread here so login/setup flows do not bounce through NewChatPage first.
         // @@@threads-index-inflight-dedup - React StrictMode remounts /threads in dev.
-        // Reuse the first main-thread request and ignore stale callbacks instead of
+        // Reuse the first default-thread request and ignore stale callbacks instead of
         // aborting the first fetch and polluting network/devtools with ERR_ABORTED.
-        const thread = await loadMainThread(agentId);
+        const thread = await loadDefaultThread(agentId);
         if (cancelled) return;
         navigate(
           thread
@@ -44,7 +44,7 @@ export default function ThreadsIndexRedirect() {
       } catch (error) {
         if (cancelled) return;
         if (error instanceof DOMException && error.name === "AbortError") return;
-        console.error("[ThreadsIndexRedirect] resolve main thread failed:", error);
+        console.error("[ThreadsIndexRedirect] resolve default thread failed:", error);
         navigate(`/chat/hire/${memberId}`, { replace: true });
       }
     }

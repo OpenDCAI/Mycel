@@ -159,7 +159,7 @@ describe("NewChatPage", () => {
     });
   });
 
-  it("does not block the create-chat UI on a pending default-config fetch once main thread resolves null", async () => {
+  it("does not block the create-chat UI on a pending default-config fetch once the default thread resolves null", async () => {
     render(
       <MemoryRouter initialEntries={["/chat/hire/m_xVuNpKJNxblZ"]}>
         <Routes>
@@ -173,7 +173,25 @@ describe("NewChatPage", () => {
     await waitFor(() => {
       expect(screen.getByText("开始与 Morel 对话")).toBeTruthy();
     });
-    expect(screen.queryByText("正在检查 Morel 的主对话")).toBeNull();
+    expect(screen.queryByText("正在检查 Morel 的默认线程")).toBeNull();
     expect(screen.getByText("centered-input-box")).toBeTruthy();
+  });
+
+  it("uses default-thread wording while resolving the template entry", async () => {
+    handleGetMainThread.mockReset();
+    handleGetMainThread.mockImplementation(() => new Promise(() => {}));
+
+    render(
+      <MemoryRouter initialEntries={["/chat/hire/m_xVuNpKJNxblZ"]}>
+        <Routes>
+          <Route element={<ContextOutlet />}>
+            <Route path="/chat/hire/:memberId" element={<NewChatPage />} />
+          </Route>
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText("正在检查 Morel 的默认线程")).toBeTruthy();
+    expect(screen.getByText("如果没有默认线程，这里会进入创建界面。")).toBeTruthy();
   });
 });

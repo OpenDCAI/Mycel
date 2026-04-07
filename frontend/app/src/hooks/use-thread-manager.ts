@@ -107,6 +107,8 @@ export function useThreadManager(): ThreadManagerState & ThreadManagerActions {
     return thread.thread_id;
   }, [selectedSandbox]);
 
+  // @@@template-default-thread-entry - this hook resolves a template entry to its
+  // current default thread without changing the existing backend wire name yet.
   const handleGetMainThread = useCallback(async (memberId: string, signal?: AbortSignal): Promise<ThreadSummary | null> => {
     const thread = await getMainThread(memberId, signal);
     if (thread) {
