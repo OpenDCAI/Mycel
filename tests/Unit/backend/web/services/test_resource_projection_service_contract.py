@@ -85,3 +85,43 @@ def test_list_resource_providers_keeps_unavailable_remote_card_with_reason(monke
     assert remote["unavailableReason"] == "provider unavailable in current process"
     assert remote["sessions"] == []
     assert isinstance(remote["cardCpu"], dict)
+
+
+def test_list_resource_providers_inherits_desired_state_for_detached_sessions(monkeypatch):
+    rows = [
+        {
+            "provider": "local",
+            "session_id": None,
+            "thread_id": "thread-1",
+            "lease_id": "lease-1",
+            "observed_state": "detached",
+            "desired_state": "running",
+            "created_at": "2026-04-04T00:00:00",
+        },
+    ]
+
+    monkeypatch.setattr(resource_projection_service, "make_sandbox_monitor_repo", lambda: _FakeRepo(rows))
+    monkeypatch.setattr(
+        resource_projection_service,
+        "available_sandbox_types",
+        lambda: [{"name": "local", "available": True}],
+    )
+    monkeypatch.setattr(resource_projection_service, "resolve_provider_name", lambda *_args, **_kwargs: "local")
+    monkeypatch.setattr(resource_projection_service, "_resolve_console_url", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(
+        resource_projection_service,
+        "_resolve_instance_capabilities",
+        lambda _config_name: (_caps(metrics=False), None),
+    )
+    monkeypatch.setattr(
+        resource_projection_service,
+        "_thread_owners",
+        lambda thread_ids: {tid: {"member_id": "member-1", "member_name": "Toad", "avatar_url": None} for tid in thread_ids},
+    )
+    monkeypatch.setattr(resource_projection_service, "list_resource_snapshots", lambda _lease_ids: {})
+    monkeypatch.setattr(resource_projection_service.LocalSessionProvider, "get_metrics", lambda self, _session_id: None)
+
+    payload = resource_projection_service.list_resource_providers()
+
+    assert payload["providers"][0]["sessions"][0]["status"] == "running"
+    assert payload["summary"]["running_sessions"] == 1
