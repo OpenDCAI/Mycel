@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 
-export interface UserSettings {
+interface UserSettings {
   default_workspace: string | null;
   recent_workspaces: string[];
   default_model: string;
