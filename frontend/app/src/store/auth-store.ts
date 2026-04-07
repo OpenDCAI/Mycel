@@ -35,6 +35,7 @@ interface AuthState {
   clearSetupInfo: () => void;
   logout: () => void;
   forgotPassword: (email: string) => Promise<void>;
+  verifyRecoveryOtp: (email: string, token: string) => Promise<{ accessToken: string }>;
   updatePassword: (accessToken: string, newPassword: string) => Promise<void>;
 }
 
@@ -111,6 +112,11 @@ export const useAuthStore = create<AuthState>()(
 
       forgotPassword: async (email) => {
         await apiPost("forgot-password", { email, redirect_to: window.location.origin });
+      },
+
+      verifyRecoveryOtp: async (email, token) => {
+        const data = await apiPost("verify-recovery-otp", { email, token });
+        return { accessToken: data.access_token };
       },
 
       updatePassword: async (accessToken, newPassword) => {

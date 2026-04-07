@@ -383,6 +383,8 @@ function CreateDropdown({
 type AuthStep =
   | { type: "login" }
   | { type: "forgot_password" }
+  | { type: "recovery_otp"; email: string }
+  | { type: "reset_password"; accessToken: string }
   | { type: "reg_email" }
   | { type: "reg_otp"; email: string; password: string; inviteCode: string };
 
@@ -415,6 +417,7 @@ export function LoginForm() {
   const verifyOtp = useAuthStore(s => s.verifyOtp);
   const completeRegister = useAuthStore(s => s.completeRegister);
   const forgotPassword = useAuthStore(s => s.forgotPassword);
+  const verifyRecoveryOtp = useAuthStore(s => s.verifyRecoveryOtp);
 
   function reset(t: AuthStep) { setStep(t); setError(null); }
 
@@ -437,11 +440,33 @@ export function LoginForm() {
     return <ForgotPasswordStep
       onSubmit={async (email) => {
         await forgotPassword(email);
+        setStep({ type: "recovery_otp", email });
       }}
       onBack={() => reset({ type: "login" })}
       error={error} setError={setError}
       loading={loading} setLoading={setLoading}
     />;
+  }
+
+  // ── Step: Enter recovery OTP ──
+  if (step.type === "recovery_otp") {
+    const { email } = step;
+    return <RecoveryOtpStep
+      email={email}
+      onSubmit={async (token) => {
+        const { accessToken } = await verifyRecoveryOtp(email, token);
+        setStep({ type: "reset_password", accessToken });
+      }}
+      onResend={async () => { await forgotPassword(email); }}
+      onBack={() => reset({ type: "forgot_password" })}
+      error={error} setError={setError}
+      loading={loading} setLoading={setLoading}
+    />;
+  }
+
+  // ── Step: Set new password (via OTP flow) ──
+  if (step.type === "reset_password") {
+    return <ResetPasswordForm accessToken={step.accessToken} onDone={() => reset({ type: "login" })} />;
   }
 
   // ── Step: Enter email + password + invite code ──
@@ -525,32 +550,71 @@ function ForgotPasswordStep({ onSubmit, onBack, error, setError, loading, setLoa
   loading: boolean; setLoading: (v: boolean) => void;
 }) {
   const [email, setEmail] = useState("");
-  const [sent, setSent] = useState(false);
   async function handle(e: React.FormEvent) {
     e.preventDefault(); setError(null); setLoading(true);
-    try { await onSubmit(email); setSent(true); }
+    try { await onSubmit(email); }
     catch (err) { setError(err instanceof Error ? err.message : "发送失败"); }
     finally { setLoading(false); }
   }
-  if (sent) {
-    return (
-      <AuthCard>
-        <AuthHeader title="邮件已发送" subtitle={`重置密码链接已发送至 ${email}`} />
-        <p className="text-sm text-muted-foreground text-center mb-6">请查收邮件并点击链接重置密码。如未收到，请检查垃圾邮件箱。</p>
-        <button onClick={onBack} className={btnCls}>返回登录</button>
-      </AuthCard>
-    );
-  }
   return (
     <AuthCard>
-      <AuthHeader title="重置密码" subtitle="输入账号邮箱，我们将发送重置链接" />
+      <AuthHeader title="重置密码" subtitle="输入账号邮箱，我们将发送验证码" />
       <form onSubmit={handle} className="space-y-4">
         <input type="email" placeholder="邮箱" value={email} onChange={e => setEmail(e.target.value)} className={inputCls} required autoFocus autoComplete="email" />
         {error && <p className="text-xs text-destructive">{error}</p>}
-        <button type="submit" disabled={loading} className={btnCls}>{loading ? "发送中..." : "发送重置邮件"}</button>
+        <button type="submit" disabled={loading} className={btnCls}>{loading ? "发送中..." : "发送验证码"}</button>
       </form>
       <p className="text-center text-xs text-muted-foreground mt-4">
         <button onClick={onBack} className="text-primary hover:underline">返回登录</button>
+      </p>
+    </AuthCard>
+  );
+}
+
+function RecoveryOtpStep({ email, onSubmit, onResend, onBack, error, setError, loading, setLoading }: {
+  email: string;
+  onSubmit: (token: string) => Promise<void>;
+  onResend: () => Promise<void>;
+  onBack: () => void;
+  error: string | null; setError: (e: string | null) => void;
+  loading: boolean; setLoading: (v: boolean) => void;
+}) {
+  const [otp, setOtp] = useState("");
+  const [resending, setResending] = useState(false);
+  const [resendDone, setResendDone] = useState(false);
+  async function handle(e: React.FormEvent) {
+    e.preventDefault(); setError(null); setLoading(true);
+    try { await onSubmit(otp.trim()); }
+    catch (err) { setError(err instanceof Error ? err.message : "验证失败"); }
+    finally { setLoading(false); }
+  }
+  async function handleResend() {
+    setError(null); setResending(true); setResendDone(false);
+    try { await onResend(); setResendDone(true); }
+    catch (err) { setError(err instanceof Error ? err.message : "发送失败"); }
+    finally { setResending(false); }
+  }
+  return (
+    <AuthCard>
+      <AuthHeader title="输入验证码" subtitle={`验证码已发送至 ${email}`} />
+      <form onSubmit={handle} className="space-y-4">
+        <input
+          type="text" inputMode="numeric" placeholder="6 位验证码"
+          value={otp} onChange={e => setOtp(e.target.value.replace(/\D/g, ""))}
+          maxLength={6} autoComplete="one-time-code" autoFocus
+          className={`${inputCls} text-center tracking-widest text-lg font-mono`}
+          required
+        />
+        {error && <p className="text-xs text-destructive">{error}</p>}
+        {resendDone && !error && <p className="text-xs text-success">验证码已重新发送</p>}
+        <button type="submit" disabled={loading || otp.length < 6} className={btnCls}>
+          {loading ? "验证中..." : "下一步"}
+        </button>
+      </form>
+      <p className="text-center text-xs text-muted-foreground mt-4">
+        没收到？<button onClick={handleResend} disabled={resending || loading} className="text-primary hover:underline">{resending ? "发送中..." : "重新发送"}</button>
+        <span className="mx-2 text-border">·</span>
+        <button onClick={onBack} className="text-primary hover:underline">修改邮箱</button>
       </p>
     </AuthCard>
   );

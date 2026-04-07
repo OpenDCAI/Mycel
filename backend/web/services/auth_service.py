@@ -175,6 +175,20 @@ class AuthService:
             "agent": agent_info,
         }
 
+    def verify_recovery_otp(self, email: str, token: str) -> dict:
+        """Verify a password-recovery OTP. Returns access_token for use in update_password."""
+        if self._sb is None:
+            raise RuntimeError("Supabase client required.")
+        from supabase_auth.errors import AuthApiError
+
+        try:
+            resp = self._sb.auth.verify_otp({"email": email, "token": token, "type": "recovery"})
+        except AuthApiError as e:
+            raise ValueError(f"验证码错误: {e.message}") from e
+        if resp.user is None or resp.session is None:
+            raise ValueError("验证码无效或已过期")
+        return {"access_token": resp.session.access_token}
+
     def send_password_reset(self, email: str, redirect_to: str) -> None:
         """Send a password reset email via Supabase GoTrue."""
         if self._sb is None:

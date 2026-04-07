@@ -74,6 +74,22 @@ async def login(payload: LoginRequest, app: Annotated[Any, Depends(get_app)]) ->
     return await _call_auth_service(app, 401, "login", payload.identifier, payload.password)
 
 
+# ── Verify recovery OTP ─────────────────────────────────────────────────────
+
+
+class VerifyRecoveryOtpRequest(BaseModel):
+    email: str
+    token: str
+
+
+@router.post("/verify-recovery-otp")
+async def verify_recovery_otp(payload: VerifyRecoveryOtpRequest, app: Annotated[Any, Depends(get_app)]) -> dict:
+    try:
+        return await asyncio.to_thread(_get_auth_service(app).verify_recovery_otp, payload.email, payload.token)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+
+
 # ── Forgot password ──────────────────────────────────────────────────────────
 
 
