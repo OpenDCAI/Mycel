@@ -88,8 +88,8 @@ interface MarketplaceState {
   // Actions (go through Mycel backend)
   downloading: boolean;
   download: (itemId: string) => Promise<{ resource_id: string; type: string; version: string }>;
-  upgrade: (memberId: string, itemId: string) => Promise<void>;
-  publishToMarketplace: (memberId: string, type: string, bumpType: string, releaseNotes: string, tags: string[], visibility: string) => Promise<any>;
+  upgrade: (userId: string, itemId: string) => Promise<void>;
+  publishToMarketplace: (userId: string, type: string, bumpType: string, releaseNotes: string, tags: string[], visibility: string) => Promise<any>;
 }
 
 async function hubApi<T = any>(path: string): Promise<T> {
@@ -229,19 +229,19 @@ export const useMarketplaceStore = create<MarketplaceState>()((set, get) => ({
     }
   },
 
-  upgrade: async (memberId, itemId) => {
+  upgrade: async (userId, itemId) => {
     const data = await backendApi("/upgrade", {
       method: "POST",
-      body: JSON.stringify({ member_id: memberId, item_id: itemId }),
+      body: JSON.stringify({ user_id: userId, item_id: itemId }),
     });
     return data;
   },
 
-  publishToMarketplace: async (memberId, type, bumpType, releaseNotes, tags, visibility) => {
+  publishToMarketplace: async (userId, type, bumpType, releaseNotes, tags, visibility) => {
     return backendApi("/publish", {
       method: "POST",
       body: JSON.stringify({
-        member_id: memberId,
+        user_id: userId,
         type,
         bump_type: bumpType,
         release_notes: releaseNotes,
