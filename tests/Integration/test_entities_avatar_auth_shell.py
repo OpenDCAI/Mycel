@@ -18,43 +18,43 @@ class _FakeUploadFile:
         return self._content
 
 
-def _member(member_id: str, *, owner_user_id: str | None = None, avatar: str | None = None):
+def _user(user_id: str, *, owner_user_id: str | None = None, avatar: str | None = None):
     return SimpleNamespace(
-        id=member_id,
+        id=user_id,
         owner_user_id=owner_user_id,
         avatar=avatar,
     )
 
 
-def test_avatar_member_helper_allows_self_or_owner():
-    member_repo = SimpleNamespace(
-        get_by_id=lambda member_id: _member(member_id, owner_user_id="user-9"),
+def test_avatar_user_helper_allows_self_or_owner():
+    user_repo = SimpleNamespace(
+        get_by_id=lambda user_id: _user(user_id, owner_user_id="user-9"),
     )
 
-    self_member = entities_router._get_owned_avatar_member_or_404("user-1", "user-1", member_repo)
-    owner_member = entities_router._get_owned_avatar_member_or_404("agent-1", "user-9", member_repo)
+    self_user = entities_router._get_owned_avatar_user_or_404("user-1", "user-1", user_repo)
+    owner_user = entities_router._get_owned_avatar_user_or_404("agent-1", "user-9", user_repo)
 
-    assert self_member.id == "user-1"
-    assert owner_member.id == "agent-1"
+    assert self_user.id == "user-1"
+    assert owner_user.id == "agent-1"
 
 
-def test_avatar_member_helper_raises_404_for_missing_member():
-    member_repo = SimpleNamespace(get_by_id=lambda _member_id: None)
+def test_avatar_user_helper_raises_404_for_missing_user():
+    user_repo = SimpleNamespace(get_by_id=lambda _user_id: None)
 
     with pytest.raises(HTTPException) as excinfo:
-        entities_router._get_owned_avatar_member_or_404("missing", "user-1", member_repo)
+        entities_router._get_owned_avatar_user_or_404("missing", "user-1", user_repo)
 
     assert excinfo.value.status_code == 404
-    assert excinfo.value.detail == "Member not found"
+    assert excinfo.value.detail == "User not found"
 
 
-def test_avatar_member_helper_raises_403_for_unrelated_user():
-    member_repo = SimpleNamespace(
-        get_by_id=lambda _member_id: _member("agent-1", owner_user_id="user-2"),
+def test_avatar_user_helper_raises_403_for_unrelated_user():
+    user_repo = SimpleNamespace(
+        get_by_id=lambda _user_id: _user("agent-1", owner_user_id="user-2"),
     )
 
     with pytest.raises(HTTPException) as excinfo:
-        entities_router._get_owned_avatar_member_or_404("agent-1", "user-1", member_repo)
+        entities_router._get_owned_avatar_user_or_404("agent-1", "user-1", user_repo)
 
     assert excinfo.value.status_code == 403
     assert excinfo.value.detail == "Not authorized"
@@ -69,21 +69,21 @@ async def test_delete_avatar_route_uses_auth_shell(monkeypatch: pytest.MonkeyPat
     avatar_path.write_bytes(b"png")
     monkeypatch.setattr(entities_router, "AVATARS_DIR", avatar_dir)
 
-    def fake_helper(member_id: str, current_user_id: str, member_repo):
-        seen.append(("helper", (member_id, current_user_id)))
-        return _member(member_id, owner_user_id="user-1", avatar="avatars/agent-1.png")
+    def fake_helper(user_id: str, current_user_id: str, user_repo):
+        seen.append(("helper", (user_id, current_user_id)))
+        return _user(user_id, owner_user_id="user-1", avatar="avatars/agent-1.png")
 
-    monkeypatch.setattr(entities_router, "_get_owned_avatar_member_or_404", fake_helper)
+    monkeypatch.setattr(entities_router, "_get_owned_avatar_user_or_404", fake_helper)
 
     fake_repo = SimpleNamespace(
-        get_by_id=lambda _member_id: (_ for _ in ()).throw(AssertionError("route should use helper, not repo lookup directly")),
-        update=lambda member_id, **fields: seen.append(("update", (member_id, fields))),
+        get_by_id=lambda _user_id: (_ for _ in ()).throw(AssertionError("route should use helper, not repo lookup directly")),
+        update=lambda user_id, **fields: seen.append(("update", (user_id, fields))),
     )
 
     result = await entities_router.delete_avatar(
         "agent-1",
         current_user_id="user-1",
-        app=SimpleNamespace(state=SimpleNamespace(member_repo=fake_repo)),
+        app=SimpleNamespace(state=SimpleNamespace(user_repo=fake_repo)),
     )
 
     assert result == {"status": "ok"}
@@ -98,27 +98,27 @@ async def test_delete_avatar_route_uses_auth_shell(monkeypatch: pytest.MonkeyPat
 async def test_upload_avatar_route_uses_auth_shell(monkeypatch: pytest.MonkeyPatch):
     seen: list[tuple[str, object]] = []
 
-    def fake_helper(member_id: str, current_user_id: str, member_repo):
-        seen.append(("helper", (member_id, current_user_id)))
-        return _member(member_id, owner_user_id="user-1")
+    def fake_helper(user_id: str, current_user_id: str, user_repo):
+        seen.append(("helper", (user_id, current_user_id)))
+        return _user(user_id, owner_user_id="user-1")
 
-    monkeypatch.setattr(entities_router, "_get_owned_avatar_member_or_404", fake_helper)
+    monkeypatch.setattr(entities_router, "_get_owned_avatar_user_or_404", fake_helper)
     monkeypatch.setattr(
         entities_router,
         "process_and_save_avatar",
-        lambda data, member_id: seen.append(("save", (data, member_id))) or f"avatars/{member_id}.png",
+        lambda data, user_id: seen.append(("save", (data, user_id))) or f"avatars/{user_id}.png",
     )
 
     fake_repo = SimpleNamespace(
-        get_by_id=lambda _member_id: (_ for _ in ()).throw(AssertionError("route should use helper, not repo lookup directly")),
-        update=lambda member_id, **fields: seen.append(("update", (member_id, fields))),
+        get_by_id=lambda _user_id: (_ for _ in ()).throw(AssertionError("route should use helper, not repo lookup directly")),
+        update=lambda user_id, **fields: seen.append(("update", (user_id, fields))),
     )
 
     result = await entities_router.upload_avatar(
         "agent-1",
         _FakeUploadFile(b"png-bytes", content_type="image/png"),
         current_user_id="user-1",
-        app=SimpleNamespace(state=SimpleNamespace(member_repo=fake_repo)),
+        app=SimpleNamespace(state=SimpleNamespace(user_repo=fake_repo)),
     )
 
     assert result == {"status": "ok", "avatar": "avatars/agent-1.png"}

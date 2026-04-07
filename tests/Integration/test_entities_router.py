@@ -14,36 +14,38 @@ import pytest
 from fastapi import HTTPException
 
 from backend.web.routers import entities as entities_router
-from storage.contracts import MemberRow, MemberType
+from storage.contracts import UserRow, UserType
 
 
 @pytest.mark.asyncio
 async def test_list_entities_excludes_current_user_and_returns_all_others():
     now = 1_775_223_756.0
-    current_user = MemberRow(id="u1", name="owner", type=MemberType.HUMAN, created_at=now)
-    other_human = MemberRow(id="u2", name="other", type=MemberType.HUMAN, created_at=now)
-    main_agent = MemberRow(
+    current_user = UserRow(id="u1", display_name="owner", type=UserType.HUMAN, created_at=now)
+    other_human = UserRow(id="u2", display_name="other", type=UserType.HUMAN, created_at=now)
+    main_agent = UserRow(
         id="a-main",
-        name="Toad",
-        type=MemberType.MYCEL_AGENT,
+        display_name="Toad",
+        type=UserType.AGENT,
         owner_user_id="u2",
+        agent_config_id="cfg-a-main",
         created_at=now,
     )
-    child_agent = MemberRow(
+    child_agent = UserRow(
         id="a-child",
-        name="Toad Branch",
-        type=MemberType.MYCEL_AGENT,
+        display_name="Toad Branch",
+        type=UserType.AGENT,
         owner_user_id="u2",
+        agent_config_id="cfg-a-child",
         created_at=now,
     )
 
     app = SimpleNamespace(
         state=SimpleNamespace(
-            member_repo=SimpleNamespace(list_all=lambda: [current_user, other_human, main_agent, child_agent]),
+            user_repo=SimpleNamespace(list_all=lambda: [current_user, other_human, main_agent, child_agent]),
             thread_repo=SimpleNamespace(
-                get_default_thread=lambda member_id: (
+                get_default_thread=lambda user_id: (
                     {"id": "thread-main", "is_main": True, "branch_index": 0}
-                    if member_id == "a-main"
+                    if user_id == "a-main"
                     else {"id": "thread-child", "is_main": False, "branch_index": 1}
                 )
             ),
@@ -52,12 +54,12 @@ async def test_list_entities_excludes_current_user_and_returns_all_others():
 
     result = await entities_router.list_entities(user_id="u1", app=app)
 
-    # Current user (u1) is excluded; all other members are returned.
-    identities = [(item["type"], item.get("user_id"), item.get("member_id")) for item in result]
+    # Current user (u1) is excluded; all other users are returned.
+    identities = [(item["type"], item.get("user_id")) for item in result]
     assert identities == [
-        ("human", "u2", None),
-        ("mycel_agent", None, "a-main"),
-        ("mycel_agent", None, "a-child"),
+        ("human", "u2"),
+        ("agent", "a-main"),
+        ("agent", "a-child"),
     ]
 
     # Human entry is keyed by social user identity, not a generic mixed id.
@@ -66,36 +68,38 @@ async def test_list_entities_excludes_current_user_and_returns_all_others():
     assert "id" not in human_item
     assert human_item["default_thread_id"] is None
 
-    # Agent entry is keyed by member template plus explicit default thread.
-    main_item = next(i for i in result if i.get("member_id") == "a-main")
+    # Agent entry is keyed by unified user identity plus explicit default thread.
+    main_item = next(i for i in result if i.get("user_id") == "a-main")
     assert "id" not in main_item
+    assert "member_id" not in main_item
     assert main_item["default_thread_id"] == "thread-main"
     assert main_item["is_default_thread"] is True
     assert main_item["branch_index"] == 0
 
     # Child agent: also returned (frontend decides whether to hide it).
-    child_item = next(i for i in result if i.get("member_id") == "a-child")
+    child_item = next(i for i in result if i.get("user_id") == "a-child")
     assert child_item["default_thread_id"] == "thread-child"
     assert child_item["is_default_thread"] is False
     assert child_item["branch_index"] == 1
 
 
 @pytest.mark.asyncio
-async def test_get_agent_thread_reads_main_thread_from_thread_repo():
+async def test_get_agent_thread_reads_main_thread_from_thread_repo_via_user_repo():
     now = 1_775_223_756.0
-    agent = MemberRow(
+    agent = UserRow(
         id="a-main",
-        name="Toad",
-        type=MemberType.MYCEL_AGENT,
+        display_name="Toad",
+        type=UserType.AGENT,
         owner_user_id="u2",
+        agent_config_id="cfg-a-main",
         created_at=now,
     )
     app = SimpleNamespace(
         state=SimpleNamespace(
-            member_repo=SimpleNamespace(get_by_id=lambda member_id: agent if member_id == "a-main" else None),
+            user_repo=SimpleNamespace(get_by_id=lambda user_id: agent if user_id == "a-main" else None),
             thread_repo=SimpleNamespace(
-                get_default_thread=lambda member_id: (
-                    {"id": "thread-main", "is_main": True, "branch_index": 0} if member_id == "a-main" else None
+                get_default_thread=lambda user_id: (
+                    {"id": "thread-main", "is_main": True, "branch_index": 0} if user_id == "a-main" else None
                 )
             ),
         )
@@ -103,38 +107,39 @@ async def test_get_agent_thread_reads_main_thread_from_thread_repo():
 
     result = await entities_router.get_agent_thread("a-main", current_user_id="u2", app=app)
 
-    assert result == {"member_id": "a-main", "default_thread_id": "thread-main"}
+    assert result == {"user_id": "a-main", "default_thread_id": "thread-main"}
 
 
-def test_get_member_or_404_returns_member():
+def test_get_user_or_404_returns_user():
     now = 1_775_223_756.0
-    agent = MemberRow(
+    agent = UserRow(
         id="a-main",
-        name="Toad",
-        type=MemberType.MYCEL_AGENT,
+        display_name="Toad",
+        type=UserType.AGENT,
         owner_user_id="u2",
+        agent_config_id="cfg-a-main",
         created_at=now,
     )
     app = SimpleNamespace(
         state=SimpleNamespace(
-            member_repo=SimpleNamespace(get_by_id=lambda member_id: agent if member_id == "a-main" else None),
+            user_repo=SimpleNamespace(get_by_id=lambda user_id: agent if user_id == "a-main" else None),
         )
     )
 
-    result = entities_router._get_member_or_404(app, "a-main")
+    result = entities_router._get_user_or_404(app, "a-main")
 
     assert result is agent
 
 
-def test_get_member_or_404_raises_for_missing_member():
+def test_get_user_or_404_raises_for_missing_user():
     app = SimpleNamespace(
         state=SimpleNamespace(
-            member_repo=SimpleNamespace(get_by_id=lambda _member_id: None),
+            user_repo=SimpleNamespace(get_by_id=lambda _user_id: None),
         )
     )
 
     with pytest.raises(HTTPException) as exc_info:
-        entities_router._get_member_or_404(app, "missing")
+        entities_router._get_user_or_404(app, "missing")
 
     assert exc_info.value.status_code == 404
-    assert exc_info.value.detail == "Member not found"
+    assert exc_info.value.detail == "User not found"
