@@ -85,16 +85,20 @@ class ChatToolService:
     def __init__(
         self,
         registry: ToolRegistry,
-        user_id: str,
         owner_id: str,
         *,
+        chat_identity_id: str | None = None,
+        user_id: str | None = None,
         messaging_service: Any = None,  # MessagingService (new)
         chat_member_repo: Any = None,  # SupabaseChatMemberRepo
         messages_repo: Any = None,  # SupabaseMessagesRepo
         member_repo: Any = None,
         relationship_repo: Any = None,  # for directory privacy filter
     ) -> None:
-        self._user_id = user_id
+        identity_id = chat_identity_id or user_id
+        if not identity_id:
+            raise ValueError("ChatToolService requires chat_identity_id or legacy user_id")
+        self._chat_identity_id: str = identity_id
         self._owner_id = owner_id
         self._messaging = messaging_service
         self._chat_members = chat_member_repo
@@ -127,7 +131,7 @@ class ChatToolService:
             limit = parsed["limit"]
             skip_last = parsed["skip_last"]
             fetch_count = limit + skip_last
-            msgs = self._messages.list_by_chat(chat_id, limit=fetch_count, viewer_id=self._user_id)
+            msgs = self._messages.list_by_chat(chat_id, limit=fetch_count, viewer_id=self._chat_identity_id)
             if skip_last > 0:
                 msgs = msgs[: len(msgs) - skip_last] if len(msgs) > skip_last else []
             return msgs
@@ -137,7 +141,7 @@ class ChatToolService:
             return self._messages.list_by_time_range(chat_id, after=after_iso, before=before_iso)
 
     def _register_chats(self, registry: ToolRegistry) -> None:
-        eid = self._user_id
+        eid = self._chat_identity_id
 
         def handle(unread_only: bool = False, limit: int = 20) -> str:
             chats = self._messaging.list_chats_for_user(eid)
@@ -188,7 +192,7 @@ class ChatToolService:
         )
 
     def _register_chat_read(self, registry: ToolRegistry) -> None:
-        eid = self._user_id
+        eid = self._chat_identity_id
 
         def handle(user_id: str | None = None, chat_id: str | None = None, range: str | None = None) -> str:
             if chat_id:
@@ -261,7 +265,7 @@ class ChatToolService:
         )
 
     def _register_chat_send(self, registry: ToolRegistry) -> None:
-        eid = self._user_id
+        eid = self._chat_identity_id
 
         def handle(
             content: str,
@@ -341,7 +345,7 @@ class ChatToolService:
         )
 
     def _register_chat_search(self, registry: ToolRegistry) -> None:
-        eid = self._user_id
+        eid = self._chat_identity_id
 
         def handle(query: str, user_id: str | None = None) -> str:
             chat_id = None
@@ -382,7 +386,7 @@ class ChatToolService:
         )
 
     def _register_directory(self, registry: ToolRegistry) -> None:
-        eid = self._user_id
+        eid = self._chat_identity_id
 
         def handle(search: str | None = None, type: str | None = None) -> str:
             all_entities = self._member_repo.list_all()

@@ -120,3 +120,27 @@ def test_chat_tool_send_schema_marks_user_id_name_as_legacy() -> None:
 
     assert "legacy" in chat_send_schema["parameters"]["properties"]["user_id"]["description"].lower()
     assert "chat_send(user_id" in directory_schema["description"]
+
+
+def test_chat_tool_service_accepts_chat_identity_id_without_legacy_user_id() -> None:
+    registry = ToolRegistry()
+    ChatToolService(
+        registry=registry,
+        chat_identity_id="agent-user-1",
+        owner_id="owner-user-1",
+        member_repo=SimpleNamespace(
+            list_all=lambda: [
+                SimpleNamespace(id="agent-user-2", name="Morel", type="mycel_agent", owner_user_id="owner-user-1"),
+            ],
+            get_by_id=lambda member_id: (
+                SimpleNamespace(id=member_id, name="Owner", owner_user_id=None) if member_id == "owner-user-1" else None
+            ),
+        ),
+        relationship_repo=None,
+    )
+
+    directory = registry.get("directory")
+    assert directory is not None
+    result = directory.handler()
+    assert isinstance(result, str)
+    assert "id=agent-user-2" in result

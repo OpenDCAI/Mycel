@@ -725,6 +725,28 @@ def test_leon_agent_chat_identity_prompt_uses_honest_legacy_wording():
     assert "- Your user_id:" not in prompt
 
 
+def test_leon_agent_chat_identity_prompt_accepts_chat_identity_id_without_legacy_user_id():
+    from core.runtime.agent import LeonAgent
+
+    agent = object.__new__(LeonAgent)
+    agent._build_system_prompt = lambda: "BASE"
+    cast(Any, agent).config = SimpleNamespace(system_prompt=None)
+    agent._chat_repos = {
+        "chat_identity_id": "agent-member-2",
+        "owner_id": "human-user-2",
+        "member_repo": SimpleNamespace(
+            get_by_id=lambda uid: (
+                SimpleNamespace(id=uid, name="Morel") if uid == "agent-member-2" else SimpleNamespace(id=uid, name="Owner 2")
+            )
+        ),
+    }
+
+    prompt = LeonAgent._compose_system_prompt(agent)
+
+    assert "- Your chat identity id: agent-member-2" in prompt
+    assert "- Your owner: Owner 2 (human user_id: human-user-2)" in prompt
+
+
 def test_build_rules_section_includes_function_result_clearing_guidance_when_spill_buffer_enabled():
     from core.runtime.prompts import build_rules_section
 

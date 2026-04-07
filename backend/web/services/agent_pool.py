@@ -133,6 +133,7 @@ async def get_or_create_agent(app_obj: FastAPI, sandbox_type: str, thread_id: st
             if agent_member:
                 owner_id = agent_member.owner_user_id or ""
                 chat_repos = {
+                    "chat_identity_id": agent_member.id,
                     "user_id": agent_member.id,
                     "owner_id": owner_id,
                     "member_repo": member_repo,
