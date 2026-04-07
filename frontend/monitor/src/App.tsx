@@ -3716,6 +3716,24 @@ function EvaluationPage() {
     composerPanelRef.current?.focus();
   }, [composerOpen]);
 
+  React.useEffect(() => {
+    if (composerOpen) return;
+    const trigger = document.querySelector<HTMLElement>(
+      '[data-testid="evaluation-composer-trigger"]',
+    );
+    trigger?.focus();
+  }, [composerOpen]);
+
+  React.useEffect(() => {
+    if (!composerOpen) return;
+    // @@@composer-escape-close - keep the config layer aligned with the guide modal so keyboard users can dismiss it without reaching for the mouse.
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") closeComposer();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [composerOpen, location.pathname, location.search]);
+
   // @@@evaluation-query-close - clear the query flag on close so the shell CTA can reopen the composer on the next click.
   function closeComposer() {
     const query = new URLSearchParams(location.search);
@@ -4613,6 +4631,14 @@ function OperatorGuideModal({
     panelRef.current?.focus();
   }, [open]);
 
+  React.useEffect(() => {
+    if (open) return;
+    const trigger = document.querySelector<HTMLElement>(
+      '[data-testid="operator-guide-trigger"]',
+    );
+    trigger?.focus();
+  }, [open]);
+
   if (!open) return null;
 
   return (
@@ -4739,7 +4765,11 @@ function Layout({ children }: { children: React.ReactNode }) {
           </div>
           <div className="console-header-actions">
             {showEvalComposeAction ? (
-              <Link className="primary-btn" to="/evaluation?new=1">
+              <Link
+                className="primary-btn"
+                to="/evaluation?new=1"
+                data-testid="evaluation-composer-trigger"
+              >
                 Build Eval
               </Link>
             ) : null}
