@@ -91,6 +91,78 @@ async def test_approve_relationship_accepts_owned_agent_actor_user_id() -> None:
 
 
 @pytest.mark.asyncio
+async def test_reject_relationship_accepts_owned_agent_actor_user_id() -> None:
+    seen: list[tuple[str, str]] = []
+    existing = {
+        "id": "hire_visit:agent-user-1:requester-user-1",
+        "user_low": "agent-user-1",
+        "user_high": "requester-user-1",
+        "state": "pending",
+        "initiator_user_id": "requester-user-1",
+    }
+    app = SimpleNamespace(
+        state=SimpleNamespace(
+            relationship_service=SimpleNamespace(
+                get_by_id=lambda relationship_id: existing if relationship_id == existing["id"] else None,
+                reject=lambda actor_id, requester_id: (
+                    seen.append((actor_id, requester_id)) or _row(state="none", initiator_user_id=requester_id)
+                ),
+            ),
+            user_repo=SimpleNamespace(
+                get_by_id=lambda user_id: SimpleNamespace(id=user_id, owner_user_id="owner-user-1") if user_id == "agent-user-1" else None
+            ),
+        )
+    )
+
+    result = await relationship_router.reject_relationship(
+        existing["id"],
+        relationship_router.RelationshipActionBody(actor_user_id="agent-user-1"),
+        user_id="owner-user-1",
+        app=app,
+    )
+
+    assert seen == [("agent-user-1", "requester-user-1")]
+    assert result["other_user_id"] == "requester-user-1"
+    assert result["state"] == "none"
+
+
+@pytest.mark.asyncio
+async def test_downgrade_relationship_accepts_owned_agent_actor_user_id() -> None:
+    seen: list[tuple[str, str]] = []
+    existing = {
+        "id": "hire_visit:agent-user-1:requester-user-1",
+        "user_low": "agent-user-1",
+        "user_high": "requester-user-1",
+        "state": "hire",
+        "initiator_user_id": "requester-user-1",
+    }
+    app = SimpleNamespace(
+        state=SimpleNamespace(
+            relationship_service=SimpleNamespace(
+                get_by_id=lambda relationship_id: existing if relationship_id == existing["id"] else None,
+                downgrade=lambda actor_id, other_id: (
+                    seen.append((actor_id, other_id)) or _row(state="visit", initiator_user_id="requester-user-1")
+                ),
+            ),
+            user_repo=SimpleNamespace(
+                get_by_id=lambda user_id: SimpleNamespace(id=user_id, owner_user_id="owner-user-1") if user_id == "agent-user-1" else None
+            ),
+        )
+    )
+
+    result = await relationship_router.downgrade_relationship(
+        existing["id"],
+        relationship_router.RelationshipActionBody(actor_user_id="agent-user-1"),
+        user_id="owner-user-1",
+        app=app,
+    )
+
+    assert seen == [("agent-user-1", "requester-user-1")]
+    assert result["other_user_id"] == "requester-user-1"
+    assert result["state"] == "visit"
+
+
+@pytest.mark.asyncio
 async def test_request_relationship_rejects_unowned_actor_user_id() -> None:
     app = SimpleNamespace(
         state=SimpleNamespace(
