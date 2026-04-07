@@ -315,7 +315,11 @@ function DashboardPage() {
                 value={workload.running_sessions || 0}
                 note={`${workload.evaluations_running || 0} eval jobs`}
                 tone={
-                  (workload.running_sessions || 0) > 0 ? "default" : "warning"
+                  (workload.running_sessions || 0) > 0
+                    ? "default"
+                    : (workload.evaluations_running || 0) > 0
+                      ? "warning"
+                      : "default"
                 }
               />
             </div>
@@ -3668,6 +3672,7 @@ function EvaluationPage() {
       );
       setEvaluations(Array.isArray(payload?.items) ? payload.items : []);
       setEvalPagination(payload?.pagination || null);
+      setRunError(null);
     } catch (e: any) {
       setRunError(e?.message || String(e));
     } finally {
