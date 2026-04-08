@@ -62,37 +62,31 @@ def test_get_accessible_chat_or_404_raises_403_for_non_member():
     assert exc_info.value.detail == "Not a participant of this chat"
 
 
-def test_resolve_display_user_delegates_to_messaging_local_resolver(monkeypatch: pytest.MonkeyPatch) -> None:
-    seen: dict[str, object] = {}
+def test_resolve_display_user_delegates_to_messaging_service() -> None:
+    seen: list[str] = []
     expected = SimpleNamespace(id="agent-user-1", display_name="Toad")
-
-    def fake_resolver(*, user_repo, thread_repo, social_user_id: str):
-        seen.update(
-            {
-                "user_repo": user_repo,
-                "thread_repo": thread_repo,
-                "social_user_id": social_user_id,
-            }
-        )
-        return expected
-
-    monkeypatch.setattr(messaging_router, "resolve_messaging_display_user", fake_resolver)
-
     app = SimpleNamespace(
         state=SimpleNamespace(
-            user_repo=SimpleNamespace(name="user-repo"),
-            thread_repo=SimpleNamespace(name="thread-repo"),
+            messaging_service=SimpleNamespace(
+                resolve_display_user=lambda social_user_id: (
+                    seen.append(social_user_id) or expected
+                )
+            ),
+            user_repo=SimpleNamespace(
+                get_by_id=lambda _uid: (_ for _ in ()).throw(AssertionError("router should not bypass service-owned display resolution"))
+            ),
+            thread_repo=SimpleNamespace(
+                get_by_user_id=lambda _uid: (_ for _ in ()).throw(
+                    AssertionError("router should not bypass service-owned display resolution")
+                )
+            ),
         )
     )
 
     result = messaging_router._resolve_display_user(app, "thread-user-1")
 
     assert result is expected
-    assert seen == {
-        "user_repo": app.state.user_repo,
-        "thread_repo": app.state.thread_repo,
-        "social_user_id": "thread-user-1",
-    }
+    assert seen == ["thread-user-1"]
 
 
 @pytest.mark.asyncio
@@ -235,18 +229,19 @@ async def test_list_messages_resolves_thread_user_sender_name_via_thread_repo():
                         "created_at": "2026-04-07T00:00:00Z",
                     }
                 ],
+                resolve_display_user=lambda uid: (
+                    SimpleNamespace(id=uid, display_name="Toad", type="agent", avatar=None)
+                    if uid == "thread-user-1"
+                    else None
+                ),
             ),
             user_repo=SimpleNamespace(
-                get_by_id=lambda uid: (
-                    None
-                    if uid == "thread-user-1"
-                    else SimpleNamespace(id=uid, display_name="Toad", type="agent", avatar=None)
-                    if uid == "agent-user-1"
-                    else None
-                )
+                get_by_id=lambda _uid: (_ for _ in ()).throw(AssertionError("router should not bypass service-owned display resolution"))
             ),
             thread_repo=SimpleNamespace(
-                get_by_user_id=lambda uid: {"id": "thread-1", "agent_user_id": "agent-user-1"} if uid == "thread-user-1" else None
+                get_by_user_id=lambda _uid: (_ for _ in ()).throw(
+                    AssertionError("router should not bypass service-owned display resolution")
+                )
             ),
         )
     )
@@ -275,18 +270,19 @@ async def test_send_message_accepts_owned_thread_user_sender_id_via_thread_repo(
     app = SimpleNamespace(
         state=SimpleNamespace(
             user_repo=SimpleNamespace(
-                get_by_id=lambda uid: (
-                    None
-                    if uid == "thread-user-1"
-                    else SimpleNamespace(id=uid, display_name="Toad", type="agent", avatar=None, owner_user_id="owner-user-1")
-                    if uid == "agent-user-1"
-                    else None
-                )
+                get_by_id=lambda _uid: (_ for _ in ()).throw(AssertionError("router should not bypass service-owned display resolution"))
             ),
             thread_repo=SimpleNamespace(
-                get_by_user_id=lambda uid: {"id": "thread-1", "agent_user_id": "agent-user-1"} if uid == "thread-user-1" else None
+                get_by_user_id=lambda _uid: (_ for _ in ()).throw(
+                    AssertionError("router should not bypass service-owned display resolution")
+                )
             ),
             messaging_service=SimpleNamespace(
+                resolve_display_user=lambda uid: (
+                    SimpleNamespace(id="agent-user-1", display_name="Toad", type="agent", avatar=None, owner_user_id="owner-user-1")
+                    if uid == "thread-user-1"
+                    else None
+                ),
                 send=lambda chat_id, sender_id, content, **_kwargs: (
                     seen.append((chat_id, sender_id, content))
                     or {
