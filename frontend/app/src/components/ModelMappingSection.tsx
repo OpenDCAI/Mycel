@@ -21,6 +21,11 @@ interface ModelMappingSectionProps {
   onUpdate: (mapping: Record<string, string>) => void;
 }
 
+function isActiveSettingsRoute(): boolean {
+  const path = window.location.pathname.replace(/\/+$/, "");
+  return path === "/settings";
+}
+
 export default function ModelMappingSection({
   virtualModels,
   availableModels,
@@ -45,6 +50,10 @@ export default function ModelMappingSection({
       setSuccessMessage(true);
       setTimeout(() => setSuccessMessage(false), FEEDBACK_NORMAL);
     } catch (error) {
+      // @@@mapping-route-teardown - mapping saves can resolve after navigation
+      // already left /settings. Only log while the settings route is still
+      // active; otherwise this is stale UI noise.
+      if (!isActiveSettingsRoute()) return;
       console.error("Failed to save mapping:", error);
     } finally {
       setSaving(false);
