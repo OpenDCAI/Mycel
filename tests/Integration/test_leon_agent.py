@@ -854,7 +854,7 @@ def test_leon_agent_chat_identity_prompt_uses_honest_legacy_wording():
     assert "- Your user_id:" not in prompt
 
 
-def test_leon_agent_chat_identity_prompt_does_not_fallback_to_legacy_user_id() -> None:
+def test_leon_agent_chat_identity_prompt_rejects_legacy_user_id_only_runtime_shape() -> None:
     from core.runtime.agent import LeonAgent
 
     agent = object.__new__(LeonAgent)
@@ -866,10 +866,8 @@ def test_leon_agent_chat_identity_prompt_does_not_fallback_to_legacy_user_id() -
         "user_repo": SimpleNamespace(get_by_id=lambda uid: SimpleNamespace(id=uid, display_name=f"resolved:{uid}")),
     }
 
-    prompt = LeonAgent._compose_system_prompt(agent)
-
-    assert "**Chat Identity:**" not in prompt
-    assert "agent-member-legacy" not in prompt
+    with pytest.raises(RuntimeError, match="chat_identity_id"):
+        LeonAgent._compose_system_prompt(agent)
 
 
 def test_leon_agent_chat_identity_prompt_accepts_chat_identity_id_without_legacy_user_id():
@@ -994,6 +992,68 @@ def test_leon_agent_chat_tool_wiring_does_not_pass_dead_repo_dependencies(monkey
     assert captured["owner_id"] == "human-user-9"
     assert "chat_member_repo" not in captured
     assert "messages_repo" not in captured
+
+
+def test_leon_agent_chat_tool_wiring_rejects_legacy_user_id_only_runtime_shape(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
+    from core.runtime.agent import LeonAgent
+    from core.runtime.registry import ToolRegistry
+
+    class _NoopService:
+        def __init__(self, *args, **kwargs) -> None:
+            return None
+
+    class _NoopRegistry:
+        def __init__(self, *args, **kwargs) -> None:
+            return None
+
+    class _FakeChatToolService:
+        def __init__(self, *args, **kwargs) -> None:
+            raise AssertionError("chat tool should not initialize from legacy-only runtime shape")
+
+    monkeypatch.setattr("core.runtime.agent.TaskService", _NoopService)
+    monkeypatch.setattr("core.runtime.agent.CronToolService", _NoopService)
+    monkeypatch.setattr("core.runtime.agent.McpResourceToolService", _NoopService)
+    monkeypatch.setattr("core.runtime.agent.ToolSearchService", _NoopService)
+    monkeypatch.setattr("core.runtime.agent.AgentRegistry", _NoopRegistry)
+    monkeypatch.setattr("core.runtime.agent.AgentService", _NoopService)
+    monkeypatch.setitem(sys.modules, "backend.taskboard.service", SimpleNamespace(TaskBoardService=_NoopService))
+    monkeypatch.setattr("messaging.tools.chat_tool_service.ChatToolService", _FakeChatToolService)
+
+    agent = object.__new__(LeonAgent)
+    agent._sandbox = SimpleNamespace(name="local", fs=lambda: None, shell=lambda: None)
+    agent._tool_registry = ToolRegistry()
+    agent.workspace_root = str(tmp_path)
+    agent.model_name = "test-model"
+    agent._thread_repo = SimpleNamespace()
+    agent._user_repo = SimpleNamespace()
+    agent.queue_manager = SimpleNamespace()
+    agent._web_app = None
+    agent.allowed_file_extensions = []
+    agent.extra_allowed_paths = []
+    agent.enable_audit_log = False
+    agent.block_dangerous_commands = False
+    agent.block_network_commands = False
+    agent.verbose = False
+    agent._get_mcp_server_configs = lambda: {}
+    agent._chat_repos = {
+        "user_id": "thread-user-legacy",
+        "owner_id": "human-user-legacy",
+        "messaging_service": SimpleNamespace(),
+        "user_repo": SimpleNamespace(),
+        "relationship_repo": SimpleNamespace(),
+    }
+    cast(Any, agent).config = SimpleNamespace(
+        tools=SimpleNamespace(
+            filesystem=SimpleNamespace(enabled=False),
+            search=SimpleNamespace(enabled=False),
+            web=SimpleNamespace(enabled=False),
+            command=SimpleNamespace(enabled=False),
+        ),
+        skills=SimpleNamespace(enabled=False, paths=[], skills={}),
+    )
+
+    with pytest.raises(RuntimeError, match="chat_identity_id"):
+        LeonAgent._init_services(agent)
 
 
 def test_build_rules_section_includes_function_result_clearing_guidance_when_spill_buffer_enabled():
