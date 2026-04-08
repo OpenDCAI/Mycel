@@ -17,7 +17,7 @@ const statusConfig = {
 
 type SortKey = "name" | "skills" | "status" | null;
 
-// @@@avatar-upload — click-to-upload avatar overlay on member cards
+// @@@avatar-upload — click-to-upload avatar overlay on agent cards
 function AvatarUploadTrigger({ memberId, name, hasAvatar }: { memberId: string; name: string; hasAvatar: boolean }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
@@ -85,12 +85,12 @@ export default function MembersPage() {
       {/* Header */}
       <div className="h-14 flex items-center justify-between px-4 md:px-6 border-b border-border shrink-0">
         <div className="flex items-center gap-3">
-          <h2 className="text-sm font-semibold text-foreground">成员</h2>
+          <h2 className="text-sm font-semibold text-foreground">Agent</h2>
           <span className="text-xs text-muted-foreground font-mono">{agentList.length}</span>
         </div>
         <button onClick={() => setCreateOpen(true)} className="flex items-center gap-2 px-3 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition-opacity duration-fast">
           <Plus className="w-4 h-4" />
-          <span className="hidden md:inline">创建成员</span>
+          <span className="hidden md:inline">创建 Agent</span>
         </button>
       </div>
 
@@ -98,7 +98,7 @@ export default function MembersPage() {
       <div className={`px-4 md:px-6 py-3 border-b border-border flex items-center gap-3 ${isMobile ? "overflow-x-auto" : "gap-4"}`}>
         <div className={`relative ${isMobile ? "min-w-[150px] flex-1" : "max-w-md flex-1"}`}>
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
-          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="搜索成员..." className="w-full pl-9 pr-3 py-2 rounded-lg bg-card border border-border text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary/40 transition-colors duration-fast" />
+          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="搜索 Agent..." className="w-full pl-9 pr-3 py-2 rounded-lg bg-card border border-border text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary/40 transition-colors duration-fast" />
         </div>
 
         <div className="flex items-center gap-1.5 shrink-0">
@@ -141,20 +141,20 @@ export default function MembersPage() {
           </div>
         ) : filtered.length === 0 ? (
           agentList.length === 0 ? (
-            /* Truly empty — no members at all */
+            /* Truly empty — no agents at all */
             <div className="flex flex-col items-center justify-center py-24">
               <div className="w-14 h-14 rounded-2xl bg-primary/10 flex items-center justify-center mb-4">
                 <Bot className="w-7 h-7 text-primary" />
               </div>
-              <p className="text-sm font-semibold text-foreground mb-1">还没有 AI 成员</p>
+              <p className="text-sm font-semibold text-foreground mb-1">还没有 AI Agent</p>
               <p className="text-xs text-muted-foreground mb-5 max-w-[220px] text-center leading-relaxed">
-                创建你的第一个 AI 成员，赋予它专属技能与工具
+                创建你的第一个 AI Agent，赋予它专属技能与工具
               </p>
               <button
                 onClick={() => setCreateOpen(true)}
                 className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-xs font-medium hover:opacity-90 transition-opacity duration-fast"
               >
-                <Plus className="w-3.5 h-3.5" />创建成员
+                <Plus className="w-3.5 h-3.5" />创建 Agent
               </button>
             </div>
           ) : (
@@ -163,7 +163,7 @@ export default function MembersPage() {
               <div className="w-12 h-12 rounded-xl bg-muted flex items-center justify-center mb-4">
                 <SearchX className="w-6 h-6 text-muted-foreground" />
               </div>
-              <p className="text-sm font-medium text-foreground mb-1">未找到匹配成员</p>
+              <p className="text-sm font-medium text-foreground mb-1">未找到匹配 Agent</p>
               <p className="text-xs text-muted-foreground">尝试调整搜索词或筛选条件</p>
             </div>
           )
@@ -204,7 +204,7 @@ export default function MembersPage() {
                 } catch { toast.error("删除失败"); }
               };
               return (
-                <div key={member.id} onClick={handleCardClick} className="surface-interactive p-4 cursor-pointer group hover:-translate-y-0.5 hover:shadow-md" role="button" aria-label={`查看成员 ${member.name}`} tabIndex={0} onKeyDown={(e) => e.key === "Enter" && handleCardClick()}>
+                <div key={member.id} onClick={handleCardClick} className="surface-interactive p-4 cursor-pointer group hover:-translate-y-0.5 hover:shadow-md" role="button" aria-label={`查看 Agent ${member.name}`} tabIndex={0} onKeyDown={(e) => e.key === "Enter" && handleCardClick()}>
                   <div className="flex items-start justify-between mb-3">
                     <AvatarUploadTrigger memberId={member.id} name={member.name} hasAvatar={!!member.avatar_url} />
                     <div className="flex items-center gap-1.5">

@@ -1,0 +1,143 @@
+// @vitest-environment jsdom
+
+import { cleanup, render, screen } from "@testing-library/react";
+import type { ReactNode } from "react";
+import { MemoryRouter } from "react-router-dom";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+import CreateMemberDialog from "./CreateMemberDialog";
+import NewChatDialog from "./NewChatDialog";
+import MembersPage from "../pages/MembersPage";
+import { useAppStore } from "../store/app-store";
+
+vi.mock("zustand/middleware", async () => {
+  const actual = await vi.importActual<typeof import("zustand/middleware")>("zustand/middleware");
+  return {
+    ...actual,
+    persist: ((initializer: unknown) => initializer) as typeof actual.persist,
+  };
+});
+
+vi.mock("./MemberAvatar", () => ({
+  default: ({ name }: { name: string }) => <div>{name}</div>,
+}));
+
+vi.mock("@/api/client", () => ({
+  uploadUserAvatar: vi.fn(),
+}));
+
+vi.mock("@/hooks/use-mobile", () => ({
+  useIsMobile: () => false,
+}));
+
+vi.mock("sonner", () => ({
+  toast: {
+    success: vi.fn(),
+    error: vi.fn(),
+  },
+}));
+
+vi.mock("@/components/ui/tooltip", () => ({
+  Tooltip: ({ children }: { children: ReactNode }) => <>{children}</>,
+  TooltipTrigger: ({ children }: { children: ReactNode }) => <>{children}</>,
+  TooltipContent: ({ children }: { children: ReactNode }) => <>{children}</>,
+}));
+
+vi.mock("@/components/ui/dialog", () => ({
+  Dialog: ({ children }: { children: ReactNode }) => <>{children}</>,
+  DialogContent: ({ children }: { children: ReactNode }) => <div>{children}</div>,
+  DialogHeader: ({ children }: { children: ReactNode }) => <div>{children}</div>,
+  DialogTitle: ({ children, className }: { children: ReactNode; className?: string }) => <h1 className={className}>{children}</h1>,
+  DialogDescription: ({ children, className }: { children: ReactNode; className?: string }) => <p className={className}>{children}</p>,
+  DialogFooter: ({ children }: { children: ReactNode }) => <div>{children}</div>,
+}));
+
+describe("frontend agent wording contract", () => {
+  afterEach(() => {
+    cleanup();
+  });
+
+  beforeEach(() => {
+    useAppStore.setState({
+      agentList: [],
+      taskList: [],
+      cronJobs: [],
+      librarySkills: [],
+      libraryMcps: [],
+      libraryAgents: [],
+      libraryRecipes: [],
+      userProfile: { name: "User", initials: "U", email: "" },
+      loaded: true,
+      error: null,
+      loadAll: vi.fn(),
+      retry: vi.fn(),
+      resetSessionData: vi.fn(),
+      fetchAgents: vi.fn(),
+      addAgent: vi.fn(),
+      updateAgent: vi.fn(),
+      updateAgentConfig: vi.fn(),
+      publishAgent: vi.fn(),
+      deleteAgent: vi.fn(),
+      getAgentById: vi.fn(),
+      fetchTasks: vi.fn(),
+      addTask: vi.fn(),
+      updateTask: vi.fn(),
+      deleteTask: vi.fn(),
+      bulkUpdateTaskStatus: vi.fn(),
+      bulkDeleteTasks: vi.fn(),
+      fetchCronJobs: vi.fn(),
+      addCronJob: vi.fn(),
+      updateCronJob: vi.fn(),
+      deleteCronJob: vi.fn(),
+      triggerCronJob: vi.fn(),
+      fetchLibrary: vi.fn(),
+      fetchLibraryNames: vi.fn(),
+      addResource: vi.fn(),
+      updateResource: vi.fn(),
+      deleteResource: vi.fn(),
+      fetchResourceContent: vi.fn(),
+      updateResourceContent: vi.fn(),
+      fetchProfile: vi.fn(),
+      updateProfile: vi.fn(),
+      getAgentNames: vi.fn(),
+      getResourceUsedBy: vi.fn(),
+    });
+  });
+
+  it("CreateMemberDialog presents agent wording", () => {
+    render(
+      <MemoryRouter>
+        <CreateMemberDialog open onOpenChange={() => undefined} />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByText("创建新 Agent")).toBeTruthy();
+    expect(screen.getByText("定义一个新的 AI Agent")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "创建并配置 Agent" })).toBeTruthy();
+  });
+
+  it("NewChatDialog presents agent wording", () => {
+    render(
+      <MemoryRouter>
+        <NewChatDialog open onOpenChange={() => undefined} />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByText("打开 Agent 默认线程")).toBeTruthy();
+    expect(screen.getByPlaceholderText("搜索 Agent...")).toBeTruthy();
+    expect(screen.getByText("暂无 Agent")).toBeTruthy();
+  });
+
+  it("MembersPage presents agent wording", () => {
+    render(
+      <MemoryRouter>
+        <MembersPage />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByText("Agent")).toBeTruthy();
+    expect(screen.getAllByRole("button", { name: /创建 Agent/ }).length).toBeGreaterThan(0);
+    expect(screen.getByPlaceholderText("搜索 Agent...")).toBeTruthy();
+    expect(screen.getByText("还没有 AI Agent")).toBeTruthy();
+  });
+});
