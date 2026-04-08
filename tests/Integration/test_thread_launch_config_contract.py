@@ -4,7 +4,10 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
 import pytest
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
 
+from backend.web.core.dependencies import get_app, get_current_user_id
 from backend.web.models.requests import CreateThreadRequest
 from backend.web.routers import threads as threads_router
 from backend.web.services import thread_launch_config_service
@@ -87,6 +90,14 @@ def _make_threads_app():
             thread_cwd={},
         )
     )
+
+
+def _route_test_app(app_state: object) -> FastAPI:
+    test_app = FastAPI()
+    test_app.include_router(threads_router.router)
+    test_app.dependency_overrides[get_current_user_id] = lambda: "owner-1"
+    test_app.dependency_overrides[get_app] = lambda: app_state
+    return test_app
 
 
 def _require_thread_result(result: dict[str, object] | threads_router.JSONResponse) -> dict[str, object]:
@@ -460,6 +471,79 @@ async def test_save_default_thread_config_uses_strict_agent_gate(monkeypatch: py
     assert excinfo.value.status_code == 403
     assert excinfo.value.detail == "Not authorized"
     assert calls == [(app, "member-2", "owner-1")]
+
+
+def test_get_default_thread_config_route_rejects_unowned_agent() -> None:
+    app = _make_threads_app()
+
+    with TestClient(_route_test_app(app)) as client:
+        response = client.get("/api/threads/default-config", params={"agent_user_id": "member-2"})
+
+    assert response.status_code == 403
+    assert response.json() == {"detail": "Not authorized"}
+
+
+def test_get_default_thread_config_route_uses_owner_and_agent_user_contract(monkeypatch: pytest.MonkeyPatch) -> None:
+    app = _make_threads_app()
+    calls: list[tuple[object, str, str]] = []
+    monkeypatch.setattr(
+        threads_router,
+        "resolve_default_config",
+        lambda app_obj, owner_user_id, agent_user_id: (
+            calls.append((app_obj, owner_user_id, agent_user_id))
+            or {"source": "last_successful", "config": {"create_mode": "existing", "provider_config": "local"}}
+        ),
+    )
+
+    with TestClient(_route_test_app(app)) as client:
+        response = client.get("/api/threads/default-config", params={"agent_user_id": "member-1"})
+
+    assert response.status_code == 200
+    assert response.json() == {"source": "last_successful", "config": {"create_mode": "existing", "provider_config": "local"}}
+    assert calls == [(app, "owner-1", "member-1")]
+
+
+def test_save_default_thread_config_route_persists_confirmed_agent_user_payload(monkeypatch: pytest.MonkeyPatch) -> None:
+    app = _make_threads_app()
+    calls: list[tuple[object, str, str, dict[str, object]]] = []
+    monkeypatch.setattr(
+        threads_router,
+        "save_last_confirmed_config",
+        lambda app_obj, owner_user_id, agent_user_id, payload: calls.append((app_obj, owner_user_id, agent_user_id, payload)),
+    )
+
+    with TestClient(_route_test_app(app)) as client:
+        response = client.post(
+            "/api/threads/default-config",
+            json={
+                "agent_user_id": "member-1",
+                "create_mode": "new",
+                "provider_config": "local",
+                "recipe": None,
+                "lease_id": None,
+                "model": "gpt-5.4-mini",
+                "workspace": "/tmp/demo",
+            },
+        )
+
+    assert response.status_code == 200
+    assert response.json() == {"ok": True}
+    assert calls == [
+        (
+            app,
+            "owner-1",
+            "member-1",
+            {
+                "agent_user_id": "member-1",
+                "create_mode": "new",
+                "provider_config": "local",
+                "recipe": None,
+                "lease_id": None,
+                "model": "gpt-5.4-mini",
+                "workspace": "/tmp/demo",
+            },
+        )
+    ]
 
 
 @pytest.mark.asyncio
