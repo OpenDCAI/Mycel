@@ -309,6 +309,22 @@ export default function ResourcesPage() {
       provider.telemetry.memory.freshness === "stale" &&
       provider.telemetry.disk.freshness === "stale",
   ).length;
+  const quotaOnlyRunningCount = providers.reduce(
+    (total, provider) =>
+      total +
+      provider.sessions.filter((session) => {
+        const metrics = session.metrics;
+        return (
+          session.status === "running" &&
+          metrics != null &&
+          metrics.memory == null &&
+          metrics.disk == null &&
+          (metrics.memoryLimit != null || metrics.diskLimit != null) &&
+          Boolean(metrics.memoryNote || metrics.diskNote || metrics.probeError)
+        );
+      }).length,
+    0,
+  );
   const refreshedAt = summary?.last_refreshed_at
     ? new Date(summary.last_refreshed_at).toLocaleTimeString()
     : "--:--:--";
@@ -365,6 +381,9 @@ export default function ResourcesPage() {
           )}
           {readyWithoutLiveTelemetryCount > 0 && (
             <div className="resources-summary-pill">{readyWithoutLiveTelemetryCount} 遥测未知</div>
+          )}
+          {quotaOnlyRunningCount > 0 && (
+            <div className="resources-summary-pill">{quotaOnlyRunningCount} 仅配额</div>
           )}
           <div className="resources-summary-pill">
             <span
