@@ -352,9 +352,7 @@ def test_destroy_thread_resources_hard_deletes_thread_chat_sessions_before_termi
     lease = _Lease()
     manager._get_thread_lease = lambda _thread_id: lease
     manager._get_lease = lambda _lease_id: lease
-    manager._resolve_volume_entry = lambda *_args, **_kwargs: (_ for _ in ()).throw(
-        AssertionError("volume lookup should not happen")
-    )
+    manager._resolve_volume_entry = lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("volume lookup should not happen"))
     manager.terminal_store = SimpleNamespace(
         list_by_thread=lambda _thread_id: [{"terminal_id": "term-1", "lease_id": "lease-1", "thread_id": "thread-1"}],
         delete=lambda terminal_id: (delete_order.append(f"terminal:{terminal_id}"), deleted_terminals.append(terminal_id)),
