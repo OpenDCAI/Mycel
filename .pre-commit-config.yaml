@@ -5,3 +5,19 @@ repos:
       - id: ruff
         args: [--fix]
       - id: ruff-format
+  - repo: local
+    hooks:
+      - id: eslint
+        name: eslint
+        entry: bash -c 'npm run lint --prefix frontend/app || true'
+        language: system
+        files: ^frontend/app/.*\.(ts|tsx|js|jsx)$
+        pass_filenames: false
+        verbose: true
+      - id: tsc
+        name: tsc
+        entry: bash -c 'cd frontend/app && npx tsc -b --noEmit || true'
+        language: system
+        files: ^frontend/app/.*\.(ts|tsx)$
+        pass_filenames: false
+        verbose: true
