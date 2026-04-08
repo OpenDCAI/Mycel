@@ -291,5 +291,9 @@ describe("MonitorRoutes", () => {
     expect(await screen.findByRole("heading", { name: "Evaluation" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /evaluation/i })).toHaveAttribute("aria-current", "page");
     expect(screen.getByText("Evaluation operator truth is not wired in this runtime yet.")).toBeInTheDocument();
+    expect(screen.getByText("Operator Facts")).toBeInTheDocument();
+    expect(screen.getByText("Artifact Coverage")).toBeInTheDocument();
+    expect(screen.getByText("Next Steps")).toBeInTheDocument();
+    expect(screen.getByText("Restore a truthful evaluation runtime source before reviving the monitor evaluation page.")).toBeInTheDocument();
   });
 });
