@@ -499,28 +499,35 @@ async def test_create_thread_route_passes_local_cwd_into_sandbox_bootstrap():
 
 @pytest.mark.asyncio
 async def test_list_threads_hides_internal_subagent_threads():
+    rows = {
+        "main-thread": {
+            "id": "main-thread",
+            "sandbox_type": "local",
+            "agent_name": "Toad",
+            "agent_user_id": "member-1",
+            "branch_index": 0,
+            "is_main": True,
+            "agent_avatar": None,
+        },
+        "subagent-deadbeef": {
+            "id": "subagent-deadbeef",
+            "sandbox_type": "local",
+            "agent_name": "Toad",
+            "agent_user_id": "member-1",
+            "branch_index": 1,
+            "is_main": False,
+            "agent_avatar": None,
+        },
+    }
     app = _make_threads_app(
         thread_repo=SimpleNamespace(
-            list_by_owner_user_id=lambda user_id: [
-                {
-                    "id": "main-thread",
-                    "sandbox_type": "local",
-                    "agent_name": "Toad",
-                    "agent_user_id": "member-1",
-                    "branch_index": 0,
-                    "is_main": True,
-                    "agent_avatar": None,
-                },
-                {
-                    "id": "subagent-deadbeef",
-                    "sandbox_type": "local",
-                    "agent_name": "Toad",
-                    "agent_user_id": "member-1",
-                    "branch_index": 1,
-                    "is_main": False,
-                    "agent_avatar": None,
-                },
-            ]
+            list_by_owner_user_id=lambda user_id: list(rows.values()),
+            get_by_id=lambda thread_id: rows.get(thread_id),
+        ),
+        terminal_repo=SimpleNamespace(
+            get_active=lambda _thread_id: {"terminal_id": "term-1"},
+            list_by_thread=lambda _thread_id: [{"terminal_id": "term-1"}],
+            set_active=lambda _thread_id, _terminal_id: None,
         ),
         agent_pool={},
         thread_last_active={},
@@ -529,6 +536,67 @@ async def test_list_threads_hides_internal_subagent_threads():
     payload = await threads_router.list_threads("owner-1", app)
 
     assert [item["thread_id"] for item in payload["threads"]] == ["main-thread"]
+
+
+@pytest.mark.asyncio
+async def test_list_threads_purges_incomplete_owner_visible_threads(monkeypatch: pytest.MonkeyPatch):
+    deleted: list[str] = []
+    purged: list[str] = []
+    rows = {
+        "broken-thread": {
+            "id": "broken-thread",
+            "sandbox_type": "local",
+            "agent_name": "Toad",
+            "agent_user_id": "member-1",
+            "branch_index": 0,
+            "is_main": True,
+            "agent_avatar": None,
+        },
+        "healthy-thread": {
+            "id": "healthy-thread",
+            "sandbox_type": "local",
+            "agent_name": "Toad",
+            "agent_user_id": "member-1",
+            "branch_index": 1,
+            "is_main": False,
+            "agent_avatar": None,
+        },
+    }
+
+    def _delete(thread_id: str) -> None:
+        deleted.append(thread_id)
+        rows.pop(thread_id, None)
+
+    app = _make_threads_app(
+        thread_repo=SimpleNamespace(
+            list_by_owner_user_id=lambda _user_id: list(rows.values()),
+            get_by_id=lambda thread_id: rows.get(thread_id),
+            delete=_delete,
+        ),
+        terminal_repo=SimpleNamespace(
+            get_active=lambda thread_id: {"terminal_id": f"term-{thread_id}"} if thread_id == "healthy-thread" else None,
+            list_by_thread=lambda thread_id: [] if thread_id == "broken-thread" else [{"terminal_id": "term-healthy"}],
+            set_active=lambda _thread_id, _terminal_id: None,
+        ),
+        agent_pool={},
+        thread_last_active={},
+        queue_manager=SimpleNamespace(clear_all=lambda _thread_id: None),
+        thread_sandbox={},
+        thread_cwd={},
+        thread_event_buffers={},
+        thread_tasks={},
+    )
+
+    monkeypatch.setattr(
+        "backend.web.services.thread_runtime_convergence.delete_thread_in_db",
+        lambda thread_id: purged.append(thread_id),
+    )
+
+    payload = await threads_router.list_threads("owner-1", app)
+
+    assert [item["thread_id"] for item in payload["threads"]] == ["healthy-thread"]
+    assert purged == ["broken-thread"]
+    assert deleted == ["broken-thread"]
 
 
 @pytest.mark.asyncio

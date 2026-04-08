@@ -6,6 +6,7 @@ from typing import Annotated, Any
 from fastapi import Depends, FastAPI, HTTPException, Request
 
 from backend.web.services.agent_pool import get_or_create_agent, resolve_thread_sandbox
+from backend.web.services.thread_runtime_convergence import converge_owner_thread_runtime
 from sandbox.thread_context import set_current_thread_id
 
 
@@ -49,6 +50,9 @@ async def verify_thread_owner(
     app: Annotated[FastAPI, Depends(get_app)],
 ) -> str:
     """Verify that user_id owns the thread. Returns user_id."""
+    runtime_state = converge_owner_thread_runtime(app, thread_id)
+    if runtime_state in {"missing", "purged"}:
+        raise HTTPException(404, "Thread not found")
     thread = app.state.thread_repo.get_by_id(thread_id)
     if not thread:
         raise HTTPException(404, "Thread not found")

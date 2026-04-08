@@ -485,7 +485,7 @@ def test_chat_tool_send_appends_yield_signal_to_content_and_payload() -> None:
     ]
 
 
-def test_chat_tool_send_allows_group_reply_even_with_peer_unread() -> None:
+def test_chat_tool_send_requires_group_reply_to_consume_peer_unread() -> None:
     registry = ToolRegistry()
     sent: list[dict[str, object]] = []
     ChatToolService(
@@ -509,18 +509,10 @@ def test_chat_tool_send_allows_group_reply_even_with_peer_unread() -> None:
     send_message = registry.get("send_message")
     assert send_message is not None
 
-    result = send_message.handler(content="GROUP_READ_OK", chat_id="chat-1")
+    with pytest.raises(RuntimeError, match="You have 1 unread message\\(s\\)\\. Call read_messages\\(chat_id='chat-1'\\) first\\."):
+        send_message.handler(content="GROUP_READ_OK", chat_id="chat-1")
 
-    assert result == "Message sent to chat."
-    assert sent == [
-        {
-            "chat_id": "chat-1",
-            "sender_id": "thread-user-1",
-            "content": "GROUP_READ_OK",
-            "mentions": None,
-            "signal": None,
-        }
-    ]
+    assert sent == []
 
 
 def test_read_messages_uses_thread_user_target_name_on_no_history() -> None:
