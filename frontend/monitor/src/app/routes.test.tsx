@@ -245,6 +245,60 @@ describe("MonitorRoutes", () => {
     expect(screen.getByText("Raw Thread Table")).toBeInTheDocument();
   });
 
+  it("renders thread detail session ids as plain text when monitor has no session route", async () => {
+    mockRoutePayloads({
+      "/thread/thread-1": {
+        thread_id: "thread-1",
+        breadcrumb: [
+          { label: "Threads", url: "/threads" },
+          { label: "thread-1", url: "/thread/thread-1" },
+        ],
+        sessions: {
+          title: "Sessions",
+          count: 1,
+          items: [
+            {
+              session_id: "session-1",
+              session_url: "/session/session-1",
+              status: "running",
+              started_ago: "1m",
+              ended_ago: null,
+              lease: {
+                lease_id: "lease-1",
+                lease_url: "/lease/lease-1",
+              },
+              state_badge: {
+                color: "green",
+                observed: "running",
+                desired: "running",
+                text: "running",
+              },
+              error: null,
+            },
+          ],
+        },
+        related_leases: {
+          title: "Related Leases",
+          items: [{ lease_id: "lease-1", lease_url: "/lease/lease-1" }],
+        },
+      },
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/thread/thread-1"]}>
+        <MonitorRoutes />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByRole("heading", { name: /thread:/i })).toBeInTheDocument();
+    expect(screen.getByText("session-")).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "session-" })).not.toBeInTheDocument();
+    expect(screen.getAllByRole("link", { name: "lease-1" })).toHaveLength(2);
+    for (const link of screen.getAllByRole("link", { name: "lease-1" })) {
+      expect(link).toHaveAttribute("href", "/lease/lease-1");
+    }
+  });
+
   it("renders diverged leases with triage before the raw table", async () => {
     mockRoutePayloads({
       "/diverged": {
