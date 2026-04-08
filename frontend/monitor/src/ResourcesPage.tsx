@@ -278,7 +278,9 @@ export default function ResourcesPage() {
   const runtimeUnboundRunningCount = providers.reduce(
     (total, provider) =>
       total +
-      provider.sessions.filter((session) => session.status === "running" && !session.runtimeSessionId).length,
+      provider.sessions.filter(
+        (session) => provider.type !== "local" && session.status === "running" && !session.runtimeSessionId,
+      ).length,
     0,
   );
   const refreshedAt = summary?.last_refreshed_at
@@ -383,7 +385,7 @@ function ProviderCard({
 }) {
   const runningCount = provider.sessions.filter((session) => session.status === "running").length;
   const runtimeUnboundRunningCount = provider.sessions.filter(
-    (session) => session.status === "running" && !session.runtimeSessionId,
+    (session) => provider.type !== "local" && session.status === "running" && !session.runtimeSessionId,
   ).length;
   const pausedCount = provider.sessions.filter((session) => session.status === "paused").length;
   const stoppedCount = provider.sessions.filter((session) => session.status === "stopped").length;
