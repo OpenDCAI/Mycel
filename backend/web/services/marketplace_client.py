@@ -12,8 +12,7 @@ import httpx
 import yaml
 from fastapi import HTTPException
 
-from backend.web.core.paths import members_dir
-from config.loader import AgentLoader, load_bundle_from_repo
+from config.loader import load_bundle_from_repo
 from config.types import AgentBundle
 
 logger = logging.getLogger(__name__)
@@ -89,60 +88,6 @@ def _bundle_snapshot(bundle: AgentBundle) -> dict:
     }
 
 
-def _serialize_user_snapshot(user_id: str) -> dict:
-    """Serialize a local agent user bundle into a snapshot dict for Hub."""
-    member_dir = members_dir() / user_id
-
-    # Read raw files for faithful snapshot
-    agent_md = (member_dir / "agent.md").read_text(encoding="utf-8")
-
-    rules = []
-    rules_dir = member_dir / "rules"
-    if rules_dir.is_dir():
-        for md in sorted(rules_dir.glob("*.md")):
-            rules.append({"name": md.stem, "content": md.read_text(encoding="utf-8")})
-
-    # Sub-agents
-    agents = []
-    agents_dir = member_dir / "agents"
-    if agents_dir.is_dir():
-        for md in sorted(agents_dir.glob("*.md")):
-            agents.append({"name": md.stem, "content": md.read_text(encoding="utf-8")})
-
-    # Skills
-    skills = []
-    skills_dir = member_dir / "skills"
-    if skills_dir.is_dir():
-        for skill_dir in sorted(skills_dir.iterdir()):
-            if skill_dir.is_dir():
-                skill_md = skill_dir / "SKILL.md"
-                if skill_md.exists():
-                    meta = _read_json(skill_dir / "meta.json")
-                    skills.append(
-                        {
-                            "name": skill_dir.name,
-                            "content": skill_md.read_text(encoding="utf-8"),
-                            "meta": meta,
-                        }
-                    )
-
-    # MCP
-    mcp = _read_json(member_dir / ".mcp.json")
-
-    # Runtime
-    runtime = _read_json(member_dir / "runtime.json")
-
-    return {
-        "agent_md": agent_md,
-        "rules": rules,
-        "agents": agents,
-        "skills": skills,
-        "mcp": mcp,
-        "runtime": runtime,
-        "meta": _read_json(member_dir / "meta.json"),
-    }
-
-
 def _load_repo_publish_material(user_id: str, user_repo: Any, agent_config_repo: Any) -> tuple[AgentBundle, dict[str, Any]]:
     user = user_repo.get_by_id(user_id)
     if user is None or user.agent_config_id is None:
@@ -166,17 +111,12 @@ def publish(
     agent_config_repo: Any = None,
 ) -> dict:
     """Publish a local agent user bundle to the Hub."""
-    member_dir = members_dir() / user_id
-    repo_backed_publish = user_repo is not None and agent_config_repo is not None
-    if repo_backed_publish:
-        bundle, meta = _load_repo_publish_material(user_id, user_repo, agent_config_repo)
-        snapshot = _bundle_snapshot(bundle)
-        snapshot["meta"] = copy.deepcopy(meta)
-    else:
-        meta = _read_json(member_dir / "meta.json")
-        snapshot = _serialize_user_snapshot(user_id)
-        loader = AgentLoader()
-        bundle = loader.load_bundle(member_dir)
+    if user_repo is None or agent_config_repo is None:
+        raise RuntimeError("user_repo and agent_config_repo are required for publish()")
+
+    bundle, meta = _load_repo_publish_material(user_id, user_repo, agent_config_repo)
+    snapshot = _bundle_snapshot(bundle)
+    snapshot["meta"] = copy.deepcopy(meta)
 
     # Calculate new version
     current_version = meta.get("version", "0.1.0")
@@ -229,32 +169,29 @@ def publish(
     meta["source"]["installed_version"] = new_version
     meta["source"]["installed_at"] = int(time.time() * 1000)
     meta["source"]["modified"] = False
-    # @@@repo-publish-does-not-touch-member-dir - repo-backed publish reads and writes agent_config state only.
-    if member_dir.is_dir() and not repo_backed_publish:
-        _write_json(member_dir / "meta.json", meta)
-    if repo_backed_publish:
-        user = user_repo.get_by_id(user_id)
-        if user is None or user.agent_config_id is None:
-            raise RuntimeError(f"Agent user {user_id} is missing agent_config_id")
-        agent_config_repo.save_config(
-            user.agent_config_id,
-            {
-                "id": user.agent_config_id,
-                "agent_user_id": user_id,
-                "name": bundle.agent.name,
-                "description": bundle.agent.description,
-                "model": bundle.agent.model,
-                "tools": bundle.agent.tools,
-                "system_prompt": bundle.agent.system_prompt,
-                "status": meta["status"],
-                "version": meta["version"],
-                "created_at": meta.get("created_at", int(time.time() * 1000)),
-                "updated_at": meta["updated_at"],
-                "runtime": snapshot["runtime"],
-                "mcp": snapshot["mcp"],
-                "meta": {k: v for k, v in meta.items() if k not in {"status", "version", "created_at", "updated_at"}},
-            },
-        )
+    # @@@repo-publish-only - marketplace publish is now a repo-backed web path, not a local member-dir snapshot path.
+    user = user_repo.get_by_id(user_id)
+    if user is None or user.agent_config_id is None:
+        raise RuntimeError(f"Agent user {user_id} is missing agent_config_id")
+    agent_config_repo.save_config(
+        user.agent_config_id,
+        {
+            "id": user.agent_config_id,
+            "agent_user_id": user_id,
+            "name": bundle.agent.name,
+            "description": bundle.agent.description,
+            "model": bundle.agent.model,
+            "tools": bundle.agent.tools,
+            "system_prompt": bundle.agent.system_prompt,
+            "status": meta["status"],
+            "version": meta["version"],
+            "created_at": meta.get("created_at", int(time.time() * 1000)),
+            "updated_at": meta["updated_at"],
+            "runtime": snapshot["runtime"],
+            "mcp": snapshot["mcp"],
+            "meta": {k: v for k, v in meta.items() if k not in {"status", "version", "created_at", "updated_at"}},
+        },
+    )
 
     return result
 

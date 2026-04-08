@@ -289,8 +289,6 @@ def test_publish_uses_repo_bundle_when_member_dir_is_absent(tmp_path, monkeypatc
     saved: dict[str, object] = {}
     captured: dict[str, object] = {}
 
-    monkeypatch.setattr(marketplace_client, "members_dir", lambda: tmp_path / "members")
-
     user_repo = SimpleNamespace(get_by_id=lambda user_id: SimpleNamespace(id=user_id, agent_config_id="cfg-1"))
 
     class _AgentConfigRepo:
@@ -366,7 +364,6 @@ def test_publish_uses_repo_bundle_when_member_dir_is_absent(tmp_path, monkeypatc
     assert saved["data"]["status"] == "active"
     assert saved["data"]["meta"]["source"]["marketplace_item_id"] == "item-123"
     assert saved["data"]["meta"]["source"]["installed_version"] == "0.1.1"
-    assert not (tmp_path / "members" / "agent-user-1").exists()
 
 
 def test_publish_prefers_repo_lineage_even_when_legacy_member_dir_exists(tmp_path, monkeypatch):
@@ -385,8 +382,6 @@ def test_publish_prefers_repo_lineage_even_when_legacy_member_dir_exists(tmp_pat
         "source": {"marketplace_item_id": "legacy-item", "installed_version": "9.9.9"},
     }
     (member_dir / "meta.json").write_text(json.dumps(legacy_meta, indent=2), encoding="utf-8")
-
-    monkeypatch.setattr(marketplace_client, "members_dir", lambda: members_root)
 
     user_repo = SimpleNamespace(get_by_id=lambda user_id: SimpleNamespace(id=user_id, agent_config_id="cfg-1"))
 
@@ -455,3 +450,19 @@ def test_publish_prefers_repo_lineage_even_when_legacy_member_dir_exists(tmp_pat
     assert saved["data"]["meta"]["source"]["marketplace_item_id"] == "item-123"
     assert saved["data"]["meta"]["source"]["installed_version"] == "0.1.1"
     assert json.loads((member_dir / "meta.json").read_text(encoding="utf-8")) == legacy_meta
+
+
+def test_publish_requires_repos():
+    import backend.web.services.marketplace_client as marketplace_client
+
+    with pytest.raises(RuntimeError, match="user_repo and agent_config_repo are required"):
+        marketplace_client.publish(
+            user_id="agent-user-1",
+            type_="member",
+            bump_type="patch",
+            release_notes="repo publish",
+            tags=["repo"],
+            visibility="private",
+            publisher_user_id="owner-1",
+            publisher_username="owner-name",
+        )
