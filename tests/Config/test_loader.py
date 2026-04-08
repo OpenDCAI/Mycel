@@ -239,6 +239,7 @@ def test_load_bundle_from_repo_uses_agent_config_id_root_key() -> None:
                 "version": "1.0.0",
                 "created_at": 1,
                 "updated_at": 2,
+                "meta": {"source": {"marketplace_item_id": "item-1", "installed_version": "1.0.0"}},
                 "runtime": {"tools:search": {"enabled": True, "desc": "Search"}},
                 "mcp": {},
             }
@@ -259,6 +260,7 @@ def test_load_bundle_from_repo_uses_agent_config_id_root_key() -> None:
 
     assert bundle is not None
     assert bundle.agent.name == "Toad"
+    assert bundle.meta["source"] == {"marketplace_item_id": "item-1", "installed_version": "1.0.0"}
     assert bundle.rules == [{"name": "default", "content": "Be careful."}]
     assert bundle.skills == [{"name": "Search", "content": "search skill"}]
     assert [agent.name for agent in bundle.agents] == ["Scout"]

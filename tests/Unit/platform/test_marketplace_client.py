@@ -308,6 +308,7 @@ def test_publish_uses_repo_bundle_when_member_dir_is_absent(tmp_path, monkeypatc
                 "version": "0.1.0",
                 "created_at": 1,
                 "updated_at": 2,
+                "meta": {"source": {"marketplace_item_id": "item-parent", "installed_version": "0.1.0"}},
                 "runtime": {"tools:search": {"enabled": True, "desc": "Search"}},
                 "mcp": {"demo": {"transport": "stdio", "command": "demo"}},
             }
@@ -353,13 +354,16 @@ def test_publish_uses_repo_bundle_when_member_dir_is_absent(tmp_path, monkeypatc
     payload = captured["json"]
     assert payload["name"] == "Repo Agent"
     assert payload["version"] == "0.1.1"
-    assert payload["parent_item_id"] is None
-    assert payload["parent_version"] is None
+    assert payload["parent_item_id"] == "item-parent"
+    assert payload["parent_version"] == "0.1.0"
     assert payload["snapshot"]["agent_md"].startswith("---\n")
     assert payload["snapshot"]["meta"]["version"] == "0.1.0"
+    assert payload["snapshot"]["meta"]["source"] == {"marketplace_item_id": "item-parent", "installed_version": "0.1.0"}
     assert payload["snapshot"]["rules"] == [{"name": "default", "content": "Rule content"}]
     assert payload["snapshot"]["skills"][0]["meta"] == {"name": "Search"}
     assert saved["agent_config_id"] == "cfg-1"
     assert saved["data"]["version"] == "0.1.1"
     assert saved["data"]["status"] == "active"
+    assert saved["data"]["meta"]["source"]["marketplace_item_id"] == "item-123"
+    assert saved["data"]["meta"]["source"]["installed_version"] == "0.1.1"
     assert not (tmp_path / "members" / "agent-user-1").exists()

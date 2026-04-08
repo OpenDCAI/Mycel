@@ -526,6 +526,8 @@ def test_install_from_snapshot_creates_agent_user_before_syncing_agent_config(
     assert installed_user_id == user_repo.created[0].id
     assert agent_config_repo.saved_configs[0][0] == user_repo.created[0].agent_config_id
     assert agent_config_repo.saved_configs[0][1]["agent_user_id"] == installed_user_id
+    assert agent_config_repo.saved_configs[0][1]["meta"]["source"]["marketplace_item_id"] == "item-1"
+    assert agent_config_repo.saved_configs[0][1]["meta"]["source"]["installed_version"] == "1.2.3"
     assert list(tmp_path.iterdir()) == []
 
 
@@ -555,4 +557,5 @@ def test_install_from_snapshot_updates_existing_user_via_existing_user_id(
     assert installed_user_id == "agent-1"
     assert agent_config_repo.saved_configs[0][0] == "cfg-1"
     assert agent_config_repo.saved_configs[0][1]["agent_user_id"] == "agent-1"
+    assert agent_config_repo.saved_configs[0][1]["meta"]["source"]["marketplace_item_id"] == "item-1"
     assert (tmp_path / "agent-1" / "agent.md").read_text(encoding="utf-8") == legacy_agent_md

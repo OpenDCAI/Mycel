@@ -713,6 +713,7 @@ def _save_config_to_repo(
     updated_at: int = 0,
     runtime: dict | None = None,
     mcp: dict | None = None,
+    meta: dict | None = None,
 ) -> None:
     agent_config_repo.save_config(
         agent_config_id,
@@ -729,6 +730,7 @@ def _save_config_to_repo(
             "updated_at": updated_at,
             "runtime": runtime or {},
             "mcp": mcp or {},
+            "meta": meta or {},
         },
     )
 
@@ -1134,6 +1136,14 @@ def install_from_snapshot(
         updated_at=now_ms,
         runtime=runtime_data,
         mcp=mcp_data,
+        meta={
+            "source": {
+                "marketplace_item_id": marketplace_item_id,
+                "installed_version": installed_version,
+                "installed_at": now_ms,
+                "modified": False,
+            }
+        },
     )
 
     for row in agent_config_repo.list_rules(agent_config_id):

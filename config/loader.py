@@ -440,12 +440,15 @@ def load_bundle_from_repo(agent_config_repo: Any, agent_config_id: str) -> Agent
         source_dir=None,
     )
 
-    meta = {
-        "status": config.get("status", "draft"),
-        "version": config.get("version", "0.1.0"),
-        "created_at": config.get("created_at", 0),
-        "updated_at": config.get("updated_at", 0),
-    }
+    meta = dict(config.get("meta") if isinstance(config.get("meta"), dict) else {})
+    meta.update(
+        {
+            "status": config.get("status", "draft"),
+            "version": config.get("version", "0.1.0"),
+            "created_at": config.get("created_at", 0),
+            "updated_at": config.get("updated_at", 0),
+        }
+    )
 
     # Runtime from config
     runtime_data = config.get("runtime") or {}

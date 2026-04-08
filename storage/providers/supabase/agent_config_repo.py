@@ -35,6 +35,7 @@ class SupabaseAgentConfigRepo:
             "tools": row.get("tools_json", []),
             "runtime": row.get("runtime_json", {}),
             "mcp": row.get("mcp_json", {}),
+            "meta": row.get("meta_json", {}),
         }
 
     def save_config(self, agent_config_id: str, data: dict[str, Any]) -> None:
@@ -45,6 +46,8 @@ class SupabaseAgentConfigRepo:
             payload["runtime_json"] = payload.pop("runtime")
         if "mcp" in payload:
             payload["mcp_json"] = payload.pop("mcp")
+        if "meta" in payload:
+            payload["meta_json"] = payload.pop("meta")
         self._client.table("agent_configs").upsert(payload).execute()
 
     def delete_config(self, agent_config_id: str) -> None:

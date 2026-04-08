@@ -1,5 +1,6 @@
 """HTTP client for Mycel Hub marketplace API."""
 
+import copy
 import json
 import logging
 import os
@@ -172,7 +173,7 @@ def publish(
             # @@@publish-repo-bundle - snapshot/version now come from repo data; old marketplace lineage still lives in meta.json.source.
             meta = {**meta, **_read_json(member_dir / "meta.json")}
         snapshot = _bundle_snapshot(bundle)
-        snapshot["meta"] = dict(meta)
+        snapshot["meta"] = copy.deepcopy(meta)
     else:
         meta = _read_json(member_dir / "meta.json")
         snapshot = _serialize_user_snapshot(user_id)
@@ -252,6 +253,7 @@ def publish(
                 "updated_at": meta["updated_at"],
                 "runtime": snapshot["runtime"],
                 "mcp": snapshot["mcp"],
+                "meta": {k: v for k, v in meta.items() if k not in {"status", "version", "created_at", "updated_at"}},
             },
         )
 
