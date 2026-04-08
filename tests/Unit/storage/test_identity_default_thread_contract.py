@@ -1,10 +1,10 @@
 from storage import contracts
-from storage.providers.supabase.member_repo import SupabaseMemberRepo
 from storage.providers.supabase.thread_repo import SupabaseThreadRepo
+from storage.providers.supabase.user_repo import SupabaseUserRepo
 
 
-def test_member_row_uses_next_thread_seq_not_next_entity_seq() -> None:
-    fields = contracts.MemberRow.model_fields
+def test_user_row_uses_next_thread_seq_not_next_entity_seq() -> None:
+    fields = contracts.UserRow.model_fields
     assert "next_thread_seq" in fields
     assert "next_entity_seq" not in fields
 
@@ -18,14 +18,14 @@ def test_thread_repo_exposes_get_by_user_id() -> None:
     assert hasattr(contracts.ThreadRepo, "get_by_user_id")
 
 
-def test_member_repo_exposes_increment_thread_seq_not_increment_entity_seq() -> None:
-    assert hasattr(contracts.MemberRepo, "increment_thread_seq")
-    assert not hasattr(contracts.MemberRepo, "increment_entity_seq")
+def test_user_repo_exposes_increment_thread_seq_not_increment_entity_seq() -> None:
+    assert hasattr(contracts.UserRepo, "increment_thread_seq")
+    assert not hasattr(contracts.UserRepo, "increment_entity_seq")
 
 
-def test_supabase_member_repo_exposes_increment_thread_seq() -> None:
-    assert hasattr(SupabaseMemberRepo, "increment_thread_seq")
-    assert not hasattr(SupabaseMemberRepo, "increment_entity_seq")
+def test_supabase_user_repo_exposes_increment_thread_seq() -> None:
+    assert hasattr(SupabaseUserRepo, "increment_thread_seq")
+    assert not hasattr(SupabaseUserRepo, "increment_entity_seq")
 
 
 def test_supabase_thread_repo_exposes_get_default_thread() -> None:

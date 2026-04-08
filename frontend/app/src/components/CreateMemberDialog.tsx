@@ -18,14 +18,14 @@ interface Props {
 
 export default function CreateMemberDialog({ open, onOpenChange }: Props) {
   const navigate = useNavigate();
-  const addMember = useAppStore(s => s.addMember);
+  const addAgent = useAppStore(s => s.addAgent);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
 
   const handleCreate = async () => {
     if (!name.trim()) return;
     try {
-      const member = await addMember(name.trim(), description.trim());
+      const member = await addAgent(name.trim(), description.trim());
       onOpenChange(false);
       setName("");
       setDescription("");
@@ -44,8 +44,8 @@ export default function CreateMemberDialog({ open, onOpenChange }: Props) {
               <Bot className="w-4.5 h-4.5 text-primary" />
             </div>
             <div>
-              <DialogTitle className="text-base">创建新成员</DialogTitle>
-              <DialogDescription className="text-xs mt-0.5">定义一名新的 AI 成员</DialogDescription>
+              <DialogTitle className="text-base">创建新 Agent</DialogTitle>
+              <DialogDescription className="text-xs mt-0.5">定义一个新的 AI Agent</DialogDescription>
             </div>
           </div>
         </DialogHeader>
@@ -56,12 +56,12 @@ export default function CreateMemberDialog({ open, onOpenChange }: Props) {
           </div>
           <div className="space-y-2">
             <Label htmlFor="desc" className="text-sm">描述 <span className="text-muted-foreground text-xs">（可选）</span></Label>
-            <Textarea id="desc" placeholder="简要描述这名成员的职责..." value={description} onChange={(e) => setDescription(e.target.value)} rows={3} />
+            <Textarea id="desc" placeholder="简要描述这个 Agent 的职责..." value={description} onChange={(e) => setDescription(e.target.value)} rows={3} />
           </div>
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>取消</Button>
-          <Button onClick={handleCreate} disabled={!name.trim()}>创建并配置</Button>
+          <Button onClick={handleCreate} disabled={!name.trim()}>创建并配置 Agent</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

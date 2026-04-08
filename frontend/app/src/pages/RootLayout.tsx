@@ -1,7 +1,7 @@
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { MessageSquare, Users, Store, Settings, Plus, ChevronLeft, ChevronRight, LogOut, Camera, Eye, EyeOff } from "lucide-react";
 import { useState, useEffect, useCallback, useRef } from "react";
-import { uploadMemberAvatar } from "@/api/client";
+import { uploadUserAvatar } from "@/api/client";
 import MemberAvatar from "@/components/MemberAvatar";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import CreateMemberDialog from "@/components/CreateMemberDialog";
@@ -48,7 +48,7 @@ function AuthenticatedLayout() {
     const file = e.target.files?.[0];
     if (!file || !authUser) return;
     try {
-      await uploadMemberAvatar(authUser.id, file);
+      await uploadUserAvatar(authUser.id, file);
       setAvatarRev(r => r + 1);
       // Persist avatar flag so it survives page refresh
       useAuthStore.setState(s => ({ user: s.user ? { ...s.user, avatar: `avatars/${authUser.id}.png` } : s.user }));
@@ -252,7 +252,7 @@ function AuthenticatedLayout() {
             <Popover>
               <PopoverTrigger asChild>
                 <button className={`flex items-center ${showLabels ? "px-3 gap-3" : "justify-center"} h-10 mb-1 rounded-xl hover:bg-muted transition-colors duration-fast w-full`}>
-                  <MemberAvatar name={authUser?.name || "User"} avatarUrl={(authUser?.avatar || avatarRev > 0) && authUser?.id ? `/api/members/${authUser.id}/avatar` : undefined} size="sm" type="human" rev={avatarRev} />
+                  <MemberAvatar name={authUser?.name || "User"} avatarUrl={(authUser?.avatar || avatarRev > 0) && authUser?.id ? `/api/users/${authUser.id}/avatar` : undefined} size="sm" type="human" rev={avatarRev} />
                   {showLabels && (
                     <div className="min-w-0 flex-1 text-left">
                       <p className="text-xs font-medium text-foreground truncate">{authUser?.name || "User"}</p>
@@ -263,7 +263,7 @@ function AuthenticatedLayout() {
               <PopoverContent side="top" align="start" className="w-56">
                 <div className="flex flex-col items-center gap-3">
                   <div className="relative group/avatar cursor-pointer" onClick={() => avatarInputRef.current?.click()}>
-                    <MemberAvatar name={authUser?.name || "User"} avatarUrl={(authUser?.avatar || avatarRev > 0) && authUser?.id ? `/api/members/${authUser.id}/avatar` : undefined} size="lg" type="human" rev={avatarRev} />
+                    <MemberAvatar name={authUser?.name || "User"} avatarUrl={(authUser?.avatar || avatarRev > 0) && authUser?.id ? `/api/users/${authUser.id}/avatar` : undefined} size="lg" type="human" rev={avatarRev} />
                     <div className="absolute inset-0 rounded-full bg-black/40 opacity-0 group-hover/avatar:opacity-100 transition-opacity duration-fast flex items-center justify-center">
                       <Camera className="w-5 h-5 text-white" />
                     </div>
@@ -352,7 +352,7 @@ function CreateDropdown({
         style={{ top: pos.top, left: pos.left }}
       >
         <button onClick={() => onAction("staff")} className="w-full px-3 py-2 text-left text-sm text-foreground hover:bg-muted transition-colors duration-fast flex items-center gap-2.5">
-          <Users className="w-3.5 h-3.5 text-muted-foreground" /> 新建成员
+          <Users className="w-3.5 h-3.5 text-muted-foreground" /> 新建 Agent
         </button>
         <button onClick={() => onAction("chat")} className="w-full px-3 py-2 text-left text-sm text-foreground hover:bg-muted transition-colors duration-fast flex items-center gap-2.5">
           <MessageSquare className="w-3.5 h-3.5 text-muted-foreground" /> 发起会话
@@ -618,7 +618,7 @@ function SetupNameStep({ userId, defaultName }: { userId: string; defaultName: s
     setLoading(true);
     try {
       if (name.trim() && name.trim() !== defaultName) {
-        await fetch(`/api/panel/members/${userId}`, {
+        await fetch(`/api/panel/agents/${userId}`, {
           method: "PUT",
           headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
           body: JSON.stringify({ name: name.trim() }),

@@ -37,31 +37,31 @@ def _save(data: dict[str, Any]) -> None:
 
 def get_or_create_agent_id(
     *,
-    member: str,
+    user_id: str,
     thread_id: str,
     sandbox_type: str,
-    member_path: str | None = None,
+    user_path: str | None = None,
 ) -> str:
-    """Get existing agent_id for this member+thread combo, or create a new one."""
+    """Get existing agent_id for this user+thread combo, or create a new one."""
     instances = _load()
 
     for aid, info in instances.items():
-        if info.get("member") == member and info.get("thread_id") == thread_id and info.get("sandbox_type") == sandbox_type:
+        if info.get("user_id") == user_id and info.get("thread_id") == thread_id and info.get("sandbox_type") == sandbox_type:
             return aid
 
     import time
 
     agent_id = uuid.uuid4().hex[:8]
     entry: dict[str, Any] = {
-        "member": member,
+        "user_id": user_id,
         "thread_id": thread_id,
         "sandbox_type": sandbox_type,
         "created_at": int(time.time()),
     }
-    if member_path:
-        entry["member_path"] = member_path
+    if user_path:
+        entry["user_path"] = user_path
 
     instances[agent_id] = entry
     _save(instances)
-    logger.info("Created agent identity %s for member=%s thread=%s", agent_id, member, thread_id)
+    logger.info("Created agent identity %s for user_id=%s thread=%s", agent_id, user_id, thread_id)
     return agent_id

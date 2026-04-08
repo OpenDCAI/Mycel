@@ -19,7 +19,7 @@ class RecipeSnapshotRequest(BaseModel):
 
 
 class CreateThreadRequest(BaseModel):
-    member_id: str  # which agent template to create thread from
+    agent_user_id: str
     sandbox: str = Field(default="local", validation_alias=AliasChoices("sandbox", "sandbox_type"))
     recipe: RecipeSnapshotRequest | None = None
     lease_id: str | None = None
@@ -30,11 +30,11 @@ class CreateThreadRequest(BaseModel):
 
 
 class ResolveMainThreadRequest(BaseModel):
-    member_id: str
+    agent_user_id: str
 
 
 class SaveThreadLaunchConfigRequest(BaseModel):
-    member_id: str
+    agent_user_id: str
     create_mode: Literal["new", "existing"]
     provider_config: str
     recipe: RecipeSnapshotRequest | None = None

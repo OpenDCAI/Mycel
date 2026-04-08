@@ -31,19 +31,19 @@ class _FakeThreadRepo:
         pass
 
 
-class _FakeMember:
-    def __init__(self, member_id: str, name: str, avatar: str | None = None):
-        self.id = member_id
-        self.name = name
+class _FakeUser:
+    def __init__(self, user_id: str, display_name: str, avatar: str | None = None):
+        self.id = user_id
+        self.display_name = display_name
         self.avatar = avatar
 
 
-class _FakeMemberRepo:
-    def __init__(self, members):
-        self._members = members
+class _FakeUserRepo:
+    def __init__(self, users):
+        self._users = users
 
     def list_all(self):
-        return list(self._members)
+        return list(self._users)
 
     def close(self):
         pass
@@ -141,8 +141,8 @@ def test_list_resource_providers_resolves_owner_metadata_from_runtime_storage(mo
     )
     monkeypatch.setattr(
         resource_common,
-        "build_member_repo",
-        lambda **_kwargs: _FakeMemberRepo([_FakeMember("agent-1", "Toad")]),
+        "build_user_repo",
+        lambda **_kwargs: _FakeUserRepo([_FakeUser("agent-1", "Toad")]),
     )
     monkeypatch.setattr(resource_projection_service, "list_resource_snapshots", lambda _lease_ids: {})
 

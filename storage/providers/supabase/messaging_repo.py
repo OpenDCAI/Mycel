@@ -1,12 +1,9 @@
-"""Supabase implementations for messaging v2 repos.
-
-Covers: chats, chat_members, messages, message_reads, message_deliveries.
-All IDs are TEXT (UUID strings) for consistency with existing SQLite schema.
-"""
+"""Supabase implementations for messaging v2 repos."""
 
 from __future__ import annotations
 
 import logging
+import time
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
@@ -26,7 +23,7 @@ class SupabaseChatMemberRepo:
 
     def add_member(self, chat_id: str, user_id: str) -> None:
         self._client.table("chat_members").upsert(
-            {"chat_id": chat_id, "user_id": user_id, "role": "member", "joined_at": now_iso()},
+            {"chat_id": chat_id, "user_id": user_id, "role": "member", "joined_at": time.time()},
             on_conflict="chat_id,user_id",
         ).execute()
 
@@ -54,8 +51,8 @@ class SupabaseChatMemberRepo:
                 return chat_id
         return None
 
-    def update_last_read(self, chat_id: str, user_id: str) -> None:
-        self._client.table("chat_members").update({"last_read_at": now_iso()}).eq("chat_id", chat_id).eq("user_id", user_id).execute()
+    def update_last_read(self, chat_id: str, user_id: str, last_read_seq: int) -> None:
+        self._client.table("chat_members").update({"last_read_seq": last_read_seq}).eq("chat_id", chat_id).eq("user_id", user_id).execute()
 
     def update_mute(self, chat_id: str, user_id: str, muted: bool, mute_until: str | None = None) -> None:
         self._client.table("chat_members").update({"muted": muted, "mute_until": mute_until}).eq("chat_id", chat_id).eq(
@@ -74,8 +71,18 @@ class SupabaseMessagesRepo:
 
     def create(self, row: dict[str, Any]) -> dict[str, Any]:
         """Insert a new message. Returns the created row."""
-        res = self._client.table("messages").insert(row).execute()
-        return res.data[0] if res.data else row
+        seq_response = self._client.rpc("increment_chat_message_seq", {"p_chat_id": row["chat_id"]}).execute()
+        seq_data = seq_response.data
+        if not seq_data:
+            raise RuntimeError("Supabase messages repo expected increment_chat_message_seq RPC data.")
+        if isinstance(seq_data, int):
+            seq = seq_data
+        else:
+            seq_row = seq_data[0]
+            seq = seq_row["increment_chat_message_seq"] if isinstance(seq_row, dict) else seq_row
+        payload = {**row, "seq": int(seq)}
+        res = self._client.table("messages").insert(payload).execute()
+        return res.data[0] if res.data else payload
 
     def get_by_id(self, message_id: str) -> dict[str, Any] | None:
         res = self._client.table("messages").select("*").eq("id", message_id).limit(1).execute()
@@ -86,8 +93,8 @@ class SupabaseMessagesRepo:
     ) -> list[dict[str, Any]]:
         q = self._client.table("messages").select("*").eq("chat_id", chat_id).is_("deleted_at", "null")
         if before:
-            q = q.lt("created_at", before)
-        res = q.order("created_at", desc=True).limit(limit).execute()
+            q = q.lt("seq", int(before))
+        res = q.order("seq", desc=True).limit(limit).execute()
         rows = list(reversed(res.data or []))
         # Filter soft-deleted for viewer
         if viewer_id:
@@ -95,40 +102,39 @@ class SupabaseMessagesRepo:
         return rows
 
     def list_unread(self, chat_id: str, user_id: str) -> list[dict[str, Any]]:
-        """Messages after user's last_read_at, excluding own, not deleted."""
-        # Get last_read_at from chat_members
+        """Messages after user's last_read_seq, excluding own, not deleted."""
         member_res = (
-            self._client.table("chat_members").select("last_read_at").eq("chat_id", chat_id).eq("user_id", user_id).limit(1).execute()
+            self._client.table("chat_members").select("last_read_seq").eq("chat_id", chat_id).eq("user_id", user_id).limit(1).execute()
         )
-        last_read = None
+        last_read_seq = 0
         if member_res.data:
-            last_read = member_res.data[0].get("last_read_at")
+            last_read_seq = int(member_res.data[0].get("last_read_seq") or 0)
 
-        q = self._client.table("messages").select("*").eq("chat_id", chat_id).neq("sender_id", user_id).is_("deleted_at", "null")
-        if last_read:
-            q = q.gt("created_at", last_read)
-        res = q.order("created_at", desc=False).execute()
+        q = self._client.table("messages").select("*").eq("chat_id", chat_id).neq("sender_user_id", user_id).is_("deleted_at", "null")
+        if last_read_seq > 0:
+            q = q.gt("seq", last_read_seq)
+        res = q.order("seq", desc=False).execute()
         rows = res.data or []
         return [r for r in rows if user_id not in (r.get("deleted_for") or [])]
 
     def count_unread(self, chat_id: str, user_id: str) -> int:
         """Count unread messages using a COUNT query to avoid materializing rows."""
         member_res = (
-            self._client.table("chat_members").select("last_read_at").eq("chat_id", chat_id).eq("user_id", user_id).limit(1).execute()
+            self._client.table("chat_members").select("last_read_seq").eq("chat_id", chat_id).eq("user_id", user_id).limit(1).execute()
         )
-        last_read = None
+        last_read_seq = 0
         if member_res.data:
-            last_read = member_res.data[0].get("last_read_at")
+            last_read_seq = int(member_res.data[0].get("last_read_seq") or 0)
 
         q = (
             self._client.table("messages")
             .select("id", count="exact")
             .eq("chat_id", chat_id)
-            .neq("sender_id", user_id)
+            .neq("sender_user_id", user_id)
             .is_("deleted_at", "null")
         )
-        if last_read:
-            q = q.gt("created_at", last_read)
+        if last_read_seq > 0:
+            q = q.gt("seq", last_read_seq)
         res = q.execute()
         return res.count or 0
 
@@ -136,7 +142,7 @@ class SupabaseMessagesRepo:
         """Retract a message within 2-minute window."""
 
         msg = self.get_by_id(message_id)
-        if not msg or msg.get("sender_id") != sender_id:
+        if not msg or msg.get("sender_user_id") != sender_id:
             return False
         created = msg.get("created_at")
         if created:
@@ -162,7 +168,7 @@ class SupabaseMessagesRepo:
     def search(self, query: str, *, chat_id: str, limit: int = 50) -> list[dict[str, Any]]:
         q = self._client.table("messages").select("*").ilike("content", f"%{query}%").is_("deleted_at", "null")
         q = q.eq("chat_id", chat_id)
-        res = q.order("created_at", desc=False).limit(limit).execute()
+        res = q.order("seq", desc=False).limit(limit).execute()
         return res.data or []
 
     def list_by_time_range(
@@ -178,7 +184,7 @@ class SupabaseMessagesRepo:
 
 
 class SupabaseMessageReadRepo:
-    """message_reads table — per-message read receipts."""
+    """message_reads is intentionally not part of the current v1 root contract."""
 
     def __init__(self, client: Any) -> None:
         self._client = client
@@ -187,24 +193,16 @@ class SupabaseMessageReadRepo:
         pass
 
     def mark_read(self, message_id: str, user_id: str) -> None:
-        self._client.table("message_reads").upsert(
-            {"message_id": message_id, "user_id": user_id, "read_at": now_iso()},
-            on_conflict="message_id,user_id",
-        ).execute()
+        raise RuntimeError("message_reads is not part of the current messaging v1 contract")
 
     def mark_chat_read(self, chat_id: str, user_id: str, message_ids: list[str]) -> None:
-        """Bulk mark messages as read."""
-        rows = [{"message_id": mid, "user_id": user_id, "read_at": now_iso()} for mid in message_ids]
-        if rows:
-            self._client.table("message_reads").upsert(rows, on_conflict="message_id,user_id").execute()
+        raise RuntimeError("message_reads is not part of the current messaging v1 contract")
 
     def get_read_count(self, message_id: str) -> int:
-        res = self._client.table("message_reads").select("user_id", count="exact").eq("message_id", message_id).execute()
-        return res.count or 0
+        raise RuntimeError("message_reads is not part of the current messaging v1 contract")
 
     def has_read(self, message_id: str, user_id: str) -> bool:
-        res = self._client.table("message_reads").select("user_id").eq("message_id", message_id).eq("user_id", user_id).limit(1).execute()
-        return bool(res.data)
+        raise RuntimeError("message_reads is not part of the current messaging v1 contract")
 
 
 class SupabaseRelationshipRepo:
@@ -219,30 +217,83 @@ class SupabaseRelationshipRepo:
     def _ordered(self, a: str, b: str) -> tuple[str, str]:
         return (a, b) if a < b else (b, a)
 
+    def _relationship_id(self, user_low: str, user_high: str, kind: str = "hire_visit") -> str:
+        return f"{kind}:{user_low}:{user_high}"
+
+    def _normalize(self, row: dict[str, Any] | None) -> dict[str, Any] | None:
+        if row is None:
+            return None
+        normalized = dict(row)
+        normalized.setdefault("kind", "hire_visit")
+        normalized.setdefault("id", self._relationship_id(normalized["user_low"], normalized["user_high"], normalized["kind"]))
+        return normalized
+
     def get(self, user_a: str, user_b: str) -> dict[str, Any] | None:
-        pa, pb = self._ordered(user_a, user_b)
-        res = self._client.table("relationships").select("*").eq("principal_a", pa).eq("principal_b", pb).limit(1).execute()
-        return res.data[0] if res.data else None
+        user_low, user_high = self._ordered(user_a, user_b)
+        res = (
+            self._client.table("relationships")
+            .select("*")
+            .eq("user_low", user_low)
+            .eq("user_high", user_high)
+            .eq("kind", "hire_visit")
+            .limit(1)
+            .execute()
+        )
+        return self._normalize(res.data[0] if res.data else None)
 
     def get_by_id(self, relationship_id: str) -> dict[str, Any] | None:
-        res = self._client.table("relationships").select("*").eq("id", relationship_id).limit(1).execute()
-        return res.data[0] if res.data else None
+        parts = relationship_id.split(":", 2)
+        if len(parts) != 3:
+            return None
+        kind, user_low, user_high = parts
+        res = (
+            self._client.table("relationships")
+            .select("*")
+            .eq("user_low", user_low)
+            .eq("user_high", user_high)
+            .eq("kind", kind)
+            .limit(1)
+            .execute()
+        )
+        return self._normalize(res.data[0] if res.data else None)
 
     def upsert(self, user_a: str, user_b: str, **fields: Any) -> dict[str, Any]:
-        pa, pb = self._ordered(user_a, user_b)
+        user_low, user_high = self._ordered(user_a, user_b)
         existing = self.get(user_a, user_b)
-        now = now_iso()
+        now = time.time()
         if existing:
-            res = self._client.table("relationships").update({"updated_at": now, **fields}).eq("id", existing["id"]).execute()
-            return res.data[0] if res.data else {**existing, "updated_at": now, **fields}
-        else:
-            import uuid
+            if fields.get("state") == "none":
+                (
+                    self._client.table("relationships")
+                    .delete()
+                    .eq("user_low", user_low)
+                    .eq("user_high", user_high)
+                    .eq("kind", "hire_visit")
+                    .execute()
+                )
+                return self._normalize({**existing, "updated_at": now, **fields})
+            res = (
+                self._client.table("relationships")
+                .update({"updated_at": now, **fields})
+                .eq("user_low", user_low)
+                .eq("user_high", user_high)
+                .eq("kind", "hire_visit")
+                .execute()
+            )
+            return self._normalize(res.data[0] if res.data else {**existing, "updated_at": now, **fields})
 
-            row = {"id": str(uuid.uuid4()), "principal_a": pa, "principal_b": pb, "updated_at": now, **fields}
-            res = self._client.table("relationships").insert(row).execute()
-            return res.data[0] if res.data else row
+        row = {
+            "user_low": user_low,
+            "user_high": user_high,
+            "kind": "hire_visit",
+            "created_at": now,
+            "updated_at": now,
+            **fields,
+        }
+        res = self._client.table("relationships").insert(row).execute()
+        return self._normalize(res.data[0] if res.data else row)
 
     def list_for_user(self, user_id: str) -> list[dict[str, Any]]:
         # Single query with OR filter
-        res = self._client.table("relationships").select("*").or_(f"principal_a.eq.{user_id},principal_b.eq.{user_id}").execute()
-        return res.data or []
+        res = self._client.table("relationships").select("*").or_(f"user_low.eq.{user_id},user_high.eq.{user_id}").execute()
+        return [row for raw in (res.data or []) if (row := self._normalize(raw)) is not None]

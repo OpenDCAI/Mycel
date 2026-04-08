@@ -13,7 +13,7 @@ import { toast } from "sonner";
 interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  memberId: string;
+  agentId: string;
 }
 
 type BumpType = "patch" | "minor" | "major";
@@ -25,29 +25,29 @@ function bumpVersion(version: string, type: BumpType): string {
   return `${major}.${minor}.${patch + 1}`;
 }
 
-export default function PublishDialog({ open, onOpenChange, memberId }: Props) {
-  const member = useAppStore(s => s.getMemberById(memberId));
-  const publishMember = useAppStore(s => s.publishMember);
+export default function PublishDialog({ open, onOpenChange, agentId }: Props) {
+  const agent = useAppStore(s => s.getAgentById(agentId));
+  const publishAgent = useAppStore(s => s.publishAgent);
   const [bumpType, setBumpType] = useState<BumpType>("patch");
   const [notes, setNotes] = useState("");
   const [tags, setTags] = useState("");
   const [publishing, setPublishing] = useState(false);
   const publishToMarketplace = useMarketplaceStore(s => s.publishToMarketplace);
 
-  if (!member) return null;
+  if (!agent) return null;
 
-  const newVersion = bumpVersion(member.version, bumpType);
+  const newVersion = bumpVersion(agent.version, bumpType);
 
   const handlePublish = async () => {
     try {
       setPublishing(true);
-      await publishMember(memberId, bumpType);
+      await publishAgent(agentId, bumpType);
       try {
-        await publishToMarketplace(memberId, "member", bumpType, notes, tags.split(",").map(t => t.trim()).filter(Boolean), "public");
+        await publishToMarketplace(agentId, "member", bumpType, notes, tags.split(",").map(t => t.trim()).filter(Boolean), "public");
       } catch {
         // Hub publish is optional, don't fail the whole publish
       }
-      toast.success(`${member.name} v${newVersion} 已发布`);
+      toast.success(`${agent.name} v${newVersion} 已发布`);
       onOpenChange(false);
     } catch (e) {
       toast.error("发布失败，请重试");
@@ -71,9 +71,9 @@ export default function PublishDialog({ open, onOpenChange, memberId }: Props) {
               <Tag className="w-4 h-4 text-primary" />
             </div>
             <div>
-              <DialogTitle className="text-base">发布 {member.name}</DialogTitle>
+              <DialogTitle className="text-base">发布 {agent.name}</DialogTitle>
               <DialogDescription className="text-xs mt-0.5">
-                当前版本 <span className="font-mono text-foreground">v{member.version}</span>
+                当前版本 <span className="font-mono text-foreground">v{agent.version}</span>
               </DialogDescription>
             </div>
           </div>

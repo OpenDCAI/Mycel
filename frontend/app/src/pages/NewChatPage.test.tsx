@@ -102,7 +102,7 @@ describe("NewChatPage", () => {
     });
 
     useAppStore.setState({
-      memberList: [{
+      agentList: [{
         id: "m_xVuNpKJNxblZ",
         name: "Morel",
         description: "",
@@ -132,13 +132,13 @@ describe("NewChatPage", () => {
       loadAll: vi.fn(),
       retry: vi.fn(),
       resetSessionData: vi.fn(),
-      fetchMembers: vi.fn(),
-      addMember: vi.fn(),
-      updateMember: vi.fn(),
-      updateMemberConfig: vi.fn(),
-      publishMember: vi.fn(),
-      deleteMember: vi.fn(),
-      getMemberById: vi.fn(),
+      fetchAgents: vi.fn(),
+      addAgent: vi.fn(),
+      updateAgent: vi.fn(),
+      updateAgentConfig: vi.fn(),
+      publishAgent: vi.fn(),
+      deleteAgent: vi.fn(),
+      getAgentById: vi.fn(),
       fetchTasks: vi.fn(),
       addTask: vi.fn(),
       updateTask: vi.fn(),
@@ -159,7 +159,7 @@ describe("NewChatPage", () => {
       updateResourceContent: vi.fn(),
       fetchProfile: vi.fn(),
       updateProfile: vi.fn(),
-      getMemberNames: vi.fn(),
+      getAgentNames: vi.fn(),
       getResourceUsedBy: vi.fn(),
     });
   });
@@ -169,7 +169,7 @@ describe("NewChatPage", () => {
       <MemoryRouter initialEntries={["/chat/hire/m_xVuNpKJNxblZ"]}>
         <Routes>
           <Route element={<ContextOutlet />}>
-            <Route path="/chat/hire/:memberId" element={<NewChatPage />} />
+            <Route path="/chat/hire/:agentId" element={<NewChatPage />} />
           </Route>
         </Routes>
       </MemoryRouter>,
@@ -190,7 +190,7 @@ describe("NewChatPage", () => {
       <MemoryRouter initialEntries={["/chat/hire/m_xVuNpKJNxblZ"]}>
         <Routes>
           <Route element={<ContextOutlet />}>
-            <Route path="/chat/hire/:memberId" element={<NewChatPage />} />
+            <Route path="/chat/hire/:agentId" element={<NewChatPage />} />
           </Route>
         </Routes>
       </MemoryRouter>,
@@ -207,7 +207,7 @@ describe("NewChatPage", () => {
       <MemoryRouter initialEntries={["/chat/hire/m_xVuNpKJNxblZ"]}>
         <Routes>
           <Route element={<ContextOutlet />}>
-            <Route path="/chat/hire/:memberId" element={<NewChatPage />} />
+            <Route path="/chat/hire/:agentId" element={<NewChatPage />} />
             <Route path="/chat/hire/thread/:threadId" element={<ThreadRouteProbe />} />
           </Route>
         </Routes>

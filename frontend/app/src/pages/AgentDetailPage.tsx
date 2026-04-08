@@ -29,7 +29,7 @@ const modules: ModuleDef[] = [
   { id: "role", label: "角色", icon: FileText },
   { id: "mcp", label: "MCP", icon: Plug, count: c => c.mcps.length },
   { id: "skills", label: "技能", icon: Zap, count: c => c.skills.length },
-  { id: "subagents", label: "子成员", icon: Users, count: c => c.subAgents.length },
+  { id: "subagents", label: "子 Agent", icon: Users, count: c => c.subAgents.length },
 ];
 
 // ==================== Main Component ====================
@@ -41,9 +41,9 @@ export default function AgentDetail() {
   const [showPublish, setShowPublish] = useState(false);
   const [activeModule, setActiveModule] = useState<ModuleId>("role");
 
-  const member = useAppStore(s => s.getMemberById(id || ""));
-  const updateMember = useAppStore(s => s.updateMember);
-  const updateMemberConfig = useAppStore(s => s.updateMemberConfig);
+  const member = useAppStore(s => s.getAgentById(id || ""));
+  const updateAgent = useAppStore(s => s.updateAgent);
+  const updateAgentConfig = useAppStore(s => s.updateAgentConfig);
   const loadAll = useAppStore(s => s.loadAll);
   const librarySkills = useAppStore(s => s.librarySkills);
   const libraryMcps = useAppStore(s => s.libraryMcps);
@@ -66,7 +66,7 @@ export default function AgentDetail() {
     const trimmed = nameDraft.trim();
     if (!member || !trimmed || trimmed === member.name) return;
     try {
-      await updateMember(member.id, { name: trimmed });
+      await updateAgent(member.id, { name: trimmed });
     } catch { toast.error("重命名失败"); }
   };
 
@@ -84,11 +84,11 @@ export default function AgentDetail() {
     if (!member) return;
     try {
       if (mod === "tools") {
-        await updateMemberConfig(member.id, { tools: member.config.tools.map(i => i.name === itemName ? { ...i, enabled } : i) });
+        await updateAgentConfig(member.id, { tools: member.config.tools.map(i => i.name === itemName ? { ...i, enabled } : i) });
       } else if (mod === "mcp") {
-        await updateMemberConfig(member.id, { mcps: member.config.mcps.map(i => i.name === itemName ? { ...i, disabled: !enabled } : i) });
+        await updateAgentConfig(member.id, { mcps: member.config.mcps.map(i => i.name === itemName ? { ...i, disabled: !enabled } : i) });
       } else if (mod === "skills") {
-        await updateMemberConfig(member.id, { skills: member.config.skills.map(i => i.name === itemName ? { ...i, enabled } : i) });
+        await updateAgentConfig(member.id, { skills: member.config.skills.map(i => i.name === itemName ? { ...i, enabled } : i) });
       }
     } catch { toast.error("更新失败"); }
   };
@@ -102,21 +102,21 @@ export default function AgentDetail() {
           const lib = librarySkills.find(s => s.name === n);
           return { name: n, desc: lib?.desc || "", enabled: true };
         });
-        if (newSkills.length) await updateMemberConfig(member.id, { skills: [...member.config.skills, ...newSkills] });
+        if (newSkills.length) await updateAgentConfig(member.id, { skills: [...member.config.skills, ...newSkills] });
       } else if (type === "mcp") {
         const existing = new Set(member.config.mcps.map(m => m.name));
         const newMcps = names.filter(n => !existing.has(n)).map(n => {
           const lib = libraryMcps.find(m => m.name === n);
           return { name: n, command: lib?.desc || "", args: [], env: {}, disabled: false };
         });
-        if (newMcps.length) await updateMemberConfig(member.id, { mcps: [...member.config.mcps, ...newMcps] });
+        if (newMcps.length) await updateAgentConfig(member.id, { mcps: [...member.config.mcps, ...newMcps] });
       } else {
         const existing = new Set(member.config.subAgents.map(a => a.name));
         const newAgents = names.filter(n => !existing.has(n)).map(n => {
           const lib = libraryAgents.find(a => a.name === n);
           return { name: n, desc: lib?.desc || "", tools: [] as CrudItem[], system_prompt: "" };
         });
-        if (newAgents.length) await updateMemberConfig(member.id, { subAgents: [...member.config.subAgents, ...newAgents] });
+        if (newAgents.length) await updateAgentConfig(member.id, { subAgents: [...member.config.subAgents, ...newAgents] });
       }
       toast.success("已添加");
     } catch { toast.error("添加失败"); }
@@ -125,10 +125,10 @@ export default function AgentDetail() {
   const handleRemove = async (mod: string, itemName: string) => {
     if (!member) return;
     try {
-      if (mod === "mcp") await updateMemberConfig(member.id, { mcps: member.config.mcps.filter(i => i.name !== itemName) });
-      else if (mod === "skills") await updateMemberConfig(member.id, { skills: member.config.skills.filter(i => i.name !== itemName) });
-      else if (mod === "subagents") await updateMemberConfig(member.id, { subAgents: member.config.subAgents.filter(i => i.name !== itemName) });
-      else if (mod === "rules") await updateMemberConfig(member.id, { rules: member.config.rules.filter(i => i.name !== itemName) });
+      if (mod === "mcp") await updateAgentConfig(member.id, { mcps: member.config.mcps.filter(i => i.name !== itemName) });
+      else if (mod === "skills") await updateAgentConfig(member.id, { skills: member.config.skills.filter(i => i.name !== itemName) });
+      else if (mod === "subagents") await updateAgentConfig(member.id, { subAgents: member.config.subAgents.filter(i => i.name !== itemName) });
+      else if (mod === "rules") await updateAgentConfig(member.id, { rules: member.config.rules.filter(i => i.name !== itemName) });
       toast.success("已移除");
     } catch { toast.error("移除失败"); }
   };
@@ -142,16 +142,16 @@ export default function AgentDetail() {
             tools={member.config.tools}
             rules={member.config.rules}
             onSavePrompt={async (val) => {
-              await updateMemberConfig(member.id, { prompt: val });
+              await updateAgentConfig(member.id, { prompt: val });
               toast.success("System Prompt 已保存");
             }}
             onToggleTool={(name, en) => handleToggle("tools", name, en)}
             onSaveRule={async (name, content) => {
-              await updateMemberConfig(member.id, { rules: member.config.rules.map(r => r.name === name ? { ...r, content } : r) });
+              await updateAgentConfig(member.id, { rules: member.config.rules.map(r => r.name === name ? { ...r, content } : r) });
               toast.success("规则已保存");
             }}
             onAddRule={async (name) => {
-              await updateMemberConfig(member.id, { rules: [...member.config.rules, { name, content: "" }] });
+              await updateAgentConfig(member.id, { rules: [...member.config.rules, { name, content: "" }] });
               toast.success(`${name} 已添加`);
             }}
             onDeleteRule={(name) => handleRemove("rules", name)}
@@ -182,7 +182,7 @@ export default function AgentDetail() {
           <SubAgentsPanel
             agents={member.config.subAgents}
             onSave={async (updated) => {
-              await updateMemberConfig(member.id, { subAgents: updated });
+              await updateAgentConfig(member.id, { subAgents: updated });
               toast.success("Agent 配置已保存");
             }}
             onAdd={() => setPickerType("agent")}
@@ -258,7 +258,7 @@ export default function AgentDetail() {
       </div>
 
       {showTest && <TestPanel memberName={member.name} onClose={() => setShowTest(false)} />}
-      {showPublish && <PublishDialog open={showPublish} onOpenChange={setShowPublish} memberId={member.id} />}
+      {showPublish && <PublishDialog open={showPublish} onOpenChange={setShowPublish} agentId={member.id} />}
       {pickerType && (() => {
         const libraryMap = { skill: librarySkills, mcp: libraryMcps, agent: libraryAgents };
         const assignedMap = {
@@ -707,7 +707,7 @@ function ResourceCards({ type, items, onToggle, onRemove, onAdd }: {
   onRemove?: (name: string) => void;
   onAdd?: () => void;
 }) {
-  const labels = { skill: "技能", mcp: "MCP 服务器", agent: "成员" };
+  const labels = { skill: "技能", mcp: "MCP 服务器", agent: "子 Agent" };
   const icons = { skill: Zap, mcp: Plug, agent: Users };
   const Icon = icons[type];
 
@@ -832,4 +832,3 @@ function ResourcePicker({ type, library, assigned, onConfirm, onClose }: {
     </Dialog>
   );
 }
-

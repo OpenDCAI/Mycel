@@ -9,14 +9,15 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 
 from backend.web.core.dependencies import get_app, get_current_user_id
-from storage.contracts import ContactRow
+from storage.contracts import ContactEdgeRow
 
 router = APIRouter(prefix="/api/contacts", tags=["contacts"])
 
 
 class SetContactBody(BaseModel):
-    target_id: str
-    relation: Literal["normal", "blocked", "muted"]
+    target_user_id: str
+    kind: Literal["normal", "hire", "visit", "blocked", "muted"]
+    state: Literal["pending", "active", "rejected", "revoked"] = "active"
 
 
 @router.get("")
@@ -28,9 +29,12 @@ async def list_contacts(
     rows = app.state.contact_repo.list_for_user(user_id)
     return [
         {
-            "owner_user_id": row.owner_id,
-            "target_user_id": row.target_id,
-            "relation": row.relation,
+            "source_user_id": row.source_user_id,
+            "target_user_id": row.target_user_id,
+            "kind": row.kind,
+            "state": row.state,
+            "muted": row.muted,
+            "blocked": row.blocked,
             "created_at": row.created_at,
             "updated_at": row.updated_at,
         }
@@ -46,15 +50,18 @@ async def set_contact(
 ):
     """Upsert contact (block/mute/normal)."""
     app.state.contact_repo.upsert(
-        ContactRow(
-            owner_id=user_id,
-            target_id=body.target_id,
-            relation=body.relation,
+        ContactEdgeRow(
+            source_user_id=user_id,
+            target_user_id=body.target_user_id,
+            kind=body.kind,
+            state=body.state,
+            muted=body.kind == "muted",
+            blocked=body.kind == "blocked",
             created_at=time.time(),
             updated_at=time.time(),
         )
     )
-    return {"status": "ok", "relation": body.relation}
+    return {"status": "ok", "kind": body.kind, "state": body.state}
 
 
 @router.delete("/{target_id}")

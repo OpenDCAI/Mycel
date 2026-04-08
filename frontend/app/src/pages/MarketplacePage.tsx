@@ -6,7 +6,7 @@ import { useAppStore } from "@/store/app-store";
 import { useIsMobile } from "@/hooks/use-mobile";
 import MarketplaceCard from "@/components/marketplace/MarketplaceCard";
 import UpdateDialog from "@/components/marketplace/UpdateDialog";
-import type { Member } from "@/store/types";
+import type { Agent } from "@/store/types";
 
 type Tab = "explore" | "installed";
 type InstalledSubTab = "member" | "skill" | "agent";
@@ -47,7 +47,7 @@ export default function MarketplacePage() {
   const error = useMarketplaceStore((s) => s.error);
 
   // Installed state
-  const memberList = useAppStore((s) => s.memberList);
+  const agentList = useAppStore((s) => s.agentList);
   const librarySkills = useAppStore((s) => s.librarySkills);
   const libraryAgents = useAppStore((s) => s.libraryAgents);
   const fetchLibrary = useAppStore((s) => s.fetchLibrary);
@@ -61,7 +61,7 @@ export default function MarketplacePage() {
 
   // Update dialog
   const [updateDialogOpen, setUpdateDialogOpen] = useState(false);
-  const [updateTarget, setUpdateTarget] = useState<{ member: Member; update: any } | null>(null);
+  const [updateTarget, setUpdateTarget] = useState<{ agent: Agent; update: any } | null>(null);
 
 
   // Fetch explore items when filters change
@@ -90,7 +90,7 @@ export default function MarketplacePage() {
   }, [tab, fetchLibrary]);
 
   // Installed members with marketplace source info
-  const installedMembers = memberList.filter((m) => !m.builtin);
+  const installedMembers = agentList.filter((m) => !m.builtin);
   const filteredMembers = installedMembers.filter((m) =>
     !installedSearch || m.name.toLowerCase().includes(installedSearch.toLowerCase())
   );
@@ -102,7 +102,7 @@ export default function MarketplacePage() {
   );
 
   const installedSubTabs: { id: InstalledSubTab; label: string; icon: React.ElementType; count: number }[] = [
-    { id: "member", label: "成员", icon: Package, count: installedMembers.length },
+    { id: "member", label: "Agent", icon: Package, count: installedMembers.length },
     { id: "skill", label: "Skill", icon: Zap, count: librarySkills.length },
     { id: "agent", label: "Agent", icon: Users, count: libraryAgents.length },
   ];
@@ -364,7 +364,7 @@ export default function MarketplacePage() {
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  setUpdateTarget({ member, update });
+                                  setUpdateTarget({ agent: member, update });
                                   setUpdateDialogOpen(true);
                                 }}
                                 className="absolute top-2 right-2 text-2xs px-2 py-0.5 rounded-full bg-primary/10 text-primary font-medium hover:bg-primary/20 transition-colors duration-fast"
@@ -377,7 +377,7 @@ export default function MarketplacePage() {
                       })}
                     </div>
                     {filteredMembers.length === 0 && (
-                      <div className="text-center py-12 text-sm text-muted-foreground">暂无已安装的成员</div>
+                      <div className="text-center py-12 text-sm text-muted-foreground">暂无已安装的 Agent</div>
                     )}
                   </>
                 )}
@@ -462,9 +462,9 @@ export default function MarketplacePage() {
         <UpdateDialog
           open={updateDialogOpen}
           onOpenChange={setUpdateDialogOpen}
-          memberId={updateTarget.member.id}
+          agentId={updateTarget.agent.id}
           update={updateTarget.update}
-          memberName={updateTarget.member.name}
+          agentName={updateTarget.agent.name}
         />
       )}
 

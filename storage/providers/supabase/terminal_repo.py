@@ -210,6 +210,25 @@ class SupabaseTerminalRepo:
         if terminal is None:
             return
         thread_id = str(terminal["thread_id"])
+        pointer = self._get_pointer_row(thread_id)
+        remaining = [row for row in self.list_by_thread(thread_id) if str(row["terminal_id"]) != terminal_id]
+
+        # @@@pointer-before-terminal-delete - Supabase now enforces thread_terminal_pointers FKs,
+        # so pointer rows must stop referencing the terminal before the terminal row is deleted.
+        if pointer is not None:
+            if not remaining:
+                self._pointers().delete().eq("thread_id", thread_id).execute()
+            else:
+                next_terminal_id = str(remaining[0]["terminal_id"])
+                active_terminal_id = str(pointer["active_terminal_id"])
+                default_terminal_id = str(pointer["default_terminal_id"])
+                self._pointers().update(
+                    {
+                        "active_terminal_id": next_terminal_id if active_terminal_id == terminal_id else active_terminal_id,
+                        "default_terminal_id": next_terminal_id if default_terminal_id == terminal_id else default_terminal_id,
+                        "updated_at": datetime.now().isoformat(),
+                    }
+                ).eq("thread_id", thread_id).execute()
 
         # Delete associated command chunks and commands (best-effort via chat_session_repo pattern)
         self._client.table("terminal_command_chunks").delete().in_(
@@ -226,39 +245,3 @@ class SupabaseTerminalRepo:
         ).execute()
         self._client.table("terminal_commands").delete().eq("terminal_id", terminal_id).execute()
         self._terminals().delete().eq("terminal_id", terminal_id).execute()
-
-        # Update or remove pointer
-        pointer = self._get_pointer_row(thread_id)
-        if pointer is None:
-            return
-
-        remaining = q.rows(
-            q.limit(
-                q.order(
-                    self._terminals().select("terminal_id").eq("thread_id", thread_id),
-                    "created_at",
-                    desc=True,
-                    repo=_REPO,
-                    operation="delete find remaining",
-                ),
-                1,
-                _REPO,
-                "delete find remaining",
-            ).execute(),
-            _REPO,
-            "delete find remaining",
-        )
-
-        if not remaining:
-            self._pointers().delete().eq("thread_id", thread_id).execute()
-        else:
-            next_terminal_id = str(remaining[0]["terminal_id"])
-            active_terminal_id = str(pointer["active_terminal_id"])
-            default_terminal_id = str(pointer["default_terminal_id"])
-            self._pointers().update(
-                {
-                    "active_terminal_id": next_terminal_id if active_terminal_id == terminal_id else active_terminal_id,
-                    "default_terminal_id": next_terminal_id if default_terminal_id == terminal_id else default_terminal_id,
-                    "updated_at": datetime.now().isoformat(),
-                }
-            ).eq("thread_id", thread_id).execute()

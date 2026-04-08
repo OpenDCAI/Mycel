@@ -39,10 +39,17 @@ def _supabase_client() -> Any:
     return create_supabase_client()
 
 
+@lru_cache(maxsize=1)
+def _public_supabase_client() -> Any:
+    from backend.web.core.supabase_factory import create_public_supabase_client
+
+    return create_public_supabase_client()
+
+
 def make_panel_task_repo() -> Any:
     from storage.providers.supabase.panel_task_repo import SupabasePanelTaskRepo
 
-    return SupabasePanelTaskRepo(_supabase_client())
+    return SupabasePanelTaskRepo(_public_supabase_client())
 
 
 def make_cron_job_repo() -> Any:
@@ -55,6 +62,8 @@ def make_sandbox_monitor_repo() -> Any:
     if _strategy() == "supabase":
         from storage.providers.supabase.sandbox_monitor_repo import SupabaseSandboxMonitorRepo
 
+        # @@@monitor-storage-single-world - resource probes read leases and write snapshots.
+        # In web runtime those reads/writes must hit the same Supabase schema or FK contracts explode.
         return SupabaseSandboxMonitorRepo(_supabase_client())
     from storage.providers.sqlite.sandbox_monitor_repo import SQLiteSandboxMonitorRepo
 

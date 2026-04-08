@@ -13,18 +13,18 @@ class _FakeThreadRepo:
 
 
 class _FakeAgent:
-    def __init__(self, user_id: str, name: str, avatar: str | None = None):
+    def __init__(self, user_id: str, display_name: str, avatar: str | None = None):
         self.id = user_id
-        self.name = name
+        self.display_name = display_name
         self.avatar = avatar
 
 
-class _FakeMemberRepo:
-    def __init__(self, members):
-        self._members = members
+class _FakeUserRepo:
+    def __init__(self, users):
+        self._users = users
 
     def list_all(self):
-        return list(self._members)
+        return list(self._users)
 
     def close(self):
         pass
@@ -34,7 +34,7 @@ def test_thread_owners_resolves_member_metadata_from_runtime_storage():
     owners = resource_common.thread_owners(
         ["thread-1", "thread-2"],
         thread_repo=_FakeThreadRepo({"thread-1": {"agent_user_id": "agent-1"}}),
-        member_repo=_FakeMemberRepo([_FakeAgent("agent-1", "Toad", avatar="x")]),
+        user_repo=_FakeUserRepo([_FakeAgent("agent-1", "Toad", avatar="x")]),
     )
 
     assert owners == {

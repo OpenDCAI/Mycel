@@ -448,3 +448,31 @@ def test_cleanup_resource_leases_reports_category_mismatch_without_deleting(monk
             "actual_category": "active_drift",
         }
     ]
+
+
+def test_runtime_health_snapshot_reports_supabase_storage_contract(monkeypatch):
+    class FakeRepo:
+        def count_rows(self, table_names):
+            return {name: idx + 1 for idx, name in enumerate(table_names)}
+
+        def close(self):
+            return None
+
+    monkeypatch.setenv("LEON_STORAGE_STRATEGY", "supabase")
+    monkeypatch.setenv("LEON_DB_SCHEMA", "staging")
+    monkeypatch.setattr(monitor_service, "make_sandbox_monitor_repo", lambda: FakeRepo())
+    monkeypatch.setattr(monitor_service, "init_providers_and_managers", lambda: ({}, {}))
+    monkeypatch.setattr(monitor_service, "load_all_sessions", lambda _managers: [])
+
+    payload = monitor_service.runtime_health_snapshot()
+
+    assert payload["db"] == {
+        "strategy": "supabase",
+        "schema": "staging",
+        "counts": {
+            "chat_sessions": 1,
+            "sandbox_leases": 2,
+            "lease_events": 3,
+        },
+    }
+    assert payload["sessions"] == {"total": 0, "providers": {}}

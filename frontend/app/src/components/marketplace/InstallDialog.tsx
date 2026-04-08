@@ -47,7 +47,7 @@ export default function InstallDialog({ open, onOpenChange, item }: Props) {
 
         <div className="py-3">
           <p className="text-sm text-muted-foreground">
-            这将把该 {item.type} 保存到本地库，之后可以在成员配置页中添加使用。
+            这将把该 {item.type} 保存到本地库，之后可以在 Agent 配置页中添加使用。
           </p>
           {item.tags.length > 0 && (
             <div className="flex flex-wrap gap-1.5 mt-3">

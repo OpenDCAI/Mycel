@@ -4,61 +4,68 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
 import pytest
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
 
+from backend.web.core.dependencies import get_app, get_current_user_id
 from backend.web.models.requests import CreateThreadRequest
 from backend.web.routers import threads as threads_router
 from backend.web.services import thread_launch_config_service
 from sandbox.recipes import default_recipe_snapshot, normalize_recipe_snapshot
-from storage.contracts import MemberRow, MemberType
+from storage.contracts import UserRow, UserType
 
 
-class _FakeMemberRepo:
+class _FakeUserRepo:
     def __init__(self) -> None:
-        self._members = {
-            "member-1": MemberRow(
+        self._users = {
+            "member-1": UserRow(
                 id="member-1",
-                name="Toad",
-                type=MemberType.MYCEL_AGENT,
+                type=UserType.AGENT,
+                display_name="Toad",
                 owner_user_id="owner-1",
+                agent_config_id="cfg-1",
+                avatar="avatars/member-1.png",
                 created_at=1.0,
             ),
-            "member-2": MemberRow(
+            "member-2": UserRow(
                 id="member-2",
-                name="Dryad",
-                type=MemberType.MYCEL_AGENT,
+                type=UserType.AGENT,
+                display_name="Dryad",
                 owner_user_id="owner-2",
+                agent_config_id="cfg-2",
+                avatar="avatars/member-2.png",
                 created_at=2.0,
             ),
         }
-        self._seq = {"member-1": 0}
+        self._seq = {"member-1": 0, "member-2": 0}
 
-    def get_by_id(self, member_id: str):
-        return self._members.get(member_id)
+    def get_by_id(self, user_id: str):
+        return self._users.get(user_id)
 
-    def increment_thread_seq(self, member_id: str) -> int:
-        self._seq[member_id] += 1
-        return self._seq[member_id]
+    def increment_thread_seq(self, user_id: str) -> int:
+        self._seq[user_id] += 1
+        return self._seq[user_id]
 
 
 class _FakeThreadRepo:
     def __init__(self) -> None:
         self.rows: dict[str, dict] = {}
 
-    def get_default_thread(self, member_id: str):
+    def get_default_thread(self, agent_user_id: str):
         for row in self.rows.values():
-            if row["member_id"] == member_id and row["is_main"]:
+            if row["agent_user_id"] == agent_user_id and row["is_main"]:
                 return {"id": row["thread_id"], **row}
         return None
 
-    def get_next_branch_index(self, member_id: str) -> int:
-        indices = [row["branch_index"] for row in self.rows.values() if row["member_id"] == member_id]
+    def get_next_branch_index(self, agent_user_id: str) -> int:
+        indices = [row["branch_index"] for row in self.rows.values() if row["agent_user_id"] == agent_user_id]
         return max(indices, default=0) + 1
 
     def create(self, **kwargs):
         self.rows[kwargs["thread_id"]] = dict(kwargs)
 
-    def list_by_member(self, member_id: str):
-        return [{"id": thread_id, **row} for thread_id, row in self.rows.items() if row["member_id"] == member_id]
+    def list_by_agent_user(self, agent_user_id: str):
+        return [{"id": thread_id, **row} for thread_id, row in self.rows.items() if row["agent_user_id"] == agent_user_id]
 
 
 class _FakeThreadLaunchPrefRepo:
@@ -66,23 +73,31 @@ class _FakeThreadLaunchPrefRepo:
         self.confirmed: list[tuple[str, str, dict[str, object]]] = []
         self.successful: list[tuple[str, str, dict[str, object]]] = []
 
-    def save_confirmed(self, owner_user_id: str, member_id: str, config: dict[str, object]) -> None:
-        self.confirmed.append((owner_user_id, member_id, config))
+    def save_confirmed(self, owner_user_id: str, agent_user_id: str, config: dict[str, object]) -> None:
+        self.confirmed.append((owner_user_id, agent_user_id, config))
 
-    def save_successful(self, owner_user_id: str, member_id: str, config: dict[str, object]) -> None:
-        self.successful.append((owner_user_id, member_id, config))
+    def save_successful(self, owner_user_id: str, agent_user_id: str, config: dict[str, object]) -> None:
+        self.successful.append((owner_user_id, agent_user_id, config))
 
 
 def _make_threads_app():
     return SimpleNamespace(
         state=SimpleNamespace(
-            member_repo=_FakeMemberRepo(),
+            user_repo=_FakeUserRepo(),
             thread_repo=_FakeThreadRepo(),
             thread_launch_pref_repo=_FakeThreadLaunchPrefRepo(),
             thread_sandbox={},
             thread_cwd={},
         )
     )
+
+
+def _route_test_app(app_state: object) -> FastAPI:
+    test_app = FastAPI()
+    test_app.include_router(threads_router.router)
+    test_app.dependency_overrides[get_current_user_id] = lambda: "owner-1"
+    test_app.dependency_overrides[get_app] = lambda: app_state
+    return test_app
 
 
 def _require_thread_result(result: dict[str, object] | threads_router.JSONResponse) -> dict[str, object]:
@@ -105,10 +120,10 @@ def test_save_last_confirmed_config_normalizes_payload() -> None:
     app = _make_threads_app()
 
     thread_launch_config_service.save_last_confirmed_config(
-        app,
-        "owner-1",
-        "member-1",
-        {
+        app=app,
+        owner_user_id="owner-1",
+        agent_user_id="member-1",
+        payload={
             "create_mode": "wat",
             "provider_config": "  local  ",
             "recipe": "nope",
@@ -190,7 +205,7 @@ def test_resolve_default_config_prefers_last_successful_over_last_confirmed() ->
     app = SimpleNamespace(
         state=SimpleNamespace(
             thread_launch_pref_repo=SimpleNamespace(
-                get=lambda _owner_user_id, _member_id: {
+                get=lambda _owner_user_id, _agent_user_id: {
                     "last_successful": {
                         "create_mode": "existing",
                         "provider_config": "local",
@@ -210,7 +225,7 @@ def test_resolve_default_config_prefers_last_successful_over_last_confirmed() ->
                 }
             ),
             thread_repo=_FakeThreadRepo(),
-            member_repo=_FakeMemberRepo(),
+            user_repo=SimpleNamespace(),
             recipe_repo=object(),
         )
     )
@@ -240,7 +255,11 @@ def test_resolve_default_config_prefers_last_successful_over_last_confirmed() ->
             return_value=[_recipe_library_entry("local")],
         ),
     ):
-        result = thread_launch_config_service.resolve_default_config(app, "owner-1", "member-1")
+        result = thread_launch_config_service.resolve_default_config(
+            app=app,
+            owner_user_id="owner-1",
+            agent_user_id="member-1",
+        )
 
     assert result == {
         "source": "last_successful",
@@ -259,7 +278,7 @@ def test_resolve_default_config_skips_invalid_successful_and_uses_confirmed() ->
     app = SimpleNamespace(
         state=SimpleNamespace(
             thread_launch_pref_repo=SimpleNamespace(
-                get=lambda _owner_user_id, _member_id: {
+                get=lambda _owner_user_id, _agent_user_id: {
                     "last_successful": {
                         "create_mode": "existing",
                         "provider_config": "local",
@@ -279,7 +298,7 @@ def test_resolve_default_config_skips_invalid_successful_and_uses_confirmed() ->
                 }
             ),
             thread_repo=_FakeThreadRepo(),
-            member_repo=_FakeMemberRepo(),
+            user_repo=SimpleNamespace(),
             recipe_repo=object(),
         )
     )
@@ -301,7 +320,11 @@ def test_resolve_default_config_skips_invalid_successful_and_uses_confirmed() ->
             return_value=[_recipe_library_entry("local")],
         ),
     ):
-        result = thread_launch_config_service.resolve_default_config(app, "owner-1", "member-1")
+        result = thread_launch_config_service.resolve_default_config(
+            app=app,
+            owner_user_id="owner-1",
+            agent_user_id="member-1",
+        )
 
     assert result == {
         "source": "last_confirmed",
@@ -316,19 +339,19 @@ def test_resolve_default_config_skips_invalid_successful_and_uses_confirmed() ->
     }
 
 
-def test_find_owned_member_returns_none_for_foreign_member() -> None:
+def test_find_owned_agent_returns_none_for_foreign_agent() -> None:
     app = _make_threads_app()
 
-    result = threads_router._find_owned_member(app, "member-2", "owner-1")
+    result = threads_router._find_owned_agent(app, "member-2", "owner-1")
 
     assert result is None
 
 
-def test_require_owned_member_raises_for_foreign_member() -> None:
+def test_require_owned_agent_raises_for_foreign_agent() -> None:
     app = _make_threads_app()
 
     with pytest.raises(threads_router.HTTPException) as excinfo:
-        threads_router._require_owned_member(app, "member-2", "owner-1")
+        threads_router._require_owned_agent(app, "member-2", "owner-1")
 
     assert excinfo.value.status_code == 403
     assert excinfo.value.detail == "Not authorized"
@@ -339,7 +362,7 @@ async def test_create_thread_persists_existing_lease_successful_config() -> None
     app = _make_threads_app()
     payload = CreateThreadRequest.model_validate(
         {
-            "member_id": "member-1",
+            "agent_user_id": "member-1",
             "lease_id": "lease-1",
             "model": "gpt-5.4",
             "cwd": "/workspace/requested",
@@ -382,21 +405,21 @@ async def test_create_thread_persists_existing_lease_successful_config() -> None
 
 
 @pytest.mark.asyncio
-async def test_resolve_main_thread_uses_owned_member_lookup(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_resolve_main_thread_uses_owned_agent_lookup(monkeypatch: pytest.MonkeyPatch) -> None:
     app = _make_threads_app()
-    payload = threads_router.ResolveMainThreadRequest(member_id="member-2")
+    payload = threads_router.ResolveMainThreadRequest(agent_user_id="member-2")
     calls: list[tuple[object, str, str]] = []
 
-    def _fake_find_owned_member(app_obj, member_id: str, owner_user_id: str):
+    def _fake_find_owned_agent(app_obj, member_id: str, owner_user_id: str):
         calls.append((app_obj, member_id, owner_user_id))
         return None
 
-    monkeypatch.setattr(threads_router, "_find_owned_member", _fake_find_owned_member)
+    monkeypatch.setattr(threads_router, "_find_owned_agent", _fake_find_owned_agent)
 
     result = await threads_router.resolve_main_thread(payload, "owner-1", app)
 
     assert result == {
-        "member_id": "member-2",
+        "agent_user_id": "member-2",
         "default_thread_id": None,
         "thread": None,
     }
@@ -404,15 +427,15 @@ async def test_resolve_main_thread_uses_owned_member_lookup(monkeypatch: pytest.
 
 
 @pytest.mark.asyncio
-async def test_get_default_thread_config_uses_strict_member_gate(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_get_default_thread_config_uses_strict_agent_gate(monkeypatch: pytest.MonkeyPatch) -> None:
     app = _make_threads_app()
     calls: list[tuple[object, str, str]] = []
 
-    def _fake_require_owned_member(app_obj, member_id: str, owner_user_id: str):
+    def _fake_require_owned_agent(app_obj, member_id: str, owner_user_id: str):
         calls.append((app_obj, member_id, owner_user_id))
         raise threads_router.HTTPException(403, "Not authorized")
 
-    monkeypatch.setattr(threads_router, "_require_owned_member", _fake_require_owned_member)
+    monkeypatch.setattr(threads_router, "_require_owned_agent", _fake_require_owned_agent)
 
     with pytest.raises(threads_router.HTTPException) as excinfo:
         await threads_router.get_default_thread_config("member-2", "owner-1", app)
@@ -423,10 +446,10 @@ async def test_get_default_thread_config_uses_strict_member_gate(monkeypatch: py
 
 
 @pytest.mark.asyncio
-async def test_save_default_thread_config_uses_strict_member_gate(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_save_default_thread_config_uses_strict_agent_gate(monkeypatch: pytest.MonkeyPatch) -> None:
     app = _make_threads_app()
     payload = threads_router.SaveThreadLaunchConfigRequest(
-        member_id="member-2",
+        agent_user_id="member-2",
         create_mode="new",
         provider_config="local",
         recipe=None,
@@ -436,11 +459,11 @@ async def test_save_default_thread_config_uses_strict_member_gate(monkeypatch: p
     )
     calls: list[tuple[object, str, str]] = []
 
-    def _fake_require_owned_member(app_obj, member_id: str, owner_user_id: str):
+    def _fake_require_owned_agent(app_obj, member_id: str, owner_user_id: str):
         calls.append((app_obj, member_id, owner_user_id))
         raise threads_router.HTTPException(403, "Not authorized")
 
-    monkeypatch.setattr(threads_router, "_require_owned_member", _fake_require_owned_member)
+    monkeypatch.setattr(threads_router, "_require_owned_agent", _fake_require_owned_agent)
 
     with pytest.raises(threads_router.HTTPException) as excinfo:
         await threads_router.save_default_thread_config(payload, "owner-1", app)
@@ -450,12 +473,85 @@ async def test_save_default_thread_config_uses_strict_member_gate(monkeypatch: p
     assert calls == [(app, "member-2", "owner-1")]
 
 
+def test_get_default_thread_config_route_rejects_unowned_agent() -> None:
+    app = _make_threads_app()
+
+    with TestClient(_route_test_app(app)) as client:
+        response = client.get("/api/threads/default-config", params={"agent_user_id": "member-2"})
+
+    assert response.status_code == 403
+    assert response.json() == {"detail": "Not authorized"}
+
+
+def test_get_default_thread_config_route_uses_owner_and_agent_user_contract(monkeypatch: pytest.MonkeyPatch) -> None:
+    app = _make_threads_app()
+    calls: list[tuple[object, str, str]] = []
+    monkeypatch.setattr(
+        threads_router,
+        "resolve_default_config",
+        lambda app_obj, owner_user_id, agent_user_id: (
+            calls.append((app_obj, owner_user_id, agent_user_id))
+            or {"source": "last_successful", "config": {"create_mode": "existing", "provider_config": "local"}}
+        ),
+    )
+
+    with TestClient(_route_test_app(app)) as client:
+        response = client.get("/api/threads/default-config", params={"agent_user_id": "member-1"})
+
+    assert response.status_code == 200
+    assert response.json() == {"source": "last_successful", "config": {"create_mode": "existing", "provider_config": "local"}}
+    assert calls == [(app, "owner-1", "member-1")]
+
+
+def test_save_default_thread_config_route_persists_confirmed_agent_user_payload(monkeypatch: pytest.MonkeyPatch) -> None:
+    app = _make_threads_app()
+    calls: list[tuple[object, str, str, dict[str, object]]] = []
+    monkeypatch.setattr(
+        threads_router,
+        "save_last_confirmed_config",
+        lambda app_obj, owner_user_id, agent_user_id, payload: calls.append((app_obj, owner_user_id, agent_user_id, payload)),
+    )
+
+    with TestClient(_route_test_app(app)) as client:
+        response = client.post(
+            "/api/threads/default-config",
+            json={
+                "agent_user_id": "member-1",
+                "create_mode": "new",
+                "provider_config": "local",
+                "recipe": None,
+                "lease_id": None,
+                "model": "gpt-5.4-mini",
+                "workspace": "/tmp/demo",
+            },
+        )
+
+    assert response.status_code == 200
+    assert response.json() == {"ok": True}
+    assert calls == [
+        (
+            app,
+            "owner-1",
+            "member-1",
+            {
+                "agent_user_id": "member-1",
+                "create_mode": "new",
+                "provider_config": "local",
+                "recipe": None,
+                "lease_id": None,
+                "model": "gpt-5.4-mini",
+                "workspace": "/tmp/demo",
+            },
+        )
+    ]
+
+
 @pytest.mark.asyncio
 async def test_create_thread_persists_new_launch_successful_config() -> None:
     app = _make_threads_app()
     payload = CreateThreadRequest.model_validate(
         {
-            "member_id": "member-1",
+            "agent_user_id": "member-1",
             "model": "gpt-5.4-mini",
             "cwd": "/tmp/fresh-local-thread",
         }

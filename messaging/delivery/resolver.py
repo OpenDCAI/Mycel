@@ -51,7 +51,7 @@ class HireVisitDeliveryResolver:
     ) -> DeliveryAction:
         # 1. Contact-level block — always DROP
         contact = self._get_contact(recipient_id, sender_id)
-        if contact and contact.get("relation") == "blocked":
+        if self._is_blocked(contact):
             logger.debug("[resolver] DROP: %s blocked %s", recipient_id[:15], sender_id[:15])
             return DeliveryAction.DROP
 
@@ -69,7 +69,7 @@ class HireVisitDeliveryResolver:
             return DeliveryAction.DELIVER
 
         # 4. Contact-level mute
-        if contact and contact.get("relation") == "muted":
+        if self._is_muted(contact):
             logger.debug("[resolver] NOTIFY: %s muted %s", recipient_id[:15], sender_id[:15])
             return DeliveryAction.NOTIFY
 
@@ -92,14 +92,27 @@ class HireVisitDeliveryResolver:
         return DeliveryAction.DELIVER
 
     def _get_contact(self, owner_id: str, target_id: str):
-        """Fetch contact row — handles both old and new field names."""
+        """Fetch contact row from the directional contacts table."""
         try:
-            # New contacts table (owner_user_id / target_user_id)
             if hasattr(self._contacts, "get"):
                 return self._contacts.get(owner_id, target_id)
         except Exception:
             pass
         return None
+
+    def _is_blocked(self, contact: Any | None) -> bool:
+        if not contact:
+            return False
+        if bool(contact.get("blocked")):
+            return True
+        return contact.get("relation") == "blocked"
+
+    def _is_muted(self, contact: Any | None) -> bool:
+        if not contact:
+            return False
+        if bool(contact.get("muted")):
+            return True
+        return contact.get("relation") == "muted"
 
     def _is_chat_muted(self, user_id: str, chat_id: str) -> bool:
         """Check if user has muted this specific chat."""

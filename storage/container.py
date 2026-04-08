@@ -17,7 +17,6 @@ from .contracts import (
     FileOperationRepo,
     InviteCodeRepo,
     LeaseRepo,
-    MemberRepo,
     PanelTaskRepo,
     ProviderEventRepo,
     QueueRepo,
@@ -31,6 +30,7 @@ from .contracts import (
     ThreadLaunchPrefRepo,
     ThreadRepo,
     ToolTaskRepo,
+    UserRepo,
     UserSettingsRepo,
 )
 
@@ -52,7 +52,7 @@ _REPO_REGISTRY: dict[str, tuple[str, str]] = {
     "tool_task_repo": ("storage.providers.supabase.tool_task_repo", "SupabaseToolTaskRepo"),
     "sync_file_repo": ("storage.providers.supabase.sync_file_repo", "SupabaseSyncFileRepo"),
     "resource_snapshot_repo": ("storage.providers.supabase.resource_snapshot_repo", "SupabaseResourceSnapshotRepo"),
-    "member_repo": ("storage.providers.supabase.member_repo", "SupabaseMemberRepo"),
+    "user_repo": ("storage.providers.supabase.user_repo", "SupabaseUserRepo"),
     "thread_repo": ("storage.providers.supabase.thread_repo", "SupabaseThreadRepo"),
     "thread_launch_pref_repo": ("storage.providers.supabase.thread_launch_pref_repo", "SupabaseThreadLaunchPrefRepo"),
     "recipe_repo": ("storage.providers.supabase.recipe_repo", "SupabaseRecipeRepo"),
@@ -67,15 +67,16 @@ _REPO_REGISTRY: dict[str, tuple[str, str]] = {
 class StorageContainer:
     """Composition root for storage repos (Supabase-only)."""
 
-    def __init__(self, supabase_client: Any, **_kwargs: Any) -> None:
+    def __init__(self, supabase_client: Any, public_supabase_client: Any | None = None, **_kwargs: Any) -> None:
         if supabase_client is None:
             raise RuntimeError("StorageContainer requires a supabase_client.")
         self._supabase_client = supabase_client
+        self._public_supabase_client = public_supabase_client or supabase_client
 
-    def _build(self, name: str) -> Any:
+    def _build(self, name: str, *, client: Any | None = None) -> Any:
         mod_path, cls_name = _REPO_REGISTRY[name]
         mod = importlib.import_module(mod_path)
-        return getattr(mod, cls_name)(client=self._supabase_client)
+        return getattr(mod, cls_name)(client=client or self._supabase_client)
 
     def checkpoint_repo(self) -> CheckpointRepo:
         return self._build("checkpoint_repo")
@@ -111,7 +112,9 @@ class StorageContainer:
         return self._build("chat_session_repo")
 
     def panel_task_repo(self) -> PanelTaskRepo:
-        return self._build("panel_task_repo")
+        # @@@panel-task-public-schema - panel task board is still a public-schema
+        # island, so the live repo must not silently inherit runtime staging schema.
+        return self._build("panel_task_repo", client=self._public_supabase_client)
 
     def cron_job_repo(self) -> CronJobRepo:
         return self._build("cron_job_repo")
@@ -123,13 +126,15 @@ class StorageContainer:
         return self._build("tool_task_repo")
 
     def sync_file_repo(self) -> SyncFileRepo:
-        return self._build("sync_file_repo")
+        # @@@sync-file-public-schema - sync_files is still a public-schema island,
+        # so runtime cleanup must not silently inherit staging.
+        return self._build("sync_file_repo", client=self._public_supabase_client)
 
     def resource_snapshot_repo(self) -> ResourceSnapshotRepo:
         return self._build("resource_snapshot_repo")
 
-    def member_repo(self) -> MemberRepo:
-        return self._build("member_repo")
+    def user_repo(self) -> UserRepo:
+        return self._build("user_repo")
 
     def thread_repo(self) -> ThreadRepo:
         return self._build("thread_repo")
@@ -147,7 +152,9 @@ class StorageContainer:
         return self._build("invite_code_repo")
 
     def user_settings_repo(self) -> UserSettingsRepo:
-        return self._build("user_settings_repo")
+        # @@@user-settings-public-schema - user_settings is still a public-schema
+        # island, so authenticated settings routes must not inherit staging.
+        return self._build("user_settings_repo", client=self._public_supabase_client)
 
     def agent_config_repo(self) -> AgentConfigRepo:
         return self._build("agent_config_repo")

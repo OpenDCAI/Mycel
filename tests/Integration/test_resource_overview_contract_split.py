@@ -61,7 +61,7 @@ def test_monitor_resources_route_stays_global(monkeypatch) -> None:
 def test_user_resource_projection_groups_visible_leases_into_provider_cards(monkeypatch) -> None:
     class _State:
         thread_repo = object()
-        member_repo = object()
+        user_repo = object()
 
     class _App:
         state = _State()
@@ -132,7 +132,7 @@ def test_user_resource_projection_groups_visible_leases_into_provider_cards(monk
 def test_user_resource_projection_marks_provider_unavailable_when_capability_probe_fails(monkeypatch) -> None:
     class _State:
         thread_repo = object()
-        member_repo = object()
+        user_repo = object()
 
     class _App:
         state = _State()
@@ -191,7 +191,7 @@ def test_user_resource_projection_marks_provider_unavailable_when_capability_pro
 def test_resources_overview_route_surfaces_actor_first_user_payload(monkeypatch) -> None:
     class _State:
         thread_repo = object()
-        member_repo = object()
+        user_repo = object()
 
     test_app = FastAPI()
     test_app.state = _State()

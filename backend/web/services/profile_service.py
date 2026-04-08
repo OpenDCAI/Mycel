@@ -1,11 +1,11 @@
-"""Profile CRUD — config.json based, with auth-member override for signed-in shell."""
+"""Profile CRUD — config.json based, with auth-user override for signed-in shell."""
 
 import json
 from pathlib import Path
 from typing import Any
 
 from config.user_paths import preferred_existing_user_home_path, user_home_path
-from storage.contracts import MemberRow
+from storage.contracts import UserRow
 
 LEON_HOME = user_home_path()
 CONFIG_PATH = LEON_HOME / "config.json"
@@ -35,12 +35,12 @@ def _initials_from_name(name: str) -> str:
     return stripped[:2].upper()
 
 
-def get_profile(member: MemberRow | None = None) -> dict[str, Any]:
-    if member is not None:
+def get_profile(user: UserRow | None = None) -> dict[str, Any]:
+    if user is not None:
         return {
-            "name": member.name or "用户",
-            "initials": _initials_from_name(member.name or ""),
-            "email": member.email or "",
+            "name": user.display_name or "用户",
+            "initials": _initials_from_name(user.display_name or ""),
+            "email": user.email or "",
         }
     cfg = _read_json(preferred_existing_user_home_path("config.json"), {})
     profile = cfg.get("profile", {})
@@ -51,14 +51,13 @@ def get_profile(member: MemberRow | None = None) -> dict[str, Any]:
     }
 
 
-def update_profile(**fields: Any) -> dict[str, Any]:
-    allowed = {"name", "initials", "email"}
-    updates = {k: v for k, v in fields.items() if k in allowed and v is not None}
+def update_profile(*, user_repo: Any, user_id: str, **fields: Any) -> dict[str, Any]:
+    updates: dict[str, Any] = {}
+    if fields.get("name") is not None:
+        updates["display_name"] = fields["name"]
+    if fields.get("email") is not None:
+        updates["email"] = fields["email"]
     if not updates:
-        return get_profile()
-    cfg = _read_json(preferred_existing_user_home_path("config.json"), {})
-    profile = cfg.get("profile", {})
-    profile.update(updates)
-    cfg["profile"] = profile
-    _write_json(CONFIG_PATH, cfg)
-    return get_profile()
+        return get_profile(user_repo.get_by_id(user_id))
+    user_repo.update(user_id, **updates)
+    return get_profile(user_repo.get_by_id(user_id))

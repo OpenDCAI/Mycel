@@ -39,7 +39,7 @@ if _env_file.exists():
             os.environ[key] = value
 
 from config import LeonSettings  # noqa: E402
-from config.loader import AgentLoader  # noqa: E402
+from config.loader import AgentLoader, load_bundle_from_repo  # noqa: E402
 from config.models_loader import ModelsLoader  # noqa: E402
 from config.models_schema import ModelsConfig  # noqa: E402
 from config.observation_loader import ObservationLoader  # noqa: E402
@@ -148,6 +148,8 @@ class LeonAgent:
         *,
         agent: str | None = None,
         bundle_dir: str | Path | None = None,
+        agent_config_id: str | None = None,
+        agent_config_repo: Any = None,
         allowed_file_extensions: list[str] | None = None,
         block_dangerous_commands: bool | None = None,
         block_network_commands: bool | None = None,
@@ -160,7 +162,7 @@ class LeonAgent:
         sandbox: Any = None,
         storage_container: StorageContainer | None = None,
         thread_repo: Any = None,
-        member_repo: Any = None,
+        user_repo: Any = None,
         queue_manager: MessageQueueManager | None = None,
         chat_repos: dict | None = None,
         web_app: Any = None,
@@ -185,7 +187,7 @@ class LeonAgent:
             enable_web_tools: Whether to enable web search and content fetching tools
             sandbox: Sandbox instance, name string, or None for local
             thread_repo: Optional thread metadata repo for backend-integrated subagent registration
-            member_repo: Optional member repo for backend-integrated subagent registration
+            user_repo: Optional user repo for backend-integrated subagent registration
             queue_manager: Shared MessageQueueManager instance (created if not provided)
             permission_resolver_scope: Permission request surface for this agent ("none" or "thread")
             verbose: Whether to output detailed logs (default False)
@@ -196,7 +198,7 @@ class LeonAgent:
         self.queue_manager = queue_manager or MessageQueueManager()
         self._chat_repos: dict | None = chat_repos
         self._thread_repo = thread_repo
-        self._member_repo = member_repo
+        self._user_repo = user_repo
         self._web_app = web_app
         self._session_started = False
         self._session_ended = False
@@ -209,6 +211,8 @@ class LeonAgent:
         self.config, self.models_config = self._load_config(
             agent_name=agent,
             bundle_dir=bundle_dir,
+            agent_config_id=agent_config_id,
+            agent_config_repo=agent_config_repo,
             workspace_root=workspace_root,
             sandbox_name=requested_sandbox_name,
             model_name=model_name,
@@ -527,6 +531,8 @@ class LeonAgent:
         self,
         agent_name: str | None,
         bundle_dir: str | Path | None,
+        agent_config_id: str | None,
+        agent_config_repo: Any,
         workspace_root: str | Path | None,
         sandbox_name: str | None,
         model_name: str | None,
@@ -581,15 +587,23 @@ class LeonAgent:
         models_loader = ModelsLoader(workspace_root=workspace_root)
         models_config = models_loader.load(cli_overrides=models_cli if models_cli else None)
 
-        # @@@bundle-dir-wins - member-backed top-level agents need their own bundle even when
-        # no explicit agent type name is passed through the thread runtime wiring.
-        if bundle_dir is not None:
+        # @@@runtime-agent-config-root - web/runtime live agent startup must resolve from the
+        # repo-rooted agent_config_id path, not from ~/.leon/members filesystem shells.
+        if agent_config_id is not None:
+            if agent_config_repo is None:
+                raise RuntimeError("agent_config_repo is required when agent_config_id is provided")
+            bundle = load_bundle_from_repo(agent_config_repo, agent_config_id)
+            if bundle is None:
+                raise RuntimeError(f"Agent config bundle not found: {agent_config_id}")
+            self._agent_bundle = bundle
+            self._agent_override = bundle.agent
+        elif bundle_dir is not None:
             bundle_path = Path(bundle_dir).expanduser().resolve()
             self._agent_bundle = loader.load_bundle(bundle_path)
             self._agent_override = self._agent_bundle.agent.model_copy(update={"source_dir": bundle_path})
         # If agent specified, load agent definition to override system_prompt and tools
         elif agent_name:
-            all_agents = loader.load_all_agents()
+            all_agents = loader.load_runtime_agents()
             agent_def = all_agents.get(agent_name)
             if not agent_def:
                 available = ", ".join(sorted(all_agents.keys()))
@@ -1216,7 +1230,7 @@ class LeonAgent:
             workspace_root=self.workspace_root,
             model_name=self.model_name,
             thread_repo=self._thread_repo,
-            member_repo=self._member_repo,
+            user_repo=self._user_repo,
             queue_manager=self.queue_manager,
             shared_runs=self._background_runs,
             web_app=self._web_app,
@@ -1252,7 +1266,7 @@ class LeonAgent:
                     messaging_service=repos.get("messaging_service"),
                     chat_member_repo=repos.get("chat_member_repo"),
                     messages_repo=repos.get("messages_repo"),
-                    member_repo=repos.get("member_repo"),
+                    user_repo=repos.get("user_repo"),
                     thread_repo=self._thread_repo,
                     relationship_repo=repos.get("relationship_repo"),
                 )
@@ -1399,16 +1413,16 @@ class LeonAgent:
             uid = repos.get("chat_identity_id") or repos.get("user_id")
             owner_uid = repos.get("owner_id", "")
             if uid:
-                member_repo = repos.get("member_repo")
-                self_member = member_repo.get_by_id(uid) if member_repo else None
-                if self_member is None and member_repo and self._thread_repo is not None:
+                user_repo = repos.get("user_repo")
+                self_member = user_repo.get_by_id(uid) if user_repo else None
+                if self_member is None and user_repo and self._thread_repo is not None:
                     thread = self._thread_repo.get_by_user_id(uid)
-                    member_id = thread.get("member_id") if thread else None
-                    if member_id:
-                        self_member = member_repo.get_by_id(member_id)
-                owner_row = member_repo.get_by_id(owner_uid) if member_repo and owner_uid else None
-                name = self_member.name if self_member else uid
-                owner_name = owner_row.name if owner_row else "unknown"
+                    agent_user_id = thread.get("agent_user_id") if thread else None
+                    if agent_user_id:
+                        self_member = user_repo.get_by_id(agent_user_id)
+                owner_row = user_repo.get_by_id(owner_uid) if user_repo and owner_uid else None
+                name = self_member.display_name if self_member else uid
+                owner_name = owner_row.display_name if owner_row else "unknown"
                 prompt += (
                     f"\n\n**Chat Identity:**\n"
                     f"- Your name: {name}\n"

@@ -43,12 +43,13 @@ async def lifespan(app: FastAPI):
     await _validate_web_checkpointer_contract()
 
     # ---- Member-Chat repos + services ----
-    from backend.web.core.supabase_factory import create_supabase_auth_client, create_supabase_client
+    from backend.web.core.supabase_factory import create_public_supabase_client, create_supabase_auth_client, create_supabase_client
     from storage.container import StorageContainer
 
     _supabase_client = create_supabase_client()
-    storage_container = StorageContainer(supabase_client=_supabase_client)
-    app.state.member_repo = storage_container.member_repo()
+    _public_supabase_client = create_public_supabase_client()
+    storage_container = StorageContainer(supabase_client=_supabase_client, public_supabase_client=_public_supabase_client)
+    app.state.user_repo = storage_container.user_repo()
     app.state.thread_repo = storage_container.thread_repo()
     app.state.thread_launch_pref_repo = storage_container.thread_launch_pref_repo()
     app.state.recipe_repo = storage_container.recipe_repo()
@@ -59,13 +60,15 @@ async def lifespan(app: FastAPI):
     app.state.panel_task_repo = storage_container.panel_task_repo()
     app.state.cron_job_repo = storage_container.cron_job_repo()
     app.state._supabase_client = _supabase_client
+    app.state._public_supabase_client = _public_supabase_client
     app.state._supabase_auth_client_factory = create_supabase_auth_client
     app.state._storage_container = storage_container
 
     from backend.web.services.auth_service import AuthService
 
     app.state.auth_service = AuthService(
-        members=app.state.member_repo,
+        users=app.state.user_repo,
+        agent_configs=app.state.agent_config_repo,
         supabase_client=_supabase_client,
         supabase_auth_client_factory=create_supabase_auth_client,
         invite_codes=app.state.invite_code_repo,
@@ -101,11 +104,7 @@ async def lifespan(app: FastAPI):
     app.state.chat_member_repo = _chat_member_repo
     app.state.messages_repo = _messages_repo
 
-    app.state.relationship_service = RelationshipService(
-        app.state.relationship_repo,
-        member_repo=app.state.member_repo,
-        thread_repo=app.state.thread_repo,
-    )
+    app.state.relationship_service = RelationshipService(app.state.relationship_repo)
 
     _msg_delivery_resolver = HireVisitDeliveryResolver(
         contact_repo=app.state.contact_repo,
@@ -118,7 +117,7 @@ async def lifespan(app: FastAPI):
         chat_member_repo=_chat_member_repo,
         messages_repo=_messages_repo,
         message_read_repo=_message_read_repo,
-        member_repo=app.state.member_repo,
+        user_repo=app.state.user_repo,
         thread_repo=app.state.thread_repo,
         event_bus=app.state.chat_event_bus,
         delivery_resolver=_msg_delivery_resolver,

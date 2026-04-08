@@ -37,8 +37,8 @@ def _extract_jwt_payload(request: Request) -> dict:
 async def get_current_user_id(request: Request) -> str:
     """Extract user_id from JWT and verify user exists. Returns 401 if user was deleted (e.g. DB reset)."""
     user_id = _extract_jwt_payload(request)["user_id"]
-    member_repo = getattr(request.app.state, "member_repo", None)
-    if member_repo and member_repo.get_by_id(user_id) is None:
+    user_repo = getattr(request.app.state, "user_repo", None)
+    if user_repo and user_repo.get_by_id(user_id) is None:
         raise HTTPException(401, "User no longer exists — please re-login")
     return user_id
 
@@ -52,8 +52,8 @@ async def verify_thread_owner(
     thread = app.state.thread_repo.get_by_id(thread_id)
     if not thread:
         raise HTTPException(404, "Thread not found")
-    agent_member = app.state.member_repo.get_by_id(thread["member_id"])
-    if not agent_member or agent_member.owner_user_id != user_id:
+    agent_user = app.state.user_repo.get_by_id(thread["agent_user_id"])
+    if not agent_user or agent_user.owner_user_id != user_id:
         raise HTTPException(403, "Not authorized")
     return user_id
 

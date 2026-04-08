@@ -5,7 +5,7 @@ from __future__ import annotations
 from enum import StrEnum
 from typing import Any, Literal, Protocol
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 NotificationType = Literal["steer", "command", "agent", "chat"]
 
@@ -132,27 +132,254 @@ class MemberType(StrEnum):
     OPENCLAW_AGENT = "openclaw_agent"
 
 
-class MemberRow(BaseModel):
+class UserType(StrEnum):
+    HUMAN = "human"
+    AGENT = "agent"
+
+
+class UserRow(BaseModel):
     id: str
-    name: str
-    type: MemberType
-    avatar: str | None = None
-    description: str | None = None
-    config_dir: str | None = None
+    type: UserType
+    display_name: str
     owner_user_id: str | None = None
+    agent_config_id: str | None = None
     next_thread_seq: int = 0
-    created_at: float
-    updated_at: float | None = None
+    avatar: str | None = None
     email: str | None = None
     mycel_id: int | None = None
+    created_at: float
+    updated_at: float | None = None
+
+    @model_validator(mode="after")
+    def _validate_identity_shape(self) -> UserRow:
+        # @@@user-row-shape - users are the unified social identity surface, so
+        # human/agent optional fields must fail loudly instead of drifting into
+        # mixed half-valid rows.
+        if self.type is UserType.HUMAN:
+            if self.owner_user_id is not None:
+                raise ValueError("human users must not carry owner_user_id")
+            if self.agent_config_id is not None:
+                raise ValueError("human users must not carry agent_config_id")
+            return self
+        if self.owner_user_id is None:
+            raise ValueError("agent users require owner_user_id")
+        if self.agent_config_id is None:
+            raise ValueError("agent users require agent_config_id")
+        return self
+
+
+class AgentConfigRow(BaseModel):
+    id: str
+    agent_user_id: str
+    name: str
+    description: str = ""
+    model: str | None = None
+    tools: list[str] = Field(default_factory=list)
+    system_prompt: str = ""
+    status: str = "draft"
+    version: str = "0.1.0"
+    runtime: dict[str, Any] = Field(default_factory=dict)
+    mcp: dict[str, Any] = Field(default_factory=dict)
+    created_at: int
+    updated_at: int | None = None
+
+    @field_validator("id", "agent_user_id", "name")
+    @classmethod
+    def _validate_non_blank(cls, value: str, info: Any) -> str:
+        if not value.strip():
+            raise ValueError(f"agent_config.{info.field_name} must not be blank")
+        return value
+
+
+class AgentRuleRow(BaseModel):
+    id: str
+    agent_config_id: str
+    filename: str
+    content: str
+
+    @field_validator("id", "agent_config_id")
+    @classmethod
+    def _validate_identity_fields(cls, value: str, info: Any) -> str:
+        if not value.strip():
+            raise ValueError(f"agent_rule.{info.field_name} must not be blank")
+        return value
+
+
+class AgentSkillRow(BaseModel):
+    id: str
+    agent_config_id: str
+    name: str
+    content: str
+    meta: dict[str, Any] = Field(default_factory=dict)
+
+    @field_validator("id", "agent_config_id")
+    @classmethod
+    def _validate_identity_fields(cls, value: str, info: Any) -> str:
+        if not value.strip():
+            raise ValueError(f"agent_skill.{info.field_name} must not be blank")
+        return value
+
+
+class AgentSubAgentRow(BaseModel):
+    id: str
+    agent_config_id: str
+    name: str
+    description: str | None = None
+    model: str | None = None
+    tools: list[Any] = Field(default_factory=list)
+    system_prompt: str | None = None
+
+    @field_validator("id", "agent_config_id")
+    @classmethod
+    def _validate_identity_fields(cls, value: str, info: Any) -> str:
+        if not value.strip():
+            raise ValueError(f"agent_sub_agent.{info.field_name} must not be blank")
+        return value
+
+
+class ThreadRow(BaseModel):
+    id: str
+    agent_user_id: str
+    sandbox_type: str
+    model: str | None = None
+    cwd: str | None = None
+    status: str = "active"
+    created_at: float
+    updated_at: float | None = None
+    last_active_at: float | None = None
+
+    @field_validator("id", "agent_user_id", "sandbox_type")
+    @classmethod
+    def _validate_non_blank(cls, value: str, info: Any) -> str:
+        if not value.strip():
+            raise ValueError(f"thread.{info.field_name} must not be blank")
+        return value
 
 
 class ChatRow(BaseModel):
     id: str
+    type: str
+    created_by_user_id: str
     title: str | None = None
     status: str = "active"
+    next_message_seq: int = 0
     created_at: float
     updated_at: float | None = None
+
+    @field_validator("id", "type", "created_by_user_id")
+    @classmethod
+    def _validate_chat_identity_fields(cls, value: str, info: Any) -> str:
+        if not value.strip():
+            raise ValueError(f"chat.{info.field_name} must not be blank")
+        return value
+
+
+class ChatMemberRow(BaseModel):
+    chat_id: str
+    user_id: str
+    role: str = "member"
+    joined_at: float
+    last_read_seq: int = 0
+    muted: bool = False
+    mute_until: float | None = None
+    version: int = 0
+
+    @field_validator("chat_id", "user_id")
+    @classmethod
+    def _validate_chat_member_identity_fields(cls, value: str, info: Any) -> str:
+        if not value.strip():
+            raise ValueError(f"chat_member.{info.field_name} must not be blank")
+        return value
+
+    @field_validator("last_read_seq")
+    @classmethod
+    def _validate_last_read_seq(cls, value: int) -> int:
+        if value < 0:
+            raise ValueError("chat_member.last_read_seq must be >= 0")
+        return value
+
+
+class MessageRow(BaseModel):
+    id: str
+    chat_id: str
+    seq: int
+    sender_user_id: str
+    content: str
+    content_type: str = "text/plain"
+    message_type: str = "text"
+    signal: str | None = None
+    mentions: list[str] = Field(default_factory=list)
+    reply_to_message_id: str | None = None
+    ai_metadata: dict[str, Any] = Field(default_factory=dict)
+    created_at: float
+    delivered_at: float | None = None
+    edited_at: float | None = None
+    retracted_at: float | None = None
+    deleted_at: float | None = None
+
+    @field_validator("id", "chat_id", "sender_user_id")
+    @classmethod
+    def _validate_message_identity_fields(cls, value: str, info: Any) -> str:
+        if not value.strip():
+            raise ValueError(f"message.{info.field_name} must not be blank")
+        return value
+
+    @field_validator("seq")
+    @classmethod
+    def _validate_message_seq(cls, value: int) -> int:
+        if value < 1:
+            raise ValueError("message.seq must be >= 1")
+        return value
+
+
+class ContactEdgeRow(BaseModel):
+    source_user_id: str
+    target_user_id: str
+    kind: str = "normal"
+    state: str = "active"
+    alias: str | None = None
+    note: str | None = None
+    pinned: bool = False
+    muted: bool = False
+    archived: bool = False
+    blocked: bool = False
+    snapshot: dict[str, Any] = Field(default_factory=dict)
+    version: int = 0
+    created_at: float
+    updated_at: float | None = None
+
+    @field_validator("source_user_id", "target_user_id", "kind", "state")
+    @classmethod
+    def _validate_contact_identity_fields(cls, value: str, info: Any) -> str:
+        if not value.strip():
+            raise ValueError(f"contact.{info.field_name} must not be blank")
+        return value
+
+
+class RelationshipRow(BaseModel):
+    user_low: str
+    user_high: str
+    kind: str
+    state: str = "pending"
+    initiator_user_id: str
+    version: int = 0
+    created_at: float
+    updated_at: float | None = None
+
+    @field_validator("user_low", "user_high", "kind", "initiator_user_id")
+    @classmethod
+    def _validate_relationship_identity_fields(cls, value: str, info: Any) -> str:
+        if not value.strip():
+            raise ValueError(f"relationship.{info.field_name} must not be blank")
+        return value
+
+    @model_validator(mode="after")
+    def _validate_sorted_pair(self) -> RelationshipRow:
+        # @@@relationship-sorted-pair - symmetric edges must collapse to one
+        # canonical row, so the storage contract rejects unsorted user pairs.
+        if self.user_low >= self.user_high:
+            raise ValueError("relationship.user_low must be < relationship.user_high")
+        return self
 
 
 # ---------------------------------------------------------------------------
@@ -234,9 +461,10 @@ class RecipeRepo(Protocol):
 
 class ThreadLaunchPrefRepo(Protocol):
     def close(self) -> None: ...
-    def get(self, owner_user_id: str, member_id: str) -> dict[str, Any] | None: ...
-    def save_confirmed(self, owner_user_id: str, member_id: str, config: dict[str, Any]) -> None: ...
-    def save_successful(self, owner_user_id: str, member_id: str, config: dict[str, Any]) -> None: ...
+    def get(self, owner_user_id: str, agent_user_id: str) -> dict[str, Any] | None: ...
+    def save_confirmed(self, owner_user_id: str, agent_user_id: str, config: dict[str, Any]) -> None: ...
+    def save_successful(self, owner_user_id: str, agent_user_id: str, config: dict[str, Any]) -> None: ...
+    def delete_by_agent_user_id(self, agent_user_id: str) -> int: ...
 
 
 class UserSettingsRepo(Protocol):
@@ -255,26 +483,26 @@ class UserSettingsRepo(Protocol):
 
 class AgentConfigRepo(Protocol):
     def close(self) -> None: ...
-    def get_config(self, member_id: str) -> dict[str, Any] | None: ...
-    def save_config(self, member_id: str, data: dict[str, Any]) -> None: ...
-    def delete_config(self, member_id: str) -> None: ...
-    def list_rules(self, member_id: str) -> list[dict[str, Any]]: ...
-    def save_rule(self, member_id: str, filename: str, content: str, rule_id: str | None = None) -> dict[str, Any]: ...
+    def get_config(self, agent_config_id: str) -> dict[str, Any] | None: ...
+    def save_config(self, agent_config_id: str, data: dict[str, Any]) -> None: ...
+    def delete_config(self, agent_config_id: str) -> None: ...
+    def list_rules(self, agent_config_id: str) -> list[dict[str, Any]]: ...
+    def save_rule(self, agent_config_id: str, filename: str, content: str, rule_id: str | None = None) -> dict[str, Any]: ...
     def delete_rule(self, rule_id: str) -> None: ...
-    def list_skills(self, member_id: str) -> list[dict[str, Any]]: ...
+    def list_skills(self, agent_config_id: str) -> list[dict[str, Any]]: ...
     def save_skill(
         self,
-        member_id: str,
+        agent_config_id: str,
         name: str,
         content: str,
         meta: dict[str, Any] | None = None,
         skill_id: str | None = None,
     ) -> dict[str, Any]: ...
     def delete_skill(self, skill_id: str) -> None: ...
-    def list_sub_agents(self, member_id: str) -> list[dict[str, Any]]: ...
+    def list_sub_agents(self, agent_config_id: str) -> list[dict[str, Any]]: ...
     def save_sub_agent(
         self,
-        member_id: str,
+        agent_config_id: str,
         name: str,
         *,
         description: str | None = None,
@@ -452,24 +680,18 @@ class EvalRepo(Protocol):
     def get_metrics(self, run_id: str, tier: str | None = None) -> list[dict]: ...
 
 
-# ---------------------------------------------------------------------------
-# Member-Chat — repo protocols
-# ---------------------------------------------------------------------------
-
-
-class MemberRepo(Protocol):
+class UserRepo(Protocol):
     def close(self) -> None: ...
-    def create(self, row: MemberRow) -> None: ...
-    def get_by_id(self, member_id: str) -> MemberRow | None: ...
-    def get_by_name(self, name: str) -> MemberRow | None: ...
-    def get_by_email(self, email: str) -> MemberRow | None: ...
-    def get_by_mycel_id(self, mycel_id: int) -> MemberRow | None: ...
-    def list_all(self) -> list[MemberRow]: ...
-    def list_by_type(self, member_type: str) -> list[MemberRow]: ...
-    def list_by_owner_user_id(self, owner_user_id: str) -> list[MemberRow]: ...
-    def update(self, member_id: str, **fields: Any) -> None: ...
-    def increment_thread_seq(self, member_id: str) -> int: ...
-    def delete(self, member_id: str) -> None: ...
+    def create(self, row: UserRow) -> None: ...
+    def get_by_id(self, user_id: str) -> UserRow | None: ...
+    def get_by_email(self, email: str) -> UserRow | None: ...
+    def get_by_mycel_id(self, mycel_id: int) -> UserRow | None: ...
+    def list_all(self) -> list[UserRow]: ...
+    def list_by_type(self, user_type: str) -> list[UserRow]: ...
+    def list_by_owner_user_id(self, owner_user_id: str) -> list[UserRow]: ...
+    def update(self, user_id: str, **fields: Any) -> None: ...
+    def increment_thread_seq(self, user_id: str) -> int: ...
+    def delete(self, user_id: str) -> None: ...
 
 
 class ChatRepo(Protocol):
@@ -484,7 +706,7 @@ class ThreadRepo(Protocol):
     def create(
         self,
         thread_id: str,
-        member_id: str,
+        agent_user_id: str,
         user_id: str,
         sandbox_type: str,
         cwd: str | None,
@@ -493,9 +715,9 @@ class ThreadRepo(Protocol):
     ) -> None: ...
     def get_by_id(self, thread_id: str) -> dict[str, Any] | None: ...
     def get_by_user_id(self, user_id: str) -> dict[str, Any] | None: ...
-    def get_default_thread(self, member_id: str) -> dict[str, Any] | None: ...
-    def get_next_branch_index(self, member_id: str) -> int: ...
-    def list_by_member(self, member_id: str) -> list[dict[str, Any]]: ...
+    def get_default_thread(self, agent_user_id: str) -> dict[str, Any] | None: ...
+    def get_next_branch_index(self, agent_user_id: str) -> int: ...
+    def list_by_agent_user(self, agent_user_id: str) -> list[dict[str, Any]]: ...
     def list_by_owner_user_id(self, owner_user_id: str) -> list[dict[str, Any]]: ...
     def update(self, thread_id: str, **fields: Any) -> None: ...
     def delete(self, thread_id: str) -> None: ...
@@ -503,9 +725,9 @@ class ThreadRepo(Protocol):
 
 class ContactRepo(Protocol):
     def close(self) -> None: ...
-    def upsert(self, row: ContactRow) -> None: ...
-    def get(self, owner_id: str, target_id: str) -> ContactRow | None: ...
-    def list_for_user(self, owner_id: str) -> list[ContactRow]: ...
+    def upsert(self, row: ContactEdgeRow) -> None: ...
+    def get(self, owner_id: str, target_id: str) -> ContactEdgeRow | None: ...
+    def list_for_user(self, owner_id: str) -> list[ContactEdgeRow]: ...
     def delete(self, owner_id: str, target_id: str) -> None: ...
 
 

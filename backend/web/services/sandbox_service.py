@@ -11,6 +11,7 @@ from typing import Any
 from backend.web.core.config import LOCAL_WORKSPACE_ROOT, SANDBOXES_DIR
 from backend.web.core.storage_factory import make_sandbox_monitor_repo
 from backend.web.utils.helpers import is_virtual_thread_id
+from backend.web.utils.serializers import avatar_url
 from sandbox.config import SandboxConfig
 from sandbox.manager import SandboxManager
 from sandbox.provider import ProviderCapability
@@ -24,12 +25,6 @@ SANDBOX_DB_PATH = resolve_role_db_path(SQLiteDBRole.SANDBOX)
 
 _SANDBOX_INVENTORY_LOCK = threading.Lock()
 _SANDBOX_INVENTORY: tuple[dict[str, Any], dict[str, Any]] | None = None
-
-
-def _resource_avatar_url(user_id: str | None, has_avatar: bool) -> str | None:
-    # @@@resource-avatar-contract - keep the resource lane aligned with #259's public users avatar route
-    # without widening this PR into a repo-wide serializer migration.
-    return f"/api/users/{user_id}/avatar" if user_id and has_avatar else None
 
 
 def _capability_to_dict(capability: ProviderCapability) -> dict[str, Any]:
@@ -54,15 +49,15 @@ def list_user_leases(
     user_id: str,
     *,
     thread_repo: Any = None,
-    member_repo: Any = None,
+    user_repo: Any = None,
     main_db_path: str | Path | None = None,
     sandbox_db_path: str | Path | None = None,
 ) -> list[dict[str, Any]]:
     monitor_repo = make_sandbox_monitor_repo()
-    if thread_repo is None or member_repo is None:
-        raise RuntimeError("thread_repo and member_repo are required for list_user_leases")
+    if thread_repo is None or user_repo is None:
+        raise RuntimeError("thread_repo and user_repo are required for list_user_leases")
     _thread_repo = thread_repo
-    _member_repo = member_repo
+    _user_repo = user_repo
     own_repos = False
     try:
         rows = monitor_repo.list_leases_with_threads()
@@ -96,22 +91,19 @@ def list_user_leases(
             thread = _thread_repo.get_by_id(thread_id)
             if thread is None:
                 continue
-            # @@@thread-agent-owner-compat - keep this read-side fallback narrow until #259
-            # lands user_repo/agent runtime ownership wiring. #260 must stay actor-first outward
-            # without widening runtime member joins inside the resource lane.
-            actor_user_id = str(thread.get("agent_user_id") or thread.get("member_id") or "").strip()
-            if not actor_user_id:
+            agent_user_id = str(thread.get("agent_user_id") or "").strip()
+            if not agent_user_id:
                 continue
-            actor = _member_repo.get_by_id(actor_user_id)
-            if actor is None or actor.owner_user_id != user_id:
+            agent_user = _user_repo.get_by_id(agent_user_id)
+            if agent_user is None or agent_user.owner_user_id != user_id:
                 continue
             group["thread_ids"].append(thread_id)
             group["agents"].append(
                 {
                     "thread_id": thread_id,
-                    "agent_user_id": actor_user_id,
-                    "agent_name": actor.name,
-                    "avatar_url": _resource_avatar_url(actor.id, bool(actor.avatar)),
+                    "agent_user_id": agent_user_id,
+                    "agent_name": agent_user.display_name,
+                    "avatar_url": avatar_url(agent_user.id, bool(agent_user.avatar)),
                 }
             )
             if not group["cwd"] and row.get("cwd"):
@@ -138,7 +130,7 @@ def list_user_leases(
         return leases
     finally:
         if own_repos:
-            _member_repo.close()
+            _user_repo.close()
             _thread_repo.close()
         monitor_repo.close()
 

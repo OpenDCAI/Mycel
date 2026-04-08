@@ -1,5 +1,6 @@
 """HTTP client for Mycel Hub marketplace API."""
 
+import copy
 import json
 import logging
 import os
@@ -8,10 +9,11 @@ from pathlib import Path
 from typing import Any
 
 import httpx
+import yaml
 from fastapi import HTTPException
 
-from backend.web.core.paths import members_dir
-from config.loader import AgentLoader
+from config.loader import load_bundle_from_repo
+from config.types import AgentBundle
 
 logger = logging.getLogger(__name__)
 
@@ -50,62 +52,54 @@ def _write_json(path: Path, data: dict) -> None:
     path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
-def _serialize_member_snapshot(member_id: str) -> dict:
-    """Serialize a local member into a snapshot dict for Hub."""
-    member_dir = members_dir() / member_id
+def _render_agent_md(bundle: AgentBundle) -> str:
+    fm: dict[str, Any] = {"name": bundle.agent.name}
+    if bundle.agent.description:
+        fm["description"] = bundle.agent.description
+    if bundle.agent.model:
+        fm["model"] = bundle.agent.model
+    if bundle.agent.tools and bundle.agent.tools != ["*"]:
+        fm["tools"] = bundle.agent.tools
+    frontmatter = yaml.dump(fm, allow_unicode=True, default_flow_style=False).strip()
+    return f"---\n{frontmatter}\n---\n\n{bundle.agent.system_prompt}\n"
 
-    # Read raw files for faithful snapshot
-    agent_md = (member_dir / "agent.md").read_text(encoding="utf-8")
 
-    rules = []
-    rules_dir = member_dir / "rules"
-    if rules_dir.is_dir():
-        for md in sorted(rules_dir.glob("*.md")):
-            rules.append({"name": md.stem, "content": md.read_text(encoding="utf-8")})
+def _render_sub_agent_md(agent: Any) -> str:
+    fm: dict[str, Any] = {"name": agent.name}
+    if getattr(agent, "description", ""):
+        fm["description"] = agent.description
+    if getattr(agent, "model", None):
+        fm["model"] = agent.model
+    if getattr(agent, "tools", None) and agent.tools != ["*"]:
+        fm["tools"] = agent.tools
+    frontmatter = yaml.dump(fm, allow_unicode=True, default_flow_style=False).strip()
+    return f"---\n{frontmatter}\n---\n\n{getattr(agent, 'system_prompt', '')}\n"
 
-    # Sub-agents
-    agents = []
-    agents_dir = member_dir / "agents"
-    if agents_dir.is_dir():
-        for md in sorted(agents_dir.glob("*.md")):
-            agents.append({"name": md.stem, "content": md.read_text(encoding="utf-8")})
 
-    # Skills
-    skills = []
-    skills_dir = member_dir / "skills"
-    if skills_dir.is_dir():
-        for skill_dir in sorted(skills_dir.iterdir()):
-            if skill_dir.is_dir():
-                skill_md = skill_dir / "SKILL.md"
-                if skill_md.exists():
-                    meta = _read_json(skill_dir / "meta.json")
-                    skills.append(
-                        {
-                            "name": skill_dir.name,
-                            "content": skill_md.read_text(encoding="utf-8"),
-                            "meta": meta,
-                        }
-                    )
-
-    # MCP
-    mcp = _read_json(member_dir / ".mcp.json")
-
-    # Runtime
-    runtime = _read_json(member_dir / "runtime.json")
-
+def _bundle_snapshot(bundle: AgentBundle) -> dict:
     return {
-        "agent_md": agent_md,
-        "rules": rules,
-        "agents": agents,
-        "skills": skills,
-        "mcp": mcp,
-        "runtime": runtime,
-        "meta": _read_json(member_dir / "meta.json"),
+        "agent_md": _render_agent_md(bundle),
+        "rules": bundle.rules,
+        "agents": [{"name": agent.name, "content": _render_sub_agent_md(agent)} for agent in bundle.agents],
+        "skills": bundle.skills,
+        "mcp": {name: cfg.model_dump(exclude_none=True) for name, cfg in bundle.mcp.items()},
+        "runtime": {name: cfg.model_dump(exclude_none=True) for name, cfg in bundle.runtime.items()},
+        "meta": bundle.meta,
     }
 
 
+def _load_repo_publish_material(user_id: str, user_repo: Any, agent_config_repo: Any) -> tuple[AgentBundle, dict[str, Any]]:
+    user = user_repo.get_by_id(user_id)
+    if user is None or user.agent_config_id is None:
+        raise RuntimeError(f"Agent user {user_id} is missing agent_config_id")
+    bundle = load_bundle_from_repo(agent_config_repo, user.agent_config_id)
+    if bundle is None:
+        raise RuntimeError(f"Agent config bundle not found for user {user_id}")
+    return bundle, dict(bundle.meta)
+
+
 def publish(
-    member_id: str,
+    user_id: str,
     type_: str,
     bump_type: str,
     release_notes: str,
@@ -113,10 +107,16 @@ def publish(
     visibility: str,
     publisher_user_id: str,
     publisher_username: str,
+    user_repo: Any = None,
+    agent_config_repo: Any = None,
 ) -> dict:
-    """Publish a local member to the Hub."""
-    member_dir = members_dir() / member_id
-    meta = _read_json(member_dir / "meta.json")
+    """Publish a local agent user bundle to the Hub."""
+    if user_repo is None or agent_config_repo is None:
+        raise RuntimeError("user_repo and agent_config_repo are required for publish()")
+
+    bundle, meta = _load_repo_publish_material(user_id, user_repo, agent_config_repo)
+    snapshot = _bundle_snapshot(bundle)
+    snapshot["meta"] = copy.deepcopy(meta)
 
     # Calculate new version
     current_version = meta.get("version", "0.1.0")
@@ -130,12 +130,7 @@ def publish(
         patch += 1
     new_version = f"{major}.{minor}.{patch}"
 
-    # Serialize snapshot
-    snapshot = _serialize_member_snapshot(member_id)
-
     # Get slug from agent name
-    loader = AgentLoader()
-    bundle = loader.load_bundle(member_dir)
     slug = bundle.agent.name.lower().replace(" ", "-")
 
     # Check for fork/parent relationship
@@ -174,13 +169,40 @@ def publish(
     meta["source"]["installed_version"] = new_version
     meta["source"]["installed_at"] = int(time.time() * 1000)
     meta["source"]["modified"] = False
-    _write_json(member_dir / "meta.json", meta)
+    # @@@repo-publish-only - marketplace publish is now a repo-backed web path, not a local member-dir snapshot path.
+    user = user_repo.get_by_id(user_id)
+    if user is None or user.agent_config_id is None:
+        raise RuntimeError(f"Agent user {user_id} is missing agent_config_id")
+    agent_config_repo.save_config(
+        user.agent_config_id,
+        {
+            "id": user.agent_config_id,
+            "agent_user_id": user_id,
+            "name": bundle.agent.name,
+            "description": bundle.agent.description,
+            "model": bundle.agent.model,
+            "tools": bundle.agent.tools,
+            "system_prompt": bundle.agent.system_prompt,
+            "status": meta["status"],
+            "version": meta["version"],
+            "created_at": meta.get("created_at", int(time.time() * 1000)),
+            "updated_at": meta["updated_at"],
+            "runtime": snapshot["runtime"],
+            "mcp": snapshot["mcp"],
+            "meta": {k: v for k, v in meta.items() if k not in {"status", "version", "created_at", "updated_at"}},
+        },
+    )
 
     return result
 
 
-def download(item_id: str, owner_user_id: str = "system") -> dict:
-    """Download a marketplace item to local library."""
+def download(
+    item_id: str,
+    owner_user_id: str = "system",
+    user_repo: Any = None,
+    agent_config_repo: Any = None,
+) -> dict:
+    """Download a marketplace item to local library or install an agent user."""
     result = _hub_api("POST", f"/items/{item_id}/download")
     snapshot = result["snapshot"]
     item = result["item"]
@@ -198,11 +220,9 @@ def download(item_id: str, owner_user_id: str = "system") -> dict:
             raise ValueError(f"Invalid slug: {slug}")
         skill_dir.mkdir(parents=True, exist_ok=True)
 
-        # Write SKILL.md
         content = snapshot.get("content", "")
         (skill_dir / "SKILL.md").write_text(content, encoding="utf-8")
 
-        # Write meta.json with marketplace source info
         meta = snapshot.get("meta", {})
         meta_data = {
             "name": meta.get("name", item["name"]),
@@ -221,7 +241,7 @@ def download(item_id: str, owner_user_id: str = "system") -> dict:
         logger.info("Downloaded skill %s to library", slug)
         return {"resource_id": slug, "type": "skill", "version": installed_version}
 
-    elif item_type == "agent":
+    if item_type == "agent":
         slug = item.get("slug", item["name"].lower().replace(" ", "-"))
         agent_dir = (LIBRARY_DIR / "agents").resolve()
         if not (agent_dir / slug).resolve().is_relative_to(agent_dir):
@@ -247,26 +267,32 @@ def download(item_id: str, owner_user_id: str = "system") -> dict:
         logger.info("Downloaded agent %s to library", slug)
         return {"resource_id": slug, "type": "agent", "version": installed_version}
 
-    elif item_type == "member":
-        # Members still get installed as full members
+    if item_type == "member":
+        if user_repo is None or agent_config_repo is None:
+            raise RuntimeError("user_repo and agent_config_repo are required to install marketplace user snapshot")
+
         from backend.web.services.member_service import install_from_snapshot
 
-        member_id = install_from_snapshot(
+        user_id = install_from_snapshot(
             snapshot=snapshot,
             name=item["name"],
             description=item.get("description", ""),
             marketplace_item_id=item_id,
             installed_version=installed_version,
             owner_user_id=owner_user_id,
+            user_repo=user_repo,
+            agent_config_repo=agent_config_repo,
         )
-        return {"resource_id": member_id, "type": "member", "version": installed_version}
+        return {"user_id": user_id, "type": "user", "version": installed_version}
 
-    else:
-        raise ValueError(f"Unsupported item type: {item_type}")
+    raise ValueError(f"Unsupported item type: {item_type}")
 
 
-def upgrade(member_id: str, item_id: str, owner_user_id: str) -> dict:
+def upgrade(user_id: str, item_id: str, owner_user_id: str, user_repo: Any = None, agent_config_repo: Any = None) -> dict:
     """Upgrade a locally installed marketplace item."""
+    if user_repo is None or agent_config_repo is None:
+        raise RuntimeError("user_repo and agent_config_repo are required to upgrade marketplace user snapshot")
+
     result = _hub_api("POST", f"/items/{item_id}/download")
     snapshot = result["snapshot"]
     installed_version = result["version"]
@@ -280,10 +306,12 @@ def upgrade(member_id: str, item_id: str, owner_user_id: str) -> dict:
         marketplace_item_id=item_id,
         installed_version=installed_version,
         owner_user_id=owner_user_id,
-        existing_member_id=member_id,
+        existing_user_id=user_id,
+        user_repo=user_repo,
+        agent_config_repo=agent_config_repo,
     )
 
-    return {"member_id": member_id, "version": installed_version}
+    return {"user_id": user_id, "version": installed_version}
 
 
 def check_updates(items: list[dict]) -> dict:

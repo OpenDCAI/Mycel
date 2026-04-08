@@ -16,8 +16,8 @@ from backend.web.models.marketplace import (
 
 class TestPublishToMarketplaceRequest:
     def test_valid_minimal(self):
-        req = PublishToMarketplaceRequest(member_id="my-agent_01")
-        assert req.member_id == "my-agent_01"
+        req = PublishToMarketplaceRequest(user_id="my-agent_01")
+        assert req.user_id == "my-agent_01"
         assert req.type == "member"
         assert req.bump_type == "patch"
         assert req.visibility == "public"
@@ -26,7 +26,7 @@ class TestPublishToMarketplaceRequest:
 
     def test_valid_all_fields(self):
         req = PublishToMarketplaceRequest(
-            member_id="agent-x",
+            user_id="agent-x",
             type="skill",
             bump_type="minor",
             release_notes="New feature",
@@ -40,31 +40,31 @@ class TestPublishToMarketplaceRequest:
 
     def test_invalid_type_raises(self):
         with pytest.raises(ValidationError):
-            PublishToMarketplaceRequest.model_validate({"member_id": "ok", "type": "unknown"})
+            PublishToMarketplaceRequest.model_validate({"user_id": "ok", "type": "unknown"})
 
     def test_invalid_bump_type_raises(self):
         with pytest.raises(ValidationError):
-            PublishToMarketplaceRequest.model_validate({"member_id": "ok", "bump_type": "hotfix"})
+            PublishToMarketplaceRequest.model_validate({"user_id": "ok", "bump_type": "hotfix"})
 
     def test_invalid_visibility_raises(self):
         with pytest.raises(ValidationError):
-            PublishToMarketplaceRequest.model_validate({"member_id": "ok", "visibility": "unlisted"})
+            PublishToMarketplaceRequest.model_validate({"user_id": "ok", "visibility": "unlisted"})
 
-    def test_invalid_member_id_path_traversal(self):
+    def test_invalid_user_id_path_traversal(self):
         with pytest.raises(ValidationError):
-            PublishToMarketplaceRequest(member_id="../evil")
+            PublishToMarketplaceRequest(user_id="../evil")
 
-    def test_invalid_member_id_slash(self):
+    def test_invalid_user_id_slash(self):
         with pytest.raises(ValidationError):
-            PublishToMarketplaceRequest(member_id="foo/bar")
+            PublishToMarketplaceRequest(user_id="foo/bar")
 
-    def test_invalid_member_id_spaces(self):
+    def test_invalid_user_id_spaces(self):
         with pytest.raises(ValidationError):
-            PublishToMarketplaceRequest(member_id="has space")
+            PublishToMarketplaceRequest(user_id="has space")
 
-    def test_empty_member_id_raises(self):
+    def test_empty_user_id_raises(self):
         with pytest.raises(ValidationError):
-            PublishToMarketplaceRequest(member_id="")
+            PublishToMarketplaceRequest(user_id="")
 
 
 # ── InstallFromMarketplaceRequest ──
@@ -110,10 +110,10 @@ class TestCheckUpdatesRequest:
 
 class TestUpgradeFromMarketplaceRequest:
     def test_valid(self):
-        req = UpgradeFromMarketplaceRequest(member_id="local-1", item_id="mkt-42")
-        assert req.member_id == "local-1"
+        req = UpgradeFromMarketplaceRequest(user_id="local-1", item_id="mkt-42")
+        assert req.user_id == "local-1"
         assert req.item_id == "mkt-42"
 
     def test_missing_fields_raises(self):
         with pytest.raises(ValidationError):
-            UpgradeFromMarketplaceRequest.model_validate({"member_id": "only-one"})
+            UpgradeFromMarketplaceRequest.model_validate({"user_id": "only-one"})

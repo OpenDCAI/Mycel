@@ -29,12 +29,12 @@ class _FakeThreadRepo:
         pass
 
 
-class _FakeMemberRepo:
+class _FakeUserRepo:
     def __init__(self, rows):
         self._rows = rows
 
-    def get_by_id(self, actor_user_id: str):
-        return self._rows.get(actor_user_id)
+    def get_by_id(self, user_id: str):
+        return self._rows.get(user_id)
 
     def close(self):
         pass
@@ -71,9 +71,9 @@ def test_list_user_leases_hides_subagent_threads_and_deduplicates_visible_agents
             "subagent-deadbeef": {"agent_user_id": "agent-1"},
         }
     )
-    member_repo = _FakeMemberRepo(
+    user_repo = _FakeUserRepo(
         {
-            "agent-1": SimpleNamespace(id="agent-1", name="Morel", avatar="x", owner_user_id="owner-1"),
+            "agent-1": SimpleNamespace(id="agent-1", display_name="Morel", avatar="x", owner_user_id="owner-1"),
         }
     )
 
@@ -82,7 +82,7 @@ def test_list_user_leases_hides_subagent_threads_and_deduplicates_visible_agents
     leases = sandbox_service.list_user_leases(
         "owner-1",
         thread_repo=thread_repo,
-        member_repo=member_repo,
+        user_repo=user_repo,
     )
 
     assert leases == [
@@ -156,9 +156,9 @@ def test_list_user_leases_keeps_distinct_visible_threads_even_for_same_member(mo
             "thread-b": {"agent_user_id": "agent-1"},
         }
     )
-    member_repo = _FakeMemberRepo(
+    user_repo = _FakeUserRepo(
         {
-            "agent-1": SimpleNamespace(id="agent-1", name="Morel", avatar="x", owner_user_id="owner-1"),
+            "agent-1": SimpleNamespace(id="agent-1", display_name="Morel", avatar="x", owner_user_id="owner-1"),
         }
     )
 
@@ -167,7 +167,7 @@ def test_list_user_leases_keeps_distinct_visible_threads_even_for_same_member(mo
     leases = sandbox_service.list_user_leases(
         "owner-1",
         thread_repo=thread_repo,
-        member_repo=member_repo,
+        user_repo=user_repo,
     )
 
     assert leases[0]["thread_ids"] == ["thread-a", "thread-b"]
@@ -202,9 +202,9 @@ def test_list_user_leases_keeps_runtime_session_ids_per_lease(monkeypatch):
         },
     ]
     thread_repo = _FakeThreadRepo({"thread-parent": {"agent_user_id": "agent-1"}})
-    member_repo = _FakeMemberRepo(
+    user_repo = _FakeUserRepo(
         {
-            "agent-1": SimpleNamespace(id="agent-1", name="Morel", avatar="x", owner_user_id="owner-1"),
+            "agent-1": SimpleNamespace(id="agent-1", display_name="Morel", avatar="x", owner_user_id="owner-1"),
         }
     )
 
@@ -217,7 +217,7 @@ def test_list_user_leases_keeps_runtime_session_ids_per_lease(monkeypatch):
     leases = sandbox_service.list_user_leases(
         "owner-1",
         thread_repo=thread_repo,
-        member_repo=member_repo,
+        user_repo=user_repo,
     )
 
     assert leases[0]["runtime_session_id"] == "provider-session-1"
@@ -278,9 +278,9 @@ def test_list_user_leases_keeps_detached_but_hides_destroying_leases(monkeypatch
             "thread-destroying": {"agent_user_id": "agent-1"},
         }
     )
-    member_repo = _FakeMemberRepo(
+    user_repo = _FakeUserRepo(
         {
-            "agent-1": SimpleNamespace(id="agent-1", name="Morel", avatar="x", owner_user_id="owner-1"),
+            "agent-1": SimpleNamespace(id="agent-1", display_name="Morel", avatar="x", owner_user_id="owner-1"),
         }
     )
 
@@ -289,7 +289,7 @@ def test_list_user_leases_keeps_detached_but_hides_destroying_leases(monkeypatch
     leases = sandbox_service.list_user_leases(
         "owner-1",
         thread_repo=thread_repo,
-        member_repo=member_repo,
+        user_repo=user_repo,
     )
 
     assert [lease["lease_id"] for lease in leases] == ["lease-running", "lease-paused", "lease-detached"]

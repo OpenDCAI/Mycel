@@ -493,6 +493,132 @@ async def test_leon_agent_bundle_dir_registers_mcp_resource_tools(tmp_path):
 
 @pytest.mark.asyncio
 @_patch_env_api_key()
+async def test_leon_agent_agent_config_id_registers_mcp_resource_tools(tmp_path):
+    """Repo-rooted agent config should surface MCP resource tools in the live registry."""
+    from core.runtime.agent import LeonAgent
+
+    class _Repo:
+        def get_config(self, agent_config_id: str):
+            assert agent_config_id == "cfg-1"
+            return {
+                "id": "cfg-1",
+                "name": "Toad",
+                "description": "Demo member",
+                "tools": ["*"],
+                "system_prompt": "You are Toad.",
+                "status": "active",
+                "version": "1.0.0",
+                "runtime": {},
+                "mcp": {
+                    "nu50demo": {
+                        "transport": "stdio",
+                        "command": "uv",
+                        "args": ["run", "python", "/tmp/nu50_mcp_server.py"],
+                    }
+                },
+            }
+
+        def list_rules(self, _agent_config_id: str):
+            return []
+
+        def list_sub_agents(self, _agent_config_id: str):
+            return []
+
+        def list_skills(self, _agent_config_id: str):
+            return []
+
+    mock_model = _mock_model("Repo MCP response")
+
+    with (
+        patch("core.runtime.agent.LeonAgent._create_model", return_value=mock_model),
+        patch("core.runtime.agent.LeonAgent._init_async_components", return_value=(None, [])),
+        patch("core.runtime.agent.LeonAgent._init_checkpointer", new_callable=AsyncMock, return_value=None),
+    ):
+        agent = LeonAgent(
+            workspace_root=str(tmp_path),
+            agent_config_id="cfg-1",
+            agent_config_repo=_Repo(),
+            api_key="sk-test-integration",
+        )
+        await agent.ainit()
+
+        assert agent._tool_registry.get("ListMcpResources") is not None
+        assert agent._tool_registry.get("ReadMcpResource") is not None
+
+        agent.close()
+
+
+@pytest.mark.asyncio
+@_patch_env_api_key()
+async def test_leon_agent_agent_config_id_ignores_conflicting_legacy_member_shell(tmp_path):
+    """Repo-rooted live startup must ignore a stale member-dir shell with conflicting MCP state."""
+    from core.runtime.agent import LeonAgent
+
+    legacy_member_dir = tmp_path / "members" / "toad"
+    legacy_member_dir.mkdir(parents=True)
+    (legacy_member_dir / "agent.md").write_text(
+        "---\nname: Legacy Toad\ndescription: Stale member shell\n---\nYou are Legacy Toad.\n",
+        encoding="utf-8",
+    )
+    (legacy_member_dir / ".mcp.json").write_text('{"mcpServers":{}}', encoding="utf-8")
+
+    class _Repo:
+        def get_config(self, agent_config_id: str):
+            assert agent_config_id == "cfg-1"
+            return {
+                "id": "cfg-1",
+                "name": "Repo Toad",
+                "description": "Repo-backed member",
+                "tools": ["*"],
+                "system_prompt": "You are Repo Toad.",
+                "status": "active",
+                "version": "1.0.0",
+                "runtime": {},
+                "mcp": {
+                    "nu50demo": {
+                        "transport": "stdio",
+                        "command": "uv",
+                        "args": ["run", "python", "/tmp/nu50_mcp_server.py"],
+                    }
+                },
+            }
+
+        def list_rules(self, _agent_config_id: str):
+            return []
+
+        def list_sub_agents(self, _agent_config_id: str):
+            return []
+
+        def list_skills(self, _agent_config_id: str):
+            return []
+
+    mock_model = _mock_model("Repo MCP response")
+
+    with (
+        patch("core.runtime.agent.LeonAgent._create_model", return_value=mock_model),
+        patch("core.runtime.agent.LeonAgent._init_async_components", return_value=(None, [])),
+        patch("core.runtime.agent.LeonAgent._init_checkpointer", new_callable=AsyncMock, return_value=None),
+    ):
+        agent = LeonAgent(
+            workspace_root=str(tmp_path),
+            agent_config_id="cfg-1",
+            agent_config_repo=_Repo(),
+            api_key="sk-test-integration",
+        )
+        await agent.ainit()
+
+        # @@@runtime-repo-source-of-truth - repo-backed live startup must ignore
+        # conflicting legacy member shells and keep MCP registration sourced from agent_config_repo.
+        assert "Repo Toad" in agent.system_prompt
+        assert "Legacy Toad" not in agent.system_prompt
+        assert agent._tool_registry.get("ListMcpResources") is not None
+        assert agent._tool_registry.get("ReadMcpResource") is not None
+
+        agent.close()
+
+
+@pytest.mark.asyncio
+@_patch_env_api_key()
 async def test_leon_agent_announces_mcp_instruction_delta_once_and_reannounces_on_change(tmp_path):
     from core.runtime.agent import LeonAgent
 
@@ -712,8 +838,10 @@ def test_leon_agent_chat_identity_prompt_uses_honest_legacy_wording():
     agent._chat_repos = {
         "user_id": "agent-member-1",
         "owner_id": "human-user-1",
-        "member_repo": SimpleNamespace(
-            get_by_id=lambda uid: SimpleNamespace(id=uid, name="Toad") if uid == "agent-member-1" else SimpleNamespace(id=uid, name="Owner")
+        "user_repo": SimpleNamespace(
+            get_by_id=lambda uid: (
+                SimpleNamespace(id=uid, display_name="Toad") if uid == "agent-member-1" else SimpleNamespace(id=uid, display_name="Owner")
+            )
         ),
     }
 
@@ -734,9 +862,11 @@ def test_leon_agent_chat_identity_prompt_accepts_chat_identity_id_without_legacy
     agent._chat_repos = {
         "chat_identity_id": "agent-member-2",
         "owner_id": "human-user-2",
-        "member_repo": SimpleNamespace(
+        "user_repo": SimpleNamespace(
             get_by_id=lambda uid: (
-                SimpleNamespace(id=uid, name="Morel") if uid == "agent-member-2" else SimpleNamespace(id=uid, name="Owner 2")
+                SimpleNamespace(id=uid, display_name="Morel")
+                if uid == "agent-member-2"
+                else SimpleNamespace(id=uid, display_name="Owner 2")
             )
         ),
     }
@@ -754,18 +884,18 @@ def test_leon_agent_chat_identity_prompt_resolves_thread_user_name_via_member() 
     agent._build_system_prompt = lambda: "BASE"
     cast(Any, agent).config = SimpleNamespace(system_prompt=None)
     agent._thread_repo = SimpleNamespace(
-        get_by_user_id=lambda uid: {"id": "thread-1", "member_id": "member-agent-3"} if uid == "thread-user-3" else None
+        get_by_user_id=lambda uid: {"id": "thread-1", "agent_user_id": "member-agent-3"} if uid == "thread-user-3" else None
     )
     agent._chat_repos = {
         "chat_identity_id": "thread-user-3",
         "owner_id": "human-user-3",
-        "member_repo": SimpleNamespace(
+        "user_repo": SimpleNamespace(
             get_by_id=lambda uid: (
                 None
                 if uid == "thread-user-3"
-                else SimpleNamespace(id=uid, name="Truffle")
+                else SimpleNamespace(id=uid, display_name="Truffle")
                 if uid == "member-agent-3"
-                else SimpleNamespace(id=uid, name="Owner 3")
+                else SimpleNamespace(id=uid, display_name="Owner 3")
             )
         ),
     }

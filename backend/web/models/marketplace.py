@@ -6,7 +6,7 @@ from pydantic import BaseModel, Field
 
 
 class PublishToMarketplaceRequest(BaseModel):
-    member_id: str = Field(pattern=r"^[a-zA-Z0-9_-]+$")
+    user_id: str = Field(pattern=r"^[a-zA-Z0-9_-]+$")
     type: Literal["member", "agent", "skill", "env"] = "member"
     bump_type: Literal["major", "minor", "patch"] = "patch"
     release_notes: str = ""
@@ -19,7 +19,7 @@ class InstallFromMarketplaceRequest(BaseModel):
 
 
 class UpgradeFromMarketplaceRequest(BaseModel):
-    member_id: str  # local member id
+    user_id: str  # local agent user id
     item_id: str  # marketplace item id
 
 

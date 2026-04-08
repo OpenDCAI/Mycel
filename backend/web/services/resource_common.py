@@ -16,7 +16,7 @@ from sandbox.providers.daytona import DaytonaProvider
 from sandbox.providers.docker import DockerProvider
 from sandbox.providers.e2b import E2BProvider
 from sandbox.providers.local import LocalSessionProvider
-from storage.runtime import build_member_repo, build_thread_repo
+from storage.runtime import build_thread_repo, build_user_repo
 
 _CONFIG_LOADER = SandboxConfigLoader(SANDBOXES_DIR)
 
@@ -205,10 +205,7 @@ def thread_agent_refs(thread_ids: list[str], thread_repo: Any = None) -> dict[st
         refs: dict[str, str] = {}
         for tid in unique:
             data = repo.get_by_id(tid)
-            # @@@thread-agent-ref-compat - keep this narrow read-side fallback until #259
-            # lands the first-class user_repo/agent runtime wiring. Do not expand member-shaped
-            # semantics beyond this compatibility seam inside the resource lane.
-            agent_ref = str(data.get("agent_user_id") or data.get("member_id") or "").strip() if data else ""
+            agent_ref = str(data.get("agent_user_id") or "").strip() if data else ""
             if agent_ref:
                 refs[tid] = agent_ref
         return refs
@@ -219,21 +216,21 @@ def thread_agent_refs(thread_ids: list[str], thread_repo: Any = None) -> dict[st
             repo.close()
 
 
-def member_meta_map(member_repo: Any = None) -> dict[str, dict[str, str | None]]:
-    repo = member_repo
+def member_meta_map(user_repo: Any = None) -> dict[str, dict[str, str | None]]:
+    repo = user_repo
     own_repo = False
     if repo is None:
-        repo = build_member_repo()
+        repo = build_user_repo()
         own_repo = True
     try:
-        members = repo.list_all()
+        users = repo.list_all()
         return {
-            member.id: {
-                "agent_name": member.name,
-                "avatar_url": _resource_avatar_url(member.id, bool(member.avatar)),
+            user.id: {
+                "agent_name": user.display_name,
+                "avatar_url": _resource_avatar_url(user.id, bool(user.avatar)),
             }
-            for member in members
-            if member.id and member.name
+            for user in users
+            if user.id and user.display_name
         }
     except Exception:
         return {}
@@ -242,9 +239,9 @@ def member_meta_map(member_repo: Any = None) -> dict[str, dict[str, str | None]]
             repo.close()
 
 
-def thread_owners(thread_ids: list[str], member_repo: Any = None, thread_repo: Any = None) -> dict[str, dict[str, str | None]]:
+def thread_owners(thread_ids: list[str], user_repo: Any = None, thread_repo: Any = None) -> dict[str, dict[str, str | None]]:
     refs = thread_agent_refs(thread_ids, thread_repo=thread_repo)
-    member_meta = member_meta_map(member_repo=member_repo)
+    member_meta = member_meta_map(user_repo=user_repo)
     owners: dict[str, dict[str, str | None]] = {}
     for thread_id in thread_ids:
         agent_ref = refs.get(thread_id)

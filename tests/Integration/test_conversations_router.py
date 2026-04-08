@@ -14,7 +14,7 @@ async def test_list_conversations_resolves_thread_user_participant_title_and_ava
         state=SimpleNamespace(
             thread_repo=SimpleNamespace(
                 list_by_owner_user_id=lambda _user_id: [],
-                get_by_user_id=lambda uid: {"id": "thread-1", "member_id": "member-agent-1"} if uid == "thread-user-1" else None,
+                get_by_user_id=lambda uid: {"id": "thread-1", "agent_user_id": "agent-user-1"} if uid == "thread-user-1" else None,
             ),
             agent_pool={},
             thread_last_active={},
@@ -25,14 +25,14 @@ async def test_list_conversations_resolves_thread_user_participant_title_and_ava
                     {"user_id": "thread-user-1"},
                 ],
             ),
-            member_repo=SimpleNamespace(
+            user_repo=SimpleNamespace(
                 get_by_id=lambda uid: (
                     None
                     if uid == "thread-user-1"
-                    else SimpleNamespace(id=uid, name="Toad", avatar=None)
-                    if uid == "member-agent-1"
+                    else SimpleNamespace(id=uid, display_name="Toad", avatar=None)
+                    if uid == "agent-user-1"
                     else None
-                )
+                ),
             ),
             chat_repo=SimpleNamespace(
                 get_by_id=lambda _chat_id: SimpleNamespace(id="chat-1", title=None, created_at="2026-04-07T00:00:00Z")
@@ -48,7 +48,7 @@ async def test_list_conversations_resolves_thread_user_participant_title_and_ava
             "id": "chat-1",
             "type": "visit",
             "title": "Toad",
-            "avatar_url": avatar_url("member-agent-1", False),
+            "avatar_url": avatar_url("agent-user-1", False),
             "updated_at": "2026-04-07T00:00:00Z",
             "unread_count": 3,
             "running": False,
@@ -64,9 +64,9 @@ async def test_list_conversations_sorts_mixed_updated_at_types_without_type_erro
                 list_by_owner_user_id=lambda _user_id: [
                     {
                         "id": "thread-1",
-                        "member_id": "member-agent-1",
-                        "member_name": "Morel",
-                        "member_avatar": None,
+                        "agent_user_id": "agent-user-1",
+                        "agent_name": "Morel",
+                        "agent_avatar": None,
                         "sandbox_type": "local",
                     }
                 ],
@@ -81,8 +81,8 @@ async def test_list_conversations_sorts_mixed_updated_at_types_without_type_erro
                     {"user_id": "member-agent-2"},
                 ],
             ),
-            member_repo=SimpleNamespace(
-                get_by_id=lambda uid: SimpleNamespace(id=uid, name="Toad", avatar=None) if uid == "member-agent-2" else None
+            user_repo=SimpleNamespace(
+                get_by_id=lambda uid: SimpleNamespace(id=uid, display_name="Toad", avatar=None) if uid == "member-agent-2" else None
             ),
             chat_repo=SimpleNamespace(
                 get_by_id=lambda _chat_id: SimpleNamespace(
@@ -109,9 +109,9 @@ async def test_list_conversations_hire_entries_do_not_leak_template_member_ids()
                 list_by_owner_user_id=lambda _user_id: [
                     {
                         "id": "thread-1",
-                        "member_id": "member-agent-1",
-                        "member_name": "Morel",
-                        "member_avatar": "avatars/morel.png",
+                        "agent_user_id": "agent-user-1",
+                        "agent_name": "Morel",
+                        "agent_avatar": "avatars/morel.png",
                         "sandbox_type": "local",
                     }
                 ],
@@ -130,10 +130,45 @@ async def test_list_conversations_hire_entries_do_not_leak_template_member_ids()
             "id": "thread-1",
             "type": "hire",
             "title": "Morel",
-            "avatar_url": avatar_url("member-agent-1", True),
+            "avatar_url": avatar_url("agent-user-1", True),
             "updated_at": None,
             "unread_count": 0,
             "running": False,
         }
     ]
     assert "member_id" not in result[0]
+
+
+@pytest.mark.asyncio
+async def test_list_conversations_does_not_require_member_repo() -> None:
+    app = SimpleNamespace(
+        state=SimpleNamespace(
+            thread_repo=SimpleNamespace(
+                list_by_owner_user_id=lambda _user_id: [],
+                get_by_user_id=lambda uid: {"id": "thread-1", "agent_user_id": "agent-user-1"} if uid == "thread-user-1" else None,
+            ),
+            agent_pool={},
+            thread_last_active={},
+            messaging_service=SimpleNamespace(
+                list_chats_for_user=lambda _user_id: [{"id": "chat-1"}],
+                list_chat_members=lambda _chat_id: [
+                    {"user_id": "human-user-1"},
+                    {"user_id": "thread-user-1"},
+                ],
+            ),
+            user_repo=SimpleNamespace(
+                get_by_id=lambda uid: (
+                    SimpleNamespace(id=uid, display_name="Morel", avatar="avatars/morel.png") if uid == "agent-user-1" else None
+                ),
+            ),
+            chat_repo=SimpleNamespace(
+                get_by_id=lambda _chat_id: SimpleNamespace(id="chat-1", title=None, created_at="2026-04-07T00:00:00Z")
+            ),
+            messages_repo=SimpleNamespace(count_unread=lambda _chat_id, _user_id: 0),
+        )
+    )
+
+    result = await conversations_router.list_conversations("human-user-1", app=app)
+
+    assert result[0]["title"] == "Morel"
+    assert result[0]["avatar_url"] == avatar_url("agent-user-1", True)

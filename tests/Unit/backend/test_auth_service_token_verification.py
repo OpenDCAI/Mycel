@@ -95,11 +95,11 @@ def _service(
     supabase_client=None,
     supabase_auth_client=None,
     supabase_auth_client_factory=None,
-    member_repo=None,
+    user_repo=None,
     invite_codes=None,
 ) -> AuthService:
     return AuthService(
-        members=member_repo or SimpleNamespace(),
+        users=user_repo or SimpleNamespace(),
         supabase_client=supabase_client,
         supabase_auth_client=supabase_auth_client,
         supabase_auth_client_factory=supabase_auth_client_factory,
@@ -126,15 +126,15 @@ def test_verify_token_without_supabase_client_still_fails_loudly_when_secret_mis
 
 def test_login_uses_dedicated_auth_client_instead_of_storage_client():
     auth_client = _FakeAuthClient()
-    member_repo = SimpleNamespace(
-        get_by_id=lambda _user_id: SimpleNamespace(name="codex", mycel_id=10001, email="codex@example.com", avatar=None),
+    user_repo = SimpleNamespace(
+        get_by_id=lambda _user_id: SimpleNamespace(display_name="codex", mycel_id=10001, email="codex@example.com", avatar=None),
         list_by_owner_user_id=lambda _user_id: [],
     )
 
     result = _service(
         supabase_client=SimpleNamespace(auth=None),
         supabase_auth_client=auth_client,
-        member_repo=member_repo,
+        user_repo=user_repo,
     ).login("codex@example.com", "pw-1")
 
     assert auth_client.auth.calls == [{"email": "codex@example.com", "password": "pw-1"}]
@@ -149,14 +149,14 @@ def test_login_uses_fresh_auth_client_from_factory_per_call():
         created.append(client)
         return client
 
-    member_repo = SimpleNamespace(
-        get_by_id=lambda _user_id: SimpleNamespace(name="codex", mycel_id=10001, email="codex@example.com", avatar=None),
+    user_repo = SimpleNamespace(
+        get_by_id=lambda _user_id: SimpleNamespace(display_name="codex", mycel_id=10001, email="codex@example.com", avatar=None),
         list_by_owner_user_id=lambda _user_id: [],
     )
     service = _service(
         supabase_client=SimpleNamespace(auth=None),
         supabase_auth_client_factory=factory,
-        member_repo=member_repo,
+        user_repo=user_repo,
     )
 
     service.login("codex@example.com", "pw-1")
@@ -187,15 +187,15 @@ def test_verify_token_uses_fresh_auth_client_from_factory_per_call(monkeypatch: 
 
 def test_login_accepts_direct_gotrue_client_without_auth_wrapper():
     auth_client = _DirectAuthClient()
-    member_repo = SimpleNamespace(
-        get_by_id=lambda _user_id: SimpleNamespace(name="codex", mycel_id=10001, email="codex@example.com", avatar=None),
+    user_repo = SimpleNamespace(
+        get_by_id=lambda _user_id: SimpleNamespace(display_name="codex", mycel_id=10001, email="codex@example.com", avatar=None),
         list_by_owner_user_id=lambda _user_id: [],
     )
 
     result = _service(
         supabase_client=SimpleNamespace(auth=None),
         supabase_auth_client=auth_client,
-        member_repo=member_repo,
+        user_repo=user_repo,
     ).login("codex@example.com", "pw-1")
 
     assert auth_client.calls == [{"email": "codex@example.com", "password": "pw-1"}]
@@ -235,3 +235,23 @@ def test_verify_register_otp_accepts_direct_gotrue_client_without_auth_wrapper()
 
     assert auth_client.calls == [{"email": "fresh@example.com", "token": "123456", "type": "signup"}]
     assert result == {"temp_token": "temp-token-1"}
+
+
+def test_login_resolves_numeric_mycel_id_via_user_repo():
+    auth_client = _FakeAuthClient()
+    user_repo = SimpleNamespace(
+        get_by_mycel_id=lambda mycel_id: (
+            SimpleNamespace(display_name="codex", mycel_id=mycel_id, email="codex@example.com", avatar=None) if mycel_id == 10001 else None
+        ),
+        get_by_id=lambda _user_id: SimpleNamespace(display_name="codex", mycel_id=10001, email="codex@example.com", avatar=None),
+        list_by_owner_user_id=lambda _user_id: [],
+    )
+
+    result = _service(
+        supabase_client=SimpleNamespace(auth=None),
+        supabase_auth_client=auth_client,
+        user_repo=user_repo,
+    ).login("10001", "pw-1")
+
+    assert auth_client.auth.calls == [{"email": "codex@example.com", "password": "pw-1"}]
+    assert result["user"]["mycel_id"] == 10001

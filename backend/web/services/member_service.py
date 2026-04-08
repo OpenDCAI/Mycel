@@ -79,6 +79,10 @@ def _parse_agent_md(path: Path) -> dict[str, Any] | None:
         content = path.read_text(encoding="utf-8")
     except OSError:
         return None
+    return _parse_agent_md_content(content)
+
+
+def _parse_agent_md_content(content: str) -> dict[str, Any] | None:
     if not content.startswith("---"):
         return None
     parts = content.split("---", 2)
@@ -262,6 +266,125 @@ def _member_to_dict(member_dir: Path) -> dict[str, Any] | None:
     }
 
 
+def _tools_from_repo(config: dict[str, Any]) -> list[dict[str, Any]]:
+    catalog = _load_tools_catalog()
+    runtime = config.get("runtime", {}) if isinstance(config.get("runtime"), dict) else {}
+    enabled_tools = config.get("tools") or ["*"]
+    is_all = enabled_tools == ["*"]
+    tools_list = []
+    for tool_name, tool_info in catalog.items():
+        runtime_key = f"tools:{tool_name}"
+        override = runtime.get(runtime_key, {}) if isinstance(runtime.get(runtime_key), dict) else {}
+        tools_list.append(
+            {
+                "name": tool_name,
+                "enabled": bool(override.get("enabled", is_all or tool_name in enabled_tools)),
+                "desc": override.get("desc") or tool_info.desc,
+                "group": tool_info.group,
+            }
+        )
+    return tools_list
+
+
+def _skills_from_repo(agent_config_id: str, config: dict[str, Any], agent_config_repo: Any) -> list[dict[str, Any]]:
+    runtime = config.get("runtime", {}) if isinstance(config.get("runtime"), dict) else {}
+    skills_list = []
+    for row in agent_config_repo.list_skills(agent_config_id):
+        runtime_key = f"skills:{row['name']}"
+        override = runtime.get(runtime_key, {}) if isinstance(runtime.get(runtime_key), dict) else {}
+        desc = override.get("desc")
+        if not desc:
+            from backend.web.services.library_service import get_library_skill_desc
+
+            desc = get_library_skill_desc(str(row["name"]))
+        skills_list.append(
+            {
+                "name": row["name"],
+                "enabled": bool(override.get("enabled", True)),
+                "desc": desc or "",
+            }
+        )
+    return skills_list
+
+
+def _rules_from_repo(agent_config_id: str, agent_config_repo: Any) -> list[dict[str, Any]]:
+    rules = []
+    for row in agent_config_repo.list_rules(agent_config_id):
+        filename = str(row.get("filename") or "")
+        name = filename[:-3] if filename.endswith(".md") else filename
+        rules.append({"name": name, "content": row.get("content", "")})
+    return rules
+
+
+def _sub_agents_from_repo(agent_config_id: str, agent_config_repo: Any) -> list[dict[str, Any]]:
+    catalog = _load_tools_catalog()
+    sub_agents = []
+    for row in agent_config_repo.list_sub_agents(agent_config_id):
+        raw_tools = row.get("tools_json") or row.get("tools") or ["*"]
+        is_all = raw_tools == ["*"]
+        tools = [
+            {
+                "name": name,
+                "enabled": bool(is_all or name in raw_tools),
+                "desc": info.desc,
+                "group": info.group,
+            }
+            for name, info in catalog.items()
+        ]
+        sub_agents.append(
+            {
+                "name": row["name"],
+                "desc": row.get("description", ""),
+                "tools": tools,
+                "system_prompt": row.get("system_prompt", ""),
+                "builtin": False,
+            }
+        )
+    return sub_agents
+
+
+def _mcps_from_repo(config: dict[str, Any]) -> list[dict[str, Any]]:
+    raw = config.get("mcp", {}) if isinstance(config.get("mcp"), dict) else {}
+    return [
+        {
+            "name": name,
+            "command": item.get("command", ""),
+            "args": item.get("args", []),
+            "env": item.get("env", {}),
+            "disabled": item.get("disabled", False),
+        }
+        for name, item in raw.items()
+        if isinstance(item, dict)
+    ]
+
+
+def _member_from_repos(user: Any, agent_config_repo: Any) -> dict[str, Any]:
+    if user.agent_config_id is None:
+        raise RuntimeError(f"Agent user {user.id} is missing agent_config_id")
+    config = agent_config_repo.get_config(user.agent_config_id)
+    if config is None:
+        raise RuntimeError(f"Agent config {user.agent_config_id} is missing for {user.id}")
+    return {
+        "id": user.id,
+        "name": config.get("name") or user.display_name,
+        "description": config.get("description", ""),
+        "model": config.get("model"),
+        "status": config.get("status", "draft"),
+        "version": config.get("version", "0.1.0"),
+        "avatar_url": avatar_url(user.id, bool(user.avatar)),
+        "config": {
+            "prompt": config.get("system_prompt", ""),
+            "rules": _rules_from_repo(user.agent_config_id, agent_config_repo),
+            "tools": _tools_from_repo(config),
+            "mcps": _mcps_from_repo(config),
+            "skills": _skills_from_repo(user.agent_config_id, config, agent_config_repo),
+            "subAgents": _sub_agents_from_repo(user.agent_config_id, agent_config_repo),
+        },
+        "created_at": config.get("created_at", 0),
+        "updated_at": config.get("updated_at", 0),
+    }
+
+
 # ── Leon builtin ──
 
 
@@ -309,107 +432,75 @@ def _load_builtin_agents(catalog: dict[str, ToolDef]) -> list[dict[str, Any]]:
     return agents
 
 
-def _ensure_leon_dir() -> Path:
-    """Ensure Leon's member directory exists for persisting edits."""
-    leon_dir = MEMBERS_DIR / "__leon__"
-    leon_dir.mkdir(parents=True, exist_ok=True)
-    if not (leon_dir / "agent.md").exists():
-        _write_agent_md(leon_dir / "agent.md", name="Leon", description="通用数字成员，随时准备为你工作")
-    if not (leon_dir / "meta.json").exists():
-        _write_json(
-            leon_dir / "meta.json",
-            {
-                "status": "active",
-                "version": "1.0.0",
-                "created_at": 0,
-                "updated_at": 0,
-            },
-        )
-    return leon_dir
-
-
 # ── CRUD operations ──
 
 
-def list_members(owner_user_id: str | None = None, member_repo: Any = None) -> list[dict[str, Any]]:
+def list_members(owner_user_id: str | None = None, user_repo: Any = None, agent_config_repo: Any = None) -> list[dict[str, Any]]:
     """List agent members. If owner_user_id given, only that user's agents (no builtin Leon).
 
     Args:
         owner_user_id: Filter to agents owned by this user.
-        member_repo: Injected MemberRepo (respects LEON_STORAGE_STRATEGY). Falls back to SQLite.
+        user_repo: Injected UserRepo for agent ownership lookup.
     """
     # @@@auth-scope — scoped by owner from DB, config from filesystem
     if owner_user_id:
-        if member_repo is None:
-            raise RuntimeError("member_repo is required when owner_user_id is provided")
-        agents = member_repo.list_by_owner_user_id(owner_user_id)
-        results = []
-        for agent in agents:
-            agent_dir = MEMBERS_DIR / agent.id
-            if agent_dir.is_dir() and (agent_dir / "agent.md").exists():
-                item = _member_to_dict(agent_dir)
-                if item:
-                    results.append(item)
-        return results
+        if user_repo is None or agent_config_repo is None:
+            raise RuntimeError("user_repo and agent_config_repo are required when owner_user_id is provided")
+        agents = user_repo.list_by_owner_user_id(owner_user_id)
+        return [_member_from_repos(agent, agent_config_repo) for agent in agents]
 
-    # Unscoped: return all (legacy/unauthenticated)
-    leon = get_member("__leon__")
-    results: list[dict[str, Any]] = [leon] if leon else [_leon_builtin()]
-    if MEMBERS_DIR.exists():
-        for d in sorted(MEMBERS_DIR.iterdir(), reverse=True):
-            if d.is_dir() and d.name != "__leon__" and (d / "agent.md").exists():
-                item = _member_to_dict(d)
-                if item:
-                    results.append(item)
-    return results
+    # Unscoped legacy path is now builtin-only. Owner-scoped callers must use repos.
+    return [_leon_builtin()]
 
 
-def get_member(member_id: str) -> dict[str, Any] | None:
+def get_member(member_id: str, *, user_repo: Any = None, agent_config_repo: Any = None) -> dict[str, Any] | None:
     if member_id == "__leon__":
-        leon_dir = MEMBERS_DIR / "__leon__"
-        if leon_dir.is_dir() and (leon_dir / "agent.md").exists():
-            item = _member_to_dict(leon_dir)
-            if item:
-                item["builtin"] = True
-                return item
         return _leon_builtin()
-    member_dir = MEMBERS_DIR / member_id
-    if not member_dir.is_dir():
+    if user_repo is None or agent_config_repo is None:
+        raise RuntimeError("user_repo and agent_config_repo are required for agent member reads")
+    user = user_repo.get_by_id(member_id)
+    if user is None:
         return None
-    return _member_to_dict(member_dir)
+    return _member_from_repos(user, agent_config_repo)
 
 
 def create_member(
     name: str,
     description: str = "",
     owner_user_id: str | None = None,
-    member_repo: Any = None,
+    user_repo: Any = None,
     agent_config_repo: Any = None,
 ) -> dict[str, Any]:
-    from storage.contracts import MemberRow, MemberType
-    from storage.utils import generate_member_id
+    from storage.contracts import UserRow, UserType
+    from storage.utils import generate_agent_config_id, generate_member_id
 
     now = time.time()
     now_ms = int(now * 1000)
-    member_id = generate_member_id()
-    member_dir = MEMBERS_DIR / member_id
-    member_dir.mkdir(parents=True, exist_ok=True)
-    _write_agent_md(member_dir / "agent.md", name=name, description=description)
-    _write_json(
-        member_dir / "meta.json",
-        {
-            "status": "draft",
-            "version": "0.1.0",
-            "created_at": now_ms,
-            "updated_at": now_ms,
-        },
-    )
+    agent_user_id = generate_member_id()
+    agent_config_id = generate_agent_config_id()
 
-    # Dual-write to Supabase repo
+    # Persist to users table so panel/auth shells see a unified agent identity
+    if owner_user_id:
+        row = UserRow(
+            id=agent_user_id,
+            type=UserType.AGENT,
+            display_name=name,
+            owner_user_id=owner_user_id,
+            agent_config_id=agent_config_id,
+            created_at=now,
+        )
+        if user_repo is None:
+            raise RuntimeError("user_repo is required when owner_user_id is provided")
+        user_repo.create(row)
+
+    # @@@agent-user-before-config - new schema roots agent_configs on agent_user_id.
+    # The user row must exist before the config write, otherwise live staging
+    # rejects the insert on the forward reference.
     if agent_config_repo:
         _save_config_to_repo(
             agent_config_repo,
-            member_id,
+            agent_config_id,
+            agent_user_id=agent_user_id,
             name=name,
             description=description,
             status="draft",
@@ -418,150 +509,59 @@ def create_member(
             updated_at=now_ms,
         )
 
-    # Persist to members table so list_members finds it
-    if owner_user_id:
-        row = MemberRow(
-            id=member_id,
-            name=name,
-            type=MemberType.MYCEL_AGENT,
-            description=description,
-            config_dir=str(member_dir),
-            owner_user_id=owner_user_id,
-            created_at=now,
-        )
-        if member_repo is None:
-            raise RuntimeError("member_repo is required when owner_user_id is provided")
-        member_repo.create(row)
+    return get_member(agent_user_id, user_repo=user_repo, agent_config_repo=agent_config_repo)  # type: ignore
 
-    return get_member(member_id)  # type: ignore
+
+def _require_repo_backed_member_ops(user_repo: Any = None, agent_config_repo: Any = None) -> None:
+    if user_repo is None or agent_config_repo is None:
+        raise RuntimeError("user_repo and agent_config_repo are required for owner-scoped agent operations")
 
 
 def update_member(
     member_id: str,
-    member_repo: Any = None,
+    user_repo: Any = None,
+    agent_config_repo: Any = None,
     **fields: Any,
 ) -> dict[str, Any] | None:
     if member_id == "__leon__":
-        member_dir = _ensure_leon_dir()
-    else:
-        member_dir = MEMBERS_DIR / member_id
-        if not member_dir.is_dir():
-            return None
+        raise RuntimeError("Builtin agent is read-only")
+    _require_repo_backed_member_ops(user_repo, agent_config_repo)
+    user, config = _resolve_repo_backed_agent(member_id, user_repo, agent_config_repo)
+    if user is None or config is None:
+        return None
     allowed = {"name", "description", "status"}
     updates = {k: v for k, v in fields.items() if k in allowed and v is not None}
     if not updates:
-        return get_member(member_id)
-    if "status" in updates:
-        meta = _read_json(member_dir / "meta.json", {})
-        meta["status"] = updates["status"]
-        meta["updated_at"] = int(time.time() * 1000)
-        _write_json(member_dir / "meta.json", meta)
-    if "name" in updates or "description" in updates:
-        parsed = _parse_agent_md(member_dir / "agent.md") or {}
-        _write_agent_md(
-            member_dir / "agent.md",
-            name=updates.get("name", parsed.get("name", "")),
-            description=updates.get("description", parsed.get("description", "")),
-            model=parsed.get("model"),
-            tools=parsed.get("tools"),
-            system_prompt=parsed.get("system_prompt", ""),
-        )
-        meta = _read_json(member_dir / "meta.json", {})
-        meta["updated_at"] = int(time.time() * 1000)
-        _write_json(member_dir / "meta.json", meta)
+        return get_member(member_id, user_repo=user_repo, agent_config_repo=agent_config_repo)
+    if "name" in updates:
+        user_repo.update(member_id, display_name=updates["name"])
+    agent_config_repo.save_config(
+        user.agent_config_id,
+        {
+            **config,
+            "name": updates.get("name", config.get("name") or user.display_name),
+            "description": updates.get("description", config.get("description", "")),
+            "status": updates.get("status", config.get("status", "draft")),
+            "updated_at": int(time.time() * 1000),
+        },
+    )
 
-        if "name" in updates:
-            if member_repo is None:
-                raise RuntimeError("member_repo is required to update member name")
-            member_repo.update(member_id, name=updates["name"])
-
-    return get_member(member_id)
+    return get_member(member_id, user_repo=user_repo, agent_config_repo=agent_config_repo)
 
 
-def update_member_config(member_id: str, config_patch: dict[str, Any], agent_config_repo: Any = None) -> dict[str, Any] | None:
+def update_member_config(
+    member_id: str,
+    config_patch: dict[str, Any],
+    user_repo: Any = None,
+    agent_config_repo: Any = None,
+) -> dict[str, Any] | None:
     if member_id == "__leon__":
-        member_dir = _ensure_leon_dir()
-    else:
-        member_dir = MEMBERS_DIR / member_id
-        if not member_dir.is_dir():
-            return None
-
-    # prompt → agent.md body
-    if "prompt" in config_patch and config_patch["prompt"] is not None:
-        parsed = _parse_agent_md(member_dir / "agent.md") or {}
-        _write_agent_md(
-            member_dir / "agent.md",
-            name=parsed.get("name", ""),
-            description=parsed.get("description", ""),
-            model=parsed.get("model"),
-            tools=parsed.get("tools"),
-            system_prompt=config_patch["prompt"],
-        )
-
-    # rules → rules/ directory
-    if "rules" in config_patch and config_patch["rules"] is not None:
-        _write_rules(member_dir, config_patch["rules"])
-
-    # subAgents → agents/ directory
-    if "subAgents" in config_patch and config_patch["subAgents"] is not None:
-        _write_sub_agents(member_dir, config_patch["subAgents"])
-
-    # tools/skills → runtime.json
-    _write_runtime_resources(member_dir, config_patch)
-
-    # mcps → .mcp.json
-    if "mcps" in config_patch and config_patch["mcps"] is not None:
-        _write_mcps(member_dir, config_patch["mcps"])
-
-    # Update timestamp
-    meta = _read_json(member_dir / "meta.json", {})
-    meta["updated_at"] = int(time.time() * 1000)
-    _write_json(member_dir / "meta.json", meta)
-
-    # Dual-write full state to Supabase repo
-    if agent_config_repo:
-        try:
-            bundle = AgentLoader().load_bundle(member_dir)
-            _save_config_to_repo(
-                agent_config_repo,
-                member_id,
-                name=bundle.agent.name,
-                description=bundle.agent.description,
-                model=bundle.agent.model,
-                tools=bundle.agent.tools,
-                system_prompt=bundle.agent.system_prompt,
-                status=bundle.meta.get("status", "draft"),
-                version=bundle.meta.get("version", "0.1.0"),
-                created_at=bundle.meta.get("created_at", 0),
-                updated_at=bundle.meta.get("updated_at", 0),
-                runtime={k: {"enabled": v.enabled, "desc": v.desc} for k, v in bundle.runtime.items()},
-                mcp={n: {"command": s.command, "args": s.args, "env": s.env, "disabled": s.disabled} for n, s in bundle.mcp.items()},
-            )
-            # Sync rules
-            for rule in bundle.rules:
-                agent_config_repo.save_rule(member_id, f"{rule['name']}.md", rule.get("content", ""))
-            # Sync sub-agents
-            for agent_cfg in bundle.agents:
-                if agent_cfg.source_dir and agent_cfg.source_dir.resolve() == _SYSTEM_AGENTS_DIR:
-                    continue  # skip builtins
-                agent_config_repo.save_sub_agent(
-                    member_id,
-                    agent_cfg.name,
-                    description=agent_cfg.description,
-                    model=agent_cfg.model,
-                    tools=agent_cfg.tools,
-                    system_prompt=agent_cfg.system_prompt,
-                )
-            # Sync skills
-            for skill in bundle.skills:
-                skill_path = Path(skill.get("path", ""))
-                skill_md = skill_path / "SKILL.md"
-                content = skill_md.read_text(encoding="utf-8") if skill_md.exists() else ""
-                agent_config_repo.save_skill(member_id, skill["name"], content)
-        except Exception:
-            logger.warning("Failed to sync config to repo for member %s", member_id, exc_info=True)
-
-    return get_member(member_id)
+        raise RuntimeError("Builtin agent is read-only")
+    _require_repo_backed_member_ops(user_repo, agent_config_repo)
+    user, _config = _resolve_repo_backed_agent(member_id, user_repo, agent_config_repo)
+    if user is None or _config is None:
+        return None
+    return _sync_member_patch_to_repo(member_id, config_patch, user_repo, agent_config_repo)
 
 
 # ── Supabase repo dual-write helper ──
@@ -569,8 +569,9 @@ def update_member_config(member_id: str, config_patch: dict[str, Any], agent_con
 
 def _save_config_to_repo(
     agent_config_repo: Any,
-    member_id: str,
+    agent_config_id: str,
     *,
+    agent_user_id: str,
     name: str,
     description: str = "",
     model: str | None = None,
@@ -582,27 +583,142 @@ def _save_config_to_repo(
     updated_at: int = 0,
     runtime: dict | None = None,
     mcp: dict | None = None,
+    meta: dict | None = None,
 ) -> None:
-    """Save agent config to Supabase repo. Best-effort — logs errors but doesn't raise."""
-    try:
-        agent_config_repo.save_config(
-            member_id,
-            {
-                "name": name,
-                "description": description,
-                "model": model,
-                "tools": tools or ["*"],
-                "system_prompt": system_prompt,
-                "status": status,
-                "version": version,
-                "created_at": created_at,
-                "updated_at": updated_at,
-                "runtime": runtime or {},
-                "mcp": mcp or {},
-            },
-        )
-    except Exception:
-        logger.warning("Failed to save config to repo for member %s", member_id, exc_info=True)
+    agent_config_repo.save_config(
+        agent_config_id,
+        {
+            "agent_user_id": agent_user_id,
+            "name": name,
+            "description": description,
+            "model": model,
+            "tools": tools or ["*"],
+            "system_prompt": system_prompt,
+            "status": status,
+            "version": version,
+            "created_at": created_at,
+            "updated_at": updated_at,
+            "runtime": runtime or {},
+            "mcp": mcp or {},
+            "meta": meta or {},
+        },
+    )
+
+
+def _runtime_and_tools_from_patch(current_config: dict[str, Any], config_patch: dict[str, Any]) -> tuple[dict[str, Any], list[str]]:
+    runtime = dict(current_config.get("runtime", {}) if isinstance(current_config.get("runtime"), dict) else {})
+    tools = list(current_config.get("tools") or ["*"])
+
+    if "tools" in config_patch and config_patch["tools"] is not None:
+        tool_items = [item for item in config_patch["tools"] if isinstance(item, dict) and item.get("name")]
+        runtime = {k: v for k, v in runtime.items() if not k.startswith("tools:")}
+        for item in tool_items:
+            runtime[f"tools:{item['name']}"] = {
+                "enabled": item.get("enabled", True),
+                "desc": item.get("desc", ""),
+            }
+        enabled_tools = [item["name"] for item in tool_items if item.get("enabled", True)]
+        tools = ["*"] if tool_items and len(enabled_tools) == len(tool_items) else enabled_tools
+
+    if "skills" in config_patch and config_patch["skills"] is not None:
+        skill_items = [item for item in config_patch["skills"] if isinstance(item, dict) and item.get("name")]
+        runtime = {k: v for k, v in runtime.items() if not k.startswith("skills:")}
+        for item in skill_items:
+            runtime[f"skills:{item['name']}"] = {
+                "enabled": item.get("enabled", True),
+                "desc": item.get("desc", ""),
+            }
+
+    return runtime, tools
+
+
+def _mcp_from_patch(config_patch: dict[str, Any], current_config: dict[str, Any]) -> dict[str, Any]:
+    if "mcps" not in config_patch or config_patch["mcps"] is None:
+        return dict(current_config.get("mcp", {}) if isinstance(current_config.get("mcp"), dict) else {})
+    servers: dict[str, Any] = {}
+    for item in config_patch["mcps"]:
+        if isinstance(item, dict) and item.get("name"):
+            servers[item["name"]] = {
+                "command": item.get("command", ""),
+                "args": item.get("args", []),
+                "env": item.get("env", {}),
+                "disabled": item.get("disabled", False),
+            }
+    return servers
+
+
+def _sync_repo_children(agent_config_id: str, config_patch: dict[str, Any], agent_config_repo: Any) -> None:
+    if "rules" in config_patch and config_patch["rules"] is not None:
+        for row in agent_config_repo.list_rules(agent_config_id):
+            agent_config_repo.delete_rule(row["id"])
+        for rule in config_patch["rules"]:
+            if isinstance(rule, dict) and rule.get("name"):
+                agent_config_repo.save_rule(agent_config_id, f"{rule['name']}.md", rule.get("content", ""))
+
+    if "skills" in config_patch and config_patch["skills"] is not None:
+        existing = {row["name"]: row for row in agent_config_repo.list_skills(agent_config_id)}
+        for row in existing.values():
+            agent_config_repo.delete_skill(row["id"])
+        for skill in config_patch["skills"]:
+            if isinstance(skill, dict) and skill.get("name"):
+                prior = existing.get(skill["name"], {})
+                agent_config_repo.save_skill(
+                    agent_config_id,
+                    skill["name"],
+                    str(prior.get("content", "")),
+                    meta=prior.get("meta_json") if isinstance(prior.get("meta_json"), dict) else None,
+                )
+
+    if "subAgents" in config_patch and config_patch["subAgents"] is not None:
+        for row in agent_config_repo.list_sub_agents(agent_config_id):
+            agent_config_repo.delete_sub_agent(row["id"])
+        for item in config_patch["subAgents"]:
+            if not (isinstance(item, dict) and item.get("name")):
+                continue
+            if item.get("builtin"):
+                continue
+            raw_tools = item.get("tools") or []
+            if isinstance(raw_tools, list) and raw_tools and isinstance(raw_tools[0], dict):
+                enabled_tools = [tool["name"] for tool in raw_tools if tool.get("enabled")]
+            else:
+                enabled_tools = list(raw_tools)
+            agent_config_repo.save_sub_agent(
+                agent_config_id,
+                item["name"],
+                description=item.get("desc", ""),
+                tools=enabled_tools,
+                system_prompt=item.get("system_prompt", ""),
+            )
+
+
+def _sync_member_patch_to_repo(member_id: str, config_patch: dict[str, Any], user_repo: Any, agent_config_repo: Any) -> dict[str, Any]:
+    # @@@repo-only-agent-shell - fresh register now creates DB-only agents. Owner-scoped
+    # panel edits must keep working even when no legacy member dir exists.
+    user = user_repo.get_by_id(member_id)
+    if user is None or user.agent_config_id is None:
+        raise RuntimeError(f"Agent user {member_id} is missing agent_config_id")
+    current_config = agent_config_repo.get_config(user.agent_config_id)
+    if current_config is None:
+        raise RuntimeError(f"Agent config {user.agent_config_id} is missing for {member_id}")
+
+    runtime, tools = _runtime_and_tools_from_patch(current_config, config_patch)
+    updated_config = {
+        **current_config,
+        "name": current_config.get("name") or user.display_name,
+        "description": current_config.get("description", ""),
+        "model": current_config.get("model"),
+        "tools": tools,
+        "system_prompt": config_patch.get("prompt", current_config.get("system_prompt", "")),
+        "status": current_config.get("status", "draft"),
+        "version": current_config.get("version", "0.1.0"),
+        "created_at": current_config.get("created_at", 0),
+        "updated_at": int(time.time() * 1000),
+        "runtime": runtime,
+        "mcp": _mcp_from_patch(config_patch, current_config),
+    }
+    agent_config_repo.save_config(user.agent_config_id, updated_config)
+    _sync_repo_children(user.agent_config_id, config_patch, agent_config_repo)
+    return get_member(member_id, user_repo=user_repo, agent_config_repo=agent_config_repo)
 
 
 # ── Write helpers for config fields → file structure ──
@@ -731,12 +847,14 @@ def _write_mcps(member_dir: Path, mcps: list[dict[str, Any]]) -> None:
 # ── Publish / Delete ──
 
 
-def publish_member(member_id: str, bump_type: str = "patch", agent_config_repo: Any = None) -> dict[str, Any] | None:
-    member_dir = MEMBERS_DIR / member_id
-    if not member_dir.is_dir():
+def publish_member(member_id: str, bump_type: str = "patch", user_repo: Any = None, agent_config_repo: Any = None) -> dict[str, Any] | None:
+    _require_repo_backed_member_ops(user_repo, agent_config_repo)
+    user, config = _resolve_repo_backed_agent(member_id, user_repo, agent_config_repo)
+    if user is None or config is None:
         return None
-    meta = _read_json(member_dir / "meta.json", {})
-    parts = meta.get("version", "0.1.0").split(".")
+    current_version = config.get("version", "0.1.0")
+
+    parts = current_version.split(".")
     major, minor, patch = int(parts[0]), int(parts[1]), int(parts[2])
     if bump_type == "major":
         major, minor, patch = major + 1, 0, 0
@@ -744,51 +862,66 @@ def publish_member(member_id: str, bump_type: str = "patch", agent_config_repo: 
         minor, patch = minor + 1, 0
     else:
         patch += 1
-    meta["version"] = f"{major}.{minor}.{patch}"
-    meta["status"] = "active"
-    meta["updated_at"] = int(time.time() * 1000)
-    _write_json(member_dir / "meta.json", meta)
+    next_version = f"{major}.{minor}.{patch}"
+    updated_at = int(time.time() * 1000)
 
-    # Dual-write publish status to Supabase repo
-    if agent_config_repo:
-        try:
-            config = agent_config_repo.get_config(member_id)
-            if config:
-                agent_config_repo.save_config(
-                    member_id,
-                    {
-                        **config,
-                        "version": meta["version"],
-                        "status": "active",
-                        "updated_at": meta["updated_at"],
-                    },
-                )
-        except Exception:
-            logger.warning("Failed to update repo for publish of %s", member_id, exc_info=True)
+    agent_config_repo.save_config(
+        user.agent_config_id,
+        {
+            **config,
+            "version": next_version,
+            "status": "active",
+            "updated_at": updated_at,
+        },
+    )
 
-    return get_member(member_id)
+    return get_member(member_id, user_repo=user_repo, agent_config_repo=agent_config_repo)
 
 
-def delete_member(member_id: str, member_repo: Any = None, agent_config_repo: Any = None) -> bool:
+def _resolve_repo_backed_agent(
+    member_id: str, user_repo: Any = None, agent_config_repo: Any = None
+) -> tuple[Any | None, dict[str, Any] | None]:
+    if user_repo is None or agent_config_repo is None:
+        return None, None
+    user = user_repo.get_by_id(member_id)
+    if user is None or user.agent_config_id is None:
+        return None, None
+    # @@@repo-backed-agent-wins - repo-backed agent users must not silently fall
+    # back to legacy member-dir writes just because an old shell still exists.
+    config = agent_config_repo.get_config(user.agent_config_id)
+    if config is None:
+        raise RuntimeError(f"Agent config {user.agent_config_id} is missing for {member_id}")
+    return user, config
+
+
+def delete_member(
+    member_id: str,
+    user_repo: Any = None,
+    agent_config_repo: Any = None,
+    thread_launch_pref_repo: Any = None,
+) -> bool:
     if member_id == "__leon__":
         return False
+    _require_repo_backed_member_ops(user_repo, agent_config_repo)
+    if thread_launch_pref_repo is None:
+        raise RuntimeError("thread_launch_pref_repo is required for agent delete")
     member_dir = MEMBERS_DIR / member_id
-    if not member_dir.is_dir():
+    user = user_repo.get_by_id(member_id)
+    if user is None:
         return False
 
     # Delete from Supabase repo before removing filesystem
-    if agent_config_repo:
-        try:
-            agent_config_repo.delete_config(member_id)
-        except Exception:
-            logger.warning("Failed to delete config from repo for %s", member_id, exc_info=True)
+    if user.agent_config_id is None:
+        raise RuntimeError(f"Agent user {member_id} is missing agent_config_id")
+    # @@@delete-member-fails-loudly - partial delete is worse than refusing the delete when repo state cannot be removed cleanly.
+    agent_config_repo.delete_config(user.agent_config_id)
+    thread_launch_pref_repo.delete_by_agent_user_id(member_id)
 
-    shutil.rmtree(member_dir)
+    if member_dir.is_dir():
+        shutil.rmtree(member_dir)
 
-    # Also remove from DB
-    if member_repo is None:
-        raise RuntimeError("member_repo is required to delete member")
-    member_repo.delete(member_id)
+    # Also remove from unified users table
+    user_repo.delete(member_id)
 
     return True
 
@@ -809,143 +942,110 @@ def install_from_snapshot(
     marketplace_item_id: str,
     installed_version: str,
     owner_user_id: str,
-    existing_member_id: str | None = None,
-    member_repo: Any = None,
+    existing_user_id: str | None = None,
+    user_repo: Any = None,
     agent_config_repo: Any = None,
 ) -> str:
-    """Create or update a local member from a marketplace snapshot."""
-    from storage.contracts import MemberRow, MemberType
-    from storage.utils import generate_member_id
+    """Create or update a marketplace-backed agent user via repos only."""
+    from storage.contracts import UserRow, UserType
+    from storage.utils import generate_agent_config_id, generate_member_id
+
+    if user_repo is None or agent_config_repo is None:
+        raise RuntimeError("user_repo and agent_config_repo are required to install marketplace user snapshot")
 
     now = time.time()
     now_ms = int(now * 1000)
+    agent_md = _parse_agent_md_content(str(snapshot.get("agent_md") or "")) or {}
+    agent_name = str(agent_md.get("name") or name)
+    agent_description = str(agent_md.get("description") or description)
+    agent_model = agent_md.get("model")
+    agent_tools = list(agent_md.get("tools") or ["*"])
+    agent_prompt = str(agent_md.get("system_prompt") or "")
+    runtime_data = snapshot.get("runtime") if isinstance(snapshot.get("runtime"), dict) else {}
+    mcp_data = snapshot.get("mcp") if isinstance(snapshot.get("mcp"), dict) else {}
 
-    if existing_member_id:
-        member_id = existing_member_id
-        member_dir = MEMBERS_DIR / member_id
+    if existing_user_id:
+        user_id = existing_user_id
+        user = user_repo.get_by_id(user_id)
+        if user is None or user.agent_config_id is None:
+            raise RuntimeError(f"Agent user {user_id} is missing agent_config_id")
+        agent_config_id = user.agent_config_id
+        current_config = agent_config_repo.get_config(agent_config_id) or {}
+        created_at = int(current_config.get("created_at", now_ms))
+        user_repo.update(user_id, display_name=agent_name)
     else:
-        member_id = generate_member_id()
-        member_dir = MEMBERS_DIR / member_id
-        member_dir.mkdir(parents=True, exist_ok=True)
-
-    # Write agent.md
-    agent_md_content = snapshot.get("agent_md", "")
-    if agent_md_content:
-        (member_dir / "agent.md").write_text(agent_md_content, encoding="utf-8")
-    else:
-        _write_agent_md(member_dir / "agent.md", name=name, description=description)
-
-    # Write rules
-    rules_dir = member_dir / "rules"
-    if rules_dir.exists():
-        shutil.rmtree(rules_dir)
-    member_dir_resolved = member_dir.resolve()
-    for rule in snapshot.get("rules", []):
-        rules_dir.mkdir(exist_ok=True)
-        rule_name = _sanitize_name(rule.get("name", "default"))
-        rule_path = (rules_dir / f"{rule_name}.md").resolve()
-        if not str(rule_path).startswith(str(member_dir_resolved)):
-            logger.warning("Skipping snapshot rule with unsafe name: %s", rule_name)
-            continue
-        rule_path.write_text(rule.get("content", ""), encoding="utf-8")
-
-    # Write agents
-    agents_dir = member_dir / "agents"
-    if agents_dir.exists():
-        shutil.rmtree(agents_dir)
-    for agent in snapshot.get("agents", []):
-        agents_dir.mkdir(exist_ok=True)
-        agent_name = _sanitize_name(agent.get("name", "default"))
-        agent_path = (agents_dir / f"{agent_name}.md").resolve()
-        if not str(agent_path).startswith(str(member_dir_resolved)):
-            logger.warning("Skipping snapshot agent with unsafe name: %s", agent_name)
-            continue
-        agent_path.write_text(agent.get("content", ""), encoding="utf-8")
-
-    # Write skills
-    skills_dir = member_dir / "skills"
-    if skills_dir.exists():
-        shutil.rmtree(skills_dir)
-    for skill in snapshot.get("skills", []):
-        skill_name = _sanitize_name(skill.get("name", "default"))
-        skill_sub_dir = (skills_dir / skill_name).resolve()
-        if not str(skill_sub_dir).startswith(str(member_dir_resolved)):
-            logger.warning("Skipping snapshot skill with unsafe name: %s", skill_name)
-            continue
-        skill_sub_dir.mkdir(parents=True, exist_ok=True)
-        (skill_sub_dir / "SKILL.md").write_text(skill.get("content", ""), encoding="utf-8")
-        if skill.get("meta"):
-            _write_json(skill_sub_dir / "meta.json", skill["meta"])
-
-    # Write MCP
-    mcp_data = snapshot.get("mcp", {})
-    if mcp_data:
-        _write_json(member_dir / ".mcp.json", mcp_data)
-    elif (member_dir / ".mcp.json").exists():
-        (member_dir / ".mcp.json").unlink()
-
-    # Write runtime
-    runtime_data = snapshot.get("runtime", {})
-    if runtime_data:
-        _write_json(member_dir / "runtime.json", runtime_data)
-
-    # Write meta.json with source info
-    meta = {
-        "status": "active",
-        "version": installed_version,
-        "created_at": now_ms if not existing_member_id else _read_json(member_dir / "meta.json", {}).get("created_at", now_ms),
-        "updated_at": now_ms,
-        "source": {
-            "marketplace_item_id": marketplace_item_id,
-            "installed_version": installed_version,
-            "installed_at": now_ms,
-            "modified": False,
-        },
-    }
-    _write_json(member_dir / "meta.json", meta)
-
-    # Register in DB (new installs only)
-    if not existing_member_id and owner_user_id:
-        row = MemberRow(
-            id=member_id,
-            name=name,
-            type=MemberType.MYCEL_AGENT,
-            description=description,
-            config_dir=str(member_dir),
+        user_id = generate_member_id()
+        agent_config_id = generate_agent_config_id()
+        created_at = now_ms
+        row = UserRow(
+            id=user_id,
+            type=UserType.AGENT,
+            display_name=agent_name,
             owner_user_id=owner_user_id,
+            agent_config_id=agent_config_id,
             created_at=now,
         )
-        if member_repo is None:
-            raise RuntimeError("member_repo is required to register new member from snapshot")
-        member_repo.create(row)
+        user_repo.create(row)
 
-    # Dual-write to Supabase repo
-    if agent_config_repo:
-        _save_config_to_repo(
-            agent_config_repo,
-            member_id,
-            name=name,
-            description=description,
-            status=meta["status"],
-            version=meta["version"],
-            created_at=meta["created_at"],
-            updated_at=meta["updated_at"],
-            runtime=runtime_data if runtime_data else {},
-            mcp=mcp_data if mcp_data else {},
+    # @@@snapshot-install-repo-only - marketplace member installs no longer materialize
+    # a member dir. The DB is now the live shell; marketplace lineage still needs
+    # a separate repo-rooted home because publish used to read meta.json.source.
+    _save_config_to_repo(
+        agent_config_repo,
+        agent_config_id,
+        agent_user_id=user_id,
+        name=agent_name,
+        description=agent_description,
+        model=agent_model,
+        tools=agent_tools,
+        system_prompt=agent_prompt,
+        status="active",
+        version=installed_version,
+        created_at=created_at,
+        updated_at=now_ms,
+        runtime=runtime_data,
+        mcp=mcp_data,
+        meta={
+            "source": {
+                "marketplace_item_id": marketplace_item_id,
+                "installed_version": installed_version,
+                "installed_at": now_ms,
+                "modified": False,
+            }
+        },
+    )
+
+    for row in agent_config_repo.list_rules(agent_config_id):
+        agent_config_repo.delete_rule(row["id"])
+    for rule in snapshot.get("rules", []):
+        if not isinstance(rule, dict):
+            continue
+        rule_name = _sanitize_name(str(rule.get("name") or "default"))
+        agent_config_repo.save_rule(agent_config_id, f"{rule_name}.md", str(rule.get("content") or ""))
+
+    for row in agent_config_repo.list_skills(agent_config_id):
+        agent_config_repo.delete_skill(row["id"])
+    for skill in snapshot.get("skills", []):
+        if not isinstance(skill, dict):
+            continue
+        skill_name = _sanitize_name(str(skill.get("name") or "default"))
+        skill_meta = skill.get("meta") if isinstance(skill.get("meta"), dict) else None
+        agent_config_repo.save_skill(agent_config_id, skill_name, str(skill.get("content") or ""), meta=skill_meta)
+
+    for row in agent_config_repo.list_sub_agents(agent_config_id):
+        agent_config_repo.delete_sub_agent(row["id"])
+    for item in snapshot.get("agents", []):
+        if not isinstance(item, dict):
+            continue
+        parsed_sub_agent = _parse_agent_md_content(str(item.get("content") or "")) or {}
+        sub_agent_name = str(parsed_sub_agent.get("name") or item.get("name") or "default")
+        agent_config_repo.save_sub_agent(
+            agent_config_id,
+            _sanitize_name(sub_agent_name),
+            description=str(parsed_sub_agent.get("description") or ""),
+            model=parsed_sub_agent.get("model"),
+            tools=list(parsed_sub_agent.get("tools") or ["*"]),
+            system_prompt=str(parsed_sub_agent.get("system_prompt") or ""),
         )
-        # Sync rules from snapshot
-        for rule in snapshot.get("rules", []):
-            rule_name = _sanitize_name(rule.get("name", "default"))
-            try:
-                agent_config_repo.save_rule(member_id, f"{rule_name}.md", rule.get("content", ""))
-            except Exception:
-                logger.warning("Failed to save snapshot rule %s for member %s", rule_name, member_id, exc_info=True)
-        # Sync skills from snapshot
-        for skill in snapshot.get("skills", []):
-            skill_name = _sanitize_name(skill.get("name", "default"))
-            try:
-                agent_config_repo.save_skill(member_id, skill_name, skill.get("content", ""))
-            except Exception:
-                logger.warning("Failed to save snapshot skill %s for member %s", skill_name, member_id, exc_info=True)
 
-    return member_id
+    return user_id

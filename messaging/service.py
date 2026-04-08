@@ -10,12 +10,12 @@ Wraps Supabase messaging repos with business rules:
 from __future__ import annotations
 
 import logging
+import time
 import uuid
 from collections.abc import Callable
 from typing import Any
 
 from backend.web.utils.serializers import avatar_url
-from messaging._utils import now_iso
 from messaging.contracts import ContentType, MessageType
 
 logger = logging.getLogger(__name__)
@@ -30,8 +30,8 @@ class MessagingService:
         chat_member_repo: Any,  # SupabaseChatMemberRepo or compatible
         messages_repo: Any,  # SupabaseMessagesRepo
         message_read_repo: Any,  # SupabaseMessageReadRepo
-        member_repo: Any,  # MemberRepo (for name + avatar lookup)
-        thread_repo: Any | None = None,  # ThreadRepo for thread-user-id -> member display lookup
+        user_repo: Any,  # UserRepo (for name + avatar lookup)
+        thread_repo: Any | None = None,  # ThreadRepo for thread-user-id -> agent-user display lookup
         delivery_resolver: Any | None = None,
         delivery_fn: Callable | None = None,
         event_bus: Any | None = None,  # ChatEventBus or SupabaseRealtimeBridge (optional)
@@ -39,26 +39,35 @@ class MessagingService:
         self._chats = chat_repo
         self._members_repo = chat_member_repo
         self._messages = messages_repo
-        self._reads = message_read_repo
-        self._member_repo = member_repo
+        self._user_repo = user_repo
         self._thread_repo = thread_repo
         self._delivery_resolver = delivery_resolver
         self._delivery_fn = delivery_fn
         self._event_bus = event_bus
+        self._reads = message_read_repo
 
-    def _resolve_display_member(self, social_user_id: str) -> Any | None:
-        member = self._member_repo.get_by_id(social_user_id)
-        if member is not None:
-            return member
+    def _normalize_message_row(self, row: dict[str, Any]) -> dict[str, Any]:
+        return {
+            **row,
+            "sender_id": row.get("sender_id") or row.get("sender_user_id"),
+            "mentioned_ids": row.get("mentioned_ids") or row.get("mentions") or row.get("mentions_json") or [],
+            "reply_to": row.get("reply_to") or row.get("reply_to_message_id"),
+            "ai_metadata": row.get("ai_metadata") or row.get("ai_metadata_json") or {},
+        }
+
+    def _resolve_display_user(self, social_user_id: str) -> Any | None:
+        user = self._user_repo.get_by_id(social_user_id)
+        if user is not None:
+            return user
         if self._thread_repo is None:
             return None
         thread = self._thread_repo.get_by_user_id(social_user_id)
         if thread is None:
             return None
-        member_id = thread.get("member_id")
-        if not member_id:
+        agent_user_id = thread.get("agent_user_id")
+        if not agent_user_id:
             return None
-        return self._member_repo.get_by_id(member_id)
+        return self._user_repo.get_by_id(agent_user_id)
 
     def set_delivery_fn(self, fn: Callable) -> None:
         self._delivery_fn = fn
@@ -83,13 +92,20 @@ class MessagingService:
         return self._create_chat(user_ids, chat_type="group", title=title)
 
     def _create_chat(self, user_ids: list[str], *, chat_type: str, title: str | None) -> dict[str, Any]:
-        import time
-
         from storage.contracts import ChatRow
 
         chat_id = str(uuid.uuid4())
         now = time.time()
-        self._chats.create(ChatRow(id=chat_id, title=title, status="active", created_at=now))
+        self._chats.create(
+            ChatRow(
+                id=chat_id,
+                type=chat_type,
+                created_by_user_id=user_ids[0],
+                title=title,
+                status="active",
+                created_at=now,
+            )
+        )
         for uid in user_ids:
             self._members_repo.add_member(chat_id, uid)
         return {"id": chat_id, "title": title, "status": "active", "created_at": now}
@@ -116,26 +132,26 @@ class MessagingService:
         row: dict[str, Any] = {
             "id": msg_id,
             "chat_id": chat_id,
-            "sender_id": sender_id,
+            "sender_user_id": sender_id,
             "content": content,
             "content_type": content_type,
             "message_type": message_type,
-            "mentions": mentions or [],
-            "created_at": now_iso(),
+            "mentions_json": mentions or [],
+            "created_at": time.time(),
         }
         if signal in ("open", "yield", "close"):
             row["signal"] = signal
         if reply_to:
-            row["reply_to"] = reply_to
+            row["reply_to_message_id"] = reply_to
         if ai_metadata:
-            row["ai_metadata"] = ai_metadata
+            row["ai_metadata_json"] = ai_metadata
 
-        created = self._messages.create(row)
+        created = self._normalize_message_row(self._messages.create(row))
         logger.debug("[messaging] send chat=%s sender=%s msg=%s type=%s", chat_id[:8], sender_id[:15], msg_id[:8], message_type)
 
         # Publish to event bus (SSE / Realtime bridge)
-        sender = self._resolve_display_member(sender_id)
-        sender_name = sender.name if sender else "unknown"
+        sender = self._resolve_display_user(sender_id)
+        sender_name = sender.display_name if sender else "unknown"
         if self._event_bus:
             self._event_bus.publish(
                 chat_id,
@@ -161,22 +177,23 @@ class MessagingService:
     ) -> None:
         mention_set = set(mentions)
         members = self._members_repo.list_members(chat_id)
-        sender_member = self._resolve_display_member(sender_id)
-        sender_name = sender_member.name if sender_member else "unknown"
-        sender_avatar_url = avatar_url(sender_id, bool(sender_member.avatar if sender_member else None))
+        sender_user = self._resolve_display_user(sender_id)
+        sender_name = sender_user.display_name if sender_user else "unknown"
+        sender_avatar_url = avatar_url(sender_user.id if sender_user else sender_id, bool(sender_user.avatar if sender_user else None))
         sender_type = (
-            sender_member.type.value
-            if hasattr(sender_member, "type") and hasattr(sender_member.type, "value")
-            else getattr(sender_member, "type", None)
+            sender_user.type.value
+            if hasattr(sender_user, "type") and hasattr(sender_user.type, "value")
+            else getattr(sender_user, "type", None)
         )
-        sender_owner_id = sender_member.id if sender_type == "human" else getattr(sender_member, "owner_user_id", None)
+        sender_owner_id = sender_user.id if sender_type == "human" else getattr(sender_user, "owner_user_id", None)
 
         for member in members:
             uid = member.get("user_id")
             if not uid or uid == sender_id:
                 continue
-            m = self._resolve_display_member(uid)
-            if not m or m.type == "human":
+            m = self._resolve_display_user(uid)
+            member_type = m.type.value if hasattr(getattr(m, "type", None), "value") else getattr(m, "type", None)
+            if not m or member_type == "human":
                 continue
 
             # @@@same-owner-group-delivery - explicit group membership among the same owner
@@ -216,15 +233,9 @@ class MessagingService:
 
     def mark_read(self, chat_id: str, user_id: str) -> None:
         """Mark all messages in a chat as read for user."""
-        self._members_repo.update_last_read(chat_id, user_id)
-        # Also write per-message reads for recent messages
-        msgs = self._messages.list_by_chat(chat_id, limit=50, viewer_id=user_id)
-        msg_ids = [m["id"] for m in msgs if m.get("sender_id") != user_id]
-        if msg_ids:
-            self._reads.mark_chat_read(chat_id, user_id, msg_ids)
-
-    def mark_message_read(self, message_id: str, user_id: str) -> None:
-        self._reads.mark_read(message_id, user_id)
+        msgs = self._messages.list_by_chat(chat_id, limit=1, viewer_id=user_id)
+        last_read_seq = int(msgs[-1].get("seq") or 0) if msgs else 0
+        self._members_repo.update_last_read(chat_id, user_id, last_read_seq)
 
     # ------------------------------------------------------------------
     # Queries
@@ -233,10 +244,16 @@ class MessagingService:
     def list_messages(
         self, chat_id: str, *, limit: int = 50, before: str | None = None, viewer_id: str | None = None
     ) -> list[dict[str, Any]]:
-        return self._messages.list_by_chat(chat_id, limit=limit, before=before, viewer_id=viewer_id)
+        rows = self._messages.list_by_chat(
+            chat_id,
+            limit=limit,
+            before=before,
+            viewer_id=viewer_id,
+        )
+        return [self._normalize_message_row(row) for row in rows]
 
     def list_unread(self, chat_id: str, user_id: str) -> list[dict[str, Any]]:
-        return self._messages.list_unread(chat_id, user_id)
+        return [self._normalize_message_row(row) for row in self._messages.list_unread(chat_id, user_id)]
 
     def count_unread(self, chat_id: str, user_id: str) -> int:
         return self._messages.count_unread(chat_id, user_id)
@@ -265,12 +282,12 @@ class MessagingService:
             entities_info = []
             for m in members:
                 uid = m.get("user_id")
-                e = self._resolve_display_member(uid) if uid else None
+                e = self._resolve_display_user(uid) if uid else None
                 if e:
                     entities_info.append(
                         {
                             "id": uid,
-                            "name": e.name,
+                            "name": e.display_name,
                             "type": e.type,
                             "avatar_url": avatar_url(e.id, bool(e.avatar)),
                         }
@@ -278,11 +295,11 @@ class MessagingService:
             msgs = self._messages.list_by_chat(cid, limit=1)
             last_msg = None
             if msgs:
-                m = msgs[-1]
-                sender = self._resolve_display_member(m.get("sender_id", ""))
+                m = self._normalize_message_row(msgs[-1])
+                sender = self._resolve_display_user(m.get("sender_id", ""))
                 last_msg = {
                     "content": m.get("content", ""),
-                    "sender_name": sender.name if sender else "unknown",
+                    "sender_name": sender.display_name if sender else "unknown",
                     "created_at": m.get("created_at"),
                 }
             unread = self.count_unread(cid, user_id)

@@ -26,7 +26,7 @@ class _FakeRepo:
 
 class _FakeContainer:
     def __init__(self) -> None:
-        self.member_repo_value = _FakeRepo()
+        self.user_repo_value = _FakeRepo()
         self.thread_repo_value = _FakeRepo()
         self.thread_launch_pref_repo_value = _FakeRepo()
         self.recipe_repo_value = _FakeRepo()
@@ -35,9 +35,10 @@ class _FakeContainer:
         self.user_settings_repo_value = _FakeRepo()
         self.agent_config_repo_value = _FakeRepo()
         self.contact_repo_value = _FakeRepo()
+        self.panel_task_repo_value = _FakeRepo()
 
-    def member_repo(self) -> _FakeRepo:
-        return self.member_repo_value
+    def user_repo(self) -> _FakeRepo:
+        return self.user_repo_value
 
     def thread_repo(self) -> _FakeRepo:
         return self.thread_repo_value
@@ -64,7 +65,7 @@ class _FakeContainer:
         return self.contact_repo_value
 
     def panel_task_repo(self) -> _FakeRepo:
-        return _FakeRepo()
+        return self.panel_task_repo_value
 
     def cron_job_repo(self) -> _FakeRepo:
         return _FakeRepo()
@@ -120,6 +121,10 @@ def _install_lifespan_noop_dependencies(monkeypatch: pytest.MonkeyPatch) -> None
         lambda: _FakeSupabaseClient(),
     )
     monkeypatch.setattr(
+        "backend.web.core.supabase_factory.create_public_supabase_client",
+        lambda: _FakeSupabaseClient(),
+    )
+    monkeypatch.setattr(
         "backend.web.core.supabase_factory.create_supabase_auth_client",
         lambda *_args, **_kwargs: object(),
     )
@@ -128,7 +133,7 @@ def _install_lifespan_noop_dependencies(monkeypatch: pytest.MonkeyPatch) -> None
         lambda: _FakeSupabaseClient(),
     )
 
-    monkeypatch.setattr("storage.providers.supabase.SupabaseMemberRepo", _fake_repo_factory)
+    monkeypatch.setattr("storage.providers.supabase.SupabaseUserRepo", _fake_repo_factory)
     monkeypatch.setattr("storage.providers.supabase.SupabaseThreadRepo", _fake_repo_factory)
     monkeypatch.setattr("storage.providers.supabase.SupabaseThreadLaunchPrefRepo", _fake_repo_factory)
     monkeypatch.setattr("storage.providers.supabase.SupabaseRecipeRepo", _fake_repo_factory)
@@ -192,6 +197,8 @@ def _install_lifespan_noop_dependencies(monkeypatch: pytest.MonkeyPatch) -> None
 def test_storage_container_exposes_bypass_repo_builders() -> None:
     container = StorageContainer(supabase_client=_FakeSupabaseClient())
 
+    assert callable(container.user_repo)
+    assert not hasattr(container, "member_repo")
     assert callable(container.panel_task_repo)
     assert callable(container.cron_job_repo)
     assert callable(container.agent_registry_repo)
@@ -200,8 +207,134 @@ def test_storage_container_exposes_bypass_repo_builders() -> None:
     assert callable(container.resource_snapshot_repo)
 
 
+def test_storage_container_panel_task_repo_uses_public_client(monkeypatch: pytest.MonkeyPatch) -> None:
+    captured: dict[str, object] = {}
+
+    class _FakePanelTaskRepo:
+        def __init__(self, client: object) -> None:
+            captured["client"] = client
+
+    monkeypatch.setattr("storage.providers.supabase.panel_task_repo.SupabasePanelTaskRepo", _FakePanelTaskRepo)
+
+    runtime_client = object()
+    public_client = object()
+    container = StorageContainer(supabase_client=runtime_client, public_supabase_client=public_client)
+
+    container.panel_task_repo()
+
+    assert captured["client"] is public_client
+
+
+def test_storage_container_sync_file_repo_uses_public_client(monkeypatch: pytest.MonkeyPatch) -> None:
+    captured: dict[str, object] = {}
+
+    class _FakeSyncFileRepo:
+        def __init__(self, client: object) -> None:
+            captured["client"] = client
+
+    monkeypatch.setattr("storage.providers.supabase.sync_file_repo.SupabaseSyncFileRepo", _FakeSyncFileRepo)
+
+    runtime_client = object()
+    public_client = object()
+    container = StorageContainer(supabase_client=runtime_client, public_supabase_client=public_client)
+
+    container.sync_file_repo()
+
+    assert captured["client"] is public_client
+
+
+def test_storage_container_user_settings_repo_uses_public_client(monkeypatch: pytest.MonkeyPatch) -> None:
+    captured: dict[str, object] = {}
+
+    class _FakeUserSettingsRepo:
+        def __init__(self, client: object) -> None:
+            captured["client"] = client
+
+    monkeypatch.setattr("storage.providers.supabase.user_settings_repo.SupabaseUserSettingsRepo", _FakeUserSettingsRepo)
+
+    runtime_client = object()
+    public_client = object()
+    container = StorageContainer(supabase_client=runtime_client, public_supabase_client=public_client)
+
+    container.user_settings_repo()
+
+    assert captured["client"] is public_client
+
+
+def test_make_sandbox_monitor_repo_uses_web_supabase_factory(monkeypatch: pytest.MonkeyPatch) -> None:
+    captured: dict[str, object] = {}
+
+    class _FakeMonitorRepo:
+        def __init__(self, client: object) -> None:
+            captured["client"] = client
+
+        def close(self) -> None:
+            return None
+
+    fake_client = _FakeSupabaseClient()
+    monkeypatch.setenv("LEON_STORAGE_STRATEGY", "supabase")
+    monkeypatch.setattr(
+        "backend.web.core.supabase_factory.create_supabase_client",
+        lambda: fake_client,
+    )
+    monkeypatch.setattr(
+        "storage.providers.supabase.sandbox_monitor_repo.SupabaseSandboxMonitorRepo",
+        _FakeMonitorRepo,
+    )
+
+    from backend.web.core import storage_factory
+
+    supabase_cache_clear = getattr(storage_factory._supabase_client, "cache_clear", None)
+    if callable(supabase_cache_clear):
+        supabase_cache_clear()
+    cache_clear = getattr(storage_factory.make_sandbox_monitor_repo, "cache_clear", None)
+    if callable(cache_clear):
+        cache_clear()
+
+    repo = storage_factory.make_sandbox_monitor_repo()
+    try:
+        assert isinstance(repo, _FakeMonitorRepo)
+        assert captured["client"] is fake_client
+    finally:
+        repo.close()
+
+
+def test_make_panel_task_repo_uses_public_supabase_factory(monkeypatch: pytest.MonkeyPatch) -> None:
+    captured: dict[str, object] = {}
+
+    class _FakePanelTaskRepo:
+        def __init__(self, client: object) -> None:
+            captured["client"] = client
+
+        def close(self) -> None:
+            return None
+
+    fake_client = _FakeSupabaseClient()
+    monkeypatch.setattr(
+        "backend.web.core.supabase_factory.create_public_supabase_client",
+        lambda: fake_client,
+    )
+    monkeypatch.setattr(
+        "storage.providers.supabase.panel_task_repo.SupabasePanelTaskRepo",
+        _FakePanelTaskRepo,
+    )
+
+    from backend.web.core import storage_factory
+
+    cache_clear = getattr(storage_factory.make_panel_task_repo, "cache_clear", None)
+    if callable(cache_clear):
+        cache_clear()
+
+    repo = storage_factory.make_panel_task_repo()
+    try:
+        assert isinstance(repo, _FakePanelTaskRepo)
+        assert captured["client"] is fake_client
+    finally:
+        repo.close()
+
+
 @pytest.mark.asyncio
-async def test_lifespan_wires_member_and_thread_repos_from_storage_container(
+async def test_lifespan_wires_user_and_thread_repos_from_storage_container(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     container = _FakeContainer()
@@ -210,8 +343,10 @@ async def test_lifespan_wires_member_and_thread_repos_from_storage_container(
     monkeypatch.setattr("storage.container.StorageContainer", lambda **_: container)
 
     async with lifespan_module.lifespan(app):
-        assert app.state.member_repo is container.member_repo_value
+        assert app.state.user_repo is container.user_repo_value
         assert app.state.thread_repo is container.thread_repo_value
+        assert app.state.panel_task_repo is container.panel_task_repo_value
+        assert not hasattr(app.state, "member_repo")
 
 
 def test_runtime_services_default_to_storage_runtime_container(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
@@ -309,3 +444,22 @@ def test_build_resource_snapshot_repo_defaults_to_web_supabase_factory(monkeypat
     storage_runtime.build_resource_snapshot_repo()
 
     assert recorded["supabase_client_factory"] == "backend.web.core.supabase_factory:create_supabase_client"
+
+
+def test_build_sync_file_repo_defaults_to_public_supabase_factory(monkeypatch: pytest.MonkeyPatch) -> None:
+    recorded: dict[str, object] = {}
+
+    class _FakeRuntimeContainer:
+        def sync_file_repo(self) -> object:
+            return object()
+
+    def _fake_build_storage_container(**kwargs: object) -> _FakeRuntimeContainer:
+        recorded.update(kwargs)
+        return _FakeRuntimeContainer()
+
+    monkeypatch.delenv("LEON_SUPABASE_CLIENT_FACTORY", raising=False)
+    monkeypatch.setattr("storage.runtime.build_storage_container", _fake_build_storage_container)
+
+    storage_runtime.build_sync_file_repo()
+
+    assert recorded["public_supabase_client_factory"] == "backend.web.core.supabase_factory:create_public_supabase_client"

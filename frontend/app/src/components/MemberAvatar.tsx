@@ -1,7 +1,7 @@
 /**
  * @@@universal-avatar — THE single avatar component. Used everywhere.
  * Displays avatar image from backend-provided URL with initials+color fallback.
- * Backend decides the URL (human → account avatar, agent → member avatar).
+ * Backend decides the URL (human → account avatar, agent → user avatar).
  * Frontend just renders what backend gives.
  */
 
@@ -20,7 +20,7 @@ interface MemberAvatarProps {
   name: string;
   /** Avatar image URL from backend. Frontend doesn't build URLs. */
   avatarUrl?: string;
-  /** Member type — for deterministic fallback color. */
+  /** Actor type — for deterministic fallback color. */
   type?: string;
   size?: keyof typeof SIZE_MAP;
   className?: string;

@@ -13,7 +13,7 @@ interface NewChatDialogProps {
 
 export default function NewChatDialog({ open, onOpenChange }: NewChatDialogProps) {
   const navigate = useNavigate();
-  const memberList = useAppStore(s => s.memberList);
+  const agentList = useAppStore(s => s.agentList);
   const loadAll = useAppStore(s => s.loadAll);
   const [filter, setFilter] = useState("");
 
@@ -25,14 +25,14 @@ export default function NewChatDialog({ open, onOpenChange }: NewChatDialogProps
   }, [open, loadAll]);
 
   const filtered = useMemo(() => {
-    if (!filter) return memberList;
+    if (!filter) return agentList;
     const q = filter.toLowerCase();
-    return memberList.filter(m =>
+    return agentList.filter(m =>
       m.name.toLowerCase().includes(q) || m.description?.toLowerCase().includes(q)
     );
-  }, [memberList, filter]);
+  }, [agentList, filter]);
 
-  const handleSelect = (member: typeof memberList[0]) => {
+  const handleSelect = (member: typeof agentList[0]) => {
     onOpenChange(false);
     navigate(`/chat/hire/${member.id}`);
   };
@@ -41,15 +41,15 @@ export default function NewChatDialog({ open, onOpenChange }: NewChatDialogProps
     <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent className="sm:max-w-md p-0 gap-0">
         <DialogHeader className="px-4 pt-4 pb-3">
-          <DialogTitle className="text-base">打开成员默认线程</DialogTitle>
-          <DialogDescription className="sr-only">选择成员打开默认线程入口</DialogDescription>
+          <DialogTitle className="text-base">打开 Agent 默认线程</DialogTitle>
+          <DialogDescription className="sr-only">选择 Agent 打开默认线程入口</DialogDescription>
         </DialogHeader>
         <div className="px-4 pb-3">
           <div className="relative">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
               className="pl-9 h-9 text-sm"
-              placeholder="搜索成员..."
+              placeholder="搜索 Agent..."
               value={filter}
               onChange={e => setFilter(e.target.value)}
               autoFocus
@@ -59,7 +59,7 @@ export default function NewChatDialog({ open, onOpenChange }: NewChatDialogProps
         <div className="border-t max-h-80 overflow-y-auto">
           {filtered.length === 0 ? (
             <p className="text-sm text-muted-foreground text-center py-8">
-              {memberList.length === 0 ? "暂无成员" : "无匹配结果"}
+              {agentList.length === 0 ? "暂无 Agent" : "无匹配结果"}
             </p>
           ) : (
             filtered.map(member => (
