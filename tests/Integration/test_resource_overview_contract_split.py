@@ -122,8 +122,11 @@ def test_user_resource_projection_groups_visible_leases_into_provider_cards(monk
     assert payload["providers"][0]["sessions"][0]["threadId"] == "thread-1"
     assert payload["providers"][0]["sessions"][0]["agentUserId"] == "agent-1"
     assert payload["providers"][0]["sessions"][0]["agentName"] == "Morel"
+    assert payload["providers"][0]["sessions"][0]["avatarUrl"] == "/api/users/agent-1/avatar"
     assert payload["providers"][0]["sessions"][0]["runtimeSessionId"] == "provider-session-1"
     assert payload["providers"][0]["sessions"][0]["startedAt"] == "2026-04-07T10:00:00Z"
+    assert "memberId" not in payload["providers"][0]["sessions"][0]
+    assert "memberName" not in payload["providers"][0]["sessions"][0]
 
 
 def test_user_resource_projection_marks_provider_unavailable_when_capability_probe_fails(monkeypatch) -> None:
