@@ -161,18 +161,35 @@ class TestDownloadAgent:
 class TestDownloadUser:
     def test_member_type_installs_as_user_contract(self, monkeypatch):
         hub_resp = _make_hub_response("member", "agent-user")
+        seen: dict[str, object] = {}
 
         monkeypatch.setattr(
             "backend.web.services.member_service.install_from_snapshot",
-            lambda **_kwargs: "agent-user-1",
+            lambda **kwargs: seen.update(kwargs) or "agent-user-1",
         )
 
         with patch("backend.web.services.marketplace_client._hub_api", return_value=hub_resp):
             from backend.web.services.marketplace_client import download
 
-            result = download("item-u1", owner_user_id="owner-1")
+            result = download(
+                "item-u1",
+                owner_user_id="owner-1",
+                user_repo=SimpleNamespace(),
+                agent_config_repo=SimpleNamespace(),
+            )
 
         assert result == {"user_id": "agent-user-1", "type": "user", "version": "1.0.0"}
+        assert seen["user_repo"] is not None
+        assert seen["agent_config_repo"] is not None
+
+    def test_member_type_download_requires_repos(self):
+        hub_resp = _make_hub_response("member", "agent-user")
+
+        with patch("backend.web.services.marketplace_client._hub_api", return_value=hub_resp):
+            from backend.web.services.marketplace_client import download
+
+            with pytest.raises(RuntimeError, match="user_repo and agent_config_repo are required"):
+                download("item-u1", owner_user_id="owner-1")
 
 
 # ── Download idempotency ──
@@ -202,9 +219,11 @@ class TestDownloadIdempotency:
 
 
 def test_upgrade_returns_user_id_contract(monkeypatch):
+    seen: dict[str, object] = {}
+
     monkeypatch.setattr(
         "backend.web.services.member_service.install_from_snapshot",
-        lambda **_kwargs: "agent-user-1",
+        lambda **kwargs: seen.update(kwargs) or "agent-user-1",
     )
 
     with patch(
@@ -212,9 +231,17 @@ def test_upgrade_returns_user_id_contract(monkeypatch):
     ):
         from backend.web.services.marketplace_client import upgrade
 
-        result = upgrade(user_id="agent-user-1", item_id="item-u2", owner_user_id="owner-1")
+        result = upgrade(
+            user_id="agent-user-1",
+            item_id="item-u2",
+            owner_user_id="owner-1",
+            user_repo=SimpleNamespace(),
+            agent_config_repo=SimpleNamespace(),
+        )
 
     assert result == {"user_id": "agent-user-1", "version": "2.0.0"}
+    assert seen["user_repo"] is not None
+    assert seen["agent_config_repo"] is not None
 
 
 def test_upgrade_passes_existing_user_id_to_snapshot_install(monkeypatch):
@@ -234,10 +261,26 @@ def test_upgrade_passes_existing_user_id_to_snapshot_install(monkeypatch):
     ):
         from backend.web.services.marketplace_client import upgrade
 
-        upgrade(user_id="agent-user-1", item_id="item-u2", owner_user_id="owner-1")
+        upgrade(
+            user_id="agent-user-1",
+            item_id="item-u2",
+            owner_user_id="owner-1",
+            user_repo=SimpleNamespace(),
+            agent_config_repo=SimpleNamespace(),
+        )
 
     assert seen["existing_user_id"] == "agent-user-1"
     assert "existing_member_id" not in seen
+
+
+def test_upgrade_requires_repos():
+    with patch(
+        "backend.web.services.marketplace_client._hub_api", return_value=_make_hub_response("member", "agent-user", version="2.0.0")
+    ):
+        from backend.web.services.marketplace_client import upgrade
+
+        with pytest.raises(RuntimeError, match="user_repo and agent_config_repo are required"):
+            upgrade(user_id="agent-user-1", item_id="item-u2", owner_user_id="owner-1")
 
 
 def test_publish_uses_repo_bundle_when_member_dir_is_absent(tmp_path, monkeypatch):

@@ -258,8 +258,13 @@ def publish(
     return result
 
 
-def download(item_id: str, owner_user_id: str = "system") -> dict:
-    """Download a marketplace item to local library."""
+def download(
+    item_id: str,
+    owner_user_id: str = "system",
+    user_repo: Any = None,
+    agent_config_repo: Any = None,
+) -> dict:
+    """Download a marketplace item to local library or install an agent user."""
     result = _hub_api("POST", f"/items/{item_id}/download")
     snapshot = result["snapshot"]
     item = result["item"]
@@ -277,11 +282,9 @@ def download(item_id: str, owner_user_id: str = "system") -> dict:
             raise ValueError(f"Invalid slug: {slug}")
         skill_dir.mkdir(parents=True, exist_ok=True)
 
-        # Write SKILL.md
         content = snapshot.get("content", "")
         (skill_dir / "SKILL.md").write_text(content, encoding="utf-8")
 
-        # Write meta.json with marketplace source info
         meta = snapshot.get("meta", {})
         meta_data = {
             "name": meta.get("name", item["name"]),
@@ -300,7 +303,7 @@ def download(item_id: str, owner_user_id: str = "system") -> dict:
         logger.info("Downloaded skill %s to library", slug)
         return {"resource_id": slug, "type": "skill", "version": installed_version}
 
-    elif item_type == "agent":
+    if item_type == "agent":
         slug = item.get("slug", item["name"].lower().replace(" ", "-"))
         agent_dir = (LIBRARY_DIR / "agents").resolve()
         if not (agent_dir / slug).resolve().is_relative_to(agent_dir):
@@ -326,8 +329,10 @@ def download(item_id: str, owner_user_id: str = "system") -> dict:
         logger.info("Downloaded agent %s to library", slug)
         return {"resource_id": slug, "type": "agent", "version": installed_version}
 
-    elif item_type == "member":
-        # Hub still emits "member" here; local v1 contract exposes unified users.
+    if item_type == "member":
+        if user_repo is None or agent_config_repo is None:
+            raise RuntimeError("user_repo and agent_config_repo are required to install marketplace user snapshot")
+
         from backend.web.services.member_service import install_from_snapshot
 
         user_id = install_from_snapshot(
@@ -337,15 +342,19 @@ def download(item_id: str, owner_user_id: str = "system") -> dict:
             marketplace_item_id=item_id,
             installed_version=installed_version,
             owner_user_id=owner_user_id,
+            user_repo=user_repo,
+            agent_config_repo=agent_config_repo,
         )
         return {"user_id": user_id, "type": "user", "version": installed_version}
 
-    else:
-        raise ValueError(f"Unsupported item type: {item_type}")
+    raise ValueError(f"Unsupported item type: {item_type}")
 
 
-def upgrade(user_id: str, item_id: str, owner_user_id: str) -> dict:
+def upgrade(user_id: str, item_id: str, owner_user_id: str, user_repo: Any = None, agent_config_repo: Any = None) -> dict:
     """Upgrade a locally installed marketplace item."""
+    if user_repo is None or agent_config_repo is None:
+        raise RuntimeError("user_repo and agent_config_repo are required to upgrade marketplace user snapshot")
+
     result = _hub_api("POST", f"/items/{item_id}/download")
     snapshot = result["snapshot"]
     installed_version = result["version"]
@@ -360,6 +369,8 @@ def upgrade(user_id: str, item_id: str, owner_user_id: str) -> dict:
         installed_version=installed_version,
         owner_user_id=owner_user_id,
         existing_user_id=user_id,
+        user_repo=user_repo,
+        agent_config_repo=agent_config_repo,
     )
 
     return {"user_id": user_id, "version": installed_version}

@@ -52,7 +52,8 @@ async def test_upgrade_from_marketplace_uses_user_repo_not_member_repo(monkeypat
             state=SimpleNamespace(
                 user_repo=SimpleNamespace(
                     get_by_id=lambda user_id: SimpleNamespace(id=user_id, owner_user_id="owner-1") if user_id == "agent-1" else None
-                )
+                ),
+                agent_config_repo=SimpleNamespace(),
             )
         )
     )
@@ -60,7 +61,36 @@ async def test_upgrade_from_marketplace_uses_user_repo_not_member_repo(monkeypat
     result = await marketplace_router.upgrade_from_marketplace(req=req, user_id="owner-1", request=request)
 
     assert result == {"ok": True}
-    assert seen == {"user_id": "agent-1", "item_id": "item-1", "owner_user_id": "owner-1"}
+    assert seen["user_id"] == "agent-1"
+    assert seen["item_id"] == "item-1"
+    assert seen["owner_user_id"] == "owner-1"
+    assert seen["user_repo"] is request.app.state.user_repo
+    assert seen["agent_config_repo"] is request.app.state.agent_config_repo
+
+
+@pytest.mark.asyncio
+async def test_download_from_marketplace_uses_user_and_agent_config_repos(monkeypatch: pytest.MonkeyPatch) -> None:
+    seen: dict[str, object] = {}
+
+    monkeypatch.setattr(marketplace_router.marketplace_client, "download", lambda **kwargs: seen.update(kwargs) or {"ok": True})
+
+    request = SimpleNamespace(
+        app=SimpleNamespace(
+            state=SimpleNamespace(
+                user_repo=SimpleNamespace(),
+                agent_config_repo=SimpleNamespace(),
+            )
+        )
+    )
+    req = SimpleNamespace(item_id="item-1")
+
+    result = await marketplace_router.download_from_marketplace(req=req, user_id="owner-1", request=request)
+
+    assert result == {"ok": True}
+    assert seen["item_id"] == "item-1"
+    assert seen["owner_user_id"] == "owner-1"
+    assert seen["user_repo"] is request.app.state.user_repo
+    assert seen["agent_config_repo"] is request.app.state.agent_config_repo
 
 
 @pytest.mark.asyncio

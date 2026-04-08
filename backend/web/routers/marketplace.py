@@ -66,10 +66,16 @@ async def publish_to_marketplace(
 async def download_from_marketplace(
     req: InstallFromMarketplaceRequest,
     user_id: Annotated[str, Depends(get_current_user_id)],
+    request: Request,
 ) -> dict[str, Any]:
+    user_repo = request.app.state.user_repo
+    agent_config_repo = getattr(request.app.state, "agent_config_repo", None)
     result = await asyncio.to_thread(
         marketplace_client.download,
         item_id=req.item_id,
+        owner_user_id=user_id,
+        user_repo=user_repo,
+        agent_config_repo=agent_config_repo,
     )
     return result
 
@@ -81,6 +87,7 @@ async def upgrade_from_marketplace(
     request: Request,
 ) -> dict[str, Any]:
     user_repo = request.app.state.user_repo
+    agent_config_repo = getattr(request.app.state, "agent_config_repo", None)
     await _verify_user_ownership(req.user_id, user_id, user_repo)
 
     result = await asyncio.to_thread(
@@ -88,6 +95,8 @@ async def upgrade_from_marketplace(
         user_id=req.user_id,
         item_id=req.item_id,
         owner_user_id=user_id,
+        user_repo=user_repo,
+        agent_config_repo=agent_config_repo,
     )
     return result
 

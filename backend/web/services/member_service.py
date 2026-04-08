@@ -79,6 +79,10 @@ def _parse_agent_md(path: Path) -> dict[str, Any] | None:
         content = path.read_text(encoding="utf-8")
     except OSError:
         return None
+    return _parse_agent_md_content(content)
+
+
+def _parse_agent_md_content(content: str) -> dict[str, Any] | None:
     if not content.startswith("---"):
         return None
     parts = content.split("---", 2)
@@ -1071,150 +1075,98 @@ def install_from_snapshot(
     user_repo: Any = None,
     agent_config_repo: Any = None,
 ) -> str:
-    """Create or update a local agent user from a marketplace snapshot."""
+    """Create or update a marketplace-backed agent user via repos only."""
     from storage.contracts import UserRow, UserType
     from storage.utils import generate_agent_config_id, generate_member_id
 
+    if user_repo is None or agent_config_repo is None:
+        raise RuntimeError("user_repo and agent_config_repo are required to install marketplace user snapshot")
+
     now = time.time()
     now_ms = int(now * 1000)
+    agent_md = _parse_agent_md_content(str(snapshot.get("agent_md") or "")) or {}
+    agent_name = str(agent_md.get("name") or name)
+    agent_description = str(agent_md.get("description") or description)
+    agent_model = agent_md.get("model")
+    agent_tools = list(agent_md.get("tools") or ["*"])
+    agent_prompt = str(agent_md.get("system_prompt") or "")
+    runtime_data = snapshot.get("runtime") if isinstance(snapshot.get("runtime"), dict) else {}
+    mcp_data = snapshot.get("mcp") if isinstance(snapshot.get("mcp"), dict) else {}
 
     if existing_user_id:
         user_id = existing_user_id
-        member_dir = MEMBERS_DIR / user_id
-        agent_config_id = None
+        user = user_repo.get_by_id(user_id)
+        if user is None or user.agent_config_id is None:
+            raise RuntimeError(f"Agent user {user_id} is missing agent_config_id")
+        agent_config_id = user.agent_config_id
+        current_config = agent_config_repo.get_config(agent_config_id) or {}
+        created_at = int(current_config.get("created_at", now_ms))
+        user_repo.update(user_id, display_name=agent_name)
     else:
         user_id = generate_member_id()
-        member_dir = MEMBERS_DIR / user_id
-        member_dir.mkdir(parents=True, exist_ok=True)
         agent_config_id = generate_agent_config_id()
-
-    # Write agent.md
-    agent_md_content = snapshot.get("agent_md", "")
-    if agent_md_content:
-        (member_dir / "agent.md").write_text(agent_md_content, encoding="utf-8")
-    else:
-        _write_agent_md(member_dir / "agent.md", name=name, description=description)
-
-    # Write rules
-    rules_dir = member_dir / "rules"
-    if rules_dir.exists():
-        shutil.rmtree(rules_dir)
-    member_dir_resolved = member_dir.resolve()
-    for rule in snapshot.get("rules", []):
-        rules_dir.mkdir(exist_ok=True)
-        rule_name = _sanitize_name(rule.get("name", "default"))
-        rule_path = (rules_dir / f"{rule_name}.md").resolve()
-        if not str(rule_path).startswith(str(member_dir_resolved)):
-            logger.warning("Skipping snapshot rule with unsafe name: %s", rule_name)
-            continue
-        rule_path.write_text(rule.get("content", ""), encoding="utf-8")
-
-    # Write agents
-    agents_dir = member_dir / "agents"
-    if agents_dir.exists():
-        shutil.rmtree(agents_dir)
-    for agent in snapshot.get("agents", []):
-        agents_dir.mkdir(exist_ok=True)
-        agent_name = _sanitize_name(agent.get("name", "default"))
-        agent_path = (agents_dir / f"{agent_name}.md").resolve()
-        if not str(agent_path).startswith(str(member_dir_resolved)):
-            logger.warning("Skipping snapshot agent with unsafe name: %s", agent_name)
-            continue
-        agent_path.write_text(agent.get("content", ""), encoding="utf-8")
-
-    # Write skills
-    skills_dir = member_dir / "skills"
-    if skills_dir.exists():
-        shutil.rmtree(skills_dir)
-    for skill in snapshot.get("skills", []):
-        skill_name = _sanitize_name(skill.get("name", "default"))
-        skill_sub_dir = (skills_dir / skill_name).resolve()
-        if not str(skill_sub_dir).startswith(str(member_dir_resolved)):
-            logger.warning("Skipping snapshot skill with unsafe name: %s", skill_name)
-            continue
-        skill_sub_dir.mkdir(parents=True, exist_ok=True)
-        (skill_sub_dir / "SKILL.md").write_text(skill.get("content", ""), encoding="utf-8")
-        if skill.get("meta"):
-            _write_json(skill_sub_dir / "meta.json", skill["meta"])
-
-    # Write MCP
-    mcp_data = snapshot.get("mcp", {})
-    if mcp_data:
-        _write_json(member_dir / ".mcp.json", mcp_data)
-    elif (member_dir / ".mcp.json").exists():
-        (member_dir / ".mcp.json").unlink()
-
-    # Write runtime
-    runtime_data = snapshot.get("runtime", {})
-    if runtime_data:
-        _write_json(member_dir / "runtime.json", runtime_data)
-
-    # Write meta.json with source info
-    meta = {
-        "status": "active",
-        "version": installed_version,
-        "created_at": now_ms if not existing_user_id else _read_json(member_dir / "meta.json", {}).get("created_at", now_ms),
-        "updated_at": now_ms,
-        "source": {
-            "marketplace_item_id": marketplace_item_id,
-            "installed_version": installed_version,
-            "installed_at": now_ms,
-            "modified": False,
-        },
-    }
-    _write_json(member_dir / "meta.json", meta)
-
-    # Register in users table (new installs only)
-    if not existing_user_id and owner_user_id:
+        created_at = now_ms
         row = UserRow(
             id=user_id,
             type=UserType.AGENT,
-            display_name=name,
+            display_name=agent_name,
             owner_user_id=owner_user_id,
             agent_config_id=agent_config_id,
             created_at=now,
         )
-        if user_repo is None:
-            raise RuntimeError("user_repo is required to register new agent user from snapshot")
         user_repo.create(row)
 
-    # Dual-write to Supabase repo
-    if agent_config_repo:
-        if existing_user_id:
-            if user_repo is None:
-                raise RuntimeError("user_repo is required to resolve existing agent_config_id")
-            user = user_repo.get_by_id(user_id)
-            if user is None or user.agent_config_id is None:
-                raise RuntimeError(f"Agent user {user_id} is missing agent_config_id")
-            agent_config_id = user.agent_config_id
-        if agent_config_id is None:
-            raise RuntimeError("agent_config_id is required to install marketplace snapshot")
-        _save_config_to_repo(
-            agent_config_repo,
+    # @@@snapshot-install-repo-only - marketplace member installs no longer materialize
+    # a member dir. The DB is now the live shell; marketplace lineage still needs
+    # a separate repo-rooted home because publish used to read meta.json.source.
+    _save_config_to_repo(
+        agent_config_repo,
+        agent_config_id,
+        agent_user_id=user_id,
+        name=agent_name,
+        description=agent_description,
+        model=agent_model,
+        tools=agent_tools,
+        system_prompt=agent_prompt,
+        status="active",
+        version=installed_version,
+        created_at=created_at,
+        updated_at=now_ms,
+        runtime=runtime_data,
+        mcp=mcp_data,
+    )
+
+    for row in agent_config_repo.list_rules(agent_config_id):
+        agent_config_repo.delete_rule(row["id"])
+    for rule in snapshot.get("rules", []):
+        if not isinstance(rule, dict):
+            continue
+        rule_name = _sanitize_name(str(rule.get("name") or "default"))
+        agent_config_repo.save_rule(agent_config_id, f"{rule_name}.md", str(rule.get("content") or ""))
+
+    for row in agent_config_repo.list_skills(agent_config_id):
+        agent_config_repo.delete_skill(row["id"])
+    for skill in snapshot.get("skills", []):
+        if not isinstance(skill, dict):
+            continue
+        skill_name = _sanitize_name(str(skill.get("name") or "default"))
+        skill_meta = skill.get("meta") if isinstance(skill.get("meta"), dict) else None
+        agent_config_repo.save_skill(agent_config_id, skill_name, str(skill.get("content") or ""), meta=skill_meta)
+
+    for row in agent_config_repo.list_sub_agents(agent_config_id):
+        agent_config_repo.delete_sub_agent(row["id"])
+    for item in snapshot.get("agents", []):
+        if not isinstance(item, dict):
+            continue
+        parsed_sub_agent = _parse_agent_md_content(str(item.get("content") or "")) or {}
+        sub_agent_name = str(parsed_sub_agent.get("name") or item.get("name") or "default")
+        agent_config_repo.save_sub_agent(
             agent_config_id,
-            agent_user_id=user_id,
-            name=name,
-            description=description,
-            status=meta["status"],
-            version=meta["version"],
-            created_at=meta["created_at"],
-            updated_at=meta["updated_at"],
-            runtime=runtime_data if runtime_data else {},
-            mcp=mcp_data if mcp_data else {},
+            _sanitize_name(sub_agent_name),
+            description=str(parsed_sub_agent.get("description") or ""),
+            model=parsed_sub_agent.get("model"),
+            tools=list(parsed_sub_agent.get("tools") or ["*"]),
+            system_prompt=str(parsed_sub_agent.get("system_prompt") or ""),
         )
-        # Sync rules from snapshot
-        for rule in snapshot.get("rules", []):
-            rule_name = _sanitize_name(rule.get("name", "default"))
-            try:
-                agent_config_repo.save_rule(agent_config_id, f"{rule_name}.md", rule.get("content", ""))
-            except Exception:
-                logger.warning("Failed to save snapshot rule %s for user %s", rule_name, user_id, exc_info=True)
-        # Sync skills from snapshot
-        for skill in snapshot.get("skills", []):
-            skill_name = _sanitize_name(skill.get("name", "default"))
-            try:
-                agent_config_repo.save_skill(agent_config_id, skill_name, skill.get("content", ""))
-            except Exception:
-                logger.warning("Failed to save snapshot skill %s for user %s", skill_name, user_id, exc_info=True)
 
     return user_id
