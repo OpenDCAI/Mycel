@@ -367,3 +367,91 @@ def test_publish_uses_repo_bundle_when_member_dir_is_absent(tmp_path, monkeypatc
     assert saved["data"]["meta"]["source"]["marketplace_item_id"] == "item-123"
     assert saved["data"]["meta"]["source"]["installed_version"] == "0.1.1"
     assert not (tmp_path / "members" / "agent-user-1").exists()
+
+
+def test_publish_prefers_repo_lineage_even_when_legacy_member_dir_exists(tmp_path, monkeypatch):
+    import backend.web.services.marketplace_client as marketplace_client
+
+    saved: dict[str, object] = {}
+    captured: dict[str, object] = {}
+    members_root = tmp_path / "members"
+    member_dir = members_root / "agent-user-1"
+    member_dir.mkdir(parents=True)
+    legacy_meta = {
+        "status": "draft",
+        "version": "9.9.9",
+        "created_at": 1,
+        "updated_at": 2,
+        "source": {"marketplace_item_id": "legacy-item", "installed_version": "9.9.9"},
+    }
+    (member_dir / "meta.json").write_text(json.dumps(legacy_meta, indent=2), encoding="utf-8")
+
+    monkeypatch.setattr(marketplace_client, "members_dir", lambda: members_root)
+
+    user_repo = SimpleNamespace(get_by_id=lambda user_id: SimpleNamespace(id=user_id, agent_config_id="cfg-1"))
+
+    class _AgentConfigRepo:
+        def get_config(self, agent_config_id: str):
+            if agent_config_id != "cfg-1":
+                return None
+            return {
+                "id": "cfg-1",
+                "agent_user_id": "agent-user-1",
+                "name": "Repo Agent",
+                "description": "from repo",
+                "tools": ["search"],
+                "system_prompt": "be helpful",
+                "status": "draft",
+                "version": "0.1.0",
+                "created_at": 1,
+                "updated_at": 2,
+                "meta": {"source": {"marketplace_item_id": "item-parent", "installed_version": "0.1.0"}},
+                "runtime": {"tools:search": {"enabled": True, "desc": "Search"}},
+                "mcp": {"demo": {"transport": "stdio", "command": "demo"}},
+            }
+
+        def list_rules(self, agent_config_id: str):
+            assert agent_config_id == "cfg-1"
+            return []
+
+        def list_sub_agents(self, agent_config_id: str):
+            assert agent_config_id == "cfg-1"
+            return []
+
+        def list_skills(self, agent_config_id: str):
+            assert agent_config_id == "cfg-1"
+            return []
+
+        def save_config(self, agent_config_id: str, data: dict):
+            saved["agent_config_id"] = agent_config_id
+            saved["data"] = data
+
+    monkeypatch.setattr(
+        marketplace_client,
+        "_hub_api",
+        lambda method, path, **kwargs: captured.update({"method": method, "path": path, "json": kwargs["json"]}) or {"item_id": "item-123"},
+    )
+
+    result = marketplace_client.publish(
+        user_id="agent-user-1",
+        type_="member",
+        bump_type="patch",
+        release_notes="repo publish",
+        tags=["repo"],
+        visibility="private",
+        publisher_user_id="owner-1",
+        publisher_username="owner-name",
+        user_repo=user_repo,
+        agent_config_repo=_AgentConfigRepo(),
+    )
+
+    assert result == {"item_id": "item-123"}
+    payload = captured["json"]
+    assert payload["version"] == "0.1.1"
+    assert payload["parent_item_id"] == "item-parent"
+    assert payload["parent_version"] == "0.1.0"
+    assert payload["snapshot"]["meta"]["source"] == {"marketplace_item_id": "item-parent", "installed_version": "0.1.0"}
+    assert saved["agent_config_id"] == "cfg-1"
+    assert saved["data"]["meta"]["source"]["marketplace_item_id"] == "item-123"
+    assert saved["data"]["meta"]["source"]["installed_version"] == "0.1.1"
+    assert json.loads((member_dir / "meta.json").read_text(encoding="utf-8")) == legacy_meta

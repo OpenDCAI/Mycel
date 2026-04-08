@@ -167,11 +167,9 @@ def publish(
 ) -> dict:
     """Publish a local agent user bundle to the Hub."""
     member_dir = members_dir() / user_id
-    if user_repo is not None and agent_config_repo is not None:
+    repo_backed_publish = user_repo is not None and agent_config_repo is not None
+    if repo_backed_publish:
         bundle, meta = _load_repo_publish_material(user_id, user_repo, agent_config_repo)
-        if member_dir.is_dir():
-            # @@@publish-repo-bundle - snapshot/version now come from repo data; old marketplace lineage still lives in meta.json.source.
-            meta = {**meta, **_read_json(member_dir / "meta.json")}
         snapshot = _bundle_snapshot(bundle)
         snapshot["meta"] = copy.deepcopy(meta)
     else:
@@ -231,9 +229,10 @@ def publish(
     meta["source"]["installed_version"] = new_version
     meta["source"]["installed_at"] = int(time.time() * 1000)
     meta["source"]["modified"] = False
-    if member_dir.is_dir():
+    # @@@repo-publish-does-not-touch-member-dir - repo-backed publish reads and writes agent_config state only.
+    if member_dir.is_dir() and not repo_backed_publish:
         _write_json(member_dir / "meta.json", meta)
-    if user_repo is not None and agent_config_repo is not None:
+    if repo_backed_publish:
         user = user_repo.get_by_id(user_id)
         if user is None or user.agent_config_id is None:
             raise RuntimeError(f"Agent user {user_id} is missing agent_config_id")
