@@ -101,7 +101,7 @@ def main() -> None:
     try:
         indices = [int(x) - 1 for x in sys.argv[2:]]
     except ValueError:
-        print(f"❌ 编号必须是整数")
+        print("❌ 编号必须是整数")
         sys.exit(1)
 
     claude_dir, skills_dir, groups_dir = get_paths()

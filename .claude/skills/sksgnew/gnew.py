@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 """sksgnew - Create a new skill group."""
-import os
 import subprocess
 import sys
 from pathlib import Path

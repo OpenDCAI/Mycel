@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 """sksoff - Deactivate all skills in a group."""
-import os
 import subprocess
 import sys
 from pathlib import Path

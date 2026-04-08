@@ -3,8 +3,8 @@
 import json
 import os
 import re
-import sys
 import subprocess
+import sys
 import threading
 import urllib.parse
 from pathlib import Path
@@ -81,8 +81,8 @@ def main() -> None:
 
     # Check for Chinese characters
     if re.search(r"[\u4e00-\u9fff]", keyword):
-        print(f"❌ 检测到中文关键词，SkillsMP 仅支持英文搜索")
-        print(f"建议使用英文关键词，例如：readme writer / documentation / testing")
+        print("❌ 检测到中文关键词，SkillsMP 仅支持英文搜索")
+        print("建议使用英文关键词，例如：readme writer / documentation / testing")
         sys.exit(0)
 
     api_key = load_api_key()
@@ -94,8 +94,6 @@ def main() -> None:
 
     enc = urllib.parse.quote(keyword)
     base = "https://skillsmp.com/api/v1/skills"
-    results: dict[str, dict] = {}
-
     kw_data: list[dict] = []
     ai_data: list[dict] = []
 
@@ -111,8 +109,10 @@ def main() -> None:
 
     t1 = threading.Thread(target=fetch_kw)
     t2 = threading.Thread(target=fetch_ai)
-    t1.start(); t2.start()
-    t1.join(); t2.join()
+    t1.start()
+    t2.start()
+    t1.join()
+    t2.join()
 
     # Merge results
     skills: dict[str, dict] = {}

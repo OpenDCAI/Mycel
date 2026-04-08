@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 """skson - Activate all skills in a group."""
-import os
 import subprocess
 import sys
 from pathlib import Path
