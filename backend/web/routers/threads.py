@@ -912,7 +912,14 @@ async def send_message(
             agent=agent,
         )
 
-    return await route_message_to_brain(app, thread_id, message, source="owner", attachments=payload.attachments or None)
+    return await route_message_to_brain(
+        app,
+        thread_id,
+        message,
+        source="owner",
+        enable_trajectory=payload.enable_trajectory,
+        attachments=payload.attachments or None,
+    )
 
 
 @router.post("/{thread_id}/queue")

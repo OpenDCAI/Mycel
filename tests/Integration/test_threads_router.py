@@ -11,7 +11,7 @@ import pytest
 from fastapi import Request
 from langchain_core.messages import HumanMessage, SystemMessage, ToolMessage
 
-from backend.web.models.requests import CreateThreadRequest, ResolvePermissionRequest, ThreadPermissionRuleRequest
+from backend.web.models.requests import CreateThreadRequest, ResolvePermissionRequest, SendMessageRequest, ThreadPermissionRuleRequest
 from backend.web.routers import threads as threads_router
 from core.runtime.loop import QueryLoop
 from core.runtime.middleware.monitor import AgentState
@@ -74,6 +74,22 @@ class _FakeAuthService:
     def verify_token(self, token: str) -> dict:
         self.tokens.append(token)
         return {"user_id": "owner-1"}
+
+
+@pytest.mark.asyncio
+async def test_send_message_passes_enable_trajectory_to_message_routing() -> None:
+    route_message = AsyncMock(return_value={"status": "started", "thread_id": "thread-1"})
+
+    with patch("backend.web.services.message_routing.route_message_to_brain", route_message):
+        result = await threads_router.send_message(
+            "thread-1",
+            SendMessageRequest(message="hello", enable_trajectory=True),
+            user_id="owner-1",
+            app=SimpleNamespace(),
+        )
+
+    assert result == {"status": "started", "thread_id": "thread-1"}
+    assert route_message.await_args.kwargs["enable_trajectory"] is True
 
 
 def _make_request(headers: dict[str, str] | None = None) -> Request:

@@ -1,6 +1,6 @@
 import pytest
 
-from backend.web.models.requests import CreateThreadRequest
+from backend.web.models.requests import CreateThreadRequest, SendMessageRequest
 
 
 def test_create_thread_request_accepts_legacy_sandbox_type_key() -> None:
@@ -35,3 +35,15 @@ def test_create_thread_request_rejects_legacy_member_id_field() -> None:
                 "sandbox": "local",
             }
         )
+
+
+def test_send_message_request_defaults_enable_trajectory_to_false() -> None:
+    payload = SendMessageRequest.model_validate({"message": "hello"})
+
+    assert payload.enable_trajectory is False
+
+
+def test_send_message_request_accepts_enable_trajectory_flag() -> None:
+    payload = SendMessageRequest.model_validate({"message": "hello", "enable_trajectory": True})
+
+    assert payload.enable_trajectory is True

@@ -1259,17 +1259,24 @@ async def _run_agent_to_buffer(  # pyright: ignore[reportGeneralTypeIssues]  # @
         # Persist trajectory
         if tracer is not None and store is not None:
             try:
+                from eval.collector import MetricsCollector
+
                 trajectory = tracer.to_trajectory()
+                runtime_status = agent.runtime.get_status_dict() if hasattr(agent, "runtime") else None
                 if hasattr(agent, "runtime"):
                     tracer.enrich_from_runtime(trajectory, agent.runtime)
+                finalized = trajectory.model_copy(update={"status": trajectory_status})
+                system_metrics, objective_metrics = MetricsCollector().compute_all(finalized, runtime_status)
                 store.finalize_run(
                     run_id=run_id,
                     finished_at=trajectory.finished_at,
                     final_response=trajectory.final_response,
                     status=trajectory_status,
                     run_tree_json=trajectory.run_tree_json,
-                    trajectory_json=trajectory.model_copy(update={"status": trajectory_status}).model_dump_json(),
+                    trajectory_json=finalized.model_dump_json(),
                 )
+                store.save_metrics(run_id, "system", system_metrics)
+                store.save_metrics(run_id, "objective", objective_metrics)
             except Exception:
                 logger.error("Failed to persist trajectory for thread %s", thread_id, exc_info=True)
 

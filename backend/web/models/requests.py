@@ -52,6 +52,7 @@ class RunRequest(BaseModel):
 
 class SendMessageRequest(BaseModel):
     message: str
+    enable_trajectory: bool = False
     attachments: list[str] = Field(default_factory=list)
 
 
