@@ -111,7 +111,18 @@ async def test_get_chat_uses_access_helper(monkeypatch: pytest.MonkeyPatch):
             chat_repo=SimpleNamespace(
                 get_by_id=lambda _chat_id: (_ for _ in ()).throw(AssertionError("route should use helper, not chat_repo lookup directly"))
             ),
-            messaging_service=SimpleNamespace(list_chat_members=lambda _chat_id: []),
+            messaging_service=SimpleNamespace(
+                get_chat_detail=lambda chat_obj: {
+                    "id": chat_obj.id,
+                    "title": chat_obj.title,
+                    "status": chat_obj.status,
+                    "created_at": chat_obj.created_at,
+                    "entities": [],
+                },
+                list_chat_members=lambda _chat_id: (_ for _ in ()).throw(
+                    AssertionError("route should consume service-owned chat detail, not rebuild members locally")
+                ),
+            ),
             user_repo=SimpleNamespace(get_by_id=lambda _user_id: None),
         )
     )
@@ -166,10 +177,20 @@ async def test_get_chat_resolves_thread_user_participant_via_thread_repo(monkeyp
     app = SimpleNamespace(
         state=SimpleNamespace(
             messaging_service=SimpleNamespace(
-                list_chat_members=lambda _chat_id: [
-                    {"user_id": "human-user-1"},
-                    {"user_id": "thread-user-1"},
-                ]
+                get_chat_detail=lambda _chat: {
+                    "id": "chat-1",
+                    "title": "Chat title",
+                    "status": "active",
+                    "created_at": "2026-04-07T00:00:00Z",
+                    "entities": [
+                        {
+                            "id": "thread-user-1",
+                            "name": "Toad",
+                            "type": "agent",
+                            "avatar_url": avatar_url("agent-user-1", False),
+                        }
+                    ],
+                }
             ),
             user_repo=SimpleNamespace(
                 get_by_id=lambda uid: (

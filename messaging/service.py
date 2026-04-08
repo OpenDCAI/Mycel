@@ -63,6 +63,25 @@ class MessagingService:
             social_user_id=social_user_id,
         )
 
+    def _build_chat_entities(self, chat_id: str) -> list[dict[str, Any]]:
+        entities_info = []
+        for member in self._members_repo.list_members(chat_id):
+            social_user_id = member.get("user_id")
+            entity = self._resolve_display_user(social_user_id) if social_user_id else None
+            if entity is None:
+                continue
+            # @@@thread-social-entity-projection - outward chat entities must keep the
+            # social/thread user id while borrowing display/avatar fields from the resolved user row.
+            entities_info.append(
+                {
+                    "id": social_user_id,
+                    "name": entity.display_name,
+                    "type": entity.type.value if hasattr(entity.type, "value") else str(entity.type),
+                    "avatar_url": avatar_url(entity.id, bool(entity.avatar)),
+                }
+            )
+        return entities_info
+
     def set_delivery_fn(self, fn: Callable) -> None:
         self._delivery_fn = fn
 
@@ -272,6 +291,15 @@ class MessagingService:
     def update_mute(self, chat_id: str, user_id: str, muted: bool, mute_until: str | None) -> None:
         self._members_repo.update_mute(chat_id, user_id, muted, mute_until)
 
+    def get_chat_detail(self, chat: Any) -> dict[str, Any]:
+        return {
+            "id": chat.id,
+            "title": chat.title,
+            "status": chat.status,
+            "created_at": chat.created_at,
+            "entities": self._build_chat_entities(chat.id),
+        }
+
     def list_chats_for_user(self, user_id: str) -> list[dict[str, Any]]:
         """List all active chats for user with summary info."""
         chat_ids = self._members_repo.list_chats_for_user(user_id)
@@ -280,20 +308,7 @@ class MessagingService:
             chat = self._chats.get_by_id(cid)
             if not chat or chat.status != "active":
                 continue
-            members = self._members_repo.list_members(cid)
-            entities_info = []
-            for m in members:
-                uid = m.get("user_id")
-                e = self._resolve_display_user(uid) if uid else None
-                if e:
-                    entities_info.append(
-                        {
-                            "id": uid,
-                            "name": e.display_name,
-                            "type": e.type,
-                            "avatar_url": avatar_url(e.id, bool(e.avatar)),
-                        }
-                    )
+            entities_info = self._build_chat_entities(cid)
             other_entities = [entity for entity in entities_info if entity["id"] != user_id]
             other_names = [entity["name"] for entity in other_entities if entity.get("name")]
             title = chat.title or ", ".join(other_names) or "Chat"

@@ -430,6 +430,61 @@ def test_messaging_service_list_chats_ignores_blank_other_names_in_title_fallbac
     assert chats[0]["title"] == "Toad"
 
 
+def test_messaging_service_get_chat_detail_exposes_thread_user_participant_id() -> None:
+    service = MessagingService(
+        chat_repo=SimpleNamespace(),
+        chat_member_repo=SimpleNamespace(
+            list_members=lambda _chat_id: [{"user_id": "human-user-1"}, {"user_id": "thread-user-1"}],
+        ),
+        messages_repo=SimpleNamespace(),
+        message_read_repo=SimpleNamespace(),
+        user_repo=SimpleNamespace(
+            get_by_id=lambda uid: (
+                SimpleNamespace(id=uid, display_name="Human", type="human", avatar=None)
+                if uid == "human-user-1"
+                else None
+                if uid == "thread-user-1"
+                else SimpleNamespace(id=uid, display_name="Toad", type="agent", avatar=None)
+                if uid == "agent-user-1"
+                else None
+            )
+        ),
+        thread_repo=SimpleNamespace(
+            get_by_user_id=lambda uid: {"id": "thread-1", "agent_user_id": "agent-user-1"} if uid == "thread-user-1" else None
+        ),
+    )
+
+    detail = service.get_chat_detail(
+        SimpleNamespace(
+            id="chat-1",
+            title="Chat title",
+            status="active",
+            created_at="2026-04-07T00:00:00Z",
+        )
+    )
+
+    assert detail == {
+        "id": "chat-1",
+        "title": "Chat title",
+        "status": "active",
+        "created_at": "2026-04-07T00:00:00Z",
+        "entities": [
+            {
+                "id": "human-user-1",
+                "name": "Human",
+                "type": "human",
+                "avatar_url": avatar_url("human-user-1", False),
+            },
+            {
+                "id": "thread-user-1",
+                "name": "Toad",
+                "type": "agent",
+                "avatar_url": avatar_url("agent-user-1", False),
+            },
+        ],
+    }
+
+
 def test_messaging_service_mark_read_resets_unread_count_via_last_read_seq_watermark() -> None:
     class _StatefulChatMemberRepo:
         def __init__(self) -> None:
