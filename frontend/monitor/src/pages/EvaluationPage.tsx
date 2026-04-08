@@ -27,6 +27,7 @@ export default function EvaluationPage() {
   const artifacts = data.artifacts ?? [];
   const summary = data.artifact_summary ?? {};
   const nextSteps = data.next_steps ?? [];
+  const hasArtifactSignal = artifacts.length > 0 || (summary.total ?? 0) > 0;
 
   return (
     <div className="page">
@@ -49,23 +50,25 @@ export default function EvaluationPage() {
         <h2>Current Summary</h2>
         <p className="surface-card__body">{data.summary ?? "No evaluation summary available."}</p>
       </section>
-      <section className="surface-section">
-        <h2>Artifact Coverage</h2>
-        <div className="surface-grid">
-          <article className="surface-card">
-            <p className="surface-card__eyebrow">Present</p>
-            <p className="surface-card__value">{summary.present ?? 0}</p>
-          </article>
-          <article className="surface-card">
-            <p className="surface-card__eyebrow">Missing</p>
-            <p className="surface-card__value">{summary.missing ?? 0}</p>
-          </article>
-          <article className="surface-card">
-            <p className="surface-card__eyebrow">Total</p>
-            <p className="surface-card__value">{summary.total ?? 0}</p>
-          </article>
-        </div>
-      </section>
+      {hasArtifactSignal ? (
+        <section className="surface-section">
+          <h2>Artifact Coverage</h2>
+          <div className="surface-grid">
+            <article className="surface-card">
+              <p className="surface-card__eyebrow">Present</p>
+              <p className="surface-card__value">{summary.present ?? 0}</p>
+            </article>
+            <article className="surface-card">
+              <p className="surface-card__eyebrow">Missing</p>
+              <p className="surface-card__value">{summary.missing ?? 0}</p>
+            </article>
+            <article className="surface-card">
+              <p className="surface-card__eyebrow">Total</p>
+              <p className="surface-card__value">{summary.total ?? 0}</p>
+            </article>
+          </div>
+        </section>
+      ) : null}
       <section className="surface-section">
         <h2>Operator Facts</h2>
         <div className="info-grid">
@@ -77,33 +80,35 @@ export default function EvaluationPage() {
           ))}
         </div>
       </section>
-      <section className="surface-section">
-        <h2>Artifacts</h2>
-        <table>
-          <thead>
-            <tr>
-              <th>Label</th>
-              <th>Path</th>
-              <th>Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            {artifacts.length > 0 ? (
-              artifacts.map((artifact) => (
-                <tr key={`${artifact.label}-${artifact.path}`}>
-                  <td>{artifact.label ?? "-"}</td>
-                  <td className="mono">{artifact.path ?? "-"}</td>
-                  <td>{artifact.status ?? "-"}</td>
-                </tr>
-              ))
-            ) : (
+      {hasArtifactSignal ? (
+        <section className="surface-section">
+          <h2>Artifacts</h2>
+          <table>
+            <thead>
               <tr>
-                <td colSpan={3}>No artifacts reported.</td>
+                <th>Label</th>
+                <th>Path</th>
+                <th>Status</th>
               </tr>
-            )}
-          </tbody>
-        </table>
-      </section>
+            </thead>
+            <tbody>
+              {artifacts.length > 0 ? (
+                artifacts.map((artifact) => (
+                  <tr key={`${artifact.label}-${artifact.path}`}>
+                    <td>{artifact.label ?? "-"}</td>
+                    <td className="mono">{artifact.path ?? "-"}</td>
+                    <td>{artifact.status ?? "-"}</td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan={3}>No artifacts reported.</td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </section>
+      ) : null}
       <section className="surface-section">
         <h2>Next Steps</h2>
         <ol className="surface-list">
