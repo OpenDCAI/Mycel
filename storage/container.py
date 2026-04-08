@@ -120,7 +120,9 @@ class StorageContainer:
         return self._build("cron_job_repo")
 
     def agent_registry_repo(self) -> AgentRegistryRepo:
-        return self._build("agent_registry_repo")
+        # @@@agent-registry-public-schema - agent_registry is still a public-schema
+        # island, so subagent persistence must not silently inherit staging.
+        return self._build("agent_registry_repo", client=self._public_supabase_client)
 
     def tool_task_repo(self) -> ToolTaskRepo:
         return self._build("tool_task_repo")
