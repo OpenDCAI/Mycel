@@ -566,6 +566,7 @@ function ProviderCard({
         <span>{runningCount} 占用中</span>
         {liveUsageRunningCount > 0 && liveUsageRunningCount < runningCount && <span>{liveUsageRunningCount} 有用量</span>}
         {missingLiveTelemetryRunningCount > 0 && <span>{missingLiveTelemetryRunningCount} 无 live telemetry</span>}
+        {runtimeBoundTelemetryGapCount > 0 && <span>{runtimeBoundTelemetryGapCount} 有 runtime无遥测</span>}
         {runtimeUnboundUsageCount > 0 && <span>{runtimeUnboundUsageCount} 无 runtime有用量</span>}
         {runtimeUnboundRunningCount > 0 && <span>{runtimeUnboundRunningCount} 无 runtime</span>}
         {pausedCount > 0 && <span>{pausedCount} 暂停</span>}
