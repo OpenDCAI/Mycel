@@ -323,7 +323,14 @@ class ChatToolService:
             if effective_signal:
                 content = f"{content}\n[signal: {effective_signal}]"
 
-            self._messaging.send(resolved_chat_id, eid, content, mentions=mentions, signal=effective_signal)
+            self._messaging.send(
+                resolved_chat_id,
+                eid,
+                content,
+                mentions=mentions,
+                signal=effective_signal,
+                enforce_caught_up=True,
+            )
             return f"Message sent to {target_name}."
 
         registry.register(

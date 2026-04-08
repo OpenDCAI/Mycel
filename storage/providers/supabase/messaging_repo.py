@@ -54,6 +54,14 @@ class SupabaseChatMemberRepo:
     def update_last_read(self, chat_id: str, user_id: str, last_read_seq: int) -> None:
         self._client.table("chat_members").update({"last_read_seq": last_read_seq}).eq("chat_id", chat_id).eq("user_id", user_id).execute()
 
+    def last_read_seq(self, chat_id: str, user_id: str) -> int:
+        member_res = (
+            self._client.table("chat_members").select("last_read_seq").eq("chat_id", chat_id).eq("user_id", user_id).limit(1).execute()
+        )
+        if not member_res.data:
+            return 0
+        return int(member_res.data[0].get("last_read_seq") or 0)
+
     def update_mute(self, chat_id: str, user_id: str, muted: bool, mute_until: str | None = None) -> None:
         self._client.table("chat_members").update({"muted": muted, "mute_until": mute_until}).eq("chat_id", chat_id).eq(
             "user_id", user_id
@@ -69,17 +77,33 @@ class SupabaseMessagesRepo:
     def close(self) -> None:
         pass
 
-    def create(self, row: dict[str, Any]) -> dict[str, Any]:
+    def create(self, row: dict[str, Any], expected_read_seq: int | None = None) -> dict[str, Any]:
         """Insert a new message. Returns the created row."""
-        seq_response = self._client.rpc("increment_chat_message_seq", {"p_chat_id": row["chat_id"]}).execute()
-        seq_data = seq_response.data
-        if not seq_data:
-            raise RuntimeError("Supabase messages repo expected increment_chat_message_seq RPC data.")
-        if isinstance(seq_data, int):
-            seq = seq_data
+        if expected_read_seq is None:
+            seq_response = self._client.rpc("increment_chat_message_seq", {"p_chat_id": row["chat_id"]}).execute()
+            seq_data = seq_response.data
+            if not seq_data:
+                raise RuntimeError("Supabase messages repo expected increment_chat_message_seq RPC data.")
+            if isinstance(seq_data, int):
+                seq = seq_data
+            else:
+                seq_row = seq_data[0]
+                seq = seq_row["increment_chat_message_seq"] if isinstance(seq_row, dict) else seq_row
         else:
-            seq_row = seq_data[0]
-            seq = seq_row["increment_chat_message_seq"] if isinstance(seq_row, dict) else seq_row
+            # @@@caught-up-send-cas - agent chat sends must prove the sender is still
+            # acting on the latest seen chat state; otherwise sibling actors can fork
+            # the conversation from the same stale history.
+            next_seq = int(expected_read_seq) + 1
+            update_res = (
+                self._client.table("chats")
+                .update({"next_message_seq": next_seq})
+                .eq("id", row["chat_id"])
+                .eq("next_message_seq", int(expected_read_seq))
+                .execute()
+            )
+            if not update_res.data:
+                raise RuntimeError(f"Chat advanced after your last read. Call read_messages(chat_id='{row['chat_id']}') first.")
+            seq = next_seq
         payload = {**row, "seq": int(seq)}
         res = self._client.table("messages").insert(payload).execute()
         return res.data[0] if res.data else payload
@@ -103,12 +127,7 @@ class SupabaseMessagesRepo:
 
     def list_unread(self, chat_id: str, user_id: str) -> list[dict[str, Any]]:
         """Messages after user's last_read_seq, excluding own, not deleted."""
-        member_res = (
-            self._client.table("chat_members").select("last_read_seq").eq("chat_id", chat_id).eq("user_id", user_id).limit(1).execute()
-        )
-        last_read_seq = 0
-        if member_res.data:
-            last_read_seq = int(member_res.data[0].get("last_read_seq") or 0)
+        last_read_seq = self._last_read_seq(chat_id, user_id)
 
         q = self._client.table("messages").select("*").eq("chat_id", chat_id).neq("sender_user_id", user_id).is_("deleted_at", "null")
         if last_read_seq > 0:
@@ -119,12 +138,7 @@ class SupabaseMessagesRepo:
 
     def count_unread(self, chat_id: str, user_id: str) -> int:
         """Count unread messages using a COUNT query to avoid materializing rows."""
-        member_res = (
-            self._client.table("chat_members").select("last_read_seq").eq("chat_id", chat_id).eq("user_id", user_id).limit(1).execute()
-        )
-        last_read_seq = 0
-        if member_res.data:
-            last_read_seq = int(member_res.data[0].get("last_read_seq") or 0)
+        last_read_seq = self._last_read_seq(chat_id, user_id)
 
         q = (
             self._client.table("messages")
@@ -137,6 +151,14 @@ class SupabaseMessagesRepo:
             q = q.gt("seq", last_read_seq)
         res = q.execute()
         return res.count or 0
+
+    def _last_read_seq(self, chat_id: str, user_id: str) -> int:
+        member_res = (
+            self._client.table("chat_members").select("last_read_seq").eq("chat_id", chat_id).eq("user_id", user_id).limit(1).execute()
+        )
+        if not member_res.data:
+            return 0
+        return int(member_res.data[0].get("last_read_seq") or 0)
 
     def retract(self, message_id: str, sender_id: str) -> bool:
         """Retract a message within 2-minute window."""

@@ -254,6 +254,50 @@ def test_messaging_service_resolves_sender_name_from_thread_user_id() -> None:
     assert data["sender_name"] == "Toad"
 
 
+def test_messaging_service_agent_send_passes_expected_read_seq_to_messages_repo() -> None:
+    created_rows: list[tuple[dict[str, Any], int | None]] = []
+
+    class _StatefulChatMemberRepo:
+        def list_members(self, _chat_id: str) -> list[dict[str, Any]]:
+            return []
+
+        def last_read_seq(self, chat_id: str, user_id: str) -> int:
+            assert chat_id == "chat-1"
+            assert user_id == "thread-user-1"
+            return 7
+
+    class _MessagesRepo:
+        def create(self, row: dict[str, Any], expected_read_seq: int | None = None) -> dict[str, Any]:
+            created_rows.append((row, expected_read_seq))
+            return {**row, "seq": 8}
+
+    service = MessagingService(
+        chat_repo=SimpleNamespace(),
+        chat_member_repo=_StatefulChatMemberRepo(),
+        messages_repo=_MessagesRepo(),
+        message_read_repo=SimpleNamespace(),
+        user_repo=SimpleNamespace(
+            get_by_id=lambda uid: (
+                None
+                if uid == "thread-user-1"
+                else SimpleNamespace(id=uid, display_name="Toad", type="agent", avatar=None)
+                if uid == "agent-user-1"
+                else None
+            )
+        ),
+        thread_repo=SimpleNamespace(
+            get_by_user_id=lambda uid: {"id": "thread-1", "agent_user_id": "agent-user-1"} if uid == "thread-user-1" else None
+        ),
+    )
+
+    service.send("chat-1", "thread-user-1", "hello", enforce_caught_up=True)
+
+    assert len(created_rows) == 1
+    row, expected_read_seq = created_rows[0]
+    assert row["sender_user_id"] == "thread-user-1"
+    assert expected_read_seq == 7
+
+
 def test_messaging_service_list_chats_exposes_thread_user_participant_id() -> None:
     service = MessagingService(
         chat_repo=SimpleNamespace(
@@ -479,6 +523,7 @@ def test_chat_tool_send_appends_yield_signal_to_content_and_payload() -> None:
             "chat_id": "chat-1",
             "sender_id": "human-user-1",
             "content": "done\n[signal: yield]",
+            "enforce_caught_up": True,
             "mentions": None,
             "signal": "yield",
         }
