@@ -7,6 +7,11 @@ interface UserSettings {
   enabled_models: string[];
 }
 
+function isActiveNewChatRoute(): boolean {
+  const path = window.location.pathname.replace(/\/+$/, "");
+  return path.startsWith("/chat/hire");
+}
+
 export function useWorkspaceSettings() {
   const [settings, setSettings] = useState<UserSettings | null>(null);
   const [loading, setLoading] = useState(true);
@@ -20,6 +25,10 @@ export function useWorkspaceSettings() {
       }
     } catch (err) {
       if (err instanceof DOMException && err.name === "AbortError") return;
+      // @@@workspace-settings-route-teardown - this hook currently powers the
+      // new-chat hire flow. If navigation already left /chat/hire, a failed
+      // settings load is stale UI noise and should not be surfaced.
+      if (!isActiveNewChatRoute()) return;
       console.error("Failed to load settings:", err);
     } finally {
       if (!signal?.aborted) {
