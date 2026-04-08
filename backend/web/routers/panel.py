@@ -48,6 +48,12 @@ def _get_owned_agent_or_404_with_config(agent_id: str, user_id: str, user_repo: 
     return item
 
 
+def _ensure_agent_has_no_threads_or_409(agent_id: str, thread_repo: Any) -> None:
+    rows = thread_repo.list_by_agent_user(agent_id)
+    if rows:
+        raise HTTPException(409, "Cannot delete agent with existing threads")
+
+
 # ── Agents ──
 
 
@@ -173,6 +179,9 @@ async def delete_member(
         raise HTTPException(403, "Cannot delete builtin agent")
     user_repo = request.app.state.user_repo
     await asyncio.to_thread(_get_owned_agent_or_404, agent_id, user_id, user_repo)
+    thread_repo = getattr(request.app.state, "thread_repo", None)
+    if thread_repo is not None:
+        await asyncio.to_thread(_ensure_agent_has_no_threads_or_409, agent_id, thread_repo)
     agent_config_repo = getattr(request.app.state, "agent_config_repo", None)
     ok = await asyncio.to_thread(
         member_service.delete_member,

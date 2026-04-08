@@ -14,10 +14,7 @@ from storage.contracts import UserRow, UserType
 
 
 def test_panel_router_exposes_agents_routes_not_members_routes():
-    route_paths = {
-        (route.path, tuple(sorted(route.methods or [])))
-        for route in panel_router.router.routes
-    }
+    route_paths = {(route.path, tuple(sorted(route.methods or []))) for route in panel_router.router.routes}
 
     assert ("/api/panel/agents", ("GET",)) in route_paths
     assert ("/api/panel/agents/{agent_id}", ("GET",)) in route_paths
@@ -157,6 +154,31 @@ async def test_delete_member_route_keeps_builtin_guard_before_owner_lookup(monke
 
     assert excinfo.value.status_code == 403
     assert excinfo.value.detail == "Cannot delete builtin agent"
+
+
+@pytest.mark.asyncio
+async def test_delete_member_route_rejects_agent_with_existing_threads(monkeypatch: pytest.MonkeyPatch):
+    def explode(*_args, **_kwargs):
+        raise AssertionError("delete_member should not run when agent still owns threads")
+
+    monkeypatch.setattr(member_service, "delete_member", explode)
+
+    with pytest.raises(HTTPException) as excinfo:
+        await panel_router.delete_member(
+            "agent-1",
+            request=SimpleNamespace(
+                app=SimpleNamespace(
+                    state=SimpleNamespace(
+                        user_repo=SimpleNamespace(get_by_id=lambda user_id: _agent_user(user_id=user_id) if user_id == "agent-1" else None),
+                        thread_repo=SimpleNamespace(list_by_agent_user=lambda agent_user_id: [{"id": f"{agent_user_id}-1"}]),
+                    )
+                )
+            ),
+            user_id="user-1",
+        )
+
+    assert excinfo.value.status_code == 409
+    assert excinfo.value.detail == "Cannot delete agent with existing threads"
 
 
 @pytest.mark.asyncio
