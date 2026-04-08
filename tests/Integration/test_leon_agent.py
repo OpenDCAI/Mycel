@@ -1051,9 +1051,10 @@ def test_leon_agent_chat_tool_wiring_does_not_pass_dead_repo_dependencies(monkey
     LeonAgent._init_services(agent)
 
     assert captured["chat_identity_id"] == "thread-user-9"
-    assert captured["owner_id"] == "human-user-9"
     assert "chat_member_repo" not in captured
     assert "messages_repo" not in captured
+    assert "owner_id" not in captured
+    assert "relationship_repo" not in captured
 
 
 def test_build_rules_section_includes_function_result_clearing_guidance_when_spill_buffer_enabled():

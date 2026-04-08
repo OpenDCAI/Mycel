@@ -85,24 +85,20 @@ class ChatToolService:
     def __init__(
         self,
         registry: ToolRegistry,
-        owner_id: str,
         *,
         chat_identity_id: str | None = None,
         user_id: str | None = None,
         messaging_service: Any = None,  # MessagingService (new)
         user_repo: Any = None,
         thread_repo: Any = None,
-        relationship_repo: Any = None,
     ) -> None:
         identity_id = chat_identity_id or user_id
         if not identity_id:
             raise ValueError("ChatToolService requires chat_identity_id or legacy user_id")
         self._chat_identity_id: str = identity_id
-        self._owner_id = owner_id
         self._messaging = messaging_service
         self._user_repo = user_repo
         self._thread_repo = thread_repo
-        self._relationships = relationship_repo
         self._register(registry)
 
     def _resolve_display_user(self, social_user_id: str) -> Any | None:
