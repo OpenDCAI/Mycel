@@ -658,6 +658,9 @@ function SandboxInspector({
                     <Link className="sandbox-link" to={`/thread/${session.threadId}`}>
                       {session.threadId}
                     </Link>
+                    {session.runtimeSessionId && (
+                      <div className="sandbox-session-row__meta">runtime {session.runtimeSessionId}</div>
+                    )}
                   </div>
                 </div>
                 <div className="sandbox-session-row__status">

@@ -141,6 +141,11 @@ function AgentRow({ session }: { session: ResourceSession }) {
         <p className="text-2xs font-mono text-muted-foreground/60 truncate mt-0.5">
           {session.threadId}
         </p>
+        {session.runtimeSessionId && (
+          <p className="text-2xs font-mono text-muted-foreground/50 truncate mt-1">
+            runtime {session.runtimeSessionId}
+          </p>
+        )}
       </div>
       <div className="flex items-center gap-1.5 shrink-0">
         <span className={`w-1.5 h-1.5 rounded-full ${STATUS_DOT[session.status]}`} />

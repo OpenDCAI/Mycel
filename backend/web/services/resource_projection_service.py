@@ -62,6 +62,7 @@ def _build_provider_card(config_name: str, leases: list[dict[str, Any]]) -> dict
                 session_identity=f"{lease['lease_id']}:{thread_id}",
                 lease_id=str(lease["lease_id"]),
                 thread_id=thread_id,
+                runtime_session_id=None,
                 owner=owner,
                 status=status,
                 started_at=str(lease.get("created_at") or ""),
@@ -204,6 +205,8 @@ def list_resource_providers() -> dict[str, Any]:
     for session in sessions:
         provider_instance = str(session.get("provider") or "local")
         grouped.setdefault(provider_instance, []).append(session)
+    runtime_session_ids: dict[str, str | None] = {}
+    query_lease_instance_id = getattr(repo, "query_lease_instance_id", None)
 
     owners = _thread_owners([str(session["thread_id"]) for session in sessions if session.get("thread_id")])
     snapshot_by_lease = list_resource_snapshots([str(session.get("lease_id") or "") for session in sessions])
@@ -240,11 +243,16 @@ def list_resource_providers() -> dict[str, Any]:
             if session_identity in seen_session_ids:
                 continue
             seen_session_ids.add(session_identity)
+            runtime_session_id = runtime_session_ids.get(lease_id)
+            if lease_id and lease_id not in runtime_session_ids:
+                runtime_session_id = query_lease_instance_id(lease_id) if callable(query_lease_instance_id) else None
+                runtime_session_ids[lease_id] = runtime_session_id
             normalized_sessions.append(
                 resource_service.build_resource_session_payload(
                     session_identity=session_identity,
                     lease_id=lease_id,
                     thread_id=thread_id,
+                    runtime_session_id=runtime_session_id,
                     owner=owner,
                     status=normalized,
                     started_at=str(session.get("created_at") or ""),

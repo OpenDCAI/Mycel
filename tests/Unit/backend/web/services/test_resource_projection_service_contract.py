@@ -2,14 +2,18 @@ from backend.web.services import resource_projection_service
 
 
 class _FakeRepo:
-    def __init__(self, rows):
+    def __init__(self, rows, instance_ids=None):
         self._rows = rows
+        self._instance_ids = instance_ids or {}
 
     def list_sessions_with_leases(self):
         return list(self._rows)
 
     def query_lease_threads(self, lease_id: str):
         return []
+
+    def query_lease_instance_id(self, lease_id: str):
+        return self._instance_ids.get(lease_id)
 
     def close(self):
         pass
@@ -197,7 +201,11 @@ def test_list_resource_providers_keeps_remote_session_actor_first(monkeypatch):
         },
     ]
 
-    monkeypatch.setattr(resource_projection_service, "make_sandbox_monitor_repo", lambda: _FakeRepo(rows))
+    monkeypatch.setattr(
+        resource_projection_service,
+        "make_sandbox_monitor_repo",
+        lambda: _FakeRepo(rows, instance_ids={"lease-remote": "provider-session-1"}),
+    )
     monkeypatch.setattr(
         resource_projection_service,
         "available_sandbox_types",
@@ -229,6 +237,7 @@ def test_list_resource_providers_keeps_remote_session_actor_first(monkeypatch):
         "id": "lease-remote:thread-remote",
         "leaseId": "lease-remote",
         "threadId": "thread-remote",
+        "runtimeSessionId": "provider-session-1",
         "agentUserId": "agent-remote",
         "agentName": "Remote Agent",
         "avatarUrl": None,

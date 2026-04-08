@@ -56,6 +56,7 @@ export interface ResourceSession {
   id: string;
   leaseId?: string;
   threadId: string;
+  runtimeSessionId?: string | null;
   agentUserId?: string | null;
   agentName: string;
   avatarUrl?: string | null;

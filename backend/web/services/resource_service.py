@@ -49,12 +49,13 @@ def build_resource_session_payload(
     session_identity: str,
     lease_id: str,
     thread_id: str,
+    runtime_session_id: str | None,
     owner: dict[str, Any],
     status: str,
     started_at: str,
     metrics: dict[str, Any] | None,
 ) -> dict[str, Any]:
-    return {
+    payload = {
         "id": session_identity,
         "leaseId": lease_id,
         "threadId": thread_id,
@@ -65,6 +66,9 @@ def build_resource_session_payload(
         "startedAt": started_at,
         "metrics": metrics,
     }
+    if runtime_session_id:
+        payload["runtimeSessionId"] = runtime_session_id
+    return payload
 
 
 def sandbox_browse(lease_id: str, path: str) -> dict[str, Any]:
