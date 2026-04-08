@@ -71,4 +71,20 @@ describe("useMarketplaceStore", () => {
     expect(fetchMock).toHaveBeenCalledOnce();
     expect(consoleError).not.toHaveBeenCalled();
   });
+
+  it("does not log a failed snapshot fetch once navigation already left the marketplace detail route", async () => {
+    window.history.replaceState({}, "", "/marketplace/item-1");
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async () => {
+      window.history.replaceState({}, "", "/chat");
+      throw new TypeError("Failed to fetch");
+    });
+
+    const { useMarketplaceStore } = await import("./marketplace-store");
+
+    await useMarketplaceStore.getState().fetchVersionSnapshot("item-1", "1.0.0");
+
+    expect(fetchMock).toHaveBeenCalledOnce();
+    expect(consoleError).not.toHaveBeenCalled();
+  });
 });

@@ -195,6 +195,10 @@ export const useMarketplaceStore = create<MarketplaceState>()((set, get) => ({
       const data = await hubApi<{ snapshot: any }>(`/items/${itemId}/versions/${version}`);
       set({ versionSnapshot: data.snapshot ?? null });
     } catch (e) {
+      // @@@marketplace-snapshot-route-teardown - snapshot fetches can resolve
+      // after the user already left this marketplace detail page. Only log if
+      // this item route is still active; otherwise this is stale UI noise.
+      if (!isActiveMarketplaceDetailRoute(itemId)) return;
       console.error("Failed to fetch snapshot:", e);
     } finally {
       set({ snapshotLoading: false });
