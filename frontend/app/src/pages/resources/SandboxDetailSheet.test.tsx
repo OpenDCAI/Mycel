@@ -25,4 +25,10 @@ describe("SandboxDetailSheet source", () => {
 
     expect(source).toContain("session.runtimeSessionId");
   });
+
+  it("renders resource agent avatars from avatarUrl", () => {
+    const source = sourceModules["./SandboxDetailSheet.tsx"];
+
+    expect(source).toContain("session.avatarUrl");
+  });
 });

@@ -122,8 +122,11 @@ def test_user_resource_projection_groups_visible_leases_into_provider_cards(monk
     assert payload["providers"][0]["sessions"][0]["threadId"] == "thread-1"
     assert payload["providers"][0]["sessions"][0]["agentUserId"] == "agent-1"
     assert payload["providers"][0]["sessions"][0]["agentName"] == "Morel"
+    assert payload["providers"][0]["sessions"][0]["avatarUrl"] == "/api/users/agent-1/avatar"
     assert payload["providers"][0]["sessions"][0]["runtimeSessionId"] == "provider-session-1"
     assert payload["providers"][0]["sessions"][0]["startedAt"] == "2026-04-07T10:00:00Z"
+    assert "memberId" not in payload["providers"][0]["sessions"][0]
+    assert "memberName" not in payload["providers"][0]["sessions"][0]
 
 
 def test_user_resource_projection_marks_provider_unavailable_when_capability_probe_fails(monkeypatch) -> None:
@@ -142,10 +145,11 @@ def test_user_resource_projection_marks_provider_unavailable_when_capability_pro
                 "lease_id": "lease-1",
                 "provider_name": "daytona_selfhost",
                 "thread_ids": ["thread-1"],
-                "agents": [{"agent_user_id": "agent-1", "agent_name": "Morel", "avatar_url": None}],
+                "agents": [{"agent_user_id": "agent-1", "agent_name": "Morel", "avatar_url": "/api/users/agent-1/avatar"}],
                 "observed_state": "paused",
                 "desired_state": "paused",
                 "created_at": "2026-04-07T10:00:00Z",
+                "runtime_session_id": "provider-session-1",
             }
         ],
     )
@@ -176,6 +180,82 @@ def test_user_resource_projection_marks_provider_unavailable_when_capability_pro
         "code": "PROVIDER_UNAVAILABLE",
         "message": "provider unavailable",
     }
+    assert payload["providers"][0]["sessions"][0]["runtimeSessionId"] == "provider-session-1"
+    assert payload["providers"][0]["sessions"][0]["agentUserId"] == "agent-1"
+    assert payload["providers"][0]["sessions"][0]["agentName"] == "Morel"
+    assert payload["providers"][0]["sessions"][0]["avatarUrl"] == "/api/users/agent-1/avatar"
+    assert "memberId" not in payload["providers"][0]["sessions"][0]
+    assert "memberName" not in payload["providers"][0]["sessions"][0]
+
+
+def test_resources_overview_route_surfaces_actor_first_user_payload(monkeypatch) -> None:
+    class _State:
+        thread_repo = object()
+        member_repo = object()
+
+    test_app = FastAPI()
+    test_app.state = _State()
+    test_app.include_router(resources_router.router)
+    test_app.dependency_overrides[get_current_user_id] = lambda: "owner-1"
+
+    monkeypatch.setattr(
+        resource_projection_service.sandbox_service,
+        "list_user_leases",
+        lambda owner_user_id, **_kwargs: [
+            {
+                "lease_id": "lease-1",
+                "provider_name": "daytona_selfhost",
+                "thread_ids": ["thread-1"],
+                "agents": [
+                    {
+                        "agent_user_id": "agent-1",
+                        "agent_name": "Morel",
+                        "avatar_url": "/api/users/agent-1/avatar",
+                    }
+                ],
+                "observed_state": "running",
+                "desired_state": "running",
+                "created_at": "2026-04-07T10:00:00Z",
+                "runtime_session_id": "provider-session-1",
+            }
+        ],
+    )
+    monkeypatch.setattr(
+        resource_projection_service.resource_service,
+        "get_provider_display_contract",
+        lambda *_args, **_kwargs: {
+            "provider_name": "daytona",
+            "description": "Daytona",
+            "vendor": "Daytona",
+            "type": "cloud",
+            "console_url": "https://example.com/daytona",
+        },
+        raising=False,
+    )
+    monkeypatch.setattr(
+        resource_projection_service.resource_service,
+        "get_provider_capability_contract",
+        lambda *_args, **_kwargs: (resource_projection_service._empty_capabilities(), None),
+        raising=False,
+    )
+
+    try:
+        with TestClient(test_app) as client:
+            response = client.get("/api/resources/overview")
+    finally:
+        test_app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    payload = response.json()
+    session = payload["providers"][0]["sessions"][0]
+    assert payload["summary"]["scope"] == "user"
+    assert payload["providers"][0]["id"] == "daytona_selfhost"
+    assert session["runtimeSessionId"] == "provider-session-1"
+    assert session["agentUserId"] == "agent-1"
+    assert session["agentName"] == "Morel"
+    assert session["avatarUrl"] == "/api/users/agent-1/avatar"
+    assert "memberId" not in session
+    assert "memberName" not in session
 
 
 def test_provider_display_contract_exposes_public_metadata(monkeypatch) -> None:
