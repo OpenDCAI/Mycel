@@ -48,9 +48,7 @@ def test_messaging_display_user_resolver_prefers_direct_user_row() -> None:
     resolved = resolve_messaging_display_user(
         user_repo=SimpleNamespace(
             get_by_id=lambda uid: (
-                SimpleNamespace(id=uid, display_name="Human", type="human", avatar=None)
-                if uid == "human-user-1"
-                else None
+                SimpleNamespace(id=uid, display_name="Human", type="human", avatar=None) if uid == "human-user-1" else None
             )
         ),
         thread_repo=SimpleNamespace(get_by_user_id=lambda _uid: pytest.fail("thread bridge should not be used")),
