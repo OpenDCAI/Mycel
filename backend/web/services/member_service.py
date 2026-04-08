@@ -1022,7 +1022,15 @@ def publish_member(member_id: str, bump_type: str = "patch", user_repo: Any = No
     if not member_dir.is_dir() and config is None:
         return None
 
-    meta = _read_json(member_dir / "meta.json", {}) if member_dir.is_dir() else {}
+    if config is not None:
+        meta = {
+            "status": config.get("status", "draft"),
+            "version": config.get("version", "0.1.0"),
+            "created_at": config.get("created_at", 0),
+            "updated_at": config.get("updated_at", 0),
+        }
+    else:
+        meta = _read_json(member_dir / "meta.json", {})
     current_version = meta.get("version") or (config or {}).get("version", "0.1.0")
     parts = current_version.split(".")
     major, minor, patch = int(parts[0]), int(parts[1]), int(parts[2])
