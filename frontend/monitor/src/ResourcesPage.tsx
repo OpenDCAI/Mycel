@@ -292,6 +292,21 @@ export default function ResourcesPage() {
     (total, provider) => total + provider.sessions.filter((session) => session.status === "running").length,
     0,
   );
+  const runtimeUnboundUsageCount = providers.reduce(
+    (total, provider) =>
+      total +
+      provider.sessions.filter((session) => {
+        const metrics = session.metrics;
+        return (
+          session.status === "running" &&
+          provider.type !== "local" &&
+          !session.runtimeSessionId &&
+          metrics != null &&
+          (metrics.cpu != null || metrics.memory != null || metrics.disk != null)
+        );
+      }).length,
+    0,
+  );
   const runtimeUnboundRunningCount = providers.reduce(
     (total, provider) =>
       total +
@@ -392,6 +407,9 @@ export default function ResourcesPage() {
           <div className="resources-summary-pill">{runningSessionCount} 运行会话</div>
           {liveUsageRunningCount > 0 && liveUsageRunningCount < runningSessionCount && (
             <div className="resources-summary-pill">{liveUsageRunningCount} 有用量</div>
+          )}
+          {runtimeUnboundUsageCount > 0 && (
+            <div className="resources-summary-pill">{runtimeUnboundUsageCount} 无 runtime有用量</div>
           )}
           {missingLiveTelemetryRunningCount > 0 && (
             <div className="resources-summary-pill">{missingLiveTelemetryRunningCount} 无 live telemetry</div>
