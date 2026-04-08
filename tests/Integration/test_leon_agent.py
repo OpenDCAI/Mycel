@@ -550,6 +550,75 @@ async def test_leon_agent_agent_config_id_registers_mcp_resource_tools(tmp_path)
 
 @pytest.mark.asyncio
 @_patch_env_api_key()
+async def test_leon_agent_agent_config_id_ignores_conflicting_legacy_member_shell(tmp_path):
+    """Repo-rooted live startup must ignore a stale member-dir shell with conflicting MCP state."""
+    from core.runtime.agent import LeonAgent
+
+    legacy_member_dir = tmp_path / "members" / "toad"
+    legacy_member_dir.mkdir(parents=True)
+    (legacy_member_dir / "agent.md").write_text(
+        "---\nname: Legacy Toad\ndescription: Stale member shell\n---\nYou are Legacy Toad.\n",
+        encoding="utf-8",
+    )
+    (legacy_member_dir / ".mcp.json").write_text('{"mcpServers":{}}', encoding="utf-8")
+
+    class _Repo:
+        def get_config(self, agent_config_id: str):
+            assert agent_config_id == "cfg-1"
+            return {
+                "id": "cfg-1",
+                "name": "Repo Toad",
+                "description": "Repo-backed member",
+                "tools": ["*"],
+                "system_prompt": "You are Repo Toad.",
+                "status": "active",
+                "version": "1.0.0",
+                "runtime": {},
+                "mcp": {
+                    "nu50demo": {
+                        "transport": "stdio",
+                        "command": "uv",
+                        "args": ["run", "python", "/tmp/nu50_mcp_server.py"],
+                    }
+                },
+            }
+
+        def list_rules(self, _agent_config_id: str):
+            return []
+
+        def list_sub_agents(self, _agent_config_id: str):
+            return []
+
+        def list_skills(self, _agent_config_id: str):
+            return []
+
+    mock_model = _mock_model("Repo MCP response")
+
+    with (
+        patch("core.runtime.agent.LeonAgent._create_model", return_value=mock_model),
+        patch("core.runtime.agent.LeonAgent._init_async_components", return_value=(None, [])),
+        patch("core.runtime.agent.LeonAgent._init_checkpointer", new_callable=AsyncMock, return_value=None),
+    ):
+        agent = LeonAgent(
+            workspace_root=str(tmp_path),
+            agent_config_id="cfg-1",
+            agent_config_repo=_Repo(),
+            api_key="sk-test-integration",
+        )
+        await agent.ainit()
+
+        # @@@runtime-repo-source-of-truth - repo-backed live startup must ignore
+        # conflicting legacy member shells and keep MCP registration sourced from agent_config_repo.
+        assert "Repo Toad" in agent.system_prompt
+        assert "Legacy Toad" not in agent.system_prompt
+        assert agent._tool_registry.get("ListMcpResources") is not None
+        assert agent._tool_registry.get("ReadMcpResource") is not None
+
+        agent.close()
+
+
+@pytest.mark.asyncio
+@_patch_env_api_key()
 async def test_leon_agent_announces_mcp_instruction_delta_once_and_reannounces_on_change(tmp_path):
     from core.runtime.agent import LeonAgent
 

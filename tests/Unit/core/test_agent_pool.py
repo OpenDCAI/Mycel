@@ -159,8 +159,17 @@ async def test_get_or_create_agent_honors_fresh_local_thread_cwd_even_when_missi
 
 
 @pytest.mark.asyncio
-async def test_get_or_create_agent_passes_member_bundle_dir(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
+async def test_get_or_create_agent_prefers_repo_backed_runtime_startup_even_with_conflicting_legacy_member_shell(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+):
     captured: dict[str, object] = {}
+    legacy_member_dir = tmp_path / "members" / "member-1"
+    legacy_member_dir.mkdir(parents=True)
+    (legacy_member_dir / "agent.md").write_text(
+        "---\nname: Legacy Toad\ndescription: stale shell\n---\nYou are the wrong source.\n",
+        encoding="utf-8",
+    )
 
     def _fake_create_agent_sync(
         sandbox_name: str,
@@ -209,6 +218,8 @@ async def test_get_or_create_agent_passes_member_bundle_dir(monkeypatch: pytest.
 
     await agent_pool.get_or_create_agent(cast(Any, app), "local", thread_id="thread-4")
 
+    # @@@runtime-repo-source-of-truth - runtime startup must stay repo-rooted
+    # for repo-backed agent users even when a stale member shell still exists on disk.
     assert captured["bundle_dir"] is None
     assert captured["agent_config_id"] == "cfg-1"
     assert captured["agent_config_repo"] is app.state.agent_config_repo
