@@ -797,11 +797,13 @@ function SandboxInspector({
                 label="RAM"
                 value={group.metrics.memory != null ? formatMetric(group.metrics.memory, "GB") : "--"}
                 sub={group.metrics.memoryLimit != null ? formatMetric(group.metrics.memoryLimit, "GB") : undefined}
+                note={group.metrics.memoryNote || undefined}
               />
               <MetricBlock
                 label="Disk"
                 value={group.metrics.disk != null ? formatMetric(group.metrics.disk, "GB") : "--"}
                 sub={group.metrics.diskLimit != null ? formatMetric(group.metrics.diskLimit, "GB") : undefined}
+                note={group.metrics.diskNote || group.metrics.probeError || undefined}
               />
             </div>
           </div>
@@ -828,7 +830,17 @@ function SandboxInspector({
   );
 }
 
-function MetricBlock({ label, value, sub }: { label: string; value: string; sub?: string }) {
+function MetricBlock({
+  label,
+  value,
+  sub,
+  note,
+}: {
+  label: string;
+  value: string;
+  sub?: string;
+  note?: string;
+}) {
   return (
     <div className="sandbox-metric-block">
       <div className="sandbox-metric-block__label">{label}</div>
@@ -836,6 +848,7 @@ function MetricBlock({ label, value, sub }: { label: string; value: string; sub?
         {value}
         {sub ? <span className="sandbox-metric-block__sub"> / {sub}</span> : null}
       </div>
+      {note ? <div className="sandbox-metric-block__note">{note}</div> : null}
     </div>
   );
 }

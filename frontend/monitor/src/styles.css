@@ -1007,6 +1007,13 @@ div:has(> :only-child:is(div:contains("Loading"))) {
   font-weight: 400;
 }
 
+.sandbox-metric-block__note {
+  margin-top: 0.45rem;
+  color: #8f98aa;
+  font-size: 0.72rem;
+  line-height: 1.45;
+}
+
 .file-browser {
   display: grid;
   grid-template-columns: 1fr 1.15fr;
