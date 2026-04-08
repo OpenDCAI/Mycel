@@ -102,7 +102,7 @@ export default function MarketplacePage() {
   );
 
   const installedSubTabs: { id: InstalledSubTab; label: string; icon: React.ElementType; count: number }[] = [
-    { id: "member", label: "成员", icon: Package, count: installedMembers.length },
+    { id: "member", label: "Agent", icon: Package, count: installedMembers.length },
     { id: "skill", label: "Skill", icon: Zap, count: librarySkills.length },
     { id: "agent", label: "Agent", icon: Users, count: libraryAgents.length },
   ];
@@ -377,7 +377,7 @@ export default function MarketplacePage() {
                       })}
                     </div>
                     {filteredMembers.length === 0 && (
-                      <div className="text-center py-12 text-sm text-muted-foreground">暂无已安装的成员</div>
+                      <div className="text-center py-12 text-sm text-muted-foreground">暂无已安装的 Agent</div>
                     )}
                   </>
                 )}
