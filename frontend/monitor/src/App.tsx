@@ -1,5 +1,6 @@
 import React from 'react';
 import { BrowserRouter, Routes, Route, Link, useParams, useNavigate } from 'react-router-dom';
+import ResourcesPage from './ResourcesPage';
 import './styles.css';
 
 const API_BASE = '/api/monitor';
@@ -545,6 +546,7 @@ function Layout({ children }: { children: React.ReactNode }) {
       <nav className="top-nav">
         <h1 className="logo">Leon Sandbox Monitor</h1>
         <div className="nav-links">
+          <Link to="/resources">Resources</Link>
           <Link to="/threads">Threads</Link>
           <Link to="/leases">Leases</Link>
           <Link to="/diverged">Diverged</Link>
@@ -565,6 +567,7 @@ export default function App() {
       <Layout>
         <Routes>
           <Route path="/" element={<DivergedPage />} />
+          <Route path="/resources" element={<ResourcesPage />} />
           <Route path="/threads" element={<ThreadsPage />} />
           <Route path="/thread/:threadId" element={<ThreadDetailPage />} />
           <Route path="/leases" element={<LeasesPage />} />

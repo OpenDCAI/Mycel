@@ -1,6 +1,7 @@
 import {
   Sheet,
   SheetContent,
+  SheetDescription,
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
@@ -10,7 +11,7 @@ import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip
 import { SandboxFileBrowser } from "@/components/SandboxFileBrowser";
 import type { LeaseGroup } from "./session-list-utils";
 import type { ResourceSession } from "./types";
-import { calculateDuration, formatDuration } from "./utils/duration";
+import { formatStartedAtDuration } from "./utils/duration";
 import { formatMetric } from "./utils/format";
 
 const STATUS_LABEL: Record<ResourceSession["status"], string> = {
@@ -42,7 +43,7 @@ export default function SandboxDetailSheet({
 }: SandboxDetailSheetProps) {
   if (!group) return null;
 
-  const duration = group.startedAt ? calculateDuration(group.startedAt) : null;
+  const durationLabel = formatStartedAtDuration(group.startedAt);
   const m = group.metrics;
   const hasMetrics =
     m != null &&
@@ -63,12 +64,15 @@ export default function SandboxDetailSheet({
             <span className={`w-2 h-2 rounded-full shrink-0 ${STATUS_DOT[group.status]}`} />
             <span className="text-xs font-mono text-muted-foreground">
               {STATUS_LABEL[group.status]}
-              {duration != null && ` · ${formatDuration(duration)}`}
+              {durationLabel && ` · ${durationLabel}`}
             </span>
           </div>
           <SheetTitle className="text-sm font-mono text-foreground">
             {group.leaseId || "local"}
           </SheetTitle>
+          <SheetDescription className="sr-only">
+            查看 {group.leaseId || "local"} 的 Agent、指标和文件浏览详情。
+          </SheetDescription>
         </SheetHeader>
 
         {/* Agents + Metrics — scrollable middle section */}
@@ -137,6 +141,11 @@ function AgentRow({ session }: { session: ResourceSession }) {
         <p className="text-2xs font-mono text-muted-foreground/60 truncate mt-0.5">
           {session.threadId}
         </p>
+        {session.runtimeSessionId && (
+          <p className="text-2xs font-mono text-muted-foreground/50 truncate mt-1">
+            runtime {session.runtimeSessionId}
+          </p>
+        )}
       </div>
       <div className="flex items-center gap-1.5 shrink-0">
         <span className={`w-1.5 h-1.5 rounded-full ${STATUS_DOT[session.status]}`} />

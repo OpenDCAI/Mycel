@@ -39,7 +39,6 @@ def test_refresh_resource_snapshots_probes_running_leases_only(monkeypatch):
         ),
     )
     monkeypatch.setattr(resource_service, "build_provider_from_config_name", lambda _: _FakeProvider())
-    monkeypatch.setattr(resource_service, "build_resource_snapshot_repo", lambda: _FakeSnapshotRepo())
 
     calls: list[dict] = []
 
@@ -73,7 +72,7 @@ def test_refresh_resource_snapshots_counts_provider_build_error(monkeypatch):
     )
     monkeypatch.setattr(resource_service, "build_provider_from_config_name", lambda _: None)
     snapshot_repo = _FakeSnapshotRepo()
-    monkeypatch.setattr(resource_service, "build_resource_snapshot_repo", lambda: snapshot_repo)
+    monkeypatch.setattr(resource_service, "upsert_lease_resource_snapshot", snapshot_repo.upsert_lease_resource_snapshot)
 
     result = resource_service.refresh_resource_snapshots()
     assert result["probed"] == 0
@@ -86,32 +85,34 @@ def test_refresh_resource_snapshots_counts_provider_build_error(monkeypatch):
     assert snapshot_repo.upserts[0]["probe_error"] == "provider init failed: p-missing"
 
 
-def test_refresh_resource_snapshots_prefers_shared_runtime_snapshot_repo(monkeypatch):
+def test_refresh_resource_snapshots_records_non_running_provider_build_error(monkeypatch):
     monkeypatch.setattr(resource_service, "ensure_resource_snapshot_table", lambda: None)
     monkeypatch.setattr(
         resource_service,
         "make_sandbox_monitor_repo",
         lambda: _make_probe_repo(
             [
-                {"provider_name": "p-missing", "instance_id": "s-1", "lease_id": "l-1", "observed_state": "detached"},
+                {"provider_name": "p-missing", "instance_id": "s-1", "lease_id": "l-1", "observed_state": "paused"},
             ]
         ),
     )
     monkeypatch.setattr(resource_service, "build_provider_from_config_name", lambda _: None)
 
     repo = _FakeSnapshotRepo()
-    monkeypatch.setattr(resource_service, "build_resource_snapshot_repo", lambda: repo, raising=False)
+    monkeypatch.setattr(resource_service, "upsert_lease_resource_snapshot", repo.upsert_lease_resource_snapshot)
 
     result = resource_service.refresh_resource_snapshots()
 
     assert result["probed"] == 0
     assert result["errors"] == 1
+    assert result["running_targets"] == 0
+    assert result["non_running_targets"] == 1
     assert repo.upserts == [
         {
             "lease_id": "l-1",
             "provider_name": "p-missing",
-            "observed_state": "detached",
-            "probe_mode": "running_runtime",
+            "observed_state": "paused",
+            "probe_mode": "non_running_sdk",
             "probe_error": "provider init failed: p-missing",
         }
     ]

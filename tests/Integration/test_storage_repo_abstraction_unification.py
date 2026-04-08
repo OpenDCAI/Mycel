@@ -236,6 +236,7 @@ def test_make_sandbox_monitor_repo_uses_web_supabase_factory(monkeypatch: pytest
             return None
 
     fake_client = _FakeSupabaseClient()
+    monkeypatch.setenv("LEON_STORAGE_STRATEGY", "supabase")
     monkeypatch.setattr(
         "backend.web.core.supabase_factory.create_supabase_client",
         lambda: fake_client,
@@ -247,6 +248,9 @@ def test_make_sandbox_monitor_repo_uses_web_supabase_factory(monkeypatch: pytest
 
     from backend.web.core import storage_factory
 
+    supabase_cache_clear = getattr(storage_factory._supabase_client, "cache_clear", None)
+    if callable(supabase_cache_clear):
+        supabase_cache_clear()
     cache_clear = getattr(storage_factory.make_sandbox_monitor_repo, "cache_clear", None)
     if callable(cache_clear):
         cache_clear()

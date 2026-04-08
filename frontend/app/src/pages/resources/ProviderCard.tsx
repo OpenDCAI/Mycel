@@ -28,6 +28,7 @@ export default function ProviderCard({ provider, selected, onSelect }: ProviderC
   const isActive = status === "active";
   const TypeIcon = typeIcon[type];
   const cardCpu = provider.cardCpu;
+  const unavailableReason = provider.unavailableReason || "未提供原因";
 
   const runningSessions = sessions.filter((s) => s.status === "running");
   const pausedSessions = sessions.filter((s) => s.status === "paused");
@@ -76,7 +77,7 @@ export default function ProviderCard({ provider, selected, onSelect }: ProviderC
           <div className="text-center">
             <p className="text-xs text-muted-foreground">未就绪</p>
             <p className="text-2xs text-muted-foreground/60 mt-0.5">
-              {type === "container" ? "需要 Docker" : "需要安装 SDK"}
+              {unavailableReason}
             </p>
           </div>
         ) : (

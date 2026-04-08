@@ -4,11 +4,15 @@ from backend.web.services import sandbox_service
 
 
 class _FakeMonitorRepo:
-    def __init__(self, rows):
+    def __init__(self, rows, instance_ids=None):
         self._rows = rows
+        self._instance_ids = instance_ids or {}
 
     def list_leases_with_threads(self):
         return list(self._rows)
+
+    def query_lease_instance_id(self, lease_id: str):
+        return self._instance_ids.get(lease_id)
 
     def close(self):
         pass
@@ -111,6 +115,7 @@ def test_list_user_leases_hides_subagent_threads_and_deduplicates_visible_agents
             "agents": [
                 {
                     "thread_id": "thread-parent",
+                    "agent_user_id": "agent-1",
                     "agent_name": "Morel",
                     "avatar_url": "/api/users/agent-1/avatar",
                 }
@@ -169,18 +174,56 @@ def test_list_user_leases_keeps_distinct_visible_threads_even_for_same_member(mo
     assert leases[0]["agents"] == [
         {
             "thread_id": "thread-a",
+            "agent_user_id": "agent-1",
             "agent_name": "Morel",
             "avatar_url": "/api/users/agent-1/avatar",
         },
         {
             "thread_id": "thread-b",
+            "agent_user_id": "agent-1",
             "agent_name": "Morel",
             "avatar_url": "/api/users/agent-1/avatar",
         },
     ]
 
 
-def test_list_user_leases_hides_stopped_and_destroying_leases(monkeypatch):
+def test_list_user_leases_keeps_runtime_session_ids_per_lease(monkeypatch):
+    rows = [
+        {
+            "lease_id": "lease-1",
+            "provider_name": "daytona_selfhost",
+            "recipe_id": "daytona:default",
+            "recipe_json": None,
+            "observed_state": "running",
+            "desired_state": "running",
+            "created_at": "2026-04-07T10:00:00Z",
+            "cwd": "/home/daytona/files/app",
+            "thread_id": "thread-parent",
+        },
+    ]
+    thread_repo = _FakeThreadRepo({"thread-parent": {"agent_user_id": "agent-1"}})
+    user_repo = _FakeUserRepo(
+        {
+            "agent-1": SimpleNamespace(id="agent-1", display_name="Morel", avatar="x", owner_user_id="owner-1"),
+        }
+    )
+
+    monkeypatch.setattr(
+        sandbox_service,
+        "make_sandbox_monitor_repo",
+        lambda: _FakeMonitorRepo(rows, instance_ids={"lease-1": "provider-session-1"}),
+    )
+
+    leases = sandbox_service.list_user_leases(
+        "owner-1",
+        thread_repo=thread_repo,
+        user_repo=user_repo,
+    )
+
+    assert leases[0]["runtime_session_id"] == "provider-session-1"
+
+
+def test_list_user_leases_keeps_detached_but_hides_destroying_leases(monkeypatch):
     rows = [
         {
             "lease_id": "lease-running",
@@ -249,4 +292,4 @@ def test_list_user_leases_hides_stopped_and_destroying_leases(monkeypatch):
         user_repo=user_repo,
     )
 
-    assert [lease["lease_id"] for lease in leases] == ["lease-running", "lease-paused"]
+    assert [lease["lease_id"] for lease in leases] == ["lease-running", "lease-paused", "lease-detached"]
