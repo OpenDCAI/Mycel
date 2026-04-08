@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 """sksgrm - Delete an entire skill group."""
-import os
 import shutil
 import subprocess
 import sys

@@ -1,7 +1,5 @@
 #!/usr/bin/env python3
 """sks - Show active skills status and available commands."""
-import sys
-import os
 import subprocess
 from pathlib import Path
 

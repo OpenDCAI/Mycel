@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 """sksls - List all skill groups and their activation status."""
-import os
 import subprocess
 import sys
 from pathlib import Path
