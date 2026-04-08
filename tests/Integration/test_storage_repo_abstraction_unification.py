@@ -28,6 +28,10 @@ class _FakeContainer:
     def __init__(self) -> None:
         self.user_repo_value = _FakeRepo()
         self.thread_repo_value = _FakeRepo()
+        self.lease_repo_value = _FakeRepo()
+        self.terminal_repo_value = _FakeRepo()
+        self.chat_session_repo_value = _FakeRepo()
+        self.sandbox_volume_repo_value = _FakeRepo()
         self.thread_launch_pref_repo_value = _FakeRepo()
         self.recipe_repo_value = _FakeRepo()
         self.chat_repo_value = _FakeRepo()
@@ -42,6 +46,18 @@ class _FakeContainer:
 
     def thread_repo(self) -> _FakeRepo:
         return self.thread_repo_value
+
+    def lease_repo(self) -> _FakeRepo:
+        return self.lease_repo_value
+
+    def terminal_repo(self) -> _FakeRepo:
+        return self.terminal_repo_value
+
+    def chat_session_repo(self) -> _FakeRepo:
+        return self.chat_session_repo_value
+
+    def sandbox_volume_repo(self) -> _FakeRepo:
+        return self.sandbox_volume_repo_value
 
     def thread_launch_pref_repo(self) -> _FakeRepo:
         return self.thread_launch_pref_repo_value
@@ -345,6 +361,10 @@ async def test_lifespan_wires_user_and_thread_repos_from_storage_container(
     async with lifespan_module.lifespan(app):
         assert app.state.user_repo is container.user_repo_value
         assert app.state.thread_repo is container.thread_repo_value
+        assert app.state.lease_repo is container.lease_repo_value
+        assert app.state.terminal_repo is container.terminal_repo_value
+        assert app.state.chat_session_repo is container.chat_session_repo_value
+        assert app.state.sandbox_volume_repo is container.sandbox_volume_repo_value
         assert app.state.panel_task_repo is container.panel_task_repo_value
         assert not hasattr(app.state, "member_repo")
 

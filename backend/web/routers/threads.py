@@ -44,6 +44,7 @@ from backend.web.services.thread_launch_config_service import (
     save_last_successful_config,
 )
 from backend.web.services.thread_naming import sidebar_label
+from backend.web.services.thread_runtime_convergence import converge_owner_thread_runtime
 from backend.web.services.thread_state_service import (
     get_lease_status,
     get_sandbox_info,
@@ -754,6 +755,9 @@ async def list_threads(
     threads = []
     for t in raw:
         tid = t["id"]
+        runtime_state = converge_owner_thread_runtime(app, tid)
+        if runtime_state in {"missing", "purged"}:
+            continue
         if _is_internal_child_thread(tid):
             continue
         sandbox_type = t.get("sandbox_type", "local")

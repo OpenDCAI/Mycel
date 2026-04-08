@@ -45,6 +45,7 @@ async def test_verify_thread_owner_uses_agent_user_row_not_member_repo():
     request_app = SimpleNamespace(
         state=SimpleNamespace(
             thread_repo=SimpleNamespace(get_by_id=lambda _thread_id: {"agent_user_id": "agent-1"}),
+            terminal_repo=SimpleNamespace(get_active=lambda _thread_id: {"terminal_id": "term-1"}, list_by_thread=lambda _thread_id: []),
             user_repo=SimpleNamespace(
                 get_by_id=lambda user_id: SimpleNamespace(id=user_id, owner_user_id="owner-1") if user_id == "agent-1" else None
             ),
@@ -55,3 +56,47 @@ async def test_verify_thread_owner_uses_agent_user_row_not_member_repo():
     )
 
     assert await dependencies.verify_thread_owner("thread-1", "owner-1", request_app) == "owner-1"
+
+
+@pytest.mark.asyncio
+async def test_verify_thread_owner_purges_incomplete_legacy_thread(monkeypatch: pytest.MonkeyPatch):
+    deleted: list[str] = []
+    purged: list[str] = []
+    rows = {"thread-1": {"agent_user_id": "agent-1"}}
+
+    def _get_thread(thread_id: str):
+        return rows.get(thread_id)
+
+    def _delete_thread(thread_id: str) -> None:
+        deleted.append(thread_id)
+        rows.pop(thread_id, None)
+
+    request_app = SimpleNamespace(
+        state=SimpleNamespace(
+            thread_repo=SimpleNamespace(get_by_id=_get_thread, delete=_delete_thread),
+            terminal_repo=SimpleNamespace(get_active=lambda _thread_id: None, list_by_thread=lambda _thread_id: []),
+            user_repo=SimpleNamespace(
+                get_by_id=lambda user_id: SimpleNamespace(id=user_id, owner_user_id="owner-1") if user_id == "agent-1" else None
+            ),
+            queue_manager=SimpleNamespace(clear_all=lambda _thread_id: None),
+            thread_sandbox={},
+            thread_cwd={},
+            thread_event_buffers={},
+            thread_tasks={},
+            thread_last_active={},
+            agent_pool={},
+        )
+    )
+
+    monkeypatch.setattr(
+        "backend.web.services.thread_runtime_convergence.delete_thread_in_db",
+        lambda thread_id: purged.append(thread_id),
+    )
+
+    with pytest.raises(HTTPException) as exc_info:
+        await dependencies.verify_thread_owner("thread-1", "owner-1", request_app)
+
+    assert exc_info.value.status_code == 404
+    assert exc_info.value.detail == "Thread not found"
+    assert purged == ["thread-1"]
+    assert deleted == ["thread-1"]

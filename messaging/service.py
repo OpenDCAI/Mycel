@@ -17,6 +17,7 @@ from typing import Any
 
 from backend.web.utils.serializers import avatar_url
 from messaging.contracts import ContentType, MessageType
+from messaging.display_user import resolve_messaging_display_user
 
 logger = logging.getLogger(__name__)
 
@@ -56,18 +57,11 @@ class MessagingService:
         }
 
     def _resolve_display_user(self, social_user_id: str) -> Any | None:
-        user = self._user_repo.get_by_id(social_user_id)
-        if user is not None:
-            return user
-        if self._thread_repo is None:
-            return None
-        thread = self._thread_repo.get_by_user_id(social_user_id)
-        if thread is None:
-            return None
-        agent_user_id = thread.get("agent_user_id")
-        if not agent_user_id:
-            return None
-        return self._user_repo.get_by_id(agent_user_id)
+        return resolve_messaging_display_user(
+            user_repo=self._user_repo,
+            thread_repo=self._thread_repo,
+            social_user_id=social_user_id,
+        )
 
     def set_delivery_fn(self, fn: Callable) -> None:
         self._delivery_fn = fn
@@ -126,6 +120,7 @@ class MessagingService:
         signal: str | None = None,
         reply_to: str | None = None,
         ai_metadata: dict[str, Any] | None = None,
+        enforce_caught_up: bool = False,
     ) -> dict[str, Any]:
         msg_id = str(uuid.uuid4())
 
@@ -146,7 +141,14 @@ class MessagingService:
         if ai_metadata:
             row["ai_metadata_json"] = ai_metadata
 
-        created = self._normalize_message_row(self._messages.create(row))
+        if enforce_caught_up:
+            last_read_seq = getattr(self._members_repo, "last_read_seq", None)
+            if last_read_seq is None:
+                raise RuntimeError("chat_member_repo must expose last_read_seq for caught-up sends")
+            created_row = self._messages.create(row, expected_read_seq=int(last_read_seq(chat_id, sender_id)))
+        else:
+            created_row = self._messages.create(row)
+        created = self._normalize_message_row(created_row)
         logger.debug("[messaging] send chat=%s sender=%s msg=%s type=%s", chat_id[:8], sender_id[:15], msg_id[:8], message_type)
 
         # Publish to event bus (SSE / Realtime bridge)

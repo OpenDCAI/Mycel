@@ -135,3 +135,13 @@ def test_supabase_thread_repo_get_by_user_id_reads_thread_identity() -> None:
     assert result["id"] == "thread-1"
     assert result["agent_user_id"] == "agent-1"
     assert ("agent_user_id", "thread-1") in client.table_obj.eq_calls
+
+
+def test_supabase_thread_repo_get_by_user_id_targets_default_main_thread() -> None:
+    client = _FakeClient()
+    repo = SupabaseThreadRepo(client)
+
+    repo.get_by_user_id("agent-1")
+
+    assert ("agent_user_id", "agent-1") in client.table_obj.eq_calls
+    assert ("is_main", 1) in client.table_obj.eq_calls

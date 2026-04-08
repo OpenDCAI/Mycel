@@ -85,9 +85,10 @@ class SupabaseThreadRepo:
 
     def get_by_user_id(self, user_id: str) -> dict[str, Any] | None:
         select = ", ".join(_COLS)
-        # @@@agent-user-thread-lookup - agent users are the stable social/runtime bridge now.
-        # get_by_user_id keeps the old name because higher layers still speak in social user ids.
-        response = self._t().select(select).eq("agent_user_id", user_id).execute()
+        # @@@agent-user-thread-lookup - social/user-facing lookups must resolve to the
+        # representative main thread, not an arbitrary branch, once one agent can own
+        # multiple thread rows.
+        response = self._t().select(select).eq("agent_user_id", user_id).eq("is_main", 1).execute()
         rows = q.rows(response, _REPO, "get_by_user_id")
         if not rows:
             return None

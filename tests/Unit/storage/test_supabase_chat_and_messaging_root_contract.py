@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import pytest
+
 from storage.contracts import ChatRow
 from storage.providers.supabase.chat_repo import SupabaseChatRepo
 from storage.providers.supabase.messaging_repo import (
@@ -246,6 +248,64 @@ def test_supabase_messages_repo_create_accepts_scalar_rpc_seq() -> None:
     assert payload is not None
     assert payload["seq"] == 8
     assert row["seq"] == 8
+
+
+def test_supabase_messages_repo_create_with_expected_read_seq_uses_chat_cas() -> None:
+    client = _FakeClient()
+    client.table("chats").rows = [{"id": "chat-1", "next_message_seq": 6}]
+    client.table("messages").rows = [
+        {
+            "id": "msg-7",
+            "chat_id": "chat-1",
+            "seq": 7,
+            "sender_user_id": "user-1",
+            "content": "hello",
+            "mentions_json": [],
+            "created_at": 123.0,
+        }
+    ]
+    repo = SupabaseMessagesRepo(client)
+
+    row = repo.create(
+        {
+            "id": "msg-7",
+            "chat_id": "chat-1",
+            "sender_user_id": "user-1",
+            "content": "hello",
+            "mentions_json": [],
+            "created_at": 123.0,
+        },
+        expected_read_seq=6,
+    )
+
+    assert client.rpc_calls == []
+    chats = client.tables["chats"]
+    assert chats.update_payload == {"next_message_seq": 7}
+    assert ("id", "chat-1") in chats.eq_calls
+    assert ("next_message_seq", 6) in chats.eq_calls
+    payload = client.tables["messages"].insert_payload
+    assert payload is not None
+    assert payload["seq"] == 7
+    assert row["seq"] == 7
+
+
+def test_supabase_messages_repo_create_with_stale_expected_read_seq_fails_loudly() -> None:
+    client = _FakeClient()
+    client.table("chats").rows = []
+    repo = SupabaseMessagesRepo(client)
+
+    with pytest.raises(RuntimeError, match="Chat advanced after your last read. Call read_messages\\(chat_id='chat-1'\\) first\\."):
+        repo.create(
+            {
+                "id": "msg-7",
+                "chat_id": "chat-1",
+                "sender_user_id": "user-1",
+                "content": "hello",
+                "mentions_json": [],
+                "created_at": 123.0,
+            },
+            expected_read_seq=6,
+        )
 
 
 def test_supabase_messages_repo_list_by_chat_uses_seq_ordering() -> None:

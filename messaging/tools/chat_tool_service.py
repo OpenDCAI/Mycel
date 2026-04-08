@@ -12,6 +12,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from core.runtime.registry import ToolEntry, ToolMode, ToolRegistry
+from core.runtime.tool_result import tool_error
 
 logger = logging.getLogger(__name__)
 
@@ -312,18 +313,37 @@ class ChatToolService:
             else:
                 raise RuntimeError("Provide user_id (for 1:1) or chat_id (for group)")
 
-            # @@@group-reply-unread-gate - direct chats use unread as a turn-taking gate,
-            # but group chats must still allow concurrent replies after other actors speak.
-            if not chat_id:
-                unread = self._messaging.count_unread(resolved_chat_id, eid)
-                if unread > 0:
-                    raise RuntimeError(f"You have {unread} unread message(s). Call read_messages(chat_id='{resolved_chat_id}') first.")
+            # @@@read-before-send-gate - group chats and direct chats share the same
+            # delivery invariant: you must consume unread messages before replying,
+            # otherwise siblings can race on stale history and fork the conversation.
+            unread = self._messaging.count_unread(resolved_chat_id, eid)
+            if unread > 0:
+                return tool_error(
+                    f"You have {unread} unread message(s). Call read_messages(chat_id='{resolved_chat_id}') first.",
+                    metadata={"error_type": "chat_not_caught_up", "chat_id": resolved_chat_id},
+                )
 
             effective_signal = signal if signal in ("yield", "close") else None
             if effective_signal:
                 content = f"{content}\n[signal: {effective_signal}]"
 
-            self._messaging.send(resolved_chat_id, eid, content, mentions=mentions, signal=effective_signal)
+            try:
+                self._messaging.send(
+                    resolved_chat_id,
+                    eid,
+                    content,
+                    mentions=mentions,
+                    signal=effective_signal,
+                    enforce_caught_up=True,
+                )
+            except RuntimeError as exc:
+                message = str(exc)
+                if message.startswith("Chat advanced after your last read."):
+                    return tool_error(
+                        message,
+                        metadata={"error_type": "chat_not_caught_up", "chat_id": resolved_chat_id},
+                    )
+                raise
             return f"Message sent to {target_name}."
 
         registry.register(
@@ -335,7 +355,7 @@ class ChatToolService:
                     "description": (
                         "Send a message. Use user_id for 1:1 chats and chat_id for group chats.\n"
                         "The user_id parameter name is legacy.\n\n"
-                        "For direct chats, you MUST call read_messages() first if you have unread messages.\n"
+                        "For any chat, you MUST call read_messages() first if you have unread messages.\n"
                         "Sending will fail otherwise.\n\n"
                         "Signal protocol:\n"
                         "  (no tag) = I expect a reply from you\n"

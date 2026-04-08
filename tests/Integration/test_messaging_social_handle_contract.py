@@ -8,8 +8,10 @@ import pytest
 from backend.web.utils.serializers import avatar_url
 from core.agents.communication import delivery as delivery_module
 from core.runtime.registry import ToolRegistry
+from core.runtime.tool_result import ToolResultEnvelope
 from messaging.delivery.actions import DeliveryAction
 from messaging.delivery.resolver import HireVisitDeliveryResolver
+from messaging.display_user import resolve_messaging_display_user
 from messaging.relationships.service import RelationshipService
 from messaging.service import MessagingService
 from messaging.tools.chat_tool_service import ChatToolService
@@ -41,6 +43,43 @@ class _FakeRelationshipRepo:
         row["updated_at"] = "2026-04-07T00:01:00Z"
         self._existing[key] = row
         return row
+
+
+def test_messaging_display_user_resolver_prefers_direct_user_row() -> None:
+    resolved = resolve_messaging_display_user(
+        user_repo=SimpleNamespace(
+            get_by_id=lambda uid: (
+                SimpleNamespace(id=uid, display_name="Human", type="human", avatar=None) if uid == "human-user-1" else None
+            )
+        ),
+        thread_repo=SimpleNamespace(get_by_user_id=lambda _uid: pytest.fail("thread bridge should not be used")),
+        social_user_id="human-user-1",
+    )
+
+    assert resolved is not None
+    assert resolved.display_name == "Human"
+
+
+def test_messaging_display_user_resolver_bridges_thread_user_to_agent_row() -> None:
+    resolved = resolve_messaging_display_user(
+        user_repo=SimpleNamespace(
+            get_by_id=lambda uid: (
+                None
+                if uid == "thread-user-1"
+                else SimpleNamespace(id=uid, display_name="Toad", type="agent", avatar=None)
+                if uid == "agent-user-1"
+                else None
+            )
+        ),
+        thread_repo=SimpleNamespace(
+            get_by_user_id=lambda uid: {"id": "thread-1", "agent_user_id": "agent-user-1"} if uid == "thread-user-1" else None
+        ),
+        social_user_id="thread-user-1",
+    )
+
+    assert resolved is not None
+    assert resolved.id == "agent-user-1"
+    assert resolved.display_name == "Toad"
 
 
 def test_deliver_to_agents_does_not_require_main_thread_id():
@@ -252,6 +291,50 @@ def test_messaging_service_resolves_sender_name_from_thread_user_id() -> None:
     payload = cast(dict[str, object], published[0])
     data = cast(dict[str, object], payload["data"])
     assert data["sender_name"] == "Toad"
+
+
+def test_messaging_service_agent_send_passes_expected_read_seq_to_messages_repo() -> None:
+    created_rows: list[tuple[dict[str, Any], int | None]] = []
+
+    class _StatefulChatMemberRepo:
+        def list_members(self, _chat_id: str) -> list[dict[str, Any]]:
+            return []
+
+        def last_read_seq(self, chat_id: str, user_id: str) -> int:
+            assert chat_id == "chat-1"
+            assert user_id == "thread-user-1"
+            return 7
+
+    class _MessagesRepo:
+        def create(self, row: dict[str, Any], expected_read_seq: int | None = None) -> dict[str, Any]:
+            created_rows.append((row, expected_read_seq))
+            return {**row, "seq": 8}
+
+    service = MessagingService(
+        chat_repo=SimpleNamespace(),
+        chat_member_repo=_StatefulChatMemberRepo(),
+        messages_repo=_MessagesRepo(),
+        message_read_repo=SimpleNamespace(),
+        user_repo=SimpleNamespace(
+            get_by_id=lambda uid: (
+                None
+                if uid == "thread-user-1"
+                else SimpleNamespace(id=uid, display_name="Toad", type="agent", avatar=None)
+                if uid == "agent-user-1"
+                else None
+            )
+        ),
+        thread_repo=SimpleNamespace(
+            get_by_user_id=lambda uid: {"id": "thread-1", "agent_user_id": "agent-user-1"} if uid == "thread-user-1" else None
+        ),
+    )
+
+    service.send("chat-1", "thread-user-1", "hello", enforce_caught_up=True)
+
+    assert len(created_rows) == 1
+    row, expected_read_seq = created_rows[0]
+    assert row["sender_user_id"] == "thread-user-1"
+    assert expected_read_seq == 7
 
 
 def test_messaging_service_list_chats_exposes_thread_user_participant_id() -> None:
@@ -479,13 +562,14 @@ def test_chat_tool_send_appends_yield_signal_to_content_and_payload() -> None:
             "chat_id": "chat-1",
             "sender_id": "human-user-1",
             "content": "done\n[signal: yield]",
+            "enforce_caught_up": True,
             "mentions": None,
             "signal": "yield",
         }
     ]
 
 
-def test_chat_tool_send_allows_group_reply_even_with_peer_unread() -> None:
+def test_chat_tool_send_requires_group_reply_to_consume_peer_unread() -> None:
     registry = ToolRegistry()
     sent: list[dict[str, object]] = []
     ChatToolService(
@@ -511,16 +595,39 @@ def test_chat_tool_send_allows_group_reply_even_with_peer_unread() -> None:
 
     result = send_message.handler(content="GROUP_READ_OK", chat_id="chat-1")
 
-    assert result == "Message sent to chat."
-    assert sent == [
-        {
-            "chat_id": "chat-1",
-            "sender_id": "thread-user-1",
-            "content": "GROUP_READ_OK",
-            "mentions": None,
-            "signal": None,
-        }
-    ]
+    assert isinstance(result, ToolResultEnvelope)
+    assert result.kind == "error"
+    assert result.metadata["error_type"] == "chat_not_caught_up"
+    assert result.content == "You have 1 unread message(s). Call read_messages(chat_id='chat-1') first."
+    assert sent == []
+
+
+def test_chat_tool_send_returns_tool_error_when_chat_advances_after_read() -> None:
+    registry = ToolRegistry()
+
+    def _send(*_args, **_kwargs):
+        raise RuntimeError("Chat advanced after your last read. Call read_messages(chat_id='chat-1') first.")
+
+    ChatToolService(
+        registry=registry,
+        chat_identity_id="thread-user-1",
+        owner_id="owner-user-1",
+        chat_member_repo=SimpleNamespace(is_member=lambda _chat_id, _user_id: True),
+        messaging_service=SimpleNamespace(
+            count_unread=lambda _chat_id, _user_id: 0,
+            send=_send,
+        ),
+    )
+
+    send_message = registry.get("send_message")
+    assert send_message is not None
+
+    result = send_message.handler(content="GROUP_READ_OK", chat_id="chat-1")
+
+    assert isinstance(result, ToolResultEnvelope)
+    assert result.kind == "error"
+    assert result.metadata["error_type"] == "chat_not_caught_up"
+    assert result.content == "Chat advanced after your last read. Call read_messages(chat_id='chat-1') first."
 
 
 def test_read_messages_uses_thread_user_target_name_on_no_history() -> None:
