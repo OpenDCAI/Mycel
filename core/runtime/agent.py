@@ -1264,8 +1264,6 @@ class LeonAgent:
                     chat_identity_id=chat_identity_id,
                     owner_id=owner_id,
                     messaging_service=repos.get("messaging_service"),
-                    chat_member_repo=repos.get("chat_member_repo"),
-                    messages_repo=repos.get("messages_repo"),
                     user_repo=repos.get("user_repo"),
                     thread_repo=self._thread_repo,
                     relationship_repo=repos.get("relationship_repo"),

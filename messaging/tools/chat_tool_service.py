@@ -90,8 +90,6 @@ class ChatToolService:
         chat_identity_id: str | None = None,
         user_id: str | None = None,
         messaging_service: Any = None,  # MessagingService (new)
-        chat_member_repo: Any = None,  # SupabaseChatMemberRepo
-        messages_repo: Any = None,  # SupabaseMessagesRepo
         user_repo: Any = None,
         thread_repo: Any = None,
         relationship_repo: Any = None,
