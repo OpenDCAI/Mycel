@@ -2,6 +2,7 @@
 
 import asyncio
 from dataclasses import dataclass
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -302,3 +303,41 @@ class TestFailLoudBlankExceptions:
         out = await service._bash("pwd")
 
         assert out == "Error executing command: BlankCommandError"
+
+
+class TestCommandServiceCancellation:
+    @pytest.mark.asyncio
+    async def test_notify_bash_completion_skips_terminal_notice_for_cancelled_command(self, tmp_path):
+        queue_manager = MagicMock()
+        service = CommandService(
+            registry=ToolRegistry(),
+            workspace_root=tmp_path,
+            queue_manager=queue_manager,
+        )
+        emitted: list[dict] = []
+
+        async def _emit(event: dict) -> None:
+            emitted.append(event)
+
+        async_cmd = AsyncCommand(
+            command_id="cmd_cancelled",
+            command_line="sleep 30; echo NEVER",
+            cwd=str(tmp_path),
+            stdout_buffer=["NEVER\n"],
+            stderr_buffer=[],
+            exit_code=-9,
+            done=True,
+        )
+        async_cmd.cancelled = True
+
+        await service._notify_bash_completion(
+            "cmd_cancelled",
+            async_cmd,
+            "sleep 30; echo NEVER",
+            "thread-cancelled",
+            _emit,
+            description="cancelled command",
+        )
+
+        assert emitted == []
+        queue_manager.enqueue.assert_not_called()

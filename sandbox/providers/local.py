@@ -489,6 +489,13 @@ class LocalPersistentShellRuntime(PhysicalTerminalRuntime):
             await asyncio.to_thread(self._pty_session.close)
             self._pty_session = None
 
+    async def _cancel_running_command(self) -> bool:
+        if self._use_windows_shell or self._pty_session is None:
+            return False
+        await asyncio.to_thread(self._pty_session.close)
+        self._pty_session = None
+        return True
+
     async def execute(self, command: str, timeout: float | None = None) -> ExecuteResult:
         """Execute command in local shell."""
         return await self._execute_background_command(command, timeout=timeout)

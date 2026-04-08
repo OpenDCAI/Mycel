@@ -11,7 +11,7 @@ import pytest
 from langchain_core.messages import AIMessage
 
 from core.agents.registry import AgentEntry, AgentRegistry
-from core.agents.service import AgentService, BackgroundRun, _BashBackgroundRun, _RunningTask
+from core.agents.service import AgentService, BackgroundRun, _BashBackgroundRun, _RunningTask, request_background_run_stop
 from core.runtime.middleware.queue import MessageQueueManager
 from core.runtime.middleware.queue.middleware import SteeringMiddleware
 from core.runtime.registry import ToolRegistry
@@ -176,6 +176,30 @@ def test_taskstop_terminates_real_background_bash_run(tmp_path):
         assert stop_result == f"Task {task_id} cancelled"
         assert task_id not in shared_runs
         assert bash_run._cmd.process.returncode is not None
+
+    asyncio.run(run())
+
+
+@pytest.mark.skipif(
+    sys.platform == "win32" or shutil.which("bash") is None,
+    reason="bash background cleanup integration requires Unix-compatible bash",
+)
+def test_request_background_run_stop_kills_real_shell_command_tree(tmp_path):
+    async def run():
+        executor = BashExecutor(default_cwd=str(tmp_path))
+        async_cmd = await executor.execute_async(
+            "sleep 2; echo NEVER_BACKGROUND_CANCEL_TREE",
+            cwd=str(tmp_path),
+        )
+        running = _BashBackgroundRun(async_cmd, "sleep 2; echo NEVER_BACKGROUND_CANCEL_TREE")
+
+        await request_background_run_stop(running)
+        await asyncio.sleep(2.5)
+
+        assert async_cmd.cancelled is True
+        assert async_cmd.done is True
+        assert async_cmd.exit_code not in (None, 0)
+        assert "NEVER_BACKGROUND_CANCEL_TREE" not in "".join(async_cmd.stdout_buffer)
 
     asyncio.run(run())
 

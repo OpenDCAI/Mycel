@@ -319,6 +319,31 @@ class _StreamingRuntime:
         return True
 
 
+class _StubbornProcess:
+    def __init__(self) -> None:
+        self.returncode: int | None = None
+        self.terminate_calls = 0
+        self.kill_calls = 0
+        self._waiters: list[asyncio.Future[int]] = []
+
+    def terminate(self) -> None:
+        self.terminate_calls += 1
+
+    def kill(self) -> None:
+        self.kill_calls += 1
+        self.returncode = -9
+        for waiter in self._waiters:
+            if not waiter.done():
+                waiter.set_result(self.returncode)
+
+    async def wait(self) -> int:
+        if self.returncode is not None:
+            return self.returncode
+        waiter = asyncio.get_running_loop().create_future()
+        self._waiters.append(waiter)
+        return await waiter
+
+
 async def _wait_for_followthrough_text(loop: QueryLoop, thread_id: str, expected: str) -> None:
     for _ in range(100):
         state = await loop.aget_state({"configurable": {"thread_id": thread_id}})
@@ -1770,6 +1795,50 @@ async def test_cancelled_task_notification_wakes_followthrough_run(monkeypatch, 
     assert [item["role"] for item in history["messages"]] == ["notification", "assistant"]
     assert "cancelled" in history["messages"][0]["text"]
     assert history["messages"][1]["text"] == "AFTER_CANCEL_WAKE"
+
+
+@pytest.mark.asyncio
+async def test_cancel_task_route_marks_bash_run_cancelled_and_forces_process_stop(monkeypatch, tmp_path):
+    _patch_streaming_event_store(monkeypatch)
+    _patch_fake_event_bus(monkeypatch)
+
+    from core.agents.service import _BashBackgroundRun
+
+    thread_id = "thread-route-cancel-bash"
+    checkpointer = _MemoryCheckpointer()
+    loop = _make_loop(text="AFTER_CANCEL_ROUTE", checkpointer=checkpointer)
+    _queue_manager, agent, app = _make_route_followthrough_context(tmp_path, thread_id=thread_id, loop=loop)
+
+    process = _StubbornProcess()
+    async_cmd = SimpleNamespace(
+        done=False,
+        exit_code=None,
+        stdout_buffer=[],
+        stderr_buffer=[],
+        process=process,
+    )
+    run = _BashBackgroundRun(async_cmd, "sleep 30; echo NEVER", description="stubborn cancel task")
+    agent._background_runs = {"cmd-cancel-route": run}
+
+    async def _raise_timeout(_awaitable, timeout=None):
+        _awaitable.close()
+        raise TimeoutError
+
+    monkeypatch.setattr("core.agents.service.asyncio.wait_for", _raise_timeout)
+
+    response = await threads_router.cancel_task(
+        thread_id,
+        "cmd-cancel-route",
+        SimpleNamespace(app=app),
+    )
+
+    assert response == {"success": True}
+    assert process.terminate_calls == 1
+    assert process.kill_calls == 1
+    assert async_cmd.cancelled is True
+    assert async_cmd.done is True
+    assert async_cmd.exit_code == -9
+    assert threads_router._serialize_background_run("cmd-cancel-route", run, include_result=False)["status"] == "cancelled"
 
 
 @pytest.mark.asyncio

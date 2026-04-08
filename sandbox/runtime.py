@@ -579,6 +579,19 @@ class PhysicalTerminalRuntime(ABC):
             except Exception as exc:
                 result = ExecuteResult(exit_code=1, stdout="", stderr=f"Error: {exc}")
                 status = "failed"
+            # @@@cancelled-terminal-truth - Runtime-level cancel may tear down the active PTY/session from another task.
+            # When that happens, this background runner must not overwrite the authoritative cancelled state with a late
+            # success/failure finalizer.
+            if async_cmd.cancelled:
+                self._last_stream_flush_at.pop(command_id, None)
+                self._persisted_stdout_chunk_count.pop(command_id, None)
+                self._persisted_stderr_chunk_count.pop(command_id, None)
+                return ExecuteResult(
+                    exit_code=130,
+                    stdout="".join(async_cmd.stdout_buffer),
+                    stderr="Command cancelled",
+                    command_id=command_id,
+                )
             self._flush_running_output_if_needed(command_id, force=True)
             async_cmd.stdout_buffer = [result.stdout]
             async_cmd.stderr_buffer = [result.stderr]
@@ -600,6 +613,9 @@ class PhysicalTerminalRuntime(ABC):
 
         self._tasks[command_id] = asyncio.create_task(_run())
         return async_cmd
+
+    async def _cancel_running_command(self) -> bool:
+        return False
 
     async def _execute_background_command(
         self,
@@ -675,8 +691,17 @@ class PhysicalTerminalRuntime(ABC):
             return False
         if task.done():
             return False
-        task.cancel()
-        self._flush_running_output_if_needed(command_id, force=True)
+        # @@@runtime-owned-cancel - Async task cancellation is not sufficient for PTY/session runtimes.
+        # The runtime must stop the live command source, then this method records the single terminal truth.
+        cmd.cancelled = True
+        stopped = await self._cancel_running_command()
+        if stopped:
+            try:
+                await asyncio.wait_for(asyncio.shield(task), timeout=1.0)
+            except (TimeoutError, asyncio.CancelledError):
+                task.cancel()
+        else:
+            task.cancel()
         cmd.done = True
         cmd.exit_code = 130
         cmd.stderr_buffer = ["Command cancelled"]

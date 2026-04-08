@@ -275,7 +275,10 @@ class CommandMiddleware(AgentMiddleware[CommandState]):
                 # Get final output
                 output = self._merge_running_output(status)
                 exit_code = status.exit_code or 0
-                task_status = "completed" if exit_code == 0 else "failed"
+                if getattr(status, "cancelled", False):
+                    task_status = "cancelled"
+                else:
+                    task_status = "completed" if exit_code == 0 else "failed"
 
                 # Update registry first
                 if self._registry:
@@ -300,7 +303,10 @@ class CommandMiddleware(AgentMiddleware[CommandState]):
                     )
 
                 # Emit task completion event
-                event_type = "task_done" if exit_code == 0 else "task_error"
+                if getattr(status, "cancelled", False):
+                    event_type = "task_done"
+                else:
+                    event_type = "task_done" if exit_code == 0 else "task_error"
                 runtime.emit_activity_event(
                     {
                         "event": event_type,
@@ -309,6 +315,7 @@ class CommandMiddleware(AgentMiddleware[CommandState]):
                                 "task_id": command_id,
                                 "exit_code": exit_code,
                                 "background": True,
+                                "cancelled": bool(getattr(status, "cancelled", False)),
                             },
                             ensure_ascii=False,
                         ),
@@ -380,7 +387,8 @@ class CommandMiddleware(AgentMiddleware[CommandState]):
                     cleaned_output = self._clean_running_output(combined_output, status.command_line)
                     return f"Status: running\nCommand: {status.command_line}\nOutput so far:\n{cleaned_output}"
                 output = result.to_tool_result()
-                return f"Status: done\nExit code: {result.exit_code}\n{output}"
+                terminal = "cancelled" if getattr(result, "cancelled", False) else "done"
+                return f"Status: {terminal}\nExit code: {result.exit_code}\n{output}"
 
         status = await self._executor.get_status(command_id)
         if status is None:
@@ -390,7 +398,8 @@ class CommandMiddleware(AgentMiddleware[CommandState]):
             result = await self._executor.wait_for(command_id)
             if result:
                 output = result.to_tool_result()
-                return f"Status: done\nExit code: {result.exit_code}\n{output}"
+                terminal = "cancelled" if getattr(status, "cancelled", False) else "done"
+                return f"Status: {terminal}\nExit code: {result.exit_code}\n{output}"
 
         combined_output = self._merge_running_output(status)
         cleaned_output = self._clean_running_output(combined_output, status.command_line)

@@ -53,6 +53,7 @@ from backend.web.services.thread_state_service import (
 )
 from backend.web.utils.helpers import delete_thread_in_db
 from backend.web.utils.serializers import avatar_url, serialize_message
+from core.agents.service import _background_run_cancelled, request_background_run_stop
 from core.runtime.middleware.monitor import AgentState
 from sandbox.config import MountSpec
 from sandbox.manager import bind_thread_to_existing_lease
@@ -1406,10 +1407,14 @@ def _background_run_type(run: Any) -> str:
 def _serialize_background_run(task_id: str, run: Any, *, include_result: bool) -> dict[str, Any]:
     run_type = _background_run_type(run)
     result_text = run.get_result() if include_result and run.is_done else None
+    if _background_run_cancelled(run):
+        status = "cancelled"
+    else:
+        status = "completed" if run.is_done else "running"
     payload = {
         "task_id": task_id,
         "task_type": run_type,
-        "status": "completed" if run.is_done else "running",
+        "status": status,
         "command_line": getattr(run, "command", None) if run_type == "bash" else None,
     }
     if include_result:
@@ -1500,15 +1505,7 @@ async def cancel_task(
     if run.is_done:
         raise HTTPException(status_code=400, detail="Task is not running")
 
-    if run.__class__.__name__ == "_RunningTask":
-        run.task.cancel()
-    elif run.__class__.__name__ == "_BashBackgroundRun":
-        process = getattr(run._cmd, "process", None)
-        if process:
-            try:
-                process.terminate()
-            except ProcessLookupError:
-                pass
+    await request_background_run_stop(run)
 
     # Emit task_done SSE and notify main agent once cancellation completes
     asyncio.create_task(_notify_task_cancelled(request.app, thread_id, task_id, run))
@@ -1523,6 +1520,10 @@ async def _notify_task_cancelled(app: Any, thread_id: str, task_id: str, run: An
         if run.is_done:
             break
         await asyncio.sleep(0.1)
+
+    if not run.is_done:
+        logger.warning("Cancelled task %s never reached a terminal state; skipping cancellation surface", task_id)
+        return
 
     # Emit task_done so the frontend indicator updates
     try:

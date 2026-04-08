@@ -366,6 +366,43 @@ class _BashBackgroundRun:
 BackgroundRun = _RunningTask | _BashBackgroundRun
 
 
+def _background_run_cancelled(running: BackgroundRun) -> bool:
+    return isinstance(running, _BashBackgroundRun) and bool(getattr(running._cmd, "cancelled", False))
+
+
+async def request_background_run_stop(running: BackgroundRun) -> None:
+    """Stop a background run and mark bash runs with authoritative cancellation state."""
+    if isinstance(running, _RunningTask):
+        running.task.cancel()
+        return
+
+    cmd = running._cmd
+    if getattr(cmd, "done", False):
+        cmd.cancelled = True
+        return
+
+    cmd.cancelled = True
+    process = getattr(cmd, "process", None)
+    wait = getattr(process, "wait", None) if process is not None else None
+    terminate = getattr(process, "terminate", None) if process is not None else None
+    kill = getattr(process, "kill", None) if process is not None else None
+
+    if callable(terminate):
+        terminate()
+    if callable(wait):
+        wait_fn = cast(Callable[[], Awaitable[Any]], wait)
+        try:
+            await asyncio.wait_for(wait_fn(), timeout=1.0)
+        except TimeoutError:
+            if callable(kill):
+                kill()
+            await wait_fn()
+
+    if getattr(cmd, "exit_code", None) is None and process is not None:
+        cmd.exit_code = getattr(process, "returncode", None)
+    cmd.done = True
+
+
 def _background_run_running_message(running: BackgroundRun) -> str:
     return "Command is still running." if isinstance(running, _BashBackgroundRun) else "Agent is still running."
 
@@ -1213,21 +1250,7 @@ class AgentService:
             return
 
         if not running.is_done:
-            process = getattr(running._cmd, "process", None)
-            wait = getattr(process, "wait", None) if process is not None else None
-            terminate = getattr(process, "terminate", None) if process is not None else None
-            kill = getattr(process, "kill", None) if process is not None else None
-
-            if callable(terminate):
-                terminate()
-            if callable(wait):
-                wait_fn = cast(Callable[[], Awaitable[Any]], wait)
-                try:
-                    await asyncio.wait_for(wait_fn(), timeout=1.0)
-                except TimeoutError:
-                    if callable(kill):
-                        kill()
-                    await wait_fn()
+            await request_background_run_stop(running)
 
         self._tasks.pop(task_id, None)
 
