@@ -4,15 +4,21 @@
 
 Turn `messaging/` into the single owner of messaging-domain truth instead of a top-level directory that still shares live contracts with web routers and runtime tool glue.
 
-This roadmap is intentionally scoped as a long-lived implementation lane, not a one-shot refactor. The initial placeholder PR should carry this document plus follow-up implementation slices, rather than letting each slice invent its own local truth.
+This roadmap is intentionally scoped as a long-lived implementation lane, not a one-shot refactor. PR #272 started as a placeholder carrier for this document, and now also carries bounded implementation slices that stay inside the ownership plan below instead of letting each slice invent its own local truth.
 
-Current campaign ruling: this branch remains a docs-only shell until the principal assigns the first bounded implementation slice. The roadmap is canonical direction for the lane, not standing permission to start Slice 1.
+Current campaign status:
 
-Current parking trigger: implementation may resume only after the principal's `chat-thread-runtime-closure` lane materially closes three checkpoints on mainline:
+1. Slice 1 resolver baseline is landed on this lane via `6b8afffd`, introducing `messaging.display_user.resolve_messaging_display_user(...)` and cutting `MessagingService` over to the canonical resolver.
+2. The next bounded cut is also landed on this lane via `668894eb`, cutting `backend/web/routers/messaging.py` over to that same canonical resolver for its participant/display shell.
+3. The final follow-up `1c036453` is formatting-only and keeps the live PR green without widening scope.
 
-1. group-chat turn semantics are caller-proven with real backend probes, including no duplicated first-turn replies and no noisy contention failures being treated as backend errors
-2. thread runtime/file-channel closure is caller-proven on the canonical path, including `create-thread -> files/channels -> upload -> agent reads uploaded file`, while legacy incomplete threads are converged or purged from owner-facing surfaces
-3. the brutal integration proof checkpoint on `chat-thread-runtime-closure` is materially closed with backend brutal-probe evidence recorded, not mechanism-level tests only
+Current parking rule:
+
+- `chat_tool_service.py` remains deferred
+- `backend/web/routers/conversations.py` remains deferred
+- delivery policy changes remain deferred
+- frontend/sidebar work remains deferred
+- future slices still require explicit bounded assignment rather than inertia from this roadmap
 
 ## Why This Exists
 
@@ -90,9 +96,11 @@ It should not own message history storage queries, chat membership queries, or i
 
 Create one canonical resolver inside `messaging/` for `social_user_id -> display user`.
 
+Current lane status: partially landed.
+
 This slice should delete duplicated resolver logic from:
 
-- `messaging/service.py`
+- `messaging/service.py` @ landed on this lane in `6b8afffd`
 - `messaging/tools/chat_tool_service.py`
 - `backend/web/routers/conversations.py`
 
@@ -114,6 +122,8 @@ Make `MessagingService` the sole owner of visit-chat summary assembly:
 - updated timestamp
 
 Then make `backend/web/routers/conversations.py` consume that projection instead of rebuilding it.
+
+Current lane status: not started. The smaller router participant/display shell cut in `668894eb` is intentionally earlier and narrower than this ownership surgery.
 
 Stopline:
 
@@ -179,20 +189,21 @@ Do not justify the refactor with helper-only tests that merely prove delegation.
 
 ## Placeholder PR Contract
 
-The placeholder PR for this roadmap should be allowed to carry:
+The placeholder PR for this roadmap is allowed to carry:
 
 - this roadmap document
-- subsequent implementation slices that stay inside the ownership plan above
+- bounded implementation slices that stay inside the ownership plan above
 
 It should not become a grab bag for unrelated communication cleanup.
 
-## Freeze Rule
+## Bounded Slice Rule
 
-Until the first bounded slice is explicitly assigned, this branch is frozen as:
+This branch is no longer a pure docs-only shell. It is now a bounded implementation lane, with the following hard limits:
 
-- one repo-shipping architecture roadmap
-- do not start Slice 1 implementation yet
-- no production-code changes
+- keep implementation aligned to the ownership plan above
+- do not widen from router/service identity cutover into `chat_tool_service.py`
+- do not widen into `backend/web/routers/conversations.py` ownership surgery
+- do not widen into delivery policy or frontend work
 - no opportunistic tests or cleanup hitchhiking
 - no parallel “helper roadmap” or scratchpad documents inside the repo
-- implementation resumes only when the parking trigger above is satisfied or the principal assigns a different bounded cut
+- future implementation still resumes only when the principal assigns a different bounded cut
