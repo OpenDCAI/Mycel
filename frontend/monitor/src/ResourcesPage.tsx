@@ -501,6 +501,17 @@ function ProviderCard({
       Boolean(metrics.memoryNote || metrics.diskNote || metrics.probeError);
     return session.status === "running" && Boolean(session.runtimeSessionId) && !hasLiveUsage && !isQuotaOnly;
   }).length;
+  const quotaOnlyRunningCount = provider.sessions.filter((session) => {
+    const metrics = session.metrics;
+    return (
+      session.status === "running" &&
+      metrics != null &&
+      metrics.memory == null &&
+      metrics.disk == null &&
+      (metrics.memoryLimit != null || metrics.diskLimit != null) &&
+      Boolean(metrics.memoryNote || metrics.diskNote || metrics.probeError)
+    );
+  }).length;
   const missingLiveTelemetryRunningCount = runningCount - liveUsageRunningCount;
   const pausedCount = provider.sessions.filter((session) => session.status === "paused").length;
   const stoppedCount = provider.sessions.filter((session) => session.status === "stopped").length;
@@ -568,6 +579,7 @@ function ProviderCard({
         {missingLiveTelemetryRunningCount > 0 && <span>{missingLiveTelemetryRunningCount} 无 live telemetry</span>}
         {runtimeBoundTelemetryGapCount > 0 && <span>{runtimeBoundTelemetryGapCount} 有 runtime无遥测</span>}
         {runtimeUnboundUsageCount > 0 && <span>{runtimeUnboundUsageCount} 无 runtime有用量</span>}
+        {quotaOnlyRunningCount > 0 && <span>{quotaOnlyRunningCount} 仅配额</span>}
         {runtimeUnboundRunningCount > 0 && <span>{runtimeUnboundRunningCount} 无 runtime</span>}
         {pausedCount > 0 && <span>{pausedCount} 暂停</span>}
         {stoppedCount > 0 && <span>{stoppedCount} 已结束</span>}
