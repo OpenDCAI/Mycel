@@ -1055,6 +1055,8 @@ def test_leon_agent_chat_tool_wiring_does_not_pass_dead_repo_dependencies(monkey
     assert "messages_repo" not in captured
     assert "owner_id" not in captured
     assert "relationship_repo" not in captured
+    assert "user_repo" not in captured
+    assert "thread_repo" not in captured
 
 
 def test_build_rules_section_includes_function_result_clearing_guidance_when_spill_buffer_enabled():

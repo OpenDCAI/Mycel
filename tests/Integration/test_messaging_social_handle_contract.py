@@ -45,6 +45,19 @@ class _FakeRelationshipRepo:
         return row
 
 
+def _messaging_display_service(**overrides: Any) -> SimpleNamespace:
+    def _resolve_display_user(uid: str) -> Any | None:
+        if uid == "thread-user-1":
+            return SimpleNamespace(id="agent-user-1", display_name="Toad", owner_user_id="owner-user-1")
+        if uid == "agent-user-1":
+            return SimpleNamespace(id="agent-user-1", display_name="Toad", owner_user_id="owner-user-1")
+        return None
+
+    payload = {"resolve_display_user": _resolve_display_user}
+    payload.update(overrides)
+    return SimpleNamespace(**payload)
+
+
 def test_messaging_display_user_resolver_prefers_direct_user_row() -> None:
     resolved = resolve_messaging_display_user(
         user_repo=SimpleNamespace(
@@ -181,17 +194,7 @@ def test_chat_tool_registry_exposes_final_contract_only() -> None:
     ChatToolService(
         registry=registry,
         user_id="owner-user-1",
-        user_repo=SimpleNamespace(
-            list_all=lambda: [
-                SimpleNamespace(id="agent-user-1", display_name="Toad", type="agent", owner_user_id="owner-user-1"),
-            ],
-            get_by_id=lambda member_id: (
-                SimpleNamespace(id=member_id, display_name="Owner", owner_user_id=None) if member_id == "owner-user-1" else None
-            ),
-        ),
-        thread_repo=SimpleNamespace(
-            get_default_thread=lambda member_id: {"id": "thread-1", "user_id": "thread-user-1"} if member_id == "agent-user-1" else None
-        ),
+        messaging_service=_messaging_display_service(),
     )
 
     for tool_name in ("list_chats", "read_messages", "send_message", "search_messages"):
@@ -240,17 +243,7 @@ def test_chat_tool_service_accepts_chat_identity_id_without_legacy_user_id() -> 
     ChatToolService(
         registry=registry,
         chat_identity_id="agent-user-1",
-        user_repo=SimpleNamespace(
-            list_all=lambda: [
-                SimpleNamespace(id="agent-user-2", display_name="Morel", type="agent", owner_user_id="owner-user-1"),
-            ],
-            get_by_id=lambda member_id: (
-                SimpleNamespace(id=member_id, display_name="Owner", owner_user_id=None) if member_id == "owner-user-1" else None
-            ),
-        ),
-        thread_repo=SimpleNamespace(
-            get_default_thread=lambda member_id: {"id": "thread-2", "user_id": "thread-user-2"} if member_id == "agent-user-2" else None
-        ),
+        messaging_service=_messaging_display_service(),
     )
 
     assert registry.get("list_chats") is not None
@@ -259,7 +252,7 @@ def test_chat_tool_service_accepts_chat_identity_id_without_legacy_user_id() -> 
 def test_chat_tool_service_rejects_dead_repo_constructor_kwargs() -> None:
     registry = ToolRegistry()
 
-    with pytest.raises(TypeError, match="chat_member_repo|messages_repo|owner_id|relationship_repo"):
+    with pytest.raises(TypeError, match="chat_member_repo|messages_repo|owner_id|relationship_repo|user_repo|thread_repo"):
         ChatToolService(
             registry=registry,
             chat_identity_id="agent-user-1",
@@ -267,6 +260,7 @@ def test_chat_tool_service_rejects_dead_repo_constructor_kwargs() -> None:
             messaging_service=SimpleNamespace(),
             chat_member_repo=SimpleNamespace(),
             relationship_repo=SimpleNamespace(),
+            user_repo=SimpleNamespace(),
         )
 
 
@@ -585,18 +579,7 @@ def test_chat_tool_formats_thread_user_id_sender_as_agent_name() -> None:
     service = ChatToolService(
         registry=registry,
         chat_identity_id="human-user-1",
-        user_repo=SimpleNamespace(
-            get_by_id=lambda uid: (
-                None
-                if uid == "thread-user-1"
-                else SimpleNamespace(id=uid, display_name="Toad", owner_user_id="owner-user-1")
-                if uid == "agent-user-1"
-                else None
-            ),
-        ),
-        thread_repo=SimpleNamespace(
-            get_by_user_id=lambda uid: {"id": "thread-1", "agent_user_id": "agent-user-1"} if uid == "thread-user-1" else None
-        ),
+        messaging_service=_messaging_display_service(),
     )
 
     rendered = service._format_msgs([{"sender_id": "thread-user-1", "content": "hello"}], "human-user-1")
@@ -610,19 +593,7 @@ def test_chat_tool_send_accepts_thread_user_target_id() -> None:
     ChatToolService(
         registry=registry,
         chat_identity_id="human-user-1",
-        user_repo=SimpleNamespace(
-            get_by_id=lambda uid: (
-                None
-                if uid == "thread-user-1"
-                else SimpleNamespace(id=uid, display_name="Toad", owner_user_id="owner-user-1")
-                if uid == "agent-user-1"
-                else None
-            ),
-        ),
-        thread_repo=SimpleNamespace(
-            get_by_user_id=lambda uid: {"id": "thread-1", "agent_user_id": "agent-user-1"} if uid == "thread-user-1" else None
-        ),
-        messaging_service=SimpleNamespace(
+        messaging_service=_messaging_display_service(
             find_or_create_chat=lambda user_ids: {"id": "chat-1", "user_ids": user_ids},
             count_unread=lambda _chat_id, _user_id: 0,
             send=lambda chat_id, sender_id, content, **_kwargs: sent.append((chat_id, sender_id, content)),
@@ -757,19 +728,7 @@ def test_read_messages_uses_thread_user_target_name_on_no_history() -> None:
     ChatToolService(
         registry=registry,
         chat_identity_id="human-user-1",
-        user_repo=SimpleNamespace(
-            get_by_id=lambda uid: (
-                None
-                if uid == "thread-user-1"
-                else SimpleNamespace(id=uid, display_name="Toad", owner_user_id="owner-user-1")
-                if uid == "agent-user-1"
-                else None
-            ),
-        ),
-        thread_repo=SimpleNamespace(
-            get_by_user_id=lambda uid: {"id": "thread-1", "agent_user_id": "agent-user-1"} if uid == "thread-user-1" else None
-        ),
-        messaging_service=SimpleNamespace(find_direct_chat_id=lambda _eid, _user_id: None),
+        messaging_service=_messaging_display_service(find_direct_chat_id=lambda _eid, _user_id: None),
     )
 
     read_messages = registry.get("read_messages")
@@ -785,19 +744,7 @@ def test_read_messages_uses_messaging_service_direct_chat_lookup_without_member_
     ChatToolService(
         registry=registry,
         chat_identity_id="human-user-1",
-        user_repo=SimpleNamespace(
-            get_by_id=lambda uid: (
-                None
-                if uid == "thread-user-1"
-                else SimpleNamespace(id=uid, display_name="Toad", owner_user_id="owner-user-1")
-                if uid == "agent-user-1"
-                else None
-            ),
-        ),
-        thread_repo=SimpleNamespace(
-            get_by_user_id=lambda uid: {"id": "thread-1", "agent_user_id": "agent-user-1"} if uid == "thread-user-1" else None
-        ),
-        messaging_service=SimpleNamespace(
+        messaging_service=_messaging_display_service(
             find_direct_chat_id=lambda _eid, _user_id: None,
         ),
     )
@@ -815,7 +762,7 @@ def test_read_messages_uses_messaging_service_time_range_history_without_message
     ChatToolService(
         registry=registry,
         chat_identity_id="human-user-1",
-        messaging_service=SimpleNamespace(
+        messaging_service=_messaging_display_service(
             list_messages_by_time_range=lambda _chat_id, *, after=None, before=None: [
                 {
                     "sender_id": "thread-user-1",
@@ -823,18 +770,6 @@ def test_read_messages_uses_messaging_service_time_range_history_without_message
                 }
             ],
             mark_read=lambda *_args, **_kwargs: None,
-        ),
-        user_repo=SimpleNamespace(
-            get_by_id=lambda uid: (
-                None
-                if uid == "thread-user-1"
-                else SimpleNamespace(id=uid, display_name="Toad", owner_user_id="owner-user-1")
-                if uid == "agent-user-1"
-                else None
-            ),
-        ),
-        thread_repo=SimpleNamespace(
-            get_by_user_id=lambda uid: {"id": "thread-1", "agent_user_id": "agent-user-1"} if uid == "thread-user-1" else None
         ),
     )
 
@@ -852,19 +787,7 @@ def test_chat_tool_search_does_not_fall_back_to_global_search_for_thread_user_ta
     ChatToolService(
         registry=registry,
         chat_identity_id="human-user-1",
-        user_repo=SimpleNamespace(
-            get_by_id=lambda uid: (
-                None
-                if uid == "thread-user-1"
-                else SimpleNamespace(id=uid, display_name="Toad", owner_user_id="owner-user-1")
-                if uid == "agent-user-1"
-                else None
-            ),
-        ),
-        thread_repo=SimpleNamespace(
-            get_by_user_id=lambda uid: {"id": "thread-1", "agent_user_id": "agent-user-1"} if uid == "thread-user-1" else None
-        ),
-        messaging_service=SimpleNamespace(
+        messaging_service=_messaging_display_service(
             find_direct_chat_id=lambda _eid, _user_id: None,
             search_messages=lambda query, *, chat_id=None: search_calls.append((query, chat_id)) or [{"content": "wrong"}],
         ),
@@ -885,19 +808,7 @@ def test_chat_tool_search_uses_messaging_service_direct_chat_lookup_without_memb
     ChatToolService(
         registry=registry,
         chat_identity_id="human-user-1",
-        user_repo=SimpleNamespace(
-            get_by_id=lambda uid: (
-                None
-                if uid == "thread-user-1"
-                else SimpleNamespace(id=uid, display_name="Toad", owner_user_id="owner-user-1")
-                if uid == "agent-user-1"
-                else None
-            ),
-        ),
-        thread_repo=SimpleNamespace(
-            get_by_user_id=lambda uid: {"id": "thread-1", "agent_user_id": "agent-user-1"} if uid == "thread-user-1" else None
-        ),
-        messaging_service=SimpleNamespace(
+        messaging_service=_messaging_display_service(
             find_direct_chat_id=lambda _eid, _user_id: "chat-1",
             search_messages=lambda query, *, chat_id=None: search_calls.append((query, chat_id)) or [],
         ),
