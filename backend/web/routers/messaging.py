@@ -102,22 +102,6 @@ def _validate_chat_participant_ids(app: Any, participant_ids: list[str], request
     return validated
 
 
-def _msg_response(m: dict[str, Any], app: Any) -> dict[str, Any]:
-    sender = _resolve_display_user(app, m.get("sender_id", ""))
-    return {
-        "id": m["id"],
-        "chat_id": m["chat_id"],
-        "sender_id": m.get("sender_id"),
-        "sender_name": sender.display_name if sender else "unknown",
-        "content": m["content"],
-        "message_type": m.get("message_type", "human"),
-        "mentioned_ids": m.get("mentioned_ids") or m.get("mentions") or [],
-        "signal": m.get("signal"),
-        "retracted_at": m.get("retracted_at"),
-        "created_at": m.get("created_at"),
-    }
-
-
 # ---------------------------------------------------------------------------
 # Chat list / create
 # ---------------------------------------------------------------------------
@@ -183,8 +167,7 @@ async def list_messages(
 ):
     if not _messaging(app).is_chat_member(chat_id, user_id):
         raise HTTPException(403, "Not a participant of this chat")
-    msgs = _messaging(app).list_messages(chat_id, limit=limit, before=before, viewer_id=user_id)
-    return [_msg_response(m, app) for m in msgs]
+    return _messaging(app).list_message_responses(chat_id, limit=limit, before=before, viewer_id=user_id)
 
 
 @router.post("/{chat_id}/messages")
@@ -205,7 +188,7 @@ async def send_message(
         signal=body.signal,
         message_type=body.message_type,
     )
-    return _msg_response(msg, app)
+    return _messaging(app).project_message_response(msg)
 
 
 @router.post("/{chat_id}/messages/{message_id}/retract")

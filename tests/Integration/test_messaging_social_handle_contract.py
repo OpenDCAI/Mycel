@@ -318,6 +318,55 @@ def test_messaging_service_resolves_sender_name_from_thread_user_id() -> None:
     assert data["sender_name"] == "Toad"
 
 
+def test_messaging_service_list_message_responses_projects_sender_name_from_thread_user_id() -> None:
+    service = MessagingService(
+        chat_repo=SimpleNamespace(),
+        chat_member_repo=SimpleNamespace(),
+        messages_repo=SimpleNamespace(
+            list_by_chat=lambda _chat_id, **_kwargs: [
+                {
+                    "id": "msg-1",
+                    "chat_id": "chat-1",
+                    "sender_user_id": "thread-user-1",
+                    "content": "hello",
+                    "message_type": "human",
+                    "created_at": "2026-04-07T00:00:00Z",
+                }
+            ]
+        ),
+        message_read_repo=SimpleNamespace(),
+        user_repo=SimpleNamespace(
+            get_by_id=lambda uid: (
+                None
+                if uid == "thread-user-1"
+                else SimpleNamespace(id=uid, display_name="Toad", type="agent", avatar=None)
+                if uid == "agent-user-1"
+                else None
+            )
+        ),
+        thread_repo=SimpleNamespace(
+            get_by_user_id=lambda uid: {"id": "thread-1", "agent_user_id": "agent-user-1"} if uid == "thread-user-1" else None
+        ),
+    )
+
+    result = service.list_message_responses("chat-1", viewer_id="human-user-1")
+
+    assert result == [
+        {
+            "id": "msg-1",
+            "chat_id": "chat-1",
+            "sender_id": "thread-user-1",
+            "sender_name": "Toad",
+            "content": "hello",
+            "message_type": "human",
+            "mentioned_ids": [],
+            "signal": None,
+            "retracted_at": None,
+            "created_at": "2026-04-07T00:00:00Z",
+        }
+    ]
+
+
 def test_messaging_service_agent_send_passes_expected_read_seq_to_messages_repo() -> None:
     created_rows: list[tuple[dict[str, Any], int | None]] = []
 
