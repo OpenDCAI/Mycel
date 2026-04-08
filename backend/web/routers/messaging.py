@@ -16,6 +16,7 @@ from pydantic import BaseModel
 
 from backend.web.core.dependencies import get_app, get_current_user_id
 from backend.web.utils.serializers import avatar_url
+from messaging.display_user import resolve_messaging_display_user
 
 router = APIRouter(prefix="/api/chats", tags=["chats"])
 
@@ -79,19 +80,11 @@ def _get_accessible_chat_or_404(app: Any, chat_id: str, user_id: str) -> Any:
 
 
 def _resolve_display_user(app: Any, social_user_id: str) -> Any | None:
-    user = app.state.user_repo.get_by_id(social_user_id)
-    if user is not None:
-        return user
-    thread_repo = getattr(app.state, "thread_repo", None)
-    if thread_repo is None:
-        return None
-    thread = thread_repo.get_by_user_id(social_user_id)
-    if thread is None:
-        return None
-    agent_user_id = thread.get("agent_user_id")
-    if not agent_user_id:
-        return None
-    return app.state.user_repo.get_by_id(agent_user_id)
+    return resolve_messaging_display_user(
+        user_repo=app.state.user_repo,
+        thread_repo=getattr(app.state, "thread_repo", None),
+        social_user_id=social_user_id,
+    )
 
 
 def _validate_chat_participant_ids(app: Any, participant_ids: list[str], requester_user_id: str) -> list[str]:
