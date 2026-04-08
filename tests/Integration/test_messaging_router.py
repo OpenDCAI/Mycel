@@ -572,3 +572,33 @@ async def test_create_chat_accepts_human_and_thread_social_user_ids_for_group_pa
         "status": "active",
         "created_at": 0,
     }
+
+
+@pytest.mark.asyncio
+async def test_create_chat_rejects_unknown_participant_ids_instead_of_falling_to_storage_fk() -> None:
+    called: list[tuple[list[str], str | None]] = []
+    app = SimpleNamespace(
+        state=SimpleNamespace(
+            user_repo=SimpleNamespace(get_by_id=lambda _uid: None),
+            thread_repo=SimpleNamespace(get_by_user_id=lambda _uid: None),
+            messaging_service=SimpleNamespace(
+                create_group_chat=lambda user_ids, title: (
+                    called.append((user_ids, title)) or {"id": "chat-1", "title": title, "status": "active", "created_at": 0}
+                )
+            ),
+        )
+    )
+
+    with pytest.raises(HTTPException) as exc_info:
+        await messaging_router.create_chat(
+            messaging_router.CreateChatBody(
+                user_ids=["human-user-1", "thread-id-not-a-user", "thread-user-2"],
+                title="bad-group",
+            ),
+            user_id="human-user-1",
+            app=app,
+        )
+
+    assert exc_info.value.status_code == 400
+    assert "participant" in str(exc_info.value.detail).lower()
+    assert called == []

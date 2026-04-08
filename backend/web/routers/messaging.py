@@ -98,7 +98,9 @@ def _validate_chat_participant_ids(app: Any, participant_ids: list[str], request
             candidate = user_repo.get_by_id(participant_id)
             if candidate is not None and getattr(candidate, "owner_user_id", None) is not None:
                 raise ValueError(f"Agent participant ids must be actor user_ids, not agent_user_id: {participant_id}")
-        validated.append(participant_id)
+        # @@@chat-participant-ingress-boundary - group chat creation must reject
+        # unknown ids loudly at ingress instead of letting storage FKs decide.
+        raise ValueError(f"Unknown chat participant id: {participant_id}")
     return validated
 
 
