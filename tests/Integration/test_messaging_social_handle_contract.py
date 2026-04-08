@@ -11,6 +11,7 @@ from core.runtime.registry import ToolRegistry
 from core.runtime.tool_result import ToolResultEnvelope
 from messaging.delivery.actions import DeliveryAction
 from messaging.delivery.resolver import HireVisitDeliveryResolver
+from messaging.display_user import resolve_messaging_display_user
 from messaging.relationships.service import RelationshipService
 from messaging.service import MessagingService
 from messaging.tools.chat_tool_service import ChatToolService
@@ -42,6 +43,45 @@ class _FakeRelationshipRepo:
         row["updated_at"] = "2026-04-07T00:01:00Z"
         self._existing[key] = row
         return row
+
+
+def test_messaging_display_user_resolver_prefers_direct_user_row() -> None:
+    resolved = resolve_messaging_display_user(
+        user_repo=SimpleNamespace(
+            get_by_id=lambda uid: (
+                SimpleNamespace(id=uid, display_name="Human", type="human", avatar=None)
+                if uid == "human-user-1"
+                else None
+            )
+        ),
+        thread_repo=SimpleNamespace(get_by_user_id=lambda _uid: pytest.fail("thread bridge should not be used")),
+        social_user_id="human-user-1",
+    )
+
+    assert resolved is not None
+    assert resolved.display_name == "Human"
+
+
+def test_messaging_display_user_resolver_bridges_thread_user_to_agent_row() -> None:
+    resolved = resolve_messaging_display_user(
+        user_repo=SimpleNamespace(
+            get_by_id=lambda uid: (
+                None
+                if uid == "thread-user-1"
+                else SimpleNamespace(id=uid, display_name="Toad", type="agent", avatar=None)
+                if uid == "agent-user-1"
+                else None
+            )
+        ),
+        thread_repo=SimpleNamespace(
+            get_by_user_id=lambda uid: {"id": "thread-1", "agent_user_id": "agent-user-1"} if uid == "thread-user-1" else None
+        ),
+        social_user_id="thread-user-1",
+    )
+
+    assert resolved is not None
+    assert resolved.id == "agent-user-1"
+    assert resolved.display_name == "Toad"
 
 
 def test_deliver_to_agents_does_not_require_main_thread_id():
