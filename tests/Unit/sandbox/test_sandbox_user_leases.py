@@ -29,8 +29,8 @@ class _FakeMemberRepo:
     def __init__(self, rows):
         self._rows = rows
 
-    def get_by_id(self, member_id: str):
-        return self._rows.get(member_id)
+    def get_by_id(self, actor_user_id: str):
+        return self._rows.get(actor_user_id)
 
     def close(self):
         pass
@@ -63,13 +63,13 @@ def test_list_user_leases_hides_subagent_threads_and_deduplicates_visible_agents
     ]
     thread_repo = _FakeThreadRepo(
         {
-            "thread-parent": {"member_id": "member-1"},
-            "subagent-deadbeef": {"member_id": "member-1"},
+            "thread-parent": {"agent_user_id": "agent-1"},
+            "subagent-deadbeef": {"agent_user_id": "agent-1"},
         }
     )
     member_repo = _FakeMemberRepo(
         {
-            "member-1": SimpleNamespace(id="member-1", name="Morel", avatar="x", owner_user_id="owner-1"),
+            "agent-1": SimpleNamespace(id="agent-1", name="Morel", avatar="x", owner_user_id="owner-1"),
         }
     )
 
@@ -111,8 +111,9 @@ def test_list_user_leases_hides_subagent_threads_and_deduplicates_visible_agents
             "agents": [
                 {
                     "thread_id": "thread-parent",
-                    "member_name": "Morel",
-                    "avatar_url": "/api/members/member-1/avatar",
+                    "agent_user_id": "agent-1",
+                    "agent_name": "Morel",
+                    "avatar_url": "/api/members/agent-1/avatar",
                 }
             ],
             "recipe_name": "Daytona Default",
@@ -147,13 +148,13 @@ def test_list_user_leases_keeps_distinct_visible_threads_even_for_same_member(mo
     ]
     thread_repo = _FakeThreadRepo(
         {
-            "thread-a": {"member_id": "member-1"},
-            "thread-b": {"member_id": "member-1"},
+            "thread-a": {"agent_user_id": "agent-1"},
+            "thread-b": {"agent_user_id": "agent-1"},
         }
     )
     member_repo = _FakeMemberRepo(
         {
-            "member-1": SimpleNamespace(id="member-1", name="Morel", avatar="x", owner_user_id="owner-1"),
+            "agent-1": SimpleNamespace(id="agent-1", name="Morel", avatar="x", owner_user_id="owner-1"),
         }
     )
 
@@ -169,18 +170,20 @@ def test_list_user_leases_keeps_distinct_visible_threads_even_for_same_member(mo
     assert leases[0]["agents"] == [
         {
             "thread_id": "thread-a",
-            "member_name": "Morel",
-            "avatar_url": "/api/members/member-1/avatar",
+            "agent_user_id": "agent-1",
+            "agent_name": "Morel",
+            "avatar_url": "/api/members/agent-1/avatar",
         },
         {
             "thread_id": "thread-b",
-            "member_name": "Morel",
-            "avatar_url": "/api/members/member-1/avatar",
+            "agent_user_id": "agent-1",
+            "agent_name": "Morel",
+            "avatar_url": "/api/members/agent-1/avatar",
         },
     ]
 
 
-def test_list_user_leases_hides_stopped_and_destroying_leases(monkeypatch):
+def test_list_user_leases_keeps_detached_but_hides_destroying_leases(monkeypatch):
     rows = [
         {
             "lease_id": "lease-running",
@@ -229,15 +232,15 @@ def test_list_user_leases_hides_stopped_and_destroying_leases(monkeypatch):
     ]
     thread_repo = _FakeThreadRepo(
         {
-            "thread-running": {"member_id": "member-1"},
-            "thread-paused": {"member_id": "member-1"},
-            "thread-detached": {"member_id": "member-1"},
-            "thread-destroying": {"member_id": "member-1"},
+            "thread-running": {"agent_user_id": "agent-1"},
+            "thread-paused": {"agent_user_id": "agent-1"},
+            "thread-detached": {"agent_user_id": "agent-1"},
+            "thread-destroying": {"agent_user_id": "agent-1"},
         }
     )
     member_repo = _FakeMemberRepo(
         {
-            "member-1": SimpleNamespace(id="member-1", name="Morel", avatar="x", owner_user_id="owner-1"),
+            "agent-1": SimpleNamespace(id="agent-1", name="Morel", avatar="x", owner_user_id="owner-1"),
         }
     )
 
@@ -249,4 +252,4 @@ def test_list_user_leases_hides_stopped_and_destroying_leases(monkeypatch):
         member_repo=member_repo,
     )
 
-    assert [lease["lease_id"] for lease in leases] == ["lease-running", "lease-paused"]
+    assert [lease["lease_id"] for lease in leases] == ["lease-running", "lease-paused", "lease-detached"]

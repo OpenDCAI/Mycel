@@ -87,15 +87,19 @@ def list_user_leases(
             thread = _thread_repo.get_by_id(thread_id)
             if thread is None:
                 continue
-            member = _member_repo.get_by_id(thread["member_id"])
-            if member is None or member.owner_user_id != user_id:
+            actor_user_id = str(thread.get("agent_user_id") or thread.get("member_id") or "").strip()
+            if not actor_user_id:
+                continue
+            actor = _member_repo.get_by_id(actor_user_id)
+            if actor is None or actor.owner_user_id != user_id:
                 continue
             group["thread_ids"].append(thread_id)
             group["agents"].append(
                 {
                     "thread_id": thread_id,
-                    "member_name": member.name,
-                    "avatar_url": avatar_url(member.id, bool(member.avatar)),
+                    "agent_user_id": actor_user_id,
+                    "agent_name": actor.name,
+                    "avatar_url": avatar_url(actor.id, bool(actor.avatar)),
                 }
             )
             if not group["cwd"] and row.get("cwd"):

@@ -556,7 +556,7 @@ function InlineMetric({ label, value }: { label: string; value: string }) {
 
 function SandboxCard({ group, onOpen }: { group: LeaseGroup; onOpen: () => void }) {
   const duration = formatStartedAtDuration(group.startedAt);
-  const names = group.sessions.map((session) => session.memberName || "未绑定").join(", ");
+  const names = group.sessions.map((session) => session.agentName || "未绑定").join(", ");
   const metrics = group.metrics;
   const hasMetrics =
     metrics != null &&
@@ -579,8 +579,8 @@ function SandboxCard({ group, onOpen }: { group: LeaseGroup; onOpen: () => void 
         <div className="sandbox-card__agent-row">
           <div className="sandbox-card__avatar-stack">
             {group.sessions.slice(0, 3).map((session) => (
-              <div key={session.id} className="sandbox-avatar" title={session.memberName || "未绑定"}>
-                {session.avatarUrl ? <img src={session.avatarUrl} alt="" /> : initials(session.memberName || "未绑定")}
+              <div key={session.id} className="sandbox-avatar" title={session.agentName || "未绑定"}>
+                {session.avatarUrl ? <img src={session.avatarUrl} alt="" /> : initials(session.agentName || "未绑定")}
               </div>
             ))}
             {group.sessions.length > 3 && <div className="sandbox-avatar sandbox-avatar--count">+{group.sessions.length - 3}</div>}
@@ -645,16 +645,16 @@ function SandboxInspector({
         </div>
 
         <div className="sandbox-modal__section">
-          <h4>成员</h4>
+          <h4>Agent</h4>
           <div className="sandbox-session-list">
             {group.sessions.map((session) => (
               <div key={session.id} className="sandbox-session-row">
                 <div className="sandbox-session-row__identity">
-                  <div className="sandbox-avatar sandbox-avatar--lg" title={session.memberName || "未绑定"}>
-                    {session.avatarUrl ? <img src={session.avatarUrl} alt="" /> : initials(session.memberName || "未绑定")}
+                  <div className="sandbox-avatar sandbox-avatar--lg" title={session.agentName || "未绑定"}>
+                    {session.avatarUrl ? <img src={session.avatarUrl} alt="" /> : initials(session.agentName || "未绑定")}
                   </div>
                   <div>
-                    <div className="sandbox-session-row__name">{session.memberName || "未绑定"}</div>
+                    <div className="sandbox-session-row__name">{session.agentName || "未绑定"}</div>
                     <Link className="sandbox-link" to={`/thread/${session.threadId}`}>
                       {session.threadId}
                     </Link>

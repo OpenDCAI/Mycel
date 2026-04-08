@@ -235,7 +235,7 @@ def list_resource_providers() -> dict[str, Any]:
                 running_count += 1
                 seen_running_leases.add(lease_id)
             session_metrics = _to_session_metrics(snapshot_by_lease.get(lease_id))
-            owner = owners.get(thread_id, {"member_name": "未绑定Agent", "avatar_url": None})
+            owner = owners.get(thread_id, {"agent_name": "未绑定Agent", "avatar_url": None})
             session_identity = _resource_session_identity(session)
             if session_identity in seen_session_ids:
                 continue

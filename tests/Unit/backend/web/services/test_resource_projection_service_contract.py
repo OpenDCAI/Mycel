@@ -116,7 +116,7 @@ def test_list_resource_providers_inherits_desired_state_for_detached_sessions(mo
     monkeypatch.setattr(
         resource_projection_service,
         "_thread_owners",
-        lambda thread_ids: {tid: {"member_id": "member-1", "member_name": "Toad", "avatar_url": None} for tid in thread_ids},
+        lambda thread_ids: {tid: {"agent_user_id": "agent-1", "agent_name": "Toad", "avatar_url": None} for tid in thread_ids},
     )
     monkeypatch.setattr(resource_projection_service, "list_resource_snapshots", lambda _lease_ids: {})
     monkeypatch.setattr(resource_projection_service.LocalSessionProvider, "get_metrics", lambda self, _session_id: None)
@@ -124,6 +124,7 @@ def test_list_resource_providers_inherits_desired_state_for_detached_sessions(mo
     payload = resource_projection_service.list_resource_providers()
 
     assert payload["providers"][0]["sessions"][0]["status"] == "running"
+    assert payload["providers"][0]["sessions"][0]["agentName"] == "Toad"
     assert payload["summary"]["running_sessions"] == 1
 
 
@@ -166,7 +167,7 @@ def test_list_resource_providers_keeps_sessions_under_unavailable_provider(monke
         resource_projection_service,
         "_thread_owners",
         lambda thread_ids: {
-            tid: {"member_id": f"member-{tid}", "member_name": tid, "avatar_url": None} for tid in thread_ids
+            tid: {"agent_user_id": f"agent-{tid}", "agent_name": tid, "avatar_url": None} for tid in thread_ids
         },
     )
     monkeypatch.setattr(resource_projection_service, "list_resource_snapshots", lambda _lease_ids: {})
@@ -179,4 +180,5 @@ def test_list_resource_providers_keeps_sessions_under_unavailable_provider(monke
     assert provider["unavailableReason"] == "provider unavailable in current process"
     assert [session["leaseId"] for session in provider["sessions"]] == ["lease-1", "lease-2"]
     assert [session["status"] for session in provider["sessions"]] == ["running", "paused"]
+    assert [session["agentName"] for session in provider["sessions"]] == ["thread-1", "thread-2"]
     assert payload["summary"]["running_sessions"] == 1

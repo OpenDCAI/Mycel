@@ -81,7 +81,7 @@ def test_list_resource_providers_deduplicates_terminal_fallback_rows(monkeypatch
     monkeypatch.setattr(
         resource_projection_service,
         "_thread_owners",
-        lambda thread_ids: {tid: {"member_id": "member-1", "member_name": "Toad", "avatar_url": None} for tid in thread_ids},
+        lambda thread_ids: {tid: {"agent_user_id": "agent-1", "agent_name": "Toad", "avatar_url": None} for tid in thread_ids},
     )
     monkeypatch.setattr(resource_projection_service, "list_resource_snapshots", lambda _lease_ids: {})
 
@@ -94,7 +94,8 @@ def test_list_resource_providers_deduplicates_terminal_fallback_rows(monkeypatch
             "id": "lease-1:thread-1",
             "leaseId": "lease-1",
             "threadId": "thread-1",
-            "memberName": "Toad",
+            "agentUserId": "agent-1",
+            "agentName": "Toad",
             "avatarUrl": None,
             "status": "running",
             "startedAt": "2026-04-04T00:00:00",
@@ -132,12 +133,12 @@ def test_list_resource_providers_resolves_owner_metadata_from_runtime_storage(mo
     monkeypatch.setattr(
         resource_common,
         "build_thread_repo",
-        lambda **_kwargs: _FakeThreadRepo({"thread-supabase": {"member_id": "member-1"}}),
+        lambda **_kwargs: _FakeThreadRepo({"thread-supabase": {"agent_user_id": "agent-1"}}),
     )
     monkeypatch.setattr(
         resource_common,
         "build_member_repo",
-        lambda **_kwargs: _FakeMemberRepo([_FakeMember("member-1", "Toad")]),
+        lambda **_kwargs: _FakeMemberRepo([_FakeMember("agent-1", "Toad")]),
     )
     monkeypatch.setattr(resource_projection_service, "list_resource_snapshots", lambda _lease_ids: {})
 
@@ -148,7 +149,8 @@ def test_list_resource_providers_resolves_owner_metadata_from_runtime_storage(mo
             "id": "lease-1:thread-supabase",
             "leaseId": "lease-1",
             "threadId": "thread-supabase",
-            "memberName": "Toad",
+            "agentUserId": "agent-1",
+            "agentName": "Toad",
             "avatarUrl": None,
             "status": "running",
             "startedAt": "2026-04-04T00:00:00",
@@ -195,7 +197,7 @@ def test_list_resource_providers_hides_subagent_threads(monkeypatch):
     monkeypatch.setattr(
         resource_projection_service,
         "_thread_owners",
-        lambda thread_ids: {tid: {"member_id": tid, "member_name": tid, "avatar_url": None} for tid in thread_ids},
+        lambda thread_ids: {tid: {"agent_user_id": tid, "agent_name": tid, "avatar_url": None} for tid in thread_ids},
     )
     monkeypatch.setattr(resource_projection_service, "list_resource_snapshots", lambda _lease_ids: {})
 
@@ -239,7 +241,7 @@ def test_list_resource_providers_projects_visible_parent_when_raw_monitor_row_is
     monkeypatch.setattr(
         resource_projection_service,
         "_thread_owners",
-        lambda thread_ids: {tid: {"member_id": "member-1", "member_name": "Morel", "avatar_url": None} for tid in thread_ids},
+        lambda thread_ids: {tid: {"agent_user_id": "agent-1", "agent_name": "Morel", "avatar_url": None} for tid in thread_ids},
     )
     monkeypatch.setattr(resource_projection_service, "list_resource_snapshots", lambda _lease_ids: {})
 
@@ -251,7 +253,8 @@ def test_list_resource_providers_projects_visible_parent_when_raw_monitor_row_is
             "id": "lease-1:thread-parent",
             "leaseId": "lease-1",
             "threadId": "thread-parent",
-            "memberName": "Morel",
+            "agentUserId": "agent-1",
+            "agentName": "Morel",
             "avatarUrl": None,
             "status": "paused",
             "startedAt": "2026-04-04T00:00:00",
@@ -298,7 +301,7 @@ def test_list_resource_providers_deduplicates_same_lease_thread_even_with_distin
     monkeypatch.setattr(
         resource_projection_service,
         "_thread_owners",
-        lambda thread_ids: {tid: {"member_id": "member-1", "member_name": "Toad", "avatar_url": None} for tid in thread_ids},
+        lambda thread_ids: {tid: {"agent_user_id": "agent-1", "agent_name": "Toad", "avatar_url": None} for tid in thread_ids},
     )
     monkeypatch.setattr(resource_projection_service, "list_resource_snapshots", lambda _lease_ids: {})
 
@@ -310,7 +313,8 @@ def test_list_resource_providers_deduplicates_same_lease_thread_even_with_distin
             "id": "lease-1:thread-parent",
             "leaseId": "lease-1",
             "threadId": "thread-parent",
-            "memberName": "Toad",
+            "agentUserId": "agent-1",
+            "agentName": "Toad",
             "avatarUrl": None,
             "status": "running",
             "startedAt": "2026-04-04T00:00:00",

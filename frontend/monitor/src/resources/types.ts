@@ -56,8 +56,8 @@ export interface ResourceSession {
   id: string;
   leaseId?: string;
   threadId: string;
-  memberId: string;
-  memberName: string;
+  agentUserId?: string | null;
+  agentName: string;
   avatarUrl?: string | null;
   status: "running" | "paused" | "stopped" | "destroying";
   startedAt: string;

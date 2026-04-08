@@ -202,7 +202,7 @@ def thread_agent_refs(thread_ids: list[str], thread_repo: Any = None) -> dict[st
         refs: dict[str, str] = {}
         for tid in unique:
             data = repo.get_by_id(tid)
-            agent_ref = str(data.get("member_id") or "").strip() if data else ""
+            agent_ref = str(data.get("agent_user_id") or data.get("member_id") or "").strip() if data else ""
             if agent_ref:
                 refs[tid] = agent_ref
         return refs
@@ -223,7 +223,7 @@ def member_meta_map(member_repo: Any = None) -> dict[str, dict[str, str | None]]
         members = repo.list_all()
         return {
             member.id: {
-                "member_name": member.name,
+                "agent_name": member.name,
                 "avatar_url": avatar_url(member.id, bool(member.avatar)),
             }
             for member in members
@@ -243,13 +243,13 @@ def thread_owners(thread_ids: list[str], member_repo: Any = None, thread_repo: A
     for thread_id in thread_ids:
         agent_ref = refs.get(thread_id)
         if not agent_ref:
-            owners[thread_id] = {"member_id": None, "member_name": "未绑定Agent", "avatar_url": None}
+            owners[thread_id] = {"agent_user_id": None, "agent_name": "未绑定Agent", "avatar_url": None}
             continue
         # @@@agent-name-resolution - thread_config.agent may be member id or direct display name.
         meta = member_meta.get(agent_ref, {})
         owners[thread_id] = {
-            "member_id": agent_ref,
-            "member_name": meta.get("member_name") or agent_ref,
+            "agent_user_id": agent_ref,
+            "agent_name": meta.get("agent_name") or agent_ref,
             "avatar_url": meta.get("avatar_url"),
         }
     return owners

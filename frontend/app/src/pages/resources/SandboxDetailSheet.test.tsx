@@ -12,4 +12,11 @@ describe("SandboxDetailSheet source", () => {
 
     expect(source).toContain("SheetDescription");
   });
+
+  it("renders resource session names from agentName", () => {
+    const source = sourceModules["./SandboxDetailSheet.tsx"];
+
+    expect(source).toContain("session.agentName");
+    expect(source).not.toContain("session.memberName");
+  });
 });

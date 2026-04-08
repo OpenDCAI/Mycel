@@ -12,9 +12,9 @@ class _FakeThreadRepo:
         pass
 
 
-class _FakeMember:
-    def __init__(self, member_id: str, name: str, avatar: str | None = None):
-        self.id = member_id
+class _FakeAgent:
+    def __init__(self, user_id: str, name: str, avatar: str | None = None):
+        self.id = user_id
         self.name = name
         self.avatar = avatar
 
@@ -33,13 +33,13 @@ class _FakeMemberRepo:
 def test_thread_owners_resolves_member_metadata_from_runtime_storage():
     owners = resource_common.thread_owners(
         ["thread-1", "thread-2"],
-        thread_repo=_FakeThreadRepo({"thread-1": {"member_id": "member-1"}}),
-        member_repo=_FakeMemberRepo([_FakeMember("member-1", "Toad")]),
+        thread_repo=_FakeThreadRepo({"thread-1": {"agent_user_id": "agent-1"}}),
+        member_repo=_FakeMemberRepo([_FakeAgent("agent-1", "Toad")]),
     )
 
     assert owners == {
-        "thread-1": {"member_id": "member-1", "member_name": "Toad", "avatar_url": None},
-        "thread-2": {"member_id": None, "member_name": "未绑定Agent", "avatar_url": None},
+        "thread-1": {"agent_user_id": "agent-1", "agent_name": "Toad", "avatar_url": None},
+        "thread-2": {"agent_user_id": None, "agent_name": "未绑定Agent", "avatar_url": None},
     }
 
 

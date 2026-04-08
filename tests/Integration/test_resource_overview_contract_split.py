@@ -78,9 +78,9 @@ def test_user_resource_projection_groups_visible_leases_into_provider_cards(monk
                 "thread_ids": ["thread-1"],
                 "agents": [
                     {
-                        "member_id": "member-1",
-                        "member_name": "Morel",
-                        "avatar_url": "/api/members/member-1/avatar",
+                        "agent_user_id": "agent-1",
+                        "agent_name": "Morel",
+                        "avatar_url": "/api/members/agent-1/avatar",
                     }
                 ],
                 "observed_state": "running",
@@ -119,7 +119,8 @@ def test_user_resource_projection_groups_visible_leases_into_provider_cards(monk
     assert payload["providers"][0]["consoleUrl"] == "https://example.com/daytona"
     assert payload["providers"][0]["sessions"][0]["leaseId"] == "lease-1"
     assert payload["providers"][0]["sessions"][0]["threadId"] == "thread-1"
-    assert payload["providers"][0]["sessions"][0]["memberName"] == "Morel"
+    assert payload["providers"][0]["sessions"][0]["agentUserId"] == "agent-1"
+    assert payload["providers"][0]["sessions"][0]["agentName"] == "Morel"
     assert payload["providers"][0]["sessions"][0]["startedAt"] == "2026-04-07T10:00:00Z"
 
 
@@ -139,7 +140,7 @@ def test_user_resource_projection_marks_provider_unavailable_when_capability_pro
                 "lease_id": "lease-1",
                 "provider_name": "daytona_selfhost",
                 "thread_ids": ["thread-1"],
-                "agents": [{"member_id": "member-1", "member_name": "Morel", "avatar_url": None}],
+                "agents": [{"agent_user_id": "agent-1", "agent_name": "Morel", "avatar_url": None}],
                 "observed_state": "paused",
                 "desired_state": "paused",
                 "created_at": "2026-04-07T10:00:00Z",

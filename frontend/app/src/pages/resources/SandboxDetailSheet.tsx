@@ -71,7 +71,7 @@ export default function SandboxDetailSheet({
             {group.leaseId || "local"}
           </SheetTitle>
           <SheetDescription className="sr-only">
-            查看 {group.leaseId || "local"} 的成员、指标和文件浏览详情。
+            查看 {group.leaseId || "local"} 的 Agent、指标和文件浏览详情。
           </SheetDescription>
         </SheetHeader>
 
@@ -81,7 +81,7 @@ export default function SandboxDetailSheet({
             {/* Agents */}
             <section>
               <p className="text-2xs font-semibold text-muted-foreground/60 uppercase tracking-widest mb-2.5">
-                成员
+                Agent
               </p>
               <div className="space-y-2">
                 {group.sessions.map((s) => (
@@ -133,10 +133,10 @@ export default function SandboxDetailSheet({
 function AgentRow({ session }: { session: ResourceSession }) {
   return (
     <div className="flex items-center gap-3 rounded-lg border border-border/40 bg-muted/10 px-3 py-2.5">
-      <MemberAvatar name={session.memberName || "?"} avatarUrl={session.avatarUrl || undefined} size="sm" type="mycel_agent" />
+      <MemberAvatar name={session.agentName || "?"} avatarUrl={session.avatarUrl || undefined} size="sm" type="mycel_agent" />
       <div className="flex-1 min-w-0">
         <p className="text-sm font-medium text-foreground truncate">
-          {session.memberName || "未绑定"}
+          {session.agentName || "未绑定"}
         </p>
         <p className="text-2xs font-mono text-muted-foreground/60 truncate mt-0.5">
           {session.threadId}
