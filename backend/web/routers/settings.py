@@ -793,7 +793,10 @@ async def update_observation_settings(request: ObservationRequest, req: Request)
     Existing threads keep their locked provider — only credentials are read live.
     """
     storage = _resolve_settings_storage(req)
-    data = _load_observation_data(storage) or {}
+    if storage.repo_backed:
+        data = storage.repo.get_observation_config(storage.user_id) or {}
+    else:
+        data = _load_observation_data(storage) or {}
 
     data["active"] = request.active
     if request.langfuse is not None:
@@ -898,7 +901,7 @@ async def save_sandbox_config(request: SandboxConfigRequest, req: Request) -> di
         cfg = SandboxConfig(**request.config)
         storage = _resolve_settings_storage(req)
         if storage.repo_backed:
-            existing = _load_sandbox_configs(storage) or {}
+            existing = storage.repo.get_sandbox_configs(storage.user_id) or {}
             existing[request.name] = cfg.model_dump()
             _save_sandbox_configs(storage, existing)
             return {"success": True, "path": f"supabase://user_settings/{storage.user_id}/sandbox_configs/{request.name}"}
