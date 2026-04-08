@@ -67,7 +67,11 @@ CREATE INDEX IF NOT EXISTS idx_eval_metrics_run ON eval_metrics(run_id, tier);
 class SQLiteEvalRepo:
     """Repository boundary for eval DB SQL operations."""
 
-    def __init__(self, db_path: str | Path, conn: sqlite3.Connection | None = None) -> None:
+    def __init__(
+        self,
+        db_path: str | Path,
+        conn: sqlite3.Connection | None = None,
+    ) -> None:
         self._own_conn = conn is None
         if conn is not None:
             self._conn = conn
@@ -179,7 +183,13 @@ class SQLiteEvalRepo:
         self._conn.commit()
         return run_id
 
-    def save_metrics(self, run_id: str, tier: str, timestamp: str, metrics_json: str) -> None:
+    def save_metrics(
+        self,
+        run_id: str,
+        tier: str,
+        timestamp: str,
+        metrics_json: str,
+    ) -> None:
         self._conn.execute(
             "INSERT INTO eval_metrics (id, run_id, tier, timestamp, metrics_json) VALUES (?, ?, ?, ?, ?)",
             (
