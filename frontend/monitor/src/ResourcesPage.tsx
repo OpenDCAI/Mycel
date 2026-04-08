@@ -632,6 +632,9 @@ function ProviderDetail({ provider }: { provider: ProviderInfo }) {
   const [selectedGroup, setSelectedGroup] = React.useState<LeaseGroup | null>(null);
   const groups = React.useMemo(() => groupByLease(provider.sessions), [provider.sessions]);
   const runningCount = provider.sessions.filter((session) => session.status === "running").length;
+  const detachedResidueCount = provider.sessions.filter(
+    (session) => session.status === "stopped" && !session.runtimeSessionId && session.metrics == null,
+  ).length;
   const runtimeUnboundUsageCount = provider.sessions.filter((session) => {
     const metrics = session.metrics;
     return (
@@ -745,6 +748,7 @@ function ProviderDetail({ provider }: { provider: ProviderInfo }) {
                   {missingLiveTelemetryRunningCount > 0 && (
                     <InlineMetric label="无 live telemetry" value={String(missingLiveTelemetryRunningCount)} />
                   )}
+                  {detachedResidueCount > 0 && <InlineMetric label="Detached Residue" value={String(detachedResidueCount)} />}
                   <InlineMetric label="CPU" value={formatMetricRange(provider.cardCpu)} />
                   <InlineMetric label="RAM" value={formatMetricRange(provider.telemetry.memory)} />
                   <InlineMetric label="Disk" value={formatMetricRange(provider.telemetry.disk)} />
@@ -767,6 +771,7 @@ function ProviderDetail({ provider }: { provider: ProviderInfo }) {
                   {runtimeUnboundRunningCount > 0 && <InlineMetric label="无 runtime" value={String(runtimeUnboundRunningCount)} />}
                   {quotaOnlyRunningCount > 0 && <InlineMetric label="仅配额" value={String(quotaOnlyRunningCount)} />}
                   <InlineMetric label="已暂停" value={String(pausedCount)} />
+                  {detachedResidueCount > 0 && <InlineMetric label="Detached Residue" value={String(detachedResidueCount)} />}
                   <InlineMetric label="已结束" value={String(stoppedCount)} />
                 </div>
               )}
