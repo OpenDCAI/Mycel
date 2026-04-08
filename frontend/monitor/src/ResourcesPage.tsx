@@ -518,6 +518,9 @@ function ProviderCard({
       Boolean(metrics.memoryNote || metrics.diskNote || metrics.probeError)
     );
   }).length;
+  const detachedResidueCount = provider.sessions.filter(
+    (session) => session.status === "stopped" && !session.runtimeSessionId && session.metrics == null,
+  ).length;
   const missingLiveTelemetryRunningCount = runningCount - liveUsageRunningCount;
   const pausedCount = provider.sessions.filter((session) => session.status === "paused").length;
   const stoppedCount = provider.sessions.filter((session) => session.status === "stopped").length;
@@ -587,6 +590,7 @@ function ProviderCard({
         {runtimeUnboundUsageCount > 0 && <span>{runtimeUnboundUsageCount} 无 runtime有用量</span>}
         {quotaOnlyRunningCount > 0 && <span>{quotaOnlyRunningCount} 仅配额</span>}
         {runtimeUnboundRunningCount > 0 && <span>{runtimeUnboundRunningCount} 无 runtime</span>}
+        {detachedResidueCount > 0 && <span>{detachedResidueCount} Detached Residue</span>}
         {pausedCount > 0 && <span>{pausedCount} 暂停</span>}
         {stoppedCount > 0 && <span>{stoppedCount} 已结束</span>}
       </div>
