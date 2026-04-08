@@ -104,6 +104,7 @@ export interface ResourceOverviewResponse {
   providers: ProviderInfo[];
   triage?: {
     summary?: {
+      active_drift?: number;
       detached_residue?: number;
       orphan_cleanup?: number;
     };
