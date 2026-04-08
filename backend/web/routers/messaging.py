@@ -15,7 +15,6 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
 from backend.web.core.dependencies import get_app, get_current_user_id
-from backend.web.utils.serializers import avatar_url
 from messaging.display_user import resolve_messaging_display_user
 
 router = APIRouter(prefix="/api/chats", tags=["chats"])
@@ -171,29 +170,7 @@ async def get_chat(
     app: Annotated[Any, Depends(get_app)],
 ):
     chat = _get_accessible_chat_or_404(app, chat_id, user_id)
-    members_list = _messaging(app).list_chat_members(chat_id)
-    members_info = []
-    for m in members_list:
-        uid = m.get("user_id")
-        if not uid:
-            continue
-        mem = _resolve_display_user(app, uid)
-        if mem:
-            members_info.append(
-                {
-                    "id": uid,
-                    "name": mem.display_name,
-                    "type": mem.type.value if hasattr(mem.type, "value") else str(mem.type),
-                    "avatar_url": avatar_url(mem.id, bool(mem.avatar)),
-                }
-            )
-    return {
-        "id": chat.id,
-        "title": chat.title,
-        "status": chat.status,
-        "created_at": chat.created_at,
-        "entities": members_info,
-    }
+    return _messaging(app).get_chat_detail(chat)
 
 
 # ---------------------------------------------------------------------------
