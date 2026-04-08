@@ -41,6 +41,8 @@ export default function LeasesPage() {
   const triageCards = [
     { label: "Active Drift", value: triage.active_drift ?? 0 },
     { label: "Detached Residue", value: triage.detached_residue ?? 0 },
+    { label: "Orphan Cleanup", value: triage.orphan_cleanup ?? 0 },
+    { label: "Healthy Capacity", value: triage.healthy_capacity ?? 0 },
     { label: "Tracked Leases", value: triage.total ?? data.count ?? 0 },
   ];
 
