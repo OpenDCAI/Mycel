@@ -275,6 +275,12 @@ export default function ResourcesPage() {
   }, [loadSnapshot]);
 
   const selected = providers.find((provider) => provider.id === selectedId) ?? null;
+  const runtimeUnboundRunningCount = providers.reduce(
+    (total, provider) =>
+      total +
+      provider.sessions.filter((session) => session.status === "running" && !session.runtimeSessionId).length,
+    0,
+  );
   const refreshedAt = summary?.last_refreshed_at
     ? new Date(summary.last_refreshed_at).toLocaleTimeString()
     : "--:--:--";
@@ -326,6 +332,9 @@ export default function ResourcesPage() {
             {summary?.active_providers ?? 0} 活跃 provider
           </div>
           <div className="resources-summary-pill">{summary?.running_sessions ?? 0} 运行会话</div>
+          {runtimeUnboundRunningCount > 0 && (
+            <div className="resources-summary-pill">{runtimeUnboundRunningCount} 无 runtime</div>
+          )}
           <div className="resources-summary-pill">
             <span
               className={[
