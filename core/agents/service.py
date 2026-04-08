@@ -96,7 +96,7 @@ def _resolve_subagent_model(
     if requested_model and not _is_inherit_marker(requested_model):
         return requested_model
 
-    agent_def = AgentLoader(workspace_root=workspace_root).load_all_agents().get(_get_subagent_agent_name(subagent_type))
+    agent_def = AgentLoader(workspace_root=workspace_root).load_runtime_agents().get(_get_subagent_agent_name(subagent_type))
     if agent_def and agent_def.model:
         return agent_def.model
 

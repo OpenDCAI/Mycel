@@ -24,6 +24,8 @@ async def test_get_or_create_agent_creates_once_per_thread(monkeypatch: pytest.M
         model_name: str | None = None,
         agent: str | None = None,
         bundle_dir=None,
+        agent_config_id=None,
+        agent_config_repo=None,
         thread_repo=None,
         user_repo=None,
         queue_manager=None,
@@ -68,6 +70,8 @@ async def test_get_or_create_agent_ignores_unavailable_local_cwd(monkeypatch: py
         model_name: str | None = None,
         agent: str | None = None,
         bundle_dir=None,
+        agent_config_id=None,
+        agent_config_repo=None,
         thread_repo=None,
         user_repo=None,
         queue_manager=None,
@@ -115,6 +119,8 @@ async def test_get_or_create_agent_honors_fresh_local_thread_cwd_even_when_missi
         model_name: str | None = None,
         agent: str | None = None,
         bundle_dir=None,
+        agent_config_id=None,
+        agent_config_repo=None,
         thread_repo=None,
         user_repo=None,
         queue_manager=None,
@@ -155,8 +161,6 @@ async def test_get_or_create_agent_honors_fresh_local_thread_cwd_even_when_missi
 @pytest.mark.asyncio
 async def test_get_or_create_agent_passes_member_bundle_dir(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
     captured: dict[str, object] = {}
-    member_dir = tmp_path / "members" / "member-1"
-    member_dir.mkdir(parents=True)
 
     def _fake_create_agent_sync(
         sandbox_name: str,
@@ -164,6 +168,8 @@ async def test_get_or_create_agent_passes_member_bundle_dir(monkeypatch: pytest.
         model_name: str | None = None,
         agent: str | None = None,
         bundle_dir=None,
+        agent_config_id=None,
+        agent_config_repo=None,
         thread_repo=None,
         user_repo=None,
         queue_manager=None,
@@ -172,6 +178,8 @@ async def test_get_or_create_agent_passes_member_bundle_dir(monkeypatch: pytest.
         web_app=None,
     ) -> object:
         captured["bundle_dir"] = bundle_dir
+        captured["agent_config_id"] = agent_config_id
+        captured["agent_config_repo"] = agent_config_repo
         return SimpleNamespace()
 
     class _ThreadRepo:
@@ -185,12 +193,15 @@ async def test_get_or_create_agent_passes_member_bundle_dir(monkeypatch: pytest.
 
     monkeypatch.setattr(agent_pool, "create_agent_sync", _fake_create_agent_sync)
     monkeypatch.setattr(agent_pool, "get_or_create_agent_id", lambda **_: "agent-4")
-    monkeypatch.setattr(agent_pool, "preferred_existing_user_home_path", lambda *parts: member_dir)
 
     app = SimpleNamespace(
         state=SimpleNamespace(
             agent_pool={},
             thread_repo=_ThreadRepo(),
+            user_repo=SimpleNamespace(
+                get_by_id=lambda user_id: SimpleNamespace(id=user_id, agent_config_id="cfg-1", owner_user_id="owner-1")
+            ),
+            agent_config_repo=SimpleNamespace(),
             thread_cwd={},
             thread_sandbox={},
         )
@@ -198,7 +209,9 @@ async def test_get_or_create_agent_passes_member_bundle_dir(monkeypatch: pytest.
 
     await agent_pool.get_or_create_agent(cast(Any, app), "local", thread_id="thread-4")
 
-    assert captured["bundle_dir"] == member_dir.resolve()
+    assert captured["bundle_dir"] is None
+    assert captured["agent_config_id"] == "cfg-1"
+    assert captured["agent_config_repo"] is app.state.agent_config_repo
 
 
 @pytest.mark.asyncio
@@ -211,6 +224,8 @@ async def test_get_or_create_agent_uses_thread_user_id_for_chat_identity(monkeyp
         model_name: str | None = None,
         agent: str | None = None,
         bundle_dir=None,
+        agent_config_id=None,
+        agent_config_repo=None,
         thread_repo=None,
         user_repo=None,
         queue_manager=None,
@@ -232,7 +247,7 @@ async def test_get_or_create_agent_uses_thread_user_id_for_chat_identity(monkeyp
 
     class _UserRepo:
         def get_by_id(self, user_id: str):
-            return SimpleNamespace(id=user_id, owner_user_id="owner-5")
+            return SimpleNamespace(id=user_id, owner_user_id="owner-5", agent_config_id="cfg-5")
 
     monkeypatch.setattr(agent_pool, "create_agent_sync", _fake_create_agent_sync)
     monkeypatch.setattr(agent_pool, "get_or_create_agent_id", lambda **_: "agent-5")
@@ -242,6 +257,7 @@ async def test_get_or_create_agent_uses_thread_user_id_for_chat_identity(monkeyp
             agent_pool={},
             thread_repo=_ThreadRepo(),
             user_repo=_UserRepo(),
+            agent_config_repo=SimpleNamespace(),
             thread_cwd={},
             thread_sandbox={},
         )
@@ -312,10 +328,16 @@ async def test_get_or_create_agent_keys_registry_by_agent_user_id(monkeypatch: p
     monkeypatch.setattr(agent_pool, "create_agent_sync", _fake_create_agent_sync)
     monkeypatch.setattr(agent_pool, "get_or_create_agent_id", _fake_get_or_create_agent_id)
 
+    class _UserRepo:
+        def get_by_id(self, user_id: str):
+            return SimpleNamespace(id=user_id, owner_user_id="owner-7", agent_config_id="cfg-7")
+
     app = SimpleNamespace(
         state=SimpleNamespace(
             agent_pool={},
             thread_repo=_ThreadRepo(),
+            user_repo=_UserRepo(),
+            agent_config_repo=SimpleNamespace(),
             thread_cwd={},
             thread_sandbox={},
         )

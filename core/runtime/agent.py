@@ -39,7 +39,7 @@ if _env_file.exists():
             os.environ[key] = value
 
 from config import LeonSettings  # noqa: E402
-from config.loader import AgentLoader  # noqa: E402
+from config.loader import AgentLoader, load_bundle_from_repo  # noqa: E402
 from config.models_loader import ModelsLoader  # noqa: E402
 from config.models_schema import ModelsConfig  # noqa: E402
 from config.observation_loader import ObservationLoader  # noqa: E402
@@ -148,6 +148,8 @@ class LeonAgent:
         *,
         agent: str | None = None,
         bundle_dir: str | Path | None = None,
+        agent_config_id: str | None = None,
+        agent_config_repo: Any = None,
         allowed_file_extensions: list[str] | None = None,
         block_dangerous_commands: bool | None = None,
         block_network_commands: bool | None = None,
@@ -209,6 +211,8 @@ class LeonAgent:
         self.config, self.models_config = self._load_config(
             agent_name=agent,
             bundle_dir=bundle_dir,
+            agent_config_id=agent_config_id,
+            agent_config_repo=agent_config_repo,
             workspace_root=workspace_root,
             sandbox_name=requested_sandbox_name,
             model_name=model_name,
@@ -527,6 +531,8 @@ class LeonAgent:
         self,
         agent_name: str | None,
         bundle_dir: str | Path | None,
+        agent_config_id: str | None,
+        agent_config_repo: Any,
         workspace_root: str | Path | None,
         sandbox_name: str | None,
         model_name: str | None,
@@ -581,15 +587,23 @@ class LeonAgent:
         models_loader = ModelsLoader(workspace_root=workspace_root)
         models_config = models_loader.load(cli_overrides=models_cli if models_cli else None)
 
-        # @@@bundle-dir-wins - member-backed top-level agents need their own bundle even when
-        # no explicit agent type name is passed through the thread runtime wiring.
-        if bundle_dir is not None:
+        # @@@runtime-agent-config-root - web/runtime live agent startup must resolve from the
+        # repo-rooted agent_config_id path, not from ~/.leon/members filesystem shells.
+        if agent_config_id is not None:
+            if agent_config_repo is None:
+                raise RuntimeError("agent_config_repo is required when agent_config_id is provided")
+            bundle = load_bundle_from_repo(agent_config_repo, agent_config_id)
+            if bundle is None:
+                raise RuntimeError(f"Agent config bundle not found: {agent_config_id}")
+            self._agent_bundle = bundle
+            self._agent_override = bundle.agent
+        elif bundle_dir is not None:
             bundle_path = Path(bundle_dir).expanduser().resolve()
             self._agent_bundle = loader.load_bundle(bundle_path)
             self._agent_override = self._agent_bundle.agent.model_copy(update={"source_dir": bundle_path})
         # If agent specified, load agent definition to override system_prompt and tools
         elif agent_name:
-            all_agents = loader.load_all_agents()
+            all_agents = loader.load_runtime_agents()
             agent_def = all_agents.get(agent_name)
             if not agent_def:
                 available = ", ".join(sorted(all_agents.keys()))

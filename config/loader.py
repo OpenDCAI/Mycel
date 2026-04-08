@@ -112,7 +112,16 @@ class AgentLoader:
     # ── Agent .md parsing (merged from core/task/loader) ──
 
     def load_all_agents(self) -> dict[str, AgentConfig]:
-        """Load all agents by priority (low -> high, later overrides earlier)."""
+        """Load all agents by priority, including local member filesystem shells."""
+        self._load_agent_layers(include_members=True)
+        return self._agents
+
+    def load_runtime_agents(self) -> dict[str, AgentConfig]:
+        """Load only runtime-facing agent definitions, excluding member shells."""
+        self._load_agent_layers(include_members=False)
+        return self._agents
+
+    def _load_agent_layers(self, *, include_members: bool) -> None:
         self._agents = {}
 
         # 1. Built-in agents (lowest priority)
@@ -126,11 +135,12 @@ class AgentLoader:
         if self.workspace_root:
             self._load_agents_from_dir(self.workspace_root / ".leon" / "agents")
 
-        # 4. Members (~/.leon/members/<id>/agent.md) — highest priority
+        if not include_members:
+            return
+        # @@@local-member-discovery-only - keep filesystem member shells available for
+        # explicit local discovery, but never let web/runtime live config read from them.
         for path in user_home_read_candidates("members"):
             self._load_agents_from_members(path)
-
-        return self._agents
 
     def _load_agents_from_dir(self, dir_path: Path) -> None:
         """Load all .md files from a directory."""
