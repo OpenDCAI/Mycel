@@ -328,19 +328,19 @@ def test_resolve_default_config_skips_invalid_successful_and_uses_confirmed() ->
     }
 
 
-def test_find_owned_member_returns_none_for_foreign_member() -> None:
+def test_find_owned_agent_returns_none_for_foreign_agent() -> None:
     app = _make_threads_app()
 
-    result = threads_router._find_owned_member(app, "member-2", "owner-1")
+    result = threads_router._find_owned_agent(app, "member-2", "owner-1")
 
     assert result is None
 
 
-def test_require_owned_member_raises_for_foreign_member() -> None:
+def test_require_owned_agent_raises_for_foreign_agent() -> None:
     app = _make_threads_app()
 
     with pytest.raises(threads_router.HTTPException) as excinfo:
-        threads_router._require_owned_member(app, "member-2", "owner-1")
+        threads_router._require_owned_agent(app, "member-2", "owner-1")
 
     assert excinfo.value.status_code == 403
     assert excinfo.value.detail == "Not authorized"
@@ -394,16 +394,16 @@ async def test_create_thread_persists_existing_lease_successful_config() -> None
 
 
 @pytest.mark.asyncio
-async def test_resolve_main_thread_uses_owned_member_lookup(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_resolve_main_thread_uses_owned_agent_lookup(monkeypatch: pytest.MonkeyPatch) -> None:
     app = _make_threads_app()
     payload = threads_router.ResolveMainThreadRequest(agent_user_id="member-2")
     calls: list[tuple[object, str, str]] = []
 
-    def _fake_find_owned_member(app_obj, member_id: str, owner_user_id: str):
+    def _fake_find_owned_agent(app_obj, member_id: str, owner_user_id: str):
         calls.append((app_obj, member_id, owner_user_id))
         return None
 
-    monkeypatch.setattr(threads_router, "_find_owned_member", _fake_find_owned_member)
+    monkeypatch.setattr(threads_router, "_find_owned_agent", _fake_find_owned_agent)
 
     result = await threads_router.resolve_main_thread(payload, "owner-1", app)
 
@@ -416,15 +416,15 @@ async def test_resolve_main_thread_uses_owned_member_lookup(monkeypatch: pytest.
 
 
 @pytest.mark.asyncio
-async def test_get_default_thread_config_uses_strict_member_gate(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_get_default_thread_config_uses_strict_agent_gate(monkeypatch: pytest.MonkeyPatch) -> None:
     app = _make_threads_app()
     calls: list[tuple[object, str, str]] = []
 
-    def _fake_require_owned_member(app_obj, member_id: str, owner_user_id: str):
+    def _fake_require_owned_agent(app_obj, member_id: str, owner_user_id: str):
         calls.append((app_obj, member_id, owner_user_id))
         raise threads_router.HTTPException(403, "Not authorized")
 
-    monkeypatch.setattr(threads_router, "_require_owned_member", _fake_require_owned_member)
+    monkeypatch.setattr(threads_router, "_require_owned_agent", _fake_require_owned_agent)
 
     with pytest.raises(threads_router.HTTPException) as excinfo:
         await threads_router.get_default_thread_config("member-2", "owner-1", app)
@@ -435,7 +435,7 @@ async def test_get_default_thread_config_uses_strict_member_gate(monkeypatch: py
 
 
 @pytest.mark.asyncio
-async def test_save_default_thread_config_uses_strict_member_gate(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_save_default_thread_config_uses_strict_agent_gate(monkeypatch: pytest.MonkeyPatch) -> None:
     app = _make_threads_app()
     payload = threads_router.SaveThreadLaunchConfigRequest(
         agent_user_id="member-2",
@@ -448,11 +448,11 @@ async def test_save_default_thread_config_uses_strict_member_gate(monkeypatch: p
     )
     calls: list[tuple[object, str, str]] = []
 
-    def _fake_require_owned_member(app_obj, member_id: str, owner_user_id: str):
+    def _fake_require_owned_agent(app_obj, member_id: str, owner_user_id: str):
         calls.append((app_obj, member_id, owner_user_id))
         raise threads_router.HTTPException(403, "Not authorized")
 
-    monkeypatch.setattr(threads_router, "_require_owned_member", _fake_require_owned_member)
+    monkeypatch.setattr(threads_router, "_require_owned_agent", _fake_require_owned_agent)
 
     with pytest.raises(threads_router.HTTPException) as excinfo:
         await threads_router.save_default_thread_config(payload, "owner-1", app)

@@ -81,18 +81,18 @@ def _invalidate_resource_overview_cache() -> None:
     clear_monitor_resource_overview_cache()
 
 
-def _find_owned_member(app: Any, member_id: str, owner_user_id: str) -> Any | None:
-    member = app.state.user_repo.get_by_id(member_id)
-    if not member or member.owner_user_id != owner_user_id:
+def _find_owned_agent(app: Any, agent_id: str, owner_user_id: str) -> Any | None:
+    agent = app.state.user_repo.get_by_id(agent_id)
+    if not agent or agent.owner_user_id != owner_user_id:
         return None
-    return member
+    return agent
 
 
-def _require_owned_member(app: Any, member_id: str, owner_user_id: str) -> Any:
-    member = _find_owned_member(app, member_id, owner_user_id)
-    if member is None:
+def _require_owned_agent(app: Any, agent_id: str, owner_user_id: str) -> Any:
+    agent = _find_owned_agent(app, agent_id, owner_user_id)
+    if agent is None:
         raise HTTPException(403, "Not authorized")
-    return member
+    return agent
 
 
 async def _prepare_attachment_message(
@@ -681,7 +681,7 @@ async def resolve_main_thread(
 ) -> dict[str, Any]:
     """Return the default representative thread for an agent user."""
     agent_user_id = payload.agent_user_id
-    agent_member = _find_owned_member(app, agent_user_id, user_id)
+    agent_member = _find_owned_agent(app, agent_user_id, user_id)
     if agent_member is None:
         # Return null instead of 403 — member may not exist yet (stale client state)
         # or belong to another user (harmless to reveal "no thread")
@@ -727,7 +727,7 @@ async def get_default_thread_config(
     user_id: Annotated[str, Depends(get_current_user_id)],
     app: Annotated[Any, Depends(get_app)] = None,
 ) -> dict[str, Any]:
-    _require_owned_member(app, agent_user_id, user_id)
+    _require_owned_agent(app, agent_user_id, user_id)
     return resolve_default_config(app, user_id, agent_user_id)
 
 
@@ -737,7 +737,7 @@ async def save_default_thread_config(
     user_id: Annotated[str, Depends(get_current_user_id)],
     app: Annotated[Any, Depends(get_app)] = None,
 ) -> dict[str, Any]:
-    _require_owned_member(app, payload.agent_user_id, user_id)
+    _require_owned_agent(app, payload.agent_user_id, user_id)
     save_last_confirmed_config(app, user_id, payload.agent_user_id, payload.model_dump())
     return {"ok": True}
 
