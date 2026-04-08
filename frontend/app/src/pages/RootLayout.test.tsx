@@ -114,6 +114,50 @@ describe("RootLayout setup-name contract", () => {
   });
 });
 
+describe("RootLayout agent wording contract", () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    const storage = {
+      getItem: vi.fn(() => "true"),
+      setItem: vi.fn(),
+      removeItem: vi.fn(),
+    };
+    vi.stubGlobal("localStorage", storage);
+    Object.defineProperty(window, "localStorage", {
+      value: storage,
+      configurable: true,
+    });
+    useAuthStore.setState({
+      token: "token-1",
+      user: { id: "user-1", name: "tester", type: "human", avatar: null },
+      agent: null,
+      setupInfo: null,
+      login: vi.fn(),
+      sendOtp: vi.fn(),
+      verifyOtp: vi.fn(),
+      completeRegister: vi.fn(),
+      clearSetupInfo: vi.fn(),
+      logout: vi.fn(),
+    });
+  });
+
+  it("uses Agent wording in the create dropdown", async () => {
+    render(
+      <MemoryRouter initialEntries={["/chat"]}>
+        <Routes>
+          <Route path="*" element={<RootLayout />}>
+            <Route path="chat" element={<div>chat-page</div>} />
+          </Route>
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "新建" }));
+
+    expect(await screen.findByRole("button", { name: "新建 Agent" })).toBeTruthy();
+  });
+});
+
 describe("LoginForm", () => {
   beforeEach(() => {
     useAuthStore.setState({
