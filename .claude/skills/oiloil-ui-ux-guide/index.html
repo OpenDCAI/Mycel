@@ -1,0 +1,2117 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>OilOil UI/UX Guide Skill</title>
+    <meta
+      name="description"
+      content="OilOil UI/UX Guide Skill：把 UI/UX 评审变成可执行的界面改造。"
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&amp;family=Newsreader:opsz,wght@6..72,600;6..72,700&amp;display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --bg: #f7f8fb;
+        --panel: #ffffff;
+        --panel-2: #f3f5f8;
+        --text: #111111;
+        --muted: #5f6673;
+        --line: #e2e7ee;
+        --line-strong: #d2dae6;
+        --shadow: 0 18px 38px rgba(9, 30, 66, 0.08);
+        --s1: 4px;
+        --s2: 8px;
+        --s3: 12px;
+        --s4: 16px;
+        --s5: 24px;
+        --s6: 32px;
+        --s7: 40px;
+        --s8: 48px;
+        --s9: 64px;
+
+        --r1: 10px;
+        --r2: 12px;
+        --r3: 14px;
+        --r4: 18px;
+        --r5: 24px;
+
+        --radius: var(--r4);
+        --radius-sm: var(--r2);
+        --maxw: 1180px;
+
+        --accent: #1c56d8;
+        --accent-soft: #eaf0ff;
+        --good: #1f7a45;
+        --good-soft: #e9f7ef;
+        --warn: #8c5a00;
+        --warn-soft: #fff4dd;
+        --bad: #b43b3b;
+        --bad-soft: #fff1f1;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        font-family: "Noto Sans SC", sans-serif;
+        color: var(--text);
+        background: radial-gradient(circle at 10% -15%, #ffffff 0%, var(--bg) 60%);
+        line-height: 1.6;
+      }
+
+      a {
+        color: inherit;
+      }
+
+      .page {
+        width: min(calc(100% - 3rem), var(--maxw));
+        margin: 0 auto;
+      }
+
+      .topbar {
+        padding: var(--s6) 0 var(--s5);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: var(--s3);
+      }
+
+      .brand {
+        display: flex;
+        align-items: baseline;
+        gap: var(--s3);
+      }
+
+      .brand .name {
+        font-size: 13px;
+        letter-spacing: 0.09em;
+        text-transform: uppercase;
+        color: var(--muted);
+        font-weight: 700;
+      }
+
+      .brand .mode {
+        font-size: 12px;
+        color: #2a3f6e;
+        background: var(--accent-soft);
+        border: 1px solid #dbe6ff;
+        padding: var(--s1) var(--s3);
+        border-radius: 999px;
+        font-weight: 600;
+      }
+
+      .repo {
+        text-decoration: none;
+        border: 1px solid var(--line-strong);
+        border-radius: 999px;
+        padding: var(--s2) var(--s4);
+        font-size: 13px;
+        background: #fff;
+        transition: transform 0.2s ease, border-color 0.2s ease;
+      }
+
+      .repo:hover {
+        transform: translateY(-1px);
+        border-color: #bac3d0;
+      }
+
+      .hero {
+        border: 1px solid var(--line);
+        background: linear-gradient(165deg, #ffffff, #f9fbff 72%);
+        border-radius: var(--r5);
+        box-shadow: var(--shadow);
+        padding: var(--s7);
+      }
+
+      h1,
+      h2,
+      h3 {
+        margin: 0;
+        line-height: 1.15;
+      }
+
+      h1 {
+        font-family: "Newsreader", serif;
+        font-size: clamp(2rem, 3.9vw, 3.35rem);
+        letter-spacing: 0.01em;
+      }
+
+      .hero p {
+        margin: var(--s3) 0 0;
+        color: #39414d;
+        max-width: 78ch;
+      }
+
+      .hero-row {
+        margin-top: var(--s5);
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: var(--s4);
+      }
+
+      .quick {
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        background: #fff;
+        padding: var(--s5);
+      }
+
+      .quick h2 {
+        font-size: 15px;
+        font-weight: 700;
+      }
+
+      .quick p {
+        margin: var(--s2) 0 0;
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      .prompt-grid {
+        margin-top: var(--s4);
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: var(--s3);
+      }
+
+      .prompt {
+        border: 1px solid #dbe6ff;
+        background: #f5f9ff;
+        border-radius: var(--r3);
+        padding: var(--s3);
+      }
+
+      .prompt .tag {
+        display: inline-flex;
+        align-items: center;
+        gap: var(--s2);
+        font-size: 12px;
+        font-weight: 700;
+        color: #1d3564;
+        margin-bottom: var(--s1);
+      }
+
+      .dot {
+        width: 7px;
+        height: 7px;
+        border-radius: 999px;
+        background: var(--accent);
+      }
+
+      pre {
+        margin: 0;
+        border: 0;
+        background: transparent;
+        color: #1f3154;
+        font-size: 12px;
+        line-height: 1.45;
+        white-space: pre-wrap;
+      }
+
+      .outcomes {
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        background: #fff;
+        padding: var(--s5);
+      }
+
+      .outcomes h2 {
+        font-size: 15px;
+        font-weight: 700;
+      }
+
+      .bullets {
+        margin: var(--s3) 0 0;
+        padding: 0;
+        list-style: none;
+      }
+
+      .bullets li {
+        border-top: 1px solid var(--line);
+        padding: var(--s3) 0;
+        color: #3f4650;
+        font-size: 13px;
+        display: grid;
+        grid-template-columns: 90px 1fr;
+        gap: var(--s3);
+      }
+
+      .bullets li:first-child {
+        border-top: 0;
+        padding-top: 0;
+      }
+
+      .pill {
+        font-size: 12px;
+        font-weight: 700;
+        border-radius: 999px;
+        padding: var(--s1) var(--s2);
+        width: fit-content;
+        border: 1px solid var(--line);
+        background: var(--panel-2);
+        color: #2f3640;
+      }
+
+      .hero-metrics {
+        margin-top: var(--s5);
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: var(--s3);
+      }
+
+      .hero-metrics .item {
+        border: 1px solid var(--line);
+        border-radius: var(--r2);
+        background: #fff;
+        padding: var(--s3) var(--s4);
+        font-size: 13px;
+        color: #3b4350;
+      }
+
+      main section + section {
+        margin-top: var(--s8);
+      }
+
+      .section-head {
+        margin: 0 0 var(--s4);
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: var(--s2);
+      }
+
+      .section-head h2 {
+        font-family: "Newsreader", serif;
+        font-size: clamp(1.45rem, 2.5vw, 2.05rem);
+      }
+
+      .section-head p {
+        margin: 0;
+        color: var(--muted);
+        font-size: 13px;
+        max-width: 66ch;
+      }
+
+      .demo-grid {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: var(--s4);
+      }
+
+      .demo {
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        background: var(--panel);
+        overflow: hidden;
+      }
+
+      .demo-top {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: var(--s3) var(--s4);
+        border-bottom: 1px solid var(--line);
+      }
+
+      .demo-top .title {
+        font-weight: 700;
+        font-size: 14px;
+      }
+
+      .seg {
+        display: inline-flex;
+        gap: 0;
+        border: 1px solid var(--line-strong);
+        border-radius: 999px;
+        background: #fff;
+        overflow: hidden;
+      }
+
+      .seg button {
+        appearance: none;
+        border: 0;
+        background: transparent;
+        padding: var(--s2) var(--s3);
+        font-size: 12px;
+        color: #3f4650;
+        cursor: pointer;
+      }
+
+      .seg button[aria-pressed="true"] {
+        background: #111111;
+        color: #ffffff;
+      }
+
+      .demo-body {
+        padding: var(--s5);
+        background: linear-gradient(180deg, #fff, #fbfcfe);
+      }
+
+      .mock {
+        border: 1px solid var(--line);
+        border-radius: var(--r3);
+        background: #fff;
+        padding: var(--s4);
+      }
+
+      .mock + .mock {
+        margin-top: var(--s3);
+      }
+
+      .mock-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        font-size: 13px;
+        margin-bottom: var(--s3);
+      }
+
+      .state {
+        font-size: 12px;
+        color: #7a828f;
+      }
+
+      .mode-toggle {
+        display: inline-flex;
+        align-items: center;
+        gap: 0;
+        border: 1px solid var(--line-strong);
+        border-radius: 999px;
+        background: #fff;
+        overflow: hidden;
+      }
+
+      .mode-toggle button {
+        appearance: none;
+        border: 0;
+        background: transparent;
+        padding: var(--s2) var(--s3);
+        font-size: 12px;
+        color: #3f4650;
+        cursor: pointer;
+      }
+
+      .mode-toggle button[aria-pressed="true"] {
+        background: #111111;
+        color: #ffffff;
+      }
+
+      .row {
+        margin-top: var(--s2);
+      }
+
+      .label {
+        font-size: 12px;
+        color: #3f4650;
+        margin-bottom: var(--s1);
+      }
+
+      .control {
+        border: 1px solid var(--line-strong);
+        border-radius: var(--r1);
+        padding: var(--s2) var(--s3);
+        font-size: 13px;
+      }
+
+      .help {
+        margin-top: var(--s1);
+        font-size: 11px;
+        color: #717b8a;
+      }
+
+      .help.warn {
+        color: #7c4e00;
+        background: var(--warn-soft);
+        border: 1px solid #efd8a9;
+        border-radius: var(--r2);
+        padding: var(--s1) var(--s2);
+      }
+
+      .cta {
+        display: flex;
+        gap: var(--s2);
+        margin-top: var(--s3);
+      }
+
+      .btn {
+        border: 1px solid var(--line-strong);
+        background: #fff;
+        border-radius: var(--r1);
+        padding: var(--s2) var(--s3);
+        font-size: 12px;
+      }
+
+      .btn.primary {
+        background: #111111;
+        color: #ffffff;
+        border-color: #111111;
+      }
+
+      .btn.link {
+        border: 0;
+        padding: var(--s2) var(--s1);
+        color: #4c5563;
+      }
+
+      .chips {
+        margin-top: var(--s2);
+        display: flex;
+        flex-wrap: wrap;
+        gap: var(--s2);
+      }
+
+      .chip {
+        font-size: 11px;
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        padding: var(--s1) var(--s2);
+        background: #fff;
+      }
+
+      .feedback {
+        margin-top: var(--s3);
+        border-radius: var(--r1);
+        border: 1px solid #cfe3d7;
+        background: #f1fbf5;
+        color: #245b39;
+        font-size: 12px;
+        padding: var(--s2) var(--s3);
+      }
+
+      .metrics {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: var(--s2);
+      }
+
+      .metric {
+        border: 1px solid var(--line);
+        border-radius: var(--r1);
+        background: #fff;
+        padding: var(--s2);
+        font-size: 11px;
+      }
+
+      .metric b {
+        display: block;
+        font-size: 16px;
+        margin-top: var(--s1);
+      }
+
+      .metric.primary {
+        border-color: #cfe0ff;
+        background: #f5f8ff;
+      }
+
+      .metric.risk {
+        border-color: #efd8a9;
+        background: var(--warn-soft);
+      }
+
+      .table {
+        margin-top: var(--s2);
+        border: 1px solid var(--line);
+        border-radius: var(--r2);
+        overflow: hidden;
+      }
+
+      .tr {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: var(--s2);
+        padding: var(--s2) var(--s3);
+        font-size: 12px;
+        border-top: 1px solid var(--line);
+      }
+
+      .tr:first-child {
+        border-top: 0;
+      }
+
+      .notes {
+        padding: var(--s4) var(--s5);
+        border-top: 1px solid var(--line);
+        background: #fbfcff;
+        font-size: 12px;
+        color: #4a5260;
+      }
+
+      .notes b {
+        color: #23478d;
+      }
+
+      .show {
+        display: block;
+      }
+
+      .hide {
+        display: none;
+      }
+
+      .review {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: var(--s4);
+      }
+
+      .review-card {
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        background: #fff;
+        overflow: hidden;
+      }
+
+      .review-card .head {
+        padding: var(--s3) var(--s4);
+        border-bottom: 1px solid var(--line);
+        font-size: 14px;
+        font-weight: 700;
+      }
+
+      .review-card .body {
+        padding: var(--s5);
+      }
+
+      .prio {
+        display: grid;
+        gap: var(--s2);
+      }
+
+      .prio .item {
+        border: 1px solid var(--line);
+        border-radius: var(--r2);
+        padding: var(--s3);
+        background: #fff;
+      }
+
+      .prio .item .k {
+        display: inline-flex;
+        align-items: center;
+        gap: var(--s2);
+        font-weight: 800;
+        font-size: 12px;
+        letter-spacing: 0.04em;
+      }
+
+      .k .mark {
+        width: 8px;
+        height: 8px;
+        border-radius: 999px;
+      }
+
+      .k.p0 .mark {
+        background: var(--bad);
+      }
+
+      .k.p1 .mark {
+        background: var(--warn);
+      }
+
+      .k.p2 .mark {
+        background: #6b7280;
+      }
+
+      .prio .item p {
+        margin: var(--s2) 0 0;
+        color: #424a56;
+        font-size: 13px;
+      }
+
+      .small {
+        color: var(--muted);
+        font-size: 12px;
+        margin-top: var(--s2);
+      }
+
+      .feature-grid {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: var(--s4);
+      }
+
+      .card {
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        background: #fff;
+        overflow: hidden;
+      }
+
+      .card .head {
+        padding: var(--s3) var(--s4);
+        border-bottom: 1px solid var(--line);
+        font-size: 14px;
+        font-weight: 800;
+      }
+
+      .card .body {
+        padding: var(--s5);
+      }
+
+      .psych-grid {
+        display: grid;
+        grid-template-columns: 0.95fr 1.05fr;
+        gap: var(--s4);
+      }
+
+      .toolbox {
+        border: 1px solid var(--line);
+        border-radius: var(--r3);
+        background: #fff;
+        padding: var(--s4);
+      }
+
+      .toolbox .group-title {
+        font-size: 12px;
+        font-weight: 800;
+        letter-spacing: 0.05em;
+        color: #3f4650;
+        text-transform: uppercase;
+        margin: 0 0 var(--s2);
+      }
+
+      .toolbox .group-title.sub {
+        margin-top: var(--s3);
+      }
+
+      .toggle-list {
+        display: grid;
+        gap: var(--s2);
+      }
+
+      .inline-actions {
+        display: flex;
+        gap: var(--s2);
+        margin-top: var(--s3);
+      }
+
+      .toggle {
+        display: grid;
+        grid-template-columns: 18px 1fr;
+        gap: var(--s3);
+        align-items: start;
+        padding: var(--s2) var(--s3);
+        border-radius: var(--r2);
+        border: 1px solid var(--line);
+        background: var(--panel-2);
+        cursor: pointer;
+        user-select: none;
+      }
+
+      .toggle input {
+        margin: 2px 0 0;
+        accent-color: var(--accent);
+      }
+
+      .toggle b {
+        display: block;
+        font-size: 13px;
+      }
+
+      .toggle span {
+        display: block;
+        margin-top: var(--s1);
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .stage {
+        border: 1px solid var(--line);
+        border-radius: var(--r3);
+        background: linear-gradient(180deg, #fff, #fbfcfe);
+        padding: var(--s4);
+      }
+
+      .annotated {
+        position: relative;
+      }
+
+      .pin {
+        position: absolute;
+        left: calc(var(--x) * 1%);
+        top: calc(var(--y) * 1%);
+        transform: translate(-50%, -50%);
+        width: min(360px, calc(100vw - 56px));
+        display: none;
+        pointer-events: none;
+        overflow: visible;
+      }
+
+      .pin::before {
+        content: "";
+        width: 10px;
+        height: 10px;
+        border-radius: 999px;
+        background: var(--accent);
+        box-shadow: 0 0 0 4px rgba(28, 86, 216, 0.14);
+        display: block;
+      }
+
+      .pin .label {
+        position: absolute;
+        left: var(--s3);
+        top: calc(-1 * var(--s2));
+        background: #111111;
+        color: #fff;
+        border-radius: var(--r1);
+        padding: var(--s2) var(--s3);
+        font-size: 12px;
+        width: calc(100% - var(--s3));
+        max-width: none;
+        line-height: 1.35;
+        box-shadow: 0 10px 22px rgba(0, 0, 0, 0.16);
+        white-space: normal;
+        word-break: break-word;
+      }
+
+      .pin .label i {
+        font-style: normal;
+        opacity: 0.82;
+      }
+
+      .anno-affordance [data-anno="affordance"],
+      .anno-signifiers [data-anno="signifiers"],
+      .anno-mapping [data-anno="mapping"],
+      .anno-constraints [data-anno="constraints"],
+      .anno-feedback [data-anno="feedback"],
+      .anno-exec [data-anno="exec"],
+      .anno-eval [data-anno="eval"],
+      .anno-model [data-anno="model"],
+      .anno-knowledge [data-anno="knowledge"],
+      .anno-modes [data-anno="modes"] {
+        display: block;
+      }
+
+      .anno-affordance .a-cta,
+      .anno-signifiers .a-signifier,
+      .anno-mapping .a-mapping,
+      .anno-constraints .a-constraint,
+      .anno-feedback .a-feedback,
+      .anno-modes .a-mode {
+        outline: 2px solid rgba(28, 86, 216, 0.4);
+        outline-offset: 2px;
+        border-radius: 10px;
+      }
+
+      .anno-exec .a-exec {
+        outline: 2px solid rgba(180, 59, 59, 0.45);
+        outline-offset: 2px;
+        border-radius: 10px;
+      }
+
+      .anno-eval .a-eval {
+        outline: 2px solid rgba(140, 90, 0, 0.45);
+        outline-offset: 2px;
+        border-radius: 10px;
+      }
+
+      .anno-exec .a-cta {
+        outline: 2px solid rgba(180, 59, 59, 0.45);
+        outline-offset: 2px;
+        border-radius: 10px;
+      }
+
+      .anno-eval .a-feedback {
+        outline: 2px solid rgba(140, 90, 0, 0.45);
+        outline-offset: 2px;
+        border-radius: 10px;
+      }
+
+      .anno-model .a-model {
+        outline: 2px solid rgba(31, 122, 69, 0.38);
+        outline-offset: 2px;
+        border-radius: 10px;
+      }
+
+      .anno-knowledge .a-knowledge {
+        outline: 2px solid rgba(31, 122, 69, 0.38);
+        outline-offset: 2px;
+        border-radius: 10px;
+      }
+
+      .micro-grid {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: var(--s4);
+      }
+
+      .micro {
+        border: 1px solid var(--line);
+        border-radius: var(--r3);
+        background: #fff;
+        padding: var(--s4);
+      }
+
+      .micro .k {
+        display: inline-flex;
+        align-items: center;
+        gap: var(--s2);
+        font-weight: 900;
+        font-size: 12px;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        margin-bottom: var(--s2);
+      }
+
+      .micro .k .mark {
+        width: 8px;
+        height: 8px;
+        border-radius: 999px;
+      }
+
+      .micro .k.slip .mark {
+        background: var(--warn);
+      }
+
+      .micro .k.mistake .mark {
+        background: var(--bad);
+      }
+
+      .micro p {
+        margin: 0 0 var(--s3);
+        color: #424a56;
+        font-size: 13px;
+      }
+
+      .toast {
+        margin-top: var(--s2);
+        border: 1px solid #cfe3d7;
+        background: #f1fbf5;
+        color: #245b39;
+        border-radius: var(--r1);
+        font-size: 12px;
+        padding: var(--s2) var(--s3);
+      }
+
+      .danger {
+        border: 1px solid #f2d2d2;
+        background: var(--bad-soft);
+        color: #7b2a2a;
+        border-radius: var(--r1);
+        font-size: 12px;
+        padding: var(--s2) var(--s3);
+      }
+
+      .icon-row {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: var(--s4);
+      }
+
+      .icon-bar {
+        border: 1px solid var(--line);
+        border-radius: var(--r3);
+        background: #fff;
+        padding: var(--s4);
+        display: flex;
+        gap: var(--s3);
+        align-items: center;
+        flex-wrap: wrap;
+      }
+
+      .mt-s2 {
+        margin-top: var(--s2);
+      }
+
+      .icon-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: var(--s2);
+        border: 1px solid var(--line-strong);
+        background: #fff;
+        border-radius: 999px;
+        padding: var(--s2) var(--s3);
+        font-size: 12px;
+        color: #2f3640;
+      }
+
+      .ico {
+        width: 16px;
+        height: 16px;
+        stroke: currentColor;
+        stroke-width: 2;
+        fill: none;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+
+      .icon-btn.icon-only span {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        white-space: nowrap;
+        border: 0;
+      }
+
+      .motion-demo {
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        background: #fff;
+        padding: var(--s5);
+      }
+
+      .motion-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: var(--s3);
+        margin-bottom: var(--s3);
+      }
+
+      .motion-title {
+        font-weight: 800;
+        font-size: 13px;
+      }
+
+      .motion-stage {
+        border: 1px solid var(--line);
+        border-radius: var(--r3);
+        background: #fff;
+        padding: var(--s4);
+        position: relative;
+        overflow: hidden;
+        min-height: 180px;
+      }
+
+      .overlay {
+        position: absolute;
+        inset: 0;
+        background: rgba(17, 17, 17, 0.2);
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 180ms ease;
+      }
+
+      .panel {
+        position: absolute;
+        right: var(--s3);
+        top: var(--s3);
+        bottom: var(--s3);
+        width: min(320px, 92%);
+        background: #fff;
+        border: 1px solid var(--line-strong);
+        border-radius: var(--r3);
+        box-shadow: 0 18px 40px rgba(0, 0, 0, 0.12);
+        opacity: 0;
+        transform: translateY(8px);
+        pointer-events: none;
+        transition: opacity 220ms ease, transform 220ms ease;
+        padding: var(--s3);
+      }
+
+      .panel h3 {
+        font-size: 13px;
+        font-weight: 800;
+        margin-bottom: var(--s2);
+      }
+
+      .panel p {
+        margin: 0;
+        color: #4a5260;
+        font-size: 12px;
+      }
+
+      .mock.mock-reset {
+        margin: 0;
+        position: relative;
+      }
+
+      .panel-actions {
+        display: flex;
+        justify-content: flex-end;
+        margin-top: var(--s3);
+      }
+
+      .motion-stage[data-open="true"] .overlay {
+        opacity: 1;
+        pointer-events: auto;
+      }
+
+      .motion-stage[data-open="true"] .panel {
+        opacity: 1;
+        transform: translateY(0);
+        pointer-events: auto;
+      }
+
+      .state-box {
+        border: 1px solid var(--line);
+        border-radius: var(--r3);
+        background: #fff;
+        padding: var(--s4);
+      }
+
+      .skeleton {
+        display: grid;
+        gap: var(--s2);
+      }
+
+      .sk {
+        height: 12px;
+        border-radius: 999px;
+        background: linear-gradient(90deg, #f2f4f7 0%, #eceff4 40%, #f2f4f7 80%);
+        background-size: 200% 100%;
+        animation: shimmer 1.2s ease-in-out infinite;
+      }
+
+      .sk.w60 {
+        width: 60%;
+      }
+
+      .sk.w80 {
+        width: 80%;
+      }
+
+      .sk.w40 {
+        width: 40%;
+      }
+
+      @keyframes shimmer {
+        0% {
+          background-position: 120% 0;
+        }
+        100% {
+          background-position: -20% 0;
+        }
+      }
+
+      .empty {
+        border: 1px dashed var(--line-strong);
+        border-radius: var(--r3);
+        padding: var(--s5);
+        background: #fbfcfe;
+      }
+
+      .empty b {
+        display: block;
+        font-size: 13px;
+        margin-bottom: var(--s2);
+      }
+
+      .empty p {
+        margin: 0 0 var(--s3);
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .alert {
+        border-radius: var(--r2);
+        padding: var(--s3);
+        font-size: 12px;
+        border: 1px solid var(--line);
+        background: #fff;
+        color: #2f3640;
+      }
+
+      .alert.err {
+        border-color: #f2d2d2;
+        background: var(--bad-soft);
+        color: #7b2a2a;
+      }
+
+      .alert.ok {
+        border-color: #cfe3d7;
+        background: #f1fbf5;
+        color: #245b39;
+      }
+
+      .alert.perm {
+        border-color: #dbe6ff;
+        background: #f5f9ff;
+        color: #1f3154;
+      }
+
+      .footer {
+        margin: var(--s7) 0 var(--s8);
+        padding-top: var(--s3);
+        border-top: 1px solid var(--line);
+        display: flex;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        gap: var(--s3);
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      [data-in] {
+        opacity: 0;
+        transform: translateY(10px);
+        animation: rise 0.55s ease forwards;
+      }
+
+      [data-in="2"] {
+        animation-delay: 0.08s;
+      }
+
+      [data-in="3"] {
+        animation-delay: 0.16s;
+      }
+
+      [data-in="4"] {
+        animation-delay: 0.24s;
+      }
+
+      @keyframes rise {
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+
+      @media (max-width: 1020px) {
+        .hero-metrics {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+
+        .psych-grid {
+          grid-template-columns: 1fr;
+        }
+      }
+
+      @media (max-width: 700px) {
+        .page {
+          width: min(calc(100% - 1.2rem), var(--maxw));
+        }
+
+        .hero {
+          padding: var(--s5) var(--s4);
+        }
+
+        main section + section {
+          margin-top: var(--s6);
+        }
+
+        .hero-metrics,
+        .metrics {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="page">
+      <header class="topbar" data-in="1">
+        <div class="brand">
+          <div class="name">OilOil UI/UX Guide Skill</div>
+          <div class="mode">guide / review</div>
+        </div>
+        <a class="repo" href="https://github.com/oil-oil/oiloil-ui-ux-guide" target="_blank" rel="noreferrer"
+          >GitHub</a
+        >
+      </header>
+
+      <main>
+        <section class="hero" data-in="1">
+          <h1>让 UI 评审快速收敛，并直接落地到界面</h1>
+          <p>
+            `guide` 给你一套清晰的设计规则，`review` 给你带优先级的修复清单。下面三个示例用同一业务目标的“前后界面”对比，
+            把差异做成可视化结果：主任务更清晰、提示更克制、状态更完整、操作更可发现。
+          </p>
+
+          <div class="hero-row">
+            <div class="quick">
+              <h2>快速触发</h2>
+              <p>直接点名 Skill + 说清页面目标，输出会更稳定。</p>
+              <div class="prompt-grid">
+                <div class="prompt">
+                  <div class="tag"><span class="dot"></span>guide</div>
+                  <pre>请使用 $oiloil-ui-ux-guide 的 guide 模式。
+页面类型：B 端设置页。
+输出：简洁的“该做 / 不该做”规则。</pre>
+                </div>
+                <div class="prompt">
+                  <div class="tag"><span class="dot"></span>review</div>
+                  <pre>请使用 $oiloil-ui-ux-guide 的 review 模式。
+目标：提升首次配置完成率。
+输出：P0/P1/P2 + 修复方案 + 验收标准。</pre>
+                </div>
+              </div>
+            </div>
+
+            <div class="outcomes">
+              <h2>你会得到什么</h2>
+              <ul class="bullets">
+                <li><span class="pill">优先级</span><span>P0/P1/P2 分层，先解决最影响结果的问题。</span></li>
+                <li><span class="pill">可落地</span><span>建议落到布局/组件/文案/状态，能直接改代码。</span></li>
+                <li><span class="pill">可验收</span><span>每项修复配验收检查点，避免“改了但没变好”。</span></li>
+              </ul>
+            </div>
+          </div>
+
+          <div class="hero-metrics">
+            <div class="item">关注点：任务、状态、结果、风险</div>
+            <div class="item">约束：少文案 + 提示分层</div>
+            <div class="item">图标：禁止 emoji，统一图标集</div>
+            <div class="item">输出：简洁要点，避免长段落</div>
+          </div>
+        </section>
+
+        <section data-in="2">
+          <div class="section-head">
+            <h2>规范集（简版）</h2>
+            <p>不追求写很多，只保留最能稳定结果的规则：先过这 6 条，再做视觉润色。</p>
+          </div>
+          <div class="demo-grid">
+            <article class="demo">
+              <div class="demo-top">
+                <div class="title">开发与评审共用的 6 条规则</div>
+              </div>
+              <div class="demo-body">
+                <div class="table">
+                  <div class="tr"><span>1) 主任务优先</span><span>3 秒可识别主操作</span></div>
+                  <div class="tr"><span>2) 提示分层</span><span>先就近必要信息，再按需展开</span></div>
+                  <div class="tr"><span>3) 状态闭环</span><span>加载/空/错/成/权限都给下一步</span></div>
+                  <div class="tr"><span>4) 间距上尺度</span><span>4/8/12/16/24/32/40/48</span></div>
+                  <div class="tr"><span>5) 重复与规整</span><span>同类组件间距一致，不漂移</span></div>
+                  <div class="tr"><span>6) 少嵌套</span><span>容器必须有功能，不做装饰叠层</span></div>
+                </div>
+                <div class="small">如果一条规则需要很多例外，优先检查信息架构和默认值设计，而不是继续加提示文案。</div>
+              </div>
+              <div class="notes"><b>建议顺序：</b>先过规范集，再做设计心理学诊断，最后补齐状态与细节（图标/动效）。</div>
+            </article>
+          </div>
+        </section>
+
+        <section data-in="2">
+          <div class="section-head">
+            <h2>示例 1：设置表单</h2>
+            <p>同样是“完成首次配置”，差异主要来自提示分层与主操作的层级。</p>
+          </div>
+          <div class="demo-grid">
+            <article class="demo" data-demo="form">
+              <div class="demo-top">
+                <div class="title">界面</div>
+                <div class="seg" role="group" aria-label="表单示例切换">
+                  <button type="button" data-view="before" aria-pressed="true">改造前</button>
+                  <button type="button" data-view="after" aria-pressed="false">改造后</button>
+                </div>
+              </div>
+              <div class="demo-body">
+                <div class="mock show" data-pane="before">
+                  <div class="mock-head"><strong>通知策略设置</strong><span class="state">未保存</span></div>
+                  <div class="row">
+                    <div class="label">邮箱</div>
+                    <div class="control">name@example.com</div>
+                    <div class="help">请填写常用邮箱，格式错误会导致通知失败。</div>
+                    <div class="help">邮箱用于告警、系统消息与账号安全提醒。</div>
+                  </div>
+                  <div class="row">
+                    <div class="label">发送频率</div>
+                    <div class="control">立即发送</div>
+                    <div class="help">建议立即发送。</div>
+                    <div class="help">也可以选择每小时或每天汇总。</div>
+                  </div>
+                  <div class="cta">
+                    <button class="btn">返回</button>
+                    <button class="btn">保存</button>
+                  </div>
+                </div>
+
+                <div class="mock hide" data-pane="after">
+                  <div class="mock-head"><strong>通知策略设置</strong><span class="state">步骤 1 / 1</span></div>
+                  <div class="row">
+                    <div class="label">邮箱（必填）</div>
+                    <div class="control">name@example.com</div>
+                    <div class="help warn">仅用于告警和账号安全通知。</div>
+                  </div>
+                  <div class="row">
+                    <div class="label">发送频率</div>
+                    <div class="chips">
+                      <span class="chip">立即</span>
+                      <span class="chip">每小时</span>
+                      <span class="chip">每天</span>
+                    </div>
+                  </div>
+                  <div class="cta">
+                    <button class="btn link">取消</button>
+                    <button class="btn primary">保存策略</button>
+                  </div>
+                  <div class="feedback">保存后立即生效，可在“通知历史”查看投递结果。</div>
+                </div>
+              </div>
+              <div class="notes"><b>直观变化：</b>主 CTA 更清晰；提示更克制；保存后有明确结果与下一步。</div>
+            </article>
+
+            <article class="demo" data-demo="dashboard">
+              <div class="demo-top">
+                <div class="title">评审输出（节选）</div>
+                <div class="seg" role="group" aria-label="表单评审输出切换">
+                  <button type="button" data-view="before" aria-pressed="true">针对改造前</button>
+                  <button type="button" data-view="after" aria-pressed="false">针对改造后</button>
+                </div>
+              </div>
+              <div class="demo-body">
+                <div class="review-card show" data-pane="before">
+                  <div class="head">P0 / P1 / P2</div>
+                  <div class="body">
+                    <div class="prio">
+                      <div class="item">
+                        <div class="k p0"><span class="mark"></span>P0</div>
+                        <p>主操作与次级按钮同权重，用户容易误点或犹豫。</p>
+                      </div>
+                      <div class="item">
+                        <div class="k p1"><span class="mark"></span>P1</div>
+                        <p>提示重复且过多，扫描成本高，关键约束不突出。</p>
+                      </div>
+                      <div class="item">
+                        <div class="k p2"><span class="mark"></span>P2</div>
+                        <p>缺少保存后的结果反馈，用户不知道是否生效。</p>
+                      </div>
+                    </div>
+                    <div class="small">修复建议会落到：按钮层级、提示分层、成功/失败状态。</div>
+                  </div>
+                </div>
+
+                <div class="review-card hide" data-pane="after">
+                  <div class="head">验收检查点</div>
+                  <div class="body">
+                    <div class="prio">
+                      <div class="item">
+                        <div class="k p0"><span class="mark"></span>主操作</div>
+                        <p>3 秒内可识别“保存策略”为主操作；取消是次级操作。</p>
+                      </div>
+                      <div class="item">
+                        <div class="k p1"><span class="mark"></span>提示</div>
+                        <p>只有一条就近提示覆盖关键风险，不出现重复解释。</p>
+                      </div>
+                      <div class="item">
+                        <div class="k p2"><span class="mark"></span>反馈</div>
+                        <p>保存后出现结果与下一步入口（例如查看通知历史）。</p>
+                      </div>
+                    </div>
+                    <div class="small">这类检查点能帮助你快速判断“改造是否真的变好”。</div>
+                  </div>
+                </div>
+              </div>
+              <div class="notes"><b>直观收益：</b>评审从“泛建议”变成“优先级 + 可验收改法”。</div>
+            </article>
+          </div>
+        </section>
+
+        <section data-in="3">
+          <div class="section-head">
+            <h2>示例 2：仪表盘</h2>
+            <p>同样是“看数据”，差异来自主次层级与关键风险的可见性。</p>
+          </div>
+          <div class="demo-grid">
+            <article class="demo" data-demo="dash">
+              <div class="demo-top">
+                <div class="title">界面</div>
+                <div class="seg" role="group" aria-label="仪表盘示例切换">
+                  <button type="button" data-view="before" aria-pressed="true">改造前</button>
+                  <button type="button" data-view="after" aria-pressed="false">改造后</button>
+                </div>
+              </div>
+              <div class="demo-body">
+                <div class="mock show" data-pane="before">
+                  <div class="mock-head"><strong>运营概览</strong><span class="state">过去 7 天</span></div>
+                  <div class="metrics">
+                    <div class="metric">活跃用户<b>24,120</b></div>
+                    <div class="metric">新注册<b>1,632</b></div>
+                    <div class="metric">支付率<b>5.1%</b></div>
+                    <div class="metric">流失率<b>3.2%</b></div>
+                    <div class="metric">工单数<b>482</b></div>
+                    <div class="metric">告警数<b>19</b></div>
+                  </div>
+                </div>
+
+                <div class="mock hide" data-pane="after">
+                  <div class="mock-head"><strong>运营概览</strong><span class="state">过去 7 天</span></div>
+                  <div class="metrics">
+                    <div class="metric primary">核心健康度<b>91</b></div>
+                    <div class="metric">活跃用户<b>24,120</b></div>
+                    <div class="metric">新注册<b>1,632</b></div>
+                    <div class="metric">支付率<b>5.1%</b></div>
+                    <div class="metric risk">告警数<b>19</b></div>
+                    <div class="metric">工单数<b>482</b></div>
+                  </div>
+                  <div class="feedback">告警较上周上升 34%，建议优先查看“支付链路”详情。</div>
+                </div>
+              </div>
+              <div class="notes"><b>直观变化：</b>先看到关键状态；风险有明确入口；下一步动作更清晰。</div>
+            </article>
+
+            <article class="demo" data-demo="list">
+              <div class="demo-top">
+                <div class="title">清单式规则（guide 输出片段）</div>
+                <div class="seg" role="group" aria-label="仪表盘规则切换">
+                  <button type="button" data-view="before" aria-pressed="true">规则</button>
+                  <button type="button" data-view="after" aria-pressed="false">验收</button>
+                </div>
+              </div>
+              <div class="demo-body">
+                <div class="review-card show" data-pane="before">
+                  <div class="head">该做 / 不该做</div>
+                  <div class="body">
+                    <div class="prio">
+                      <div class="item">
+                        <div class="k p0"><span class="mark"></span>该做</div>
+                        <p>只保留一个主指标做视觉主点，其他指标降权作为支撑信息。</p>
+                      </div>
+                      <div class="item">
+                        <div class="k p1"><span class="mark"></span>该做</div>
+                        <p>关键风险要可见，并提供可点击的下一步入口。</p>
+                      </div>
+                      <div class="item">
+                        <div class="k p2"><span class="mark"></span>不该做</div>
+                        <p>不要让所有数字同权重铺满首屏，用户难以判断重点。</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="review-card hide" data-pane="after">
+                  <div class="head">验收检查点</div>
+                  <div class="body">
+                    <div class="prio">
+                      <div class="item">
+                        <div class="k p0"><span class="mark"></span>3 秒判断</div>
+                        <p>用户能在 3 秒内说出“现在状态是否健康”。</p>
+                      </div>
+                      <div class="item">
+                        <div class="k p1"><span class="mark"></span>风险入口</div>
+                        <p>告警/异常有清晰入口，点击后能看到原因与处理路径。</p>
+                      </div>
+                      <div class="item">
+                        <div class="k p2"><span class="mark"></span>层级稳定</div>
+                        <p>同类指标在不同页面保持一致呈现，不出现随机风格。</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div class="notes"><b>直观收益：</b>同一套规则能复用到多个仪表盘页面，避免“每页一套”。</div>
+            </article>
+          </div>
+        </section>
+
+        <section data-in="4">
+          <div class="section-head">
+            <h2>示例 3：列表页</h2>
+            <p>同样是“打开项目”，差异来自操作可发现性与一致的行动入口。</p>
+          </div>
+          <div class="demo-grid">
+            <article class="demo" data-demo="table">
+              <div class="demo-top">
+                <div class="title">界面</div>
+                <div class="seg" role="group" aria-label="列表页示例切换">
+                  <button type="button" data-view="before" aria-pressed="true">改造前</button>
+                  <button type="button" data-view="after" aria-pressed="false">改造后</button>
+                </div>
+              </div>
+              <div class="demo-body">
+                <div class="mock show" data-pane="before">
+                  <div class="mock-head"><strong>项目列表</strong><span class="state">32 个项目</span></div>
+                  <div class="table">
+                    <div class="tr"><span>支付链路监控</span><span>...</span></div>
+                    <div class="tr"><span>增长实验看板</span><span>...</span></div>
+                    <div class="tr"><span>客服自动分配</span><span>...</span></div>
+                  </div>
+                </div>
+
+                <div class="mock hide" data-pane="after">
+                  <div class="mock-head"><strong>项目列表</strong><span class="state">32 个项目</span></div>
+                  <div class="table">
+                    <div class="tr"><span>支付链路监控</span><span><button class="btn">查看</button></span></div>
+                    <div class="tr"><span>增长实验看板</span><span><button class="btn">查看</button></span></div>
+                    <div class="tr"><span>客服自动分配</span><span><button class="btn">查看</button></span></div>
+                  </div>
+                  <div class="chips">
+                    <span class="chip">批量编辑</span>
+                    <span class="chip">导出报表</span>
+                    <span class="chip">更多操作</span>
+                  </div>
+                </div>
+              </div>
+              <div class="notes"><b>直观变化：</b>主操作显式；长尾操作后置；列表行为一致。</div>
+            </article>
+
+            <article class="demo">
+              <div class="demo-top">
+                <div class="title">触发示例</div>
+                <div class="seg" role="group" aria-label="触发示例切换">
+                  <button type="button" data-view="before" aria-pressed="true">提示词</button>
+                  <button type="button" data-view="after" aria-pressed="false">输出节选</button>
+                </div>
+              </div>
+              <div class="demo-body">
+                <div class="review-card show" data-pane="before">
+                  <div class="head">提示词</div>
+                  <div class="body">
+                    <pre>请使用 $oiloil-ui-ux-guide 的 review 模式。
+页面：项目列表（列表-详情）。
+目标：减少误点，提高“查看项目”的可发现性。
+输出：P0/P1/P2 + 修复方案 + 验收检查点。</pre>
+                  </div>
+                </div>
+                <div class="review-card hide" data-pane="after">
+                  <div class="head">输出节选</div>
+                  <div class="body">
+                    <div class="prio">
+                      <div class="item">
+                        <div class="k p0"><span class="mark"></span>P0</div>
+                        <p>主要操作藏在“...”中，用户不确定能做什么。</p>
+                      </div>
+                      <div class="item">
+                        <div class="k p1"><span class="mark"></span>P1</div>
+                        <p>列表缺少一致入口，行内操作与点击行为不一致。</p>
+                      </div>
+                      <div class="item">
+                        <div class="k p2"><span class="mark"></span>P2</div>
+                        <p>长尾操作应后置到“更多操作”，避免首屏噪音。</p>
+                      </div>
+                    </div>
+                    <div class="small">修复会落到：按钮/链接的可发现性、行交互一致性、长尾操作收纳。</div>
+                  </div>
+                </div>
+              </div>
+              <div class="notes"><b>直观收益：</b>同一个问题能被稳定拆成优先级与可落地动作。</div>
+            </article>
+          </div>
+        </section>
+
+        <section data-in="4">
+          <div class="section-head">
+            <h2>设计心理学（怎么落到界面细节）</h2>
+            <p>把抽象概念变成可检查的界面信号：可做什么、怎么做、做完发生了什么、错了怎么恢复。</p>
+          </div>
+
+          <div class="feature-grid">
+            <article class="card">
+              <div class="head">可视化标注（点击开关看变化）</div>
+              <div class="body">
+                <div class="psych-grid">
+                  <div class="toolbox" aria-label="设计心理学开关">
+                    <p class="group-title">设计手段</p>
+                    <div class="toggle-list">
+                      <label class="toggle">
+                        <input type="checkbox" data-anno="affordance" checked />
+                        <div>
+                          <b>示能性</b>
+                          <span>用户能一眼看出“能做什么”。</span>
+                        </div>
+                      </label>
+                      <label class="toggle">
+                        <input type="checkbox" data-anno="signifiers" checked />
+                        <div>
+                          <b>指示符</b>
+                          <span>用户能看出“怎么做”（按钮、标签、可点击性）。</span>
+                        </div>
+                      </label>
+                      <label class="toggle">
+                        <input type="checkbox" data-anno="constraints" checked />
+                        <div>
+                          <b>约束（防错）</b>
+                          <span>用默认值/约束/就近提示减少错误。</span>
+                        </div>
+                      </label>
+                      <label class="toggle">
+                        <input type="checkbox" data-anno="feedback" checked />
+                        <div>
+                          <b>反馈（闭环）</b>
+                          <span>操作后明确结果、变化与下一步。</span>
+                        </div>
+                      </label>
+                      <label class="toggle">
+                        <input type="checkbox" data-anno="mapping" />
+                        <div>
+                          <b>映射</b>
+                          <span>控件位置与它控制的对象保持自然对应。</span>
+                        </div>
+                      </label>
+                      <label class="toggle">
+                        <input type="checkbox" data-anno="knowledge" />
+                        <div>
+                          <b>知识外显</b>
+                          <span>把关键约束放在决策点，而不是让用户记住。</span>
+                        </div>
+                      </label>
+                      <label class="toggle">
+                        <input type="checkbox" data-anno="modes" />
+                        <div>
+                          <b>模式（Mode）</b>
+                          <span>同一操作在不同状态结果不同，需要强提示。</span>
+                        </div>
+                      </label>
+                    </div>
+
+                    <p class="group-title sub">诊断标签</p>
+                    <div class="toggle-list">
+                      <label class="toggle">
+                        <input type="checkbox" data-anno="exec" />
+                        <div>
+                          <b>执行鸿沟</b>
+                          <span>用户不知道“怎么开始/点哪里”。</span>
+                        </div>
+                      </label>
+                      <label class="toggle">
+                        <input type="checkbox" data-anno="eval" />
+                        <div>
+                          <b>评估鸿沟</b>
+                          <span>用户不知道“发生了什么/是否生效”。</span>
+                        </div>
+                      </label>
+                      <label class="toggle">
+                        <input type="checkbox" data-anno="model" />
+                        <div>
+                          <b>概念模型</b>
+                          <span>概念命名一致，让用户形成正确理解。</span>
+                        </div>
+                      </label>
+                    </div>
+
+                    <div class="inline-actions">
+                      <button class="btn" type="button" id="annoAll">全选</button>
+                      <button class="btn" type="button" id="annoNone">清空</button>
+                    </div>
+                  </div>
+
+                  <div class="stage">
+                    <div id="psych-demo" class="annotated anno-affordance anno-signifiers anno-constraints anno-feedback">
+                      <div class="mock">
+                      <div class="mock-head">
+                        <strong class="a-model">通知策略设置</strong>
+                        <div class="mode-toggle a-mode" aria-label="查看与编辑切换">
+                          <button type="button" aria-pressed="false">查看</button>
+                          <button type="button" aria-pressed="true">编辑</button>
+                        </div>
+                      </div>
+                        <div class="row">
+                          <div class="label">邮箱（必填）</div>
+                          <div class="control a-constraint a-knowledge">name@example.com</div>
+                          <div class="help warn a-constraint a-knowledge">仅用于告警和账号安全通知。</div>
+                        </div>
+                        <div class="row">
+                          <div class="label">发送频率</div>
+                          <div class="chips a-mapping">
+                            <span class="chip">立即</span>
+                            <span class="chip">每小时</span>
+                            <span class="chip">每天</span>
+                          </div>
+                        </div>
+                        <div class="cta a-cta a-signifier">
+                          <button class="btn link">取消</button>
+                          <button class="btn primary">保存策略</button>
+                        </div>
+                        <div class="feedback a-feedback a-eval">保存后立即生效，可在“通知历史”查看投递结果。</div>
+                      </div>
+
+                      <div class="pin" data-anno="affordance" style="--x: 78; --y: 73">
+                        <div class="label">示能性：<i>主操作清晰可见</i>，用户知道“能保存”。</div>
+                      </div>
+                      <div class="pin" data-anno="signifiers" style="--x: 82; --y: 68">
+                        <div class="label">指示符：<i>按钮文案是动作</i>，且视觉层级明确。</div>
+                      </div>
+                      <div class="pin" data-anno="constraints" style="--x: 26; --y: 33">
+                        <div class="label">约束：<i>关键风险就近提示</i>，减少填写/理解错误。</div>
+                      </div>
+                      <div class="pin" data-anno="knowledge" style="--x: 30; --y: 42">
+                        <div class="label">知识外显：<i>把约束放在决策点</i>，用户不需要记忆。</div>
+                      </div>
+                      <div class="pin" data-anno="feedback" style="--x: 40; --y: 88">
+                        <div class="label">反馈：<i>结果 + 下一步</i>，减少“是否生效”的不确定。</div>
+                      </div>
+                      <div class="pin" data-anno="mapping" style="--x: 38; --y: 57">
+                        <div class="label">映射：<i>控制项紧贴它控制的内容</i>，减少找位置成本。</div>
+                      </div>
+                      <div class="pin" data-anno="modes" style="--x: 86; --y: 10">
+                        <div class="label">模式：<i>用控制状态表达</i>（查看/编辑切换），避免额外的“状态标签”噪音。</div>
+                      </div>
+                      <div class="pin" data-anno="exec" style="--x: 70; --y: 73">
+                        <div class="label">执行鸿沟：如果主 CTA 不突出，用户会犹豫“点哪里”。</div>
+                      </div>
+                      <div class="pin" data-anno="eval" style="--x: 46; --y: 88">
+                        <div class="label">评估鸿沟：如果缺少结果反馈，用户会重复点击或放弃。</div>
+                      </div>
+                      <div class="pin" data-anno="model" style="--x: 26; --y: 10">
+                        <div class="label">概念模型：标题与字段命名一致，帮助用户建立正确理解。</div>
+                      </div>
+                    </div>
+                    <div class="small">提示：开关越少，越能看清“最关键的信号”是什么。</div>
+                  </div>
+                </div>
+              </div>
+            </article>
+
+            <article class="card">
+              <div class="head">Slip vs Mistake（两种错误要用两种修复）</div>
+              <div class="body">
+                <div class="micro-grid">
+                  <div class="micro">
+                    <div class="k slip"><span class="mark"></span>Slip</div>
+                    <p>目标是对的，但点错了/手滑了。修复方向：可撤销、更安全的触达、二次确认。</p>
+                    <div class="danger">已删除“支付链路监控”。</div>
+                    <div class="toast">撤销删除</div>
+                  </div>
+                  <div class="micro">
+                    <div class="k mistake"><span class="mark"></span>Mistake</div>
+                    <p>理解错了：以为“删除”只是移出列表。修复方向：命名、后果、概念模型要更明确。</p>
+                    <div class="danger">删除是不可逆操作，会移除项目与数据。</div>
+                    <div class="toast">了解差异：停用 vs 删除</div>
+                  </div>
+                </div>
+                <div class="small">Skill 在 review 模式会要求标注这类诊断，避免只给“把按钮做大点”这种泛建议。</div>
+              </div>
+            </article>
+          </div>
+        </section>
+
+        <section data-in="4">
+          <div class="section-head">
+            <h2>系统状态（加载 / 空 / 错误 / 成功 / 权限）</h2>
+            <p>同一个界面，在不同状态下也要“可理解、可操作、可恢复”。</p>
+          </div>
+
+          <div class="demo-grid">
+            <article class="demo" data-demo="states">
+              <div class="demo-top">
+                <div class="title">状态切换</div>
+                <div class="seg" role="group" aria-label="系统状态切换">
+                  <button type="button" data-view="loading" aria-pressed="true">加载</button>
+                  <button type="button" data-view="empty" aria-pressed="false">空</button>
+                  <button type="button" data-view="error" aria-pressed="false">错误</button>
+                  <button type="button" data-view="success" aria-pressed="false">成功</button>
+                  <button type="button" data-view="permission" aria-pressed="false">权限</button>
+                </div>
+              </div>
+              <div class="demo-body">
+                <div class="state-box show" data-pane="loading">
+                  <div class="mock-head"><strong>项目列表</strong><span class="state">加载中</span></div>
+                  <div class="skeleton">
+                    <div class="sk w80"></div>
+                    <div class="sk w60"></div>
+                    <div class="sk w40"></div>
+                  </div>
+                  <div class="small">要点：保持布局稳定，避免跳动；必要时禁用重复提交。</div>
+                </div>
+
+                <div class="state-box hide" data-pane="empty">
+                  <div class="mock-head"><strong>项目列表</strong><span class="state">空</span></div>
+                  <div class="empty">
+                    <b>这里还没有项目</b>
+                    <p>你可以先创建一个项目，或导入已有配置。</p>
+                    <div class="cta">
+                      <button class="btn">导入</button>
+                      <button class="btn primary">创建项目</button>
+                    </div>
+                  </div>
+                  <div class="small">要点：解释“空”是什么意思，并给下一步动作。</div>
+                </div>
+
+                <div class="state-box hide" data-pane="error">
+                  <div class="mock-head"><strong>项目列表</strong><span class="state">失败</span></div>
+                  <div class="alert err">
+                    获取失败：无法连接服务器。请检查网络后重试，或稍后再试。
+                  </div>
+                  <div class="cta">
+                    <button class="btn primary">重试</button>
+                    <button class="btn">查看状态页</button>
+                  </div>
+                  <div class="small">要点：错误信息要可执行（发生了什么 + 怎么修）。</div>
+                </div>
+
+                <div class="state-box hide" data-pane="success">
+                  <div class="mock-head"><strong>通知策略设置</strong><span class="state">已保存</span></div>
+                  <div class="alert ok">保存成功：策略已生效。你可以去“通知历史”验证投递结果。</div>
+                  <div class="cta">
+                    <button class="btn">继续编辑</button>
+                    <button class="btn primary">查看通知历史</button>
+                  </div>
+                  <div class="small">要点：成功也要回答“变化了什么 + 下一步做什么”。</div>
+                </div>
+
+                <div class="state-box hide" data-pane="permission">
+                  <div class="mock-head"><strong>告警规则</strong><span class="state">无权限</span></div>
+                  <div class="alert perm">你没有访问权限。需要“告警管理员”角色才能查看和编辑规则。</div>
+                  <div class="cta">
+                    <button class="btn primary">申请权限</button>
+                    <button class="btn">返回首页</button>
+                  </div>
+                  <div class="small">要点：解释原因 + 给出获取权限的路径。</div>
+                </div>
+              </div>
+              <div class="notes"><b>直观收益：</b>状态齐全意味着更少疑惑、更少重复点击、更少“卡住”。</div>
+            </article>
+
+            <article class="demo">
+              <div class="demo-top">
+                <div class="title">review 输出会覆盖哪些状态</div>
+                <div class="seg" role="group" aria-label="状态覆盖切换">
+                  <button type="button" data-view="before" aria-pressed="true">检查清单</button>
+                  <button type="button" data-view="after" aria-pressed="false">常见缺口</button>
+                </div>
+              </div>
+              <div class="demo-body">
+                <div class="review-card show" data-pane="before">
+                  <div class="head">检查清单</div>
+                  <div class="body">
+                    <div class="prio">
+                      <div class="item">
+                        <div class="k p0"><span class="mark"></span>必须有</div>
+                        <p>加载 / 空 / 错误 / 成功 / 权限状态，且每个都有可执行下一步。</p>
+                      </div>
+                      <div class="item">
+                        <div class="k p1"><span class="mark"></span>避免</div>
+                        <p>只用全局 toast 代替关键页面状态；状态和内容混在一起导致难读。</p>
+                      </div>
+                      <div class="item">
+                        <div class="k p2"><span class="mark"></span>加分项</div>
+                        <p>骨架屏保持布局稳定；失败后尽量保留用户输入。</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div class="review-card hide" data-pane="after">
+                  <div class="head">常见缺口</div>
+                  <div class="body">
+                    <div class="prio">
+                      <div class="item">
+                        <div class="k p0"><span class="mark"></span>评估鸿沟</div>
+                        <p>保存后没有“已生效/未生效”的反馈，用户反复点击。</p>
+                      </div>
+                      <div class="item">
+                        <div class="k p1"><span class="mark"></span>空状态</div>
+                        <p>只写“暂无数据”，不解释原因，也不给下一步。</p>
+                      </div>
+                      <div class="item">
+                        <div class="k p2"><span class="mark"></span>权限</div>
+                        <p>只写“403”，不说明需要什么权限、去哪申请。</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div class="notes"><b>直观收益：</b>把“状态缺口”变成可检查项，评审更稳定。</div>
+            </article>
+          </div>
+        </section>
+
+        <section data-in="4">
+          <div class="section-head">
+            <h2>细节规则补齐：图标与动效</h2>
+            <p>少量关键细节决定“看起来专业”，也决定“用起来不费劲”。</p>
+          </div>
+
+          <div class="feature-grid">
+            <article class="card">
+              <div class="head">图标（统一图标集 + 避免只靠图标传达主操作）</div>
+              <div class="body">
+                <div class="icon-row">
+                  <div>
+                    <div class="pill">更安全的做法</div>
+                    <div class="icon-bar mt-s2">
+                      <button class="icon-btn" type="button">
+                        <svg class="ico" viewBox="0 0 24 24" aria-hidden="true">
+                          <circle cx="11" cy="11" r="7"></circle>
+                          <path d="M20 20l-3.5-3.5"></path>
+                        </svg>
+                        <span>搜索</span>
+                      </button>
+                      <button class="icon-btn" type="button">
+                        <svg class="ico" viewBox="0 0 24 24" aria-hidden="true">
+                          <path d="M4 6h16"></path>
+                          <path d="M7 12h10"></path>
+                          <path d="M10 18h4"></path>
+                        </svg>
+                        <span>筛选</span>
+                      </button>
+                      <button class="icon-btn" type="button">
+                        <svg class="ico" viewBox="0 0 24 24" aria-hidden="true">
+                          <path d="M12 1v4"></path>
+                          <path d="M12 19v4"></path>
+                          <path d="M4.2 4.2l2.8 2.8"></path>
+                          <path d="M17 17l2.8 2.8"></path>
+                          <path d="M1 12h4"></path>
+                          <path d="M19 12h4"></path>
+                          <path d="M4.2 19.8l2.8-2.8"></path>
+                          <path d="M17 7l2.8-2.8"></path>
+                          <circle cx="12" cy="12" r="3.2"></circle>
+                        </svg>
+                        <span>设置</span>
+                      </button>
+                    </div>
+                    <div class="small">主操作优先用文字或“文字+图标”，降低误解风险。</div>
+                  </div>
+
+                  <div>
+                    <div class="pill">风险更高的做法</div>
+                    <div class="icon-bar mt-s2">
+                      <button class="icon-btn icon-only" type="button" aria-label="搜索">
+                        <svg class="ico" viewBox="0 0 24 24" aria-hidden="true">
+                          <circle cx="11" cy="11" r="7"></circle>
+                          <path d="M20 20l-3.5-3.5"></path>
+                        </svg>
+                        <span>搜索</span>
+                      </button>
+                      <button class="icon-btn icon-only" type="button" aria-label="筛选">
+                        <svg class="ico" viewBox="0 0 24 24" aria-hidden="true">
+                          <path d="M4 6h16"></path>
+                          <path d="M7 12h10"></path>
+                          <path d="M10 18h4"></path>
+                        </svg>
+                        <span>筛选</span>
+                      </button>
+                      <button class="icon-btn icon-only" type="button" aria-label="设置">
+                        <svg class="ico" viewBox="0 0 24 24" aria-hidden="true">
+                          <path d="M12 1v4"></path>
+                          <path d="M12 19v4"></path>
+                          <circle cx="12" cy="12" r="3.2"></circle>
+                        </svg>
+                        <span>设置</span>
+                      </button>
+                    </div>
+                    <div class="small">icon-only 适合通用动作（搜索/关闭/更多），不适合承载主操作语义。</div>
+                  </div>
+                </div>
+              </div>
+            </article>
+
+            <article class="card">
+              <div class="head">动效（解释层级与状态变化）</div>
+              <div class="body">
+                <div class="motion-demo">
+                  <div class="motion-head">
+                    <div>
+                      <div class="motion-title">打开详情面板</div>
+                      <div class="small">动效只用来解释“层级/状态”，不做装饰。</div>
+                    </div>
+                    <button class="btn primary" type="button" id="openPanel">打开</button>
+                  </div>
+
+                  <div class="motion-stage" id="motionStage" data-open="false" aria-label="动效示例区域">
+                    <div class="overlay" aria-hidden="true"></div>
+                    <div class="mock mock-reset">
+                      <div class="mock-head"><strong>编辑器画布</strong><span class="state">稳定不漂浮</span></div>
+                      <div class="row">
+                        <div class="label">内容</div>
+                        <div class="control">这里是你的主要工作区域（保持稳定）。</div>
+                      </div>
+                      <div class="cta">
+                        <button class="btn">取消</button>
+                        <button class="btn primary">保存</button>
+                      </div>
+                    </div>
+
+                    <aside class="panel" aria-label="详情面板">
+                      <h3>详情</h3>
+                      <p>面板用小幅位移 + 淡入出现；画布区域保持稳定，减少认知负担。</p>
+                      <div class="panel-actions">
+                        <button class="btn" type="button" id="closePanel">关闭</button>
+                      </div>
+                    </aside>
+                  </div>
+                </div>
+              </div>
+            </article>
+          </div>
+        </section>
+
+        <footer class="footer">
+          <span>OilOil UI/UX Guide Skill · Apache 2.0</span>
+          <span>Focus on task, state, result, risk.</span>
+        </footer>
+      </main>
+    </div>
+
+    <script>
+      function setView(root, view) {
+        const buttons = root.querySelectorAll("[data-view]");
+        buttons.forEach((btn) => btn.setAttribute("aria-pressed", btn.dataset.view === view ? "true" : "false"));
+
+        const panes = root.querySelectorAll("[data-pane]");
+        panes.forEach((pane) => {
+          const show = pane.dataset.pane === view;
+          pane.classList.toggle("show", show);
+          pane.classList.toggle("hide", !show);
+        });
+      }
+
+      document.querySelectorAll("[data-demo]").forEach((demo) => {
+        const pressed = demo.querySelector('[data-view][aria-pressed="true"]');
+        const first = demo.querySelector("[data-view]");
+        const initial = (pressed || first)?.dataset?.view || "before";
+        setView(demo, initial);
+        demo.querySelectorAll("[data-view]").forEach((btn) => {
+          btn.addEventListener("click", () => setView(demo, btn.dataset.view));
+        });
+      });
+
+      // Non-demo segmented controls (small cards)
+      document.querySelectorAll(".demo:not([data-demo])").forEach((demo) => {
+        const seg = demo.querySelector(".seg");
+        if (!seg) return;
+        const pressed = demo.querySelector('[data-view][aria-pressed="true"]');
+        const first = demo.querySelector("[data-view]");
+        const initial = (pressed || first)?.dataset?.view || "before";
+        setView(demo, initial);
+        demo.querySelectorAll("[data-view]").forEach((btn) => {
+          btn.addEventListener("click", () => setView(demo, btn.dataset.view));
+        });
+      });
+
+      // Design psychology annotation toggles
+      (function initAnnotations() {
+        const psych = document.getElementById("psych-demo");
+        if (!psych) return;
+
+        const allAnno = ["affordance", "signifiers", "constraints", "feedback", "mapping", "knowledge", "modes", "exec", "eval", "model"];
+        const inputs = document.querySelectorAll('.toolbox input[type="checkbox"][data-anno]');
+
+        function sync() {
+          allAnno.forEach((k) => psych.classList.remove(`anno-${k}`));
+          inputs.forEach((inp) => {
+            if (inp.checked) psych.classList.add(`anno-${inp.dataset.anno}`);
+          });
+        }
+
+        inputs.forEach((inp) => inp.addEventListener("change", sync));
+
+        const btnAll = document.getElementById("annoAll");
+        const btnNone = document.getElementById("annoNone");
+
+        if (btnAll) {
+          btnAll.addEventListener("click", () => {
+            inputs.forEach((inp) => (inp.checked = true));
+            sync();
+          });
+        }
+
+        if (btnNone) {
+          btnNone.addEventListener("click", () => {
+            inputs.forEach((inp) => (inp.checked = false));
+            sync();
+          });
+        }
+
+        sync();
+      })();
+
+      // Motion demo: subtle panel open/close
+      (function initMotionDemo() {
+        const stage = document.getElementById("motionStage");
+        const open = document.getElementById("openPanel");
+        const close = document.getElementById("closePanel");
+        if (!stage || !open || !close) return;
+
+        function setOpen(v) {
+          stage.setAttribute("data-open", v ? "true" : "false");
+        }
+
+        open.addEventListener("click", () => setOpen(true));
+        close.addEventListener("click", () => setOpen(false));
+        stage.querySelector(".overlay")?.addEventListener("click", () => setOpen(false));
+      })();
+    </script>
+  </body>
+</html>

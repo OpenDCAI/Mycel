@@ -98,18 +98,6 @@ worktrees/
 !.pre-commit-config.yaml
 /dogfood-output/
 /current-chat.yaml
-/.claude/skills/*
-!/.claude/skills/wtpr/
-!/.claude/skills/bench/
-!/.claude/skills/sks/
-!/.claude/skills/sksadd/
-!/.claude/skills/sksgnew/
-!/.claude/skills/sksgrm/
-!/.claude/skills/sksls/
-!/.claude/skills/sksoff/
-!/.claude/skills/skson/
-!/.claude/skills/sksrm/
-!/.claude/skills/skssearch/
 
 # Development artifacts — never commit
 docs/lessons/
