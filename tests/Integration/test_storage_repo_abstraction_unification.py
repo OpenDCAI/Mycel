@@ -243,6 +243,24 @@ def test_storage_container_sync_file_repo_uses_public_client(monkeypatch: pytest
     assert captured["client"] is public_client
 
 
+def test_storage_container_user_settings_repo_uses_public_client(monkeypatch: pytest.MonkeyPatch) -> None:
+    captured: dict[str, object] = {}
+
+    class _FakeUserSettingsRepo:
+        def __init__(self, client: object) -> None:
+            captured["client"] = client
+
+    monkeypatch.setattr("storage.providers.supabase.user_settings_repo.SupabaseUserSettingsRepo", _FakeUserSettingsRepo)
+
+    runtime_client = object()
+    public_client = object()
+    container = StorageContainer(supabase_client=runtime_client, public_supabase_client=public_client)
+
+    container.user_settings_repo()
+
+    assert captured["client"] is public_client
+
+
 def test_make_sandbox_monitor_repo_uses_web_supabase_factory(monkeypatch: pytest.MonkeyPatch) -> None:
     captured: dict[str, object] = {}
 

@@ -152,7 +152,9 @@ class StorageContainer:
         return self._build("invite_code_repo")
 
     def user_settings_repo(self) -> UserSettingsRepo:
-        return self._build("user_settings_repo")
+        # @@@user-settings-public-schema - user_settings is still a public-schema
+        # island, so authenticated settings routes must not inherit staging.
+        return self._build("user_settings_repo", client=self._public_supabase_client)
 
     def agent_config_repo(self) -> AgentConfigRepo:
         return self._build("agent_config_repo")
