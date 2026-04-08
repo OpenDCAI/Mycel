@@ -393,6 +393,7 @@ def build_evaluation_operator_surface(
         ]
 
     return {
+        "status": status,
         "kind": kind,
         "tone": tone,
         "headline": headline,
@@ -403,6 +404,43 @@ def build_evaluation_operator_surface(
         "next_steps": next_steps,
         "raw_notes": notes,
     }
+
+
+def _evaluation_unavailable_surface() -> dict[str, Any]:
+    return {
+        "status": "unavailable",
+        "kind": "unavailable",
+        "tone": "warning",
+        "headline": "Evaluation operator truth is not wired in this runtime yet.",
+        "summary": "Monitor can report that evaluation truth is unavailable without pretending nothing is happening.",
+        "facts": [{"label": "Status", "value": "unavailable"}],
+        "artifacts": [],
+        "artifact_summary": {"present": 0, "missing": 0, "total": 0},
+        "next_steps": ["Restore a truthful evaluation runtime source before reviving the monitor evaluation page."],
+        "raw_notes": None,
+    }
+
+
+def get_monitor_evaluation_truth() -> dict[str, Any]:
+    # @@@evaluation-truth-stopline - PR-D1 exposes explicit unavailable truth until a real runtime source is wired.
+    return _evaluation_unavailable_surface()
+
+
+def build_monitor_evaluation_dashboard_summary(payload: dict[str, Any]) -> dict[str, Any]:
+    status = str(payload.get("status") or "unavailable")
+    return {
+        "evaluations_running": 1 if status == "running" else 0,
+        "latest_evaluation": {
+            "status": status,
+            "kind": payload.get("kind"),
+            "tone": payload.get("tone"),
+            "headline": payload.get("headline"),
+        },
+    }
+
+
+def get_monitor_evaluation_dashboard_summary() -> dict[str, Any]:
+    return build_monitor_evaluation_dashboard_summary(get_monitor_evaluation_truth())
 
 
 # ---------------------------------------------------------------------------

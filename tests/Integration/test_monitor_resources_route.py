@@ -3,7 +3,7 @@ from fastapi.testclient import TestClient
 
 from backend.web.core.dependencies import get_current_user_id
 from backend.web.routers import monitor, resources
-from backend.web.services import resource_service
+from backend.web.services import monitor_service, resource_service
 
 
 def _build_monitor_test_app(*, include_product_resources: bool = False) -> FastAPI:
@@ -119,6 +119,65 @@ def test_monitor_dashboard_route_smoke(monkeypatch):
     assert "infra" in payload
     assert "workload" in payload
     assert "latest_evaluation" in payload
+
+
+def test_monitor_evaluation_route_exposes_operator_truth(monkeypatch):
+    monkeypatch.setattr(
+        monitor_service,
+        "get_monitor_evaluation_truth",
+        lambda: {
+            "status": "unavailable",
+            "kind": "unavailable",
+            "tone": "warning",
+            "headline": "Evaluation operator truth is not wired in this runtime yet.",
+            "summary": "Monitor can report that evaluation truth is unavailable without pretending nothing is happening.",
+            "facts": [{"label": "Status", "value": "unavailable"}],
+            "artifacts": [],
+            "artifact_summary": {"present": 0, "missing": 0, "total": 0},
+            "next_steps": ["Restore a truthful evaluation runtime source before reviving the monitor evaluation page."],
+            "raw_notes": None,
+        },
+    )
+
+    with TestClient(_build_monitor_test_app()) as client:
+        response = client.get("/api/monitor/evaluation")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["status"] == "unavailable"
+    assert payload["kind"] == "unavailable"
+    assert payload["headline"] == "Evaluation operator truth is not wired in this runtime yet."
+    assert payload["artifact_summary"] == {"present": 0, "missing": 0, "total": 0}
+
+
+def test_monitor_dashboard_route_derives_evaluation_summary_from_service(monkeypatch):
+    _stub_monitor_resource_snapshot(monkeypatch)
+    monkeypatch.setattr(
+        monitor_service,
+        "get_monitor_evaluation_dashboard_summary",
+        lambda: {
+            "evaluations_running": 1,
+            "latest_evaluation": {
+                "status": "running",
+                "kind": "running_active",
+                "tone": "default",
+                "headline": "Evaluation is actively running.",
+            },
+        },
+    )
+
+    with TestClient(_build_monitor_test_app()) as client:
+        response = client.get("/api/monitor/dashboard")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["workload"]["evaluations_running"] == 1
+    assert payload["latest_evaluation"] == {
+        "status": "running",
+        "kind": "running_active",
+        "tone": "default",
+        "headline": "Evaluation is actively running.",
+    }
 
 
 def test_monitor_leases_route_exposes_summary_and_groups():
