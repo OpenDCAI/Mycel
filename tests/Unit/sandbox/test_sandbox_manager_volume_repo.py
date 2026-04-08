@@ -323,7 +323,8 @@ def test_sync_uploads_skips_local_volume_sync_when_lease_has_no_volume_id():
     assert manager.volume.upload_calls == []
 
 
-def test_get_sandbox_local_provider_does_not_require_volume_bootstrap(tmp_path):
+def test_get_sandbox_local_provider_does_not_require_volume_bootstrap(tmp_path, monkeypatch):
+    monkeypatch.setattr("sandbox.resource_snapshot.upsert_lease_resource_snapshot", lambda **_kwargs: None)
     manager = SandboxManager(
         provider=LocalSessionProvider(default_cwd=str(tmp_path)),
         db_path=tmp_path / "sandbox.db",
@@ -538,6 +539,7 @@ def test_make_sandbox_monitor_repo_returns_supabase(monkeypatch):
         def table(self, _name: str):
             return object()
 
+    monkeypatch.setenv("LEON_STORAGE_STRATEGY", "supabase")
     monkeypatch.setattr(
         "backend.web.core.supabase_factory.create_supabase_client",
         lambda: _FakeSupabaseClient(),

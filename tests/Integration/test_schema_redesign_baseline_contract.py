@@ -55,6 +55,7 @@ def test_list_user_leases_exposes_thread_identity_not_member_id(monkeypatch) -> 
     assert lease["agents"] == [
         {
             "thread_id": "thread-1",
+            "agent_user_id": "agent-1",
             "agent_name": "Morel",
             "avatar_url": avatar_url("agent-1", True),
         }
@@ -126,7 +127,13 @@ def test_build_resource_session_payload_has_no_member_id_field() -> None:
         session_identity="lease-1:thread-1",
         lease_id="lease-1",
         thread_id="thread-1",
-        owner={"thread_id": "thread-1", "agent_name": "Toad", "avatar_url": "/api/users/member-1/avatar"},
+        runtime_session_id="provider-session-1",
+        owner={
+            "thread_id": "thread-1",
+            "agent_user_id": "agent-1",
+            "agent_name": "Toad",
+            "avatar_url": "/api/users/agent-1/avatar",
+        },
         status="running",
         started_at="2026-04-08T10:00:00Z",
         metrics=None,
@@ -136,8 +143,10 @@ def test_build_resource_session_payload_has_no_member_id_field() -> None:
         "id": "lease-1:thread-1",
         "leaseId": "lease-1",
         "threadId": "thread-1",
+        "runtimeSessionId": "provider-session-1",
+        "agentUserId": "agent-1",
         "agentName": "Toad",
-        "avatarUrl": "/api/users/member-1/avatar",
+        "avatarUrl": "/api/users/agent-1/avatar",
         "status": "running",
         "startedAt": "2026-04-08T10:00:00Z",
         "metrics": None,
