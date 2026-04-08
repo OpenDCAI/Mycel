@@ -17,6 +17,8 @@ class _FakeSettingsRepo:
             "default_model": "openai:gpt-5.4",
         }
         self.models_config = {"pool": {"enabled": ["openai:gpt-5.4"], "custom": []}}
+        self.saved_observation = None
+        self.saved_sandboxes = None
 
     def get(self, user_id: str):
         assert user_id == "user-1"
@@ -33,6 +35,14 @@ class _FakeSettingsRepo:
     def get_sandbox_configs(self, user_id: str):
         assert user_id == "user-1"
         return None
+
+    def set_observation_config(self, user_id: str, config):
+        assert user_id == "user-1"
+        self.saved_observation = config
+
+    def set_sandbox_configs(self, user_id: str, configs):
+        assert user_id == "user-1"
+        self.saved_sandboxes = configs
 
 
 def _request(repo: _FakeSettingsRepo | None):
@@ -118,3 +128,48 @@ async def test_list_sandbox_configs_keeps_filesystem_fallback_when_repo_row_miss
     result = await settings_router.list_sandbox_configs(req)
 
     assert result == {"sandboxes": {"alpha": {"provider": "local"}}}
+
+
+@pytest.mark.asyncio
+async def test_update_observation_settings_does_not_import_filesystem_when_repo_row_missing(monkeypatch):
+    repo = _FakeSettingsRepo()
+    req = _request(repo)
+    monkeypatch.setattr(settings_router, "_try_get_user_id", lambda _request: "user-1")
+    monkeypatch.setattr(
+        settings_router,
+        "_load_user_json",
+        lambda *_parts: {"active": "legacy", "langfuse": {"public_key": "legacy-pk"}},
+    )
+
+    result = await settings_router.update_observation_settings(
+        settings_router.ObservationRequest(active="langsmith"),
+        req,
+    )
+
+    assert result == {"success": True, "active": "langsmith"}
+    assert repo.saved_observation == {"active": "langsmith"}
+
+
+@pytest.mark.asyncio
+async def test_save_sandbox_config_does_not_import_filesystem_when_repo_row_missing(
+    monkeypatch,
+    tmp_path: Path,
+):
+    repo = _FakeSettingsRepo()
+    req = _request(repo)
+    monkeypatch.setattr(settings_router, "_try_get_user_id", lambda _request: "user-1")
+    sandboxes_dir = tmp_path / "sandboxes"
+    sandboxes_dir.mkdir()
+    (sandboxes_dir / "alpha.json").write_text(json.dumps({"provider": "local"}), encoding="utf-8")
+    monkeypatch.setattr(settings_router, "user_home_read_candidates", lambda *_parts: [sandboxes_dir])
+
+    result = await settings_router.save_sandbox_config(
+        settings_router.SandboxConfigRequest(name="beta", config={"provider": "local"}),
+        req,
+    )
+
+    assert result == {"success": True, "path": "supabase://user_settings/user-1/sandbox_configs/beta"}
+    assert "alpha" not in repo.saved_sandboxes
+    assert repo.saved_sandboxes["beta"]["provider"] == "local"
+    assert repo.saved_sandboxes["beta"]["name"] == "local"
+    assert repo.saved_sandboxes["beta"]["on_exit"] == "pause"
