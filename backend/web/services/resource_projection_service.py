@@ -156,6 +156,26 @@ def _resource_session_identity(session: dict[str, Any]) -> str:
     return f"{lease_id}:{thread_id or 'unbound'}"
 
 
+def _resource_display_status(
+    *,
+    observed_state: str | None,
+    desired_state: str | None,
+    runtime_session_id: str | None,
+    session_metrics: dict[str, Any] | None,
+) -> str:
+    status = map_lease_to_session_status(observed_state, desired_state)
+    observed = str(observed_state or "").strip().lower()
+    desired = str(desired_state or "").strip().lower()
+    if status != "running":
+        return status
+    # @@@resource-detached-residue - monitor/resources should not inflate running counts with
+    # detached leases that have neither a bound runtime nor any live/quota snapshot. Those rows
+    # are residue on this operator surface, even if the product-facing desired state still says running.
+    if observed == "detached" and desired == "running" and not runtime_session_id and session_metrics is None:
+        return "stopped"
+    return status
+
+
 def _project_user_visible_resource_sessions(repo: Any, rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Project raw monitor rows into the user-visible resource surface."""
     grouped: dict[str, list[dict[str, Any]]] = {}
@@ -231,22 +251,27 @@ def list_resource_providers() -> dict[str, Any]:
         for session in provider_sessions:
             observed_state = session.get("observed_state")
             desired_state = session.get("desired_state")
-            normalized = map_lease_to_session_status(observed_state, desired_state)
             thread_id = str(session.get("thread_id") or "")
             lease_id = str(session.get("lease_id") or "")
+            runtime_session_id = runtime_session_ids.get(lease_id)
+            if lease_id and lease_id not in runtime_session_ids:
+                runtime_session_id = query_lease_instance_id(lease_id) if callable(query_lease_instance_id) else None
+                runtime_session_ids[lease_id] = runtime_session_id
+            session_metrics = _to_session_metrics(snapshot_by_lease.get(lease_id))
+            normalized = _resource_display_status(
+                observed_state=observed_state,
+                desired_state=desired_state,
+                runtime_session_id=runtime_session_id,
+                session_metrics=session_metrics,
+            )
             if normalized == "running" and lease_id not in seen_running_leases:
                 running_count += 1
                 seen_running_leases.add(lease_id)
-            session_metrics = _to_session_metrics(snapshot_by_lease.get(lease_id))
             owner = owners.get(thread_id, {"agent_name": "未绑定Agent", "avatar_url": None})
             session_identity = _resource_session_identity(session)
             if session_identity in seen_session_ids:
                 continue
             seen_session_ids.add(session_identity)
-            runtime_session_id = runtime_session_ids.get(lease_id)
-            if lease_id and lease_id not in runtime_session_ids:
-                runtime_session_id = query_lease_instance_id(lease_id) if callable(query_lease_instance_id) else None
-                runtime_session_ids[lease_id] = runtime_session_id
             normalized_sessions.append(
                 resource_service.build_resource_session_payload(
                     session_identity=session_identity,
@@ -314,9 +339,12 @@ def visible_resource_session_stats() -> dict[str, dict[str, int]]:
     try:
         raw_sessions = repo.list_sessions_with_leases()
         sessions = _project_user_visible_resource_sessions(repo, raw_sessions)
+        query_lease_instance_id = getattr(repo, "query_lease_instance_id", None)
     finally:
         repo.close()
 
+    runtime_session_ids: dict[str, str | None] = {}
+    snapshot_by_lease = list_resource_snapshots([str(session.get("lease_id") or "") for session in sessions])
     stats: dict[str, dict[str, int]] = {}
     seen_session_ids: set[str] = set()
     seen_running_leases: set[tuple[str, str]] = set()
@@ -329,7 +357,16 @@ def visible_resource_session_stats() -> dict[str, dict[str, int]]:
             provider_stats["sessions"] += 1
 
         lease_id = str(session.get("lease_id") or "")
-        normalized = map_lease_to_session_status(session.get("observed_state"), session.get("desired_state"))
+        runtime_session_id = runtime_session_ids.get(lease_id)
+        if lease_id and lease_id not in runtime_session_ids:
+            runtime_session_id = query_lease_instance_id(lease_id) if callable(query_lease_instance_id) else None
+            runtime_session_ids[lease_id] = runtime_session_id
+        normalized = _resource_display_status(
+            observed_state=session.get("observed_state"),
+            desired_state=session.get("desired_state"),
+            runtime_session_id=runtime_session_id,
+            session_metrics=_to_session_metrics(snapshot_by_lease.get(lease_id)),
+        )
         running_identity = (provider_instance, lease_id)
         if normalized == "running" and lease_id and running_identity not in seen_running_leases:
             seen_running_leases.add(running_identity)

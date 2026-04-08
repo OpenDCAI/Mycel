@@ -22,6 +22,11 @@ def test_resource_overview_cache_refresh_adds_metadata(monkeypatch):
     cache.clear_monitor_resource_overview_cache()
     monkeypatch.setattr(
         cache.resource_projection_service,
+        "visible_resource_session_stats",
+        lambda: {"local": {"sessions": 0, "running": 0}},
+    )
+    monkeypatch.setattr(
+        cache.resource_projection_service,
         "list_resource_providers",
         lambda: {
             "summary": {
@@ -54,6 +59,11 @@ def test_resource_overview_cache_refresh_adds_metadata(monkeypatch):
 
 def test_resource_overview_cache_keeps_last_snapshot_on_refresh_error(monkeypatch):
     cache.clear_monitor_resource_overview_cache()
+    monkeypatch.setattr(
+        cache.resource_projection_service,
+        "visible_resource_session_stats",
+        lambda: {"docker": {"sessions": 1, "running": 1}},
+    )
     monkeypatch.setattr(
         cache.resource_projection_service,
         "list_resource_providers",
