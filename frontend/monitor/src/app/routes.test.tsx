@@ -204,6 +204,8 @@ describe("MonitorRoutes", () => {
     expect(await screen.findByText("Lease Triage")).toBeInTheDocument();
     expect(screen.getByText("Active Drift")).toBeInTheDocument();
     expect(screen.getByText("Detached Residue")).toBeInTheDocument();
+    expect(screen.getByText("Orphan Cleanup")).toBeInTheDocument();
+    expect(screen.getByText("Healthy Capacity")).toBeInTheDocument();
     expect(screen.getByText("Tracked Leases")).toBeInTheDocument();
     expect(screen.getByText("Raw Lease Table")).toBeInTheDocument();
   });
