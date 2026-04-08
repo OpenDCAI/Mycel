@@ -642,7 +642,6 @@ describe("MonitorRoutes", () => {
                 agentName: "Local Agent",
                 status: "running",
                 startedAt: "2026-04-08T00:00:00Z",
-                runtimeSessionId: "runtime-local",
               },
             ],
           },
@@ -658,6 +657,64 @@ describe("MonitorRoutes", () => {
 
     const summaryPills = await screen.findAllByText("1 无 runtime");
     expect(summaryPills[0]).toHaveClass("resources-summary-pill");
+  });
+
+  it("does not count local sessions as missing runtime in the summary strip", async () => {
+    mockRoutePayloads({
+      "/resources": {
+        summary: {
+          snapshot_at: "2026-04-08T00:00:00Z",
+          total_providers: 1,
+          active_providers: 1,
+          unavailable_providers: 0,
+          running_sessions: 1,
+        },
+        providers: [
+          {
+            id: "local",
+            name: "local",
+            description: "Local provider",
+            type: "local",
+            status: "active",
+            capabilities: {
+              filesystem: true,
+              terminal: true,
+              metrics: true,
+              screenshot: false,
+              web: false,
+              process: false,
+              hooks: false,
+              mount: false,
+            },
+            telemetry: {
+              running: { used: 1, limit: null, unit: "sandbox", source: "sandbox_db", freshness: "cached" },
+              cpu: { used: 5, limit: 100, unit: "%", source: "api", freshness: "live" },
+              memory: { used: 1, limit: 8, unit: "GB", source: "api", freshness: "live" },
+              disk: { used: 2, limit: 20, unit: "GB", source: "api", freshness: "live" },
+            },
+            cardCpu: { used: 5, limit: 100, unit: "%", source: "api", freshness: "live" },
+            sessions: [
+              {
+                id: "session-1",
+                threadId: "thread-1",
+                agentName: "Local Agent",
+                status: "running",
+                startedAt: "2026-04-08T00:00:00Z",
+              },
+            ],
+          },
+        ],
+      },
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/resources"]}>
+        <MonitorRoutes />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText("1 运行会话")).toBeInTheDocument();
+    expect(screen.queryByText(/无 runtime/)).not.toBeInTheDocument();
   });
 
   it("surfaces when a ready provider still has no live telemetry", async () => {
