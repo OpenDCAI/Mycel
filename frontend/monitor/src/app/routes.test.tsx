@@ -50,6 +50,7 @@ describe("MonitorRoutes", () => {
     expect(screen.getByRole("link", { name: /threads/i })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /resources/i })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /leases/i })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /evaluation/i })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /diverged/i })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /events/i })).toBeInTheDocument();
   });
@@ -259,5 +260,36 @@ describe("MonitorRoutes", () => {
 
     expect(await screen.findByText("Signal Feed")).toBeInTheDocument();
     expect(screen.getByText("Raw Event Table")).toBeInTheDocument();
+  });
+
+  it("renders evaluation as a truthful operator surface", async () => {
+    mockRoutePayloads({
+      "/evaluation": {
+        status: "unavailable",
+        kind: "unavailable",
+        tone: "warning",
+        headline: "Evaluation operator truth is not wired in this runtime yet.",
+        summary: "Monitor can report that evaluation truth is unavailable without pretending nothing is happening.",
+        facts: [{ label: "Status", value: "unavailable" }],
+        artifacts: [],
+        artifact_summary: {
+          present: 0,
+          missing: 0,
+          total: 0,
+        },
+        next_steps: ["Restore a truthful evaluation runtime source before reviving the monitor evaluation page."],
+        raw_notes: null,
+      },
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/evaluation"]}>
+        <MonitorRoutes />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByRole("heading", { name: "Evaluation" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /evaluation/i })).toHaveAttribute("aria-current", "page");
+    expect(screen.getByText("Evaluation operator truth is not wired in this runtime yet.")).toBeInTheDocument();
   });
 });
