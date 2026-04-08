@@ -47,6 +47,7 @@ class AsyncCommand:
     stderr_buffer: list[str] = field(default_factory=list)
     exit_code: int | None = None
     done: bool = False
+    cancelled: bool = False
 
 
 class BaseExecutor(ABC):

@@ -90,7 +90,7 @@ def format_background_notification(
 
 def format_command_notification(
     command_id: str,
-    status: Literal["completed", "failed"],
+    status: Literal["completed", "failed", "cancelled"],
     exit_code: int,
     command_line: str,
     output: str,

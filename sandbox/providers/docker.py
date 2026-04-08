@@ -664,6 +664,12 @@ class DockerPtyRuntime(_RemoteRuntimeBase):
             await asyncio.to_thread(self._pty_session.close)
             self._pty_session = None
 
+    async def _cancel_running_command(self) -> bool:
+        if self._pty_session is None:
+            return False
+        await asyncio.to_thread(self._close_shell_sync)
+        return True
+
     async def execute(self, command: str, timeout: float | None = None) -> ExecuteResult:
         return await self._execute_background_command(command, timeout=timeout)
 

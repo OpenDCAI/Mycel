@@ -464,6 +464,37 @@ class TestRuntimeIntegration:
 
         await runtime2.close()
 
+    @pytest.mark.asyncio
+    async def test_cancelled_background_command_releases_local_shell_prompt(self, terminal_store, lease_store):
+        terminal = terminal_from_row(
+            terminal_store.create("term-cancel-shell", "thread-cancel-shell", "lease-cancel-shell", "/tmp"),
+            terminal_store.db_path,
+        )
+        lease = lease_store.create("lease-cancel-shell", "local")
+        provider = MagicMock()
+        provider.create_runtime.side_effect = lambda t, lease: LocalPersistentShellRuntime(t, lease)
+        ChatSessionManager(provider=provider, db_path=terminal_store.db_path)
+
+        runtime = provider.create_runtime(terminal, lease)
+
+        async_cmd = await runtime.start_command("sleep 3; echo SHOULD_NOT_APPEAR", "/tmp")
+        await asyncio.sleep(0.2)
+
+        cancelled = await runtime.cancel_command(async_cmd.command_id)
+        assert cancelled is True
+
+        followup = await asyncio.wait_for(runtime.execute("echo prompt-back"), timeout=1.0)
+        assert followup.exit_code == 0
+        assert "prompt-back" in followup.stdout
+
+        status = await runtime.get_command(async_cmd.command_id)
+        assert status is not None
+        assert status.done is True
+        assert status.exit_code == 130
+        assert "SHOULD_NOT_APPEAR" not in "".join(status.stdout_buffer)
+
+        await runtime.close()
+
 
 def test_docker_provider_create_runtime(terminal_store, lease_store):
     pytest.importorskip("docker")

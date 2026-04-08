@@ -224,6 +224,10 @@ class CommandService:
         """Poll until async command finishes, then enqueue CommandNotification."""
         while not async_cmd.done:
             await asyncio.sleep(1)
+
+        if getattr(async_cmd, "cancelled", False):
+            return
+
         from core.agents.service import _BashBackgroundRun
 
         result = _BashBackgroundRun(async_cmd, command).get_result() or ""
