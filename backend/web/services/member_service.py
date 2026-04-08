@@ -894,10 +894,17 @@ def _resolve_repo_backed_agent(
     return user, config
 
 
-def delete_member(member_id: str, user_repo: Any = None, agent_config_repo: Any = None) -> bool:
+def delete_member(
+    member_id: str,
+    user_repo: Any = None,
+    agent_config_repo: Any = None,
+    thread_launch_pref_repo: Any = None,
+) -> bool:
     if member_id == "__leon__":
         return False
     _require_repo_backed_member_ops(user_repo, agent_config_repo)
+    if thread_launch_pref_repo is None:
+        raise RuntimeError("thread_launch_pref_repo is required for agent delete")
     member_dir = MEMBERS_DIR / member_id
     user = user_repo.get_by_id(member_id)
     if user is None:
@@ -908,6 +915,7 @@ def delete_member(member_id: str, user_repo: Any = None, agent_config_repo: Any 
         raise RuntimeError(f"Agent user {member_id} is missing agent_config_id")
     # @@@delete-member-fails-loudly - partial delete is worse than refusing the delete when repo state cannot be removed cleanly.
     agent_config_repo.delete_config(user.agent_config_id)
+    thread_launch_pref_repo.delete_by_agent_user_id(member_id)
 
     if member_dir.is_dir():
         shutil.rmtree(member_dir)

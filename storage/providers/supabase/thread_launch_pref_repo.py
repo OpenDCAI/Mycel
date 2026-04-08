@@ -50,6 +50,14 @@ class SupabaseThreadLaunchPrefRepo:
     def save_successful(self, owner_user_id: str, agent_user_id: str, config: dict[str, Any]) -> None:
         self._save(owner_user_id, agent_user_id, "last_successful_json", "last_successful_at", config)
 
+    def delete_by_agent_user_id(self, agent_user_id: str) -> int:
+        rows = q.rows(
+            self._t().delete().eq("agent_user_id", agent_user_id).execute(),
+            _REPO,
+            "delete_by_agent_user_id",
+        )
+        return len(rows)
+
     def _save(
         self,
         owner_user_id: str,

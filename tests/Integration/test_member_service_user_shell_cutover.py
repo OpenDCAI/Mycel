@@ -110,6 +110,15 @@ class _FakeAgentConfigRepo:
             self.sub_agents[agent_config_id] = [row for row in rows if row["id"] != sub_agent_id]
 
 
+class _FakeThreadLaunchPrefRepo:
+    def __init__(self) -> None:
+        self.deleted_agent_user_ids: list[str] = []
+
+    def delete_by_agent_user_id(self, agent_user_id: str) -> int:
+        self.deleted_agent_user_ids.append(agent_user_id)
+        return 1
+
+
 class _OrderCheckingAgentConfigRepo(_FakeAgentConfigRepo):
     def __init__(self, user_repo: _FakeUserRepo) -> None:
         super().__init__()
@@ -638,11 +647,18 @@ def test_delete_member_deletes_user_and_agent_config_by_agent_config_id(monkeypa
     _write_member_shell(tmp_path / "agent-1")
     user_repo = _FakeUserRepo(rows={"agent-1": _agent_user()})
     agent_config_repo = _FakeAgentConfigRepo()
+    thread_launch_pref_repo = _FakeThreadLaunchPrefRepo()
 
-    ok = member_service.delete_member("agent-1", user_repo=user_repo, agent_config_repo=agent_config_repo)
+    ok = member_service.delete_member(
+        "agent-1",
+        user_repo=user_repo,
+        agent_config_repo=agent_config_repo,
+        thread_launch_pref_repo=thread_launch_pref_repo,
+    )
 
     assert ok is True
     assert agent_config_repo.deleted == ["cfg-1"]
+    assert thread_launch_pref_repo.deleted_agent_user_ids == ["agent-1"]
     assert user_repo.deleted == ["agent-1"]
 
 
@@ -650,11 +666,18 @@ def test_delete_member_deletes_db_shell_even_when_member_dir_is_absent(monkeypat
     monkeypatch.setattr(member_service, "MEMBERS_DIR", tmp_path)
     user_repo = _FakeUserRepo(rows={"agent-1": _agent_user()})
     agent_config_repo = _FakeAgentConfigRepo()
+    thread_launch_pref_repo = _FakeThreadLaunchPrefRepo()
 
-    ok = member_service.delete_member("agent-1", user_repo=user_repo, agent_config_repo=agent_config_repo)
+    ok = member_service.delete_member(
+        "agent-1",
+        user_repo=user_repo,
+        agent_config_repo=agent_config_repo,
+        thread_launch_pref_repo=thread_launch_pref_repo,
+    )
 
     assert ok is True
     assert agent_config_repo.deleted == ["cfg-1"]
+    assert thread_launch_pref_repo.deleted_agent_user_ids == ["agent-1"]
     assert user_repo.deleted == ["agent-1"]
 
 
@@ -681,9 +704,16 @@ def test_delete_member_fails_loudly_when_agent_config_delete_fails(monkeypatch: 
         def delete_config(self, agent_config_id: str) -> None:
             raise RuntimeError(f"boom {agent_config_id}")
 
+    thread_launch_pref_repo = _FakeThreadLaunchPrefRepo()
     with pytest.raises(RuntimeError, match="boom cfg-1"):
-        member_service.delete_member("agent-1", user_repo=user_repo, agent_config_repo=_ExplodingDeleteConfigRepo())
+        member_service.delete_member(
+            "agent-1",
+            user_repo=user_repo,
+            agent_config_repo=_ExplodingDeleteConfigRepo(),
+            thread_launch_pref_repo=thread_launch_pref_repo,
+        )
 
+    assert thread_launch_pref_repo.deleted_agent_user_ids == []
     assert user_repo.deleted == []
     assert _snapshot_tree(member_dir) == before
 

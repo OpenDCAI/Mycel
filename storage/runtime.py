@@ -16,11 +16,22 @@ def build_storage_container(
     *,
     supabase_client: Any | None = None,
     supabase_client_factory: str | None = None,
+    public_supabase_client: Any | None = None,
+    public_supabase_client_factory: str | None = None,
     **_kwargs: Any,
 ) -> StorageContainer:
     """Build a runtime storage container (Supabase-only)."""
     client = _resolve_supabase_client(supabase_client, supabase_client_factory)
-    return StorageContainer(supabase_client=client)
+    public_client = (
+        public_supabase_client
+        if public_supabase_client is not None
+        else (
+            _resolve_supabase_client(public_supabase_client, public_supabase_client_factory)
+            if public_supabase_client_factory
+            else None
+        )
+    )
+    return StorageContainer(supabase_client=client, public_supabase_client=public_client)
 
 
 def build_thread_repo(
@@ -82,6 +93,7 @@ def build_sync_file_repo(
     return build_storage_container(
         supabase_client=supabase_client,
         supabase_client_factory=supabase_client_factory,
+        public_supabase_client_factory="backend.web.core.supabase_factory:create_public_supabase_client",
         **kwargs,
     ).sync_file_repo()
 

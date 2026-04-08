@@ -182,6 +182,37 @@ async def test_delete_member_route_rejects_agent_with_existing_threads(monkeypat
 
 
 @pytest.mark.asyncio
+async def test_delete_member_route_passes_thread_launch_pref_repo(monkeypatch: pytest.MonkeyPatch):
+    seen: dict[str, object] = {}
+
+    def _fake_delete_member(agent_id: str, **kwargs: object) -> bool:
+        seen["agent_id"] = agent_id
+        seen["thread_launch_pref_repo"] = kwargs.get("thread_launch_pref_repo")
+        return True
+
+    monkeypatch.setattr(member_service, "delete_member", _fake_delete_member)
+
+    thread_launch_pref_repo = object()
+    result = await panel_router.delete_member(
+        "agent-1",
+        request=SimpleNamespace(
+            app=SimpleNamespace(
+                state=SimpleNamespace(
+                    user_repo=SimpleNamespace(get_by_id=lambda user_id: _agent_user(user_id=user_id) if user_id == "agent-1" else None),
+                    thread_repo=SimpleNamespace(list_by_agent_user=lambda _agent_user_id: []),
+                    agent_config_repo=SimpleNamespace(),
+                    thread_launch_pref_repo=thread_launch_pref_repo,
+                )
+            )
+        ),
+        user_id="user-1",
+    )
+
+    assert result == {"success": True}
+    assert seen == {"agent_id": "agent-1", "thread_launch_pref_repo": thread_launch_pref_repo}
+
+
+@pytest.mark.asyncio
 async def test_publish_member_route_keeps_builtin_guard_before_owner_lookup(monkeypatch: pytest.MonkeyPatch):
     def explode(_member_id: str):
         raise AssertionError("member lookup should not run for builtin guard")

@@ -6,6 +6,7 @@ class _FakeTable:
         self.eq_calls: list[tuple[str, object]] = []
         self.upsert_payload = None
         self.upsert_conflict = None
+        self.mode = "select"
         self.rows = [
             {
                 "owner_user_id": "owner-1",
@@ -18,6 +19,11 @@ class _FakeTable:
         ]
 
     def select(self, _cols):
+        self.mode = "select"
+        return self
+
+    def delete(self):
+        self.mode = "delete"
         return self
 
     def eq(self, key, value):
@@ -30,6 +36,8 @@ class _FakeTable:
         return self
 
     def execute(self):
+        if self.mode == "delete":
+            return type("Resp", (), {"data": list(self.rows)})()
         return type("Resp", (), {"data": self.rows})()
 
 
@@ -63,3 +71,14 @@ def test_supabase_thread_launch_pref_repo_save_successful_upserts_on_agent_user_
     assert client.table_obj.upsert_payload["owner_user_id"] == "owner-1"
     assert client.table_obj.upsert_payload["agent_user_id"] == "agent-1"
     assert client.table_obj.upsert_conflict == "owner_user_id,agent_user_id"
+
+
+def test_supabase_thread_launch_pref_repo_delete_filters_on_agent_user_id() -> None:
+    client = _FakeClient()
+    repo = SupabaseThreadLaunchPrefRepo(client)
+
+    deleted = repo.delete_by_agent_user_id("agent-1")
+
+    assert deleted == 1
+    assert ("agent_user_id", "agent-1") in client.table_obj.eq_calls
+    assert ("member_id", "agent-1") not in client.table_obj.eq_calls

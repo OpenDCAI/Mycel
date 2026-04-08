@@ -225,6 +225,24 @@ def test_storage_container_panel_task_repo_uses_public_client(monkeypatch: pytes
     assert captured["client"] is public_client
 
 
+def test_storage_container_sync_file_repo_uses_public_client(monkeypatch: pytest.MonkeyPatch) -> None:
+    captured: dict[str, object] = {}
+
+    class _FakeSyncFileRepo:
+        def __init__(self, client: object) -> None:
+            captured["client"] = client
+
+    monkeypatch.setattr("storage.providers.supabase.sync_file_repo.SupabaseSyncFileRepo", _FakeSyncFileRepo)
+
+    runtime_client = object()
+    public_client = object()
+    container = StorageContainer(supabase_client=runtime_client, public_supabase_client=public_client)
+
+    container.sync_file_repo()
+
+    assert captured["client"] is public_client
+
+
 def test_make_sandbox_monitor_repo_uses_web_supabase_factory(monkeypatch: pytest.MonkeyPatch) -> None:
     captured: dict[str, object] = {}
 
@@ -408,3 +426,22 @@ def test_build_resource_snapshot_repo_defaults_to_web_supabase_factory(monkeypat
     storage_runtime.build_resource_snapshot_repo()
 
     assert recorded["supabase_client_factory"] == "backend.web.core.supabase_factory:create_supabase_client"
+
+
+def test_build_sync_file_repo_defaults_to_public_supabase_factory(monkeypatch: pytest.MonkeyPatch) -> None:
+    recorded: dict[str, object] = {}
+
+    class _FakeRuntimeContainer:
+        def sync_file_repo(self) -> object:
+            return object()
+
+    def _fake_build_storage_container(**kwargs: object) -> _FakeRuntimeContainer:
+        recorded.update(kwargs)
+        return _FakeRuntimeContainer()
+
+    monkeypatch.delenv("LEON_SUPABASE_CLIENT_FACTORY", raising=False)
+    monkeypatch.setattr("storage.runtime.build_storage_container", _fake_build_storage_container)
+
+    storage_runtime.build_sync_file_repo()
+
+    assert recorded["public_supabase_client_factory"] == "backend.web.core.supabase_factory:create_public_supabase_client"
