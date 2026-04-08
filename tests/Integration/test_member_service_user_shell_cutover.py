@@ -634,6 +634,24 @@ def test_delete_member_deletes_db_shell_even_when_member_dir_is_absent(monkeypat
     assert user_repo.deleted == ["agent-1"]
 
 
+def test_delete_member_fails_loudly_when_agent_config_delete_fails(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    monkeypatch.setattr(member_service, "MEMBERS_DIR", tmp_path)
+    member_dir = tmp_path / "agent-1"
+    _write_member_shell(member_dir)
+    before = _snapshot_tree(member_dir)
+    user_repo = _FakeUserRepo(rows={"agent-1": _agent_user()})
+
+    class _ExplodingDeleteConfigRepo(_FakeAgentConfigRepo):
+        def delete_config(self, agent_config_id: str) -> None:
+            raise RuntimeError(f"boom {agent_config_id}")
+
+    with pytest.raises(RuntimeError, match="boom cfg-1"):
+        member_service.delete_member("agent-1", user_repo=user_repo, agent_config_repo=_ExplodingDeleteConfigRepo())
+
+    assert user_repo.deleted == []
+    assert _snapshot_tree(member_dir) == before
+
+
 def test_install_from_snapshot_creates_agent_user_before_syncing_agent_config(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,

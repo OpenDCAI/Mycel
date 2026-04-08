@@ -1047,10 +1047,8 @@ def delete_member(member_id: str, user_repo: Any = None, agent_config_repo: Any 
             raise RuntimeError("user_repo is required when deleting member config from agent_config_repo")
         if user is None or user.agent_config_id is None:
             raise RuntimeError(f"Agent user {member_id} is missing agent_config_id")
-        try:
-            agent_config_repo.delete_config(user.agent_config_id)
-        except Exception:
-            logger.warning("Failed to delete config from repo for %s", member_id, exc_info=True)
+        # @@@delete-member-fails-loudly - partial delete is worse than refusing the delete when repo state cannot be removed cleanly.
+        agent_config_repo.delete_config(user.agent_config_id)
 
     if member_dir.is_dir():
         shutil.rmtree(member_dir)
