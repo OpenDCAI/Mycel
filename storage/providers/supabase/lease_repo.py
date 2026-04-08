@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
 from storage.providers.supabase import _query as q
@@ -10,6 +10,10 @@ from storage.providers.supabase import _query as q
 _REPO = "lease repo"
 _LEASES_TABLE = "sandbox_leases"
 _INSTANCES_TABLE = "sandbox_instances"
+
+
+def _utc_now_iso() -> str:
+    return datetime.now(UTC).isoformat()
 
 
 class SupabaseLeaseRepo:
@@ -78,7 +82,7 @@ class SupabaseLeaseRepo:
         recipe_id: str | None = None,
         recipe_json: str | None = None,
     ) -> dict[str, Any]:
-        now = datetime.now().isoformat()
+        now = _utc_now_iso()
         self._leases().insert(
             {
                 "lease_id": lease_id,
@@ -91,7 +95,7 @@ class SupabaseLeaseRepo:
                 "version": 0,
                 "observed_at": now,
                 "last_error": None,
-                "needs_refresh": False,
+                "needs_refresh": 0,
                 "refresh_hint_at": None,
                 "status": "active",
                 "volume_id": volume_id,
@@ -138,7 +142,7 @@ class SupabaseLeaseRepo:
         if existing["provider_name"] != provider_name:
             raise RuntimeError(f"Lease provider mismatch during adopt: lease={existing['provider_name']}, requested={provider_name}")
 
-        now = datetime.now().isoformat()
+        now = _utc_now_iso()
         normalized = parse_lease_instance_state(status).value
         desired = "paused" if normalized == "paused" else "running"
 
@@ -177,8 +181,8 @@ class SupabaseLeaseRepo:
     def mark_needs_refresh(self, lease_id: str, hint_at: Any = None) -> bool:
         from datetime import datetime as _dt
 
-        hinted_at = (hint_at or _dt.now()).isoformat() if not isinstance(hint_at, str) else hint_at
-        now = datetime.now().isoformat()
+        hinted_at = (hint_at or _dt.now(UTC)).isoformat() if not isinstance(hint_at, str) else hint_at
+        now = _utc_now_iso()
         response = (
             self._leases()
             .update(

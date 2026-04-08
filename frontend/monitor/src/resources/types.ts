@@ -86,3 +86,26 @@ export interface ProviderInfo {
   latencyMs?: number;
   sessions: ResourceSession[];
 }
+
+export interface ResourceSummary {
+  snapshot_at: string;
+  last_refreshed_at?: string;
+  refresh_duration_ms?: number;
+  refresh_status?: "ok" | "error";
+  refresh_error?: string | null;
+  total_providers: number;
+  active_providers: number;
+  unavailable_providers: number;
+  running_sessions: number;
+}
+
+export interface ResourceOverviewResponse {
+  summary: ResourceSummary;
+  providers: ProviderInfo[];
+}
+
+export interface BrowseItem {
+  name: string;
+  path: string;
+  is_dir: boolean;
+}

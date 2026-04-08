@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import MemberAvatar from "@/components/MemberAvatar";
 import type { LeaseGroup } from "./session-list-utils";
-import { calculateDuration, formatDuration } from "./utils/duration";
+import { calculateDuration, formatDuration, formatStartedAtDuration } from "./utils/duration";
 import { formatMetric } from "./utils/format";
 
 const STATUS_CONFIG = {
@@ -52,6 +52,11 @@ export default function SandboxCard({ group, onClick }: SandboxCardProps) {
 
   const cfg = STATUS_CONFIG[group.status] ?? STATUS_CONFIG.stopped;
   const isStopped = group.status === "stopped";
+  const durationLabel = group.startedAt
+    ? duration == null
+      ? formatStartedAtDuration(group.startedAt)
+      : formatDuration(duration)
+    : null;
   const m = group.metrics;
   const hasMetrics =
     m != null &&
@@ -78,9 +83,9 @@ export default function SandboxCard({ group, onClick }: SandboxCardProps) {
             {cfg.label}
           </span>
         </div>
-        {duration != null && (
+        {durationLabel && (
           <span className="text-2xs font-mono text-muted-foreground/50 shrink-0">
-            {formatDuration(duration)}
+            {durationLabel}
           </span>
         )}
       </div>
@@ -89,7 +94,7 @@ export default function SandboxCard({ group, onClick }: SandboxCardProps) {
       <div className="flex items-center gap-2">
         <div className="flex -space-x-1.5 shrink-0">
           {group.sessions.slice(0, 3).map((s) => (
-            <MemberAvatar key={s.id} name={s.memberName || "?"} avatarUrl={s.avatarUrl || undefined} size="xs" type="mycel_agent" className="border-2 border-card" />
+            <MemberAvatar key={s.id} name={s.agentName || "?"} avatarUrl={s.avatarUrl || undefined} size="xs" type="mycel_agent" className="border-2 border-card" />
           ))}
           {group.sessions.length > 3 && (
             <div className="w-6 h-6 rounded-full bg-muted border-2 border-card flex items-center justify-center text-3xs font-mono text-muted-foreground">
@@ -98,7 +103,7 @@ export default function SandboxCard({ group, onClick }: SandboxCardProps) {
           )}
         </div>
         <span className="text-xs text-foreground truncate leading-snug">
-          {group.sessions.map((s) => s.memberName || "未绑定").join(", ")}
+          {group.sessions.map((s) => s.agentName || "未绑定").join(", ")}
         </span>
       </div>
 

@@ -3,6 +3,7 @@ from fastapi.testclient import TestClient
 
 from backend.web.core.dependencies import get_current_user_id
 from backend.web.routers import monitor, resources
+from backend.web.services import resource_service
 
 
 def _build_monitor_test_app(*, include_product_resources: bool = False) -> FastAPI:
@@ -176,3 +177,55 @@ def test_monitor_resources_cleanup_route_forwards_structured_payload(monkeypatch
     assert payload["skipped"] == []
     assert payload["errors"] == []
     assert set(payload["refreshed_summary"]).issuperset({"total", "active_drift", "detached_residue", "orphan_cleanup", "healthy_capacity"})
+
+
+def test_monitor_sandbox_browse_route_maps_missing_lease_to_404(monkeypatch):
+    def _raise(_lease_id, _path):
+        raise KeyError("Lease not found: lease-404")
+
+    monkeypatch.setattr(resource_service, "sandbox_browse", _raise)
+
+    with TestClient(_build_monitor_test_app(), raise_server_exceptions=False) as client:
+        response = client.get("/api/monitor/sandbox/lease-404/browse", params={"path": "/"})
+
+    assert response.status_code == 404
+    assert "Lease not found: lease-404" in response.text
+
+
+def test_monitor_sandbox_browse_route_maps_runtime_failures_to_503(monkeypatch):
+    def _raise(_lease_id, _path):
+        raise RuntimeError("Could not initialize provider: daytona_selfhost")
+
+    monkeypatch.setattr(resource_service, "sandbox_browse", _raise)
+
+    with TestClient(_build_monitor_test_app(), raise_server_exceptions=False) as client:
+        response = client.get("/api/monitor/sandbox/lease-1/browse", params={"path": "/"})
+
+    assert response.status_code == 503
+    assert "Could not initialize provider: daytona_selfhost" in response.text
+
+
+def test_monitor_sandbox_read_route_maps_missing_lease_to_404(monkeypatch):
+    def _raise(_lease_id, _path):
+        raise KeyError("Lease not found: lease-404")
+
+    monkeypatch.setattr(resource_service, "sandbox_read", _raise)
+
+    with TestClient(_build_monitor_test_app(), raise_server_exceptions=False) as client:
+        response = client.get("/api/monitor/sandbox/lease-404/read", params={"path": "/README.md"})
+
+    assert response.status_code == 404
+    assert "Lease not found: lease-404" in response.text
+
+
+def test_monitor_sandbox_read_route_maps_runtime_failures_to_503(monkeypatch):
+    def _raise(_lease_id, _path):
+        raise RuntimeError("No active instance for this lease — sandbox may be destroyed or paused")
+
+    monkeypatch.setattr(resource_service, "sandbox_read", _raise)
+
+    with TestClient(_build_monitor_test_app(), raise_server_exceptions=False) as client:
+        response = client.get("/api/monitor/sandbox/lease-1/read", params={"path": "/README.md"})
+
+    assert response.status_code == 503
+    assert "No active instance for this lease" in response.text

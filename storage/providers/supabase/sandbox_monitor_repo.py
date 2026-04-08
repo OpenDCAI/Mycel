@@ -428,10 +428,15 @@ class SupabaseSandboxMonitorRepo:
 
     def list_probe_targets(self) -> list[dict]:
         leases = q.rows(
-            self._client.table("sandbox_leases")
-            .select("lease_id,provider_name,current_instance_id,observed_state")
-            .in_("observed_state", ["running", "detached", "paused"])
-            .execute(),
+            q.order(
+                self._client.table("sandbox_leases")
+                .select("lease_id,provider_name,current_instance_id,observed_state,updated_at")
+                .in_("observed_state", ["running", "detached", "paused"]),
+                "updated_at",
+                desc=True,
+                repo=_REPO,
+                operation="list_probe_targets",
+            ).execute(),
             _REPO,
             "list_probe_targets",
         )
