@@ -211,6 +211,10 @@ export const useMarketplaceStore = create<MarketplaceState>()((set, get) => ({
       const data = await hubApi<{ ancestors: LineageNode[]; children: LineageNode[] }>(`/items/${id}/lineage`);
       set({ lineage: data });
     } catch (e) {
+      // @@@marketplace-lineage-route-teardown - lineage fetches can resolve
+      // after the user already left this marketplace detail page. Only log if
+      // this item route is still active; otherwise this is stale UI noise.
+      if (!isActiveMarketplaceDetailRoute(id)) return;
       console.error("Failed to fetch lineage:", e);
       set({ error: e instanceof Error ? e.message : "Unknown error" });
     }
