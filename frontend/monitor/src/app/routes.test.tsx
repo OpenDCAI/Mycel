@@ -213,4 +213,51 @@ describe("MonitorRoutes", () => {
     expect(await screen.findByText("Drift Triage")).toBeInTheDocument();
     expect(screen.getByText("Raw Divergence Table")).toBeInTheDocument();
   });
+
+  it("renders events with signal summary before the raw table", async () => {
+    mockRoutePayloads({
+      "/events?limit=100": {
+        title: "Events",
+        description: "Recent monitor events.",
+        count: 2,
+        items: [
+          {
+            event_id: "event-1",
+            event_url: "/event/event-1",
+            event_type: "lease.state.changed",
+            source: "monitor",
+            provider: "local",
+            lease: {
+              lease_id: "lease-1",
+              lease_url: "/lease/lease-1",
+            },
+            error: null,
+            created_ago: "1m",
+          },
+          {
+            event_id: "event-2",
+            event_url: "/event/event-2",
+            event_type: "probe.failed",
+            source: "probe",
+            provider: "daytona_selfhost",
+            lease: {
+              lease_id: null,
+              lease_url: null,
+            },
+            error: "provider unavailable",
+            created_ago: "3m",
+          },
+        ],
+      },
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/events"]}>
+        <MonitorRoutes />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText("Signal Feed")).toBeInTheDocument();
+    expect(screen.getByText("Raw Event Table")).toBeInTheDocument();
+  });
 });

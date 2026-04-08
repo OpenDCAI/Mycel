@@ -9,11 +9,36 @@ export default function EventsPage() {
   if (error) return <ErrorState title="Events" error={error} />;
   if (!data) return <div>Loading...</div>;
 
+  const items = data.items ?? [];
+  const signalCards = [
+    { label: "Recent Events", value: data.count ?? items.length },
+    {
+      label: "Errors",
+      value: items.filter((item: any) => item.error).length,
+    },
+    {
+      label: "Lease-linked",
+      value: items.filter((item: any) => item.lease?.lease_id).length,
+    },
+  ];
+
   return (
     <div className="page">
       <h1>{data.title}</h1>
       <p className="description">{data.description}</p>
       <p className="count">Total: {data.count}</p>
+      <section className="surface-section">
+        <h2>Signal Feed</h2>
+        <div className="surface-grid">
+          {signalCards.map((card) => (
+            <article className="surface-card" key={card.label}>
+              <p className="surface-card__eyebrow">{card.label}</p>
+              <p className="surface-card__value">{card.value}</p>
+            </article>
+          ))}
+        </div>
+      </section>
+      <h2>Raw Event Table</h2>
       <table>
         <thead>
           <tr>
