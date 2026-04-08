@@ -259,6 +259,41 @@ def test_create_member_does_not_write_member_shell_dir(
     assert list(tmp_path.iterdir()) == []
 
 
+def test_get_member_builtin_does_not_require_member_shell_dir(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    monkeypatch.setattr(member_service, "MEMBERS_DIR", tmp_path)
+
+    item = member_service.get_member("__leon__")
+
+    assert item is not None
+    assert item["id"] == "__leon__"
+    assert item["builtin"] is True
+    assert not (tmp_path / "__leon__").exists()
+
+
+def test_list_members_unscoped_returns_builtin_without_scanning_member_dirs(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    monkeypatch.setattr(member_service, "MEMBERS_DIR", tmp_path)
+    _write_member_shell(tmp_path / "legacy-agent", name="LegacyAgent", description="legacy shell")
+
+    items = member_service.list_members()
+
+    assert [item["id"] for item in items] == ["__leon__"]
+    assert items[0]["builtin"] is True
+
+
+def test_update_member_builtin_is_read_only(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    monkeypatch.setattr(member_service, "MEMBERS_DIR", tmp_path)
+
+    with pytest.raises(RuntimeError, match="Builtin agent is read-only"):
+        member_service.update_member("__leon__", name="Nope")
+
+
+def test_update_member_config_builtin_is_read_only(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    monkeypatch.setattr(member_service, "MEMBERS_DIR", tmp_path)
+
+    with pytest.raises(RuntimeError, match="Builtin agent is read-only"):
+        member_service.update_member_config("__leon__", {"prompt": "nope"})
+
+
 def test_create_member_persists_agent_user_before_agent_config(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,

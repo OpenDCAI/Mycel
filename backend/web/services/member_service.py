@@ -428,25 +428,6 @@ def _load_builtin_agents(catalog: dict[str, ToolDef]) -> list[dict[str, Any]]:
     return agents
 
 
-def _ensure_leon_dir() -> Path:
-    """Ensure Leon's member directory exists for persisting edits."""
-    leon_dir = MEMBERS_DIR / "__leon__"
-    leon_dir.mkdir(parents=True, exist_ok=True)
-    if not (leon_dir / "agent.md").exists():
-        _write_agent_md(leon_dir / "agent.md", name="Leon", description="通用数字成员，随时准备为你工作")
-    if not (leon_dir / "meta.json").exists():
-        _write_json(
-            leon_dir / "meta.json",
-            {
-                "status": "active",
-                "version": "1.0.0",
-                "created_at": 0,
-                "updated_at": 0,
-            },
-        )
-    return leon_dir
-
-
 # ── CRUD operations ──
 
 
@@ -464,26 +445,12 @@ def list_members(owner_user_id: str | None = None, user_repo: Any = None, agent_
         agents = user_repo.list_by_owner_user_id(owner_user_id)
         return [_member_from_repos(agent, agent_config_repo) for agent in agents]
 
-    # Unscoped: return all (legacy/unauthenticated)
-    leon = get_member("__leon__")
-    results: list[dict[str, Any]] = [leon] if leon else [_leon_builtin()]
-    if MEMBERS_DIR.exists():
-        for d in sorted(MEMBERS_DIR.iterdir(), reverse=True):
-            if d.is_dir() and d.name != "__leon__" and (d / "agent.md").exists():
-                item = _member_to_dict(d)
-                if item:
-                    results.append(item)
-    return results
+    # Unscoped legacy path is now builtin-only. Owner-scoped callers must use repos.
+    return [_leon_builtin()]
 
 
 def get_member(member_id: str, *, user_repo: Any = None, agent_config_repo: Any = None) -> dict[str, Any] | None:
     if member_id == "__leon__":
-        leon_dir = MEMBERS_DIR / "__leon__"
-        if leon_dir.is_dir() and (leon_dir / "agent.md").exists():
-            item = _member_to_dict(leon_dir)
-            if item:
-                item["builtin"] = True
-                return item
         return _leon_builtin()
     if user_repo is None or agent_config_repo is None:
         raise RuntimeError("user_repo and agent_config_repo are required for agent member reads")
@@ -548,35 +515,34 @@ def update_member(
     **fields: Any,
 ) -> dict[str, Any] | None:
     if member_id == "__leon__":
-        member_dir = _ensure_leon_dir()
-    else:
-        member_dir = MEMBERS_DIR / member_id
-        if not member_dir.is_dir():
-            if user_repo is None or agent_config_repo is None:
-                return None
-            user = user_repo.get_by_id(member_id)
-            if user is None or user.agent_config_id is None:
-                return None
-            config = agent_config_repo.get_config(user.agent_config_id)
-            if config is None:
-                return None
-            allowed = {"name", "description", "status"}
-            updates = {k: v for k, v in fields.items() if k in allowed and v is not None}
-            if not updates:
-                return get_member(member_id, user_repo=user_repo, agent_config_repo=agent_config_repo)
-            if "name" in updates:
-                user_repo.update(member_id, display_name=updates["name"])
-            agent_config_repo.save_config(
-                user.agent_config_id,
-                {
-                    **config,
-                    "name": updates.get("name", config.get("name") or user.display_name),
-                    "description": updates.get("description", config.get("description", "")),
-                    "status": updates.get("status", config.get("status", "draft")),
-                    "updated_at": int(time.time() * 1000),
-                },
-            )
+        raise RuntimeError("Builtin agent is read-only")
+    member_dir = MEMBERS_DIR / member_id
+    if not member_dir.is_dir():
+        if user_repo is None or agent_config_repo is None:
+            return None
+        user = user_repo.get_by_id(member_id)
+        if user is None or user.agent_config_id is None:
+            return None
+        config = agent_config_repo.get_config(user.agent_config_id)
+        if config is None:
+            return None
+        allowed = {"name", "description", "status"}
+        updates = {k: v for k, v in fields.items() if k in allowed and v is not None}
+        if not updates:
             return get_member(member_id, user_repo=user_repo, agent_config_repo=agent_config_repo)
+        if "name" in updates:
+            user_repo.update(member_id, display_name=updates["name"])
+        agent_config_repo.save_config(
+            user.agent_config_id,
+            {
+                **config,
+                "name": updates.get("name", config.get("name") or user.display_name),
+                "description": updates.get("description", config.get("description", "")),
+                "status": updates.get("status", config.get("status", "draft")),
+                "updated_at": int(time.time() * 1000),
+            },
+        )
+        return get_member(member_id, user_repo=user_repo, agent_config_repo=agent_config_repo)
     allowed = {"name", "description", "status"}
     updates = {k: v for k, v in fields.items() if k in allowed and v is not None}
     if not updates:
@@ -633,13 +599,12 @@ def update_member_config(
     agent_config_repo: Any = None,
 ) -> dict[str, Any] | None:
     if member_id == "__leon__":
-        member_dir = _ensure_leon_dir()
-    else:
-        member_dir = MEMBERS_DIR / member_id
-        if not member_dir.is_dir():
-            if user_repo is None or agent_config_repo is None:
-                return None
-            return _sync_member_patch_to_repo(member_id, config_patch, user_repo, agent_config_repo)
+        raise RuntimeError("Builtin agent is read-only")
+    member_dir = MEMBERS_DIR / member_id
+    if not member_dir.is_dir():
+        if user_repo is None or agent_config_repo is None:
+            return None
+        return _sync_member_patch_to_repo(member_id, config_patch, user_repo, agent_config_repo)
 
     # prompt → agent.md body
     if "prompt" in config_patch and config_patch["prompt"] is not None:
