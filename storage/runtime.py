@@ -76,6 +76,7 @@ def build_agent_registry_repo(
     return build_storage_container(
         supabase_client=supabase_client,
         supabase_client_factory=supabase_client_factory,
+        public_supabase_client_factory="backend.web.core.supabase_factory:create_public_supabase_client",
         **kwargs,
     ).agent_registry_repo()
 

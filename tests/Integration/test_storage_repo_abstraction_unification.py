@@ -349,6 +349,34 @@ def test_make_panel_task_repo_uses_public_supabase_factory(monkeypatch: pytest.M
         repo.close()
 
 
+def test_storage_container_routes_agent_registry_repo_through_public_client(monkeypatch: pytest.MonkeyPatch) -> None:
+    captured: dict[str, object] = {}
+
+    class _FakeAgentRegistryRepo:
+        def __init__(self, client: object) -> None:
+            captured["client"] = client
+
+        def close(self) -> None:
+            return None
+
+    public_client = object()
+    private_client = object()
+    monkeypatch.setattr(
+        "storage.providers.supabase.agent_registry_repo.SupabaseAgentRegistryRepo",
+        _FakeAgentRegistryRepo,
+    )
+
+    repo = StorageContainer(
+        supabase_client=private_client,
+        public_supabase_client=public_client,
+    ).agent_registry_repo()
+    try:
+        assert isinstance(repo, _FakeAgentRegistryRepo)
+        assert captured["client"] is public_client
+    finally:
+        repo.close()
+
+
 @pytest.mark.asyncio
 async def test_lifespan_wires_user_and_thread_repos_from_storage_container(
     monkeypatch: pytest.MonkeyPatch,
@@ -481,5 +509,24 @@ def test_build_sync_file_repo_defaults_to_public_supabase_factory(monkeypatch: p
     monkeypatch.setattr("storage.runtime.build_storage_container", _fake_build_storage_container)
 
     storage_runtime.build_sync_file_repo()
+
+    assert recorded["public_supabase_client_factory"] == "backend.web.core.supabase_factory:create_public_supabase_client"
+
+
+def test_build_agent_registry_repo_defaults_to_public_supabase_factory(monkeypatch: pytest.MonkeyPatch) -> None:
+    recorded: dict[str, object] = {}
+
+    class _FakeRuntimeContainer:
+        def agent_registry_repo(self) -> object:
+            return object()
+
+    def _fake_build_storage_container(**kwargs: object) -> _FakeRuntimeContainer:
+        recorded.update(kwargs)
+        return _FakeRuntimeContainer()
+
+    monkeypatch.delenv("LEON_SUPABASE_CLIENT_FACTORY", raising=False)
+    monkeypatch.setattr("storage.runtime.build_storage_container", _fake_build_storage_container)
+
+    storage_runtime.build_agent_registry_repo()
 
     assert recorded["public_supabase_client_factory"] == "backend.web.core.supabase_factory:create_public_supabase_client"
