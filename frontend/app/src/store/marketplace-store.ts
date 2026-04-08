@@ -97,6 +97,11 @@ function isActiveMarketplaceRoute(): boolean {
   return path === "/marketplace" || path.startsWith("/marketplace/");
 }
 
+function isActiveMarketplaceDetailRoute(itemId: string): boolean {
+  const path = window.location.pathname.replace(/\/+$/, "");
+  return path === `/marketplace/${encodeURIComponent(itemId)}`;
+}
+
 async function hubApi<T = any>(path: string): Promise<T> {
   try {
     const res = await fetch(`${HUB_URL}/api/v1${path}`);
@@ -168,6 +173,10 @@ export const useMarketplaceStore = create<MarketplaceState>()((set, get) => ({
       const data = await hubApi<MarketplaceItemDetail>(`/items/${id}`);
       set({ detail: data });
     } catch (e) {
+      // @@@marketplace-detail-route-teardown - detail fetches can resolve after
+      // the user already left this marketplace detail page. Only log if this
+      // item route is still active; otherwise this is stale UI noise.
+      if (!isActiveMarketplaceDetailRoute(id)) return;
       console.error("Failed to fetch detail:", e);
       set({ error: e instanceof Error ? e.message : "Unknown error" });
     } finally {
