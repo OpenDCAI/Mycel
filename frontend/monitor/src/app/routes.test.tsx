@@ -23,6 +23,20 @@ beforeEach(() => {
   );
 });
 
+function mockRoutePayloads(routes: Record<string, unknown>) {
+  vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+    const url = typeof input === "string" ? input : input instanceof URL ? input.pathname : String(input.url);
+    const match = Object.entries(routes).find(([path]) => url.endsWith(path));
+    if (!match) {
+      throw new Error(`Unexpected fetch: ${url}`);
+    }
+    return new Response(JSON.stringify(match[1]), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  });
+}
+
 describe("MonitorRoutes", () => {
   it("renders the current monitor route set under the app router", () => {
     render(
@@ -60,5 +74,69 @@ describe("MonitorRoutes", () => {
 
     expect(screen.getByRole("navigation", { name: "Monitor sections" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /leases/i })).toHaveAttribute("aria-current", "page");
+  });
+
+  it("renders dashboard as a switchboard surface", async () => {
+    mockRoutePayloads({
+      "/dashboard": {
+        snapshot_at: "2026-04-08T00:00:00Z",
+        summary: {
+          active_threads: 7,
+          active_leases: 3,
+          resources_ready: 4,
+        },
+      },
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/dashboard"]}>
+        <MonitorRoutes />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText("Runtime Surfaces")).toBeInTheDocument();
+    expect(screen.getByText("Operator Attention")).toBeInTheDocument();
+  });
+
+  it("renders leases with a triage summary before the raw table", async () => {
+    mockRoutePayloads({
+      "/leases": {
+        title: "Leases",
+        count: 1,
+        triage: {
+          active: 1,
+          residue: 0,
+        },
+        items: [
+          {
+            lease_id: "lease-1",
+            lease_url: "/lease/lease-1",
+            provider: "local",
+            instance_id: "instance-1",
+            thread: {
+              thread_id: "thread-1",
+              thread_url: "/thread/thread-1",
+            },
+            state_badge: {
+              color: "green",
+              observed: "running",
+              desired: "running",
+              text: "running",
+            },
+            updated_ago: "1m",
+            error: null,
+          },
+        ],
+      },
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/leases"]}>
+        <MonitorRoutes />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText("Lease Triage")).toBeInTheDocument();
+    expect(screen.getByText("Raw Lease Table")).toBeInTheDocument();
   });
 });
