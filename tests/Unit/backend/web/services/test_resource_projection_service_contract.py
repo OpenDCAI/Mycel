@@ -182,3 +182,59 @@ def test_list_resource_providers_keeps_sessions_under_unavailable_provider(monke
     assert [session["status"] for session in provider["sessions"]] == ["running", "paused"]
     assert [session["agentName"] for session in provider["sessions"]] == ["thread-1", "thread-2"]
     assert payload["summary"]["running_sessions"] == 1
+
+
+def test_list_resource_providers_keeps_remote_session_actor_first(monkeypatch):
+    rows = [
+        {
+            "provider": "daytona_selfhost",
+            "session_id": "provider-session-1",
+            "thread_id": "thread-remote",
+            "lease_id": "lease-remote",
+            "observed_state": "running",
+            "desired_state": "running",
+            "created_at": "2026-04-08T00:00:00",
+        },
+    ]
+
+    monkeypatch.setattr(resource_projection_service, "make_sandbox_monitor_repo", lambda: _FakeRepo(rows))
+    monkeypatch.setattr(
+        resource_projection_service,
+        "available_sandbox_types",
+        lambda: [{"name": "daytona_selfhost", "available": False, "reason": "provider unavailable in current process"}],
+    )
+    monkeypatch.setattr(resource_projection_service, "resolve_provider_name", lambda *_args, **_kwargs: "daytona")
+    monkeypatch.setattr(resource_projection_service, "_resolve_console_url", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(
+        resource_projection_service,
+        "_resolve_instance_capabilities",
+        lambda _config_name: (_caps(metrics=False), None),
+    )
+    monkeypatch.setattr(
+        resource_projection_service,
+        "_thread_owners",
+        lambda thread_ids: {
+            tid: {"agent_user_id": "agent-remote", "agent_name": "Remote Agent", "avatar_url": None}
+            for tid in thread_ids
+        },
+    )
+    monkeypatch.setattr(resource_projection_service, "list_resource_snapshots", lambda _lease_ids: {})
+    monkeypatch.setattr(resource_projection_service.LocalSessionProvider, "get_metrics", lambda self, _session_id: None)
+
+    payload = resource_projection_service.list_resource_providers()
+    session = payload["providers"][0]["sessions"][0]
+
+    assert payload["providers"][0]["status"] == "unavailable"
+    assert session == {
+        "id": "lease-remote:thread-remote",
+        "leaseId": "lease-remote",
+        "threadId": "thread-remote",
+        "agentUserId": "agent-remote",
+        "agentName": "Remote Agent",
+        "avatarUrl": None,
+        "status": "running",
+        "startedAt": "2026-04-08T00:00:00",
+        "metrics": None,
+    }
+    assert "memberId" not in session
+    assert "memberName" not in session
