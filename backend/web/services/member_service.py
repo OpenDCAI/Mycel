@@ -507,18 +507,6 @@ def create_member(
     now_ms = int(now * 1000)
     agent_user_id = generate_member_id()
     agent_config_id = generate_agent_config_id()
-    member_dir = MEMBERS_DIR / agent_user_id
-    member_dir.mkdir(parents=True, exist_ok=True)
-    _write_agent_md(member_dir / "agent.md", name=name, description=description)
-    _write_json(
-        member_dir / "meta.json",
-        {
-            "status": "draft",
-            "version": "0.1.0",
-            "created_at": now_ms,
-            "updated_at": now_ms,
-        },
-    )
 
     # Persist to users table so panel/auth shells see a unified agent identity
     if owner_user_id:
@@ -564,7 +552,31 @@ def update_member(
     else:
         member_dir = MEMBERS_DIR / member_id
         if not member_dir.is_dir():
-            return None
+            if user_repo is None or agent_config_repo is None:
+                return None
+            user = user_repo.get_by_id(member_id)
+            if user is None or user.agent_config_id is None:
+                return None
+            config = agent_config_repo.get_config(user.agent_config_id)
+            if config is None:
+                return None
+            allowed = {"name", "description", "status"}
+            updates = {k: v for k, v in fields.items() if k in allowed and v is not None}
+            if not updates:
+                return get_member(member_id, user_repo=user_repo, agent_config_repo=agent_config_repo)
+            if "name" in updates:
+                user_repo.update(member_id, display_name=updates["name"])
+            agent_config_repo.save_config(
+                user.agent_config_id,
+                {
+                    **config,
+                    "name": updates.get("name", config.get("name") or user.display_name),
+                    "description": updates.get("description", config.get("description", "")),
+                    "status": updates.get("status", config.get("status", "draft")),
+                    "updated_at": int(time.time() * 1000),
+                },
+            )
+            return get_member(member_id, user_repo=user_repo, agent_config_repo=agent_config_repo)
     allowed = {"name", "description", "status"}
     updates = {k: v for k, v in fields.items() if k in allowed and v is not None}
     if not updates:
@@ -593,6 +605,24 @@ def update_member(
                 raise RuntimeError("user_repo is required to update member name")
             user_repo.update(member_id, display_name=updates["name"])
 
+    if member_id != "__leon__" and user_repo is not None and agent_config_repo is not None:
+        user = user_repo.get_by_id(member_id)
+        if user is None or user.agent_config_id is None:
+            raise RuntimeError(f"Agent user {member_id} is missing agent_config_id")
+        config = agent_config_repo.get_config(user.agent_config_id)
+        if config is None:
+            raise RuntimeError(f"Agent config {user.agent_config_id} is missing for {member_id}")
+        agent_config_repo.save_config(
+            user.agent_config_id,
+            {
+                **config,
+                "name": updates.get("name", config.get("name") or user.display_name),
+                "description": updates.get("description", config.get("description", "")),
+                "status": updates.get("status", config.get("status", "draft")),
+                "updated_at": int(time.time() * 1000),
+            },
+        )
+
     return get_member(member_id, user_repo=user_repo, agent_config_repo=agent_config_repo)
 
 
@@ -607,7 +637,9 @@ def update_member_config(
     else:
         member_dir = MEMBERS_DIR / member_id
         if not member_dir.is_dir():
-            return None
+            if user_repo is None or agent_config_repo is None:
+                return None
+            return _sync_member_patch_to_repo(member_id, config_patch, user_repo, agent_config_repo)
 
     # prompt → agent.md body
     if "prompt" in config_patch and config_patch["prompt"] is not None:
@@ -730,6 +762,122 @@ def _save_config_to_repo(
             "mcp": mcp or {},
         },
     )
+
+
+def _runtime_and_tools_from_patch(current_config: dict[str, Any], config_patch: dict[str, Any]) -> tuple[dict[str, Any], list[str]]:
+    runtime = dict(current_config.get("runtime", {}) if isinstance(current_config.get("runtime"), dict) else {})
+    tools = list(current_config.get("tools") or ["*"])
+
+    if "tools" in config_patch and config_patch["tools"] is not None:
+        tool_items = [item for item in config_patch["tools"] if isinstance(item, dict) and item.get("name")]
+        runtime = {k: v for k, v in runtime.items() if not k.startswith("tools:")}
+        for item in tool_items:
+            runtime[f"tools:{item['name']}"] = {
+                "enabled": item.get("enabled", True),
+                "desc": item.get("desc", ""),
+            }
+        enabled_tools = [item["name"] for item in tool_items if item.get("enabled", True)]
+        tools = ["*"] if tool_items and len(enabled_tools) == len(tool_items) else enabled_tools
+
+    if "skills" in config_patch and config_patch["skills"] is not None:
+        skill_items = [item for item in config_patch["skills"] if isinstance(item, dict) and item.get("name")]
+        runtime = {k: v for k, v in runtime.items() if not k.startswith("skills:")}
+        for item in skill_items:
+            runtime[f"skills:{item['name']}"] = {
+                "enabled": item.get("enabled", True),
+                "desc": item.get("desc", ""),
+            }
+
+    return runtime, tools
+
+
+def _mcp_from_patch(config_patch: dict[str, Any], current_config: dict[str, Any]) -> dict[str, Any]:
+    if "mcps" not in config_patch or config_patch["mcps"] is None:
+        return dict(current_config.get("mcp", {}) if isinstance(current_config.get("mcp"), dict) else {})
+    servers: dict[str, Any] = {}
+    for item in config_patch["mcps"]:
+        if isinstance(item, dict) and item.get("name"):
+            servers[item["name"]] = {
+                "command": item.get("command", ""),
+                "args": item.get("args", []),
+                "env": item.get("env", {}),
+                "disabled": item.get("disabled", False),
+            }
+    return servers
+
+
+def _sync_repo_children(agent_config_id: str, config_patch: dict[str, Any], agent_config_repo: Any) -> None:
+    if "rules" in config_patch and config_patch["rules"] is not None:
+        for row in agent_config_repo.list_rules(agent_config_id):
+            agent_config_repo.delete_rule(row["id"])
+        for rule in config_patch["rules"]:
+            if isinstance(rule, dict) and rule.get("name"):
+                agent_config_repo.save_rule(agent_config_id, f"{rule['name']}.md", rule.get("content", ""))
+
+    if "skills" in config_patch and config_patch["skills"] is not None:
+        existing = {row["name"]: row for row in agent_config_repo.list_skills(agent_config_id)}
+        for row in existing.values():
+            agent_config_repo.delete_skill(row["id"])
+        for skill in config_patch["skills"]:
+            if isinstance(skill, dict) and skill.get("name"):
+                prior = existing.get(skill["name"], {})
+                agent_config_repo.save_skill(
+                    agent_config_id,
+                    skill["name"],
+                    str(prior.get("content", "")),
+                    meta=prior.get("meta_json") if isinstance(prior.get("meta_json"), dict) else None,
+                )
+
+    if "subAgents" in config_patch and config_patch["subAgents"] is not None:
+        for row in agent_config_repo.list_sub_agents(agent_config_id):
+            agent_config_repo.delete_sub_agent(row["id"])
+        for item in config_patch["subAgents"]:
+            if not (isinstance(item, dict) and item.get("name")):
+                continue
+            if item.get("builtin"):
+                continue
+            raw_tools = item.get("tools") or []
+            if isinstance(raw_tools, list) and raw_tools and isinstance(raw_tools[0], dict):
+                enabled_tools = [tool["name"] for tool in raw_tools if tool.get("enabled")]
+            else:
+                enabled_tools = list(raw_tools)
+            agent_config_repo.save_sub_agent(
+                agent_config_id,
+                item["name"],
+                description=item.get("desc", ""),
+                tools=enabled_tools,
+                system_prompt=item.get("system_prompt", ""),
+            )
+
+
+def _sync_member_patch_to_repo(member_id: str, config_patch: dict[str, Any], user_repo: Any, agent_config_repo: Any) -> dict[str, Any]:
+    # @@@repo-only-agent-shell - fresh register now creates DB-only agents. Owner-scoped
+    # panel edits must keep working even when no legacy member dir exists.
+    user = user_repo.get_by_id(member_id)
+    if user is None or user.agent_config_id is None:
+        raise RuntimeError(f"Agent user {member_id} is missing agent_config_id")
+    current_config = agent_config_repo.get_config(user.agent_config_id)
+    if current_config is None:
+        raise RuntimeError(f"Agent config {user.agent_config_id} is missing for {member_id}")
+
+    runtime, tools = _runtime_and_tools_from_patch(current_config, config_patch)
+    updated_config = {
+        **current_config,
+        "name": current_config.get("name") or user.display_name,
+        "description": current_config.get("description", ""),
+        "model": current_config.get("model"),
+        "tools": tools,
+        "system_prompt": config_patch.get("prompt", current_config.get("system_prompt", "")),
+        "status": current_config.get("status", "draft"),
+        "version": current_config.get("version", "0.1.0"),
+        "created_at": current_config.get("created_at", 0),
+        "updated_at": int(time.time() * 1000),
+        "runtime": runtime,
+        "mcp": _mcp_from_patch(config_patch, current_config),
+    }
+    agent_config_repo.save_config(user.agent_config_id, updated_config)
+    _sync_repo_children(user.agent_config_id, config_patch, agent_config_repo)
+    return get_member(member_id, user_repo=user_repo, agent_config_repo=agent_config_repo)
 
 
 # ── Write helpers for config fields → file structure ──
